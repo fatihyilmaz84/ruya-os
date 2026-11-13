@@ -50,6 +50,37 @@ fn vendor_of(modalias: &str) -> Option<(&str, u16)> {
     Some((source, id))
 }
 
+/// The (source, vendor id, product id) of a modalias such as `usb:v054Cp0CE6d0100`, or `None`.
+fn ids_of(modalias: &str) -> Option<(&str, u16, u16)> {
+    let (source, vendor) = vendor_of(modalias)?;
+    let rest = modalias.trim().split_once(':')?.1;
+    let product = rest
+        .get(5..)
+        .and_then(|r| r.strip_prefix('p'))
+        .and_then(|r| r.get(..4))
+        .and_then(|hex| u16::from_str_radix(hex, 16).ok())
+        .unwrap_or(0);
+    Some((source, vendor, product))
+}
+
+/// The model of a controller (`ruya_pads::model_of`, the table of silhouettes): by the USB ids of
+/// the Modalias when it is a `usb:` one, and by the device's own name (else the alias, as for the
+/// family) in any case; "" when the table does not know the pad. A vendor id of the Bluetooth SIG
+/// is not a USB one: such a modalias leaves only the name. Call it for controllers only.
+pub fn model_of_device(modalias: &str, device_name: &str, alias: &str) -> &'static str {
+    let name = if device_name.is_empty() {
+        alias
+    } else {
+        device_name
+    };
+    match ids_of(modalias) {
+        Some((source, vendor, product)) if source.eq_ignore_ascii_case("usb") => {
+            ruya_pads::model_of(vendor, product, name)
+        }
+        _ => ruya_pads::model_of(0, 0, name),
+    }
+}
+
 /// The family of the pad with this `Modalias` and this display name; "" when unknown. Call it for
 /// controllers only: a Sony headset has the same vendor.
 pub fn family_of(modalias: &str, name: &str) -> &'static str {
@@ -121,6 +152,74 @@ mod tests {
         for (modalias, name, alias, want) in table {
             assert_eq!(
                 family_of_device(modalias, name, alias),
+                want,
+                "{modalias:?} {name:?} {alias:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_model_of_a_device_is_told_by_its_usb_ids_and_its_name() {
+        // (modalias, BlueZ Name, Alias, model)
+        let table = [
+            // The Dell's pads (RUY-491): a DualSense over Bluetooth, a Wii U Pro.
+            (
+                "usb:v054Cp0CE6d0100",
+                "Wireless Controller",
+                "Wireless Controller",
+                "dualsense",
+            ),
+            (
+                "usb:v057Ep0330d0600",
+                "Nintendo RVL-CNT-01-UC",
+                "Nintendo RVL-CNT-01-UC",
+                "wiiu_pro",
+            ),
+            (
+                "usb:v045Ep0B13d0509",
+                "Xbox Wireless Controller",
+                "Player 2",
+                "xbox_series",
+            ),
+            // A rename does not change the model; no Name falls back to the alias.
+            (
+                "",
+                "DualSense Wireless Controller",
+                "Living room pad",
+                "dualsense",
+            ),
+            ("", "", "Pro Controller", "switch_pro"),
+            // The Bluetooth SIG company id is no USB id: only the name is asked.
+            (
+                "bluetooth:v012Dp0CE6d0100",
+                "Wireless Controller",
+                "Pad",
+                "",
+            ),
+            (
+                "bluetooth:v012Dp0CE6d0100",
+                "DualSense Wireless Controller",
+                "Pad",
+                "dualsense",
+            ),
+            // Another maker's id with a name that claims a model: no model.
+            (
+                "usb:v1234p0001d0100",
+                "DualSense Wireless Controller",
+                "DualSense",
+                "",
+            ),
+            (
+                "usb:v054Cp7777d0100",
+                "Wireless Controller",
+                "Wireless Controller",
+                "",
+            ),
+            ("", "", "", ""),
+        ];
+        for (modalias, name, alias, want) in table {
+            assert_eq!(
+                model_of_device(modalias, name, alias),
                 want,
                 "{modalias:?} {name:?} {alias:?}"
             );

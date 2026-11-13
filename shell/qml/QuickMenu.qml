@@ -298,7 +298,7 @@ Item {
                 ...(pads.length === 0 ? [
                     { key: "controllers:none", label: qsTr("No controllers connected."), kind: "info" }
                 ] : pads.map(p => ({ key: "controllers:pad:" + p.id, label: p.name, kind: "info",
-                                     icon: DeviceIcons.iconFor("controller", p.family),
+                                     icon: DeviceIcons.iconFor("controller", p.family, p.model),
                                      value: () => padText(p) }))),
                 { key: "controllers:settings", label: qsTr("Controller settings"), kind: "action",
                   activate: () => menu.settingsRequested("controllers") }

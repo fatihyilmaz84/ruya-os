@@ -99,7 +99,7 @@ Page {
         if (gone || Input.devicesState !== "ok" || Input.devices.some(d => d.id === padId))
             return
         gone = true
-        Notifications.show(qsTr("Controller disconnected"), "info", "", DeviceIcons.iconFor("controller", pad.family),
+        Notifications.show(qsTr("Controller disconnected"), "info", "", DeviceIcons.iconFor("controller", pad.family, pad.model),
                            pad.name)
         page.backRequested()
     }
@@ -113,7 +113,7 @@ Page {
             objectName: "controllerGlyph"
             u: page.u
             size: Theme.cardIconSize      // the page's literal size for the family glyph (04 §5)
-            name: DeviceIcons.iconFor("controller", page.pad.family)
+            name: DeviceIcons.iconFor("controller", page.pad.family, page.pad.model)
         }
         Text {
             objectName: "controllerName"

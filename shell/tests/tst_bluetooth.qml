@@ -973,34 +973,36 @@ Item {
         // them. A family-less Batteries record would give the generic pad here and fail the first row.
         function test_one_glyph_per_device_everywhere() {
             const table = [
-                ["controller", "playstation", "bt-gallery-ps", "pad_playstation"],
-                ["controller", "xbox", "bt-gallery-xbox", "pad_xbox"],
-                ["controller", "nintendo", "bt-gallery-switch", "pad_switch"],
-                ["controller", "8bitdo", "bt-gallery-8bitdo", "sports_esports"],
-                ["controller", "", "bt-gallery-pad", "sports_esports"],
-                ["headset", "", "bt-gallery-headset", "headphones"],
-                ["speaker", "", "bt-gallery-speaker", "speaker"],
-                ["keyboard", "", "bt-gallery-keyboard", "keyboard"],
-                ["mouse", "", "bt-gallery-mouse", "mouse"],
+                // [kind, family, id, glyph, model]: the model (RUY-491) is what the service names; the gallery's
+                // pads all have one, and the glyph is the model's silhouette.
+                ["controller", "playstation", "bt-gallery-ps", "pad_dualsense", "dualsense"],
+                ["controller", "xbox", "bt-gallery-xbox", "pad_xbox_series", "xbox_series"],
+                ["controller", "nintendo", "bt-gallery-switch", "pad_switch_pro", "switch_pro"],
+                ["controller", "8bitdo", "bt-gallery-8bitdo", "pad_8bitdo_pro2", "8bitdo_pro2"],
+                ["controller", "", "bt-gallery-pad", "sports_esports", ""],
+                ["headset", "", "bt-gallery-headset", "headphones", ""],
+                ["speaker", "", "bt-gallery-speaker", "speaker", ""],
+                ["keyboard", "", "bt-gallery-keyboard", "keyboard", ""],
+                ["mouse", "", "bt-gallery-mouse", "mouse", ""],
             ]
             Bluetooth.mockPopulate()
             tryVerify(() => device("bt-gallery-8bitdo") !== undefined, 2000)
             openBluetoothPane()
             for (let i = 0; i < table.length; ++i) {
-                const [kind, family, id, glyph] = table[i]
-                compare(DeviceIcons.iconFor(kind, family), glyph, "the table: " + id)
+                const [kind, family, id, glyph, model] = table[i]
+                compare(DeviceIcons.iconFor(kind, family, model), glyph, "the table: " + id)
                 // the paired list in Settings
                 tryVerify(() => rowIcon(id) !== null, 2000, id + " has a row")
                 compare(rowIcon(id).name, glyph, "pane row of " + id)
                 // the chip in the status cluster, for a Batteries record of the same kind and family
                 const bat = "bat-" + i
                 Batteries.mockClear()
-                Batteries.mockSet(bat, 50, "discharging", kind, "Device " + i, family)
+                Batteries.mockSet(bat, 50, "discharging", kind, "Device " + i, family, "", model)
                 tryVerify(() => chipGlyph(bat) === glyph, 2000, "chip of " + id + ": " + chipGlyph(bat))
                 // the low-battery toast (controllers: Batteries; the other kinds: Bluetooth)
                 clearToasts()
                 if (kind === "controller")
-                    Batteries.mockSet(bat, 10, "discharging", kind, "Device " + i, family)
+                    Batteries.mockSet(bat, 10, "discharging", kind, "Device " + i, family, "", model)
                 else
                     Bluetooth.mockSetBattery(id, 10)
                 tryVerify(() => Notifications.model.count === 1 && Notifications.model.get(0).iconName === glyph, 3000,
@@ -1008,7 +1010,7 @@ Item {
                 // the connected toast and the pad's glyph there (controllers)
                 if (kind === "controller") {
                     clearToasts()
-                    Bluetooth.mockGamepad(true, id, "Pad", family, "bluetooth")
+                    Bluetooth.mockGamepad(true, id, "Pad", family, "bluetooth", model)
                     tryVerify(() => Notifications.model.count === 1 && Notifications.model.get(0).iconName === glyph, 4000,
                               "connected toast of " + id)
                 }
@@ -1021,9 +1023,9 @@ Item {
             tryVerify(() => device("bt-gallery-gizmo") !== undefined, 2000)
             openBluetoothPane()
             const expected = [
-                ["bt-gallery-ps", "pad_playstation", "PlayStation controller"],
-                ["bt-gallery-xbox", "pad_xbox", "Xbox controller"],
-                ["bt-gallery-switch", "pad_switch", "Nintendo controller"],
+                ["bt-gallery-ps", "pad_dualsense", "PlayStation controller"],
+                ["bt-gallery-xbox", "pad_xbox_series", "Xbox controller"],
+                ["bt-gallery-switch", "pad_switch_pro", "Nintendo controller"],
                 ["bt-gallery-pad", "sports_esports", "Controller"],
                 ["bt-gallery-headset", "headphones", "Headset"],
                 ["bt-gallery-speaker", "speaker", "Speaker"],

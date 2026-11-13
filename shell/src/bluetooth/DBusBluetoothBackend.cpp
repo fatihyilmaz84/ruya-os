@@ -49,6 +49,7 @@ QList<BtDevice> parseDevices(const QDBusArgument &arg)
         dev.kind = d.value(QStringLiteral("kind"), dev.kind).toString();
         dev.keyboard = d.value(QStringLiteral("keyboard"), false).toBool(); // an older service tells none
         dev.family = d.value(QStringLiteral("family")).toString();
+        dev.model = d.value(QStringLiteral("model")).toString(); // an older service tells none
         dev.paired = d.value(QStringLiteral("paired")).toBool();
         dev.bonded = d.value(QStringLiteral("bonded"), true).toBool();     // an older service tells none
         dev.connected = d.value(QStringLiteral("connected")).toBool();
@@ -72,6 +73,7 @@ QList<BtGamepad> parseGamepads(const QDBusArgument &arg)
         pad.id = d.value(QStringLiteral("id")).toString();
         pad.name = d.value(QStringLiteral("name")).toString();
         pad.family = d.value(QStringLiteral("family")).toString();
+        pad.model = d.value(QStringLiteral("model")).toString(); // an older service tells none
         pad.transport = d.value(QStringLiteral("transport"), QStringLiteral("other")).toString();
         out.append(pad);
     }
@@ -94,9 +96,9 @@ DBusBluetoothBackend::DBusBluetoothBackend(QObject *parent)
     m_bus.connect(Service, Path, Interface, QStringLiteral("ControllerPairingRejected"), this,
                   SLOT(onControllerRejected()));
     m_bus.connect(Service, Path, Interface, QStringLiteral("GamepadConnected"), this,
-                  SLOT(onGamepadConnected(QString, QString, QString, QString)));
+                  SLOT(onGamepadConnected(QString, QString, QString, QString, QString)));
     m_bus.connect(Service, Path, Interface, QStringLiteral("GamepadDisconnected"), this,
-                  SLOT(onGamepadDisconnected(QString, QString, QString, QString)));
+                  SLOT(onGamepadDisconnected(QString, QString, QString, QString, QString)));
     m_bus.connect(Service, Path, PropertiesInterface, QStringLiteral("PropertiesChanged"), this,
                   SLOT(onPropertiesChanged(QString, QVariantMap, QStringList)));
 }
@@ -259,16 +261,16 @@ void DBusBluetoothBackend::onControllerRejected()
 }
 
 void DBusBluetoothBackend::onGamepadConnected(const QString &id, const QString &name, const QString &family,
-                                              const QString &transport)
+                                              const QString &transport, const QString &model)
 {
-    emit gamepadConnected(id, name, family, transport);
+    emit gamepadConnected(id, name, family, transport, model);
     refreshGamepads();      // the signal means "the list changed"
 }
 
 void DBusBluetoothBackend::onGamepadDisconnected(const QString &id, const QString &name, const QString &family,
-                                                 const QString &transport)
+                                                 const QString &transport, const QString &model)
 {
-    emit gamepadDisconnected(id, name, family, transport);
+    emit gamepadDisconnected(id, name, family, transport, model);
     refreshGamepads();
 }
 

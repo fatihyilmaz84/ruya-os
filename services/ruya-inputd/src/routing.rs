@@ -111,6 +111,8 @@ pub struct PadInfo {
     pub name: String,
     pub family: String,
     pub connection: String,
+    /// The model whose silhouette the shell draws (`identity::model`); "" = the family's.
+    pub model: String,
     /// The drawing of the pad for the Button test (`identity::layout`); "" = the family's default.
     pub layout: String,
     /// The pad takes `FF_RUMBLE`: only then does its virtual pad declare it.
@@ -127,6 +129,7 @@ pub struct DeviceRecord {
     pub name: String,
     pub family: String,
     pub connection: String,
+    pub model: String,
     pub layout: String,
     pub battery: i32,
     pub charging: bool,
@@ -478,6 +481,7 @@ impl<B: Backend> Router<B> {
             name: pad.info.name.clone(),
             family: pad.info.family.clone(),
             connection: pad.info.connection.clone(),
+            model: pad.info.model.clone(),
             layout: pad.info.layout.clone(),
             battery: -1,
             charging: false,
@@ -1466,6 +1470,7 @@ mod tests {
             name: "DualSense Wireless Controller".into(),
             family: "playstation".into(),
             connection: "bluetooth".into(),
+            model: "dualsense".into(),
             layout: String::new(),
             rumble: true,
             capabilities: Vec::new(),
@@ -1870,6 +1875,14 @@ mod tests {
         assert_eq!(created(&r.backend_mut().take())[0].phys, "ruya-input/pad1");
         assert_eq!(r.devices().len(), 2);
         let _ = b;
+    }
+
+    #[test]
+    fn a_device_record_carries_the_pads_model() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let _ = a;
+        assert_eq!(r.devices()[0].model, "dualsense");
     }
 
     #[test]

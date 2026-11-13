@@ -67,7 +67,7 @@ QVariantList describe(const QStringList &model, const QStringList &usable, const
 }
 
 QVariantMap pad(const QString &id, const QString &name, const QString &family, const QString &connection,
-                int battery, bool charging, const QVariantList &capabilities)
+                int battery, bool charging, const QVariantList &capabilities, const QString &model = QString())
 {
     return {
         {QStringLiteral("id"), id},
@@ -75,6 +75,7 @@ QVariantMap pad(const QString &id, const QString &name, const QString &family, c
         {QStringLiteral("name"), name},
         {QStringLiteral("family"), family},
         {QStringLiteral("connection"), connection},
+        {QStringLiteral("model"), model},
         {QStringLiteral("layout"), QString()},
         {QStringLiteral("battery"), battery},
         {QStringLiteral("charging"), charging},
@@ -139,12 +140,14 @@ void MockInputBackend::setDefaultDevices()
     m_devices = {
         pad(QStringLiteral("bluetooth-054c-0ce6-3f2a9c41d0b7"), QStringLiteral("DualSense Wireless Controller"),
             QStringLiteral("playstation"), QStringLiteral("bluetooth"), 62, true,
-            describe(dualsense, pads + motion + QStringList{QStringLiteral("touchpad"), QStringLiteral("battery")})),
+            describe(dualsense, pads + motion + QStringList{QStringLiteral("touchpad"), QStringLiteral("battery")}),
+            QStringLiteral("dualsense")),
         pad(QStringLiteral("usb-045e-0b12-8e01c2d4a9f3"), QStringLiteral("Xbox Wireless Controller"),
-            QStringLiteral("xbox"), QStringLiteral("usb"), -1, false, describe(xboxOne, pads)),
+            QStringLiteral("xbox"), QStringLiteral("usb"), -1, false, describe(xboxOne, pads),
+            QStringLiteral("xbox_series")),
         pad(QStringLiteral("bluetooth-057e-2009-b7c0e1f2a3d4"), QStringLiteral("Pro Controller"),
             QStringLiteral("nintendo"), QStringLiteral("bluetooth"), 12, false,
-            describe(switchPro, switchUsable, motion)),
+            describe(switchPro, switchUsable, motion), QStringLiteral("switch_pro")),
     };
 }
 

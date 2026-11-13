@@ -102,6 +102,13 @@ pub fn family(hw: &Hardware) -> &'static str {
     }
 }
 
+/// The model of the pad whose silhouette the shell draws (`ruya_pads::model_of`, the table that
+/// `ruya-devices` uses too): by the USB ids, and by the name the driver gave; "" when the table
+/// does not know the pad, and then the shell draws the family's silhouette (RUY-491).
+pub fn model(hw: &Hardware, name: &str) -> &'static str {
+    ruya_pads::model_of(hw.vendor, hw.product, name)
+}
+
 /// How the Button test draws the pad when its family's drawing does not fit: "nintendo-wiiu" for
 /// the Wii U Pro (057e:0330), else "" (the family's default).
 pub fn layout(hw: &Hardware) -> &'static str {
@@ -223,6 +230,32 @@ mod tests {
         hw.product = 0x2009;
         assert_eq!(layout(&hw), "", "the Switch Pro takes the family's default");
         assert_eq!(layout(&dualsense_bt()), "");
+    }
+
+    #[test]
+    fn the_model_is_told_by_the_ids_and_the_drivers_name() {
+        assert_eq!(
+            model(&dualsense_bt(), "DualSense Wireless Controller"),
+            "dualsense"
+        );
+        // The same ids, the driver's name differs: the ids decide.
+        assert_eq!(model(&dualsense_bt(), "Wireless Controller"), "dualsense");
+        let wiiu = Hardware {
+            bus: BUS_BLUETOOTH,
+            vendor: 0x057e,
+            product: 0x0330,
+            ..Hardware::default()
+        };
+        assert_eq!(model(&wiiu, "Nintendo RVL-CNT-01-UC"), "wiiu_pro");
+        assert_eq!(model(&wiiu, "Nintendo RVL-CNT-01-TR"), "wii_remote");
+        // An unknown pad has none, whatever family it is.
+        let other = Hardware {
+            vendor: 0x1234,
+            product: 1,
+            driver: "xpad".into(),
+            ..Hardware::default()
+        };
+        assert_eq!(model(&other, "Xbox clone"), "");
     }
 
     #[test]

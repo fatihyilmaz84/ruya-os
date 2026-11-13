@@ -732,6 +732,7 @@ dependencies = [
  "blocking",
  "futures-lite",
  "libc",
+ "ruya-pads",
  "ruya-sysinfo",
  "serde",
  "serde_json",
@@ -748,6 +749,7 @@ dependencies = [
  "evdev",
  "futures-lite",
  "libc",
+ "ruya-pads",
  "serde_json",
  "sha2",
  "tempfile",
@@ -763,6 +765,10 @@ dependencies = [
  "tempfile",
  "zbus",
 ]
+
+[[package]]
+name = "ruya-pads"
+version = "0.1.0"
 
 [[package]]
 name = "ruya-profiles"

@@ -144,6 +144,33 @@ pub fn family_of_battery(
     }
 }
 
+/// The controller model of a battery (RUY-491), the way `family_of_battery` finds the family: the
+/// Bluetooth device with the same address decides, else the pad is guessed from its UPower model
+/// and vendor by name (UPower has no USB ids). "" for every other kind and for an unknown pad.
+pub fn model_of_battery(
+    kind: &str,
+    address: &str,
+    vendor: &str,
+    model: &str,
+    bluetooth: &[Device],
+) -> &'static str {
+    if kind != "controller" {
+        return "";
+    }
+    if !address.is_empty() {
+        if let Some(d) = bluetooth
+            .iter()
+            .find(|d| d.kind == "controller" && d.id.eq_ignore_ascii_case(address))
+        {
+            return d.model;
+        }
+    }
+    match ruya_pads::model_of(0, 0, model) {
+        "" => ruya_pads::model_of(0, 0, &format!("{vendor} {model}")),
+        found => found,
+    }
+}
+
 /// A listed battery.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Battery {
@@ -157,6 +184,8 @@ pub struct Battery {
     /// family cannot be told. `peripherals` sets the guess from the name; `Batteries::list_with`
     /// replaces it by what Bluetooth knows.
     pub family: &'static str,
+    /// The controller model (`model_of_battery`), "" when unknown or for every other kind.
+    pub pad_model: &'static str,
     /// The Bluetooth address UPower's serial or native path holds, "" for none.
     pub address: String,
     vendor: String,
@@ -198,6 +227,7 @@ pub fn peripherals(devices: &[RawDevice]) -> Vec<Battery> {
                 percent,
                 state,
                 family: family_of_battery(kind, "", &d.vendor, model, &[]),
+                pad_model: model_of_battery(kind, "", &d.vendor, model, &[]),
                 address: {
                     let found = address_in(&d.serial);
                     if found.is_empty() {
@@ -291,6 +321,7 @@ impl<U: UPower> Batteries<U> {
         let mut list = read.to_vec();
         for b in &mut list {
             b.family = family_of_battery(b.kind, &b.address, &b.vendor, &b.model, bluetooth);
+            b.pad_model = model_of_battery(b.kind, &b.address, &b.vendor, &b.model, bluetooth);
         }
         list
     }
@@ -366,6 +397,7 @@ mod tests {
                 percent: 40,
                 state: ChargeState::Discharging,
                 family: "",
+                pad_model: "",
                 address: String::new(),
                 vendor: String::new(),
                 model: "Ruya Pad".to_owned(),
@@ -386,6 +418,7 @@ mod tests {
             assert_eq!(list[0].kind, "controller");
             assert_eq!(list[0].name, "Xbox 360 Controller");
             assert_eq!(list[0].family, "xbox");
+            assert_eq!(list[0].pad_model, "xbox_360");
             assert_eq!(
                 (list[0].percent, list[0].state),
                 (55, ChargeState::Discharging)
@@ -404,6 +437,7 @@ mod tests {
             kind,
             keyboard: false,
             family,
+            model: "",
             paired: true,
             bonded: true,
             connected: true,
@@ -437,6 +471,36 @@ mod tests {
     }
 
     #[test]
+    fn a_batterys_model_is_the_bluetooth_devices_or_guessed_from_its_name() {
+        let mut dualsense = bt(
+            "E4:17:D8:00:00:01",
+            "Wireless Controller",
+            "controller",
+            "playstation",
+        );
+        dualsense.model = "dualsense";
+        let model = |address: &str, vendor: &str, name: &str, list: &[Device]| {
+            model_of_battery("controller", address, vendor, name, list)
+        };
+        // The paired device with the address decides, whatever UPower calls the pad.
+        assert_eq!(
+            model(
+                "e4:17:d8:00:00:01",
+                "",
+                "Wireless Controller",
+                &[dualsense.clone()]
+            ),
+            "dualsense"
+        );
+        // A wired or dongle pad: the name, with the vendor in front when the model alone says nothing.
+        assert_eq!(model("", "", "Xbox 360 Controller", &[]), "xbox_360");
+        assert_eq!(model("", "8BitDo", "Pro 2", &[]), "8bitdo_pro2");
+        assert_eq!(model("", "Ruya", "Ruya Pad", &[]), "");
+        // Other kinds have none.
+        assert_eq!(model_of_battery("headset", "", "", "DualSense", &[]), "");
+    }
+
+    #[test]
     fn a_dualsense_battery_has_the_family_of_the_bluetooth_device_with_its_serial() {
         let b = Batteries::new(FakeUPower::new(vec![with(
             dev("/p1", KIND_GAMING_INPUT, "Wireless Controller", 62.0, 2),
@@ -452,6 +516,11 @@ mod tests {
             "playstation",
         )];
         assert_eq!(b.list_with(&list)[0].family, "playstation");
+        // Its model is the Bluetooth device's too (RUY-491): UPower's "Wireless Controller" says none.
+        assert_eq!(b.list_with(&list)[0].pad_model, "");
+        let mut known = list.clone();
+        known[0].model = "dualsense";
+        assert_eq!(b.list_with(&known)[0].pad_model, "dualsense");
         // The Bluetooth device decides, even against what the name alone would say.
         let other = [bt("E4:17:D8:00:00:01", "Renamed", "controller", "xbox")];
         assert_eq!(b.list_with(&other)[0].family, "xbox");

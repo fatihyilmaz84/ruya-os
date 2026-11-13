@@ -34,8 +34,8 @@ Item {
     // battery of the only controller is critical (RUY-413): it breaks through "Don't interrupt games".
     Connections {
         target: Batteries
-        function onBatteryLow(id, name, percent, family) {
-            Notifications.show(qsTr("Controller battery low"), "warning", "", DeviceIcons.iconFor("controller", family),
+        function onBatteryLow(id, name, percent, family, model) {
+            Notifications.show(qsTr("Controller battery low"), "warning", "", DeviceIcons.iconFor("controller", family, model),
                                qsTr("%1 · %2%").arg(DeviceIcons.padName(id, name, family)).arg(percent),
                                { source: "devices", urgency: Bluetooth.gamepads.length <= 1 ? "critical" : "normal" })
         }

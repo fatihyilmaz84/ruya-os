@@ -127,7 +127,7 @@ Item {
             NotificationCentre.mockSetNow(tc.t0 - 25 * 3600000)
             Notifications.show(t.wallpaper, "success")
             NotificationCentre.mockSetNow(tc.t0 - 3 * 3600000)
-            Notifications.show(t.battery, "warning", "", "pad_playstation", "DualSense · 12%", { source: "devices" })
+            Notifications.show(t.battery, "warning", "", "pad_dualsense", "DualSense · 12%", { source: "devices" })
             tryVerify(() => NotificationCentre.count === 2)
             NotificationCentre.markRead()
             tryVerify(() => NotificationCentre.unreadCount === 0)

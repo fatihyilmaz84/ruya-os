@@ -124,7 +124,7 @@ Item {
             compare(padRow(pro).detail, "Bluetooth · Battery 12 %, low")
             compare(padRow(xbox).detail, "USB · Battery not reported")
             compare(padRow(ds).value, "", "no player in the record: no value")
-            compare(padRow(ds).iconName, DeviceIcons.iconFor("controller", "playstation"))
+            compare(padRow(ds).iconName, "pad_dualsense", "the record names the model: its own silhouette")
             compare(padRow(ds).Accessible.name,
                     "DualSense Wireless Controller, PlayStation controller, Bluetooth · Battery 62 %, charging")
             compare(hintVerbs(), "A Open|B Back")
@@ -159,6 +159,33 @@ Item {
             const bottom = detail.y + detail.height
             verify(Math.abs((top + bottom) / 2 - row.height / 2) <= 1, "centred: " + top + ".." + bottom + " in " + row.height)
             verify(detail.x + detail.width <= row.width, "inside the row")
+        }
+
+        // RUY-491: the record's model names the silhouette (the pane's row and the controller page's glyph);
+        // a pad with no model, or one this shell has no glyph for, is drawn as its family's; one with
+        // neither is the generic gamepad.
+        function test_a_pad_is_drawn_as_its_model_else_its_family() {
+            const wiiu = "bluetooth-057e-0330-c1d2e3f4a5b6"
+            Input.mockAddDevice({ id: wiiu, name: "Nintendo RVL-CNT-01-UC", family: "nintendo", model: "wiiu_pro",
+                                  connection: "bluetooth", battery: 80 })
+            const newer = "usb-1234-0001-aaaaaaaaaaaa"
+            Input.mockAddDevice({ id: newer, name: "Pad from the future", family: "xbox", model: "no_such_model",
+                                  connection: "usb" })
+            const plain = "usb-1234-0002-aaaaaaaaaaaa"
+            Input.mockAddDevice({ id: plain, name: "Plain pad", family: "generic", connection: "usb" })
+            tryVerify(() => Input.devices.length === 6)
+            openPane()
+            tryVerify(() => padRow(plain) !== null, 2000)
+            compare(padRow(ds).iconName, "pad_dualsense")
+            compare(padRow(wiiu).iconName, "pad_wiiu_pro", "its own silhouette, not the Switch Pro of its family")
+            compare(padRow(newer).iconName, "pad_xbox_series", "a model this shell does not know: the family's")
+            compare(padRow(plain).iconName, "sports_esports", "no model, no family: the generic gamepad")
+            for (let i = 0; i < 6 && !padRow(wiiu).activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(padRow(wiiu).activeFocus, "on the pad row")
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "controller")
+            compare(find("controllerGlyph").name, "pad_wiiu_pro", "the controller page draws the same silhouette")
         }
 
         function test_a_player_shows_when_the_record_has_one() {

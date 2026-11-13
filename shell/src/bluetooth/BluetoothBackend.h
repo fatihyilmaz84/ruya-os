@@ -17,6 +17,9 @@ struct BtDevice
     bool keyboard = false;
     // "playstation" | "xbox" | "nintendo" | "8bitdo" for a controller the service can place, else ""
     QString family;
+    // The controller model whose silhouette is drawn ("dualsense", "wiiu_pro", ...; the file stem in
+    // shell/art/pads), "" when the service does not know the pad (RUY-491)
+    QString model;
     bool paired = false;
     bool bonded = true; // the pairing keys are kept; false: paired but only reconnects in pairing mode (T-300)
     bool connected = false;
@@ -33,6 +36,7 @@ struct BtGamepad
     QString name;
     QString family;    // "playstation" | "xbox" | "nintendo" | "8bitdo" | ""
     QString transport; // "usb" | "bluetooth" | "other"
+    QString model;     // the controller model as in BtDevice, "" when unknown (RUY-491)
 };
 
 // Transport behind the Bluetooth QML singleton: org.ruyaos.Devices1.Bluetooth over D-Bus
@@ -73,9 +77,12 @@ signals:
     // The window refused a device that is not an input device.
     void controllerRejected();
     // A game controller appeared or went away, over USB or Bluetooth (T-260). id is stable per pad;
-    // family: "playstation" | "xbox" | "nintendo" | "8bitdo" | ""; transport: "usb" | "bluetooth" | "other".
-    void gamepadConnected(const QString &id, const QString &name, const QString &family, const QString &transport);
-    void gamepadDisconnected(const QString &id, const QString &name, const QString &family, const QString &transport);
+    // family: "playstation" | "xbox" | "nintendo" | "8bitdo" | ""; transport: "usb" | "bluetooth" | "other";
+    // model: the controller model, "" when unknown (RUY-491).
+    void gamepadConnected(const QString &id, const QString &name, const QString &family, const QString &transport,
+                          const QString &model);
+    void gamepadDisconnected(const QString &id, const QString &name, const QString &family, const QString &transport,
+                             const QString &model);
     // The service went away (or came back): what was said about pads before is void, the next read of
     // the service is a new baseline.
     void gamepadsReset();

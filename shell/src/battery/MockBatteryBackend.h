@@ -20,7 +20,7 @@ public:
     // `family`: a controller's (T-260), only when given.
     void setDevice(const QString &id, int percent, const QString &state, const QString &kind = QString(),
                    const QString &name = QString(), const QString &family = QString(),
-                   const QString &address = QString());
+                   const QString &address = QString(), const QString &model = QString());
     void removeDevice(const QString &id);
     void clear();
     void reset();

@@ -529,6 +529,7 @@ impl Scanner {
             name: name.clone(),
             family: identity::family(&hw).to_owned(),
             connection: identity::connection(&hw).to_owned(),
+            model: identity::model(&hw, &name).to_owned(),
             layout: identity::layout(&hw).to_owned(),
             rumble: device
                 .supported_ff()

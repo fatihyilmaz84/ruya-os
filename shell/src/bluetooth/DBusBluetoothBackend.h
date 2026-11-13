@@ -32,8 +32,10 @@ public:
 private slots:
     void onDevicesChanged();
     void onControllerRejected();
-    void onGamepadConnected(const QString &id, const QString &name, const QString &family, const QString &transport);
-    void onGamepadDisconnected(const QString &id, const QString &name, const QString &family, const QString &transport);
+    void onGamepadConnected(const QString &id, const QString &name, const QString &family, const QString &transport,
+                            const QString &model);
+    void onGamepadDisconnected(const QString &id, const QString &name, const QString &family, const QString &transport,
+                               const QString &model);
     void onPropertiesChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated);
 
 private:

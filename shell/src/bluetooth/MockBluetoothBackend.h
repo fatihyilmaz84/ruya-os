@@ -48,6 +48,7 @@ public:
     // A device's name set to any text (a device names itself; rename() would refuse some of it).
     void setName(const QString &id, const QString &name);
     void setFamily(const QString &id, const QString &family);
+    void setModel(const QString &id, const QString &model);
     // Paired without the keys kept (BlueZ's Bonded: no), or bonded.
     void setBonded(const QString &id, bool bonded);
     void setTrusted(const QString &id, bool trusted);
@@ -60,7 +61,7 @@ public:
     // The list (ListGamepads, T-453) follows: the pads given here, plus every connected controller of
     // the device list (a Bluetooth pad is a gamepad with its address as id), without duplicates.
     void gamepadEvent(bool connected, const QString &id, const QString &name, const QString &family,
-                      const QString &transport);
+                      const QString &transport, const QString &model = QString());
     // Adds one paired, connected device of every kind and every controller family the shell
     // draws, and one of a kind it does not know (icons: T-199). The ids are "bt-gallery-<what>".
     void populate();

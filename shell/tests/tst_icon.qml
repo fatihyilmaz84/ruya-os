@@ -11,6 +11,34 @@ Item {
 
     Component { id: iconComponent; Icon {} }
     Component { id: navComponent; SectionNav {} }
+    // Every controller silhouette at one size on the page background (RUY-491), for review.
+    Component {
+        id: padSheetComponent
+        Rectangle {
+            id: sheet
+            property real glyphSize: 160
+            property int columns: 7
+            color: Theme.background
+            width: grid.width + 40
+            height: grid.height + 40
+            Grid {
+                id: grid
+                x: 20
+                y: 20
+                columns: sheet.columns
+                spacing: sheet.glyphSize / 4
+                Repeater {
+                    model: DeviceIcons.padModels
+                    Icon {
+                        required property string modelData
+                        name: "pad_" + modelData
+                        size: sheet.glyphSize
+                        color: Theme.text
+                    }
+                }
+            }
+        }
+    }
     Component {
         id: benchComponent
         FocusScope {
@@ -54,7 +82,7 @@ Item {
             const names = ["battery_0_bar", "battery_1_bar", "battery_2_bar", "battery_3_bar", "battery_4_bar",
                            "battery_5_bar", "battery_full", "battery_alert", "battery_charging_full",
                            "sports_esports", "headphones", "speaker", "mouse", "keyboard", "bluetooth",
-                           "smartphone", "pad_playstation", "pad_xbox", "pad_switch"]
+                           "smartphone", "pad_dualsense", "pad_xbox_series", "pad_switch_pro"]
             const icon = createTemporaryObject(iconComponent, host)
             verify(icon)
             for (const name of names) {
@@ -77,14 +105,44 @@ Item {
                     verify(icon.known, "(" + kind + ", " + family + ") is " + icon.name)
                 }
             }
-            compare(DeviceIcons.iconFor("controller", "playstation"), "pad_playstation")
-            compare(DeviceIcons.iconFor("controller", "xbox"), "pad_xbox")
-            compare(DeviceIcons.iconFor("controller", "nintendo"), "pad_switch")
+            compare(DeviceIcons.iconFor("controller", "playstation"), "pad_dualsense")
+            compare(DeviceIcons.iconFor("controller", "xbox"), "pad_xbox_series")
+            compare(DeviceIcons.iconFor("controller", "nintendo"), "pad_switch_pro")
             compare(DeviceIcons.iconFor("controller", "newbrand"), "sports_esports", "an unknown family is the generic pad")
             compare(DeviceIcons.iconFor("controller", ""), "sports_esports")
             compare(DeviceIcons.iconFor("headset", "playstation"), "headphones", "a family only matters for a controller")
             compare(DeviceIcons.iconFor("gizmo", ""), "bluetooth", "an unknown kind is the generic glyph")
             compare(DeviceIcons.iconFor("", ""), "bluetooth")
+        }
+
+        // RUY-491: a controller is its model's silhouette, else its family's, else the generic gamepad; a model
+        // this shell has no glyph for (a newer service) counts as none, and every model it lists is in the table.
+        function test_a_controller_is_drawn_as_its_model_else_its_family() {
+            compare(DeviceIcons.iconFor("controller", "nintendo", "wiiu_pro"), "pad_wiiu_pro", "the model wins over the family")
+            compare(DeviceIcons.iconFor("controller", "", "dualsense"), "pad_dualsense", "a model needs no family")
+            compare(DeviceIcons.iconFor("controller", "playstation", ""), "pad_dualsense")
+            compare(DeviceIcons.iconFor("controller", "playstation", "no_such_model"), "pad_dualsense", "an unknown model: the family's")
+            compare(DeviceIcons.iconFor("controller", "", "no_such_model"), "sports_esports", "an unknown model and no family")
+            compare(DeviceIcons.iconFor("controller", "8bitdo", ""), "sports_esports", "8BitDo has no family silhouette")
+            compare(DeviceIcons.iconFor("controller", "8bitdo", "8bitdo_pro2"), "pad_8bitdo_pro2")
+            compare(DeviceIcons.iconFor("controller", "", undefined), "sports_esports", "a missing model is none")
+            compare(DeviceIcons.iconFor("headset", "playstation", "dualsense"), "headphones", "a model only matters for a controller")
+            compare(DeviceIcons.iconFor("keyboard", "", "keyboard"), "keyboard")
+        }
+
+        function test_every_model_there_is_a_silhouette_for_is_in_the_icon_table() {
+            verify(DeviceIcons.padModels.length >= 28, "the 28 drawings of shell/art/pads: " + DeviceIcons.padModels.length)
+            const icon = createTemporaryObject(iconComponent, host)
+            verify(icon)
+            for (const model of DeviceIcons.padModels) {
+                icon.name = DeviceIcons.iconFor("controller", "", model)
+                compare(icon.name, "pad_" + model)
+                verify(icon.known, model + " has no glyph in the Icon table")
+                verify(icon.implicitWidth > 0, model + " has a size")
+            }
+            // The families' defaults are models of the list.
+            for (const family of ["playstation", "xbox", "nintendo"])
+                verify(DeviceIcons.padModels.indexOf(DeviceIcons.familyModel(family)) >= 0, family)
         }
 
         function test_unknown_name_draws_nothing_and_warns_once() {
@@ -134,6 +192,26 @@ Item {
                 }
             }
             DeviceSettings.language = "en"
+        }
+
+        // The 28 controller silhouettes at 160, 40, 32 and 24 u (the controller page, the Controllers pane's
+        // rows, the Bluetooth pane and the chips) on the Dreamglass and the Daylight theme (RUY-491).
+        function test_zz_screenshots_pads() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            DeviceSettings.language = "en"
+            for (const theme of ["dreamglass", "daylight"]) {
+                DeviceSettings.theme = theme
+                for (const size of [160, 40, 32, 24]) {
+                    const sheet = createTemporaryObject(padSheetComponent, host,
+                                                        { glyphSize: size, columns: size === 160 ? 7 : 14 })
+                    verify(sheet)
+                    wait(200)
+                    grabImage(sheet).save(shotsDir + "/pads-" + theme + "-" + size + ".png")
+                    sheet.destroy()
+                }
+            }
+            DeviceSettings.theme = "dreamglass"
         }
 
         // Relative luminance (WCAG) of a colour, and the contrast ratio of two.

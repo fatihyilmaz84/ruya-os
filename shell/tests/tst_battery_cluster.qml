@@ -194,8 +194,11 @@ Item {
             Batteries.mockSet("pad-late", 62, "discharging", "controller", "Wireless Controller")
             tryVerify(() => chipGlyph("pad-late") === "sports_esports", 2000, "no family yet: the generic pad: " + chipGlyph("pad-late"))
             Batteries.mockSet("pad-late", 62, "discharging", "controller", "Wireless Controller", "playstation")
-            tryVerify(() => chipGlyph("pad-late") === "pad_playstation", 2000, "the chip got the PlayStation pad after the late bond: " + chipGlyph("pad-late"))
-            compare(DeviceIcons.iconFor("controller", "playstation"), "pad_playstation")
+            tryVerify(() => chipGlyph("pad-late") === "pad_dualsense", 2000, "the chip got the PlayStation pad after the late bond: " + chipGlyph("pad-late"))
+            compare(DeviceIcons.iconFor("controller", "playstation"), "pad_dualsense", "the family's silhouette")
+            // The model the service named, once the pad's maker has told it, replaces the family's silhouette.
+            Batteries.mockSet("pad-late", 62, "discharging", "controller", "Wireless Controller", "playstation", "", "dualshock4")
+            tryVerify(() => chipGlyph("pad-late") === "pad_dualshock4", 2000, "the chip got the model: " + chipGlyph("pad-late"))
             tc.shell.destroy()
             wait(50)
         }

@@ -112,7 +112,7 @@ FocusScope {
             const set = phases[d.id]
             // The name the Bluetooth pane shows: the end of the address is added for a like-named pad.
             const parts = DeviceIcons.shownParts(Bluetooth.devices, d)
-            const entry = { devId: d.id, name: parts.name, tail: parts.tail, family: d.family ?? "", phase: phaseOf(d),
+            const entry = { devId: d.id, name: parts.name, tail: parts.tail, family: d.family ?? "", silhouette: d.model ?? "", phase: phaseOf(d),
                             reason: set && set.reason ? set.reason : "" }
             let at = -1
             for (let j = 0; j < found.count; ++j) {
@@ -383,6 +383,7 @@ FocusScope {
                         required property string name
                         required property string tail
                         required property string family
+                        required property string silhouette   // the controller model
                         required property string phase
                         required property string reason
                         objectName: "onbRow_" + devId
@@ -407,7 +408,7 @@ FocusScope {
                             id: rowGlyph
                             objectName: "onbRowGlyph"
                             u: onb.u
-                            name: DeviceIcons.iconFor("controller", row.family)
+                            name: DeviceIcons.iconFor("controller", row.family, row.silhouette)
                             anchors { left: parent.left; leftMargin: Theme.spaceM * onb.u; verticalCenter: parent.verticalCenter }
                         }
                         // A name the device chose: plain text (TailText), cut at the end of the name and never in the end

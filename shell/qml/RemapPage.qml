@@ -105,6 +105,7 @@ Page {
         objectName: "remapIntro"
         u: page.u
         family: page.family
+        model: page.pad ? page.pad.model : ""
     }
 
     SettingsPane {
