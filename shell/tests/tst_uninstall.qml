@@ -258,6 +258,7 @@ Item {
             verify(find("uninstallCancel").activeFocus)
             compare(find("uninstallCancel").y, find("uninstallGo").y, "one row at 1080p-ish sizes")
             verify(find("uninstallCancel").x < find("uninstallGo").x, "Cancel first")
+            verify(find("uninstallGo").width >= find("uninstallCancel").width, "the pill grows with its label, never narrower than Cancel")
         }
 
         function test_back_and_cancel_change_nothing_and_the_toggle_is_off_again() {
@@ -640,6 +641,32 @@ Item {
                 tryVerify(() => !confirm().shown, 2000)
                 Display.setUiScale(0)
                 tc.shell.destroy()
+                wait(100)
+            }
+        }
+
+        // A 4:3 screen at 200 %: the card is narrower than on 16:9, so the long label gets its own row.
+        function test_zz_screenshots_stacked_4x3() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            for (const lang of ["en", "tr"]) {
+                DeviceSettings.language = lang
+                host.width = host.height * 4 / 3
+                start()
+                Display.setUiScale(200)
+                tryCompare(Theme, "uiScale", 2)
+                tryVerify(() => find("homePlay").activeFocus, 2000)
+                openConfirm()
+                keyClick(Qt.Key_Up)
+                keyClick(Qt.Key_Return)
+                verify(confirm().stacked)
+                settle()
+                grabImage(tc.shell).save(shotsDir + "/" + "74-uninstall-stacked-" + lang + ".png")
+                keyClick(Qt.Key_Escape)
+                tryVerify(() => !confirm().shown, 2000)
+                Display.setUiScale(0)
+                tc.shell.destroy()
+                host.width = 1280
                 wait(100)
             }
         }

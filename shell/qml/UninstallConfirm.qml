@@ -43,8 +43,9 @@ FocusScope {
     readonly property real cancelWidth: 300 * u
     readonly property real buttonPad: Theme.spaceL * u
     readonly property string goLabel: deleteData.checked ? qsTr("Uninstall and delete data") : qsTr("Uninstall")
-    // The danger pill is sized to its label; Cancel, `spaceM` and the pill on one row, else stacked.
-    readonly property real goWidth: goMetrics.advanceWidth + 2 * buttonPad
+    // The danger pill grows with its label (never narrower than Cancel, as in PowerConfirm); Cancel, `spaceM`
+    // and the pill on one row, else stacked.
+    readonly property real goWidth: Math.max(cancelWidth, goMetrics.advanceWidth + 2 * buttonPad)
     readonly property bool stacked: cancelWidth + Theme.spaceM * u + goWidth > contentWidth
 
     function open(id, name, note) {
