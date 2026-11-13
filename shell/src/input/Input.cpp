@@ -298,6 +298,12 @@ void Input::mockResetProfiles()
         mock->resetProfiles();
 }
 
+void Input::mockSetProfileStatus(const QString &method, const QString &status)
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        mock->setProfileStatus(method, status);
+}
+
 void Input::setRoute(const QString &route, const QString &instance, const QString &appId, const QString &profile)
 {
     const bool same = route == m_route && instance == m_instance && appId == m_appId && profile == m_profile;

@@ -291,6 +291,7 @@ Page {
                     overlay: page.overlay
                     onExitRequested: page.leavePane()
                     onControllerRequested: id => page.openRequested("controller", ({ id: id }))
+                    onControlsRequested: page.openRequested("controls", ({}))
                 }
             }
         }

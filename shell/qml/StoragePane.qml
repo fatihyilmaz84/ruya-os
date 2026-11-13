@@ -83,24 +83,14 @@ SettingsPane {
             font.pixelSize: Theme.typeBody * usage.u
         }
 
-        Rectangle {
+        ProgressBar {
             objectName: "usageTrack"
+            fillName: "usageFill"
             anchors { right: usageValue.left; rightMargin: Theme.spaceM * usage.u; verticalCenter: parent.verticalCenter }
             width: 260 * usage.u
-            height: Theme.spaceS * usage.u
-            radius: height / 2
-            color: Theme.glass
-            border.width: Theme.hairlineAt(usage.u)
-            border.color: Theme.glassBorder
-
-            Rectangle {
-                objectName: "usageFill"
-                width: parent.width * usage.fraction
-                height: parent.height
-                radius: height / 2
-                color: usage.fillColor
-                Behavior on width { NumberAnimation { duration: Theme.focusMs } }
-            }
+            u: usage.u
+            value: usage.fraction
+            fillColor: usage.fillColor
         }
     }
 

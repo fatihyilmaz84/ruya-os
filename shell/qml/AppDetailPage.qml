@@ -337,25 +337,15 @@ Page {
                     font.pixelSize: Theme.typeCaption * page.u
                 }
 
-                Rectangle {
+                ProgressBar {
                     objectName: "detailProgress"
+                    fillName: "detailProgressFill"
                     visible: page.working
                     y: 40 * page.u
                     width: parent.width
-                    height: Theme.spaceS * page.u
-                    radius: height / 2
-                    color: Theme.blurMax > 0 ? Theme.glass : Theme.glassOpaque
-                    border.width: Theme.hairlineAt(page.u)
-                    border.color: Theme.glassBorder
-
-                    Rectangle {
-                        objectName: "detailProgressFill"
-                        width: parent.width * (page.job ? page.job.percent : 0) / 100
-                        height: parent.height
-                        radius: height / 2
-                        color: Theme.text
-                        Behavior on width { NumberAnimation { duration: Theme.focusMs } }
-                    }
+                    u: page.u
+                    trackColor: Theme.blurMax > 0 ? Theme.glass : Theme.glassOpaque
+                    value: (page.job ? page.job.percent : 0) / 100
                 }
 
                 Text {

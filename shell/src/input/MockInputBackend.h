@@ -3,6 +3,7 @@
 #include "InputBackend.h"
 #include "MockInputProfiles.h"
 
+#include <QHash>
 #include <QSet>
 #include <QVariantList>
 #include <QVariantMap>
@@ -37,7 +38,20 @@ public:
     // built-ins only.
     QVariantList profileCalls() const { return m_profileCalls; }
     void clearProfileCalls() { m_profileCalls.clear(); }
-    void resetProfiles() { m_profiles.reset(); }
+    void resetProfiles()
+    {
+        m_profiles.reset();
+        m_forcedStatus.clear();
+    }
+    // While set, every call of `method` answers `status` (its other out-arguments empty) without
+    // reaching the profiles: a refused or failed save for the pages' tests (RUY-465). "" clears it.
+    void setProfileStatus(const QString &method, const QString &status)
+    {
+        if (status.isEmpty())
+            m_forcedStatus.remove(method);
+        else
+            m_forcedStatus.insert(method, status);
+    }
 
     // Tests (RUY-39). A pad connects (a device record; `capabilities` a list of
     // { name, hardware, driver, available, output }, else none) or changes (same id), or goes.
@@ -86,4 +100,5 @@ private:
     QSet<QString> m_tests;
     MockInputProfiles m_profiles;
     QVariantList m_profileCalls;
+    QHash<QString, QString> m_forcedStatus;
 };
