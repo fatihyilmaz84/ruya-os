@@ -18,10 +18,10 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 - **Merged, still In Review:**
   - RUY-22 (GlassShadow in Loaders): its Dell criteria are owed (pills after display sleep, L0 VRAM; RUY-450).
   - RUY-435 (ruya-session X11 mode, x11.rs): its VM run (RUY-436) and Dell run need RUY-434's image. Until then X11-only games end `launch-failed` with a clear journal line. Follow-ups are in RUY-457.
-- **In flight:** RUY-434 (image: patched satellite, Xwayland), `D:\dev\RuyaOS-worktrees\RUY-434`, branch t/RUY-434-xwayland-satellite. Its builder was still working at handoff: uncommitted changes to the Containerfile, 20-base.sh, 98-guard.sh, image-packages.md and 01. It owns WSL and the VM for its image build.
-  - If it has reported: review it (ruya-reviewer, Opus).
-  - Otherwise: look at the worktree. If nothing is committed and nothing runs (`wsl -- pgrep -f build.sh`), resume with a new builder on the same branch and tell it what is in the worktree.
-  - Then RUY-436 (vm-x11-check and baseline; RUY-457 lists the cases), then Alien Arena and AAAAXY on the Dell.
+- **RUY-434 is Done** (merged 0226d1a; the image builds a patched xwayland-satellite; VM OK). Its Outcome has a ready-to-paste upstream PR: file it (the owner approved). **Nothing is in flight**; no worktrees left.
+- **First, RUY-459 (high):** QEMU keys no longer reach the first-boot wizard on 0.0.72. It may be a regression from today's input merges, and it breaks every VM check that walks the wizard.
+- Then RUY-436 (vm-x11-check and baseline; RUY-457 lists the cases), then Alien Arena and AAAAXY on the Dell.
+- **Owner, 2026-11-13 night:** no image builds and no Dell updates while they sleep; keep building host-verifiable tickets, two lanes; the lead starts the next lead session itself at 60 % context.
 - **Images:**
   - 0.0.71: VM queue 11 PASS, 3 FAIL, all three check-script problems (fixed by RUY-430).
   - **The Dell runs 0.0.72** (main 07d86bf: the virtual-pad toast fix and RUY-422; rollback 0.0.71). The owner is asked to confirm that the toasts are gone.
