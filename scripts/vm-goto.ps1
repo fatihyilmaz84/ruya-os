@@ -94,6 +94,26 @@ function Get-Lit {
     return $lit / $n
 }
 
+# Waits until the shell has drawn. A VM left alone for 10 minutes shows the screen saver (a
+# small clock on black) and after 30 the screen is off ("Display output is not active"): both
+# read as dark here, and the first key then only wakes the shell (KeyRouter eats it, T-202), so a
+# wizard walked from there would lose its first key (RUY-459). While the screen stays dark,
+# Right Shift is pressed every few seconds: eaten while the screen is covered, used by no page.
+function Wait-Lit {
+    param([Parameter(Mandatory)][string]$Step)
+    $deadline = (Get-Date).AddSeconds($StepTimeoutSec)
+    $darkSince = Get-Date
+    while ((Get-Lit) -le 0.02) {
+        if ((Get-Date) -gt $deadline) { throw "vm-goto: step '$Step' did not show its result within $StepTimeoutSec s" }
+        if (((Get-Date) - $darkSince).TotalSeconds -ge 6) {
+            Write-Host "vm-goto: the screen is dark (saver, display off or still starting): pressing shift to wake it"
+            & (Join-Path $PSScriptRoot "vm-keys.ps1") shift_r -Port $Port | Out-Null
+            $darkSince = Get-Date
+        }
+        Start-Sleep -Seconds 2
+    }
+}
+
 function Send-Keys {
     param([string[]]$Keys, [string]$Text)
     $keyScript = Join-Path $PSScriptRoot "vm-keys.ps1"
@@ -108,14 +128,19 @@ function Send-Keys {
 }
 
 # Fails within seconds when the VM is not there.
-try { [void](Send-VmMonitor -Port $Port -Command "info status" -TimeoutSec 5) }
+try { $status = Send-VmMonitor -Port $Port -Command "info status" -TimeoutSec 5 }
 catch { throw "vm-goto: no VM on the QEMU monitor 127.0.0.1:${Port}. Start it with .\scripts\smoke-test.ps1 -Work -Keep. ($_)" }
+# A guest that suspended (a VM started without vm-no-suspend.cred) shows its last frame and takes
+# no key and no SSH; WHPX cannot resume it (RUY-459).
+if ("$status" -notmatch 'VM status: running') {
+    throw "vm-goto: the VM is not running ($((("$status" -split "`n") | Where-Object { $_ -match 'VM status' }) -join ' ')). A suspended WHPX guest does not come back: boot a fresh one with smoke-test.ps1."
+}
 if (-not (Test-Path $Key)) { throw "vm-goto: SSH key $Key not found" }
 
 $count = Get-ProfileCount
 if ($count -eq 0) {
     Write-Host "vm-goto: no profile yet, running the wizard"
-    Wait-Until "wizard shown" { (Get-Lit) -gt 0.02 }
+    Wait-Lit "wizard shown"
     Start-Sleep -Milliseconds $SettleMs
     Send-Keys -Keys @("ret")                                  # welcome
     Send-Keys -Keys @("ret")                                  # language: English
