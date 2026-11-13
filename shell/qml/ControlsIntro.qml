@@ -1,7 +1,7 @@
 import QtQuick
 import RuyaShell
 
-// The left column of Controls in games and Remap buttons (RUY-465, 02 §1.2): the pad's family glyph
+// The left column of Controls in games and Remap buttons (RUY-465, 02 §1.2): the pad's silhouette (its model, else its family's)
 // at `cardIconSize` (the controller page's literal, 04 §5), "Changes here reach games only. Menus
 // keep their buttons." and the console profile the controls belong to. Not focusable.
 Column {
@@ -9,6 +9,7 @@ Column {
 
     property real u: 1
     property string family: ""
+    property string model: ""
 
     width: 470 * u
     spacing: Theme.spaceM * u
@@ -17,7 +18,7 @@ Column {
         objectName: "controlsGlyph"
         u: intro.u
         size: Theme.cardIconSize
-        name: DeviceIcons.iconFor("controller", intro.family)
+        name: DeviceIcons.iconFor("controller", intro.family, intro.model)
     }
     Text {
         objectName: "controlsGamesOnly"

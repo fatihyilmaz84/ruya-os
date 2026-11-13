@@ -109,6 +109,7 @@ public:
     Q_INVOKABLE void mockReveal(const QString &id);
     Q_INVOKABLE void mockSetName(const QString &id, const QString &name);   // any text, as a device could send it
     Q_INVOKABLE void mockSetFamily(const QString &id, const QString &family);
+    Q_INVOKABLE void mockSetModel(const QString &id, const QString &model);   // the controller model (RUY-491)
     Q_INVOKABLE void mockSetBonded(const QString &id, bool bonded);
     // A paired device that was never confirmed (RUY-444): not trusted, not connected.
     Q_INVOKABLE void mockSetTrusted(const QString &id, bool trusted);
@@ -116,7 +117,7 @@ public:
     Q_INVOKABLE void mockSetSilent(const QString &id, bool silent);
     Q_INVOKABLE void mockServiceRestart();
     Q_INVOKABLE void mockGamepad(bool connected, const QString &id, const QString &name, const QString &family,
-                                 const QString &transport);
+                                 const QString &transport, const QString &model = QString());
     Q_INVOKABLE int mockPairingStarts() const;
     // The idle reports the mock got since the last reset, and the last one (0 / -1 before any).
     Q_INVOKABLE int mockIdleReports() const;
@@ -132,9 +133,12 @@ signals:
     // A device that is not a controller tried to pair while the window was open.
     void controllerRejected();
     // A game controller appeared or went away (USB or Bluetooth, T-260). family: "playstation" | "xbox" |
-    // "nintendo" | "8bitdo" | ""; transport: "usb" | "bluetooth" | "other"; id is stable per pad.
-    void gamepadConnected(const QString &id, const QString &name, const QString &family, const QString &transport);
-    void gamepadDisconnected(const QString &id, const QString &name, const QString &family, const QString &transport);
+    // "nintendo" | "8bitdo" | ""; transport: "usb" | "bluetooth" | "other"; id is stable per pad; model: the
+    // controller model whose silhouette is drawn ("dualsense", ...), "" when the service does not know it.
+    void gamepadConnected(const QString &id, const QString &name, const QString &family, const QString &transport,
+                          const QString &model);
+    void gamepadDisconnected(const QString &id, const QString &name, const QString &family, const QString &transport,
+                             const QString &model);
     // The service restarted: pads announced before are forgotten.
     void gamepadsReset();
     // op: "power" | "scan" | "pair" | "forget" | "connect" | "disconnect" | "rename" | "controller-pairing"; status: see

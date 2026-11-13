@@ -375,7 +375,7 @@ else:
 # T-453: ListGamepads with a pad that exists. A virtual gamepad is made through /dev/uinput (root; USB bus, Microsoft's
 # vendor id, BTN_SOUTH and BTN_EAST: what the service takes for a pad, input.rs). The service reads the kernel's input
 # devices every two seconds, so the check waits up to 8 s: the pad must then be in ListGamepads once (id and name
-# "Ruya Test Pad", family xbox, transport usb, exactly the four keys, the baseline included: the service did not
+# "Ruya Test Pad", family xbox, model xbox_360 (045e:028e, RUY-491), transport usb, exactly the five keys, the baseline included: the service did not
 # start with it), and gone again up to 8 s after the device is destroyed. No uinput in the image: reported, not a failure.
 gamepads_check() {
     local verdict
@@ -423,7 +423,7 @@ try:
             print("wrong: the virtual pad is not in ListGamepads after 8 s:", got)
             sys.exit(0)
         pad = {k: v["data"] for k, v in got[0].items()}
-        want = {"id": "Ruya Test Pad", "name": "Ruya Test Pad", "family": "xbox", "transport": "usb"}
+        want = {"id": "Ruya Test Pad", "name": "Ruya Test Pad", "family": "xbox", "model": "xbox_360", "transport": "usb"}
         if pad != want:
             print("wrong: the pad is", pad, "not", want)
             sys.exit(0)
@@ -440,7 +440,7 @@ PY
 )"
     echo "$verdict"
     case "$verdict" in
-        *"VERDICT ok"*) ok "ListGamepads lists a virtual USB pad (id, name, xbox, usb) within 8 s and drops it within 8 s of its removal";;
+        *"VERDICT ok"*) ok "ListGamepads lists a virtual USB pad (id, name, xbox, xbox_360, usb) within 8 s and drops it within 8 s of its removal";;
         *) bad "ListGamepads with a virtual pad: $verdict";;
     esac
     as_shell systemctl --user is-active ruya-devices >/dev/null && ok "ruya-devices still active after the gamepads check" || bad "ruya-devices not active"

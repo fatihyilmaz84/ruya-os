@@ -670,6 +670,7 @@ impl BatteriesIface {
                     ("percent", own(Value::from(b.percent))),
                     ("state", own(Value::from(b.state.as_str()))),
                     ("family", own(Value::from(b.family))),
+                    ("model", own(Value::from(b.pad_model))),
                     ("address", own(Value::from(b.address.clone()))),
                 ]
                 .into_iter()
@@ -807,7 +808,7 @@ pub type SharedInput = Arc<InputPresence<crate::input::DynInputSource>>;
 #[cfg(target_os = "linux")]
 const INPUT_POLL: Duration = Duration::from_secs(2);
 
-/// `ListGamepads`: one dictionary per pad, `{ id, name, family, transport }`.
+/// `ListGamepads`: one dictionary per pad, `{ id, name, family, model, transport }`.
 fn gamepad_dicts(pads: &[crate::input::Gamepad]) -> Vec<HashMap<String, OwnedValue>> {
     pads.iter()
         .map(|p| {
@@ -816,6 +817,7 @@ fn gamepad_dicts(pads: &[crate::input::Gamepad]) -> Vec<HashMap<String, OwnedVal
                 ("id", own(Value::from(p.id.clone()))),
                 ("name", own(Value::from(p.name.clone()))),
                 ("family", own(Value::from(p.family))),
+                ("model", own(Value::from(p.model))),
                 ("transport", own(Value::from(p.transport))),
             ]
             .into_iter()
@@ -951,6 +953,7 @@ impl BluetoothIface {
                     ("kind", own(Value::from(d.kind))),
                     ("keyboard", own(Value::from(d.keyboard))),
                     ("family", own(Value::from(d.family))),
+                    ("model", own(Value::from(d.model))),
                     ("paired", own(Value::from(d.paired))),
                     ("bonded", own(Value::from(d.bonded))),
                     ("connected", own(Value::from(d.connected))),
@@ -1066,6 +1069,7 @@ impl BluetoothIface {
         name: &str,
         family: &str,
         transport: &str,
+        model: &str,
     ) -> zbus::Result<()>;
 
     #[zbus(signal)]
@@ -1075,6 +1079,7 @@ impl BluetoothIface {
         name: &str,
         family: &str,
         transport: &str,
+        model: &str,
     ) -> zbus::Result<()>;
 
     #[zbus(property)]
@@ -1291,6 +1296,7 @@ pub async fn watch_input(connection: Connection, input: SharedInput) {
                         &p.name,
                         p.family,
                         p.transport,
+                        p.model,
                     )
                     .await
                 }
@@ -1301,6 +1307,7 @@ pub async fn watch_input(connection: Connection, input: SharedInput) {
                         &p.name,
                         p.family,
                         p.transport,
+                        p.model,
                     )
                     .await
                 }
@@ -2429,6 +2436,28 @@ mod tests {
         assert_eq!(addresses, ["AA:00:00:00:00:04", "AA:00:00:00:00:05"]);
     }
 
+    /// RUY-491: a battery says its controller model: guessed from UPower's model name when no
+    /// Bluetooth device has the address (the first pad), else the Bluetooth device's (the second:
+    /// the rig's paired DualSense, though UPower only knows a "Wireless Controller").
+    #[test]
+    fn list_batteries_carries_the_controller_model() {
+        let mut pad = upower_pad("AA:00:00:00:00:04", 62.0);
+        pad.model = "Xbox 360 Controller".to_owned();
+        pad.serial = String::new();
+        let (_upower, batteries, bluetooth) = rig(vec![pad, upower_pad("AA:00:00:00:00:05", 40.0)]);
+        batteries_due(&batteries, &bluetooth).expect("reads");
+        let iface = BatteriesIface::new(batteries, bluetooth);
+        let listed = iface.list_batteries();
+        let models: Vec<String> = listed
+            .iter()
+            .map(|b| match b.get("model").map(|v| &**v) {
+                Some(Value::Str(s)) => s.as_str().to_owned(),
+                other => panic!("model: {other:?}"),
+            })
+            .collect();
+        assert_eq!(models, ["xbox_360", "dualsense"]);
+    }
+
     /// T-453: `ListGamepads` answers the pads of the last read, a wired pad with no battery and no
     /// Bluetooth entry included, with the four keys of the contract.
     #[test]
@@ -2463,8 +2492,9 @@ mod tests {
         assert_eq!(text("id"), "usb-0000:00:14.0-2/input0");
         assert_eq!(text("name"), "Xbox 360 Controller");
         assert_eq!(text("family"), "xbox");
+        assert_eq!(text("model"), "xbox_360", "045e:028e");
         assert_eq!(text("transport"), "usb");
-        assert_eq!(listed[0].len(), 4, "exactly the contract's keys");
+        assert_eq!(listed[0].len(), 5, "exactly the contract's keys");
     }
 
     #[test]

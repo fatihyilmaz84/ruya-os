@@ -28,7 +28,8 @@ void MockBatteryBackend::publish()
 }
 
 void MockBatteryBackend::setDevice(const QString &id, int percent, const QString &state, const QString &kind,
-                                   const QString &name, const QString &family, const QString &address)
+                                   const QString &name, const QString &family, const QString &address,
+                                   const QString &model)
 {
     for (DeviceBattery &existing : m_list) {
         if (existing.id != id)
@@ -43,6 +44,8 @@ void MockBatteryBackend::setDevice(const QString &id, int percent, const QString
             existing.family = family;
         if (!address.isEmpty())
             existing.address = address;
+        if (!model.isEmpty())
+            existing.model = model;
         publish();
         return;
     }
@@ -54,6 +57,7 @@ void MockBatteryBackend::setDevice(const QString &id, int percent, const QString
     c.state = state;
     c.family = family;
     c.address = address;
+    c.model = model;
     m_list.append(c);
     publish();
 }
@@ -92,7 +96,7 @@ void MockBatteryBackend::populate()
 {
     m_list.clear();
     const auto add = [this](const char *id, const char *name, const char *kind, int percent, const char *state,
-                            const char *family = "") {
+                            const char *family = "", const char *model = "") {
         DeviceBattery d;
         d.id = QString::fromLatin1(id);
         d.name = QString::fromLatin1(name);
@@ -100,10 +104,11 @@ void MockBatteryBackend::populate()
         d.percent = percent;
         d.state = QString::fromLatin1(state);
         d.family = QString::fromLatin1(family);
+        d.model = QString::fromLatin1(model);
         m_list.append(d);
     };
-    add("pad-1", "DualSense Wireless Controller", "controller", 62, "charging", "playstation");
-    add("pad-2", "Xbox Wireless Controller", "controller", 41, "discharging", "xbox");
+    add("pad-1", "DualSense Wireless Controller", "controller", 62, "charging", "playstation", "dualsense");
+    add("pad-2", "Xbox Wireless Controller", "controller", 41, "discharging", "xbox", "xbox_series");
     add("headset-1", "WH-1000XM4", "headset", 78, "discharging");
     add("keyboard-1", "Ruya Keyboard", "keyboard", 94, "discharging");
     add("mouse-1", "Ruya Mouse", "mouse", 12, "discharging");

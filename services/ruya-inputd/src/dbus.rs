@@ -116,6 +116,7 @@ fn record(d: &DeviceRecord) -> Dict {
         ("name", Value::from(d.name.clone())),
         ("family", Value::from(d.family.clone())),
         ("connection", Value::from(d.connection.clone())),
+        ("model", Value::from(d.model.clone())),
         ("layout", Value::from(d.layout.clone())),
         ("battery", Value::from(d.battery)),
         ("charging", Value::from(d.charging)),
@@ -467,5 +468,37 @@ pub async fn follow_callers(connection: Connection, shared: Arc<Shared>) {
         if new.is_empty() && name.starts_with(':') {
             shared.with(|r| r.caller_left(&name, Instant::now()));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zbus::zvariant::Value;
+
+    #[test]
+    fn a_device_record_has_the_model_key_next_to_the_family() {
+        let d = DeviceRecord {
+            id: "bluetooth-054c-0ce6-0123456789ab".into(),
+            instance: "bluetooth-054c-0ce6-0123456789ab#1".into(),
+            name: "DualSense Wireless Controller".into(),
+            family: "playstation".into(),
+            connection: "bluetooth".into(),
+            model: "dualsense".into(),
+            layout: String::new(),
+            battery: -1,
+            charging: false,
+            slot: 0,
+            profile: String::new(),
+            routed: false,
+        };
+        let dict = record(&d);
+        let text = |key: &str| match dict.get(key).map(|v| &**v) {
+            Some(Value::Str(s)) => s.as_str().to_owned(),
+            other => panic!("{key}: {other:?}"),
+        };
+        assert_eq!(text("family"), "playstation");
+        assert_eq!(text("model"), "dualsense");
+        assert_eq!(dict.len(), 12, "the contract's keys, no more");
     }
 }

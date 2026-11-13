@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use crate::families::family_of_device;
+use crate::families::{family_of_device, model_of_device};
 use crate::idle_pads::{IdlePads, IdleReport, Pad};
 use crate::log::{self, clean};
 use crate::pairing::{
@@ -137,6 +137,16 @@ pub fn kind_of(icon: &str) -> &'static str {
 pub fn family_for(kind: &str, modalias: &str, device_name: &str, alias: &str) -> &'static str {
     if kind == "controller" {
         family_of_device(modalias, device_name, alias)
+    } else {
+        ""
+    }
+}
+
+/// The contract's `model`: the silhouette of a `controller` (`ruya_pads`, through
+/// `families::model_of_device`), "" for every other kind and for a pad the table does not know.
+pub fn model_for(kind: &str, modalias: &str, device_name: &str, alias: &str) -> &'static str {
+    if kind == "controller" {
+        model_of_device(modalias, device_name, alias)
     } else {
         ""
     }
@@ -392,6 +402,8 @@ pub struct Device {
     pub keyboard: bool,
     /// "playstation" | "xbox" | "nintendo" | "" (`family_for`).
     pub family: &'static str,
+    /// The controller model whose silhouette the shell draws (`model_for`), "" when unknown.
+    pub model: &'static str,
     pub paired: bool,
     pub bonded: bool,
     pub connected: bool,
@@ -415,6 +427,7 @@ pub fn list_of(raw: &[RawDevice]) -> Vec<Device> {
             keyboard: kind_of(&d.icon) == "keyboard"
                 || crate::pairing::is_keyboard_class(d.class, d.appearance),
             family: family_for(kind_of(&d.icon), &d.modalias, &d.name, &d.alias),
+            model: model_for(kind_of(&d.icon), &d.modalias, &d.name, &d.alias),
             paired: d.paired,
             bonded: d.bonded,
             connected: d.connected,
@@ -2476,6 +2489,60 @@ mod tests {
                 ("AA:BB:CC:00:00:01", "controller", "playstation"),
                 ("AA:BB:CC:00:00:08", "phone", ""),
                 ("AA:BB:CC:00:00:02", "controller", "xbox"),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_controller_carries_its_model_and_nothing_else_does() {
+        let list = list_of(&[
+            with_modalias(
+                raw_dev(
+                    "AA:BB:CC:00:00:01",
+                    "Wireless Controller",
+                    "input-gaming",
+                    true,
+                ),
+                "usb:v054Cp0CE6d0100",
+            ),
+            with_modalias(
+                raw_dev(
+                    "AA:BB:CC:00:00:02",
+                    "Nintendo RVL-CNT-01-UC",
+                    "input-gaming",
+                    true,
+                ),
+                "usb:v057Ep0330d0600",
+            ),
+            with_modalias(
+                raw_dev(
+                    "AA:BB:CC:00:00:03",
+                    "Xbox Wireless Controller",
+                    "input-gaming",
+                    true,
+                ),
+                "usb:v045Ep0B13d0509",
+            ),
+            // A known maker, a product the table lacks: no model, the family's picture applies.
+            with_modalias(
+                raw_dev("AA:BB:CC:00:00:04", "Pad X", "input-gaming", true),
+                "usb:v057Ep7777d0001",
+            ),
+            // The same vendor, a headset: no model.
+            with_modalias(
+                raw_dev("AA:BB:CC:00:00:05", "WH-1000XM4", "audio-headset", true),
+                "usb:v054Cp0CE6d0100",
+            ),
+        ]);
+        let models: Vec<(&str, &str)> = list.iter().map(|d| (d.id.as_str(), d.model)).collect();
+        assert_eq!(
+            models,
+            [
+                ("AA:BB:CC:00:00:02", "wiiu_pro"),
+                ("AA:BB:CC:00:00:04", ""),
+                ("AA:BB:CC:00:00:05", ""),
+                ("AA:BB:CC:00:00:01", "dualsense"),
+                ("AA:BB:CC:00:00:03", "xbox_series"),
             ]
         );
     }

@@ -31,7 +31,7 @@ QtObject {
         return connection === "usb" ? qsTr("USB") : connection === "bluetooth" ? qsTr("Bluetooth") : ""
     }
 
-    // The Hub's pads: [{ id, name, rawName, family, transport, percent, state }], by name then id.
+    // The Hub's pads: [{ id, name, rawName, family, model, transport, percent, state }], by name then id.
     function hubPads() {
         const batteries = Batteries.devices.filter(b => b.kind === "controller")
         const used = ({})
@@ -47,6 +47,7 @@ QtObject {
                         name: paired ? DeviceIcons.shownName(Bluetooth.devices, paired) : DeviceIcons.plain(g.name),
                         rawName: g.name,
                         family: g.family !== "" ? g.family : (paired ? paired.family : ""),
+                        model: (g.model ?? "") !== "" ? g.model : (paired ? (paired.model ?? "") : ""),
                         transport: g.transport,
                         percent: battery ? battery.percent : (paired && paired.battery >= 0 ? paired.battery : -1),
                         state: battery ? battery.state : "" })
@@ -66,7 +67,7 @@ QtObject {
         return pads
     }
 
-    // Input1's pads as rows: [{ id, name, family, connection, layout, percent, state, slot }], sorted by
+    // Input1's pads as rows: [{ id, name, family, model, connection, layout, percent, state, slot }], sorted by
     // player (slot 1..n; none last), then name, then id.
     function controllers() {
         const devices = Input.devices
@@ -80,6 +81,7 @@ QtObject {
             return { id: d.id,
                      name: hubPad ? hubPad.name : DeviceIcons.plain(d.name),
                      family: d.family !== "generic" ? d.family : (hubPad ? hubPad.family : ""),
+                     model: (d.model ?? "") !== "" ? d.model : (hubPad ? hubPad.model : ""),
                      connection: d.connection,
                      layout: d.layout ?? "",
                      percent: own ? d.battery : (hubPad ? hubPad.percent : -1),

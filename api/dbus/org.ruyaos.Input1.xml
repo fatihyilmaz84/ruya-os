@@ -48,6 +48,11 @@
     name        s   the driver's name ("DualSense Wireless Controller")
     family      s   "xbox" | "playstation" | "nintendo" | "generic"
     connection  s   "usb" | "bluetooth" | "receiver" | "virtual"
+    model       s   the controller model whose silhouette the shell draws: the file stem of a drawing in
+                    shell/art/pads/ ("dualsense", "wiiu_pro", ...), "" when the table does not know the
+                    pad (the shell then draws the family's). From the USB ids and the driver's name;
+                    the same table as Devices1's `model` (services/ruya-pads; RUY-491; a missing key
+                    is "")
     layout      s   how the Button test draws the pad: "nintendo-wiiu" (Wii U Pro, 057e:0330), or ""
                     for the family's default drawing (RUY-486; a missing key is "")
     battery     i   0..100, or -1 when unknown or not on battery

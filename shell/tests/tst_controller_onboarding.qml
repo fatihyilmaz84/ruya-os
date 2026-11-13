@@ -76,7 +76,7 @@ Item {
             tryCompare(Notifications.model, "count", 1)
             compare(Notifications.model.get(0).text, "PlayStation controller connected")
             compare(Notifications.model.get(0).detail, "Battery 60% · USB")
-            compare(Notifications.model.get(0).iconName, "pad_playstation")
+            compare(Notifications.model.get(0).iconName, "pad_dualsense")
             compare(Notifications.model.get(0).kind, "success")
             usb(true, "usb-1", "Wireless Controller", "playstation")      // the same connection again
             wait(150)
@@ -127,7 +127,7 @@ Item {
             usb(false, "usb-1", "Wireless Controller", "playstation")
             tryCompare(toasts, "disconnectedShown", 1)
             compare(toastTexts()[1], "PlayStation controller disconnected")
-            compare(Notifications.model.get(1).iconName, "pad_playstation")
+            compare(Notifications.model.get(1).iconName, "pad_dualsense")
         }
 
         function test_a_pad_that_was_not_in_use_leaves_quietly() {
@@ -199,8 +199,8 @@ Item {
             const texts = toastTexts()
             verify(texts.includes("Wireless Controller (00:04) connected | Battery 80% · Bluetooth"), texts.join(" | "))
             verify(texts.includes("Wireless Controller (00:05) connected | Battery 55% · Bluetooth"), texts.join(" | "))
-            compare(Notifications.model.get(0).iconName, "pad_playstation")
-            compare(Notifications.model.get(1).iconName, "pad_playstation")
+            compare(Notifications.model.get(0).iconName, "pad_dualsense")
+            compare(Notifications.model.get(1).iconName, "pad_dualsense")
             // The same connections again say nothing new.
             bt(true, tc.padA)
             bt(true, tc.padB)
@@ -306,7 +306,7 @@ Item {
                 verify(t.indexOf("connected") >= 0 && t.toLowerCase().indexOf("battery 60%") >= 0, t)
                 verify(t.toLowerCase().indexOf("receiver") < 0, "no toast for the receiver: " + t)
             }
-            compare(Notifications.model.get(0).iconName, "pad_xbox")
+            compare(Notifications.model.get(0).iconName, "pad_xbox_series")
             clearToasts()
             toasts.noteInput()
             usb(false, "usb-1/input2", "Xbox 360 Controller", "xbox")
@@ -484,13 +484,17 @@ Item {
             onb.open()
             Bluetooth.mockReveal("bt-flaky")
             tryVerify(() => find("onbRow_bt-flaky") !== null, 2000)
-            const table = [["playstation", "pad_playstation"], ["xbox", "pad_xbox"], ["nintendo", "pad_switch"],
+            const table = [["playstation", "pad_dualsense"], ["xbox", "pad_xbox_series"], ["nintendo", "pad_switch_pro"],
                            ["8bitdo", "sports_esports"], ["", "sports_esports"]]
             for (const [family, glyph] of table) {
                 Bluetooth.mockSetFamily("bt-flaky", family)
                 tryVerify(() => findChild(find("onbRow_bt-flaky"), "onbRowGlyph").name === glyph, 2000, family)
                 compare(DeviceIcons.iconFor("controller", family), glyph)
             }
+            // The model the service names (RUY-491) is the pad's own silhouette, whatever the family.
+            Bluetooth.mockSetFamily("bt-flaky", "nintendo")
+            Bluetooth.mockSetModel("bt-flaky", "wiiu_pro")
+            tryVerify(() => findChild(find("onbRow_bt-flaky"), "onbRowGlyph").name === "pad_wiiu_pro", 2000, "the model")
         }
 
         function test_a_controller_the_service_paired_itself_is_listed_as_done() {

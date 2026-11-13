@@ -48,6 +48,7 @@ QList<DeviceBattery> parseBatteries(const QDBusArgument &arg)
         c.state = d.value(QStringLiteral("state"), c.state).toString();
         c.family = d.value(QStringLiteral("family")).toString();     // an older service tells none
         c.address = d.value(QStringLiteral("address")).toString();   // nor an address
+        c.model = d.value(QStringLiteral("model")).toString();       // nor a model
         out.append(c);
     }
     arg.endArray();

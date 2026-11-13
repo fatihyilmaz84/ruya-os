@@ -41,8 +41,9 @@ Row {
     readonly property string chargeState: chip.device.state ?? "unknown"
     readonly property bool low: chip.device.low ?? false
     // The glyph of the device: the one table every screen uses (DeviceIcons), with the family the
-    // service told (T-260), so a pad looks the same here as in Settings and in the toasts.
-    readonly property string kindIcon: DeviceIcons.iconFor(chip.device.kind ?? "", chip.device.family ?? "")
+    // service told (T-260) and its model (RUY-491), so a pad looks the same here as in Settings and in the toasts.
+    readonly property string kindIcon: DeviceIcons.iconFor(chip.device.kind ?? "", chip.device.family ?? "",
+                                                           chip.device.model ?? "")
     readonly property string levelIcon: levelIconFor(percent, chargeState, low)
     readonly property color tone: low ? Theme.warningText : Theme.text
 

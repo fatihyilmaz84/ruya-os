@@ -400,6 +400,13 @@
                        table is in the service (families.rs). Shells show a
                        family's picture when they have one and the generic controller otherwise, and
                        treat a family they do not know as ""
+        model      s   the controller model, for kind "controller" only: the file stem of a silhouette
+                       in shell/art/pads/ ("dualsense", "wiiu_pro", "xbox_series", ...), or "" when the
+                       table does not know the pad (every other kind, an unknown pad). From the USB ids
+                       of the Modalias (when it is a `usb:` one) and the device's own name; one table
+                       for Devices1 and Input1, services/ruya-pads. Shells draw the model's picture
+                       when they have one, else the family's, else the generic controller; they treat a
+                       model they do not know, or a missing key, as "" (RUY-491)
         paired     b
         bonded     b   BlueZ's Device1.Bonded: the pairing keys are kept. A device paired while the
                        adapter was not pairable (before the pairing fix) is `paired` but not `bonded`
@@ -589,6 +596,7 @@
         id         s   stable per pad (the Bluetooth address when it has one, else the USB port, else the name)
         name       s   made fit to show, plain text only
         family     s   "playstation" | "xbox" | "nintendo" | "8bitdo" | ""
+        model      s   the controller model as in ListDevices, from the pad's USB ids and name; "" when unknown
         transport  s   "usb" | "bluetooth" | "other"
       A pad's battery is not here: Batteries.ListBatteries has it (the pad's `address` is its Bluetooth
       address, which is the `id` of a Bluetooth pad here, compared without regard to case). Read-only,
@@ -612,6 +620,7 @@
         family     s   as in ListDevices: "playstation" | "xbox" | "nintendo" | "8bitdo" | "", from the
                        USB vendor id the device reports (the same table, families.rs)
         transport  s   "usb" | "bluetooth" | "other"
+        model      s   (the fifth argument) the controller model as in ListGamepads, "" when unknown
       The shell debounces a cable that flaps; nothing here says whether the pad is "in use".
       Since T-453 the two signals also mean "the list changed": ListGamepads has the pads present now,
       baseline included (a client that connects or reconnects asks it once, then again after a signal).
@@ -621,6 +630,7 @@
       <arg name="name" type="s"/>
       <arg name="family" type="s"/>
       <arg name="transport" type="s"/>
+      <arg name="model" type="s"/>
     </signal>
 
     <signal name="GamepadDisconnected">
@@ -628,6 +638,7 @@
       <arg name="name" type="s"/>
       <arg name="family" type="s"/>
       <arg name="transport" type="s"/>
+      <arg name="model" type="s"/>
     </signal>
 
   </interface>
@@ -855,6 +866,10 @@
                      holds it for a BlueZ-fed pad) decides, so the two lists agree; a wired or dongle
                      pad is guessed from UPower's vendor and model through the same table (families.rs).
                      Clients treat a missing key or a family they do not know as ""
+        model    s   for kind "controller": the controller model as in Bluetooth.ListDevices ("dualsense",
+                     ...), "" when unknown and for every other kind. The Bluetooth device with the same
+                     address decides, as for `family`; a wired or dongle pad is guessed from UPower's
+                     model and vendor names (UPower has no USB ids). Clients treat a missing key as ""
         address  s   the Bluetooth address (upper case, "E4:17:D8:00:00:01") of a device UPower ties
                      to one (its Serial or NativePath holds it for a BlueZ-fed device), "" for every
                      other (a wired or dongle pad, a mouse on a receiver). It is the id of the same

@@ -23,7 +23,7 @@ QtObject {
 
     property int debounceMs: 800
 
-    // Waiting announcements: [{ kind: "connected" | "disconnected", id, name, family, transport }].
+    // Waiting announcements: [{ kind: "connected" | "disconnected", id, name, family, transport, model }].
     property var waiting: []
     // Pads the user was told are connected: id -> { used }.
     property var shown: ({})
@@ -45,7 +45,7 @@ QtObject {
         return waiting.findIndex(w => w.id === id)
     }
 
-    function onConnected(id, name, family, transport, deviceKind) {
+    function onConnected(id, name, family, transport, deviceKind, model) {
         const at = indexWaiting(id)
         if (at >= 0) {
             if (waiting[at].kind === "disconnected") {
@@ -54,7 +54,7 @@ QtObject {
             }
         } else if (!(id in shown)) {
             waiting = waiting.concat([{ kind: "connected", id: id, name: name, family: family, transport: transport,
-                                                         deviceKind: deviceKind ?? "controller" }])
+                                                         model: model ?? "", deviceKind: deviceKind ?? "controller" }])
         }
         settle.restart()
     }
@@ -80,7 +80,7 @@ QtObject {
         toasts.keyboards = now
     }
 
-    function onDisconnected(id, name, family, transport) {
+    function onDisconnected(id, name, family, transport, model) {
         const at = indexWaiting(id)
         if (at >= 0) {
             if (waiting[at].kind === "connected") {
@@ -88,7 +88,8 @@ QtObject {
                 waiting = waiting.filter((w, i) => i !== at)
             }
         } else if (id in shown) {
-            waiting = waiting.concat([{ kind: "disconnected", id: id, name: name, family: family, transport: transport }])
+            waiting = waiting.concat([{ kind: "disconnected", id: id, name: name, family: family, transport: transport,
+                                         model: model ?? "" }])
         }
         settle.restart()
     }
@@ -126,7 +127,7 @@ QtObject {
             else if (w.transport === "usb")
                 parts.push(qsTr("USB"))
             toasts.connectedShown += 1
-            Notifications.show(qsTr("%1 connected").arg(name), "success", "", DeviceIcons.iconFor(deviceKind, w.family),
+            Notifications.show(qsTr("%1 connected").arg(name), "success", "", DeviceIcons.iconFor(deviceKind, w.family, w.model),
                                parts.join(" · "), { source: "devices" })
         } else {
             const used = shown[w.id] ? shown[w.id].used : false
@@ -134,7 +135,7 @@ QtObject {
             if (used || !Bluetooth.inputPresent) {
                 toasts.disconnectedShown += 1
                 Notifications.show(qsTr("%1 disconnected").arg(displayName(w.id, w.name, w.family)), "info", "",
-                                   DeviceIcons.iconFor("controller", w.family), "", { source: "devices" })
+                                   DeviceIcons.iconFor("controller", w.family, w.model), "", { source: "devices" })
             }
         }
     }
@@ -151,8 +152,12 @@ QtObject {
 
     property Connections events: Connections {
         target: Bluetooth
-        function onGamepadConnected(id, name, family, transport) { toasts.onConnected(id, name, family, transport) }
-        function onGamepadDisconnected(id, name, family, transport) { toasts.onDisconnected(id, name, family, transport) }
+        function onGamepadConnected(id, name, family, transport, model) {
+            toasts.onConnected(id, name, family, transport, undefined, model)
+        }
+        function onGamepadDisconnected(id, name, family, transport, model) {
+            toasts.onDisconnected(id, name, family, transport, model)
+        }
         // The service restarted: what it said before is void, and its next read is a new baseline.
         function onGamepadsReset() {
             toasts.waiting = []

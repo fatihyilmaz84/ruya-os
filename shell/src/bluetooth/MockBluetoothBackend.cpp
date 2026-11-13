@@ -287,6 +287,15 @@ void MockBluetoothBackend::setFamily(const QString &id, const QString &family)
     }
 }
 
+void MockBluetoothBackend::setModel(const QString &id, const QString &model)
+{
+    const int at = indexOf(id);
+    if (at >= 0) {
+        m_entries[at].dev.model = model;
+        publish();
+    }
+}
+
 void MockBluetoothBackend::setBonded(const QString &id, bool bonded)
 {
     const int at = indexOf(id);
@@ -324,17 +333,17 @@ void MockBluetoothBackend::reveal(const QString &id)
 }
 
 void MockBluetoothBackend::gamepadEvent(bool connected, const QString &id, const QString &name, const QString &family,
-                                        const QString &transport)
+                                        const QString &transport, const QString &model)
 {
-    QTimer::singleShot(0, this, [this, connected, id, name, family, transport] {
+    QTimer::singleShot(0, this, [this, connected, id, name, family, transport, model] {
         m_gamepads.removeIf([&id](const BtGamepad &p) { return p.id.compare(id, Qt::CaseInsensitive) == 0; });
         if (connected)
-            m_gamepads.append({id, name, family, transport});
+            m_gamepads.append({id, name, family, transport, model});
         deliverGamepads(beginGamepadsRequest(), gamepadList());
         if (connected)
-            emit gamepadConnected(id, name, family, transport);
+            emit gamepadConnected(id, name, family, transport, model);
         else
-            emit gamepadDisconnected(id, name, family, transport);
+            emit gamepadDisconnected(id, name, family, transport, model);
     });
 }
 
@@ -351,20 +360,20 @@ void MockBluetoothBackend::setBattery(const QString &id, int percent)
 // names and the screenshots show them all. "gizmo" is a kind that no shell version knows.
 void MockBluetoothBackend::populate()
 {
-    struct Spec { const char *id; const char *name; const char *kind; const char *family; };
+    struct Spec { const char *id; const char *name; const char *kind; const char *family; const char *model; };
     static const Spec specs[] = {
-        {"bt-gallery-ps", "DualSense", "controller", "playstation"},
-        {"bt-gallery-xbox", "Xbox Wireless Controller", "controller", "xbox"},
-        {"bt-gallery-switch", "Pro Controller", "controller", "nintendo"},
-        {"bt-gallery-8bitdo", "8BitDo Pro 2", "controller", "8bitdo"},
-        {"bt-gallery-pad", "Generic Pad", "controller", ""},
-        {"bt-gallery-headset", "WH-1000XM4", "headset", ""},
-        {"bt-gallery-speaker", "Kitchen Speaker", "speaker", ""},
-        {"bt-gallery-keyboard", "Living Room Keyboard", "keyboard", ""},
-        {"bt-gallery-mouse", "Travel Mouse", "mouse", ""},
-        {"bt-gallery-phone", "Fatma's Phone", "phone", ""},
-        {"bt-gallery-other", "Fitness Band", "other", ""},
-        {"bt-gallery-gizmo", "Mystery Gadget", "gizmo", ""},
+        {"bt-gallery-ps", "DualSense", "controller", "playstation", "dualsense"},
+        {"bt-gallery-xbox", "Xbox Wireless Controller", "controller", "xbox", "xbox_series"},
+        {"bt-gallery-switch", "Pro Controller", "controller", "nintendo", "switch_pro"},
+        {"bt-gallery-8bitdo", "8BitDo Pro 2", "controller", "8bitdo", "8bitdo_pro2"},
+        {"bt-gallery-pad", "Generic Pad", "controller", "", ""},
+        {"bt-gallery-headset", "WH-1000XM4", "headset", "", ""},
+        {"bt-gallery-speaker", "Kitchen Speaker", "speaker", "", ""},
+        {"bt-gallery-keyboard", "Living Room Keyboard", "keyboard", "", ""},
+        {"bt-gallery-mouse", "Travel Mouse", "mouse", "", ""},
+        {"bt-gallery-phone", "Fatma's Phone", "phone", "", ""},
+        {"bt-gallery-other", "Fitness Band", "other", "", ""},
+        {"bt-gallery-gizmo", "Mystery Gadget", "gizmo", "", ""},
     };
     for (const Spec &s : specs) {
         if (indexOf(QString::fromLatin1(s.id)) >= 0)
@@ -377,6 +386,7 @@ void MockBluetoothBackend::populate()
         e.dev.bonded = true;
         e.dev.kind = QString::fromLatin1(s.kind);
         e.dev.family = QString::fromLatin1(s.family);
+        e.dev.model = QString::fromLatin1(s.model);
         e.dev.keyboard = e.dev.kind == QLatin1String("keyboard");
         e.dev.paired = true;
         e.dev.connected = true;
@@ -401,6 +411,7 @@ void MockBluetoothBackend::addTwoPads()
         e.dev.bonded = true;
         e.dev.kind = QStringLiteral("controller");
         e.dev.family = QStringLiteral("playstation");
+        e.dev.model = QStringLiteral("dualsense");
         e.dev.paired = true;
         e.dev.connected = true;
         e.dev.trusted = true;
@@ -524,7 +535,7 @@ QList<BtGamepad> MockBluetoothBackend::gamepadList() const
             return p.id.compare(e.dev.id, Qt::CaseInsensitive) == 0;
         });
         if (!known)
-            pads.append({e.dev.id, e.dev.name, e.dev.family, QStringLiteral("bluetooth")});
+            pads.append({e.dev.id, e.dev.name, e.dev.family, QStringLiteral("bluetooth"), e.dev.model});
     }
     return pads;
 }

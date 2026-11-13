@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["ruya-inputd", "ruya-profiles", "ruya-devices", "ruya-store", "ruya-update", "ruya-session", "ruya-library", "ruya-sysinfo"]
+members = ["ruya-inputd", "ruya-profiles", "ruya-devices", "ruya-store", "ruya-update", "ruya-session", "ruya-library", "ruya-sysinfo", "ruya-pads"]
 
 [workspace.package]
 version = "0.1.0"

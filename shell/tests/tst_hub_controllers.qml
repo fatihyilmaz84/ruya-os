@@ -188,6 +188,7 @@ Item {
             start()
             noPads()
             Bluetooth.mockTwoPads()                                    // two connected Bluetooth pads, 80 % and 55 %
+            Bluetooth.mockSetModel("AA:00:00:00:00:05", "dualshock4")   // the service named the second one's model (RUY-491)
             plugIn("usb-1", "Xbox Controller", "xbox")                 // a wired pad
             Batteries.mockSet("up-usb", 100, "full", "controller", "Xbox Wireless Controller", "xbox")   // UPower: no address
             tryVerify(() => Batteries.devices.length === 1)
@@ -201,9 +202,10 @@ Item {
             compare(rowName("controllers:pad:aa:00:00:00:00:04"), "Wireless Controller (00:04), Battery 80 % · Bluetooth")
             compare(rowName("controllers:pad:aa:00:00:00:00:05"), "Wireless Controller (00:05), Battery 55 % · Bluetooth")
             compare(rowName("controllers:pad:usb-1"), "Xbox Controller, Battery full · USB")
-            // The family glyph of each.
-            compare(findChild(find("quickMenuItem_controllers:pad:usb-1"), "hubInfoIcon").name, "pad_xbox")
-            compare(findChild(find("quickMenuItem_controllers:pad:aa:00:00:00:00:04"), "hubInfoIcon").name, "pad_playstation")
+            // The silhouette of each: the model the service named, else the family's.
+            compare(findChild(find("quickMenuItem_controllers:pad:usb-1"), "hubInfoIcon").name, "pad_xbox_series")
+            compare(findChild(find("quickMenuItem_controllers:pad:aa:00:00:00:00:04"), "hubInfoIcon").name, "pad_dualsense")
+            compare(findChild(find("quickMenuItem_controllers:pad:aa:00:00:00:00:05"), "hubInfoIcon").name, "pad_dualshock4")
             // The readings are in `text`, never `textDim` (04 §7), and take focus so Up/Down walk them.
             compare(findChild(find("quickMenuItem_controllers:pad:usb-1"), "hubInfoValue").color, Theme.text)
             compare(focusedKey(), padKeys()[0], "the focus lands on the first pad")

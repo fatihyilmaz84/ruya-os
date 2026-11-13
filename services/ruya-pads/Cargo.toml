@@ -1,0 +1,9 @@
+[package]
+name = "ruya-pads"
+description = "Which controller model a pad is, from its USB ids and its name: the one table behind the `model` key of Devices1 and Input1 (pure core, no D-Bus)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]

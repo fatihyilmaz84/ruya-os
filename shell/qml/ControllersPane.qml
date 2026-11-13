@@ -59,7 +59,7 @@ SettingsPane {
         }
         for (let i = 0; i < list.length; ++i) {
             const p = list[i]
-            const entry = { padId: p.id, name: p.name, family: p.family, detailLine: ControllerPads.detailText(p),
+            const entry = { padId: p.id, name: p.name, family: p.family, silhouette: p.model, detailLine: ControllerPads.detailText(p),
                             player: ControllerPads.playerText(p.slot) }
             let at = -1
             for (let j = 0; j < padModel.count; ++j) {
@@ -169,6 +169,7 @@ SettingsPane {
             required property string padId
             required property string name
             required property string family
+            required property string silhouette   // the controller model (not `model`: a delegate has one)
             required property string detailLine
             required property string player
             readonly property bool padRow: true
@@ -176,7 +177,7 @@ SettingsPane {
             visible: !pane.failed            // the last list is not shown as if it were current
             u: pane.u
             label: name
-            iconName: DeviceIcons.iconFor("controller", family)
+            iconName: DeviceIcons.iconFor("controller", family, silhouette)
             detail: detailLine
             value: player
             // "DualSense Wireless Controller, PlayStation controller, Player 1, Bluetooth · Battery 62 %"

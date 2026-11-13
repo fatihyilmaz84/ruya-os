@@ -11,6 +11,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"  # pw-dump output (wpctl/pw-dump child processes, no PipeWire bindings)
 toml = "0.8"
 ruya-sysinfo = { path = "../ruya-sysinfo" }  # the System information collector (T-226)
+ruya-pads = { path = "../ruya-pads" }  # the controller model table (RUY-491)
 zbus = { version = "5", default-features = false, features = ["async-io"] }
 futures-lite = "2"
 async-io = "2"  # timers; already in the tree through zbus

@@ -165,9 +165,9 @@ Item {
             tryCompare(Notifications.model, "count", 3)
             tryVerify(() => child(toastItem(2), "toastIcon").name === "error")
             Notifications.dismiss(Notifications.model.get(0).toastId)
-            Notifications.show("pad", "success", "", "pad_xbox")
+            Notifications.show("pad", "success", "", "pad_xbox_series")
             tryVerify(() => Notifications.model.count === 3)
-            tryVerify(() => child(toastItem(2), "toastIcon").name === "pad_xbox", 2000, "a device icon wins")
+            tryVerify(() => child(toastItem(2), "toastIcon").name === "pad_xbox_series", 2000, "a device icon wins")
             verify(child(toastItem(2), "toastBadge").width > 0)
         }
 
@@ -333,9 +333,9 @@ Item {
 
         function toastStack(texts) {
             Notifications.durationMs = 60000
-            Notifications.show(texts[0], "success", "", "pad_playstation", texts[1])
+            Notifications.show(texts[0], "success", "", "pad_dualsense", texts[1])
             Notifications.show(texts[2], "info", "", "", texts[3])
-            Notifications.show(texts[4], "warning", "", "pad_xbox", texts[5])
+            Notifications.show(texts[4], "warning", "", "pad_xbox_series", texts[5])
             Notifications.show(texts[6], "info")
             keyClick(Qt.Key_VolumeUp)
             tryCompare(Audio, "volume", 55)

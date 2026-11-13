@@ -12,9 +12,9 @@
 # overlapping contours merged (T-206): the variable font draws the filled gear as two coincident
 # contours of opposite direction that cancel in the nonzero fill rule, and the Windows rasteriser
 # leaves speckled holes where their edges meet (the gear in the active Settings pill).
-# Lines of icons.txt that end in the word `ruya` are not Material's: scripts/add-pad-glyphs.py draws
-# them (the controller silhouettes, T-199) into both cuts, at private-use code points that upstream
-# does not use (checked here).
+# Lines of icons.txt that end in the word `ruya` are not Material's: scripts/add-pad-glyphs.py adds
+# them (the controller silhouettes, one per SVG in shell/art/pads/, T-199, RUY-491) into both cuts, at
+# private-use code points that upstream does not use (checked here).
 # The outputs, icons.txt and the upstream LICENSE are committed; the download is not.
 set -euo pipefail
 
@@ -71,7 +71,7 @@ done < "$list"
 
 cut() {   # cut <fill> <family name> <output file>
     "$PY" -m fontTools.varLib.instancer subset.ttf FILL="$1" GRAD=0 opsz=40 wght=400 --remove-overlaps -o "cut-$1.ttf" -q
-    "$PY" "$repo/scripts/add-pad-glyphs.py" "cut-$1.ttf" "$1" "pads-$1.ttf" "$list"
+    "$PY" "$repo/scripts/add-pad-glyphs.py" "cut-$1.ttf" "$1" "pads-$1.ttf" "$list" "$repo/shell/art/pads"
     "$PY" - "pads-$1.ttf" "$2" "$out/$3" <<'EOF'
 import sys
 from fontTools.ttLib import TTFont

@@ -39,6 +39,7 @@ Bluetooth::Bluetooth(std::unique_ptr<BluetoothBackend> backend, QObject *parent)
                 {QStringLiteral("kind"), d.kind},
                 {QStringLiteral("keyboard"), d.keyboard},
                 {QStringLiteral("family"), d.family},
+                {QStringLiteral("model"), d.model},
                 {QStringLiteral("paired"), d.paired},
                 {QStringLiteral("bonded"), d.bonded},
                 {QStringLiteral("connected"), d.connected},
@@ -58,6 +59,7 @@ Bluetooth::Bluetooth(std::unique_ptr<BluetoothBackend> backend, QObject *parent)
                 {QStringLiteral("id"), p.id},
                 {QStringLiteral("name"), p.name},
                 {QStringLiteral("family"), p.family},
+                {QStringLiteral("model"), p.model},
                 {QStringLiteral("transport"), p.transport},
             });
         }
@@ -216,6 +218,12 @@ void Bluetooth::mockSetFamily(const QString &id, const QString &family)
         mock->setFamily(id, family);
 }
 
+void Bluetooth::mockSetModel(const QString &id, const QString &model)
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
+        mock->setModel(id, model);
+}
+
 void Bluetooth::mockSetBonded(const QString &id, bool bonded)
 {
     if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
@@ -241,10 +249,10 @@ void Bluetooth::mockServiceRestart()
 }
 
 void Bluetooth::mockGamepad(bool connected, const QString &id, const QString &name, const QString &family,
-                            const QString &transport)
+                            const QString &transport, const QString &model)
 {
     if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
-        mock->gamepadEvent(connected, id, name, family, transport);
+        mock->gamepadEvent(connected, id, name, family, transport, model);
 }
 
 void Bluetooth::mockSetInputPresent(bool present)

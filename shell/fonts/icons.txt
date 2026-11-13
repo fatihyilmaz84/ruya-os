@@ -50,8 +50,34 @@ close e5cd
 delete e92e
 bar_chart e26b
 more_horiz e5d3
-# Our own glyphs (T-199, scripts/add-pad-glyphs.py): the name, a private-use code point Material does
-# not use, and the word ruya. They are drawn, not downloaded.
-pad_playstation e005 ruya
-pad_xbox e006 ruya
-pad_switch e007 ruya
+# Our own glyphs (T-199, RUY-491; scripts/add-pad-glyphs.py): the name, a private-use code point Material
+# does not use, and the word ruya. They are not downloaded: one per silhouette in shell/art/pads/
+# (pad_<file stem>, in the order of the stems), drawn from its SVG into both cuts.
+pad_8bitdo_pro2 ee00 ruya
+pad_8bitdo_sn30pro ee01 ruya
+pad_8bitdo_ultimate ee02 ruya
+pad_arcade_stick ee03 ruya
+pad_dualsense ee04 ruya
+pad_dualsense_edge ee05 ruya
+pad_dualshock3 ee06 ruya
+pad_dualshock4 ee07 ruya
+pad_gamecube ee08 ruya
+pad_generic_pad ee09 ruya
+pad_joycon_left ee0a ruya
+pad_joycon_pair ee0b ruya
+pad_joycon_right ee0c ruya
+pad_keyboard ee0d ruya
+pad_n64 ee0e ruya
+pad_retro_pad ee0f ruya
+pad_stadia ee10 ruya
+pad_steam_controller ee11 ruya
+pad_steam_deck ee12 ruya
+pad_switch_pro ee13 ruya
+pad_wii_remote ee14 ruya
+pad_wii_remote_nunchuk ee15 ruya
+pad_wiiu_pro ee16 ruya
+pad_xbox_360 ee17 ruya
+pad_xbox_adaptive ee18 ruya
+pad_xbox_elite ee19 ruya
+pad_xbox_one ee1a ruya
+pad_xbox_series ee1b ruya

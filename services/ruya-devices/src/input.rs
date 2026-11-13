@@ -82,6 +82,8 @@ pub struct Gamepad {
     pub name: String,
     /// "playstation" | "xbox" | "nintendo" | "8bitdo" | "" (`families.rs`).
     pub family: &'static str,
+    /// The model of the silhouette (`ruya_pads::model_of`), "" when the table does not know it.
+    pub model: &'static str,
     /// "usb" | "bluetooth" | "other"
     pub transport: &'static str,
 }
@@ -145,10 +147,12 @@ pub fn gamepad_of(device: &InputDevice) -> Option<Gamepad> {
     .into_iter()
     .find(|s| !s.is_empty())
     .unwrap_or_default();
+    let model = ruya_pads::model_of(device.vendor, device.product, &name);
     Some(Gamepad {
         id,
         name,
         family,
+        model,
         transport: match device.bustype {
             3 => "usb",
             5 => "bluetooth",
@@ -440,6 +444,7 @@ mod tests {
         ))
         .expect("a pad");
         assert_eq!(usb.family, "playstation");
+        assert_eq!(usb.model, "dualsense", "054c:0ce6");
         assert_eq!(usb.transport, "usb");
         assert_eq!(usb.id, "usb-0000:00:14.0-2/input0");
         let bt = gamepad_of(&pad(
@@ -454,12 +459,32 @@ mod tests {
         assert_eq!(bt.id, "e4:17:d8:00:00:01", "the address wins over the port");
         let eightbit = gamepad_of(&pad("8BitDo Pro 2", "", "", 3, 0x2dc8)).expect("a pad");
         assert_eq!(eightbit.family, "8bitdo");
+        assert_eq!(eightbit.model, "8bitdo_pro2", "told by its name");
         assert_eq!(eightbit.id, "8BitDo Pro 2", "no port, no address: the name");
         // An unknown vendor is no family whatever it calls itself; no vendor at all is guessed.
         let clone = gamepad_of(&pad("Xbox clone", "p", "", 3, 0x1234)).expect("pad");
         assert_eq!(clone.family, "");
+        assert_eq!(clone.model, "", "no maker, no model");
+        // An Xbox pad whose product id the table does not know keeps the family's picture.
+        assert_eq!((bt.family, bt.model), ("xbox", ""));
         let guessed = gamepad_of(&pad("DualSense", "p", "", 0, 0)).expect("pad");
         assert_eq!(guessed.family, "playstation");
+    }
+
+    #[test]
+    fn the_wii_u_pro_is_told_from_the_wii_remote_by_its_name() {
+        let mut device = pad("Nintendo RVL-CNT-01-UC", "", "e0:e7:51:00:00:01", 5, 0x057e);
+        device.product = 0x0330;
+        let wiiu = gamepad_of(&device).expect("a pad");
+        assert_eq!((wiiu.family, wiiu.model), ("nintendo", "wiiu_pro"));
+        device.name = "Nintendo RVL-CNT-01-TR".to_owned();
+        assert_eq!(gamepad_of(&device).expect("a pad").model, "wii_remote");
+        // The kernel's own (hid-wiimote evdev) names, which is what the service really reads.
+        device.name = "Nintendo Wii Remote Pro Controller".to_owned();
+        let wiiu = gamepad_of(&device).expect("a pad");
+        assert_eq!((wiiu.family, wiiu.model), ("nintendo", "wiiu_pro"));
+        device.name = "Nintendo Wii Remote".to_owned();
+        assert_eq!(gamepad_of(&device).expect("a pad").model, "wii_remote");
     }
 
     /// What `xpad` registers for a pad behind the receiver: named after the receiver, the
@@ -496,6 +521,7 @@ mod tests {
             let p = gamepad_of(&pad360("usb-0000:00:14.0-2/input0", product)).expect("a pad");
             assert_eq!(p.name, "Xbox 360 Controller", "not the receiver's name");
             assert_eq!((p.family, p.transport), ("xbox", "usb"));
+            assert_eq!(p.model, "xbox_360");
             assert_eq!(p.id, "usb-0000:00:14.0-2/input0");
         }
     }

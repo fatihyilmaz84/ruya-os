@@ -2,26 +2,77 @@ pragma Singleton
 import QtQuick
 
 // What a wireless device looks like and what it is called in words (T-199, 04 §3.7): the one place
-// that maps the contract's `kind` and `family` (Devices1.Bluetooth.ListDevices, Devices1.Batteries)
-// to an icon name from the bundled font and to an accessible word. The Bluetooth pane, the status
-// cluster's battery chips and the device toasts all ask here, so a new kind is added once.
+// that maps the contract's `kind`, `family` and `model` (Devices1.Bluetooth.ListDevices, ListGamepads,
+// Devices1.Batteries, Input1 device records) to an icon name from the bundled font and to an accessible
+// word. The Bluetooth pane, the status cluster's battery chips, Settings > Controllers, the controller
+// page and the device toasts all ask here, so a new kind is added once.
 //
-// An unknown kind (a newer service) is the generic Bluetooth glyph and the word "device"; a
-// controller of an unknown or missing family is the generic gamepad. The three family glyphs are our
-// own silhouettes (`scripts/add-pad-glyphs.py`), not vendor art.
+// An unknown kind (a newer service) is the generic Bluetooth glyph and the word "device". A controller
+// is drawn as its own silhouette when the service names its `model` (a file stem of shell/art/pads/,
+// RUY-491: "dualsense", "wiiu_pro"), else as its family's (PlayStation: the DualSense, Xbox: the Series
+// pad, Nintendo: the Switch Pro), else as the generic gamepad. The silhouettes are our own drawings
+// (`scripts/add-pad-glyphs.py` puts them in the icon font as `pad_<model>`), not vendor art.
 QtObject {
     id: icons
 
-    // The icon name for a device. `family` only matters for a controller.
-    function iconFor(kind, family) {
+    // Every model there is a glyph for: the stems of shell/art/pads/. `scripts/lint-icons.ps1` keeps this list,
+    // the folder, icons.txt and the table of Icon.qml in step; the service's table (services/ruya-pads) is
+    // tested against the same folder.
+    readonly property var padModels: [
+        "8bitdo_pro2",
+        "8bitdo_sn30pro",
+        "8bitdo_ultimate",
+        "arcade_stick",
+        "dualsense",
+        "dualsense_edge",
+        "dualshock3",
+        "dualshock4",
+        "gamecube",
+        "generic_pad",
+        "joycon_left",
+        "joycon_pair",
+        "joycon_right",
+        "keyboard",
+        "n64",
+        "retro_pad",
+        "stadia",
+        "steam_controller",
+        "steam_deck",
+        "switch_pro",
+        "wii_remote",
+        "wii_remote_nunchuk",
+        "wiiu_pro",
+        "xbox_360",
+        "xbox_adaptive",
+        "xbox_elite",
+        "xbox_one",
+        "xbox_series"
+    ]
+
+    // The model a family is drawn as when the service names none.
+    function familyModel(family) {
+        switch (family) {
+        case "playstation": return "dualsense"
+        case "xbox": return "xbox_series"
+        case "nintendo": return "switch_pro"
+        }
+        return ""
+    }
+
+    // The icon name of a controller: its model's silhouette, else its family's, else the generic gamepad.
+    // A model this shell has no glyph for (a newer service) counts as none.
+    function padIcon(family, model) {
+        const own = String(model ?? "")
+        if (own !== "" && padModels.indexOf(own) >= 0)
+            return "pad_" + own
+        const byFamily = familyModel(family)
+        return byFamily !== "" ? "pad_" + byFamily : "sports_esports"
+    }
+
+    // The icon name for a device. `family` and `model` only matter for a controller.
+    function iconFor(kind, family, model) {
         switch (kind) {
-        case "controller":
-            switch (family) {
-            case "playstation": return "pad_playstation"
-            case "xbox": return "pad_xbox"
-            case "nintendo": return "pad_switch"
-            }
-            return "sports_esports"
+        case "controller": return padIcon(family, model)
         case "headset": return "headphones"
         case "speaker": return "speaker"
         case "keyboard": return "keyboard"
