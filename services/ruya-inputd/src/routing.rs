@@ -1754,6 +1754,32 @@ mod tests {
     }
 
     #[test]
+    fn a_profile_switch_captures_the_pad_that_signed_the_new_profile_in() {
+        let pad_of = |calls: &[Call], phys: &str| -> Option<PadKey> {
+            calls.iter().find_map(|c| match c {
+                Call::Create(k, s) if s.phys == phys => Some(*k),
+                _ => None,
+            })
+        };
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        r.input(a, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        r.backend_mut().take();
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(pad_of(&r.backend_mut().take(), "ruya-input/pad1"), Some(a));
+        // Switch: lock, then b signs p2 in.
+        r.set_route("locked", "", "", "", SHELL, t0());
+        r.input(b, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p2", SHELL, t0());
+        r.input(a, &[press(PadButton::South)]);
+        r.backend_mut().take();
+        app(&mut r, "i2", STK, "p2");
+        assert_eq!(pad_of(&r.backend_mut().take(), "ruya-input/pad1"), Some(b));
+    }
+
+    #[test]
     fn a_virtual_pad_per_pad_exists_only_in_app() {
         let mut r = router();
         r.add_pad(pad("a"), t0());

@@ -205,7 +205,7 @@ class FakePad:
 
     def __init__(self, vendor=0x1234, product=0x5678, phys=PHYS, name=NAME):
         self.fd = os.open("/dev/uinput", os.O_RDWR | os.O_NONBLOCK)
-        fcntl.ioctl(self.fd, UI_SET_PHYS, PHYS.encode() + b"\0")
+        fcntl.ioctl(self.fd, UI_SET_PHYS, phys.encode() + b"\0")
         for ev in (EV_KEY, EV_ABS, EV_FF):
             fcntl.ioctl(self.fd, UI_SET_EVBIT, ev)
         for code in KEYS:
@@ -621,10 +621,6 @@ def cmd_twopads(args):
     bus = None
     game = None
     try:
-        for p in pads:
-            if not wait_for(lambda: next((d for d in (devices() or []) if d.get("name") in (NAME, NAME + " 2")), None), 5):
-                bad("ListDevices does not list the pads")
-                return fails
         if not wait_for(lambda: len([d for d in (devices() or []) if d.get("name") in (NAME, NAME + " 2")]) == 2, 5):
             bad("ListDevices does not list both pads")
             return fails
