@@ -10,9 +10,9 @@
   the bus policy will let only ruya-shell and root call it (CLAUDE.md, restrictive policies).
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §1.4.
 
-  Stability: the interface is experimental (the annotation below). It is tagged on the interface
-  only, not per element, so nothing here is public to apps (docs/developers/api-surface.md: a tag
-  on an element makes it public); RUY-88 decides the app side.
+  Stability: a draft and internal. No element carries org.ruyaos.Stability, so nothing here is
+  public to apps (docs/developers/api-surface.md: the tag marks an element public); RUY-88 decides
+  the app side and tags its elements there.
 
   One list, one entry point (T-245 scope 4): every notification the console shows is an item here.
   The shell's own sources (system, updates, devices, store) Post their items; apps' items arrive
@@ -55,7 +55,6 @@
 -->
 <node>
   <interface name="org.ruyaos.Notifications1">
-    <annotation name="org.ruyaos.Stability" value="experimental"/>
 
     <!-- The profile's items, in the order above. Fails with a D-Bus error only on an internal
          error; an unknown profile has no items. -->

@@ -1069,25 +1069,37 @@ FocusScope {
         value: Profiles.activeProfile
     }
 
-    // An action of a notification, picked in the centre (RUY-413): the centre has asked the service
-    // to record it (and to hand an app's action back to the app). The console's own actions run here:
-    // "restart" restarts (an update waits for it), "settings:<category>" opens that Settings pane,
-    // "open" brings the item's app to the front or starts it. The centre closes first when the action
-    // leaves it.
+    // An action of a notification, picked in the centre (RUY-413). An app's action (source "app") only
+    // goes back to the app through the service (Invoke; the bridge of RUY-88 hands it over), whatever
+    // its id says: an app never runs a console action. The console's own actions run here: "restart"
+    // asks first (the centre closes, then the power confirmation with Cancel focused, like every
+    // other restart path) and is recorded only when confirmed; "settings:<category>" opens that
+    // Settings pane. Running an action clears the item (Invoke), a pinned one stays.
+    property int pendingRestartItem: 0      // the item whose "Restart now" waits for the confirmation
     function runNotificationAction(item, action) {
-        if (action === "restart") {
+        if (item.source === "app") {
+            NotificationCentre.invoke(item.id, action)
+        } else if (action === "restart") {
             notificationSheet.close()
-            Power.restart()
+            pendingRestartItem = item.id
+            powerConfirm.open("restart")
         } else if (action.startsWith("settings:")) {
+            NotificationCentre.invoke(item.id, action)
             notificationSheet.close()
             while (pageOpen)
                 closePage()
             Sfx.page()
             openPage("settings", { category: action.slice(9) })
-        } else if (action === "open" && (item.appId ?? "") !== "") {
-            notificationSheet.close()
-            launchApp(item.appId, titleOfApp(item.appId), "")
+        } else {
+            NotificationCentre.invoke(item.id, action)
         }
+    }
+    // A at a row without actions: its app comes to the front, or starts.
+    function openNotificationSource(item) {
+        if ((item.appId ?? "") === "")
+            return
+        notificationSheet.close()
+        launchApp(item.appId, titleOfApp(item.appId), "")
     }
 
     // A screen mode waiting for the owner (T-198): after the restart on a new mode the shell finds
@@ -1711,7 +1723,7 @@ FocusScope {
     // The "N more" chip lost the focus because it went away: if nothing took it, the nav does.
     function rescueFocus() {
         const item = root.Window.window ? root.Window.window.activeFocusItem : null
-        if (navShown && !systemPanel.open && !batteryList.shown && !notificationSheet.shown && (item === null || item === root || !item.visible || !item.enabled)) {
+        if (navShown && !systemPanel.open && !batteryList.shown && !notificationSheet.shown && !powerConfirm.shown && (item === null || item === root || !item.visible || !item.enabled)) {
             sectionNav.currentIndex = sectionNav.keys.indexOf(navSection) >= 0 ? sectionNav.keys.indexOf(navSection) : 0
             sectionNav.forceActiveFocus()
         }
@@ -1959,6 +1971,7 @@ FocusScope {
         marginX: root.marginX
         marginY: root.marginY
         onActionRequested: (item, action) => root.runNotificationAction(item, action)
+        onOpenRequested: item => root.openNotificationSource(item)
         onClosed: Qt.callLater(root.rescueFocus)      // its return target may be gone
     }
 
@@ -2016,6 +2029,8 @@ FocusScope {
             return modeConfirm.modalHints
         if (systemPanel.open)
             return systemPanel.hints
+        if (powerConfirm.shown)           // the centre's Restart now asks here (RUY-413)
+            return powerConfirm.modalHints
         if (launching || closingScreen)
             return launchSplash.hints
         if (appOpen)
@@ -2147,10 +2162,20 @@ FocusScope {
         anchors.fill: parent
         z: 25
         u: root.u
-        onConfirmed: systemPanel.open = false
+        onConfirmed: done => {
+            systemPanel.open = false
+            if (done === "restart" && root.pendingRestartItem > 0)
+                NotificationCentre.invoke(root.pendingRestartItem, "restart")   // the centre's Restart now (RUY-413)
+            root.pendingRestartItem = 0
+        }
         // Cancelled: back to the choices. (The dialog's own restore would land on a list
-        // delegate that may be gone, so name the list.)
-        onClosed: if (systemPanel.open) systemPanel.actions.forceActiveFocus()
+        // delegate that may be gone, so name the list.) A cancelled Restart now from the centre
+        // leaves its item as it was; the focus goes back to the bell (the dialog's own restore).
+        onClosed: {
+            if (systemPanel.open)
+                systemPanel.actions.forceActiveFocus()
+            Qt.callLater(() => { if (!powerConfirm.shown) root.pendingRestartItem = 0 })
+        }
     }
 
     // What the console does about heat: a toast and fewer effects when hot, a notice, stopping the

@@ -44,8 +44,11 @@ FocusScope {
     property int pick: 0
 
     signal closed()
-    // The Shell runs it: "restart", "settings:<category>", or "open" (the item's app).
+    // A picked action of an item (Shell.runNotificationAction decides what it does: an app's action goes
+    // back to the app; the console's own run in the shell, a restart after a confirmation).
     signal actionRequested(var item, string action)
+    // A at a row without actions whose item has an app: open that app.
+    signal openRequested(var item)
 
     readonly property real sheetWidth: 800 * u
     readonly property var items: NotificationCentre.items
@@ -268,10 +271,9 @@ FocusScope {
             const action = currentActions[Math.min(pick, currentActions.length - 1)].id
             Sfx.select()
             sheet.actionRequested(it, action)
-            NotificationCentre.invoke(it.id, action)
         } else if ((it.appId ?? "") !== "") {
             Sfx.select()
-            sheet.actionRequested(it, "open")
+            sheet.openRequested(it)
         }
     }
 

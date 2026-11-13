@@ -52,6 +52,7 @@ Item {
         }
 
         function cleanup() {
+            Update.mockAnnounceRestart(0)
             Notifications.durationMs = Theme.toastMs
             Notifications.appInFront = false
             Notifications.overlayOpen = false
@@ -289,6 +290,97 @@ Item {
             verify(itemTitled("Older") !== undefined)
         }
 
+        // Review round 2: "Restart now" never restarts on one press. The centre closes and the power
+        // confirmation asks, Cancel focused; Cancel leaves the item, Restart now restarts and records it.
+        function test_restart_now_asks_first() {
+            Notifications.show("Update ready. Restart to finish.", "info", "", "download_done", "",
+                               { source: "updates", actions: [{ id: "restart", label: "Restart now" }] })
+            tryVerify(() => idOf("Update ready. Restart to finish.") > 0)
+            clearToasts()
+            const restarts = Power.actionCount
+            const invoked = NotificationCentre.mockCalls("invoke")
+            openCentre()
+            tryVerify(() => rowFocused("Update ready. Restart to finish."))
+            keyClick(Qt.Key_Return)
+            const confirm = find("overlayPowerConfirm")
+            tryVerify(() => confirm.shown, 2000, "A asks first")
+            tryVerify(() => !sheet().shown, 2000, "the centre closed")
+            tryVerify(() => findChild(confirm, "powerCancel").activeFocus, 2000, "Cancel has the focus")
+            compare(Power.actionCount, restarts, "nothing restarted yet")
+            compare(hintText(), "A Select, B Cancel")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !confirm.shown)
+            tryVerify(() => find("notificationBell").activeFocus, 2000, "Cancel: the focus is back on the bell")
+            compare(Power.actionCount, restarts)
+            compare(NotificationCentre.mockCalls("invoke"), invoked, "a cancelled restart is not recorded")
+            verify(itemTitled("Update ready. Restart to finish.") !== undefined, "and the item stays")
+            // Again, and confirm this time.
+            keyClick(Qt.Key_Return)
+            tryVerify(() => sheet().shown)
+            tryVerify(() => rowFocused("Update ready. Restart to finish."))
+            keyClick(Qt.Key_Return)
+            tryVerify(() => findChild(confirm, "powerCancel").activeFocus)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => findChild(confirm, "powerConfirm").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryCompare(Power, "actionCount", restarts + 1)
+            compare(Power.lastAction, "restart")
+            tryCompare(NotificationCentre, "count", 0, 2000, "confirmed: the item ran and went")
+            compare(NotificationCentre.mockCalls("invoke"), invoked + 1)
+        }
+
+        // Review round 2: an app's action ids are never console actions. An app that names its actions
+        // "restart" or "settings:storage" only has them handed back (Invoke); nothing restarts or opens.
+        function test_app_actions_never_run_console_actions() {
+            const restarts = Power.actionCount
+            NotificationCentre.mockSetNow(tc.t0)
+            NotificationCentre.mockAppNotify({ appId: "org.example.Evil", title: "Click me", body: "",
+                                                 actions: [{ id: "restart", label: "Restart" }, { id: "settings:storage", label: "Storage" }] })
+            NotificationCentre.mockSetNow(tc.t0 - 1000)
+            NotificationCentre.mockAppNotify({ appId: "org.example.Evil", title: "And me", body: "",
+                                                 actions: [{ id: "restart", label: "Restart" }, { id: "settings:storage", label: "Storage" }] })
+            tryVerify(() => NotificationCentre.count === 2)
+            clearToasts()
+            const invoked = NotificationCentre.mockCalls("invoke")
+            openCentre()
+            tryVerify(() => rowFocused("Click me"))
+            keyClick(Qt.Key_Return)                          // its "restart"
+            tryVerify(() => itemTitled("Click me") === undefined, 2000, "handed back to the app: the item went")
+            compare(NotificationCentre.mockCalls("invoke"), invoked + 1)
+            verify(!find("overlayPowerConfirm").shown, "no power confirmation")
+            compare(Power.actionCount, restarts, "no restart")
+            verify(sheet().shown, "the centre stays")
+            tryVerify(() => rowFocused("And me"))
+            keyClick(Qt.Key_Right)                           // its "settings:storage"
+            tryCompare(sheet(), "pick", 1)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => itemTitled("And me") === undefined, 2000, "handed back too")
+            compare(NotificationCentre.mockCalls("invoke"), invoked + 2)
+            compare(tc.shell.currentPage, "", "no Settings page opened")
+            verify(sheet().shown)
+            tryVerify(() => find("centreQuiet").activeFocus)
+        }
+
+        // Review round 2: a pinned item's title is a safety notice: it wraps to two lines, never cut.
+        function test_pinned_title_wraps() {
+            const longTitle = "Restarting in 2 minutes to finish"      // the real title is shorter; this one needs two lines
+            NotificationCentre.mockSetNow(tc.t0)
+            Notifications.keep("update-restart", longTitle, "warning", "restart_alt", "To finish the update",
+                               { source: "updates", urgency: "critical", pinned: true })
+            post("Plain " + longTitle, tc.t0 - 1000)
+            dropToasts()                                         // the toasts only: the keyed state stays
+            openCentre()
+            tryVerify(() => rowFocused(longTitle))
+            const pinned = findChild(rowOf(idOf(longTitle)), "notificationRow")
+            const title = findChild(pinned, "notificationTitle")
+            tryVerify(() => title.lineCount === 2, 2000, "two lines: " + title.lineCount)
+            verify(!title.truncated, "a pinned title is not cut")
+            verify(pinned.height > 112 * tc.shell.u, "the row grew: " + pinned.height)
+            const plainTitle = findChild(findChild(rowOf(idOf("Plain " + longTitle)), "notificationRow"), "notificationTitle")
+            compare(plainTitle.lineCount, 1, "an ordinary row stays one line")
+            verify(plainTitle.truncated, "and elides")
+        }
+
         function test_app_item_actions_pick_and_toast() {
             post("Older", tc.t0 - 60000)
             NotificationCentre.mockSetNow(tc.t0)
@@ -461,6 +553,38 @@ Item {
             compare(findChild(bell, "bellIcon").name, "notifications")
             Notifications.show("Back to normal", "info")
             compare(Notifications.model.count, 1, "toasts again")
+        }
+
+        // Review round 2: quiet mode keeps the pinned restart notice in the centre (counted), holds its
+        // sticky toast and shows it again when quiet mode ends while the restart is still pending.
+        function test_quiet_keeps_pinned_and_brings_the_sticky_back() {
+            NotificationCentre.setQuiet(true)
+            tryCompare(NotificationCentre, "quiet", true)
+            Update.mockAnnounceRestart(Math.floor(Date.now() / 1000) + 120)
+            tryVerify(() => NotificationCentre.items.some(i => i.pinned && i.source === "updates"), 2000,
+                      "the restart notice is kept, pinned")
+            tryCompare(NotificationCentre, "unreadCount", 1, 2000, "and the badge counts it")
+            verify(findChild(find("notificationBell"), "bellBadge").visible)
+            compare(Notifications.model.count, 0, "no toast in quiet mode")
+            NotificationCentre.setQuiet(false)
+            tryCompare(NotificationCentre, "quiet", false)
+            tryVerify(() => Notifications.model.count === 1 && Notifications.model.get(0).key === "update-restart", 2000,
+                      "quiet mode over, the restart notice is on screen again")
+            // Quiet mode while it is on screen: it leaves, and comes back.
+            NotificationCentre.setQuiet(true)
+            tryCompare(NotificationCentre, "quiet", true)
+            tryCompare(Notifications.model, "count", 0)
+            NotificationCentre.setQuiet(false)
+            tryVerify(() => Notifications.model.count === 1 && Notifications.model.get(0).key === "update-restart")
+            // The restart is called off during quiet mode: nothing comes back.
+            NotificationCentre.setQuiet(true)
+            tryCompare(NotificationCentre, "quiet", true)
+            Update.mockAnnounceRestart(0)
+            tryVerify(() => !NotificationCentre.items.some(i => i.pinned), 2000, "withdrawn")
+            NotificationCentre.setQuiet(false)
+            tryCompare(NotificationCentre, "quiet", false)
+            wait(50)
+            compare(Notifications.model.count, 0, "a state that ended does not come back")
         }
 
         function test_dont_interrupt_games() {

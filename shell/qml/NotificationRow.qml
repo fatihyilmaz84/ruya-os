@@ -26,7 +26,9 @@ Item {
     readonly property bool hasBody: (item.body ?? "") !== ""
     readonly property bool expanded: focused && actions.length > 0
     readonly property real pad: Theme.spaceM * u
-    readonly property real baseHeight: (hasBody ? 112 : 96) * u
+    // 112 u with a detail, 96 u without; a pinned item's title may take two lines (a safety notice is
+    // never cut off, like the compact sticky toast, 04 §5 Toast), and then the row grows to fit.
+    readonly property real baseHeight: Math.max((hasBody ? 112 : 96) * u, texts.height + 2 * Theme.spaceS * u)
     readonly property real pillHeight: 64 * u
 
     implicitHeight: expanded ? baseHeight + pillHeight + pad : baseHeight
@@ -120,7 +122,8 @@ Item {
             font.pixelSize: Theme.typeBody * row.u
             font.weight: Theme.weightDemiBold
             elide: Text.ElideRight
-            maximumLineCount: 1
+            wrapMode: row.pinned ? Text.Wrap : Text.NoWrap
+            maximumLineCount: row.pinned ? 2 : 1
         }
         Text {
             objectName: "notificationBody"

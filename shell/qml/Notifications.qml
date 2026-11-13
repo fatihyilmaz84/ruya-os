@@ -10,7 +10,8 @@ import RuyaShell
 // never focusable. A sticky toast (showSticky) stays until remove(key) is called.
 //
 // Quiet rules (02-shell 5.1):
-//   - quiet mode (NotificationCentre.quiet): no toast and no cue; the item is kept and counted;
+//   - quiet mode (NotificationCentre.quiet): no toast and no cue; the item is kept and counted (a
+//     pinned one too); a sticky toast is held and shows again when quiet mode ends, if still on;
 //   - an app in front with "Don't interrupt games" on (the default): only critical items show, as
 //     the compact toast; with it off, or with the Hub over the app, warnings, errors and critical ones;
 //   - the screen saver (IdleClock.covered): a toast waits until the screen is back; it is never
@@ -45,8 +46,31 @@ QtObject {
     onOverlayOpenChanged: reconsider()
     onDontInterruptChanged: reconsider()
     onSaverOnChanged: promote()
-    // Quiet mode turned on: what still waits is not shown any more (the items are kept).
-    onQuietChanged: if (quiet) pending = []
+    // Quiet mode turned on: what still waits is not shown any more (the items are kept), and a sticky
+    // toast (a lasting state: the restart notice) leaves the screen but is held; turned off, the held
+    // ones whose state still lasts come back (RUY-413).
+    onQuietChanged: {
+        if (quiet) {
+            let hold = pending.filter(p => p.sticky)
+            for (let i = model.count - 1; i >= 0; --i) {
+                const t = model.get(i)
+                if (!t.sticky)
+                    continue
+                hold.unshift({ text: t.text, kind: t.kind, iconText: t.iconText, iconName: t.iconName,
+                               detail: t.detail, footer: t.footer, footerButton: t.footerButton,
+                               footerIcon: t.footerIcon, sticky: true, key: t.key, urgency: t.urgency })
+                model.remove(i)
+            }
+            held = held.concat(hold)
+            pending = []
+        } else {
+            const back = held.filter(h => h.key in keyed)
+            held = []
+            back.forEach(h => enqueue(h))
+        }
+    }
+    // Sticky toasts quiet mode keeps off the screen until it ends.
+    property var held: []
 
     function reconsider() {
         requeue()
@@ -122,6 +146,8 @@ QtObject {
     function enqueue(entry) {
         if (quiet) {
             quietedCount += 1           // no toast, no cue: the item is in the centre and counted
+            if (entry.sticky)
+                held = held.filter(h => h.key !== entry.key).concat([entry])
             return
         }
         pending = pending.concat([entry])
@@ -172,6 +198,7 @@ QtObject {
 
     function dropToast(key) {
         pending = pending.filter(p => p.key !== key)
+        held = held.filter(h => h.key !== key)
         for (let i = 0; i < model.count; ++i) {
             if (model.get(i).key === key) {
                 model.remove(i)
