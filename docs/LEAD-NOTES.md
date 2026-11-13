@@ -14,14 +14,16 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
   - RUY-428 and RUY-427: Dell checks.
   - RUY-1 (lead spike): XWayland through `xwayland-satellite`, one per app instance; ADR-034 updated; build tickets RUY-434..437.
   - Lead fix 07d86bf: ruya-devices no longer treats `ruya-input/` virtual pads as connected controllers. The owner saw "Xbox 360 controller connected" toasts on every game launch and Hub close.
-- RUY-430 is Done too (gate green, 1313 QML).
-- **Merged, still In Review:**
-  - RUY-22 (GlassShadow in Loaders): its Dell criteria are owed (pills after display sleep, L0 VRAM; RUY-450).
-  - RUY-435 (ruya-session X11 mode, x11.rs): its VM run (RUY-436) and Dell run need RUY-434's image. Until then X11-only games end `launch-failed` with a clear journal line. Follow-ups are in RUY-457.
-- **RUY-434 is Done** (merged 0226d1a; the image builds a patched xwayland-satellite; VM OK). Its Outcome has a ready-to-paste upstream PR: file it (the owner approved). **Nothing is in flight**; no worktrees left.
-- **First, RUY-459 (high):** QEMU keys no longer reach the first-boot wizard on 0.0.72. It may be a regression from today's input merges, and it breaks every VM check that walks the wizard.
-- Then RUY-436 (vm-x11-check and baseline; RUY-457 lists the cases), then Alien Arena and AAAAXY on the Dell.
-- **Owner, 2026-11-13 night:** no image builds and no Dell updates while they sleep; keep building host-verifiable tickets, two lanes; the lead starts the next lead session itself at 60 % context.
+- Also Done: RUY-430, RUY-22 and RUY-435 (their VM and Dell checks are queued on RUY-390).
+- **Overnight (2026-11-13, owner asleep; no image builds), all merged and Done:**
+  - RUY-434: the image builds a patched xwayland-satellite. Its Outcome has a ready-to-paste upstream PR; file it (the owner approved).
+  - RUY-436: vm-x11-check.sh and the X11 security baseline.
+  - RUY-459: not a regression. Idle VMs went dark, then suspended, and WHPX cannot resume them. Test VMs now never suspend (credential), and vm-goto wakes a dark screen.
+  - RUY-406: game settings format v1, its loader and a mock game. The API review added the invisible-text rule and a Versions section.
+  - RUY-39: Settings > Controllers, capabilities and the button test.
+- **Next:** an image with RUY-434 and RUY-435 for the VM (`vm-x11-check.sh`, `vm-input-check.sh caps`) and the Dell (Alien Arena, AAAAXY, Controllers). Then RUY-42 (the mapping UI, unblocked by RUY-39), RUY-40 and RUY-407 (needs a design canvas first, LEAD.md §5). Lead work: RUY-448, RUY-449, RUY-458.
+- **Nothing is in flight**; no worktrees left.
+- **lead-16 was proposed as a card** (the app starts sessions only from the owner's own message, not from an automated turn). The owner starts it with a click.
 - **Images:**
   - 0.0.71: VM queue 11 PASS, 3 FAIL, all three check-script problems (fixed by RUY-430).
   - **The Dell runs 0.0.72** (main 07d86bf: the virtual-pad toast fix and RUY-422; rollback 0.0.71). The owner is asked to confirm that the toasts are gone.
@@ -60,4 +62,4 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 | Date | Range reviewed | Tasks | Findings (fixed / filed) | `dev.ps1 test` | VM |
 |---|---|---|---|---|---|
 | 2026-11-12 (lead-14) | 182d99f..b99ad4a | RUY-2, RUY-5 (lead); 401, 154, 411, 412, 3 | round 2+ for every ticket; joydev js leak found and closed | 1277 QML + 107 skips | 0.0.69-xpad OK |
-| 2026-11-12/13 (lead-15) | 7a46c55..HEAD | RUY-1 (lead); 409, 410, 425, 421, 415, 422, 424, 430, 22, 435 | round 2 for 409 (thaw test gap) and 410 (use-after-free); virtual-pad toast bug fixed by the lead; 0.0.71 input checks failing on script problems (RUY-430) | 1310 QML + 107 skips | 0.0.71 queue 11/14 (3 script fails); Dell 0.0.71 hw: 428, 409 route, 410, 427 PASS |
+| 2026-11-12/13 (lead-15) | 7a46c55..HEAD | RUY-1 (lead); 409, 410, 425, 421, 415, 422, 424, 430, 22, 435, 434, 436, 459, 406, 39 | round 2 for 409 (thaw test gap) and 410 (use-after-free); virtual-pad toast bug fixed by the lead; 0.0.71 input checks failing on script problems (RUY-430) | 1310 QML + 107 skips | 0.0.71 queue 11/14 (3 script fails); Dell 0.0.71 hw: 428, 409 route, 410, 427 PASS |
