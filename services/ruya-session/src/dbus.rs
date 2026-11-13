@@ -9,7 +9,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use async_channel::Receiver;
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
-use zbus::{interface, Connection};
+use zbus::{interface, Connection, MatchRule, MessageStream};
 
 use crate::directory::{profile_ids, ProfileDirectory, ProfileRow, ProfileSnapshot};
 use crate::session::{ExitReason, FrozenChange, Notice, RunningApp, Session, Status};
@@ -220,9 +220,13 @@ pub struct SessionIface {
     system: bool,
     /// Freeze and Thaw take turns in the order they arrive (T-457): each call awaits
     /// `Profiles1` before it acts, so without this a quick Thaw could be served before the
-    /// Freeze sent ahead of it and leave the game frozen.
-    freezer_turn: async_lock::Mutex<()>,
+    /// Freeze sent ahead of it and leave the game frozen. The freeze of a profile that leaves
+    /// (`watch_active_profile`, T-165) takes the same turns.
+    freezer_turn: FreezerTurn,
 }
+
+/// The turns of the freezer, shared by `SessionIface` and `watch_active_profile`.
+pub type FreezerTurn = Arc<async_lock::Mutex<()>>;
 
 impl SessionIface {
     pub fn new(session: Shared, usage: SharedUsage, system: bool) -> Self {
@@ -230,8 +234,13 @@ impl SessionIface {
             session,
             usage,
             system,
-            freezer_turn: async_lock::Mutex::new(()),
+            freezer_turn: Arc::new(async_lock::Mutex::new(())),
         }
+    }
+
+    /// The freezer's turns, for `watch_active_profile`.
+    pub fn freezer_turn(&self) -> FreezerTurn {
+        self.freezer_turn.clone()
     }
 
     /// `Ok(None)` in development mode (no check), `Ok(Some(active))` otherwise.
@@ -516,6 +525,106 @@ async fn emit_frozen(emitter: &SignalEmitter<'_>, changes: Vec<FrozenChange>) {
     }
 }
 
+const PROFILES_NAME: &str = "org.ruyaos.Profiles1";
+
+/// Follows the signed-in profile (T-165, ADR-004): on every `PropertiesChanged` of `Profiles1` and
+/// every change of its owner (a restart of that service), `ActiveProfile` is read again and, when
+/// it changed, the apps of the profile that left are frozen (`Session::profile_changed`) and
+/// announced (`FrozenChanged`). This covers a switch from the Hub or the picker, a sign-out and
+/// the idle lock alike. The signal is only the trigger: the value is read in the freezer's turn
+/// (`follow_active`). Runs forever.
+pub async fn watch_active_profile(connection: Connection, session: Shared, turn: FreezerTurn) {
+    let signals = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender(PROFILES_NAME)
+        .and_then(|b| b.path("/org/ruyaos/Profiles1"))
+        .and_then(|b| b.interface("org.freedesktop.DBus.Properties"))
+        .and_then(|b| b.member("PropertiesChanged"))
+        .map(|b| b.build());
+    let owner = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender("org.freedesktop.DBus")
+        .and_then(|b| b.member("NameOwnerChanged"))
+        .and_then(|b| b.arg(0, PROFILES_NAME))
+        .map(|b| b.build());
+    let (Ok(signals), Ok(owner)) = (signals, owner) else {
+        return eprintln!("ruya-session: cannot follow the signed-in profile");
+    };
+    let (signals, owner) = match (
+        MessageStream::for_match_rule(signals, &connection, None).await,
+        MessageStream::for_match_rule(owner, &connection, None).await,
+    ) {
+        (Ok(a), Ok(b)) => (a, b),
+        (Err(err), _) | (_, Err(err)) => {
+            return eprintln!("ruya-session: cannot follow the signed-in profile: {err}");
+        }
+    };
+    let mut stream = futures_lite::stream::or(signals, owner);
+    // The first value is read once the streams are set up, so no change is missed in between.
+    let mut last: Option<String> = None;
+    loop {
+        let read = || async {
+            fetch_active_profile(&connection)
+                .await
+                .map_err(|err| {
+                    eprintln!("ruya-session: Profiles1 ActiveProfile not readable: {err}")
+                })
+                .ok()
+        };
+        let changes = follow_active(&session, &turn, &mut last, read).await;
+        if !changes.is_empty() {
+            if let Ok(iface) = connection
+                .object_server()
+                .interface::<_, SessionIface>(OBJECT_PATH)
+                .await
+            {
+                emit_frozen(iface.signal_emitter(), changes).await;
+            }
+        }
+        if futures_lite::StreamExt::next(&mut stream).await.is_none() {
+            return eprintln!(
+                "ruya-session: the bus closed, the signed-in profile is not followed"
+            );
+        }
+    }
+}
+
+/// One step of `watch_active_profile`: in the freezer's turn (after any Freeze or Thaw that came
+/// first), the signed-in profile is read (`read`, `None` when it cannot be) and, when it is not
+/// `last`, the apps of `last` are frozen (all but the new profile's when `last` is not known yet).
+/// Reading the value in the turn, not taking it from the signal, means that a Thaw sent just before
+/// the change (the Hub closing as Switch profile locks) is served first and the game ends frozen,
+/// and that a profile that left and came back before its turn has nothing frozen. Returns the
+/// `frozen` changes to announce.
+async fn follow_active<F, Fut>(
+    session: &Shared,
+    turn: &FreezerTurn,
+    last: &mut Option<String>,
+    read: F,
+) -> Vec<FrozenChange>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Option<String>>,
+{
+    let _turn = turn.lock().await;
+    let Some(active) = read().await else {
+        return Vec::new();
+    };
+    if last.as_deref() == Some(active.as_str()) {
+        return Vec::new();
+    }
+    let mut session = lock(session);
+    for (unit, status) in session.profile_changed(last.as_deref(), &active, Instant::now()) {
+        if status == Status::Ok {
+            eprintln!(
+                "ruya-session: froze {unit}: its profile is not signed in (now \"{active}\")"
+            );
+        }
+    }
+    *last = Some(active);
+    session.take_frozen_changes()
+}
+
 fn end_reason_of(reason: ExitReason) -> Option<EndReason> {
     match reason {
         ExitReason::Quit => Some(EndReason::Quit),
@@ -705,5 +814,101 @@ mod tests {
         )));
         let (status, instance) = lock(&shared).launch(APP, "p1", 2);
         assert_eq!((status, instance.as_str()), (Status::Failed, ""));
+    }
+
+    // ---- The freeze of a profile that leaves (T-165) -----------------------------------------
+
+    /// p1 runs Racer, and the watcher has seen p1 signed in.
+    fn signed_in_session() -> (Shared, String, Option<String>) {
+        let spawner: DynSpawner = Box::new(FakeSpawner::new().with_app(APP));
+        let dir = ProfileSnapshot::new(["p1".to_owned(), "p2".to_owned()]);
+        let shared: Shared = Arc::new(Mutex::new(Session::new(spawner, dir, Vec::new())));
+        let (_, unit) = lock(&shared).launch(APP, "p1", 1);
+        lock(&shared).on_event(UnitEvent::Started { unit: unit.clone() });
+        (shared, unit, Some("p1".to_owned()))
+    }
+
+    fn is_frozen(shared: &Shared, unit: &str) -> bool {
+        lock(shared)
+            .list()
+            .into_iter()
+            .any(|a| a.instance == unit && a.frozen)
+    }
+
+    #[test]
+    fn a_change_waits_for_the_thaw_ahead_of_it_and_the_game_ends_frozen() {
+        // Switch profile from the Hub: the Hub closes (a Thaw), then the profile locks. The Thaw
+        // came first and holds the turn while it reads Profiles1; the change waits for it.
+        let (shared, unit, mut last) = signed_in_session();
+        assert_eq!(
+            lock(&shared).freeze(&unit, Some("p1"), Instant::now()),
+            Status::Ok
+        );
+        let turn: FreezerTurn = Arc::new(async_lock::Mutex::new(()));
+        futures_lite::future::block_on(async {
+            let thaw_turn = turn.lock().await;
+            let mut change = Box::pin(follow_active(&shared, &turn, &mut last, || async {
+                Some(String::new())
+            }));
+            assert!(
+                futures_lite::future::poll_once(&mut change).await.is_none(),
+                "the change waits for the Thaw's turn"
+            );
+            assert_eq!(lock(&shared).thaw(&unit, Some("p1")), Status::Ok);
+            lock(&shared).take_frozen_changes(); // the Hub's freeze and thaw, announced by them
+            drop(thaw_turn);
+            let changes = change.await;
+            assert_eq!(
+                changes,
+                [FrozenChange {
+                    instance: unit.clone(),
+                    frozen: true
+                }]
+            );
+        });
+        assert!(is_frozen(&shared, &unit), "the final state is frozen");
+        assert_eq!(last.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn a_profile_that_left_and_came_back_before_its_turn_has_nothing_frozen() {
+        // The value is read in the turn, not taken from the signal: p1 locked and signed in again
+        // before the watcher's turn came, so it reads "p1" and nothing changes.
+        let (shared, unit, mut last) = signed_in_session();
+        let turn: FreezerTurn = Arc::new(async_lock::Mutex::new(()));
+        let changes =
+            futures_lite::future::block_on(follow_active(&shared, &turn, &mut last, || async {
+                Some("p1".to_owned())
+            }));
+        assert!(changes.is_empty());
+        assert!(!is_frozen(&shared, &unit));
+        // An unreadable Profiles1 changes nothing either, and the last value is kept.
+        let changes =
+            futures_lite::future::block_on(follow_active(&shared, &turn, &mut last, || async {
+                None
+            }));
+        assert!(changes.is_empty());
+        assert_eq!(last.as_deref(), Some("p1"));
+        // Then p2 signs in: p1's game is frozen.
+        let changes =
+            futures_lite::future::block_on(follow_active(&shared, &turn, &mut last, || async {
+                Some("p2".to_owned())
+            }));
+        assert_eq!(changes.len(), 1);
+        assert!(is_frozen(&shared, &unit));
+    }
+
+    #[test]
+    fn the_first_value_freezes_the_apps_of_every_profile_that_is_not_signed_in() {
+        // After a restart of this service (`last` unknown) while the console is locked.
+        let (shared, unit, _) = signed_in_session();
+        let mut last = None;
+        let turn: FreezerTurn = Arc::new(async_lock::Mutex::new(()));
+        let changes =
+            futures_lite::future::block_on(follow_active(&shared, &turn, &mut last, || async {
+                Some(String::new())
+            }));
+        assert_eq!(changes.len(), 1);
+        assert!(is_frozen(&shared, &unit));
     }
 }

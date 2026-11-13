@@ -83,6 +83,12 @@ Session *Session::create(QQmlEngine *qmlEngine, QJSEngine *)
                     return std::nullopt;
                 return profiles->activeProfile();
             });
+        // Like ruya-session (T-165): a profile that leaves has its apps frozen.
+        auto *mock = static_cast<MockSessionBackend *>(backend.get());
+        if (auto *profiles = qmlEngine ? qmlEngine->singletonInstance<Profiles *>("RuyaShell", "Profiles") : nullptr) {
+            QObject::connect(profiles, &Profiles::activeProfileChanged, mock, &MockSessionBackend::activeProfileChanged);
+            mock->activeProfileChanged();       // who is signed in now; nothing to freeze yet
+        }
     } else {
         backend = std::make_unique<DBusSessionBackend>();
     }

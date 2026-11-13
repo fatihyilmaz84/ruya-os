@@ -19,6 +19,12 @@
 // thaws a frozen app first. setFailFreeze / setFailThaw make Freeze / Thaw answer "failed". Every freeze, thaw and stop
 // that reaches an app is logged in calls().
 //
+// A profile that leaves (T-165) has its apps frozen, as ruya-session does on Profiles1's ActiveProfile: the
+// facade calls activeProfileChanged() on every change of Profiles.activeProfile, and every running app of the
+// profile that was signed in before is frozen (logged "freeze <instance>", FrozenChanged follows; no
+// freezeFinished, nobody called Freeze). An app frozen already is not asked again; with setFailFreeze the
+// freeze fails and the app keeps running. Nothing is thawed at a sign-in: the shell's HubPause sweep does that.
+//
 // Stop (T-458): the app exits after a third of the start time unless setStopDelay says otherwise;
 // setStubbornStop makes it report AppExited "killed" after that delay while the record stays listed.
 //
@@ -43,6 +49,8 @@ public:
     void instanceOfPid(int pid) override;
 
     void reset();
+    // The signed-in profile changed (T-165): the apps of the one before are frozen.
+    void activeProfileChanged();
     void setFailFreeze(bool fail) { m_failFreeze = fail; }
     void setFailThaw(bool fail) { m_failThaw = fail; }
     // InstanceOfPid answers after `ms` instead of at once (T-459).
@@ -65,6 +73,8 @@ private:
 
     ProfileCheck m_knownProfile;
     ActiveProfile m_activeProfile;
+    // The signed-in profile at the last activeProfileChanged() (or reset), "" when locked.
+    QString m_lastActive;
     QStringList m_calls;
     bool m_failFreeze = false;
     bool m_failThaw = false;

@@ -18,6 +18,9 @@
 # more than 12 s of sound, keep playing and not abort (RUY-425; about 15 s more). It also (T-472)
 # keeps the shell down for 20 s without linger and checks
 # that ruya-shell's manager ends and that the next Launch has its profile's sound server again (about 25 s).
+# T-165 (RUY-87): after the Freeze/Thaw steps a Lock must freeze the profile's app (its unit and every
+# scope, FrozenChanged, the journal's "froze" line) with no Freeze from the check; a Thaw while locked
+# is refused; after the sign-in a Thaw (the shell's sweep stands in) runs it again.
 # `restart` (T-290) needs a profile (run `check` once on an empty store, or create one) and
 # installs the test apps itself when they are missing.
 # On an empty profile store the check creates the admin "Check Admin" (PIN 1234) and a standard
@@ -869,11 +872,36 @@ check)
             kill "$cpid" 2>/dev/null
         fi
     fi
+    # T-165 (RUY-87): a profile that leaves has its apps frozen. ruya-session follows Profiles1's
+    # ActiveProfile: the Lock freezes the running app of $pid, its unit and every active scope (the
+    # dashed app id of RUY-546, whose scopes are named with \x2d). Before, nothing was frozen (RUY-539).
+    echo "--- a profile that leaves has its apps frozen (T-165)"
+    : > "$work/signals.log"   # the FrozenChanged lines above must not satisfy the wait below
+    tlock="$(date +%s)"
+    lscopes="$(app_scope_names "$user")"
     busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
+    wait_sig "\"member\":\"FrozenChanged\".*$inst.*true" 15 && ok "the Lock froze the app: FrozenChanged(true), no Freeze from the check" \
+        || bad "no FrozenChanged(true) within 15 s of the Lock"
+    for u in "$inst" $lscopes; do
+        [ "$(fstate "$user" "$u")" = frozen ] && ok "$u is frozen after the Lock" || bad "$u: FreezerState $(fstate "$user" "$u") after the Lock"
+    done
+    [ "$(echo "$lscopes" | grep -c .)" -ge 2 ] && ok "the dashed id's scopes (named with \\x2d) were checked: $(echo $lscopes)" || bad "expected at least two active scopes of $sleeper before the Lock, found: $lscopes"
+    running | grep -q '"frozen":{"type":"b","data":true}' && ok "ListRunning says frozen while locked" || bad "ListRunning does not say frozen while locked: $(running)"
+    journalctl -u ruya-session -b --no-pager -o cat --since "@$tlock" 2>/dev/null | grep -a -q "froze $inst: its profile is not signed in" \
+        && ok "journal: froze $inst: its profile is not signed in" || bad "no 'froze $inst' line in the journal after the Lock"
     case "$(freeze_app "$inst")" in 's "not-allowed"') ok "Freeze with nobody signed in: not-allowed";; *) bad "Freeze while locked";; esac
-    [ "$(fstate "$user" "$inst")" = running ] && ok "and nothing was frozen" || bad "frozen while locked"
+    case "$(thaw_app "$inst")" in 's "not-allowed"') ok "Thaw with nobody signed in: not-allowed";; *) bad "Thaw while locked";; esac
+    [ "$(fstate "$user" "$inst")" = frozen ] && ok "and it stays frozen" || bad "$inst: FreezerState $(fstate "$user" "$inst") after the refused Thaw"
     busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" "" >/dev/null 2>&1 \
         || busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" 1234 >/dev/null 2>&1
+    # The service thaws nothing at a sign-in: the shell's sweep does (it is stopped here), so a Thaw from
+    # the check stands in for it.
+    sleep 2
+    [ "$(fstate "$user" "$inst")" = frozen ] && ok "signed in again: still frozen until the shell's Thaw" || bad "$inst: FreezerState $(fstate "$user" "$inst") after the sign-in"
+    case "$(thaw_app "$inst")" in 's "ok"') ok "Thaw after the sign-in: ok";; *) bad "Thaw after the sign-in";; esac
+    for u in "$inst" $lscopes; do
+        [ "$(fstate "$user" "$u")" = running ] && ok "$u runs again after the Thaw" || bad "$u: FreezerState $(fstate "$user" "$u") after the Thaw"
+    done
     # Frozen again for the Stop below: it must thaw first, so the app quits on its SIGTERM ("quit",
     # not "killed" after the grace time).
     case "$(freeze_app "$inst")" in 's "ok"') ok "frozen again before Stop";; *) bad "Freeze before Stop";; esac

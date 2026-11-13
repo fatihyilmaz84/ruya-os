@@ -22,6 +22,25 @@ MockSessionBackend::MockSessionBackend(ProfileCheck knownProfile, ActiveProfile 
         m_startMs = 10;
 }
 
+void MockSessionBackend::activeProfileChanged()
+{
+    const std::optional<QString> active = m_activeProfile ? m_activeProfile() : std::nullopt;
+    if (!active)
+        return;
+    const QString old = m_lastActive;
+    m_lastActive = *active;
+    if (old.isEmpty() || old == *active)
+        return;
+    for (int i = 0; i < m_running.size(); ++i) {
+        const RunningApp &r = m_running.at(i);
+        if (r.profile != old || r.frozen || r.state != QLatin1String("running"))
+            continue;
+        m_calls.append(QStringLiteral("freeze ") + r.instance);
+        if (!m_failFreeze)                  // a failed freeze is undone: the app keeps running
+            setFrozen(i, true);
+    }
+}
+
 int MockSessionBackend::indexOf(const QString &instance) const
 {
     for (int i = 0; i < m_running.size(); ++i) {
@@ -40,6 +59,7 @@ void MockSessionBackend::reset()
     m_pidDelayMs = 0;
     m_stopDelayMs = -1;
     m_stubbornStop = false;
+    m_lastActive = m_activeProfile ? m_activeProfile().value_or(QString()) : QString();
     emit runningListed(m_running);
 }
 
