@@ -594,6 +594,14 @@ Item {
 
         // ---- placement on the real screens ----
 
+        // How far the sheet is from the place right of `card` (a top-level function: qmllint goes blind on a local
+        // inside a block-bodied arrow, T-189).
+        function besideCardError(card) {
+            const gap = (Theme.focusRingOffset + Theme.focusRingWidth + Theme.spaceM) * tc.shell.u + (Theme.focusScale - 1) / 2 * card.width
+            const right = card.mapToItem(menu(), card.width / 2, 0).x + card.width / 2
+            return Math.abs(menu().placedX - (right + gap))
+        }
+
         // The card the focus has just moved to may not be laid out when Menu is pressed.
         function test_the_menu_sits_beside_the_second_recent_card() {
             start()
@@ -602,12 +610,7 @@ Item {
             const card = find("recentRow").currentItem
             keyClick(Qt.Key_Menu)
             verify(menu().shown)
-            const u = tc.shell.u
-            const gap = (Theme.focusRingOffset + Theme.focusRingWidth + Theme.spaceM) * u + (Theme.focusScale - 1) / 2 * card.width
-            tryVerify(() => {
-                const right = card.mapToItem(menu(), card.width / 2, 0).x + card.width / 2
-                return Math.abs(menu().placedX - (right + gap)) < 1
-            }, 2000, "right of the card it opened on")
+            tryVerify(() => besideCardError(card) < 1, 2000, "right of the card it opened on")
             compare(menu().placedSide, "right")
             keyClick(Qt.Key_Escape)
         }
