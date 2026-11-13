@@ -60,6 +60,7 @@ QVariantMap recordOf(const QVariantMap &d)
         {QStringLiteral("name"), d.value(QStringLiteral("name")).toString()},
         {QStringLiteral("family"), d.value(QStringLiteral("family")).toString()},
         {QStringLiteral("connection"), d.value(QStringLiteral("connection")).toString()},
+        {QStringLiteral("layout"), d.value(QStringLiteral("layout")).toString()},
         {QStringLiteral("battery"), d.contains(QStringLiteral("battery")) ? d.value(QStringLiteral("battery")).toInt() : -1},
         {QStringLiteral("charging"), d.value(QStringLiteral("charging")).toBool()},
         {QStringLiteral("slot"), d.value(QStringLiteral("slot")).toUInt()},

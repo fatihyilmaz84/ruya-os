@@ -48,6 +48,8 @@
     name        s   the driver's name ("DualSense Wireless Controller")
     family      s   "xbox" | "playstation" | "nintendo" | "generic"
     connection  s   "usb" | "bluetooth" | "receiver" | "virtual"
+    layout      s   how the Button test draws the pad: "nintendo-wiiu" (Wii U Pro, 057e:0330), or ""
+                    for the family's default drawing (RUY-486; a missing key is "")
     battery     i   0..100, or -1 when unknown or not on battery
     charging    b
     slot        u   ADR-017 player slot, 0 when none (T-264 fills it)

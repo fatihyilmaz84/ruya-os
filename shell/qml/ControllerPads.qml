@@ -66,7 +66,7 @@ QtObject {
         return pads
     }
 
-    // Input1's pads as rows: [{ id, name, family, connection, percent, state, slot }], sorted by
+    // Input1's pads as rows: [{ id, name, family, connection, layout, percent, state, slot }], sorted by
     // player (slot 1..n; none last), then name, then id.
     function controllers() {
         const devices = Input.devices
@@ -81,6 +81,7 @@ QtObject {
                      name: hubPad ? hubPad.name : DeviceIcons.plain(d.name),
                      family: d.family !== "generic" ? d.family : (hubPad ? hubPad.family : ""),
                      connection: d.connection,
+                     layout: d.layout ?? "",
                      percent: own ? d.battery : (hubPad ? hubPad.percent : -1),
                      state: own ? (d.charging ? "charging" : (d.battery >= 100 ? "full" : "discharging"))
                                 : (hubPad ? hubPad.state : ""),

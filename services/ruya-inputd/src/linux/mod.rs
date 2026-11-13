@@ -532,6 +532,7 @@ impl Scanner {
             name: name.clone(),
             family: identity::family(&hw).to_owned(),
             connection: identity::connection(&hw).to_owned(),
+            layout: identity::layout(&hw).to_owned(),
             rumble: device
                 .supported_ff()
                 .is_some_and(|ff| ff.contains(FFEffectType::FF_RUMBLE)),

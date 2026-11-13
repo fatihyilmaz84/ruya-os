@@ -102,6 +102,15 @@ pub fn family(hw: &Hardware) -> &'static str {
     }
 }
 
+/// How the Button test draws the pad when its family's drawing does not fit: "nintendo-wiiu" for
+/// the Wii U Pro (057e:0330), else "" (the family's default).
+pub fn layout(hw: &Hardware) -> &'static str {
+    match (hw.vendor, hw.product) {
+        (0x057e, 0x0330) => "nintendo-wiiu",
+        _ => "",
+    }
+}
+
 /// The machine salt in `dir/salt`: read it, or create it from `random` when there is none. A
 /// salt of the wrong size is an error and is never overwritten (services/CLAUDE.md).
 pub fn load_or_create_salt(dir: &Path, random: &mut dyn Read) -> io::Result<Vec<u8>> {
@@ -199,6 +208,21 @@ mod tests {
         assert_eq!(family(&hw), "xbox");
         hw.driver = "hid-generic".into();
         assert_eq!(family(&hw), "generic");
+    }
+
+    #[test]
+    fn the_wii_u_pro_has_its_own_layout() {
+        let mut hw = Hardware {
+            bus: BUS_BLUETOOTH,
+            vendor: 0x057e,
+            product: 0x0330,
+            ..Hardware::default()
+        };
+        assert_eq!(family(&hw), "nintendo");
+        assert_eq!(layout(&hw), "nintendo-wiiu");
+        hw.product = 0x2009;
+        assert_eq!(layout(&hw), "", "the Switch Pro takes the family's default");
+        assert_eq!(layout(&dualsense_bt()), "");
     }
 
     #[test]

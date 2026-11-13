@@ -18,7 +18,7 @@ Page {
 
     readonly property string padId: String((params ?? {}).id ?? "")
     readonly property var current: ControllerPads.controllers().find(p => p.id === padId) ?? null
-    property var pad: ({ id: padId, name: "", family: "", connection: "", percent: -1, state: "", slot: 0 })
+    property var pad: ({ id: padId, name: "", family: "", layout: "", connection: "", percent: -1, state: "", slot: 0 })
     onCurrentChanged: if (current) pad = current
 
     title: qsTr("Button test")
@@ -188,6 +188,7 @@ Page {
         y: 12 * page.u
         u: page.u
         family: page.pad.family
+        layout: page.pad.layout ?? ""
         held: page.held
         tried: page.tried
         axes: page.axes
