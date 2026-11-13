@@ -1,0 +1,183 @@
+{
+  "version": 1,
+  "settings": [
+    {
+      "id": "graphics.preset",
+      "label": { "en": "Quality preset", "tr": "Kalite ayarı" },
+      "description": { "en": "Sets many graphics options at once.", "tr": "Birçok grafik seçeneğini birden ayarlar." },
+      "type": "enum",
+      "category": "graphics",
+      "default": "high",
+      "options": [
+        { "value": "low", "label": { "en": "Low", "tr": "Düşük" } },
+        { "value": "medium", "label": { "en": "Medium", "tr": "Orta" } },
+        { "value": "high", "label": { "en": "High", "tr": "Yüksek" } },
+        { "value": "ultra", "label": { "en": "Ultra" } }
+      ]
+    },
+    {
+      "id": "graphics.shadows",
+      "label": { "en": "Shadows", "tr": "Gölgeler" },
+      "type": "bool",
+      "category": "graphics",
+      "default": true
+    },
+    {
+      "id": "graphics.raytracing",
+      "label": "Ray tracing",
+      "description": "Realistic reflections. Needs a fast graphics card.",
+      "type": "bool",
+      "category": "graphics",
+      "default": false
+    },
+    {
+      "id": "graphics.raytracing_quality",
+      "label": { "en": "Ray tracing quality", "tr": "Işın izleme kalitesi" },
+      "type": "enum",
+      "category": "graphics",
+      "default": "medium",
+      "visibleWhen": { "id": "graphics.raytracing", "equals": true },
+      "options": [
+        { "value": "low", "label": { "en": "Low", "tr": "Düşük" } },
+        { "value": "medium", "label": { "en": "Medium", "tr": "Orta" } },
+        { "value": "high", "label": { "en": "High", "tr": "Yüksek" } }
+      ]
+    },
+    {
+      "id": "graphics.textures",
+      "label": { "en": "Texture detail", "tr": "Doku ayrıntısı" },
+      "description": { "en": "Loaded when the game starts.", "tr": "Oyun açılırken yüklenir." },
+      "type": "enum",
+      "category": "graphics",
+      "default": "high",
+      "restart": true,
+      "options": [
+        { "value": "standard", "label": { "en": "Standard", "tr": "Standart" } },
+        { "value": "high", "label": { "en": "High", "tr": "Yüksek" } }
+      ]
+    },
+    {
+      "id": "display.fps_limit",
+      "label": { "en": "Frame rate limit", "tr": "Kare hızı sınırı" },
+      "type": "int",
+      "category": "display",
+      "default": 60,
+      "min": 30,
+      "max": 120,
+      "step": 10,
+      "unit": "fps"
+    },
+    {
+      "id": "display.render_scale",
+      "label": { "en": "Resolution scale", "tr": "Çözünürlük ölçeği" },
+      "type": "int",
+      "category": "display",
+      "default": 100,
+      "min": 50,
+      "max": 100,
+      "step": 5,
+      "unit": "%"
+    },
+    {
+      "id": "display.brightness",
+      "label": { "en": "Brightness", "tr": "Parlaklık" },
+      "type": "float",
+      "category": "display",
+      "default": 0.5,
+      "min": 0,
+      "max": 1,
+      "step": 0.05
+    },
+    {
+      "id": "controls.vibration",
+      "label": { "en": "Vibration strength", "tr": "Titreşim gücü" },
+      "type": "float",
+      "category": "controls",
+      "default": 0.8,
+      "min": 0,
+      "max": 1,
+      "step": 0.1
+    },
+    {
+      "id": "controls.invert_y",
+      "label": { "en": "Invert look up and down", "tr": "Yukarı aşağı bakışı ters çevir" },
+      "type": "bool",
+      "category": "controls",
+      "default": false
+    },
+    {
+      "id": "controls.recalibrate",
+      "label": { "en": "Recalibrate steering", "tr": "Direksiyonu yeniden ayarla" },
+      "type": "action",
+      "category": "controls"
+    },
+    {
+      "id": "audio.music",
+      "label": { "en": "Music volume", "tr": "Müzik sesi" },
+      "type": "int",
+      "category": "audio",
+      "default": 70,
+      "min": 0,
+      "max": 100,
+      "step": 5,
+      "unit": "%"
+    },
+    {
+      "id": "audio.engine",
+      "label": { "en": "Engine sound", "tr": "Motor sesi" },
+      "type": "enum",
+      "category": "audio",
+      "default": "realistic",
+      "options": [
+        { "value": "realistic", "label": { "en": "Realistic", "tr": "Gerçekçi" } },
+        { "value": "arcade", "label": { "en": "Arcade", "tr": "Arcade" } }
+      ]
+    },
+    {
+      "id": "gameplay.difficulty",
+      "label": { "en": "Difficulty", "tr": "Zorluk" },
+      "type": "enum",
+      "category": "gameplay",
+      "default": "normal",
+      "options": [
+        { "value": "easy", "label": { "en": "Easy", "tr": "Kolay" } },
+        { "value": "normal", "label": { "en": "Normal", "tr": "Normal" } },
+        { "value": "hard", "label": { "en": "Hard", "tr": "Zor" } }
+      ]
+    },
+    {
+      "id": "interface.speedometer",
+      "label": { "en": "Show speedometer", "tr": "Hız göstergesini göster" },
+      "type": "bool",
+      "category": "interface",
+      "default": true
+    },
+    {
+      "id": "accessibility.colour_blind",
+      "label": { "en": "Colour-blind mode", "tr": "Renk körlüğü modu" },
+      "type": "enum",
+      "category": "accessibility",
+      "default": "off",
+      "options": [
+        { "value": "off", "label": { "en": "Off", "tr": "Kapalı" } },
+        { "value": "protanopia", "label": "Protanopia" },
+        { "value": "deuteranopia", "label": "Deuteranopia" },
+        { "value": "tritanopia", "label": "Tritanopia" }
+      ]
+    },
+    {
+      "id": "advanced.version",
+      "label": { "en": "Game version", "tr": "Oyun sürümü" },
+      "type": "info",
+      "category": "advanced",
+      "default": "1.4.2"
+    },
+    {
+      "id": "advanced.reset",
+      "label": { "en": "Reset to defaults", "tr": "Varsayılanlara dön" },
+      "description": { "en": "Puts every setting of this game back.", "tr": "Bu oyunun tüm ayarlarını geri alır." },
+      "type": "action",
+      "category": "advanced"
+    }
+  ]
+}

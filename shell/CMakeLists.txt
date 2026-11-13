@@ -127,6 +127,8 @@ qt_add_qml_module(ruyashell
         src/performance/MockPerformanceBackend.h src/performance/MockPerformanceBackend.cpp
         src/performance/DBusPerformanceBackend.h src/performance/DBusPerformanceBackend.cpp
         src/performance/Performance.h src/performance/Performance.cpp
+        src/gamesettings/GameSettingsSchema.h src/gamesettings/GameSettingsSchema.cpp
+        src/gamesettings/GameSettings.h src/gamesettings/GameSettings.cpp
     QML_FILES
         qml/Main.qml
         qml/Shell.qml
@@ -242,6 +244,7 @@ qt_add_qml_module(ruyashell
         qml/controls/ThemeRow.qml
     RESOURCES
         assets/glass-grain.png
+        src/gamesettings/mock-game-settings.json
         assets/wallpapers/catalog.json
         assets/wallpapers/dusk.jpg
         assets/wallpapers/aurora.jpg
@@ -292,7 +295,7 @@ else()
 endif()
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/time src/display src/thermal src/storage src/system src/power src/store src/library src/update src/session src/usage src/input src/probe src/wallpaper src/sound src/art)
+target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/time src/display src/thermal src/storage src/system src/power src/store src/library src/update src/session src/usage src/input src/probe src/wallpaper src/sound src/art src/gamesettings)
 # Qt6::GuiPrivate: ScreenPower calls QPlatformScreen::setPowerState (DPMS under eglfs_kms, T-202).
 target_include_directories(ruyashell PUBLIC src/performance)   # T-451
 target_link_libraries(ruyashell PRIVATE Qt6::Network Qt6::Quick Qt6::Multimedia Qt6::DBus Qt6::GuiPrivate)

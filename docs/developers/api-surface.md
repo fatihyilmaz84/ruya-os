@@ -58,7 +58,7 @@ No code, so no bus permission, and the safest way to extend the console. The for
 |---|---|---|
 | Save, state, config and cache layout under `~/.var/app/<id>/` | [Saves and data](saves-and-data.md), `03` §4.5a | public, written |
 | AppStream keys (`x-ruya-*`, content rating, controller support) | [AppStream metadata](appstream-metadata.md) | public, written |
-| Game settings schema (`/app/share/ruya/settings.json`, ADR-035) | `game-settings.md` (RUY-406) | planned |
+| Game settings schema (`/app/share/ruya/settings.json`, ADR-035) | [Game settings](game-settings.md), `api/settings/game-settings.schema.json` | experimental, written (format only; delivering values to the console is Platform1, planned) |
 | Sound themes (cues, ambient bed) | [Sound themes](sound-themes.md) | public, written, checker built |
 | `.play` packages | `05-play-packages.md` (epic T-228) | parked by the owner |
 | Theme, wallpaper and icon packs | none | unplanned |
