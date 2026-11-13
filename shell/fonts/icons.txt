@@ -37,6 +37,14 @@ usb e1e0
 restart_alt f053
 system_update f2cd
 notifications e7f5
+notifications_paused e7f8
+push_pin f10d
+clear_all e0b8
+device_thermostat e1ff
+download_done f091
+schedule efd6
+chevron_left e5cb
+chevron_right e5cc
 # Our own glyphs (T-199, scripts/add-pad-glyphs.py): the name, a private-use code point Material does
 # not use, and the word ruya. They are drawn, not downloaded.
 pad_playstation e005 ruya

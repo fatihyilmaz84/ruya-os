@@ -127,14 +127,14 @@ QtObject {
                 parts.push(qsTr("USB"))
             toasts.connectedShown += 1
             Notifications.show(qsTr("%1 connected").arg(name), "success", "", DeviceIcons.iconFor(deviceKind, w.family),
-                               parts.join(" · "))
+                               parts.join(" · "), { source: "devices" })
         } else {
             const used = shown[w.id] ? shown[w.id].used : false
             delete shown[w.id]
             if (used || !Bluetooth.inputPresent) {
                 toasts.disconnectedShown += 1
                 Notifications.show(qsTr("%1 disconnected").arg(displayName(w.id, w.name, w.family)), "info", "",
-                                   DeviceIcons.iconFor("controller", w.family))
+                                   DeviceIcons.iconFor("controller", w.family), "", { source: "devices" })
             }
         }
     }

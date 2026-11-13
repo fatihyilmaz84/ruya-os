@@ -120,7 +120,9 @@ QtObject {
             if (status === "failed") {
                 // Still frozen: the next Hub over it freezes it again (a no-op for the service) and
                 // its close thaws it; the sweep also tries again on the next change of the list.
-                Notifications.show(qsTr("Could not resume the game. Open Ruya Hub and choose Resume."), "warning")
+                // Critical (RUY-413): the game stays frozen in front, so the player must see how to go on.
+                Notifications.show(qsTr("Could not resume the game. Open Ruya Hub and choose Resume."), "warning", "", "", "",
+                                   { urgency: "critical" })
             }
             // "not-allowed" (the profile changed as the Hub closed): the sweep thaws it when the
             // profile is back; "not-running": it is gone.

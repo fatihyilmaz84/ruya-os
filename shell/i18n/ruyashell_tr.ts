@@ -1002,12 +1002,12 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="-7"/>
         <source>x&#xa0;%1  y&#xa0;%2</source>
-        <translation>x %1  y %2</translation>
+        <translation>x&#xa0;%1  y&#xa0;%2</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>x&#xa0;%1  y&#xa0;%2  z&#xa0;%3&#xa0;°/s</source>
-        <translation>x %1  y %2  z %3 °/s</translation>
+        <translation>x&#xa0;%1  y&#xa0;%2  z&#xa0;%3&#xa0;°/s</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -2325,6 +2325,150 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>NotificationBell</name>
+    <message numerus="yes">
+        <location filename="../qml/NotificationBell.qml" line="+33"/>
+        <source>Notifications, %n unread, quiet mode on</source>
+        <translation>
+            <numerusform>Bildirimler, %n okunmamış, sessiz mod açık</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>Notifications, %n unread</source>
+        <translation>
+            <numerusform>Bildirimler, %n okunmamış</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
+    <name>NotificationRow</name>
+    <message>
+        <location filename="../qml/NotificationRow.qml" line="+34"/>
+        <source>Pinned</source>
+        <translation>Sabitlendi</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>New</source>
+        <translation>Yeni</translation>
+    </message>
+</context>
+<context>
+    <name>NotificationSheet</name>
+    <message>
+        <location filename="../qml/NotificationSheet.qml" line="+64"/>
+        <source>Close</source>
+        <translation>Kapat</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+316"/>
+        <source>Clear all</source>
+        <translation>Tümünü temizle</translation>
+    </message>
+    <message>
+        <location line="-314"/>
+        <source>Toggle</source>
+        <translation>Aç/Kapat</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Open</source>
+        <translation>Aç</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Choose</source>
+        <translation>Değiştir</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Clear</source>
+        <translation>Temizle</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Just now</source>
+        <translation>Şimdi</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2"/>
+        <source>%n min ago</source>
+        <translation>
+            <numerusform>%n dk önce</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Yesterday</source>
+        <translation>Dün</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%n days ago</source>
+        <translation>
+            <numerusform>%n gün önce</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+264"/>
+        <location line="+51"/>
+        <source>Notifications</source>
+        <translation>Bildirimler</translation>
+    </message>
+    <message numerus="yes">
+        <location line="-40"/>
+        <source>%n new</source>
+        <translation>
+            <numerusform>%n yeni</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Quiet mode</source>
+        <translation>Sessiz mod</translation>
+    </message>
+    <message>
+        <location line="+59"/>
+        <source>Pinned until resolved</source>
+        <translation>Çözülene kadar sabit</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New</source>
+        <translation>Yeni</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Earlier</source>
+        <translation>Daha önce</translation>
+    </message>
+    <message>
+        <location line="+61"/>
+        <source>No notifications</source>
+        <translation>Bildirim yok</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>New ones show up here.</source>
+        <translation>Yenileri burada görünür.</translation>
+    </message>
+</context>
+<context>
+    <name>Notifications</name>
+    <message>
+        <location filename="../qml/Notifications.qml" line="+119"/>
+        <source>%1 is in Notifications</source>
+        <translation>%1: Bildirimlerde</translation>
+    </message>
+</context>
+<context>
     <name>PadDiagram</name>
     <message>
         <location filename="../qml/PadDiagram.qml" line="+129"/>
@@ -3471,7 +3615,13 @@ Bu geri alınamaz.</translation>
         <translation>Ses %1 cihazına taşındı</translation>
     </message>
     <message>
-        <location line="+56"/>
+        <location line="+9"/>
+        <location line="+13"/>
+        <source>Restart now</source>
+        <translation>Şimdi yeniden başlat</translation>
+    </message>
+    <message>
+        <location line="+37"/>
         <source>%1 is still closing.</source>
         <translation>%1 hâlâ kapanıyor.</translation>
     </message>
@@ -3513,7 +3663,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 henüz bir pencere açmadı.</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+64"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
@@ -3523,7 +3673,7 @@ Bu geri alınamaz.</translation>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+318"/>
+        <location line="+354"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -3569,7 +3719,7 @@ Bu geri alınamaz.</translation>
         <translation>Son oynananlar</translation>
     </message>
     <message>
-        <location line="+474"/>
+        <location line="+488"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Seç</translation>
@@ -3586,7 +3736,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1300"/>
+        <location line="-1385"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -3601,7 +3751,7 @@ Bu geri alınamaz.</translation>
         <translation>Beklemek için bir düğmeye bas</translation>
     </message>
     <message>
-        <location line="+106"/>
+        <location line="+108"/>
         <source>%1 is already running</source>
         <translation>%1 zaten çalışıyor</translation>
     </message>
@@ -3617,7 +3767,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1021"/>
+        <location line="+1104"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
     </message>
@@ -4758,6 +4908,11 @@ Bu geri alınamaz.</translation>
         <source>The console is running hot (%1). Effects are reduced.</source>
         <translation>Konsol çok sıcak (%1). Efektler azaltıldı.</translation>
     </message>
+    <message>
+        <location line="+21"/>
+        <source>The console is too hot</source>
+        <translation>Konsol aşırı sıcak</translation>
+    </message>
 </context>
 <context>
     <name>ThermalText</name>
@@ -4820,7 +4975,7 @@ Bu geri alınamaz.</translation>
         <translation>%1: pil zayıf (%2%)</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Controller battery low</source>
         <translation>Kumanda pili zayıf</translation>
     </message>
@@ -4830,7 +4985,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 · %2%</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Drive inserted</source>
         <translation>Sürücü takıldı</translation>
     </message>
@@ -4841,15 +4996,20 @@ Bu geri alınamaz.</translation>
             <numerusform>%1 (ve %n tane daha)</numerusform>
         </translation>
     </message>
+    <message>
+        <location line="+2"/>
+        <source>Open Settings</source>
+        <translation>Ayarları aç</translation>
+    </message>
     <message numerus="yes">
-        <location line="+254"/>
-        <source>%n more</source>
+        <location line="+267"/>
+        <source>%n more in Notifications</source>
         <translation>
-            <numerusform>%n tane daha</numerusform>
+            <numerusform>Bildirimlerde %n tane daha</numerusform>
         </translation>
     </message>
     <message>
-        <location line="-249"/>
+        <location line="-263"/>
         <source>Safe to remove</source>
         <translation>Çıkarmak güvenli</translation>
     </message>

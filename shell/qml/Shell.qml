@@ -627,7 +627,8 @@ FocusScope {
     Connections {
         target: Update
         function onStagedReady(version) {
-            Notifications.show(qsTr("Update ready. Restart to finish."), "info")
+            Notifications.show(qsTr("Update ready. Restart to finish."), "info", "", "download_done", "",
+                               { source: "updates", actions: [{ id: "restart", label: qsTr("Restart now") }] })
         }
     }
 
@@ -638,7 +639,9 @@ FocusScope {
         function onRestartPendingChanged() {
             if (Update.restartPending)
                 Notifications.showSticky("update-restart", qsTr("Restarting in 2 minutes"), "warning", "",
-                                         qsTr("To finish the update"), qsTr("Press any button to wait"), "A")
+                                         qsTr("To finish the update"), qsTr("Press any button to wait"), "A",
+                                         { source: "updates", urgency: "critical", pinned: true,
+                                           actions: [{ id: "restart", label: qsTr("Restart now") }] })
             else
                 Notifications.remove("update-restart")
         }
@@ -747,7 +750,9 @@ FocusScope {
                     Notifications.show(qsTr("%1 is already running").arg(name), "info")
                 return
             }
-            Notifications.show(qsTr("%1 could not start").arg(name), "error", "", "", qsTr("Try again."))
+            // Critical (RUY-413): the game the player asked for is not running, so there is nothing to
+            // interrupt; the error shows even while its window is still in front.
+            Notifications.show(qsTr("%1 could not start").arg(name), "error", "", "", qsTr("Try again."), { urgency: "critical" })
         }
         function onInstanceOfPidFinished(pid, status, instance) {
             root.instanceArrived(pid, status, instance)
@@ -777,7 +782,8 @@ FocusScope {
                 return
             const name = Notifications.named(title)
             Notifications.show(reason === "crashed" ? qsTr("%1 stopped unexpectedly").arg(name)
-                                                    : qsTr("%1 could not start").arg(name), "error", "", "", qsTr("Try again."))
+                                                    : qsTr("%1 could not start").arg(name), "error", "", "", qsTr("Try again."),
+                               { urgency: "critical" })      // the game is gone: nothing to interrupt (RUY-413)
         }
     }
 
@@ -1044,11 +1050,56 @@ FocusScope {
         systemPanel.open = false
     }
 
-    // While an app (or the launch splash) has the screen only errors and warnings are drawn.
+    // While an app (or the launch splash) has the screen only some toasts are drawn (Notifications.qml).
     Binding {
         target: Notifications
         property: "appInFront"
         value: root.appOpen || root.launching || root.closingScreen
+    }
+    // The Hub over the app: its answers are not held back by "Don't interrupt games".
+    Binding {
+        target: Notifications
+        property: "overlayOpen"
+        value: systemPanel.open
+    }
+    // The notification centre is the signed-in profile's (RUY-413).
+    Binding {
+        target: NotificationCentre
+        property: "profile"
+        value: Profiles.activeProfile
+    }
+
+    // An action of a notification, picked in the centre (RUY-413). An app's action (source "app") only
+    // goes back to the app through the service (Invoke; the bridge of RUY-88 hands it over), whatever
+    // its id says: an app never runs a console action. The console's own actions run here: "restart"
+    // asks first (the centre closes, then the power confirmation with Cancel focused, like every
+    // other restart path) and is recorded only when confirmed; "settings:<category>" opens that
+    // Settings pane. Running an action clears the item (Invoke), a pinned one stays.
+    property int pendingRestartItem: 0      // the item whose "Restart now" waits for the confirmation
+    function runNotificationAction(item, action) {
+        if (item.source === "app") {
+            NotificationCentre.invoke(item.id, action)
+        } else if (action === "restart") {
+            notificationSheet.close()
+            pendingRestartItem = item.id
+            powerConfirm.open("restart")
+        } else if (action.startsWith("settings:")) {
+            NotificationCentre.invoke(item.id, action)
+            notificationSheet.close()
+            while (pageOpen)
+                closePage()
+            Sfx.page()
+            openPage("settings", { category: action.slice(9) })
+        } else {
+            NotificationCentre.invoke(item.id, action)
+        }
+    }
+    // A at a row without actions: its app comes to the front, or starts.
+    function openNotificationSource(item) {
+        if ((item.appId ?? "") === "")
+            return
+        notificationSheet.close()
+        launchApp(item.appId, titleOfApp(item.appId), "")
     }
 
     // A screen mode waiting for the owner (T-198): after the restart on a new mode the shell finds
@@ -1195,7 +1246,10 @@ FocusScope {
         visible: root.signedIn && (!root.appOpen || opacity > 0)
         Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
         height: Theme.buttonHeight * root.u + 2 * Theme.spaceXs * root.u
-        width: statusRow.width + 2 * Theme.spaceL * root.u
+        // The bell sits at the left end, `spaceXs` from the pill's edge like a nav pill, `spaceS` before the
+        // rest (RUY-413); the rest keeps the pill's `spaceL` padding on the right.
+        readonly property real bellSlot: (Theme.spaceXs + Theme.buttonHeight + Theme.spaceS) * root.u
+        width: bellSlot + statusRow.width + Theme.spaceL * root.u
         x: root.width - root.marginX - width
         y: root.marginY
         u: root.u
@@ -1208,7 +1262,7 @@ FocusScope {
         // chips are as many as fit (the rest collapse into "+N"), so the pill never reaches the
         // nav (a Theme.spaceM gap stays) however long the name or many the devices.
         readonly property real room: root.width - root.marginX - (sectionNav.x + sectionNav.width + Theme.spaceM * root.u)
-                                     - 2 * Theme.spaceL * root.u
+                                     - bellSlot - Theme.spaceL * root.u
         // Every device that earns a chip, in the order the slots are given out (T-301): pads and headsets
         // before mice, keyboards and the rest, each group lowest first (the service sorts that way), so
         // three full pads are not pushed out by a mouse at 5 % (that one shows in Settings and in its toast).
@@ -1283,9 +1337,43 @@ FocusScope {
             return { chips: 0, compact: batteryWidth(0, false) + fixedWidth + nameMin > room }
         }
 
+        // The notification centre's bell (RUY-413): Right from the Settings gear, Left back to it, Right on
+        // to the "N more" chip when there is one; Accept opens the centre.
+        NotificationBell {
+            id: bell
+            objectName: "notificationBell"
+            x: Theme.spaceXs * root.u
+            anchors.verticalCenter: parent.verticalCenter
+            u: root.u
+            count: NotificationCentre.unreadCount
+            quiet: NotificationCentre.quiet
+            enabled: root.navShown && !systemPanel.open && !batteryList.shown && !notificationSheet.shown
+            onActivated: notificationSheet.open()
+            onLeftRequested: {
+                Sfx.navigate()
+                sectionNav.currentIndex = sectionNav.keys.length - 1
+                sectionNav.forceActiveFocus()
+            }
+            onRightRequested: {
+                if (batteryMore.visible && batteryMore.enabled) {
+                    Sfx.navigate()
+                    batteryMore.forceActiveFocus()
+                }
+            }
+            onDownRequested: { Sfx.navigate(); root.leaveNavDown() }
+            onBackRequested: {
+                if (root.pageOpen) {
+                    Sfx.back()
+                    root.closePage()
+                }
+            }
+            onStepRequested: direction => root.stepSection(direction)
+        }
+
         Row {
             id: statusRow
-            anchors.centerIn: parent
+            x: statusGlass.bellSlot
+            anchors.verticalCenter: parent.verticalCenter
             spacing: Theme.spaceM * root.u
 
             // The battery of each wireless device (Batteries, UPower behind it), lowest first: up to
@@ -1314,7 +1402,7 @@ FocusScope {
                     id: batteryMore
                     objectName: "batteryMore"
                     visible: batteryStatus.overflow.length > 0
-                    enabled: root.navShown && !systemPanel.open && !batteryList.shown
+                    enabled: root.navShown && !systemPanel.open && !batteryList.shown && !notificationSheet.shown
                     anchors.verticalCenter: parent.verticalCenter
                     u: root.u
                     count: batteryStatus.overflow.length
@@ -1323,8 +1411,7 @@ FocusScope {
                     onActivated: batteryList.open()
                     onLeftRequested: {
                         Sfx.navigate()
-                        sectionNav.currentIndex = sectionNav.keys.length - 1
-                        sectionNav.forceActiveFocus()
+                        bell.forceActiveFocus()
                     }
                     onDownRequested: { Sfx.navigate(); root.leaveNavDown() }
                     onBackRequested: {
@@ -1636,7 +1723,7 @@ FocusScope {
     // The "N more" chip lost the focus because it went away: if nothing took it, the nav does.
     function rescueFocus() {
         const item = root.Window.window ? root.Window.window.activeFocusItem : null
-        if (navShown && !systemPanel.open && !batteryList.shown && (item === null || item === root || !item.visible || !item.enabled)) {
+        if (navShown && !systemPanel.open && !batteryList.shown && !notificationSheet.shown && !powerConfirm.shown && (item === null || item === root || !item.visible || !item.enabled)) {
             sectionNav.currentIndex = sectionNav.keys.indexOf(navSection) >= 0 ? sectionNav.keys.indexOf(navSection) : 0
             sectionNav.forceActiveFocus()
         }
@@ -1712,9 +1799,9 @@ FocusScope {
         onActivated: key => root.openSection(key)
         onDownRequested: root.leaveNavDown()
         onEdgeRequested: {
-            if (batteryMore.visible && batteryMore.enabled) {
+            if (bell.visible && bell.enabled) {
                 Sfx.navigate()
-                batteryMore.forceActiveFocus()
+                bell.forceActiveFocus()
             }
         }
         onStepRequested: direction => root.stepSection(direction)
@@ -1873,6 +1960,21 @@ FocusScope {
         onClosed: Qt.callLater(root.rescueFocus)      // its return target may be gone (nothing is hidden any more)
     }
 
+    // The notification centre (RUY-413): a sheet in the modal layer, opened from the bell.
+    NotificationSheet {
+        id: notificationSheet
+        objectName: "notificationSheet"
+        parent: modalLayer
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+        u: root.u
+        marginX: root.marginX
+        marginY: root.marginY
+        onActionRequested: (item, action) => root.runNotificationAction(item, action)
+        onOpenRequested: item => root.openNotificationSource(item)
+        onClosed: Qt.callLater(root.rescueFocus)      // its return target may be gone
+    }
+
     // "Keep this resolution?" (T-198): above the hint bar and every other modal.
     ModeConfirm {
         id: modeConfirm
@@ -1927,6 +2029,8 @@ FocusScope {
             return modeConfirm.modalHints
         if (systemPanel.open)
             return systemPanel.hints
+        if (powerConfirm.shown)           // the centre's Restart now asks here (RUY-413)
+            return powerConfirm.modalHints
         if (launching || closingScreen)
             return launchSplash.hints
         if (appOpen)
@@ -2058,10 +2162,20 @@ FocusScope {
         anchors.fill: parent
         z: 25
         u: root.u
-        onConfirmed: systemPanel.open = false
+        onConfirmed: done => {
+            systemPanel.open = false
+            if (done === "restart" && root.pendingRestartItem > 0)
+                NotificationCentre.invoke(root.pendingRestartItem, "restart")   // the centre's Restart now (RUY-413)
+            root.pendingRestartItem = 0
+        }
         // Cancelled: back to the choices. (The dialog's own restore would land on a list
-        // delegate that may be gone, so name the list.)
-        onClosed: if (systemPanel.open) systemPanel.actions.forceActiveFocus()
+        // delegate that may be gone, so name the list.) A cancelled Restart now from the centre
+        // leaves its item as it was; the focus goes back to the bell (the dialog's own restore).
+        onClosed: {
+            if (systemPanel.open)
+                systemPanel.actions.forceActiveFocus()
+            Qt.callLater(() => { if (!powerConfirm.shown) root.pendingRestartItem = 0 })
+        }
     }
 
     // What the console does about heat: a toast and fewer effects when hot, a notice, stopping the

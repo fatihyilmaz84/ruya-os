@@ -130,6 +130,10 @@ qt_add_qml_module(ruyashell
         src/performance/DBusPerformanceBackend.h src/performance/DBusPerformanceBackend.cpp
         src/performance/Performance.h src/performance/Performance.cpp
         src/gamesettings/GameSettingsSchema.h src/gamesettings/GameSettingsSchema.cpp
+        src/notifications/NotificationsBackend.h
+        src/notifications/MockNotificationsBackend.h src/notifications/MockNotificationsBackend.cpp
+        src/notifications/DBusNotificationsBackend.h src/notifications/DBusNotificationsBackend.cpp
+        src/notifications/NotificationCentre.h src/notifications/NotificationCentre.cpp
         src/gamesettings/GameSettings.h src/gamesettings/GameSettings.cpp
     QML_FILES
         qml/Main.qml
@@ -213,6 +217,9 @@ qt_add_qml_module(ruyashell
         qml/HubGameCard.qml
         qml/RunningStrip.qml
         qml/HubIconRow.qml
+        qml/NotificationBell.qml
+        qml/NotificationRow.qml
+        qml/NotificationSheet.qml
         qml/LaunchSplash.qml
         qml/ThermalNotice.qml
         qml/ThermalPolicy.qml
@@ -302,7 +309,7 @@ else()
 endif()
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/time src/display src/thermal src/storage src/system src/power src/store src/library src/update src/session src/usage src/input src/probe src/wallpaper src/sound src/art src/gamesettings)
+target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/time src/display src/thermal src/storage src/system src/power src/store src/library src/update src/session src/usage src/input src/probe src/wallpaper src/sound src/art src/gamesettings src/notifications)
 # Qt6::GuiPrivate: ScreenPower calls QPlatformScreen::setPowerState (DPMS under eglfs_kms, T-202).
 target_include_directories(ruyashell PUBLIC src/performance)   # T-451
 target_link_libraries(ruyashell PRIVATE Qt6::Network Qt6::Quick Qt6::Multimedia Qt6::DBus Qt6::GuiPrivate)

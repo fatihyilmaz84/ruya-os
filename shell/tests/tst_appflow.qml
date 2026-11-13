@@ -669,16 +669,24 @@ Item {
             const app = playRacer()
             tryCompare(Notifications.model, "count", 0, 2000, "an info toast on screen goes back to the queue")
             compare(Notifications.pendingCount, 1)
+            // "Don't interrupt games" is on (the default, RUY-413): over the game only critical items are drawn.
             Notifications.show("Sound moved", "success")
             Notifications.show("Careful", "warning")
             Notifications.show("Broken", "error")
-            tryCompare(Notifications.model, "count", 2)
-            compare(toastTexts(), ["Careful", "Broken"], "only warnings and errors are drawn")
-            compare(Notifications.pendingCount, 2, "On Home and Sound moved wait")
+            compare(Notifications.model.count, 0, "warnings and errors wait while the game has the screen")
+            Notifications.show("Restarting soon", "warning", "", "", "", { urgency: "critical" })
+            tryCompare(Notifications.model, "count", 1)
+            compare(toastTexts(), ["Restarting soon"], "a critical item is drawn")
+            compare(Notifications.pendingCount, 4, "On Home, Sound moved, Careful and Broken wait")
 
+            // The Hub over the game: the player looks at the shell, so warnings and errors are drawn too.
             keyClick(Qt.Key_HomePage)
             tryVerify(() => find("quickMenuItem_resume").focused)
-            compare(Notifications.pendingCount, 2, "the quick menu over the app keeps them waiting")
+            tryVerify(() => toastTexts().includes("Careful") && toastTexts().includes("Broken"), 2000,
+                      "warnings and errors show over the Hub")
+            compare(Notifications.pendingCount, 2, "the quick menu over the app keeps the info toasts waiting")
+            Notifications.dismiss(Notifications.model.get(0).toastId)      // the critical one has been read: room for one more
+            compare(Notifications.pendingCount, 2, "an info toast still waits under the Hub")
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Return)                          // Home
             tryVerify(() => !tc.shell.appOpen)

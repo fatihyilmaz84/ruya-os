@@ -1006,12 +1006,12 @@ This can&apos;t be undone.</translation>
     <message>
         <location line="-7"/>
         <source>x&#xa0;%1  y&#xa0;%2</source>
-        <translation>x %1  y %2</translation>
+        <translation>x&#xa0;%1  y&#xa0;%2</translation>
     </message>
     <message>
         <location line="+12"/>
         <source>x&#xa0;%1  y&#xa0;%2  z&#xa0;%3&#xa0;°/s</source>
-        <translation>x %1  y %2  z %3 °/s</translation>
+        <translation>x&#xa0;%1  y&#xa0;%2  z&#xa0;%3&#xa0;°/s</translation>
     </message>
     <message>
         <location line="+6"/>
@@ -2330,6 +2330,155 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>NotificationBell</name>
+    <message numerus="yes">
+        <location filename="../qml/NotificationBell.qml" line="+33"/>
+        <source>Notifications, %n unread, quiet mode on</source>
+        <translation>
+            <numerusform>Notifications, %n unread, quiet mode on</numerusform>
+            <numerusform>Notifications, %n unread, quiet mode on</numerusform>
+        </translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>Notifications, %n unread</source>
+        <translation>
+            <numerusform>Notifications, %n unread</numerusform>
+            <numerusform>Notifications, %n unread</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
+    <name>NotificationRow</name>
+    <message>
+        <location filename="../qml/NotificationRow.qml" line="+34"/>
+        <source>Pinned</source>
+        <translation>Pinned</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>New</source>
+        <translation>New</translation>
+    </message>
+</context>
+<context>
+    <name>NotificationSheet</name>
+    <message>
+        <location filename="../qml/NotificationSheet.qml" line="+64"/>
+        <source>Close</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <location line="+316"/>
+        <source>Clear all</source>
+        <translation>Clear all</translation>
+    </message>
+    <message>
+        <location line="-314"/>
+        <source>Toggle</source>
+        <translation>Toggle</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Open</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Choose</source>
+        <translation>Choose</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Clear</source>
+        <translation>Clear</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Just now</source>
+        <translation>Just now</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2"/>
+        <source>%n min ago</source>
+        <translation>
+            <numerusform>%n min ago</numerusform>
+            <numerusform>%n min ago</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Yesterday</source>
+        <translation>Yesterday</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%n days ago</source>
+        <translation>
+            <numerusform>%n day ago</numerusform>
+            <numerusform>%n days ago</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+264"/>
+        <location line="+51"/>
+        <source>Notifications</source>
+        <translation>Notifications</translation>
+    </message>
+    <message numerus="yes">
+        <location line="-40"/>
+        <source>%n new</source>
+        <translation>
+            <numerusform>%n new</numerusform>
+            <numerusform>%n new</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Quiet mode</source>
+        <translation>Quiet mode</translation>
+    </message>
+    <message>
+        <location line="+59"/>
+        <source>Pinned until resolved</source>
+        <translation>Pinned until resolved</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>New</source>
+        <translation>New</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Earlier</source>
+        <translation>Earlier</translation>
+    </message>
+    <message>
+        <location line="+61"/>
+        <source>No notifications</source>
+        <translation>No notifications</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>New ones show up here.</source>
+        <translation>New ones show up here.</translation>
+    </message>
+</context>
+<context>
+    <name>Notifications</name>
+    <message>
+        <location filename="../qml/Notifications.qml" line="+119"/>
+        <source>%1 is in Notifications</source>
+        <translation>%1 is in Notifications</translation>
+    </message>
+</context>
+<context>
     <name>PadDiagram</name>
     <message>
         <location filename="../qml/PadDiagram.qml" line="+129"/>
@@ -3480,7 +3629,13 @@ This can&apos;t be undone.</translation>
         <translation>Sound moved to %1</translation>
     </message>
     <message>
-        <location line="+56"/>
+        <location line="+9"/>
+        <location line="+13"/>
+        <source>Restart now</source>
+        <translation>Restart now</translation>
+    </message>
+    <message>
+        <location line="+37"/>
         <source>%1 is still closing.</source>
         <translation>%1 is still closing.</translation>
     </message>
@@ -3522,7 +3677,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 has no window yet.</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+64"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
@@ -3532,7 +3687,7 @@ This can&apos;t be undone.</translation>
         <translation>Wallpaper could not be loaded</translation>
     </message>
     <message>
-        <location line="+318"/>
+        <location line="+354"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
@@ -3578,7 +3733,7 @@ This can&apos;t be undone.</translation>
         <translation>Recent</translation>
     </message>
     <message>
-        <location line="+474"/>
+        <location line="+488"/>
         <location line="+3"/>
         <source>Select</source>
         <translation>Select</translation>
@@ -3595,7 +3750,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1300"/>
+        <location line="-1385"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -3610,7 +3765,7 @@ This can&apos;t be undone.</translation>
         <translation>Press any button to wait</translation>
     </message>
     <message>
-        <location line="+106"/>
+        <location line="+108"/>
         <source>%1 is already running</source>
         <translation>%1 is already running</translation>
     </message>
@@ -3626,7 +3781,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1021"/>
+        <location line="+1104"/>
         <source>Sections</source>
         <translation>Sections</translation>
     </message>
@@ -4768,6 +4923,11 @@ This can&apos;t be undone.</translation>
         <source>The console is running hot (%1). Effects are reduced.</source>
         <translation>The console is running hot (%1). Effects are reduced.</translation>
     </message>
+    <message>
+        <location line="+21"/>
+        <source>The console is too hot</source>
+        <translation>The console is too hot</translation>
+    </message>
 </context>
 <context>
     <name>ThermalText</name>
@@ -4830,7 +4990,7 @@ This can&apos;t be undone.</translation>
         <translation>%1: battery low (%2%)</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Controller battery low</source>
         <translation>Controller battery low</translation>
     </message>
@@ -4840,7 +5000,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 · %2%</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Drive inserted</source>
         <translation>Drive inserted</translation>
     </message>
@@ -4852,16 +5012,21 @@ This can&apos;t be undone.</translation>
             <numerusform>%1 (and %n more)</numerusform>
         </translation>
     </message>
+    <message>
+        <location line="+2"/>
+        <source>Open Settings</source>
+        <translation>Open Settings</translation>
+    </message>
     <message numerus="yes">
-        <location line="+254"/>
-        <source>%n more</source>
+        <location line="+267"/>
+        <source>%n more in Notifications</source>
         <translation>
-            <numerusform>%n more</numerusform>
-            <numerusform>%n more</numerusform>
+            <numerusform>%n more in Notifications</numerusform>
+            <numerusform>%n more in Notifications</numerusform>
         </translation>
     </message>
     <message>
-        <location line="-249"/>
+        <location line="-263"/>
         <source>Safe to remove</source>
         <translation>Safe to remove</translation>
     </message>

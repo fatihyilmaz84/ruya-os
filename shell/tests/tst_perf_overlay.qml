@@ -258,7 +258,8 @@ Item {
             playRacer()
             DeviceSettings.setPerformanceOverlay("p2", true)
             tryVerify(() => drawn() && rightBlock().visible, 2000)
-            Notifications.show("Hello", "warning")   // only errors and warnings are drawn over a game
+            // Only critical items are drawn over a game ("Don't interrupt games", on by default, RUY-413).
+            Notifications.show("Hello", "warning", "", "", "", { urgency: "critical" })
             tryVerify(() => !rightBlock().visible, 2000, "the toast stack is in the top right")
             verify(leftBlock().visible, "the left corner is clear")
             verify(Performance.polling)
@@ -444,7 +445,7 @@ Item {
                             && line("Power") === "Power: 18.4 W (last reading)" && line("Fps") === "60 FPS", 3000)
             wait(500)
             grabImage(tc.shell).save(shotsDir + "/perf-overlay-2-states.png")
-            Notifications.show("A toast takes the right corner", "warning")
+            Notifications.show("A toast takes the right corner", "warning", "", "", "", { urgency: "critical" })   // drawn over a game (RUY-413)
             tryVerify(() => !rightBlock().visible, 2000)
             wait(500)
             grabImage(tc.shell).save(shotsDir + "/perf-overlay-3-toast.png")
