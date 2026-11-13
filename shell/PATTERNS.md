@@ -71,6 +71,12 @@ Keep per-opening data (the id a confirmation is for) on the pane, not as an extr
 
 Messages for Profiles1 statuses (`invalid`, `wrong-pin`, ...) come from the `ProfileStatus` singleton (`ProfileStatus.describe`); don't write a second mapping. The first-boot wizard (`Setup.qml`, not a page) hosts its own modals in an inner full-screen layer and is shown by `Shell` while no profile exists.
 
+## The Options menu and Accept on release (RUY-16, `02` §1.7, `04` §5)
+
+One `OptionsMenu` lives in the Shell's modal layer for every surface; a surface never builds its own. Home asks it directly (`Shell.openOptions(surface, id, anchor, kind, page)`), a **page** asks through `Page.optionsRequested(surface, itemId, anchor, kind)` (kind `"card"`, `"pill"` or `"row"`) and gets, set by the Shell, `Page.optionRows` (a function that lists an item's rows: use it for the Options hint) and `Page.optionsOpenFor` (the id whose menu is open: the card sets `ArtCard.anchored` from it). The rows of a surface come from `Shell.optionRows(surface, id)` (`gameRows` for a game or app card), the note from `optionNote`, what a row does from `runOption`: **add a surface by adding a case to those three**, not by a second menu. Rows are `{ id, label, icon, divider }`; they are bound while the menu is open, so a changed condition rebuilds them in place.
+
+An item that has a menu acts on **release** with `AcceptHold.qml`: forward the item's `Keys.onPressed` / `Keys.onReleased` to `hold.press(event)` / `hold.release(event)`, handle `tapped()` (what a press did before) and `longPressed()` (open the menu), call `hold.cancel()` when the current card or focused button changes or the focus leaves, and give the card `holdShown` / `holdProgress` (the Hold ring). The hold sees only presses delivered to the item itself, which is what makes a release whose press began elsewhere do nothing; never record a press from anywhere else. Open with `Qt.Key_Menu` on the press (ignore auto-repeat). A button that sits in such an item sets `acceptOnRelease` and lets Return through (`event.accepted = false`), as `HeroBlock` does. Test: `tst_options_menu` (the component, with the numbers), `tst_options_shell` (a surface).
+
 ## Text input
 
 Use `TextEntry` (`qml/TextEntry.qml`, spec 02-shell §4.4) for any text input; never a raw `TextInput` without it. Host it as a full-screen child of the screen that needs it, call `open(title, initial, options)`, and handle `accepted(text)`/`cancelled()`. It restores focus to the item that opened it.
