@@ -2,6 +2,8 @@
 
 #include <cstdlib>
 
+#include <QCoreApplication>
+#include <QEvent>
 #include <QEventLoop>
 #include <QFontDatabase>
 #include <QImage>
@@ -9,6 +11,7 @@
 #include <QPainter>
 #include <QGuiApplication>
 #include <QPointer>
+#include <QSet>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QQmlContext>
@@ -48,6 +51,12 @@ public:
                          "not a product bug, re-run `shots`",
                          __FILE__, __LINE__);
         });
+        // Frame watchdog (RUY-474), `shots` only: see requestStalledFrames().
+        if (!qEnvironmentVariableIsEmpty("RUYA_SHOTS_DIR")) {
+            m_pump.setInterval(250);
+            connect(&m_pump, &QTimer::timeout, this, &WindowGuard::requestStalledFrames);
+            m_pump.start();
+        }
         connect(qGuiApp, &QGuiApplication::focusWindowChanged, this, [this](QWindow *now) {
             if (now) {
                 m_last = qobject_cast<QQuickWindow *>(now);
@@ -114,6 +123,37 @@ public:
     }
 
 private:
+    // A GPU test window can stop turning update requests into frames while expose events still draw
+    // (RUY-474): QWindow::requestUpdate() delivers nothing, no frame is swapped, no item is polished, a
+    // ListView makes no delegates and the sg animation driver stands still, so every wait on a layout
+    // or a fade times out for no code reason. Whenever no window has swapped a frame for a quarter of
+    // a second, deliver the update request ourselves (an idle scene then draws one frame per 250 ms,
+    // which costs nothing; a healthy scene that is changing never reaches the quarter second).
+    void requestStalledFrames()
+    {
+        const auto windows = QGuiApplication::topLevelWindows();
+        for (QWindow *w : windows) {
+            auto *q = qobject_cast<QQuickWindow *>(w);
+            if (!q || !q->isVisible())
+                continue;
+            if (!m_watched.contains(q)) {
+                m_watched.insert(q);
+                connect(q, &QQuickWindow::frameSwapped, this, [this] { ++m_frames; });
+                connect(q, &QObject::destroyed, this, [this, q] { m_watched.remove(q); });
+            }
+        }
+        if (m_frames == m_framesSeen) {
+            for (QWindow *w : m_watched)
+                QCoreApplication::postEvent(w, new QEvent(QEvent::UpdateRequest));
+        }
+        m_framesSeen = m_frames;
+    }
+
+    QTimer m_pump;
+    QSet<QWindow *> m_watched;
+    quint64 m_frames = 0;
+    quint64 m_framesSeen = 0;
+
     // Offscreen tests do not look at the animation, only at its end: they would spend most of their
     // time waiting for fades. Every test starts with a short motion scale (Theme.motionFactor 0.1
     // instead of 1, so all duration tokens are a tenth): init() calls ensureActive(), so a test
