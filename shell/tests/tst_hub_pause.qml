@@ -535,6 +535,10 @@ Item {
 
         // Review (T-457 round 2): Switch profile from the Hub over a frozen game, then the same profile
         // signs in again: the game is in front and runs (a Thaw was seen), not frozen without "Paused".
+        // T-165 (RUY-87): until then the game is frozen. Before, it ran on behind the picker (freezing a
+        // locked profile's apps was not built, RUY-539), and this test only checked the return. The Hub
+        // closes first (its Thaw), then the profile locks and the service freezes the game: the final
+        // state behind the picker is frozen, whatever the order of the two.
         function test_switch_profile_from_the_hub_then_signing_back_in_thaws_the_game() {
             start()
             const run = playRacer()
@@ -542,10 +546,47 @@ Item {
             goTo("switch")
             keyClick(Qt.Key_Return)
             tryCompare(Profiles, "activeProfile", "")
+            tryVerify(() => recordOf(run.instance).frozen === true, 2000, "frozen behind the picker")
+            compare(Session.mockCalls(), ["freeze " + run.instance, "thaw " + run.instance, "freeze " + run.instance],
+                    "the Hub's Thaw, then the freeze of the profile that left")
+            verify(!run.app.visible, "the game is hidden")
+            tryVerify(() => find("profileList").activeFocus, 2000, "the picker has the focus")
             signInAda()
             tryVerify(() => run.app.activeFocus, 2000, "the game is in front again")
+            verify(run.app.visible)
             tryVerify(() => recordOf(run.instance).frozen === false, 2000, "and runs")
-            verify(Session.mockCalls().includes("thaw " + run.instance), "a Thaw was sent")
+            compare(Session.mockCalls(), ["freeze " + run.instance, "thaw " + run.instance, "freeze " + run.instance,
+                                          "thaw " + run.instance], "the sweep's Thaw at the sign-in")
+        }
+
+        // T-165 (RUY-87, ADR-004): a profile switch freezes the profile's apps and hides them; another
+        // profile sees none of them; the profile that signs in again gets its game back, running, in
+        // front and focused. Without the Hub: lock, Player One signs in, lock, Ada signs in.
+        function test_a_profile_switch_freezes_the_game_and_signing_back_in_brings_it_back() {
+            start()
+            const run = playRacer()
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            tryVerify(() => recordOf(run.instance).frozen === true, 2000, "frozen as Ada leaves")
+            Profiles.switchTo("p1", "1234")
+            tryCompare(Profiles, "activeProfile", "p1")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Player One starts at Home")
+            verify(recordOf(run.instance).frozen === true, "Ada's game stays frozen for Player One")
+            compare(recordOf(run.instance).state, "running", "listed as running, frozen")
+            verify(!run.app.visible, "no app item is visible")
+            verify(!tc.shell.appOpen)
+            verify(tc.shell.appRunning, "a frozen app still counts as running for the nightly restart (T-154)")
+            verify(!run.app.activeFocus)
+            compare(Session.mockCalls(), ["freeze " + run.instance], "frozen once")
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            compare(Session.mockCalls(), ["freeze " + run.instance], "Player One leaving asks nothing of Ada's game")
+            signInAda()
+            tryVerify(() => recordOf(run.instance).frozen === false, 2000, "running again")
+            tryVerify(() => run.app.activeFocus, 2000, "in front and focused")
+            verify(run.app.visible)
+            verify(tc.shell.appOpen)
+            compare(Session.mockCalls(), ["freeze " + run.instance, "thaw " + run.instance])
         }
 
         // Review (T-457 round 2): a game left frozen when the shell restarted (nobody in the new shell

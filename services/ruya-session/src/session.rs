@@ -373,10 +373,15 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     /// T-466: a frozen app's sound is parked (`app_audio`) and, after `RECLAIM_AFTER`, its memory
     /// is moved to swap (`tick`); `now` is when this freeze begins.
     pub fn freeze(&mut self, instance: &str, active: Option<&str>, now: Instant) -> Status {
-        let at = match self.freezable(instance, active) {
-            Ok(at) => at,
-            Err(status) => return status,
-        };
+        match self.freezable(instance, active) {
+            Ok(at) => self.freeze_at(at, now),
+            Err(status) => status,
+        }
+    }
+
+    /// The freezer path of `freeze` and `profile_changed`: the running instance at `at` is frozen
+    /// (already frozen: `Ok`, the OS is not asked again), or a failed freeze is undone.
+    fn freeze_at(&mut self, at: usize, now: Instant) -> Status {
         let inst = &mut self.instances[at];
         if inst.frozen {
             return Status::Ok;
@@ -406,6 +411,49 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 Status::Failed
             }
         }
+    }
+
+    /// The signed-in profile changed from `old` to `new` (`""`: locked), T-165 and ADR-004: every
+    /// running app of `old` is frozen through the freezer path of `freeze`, so a profile that leaves
+    /// (a switch from the Hub or the picker, a sign-out, the idle lock) leaves no game running
+    /// behind the next one. Its apps stay frozen until it signs in again, when the shell thaws them
+    /// (`thaw` serves only the signed-in profile's apps). `old` is `None` when it is not known (the
+    /// first value after this service started): then the apps of every profile but `new` are
+    /// frozen. A frozen app is left as it is; an app still starting or stopping is not frozen. A
+    /// failed freeze is undone like `freeze`'s, and the app keeps running. Returns each app asked,
+    /// with the outcome, for the journal.
+    pub fn profile_changed(
+        &mut self,
+        old: Option<&str>,
+        new: &str,
+        now: Instant,
+    ) -> Vec<(String, Status)> {
+        if old == Some(new) {
+            return Vec::new();
+        }
+        let away: Vec<usize> = self
+            .instances
+            .iter()
+            .enumerate()
+            .filter(|(_, i)| {
+                !i.hidden
+                    && !i.frozen
+                    && i.state == State::Running
+                    && i.profile != new
+                    && match old {
+                        Some(o) => i.profile == o,
+                        None => true,
+                    }
+            })
+            .map(|(at, _)| at)
+            .collect();
+        // `freeze_at` never removes an instance, so the positions stay valid.
+        away.into_iter()
+            .map(|at| {
+                let status = self.freeze_at(at, now);
+                (self.instances[at].unit.clone(), status)
+            })
+            .collect()
     }
 
     /// Thaws a running app of the signed-in profile (T-457). The OS is asked even when the app is
@@ -1033,6 +1081,216 @@ mod tests {
         assert!(!s.spawner.calls().contains(&format!("kill {unit}")));
         s.tick(t1 + STOP_GRACE);
         assert_eq!(s.spawner.calls().last(), Some(&format!("kill {unit}")));
+    }
+
+    // ---- A profile that leaves has its apps frozen (T-165, ADR-004) --------------------------
+
+    /// A running instance of `app` for `profile`.
+    fn run_as(s: &mut Session<FakeSpawner, ProfileSnapshot>, app: &str, profile: &str) -> String {
+        let (status, unit) = s.launch(app, profile, 100);
+        assert_eq!(status, Status::Ok, "{app} for {profile}");
+        s.on_event(UnitEvent::Started { unit: unit.clone() });
+        unit
+    }
+
+    fn freezes(s: &Session<FakeSpawner, ProfileSnapshot>) -> Vec<String> {
+        s.spawner
+            .calls()
+            .into_iter()
+            .filter(|c| c.starts_with("freeze "))
+            .collect()
+    }
+
+    #[test]
+    fn a_profile_that_leaves_has_every_app_frozen_and_the_next_ones_are_untouched() {
+        let mut s = session();
+        let racer = run_as(&mut s, APP, "p1");
+        let puzzle = run_as(&mut s, PUZZLE, "p1");
+        let theirs = run_as(&mut s, APP, "p2");
+        let asked = s.profile_changed(Some("p1"), "p2", Instant::now());
+        assert_eq!(
+            asked,
+            [(racer.clone(), Status::Ok), (puzzle.clone(), Status::Ok)]
+        );
+        assert!(frozen_of(&s, &racer) && frozen_of(&s, &puzzle));
+        assert!(
+            !frozen_of(&s, &theirs),
+            "the profile that came is untouched"
+        );
+        assert_eq!(
+            freezes(&s),
+            [format!("freeze {racer}"), format!("freeze {puzzle}")]
+        );
+        // Announced like a Freeze, in order.
+        assert_eq!(
+            s.take_frozen_changes(),
+            [
+                FrozenChange {
+                    instance: racer.clone(),
+                    frozen: true
+                },
+                FrozenChange {
+                    instance: puzzle.clone(),
+                    frozen: true
+                }
+            ]
+        );
+        // p2 locks in turn: its app is frozen; p1's stay frozen and are not asked again.
+        let asked = s.profile_changed(Some("p2"), "", Instant::now());
+        assert_eq!(asked, [(theirs.clone(), Status::Ok)]);
+        assert!(frozen_of(&s, &theirs));
+        assert_eq!(freezes(&s).len(), 3);
+    }
+
+    #[test]
+    fn apps_frozen_already_stay_frozen_and_the_os_is_not_asked_again() {
+        let mut s = session();
+        let racer = run_as(&mut s, APP, "p1");
+        let puzzle = run_as(&mut s, PUZZLE, "p1");
+        assert_eq!(s.freeze(&racer, Some("p1"), Instant::now()), Status::Ok); // the Hub's
+        s.take_frozen_changes();
+        let asked = s.profile_changed(Some("p1"), "", Instant::now());
+        assert_eq!(asked, [(puzzle.clone(), Status::Ok)]);
+        assert!(frozen_of(&s, &racer) && frozen_of(&s, &puzzle));
+        assert_eq!(
+            freezes(&s),
+            [format!("freeze {racer}"), format!("freeze {puzzle}")]
+        );
+        assert_eq!(
+            s.take_frozen_changes(),
+            [FrozenChange {
+                instance: puzzle,
+                frozen: true
+            }]
+        );
+    }
+
+    #[test]
+    fn a_sign_in_and_no_change_freeze_nothing() {
+        // Only the apps of the profile that left are frozen: a sign-in from the picker ("" before)
+        // freezes nobody's, not even another profile's.
+        let mut s = session();
+        let racer = run_as(&mut s, APP, "p1");
+        let theirs = run_as(&mut s, APP, "p2");
+        assert!(s.profile_changed(Some(""), "p1", Instant::now()).is_empty());
+        assert!(s
+            .profile_changed(Some("p1"), "p1", Instant::now())
+            .is_empty());
+        assert!(s.profile_changed(Some(""), "", Instant::now()).is_empty());
+        assert!(!frozen_of(&s, &racer) && !frozen_of(&s, &theirs));
+        assert!(freezes(&s).is_empty());
+        assert!(s.take_frozen_changes().is_empty());
+    }
+
+    #[test]
+    fn the_first_value_after_a_start_freezes_every_profile_but_the_signed_in_one() {
+        let mut s = session();
+        let mine = run_as(&mut s, APP, "p1");
+        let theirs = run_as(&mut s, APP, "p2");
+        assert_eq!(
+            s.profile_changed(None, "p1", Instant::now()),
+            [(theirs.clone(), Status::Ok)]
+        );
+        assert!(!frozen_of(&s, &mine));
+        assert!(frozen_of(&s, &theirs));
+        // Locked at the start: every app.
+        let mut s = session();
+        let mine = run_as(&mut s, APP, "p1");
+        let theirs = run_as(&mut s, APP, "p2");
+        assert_eq!(s.profile_changed(None, "", Instant::now()).len(), 2);
+        assert!(frozen_of(&s, &mine) && frozen_of(&s, &theirs));
+    }
+
+    #[test]
+    fn apps_that_start_or_stop_are_not_frozen_by_a_change() {
+        let mut s = session();
+        let (_, starting) = s.launch(APP, "p1", 0);
+        let stopping = run_as(&mut s, PUZZLE, "p1");
+        assert_eq!(s.stop(&stopping, Instant::now()), Status::Ok);
+        assert!(s
+            .profile_changed(Some("p1"), "p2", Instant::now())
+            .is_empty());
+        assert!(!frozen_of(&s, &starting) && !frozen_of(&s, &stopping));
+        assert!(freezes(&s).is_empty());
+    }
+
+    #[test]
+    fn a_failed_freeze_at_a_change_is_undone_and_the_app_keeps_running() {
+        let spawner = FakeSpawner::new().with_app(APP).failing_freeze();
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, Vec::new());
+        let unit = running(&mut s);
+        assert_eq!(
+            s.profile_changed(Some("p1"), "", Instant::now()),
+            [(unit.clone(), Status::Failed)]
+        );
+        assert!(!frozen_of(&s, &unit));
+        assert!(s.take_frozen_changes().is_empty());
+        assert_eq!(
+            s.spawner.calls()[1..],
+            [format!("freeze {unit}"), format!("thaw {unit}")]
+        );
+    }
+
+    #[test]
+    fn a_crash_while_frozen_by_a_change_is_reported_once() {
+        let mut s = session();
+        let unit = running(&mut s);
+        s.profile_changed(Some("p1"), "p2", Instant::now());
+        assert!(frozen_of(&s, &unit));
+        assert_eq!(reason(s.on_event(exited(&unit, 3, false))), (3, "crashed"));
+        assert!(
+            s.on_event(exited(&unit, 3, false)).is_none(),
+            "reported once"
+        );
+        assert!(s.list().is_empty());
+    }
+
+    #[test]
+    fn stop_works_on_an_app_frozen_by_a_change() {
+        // The profile that left cannot Thaw its app (not-allowed), but Stop still ends it: thawed
+        // first, so it can handle the SIGTERM.
+        let mut s = session();
+        let unit = running(&mut s);
+        s.profile_changed(Some("p1"), "", Instant::now());
+        s.take_frozen_changes();
+        assert_eq!(s.thaw(&unit, Some("")), Status::NotAllowed);
+        assert!(frozen_of(&s, &unit));
+        assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
+        assert_eq!(
+            s.spawner.calls()[1..],
+            [
+                format!("freeze {unit}"),
+                format!("thaw {unit}"),
+                format!("stop {unit}")
+            ]
+        );
+        assert_eq!(reason(s.on_event(exited(&unit, 0, false))), (0, "quit"));
+    }
+
+    #[test]
+    fn the_hubs_thaw_right_before_the_switch_still_ends_frozen() {
+        // Switch profile from the Hub (Shell.qml): the Hub closes, which thaws the game, then the
+        // profile locks. The adapter serves the Thaw and the change one at a time, in order: in
+        // either order the game ends frozen.
+        let mut s = session();
+        let unit = running(&mut s);
+        assert_eq!(s.freeze(&unit, Some("p1"), Instant::now()), Status::Ok); // the Hub opens
+                                                                             // The Thaw first, then the change.
+        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        s.profile_changed(Some("p1"), "", Instant::now());
+        assert!(frozen_of(&s, &unit));
+        // The change first: the Thaw then reads "" as the signed-in profile and is refused.
+        let mut s = session();
+        let unit = running(&mut s);
+        assert_eq!(s.freeze(&unit, Some("p1"), Instant::now()), Status::Ok);
+        s.profile_changed(Some("p1"), "", Instant::now());
+        assert_eq!(s.thaw(&unit, Some("")), Status::NotAllowed);
+        assert!(frozen_of(&s, &unit));
+        // p1 signs in again: the shell's Thaw works.
+        s.profile_changed(Some(""), "p1", Instant::now());
+        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        assert!(!frozen_of(&s, &unit));
     }
 
     // ---- The sound of a frozen app (T-466) ----------------------------------------------------

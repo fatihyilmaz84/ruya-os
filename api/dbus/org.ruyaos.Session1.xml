@@ -29,6 +29,18 @@
     "not-running"       no instance with that name is running (unknown, still starting or stopping)
     "not-allowed"       the app is not the signed-in profile's (or nobody is signed in)
 
+  A profile that leaves has its apps frozen (T-165, ADR-004): the service follows Profiles1's
+  ActiveProfile (PropertiesChanged, and a restart of Profiles1). When it changes from a profile P
+  to anything else (another profile, or "" when the console locks: a switch from the Ruya Hub or
+  the picker, a sign-out, the idle lock), every running app of P (its unit and every scope, as
+  Freeze) is frozen, and FrozenChanged(instance, true) follows each. An app frozen already is left
+  as it is; an app still starting or stopping is not frozen. The first value the service reads
+  after its own start freezes the running apps of every profile but the signed-in one. The value
+  is read in the freezer's turn (after the Freeze and Thaw calls that came before), so a Thaw sent
+  just before the change still ends frozen. Nothing is thawed by a sign-in: the shell sends Thaw
+  for the signed-in profile's frozen apps (Thaw refuses another profile's app, "not-allowed"); Stop
+  works on any frozen app. There is no extra method: the frozen state is the running record's.
+
   InstanceOfPid (T-459) has this extra status:
     "not-found"         the process is in no running instance (no such process, or not an app's)
 
@@ -48,7 +60,8 @@
     profile    s    profile id the app runs as
     started    x    unix seconds
     state      s    "starting" | "running" | "stopping"
-    frozen     b    true while the app is frozen by Freeze (T-457); FrozenChanged follows each change
+    frozen     b    true while the app is frozen by Freeze (T-457) or because its profile left (T-165);
+               FrozenChanged follows each change
                (an app taken over after a restart of the service reads its unit's FreezerState)
 
   Usage ledger (T-247). ruya-session keeps, per profile, a ledger of play sessions under

@@ -117,7 +117,8 @@ FocusScope {
     // destruction.
     // Whose app it is (T-164): `profile` is the profile the app runs as, "" for the shell's own
     // (a test client). An app is shown only while someone is signed in, and only to its own
-    // profile; the others wait hidden, without focus (T-165 decides what a switch does to them).
+    // profile; the others wait hidden, without focus, and frozen: ruya-session freezes the apps of a
+    // profile that leaves (T-165), and HubPause's sweep thaws them when it signs in again.
     property var apps: []
     property Item focusedApp: null
     // The user sent the running apps behind Home (quick menu -> Home, T-147): they keep running and
@@ -201,11 +202,14 @@ FocusScope {
         return run ? run.appId : record.appId
     }
 
-    // An app the Hub froze (or any frozen one) stays frozen until the player resumes it (T-464): it is
-    // never the front app by itself, or HubPause would thaw it behind the window that took the screen.
+    // An app the Hub froze stays frozen until the player resumes it (T-464): it is never the front app
+    // by itself, or HubPause would thaw it behind the window that took the screen. A frozen app the Hub
+    // did not freeze (its profile left and ruya-session froze it, T-165; a shell restart) is thawed by
+    // HubPause's sweep as soon as its profile is signed in, so it may be the front app: signing in again
+    // brings the game back in front.
     function appFrozen(record) {
         const run = instanceOfWindow(record)
-        return run ? (run.frozen === true || hubPause.asked.includes(run.instance)) : false
+        return run ? hubPause.asked.includes(run.instance) : false
     }
 
     // The app that takes the screen when the front one goes away: the newest shown app that is not
