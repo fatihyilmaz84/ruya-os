@@ -40,7 +40,7 @@ Page {
     Component.onCompleted: {
         if (current)
             pad = current
-        Input.startTest(padId)
+        Input.startTest(padId, false)
     }
     Component.onDestruction: {
         if (!gone)
@@ -49,7 +49,7 @@ Page {
 
     function restart() {
         if (!gone && !running)
-            Input.startTest(padId)
+            Input.startTest(padId, false)
     }
 
     function leave() {
@@ -127,7 +127,7 @@ Page {
         }
         function onServiceOwnedChanged() {
             if (Input.serviceOwned && !page.gone)
-                Input.startTest(page.padId)       // a restarted service has no test
+                Input.startTest(page.padId, false)       // a restarted service has no test
         }
         function onDevicesChanged() {
             if (!page.gone && Input.devicesState === "ok" && !Input.devices.some(d => d.id === page.padId)) {

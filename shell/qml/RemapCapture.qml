@@ -59,7 +59,7 @@ FocusScope {
         remaining = 1
         drain.restart()
         timeout.restart()
-        Input.startTest(padId)
+        Input.startTest(padId, false)
     }
 
     // The inputs that can be a target, and whether this event presses one.

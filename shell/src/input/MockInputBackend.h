@@ -29,7 +29,7 @@ public:
                   const QString &profile) override;
     void refreshDevices() override;
     void getCapabilities(const QString &deviceId) override;
-    void startTest(const QString &deviceId) override;
+    void startTest(const QString &deviceId, bool holdLeftStick) override;
     void stopTest(const QString &deviceId) override;
     // The controller profiles (RUY-42): MockInputProfiles answers, asynchronously, and a change is
     // one ProfilesChanged after the reply.
@@ -74,6 +74,16 @@ public:
     // The service ends a test by itself ("idle", "route"...).
     void endTest(const QString &id, const QString &reason);
     bool testRunning(const QString &id) const { return m_tests.contains(id); }
+    // Whether the running test of `id` was started holding the left stick's navigation (RUY-479).
+    bool testHoldsLeftStick(const QString &id) const { return m_tests.contains(id) && m_holds.value(id); }
+    // While true the mock plays the service's stick-to-arrow-keys path: a left-stick input past
+    // half travel, during a test that does not hold the stick, sends an arrow key to the focused
+    // window. Off by default, so no other test is moved by it.
+    void setStickNavigates(bool on)
+    {
+        m_stickNavigates = on;
+        m_stickDown.clear();
+    }
     QVariantList devices() const { return m_devices; }
     // The three pads again, no test, ListDevices working.
     void resetDevices();
@@ -108,6 +118,9 @@ private:
     bool m_listFail = false;
     QVariantList m_devices;
     QSet<QString> m_tests;
+    QHash<QString, bool> m_holds;      // device id -> its test holds the left stick (valid while it runs)
+    bool m_stickNavigates = false;
+    QHash<QString, int> m_stickDown;   // "id/axis" -> the direction held (-1, 1), none: absent
     MockInputProfiles m_profiles;
     QVariantList m_profileCalls;
     QHash<QString, QString> m_forcedStatus;

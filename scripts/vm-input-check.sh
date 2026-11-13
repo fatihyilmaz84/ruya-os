@@ -6,12 +6,16 @@
 # so vm-input-probe.py holds its own bus connection), rumble is forwarded, and a killed service
 # is back within 0.5 s. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|fallback|confirm]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|fallback|confirm|hold]
 # `confirm` (RUY-40) checks the family's confirm button with a uinput pad announcing Nintendo's vendor
 # id: BTN_EAST gives KEY_ENTER and BTN_SOUTH KEY_ESC on RuyaOS Navigation, `south` swaps them back, `east`
 # gives them to every family, the ConfirmButton property follows, bad modes and accounts are refused. It stops
 # ruya-compositor@tty1 for the block (an Accept must not reach a live Home, RUY-473) and starts it again; run
 # it alone, not inside `check`.
+# `hold` (RUY-479) checks StartTest(device_id, hold_left_stick) with the same pad and the same stopped compositor:
+# without the flag the left stick sends Right/Left, with it no arrow key (the D-pad still sends Right), a stick
+# held when the hold starts is released once, after StopTest a pushed stick stays quiet until it was neutral,
+# and the old one-argument StartTest is refused. Run it alone, not inside `check`.
 # `check` runs the first four, then `caps` and `profiles`. `profiles` (RUY-42) checks the controller
 # profiles over busctl: the built-ins, validation (a bad file, 64 KiB + 1), storage in
 # /var/lib/ruya-input/profiles/<profile>/ (0700 / 0600, ruya-input's, unreadable to the profile
@@ -471,7 +475,7 @@ print(status if not bad else status + ": " + "; ".join(bad))
     [ "$out" = ok ] && ok "GetCapabilities: buttons, sticks, analog triggers, D-pad and rumble work and reach games; nothing else is claimed" || bad "GetCapabilities: $out ($caps)"
     out="$(busctl --system call "$svc" "$path" "$ifc" GetCapabilities s nope 2>&1)"
     case "$out" in *'"unknown-device"'*) ok "GetCapabilities of an unknown id: unknown-device" ;; *) bad "GetCapabilities nope: $out" ;; esac
-    out="$(busctl --system call "$svc" "$path" "$ifc" StartTest s "$id" 2>&1)"
+    out="$(busctl --system call "$svc" "$path" "$ifc" StartTest sb "$id" false 2>&1)"
     case "$out" in
     *'"ok"'*)
         sleep 1
@@ -481,7 +485,7 @@ print(status if not bad else status + ": " + "; ".join(bad))
     *'"not-allowed"'*) ok "StartTest: not-allowed (the route is $(busctl --system get-property "$svc" "$path" "$ifc" Route | cut -d'"' -f2))" ;;
     *) bad "StartTest: $out" ;;
     esac
-    out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$ifc" StartTest s "$id" 2>&1)" && bad "nobody could call StartTest: $out" || ok "nobody cannot call StartTest"
+    out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$ifc" StartTest sb "$id" true 2>&1)" && bad "nobody could call StartTest: $out" || ok "nobody cannot call StartTest"
     kill "$padpid" 2>/dev/null
     wait "$padpid" 2>/dev/null
 }
@@ -497,6 +501,21 @@ confirm_restore() {
 
 confirm_check() {
     echo "--- the family's confirm button (RUY-40)"
+    stopped_shell_probe confirm
+}
+
+# RUY-479: StartTest's hold_left_stick, over the probe's own connection (a leaving caller ends a test).
+hold_check() {
+    echo "--- StartTest holds the left stick's arrow keys (RUY-479)"
+    # The old one-argument call is refused: the signature is (s, b).
+    local out
+    out="$(busctl --system call "$svc" "$path" "$ifc" StartTest s nope 2>&1)" && bad "StartTest(s) was accepted: $out" || ok "StartTest(s) without the flag is refused"
+    stopped_shell_probe hold
+}
+
+# The probe command $1 with the compositor (and the shell) stopped, so no Accept or arrow reaches Home.
+stopped_shell_probe() {
+    local what="$1"
     [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; return; }
     systemctl is-active ruya-inputd >/dev/null || { bad "ruya-inputd is not active"; return; }
     trap confirm_restore EXIT
@@ -509,7 +528,7 @@ confirm_check() {
         return
     fi
     ok "the compositor and the shell are stopped: no Accept can start anything"
-    python3 "$probe" confirm --profile "$me" || fail=1
+    python3 "$probe" "$what" --profile "$me" || fail=1
     confirm_restore
     trap - EXIT
     ok "the compositor is started again"
@@ -520,6 +539,11 @@ confirm)
     two_profiles
     [ -n "$me" ] && ok "profile $me" || { bad "need a profile"; exit 1; }
     confirm_check
+    ;;
+hold)
+    two_profiles
+    [ -n "$me" ] && ok "profile $me" || { bad "need a profile"; exit 1; }
+    hold_check
     ;;
 check)
     two_profiles

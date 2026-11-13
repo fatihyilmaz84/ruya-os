@@ -31,7 +31,7 @@ public:
     // Input1.GetCapabilities(device_id); the answer arrives as capabilitiesFinished.
     virtual void getCapabilities(const QString &deviceId) = 0;
     // Input1.StartTest / StopTest; StartTest's answer arrives as testStartFinished.
-    virtual void startTest(const QString &deviceId) = 0;
+    virtual void startTest(const QString &deviceId, bool holdLeftStick) = 0;
     virtual void stopTest(const QString &deviceId) = 0;
     // A controller profile member (InputProfileCalls.h; RUY-42) with its in-arguments by the XML's
     // names. The answer arrives as profileReply with the same token and the out-arguments by name

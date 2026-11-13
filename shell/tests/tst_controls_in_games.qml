@@ -509,6 +509,38 @@ Item {
             tryVerify(() => !Input.mockTestRunning(ds), 2000, "the stream stops when the page closes")
         }
 
+        function test_the_left_stick_page_holds_the_stick_s_arrow_keys_and_the_right_page_does_not() {
+            // The mock plays the service's stick-to-arrow path (off for every other test): a pushed
+            // left stick is an arrow key unless the running test holds it (RUY-479).
+            Input.mockStickNavigates(true)
+            openStick("left")
+            tryVerify(() => Input.mockTestRunning(ds), 2000)
+            verify(Input.mockTestHoldsLeftStick(ds), "the Left stick page starts its test holding the stick")
+            compare(find("rowInner").value, 8)
+            Input.mockTestInput(ds, "left_x", 32767, "raw:pad:3:0")
+            Input.mockTestInput(ds, "left_x", 0, "raw:pad:3:0")
+            Input.mockTestInput(ds, "left_y", 32767, "raw:pad:3:1")
+            Input.mockTestInput(ds, "left_y", 0, "raw:pad:3:1")
+            compare(find("rowInner").value, 8, "the slider did not move")
+            verify(find("rowInner").activeFocus, "the focus did not move")
+            tryCompare(find("stickReadout"), "text", "In 0.00 · Out 0.00")      // the stream still reached the preview
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "controls")
+            tryVerify(() => !Input.mockTestRunning(ds), 2000)
+
+            focusRow("controlsBody", "rowRightStick")
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "controlsStick")
+            tryVerify(() => find("rowInner") !== null && find("rowInner").activeFocus, 2000)
+            tryVerify(() => Input.mockTestRunning(ds), 2000)
+            verify(!Input.mockTestHoldsLeftStick(ds), "the Right stick page does not hold it")
+            compare(find("rowInner").value, 8)
+            Input.mockTestInput(ds, "left_x", 32767, "raw:pad:3:0")
+            compare(find("rowInner").value, 9, "without the hold the same push moves the slider")
+            Input.mockTestInput(ds, "left_y", 32767, "raw:pad:3:1")
+            tryVerify(() => find("rowOuter").activeFocus, 2000, "and the focus")
+        }
+
         function test_the_stick_editor_without_a_controller() {
             for (const id of [ds, xbox, pro])
                 Input.mockRemoveDevice(id)

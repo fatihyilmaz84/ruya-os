@@ -2,10 +2,14 @@
 
 #include "InputProfileCalls.h"
 
+#include <QCoreApplication>
+#include <QGuiApplication>
+#include <QKeyEvent>
 #include <QRegularExpression>
 #include <QStringList>
 #include <QTimer>
 #include <QVariantMap>
+#include <QWindow>
 
 #include <algorithm>
 
@@ -111,6 +115,8 @@ void MockInputBackend::resetDevices()
 {
     m_listFail = false;
     m_tests.clear();
+    m_stickNavigates = false;
+    m_stickDown.clear();
     setDefaultDevices();
     QTimer::singleShot(0, this, [this] { emit devicesChanged(); });
 }
@@ -172,7 +178,7 @@ void MockInputBackend::getCapabilities(const QString &deviceId)
     QTimer::singleShot(0, this, [this, deviceId, status, caps] { emit capabilitiesFinished(deviceId, status, caps); });
 }
 
-void MockInputBackend::startTest(const QString &deviceId)
+void MockInputBackend::startTest(const QString &deviceId, bool holdLeftStick)
 {
     const bool known = std::any_of(m_devices.cbegin(), m_devices.cend(), [&deviceId](const QVariant &d) {
         return d.toMap().value(QStringLiteral("id")).toString() == deviceId;
@@ -186,8 +192,12 @@ void MockInputBackend::startTest(const QString &deviceId)
         status = QStringLiteral("not-allowed");
     else if (m_tests.contains(deviceId))
         status = QStringLiteral("busy");
-    if (status == QLatin1String("ok"))
+    if (status == QLatin1String("ok")) {
         m_tests.insert(deviceId);
+        m_holds.insert(deviceId, holdLeftStick);
+        m_stickDown.remove(deviceId + QLatin1String("/left_x"));
+        m_stickDown.remove(deviceId + QLatin1String("/left_y"));
+    }
     QTimer::singleShot(0, this, [this, deviceId, status] { emit testStartFinished(deviceId, status); });
 }
 
@@ -224,8 +234,31 @@ void MockInputBackend::removeDevice(const QString &id)
 
 void MockInputBackend::sendTestInput(const QString &id, const QString &input, int value, const QString &source)
 {
-    if (m_tests.contains(id))
-        emit testInput(id, input, value, source);
+    if (!m_tests.contains(id))
+        return;
+    emit testInput(id, input, value, source);
+    if (!m_stickNavigates || m_holds.value(id) || (input != QLatin1String("left_x") && input != QLatin1String("left_y")))
+        return;
+    // The service's path: past half travel one arrow key, again only after the stick came back.
+    const bool horizontal = input == QLatin1String("left_x");
+    const QString slot = id + QLatin1Char('/') + input;
+    const int dir = value >= 16384 ? 1 : (value <= -16384 ? -1 : 0);
+    if (dir == m_stickDown.value(slot, 0))
+        return;
+    if (dir == 0)
+        m_stickDown.remove(slot);
+    else
+        m_stickDown.insert(slot, dir);
+    if (dir == 0)
+        return;
+    const int key = horizontal ? (dir < 0 ? Qt::Key_Left : Qt::Key_Right) : (dir < 0 ? Qt::Key_Up : Qt::Key_Down);
+    QWindow *window = QGuiApplication::focusWindow();
+    if (!window)
+        return;
+    QKeyEvent press(QEvent::KeyPress, key, Qt::NoModifier);
+    QKeyEvent release(QEvent::KeyRelease, key, Qt::NoModifier);
+    QCoreApplication::sendEvent(window, &press);
+    QCoreApplication::sendEvent(window, &release);
 }
 
 void MockInputBackend::endTest(const QString &id, const QString &reason)

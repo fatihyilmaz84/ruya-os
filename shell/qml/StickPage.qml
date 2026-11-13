@@ -17,6 +17,9 @@ Page {
     readonly property string side: (params ?? {}).side === "right" ? "right" : "left"
     readonly property var pad: GameControls.padFor(padId)
     readonly property var settings: GameControls.stick(side)
+    // The left stick's arrow keys are held while its test runs (06 §11.1), so trying it does not move
+    // the focus; the right stick sends none.
+    readonly property bool holdsStick: side === "left"
 
     title: side === "right" ? qsTr("Right stick") : qsTr("Left stick")
     hints: body.hints
@@ -45,7 +48,7 @@ Page {
         stickY = 0
         testingId = id
         if (id !== "")
-            Input.startTest(id)
+            Input.startTest(id, page.holdsStick)
     }
     function stopStream() {
         if (testingId !== "")
@@ -54,7 +57,7 @@ Page {
     }
     function restart() {
         if (!gone && testingId !== "" && Input.route === "shell")
-            Input.startTest(testingId)
+            Input.startTest(testingId, page.holdsStick)
     }
 
     Connections {
