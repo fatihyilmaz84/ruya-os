@@ -173,5 +173,11 @@
       "name": "root",
       "reason": "development image: root logs in over SSH with a key (key only, locked password); removed in the release profile (T-425)"
     }
+  ],
+  "xwayland_domains": [
+    {
+      "domain": "xserver_t",
+      "reason": "RUY-436 (ADR-034): the X server of an X11-only app, started on demand by the app's helper as the profile user. Fedora's policy labels /usr/bin/Xwayland xserver_t (seen on the Dell spike, RUY-1); the image adds no module for it. RUY-20 (SELinux domains for the ruya-* services) does not cover it: Xwayland is not a ruya-* process. Confirm on the first VM run of vm-x11-check.sh."
+    }
   ]
 }

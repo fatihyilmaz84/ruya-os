@@ -8,7 +8,7 @@
 # Exits 0 when nothing FAILED. Run it only when no other QEMU is running; never builds an image.
 param(
     [string[]]$Checks = @(
-        "vm-session-check.sh check", "vm-session-check.sh display", "vm-session-check.sh restart",
+        "vm-session-check.sh check", "vm-session-check.sh display", "vm-session-check.sh restart", "vm-x11-check.sh",
         "vm-sounds-check.sh",
         "vm-security-check.sh", "vm-swap-check.sh",
         "vm-devices-check.sh bluetooth", "vm-devices-check.sh twopads", "vm-devices-check.sh inputd", "vm-devices-check.sh system",
