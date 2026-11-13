@@ -9,6 +9,8 @@
 #   selinux   getenforce is Enforcing; no ruya-* process in unconfined_service_t unless the baseline names it
 #   files     setuid/setgid files under /usr equal the baseline; nothing under /usr or /etc is world-writable
 #   accounts  only baseline accounts have a login shell or a usable password
+#   x11       (RUY-436, ADR-034) no abstract @/tmp/.X11-unix listener; every X* socket is 0700 and owned by a profile
+#             user (ruya-p<N>); every running Xwayland has -auth and -nolisten local and runs in a baseline domain
 # `measure` prints a draft baseline of THIS system (to update the baseline file: review the diff, and give
 # every looser value a "reason" in the same commit). A missing tool is a FAIL, never a SKIP.
 # Host tests (scripts/test-vm-checks.sh) set SEC_* variables to point at fixtures and put fakes in PATH.
@@ -21,6 +23,7 @@ done
 usr="${SEC_USR:-/usr}"
 etc="${SEC_ETC:-/etc}"
 unitdirs="${SEC_UNITDIRS:-/usr/lib/systemd/system /etc/systemd/system}"
+x11dir="${SEC_X11DIR:-/tmp/.X11-unix}"
 passwd="${SEC_PASSWD:-/etc/passwd}"
 shadow="${SEC_SHADOW:-/etc/shadow}"
 
@@ -56,6 +59,14 @@ done
 ss -H -tuln > "$t/ss.txt" 2> "$t/ss.err" || echo "ss -H -tuln failed: $(cat "$t/ss.err")" >> "$t/gather-errors.txt"
 getenforce > "$t/getenforce.txt" 2>&1 || echo "getenforce failed: $(cat "$t/getenforce.txt")" >> "$t/gather-errors.txt"
 ps -e -o label= -o comm= > "$t/ps.txt" 2> "$t/ps.err" || echo "ps failed: $(cat "$t/ps.err")" >> "$t/gather-errors.txt"
+ss -H -xln > "$t/ssx.txt" 2> "$t/ssx.err" || echo "ss -H -xln failed: $(cat "$t/ssx.err")" >> "$t/gather-errors.txt"
+# Xwayland processes with their SELinux label and arguments (X11 apps start one each, on demand).
+ps -e -o pid= -o label= -o comm= -o args= > "$t/psx.txt" 2> "$t/psx.err" || echo "ps (Xwayland) failed: $(cat "$t/psx.err")" >> "$t/gather-errors.txt"
+: > "$t/x11sockets.txt"
+if [ -d "$x11dir" ]; then
+    find "$x11dir" -maxdepth 1 -name 'X*' -printf '%m %u %y %p\n' > "$t/x11sockets.txt" 2> "$t/find3.err" || true
+    [ -s "$t/find3.err" ] && echo "find X sockets: $(head -1 "$t/find3.err")" >> "$t/gather-errors.txt"
+fi
 find "$usr" -xdev -type f \( -perm -4000 -o -perm -2000 \) 2> "$t/find1.err" | sort > "$t/setid.txt" \
     || true
 [ -s "$t/find1.err" ] && echo "find setuid: $(head -1 "$t/find1.err")" >> "$t/gather-errors.txt"
@@ -127,6 +138,24 @@ for name, shell in passwd.items():
     if login_shell or usable:
         accounts.add(name)
 
+# X11 (RUY-436): listening unix sockets, the X* entries of the socket directory, Xwayland processes
+abstract_x = []
+for l in lines("ssx.txt"):
+    f = l.split()
+    if len(f) >= 5 and f[4].startswith("@/tmp/.X11-unix"):
+        abstract_x.append(f[4])
+x_entries = []     # (mode, owner, type, path)
+for l in lines("x11sockets.txt"):
+    f = l.split(None, 3)
+    if len(f) == 4:
+        x_entries.append(tuple(f))
+xwayland = []      # (pid, selinux type, argument list)
+for l in lines("psx.txt"):
+    f = l.split(None, 3)
+    if len(f) >= 3 and f[2] == "Xwayland":
+        label = f[1].split(":")
+        xwayland.append((f[0], label[2] if len(label) > 2 else f[1], f[3].split() if len(f) > 3 else []))
+
 errors = lines("gather-errors.txt")
 
 if mode == "measure":
@@ -136,6 +165,7 @@ if mode == "measure":
         "unconfined": [{"process": p, "reason": "TODO"} for p in sorted(unconfined)],
         "setid": [{"path": p, "reason": "TODO"} for p in sorted(setid)],
         "accounts": [{"name": a, "reason": "TODO"} for a in sorted(accounts)],
+        "xwayland_domains": [{"domain": d, "reason": "TODO"} for d in sorted({x[1] for x in xwayland})],
     }
     print(json.dumps(draft, indent=2))
     for e in errors:
@@ -225,6 +255,33 @@ else:
         bad("accounts with a login shell or usable password not in the baseline: " + ", ".join(sorted(accounts - ba)))
     if ba - accounts:
         bad("baseline accounts without login (remove them): " + ", ".join(sorted(ba - accounts)))
+
+# x11 (ADR-034 point 5): the isolation of an app's X server, as a standing assertion
+if abstract_x:
+    bad("abstract X11 listener(s) (any sandbox with network could connect): " + ", ".join(sorted(abstract_x)))
+else:
+    ok("no abstract @/tmp/.X11-unix listener")
+badx = [e for e in x_entries if e[0] != "700" or not re.fullmatch(r"ruya-p[0-9]+", e[1])]
+for mode, owner, _kind, path in badx:
+    bad("X socket %s is mode %s owned by %s, want 700 owned by a profile user (ruya-p<N>)" % (path, mode, owner))
+if not badx:
+    ok("%d X socket(s), each 0700 and owned by a profile user" % len(x_entries) if x_entries else "no X socket (X11 apps start one on demand)")
+bd = {e["domain"] for e in base.get("xwayland_domains", [])}
+need_reasons("xwayland_domains", "domain")
+for pid, domain, argv in xwayland:
+    pairs = list(zip(argv, argv[1:]))
+    if "-auth" not in argv:
+        bad("Xwayland %s runs without -auth (no cookie required)" % pid)
+    elif ("-nolisten", "local") not in pairs:
+        bad("Xwayland %s runs without -nolisten local (it would listen on an abstract socket)" % pid)
+    else:
+        ok("Xwayland %s has -auth and -nolisten local" % pid)
+    if domain in bd:
+        ok("Xwayland %s runs in %s (named in the baseline)" % (pid, domain))
+    else:
+        bad("Xwayland %s runs in SELinux domain %s, not in the baseline (%s)" % (pid, domain, ", ".join(sorted(bd)) or "none"))
+if not xwayland:
+    ok("no Xwayland is running (X11 apps start one on demand)")
 
 print("SOME CHECKS FAILED" if failed else "ALL CHECKS PASSED")
 sys.exit(1 if failed else 0)

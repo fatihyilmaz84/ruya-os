@@ -8,6 +8,9 @@
 #                          ListVolumes is not "the volume left the list"
 #   - vm-security-check.sh each step (exposure, port, SELinux, setuid, world-writable, account) can FAIL
 #   - vm-sample-check.sh   an early failure still cleans up (trap on EXIT)
+#   - vm-x11-check.sh      only a real refusal passes a negative probe; vm-x11-client.py against a fake X server
+#                          (test-vm-x11-client.py); vm-security-check.sh's x11 step (abstract listener, socket
+#                          mode and owner, Xwayland's -auth, -nolisten local and SELinux domain)
 # Needs bash and python3 (python on Windows). Exit 0 = all pass.
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -171,7 +174,8 @@ cat > "$sec/baseline.json" <<'JSONEOF'
  "ports": [{"port": "tcp:22", "reason": "sshd"}, {"port": "udp:68", "reason": "dhcp"}],
  "unconfined": [{"process": "ruya-odd", "reason": "t"}],
  "setid": [{"path": "/usr/bin/passwd", "reason": "t"}],
- "accounts": [{"name": "root", "reason": "t"}]}
+ "accounts": [{"name": "root", "reason": "t"}],
+ "xwayland_domains": [{"domain": "xserver_t", "reason": "t"}]}
 JSONEOF
 cat > "$sec/bin/systemd-analyze" <<'SHIMEOF'
 #!/bin/sh
@@ -185,6 +189,12 @@ echo "-> Overall exposure level for $u: $v OK"
 SHIMEOF
 cat > "$sec/bin/ss" <<'SHIMEOF'
 #!/bin/sh
+case "$*" in
+*-xln*)
+    echo "u_str LISTEN 0 4096 /run/dbus/system_bus_socket 100 * 0"
+    [ -n "${FAKE_ABSTRACT:-}" ] && echo "u_str LISTEN 0 4096 @/tmp/.X11-unix/X0 101 * 0"
+    exit 0 ;;
+esac
 echo "tcp LISTEN 0 128 0.0.0.0:22 0.0.0.0:*"
 echo "tcp LISTEN 0 128 [::]:22 [::]:*"
 echo "udp UNCONN 0 0 192.168.1.5:68 0.0.0.0:*"
@@ -194,6 +204,12 @@ SHIMEOF
 printf '#!/bin/sh\necho "${FAKE_ENFORCE:-Enforcing}"\n' > "$sec/bin/getenforce"
 cat > "$sec/bin/ps" <<'SHIMEOF'
 #!/bin/sh
+case "$*" in
+*pid=*)     # ps -e -o pid= -o label= -o comm= -o args=
+    echo "1 system_u:system_r:init_t:s0 systemd /usr/lib/systemd/systemd"
+    [ -n "${FAKE_XWL:-}" ] && echo "4242 system_u:system_r:${FAKE_XWL_DOMAIN:-xserver_t}:s0 Xwayland Xwayland :0 ${FAKE_XWL_ARGS--auth /run/user/1001/ruya-x11/a/Xauthority -nolisten local -terminate -rootless}"
+    exit 0 ;;
+esac
 echo "system_u:system_r:init_t:s0 systemd"
 echo "system_u:system_r:ruya_t:s0 ruya-aaa"
 [ -n "${FAKE_UNCONFINED:-}" ] && echo "system_u:system_r:unconfined_service_t:s0 $FAKE_UNCONFINED"
@@ -202,16 +218,18 @@ SHIMEOF
 cat > "$sec/bin/find" <<'SHIMEOF'
 #!/bin/sh
 case "$*" in
+*-maxdepth*) [ -n "${FAKE_X11:-}" ] && echo "$FAKE_X11" ;;
 *-4000*) echo /usr/bin/passwd; [ -n "${FAKE_SETUID:-}" ] && echo "$FAKE_SETUID" ;;
 *-0002*) [ -n "${FAKE_WW:-}" ] && echo "$FAKE_WW" ;;
 esac
 exit 0
 SHIMEOF
 chmod +x "$sec"/bin/*
+mkdir -p "$sec/x11"
 printf 'root:x:0:0:root:/root:/bin/bash\nruya-shell:x:990:990::/var/lib/ruya-shell:/usr/sbin/nologin\n' > "$sec/passwd"
 printf 'root:!locked:19000::::::\nruya-shell:!*:19000::::::\n' > "$sec/shadow"
 runsec() { # env assignments are inherited from the caller's prefix
-    SEC_BASELINE="$sec/baseline.json" SEC_UNITDIRS="$sec/units" SEC_PASSWD="${PW:-$sec/passwd}" SEC_SHADOW="${SH:-$sec/shadow}" \
+    SEC_BASELINE="$sec/baseline.json" SEC_X11DIR="$sec/x11" SEC_UNITDIRS="$sec/units" SEC_PASSWD="${PW:-$sec/passwd}" SEC_SHADOW="${SH:-$sec/shadow}" \
         PATH="${EXTRA_BIN:+$EXTRA_BIN:}$sec/bin:$PATH" bash "$here/vm-security-check.sh" "$@" 2>&1
 }
 out="$(runsec)"; rc=$?
@@ -256,6 +274,73 @@ expect_contains "a unit missing from the baseline: FAIL" "$out" "FAIL: unit ruya
 rm -f "$sec/units/ruya-new.service"
 out="$(runsec measure)"
 expect_contains "measure prints a draft baseline" "$out" '"max_exposure": 1.1'
+
+# --- the X11 assertions (RUY-436, ADR-034 point 5) ---
+echo "vm-security-check.sh: the X11 isolation assertions"
+out="$(runsec)"
+expect_contains "no Xwayland, no X socket: the abstract check passes" "$out" "PASS: no abstract @/tmp/.X11-unix listener"
+expect_contains "no X socket: said so" "$out" "PASS: no X socket (X11 apps start one on demand)"
+expect_contains "no Xwayland: said so" "$out" "PASS: no Xwayland is running"
+out="$(FAKE_ABSTRACT=1 runsec)"; rc=$?
+expect_contains "an abstract X11 listener: FAIL" "$out" "FAIL: abstract X11 listener(s) (any sandbox with network could connect): @/tmp/.X11-unix/X0"
+[ "$rc" = 1 ] && pass "an abstract listener: exit 1" || fail "an abstract listener: exit $rc"
+out="$(FAKE_X11='700 ruya-p1 s /tmp/.X11-unix/X0' runsec)"
+expect_contains "a 0700 socket of a profile user passes" "$out" "PASS: 1 X socket(s), each 0700 and owned by a profile user"
+expect_lacks "a 0700 socket of a profile user: no FAIL" "$out" "FAIL"
+out="$(FAKE_X11='777 ruya-p1 s /tmp/.X11-unix/X0' runsec)"
+expect_contains "a world-accessible X socket: FAIL" "$out" "FAIL: X socket /tmp/.X11-unix/X0 is mode 777 owned by ruya-p1"
+out="$(FAKE_X11='700 root s /tmp/.X11-unix/X1' runsec)"
+expect_contains "an X socket of root: FAIL" "$out" "FAIL: X socket /tmp/.X11-unix/X1 is mode 700 owned by root"
+out="$(FAKE_X11='700 ruya-shell s /tmp/.X11-unix/X1' runsec)"
+expect_contains "an X socket of ruya-shell is not a profile user's: FAIL" "$out" "FAIL: X socket /tmp/.X11-unix/X1 is mode 700 owned by ruya-shell"
+out="$(FAKE_XWL=1 runsec)"
+expect_contains "Xwayland with -auth and -nolisten local passes" "$out" "PASS: Xwayland 4242 has -auth and -nolisten local"
+expect_contains "Xwayland in xserver_t passes" "$out" "PASS: Xwayland 4242 runs in xserver_t (named in the baseline)"
+expect_lacks "a good Xwayland: no FAIL" "$out" "FAIL"
+out="$(FAKE_XWL=1 FAKE_XWL_ARGS='-nolisten local -terminate' runsec)"
+expect_contains "Xwayland without -auth: FAIL" "$out" "FAIL: Xwayland 4242 runs without -auth"
+out="$(FAKE_XWL=1 FAKE_XWL_ARGS='-auth /x/Xauthority -terminate' runsec)"
+expect_contains "Xwayland without -nolisten local: FAIL" "$out" "FAIL: Xwayland 4242 runs without -nolisten local"
+out="$(FAKE_XWL=1 FAKE_XWL_ARGS='-auth /x/Xauthority -nolisten tcp' runsec)"
+expect_contains "-nolisten tcp is not -nolisten local: FAIL" "$out" "FAIL: Xwayland 4242 runs without -nolisten local"
+out="$(FAKE_XWL=1 FAKE_XWL_DOMAIN=unconfined_service_t runsec)"
+expect_contains "Xwayland in an unnamed domain: FAIL" "$out" "FAIL: Xwayland 4242 runs in SELinux domain unconfined_service_t, not in the baseline (xserver_t)"
+out="$(FAKE_XWL=1 runsec measure)"
+expect_contains "measure lists the Xwayland domain" "$out" '"domain": "xserver_t"'
+
+# --- vm-x11-check.sh (RUY-436): only a real refusal passes a negative probe; the probe client itself ----------
+echo "vm-x11-check.sh: verdicts on the probe client's answers"
+out="$(
+    export VM_CHECK_LIB_ONLY=1
+    # shellcheck disable=SC1090
+    . "$here/vm-x11-check.sh"
+    expect_refused "r1" "refused: ECONNREFUSED"
+    expect_refused "r2" "refused: EACCES"
+    expect_refused "r3" "refused: setup status 0 Authorization required"
+    expect_refused "r4" "accepted"
+    expect_refused "r5" "error: ENOENT No such file or directory"
+    expect_refused "r6" ""
+    expect_refused "r7" "Traceback (most recent call last):"
+    expect_accepted "a1" "accepted"
+    expect_accepted "a2" "refused: EACCES"
+    expect_accepted "a3" "error: no answer to the setup request"
+    expect_accepted "a4" ""
+    expect_prefix "p1" "error: ENOENT No such file" "error: ENOENT"
+    expect_prefix "p2" "refused: EACCES" "error: ENOENT"
+)"
+for t in r1 r2 r3 a1 p1; do expect_contains "$t passes" "$out" "PASS: $t"; done
+for t in r4 r5 r6 r7 a2 a3 a4 p2; do expect_contains "$t fails" "$out" "FAIL: $t"; done
+for t in r1 r2 r3 a1 p1; do expect_lacks "$t does not fail" "$out" "FAIL: $t"; done
+printf '%s
+'     'ruya-compositor: app  RuyaOS X11 test uid 1001 pid 4321 profile p1'     'ruya-compositor: app org.x.Y title uid 1002 pid 99 profile p2'     'ruya-compositor: refused window of uid 1001 pid 77 (other-user)'     'ruya-compositor: app x uid 1001 pid 555 profile (shell)'     'ruya-compositor: app org.a.B Some game uid 1001 pid 4400 profile p1'     'ruya-compositor: app gone app:x' > "$tmp/shell.log"
+got="$( (export VM_CHECK_LIB_ONLY=1; . "$here/vm-x11-check.sh"; window_pids 1001 p1 < "$tmp/shell.log") | tr '
+' ' ')"
+[ "$got" = "4321 4400 " ] && pass "window_pids: the windows of one uid and profile, an empty title included" || fail "window_pids gave '$got'"
+echo "vm-x11-client.py: against a fake X server"
+out="$(python3 "$here/test-vm-x11-client.py" 2>&1)"; rc=$?
+echo "$out"
+fails=$((fails + $(echo "$out" | grep -c '^    FAIL')))
+[ "$rc" = 0 ] && pass "test-vm-x11-client.py exit 0" || fail "test-vm-x11-client.py exit $rc"
 
 # --- vm-sample-check.sh: an early failure still cleans -----------------------------------------------
 echo "vm-sample-check.sh: cleanup runs when a step fails early"
