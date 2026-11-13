@@ -553,6 +553,9 @@ struct State {
     starting: bool,
     /// Manual pairings (`pair`) in progress: they hold `Pairable` open themselves.
     manual_pairs: u32,
+    /// The devices those manual pairings are for: a bond to anything else that comes in while
+    /// Pairable is open is swept (RUY-444).
+    manual_targets: HashSet<String>,
     /// The adapters (object paths) made not pairable and not discoverable once (after a crash in a
     /// window). One that is not in a read any more is dropped, so it is secured again when it
     /// comes back (a dongle plugged in later, BlueZ restarted).
@@ -1088,8 +1091,20 @@ impl<B: Bluez> Bluetooth<B> {
                     None => false,
                 }
             };
+            // What was bonded before Pairable opens: a bond that appears in the 20 s it is open
+            // and is not the device asked for is nobody's choice (RUY-444).
+            let bonded_before: HashSet<String> = {
+                let mut st = self.lock();
+                st.manual_targets.insert(dev.id.clone());
+                st.raw_devices
+                    .iter()
+                    .filter(|d| d.paired)
+                    .map(|d| d.address.clone())
+                    .collect()
+            };
             if !window {
                 if let Err(e) = self.set_pairable(&adapter, true, "manual pairing") {
+                    self.lock().manual_targets.remove(&dev.id);
                     return map_error(&e.0, false);
                 }
             }
@@ -1098,7 +1113,9 @@ impl<B: Bluez> Bluetooth<B> {
                 if let Err(e) = self.set_pairable(&adapter, false, "manual pairing done") {
                     log::info(&format!("Pairable off again failed: {}", e.0));
                 }
+                self.sweep_manual(&bonded_before);
             }
+            self.lock().manual_targets.remove(&dev.id);
             if let Err(e) = paired {
                 log::info(&format!(
                     "pairing {} via manual failed: {}",
@@ -1122,9 +1139,50 @@ impl<B: Bluez> Bluetooth<B> {
         }
     }
 
+    /// Removes what bonded while a manual pairing held `Pairable` open and is not a device a
+    /// manual pairing is for (a phone that pairs itself, a keyboard nobody confirmed).
+    fn sweep_manual(&self, bonded_before: &HashSet<String>) {
+        if self.read().is_err() {
+            return;
+        }
+        let strangers: Vec<String> = {
+            let st = self.lock();
+            st.raw_devices
+                .iter()
+                .filter(|d| {
+                    d.paired
+                        && !bonded_before.contains(&d.address)
+                        && !st.manual_targets.contains(&d.address)
+                        && st
+                            .window
+                            .as_ref()
+                            .map_or(true, |w| w.paired_before.contains(&d.address))
+                })
+                .map(|d| d.address.clone())
+                .collect()
+        };
+        for address in strangers {
+            let label = self.label(&address);
+            let _ = self.remove_device(&address, "sweep");
+            log::info(&format!(
+                "refused {label}: it bonded during a manual pairing that was for another device"
+            ));
+            self.lock().pending.rejected = true;
+        }
+    }
+
     pub fn connect(&self, id: &str) -> Status {
         match self.ready_device(id) {
             Ok(d) if !d.paired => Status::Failed,
+            Ok(d) if d.keyboard && !d.trusted => {
+                // Trusted means confirmed through Pair (RUY-422): a keyboard that is bonded but
+                // not trusted was never asked about, so Connect is not a way round the question.
+                log::info(&format!(
+                    "refused to connect {}: it announces a keyboard that was never confirmed",
+                    self.label(&d.id)
+                ));
+                Status::NotConfirmed
+            }
             Ok(d) => match self.connect_device(&d.id, CALL_TIMEOUT, "user") {
                 Ok(()) => Status::Ok,
                 Err(e) => map_error(&e.0, false),
@@ -1814,6 +1872,22 @@ impl FakeBluez {
             modalias: String::new(),
             paired: false,
             bonded: false,
+            connected: false,
+            trusted: false,
+            battery: None,
+            class: Some(0x2540),
+            appearance: None,
+            adapter: HCI0.to_owned(),
+        });
+        // A second one, bonded but never confirmed (not trusted): Connect must refuse it (RUY-444).
+        raw.devices.push(RawDevice {
+            address: "AA:00:00:00:00:07".to_owned(),
+            alias: "Old Keys".to_owned(),
+            name: "Old Keys".to_owned(),
+            icon: "input-keyboard".to_owned(),
+            modalias: String::new(),
+            paired: true,
+            bonded: true,
             connected: false,
             trusted: false,
             battery: None,
@@ -3298,6 +3372,8 @@ mod tests {
             bt.pair_with("AA:00:00:00:00:06", true, Instant::now),
             Status::Ok
         );
+        // the bonded, never confirmed one: Connect is refused, as `--session` serves it
+        assert_eq!(bt.connect("AA:00:00:00:00:07"), Status::NotConfirmed);
     }
 
     #[test]
@@ -3333,6 +3409,62 @@ mod tests {
             pairing_calls(&bt),
             [format!("trust {KEYS}"), format!("connect {KEYS}")]
         );
+    }
+
+    #[test]
+    fn connect_of_a_bonded_keyboard_that_is_not_trusted_is_refused_and_logged() {
+        let bt = window_bt();
+        let mut keys = near(KEYS, "Slim Keys", "input-keyboard", Some(0x2540));
+        keys.paired = true;
+        bt.bluez.add_device(keys);
+        bt.refresh().expect("reads");
+        log::take();
+        assert_eq!(bt.connect(KEYS), Status::NotConfirmed);
+        assert!(!bt.bluez.calls().iter().any(|c| c.starts_with("connect")));
+        assert!(log::take()
+            .iter()
+            .any(|l| l.contains("refused to connect") && l.contains(KEYS)));
+        // the question answered through Pair trusts it, and Connect then passes
+        assert_eq!(bt.pair_with(KEYS, true, Instant::now), Status::Ok);
+        assert_eq!(bt.disconnect(KEYS), Status::Ok);
+        assert_eq!(bt.connect(KEYS), Status::Ok);
+    }
+
+    #[test]
+    fn connect_of_a_trusted_keyboard_and_of_an_untrusted_non_keyboard_passes() {
+        let bt = window_bt();
+        let mut keys = near(KEYS, "Slim Keys", "input-keyboard", Some(0x2540));
+        keys.paired = true;
+        keys.trusted = true;
+        bt.bluez.add_device(keys);
+        let mut buds = near(HEADSET, "Some Buds", "audio-headset", Some(0x240404));
+        buds.paired = true;
+        bt.bluez.add_device(buds);
+        bt.refresh().expect("reads");
+        assert_eq!(bt.connect(KEYS), Status::Ok);
+    }
+
+    #[test]
+    fn a_device_that_bonds_during_a_manual_pairing_is_swept() {
+        let bt = Arc::new(keyboard_bt());
+        let b = bt.clone();
+        bt.bluez.set_hook(Box::new(move |what| {
+            if what == "pair" {
+                // a phone pairs itself while Pairable is open
+                let mut phone = near(PHONE, "Some Phone", "phone", Some(0x5A020C));
+                phone.paired = true;
+                b.bluez.add_device(phone);
+            }
+        }));
+        log::take();
+        assert_eq!(bt.pair_with(HEADSET, false, Instant::now), Status::Ok);
+        let calls = bt.bluez.calls();
+        assert!(calls.contains(&format!("remove {PHONE}")), "{calls:?}");
+        assert!(!calls.contains(&format!("remove {HEADSET}")), "{calls:?}");
+        assert!(log::take().iter().any(|l| l.contains("manual pairing")));
+        bt.refresh().expect("reads");
+        assert!(bt.list().iter().any(|d| d.id == HEADSET && d.paired));
+        assert!(!bt.list().iter().any(|d| d.id == PHONE));
     }
 
     #[test]

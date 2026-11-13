@@ -212,6 +212,8 @@ void MockBluetoothBackend::connectDevice(const QString &id)
         status = QStringLiteral("unknown-device");
     else if (!m_entries.at(at).dev.paired)
         status = QStringLiteral("failed");
+    else if (m_entries.at(at).dev.keyboard && !m_entries.at(at).dev.trusted)
+        status = QStringLiteral("not-confirmed"); // the service gates Connect too (RUY-444)
     else {
         m_entries[at].dev.connected = true;
         publish();
@@ -290,6 +292,17 @@ void MockBluetoothBackend::setBonded(const QString &id, bool bonded)
     const int at = indexOf(id);
     if (at >= 0) {
         m_entries[at].dev.bonded = bonded;
+        publish();
+    }
+}
+
+void MockBluetoothBackend::setTrusted(const QString &id, bool trusted)
+{
+    const int at = indexOf(id);
+    if (at >= 0) {
+        m_entries[at].dev.trusted = trusted;
+        if (!trusted)
+            m_entries[at].dev.connected = false;
         publish();
     }
 }

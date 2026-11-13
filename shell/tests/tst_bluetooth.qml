@@ -306,6 +306,37 @@ Item {
             compare(Bluetooth.mockPairCalls(), 0, "Back did not pair")
         }
 
+        // RUY-444: Connect of a paired keyboard that was never confirmed (not trusted) goes through the
+        // keyboard question; the service refuses it otherwise ("not-confirmed").
+        function test_connect_of_an_untrusted_keyboard_asks_the_question() {
+            const run = (op, id, call) => runCommand(new Set(), op, id, call)
+            Bluetooth.mockPopulate()
+            tryVerify(() => device("bt-gallery-keyboard") !== undefined, 2000)
+            Bluetooth.mockSetTrusted("bt-gallery-keyboard", false)
+            compare(run("connect", "bt-gallery-keyboard", () => Bluetooth.connectDevice("bt-gallery-keyboard")), "not-confirmed")
+            openBluetoothPane()
+            tryVerify(() => find("btDev_bt-gallery-keyboard") !== null && find("btDev_bt-gallery-keyboard").visible, 2000)
+            goTo("btDev_bt-gallery-keyboard")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btKeyboardConfirm") !== null && find("btKeyboardConfirm").shown, 4000, "Connect asks")
+            compare(Bluetooth.mockPairCalls(), 0, "nothing sent before the answer")
+            verify(!device("bt-gallery-keyboard").connected)
+            tryVerify(() => inKeyboardConfirm("powerCancel").activeFocus)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("btKeyboardConfirm").shown, 2000)
+            tryVerify(() => find("btDev_bt-gallery-keyboard").activeFocus, 2000, "focus is back on the row")
+            verify(!device("bt-gallery-keyboard").connected, "Back did not connect")
+            // Accept sends Pair with the confirmation, which trusts and connects it
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btKeyboardConfirm").shown, 2000)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => inKeyboardConfirm("powerConfirm").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => device("bt-gallery-keyboard").connected, 2000, "Accept trusts and connects it")
+            tryVerify(() => find("btDev_bt-gallery-keyboard").activeFocus, 2000, "focus is on the row")
+            compare(Bluetooth.mockPairLog(), ["bt-gallery-keyboard:confirmed"])
+        }
+
         function test_keyboard_confirmation_closes_when_the_device_leaves() {
             scanForKeyboard()
             keyClick(Qt.Key_Return)
