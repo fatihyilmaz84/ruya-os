@@ -101,7 +101,7 @@ public:
 
     // Controller profiles (RUY-42, api/dbus/org.ruyaos.Input1.xml): one call each, the answer as the
     // signal named after it. `profile` is the console profile ("p1"); summaries are maps with the
-    // XML's keys (id, name, scope, scope_id, inherits, builtin, assigned, match_family,
+    // XML's keys (id, name, scope, scope_id, inherits, builtin, assigned, global_slot, match_family,
     // match_device, layout, remapped, left_stick_changed, right_stick_changed, changed). A refused
     // save's "path: message" lines are written to the journal; never show them as they are.
     Q_INVOKABLE void listProfiles(const QString &profile);

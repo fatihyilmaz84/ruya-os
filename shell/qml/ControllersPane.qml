@@ -305,7 +305,7 @@ SettingsPane {
         dimmed: pane.failed
         u: pane.u
         label: qsTr("Controls in games")
-        value: pane.failed ? qsTr("Not available") : GameControls.changed ? qsTr("Changed") : qsTr("Default")
+        value: pane.failed ? qsTr("Not available") : GameControls.changedFor(GameControls.padFor("")) ? qsTr("Changed") : qsTr("Default")
         onActiveFocusChanged: if (activeFocus) pane.focusedPad = true     // it opens a page: A Open
         onActivated: pane.openControls(controlsRow)
     }
@@ -329,7 +329,7 @@ SettingsPane {
         visible: !pane.failed && !pane.loading && padModel.count === 0
         u: pane.u
         label: qsTr("Controls in games")
-        value: GameControls.changed ? qsTr("Changed") : qsTr("Default")
+        value: GameControls.changedFor(GameControls.padFor("")) ? qsTr("Changed") : qsTr("Default")
         onActiveFocusChanged: if (activeFocus) pane.focusedPad = true
         onActivated: pane.openControls(controlsLastRow)
     }

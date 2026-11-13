@@ -16,6 +16,8 @@ Item {
         Shell { anchors.fill: parent; version: "test"; focus: true }
     }
 
+    SignalSpy { id: effectiveSpy; target: Input; signalName: "effectiveProfileFetched" }
+
     TestCase {
         id: tc
         name: "ControlsInGames"
@@ -26,6 +28,8 @@ Item {
         readonly property string ds: "bluetooth-054c-0ce6-3f2a9c41d0b7"
         readonly property string xbox: "usb-045e-0b12-8e01c2d4a9f3"
         readonly property string pro: "bluetooth-057e-2009-b7c0e1f2a3d4"
+        // The DualSense's own profile (RUY-545: an edit on its page makes it).
+        readonly property string dsOwn: "controls-device-" + ds
 
         function find(name) { return findChild(tc.shell, name) }
 
@@ -234,9 +238,12 @@ Item {
             compare(calls("ValidateProfile").length, 1, "validated first")
             const saved = lastSaved()
             compare(saved.inherits, "nintendo")
-            compare(saved.id, "controls")
+            // RUY-545: nothing applied to the DualSense, so the edit is a profile of its own.
+            compare(saved.id, dsOwn)
+            compare(saved.match, { device: ds })
             compare(saved.scope, { type: "global" })
-            compare(calls("AssignProfile")[0].args, { profile: "p2", scope: "global", scope_id: "", profile_id: "controls" })
+            compare(calls("AssignProfile")[0].args, { profile: "p2", scope: "global", scope_id: "device:" + ds, profile_id: dsOwn })
+            compare(find("rowAppliesTo").currentLabel, "This DualSense", "Applies to says whose it is")
             tryVerify(() => GameControls.changed, 2000, "the service says the controls changed")
             verify(find("rowLayout").activeFocus, "the row keeps the focus")
             compare(find("rowRemap").value, "Default", "a layout is not a remap")
@@ -252,21 +259,225 @@ Item {
             tryCompare(find("rowControlsInGames"), "value", "Changed")
         }
 
+        // RUY-545: each choice saves the pad's settings under that slot's id and assigns that slot;
+        // a wider one also empties the pad's narrower slots, so the pad takes it.
         function test_applies_to_limits_the_profile() {
             openControls()
             keyClick(Qt.Key_Right)
             compare(find("rowAppliesTo").currentLabel, "PlayStation controllers")
             tryVerify(() => calls("AssignProfile").length === 1, 2000)
             compare(lastSaved().match, { family: "playstation" })
+            compare(lastSaved().id, "controls-family-playstation")
+            compare(calls("AssignProfile")[0].args.scope_id, "family:playstation")
             keyClick(Qt.Key_Right)
             compare(find("rowAppliesTo").currentLabel, "This DualSense")
             tryVerify(() => calls("SaveProfile").length === 2, 2000)
             compare(lastSaved().match, { device: ds })
+            compare(lastSaved().id, dsOwn)
+            tryVerify(() => calls("AssignProfile").length === 2, 2000)
+            compare(calls("AssignProfile")[1].args.scope_id, "device:" + ds, "a narrower slot empties nothing")
             keyClick(Qt.Key_Right)                       // wraps
             compare(find("rowAppliesTo").currentLabel, "All controllers")
             tryVerify(() => calls("SaveProfile").length === 3, 2000)
             verify(lastSaved().match === undefined, "all controllers: no match")
+            compare(lastSaved().id, "controls-all")
+            tryVerify(() => calls("AssignProfile").length === 5, 2000)
+            compare(calls("AssignProfile").slice(2).map(c => c.args.scope_id + "=" + c.args.profile_id),
+                    ["=controls-all", "device:" + ds + "=", "family:playstation="])
+            tryCompare(find("rowAppliesTo"), "currentLabel", "All controllers")
             verify(find("rowAppliesTo").activeFocus)
+        }
+
+        // What the service would apply to a pad: its chain, most specific first.
+        function chainOf(device) {
+            const before = effectiveSpy.count
+            Input.getEffectiveProfile("p2", device, "")
+            tryCompare(effectiveSpy, "count", before + 1)
+            const a = effectiveSpy.signalArguments[before]
+            compare(a[3], "ok")
+            return a[5]
+        }
+
+        // A controller page's Controls in games row, with the focus on it.
+        function openControllerRow(id) {
+            tc.shell.openPage("controller", { id: id })
+            tryCompare(tc.shell, "currentPage", "controller")
+            tryVerify(() => find("rowButtonTest").activeFocus, 2000)
+            keyClick(Qt.Key_Down)
+            const row = findChild(find("page_controller"), "rowControlsInGames")
+            verify(row && row.activeFocus, "on Controls in games")
+            return row
+        }
+
+        // From a controller page's row onto that pad's Controls in games page.
+        function openControlsFrom(row) {
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "controls")
+            tryVerify(() => find("rowAppliesTo") !== null && find("rowAppliesTo").activeFocus, 2000, "focus on Applies to")
+            tryCompare(GameControls, "loadState", "ok")
+        }
+
+        // RUY-538 / RUY-545: with two pads, a change on one pad's page reaches only that pad, until
+        // Applies to = All controllers gives it to the other one too.
+        function test_a_change_on_one_pad_leaves_the_other() {
+            // The DualSense's left stick: inner dead zone 8 % -> 9 %.
+            let row = openControllerRow(ds)
+            compare(row.value, "Default")
+            openControlsFrom(row)
+            compare(find("rowAppliesTo").currentLabel, "All controllers", "nothing applies yet")
+            focusRow("controlsBody", "rowLeftStick")
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "controlsStick")
+            tryVerify(() => find("rowInner") !== null && find("rowInner").activeFocus, 2000)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => calls("AssignProfile").length === 1, 2000, "saved and assigned once it rests")
+            compare(lastSaved().id, dsOwn)
+            compare(lastSaved().settings, { left_stick: { inner_deadzone: 0.09 } })
+            compare(calls("AssignProfile")[0].args.scope_id, "device:" + ds)
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "controls")
+            tryVerify(() => find("rowLeftStick").activeFocus, 2000, "Back lands on Left stick")
+            tryCompare(find("rowLeftStick"), "value", "Changed")
+            compare(find("rowAppliesTo").currentLabel, "This DualSense")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "controller")
+            tryVerify(() => row.activeFocus, 2000, "back on the DualSense's row")
+            tryCompare(row, "value", "Changed")
+            compare(chainOf(ds), [dsOwn, "default"])
+            compare(chainOf(pro), ["default"], "the Pro Controller's effective profile is unchanged")
+
+            // The Pro Controller: Default on its controller page and on its Controls in games page.
+            keyClick(Qt.Key_Escape)
+            row = openControllerRow(pro)
+            tryCompare(row, "value", "Default")
+            openControlsFrom(row)
+            compare(GameControls.pad.id, pro, "the page edits the Pro Controller")
+            compare(find("rowLeftStick").value, "Default")
+            compare(find("rowAppliesTo").currentLabel, "All controllers")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "controller")
+            tryVerify(() => row.activeFocus, 2000)
+            keyClick(Qt.Key_Escape)
+
+            // Back on the DualSense: still Changed; Applies to = All controllers gives it to the Pro too.
+            row = openControllerRow(ds)
+            tryCompare(row, "value", "Changed")
+            openControlsFrom(row)
+            compare(find("rowLeftStick").value, "Changed")
+            compare(find("rowAppliesTo").currentLabel, "This DualSense")
+            const before = calls("AssignProfile").length
+            keyClick(Qt.Key_Right)                       // wraps to All controllers
+            compare(find("rowAppliesTo").currentLabel, "All controllers")
+            tryVerify(() => calls("AssignProfile").length === before + 2, 2000, "assigned, and the pad's own slot emptied")
+            compare(lastSaved().id, "controls-all")
+            compare(lastSaved().settings, { left_stick: { inner_deadzone: 0.09 } }, "the DualSense's settings")
+            verify(find("rowAppliesTo").activeFocus, "the row keeps the focus")
+            tryVerify(() => chainOf(pro)[0] === "controls-all", 2000, "the Pro Controller now takes them")
+            compare(chainOf(ds), ["controls-all", "default"])
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "controller")
+            keyClick(Qt.Key_Escape)
+            row = openControllerRow(pro)
+            tryCompare(row, "value", "Changed")
+            openControlsFrom(row)
+            compare(find("rowLeftStick").value, "Changed")
+            compare(find("rowAppliesTo").currentLabel, "All controllers")
+            // An edit there now changes all controllers' profile in place (the page put it there).
+            focusRow("controlsBody", "rowLayout")
+            keyClick(Qt.Key_Right)
+            tryVerify(() => calls("SaveProfile").length > 0 && lastSaved().inherits === "nintendo", 2000)
+            compare(lastSaved().id, "controls-all")
+            tryVerify(() => chainOf(ds)[1] === "nintendo", 2000, "the DualSense follows")
+        }
+
+        // Saves and assigns a profile through the mock before the pages open, and waits for it.
+        function given(id, extra, slot, device) {
+            Input.saveProfile("p2", profileText(id, extra))
+            Input.assignProfile("p2", "global", slot, id)
+            tryVerify(() => chainOf(device)[0] === id, 2000, id + " applies to " + device)
+        }
+
+        // The saves that reached the service for one profile id, parsed.
+        function savesOf(id) {
+            return calls("SaveProfile").map(c => JSON.parse(c.args.json)).filter(p => p.id === id)
+        }
+
+        // Round 2: a pad's profile that arrives while another pad's change waits is the one shown
+        // and edited (it was dropped and the next edit overwrote it), and both pads' changes are saved.
+        function test_a_profile_that_arrives_during_another_pad_s_save_is_the_one_edited() {
+            const proOwn = "controls-device-" + pro
+            given(proOwn, { match: { device: pro }, settings: { left_stick: { inner_deadzone: 0.12 } } }, "device:" + pro, pro)
+            Input.mockClearProfileCalls()
+            openStick("left")                            // the DualSense (the first pad)
+            keyClick(Qt.Key_Right)                       // a slider step: its save waits for the rest
+            verify(GameControls.busy, "the DualSense's change waits")
+            GameControls.show(pro)                       // the Pro Controller's page meanwhile
+            tryVerify(() => GameControls.stored !== null && GameControls.stored.id === proOwn, 2000)
+            verify(GameControls.busy, "its profile arrived while the other change still waited")
+            compare(GameControls.stick("left").inner_deadzone, 0.12, "the Pro Controller's own value is shown")
+            GameControls.setStick("left", "outer_deadzone", 0.05, false)
+            tryVerify(() => savesOf(proOwn).length === 1, 3000, "the Pro Controller's change is saved")
+            compare(savesOf(proOwn)[0].settings, { left_stick: { inner_deadzone: 0.12, outer_deadzone: 0.05 } },
+                    "nothing of its own is lost")
+            compare(savesOf(proOwn)[0].match, { device: pro })
+            tryVerify(() => savesOf(dsOwn).length === 1, 3000, "the DualSense's waiting change is saved too")
+            compare(savesOf(dsOwn)[0].settings, { left_stick: { inner_deadzone: 0.09 } })
+            tryVerify(() => !GameControls.busy, 3000)
+            compare(chainOf(ds)[0], dsOwn)
+            compare(chainOf(pro)[0], proOwn)
+        }
+
+        function confirmReset() {
+            focusRow("controlsBody", "rowReset")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("controlsResetConfirm").shown, 2000)
+            keyClick(Qt.Key_Right)
+            verify(findChild(find("controlsResetConfirm"), "powerConfirm").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !find("controlsResetConfirm").shown, 2000)
+            tryVerify(() => find("rowReset").activeFocus, 2000, "the focus returns to Reset")
+        }
+
+        // Reset with a changed profile for all controllers under the pad's own: the pad's own is saved
+        // empty (deleting it would hand the pad all controllers' changes), the all slot stays.
+        function test_reset_empties_the_own_profile_when_a_wider_one_would_apply() {
+            given("controls-all", { inherits: "nintendo" }, "", xbox)
+            given(dsOwn, { match: { device: ds }, settings: { left_stick: { inner_deadzone: 0.2 } } }, "device:" + ds, ds)
+            Input.mockClearProfileCalls()
+            openControls()
+            compare(find("rowAppliesTo").currentLabel, "This DualSense")
+            confirmReset()
+            tryVerify(() => savesOf(dsOwn).length === 1, 2000)
+            compare(calls("DeleteProfile").length, 0, "not deleted")
+            const saved = savesOf(dsOwn)[0]
+            compare(saved.match, { device: ds })
+            verify(saved.settings === undefined && saved.inherits === undefined && saved.mappings === undefined,
+                   "nothing in it: " + JSON.stringify(saved))
+            tryVerify(() => !GameControls.changed, 2000, "the DualSense is back to the default")
+            compare(chainOf(ds), [dsOwn, "default"])
+            compare(chainOf(xbox), ["controls-all", "nintendo", "default"], "all controllers' profile stays")
+            compare(find("rowLayout").currentLabel, "Standard")
+        }
+
+        // Reset when what applies is an all-controllers profile the page did not put there (an
+        // import): a copy for This <pad> with nothing in it, so the other pads keep the import.
+        function test_reset_on_a_shared_import_makes_an_empty_copy_for_the_pad() {
+            given("imported", { inherits: "nintendo" }, "", ds)
+            Input.mockClearProfileCalls()
+            openControls()
+            compare(find("rowAppliesTo").currentLabel, "All controllers")
+            compare(find("rowLayout").currentLabel, "Nintendo")
+            confirmReset()
+            tryVerify(() => calls("AssignProfile").length === 1, 2000)
+            compare(calls("DeleteProfile").length, 0, "the import stays")
+            compare(savesOf("imported").length, 0, "and is not rewritten")
+            const saved = savesOf(dsOwn)[0]
+            compare(saved.match, { device: ds })
+            verify(saved.inherits === undefined && saved.settings === undefined, "nothing in it")
+            compare(calls("AssignProfile")[0].args, { profile: "p2", scope: "global", scope_id: "device:" + ds, profile_id: dsOwn })
+            tryVerify(() => !GameControls.changed, 2000)
+            tryCompare(find("rowAppliesTo"), "currentLabel", "This DualSense")
+            compare(chainOf(pro), ["imported", "nintendo", "default"], "the Pro Controller keeps the import")
         }
 
         // ---- remap -----------------------------------------------------------------------------------------------
@@ -564,7 +775,7 @@ Item {
             const name = Input.exportFileName("p2")
             tryVerify(() => hasToast("Saved to the USB drive / " + name), 2000, toastTexts().join("; "))
             verify(Object.keys(Storage.mockSavedFiles()).indexOf(name) >= 0, "the file is on the stick")
-            compare(JSON.parse(Storage.mockSavedFiles()[name]).id, "controls", "the console profile's controls")
+            compare(JSON.parse(Storage.mockSavedFiles()[name]).id, dsOwn, "the pad's controls (RUY-545)")
             verify(find("rowExport").activeFocus)
             clearToasts()
             Storage.mockSetSaveStatus("read-only")
@@ -675,7 +886,7 @@ Item {
             verify(findChild(dialog, "powerConfirm").activeFocus)
             keyClick(Qt.Key_Return)
             tryVerify(() => calls("DeleteProfile").length === 1, 2000)
-            compare(calls("DeleteProfile")[0].args, { profile: "p2", profile_id: "controls" })
+            compare(calls("DeleteProfile")[0].args, { profile: "p2", profile_id: dsOwn }, "the pad's own profile (RUY-545)")
             tryVerify(() => !GameControls.changed, 2000)
             compare(find("rowLayout").currentLabel, "Standard")
             tryVerify(() => find("rowReset").activeFocus, 2000, "the focus returns to Reset")

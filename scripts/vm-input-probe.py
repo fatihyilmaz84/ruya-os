@@ -18,6 +18,9 @@
       no arrow key (the D-pad still does), a stick held when the test starts is released once, and
       after StopTest a stick still pushed stays quiet until it was neutral (vm-input-check.sh hold
       stops the compositor first)
+  python3 vm-input-probe.py twoprofiles --user ruya-p1 --profile p1
+      (root; RUY-545) two pads, a device's and a family's global slot: each virtual pad emits its own
+      pad's profile, emptying one slot changes only that pad (vm-input-check.sh twopads runs it)
   python3 vm-input-probe.py navpad [--settle S] [--lefts N] [--rights M]
       (root; RUY-410) a uinput pad that, S seconds after it is ready, taps the D-pad left N times and
       right M times, then A (the emergency reader's keys: Left, Right, Return); prints "pad ready <node>"
@@ -41,6 +44,7 @@ EV_SYN, EV_KEY, EV_ABS, EV_FF, EV_UINPUT = 0, 1, 3, 0x15, 0x0101
 UI_FF_UPLOAD, UI_FF_ERASE = 1, 2
 FF_RUMBLE = 0x50
 BTN_SOUTH, BTN_EAST, BTN_MODE = 0x130, 0x131, 0x13C
+BTN_TL = 0x136
 KEYS = [0x130, 0x131, 0x133, 0x134, 0x136, 0x137, 0x13A, 0x13B, 0x13C, 0x13D, 0x13E]
 ABS_X, ABS_Y, ABS_Z, ABS_RX, ABS_RY, ABS_RZ, ABS_HAT0X, ABS_HAT0Y = 0, 1, 2, 3, 4, 5, 0x10, 0x11
 KEY_ENTER, KEY_ESC, KEY_HOMEPAGE = 28, 1, 172
@@ -299,6 +303,23 @@ def devices():
     except (ValueError, KeyError, IndexError):
         return None
     return [{k: v["data"] for k, v in row.items()} for row in rows]
+
+
+def assigned_slots(profile):
+    """The console profile's global slots now ({scope_id: profile id}), from ListProfiles; None when
+    it cannot be read."""
+    out = subprocess.run(["busctl", "--system", "--json=short", "call", SVC, PATH, IFC, "ListProfiles", "s", profile],
+                         capture_output=True, text=True)
+    if out.returncode != 0:
+        return None
+    try:
+        status, rows = json.loads(out.stdout)["data"]
+    except (ValueError, KeyError, TypeError):
+        return None
+    if status != "ok":
+        return None
+    rows = [{k: v["data"] for k, v in row.items()} for row in rows]
+    return {r["global_slot"]: r["id"] for r in rows if r.get("assigned")}
 
 
 def route_prop():
@@ -681,6 +702,122 @@ def cmd_twopads(args):
     return fails
 
 
+def cmd_twoprofiles(args):
+    """RUY-545: two pads, two global slots assigned over Input1: pad A's own device profile (South as
+    East) and the Nintendo family's (South as LB) for pad B, a pad with Nintendo's vendor id. In `app`
+    each virtual pad emits its own pad's profile; emptying the family's slot gives B South again and
+    leaves A's. A slot that the profile's match does not name is refused."""
+    fails = 0
+
+    def ok(msg):
+        print(f"PASS: {msg}", flush=True)
+
+    def bad(msg):
+        nonlocal fails
+        fails += 1
+        print(f"FAIL: {msg}", flush=True)
+
+    names = (NAME, NAME + " N")
+    pads = [FakePad(phys="vm-check/pad0", name=names[0]), FakePad(0x057E, 0x2009, "vm-check/pad1", names[1])]
+    pad_a, pad_b = pads
+    bus = None
+    games = []
+    slots = []      # the slots this check assigned; the cleanup gives each back what it held before
+    before = {}
+    saved = []
+    try:
+        rows = wait_for(lambda: (lambda r: r if len(r) == 2 else None)(
+            [d for d in (devices() or []) if d.get("name") in names]), 5)
+        if not rows:
+            bad("ListDevices does not list both pads")
+            return fails
+        a_id = next(d["id"] for d in rows if d["name"] == names[0])
+        b_row = next(d for d in rows if d["name"] == names[1])
+        if b_row.get("family") != "nintendo":
+            bad(f"the pad with vendor 0x057e has family '{b_row.get('family')}'")
+            return fails
+        before = assigned_slots(args.profile)
+        if before is None:
+            bad("ListProfiles cannot be read: the slots could not be restored afterwards")
+            return fails
+        bus = Bus()
+
+        def south_as(pid, code, match):
+            return json.dumps({"schema_version": 1, "id": pid, "name": "VM check " + pid, "scope": {"type": "global"},
+                               "match": match, "mappings": [{"from": "south", "to": {"type": "button", "code": code}}]})
+
+        for text, pid in ((south_as("vm-check-own", "east", {"device": a_id}), "vm-check-own"),
+                          (south_as("vm-check-family", "l1", {"family": "nintendo"}), "vm-check-family")):
+            status = bus.call(SVC, PATH, IFC, "SaveProfile", [args.profile, text])
+            if status != "ok":
+                bad(f"SaveProfile {pid}: {status}")
+                return fails
+            saved.append(pid)
+        status = bus.call(SVC, PATH, IFC, "AssignProfile", [args.profile, "global", "", "vm-check-own"])
+        ok("AssignProfile of a device's profile to all controllers' slot: invalid") if status == "invalid" \
+            else bad(f"AssignProfile to the wrong slot answered {status}")
+        for slot, pid in ((f"device:{a_id}", "vm-check-own"), ("family:nintendo", "vm-check-family")):
+            status = bus.call(SVC, PATH, IFC, "AssignProfile", [args.profile, "global", slot, pid])
+            if status != "ok":
+                bad(f"AssignProfile {slot} {pid}: {status}")
+                return fails
+            slots.append(slot)
+        ok(f"two slots assigned: device:{a_id}, family:nintendo")
+        # Pad A signs the profile in, so it is ruya-input/pad1 (RUY-540) and pad B is pad2.
+        for route in (["locked", "", "", ""], None, ["shell", "", "", args.profile],
+                      ["app", "vm-check-3", "org.ruyaos.VmCheck", args.profile]):
+            if route is None:
+                pad_a.emit(EV_KEY, BTN_SOUTH, 1)
+                pad_a.emit(EV_KEY, BTN_SOUTH, 0)
+                time.sleep(0.3)
+                continue
+            status = bus.call(SVC, PATH, IFC, "SetRoute", route)
+            if status != "ok":
+                bad(f"SetRoute {route[0]}: {status}")
+                return fails
+        v1 = wait_for(lambda: node_by("phys", "ruya-input/pad1")[0], 3)
+        v2 = wait_for(lambda: node_by("phys", "ruya-input/pad2")[0], 3)
+        if not v1 or not v2:
+            bad(f"both virtual pads should exist (pad1 {v1}, pad2 {v2})")
+            return fails
+        wait_for(lambda: all(d.get("routed") for d in (devices() or []) if d.get("name") in names), 3)
+        game_a, game_b = Game(args.user, v1), Game(args.user, v2)
+        games += [game_a, game_b]
+        if not (game_a.hello.startswith("OPEN ok") and game_b.hello.startswith("OPEN ok")):
+            bad(f"{args.user} cannot open both pads: {game_a.hello} / {game_b.hello}")
+            return fails
+
+        def tap(pad, game, want, label):
+            pad.emit(EV_KEY, BTN_SOUTH, 1)
+            pad.emit(EV_KEY, BTN_SOUTH, 0)
+            got = game.events_until(lambda ev: (EV_KEY, want, 0) in ev)
+            if isinstance(got, list) and (EV_KEY, want, 1) in got and not any(
+                    c in (BTN_SOUTH, BTN_EAST, BTN_TL) and c != want for _, c, _ in got):
+                ok(label)
+            else:
+                bad(f"{label}: read {got}")
+
+        tap(pad_a, game_a, BTN_EAST, "pad A's South reaches its virtual pad as East (its device's profile)")
+        tap(pad_b, game_b, BTN_TL, "pad B's South reaches its virtual pad as LB (its family's profile)")
+        status = bus.call(SVC, PATH, IFC, "AssignProfile", [args.profile, "global", "family:nintendo", ""])
+        ok("the family's slot emptied") if status == "ok" else bad(f"emptying the family's slot answered {status}")
+        tap(pad_b, game_b, BTN_SOUTH, "pad B's South is South again")
+        tap(pad_a, game_a, BTN_EAST, "pad A keeps its own profile")
+    finally:
+        for g in games:
+            g.close()
+        if bus:
+            for slot in slots:
+                bus.call(SVC, PATH, IFC, "AssignProfile", [args.profile, "global", slot, before.get(slot, "")])
+            for pid in saved:
+                bus.call(SVC, PATH, IFC, "DeleteProfile", [args.profile, pid])
+            bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+            bus.close()
+        for p in pads:
+            p.close()
+    return fails
+
+
 def cmd_restart(args):
     """kill -9 the service; prints the ms until a new RuyaOS Navigation device exists."""
     _, before = node_by("name", NAV)
@@ -904,6 +1041,9 @@ def main():
     tp = sub.add_parser("twopads")
     tp.add_argument("--user", required=True)
     tp.add_argument("--profile", required=True)
+    tw = sub.add_parser("twoprofiles")
+    tw.add_argument("--user", required=True)
+    tw.add_argument("--profile", required=True)
     n = sub.add_parser("navpad")
     n.add_argument("--settle", type=float, default=2.5)
     n.add_argument("--lefts", type=int, default=0)
@@ -915,6 +1055,8 @@ def main():
         sys.exit(1 if cmd_confirm(args) else 0)
     if args.cmd == "twopads":
         sys.exit(1 if cmd_twopads(args) else 0)
+    if args.cmd == "twoprofiles":
+        sys.exit(1 if cmd_twoprofiles(args) else 0)
     if args.cmd == "hold":
         sys.exit(1 if cmd_hold(args) else 0)
     {"game": cmd_game, "open": cmd_open, "restart": cmd_restart, "pad": cmd_pad, "navpad": cmd_navpad}[args.cmd](args)

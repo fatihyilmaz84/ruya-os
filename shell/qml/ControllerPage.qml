@@ -174,7 +174,7 @@ Page {
             objectName: "rowControlsInGames"
             u: page.u
             label: qsTr("Controls in games")
-            value: GameControls.changed ? qsTr("Changed") : qsTr("Default")
+            value: GameControls.changedFor(page.pad) ? qsTr("Changed") : qsTr("Default")
             onActivated: page.openRequested("controls", ({ id: page.padId }))
         }
 

@@ -15,9 +15,11 @@
 //!   is left on disk, reported in the journal and not used.
 //! - Deleting a profile re-parents its children to its own parent; they keep their overrides. A
 //!   global assignment that named it is removed.
-//! - The global assignment names a built-in or a global profile. It applies to a pad when the
-//!   profile's own `match` fits the pad (family, stable id); otherwise the pad gets `default`.
-//!   Platform and game assignments are RUY-43.
+//! - Global assignments (RUY-545): one per slot, all controllers, a family or one device
+//!   (`Slot`); each names a built-in or a global profile whose `match` names that slot. A pad takes
+//!   its device's slot, else its family's, else all controllers', else `default`. Assigning or
+//!   emptying a slot never touches another; a save that changes an assigned profile's `match`
+//!   takes it out of its old slot. Platform and game assignments are RUY-43.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -189,8 +191,11 @@ pub struct Summary {
     pub scope_id: String,
     pub inherits: String,
     pub builtin: bool,
-    /// The console profile's global assignment names it.
+    /// The console profile's global assignment of `global_slot` names it.
     pub assigned: bool,
+    /// The slot its `match` names, as `AssignProfile`'s scope_id ("" all, "family:<f>",
+    /// "device:<id>").
+    pub global_slot: String,
     pub match_family: String,
     pub match_device: String,
     /// "nintendo" when the chain holds the built-in Nintendo layout, else "standard".
@@ -207,10 +212,69 @@ pub struct Summary {
 /// What `SaveProfile` answers: status, the profile id, `path: message` lines.
 pub type SaveAnswer = (Status, String, Vec<String>);
 
+/// A global assignment slot (06 §7, RUY-545): all controllers, one family, one stable device id.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Slot {
+    All,
+    Family(String),
+    Device(String),
+}
+
+impl Slot {
+    /// `AssignProfile`'s scope_id: "" | "family:<f>" | "device:<id>"; `None` for anything else.
+    pub fn parse(scope_id: &str) -> Option<Slot> {
+        if scope_id.is_empty() {
+            return Some(Slot::All);
+        }
+        if let Some(f) = scope_id.strip_prefix("family:") {
+            return profile::valid_family(f).then(|| Slot::Family(f.to_owned()));
+        }
+        if let Some(d) = scope_id.strip_prefix("device:") {
+            return profile::valid_device(d).then(|| Slot::Device(d.to_owned()));
+        }
+        None
+    }
+
+    pub fn scope_id(&self) -> String {
+        match self {
+            Slot::All => String::new(),
+            Slot::Family(f) => format!("family:{f}"),
+            Slot::Device(d) => format!("device:{d}"),
+        }
+    }
+
+    /// The slot a profile's `match` names: its device, else its family, else all controllers.
+    pub fn of(p: &Profile) -> Slot {
+        let m = p.matches.clone().unwrap_or_default();
+        match (m.device, m.family) {
+            (Some(d), _) => Slot::Device(d),
+            (None, Some(f)) => Slot::Family(f),
+            (None, None) => Slot::All,
+        }
+    }
+
+    /// The key in `_assignments.json`: "all" for all controllers, else the scope_id.
+    fn key(&self) -> String {
+        match self {
+            Slot::All => "all".to_owned(),
+            other => other.scope_id(),
+        }
+    }
+
+    fn from_key(key: &str) -> Option<Slot> {
+        match key {
+            "all" => Some(Slot::All),
+            "" => None,
+            other => Slot::parse(other),
+        }
+    }
+}
+
 #[derive(Default)]
 struct Shelf {
     profiles: BTreeMap<String, Profile>,
-    global: Option<String>,
+    /// The global assignments by slot.
+    global: BTreeMap<Slot, String>,
     confirm: Confirm,
 }
 
@@ -341,7 +405,9 @@ impl Book {
             }
         };
         let mut shelf = Shelf::default();
-        let mut global = None;
+        // (slot, id); no slot for the one assignment of a file older than RUY-545, placed by its
+        // profile's match once the profiles are read.
+        let mut global: Vec<(Option<Slot>, String)> = Vec::new();
         let mut confirm = Confirm::Family;
         for (name, text) in files {
             if name == SETTINGS {
@@ -362,12 +428,26 @@ impl Book {
                 continue;
             }
             if name == ASSIGNMENTS {
-                let parsed: Option<String> = serde_json::from_str::<serde_json::Value>(&text)
-                    .ok()
-                    .and_then(|v| v.get("global").and_then(|g| g.as_str()).map(str::to_owned));
-                match parsed {
-                    Some(g) if profile::valid_id(&g) => global = Some(g),
-                    Some(_) | None if text.trim() == "{}" => {}
+                let value = serde_json::from_str::<serde_json::Value>(&text).ok();
+                match value.as_ref().map(|v| (v.is_object(), v.get("global"))) {
+                    // {"global": "<id>"}: the one assignment of a file older than RUY-545.
+                    Some((true, Some(serde_json::Value::String(g)))) if profile::valid_id(g) => {
+                        global.push((None, g.clone()))
+                    }
+                    // {"global": {"all": "<id>", "family:<f>": "<id>", "device:<id>": "<id>"}}
+                    Some((true, Some(serde_json::Value::Object(slots)))) => {
+                        for (key, id) in slots {
+                            match (Slot::from_key(key), id.as_str()) {
+                                (Some(slot), Some(id)) if profile::valid_id(id) => {
+                                    global.push((Some(slot), id.to_owned()))
+                                }
+                                _ => self.journal.push(format!(
+                                    "{console}/{name}: the slot \"{key}\" is no assignment: not used"
+                                )),
+                            }
+                        }
+                    }
+                    Some((true, None)) => {}
                     _ => self.journal.push(format!(
                         "{console}/{name} is not an assignment file: not used"
                     )),
@@ -408,15 +488,31 @@ impl Book {
                 .push(format!("profile {console}/{id} not used: {why}"));
             shelf.profiles.remove(&id);
         }
-        shelf.global = global.filter(|g| {
-            let known = shelf.profiles.contains_key(g) || self.builtins.contains_key(g);
-            if !known {
+        for (slot, g) in global {
+            let Some(p) = shelf.profiles.get(&g).or_else(|| self.builtins.get(&g)) else {
                 self.journal.push(format!(
                     "{console}: the global profile \"{g}\" does not exist"
                 ));
+                continue;
+            };
+            if !matches!(p.scope, Scope::Builtin | Scope::Global) {
+                self.journal.push(format!(
+                    "{console}: \"{g}\" is not a global profile: not assigned"
+                ));
+                continue;
             }
-            known
-        });
+            // The one assignment of an older file takes the slot its profile's match names.
+            let own = Slot::of(p);
+            let slot = slot.unwrap_or_else(|| own.clone());
+            if slot != own {
+                self.journal.push(format!(
+                    "{console}: \"{g}\" does not match the slot \"{}\": not assigned",
+                    slot.key()
+                ));
+                continue;
+            }
+            shelf.global.insert(slot, g);
+        }
         shelf.confirm = confirm;
         self.shelves.insert(console.to_owned(), shelf);
         Ok(())
@@ -486,6 +582,7 @@ impl Book {
             ),
         };
         let m = p.matches.clone().unwrap_or_default();
+        let slot = Slot::of(p);
         Summary {
             id: p.id.clone(),
             name: p.name.clone(),
@@ -493,7 +590,8 @@ impl Book {
             scope_id: p.scope.scope_id().to_owned(),
             inherits: p.inherits.clone().unwrap_or_default(),
             builtin: p.scope == Scope::Builtin,
-            assigned: shelf.global.as_deref() == Some(p.id.as_str()),
+            assigned: shelf.global.get(&slot) == Some(&p.id),
+            global_slot: slot.scope_id(),
             match_family: m.family.unwrap_or_default(),
             match_device: m.device.unwrap_or_default(),
             layout: if chain.iter().any(|id| id == NINTENDO_ID) {
@@ -595,8 +693,26 @@ impl Book {
                 .push(format!("saving profile {console}/{id} failed: {e}"));
             return (Status::Failed, id, Vec::new());
         }
+        // An assigned profile whose match now names another slot leaves its old one (the file is
+        // written; an assignment that cannot be written is inert, as a mismatched slot never
+        // applies, and is dropped at the next load).
+        let own = Slot::of(&p);
+        let stale: Vec<Slot> = self
+            .shelf(console)
+            .global
+            .iter()
+            .filter(|(slot, g)| **g == id && **slot != own)
+            .map(|(slot, _)| slot.clone())
+            .collect();
         if let Some(shelf) = self.shelves.get_mut(console) {
             shelf.profiles.insert(id.clone(), p);
+        }
+        if !stale.is_empty() {
+            let mut global = self.shelf(console).global.clone();
+            for slot in stale {
+                global.remove(&slot);
+            }
+            self.write_assignments(console, global);
         }
         (Status::Ok, id, Vec::new())
     }
@@ -634,8 +750,11 @@ impl Book {
                 shelf.profiles.insert(child.id.clone(), child);
             }
         }
-        if self.shelf(console).global.as_deref() == Some(id) {
-            let status = self.write_assignments(console, None);
+        let mut global = self.shelf(console).global.clone();
+        let before = global.len();
+        global.retain(|_, g| g != id);
+        if global.len() != before {
+            let status = self.write_assignments(console, global);
             if status != Status::Ok {
                 return status;
             }
@@ -651,11 +770,14 @@ impl Book {
         Status::Ok
     }
 
-    fn write_assignments(&mut self, console: &str, global: Option<String>) -> Status {
-        let text = match &global {
-            Some(g) => serde_json::json!({ "global": g }),
-            None => serde_json::json!({}),
-        };
+    /// `{"global": {"all": "<id>", "family:<f>": "<id>", "device:<id>": "<id>"}}`, written whole
+    /// before it applies.
+    fn write_assignments(&mut self, console: &str, global: BTreeMap<Slot, String>) -> Status {
+        let slots: serde_json::Map<String, serde_json::Value> = global
+            .iter()
+            .map(|(slot, g)| (slot.key(), serde_json::Value::from(g.as_str())))
+            .collect();
+        let text = serde_json::json!({ "global": slots });
         if let Err(e) = self.store.write(console, ASSIGNMENTS, &text.to_string()) {
             self.journal
                 .push(format!("saving the assignments of {console} failed: {e}"));
@@ -667,26 +789,37 @@ impl Book {
         Status::Ok
     }
 
-    /// `AssignProfile`; only the global scope today (platform and game: RUY-43).
+    /// `AssignProfile`; only the global scope today (platform and game: RUY-43). One slot at a
+    /// time (`scope_id`, `Slot::parse`); the profile's match must name that slot.
     pub fn assign(&mut self, console: &str, scope: &str, scope_id: &str, id: &str) -> Status {
-        if scope != "global" || !scope_id.is_empty() {
+        if scope != "global" {
             return Status::Invalid;
         }
+        let Some(slot) = Slot::parse(scope_id) else {
+            return Status::Invalid;
+        };
         if let Err(status) = self.load(console) {
             return status;
         }
+        let mut global = self.shelf(console).global.clone();
         if id.is_empty() {
-            return self.write_assignments(console, None);
+            global.remove(&slot);
+            return self.write_assignments(console, global);
         }
         match self.profile(console, id) {
             None => Status::UnknownProfile,
             Some(p) if !matches!(p.scope, Scope::Builtin | Scope::Global) => Status::Invalid,
-            Some(_) => self.write_assignments(console, Some(id.to_owned())),
+            Some(p) if Slot::of(p) != slot => Status::Invalid,
+            Some(_) => {
+                global.insert(slot, id.to_owned());
+                self.write_assignments(console, global)
+            }
         }
     }
 
-    /// The profile that applies to a pad (`family`, stable id `device`; "" for none): the global
-    /// one when its `match` fits, else `default`.
+    /// The profile that applies to a pad (`family`, stable id `device`; "" for none): the one
+    /// assigned to its device's slot, else its family's, else all controllers', else `default`.
+    /// A slot's profile counts only while its match names that slot and fits the pad.
     fn applying(&self, console: &str, family: &str, device: &str) -> String {
         let shelf = self.shelf(console);
         let fits = |p: &Profile| match &p.matches {
@@ -696,12 +829,24 @@ impl Book {
                     && m.device.as_deref().map_or(true, |d| d == device)
             }
         };
-        shelf
-            .global
-            .as_deref()
-            .and_then(|g| self.profile(console, g))
-            .filter(|p| fits(p))
-            .map(|p| p.id.clone())
+        let mut slots = Vec::with_capacity(3);
+        if !device.is_empty() {
+            slots.push(Slot::Device(device.to_owned()));
+        }
+        if !family.is_empty() {
+            slots.push(Slot::Family(family.to_owned()));
+        }
+        slots.push(Slot::All);
+        slots
+            .into_iter()
+            .find_map(|slot| {
+                shelf
+                    .global
+                    .get(&slot)
+                    .and_then(|g| self.profile(console, g))
+                    .filter(|p| Slot::of(p) == slot && fits(p))
+                    .map(|p| p.id.clone())
+            })
             .unwrap_or_else(|| DEFAULT_ID.to_owned())
     }
 
@@ -912,7 +1057,15 @@ mod tests {
             Engine::default(),
             "not assigned yet"
         );
-        assert_eq!(b.assign("p1", "global", "", "ps"), Status::Ok);
+        assert_eq!(
+            b.assign("p1", "global", "", "ps"),
+            Status::Invalid,
+            "its match names the family's slot, not all controllers'"
+        );
+        assert_eq!(
+            b.assign("p1", "global", "family:playstation", "ps"),
+            Status::Ok
+        );
         assert_ne!(pad(&mut b, "playstation", "x"), Engine::default());
         assert_eq!(
             pad(&mut b, "xbox", "x"),
@@ -932,17 +1085,28 @@ mod tests {
                 &format!(r#"{swapped},"match":{{"device":"usb-1-2-abc"}}"#),
             ),
         );
-        b.assign("p1", "global", "", "one");
+        assert_eq!(
+            b.assign("p1", "global", "device:usb-1-2-abc", "one"),
+            Status::Ok
+        );
         assert_ne!(pad(&mut b, "xbox", "usb-1-2-abc"), Engine::default());
         assert_eq!(pad(&mut b, "xbox", "usb-1-2-abd"), Engine::default());
-        // A built-in as the global profile; "" removes the assignment.
+        // A built-in as the global profile of all controllers; "" empties that slot.
         assert_eq!(b.assign("p1", "global", "", "nintendo"), Status::Ok);
         assert!(b
             .list("p1")
             .unwrap()
             .iter()
-            .any(|s| s.id == "nintendo" && s.assigned));
+            .any(|s| s.id == "nintendo" && s.assigned && s.global_slot.is_empty()));
         assert_eq!(b.assign("p1", "global", "", ""), Status::Ok);
+        assert_eq!(
+            b.assign("p1", "global", "family:playstation", ""),
+            Status::Ok
+        );
+        assert_eq!(
+            b.assign("p1", "global", "device:usb-1-2-abc", ""),
+            Status::Ok
+        );
         assert!(b.list("p1").unwrap().iter().all(|s| !s.assigned));
         // Refusals.
         assert_eq!(b.assign("p1", "global", "", "nope"), Status::UnknownProfile);
@@ -955,12 +1119,344 @@ mod tests {
         assert_eq!(b.save("p1", game).0, Status::Ok);
         assert_eq!(b.assign("p1", "global", "", "g"), Status::Invalid);
         // Deleting the assigned profile removes the assignment.
-        b.assign("p1", "global", "", "ps");
+        b.assign("p1", "global", "family:playstation", "ps");
         b.delete("p1", "ps");
         assert_eq!(
             b.effective("p1", "playstation", "x").unwrap().1,
             ["default"]
         );
+    }
+
+    /// The files of p1 as the store has them, by name.
+    fn files(b: &mut Book) -> BTreeMap<String, String> {
+        b.store.read_all("p1").unwrap().into_iter().collect()
+    }
+
+    /// The engine a profile compiles to on its own (what a pad that it applies to gets).
+    fn engine_of(b: &mut Book, id: &str) -> Engine {
+        b.load("p1").unwrap();
+        Engine::compile(&b.resolved("p1", id))
+    }
+
+    fn swap_to(id: &str, to: &str, matches: &str) -> String {
+        let m = if matches.is_empty() {
+            String::new()
+        } else {
+            format!(r#","match":{matches}"#)
+        };
+        profile(
+            id,
+            &format!(
+                r#""mappings":[{{"from":"south","to":{{"type":"button","code":"{to}"}}}}]{m}"#
+            ),
+        )
+    }
+
+    // RUY-545: pad A (a DualSense) has its own profile, pad B (a Nintendo pad) its family's; each
+    // pad gets its own, and emptying one slot leaves the other.
+    #[test]
+    fn each_pad_takes_the_profile_of_its_most_specific_slot() {
+        const A: &str = "bluetooth-054c-0ce6-3f2a9c41d0b7";
+        const B: &str = "bluetooth-057e-2009-b7c0e1f2a3d4";
+        let mut b = book();
+        assert_eq!(
+            b.save(
+                "p1",
+                &swap_to("a", "east", &format!(r#"{{"device":"{A}"}}"#))
+            )
+            .0,
+            Status::Ok
+        );
+        assert_eq!(
+            b.save("p1", &swap_to("n", "west", r#"{"family":"nintendo"}"#))
+                .0,
+            Status::Ok
+        );
+        assert_eq!(b.save("p1", &swap_to("every", "north", "")).0, Status::Ok);
+        assert_eq!(
+            b.assign("p1", "global", &format!("device:{A}"), "a"),
+            Status::Ok
+        );
+        assert_eq!(b.assign("p1", "global", "family:nintendo", "n"), Status::Ok);
+        let (ea, en) = (engine_of(&mut b, "a"), engine_of(&mut b, "n"));
+        assert_ne!(ea, en);
+        assert_eq!(b.engine_for("p1", "playstation", A), ea, "A: its device's");
+        assert_eq!(b.engine_for("p1", "nintendo", B), en, "B: its family's");
+        assert_eq!(
+            b.engine_for("p1", "nintendo", A),
+            ea,
+            "the device's slot over the family's"
+        );
+        assert_eq!(
+            b.engine_for("p1", "xbox", "usb-045e-0b12-8e01c2d4a9f3"),
+            Engine::default(),
+            "a third pad: nothing applies"
+        );
+        assert_eq!(
+            b.effective("p1", "playstation", A).unwrap().1,
+            ["a", "default"]
+        );
+        assert_eq!(
+            b.effective("p1", "nintendo", B).unwrap().1,
+            ["n", "default"]
+        );
+        // All controllers' slot is under both.
+        assert_eq!(b.assign("p1", "global", "", "every"), Status::Ok);
+        let every = engine_of(&mut b, "every");
+        assert_eq!(
+            b.engine_for("p1", "xbox", "usb-045e-0b12-8e01c2d4a9f3"),
+            every
+        );
+        assert_eq!(b.engine_for("p1", "playstation", A), ea);
+        assert_eq!(b.engine_for("p1", "nintendo", B), en);
+        let slots = |b: &mut Book| -> Vec<(String, String)> {
+            b.list("p1")
+                .unwrap()
+                .into_iter()
+                .filter(|s| s.assigned)
+                .map(|s| (s.global_slot, s.id))
+                .collect()
+        };
+        assert_eq!(
+            slots(&mut b),
+            [
+                (format!("device:{A}"), "a".to_owned()),
+                ("".to_owned(), "every".to_owned()),
+                ("family:nintendo".to_owned(), "n".to_owned())
+            ]
+        );
+        // Emptying the family's slot leaves the device's and all controllers'.
+        assert_eq!(b.assign("p1", "global", "family:nintendo", ""), Status::Ok);
+        assert_eq!(b.engine_for("p1", "playstation", A), ea, "A keeps its own");
+        assert_eq!(b.engine_for("p1", "nintendo", B), every, "B falls to all");
+        // Emptying a slot that is already empty is "ok" and changes nothing.
+        assert_eq!(b.assign("p1", "global", "family:nintendo", ""), Status::Ok);
+        assert_eq!(b.engine_for("p1", "nintendo", B), every);
+        assert_eq!(b.engine_for("p1", "playstation", A), ea);
+        assert_eq!(b.assign("p1", "global", "", ""), Status::Ok);
+        assert_eq!(b.engine_for("p1", "nintendo", B), Engine::default());
+        assert_eq!(b.engine_for("p1", "playstation", A), ea);
+        // Assigning one slot replaces only that slot's profile.
+        assert_eq!(
+            b.save("p1", &swap_to("n2", "north", r#"{"family":"nintendo"}"#))
+                .0,
+            Status::Ok
+        );
+        assert_eq!(b.assign("p1", "global", "family:nintendo", "n"), Status::Ok);
+        assert_eq!(
+            b.assign("p1", "global", "family:nintendo", "n2"),
+            Status::Ok
+        );
+        assert_eq!(b.engine_for("p1", "nintendo", B), engine_of(&mut b, "n2"));
+        assert_eq!(b.engine_for("p1", "playstation", A), ea);
+    }
+
+    #[test]
+    fn a_slot_takes_only_a_profile_whose_match_names_it() {
+        const A: &str = "usb-1-2-abc";
+        let mut b = book();
+        b.save(
+            "p1",
+            &swap_to("a", "east", &format!(r#"{{"device":"{A}"}}"#)),
+        );
+        b.save("p1", &swap_to("n", "west", r#"{"family":"nintendo"}"#));
+        b.save("p1", &swap_to("plain", "west", ""));
+        b.save(
+            "p1",
+            &swap_to(
+                "both",
+                "west",
+                &format!(r#"{{"family":"xbox","device":"{A}"}}"#),
+            ),
+        );
+        for (scope_id, id) in [
+            ("", "a"),
+            ("", "n"),
+            ("family:xbox", "n"),
+            ("family:nintendo", "a"),
+            ("family:nintendo", "plain"),
+            (&*format!("device:{A}"), "n"),
+            ("device:usb-1-2-abd", "a"),
+            ("family:nintendo", "nintendo"),
+            ("family:xbox", "both"),
+        ] {
+            assert_eq!(
+                b.assign("p1", "global", scope_id, id),
+                Status::Invalid,
+                "{id} in \"{scope_id}\""
+            );
+        }
+        for scope_id in [
+            "all",
+            "family:",
+            "family:sega",
+            "device:",
+            "device:USB",
+            "game:x",
+            "family:nintendo ",
+        ] {
+            assert_eq!(
+                b.assign("p1", "global", scope_id, ""),
+                Status::Invalid,
+                "\"{scope_id}\" is no slot"
+            );
+        }
+        assert_eq!(
+            b.assign("p1", "global", &format!("device:{A}"), "both"),
+            Status::Ok
+        );
+        assert_eq!(
+            b.engine_for("p1", "nintendo", A),
+            Engine::default(),
+            "a device's profile with another family's match does not fit"
+        );
+        assert!(b
+            .list("p1")
+            .unwrap()
+            .iter()
+            .all(|s| s.id == "both" || !s.assigned));
+    }
+
+    #[test]
+    fn a_save_that_changes_the_match_takes_the_profile_out_of_its_slot() {
+        let mut b = book();
+        b.save("p1", &swap_to("n", "west", r#"{"family":"nintendo"}"#));
+        b.save("p1", &swap_to("every", "north", ""));
+        assert_eq!(b.assign("p1", "global", "family:nintendo", "n"), Status::Ok);
+        assert_eq!(b.assign("p1", "global", "", "every"), Status::Ok);
+        let every = engine_of(&mut b, "every");
+        // The same profile for PlayStation pads now: it leaves Nintendo's slot, takes no other.
+        assert_eq!(
+            b.save("p1", &swap_to("n", "west", r#"{"family":"playstation"}"#))
+                .0,
+            Status::Ok
+        );
+        assert_eq!(b.engine_for("p1", "nintendo", "x"), every);
+        assert_eq!(
+            b.engine_for("p1", "playstation", "x"),
+            every,
+            "not assigned"
+        );
+        let n = b
+            .list("p1")
+            .unwrap()
+            .into_iter()
+            .find(|s| s.id == "n")
+            .unwrap();
+        assert_eq!(
+            (n.assigned, n.global_slot.as_str()),
+            (false, "family:playstation")
+        );
+        // The file says so too.
+        let mut again = Book::new(Box::new(MemStore {
+            files: files(&mut b)
+                .into_iter()
+                .map(|(name, text)| (("p1".to_owned(), name), text))
+                .collect(),
+            ..MemStore::default()
+        }));
+        assert_eq!(again.engine_for("p1", "nintendo", "x"), every);
+        assert!(again.take_journal().is_empty());
+        // A save that keeps the match keeps the slot.
+        assert_eq!(b.save("p1", &swap_to("every", "south", "")).0, Status::Ok);
+        assert!(b
+            .list("p1")
+            .unwrap()
+            .iter()
+            .any(|s| s.id == "every" && s.assigned));
+    }
+
+    // The Dell's p1 before RUY-545: one assignment, `controls`, whose match names Nintendo pads.
+    #[test]
+    fn an_assignment_file_from_before_the_slots_still_loads() {
+        let mut store = MemStore::default();
+        let mut put = |name: &str, text: &str| {
+            store.files.insert(("p1".into(), name.into()), text.into());
+        };
+        put(
+            "controls.json",
+            r#"{"id":"controls","match":{"family":"nintendo"},"name":"Controls in games","schema_version":1,"scope":{"type":"global"},"settings":{"left_stick":{"inner_deadzone":0.2}}}"#,
+        );
+        put(ASSIGNMENTS, r#"{"global":"controls"}"#);
+        let mut b = Book::new(Box::new(store));
+        let controls = engine_of(&mut b, "controls");
+        assert_ne!(controls, Engine::default());
+        assert_eq!(
+            b.engine_for("p1", "nintendo", "bluetooth-057e-2009-b7c0e1f2a3d4"),
+            controls,
+            "the Wii U Pro: the family's slot"
+        );
+        assert_eq!(
+            b.engine_for("p1", "playstation", "bluetooth-054c-0ce6-3f2a9c41d0b7"),
+            Engine::default(),
+            "the DualSense"
+        );
+        let s = b
+            .list("p1")
+            .unwrap()
+            .into_iter()
+            .find(|s| s.id == "controls")
+            .unwrap();
+        assert!(s.assigned);
+        assert_eq!(s.global_slot, "family:nintendo");
+        assert!(b.take_journal().is_empty());
+        // One without a match: all controllers'; a built-in too.
+        for (file, id) in [
+            (r#"{"global":"plain"}"#, "plain"),
+            (r#"{"global":"nintendo"}"#, "nintendo"),
+        ] {
+            let mut store = MemStore::default();
+            store
+                .files
+                .insert(("p1".into(), "plain.json".into()), profile("plain", ""));
+            store
+                .files
+                .insert(("p1".into(), ASSIGNMENTS.into()), file.into());
+            let mut b = Book::new(Box::new(store));
+            let s = b
+                .list("p1")
+                .unwrap()
+                .into_iter()
+                .find(|s| s.id == id)
+                .unwrap();
+            assert!(s.assigned && s.global_slot.is_empty(), "{file}");
+        }
+        // The next assignment writes the slots.
+        assert_eq!(b.assign("p1", "global", "", "nintendo"), Status::Ok);
+        assert_eq!(
+            files(&mut b)[ASSIGNMENTS],
+            r#"{"global":{"all":"nintendo","family:nintendo":"controls"}}"#
+        );
+    }
+
+    #[test]
+    fn a_slot_file_with_bad_entries_keeps_the_good_ones() {
+        let mut store = MemStore::default();
+        store.files.insert(
+            ("p1".into(), "n.json".into()),
+            swap_to("n", "west", r#"{"family":"nintendo"}"#),
+        );
+        store
+            .files
+            .insert(("p1".into(), "plain.json".into()), profile("plain", ""));
+        store.files.insert(
+            ("p1".into(), ASSIGNMENTS.into()),
+            r#"{"global":{"family:nintendo":"n","all":"n","family:sega":"plain","device:x":"ghost","":"plain","family:xbox":7}}"#
+                .into(),
+        );
+        let mut b = Book::new(Box::new(store));
+        assert_eq!(b.engine_for("p1", "nintendo", "x"), engine_of(&mut b, "n"));
+        assert_eq!(b.engine_for("p1", "xbox", "y"), Engine::default());
+        let journal = b.take_journal().join("\n");
+        for needle in [
+            "\"n\" does not match the slot \"all\"",
+            "the slot \"family:sega\" is no assignment",
+            "the slot \"\" is no assignment",
+            "the slot \"family:xbox\" is no assignment",
+            "the global profile \"ghost\" does not exist",
+        ] {
+            assert!(journal.contains(needle), "{needle:?} not in {journal}");
+        }
     }
 
     #[test]

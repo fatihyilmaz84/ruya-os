@@ -42,7 +42,7 @@ QVariantMap parseDict(const QDBusArgument &arg)
 QVariantMap summaryOf(const QVariantMap &d)
 {
     QVariantMap out;
-    for (const char *key : {"id", "name", "scope", "scope_id", "inherits", "match_family", "match_device", "layout"})
+    for (const char *key : {"id", "name", "scope", "scope_id", "inherits", "global_slot", "match_family", "match_device", "layout"})
         out.insert(QLatin1String(key), d.value(QLatin1String(key)).toString());
     for (const char *key : {"builtin", "assigned", "left_stick_changed", "right_stick_changed", "changed"})
         out.insert(QLatin1String(key), d.value(QLatin1String(key)).toBool());

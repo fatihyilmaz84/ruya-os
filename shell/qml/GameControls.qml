@@ -2,17 +2,26 @@ pragma Singleton
 import QtQuick
 import RuyaShell
 
-// Controls in games (RUY-465, 06 §7): the signed-in console profile's global controller profile as
-// the pages edit it, over Input's profile calls (RUY-42). One profile per console profile is
-// assigned to the global scope; the pages edit it as the stored profile `controls` (or the one an
-// import assigned), which inherits `nintendo` for the Nintendo layout and `default` otherwise, and
-// holds only what differs: the Applies-to `match`, the remapped buttons, the stick settings.
+// Controls in games (RUY-465, 06 §7): the signed-in console profile's global controller profiles as
+// the pages edit them, over Input's profile calls (RUY-42), for one pad at a time (RUY-545: `show`).
+// The console profile has up to one global profile per slot: all controllers (""), a family
+// ("family:<f>") or one pad ("device:<id>"); a pad takes its device's, else its family's, else all
+// controllers' (`applyingFor`, the service's rule). A profile inherits `nintendo` for the Nintendo
+// layout and `default` otherwise, and holds only what differs: its `match` (the slot), the remapped
+// buttons, the stick settings.
 //
-// Every change is shown at once (`doc`) and saved in the background: ValidateProfile, SaveProfile
-// and, when the profile is not the assigned one yet, AssignProfile; a slider's change waits 300 ms
-// for the next step first (`change(..., true)`). One save runs at a time and only the newest change
-// waits behind it. A refused save toasts "Could not save the change" and `doc` goes back to what
-// the service has (`stored`). Reset deletes the profile (or takes back an assigned built-in).
+// An edit changes the pad's own profile: the stored one of its device's slot, of its family's, or
+// the one Applies to = All controllers saved (`allId`). When nothing else applies (no profile, a
+// built-in, or an all-controllers profile the page did not put there) the first edit makes a copy
+// of it for This <pad> (`deviceProfileId`, match.device), so it reaches no other pad. Applies to
+// moves the pad's settings to the chosen slot under that slot's id, replacing what the slot held;
+// a wider slot also empties the narrower ones of this pad (so the pad takes it).
+//
+// Every change is shown at once (`doc`) and saved in the background: ValidateProfile, SaveProfile,
+// AssignProfile when it is not assigned to its slot yet, then the slots to empty; a slider's change
+// waits 300 ms for the next step first (`change(..., true)`). One save runs at a time and the newest
+// change of each pad waits behind it, in order. A refused save toasts "Could not save the change" and `doc` goes
+// back to what the service has (`stored`). Reset gives the pad the default (`resetAll`).
 // Export and import go through Input.exportProfile / importProfile (Devices1.Storage).
 // Also the words the pages share: button names and glyphs by family, the short pad name.
 QtObject {
@@ -20,27 +29,50 @@ QtObject {
 
     // The console profile whose controls these are ("" signed out).
     readonly property string owner: Profiles.activeProfile
-    // The id the pages save under when the console profile has no stored global profile yet.
-    readonly property string ownId: "controls"
+    // The ids the pages save under, one per slot.
+    readonly property string allId: "controls-all"
+    function familyProfileId(family) {
+        return "controls-family-" + family
+    }
+    // "controls-device-<the stable id, ':' as '-'>", at most 64 characters (a hash ends a long one).
+    function deviceProfileId(device) {
+        const s = String(device).toLowerCase().replace(/[^a-z0-9._-]/g, "-")
+        const id = "controls-device-" + s
+        return id.length <= 64 ? id : "controls-device-" + s.slice(0, 39) + "-" + Qt.md5(String(device)).slice(0, 8)
+    }
+
+    // The pad the pages are about: the id `show` was given, else the first connected one; null without one.
+    property string padId: ""
+    readonly property var pad: padFor(padId)
+    readonly property string padKey: pad ? pad.id + "/" + pad.family : ""
+    onPadKeyChanged: {
+        stored = null
+        doc = null
+        if (owner !== "" && loadState !== "loading")
+            resolve()
+    }
 
     // "loading" before the first answer, "ok", or "failed" (ListProfiles or GetProfile failed).
     property string loadState: "loading"
-    // The assigned global profile's summary (Input1's keys), or null when none is assigned.
+    // The last ListProfiles answer (Input1's summaries).
+    property var profiles: []
+    // The summary of what applies to the pad, or null when nothing is assigned that fits it.
     property var summary: null
-    // The assigned stored profile as the service has it (an object), or null (none, or a built-in).
+    // That profile as the service has it (an object), or null (none, or a built-in).
     property var stored: null
     // What the pages show: `stored`, or the newest change while it is on its way.
     property var doc: null
 
-    // The save on its way: "" | "validate" | "save" | "assign" | "delete".
+    // The save on its way: "" | "validate" | "save" | "assign" | "clear" | "delete".
     property string phase: ""
-    property var inFlight: null         // { doc, tag }
-    property var queued: null           // { doc, tag }: the newest change, waiting
+    property var inFlight: null         // { doc, tag, clears, padKey }
+    // The changes waiting, oldest first: the newest one per pad ({ doc, tag, clears, padKey }).
+    property var queue: []
     property string exportVolume: ""    // an export waits for the save before it
     property bool importing: false
 
-    readonly property bool busy: phase !== "" || queued !== null
-    // Settings > Controllers' "Controls in games" value: the service's word for the assigned profile.
+    readonly property bool busy: phase !== "" || queue.length > 0
+    // The pad's "Controls in games" value: the service's word for what applies to it.
     readonly property bool changed: summary !== null && summary.changed === true
     readonly property string layout: (doc ? doc.inherits === "nintendo"
                                           : summary !== null && summary.layout === "nintendo") ? "nintendo" : "standard"
@@ -58,10 +90,11 @@ QtObject {
     signal importRefused(string fileName, string status)
 
     onOwnerChanged: {
+        profiles = []
         summary = null
         stored = null
         doc = null
-        queued = null
+        queue = []
         inFlight = null
         phase = ""
         loadState = "loading"
@@ -73,6 +106,64 @@ QtObject {
         if (owner === "")
             return
         Input.listProfiles(owner)
+    }
+
+    // The pages' entry: their pad (`id`, "" for the first connected one) and a fresh list.
+    function show(id) {
+        padId = String(id ?? "")
+        refresh()
+    }
+
+    // ---- the slots (06 §7, RUY-545) ---------------------------------------------------------------
+    // The slot a match names: "device:<id>", else "family:<f>", else "" (all controllers).
+    function slotOf(m) {
+        const device = m?.device ?? ""
+        const family = m?.family ?? ""
+        return device !== "" ? "device:" + device : family !== "" ? "family:" + family : ""
+    }
+    function slotRank(slot) {
+        return slot.startsWith("device:") ? 2 : slot.startsWith("family:") ? 1 : 0
+    }
+    // The summary of the profile that applies to pad `p` ({ id, family }, or null for no pad): its
+    // device's slot, else its family's, else all controllers', looking only below `below` (a rank;
+    // 3 looks at every slot); null when none.
+    function applyingFor(p, below) {
+        const limit = below === undefined ? 3 : below
+        const fits = s => (s.match_family === "" || (p !== null && s.match_family === p.family))
+                          && (s.match_device === "" || (p !== null && s.match_device === p.id))
+        const slots = []
+        if (p && p.id !== "" && limit > 2)
+            slots.push("device:" + p.id)
+        if (p && (p.family ?? "") !== "" && limit > 1)
+            slots.push("family:" + p.family)
+        if (limit > 0)
+            slots.push("")
+        for (const slot of slots) {
+            const s = profiles.find(r => r.assigned === true && r.global_slot === slot
+                                         && (r.scope === "global" || r.builtin === true) && fits(r))
+            if (s)
+                return s
+        }
+        return null
+    }
+    // A pad's "Controls in games" value (the controller page, Settings > Controllers).
+    function changedFor(p) {
+        const s = applyingFor(p ?? null)
+        return s !== null && s.changed === true
+    }
+
+    // What applies to the pad now; its stored profile is fetched.
+    function resolve() {
+        const s = applyingFor(pad)
+        summary = s
+        if (s && s.builtin !== true) {
+            Input.getProfile(owner, s.id)
+            return
+        }
+        stored = null
+        if (phase === "" && queue.length === 0)
+            doc = null
+        loadState = "ok"
     }
 
     // ---- the inputs ------------------------------------------------------------------------------
@@ -144,13 +235,31 @@ QtObject {
     }
 
     // ---- changes ---------------------------------------------------------------------------------
-    // A copy of the profile to change: the stored one, or a new one (the layout of an assigned built-in kept).
-    function editable() {
-        if (doc)
-            return JSON.parse(JSON.stringify(doc))
-        const d = { schema_version: 1, id: ownId, name: "Controls in games", scope: { type: "global" } }
+    // What applies to the pad as a profile to change: the newest change, else the stored one (also
+    // when it arrived while another pad's save was running), else a new one without an id (the
+    // layout of an assigned built-in kept).
+    function current() {
+        const base = doc ?? stored
+        if (base)
+            return JSON.parse(JSON.stringify(base))
+        const d = { schema_version: 1, id: "", name: "Controls in games", scope: { type: "global" } }
         if (summary && summary.builtin && summary.layout === "nintendo")
             d.inherits = "nintendo"
+        return d
+    }
+    // The pad's own profile to change: what applies when it is the pad's own (its device's slot,
+    // its family's, `allId`, or anything without a pad), else a copy of it for This <pad>.
+    function editable() {
+        const d = current()
+        if (!pad) {
+            if (d.id === "")
+                d.id = allId
+            return d
+        }
+        if (d.id !== "" && (slotOf(d.match) !== "" || d.id === allId))
+            return d
+        d.id = deviceProfileId(pad.id)
+        d.match = { device: pad.id }
         return d
     }
 
@@ -166,16 +275,38 @@ QtObject {
     // "all" | "family:<family>" | "device:<stable id>" (Applies to's values).
     readonly property string appliesValue: appliesTo === "device" ? "device:" + matchDevice
                                            : appliesTo === "family" ? "family:" + matchFamily : "all"
+    // The pad's settings go to that slot under its id (replacing what it held); a wider slot than
+    // now also empties this pad's narrower ones, so the pad takes it. Another pad's own profile is
+    // never rewritten.
     function setAppliesTo(value) {
-        const d = editable()
         const v = String(value)
-        if (v.startsWith("family:") && v.length > 7)
+        if (v === appliesValue)
+            return
+        const d = current()
+        let slot = ""
+        if (v.startsWith("family:") && v.length > 7) {
+            d.id = familyProfileId(v.slice(7))
             d.match = { family: v.slice(7) }
-        else if (v.startsWith("device:") && v.length > 7)
+            slot = v
+        } else if (v.startsWith("device:") && v.length > 7) {
+            d.id = deviceProfileId(v.slice(7))
             d.match = { device: v.slice(7) }
-        else
+            slot = v
+        } else {
+            d.id = allId
             delete d.match
-        change(d, "match", false)
+        }
+        const clears = []
+        if (pad) {
+            const mine = profiles.filter(r => r.assigned === true).map(r => r.global_slot)
+            if (doc)
+                mine.push(slotOf(doc.match))
+            for (const s of ["device:" + pad.id, "family:" + pad.family]) {
+                if (s !== "family:" && slotRank(s) > slotRank(slot) && mine.includes(s) && !clears.includes(s))
+                    clears.push(s)
+            }
+        }
+        change(d, "match", false, clears)
     }
 
     // The source now acts as `target`. False (and nothing saved) when it already does: pressing the
@@ -224,9 +355,11 @@ QtObject {
         change(d, "resetStick:" + side, false)
     }
 
-    function change(d, tag, debounce) {
+    // `clears`: the slots to empty once `d` is saved and assigned (Applies to).
+    function change(d, tag, debounce, clears) {
         doc = d
-        queued = { doc: d, tag: tag }
+        // It replaces this pad's waiting change; another pad's waits on (RUY-545 round 2).
+        queue = queue.filter(q => q.padKey !== padKey).concat([{ doc: d, tag: tag, clears: clears ?? [], padKey: padKey }])
         if (debounce) {
             debounceTimer.restart()
         } else {
@@ -241,10 +374,10 @@ QtObject {
     }
 
     function flush() {
-        if (phase !== "" || queued === null || owner === "")
+        if (phase !== "" || queue.length === 0 || owner === "")
             return
-        inFlight = queued
-        queued = null
+        inFlight = queue[0]
+        queue = queue.slice(1)
         phase = "validate"
         Input.validateProfile(JSON.stringify(inFlight.doc))
     }
@@ -255,17 +388,29 @@ QtObject {
         inFlight = null
         saved(tag)
         refresh()
-        if (queued !== null)
+        if (queue.length > 0)
             flush()
         else if (exportVolume !== "")
             startExport()
+    }
+
+    // After the save and the assignment: the next slot to empty, else done.
+    function clearNext() {
+        const clears = inFlight ? inFlight.clears : []
+        if (clears.length === 0) {
+            done()
+            return
+        }
+        inFlight = { doc: inFlight.doc, tag: inFlight.tag, clears: clears.slice(1), padKey: inFlight.padKey }
+        phase = "clear"
+        Input.assignProfile(owner, "global", clears[0], "")
     }
 
     function fail() {
         const tag = inFlight ? inFlight.tag : ""
         phase = ""
         inFlight = null
-        queued = null
+        queue = []
         debounceTimer.stop()
         doc = stored            // every row shows what the service has again
         if (exportVolume !== "") {
@@ -278,44 +423,52 @@ QtObject {
         refresh()
     }
 
-    // Everything back to the default: the stored profile goes (and its assignment with it), an
-    // assigned built-in is taken back.
+    // Everything back to the default for the pad (and the pads of its slot): its own stored
+    // profile goes (and its assignment with it) when nothing changed would apply in its place;
+    // otherwise its own profile is saved with nothing in it (a copy for This <pad> when what applies
+    // is not its own), so no other slot's pads are touched.
     function resetAll() {
-        debounceTimer.stop()
-        queued = null
+        queue = queue.filter(q => q.padKey !== padKey)
+        if (queue.length === 0)
+            debounceTimer.stop()
         if (phase !== "")
             return
-        if (stored) {
-            inFlight = { doc: null, tag: "reset" }
+        const d = editable()
+        const own = stored !== null && d.id === stored.id
+        const below = applyingFor(pad, slotRank(slotOf(d.match)))
+        if (own && !(below && below.changed === true)) {
+            inFlight = { doc: null, tag: "reset", clears: [], padKey: padKey }
             phase = "delete"
             doc = null
             Input.deleteProfile(owner, stored.id)
-        } else if (summary && summary.assigned) {
-            inFlight = { doc: null, tag: "reset" }
-            phase = "assign"
-            doc = null
-            Input.assignProfile(owner, "global", "", "")
-        } else {
+            return
+        }
+        if (!own && !changed) {
             doc = null
             saved("reset")
+            return
         }
+        const empty = { schema_version: 1, id: d.id, name: d.name, scope: { type: "global" } }
+        if (d.match)
+            empty.match = d.match
+        change(empty, "reset", false)
     }
 
     // ---- export and import -----------------------------------------------------------------------
     // The profile goes to the volume as one file; one that is not stored yet is saved first.
     function exportTo(volumeId) {
         exportVolume = volumeId
-        if (!stored && phase === "" && queued === null) {
+        if (!stored && phase === "" && queue.length === 0) {
             change(editable(), "export", false)
             return
         }
-        if (phase === "" && queued === null)
+        if (phase === "" && queue.length === 0)
             startExport()
     }
     function startExport() {
         const volume = exportVolume
         exportVolume = ""
-        Input.exportProfile(owner, stored ? stored.id : ownId, volume)
+        Input.exportProfile(owner, stored ? stored.id : editable().id, volume)
     }
 
     function importFrom(volumeId, fileName) {
@@ -335,16 +488,8 @@ QtObject {
                 games.loadState = "failed"
                 return
             }
-            const assigned = profiles.find(p => p.assigned === true && (p.scope === "global" || p.builtin === true)) ?? null
-            games.summary = assigned
-            if (assigned && assigned.builtin !== true) {
-                Input.getProfile(games.owner, assigned.id)
-                return
-            }
-            games.stored = null
-            if (games.phase === "" && games.queued === null)
-                games.doc = null
-            games.loadState = "ok"
+            games.profiles = profiles
+            games.resolve()
         }
         function onProfileFetched(profile, profileId, status, json) {
             if (profile !== games.owner || !games.summary || profileId !== games.summary.id)
@@ -361,7 +506,9 @@ QtObject {
                 return
             }
             games.stored = parsed
-            if (games.phase === "" && games.queued === null)
+            // Shown unless a change of this pad is on its way (`doc` is null after a pad switch,
+            // so another pad's save running does not hide this pad's profile).
+            if ((games.phase === "" && games.queue.length === 0) || games.doc === null)
                 games.doc = parsed
             games.loadState = "ok"
         }
@@ -382,22 +529,25 @@ QtObject {
                 games.fail()
                 return
             }
-            games.stored = games.inFlight.doc
-            if (games.summary && games.summary.id === profileId && games.summary.assigned === true) {
-                games.done()
+            const d = games.inFlight.doc
+            if (games.inFlight.padKey === games.padKey)
+                games.stored = d
+            const slot = games.slotOf(d.match)
+            if (games.profiles.some(p => p.id === profileId && p.assigned === true && p.global_slot === slot)) {
+                games.clearNext()
                 return
             }
             games.phase = "assign"
-            Input.assignProfile(games.owner, "global", "", profileId)
+            Input.assignProfile(games.owner, "global", slot, profileId)
         }
         function onProfileAssigned(profile, scope, scopeId, profileId, status) {
-            if (games.phase !== "assign" || profile !== games.owner)
+            if ((games.phase !== "assign" && games.phase !== "clear") || profile !== games.owner)
                 return
             if (status !== "ok") {
                 games.fail()
                 return
             }
-            games.done()
+            games.clearNext()
         }
         function onProfileDeleted(profile, profileId, status) {
             if (games.phase !== "delete" || profile !== games.owner)

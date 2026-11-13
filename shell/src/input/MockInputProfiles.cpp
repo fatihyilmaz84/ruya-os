@@ -478,6 +478,30 @@ QStringList MockInputProfiles::validate(const QString &text, QJsonObject *out)
     return c.errors;
 }
 
+QString MockInputProfiles::slotOf(const QJsonObject &p)
+{
+    const QJsonObject m = p.value(QStringLiteral("match")).toObject();
+    if (m.contains(QStringLiteral("device")))
+        return QStringLiteral("device:") + m.value(QStringLiteral("device")).toString();
+    if (m.contains(QStringLiteral("family")))
+        return QStringLiteral("family:") + m.value(QStringLiteral("family")).toString();
+    return QString();
+}
+
+bool MockInputProfiles::validSlot(const QString &scopeId)
+{
+    if (scopeId.isEmpty())
+        return true;
+    if (scopeId.startsWith(QLatin1String("family:"))) {
+        static const QStringList families{QStringLiteral("xbox"), QStringLiteral("playstation"), QStringLiteral("nintendo"),
+                                          QStringLiteral("generic")};
+        return families.contains(scopeId.mid(7));
+    }
+    if (scopeId.startsWith(QLatin1String("device:")))
+        return matches(QStringLiteral("^[a-z0-9:-]{1,64}$"), scopeId.mid(7));
+    return false;
+}
+
 const QJsonObject *MockInputProfiles::profile(const QString &console, const QString &id) const
 {
     const auto shelf = m_shelves.constFind(console);
@@ -551,7 +575,8 @@ QVariantMap MockInputProfiles::summary(const QString &console, const QJsonObject
         {QStringLiteral("scope_id"), scopeId},
         {QStringLiteral("inherits"), p.value(QStringLiteral("inherits")).toString()},
         {QStringLiteral("builtin"), builtin},
-        {QStringLiteral("assigned"), shelf.global == id},
+        {QStringLiteral("assigned"), shelf.global.value(slotOf(p)) == id},
+        {QStringLiteral("global_slot"), slotOf(p)},
         {QStringLiteral("match_family"), m.value(QStringLiteral("family")).toString()},
         {QStringLiteral("match_device"), m.value(QStringLiteral("device")).toString()},
         {QStringLiteral("layout"), ids.contains(NintendoId) ? QStringLiteral("nintendo") : QStringLiteral("standard")},
@@ -565,14 +590,27 @@ QVariantMap MockInputProfiles::summary(const QString &console, const QJsonObject
 
 QString MockInputProfiles::applying(const QString &console, const QString &family, const QString &device) const
 {
-    const QString global = m_shelves.value(console).global;
-    const QJsonObject *p = global.isEmpty() ? nullptr : profile(console, global);
-    if (!p)
-        return DefaultId;
-    const QJsonObject m = p->value(QStringLiteral("match")).toObject();
-    const bool fits = (!m.contains(QStringLiteral("family")) || m.value(QStringLiteral("family")).toString() == family)
-                      && (!m.contains(QStringLiteral("device")) || m.value(QStringLiteral("device")).toString() == device);
-    return fits ? global : DefaultId;
+    // Its device's slot, else its family's, else all controllers' (a slot's profile counts while
+    // its match names that slot and fits the pad), else the default.
+    const QMap<QString, QString> global = m_shelves.value(console).global;
+    QStringList order;
+    if (!device.isEmpty())
+        order.append(QStringLiteral("device:") + device);
+    if (!family.isEmpty())
+        order.append(QStringLiteral("family:") + family);
+    order.append(QString());
+    for (const QString &slot : order) {
+        const QString id = global.value(slot);
+        const QJsonObject *p = id.isEmpty() ? nullptr : profile(console, id);
+        if (!p || slotOf(*p) != slot)
+            continue;
+        const QJsonObject m = p->value(QStringLiteral("match")).toObject();
+        const bool fits = (!m.contains(QStringLiteral("family")) || m.value(QStringLiteral("family")).toString() == family)
+                          && (!m.contains(QStringLiteral("device")) || m.value(QStringLiteral("device")).toString() == device);
+        if (fits)
+            return id;
+    }
+    return DefaultId;
 }
 
 QVariantMap MockInputProfiles::call(const QString &method, const QVariantMap &args, QString *changed)
@@ -647,6 +685,13 @@ QVariantMap MockInputProfiles::call(const QString &method, const QVariantMap &ar
                 return refuse(status, id, QStringLiteral("/inherits: ") + why);
         }
         shelf.profiles.insert(id, p);
+        // A match that names another slot takes the profile out of its old one.
+        for (auto it = shelf.global.begin(); it != shelf.global.end();) {
+            if (it.value() == id && it.key() != slotOf(p))
+                it = shelf.global.erase(it);
+            else
+                ++it;
+        }
         *changed = console;
         return answer(QStringLiteral("ok"), {{QStringLiteral("profile_id"), id}, {QStringLiteral("errors"), QStringList()}});
     }
@@ -665,15 +710,20 @@ QVariantMap MockInputProfiles::call(const QString &method, const QVariantMap &ar
             else
                 it->insert(QStringLiteral("inherits"), grand);
         }
-        if (shelf.global == id)
-            shelf.global.clear();
+        for (auto it = shelf.global.begin(); it != shelf.global.end();) {
+            if (it.value() == id)
+                it = shelf.global.erase(it);
+            else
+                ++it;
+        }
         shelf.profiles.remove(id);
         *changed = console;
         return answer(QStringLiteral("ok"));
     }
     if (method == QLatin1String("AssignProfile")) {
         const QString id = args.value(QStringLiteral("profile_id")).toString();
-        if (args.value(QStringLiteral("scope")).toString() != QLatin1String("global") || !args.value(QStringLiteral("scope_id")).toString().isEmpty())
+        const QString slot = args.value(QStringLiteral("scope_id")).toString();
+        if (args.value(QStringLiteral("scope")).toString() != QLatin1String("global") || !validSlot(slot))
             return answer(QStringLiteral("invalid"));
         if (!id.isEmpty()) {
             const QJsonObject *p = profile(console, id);
@@ -682,8 +732,12 @@ QVariantMap MockInputProfiles::call(const QString &method, const QVariantMap &ar
             const QString type = p->value(QStringLiteral("scope")).toObject().value(QStringLiteral("type")).toString();
             if (type != QLatin1String("builtin") && type != QLatin1String("global"))
                 return answer(QStringLiteral("invalid"));
+            if (slotOf(*p) != slot)
+                return answer(QStringLiteral("invalid"));
+            shelf.global.insert(slot, id);
+        } else {
+            shelf.global.remove(slot);
         }
-        shelf.global = id;
         *changed = console;
         return answer(QStringLiteral("ok"));
     }

@@ -1124,8 +1124,13 @@ impl<B: Backend> Router<B> {
         let status = self.book.assign(profile, scope, scope_id, profile_id);
         self.drain_book();
         if status == Status::Ok {
+            let slot = if scope_id.is_empty() {
+                "all controllers"
+            } else {
+                scope_id
+            };
             self.journal(format!(
-                "ruya-{profile}'s {scope} controller profile is '{profile_id}'"
+                "ruya-{profile}'s {scope} controller profile for {slot} is '{profile_id}'"
             ));
             self.profiles_changed(profile);
         }
@@ -2938,7 +2943,15 @@ mod tests {
             r#""scope":{"type":"global"},"match":{"family":"playstation"},"#,
         );
         assert_eq!(r.save_profile("p1", &ps).0, Status::Ok);
-        r.assign_profile("p1", "global", "", "swap");
+        // The slot its match names (RUY-545; all controllers' slot refuses it).
+        assert_eq!(
+            r.assign_profile("p1", "global", "", "swap"),
+            Status::Invalid
+        );
+        assert_eq!(
+            r.assign_profile("p1", "global", "family:playstation", "swap"),
+            Status::Ok
+        );
         let (status, json, chain) = r.effective_profile("p1", "a", "");
         assert_eq!(
             (status, chain.as_slice()),
@@ -2959,5 +2972,66 @@ mod tests {
             Status::Invalid
         );
         assert_eq!(r.effective_profile("p1", "a", RACER).0, Status::Ok);
+    }
+
+    // RUY-545: a DualSense with its own profile and a Nintendo pad with its family's, both in the
+    // game; each virtual pad follows its own, and emptying one slot changes only that pad.
+    #[test]
+    fn each_pad_takes_its_own_slot_at_once() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(family_pad("b", "nintendo"), t0());
+        app(&mut r, "i1", STK, "p1");
+        let own = SWAP.replace(r#""id":"swap""#, r#""id":"own""#).replace(
+            r#""scope":{"type":"global"},"#,
+            r#""scope":{"type":"global"},"match":{"device":"a"},"#,
+        );
+        let family = r#"{"schema_version":1,"id":"fam","name":"Fam","scope":{"type":"global"},
+            "match":{"family":"nintendo"},"mappings":[{"from":"south","to":{"type":"button","code":"l1"}}]}"#;
+        assert_eq!(r.save_profile("p1", &own).0, Status::Ok);
+        assert_eq!(r.save_profile("p1", family).0, Status::Ok);
+        assert_eq!(
+            r.assign_profile("p1", "global", "device:a", "own"),
+            Status::Ok
+        );
+        assert_eq!(
+            r.assign_profile("p1", "global", "family:nintendo", "fam"),
+            Status::Ok
+        );
+        r.backend_mut().take();
+        let tap = |r: &mut Router<Fake>, key: PadKey| {
+            r.input(key, &[press(PadButton::South)]);
+            let out = writes(&r.backend_mut().take());
+            r.input(key, &[release(PadButton::South)]);
+            r.backend_mut().take();
+            assert_eq!(out.len(), 1, "{out:?}");
+            out[0].clone()
+        };
+        let (va, ea) = tap(&mut r, a);
+        let (vb, eb) = tap(&mut r, b);
+        assert_ne!(va, vb, "each pad has its own virtual pad");
+        assert_eq!(ea, vec![(code::EV_KEY, code::BTN_EAST, 1)], "A: its own");
+        assert_eq!(eb, vec![(code::EV_KEY, code::BTN_TL, 1)], "B: its family's");
+        assert_eq!(
+            r.effective_profile("p1", "a", "").2,
+            ["own".to_owned(), "default".to_owned()]
+        );
+        assert_eq!(
+            r.effective_profile("p1", "b", "").2,
+            ["fam".to_owned(), "default".to_owned()]
+        );
+        // Emptying the family's slot: B gets the default, A keeps its own.
+        assert_eq!(
+            r.assign_profile("p1", "global", "family:nintendo", ""),
+            Status::Ok
+        );
+        assert_eq!(
+            tap(&mut r, b),
+            (vb, vec![(code::EV_KEY, code::BTN_SOUTH, 1)])
+        );
+        assert_eq!(
+            tap(&mut r, a),
+            (va, vec![(code::EV_KEY, code::BTN_EAST, 1)])
+        );
     }
 }
