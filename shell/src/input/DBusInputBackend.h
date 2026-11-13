@@ -21,7 +21,7 @@ public:
                   const QString &profile) override;
     void refreshDevices() override;
     void getCapabilities(const QString &deviceId) override;
-    void startTest(const QString &deviceId) override;
+    void startTest(const QString &deviceId, bool holdLeftStick) override;
     void stopTest(const QString &deviceId) override;
     void callProfile(quint64 token, const QString &method, const QVariantMap &args) override;
     void readConfirmButton() override;

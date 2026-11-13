@@ -205,13 +205,14 @@ impl InputIface {
     async fn start_test(
         &self,
         device_id: &str,
+        hold_left_stick: bool,
         #[zbus(header)] header: Header<'_>,
         #[zbus(connection)] connection: &Connection,
     ) -> String {
         let caller = header.sender().map(|s| s.to_string()).unwrap_or_default();
         let status = self
             .shared
-            .with(|r| r.start_test(device_id, &caller, Instant::now()));
+            .with(|r| r.start_test(device_id, hold_left_stick, &caller, Instant::now()));
         if status == Status::Ok && !caller_present(connection, &caller).await {
             self.shared.with(|r| r.caller_left(&caller, Instant::now()));
         }

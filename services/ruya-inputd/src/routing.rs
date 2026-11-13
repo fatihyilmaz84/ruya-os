@@ -276,6 +276,8 @@ struct ButtonTest {
     caller: String,
     last_input: Instant,
     axes: BTreeMap<String, AxisSend>,
+    /// The caller asked for the left stick's navigation keys to be held back while it runs.
+    hold_left_stick: bool,
 }
 
 #[derive(Debug)]
@@ -285,6 +287,29 @@ struct Pad {
     mapper: Mapper,
     state: PadState,
     virt: Option<Virtual>,
+    /// Left-stick axes that do not navigate until they are back near neutral: a test that held
+    /// the stick's keys ended while it was pushed.
+    nav_masked: Vec<PadAxis>,
+}
+
+impl Pad {
+    /// Whether `input` is a left-stick value that must not reach the mapper: `hold` is a test
+    /// of this pad holding the stick, or the axis still waits for neutral after one.
+    fn stick_held_back(&mut self, input: PadInput, hold: bool) -> bool {
+        let PadInput::Axis(axis @ (PadAxis::LeftX | PadAxis::LeftY), value) = input else {
+            return false;
+        };
+        if hold {
+            return true;
+        }
+        if self.nav_masked.contains(&axis) {
+            if !axis_held(axis, value) {
+                self.nav_masked.retain(|&a| a != axis);
+            }
+            return true;
+        }
+        false
+    }
 }
 
 /// An axis this far from neutral when the route enters `app` counts as held.
@@ -486,6 +511,7 @@ impl<B: Backend> Router<B> {
             mapper: Mapper::default(),
             state: PadState::default(),
             virt: None,
+            nav_masked: Vec::new(),
         };
         self.notices.push(Notice::DeviceAdded(self.record(&pad)));
         self.pads.insert(key, pad);
@@ -527,12 +553,20 @@ impl<B: Backend> Router<B> {
             return;
         };
         let family = pad.info.family.clone();
+        let hold = self
+            .tests
+            .get(&pad.info.id)
+            .is_some_and(|t| t.hold_left_stick);
         let mut nav = Vec::new();
         let mut pressed = false;
         for &input in inputs {
             pad.state.apply(input);
             pressed |= matches!(input, PadInput::Button(_, true));
-            let events = mapper_events(&mut pad.mapper, input, &family, mode);
+            let events = if pad.stick_held_back(input, hold) {
+                Vec::new()
+            } else {
+                mapper_events(&mut pad.mapper, input, &family, mode)
+            };
             if app {
                 // Navigation stops while an app has the focus; Guide always reaches the shell.
                 nav.extend(events.into_iter().filter(|&(k, _)| k == NavKey::Guide));
@@ -1120,8 +1154,16 @@ impl<B: Backend> Router<B> {
         !self.tests.is_empty()
     }
 
-    /// `Input1.StartTest`: only while the route is `shell`, one test per device.
-    pub fn start_test(&mut self, device_id: &str, caller: &str, now: Instant) -> Status {
+    /// `Input1.StartTest`: only while the route is `shell`, one test per device. With
+    /// `hold_left_stick` the pad's left stick sends no navigation key until the test ends (its
+    /// D-pad and buttons still navigate), and a direction it holds now is released once.
+    pub fn start_test(
+        &mut self,
+        device_id: &str,
+        hold_left_stick: bool,
+        caller: &str,
+        now: Instant,
+    ) -> Status {
         if !self.pads.values().any(|p| p.info.id == device_id) {
             return Status::UnknownDevice;
         }
@@ -1137,8 +1179,16 @@ impl<B: Backend> Router<B> {
                 caller: caller.to_owned(),
                 last_input: now,
                 axes: BTreeMap::new(),
+                hold_left_stick,
             },
         );
+        if hold_left_stick {
+            if let Some(pad) = self.pads.values_mut().find(|p| p.info.id == device_id) {
+                let released = pad.mapper.release_sticks();
+                let keys = self.board.route(&released);
+                self.backend.nav_keys(&keys);
+            }
+        }
         self.journal(format!("button test started for {device_id}"));
         Status::Ok
     }
@@ -1157,8 +1207,17 @@ impl<B: Backend> Router<B> {
     }
 
     fn end_test(&mut self, device_id: &str, reason: &str) {
-        if self.tests.remove(device_id).is_none() {
+        let Some(test) = self.tests.remove(device_id) else {
             return;
+        };
+        if test.hold_left_stick {
+            // A stick still pushed does not navigate until it has been neutral.
+            if let Some(pad) = self.pads.values_mut().find(|p| p.info.id == device_id) {
+                pad.nav_masked = [PadAxis::LeftX, PadAxis::LeftY]
+                    .into_iter()
+                    .filter(|&a| axis_held(a, pad.state.axis(a)))
+                    .collect();
+            }
         }
         self.journal(format!("button test for {device_id} ended: {reason}"));
         self.notices.push(Notice::TestEnded {
@@ -2010,13 +2069,16 @@ mod tests {
         let mut r = router();
         let now = t0();
         r.add_pad(pad("a"), now);
-        assert_eq!(r.start_test("nope", SHELL, now), Status::UnknownDevice);
+        assert_eq!(
+            r.start_test("nope", false, SHELL, now),
+            Status::UnknownDevice
+        );
         app(&mut r, "i1", STK, "p1");
-        assert_eq!(r.start_test("a", SHELL, now), Status::NotAllowed);
+        assert_eq!(r.start_test("a", false, SHELL, now), Status::NotAllowed);
         assert_eq!(r.set_route("shell", "", "", "p1", SHELL, now), Status::Ok);
-        assert_eq!(r.start_test("a", SHELL, now), Status::Ok);
+        assert_eq!(r.start_test("a", false, SHELL, now), Status::Ok);
         assert!(r.testing());
-        assert_eq!(r.start_test("a", SHELL, now), Status::Busy);
+        assert_eq!(r.start_test("a", false, SHELL, now), Status::Busy);
     }
 
     #[test]
@@ -2027,7 +2089,7 @@ mod tests {
         // No test: input reaches no stream.
         r.test_input(a, &[ev(press(PadButton::South))], now);
         assert!(tested(&r.take_notices()).is_empty());
-        assert_eq!(r.start_test("a", SHELL, now), Status::Ok);
+        assert_eq!(r.start_test("a", false, SHELL, now), Status::Ok);
         r.test_input(a, &[ev(press(PadButton::South))], now);
         let notices = r.take_notices();
         assert_eq!(tested(&notices), vec![("south".to_owned(), 1)]);
@@ -2055,7 +2117,7 @@ mod tests {
         let mut r = router();
         let now = t0();
         let a = r.add_pad(pad("a"), now);
-        r.start_test("a", SHELL, now);
+        r.start_test("a", false, SHELL, now);
         r.take_notices();
         // 100 stick values within one second (every 10 ms) and a button in the middle.
         for i in 0..100u32 {
@@ -2088,7 +2150,7 @@ mod tests {
         let mut r = router();
         let now = t0();
         let a = r.add_pad(pad("a"), now);
-        r.start_test("a", SHELL, now);
+        r.start_test("a", false, SHELL, now);
         r.test_input(
             a,
             &[ev(press(PadButton::South))],
@@ -2112,8 +2174,8 @@ mod tests {
         let a = r.add_pad(pad("a"), now);
         r.add_pad(pad("b"), now);
         r.add_pad(pad("c"), now);
-        r.start_test("a", SHELL, now);
-        r.start_test("b", ":1.77", now);
+        r.start_test("a", false, SHELL, now);
+        r.start_test("b", false, ":1.77", now);
         r.take_notices();
         r.caller_left(":1.77", now);
         assert_eq!(
@@ -2125,7 +2187,7 @@ mod tests {
             ended(&r.take_notices()),
             vec![("a".to_owned(), "gone".to_owned())]
         );
-        r.start_test("c", SHELL, now);
+        r.start_test("c", false, SHELL, now);
         // A sign-in keeps the route "shell": the test goes on.
         assert_eq!(r.set_route("shell", "", "", "p1", SHELL, now), Status::Ok);
         assert!(ended(&r.take_notices()).is_empty());
@@ -2135,6 +2197,128 @@ mod tests {
             vec![("c".to_owned(), "route".to_owned())]
         );
         assert!(!r.testing());
+    }
+
+    // ---- the left stick held out of navigation (RUY-479) -------------------------------------
+
+    fn lx(v: i32) -> PadInput {
+        PadInput::Axis(PadAxis::LeftX, v)
+    }
+
+    #[test]
+    fn a_held_test_sends_no_stick_key_but_still_streams_it_and_the_dpad_navigates() {
+        let mut r = router();
+        let now = t0();
+        let a = r.add_pad(pad("a"), now);
+        assert_eq!(r.start_test("a", true, SHELL, now), Status::Ok);
+        r.take_notices();
+        r.backend_mut().take();
+        r.input(
+            a,
+            &[lx(STICK_MAX), PadInput::Axis(PadAxis::LeftY, STICK_MIN)],
+        );
+        r.test_input(a, &[ev(lx(STICK_MAX))], now);
+        assert!(
+            nav(&r.backend_mut().take()).is_empty(),
+            "no arrow from the stick"
+        );
+        assert_eq!(
+            tested(&r.take_notices()),
+            vec![("left_x".to_owned(), STICK_MAX)]
+        );
+        // The right stick and the D-pad are not held.
+        r.input(a, &[press(PadButton::DpadDown)]);
+        assert_eq!(nav(&r.backend_mut().take()), vec![(NavKey::Down, true)]);
+        r.input(a, &[release(PadButton::DpadDown), lx(0)]);
+        assert_eq!(nav(&r.backend_mut().take()), vec![(NavKey::Down, false)]);
+    }
+
+    #[test]
+    fn without_the_flag_the_stick_navigates_during_a_test() {
+        let mut r = router();
+        let now = t0();
+        let a = r.add_pad(pad("a"), now);
+        r.start_test("a", false, SHELL, now);
+        r.input(a, &[lx(STICK_MIN)]);
+        assert_eq!(nav(&r.backend_mut().take()), vec![(NavKey::Left, true)]);
+        r.input(a, &[lx(0)]);
+        assert_eq!(nav(&r.backend_mut().take()), vec![(NavKey::Left, false)]);
+    }
+
+    #[test]
+    fn a_stick_held_when_the_hold_starts_is_released_once() {
+        let mut r = router();
+        let now = t0();
+        let a = r.add_pad(pad("a"), now);
+        r.input(a, &[lx(STICK_MIN)]);
+        assert_eq!(nav(&r.backend_mut().take()), vec![(NavKey::Left, true)]);
+        r.start_test("a", true, SHELL, now);
+        assert_eq!(nav(&r.backend_mut().take()), vec![(NavKey::Left, false)]);
+        // Letting go afterwards sends no second release.
+        r.input(a, &[lx(0)]);
+        assert!(nav(&r.backend_mut().take()).is_empty());
+    }
+
+    #[test]
+    fn after_the_test_a_pushed_stick_waits_for_neutral_and_a_resting_one_navigates() {
+        // Every way a test ends: the stick is pushed (no key, no stray key at its next value),
+        // then neutral, then it navigates again.
+        for how in ["stopped", "idle", "route", "gone", "caller"] {
+            let mut r = router();
+            let now = t0();
+            let a = r.add_pad(pad("a"), now);
+            r.start_test("a", true, SHELL, now);
+            r.input(a, &[lx(STICK_MAX)]);
+            match how {
+                "stopped" => {
+                    r.stop_test("a");
+                }
+                "idle" => r.tick(now + Duration::from_secs(121)),
+                "route" => {
+                    r.set_route("overlay", "i1", STK, "p1", SHELL, now);
+                    r.set_route("shell", "", "", "p1", SHELL, now);
+                }
+                "gone" => {
+                    r.remove_pad(a);
+                }
+                _ => r.caller_left(SHELL, now),
+            }
+            assert!(!r.testing(), "{how}");
+            if how == "gone" {
+                continue;
+            }
+            r.backend_mut().take();
+            r.input(a, &[lx(STICK_MAX - 100)]);
+            r.input(a, &[lx(STICK_MAX)]);
+            assert!(
+                nav(&r.backend_mut().take()).is_empty(),
+                "{how}: no stray key"
+            );
+            r.input(a, &[lx(0)]);
+            assert!(
+                nav(&r.backend_mut().take()).is_empty(),
+                "{how}: neutral sends nothing"
+            );
+            r.input(a, &[lx(STICK_MAX)]);
+            assert_eq!(
+                nav(&r.backend_mut().take()),
+                vec![(NavKey::Right, true)],
+                "{how}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_stick_at_rest_navigates_at_once_after_the_test() {
+        let mut r = router();
+        let now = t0();
+        let a = r.add_pad(pad("a"), now);
+        r.start_test("a", true, SHELL, now);
+        r.input(a, &[lx(STICK_MAX), lx(0)]);
+        r.stop_test("a");
+        r.backend_mut().take();
+        r.input(a, &[lx(STICK_MIN)]);
+        assert_eq!(nav(&r.backend_mut().take()), vec![(NavKey::Left, true)]);
     }
 
     // ---- records ---------------------------------------------------------------------------

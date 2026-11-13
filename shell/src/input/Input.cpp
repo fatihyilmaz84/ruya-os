@@ -440,9 +440,9 @@ void Input::requestCapabilities(const QString &deviceId)
     m_backend->getCapabilities(deviceId);
 }
 
-void Input::startTest(const QString &deviceId)
+void Input::startTest(const QString &deviceId, bool holdLeftStick)
 {
-    m_backend->startTest(deviceId);
+    m_backend->startTest(deviceId, holdLeftStick);
 }
 
 void Input::stopTest(const QString &deviceId)
@@ -496,6 +496,18 @@ bool Input::mockTestRunning(const QString &id) const
 {
     auto *mock = qobject_cast<MockInputBackend *>(m_backend.get());
     return mock ? mock->testRunning(id) : false;
+}
+
+bool Input::mockTestHoldsLeftStick(const QString &id) const
+{
+    auto *mock = qobject_cast<MockInputBackend *>(m_backend.get());
+    return mock ? mock->testHoldsLeftStick(id) : false;
+}
+
+void Input::mockStickNavigates(bool on)
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        mock->setStickNavigates(on);
 }
 
 void Input::mockResetDevices()

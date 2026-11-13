@@ -282,6 +282,16 @@ impl Mapper {
         count_transitions(&mut self.held, &events)
     }
 
+    /// The left stick is taken out of navigation (`Input1.StartTest` with `hold_left_stick`): a
+    /// release for the stick's direction keys, and the stick holds nothing.
+    pub fn release_sticks(&mut self) -> Vec<KeyEvent> {
+        let mut out = Vec::new();
+        for slot in self.stick.iter_mut() {
+            out.extend(transition(slot, None));
+        }
+        self.settle(out)
+    }
+
     /// The keys this pad holds now, in release order.
     pub fn held_keys(&self) -> Vec<NavKey> {
         ALL_KEYS

@@ -180,10 +180,10 @@ void DBusInputBackend::getCapabilities(const QString &deviceId)
     });
 }
 
-void DBusInputBackend::startTest(const QString &deviceId)
+void DBusInputBackend::startTest(const QString &deviceId, bool holdLeftStick)
 {
     auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("StartTest"));
-    msg << deviceId;
+    msg << deviceId << holdLeftStick;
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, deviceId](QDBusPendingCallWatcher *w) {
         w->deleteLater();

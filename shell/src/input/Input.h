@@ -94,8 +94,9 @@ public:
     // GetCapabilities(device_id): the answer arrives as capabilitiesFinished.
     Q_INVOKABLE void requestCapabilities(const QString &deviceId);
     // The live button test: StartTest's answer arrives as testStartFinished, the inputs as
-    // testInput, its end (StopTest included) as testEnded.
-    Q_INVOKABLE void startTest(const QString &deviceId);
+    // testInput, its end (StopTest included) as testEnded. holdLeftStick: the pad's left stick sends
+    // no arrow keys while this test runs (only the Left stick page sets it).
+    Q_INVOKABLE void startTest(const QString &deviceId, bool holdLeftStick);
     Q_INVOKABLE void stopTest(const QString &deviceId);
 
     // Controller profiles (RUY-42, api/dbus/org.ruyaos.Input1.xml): one call each, the answer as the
@@ -156,6 +157,10 @@ public:
     Q_INVOKABLE void mockTestInput(const QString &id, const QString &input, int value, const QString &source);
     Q_INVOKABLE void mockEndTest(const QString &id, const QString &reason);
     Q_INVOKABLE bool mockTestRunning(const QString &id) const;
+    // Whether the running test of the pad holds the left stick's navigation (RUY-479), and whether the
+    // mock plays the service's stick-to-arrow-keys path (default off).
+    Q_INVOKABLE bool mockTestHoldsLeftStick(const QString &id) const;
+    Q_INVOKABLE void mockStickNavigates(bool on);
     // The mock's three pads again, no test running, ListDevices working.
     Q_INVOKABLE void mockResetDevices();
     // Controller profiles (RUY-42): every call that reached the mock as { method, args } (args by

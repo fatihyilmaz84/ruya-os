@@ -13,6 +13,11 @@
   python3 vm-input-probe.py confirm --profile p1
       (root; RUY-40) a uinput pad with Nintendo's vendor id: the Confirm button swaps Enter and Esc
       for BTN_EAST and BTN_SOUTH by mode (vm-input-check.sh confirm stops the compositor first)
+  python3 vm-input-probe.py hold --profile p1
+      (root; RUY-479) StartTest(device_id, hold_left_stick): with the flag a pushed left stick sends
+      no arrow key (the D-pad still does), a stick held when the test starts is released once, and
+      after StopTest a stick still pushed stays quiet until it was neutral (vm-input-check.sh hold
+      stops the compositor first)
   python3 vm-input-probe.py navpad [--settle S] [--lefts N] [--rights M]
       (root; RUY-410) a uinput pad that, S seconds after it is ready, taps the D-pad left N times and
       right M times, then A (the emergency reader's keys: Left, Right, Return); prints "pad ready <node>"
@@ -122,7 +127,7 @@ class Bus:
         b += struct.pack("<I", 0)  # header fields length, patched below
         self._pad(b, 8)
         fields_start = len(b)
-        sig = "s" * len(args)
+        sig = "".join("b" if isinstance(a, bool) else "s" for a in args)
         fields = [(1, "o", path), (2, "s", iface), (3, "s", member), (6, "s", dest)]
         if sig:
             fields.append((8, "g", sig))
@@ -138,7 +143,11 @@ class Bus:
         self._pad(b, 8)
         body_start = len(b)
         for a in args:
-            self._str(b, a)
+            if isinstance(a, bool):
+                self._pad(b, 4)
+                b += struct.pack("<I", 1 if a else 0)
+            else:
+                self._str(b, a)
         struct.pack_into("<I", b, 4, len(b) - body_start)
         self.sock.sendall(bytes(b))
         while True:
@@ -530,6 +539,71 @@ def cmd_confirm(args):
     return fails
 
 
+def cmd_hold(args):
+    """RUY-479: Input1.StartTest(device_id, hold_left_stick). The probe holds the route `shell` and the
+    test on its own bus connection (a leaving caller ends a test) and reads RuyaOS Navigation;
+    prints PASS:/FAIL: lines."""
+    fails = 0
+    KEY_LEFT, KEY_RIGHT = 105, 106
+
+    def ok(msg):
+        print(f"PASS: {msg}", flush=True)
+
+    def bad(msg):
+        nonlocal fails
+        fails += 1
+        print(f"FAIL: {msg}", flush=True)
+
+    def expect(got, want, label):
+        ok(label) if got == want else bad(f"{label}: got {got}, wanted {want}")
+
+    pad = FakePad()
+    bus = None
+    try:
+        row = wait_for(lambda: next((d for d in (devices() or []) if d.get("name") == NAME), None), 5)
+        if not row:
+            bad("ListDevices does not list the pad")
+            return fails
+        did = row["id"]
+        bus = Bus()
+        status = bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+        expect(status, "ok", "route shell for the profile")
+        nav = Nav()
+        nav.keys(0.3)
+
+        def stick(value):
+            pad.emit(EV_ABS, ABS_X, value)
+            return nav.keys(0.4)
+
+        def dpad_right():
+            pad.emit(EV_ABS, ABS_HAT0X, 1)
+            time.sleep(0.1)
+            pad.emit(EV_ABS, ABS_HAT0X, 0)
+            return nav.keys(0.4)
+
+        expect(bus.call(SVC, PATH, IFC, "StartTest", [did, False]), "ok", "StartTest without the flag: ok")
+        expect(stick(32767), [(KEY_RIGHT, 1)], "without the flag the left stick sends Right")
+        expect(stick(0), [(KEY_RIGHT, 0)], "and lets go")
+        expect(stick(32767), [(KEY_RIGHT, 1)], "pushed again, Right is down")
+        expect(bus.call(SVC, PATH, IFC, "StopTest", [did]), "ok", "StopTest: ok")
+        expect(bus.call(SVC, PATH, IFC, "StartTest", [did, True]), "ok", "StartTest with the flag: ok")
+        expect(nav.keys(0.4), [(KEY_RIGHT, 0)], "the stick held when the hold starts is released once")
+        expect(stick(0), [], "letting go sends nothing more")
+        expect(stick(-32768), [], "with the flag the left stick sends no Left")
+        expect(dpad_right(), [(KEY_RIGHT, 1), (KEY_RIGHT, 0)], "with the flag the D-pad still sends Right")
+        expect(bus.call(SVC, PATH, IFC, "StopTest", [did]), "ok", "StopTest: ok")
+        expect(nav.keys(0.4), [], "ending the test with the stick pushed sends no stray key")
+        expect(stick(-30000), [], "the pushed stick stays quiet after the test")
+        expect(stick(0), [], "back at neutral, still nothing")
+        expect(stick(-32768), [(KEY_LEFT, 1)], "then it navigates again")
+        expect(stick(0), [(KEY_LEFT, 0)], "and lets go")
+    finally:
+        pad.close()
+        if bus:
+            bus.close()
+    return fails
+
+
 def cmd_restart(args):
     """kill -9 the service; prints the ms until a new RuyaOS Navigation device exists."""
     _, before = node_by("name", NAV)
@@ -748,6 +822,8 @@ def main():
     p.add_argument("seconds", type=float)
     cf = sub.add_parser("confirm")
     cf.add_argument("--profile", required=True)
+    hd = sub.add_parser("hold")
+    hd.add_argument("--profile", required=True)
     n = sub.add_parser("navpad")
     n.add_argument("--settle", type=float, default=2.5)
     n.add_argument("--lefts", type=int, default=0)
@@ -757,6 +833,8 @@ def main():
         sys.exit(1 if cmd_check(args) else 0)
     if args.cmd == "confirm":
         sys.exit(1 if cmd_confirm(args) else 0)
+    if args.cmd == "hold":
+        sys.exit(1 if cmd_hold(args) else 0)
     {"game": cmd_game, "open": cmd_open, "restart": cmd_restart, "pad": cmd_pad, "navpad": cmd_navpad}[args.cmd](args)
 
 
