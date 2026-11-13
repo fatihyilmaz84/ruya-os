@@ -85,24 +85,25 @@ Item {
     Component {
         id: sheetComponent
         Rectangle {
+            id: sheetRoot
             width: 1280
             height: 800
             color: Theme.background
             property real u: 720 / 1080
-            SettingsPane {
-                anchors { fill: parent; margins: 48 * parent.u }
-                u: parent.u
-                GroupLabel { u: parent.u; text: qsTr("Sound") }
-                SettingRow { u: parent.u; label: qsTr("Model"); value: "RuyaOS box"; kind: "info" }
-                SettingRow { u: parent.u; label: qsTr("Version"); value: "0.1"; kind: "info" }
-                SettingRow { u: parent.u; label: qsTr("Analog output"); value: qsTr("Current"); current: true }
-                SettingRow { u: parent.u; label: qsTr("Wallpaper"); value: qsTr("Default"); kind: "page" }
-                SettingRow { u: parent.u; label: qsTr("Scan for networks"); value: qsTr("Scanning…"); kind: "action" }
-                SettingRow { u: parent.u; label: qsTr("Create profile"); kind: "action"; emphasis: "primary" }
-                ToggleRow { u: parent.u; label: qsTr("Reduce motion"); checked: true }
-                ChoiceRow { u: parent.u; label: qsTr("Quality"); options: [{ value: "a", label: qsTr("Default") }, { value: "b", label: qsTr("Balanced") }]; value: "a" }
-                SliderRow { u: parent.u; label: qsTr("Brightness"); from: 0; to: 100; value: 50; unit: "%" }
-                SettingRow { u: parent.u; label: qsTr("Sleep is not available"); enabled: false }
+            Column {
+                anchors { fill: parent; margins: 48 * sheetRoot.u }
+                spacing: Theme.spaceS * sheetRoot.u
+                GroupLabel { u: sheetRoot.u; text: qsTr("Sound") }
+                SettingRow { u: sheetRoot.u; label: qsTr("Model"); value: "RuyaOS box"; kind: "info"; ruleBelow: true }
+                SettingRow { u: sheetRoot.u; label: qsTr("Version"); value: "0.1"; kind: "info" }
+                SettingRow { u: sheetRoot.u; label: qsTr("Analog output"); value: qsTr("Current"); current: true }
+                SettingRow { u: sheetRoot.u; label: qsTr("Wallpaper"); value: qsTr("Default"); kind: "page" }
+                SettingRow { u: sheetRoot.u; label: qsTr("Scan for networks"); value: qsTr("Scanning…"); kind: "action" }
+                SettingRow { u: sheetRoot.u; label: qsTr("Create profile"); kind: "action"; emphasis: "primary" }
+                ToggleRow { u: sheetRoot.u; label: qsTr("Reduce motion"); checked: true }
+                ChoiceRow { u: sheetRoot.u; label: qsTr("Quality"); options: [{ value: "a", label: qsTr("Default") }, { value: "b", label: qsTr("Balanced") }]; value: "a" }
+                SliderRow { u: sheetRoot.u; label: qsTr("Brightness"); from: 0; to: 100; value: 50; unit: "%" }
+                SettingRow { u: sheetRoot.u; label: qsTr("Sleep is not available"); enabled: false }
             }
         }
     }
@@ -1300,12 +1301,15 @@ Item {
                 DeviceSettings.theme = theme
                 DeviceSettings.language = lang
                 if (lang === "en") {                     // the sheet's strings are English
+                    host.height = 800                    // the sheet is 800 high, the grab is the window
                     const sheet = createTemporaryObject(sheetComponent, host)
                     waitForRendering(sheet)
                     wait(400)
                     grabImage(sheet).save(shotsDir + "/512-row-kinds-" + theme + ".png")
                     sheet.destroy()
+                    host.height = 720
                 }
+                wait(1200)                               // the theme has blended
                 openSettings()
                 selectCategory(tc.displayIndex)
                 keyClick(Qt.Key_Right)
