@@ -22,6 +22,7 @@ Status: **Draft v1** · Parent: [00-overview](00-overview.md)
 | Network/BT | `NetworkManager`, `NetworkManager-wifi`, `bluez` (`bluetooth.service` enabled, with a drop-in that lets it run without an adapter, T-173), `upower`, `iwlwifi-*` firmware |
 | Storage | `udisks2`, `exfatprogs`, `ntfs-3g` (or kernel `ntfs3`) |
 | Apps | `flatpak`, `xdg-desktop-portal` (+ a portal backend, see 03 §4.4) |
+| X11-only apps | `xorg-x11-server-Xwayland`, `xcb-util-cursor`, `open-sans-fonts`, and `/usr/bin/xwayland-satellite` built in the image from Fedora's source RPM with two patches for Qt's `xdg_wm_base` v1 and `wl_output` v2 (ADR-034, RUY-434; [`image-packages.md`](../image-packages.md)). Nothing starts them at boot. |
 | Health | `greenboot`, `greenboot-default-health-checks` |
 | Input | `inputplumber` (per ADR-003; may need a COPR or our own build) |
 | Gaming | `gamescope` (Phase 5) |
