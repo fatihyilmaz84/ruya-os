@@ -203,9 +203,9 @@ class Bus:
 class FakePad:
     """A uinput gamepad that ruya-inputd takes as physical; it answers rumble uploads."""
 
-    def __init__(self, vendor=0x1234, product=0x5678):
+    def __init__(self, vendor=0x1234, product=0x5678, phys=PHYS, name=NAME):
         self.fd = os.open("/dev/uinput", os.O_RDWR | os.O_NONBLOCK)
-        fcntl.ioctl(self.fd, UI_SET_PHYS, PHYS.encode() + b"\0")
+        fcntl.ioctl(self.fd, UI_SET_PHYS, phys.encode() + b"\0")
         for ev in (EV_KEY, EV_ABS, EV_FF):
             fcntl.ioctl(self.fd, UI_SET_EVBIT, ev)
         for code in KEYS:
@@ -216,7 +216,7 @@ class FakePad:
             fcntl.ioctl(self.fd, UI_SET_ABSBIT, code)
             fcntl.ioctl(self.fd, UI_ABS_SETUP, struct.pack("HxxiiiiiI", code, 0, lo, hi, 0, 0, 0))
         fcntl.ioctl(self.fd, UI_SET_FFBIT, FF_RUMBLE)
-        fcntl.ioctl(self.fd, UI_DEV_SETUP, struct.pack("HHHH80sI", 0x03, vendor, product, 1, NAME.encode(), 8))
+        fcntl.ioctl(self.fd, UI_DEV_SETUP, struct.pack("HHHH80sI", 0x03, vendor, product, 1, name.encode(), 8))
         fcntl.ioctl(self.fd, UI_DEV_CREATE)
         self.rumble = []  # (strong, weak) uploads
         self.played = []  # (effect id, value)
@@ -604,6 +604,83 @@ def cmd_hold(args):
     return fails
 
 
+def cmd_twopads(args):
+    """RUY-540: two pads, one of them signs the profile in; on entry to `app` that pad is ruya-input/pad1 (SDL
+    index 0). Run twice, once with each pad the active one, so the key order cannot decide it."""
+    fails = 0
+
+    def ok(msg):
+        print(f"PASS: {msg}", flush=True)
+
+    def bad(msg):
+        nonlocal fails
+        fails += 1
+        print(f"FAIL: {msg}", flush=True)
+
+    pads = [FakePad(phys="vm-check/pad0", name=NAME), FakePad(0x1234, 0x5679, "vm-check/pad1", NAME + " 2")]
+    bus = None
+    game = None
+    try:
+        if not wait_for(lambda: len([d for d in (devices() or []) if d.get("name") in (NAME, NAME + " 2")]) == 2, 5):
+            bad("ListDevices does not list both pads")
+            return fails
+        bus = Bus()
+        for active in (1, 0, 1):
+            expect_pad, other_pad = pads[active], pads[1 - active]
+            # Locked (nobody signed in), the chosen pad gives the sign-in input, then the profile is signed in.
+            status = bus.call(SVC, PATH, IFC, "SetRoute", ["locked", "", "", ""])
+            if status != "ok":
+                bad(f"SetRoute locked: {status}")
+                return fails
+            expect_pad.emit(EV_KEY, BTN_SOUTH, 1)
+            expect_pad.emit(EV_KEY, BTN_SOUTH, 0)
+            time.sleep(0.3)
+            status = bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+            if status != "ok":
+                bad(f"SetRoute shell: {status}")
+                return fails
+            # A later press on the other pad does not move the profile's active controller.
+            other_pad.emit(EV_KEY, BTN_SOUTH, 1)
+            other_pad.emit(EV_KEY, BTN_SOUTH, 0)
+            time.sleep(0.3)
+            status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-2", "org.ruyaos.VmCheck", args.profile])
+            if status != "ok":
+                bad(f"SetRoute app: {status}")
+                return fails
+            v1 = wait_for(lambda: node_by("phys", "ruya-input/pad1")[0], 3)
+            v2 = wait_for(lambda: node_by("phys", "ruya-input/pad2")[0], 3)
+            if not v1 or not v2:
+                bad(f"both virtual pads should exist (pad1 {v1}, pad2 {v2})")
+                return fails
+            n1 = int(os.path.basename(v1).replace("event", ""))
+            n2 = int(os.path.basename(v2).replace("event", ""))
+            ok(f"pad{active + 1} signed in: pad1 is {v1}, pad2 is {v2}") if n1 < n2 else bad(f"pad1 ({v1}) was created after pad2 ({v2})")
+            wait_for(lambda: all(d.get("routed") for d in (devices() or []) if d.get("name") in (NAME, NAME + " 2")), 3)
+            game = Game(args.user, v1)
+            if not game.hello.startswith("OPEN ok"):
+                bad(f"{args.user} cannot open pad1: {game.hello}")
+                return fails
+            expect_pad.emit(EV_KEY, BTN_EAST, 1)
+            expect_pad.emit(EV_KEY, BTN_EAST, 0)
+            got = game.events_until(lambda ev: len(ev) >= 2)
+            ok("the pad the player used drives pad1 (SDL index 0)") if isinstance(got, list) and (EV_KEY, BTN_EAST, 1) in got else bad(f"pad1 did not get the used pad's button: {got}")
+            other_pad.emit(EV_KEY, BTN_SOUTH, 1)
+            other_pad.emit(EV_KEY, BTN_SOUTH, 0)
+            got = game.events(300)
+            ok("the idle pad does not reach pad1") if got == [] else bad(f"pad1 heard the idle pad: {got}")
+            game.close()
+            game = None
+    finally:
+        if game:
+            game.close()
+        if bus:
+            bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+            bus.close()
+        for p in pads:
+            p.close()
+    return fails
+
+
 def cmd_restart(args):
     """kill -9 the service; prints the ms until a new RuyaOS Navigation device exists."""
     _, before = node_by("name", NAV)
@@ -824,6 +901,9 @@ def main():
     cf.add_argument("--profile", required=True)
     hd = sub.add_parser("hold")
     hd.add_argument("--profile", required=True)
+    tp = sub.add_parser("twopads")
+    tp.add_argument("--user", required=True)
+    tp.add_argument("--profile", required=True)
     n = sub.add_parser("navpad")
     n.add_argument("--settle", type=float, default=2.5)
     n.add_argument("--lefts", type=int, default=0)
@@ -833,6 +913,8 @@ def main():
         sys.exit(1 if cmd_check(args) else 0)
     if args.cmd == "confirm":
         sys.exit(1 if cmd_confirm(args) else 0)
+    if args.cmd == "twopads":
+        sys.exit(1 if cmd_twopads(args) else 0)
     if args.cmd == "hold":
         sys.exit(1 if cmd_hold(args) else 0)
     {"game": cmd_game, "open": cmd_open, "restart": cmd_restart, "pad": cmd_pad, "navpad": cmd_navpad}[args.cmd](args)

@@ -416,6 +416,9 @@ pub struct Router<B: Backend> {
     book: Book,
     /// The stable id of the pad whose press was announced last (`ActiveInputChanged`).
     active_input: Option<String>,
+    /// The stable id of the signed-in profile's active controller: the pad that gave the last input
+    /// when the route first went to the profile (the sign-in). Kept until the profile changes (06 5.1).
+    profile_pad: Option<String>,
 }
 
 impl<B: Backend> Router<B> {
@@ -438,6 +441,7 @@ impl<B: Backend> Router<B> {
             tests: BTreeMap::new(),
             book: Book::default(),
             active_input: None,
+            profile_pad: None,
         }
     }
 
@@ -872,6 +876,14 @@ impl<B: Backend> Router<B> {
         let same_owner = self.owner.as_ref().is_some_and(|o| {
             !instance.is_empty() && o.instance == instance && o.profile == profile
         });
+        if self.profile != profile {
+            // A sign-in or switch: the pad that gave the last input is this profile's controller.
+            self.profile_pad = if profile.is_empty() {
+                None
+            } else {
+                self.active_input.clone()
+            };
+        }
         match r {
             Route::App if same_owner => {
                 if old != Route::App {
@@ -891,7 +903,15 @@ impl<B: Backend> Router<B> {
                     profile: profile.to_owned(),
                     uid,
                 });
-                let keys: Vec<PadKey> = self.pads.keys().copied().collect();
+                // The profile's active controller (the pad that signed it in) is created first, so
+                // it is `pad1` and SDL index 0; the others follow in key order (RUY-540).
+                let mut keys: Vec<PadKey> = self.pads.keys().copied().collect();
+                if let Some(active) = self.profile_pad.as_deref() {
+                    if let Some(i) = keys.iter().position(|k| self.pads[k].info.id == active) {
+                        let k = keys.remove(i);
+                        keys.insert(0, k);
+                    }
+                }
                 for key in keys {
                     self.create_virtual(key, now);
                 }
@@ -1681,6 +1701,83 @@ mod tests {
     }
 
     // ---- virtual pads ----------------------------------------------------------------------
+
+    #[test]
+    fn the_active_pad_becomes_pad1_and_is_created_first() {
+        let creations = |calls: &[Call]| -> Vec<(PadKey, String)> {
+            calls
+                .iter()
+                .filter_map(|c| match c {
+                    Call::Create(k, s) => Some((*k, s.phys.clone())),
+                    _ => None,
+                })
+                .collect()
+        };
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        let c = r.add_pad(pad("c"), t0());
+        // The second pad in key order signs the profile in.
+        r.input(b, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        // A later press on another pad does not move the profile's active controller.
+        r.input(c, &[press(PadButton::South)]);
+        r.backend_mut().take();
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(
+            creations(&r.backend_mut().take()),
+            vec![
+                (b, "ruya-input/pad1".to_owned()),
+                (a, "ruya-input/pad2".to_owned()),
+                (c, "ruya-input/pad3".to_owned()),
+            ]
+        );
+        // A pad plugged in during the app takes the next free number.
+        let d = r.add_pad(pad("d"), t0());
+        assert_eq!(
+            creations(&r.backend_mut().take()),
+            vec![(d, "ruya-input/pad4".to_owned())]
+        );
+        // No pad known at sign-in: key order, as before.
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        r.backend_mut().take();
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(
+            creations(&r.backend_mut().take()),
+            vec![
+                (a, "ruya-input/pad1".to_owned()),
+                (b, "ruya-input/pad2".to_owned())
+            ]
+        );
+    }
+
+    #[test]
+    fn a_profile_switch_captures_the_pad_that_signed_the_new_profile_in() {
+        let pad_of = |calls: &[Call], phys: &str| -> Option<PadKey> {
+            calls.iter().find_map(|c| match c {
+                Call::Create(k, s) if s.phys == phys => Some(*k),
+                _ => None,
+            })
+        };
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        r.input(a, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        r.backend_mut().take();
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(pad_of(&r.backend_mut().take(), "ruya-input/pad1"), Some(a));
+        // Switch: lock, then b signs p2 in.
+        r.set_route("locked", "", "", "", SHELL, t0());
+        r.input(b, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p2", SHELL, t0());
+        r.input(a, &[press(PadButton::South)]);
+        r.backend_mut().take();
+        app(&mut r, "i2", STK, "p2");
+        assert_eq!(pad_of(&r.backend_mut().take(), "ruya-input/pad1"), Some(b));
+    }
 
     #[test]
     fn a_virtual_pad_per_pad_exists_only_in_app() {
