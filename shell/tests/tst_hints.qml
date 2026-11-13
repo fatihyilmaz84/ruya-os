@@ -78,7 +78,7 @@ Item {
 
         function test_home_and_page() {
             signInAsAda()
-            compare(tc.shown(), "A Select|LBRB Sections")
+            compare(tc.shown(), "A Select|LBRB Sections|Start Options")
             verify(find("homePlay").activeFocus)
 
             tc.shell.openPage("settings")
@@ -92,7 +92,7 @@ Item {
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "")
             tryVerify(() => find("homePlay").activeFocus, 2000, "Back returns focus to Play")
-            compare(tc.shown(), "A Select|LBRB Sections")
+            compare(tc.shown(), "A Select|LBRB Sections|Start Options")
         }
 
         function test_sections_is_one_hint_with_two_glyphs() {
@@ -201,7 +201,7 @@ Item {
             keyClick(Qt.Key_Escape)
             tryCompare(find("systemPanel"), "open", false)
             tryVerify(() => find("homePlay").activeFocus, 2000)
-            compare(tc.shown(), "A Select|LBRB Sections")
+            compare(tc.shown(), "A Select|LBRB Sections|Start Options")
         }
 
         function test_pin_pad_modal() {

@@ -40,6 +40,21 @@ Page {
             Library.launch(id)
     }
 
+    // The game under the cursor has an Options menu with at least one row: the hint bar offers Options
+    // (02 §1.7). An item with an empty menu gets no hint; its Menu key still opens the empty menu.
+    readonly property bool optionsOffered: grid.activeFocus && grid.currentIndex >= 0 && page.optionRows !== null
+        && page.optionRows("games", page.shownIds[grid.currentIndex] ?? "").length > 0
+    hints: optionsOffered ? [{ button: "A", text: qsTr("Select") },
+                             { button: "Start", text: qsTr("Options") },
+                             { button: "B", text: qsTr("Back") },
+                             { buttons: ["LB", "RB"], text: qsTr("Sections") }]
+                          : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+
+    function openOptions() {
+        if (grid.currentIndex >= 0 && grid.currentItem)
+            page.optionsRequested("games", page.shownIds[grid.currentIndex], grid.currentItem, "card")
+    }
+
     function acceptCurrent() {
         if (grid.currentIndex < 0)
             return
@@ -111,7 +126,11 @@ Page {
             keyNavigationEnabled: true
             highlightMoveDuration: 0
             model: page.shownIds
-            onCurrentIndexChanged: if (activeFocus) Sfx.navigate()
+            onCurrentIndexChanged: {
+                hold.cancel()
+                if (activeFocus)
+                    Sfx.navigate()
+            }
 
             delegate: ArtCard {
                 id: gameCard
@@ -127,10 +146,26 @@ Page {
                 title: game.title ?? ""
                 picture: game.art ? (game.art.tile ?? "") : ""
                 focused: GridView.isCurrentItem && GridView.view.activeFocus
+                anchored: GridView.isCurrentItem && page.optionsOpenFor === modelData
+                holdShown: GridView.isCurrentItem && hold.ringShown
+                holdProgress: hold.ringProgress
             }
 
-            Keys.onReturnPressed: page.acceptCurrent()
-            Keys.onEnterPressed: page.acceptCurrent()
+            onActiveFocusChanged: if (!activeFocus) hold.cancel()
+            // Accept acts on release and a long press opens the Options menu (02 §1.7); Menu opens it at once.
+            Keys.onPressed: event => {
+                if (hold.press(event)) {
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Menu) {
+                    if (!event.isAutoRepeat)
+                        page.openOptions()
+                    event.accepted = true
+                }
+            }
+            Keys.onReleased: event => {
+                if (hold.release(event))
+                    event.accepted = true
+            }
             Keys.onUpPressed: {
                 if (currentIndex < page.columns) {
                     Sfx.navigate()
@@ -139,6 +174,13 @@ Page {
                     moveCurrentIndexUp()
                 }
             }
+        }
+
+        AcceptHold {
+            id: hold
+            objectName: "gamesHold"
+            onTapped: page.acceptCurrent()
+            onLongPressed: page.openOptions()
         }
 
         Column {

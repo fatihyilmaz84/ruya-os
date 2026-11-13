@@ -67,6 +67,9 @@ FocusScope {
         page.anchors.fill = slot
         page.backRequested.connect(root.closePage)
         page.openRequested.connect(root.openPage)
+        page.optionRows = root.optionRows
+        page.optionsOpenFor = Qt.binding(() => root.optionsOn && root.optionsPage === page ? root.optionsItemId : "")
+        page.optionsRequested.connect((surface, itemId, anchor, kind) => root.openOptions(surface, itemId, anchor, kind, page))
         page.upFromTop.connect(root.focusNav)
         page.stepRequested.connect(root.stepSection)
         slot.page = page
@@ -374,6 +377,7 @@ FocusScope {
     }
     onSignedInChanged: {
         if (!signedIn) {
+            optionsMenu.dismiss()
             endLaunch(false)     // nobody to start it for; the app, if it starts, waits hidden (T-164)
             dropCloseScreen()
             dropAllPages()       // the next sign-in starts at home
@@ -935,12 +939,33 @@ FocusScope {
         }
         const run = Session.running.find(r => r.instance === instance)
         const app = quickMenuApp
-        closeState = { instance: instance, appId: run ? run.appId : (app ? app.appId : ""), title: app ? app.title : "",
-                       picture: app ? app.picture : "" }
+        startClose(instance, run ? run.appId : (app ? app.appId : ""), app ? app.title : "", app ? app.picture : "")
+        sendAppsHome()                  // Home behind the closing screen, the focus held by the screen
+    }
+
+    // The part of Close game both ways in share (the Hub's, and the Options menu's on a card): the closing
+    // screen's state, the instance marked as closing and the stop asked of the service.
+    function startClose(instance, appId, title, picture) {
+        closeState = { instance: instance, appId: appId, title: title, picture: picture }
         closingInstances = closingInstances.includes(instance) ? closingInstances : closingInstances.concat([instance])
         closeSplashTimer.restart()
         Session.stop(instance)          // a frozen game: the service thaws it first, so it can quit (T-457)
-        sendAppsHome()                  // Home behind the closing screen, the focus held by the screen
+    }
+
+    // Close game / Close app from a card's Options menu (02 §1.7): the same flow as the Hub's, over the
+    // screen the card is on (Home or a page), which keeps the focus on the card. A card whose app has no
+    // instance of the signed-in profile (it ended meanwhile) stops nothing and says so.
+    function closeCardApp(appId, title, picture) {
+        const mine = Session.running.filter(r => r.profile === Profiles.activeProfile && r.appId === appId)
+        const run = mine.find(r => r.state !== "stopping") ?? mine[0]
+        if (!run) {
+            Notifications.show(qsTr("Could not close %1.").arg(Notifications.named(title)), "warning")
+            return
+        }
+        if (home.shown)
+            homeSavedFocus = Window.activeFocusItem         // the card, back from the closing screen
+        startClose(run.instance, appId, title, picture)
+        focusCurrent()                  // the closing screen takes the focus
     }
 
     // ---- The closing screen (T-458, 02 §1.5) ----
@@ -1542,7 +1567,12 @@ FocusScope {
             primaryShown: root.libraryEmpty || Library.sessionAppId(root.heroItem.id ?? "") !== ""
             primaryDimmed: root.heroClosing
             secondaryText: root.libraryEmpty ? "" : qsTr("Details")
+            holdEnabled: !root.libraryEmpty
 
+            onOptionsRequested: anchor => {
+                if (!root.openOptions("hero", root.heroItem.id, anchor, "pill", null))
+                    heroBlock.anchoredItem = null
+            }
             onPrimaryAccepted: root.playHero()
             onSecondaryAccepted: root.openDetails()
             onUpRequested: { Sfx.navigate(); sectionNav.forceActiveFocus() }
@@ -1589,15 +1619,43 @@ FocusScope {
                 title: entry.title ?? ""
                 picture: entry.art ? (entry.art.tile ?? "") : ""
                 focused: ListView.isCurrentItem && ListView.view.activeFocus
+                anchored: ListView.isCurrentItem && root.optionsOn && root.optionsSurface === "recent"
+                holdShown: ListView.isCurrentItem && recentHold.ringShown
+                holdProgress: recentHold.ringProgress
                 running: root.runningAppIds.includes(Library.sessionAppId(modelData))
                          && !root.closingAppIds.includes(Library.sessionAppId(modelData))
                 closing: root.closingAppIds.includes(Library.sessionAppId(modelData))
             }
 
-            onCurrentIndexChanged: if (activeFocus) Sfx.navigate()
-            Keys.onReturnPressed: root.playRecent()
-            Keys.onEnterPressed: root.playRecent()
+            onCurrentIndexChanged: {
+                recentHold.cancel()
+                if (activeFocus)
+                    Sfx.navigate()
+            }
+            onActiveFocusChanged: if (!activeFocus) recentHold.cancel()
+            // Accept acts on release and a long press opens the Options menu (02 §1.7); Menu opens it at once.
+            Keys.onPressed: event => {
+                if (recentHold.press(event)) {
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Menu) {
+                    if (!event.isAutoRepeat)
+                        root.openRecentOptions()
+                    event.accepted = true
+                }
+            }
+            Keys.onReleased: event => {
+                if (recentHold.release(event))
+                    event.accepted = true
+            }
             Keys.onUpPressed: { Sfx.navigate(); heroBlock.forceActiveFocus() }
+        }
+
+        AcceptHold {
+            id: recentHold
+            objectName: "recentHold"
+            active: !root.libraryEmpty
+            onTapped: root.playRecent()
+            onLongPressed: root.openRecentOptions()
         }
     }
 
@@ -1670,6 +1728,118 @@ FocusScope {
     function openDetails() {
         openPage("details", { id: heroItem.id })
     }
+
+    // ---- The Options menu (02 §1.7, designed RUY-4) ----
+    // One menu in the modal layer for every surface that has one. A surface asks `openOptions(surface, id,
+    // anchor, kind)`: "recent" (Home's Recent row), "hero" (its Play / Details pills) and "games" (the Games
+    // grid, a page asking through `Page.optionsRequested`) all show a game or app card's rows (`gameRows`).
+    // While it is open the rows are bound to the item's state (a game starts, the Store answers), and the
+    // menu closes by itself when the item goes.
+    property string optionsSurface: ""
+    property string optionsItemId: ""
+    property Item optionsPage: null
+    property bool optionsOn: false             // from the opening until it closes (not the fade-out)
+    property int storeTick: 0                  // the Store's records changed (Store.app is a lookup, not a property)
+    Connections {
+        target: Store
+        function onCatalogueChanged() { root.storeTick += 1 }
+    }
+
+    // The rows of a game or app card, in order; a false condition leaves its row out (never dimmed).
+    // Uninstall comes with RUY-499.
+    function gameRows(id) {
+        const tick = storeTick
+        const item = Library.items.find(i => i.id === id)
+        if (!item || tick < 0)
+            return []
+        const appId = Library.sessionAppId(id)
+        const closing = appId !== "" && closingAppIds.includes(appId)
+        const running = appId !== "" && !closing && runningAppIds.includes(appId)
+        const rows = []
+        if (appId !== "" && !running && !closing)
+            rows.push({ id: "play", label: qsTr("Play"), icon: "play_arrow" })
+        if (running && windowOf(appId) !== undefined)
+            rows.push({ id: "resume", label: qsTr("Resume"), icon: "play_arrow" })
+        if (running)
+            rows.push({ id: "close", label: item.kind === "game" ? qsTr("Close game") : qsTr("Close app"), icon: "close" })
+        if (appId !== "" && Store.available && Store.app(appId).id !== undefined)
+            rows.push({ id: "details", label: qsTr("Details"), icon: "info" })
+        if (Profiles.activeProfile !== "" && (Profiles.active.role ?? "") !== "guest")
+            rows.push({ id: "activity", label: qsTr("Your activity"), icon: "bar_chart" })
+        return rows
+    }
+
+    // The note that ends a card's menu when the Store does not answer: its rows were left out.
+    function gameNote(id) {
+        return Library.sessionAppId(id) !== "" && !Store.available ? qsTr("Store options are unavailable right now.") : ""
+    }
+
+    function optionRows(surface, id) {
+        return gameRows(id)
+    }
+
+    function optionNote(surface, id) {
+        return gameNote(id)
+    }
+
+    function optionTitle(surface, id) {
+        return Library.items.find(i => i.id === id)?.title ?? ""
+    }
+
+    // Opens the menu of item `id` on `surface`, anchored to `anchor` (a card or a pill). False when it
+    // could not open (nobody signed in, no anchor, one is open already).
+    function openOptions(surface, id, anchor, kind, page) {
+        if (!signedIn || !anchor || optionsMenu.shown || systemPanel.open || launching || closingScreen)
+            return false
+        optionsSurface = surface
+        optionsItemId = id
+        optionsPage = page ?? null
+        optionsOn = true                    // the anchor keeps its look before the menu takes the focus
+        Sfx.select()
+        optionsMenu.open(anchor, kind, optionTitle(surface, id), optionRows(surface, id), optionNote(surface, id))
+        return true
+    }
+
+    function openRecentOptions() {
+        if (!libraryEmpty)
+            openOptions("recent", heroItem.id, recentRow.currentItem, "card", null)
+    }
+
+    // A row was chosen (the menu has closed and the focus is on the item).
+    function runOption(surface, id, action) {
+        const item = Library.items.find(i => i.id === id)
+        if (!item)
+            return
+        const appId = Library.sessionAppId(id)
+        switch (action) {
+        case "play":
+        case "resume":
+            Library.launch(id)
+            break
+        case "close":
+            closeCardApp(appId, item.title, item.art ? (item.art.hero ?? item.art.tile ?? "") : "")
+            break
+        case "details":
+            openPage("appDetail", { appId: appId })
+            break
+        case "activity":
+            openPage("activityGame", { appId: appId !== "" ? appId : id })
+            break
+        }
+    }
+
+    // The item behind the open menu is gone: close it; the surface moves its own focus.
+    Connections {
+        target: Library
+        function onItemsChanged() {
+            if (root.optionsOn && !Library.items.some(i => i.id === root.optionsItemId))
+                optionsMenu.dismiss()
+        }
+    }
+
+    // Whether the focused item of Home has at least one row (the hint bar offers Options then).
+    readonly property bool homeOptionsAvailable: home.shown && !libraryEmpty && (heroBlock.activeFocus || recentRow.activeFocus)
+                                                 && gameRows(heroItem.id).length > 0
 
     // Opens a section from the nav or LB/RB. From Home, "home" just brings focus to Play. On a
     // section page the open pages are closed first (Back from the new one lands on Home, where
@@ -1954,6 +2124,39 @@ FocusScope {
         glassSource: l0          // the layer the glass sheets of the picker modals blur
     }
 
+    // The Options menu (02 §1.7): one for every surface, in the modal layer.
+    OptionsMenu {
+        id: optionsMenu
+        objectName: "optionsMenu"
+        parent: modalLayer
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+        u: root.u
+        marginX: root.marginX
+        marginY: root.marginY
+        guideKey: key => root.isGuideKey(key)
+        onActivated: id => root.runOption(root.optionsSurface, root.optionsItemId, id)
+        onClosed: {
+            root.optionsOn = false
+            heroBlock.anchoredItem = null
+        }
+    }
+    // While it is open its rows follow the item's state and the note follows the Store.
+    Binding {
+        target: optionsMenu
+        property: "rows"
+        value: root.optionRows(root.optionsSurface, root.optionsItemId)
+        when: optionsMenu.shown
+        restoreMode: Binding.RestoreNone
+    }
+    Binding {
+        target: optionsMenu
+        property: "note"
+        value: root.optionNote(root.optionsSurface, root.optionsItemId)
+        when: optionsMenu.shown
+        restoreMode: Binding.RestoreNone
+    }
+
     // The devices behind the cluster's "N more" chip (T-301): a small modal in the modal layer.
     BatteryListModal {
         id: batteryList
@@ -2052,6 +2255,11 @@ FocusScope {
             return setupActive ? setup.hints : [{ button: "A", text: qsTr("Select") }]
         if (pageOpen)       // slots and pageStack are updated one after the other
             return slots.length > 0 ? (slots[slots.length - 1].page?.hints ?? []) : []
+        if (homeOptionsAvailable) {
+            return [{ button: "A", text: qsTr("Select") },
+                    { button: "Start", text: qsTr("Options") },
+                    { buttons: ["LB", "RB"], text: qsTr("Sections") }]
+        }
         return [{ button: "A", text: qsTr("Select") },
                 { buttons: ["LB", "RB"], text: qsTr("Sections") }]
     }
@@ -2139,6 +2347,7 @@ FocusScope {
             if (!open && pageProbe.pendingKey === "hub")
                 pageProbe.cancel()              // closed before it settled (T-455)
             if (open) {
+                optionsMenu.dismiss()           // Guide closes the Options menu and opens the Hub (02 §1.7)
                 if (home.shown && !root.closingScreen)      // the closing screen holds the focus: keep where Close left it
                     root.rememberHomeFocus()
                 Power.refresh()

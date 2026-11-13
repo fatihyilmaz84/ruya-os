@@ -244,6 +244,11 @@ QtObject {
     readonly property int caretMs: 530       // text caret blink half-period
     readonly property int osdMs: 1500        // how long the volume OSD stays after the last change
     readonly property int guideHoldMs: 2000  // holding Guide this long opens the power menu (spec 01 §2.2)
+    // Input times (04 §3.4): not multiplied by motionScale, a held button takes as long under reduced
+    // motion as in full motion. Holding Accept this long on an item with an Options menu opens it;
+    // the Hold ring shows after `holdRingDelayMs` of that hold (RUY-16).
+    readonly property int longPressMs: 500
+    readonly property int holdRingDelayMs: 200
 
     readonly property color toastInfo: tok("toastInfo")
     readonly property color toastSuccess: tok("toastSuccess")

@@ -16,9 +16,16 @@ FocusScope {
     property bool primaryShown: true   // false: no Play (an item with no launch path, T-147); Details takes the focus
     property bool primaryDimmed: false // the primary's action is unavailable for now (PrimaryButton.dimmed)
     readonly property alias playButton: play
+    readonly property alias detailsButton: details
+    // The item has an Options menu (02 §1.7): Accept acts on release and a long press opens the menu
+    // (`optionsRequested`, with the focused button); false (an empty library): Accept acts on press.
+    property bool holdEnabled: false
+    // The button whose menu is open: it keeps its look but not its ring (the owner clears it on close).
+    property Item anchoredItem: null
 
     signal primaryAccepted()
     signal secondaryAccepted()
+    signal optionsRequested(Item anchor)
     signal upRequested()
     signal downRequested()
 
@@ -77,6 +84,11 @@ FocusScope {
                 u: hero.u
                 text: hero.primaryText
                 dimmed: hero.primaryDimmed
+                acceptOnRelease: hero.holdEnabled
+                anchored: hero.anchoredItem === play
+                holdShown: hold.ringShown && play.activeFocus
+                holdProgress: hold.ringProgress
+                onActiveFocusChanged: hold.cancel()
                 onAccepted: hero.primaryAccepted()
             }
             SecondaryButton {
@@ -86,10 +98,41 @@ FocusScope {
                 focus: !hero.primaryShown
                 u: hero.u
                 text: hero.secondaryText
+                acceptOnRelease: hero.holdEnabled
+                anchored: hero.anchoredItem === details
+                holdShown: hold.ringShown && details.activeFocus
+                holdProgress: hold.ringProgress
+                onActiveFocusChanged: hold.cancel()
                 onAccepted: hero.secondaryAccepted()
             }
         }
     }
+
+    // Accept on release and the long press (AcceptHold): a tap runs the focused button as a press did.
+    AcceptHold {
+        id: hold
+        objectName: "heroHold"
+        active: hero.holdEnabled
+        onTapped: {
+            Sfx.select()
+            if (play.activeFocus)
+                hero.primaryAccepted()
+            else if (details.activeFocus)
+                hero.secondaryAccepted()
+        }
+        onLongPressed: hero.openOptions()
+    }
+
+    // The menu of the hero's item, anchored to the focused pill.
+    function openOptions() {
+        const button = play.activeFocus ? play : details.activeFocus ? details : null
+        if (!button)
+            return
+        hero.anchoredItem = button
+        hero.optionsRequested(button)
+    }
+
+    onActiveFocusChanged: hold.cancel()
 
     onPrimaryShownChanged: {
         if (!primaryShown && hero.activeFocus && details.visible)
@@ -98,7 +141,22 @@ FocusScope {
             play.forceActiveFocus()
     }
 
+    Keys.onReleased: event => {
+        if (hero.holdEnabled && hold.release(event))
+            event.accepted = true
+    }
+
     Keys.onPressed: event => {
+        if (hero.holdEnabled && hold.press(event)) {
+            event.accepted = true
+            return
+        }
+        if (hero.holdEnabled && event.key === Qt.Key_Menu) {
+            if (!event.isAutoRepeat)
+                hero.openOptions()
+            event.accepted = true
+            return
+        }
         // Left/Right are visual: under a mirrored layout Play's neighbour is on its left.
         const toDetails = hero.LayoutMirroring.enabled ? Qt.Key_Left : Qt.Key_Right
         const toPlay = hero.LayoutMirroring.enabled ? Qt.Key_Right : Qt.Key_Left

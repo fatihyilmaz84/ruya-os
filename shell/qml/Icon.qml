@@ -57,6 +57,11 @@ Item {
         "schedule": 0xefd6,
         "chevron_left": 0xe5cb,
         "chevron_right": 0xe5cc,
+        "play_arrow": 0xe037,
+        "close": 0xe5cd,
+        "delete": 0xe92e,
+        "bar_chart": 0xe26b,
+        "more_horiz": 0xe5d3,
         "pad_playstation": 0xe005,
         "pad_xbox": 0xe006,
         "pad_switch": 0xe007

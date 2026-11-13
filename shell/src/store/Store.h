@@ -40,7 +40,8 @@ class Store : public QObject
     // ended differently than "failed": a job Flatpak completed after all ends with jobFinished(id,
     // "ok"). The same read happens when the shell starts, so a job running then is shown at once.
     Q_PROPERTY(QVariantMap jobs READ jobs NOTIFY jobsChanged)
-    // True once the service has answered (always, for the mock).
+    // True once the service has answered a list, false again when it is lost (until it answers once
+    // more); the mock answers at start.
     Q_PROPERTY(bool available READ isAvailable NOTIFY availableChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
 
@@ -141,6 +142,7 @@ signals:
     void jobsReconciled();
 
 private:
+    void setAvailable(bool available);
     QVariantList toList(const QList<AppInfo> &apps) const;
     // Puts the permissions of app into the record of the same id in list; whether it changed.
     bool mergeDetails(QVariantList &list, const AppInfo &app) const;
