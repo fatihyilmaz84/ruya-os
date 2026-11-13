@@ -335,11 +335,42 @@ Item {
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
             tryVerify(() => pad().shown, 2000)
+            keyClick(Qt.Key_1)
+            keyClick(Qt.Key_2)
+            compare(pad().entered, "12", "a half-typed PIN")
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")
             tryVerify(() => !confirm().shown && !pad().shown, 2000, "nothing is left over the picker")
+            compare(pad().entered, "", "the half-typed PIN does not outlive the pad")
             compare(Object.keys(Store.jobs).length, 0)
             verify(Store.app(tc.puzzleApp).installed)
+        }
+
+        // At 200 % with the warning on, the card keeps inside the band between the top safe-area edge and the
+        // hint bar's band (the bound the Options menu clamps to): it never overlaps the hint bar.
+        function test_the_card_stays_above_the_hint_bar_at_ui_size_200() {
+            start()
+            Display.setUiScale(200)
+            tryCompare(Theme, "uiScale", 2)
+            tryVerify(() => find("homePlay").activeFocus, 2000)
+            toRecentItem(tc.puzzle)
+            keyClick(Qt.Key_Menu)
+            chooseUninstall()
+            keyClick(Qt.Key_Up)
+            keyClick(Qt.Key_Return)                      // the warning: the tallest content
+            verify(find("uninstallWarning").visible)
+            const dialog = confirm()
+            const panel = findChild(dialog, "uninstallPanel")
+            const bandTop = tc.shell.height * Theme.safeArea
+            const bandBottom = tc.shell.height - tc.shell.height * Theme.safeArea - (Theme.glyphSize + Theme.spaceM) * tc.shell.u
+            const top = panel.mapToItem(dialog, 0, 0).y
+            const bottom = panel.mapToItem(dialog, 0, panel.height).y
+            verify(panel.scale < 1, "it needs scaling at this size: " + panel.scale)
+            verify(bottom <= bandBottom + 0.5, "the bottom " + bottom + " is above the hint band " + bandBottom)
+            verify(top >= bandTop - 0.5, "the top " + top + " is below the safe area " + bandTop)
+            verify(bottom <= findChild(tc.shell, "hintBar").y + 0.5, "and above the hint bar itself")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !confirm().shown)
         }
 
         // ---- the admin's PIN, and Store.uninstall ----

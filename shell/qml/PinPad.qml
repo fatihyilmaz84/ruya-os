@@ -103,6 +103,8 @@ FocusScope {
 
     function close() {
         shown = false
+        entered = ""                   // a half-typed PIN never outlives the pad (sign-out, the screen saver)
+        firstEntry = ""
         closed()
     }
 

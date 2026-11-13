@@ -48,9 +48,14 @@ FocusScope {
     readonly property real goWidth: Math.max(cancelWidth, goMetrics.advanceWidth + 2 * buttonPad)
     readonly property bool stacked: cancelWidth + Theme.spaceM * u + goWidth > contentWidth
 
-    // At a big UI size the stacked buttons and the warning can make the card taller than the screen: it is scaled
-    // down about its centre until it fits between `spaceXl` margins (1 whenever it already does).
-    readonly property real fit: Math.min(1, (height - 2 * Theme.spaceXl * u) / (card.height + 96 * u))
+    // The band the card lives in: from the top safe-area edge down to the hint bar's band (the same bound the
+    // Options menu clamps to: screen height - safe area - glyphSize - spaceM). The card is centred in it, and at a
+    // big UI size, where stacked buttons and the warning make it taller, scaled down about its centre until it
+    // fits (1 whenever it already does), so it never overlaps the hint bar.
+    readonly property real bandTop: height * Theme.safeArea
+    readonly property real bandBottom: height - height * Theme.safeArea - (Theme.glyphSize + Theme.spaceM) * u
+    readonly property real fit: Math.min(1, (bandBottom - bandTop) / (card.height + 96 * u))
+    readonly property real bandShift: (bandTop + bandBottom) / 2 - height / 2
 
     function open(id, name, note) {
         returnTo = Window.activeFocusItem
@@ -125,7 +130,7 @@ FocusScope {
 
     Rectangle {
         objectName: "uninstallPanel"
-        anchors.centerIn: parent
+        anchors { horizontalCenter: parent.horizontalCenter; verticalCenter: parent.verticalCenter; verticalCenterOffset: dialog.bandShift }
         scale: dialog.fit
         visible: dialog.step === "confirm"
         width: dialog.contentWidth + 120 * dialog.u
@@ -159,7 +164,7 @@ FocusScope {
     Column {
         id: card
         objectName: "uninstallCard"
-        anchors.centerIn: parent
+        anchors { horizontalCenter: parent.horizontalCenter; verticalCenter: parent.verticalCenter; verticalCenterOffset: dialog.bandShift }
         scale: dialog.fit
         visible: dialog.step === "confirm"
         width: dialog.contentWidth
