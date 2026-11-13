@@ -750,6 +750,20 @@ function Test-FontCoverage {
     Record "font coverage self-test (overlap helper: overlapping squares flagged, disjoint ones not)" ($LASTEXITCODE -eq 0)
 }
 
+# The game settings schema (RUY-406): the sample, the mock game's file and the chapter's example pass
+# api\settings\game-settings.schema.json, and the schema refuses the bad cases (pure Python, no packages).
+function Test-GameSettingsSchema {
+    Step "game settings schema (sample, mock game, chapter example; refusals)"
+    $py = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $py) {
+        Write-Host "FAIL: python is not on PATH; scripts\check-game-settings-schema.py needs it" -ForegroundColor Red
+        Record "game settings schema (python missing)" $false
+        return
+    }
+    & $py.Source -I (Join-Path $PSScriptRoot "check-game-settings-schema.py") (Join-Path $PSScriptRoot "..")
+    Record "game settings schema" ($LASTEXITCODE -eq 0)
+}
+
 # Every QML file is named in 04-design-system.md (or on the baseline): scripts\lint-spec-components.ps1 (shared with CI).
 function Test-SpecComponents {
     Step "spec lint (every shell\qml file is named in 04-design-system.md)"

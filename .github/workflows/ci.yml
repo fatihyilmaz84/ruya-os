@@ -44,6 +44,9 @@ jobs:
       - name: Font coverage
         # Standard library only; mirrors the "font coverage" step of dev.ps1 test (T-145).
         run: python -I scripts/check-font-coverage.py .
+      - name: Game settings schema
+        # Standard library only; mirrors the "game settings schema" step of dev.ps1 test (RUY-406).
+        run: python -I scripts/check-game-settings-schema.py .
       - name: Translation lint
         run: pwsh -NoProfile -File scripts/lint-translations.ps1
       - name: Boot experience lint
