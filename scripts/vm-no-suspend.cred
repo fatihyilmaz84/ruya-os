@@ -1,0 +1,9 @@
+io.systemd.credential:tmpfiles.extra=d /run/systemd/sleep.conf.d 0755 root root -
+f /run/systemd/sleep.conf.d/ruya-vm.conf 0644 root root - [Sleep]\nAllowSuspend=no\n
+# A systemd credential that smoke-test.ps1 and run-vm.ps1 hand to the VM as an SMBIOS type 11
+# string (RUY-459). systemd-tmpfiles writes the lines above at boot, before the shell starts:
+# logind then answers CanSuspend "na", the shell logs "power: suspend=no" and has no sleep step.
+# Why: QEMU on WHPX cannot bring a suspended guest back. After 60 idle minutes the shell's sleep
+# step suspended the VM (S3: "paused (suspended)"; s2idle without S3), no key, no system_wakeup
+# and no SSH reached it again, and the screendump kept showing the last frame. The image is not
+# changed: real hardware keeps its sleep step.

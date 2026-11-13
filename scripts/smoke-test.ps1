@@ -67,7 +67,9 @@ $qemuArgs = @(
     "-monitor", "tcp:127.0.0.1:4444,server,nowait",
     # QEMU on WHPX hangs on guest reset (0% CPU after "reboot: Restarting system"), so a guest
     # reboot makes QEMU exit instead; vm-reboot-check.ps1 relaunches it on the same disk.
-    "-no-reboot"
+    "-no-reboot",
+    # No suspend in the VM (RUY-459), see vm-no-suspend.cred.
+    "-smbios", "type=11,path=$(Join-Path $PSScriptRoot 'vm-no-suspend.cred')"
 )
 if ($Audio) {
     $audiodev = if ($AudioBackend -eq "wav") { "wav,id=snd0,path=$(Join-Path $Repo 'output\vm-audio.wav')" } else { "dsound,id=snd0" }

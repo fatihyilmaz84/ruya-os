@@ -20,4 +20,5 @@ if (-not (Test-Path $Disk)) { throw "Disk image not found: $Disk (build it with 
     -audiodev dsound,id=snd0 -device intel-hda -device hda-output,audiodev=snd0 `
     -nic user,model=virtio-net-pci,hostfwd=tcp::2222-:22 `
     -serial file:output\serial.log `
-    -monitor tcp:127.0.0.1:4444,server,nowait
+    -monitor tcp:127.0.0.1:4444,server,nowait `
+    -smbios "type=11,path=$(Join-Path $PSScriptRoot 'vm-no-suspend.cred')"
