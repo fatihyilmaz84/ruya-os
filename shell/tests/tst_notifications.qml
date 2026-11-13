@@ -112,6 +112,83 @@ Item {
             tryVerify(() => itemTitled(title) !== undefined, 2000, title + " is kept")
         }
 
+        // ---- screenshot helpers (above the tests: dev.ps1 shots gives a shotsDir line to the test before it) ----
+
+        // The toasts only: the keyed states stay (the pinned restart notice is part of the picture).
+        function dropToasts() {
+            while (Notifications.model.count > 0)
+                Notifications.dismiss(Notifications.model.get(0).toastId)
+            Notifications.pending = []
+        }
+
+        // t: the words of the items in the shot's language (the test's own qsTr has no translation).
+        function fill(t) {
+            NotificationCentre.mockSetNow(tc.t0 - 25 * 3600000)
+            Notifications.show(t.wallpaper, "success")
+            NotificationCentre.mockSetNow(tc.t0 - 3 * 3600000)
+            Notifications.show(t.battery, "warning", "", "pad_playstation", "DualSense · 12%", { source: "devices" })
+            tryVerify(() => NotificationCentre.count === 2)
+            NotificationCentre.markRead()
+            tryVerify(() => NotificationCentre.unreadCount === 0)
+            NotificationCentre.mockSetNow(tc.t0 - 600000)
+            Notifications.showSticky("update-restart", t.restart, "warning", "", t.restartDetail, "", "",
+                                     { source: "updates", urgency: "critical", pinned: true,
+                                       actions: [{ id: "restart", label: t.restartNow }] })
+            NotificationCentre.mockSetNow(tc.t0 - 120000)
+            Notifications.show(t.drive, "info", "", "usb", "SANDISK 64GB",
+                               { source: "devices", actions: [{ id: "settings:storage", label: t.openSettings }] })
+            NotificationCentre.mockSetNow(tc.t0)
+            NotificationCentre.mockAppNotify({ appId: "org.example.Game", title: t.match, body: t.matchDetail,
+                                                 kind: "success", actions: [{ id: "accept", label: t.join }, { id: "later", label: t.later }] })
+            tryVerify(() => NotificationCentre.count === 5, 2000)
+            dropToasts()
+        }
+
+        function settle() {
+            tryVerify(() => find("centreSlide").x === tc.shell.width - sheet().sheetWidth && sheet().opacity >= 1, 3000, "the sheet is at rest")
+            waitForRendering(tc.shell)
+        }
+
+        // dir: shotsDir + "/" (passed by the test, which is how dev.ps1 shots finds it).
+        function shots(dir, suffix, t) {
+            // The bell with a badge on Home, then focused.
+            fill(t)
+            tryVerify(() => findChild(find("notificationBell"), "bellBadge").visible)
+            waitForRendering(tc.shell)
+            grabImage(tc.shell).save(dir + "93-bell-badge" + suffix + ".png")
+            toBell()
+            waitForRendering(tc.shell)
+            grabImage(tc.shell).save(dir + "93b-bell-focused" + suffix + ".png")
+            // The full centre, the focus on the pinned row with its action.
+            keyClick(Qt.Key_Return)
+            tryVerify(() => sheet().shown)
+            settle()
+            grabImage(tc.shell).save(dir + "94-centre-full" + suffix + ".png")
+            keyClick(Qt.Key_Down)                    // the app's item: two actions
+            tryVerify(() => rowFocused(t.match))
+            keyClick(Qt.Key_Right)
+            tryVerify(() => sheet().pick === 1)
+            waitForRendering(tc.shell)
+            grabImage(tc.shell).save(dir + "94b-centre-actions" + suffix + ".png")
+            // Quiet mode on, then everything cleared but the pinned item, then the empty centre.
+            NotificationCentre.setQuiet(true)
+            tryCompare(NotificationCentre, "quiet", true)
+            NotificationCentre.dismissAll()
+            tryVerify(() => NotificationCentre.count === 1)
+            waitForRendering(tc.shell)
+            grabImage(tc.shell).save(dir + "94c-centre-quiet" + suffix + ".png")
+            Notifications.remove("update-restart")
+            tryVerify(() => NotificationCentre.count === 0)
+            waitForRendering(tc.shell)
+            grabImage(tc.shell).save(dir + "94d-centre-empty" + suffix + ".png")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !sheet().shown && sheet().opacity === 0, 3000)
+            waitForRendering(tc.shell)
+            grabImage(tc.shell).save(dir + "93c-bell-quiet" + suffix + ".png")
+            NotificationCentre.setQuiet(false)
+            tryCompare(NotificationCentre, "quiet", false)
+        }
+
         // ---- the mock and the badge ----
 
         function test_badge_counts() {
@@ -145,6 +222,7 @@ Item {
             compare(NotificationCentre.mockCalls("markread"), calls + 1)
             verify(!findChild(find("notificationBell"), "bellBadge").visible, "the badge empties")
             compare(findChild(sheet(), "centreNewCount").text, "2 new")
+            verify(findChild(sheet(), "centreNewCount").visible, "it fits before Clear all in English")
             tryVerify(() => rowOf(idOf("Update ready")) !== null)
             verify(findChild(rowOf(idOf("Update ready")), "notificationDot").visible, "a new item keeps its dot")
             keyClick(Qt.Key_Escape)
@@ -555,82 +633,23 @@ Item {
 
         // ---- screenshots ----
 
-        function fill() {
-            NotificationCentre.mockSetNow(tc.t0 - 25 * 3600000)
-            Notifications.show("Wallpaper added", "success")
-            NotificationCentre.mockSetNow(tc.t0 - 3 * 3600000)
-            Notifications.show("Controller battery low", "warning", "", "pad_playstation", "DualSense · 12%", { source: "devices" })
-            NotificationCentre.markRead()
-            tryVerify(() => NotificationCentre.unreadCount === 0)
-            NotificationCentre.mockSetNow(tc.t0 - 600000)
-            Notifications.showSticky("update-restart", qsTr("Restarting in 2 minutes"), "warning", "", qsTr("To finish the update"),
-                                     "", "", { source: "updates", urgency: "critical", pinned: true,
-                                               actions: [{ id: "restart", label: qsTr("Restart now") }] })
-            NotificationCentre.mockSetNow(tc.t0 - 120000)
-            Notifications.show(qsTr("Drive inserted"), "info", "", "usb", "SANDISK 64GB",
-                               { source: "devices", actions: [{ id: "settings:storage", label: qsTr("Open Settings") }] })
-            NotificationCentre.mockSetNow(tc.t0)
-            NotificationCentre.mockAppNotify({ appId: "org.example.Game", title: "Match found", body: "Ready in 30 s",
-                                                 kind: "success", actions: [{ id: "accept", label: "Join" }, { id: "later", label: "Later" }] })
-            tryVerify(() => NotificationCentre.count === 5, 2000)
-            clearToasts()
-        }
-
-        function settle() {
-            tryVerify(() => find("centreSlide").x === tc.shell.width - sheet().sheetWidth && sheet().opacity >= 1, 3000, "the sheet is at rest")
-            waitForRendering(tc.shell)
-        }
-
-        function shots(suffix) {
-            // The bell with a badge on Home, then focused.
-            fill()
-            tryVerify(() => findChild(find("notificationBell"), "bellBadge").visible)
-            waitForRendering(tc.shell)
-            grabImage(tc.shell).save(shotsDir + "/93-bell-badge" + suffix + ".png")
-            toBell()
-            waitForRendering(tc.shell)
-            grabImage(tc.shell).save(shotsDir + "/93b-bell-focused" + suffix + ".png")
-            // The full centre, the focus on the pinned row with its action.
-            keyClick(Qt.Key_Return)
-            tryVerify(() => sheet().shown)
-            settle()
-            grabImage(tc.shell).save(shotsDir + "/94-centre-full" + suffix + ".png")
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Right)
-            tryVerify(() => sheet().pick === 1)
-            waitForRendering(tc.shell)
-            grabImage(tc.shell).save(shotsDir + "/94b-centre-actions" + suffix + ".png")
-            // Quiet mode on, then everything cleared but the pinned item, then the empty centre.
-            NotificationCentre.setQuiet(true)
-            tryCompare(NotificationCentre, "quiet", true)
-            NotificationCentre.dismissAll()
-            tryVerify(() => NotificationCentre.count === 1)
-            waitForRendering(tc.shell)
-            grabImage(tc.shell).save(shotsDir + "/94c-centre-quiet" + suffix + ".png")
-            Notifications.remove("update-restart")
-            tryVerify(() => NotificationCentre.count === 0)
-            waitForRendering(tc.shell)
-            grabImage(tc.shell).save(shotsDir + "/94d-centre-empty" + suffix + ".png")
-            keyClick(Qt.Key_Escape)
-            tryVerify(() => !sheet().shown && sheet().opacity === 0, 3000)
-            waitForRendering(tc.shell)
-            grabImage(tc.shell).save(shotsDir + "/93c-bell-quiet" + suffix + ".png")
-            NotificationCentre.setQuiet(false)
-            tryCompare(NotificationCentre, "quiet", false)
-        }
-
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
-            shots("")
+            shots(shotsDir + "/", "", { wallpaper: "Wallpaper added", battery: "Controller battery low", restart: "Restarting in 2 minutes",
+                        restartDetail: "To finish the update", restartNow: "Restart now", drive: "Drive inserted",
+                        openSettings: "Open Settings", match: "Match found", matchDetail: "Ready in 30 s", join: "Join",
+                        later: "Later" })
         }
 
         function test_zz_screenshots_tr() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             DeviceSettings.language = "tr"
-            shots("-tr")
+            shots(shotsDir + "/", "-tr", { wallpaper: "Duvar kağıdı eklendi", battery: "Kumanda pili zayıf", restart: "2 dakikada yeniden başlıyor",
+                           restartDetail: "Güncellemeyi bitirmek için", restartNow: "Şimdi yeniden başlat", drive: "Sürücü takıldı",
+                           openSettings: "Ayarları aç", match: "Maç bulundu", matchDetail: "30 sn içinde hazır", join: "Katıl",
+                           later: "Sonra" })
             DeviceSettings.language = "en"
         }
     }

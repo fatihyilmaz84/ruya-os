@@ -185,7 +185,8 @@ void NotificationCentre::invoke(uint id, const QString &action)
 
 void NotificationCentre::markRead()
 {
-    if (!m_profile.isEmpty() && unreadCount() > 0)
+    // Sent even when the list here shows nothing unread: it may not have caught up with a new item yet.
+    if (!m_profile.isEmpty())
         m_backend->markRead(m_profile);
 }
 

@@ -445,7 +445,7 @@ Item {
                             && line("Power") === "Power: 18.4 W (last reading)" && line("Fps") === "60 FPS", 3000)
             wait(500)
             grabImage(tc.shell).save(shotsDir + "/perf-overlay-2-states.png")
-            Notifications.show("A toast takes the right corner", "warning")
+            Notifications.show("A toast takes the right corner", "warning", "", "", "", { urgency: "critical" })   // drawn over a game (RUY-413)
             tryVerify(() => !rightBlock().visible, 2000)
             wait(500)
             grabImage(tc.shell).save(shotsDir + "/perf-overlay-3-toast.png")

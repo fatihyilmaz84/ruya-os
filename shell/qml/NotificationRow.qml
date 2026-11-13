@@ -6,9 +6,11 @@ import RuyaShell
 // 64 u round badge (the kind's fill and glyph, or the item's icon), the title (`typeBody` DemiBold)
 // and the detail (`typeCaption`), the time on the right (`typeCaption`) and a 14 u unread dot
 // (`text`) for an item that was new when the centre opened. A pinned item has a warning hairline
-// border and the `push_pin` glyph in place of the dot. Unfocused it is glass with the lit rim;
-// focused, `focusFill` under the ring, and it grows to show at most two action pills (64 u, the
-// first `primaryFill`), the picked one ringed. Display only: the sheet owns the keys.
+// border and the `push_pin` glyph in place of the dot. Unfocused it is the toast's card
+// (`toastBackground` with the lit rim), where `textDim` holds 4.5:1; focused, `focusFill` under the
+// ring, the detail in `text` (`textDim` is under the floor on `focusFill`, 04 §7), and it grows to
+// show at most two action pills (64 u, the first `primaryFill`), the picked one ringed. Display
+// only: the sheet owns the keys.
 Item {
     id: row
 
@@ -38,7 +40,7 @@ Item {
         objectName: "notificationCard"
         anchors.fill: parent
         radius: Theme.radiusL * row.u
-        color: row.focused ? Theme.focusFill : Theme.glass
+        color: row.focused ? Theme.focusFill : Theme.toastBackground
         border.width: row.focused ? Theme.focusRingWidth * row.u : (row.pinned ? Theme.hairlineAt(row.u) : 0)
         border.color: row.focused ? Theme.focusRing : Theme.toastWarning
     }
@@ -126,7 +128,7 @@ Item {
             width: parent.width
             text: row.item.body ?? ""
             textFormat: Text.PlainText
-            color: Theme.textDim
+            color: row.focused ? Theme.text : Theme.textDim
             font.pixelSize: Theme.typeCaption * row.u
             elide: Text.ElideRight
             maximumLineCount: 1

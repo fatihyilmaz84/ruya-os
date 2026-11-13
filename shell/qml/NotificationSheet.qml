@@ -367,9 +367,12 @@ FocusScope {
                     width: Math.min(implicitWidth, header.width - (clearAll.visible ? clearAll.width + Theme.spaceM * sheet.u : 0))
                     elide: Text.ElideRight
                 }
+                // Shown only where it fits whole before Clear all (a long language can leave no room: Turkish
+                // "Tümünü temizle" at 100 %); the New caption and the dots still say which items are new.
                 Text {
                     objectName: "centreNewCount"
-                    visible: sheet.newCount > 0
+                    readonly property real room: (clearAll.visible ? clearAll.x - Theme.spaceM * sheet.u : header.width) - x
+                    visible: sheet.newCount > 0 && implicitWidth <= room
                     anchors { left: titleText.right; leftMargin: Theme.spaceS * sheet.u; baseline: titleText.baseline }
                     text: qsTr("%n new", "", sheet.newCount)
                     color: Theme.textDim
@@ -380,6 +383,9 @@ FocusScope {
                     objectName: "centreClearAll"
                     anchors { right: parent.right; verticalCenter: parent.verticalCenter }
                     visible: sheet.hasClearable
+                    // `spaceL` padding instead of the button's `spaceXl`: the header shares one line of 800 u
+                    // with the title and "N new".
+                    width: implicitWidth - 2 * (Theme.spaceXl - Theme.spaceL) * sheet.u
                     u: sheet.u
                     text: qsTr("Clear all")
                     onAccepted: sheet.clearEverything()
