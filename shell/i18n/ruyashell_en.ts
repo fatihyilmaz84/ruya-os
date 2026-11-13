@@ -830,8 +830,8 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+9"/>
-        <source>A device that is not a controller was ignored.</source>
-        <translation>A device that is not a controller was ignored.</translation>
+        <source>Another device tried to pair and was turned away.</source>
+        <translation>Another device tried to pair and was turned away.</translation>
     </message>
     <message>
         <location line="+16"/>

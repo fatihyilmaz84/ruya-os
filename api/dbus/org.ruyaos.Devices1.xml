@@ -38,7 +38,10 @@
     "unknown-device"  no device with that id in the list (Pair, Forget, Connect, Disconnect)
     "pairing-failed"  the device refused or the pairing was rejected
     "not-confirmed"   Pair of a device with the `keyboard` flag of ListDevices without keyboard_confirmed
-                      (RUY-422): nothing was paired, trusted or connected, and the refusal is logged
+                      (RUY-422): nothing was paired, trusted or connected, and the refusal is logged.
+                      Connect answers it too (RUY-444) for a bonded device with the `keyboard` flag that
+                      is not `trusted` (trusted = confirmed through Pair): the shell then asks the
+                      keyboard question and calls Pair with keyboard_confirmed
     "timeout"         the device did not answer in time (Pair, Connect). The service answers it
                       itself after 20 s, before the D-Bus default call timeout (25 s), so clients
                       keep the default timeout and Pair/Connect always get a status, never a
@@ -437,6 +440,11 @@
                             its own, so a confirmation cannot arrive late, expire or be used for
                             another call: it belongs to exactly this call for this id.
     -->
+    <!--
+      (RUY-444) While a Pair holds the adapter Pairable (up to 20 s), any other device that bonds is
+      removed again; the removal is logged and announced like a refused controller
+      (ControllerPairingRejected).
+    -->
     <method name="Pair">
       <arg name="id" type="s" direction="in"/>
       <arg name="keyboard_confirmed" type="b" direction="in"/>
@@ -449,7 +457,10 @@
       <arg name="status" type="s" direction="out"/>
     </method>
 
-    <!-- Connect / disconnect a paired device. -->
+    <!--
+      Connect / disconnect a paired device. Connect of a keyboard-class device that is not trusted
+      (never confirmed through Pair) answers "not-confirmed" and connects nothing (RUY-444).
+    -->
     <method name="Connect">
       <arg name="id" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>

@@ -564,6 +564,8 @@ bluetooth_keyboard_check() {
         echo "LIST1 $(call ListDevices)"
         echo "CONFIRMED $(call Pair sb AA:00:00:00:00:06 true)"
         echo "LIST2 $(call ListDevices)"
+        echo "CONNECT_UNTRUSTED $(call Connect s AA:00:00:00:00:07)"
+        echo "CONNECT_CONFIRMED $(call Connect s AA:00:00:00:00:06)"
         kill "$pid" 2>/dev/null
         wait "$pid" 2>/dev/null
     ' 2>&1)"
@@ -591,12 +593,16 @@ elif K not in refused or refused[K]["paired"]["data"] is not False:
     print("wrong: the refused keyboard must stay unpaired")
 elif rows.get("CONFIRMED") != ["ok"] or K not in done or done[K]["paired"]["data"] is not True:
     print("wrong: Pair with the confirmation answered %r" % (rows.get("CONFIRMED"),))
+elif rows.get("CONNECT_UNTRUSTED") != ["not-confirmed"]:
+    print("wrong: Connect of a bonded, untrusted keyboard answered %r" % (rows.get("CONNECT_UNTRUSTED"),))
+elif rows.get("CONNECT_CONFIRMED") != ["ok"]:
+    print("wrong: Connect of the keyboard confirmed through Pair answered %r" % (rows.get("CONNECT_CONFIRMED"),))
 else:
     print("VERDICT ok")
 ' 2>&1)"
     echo "$verdict"
     case "$verdict" in
-    *"VERDICT ok"*) ok "Pair of a keyboard: not-confirmed without keyboard_confirmed (still unpaired), ok with it";;
+    *"VERDICT ok"*) ok "Pair of a keyboard: not-confirmed without keyboard_confirmed (still unpaired), ok with it; Connect (RUY-444): not-confirmed for a bonded untrusted keyboard, ok once trusted through Pair";;
     *) bad "Pair of the keyboard fake: $verdict $out";;
     esac
     if grep -qF -- "refused to pair AA:00:00:00:00:06" "$log" 2>/dev/null; then
@@ -604,6 +610,12 @@ else:
     else
         echo "--- log:"; cat "$log" 2>/dev/null
         bad "the service's log lacks the refusal of the unconfirmed keyboard"
+    fi
+    if grep -qF -- "refused to connect AA:00:00:00:00:07" "$log" 2>/dev/null; then
+        ok "the service's log says it refused to connect the untrusted keyboard"
+    else
+        echo "--- log:"; cat "$log" 2>/dev/null
+        bad "the service's log lacks the refusal to connect the untrusted keyboard"
     fi
     rm -f "$log"
 }

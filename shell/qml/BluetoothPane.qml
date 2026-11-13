@@ -210,7 +210,7 @@ SettingsPane {
         } else if (connected) {
             Bluetooth.disconnectDevice(id)
         } else {
-            Bluetooth.connectDevice(id)
+            Bluetooth.connectDevice(id)        // an unconfirmed keyboard is refused ("not-confirmed"): onFinished asks (RUY-444)
         }
     }
 
@@ -247,13 +247,19 @@ SettingsPane {
                                                           : qsTr("Could not rename the controller."), "warning")
                 return
             }
+            if (op === "connect" && status === "not-confirmed") {
+                const dev = Bluetooth.devices.find(d => d.id === id)
+                if (dev)
+                    pane.askKeyboard(id, dev.name)     // the service refused: ask the question, then Pair
+                return
+            }
             if (op === "forget" || op === "scan" || op === "controller-pairing" || status === "ok")
                 return
             Notifications.show(pane.statusText(op, status), "warning")
         }
         function onControllerRejected() {
             if (pane.visible)
-                Notifications.show(qsTr("A device that is not a controller was ignored."), "info")
+                Notifications.show(qsTr("Another device tried to pair and was turned away."), "info")
         }
         function onDevicesChanged() {
             pane.syncDevices()

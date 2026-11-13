@@ -826,8 +826,8 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+9"/>
-        <source>A device that is not a controller was ignored.</source>
-        <translation>Kontrolcü olmayan bir cihaz yok sayıldı.</translation>
+        <source>Another device tried to pair and was turned away.</source>
+        <translation>Başka bir cihaz eşleşmeyi denedi ve geri çevrildi.</translation>
     </message>
     <message>
         <location line="+16"/>

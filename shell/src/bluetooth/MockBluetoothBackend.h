@@ -50,6 +50,7 @@ public:
     void setFamily(const QString &id, const QString &family);
     // Paired without the keys kept (BlueZ's Bonded: no), or bonded.
     void setBonded(const QString &id, bool bonded);
+    void setTrusted(const QString &id, bool trusted);
     // A device that does not answer a scan (it is not in pairing mode): never listed by one.
     void setSilent(const QString &id, bool silent);
     // The service restarts: pads announced before are void.
