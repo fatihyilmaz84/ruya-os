@@ -31,7 +31,7 @@ Item {
                     model: DeviceIcons.padModels
                     Icon {
                         required property string modelData
-                        name: "pad_" + modelData
+                        name: ("pad_" + modelData)   // in brackets: dev.ps1 shots reads the first `name: "..."` as the case
                         size: sheet.glyphSize
                         color: Theme.text
                     }
