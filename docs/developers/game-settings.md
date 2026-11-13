@@ -180,7 +180,7 @@ The file says which format it is in: `"version": 1`.
 
 What already holds, so you can design for it:
 
-- **Your game owns its settings.** The console keeps no copy: store the values in your own `config/` ([Saves and data](saves-and-data.md)), where a console backup also finds them.
+- **Your game owns its settings.** Store the values in your own `config/` ([Saves and data](saves-and-data.md)), where a console backup also finds them. **Planned (ADR-035 amendment):** the console remembers the values you last published, so the player can change your settings from your game's page while your game is not running. Those changes reach you **once, at your next start**, right after your first `PublishValues`, through the same `ChangesRequested` as on Resume. So publish your values early, before your first frame, and apply what you can before you draw: a `restart` setting then needs no restart. Before your first run the page shows your file's `default`s, so make them true.
 - **The file is a hint, not a guarantee.** The player's changes arrive as data; check every value again (type, range, option) before you use it.
 - **A change reaches you on Resume, not live.** Do not expect it while frozen.
 
