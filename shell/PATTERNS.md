@@ -30,6 +30,7 @@ Reusable settings rows. All extend `SettingControl` (a `FocusScope` with the lab
 |---|---|---|
 | Nothing: the row states a fact | `SettingRow { kind: "info" }` | No pill; hairline between facts; hint `B Back` |
 | Acts on a thing in a list (join a network, connect a device, pick a profile) | `SettingRow` (`kind: "item"`, the default) | Pill, value at the right; name the verb in `hints` if it is not Select |
+| Is the one in use, in a list where only one can be (default output, connected Wi-Fi, current mode) | `SettingRow { current: true }` (an item) | DemiBold label, its word, filled check at the right |
 | Opens a page, a picker or the keyboard to change this row's value | `SettingRow { kind: "page" }` | Pill, value, chevron |
 | Does something now or after a confirm (a verb: Scan, Rename, Forget, Reset) | `SettingRow { kind: "action" }` | Centred DemiBold label; a status goes in `value`, drawn under it |
 | The one main step of a flow | `kind: "action"; emphasis: "primary"` | `primaryFill` pill |
