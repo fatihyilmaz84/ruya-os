@@ -17,7 +17,7 @@ logs="$repo/output/ci-shell-linux-logs"
 rm -rf "$logs"; mkdir -p "$logs"
 src=$(mktemp /tmp/ci-shell-src.XXXXXX)
 trap 'rm -f "$src"' EXIT
-tar -C "$repo" --exclude=./.git --exclude=./services/target --exclude=./output --exclude='./shell/build*' -cf "$src" .
+tar -C "$repo" --exclude=./.git --exclude=./services/target --exclude=./output --exclude=./.claude/worktrees --exclude='./shell/build*' -cf "$src" .
 size=$(du -h "$src" | cut -f1)
 
 # Keep this dnf line equal to ci.yml's "Install Qt" step.
