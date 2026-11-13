@@ -34,6 +34,15 @@ public:
     // The controller profiles (RUY-42): MockInputProfiles answers, asynchronously, and a change is
     // one ProfilesChanged after the reply.
     void callProfile(quint64 token, const QString &method, const QVariantMap &args) override;
+    // The Confirm button per console profile (RUY-40); the property is the route's profile's.
+    void readConfirmButton() override;
+    // Tests: the press of a pad is announced (ActiveInputChanged).
+    void sendActiveInput(const QString &deviceId, const QString &family)
+    {
+        emit activeInputChanged(deviceId, family);
+    }
+    // Tests: the mode stored for a console profile ("family" when none).
+    QString confirmButtonOf(const QString &profile) const { return m_confirm.value(profile, QStringLiteral("family")); }
     // Tests: every profile call as { method, args }, oldest first; the profiles back to the
     // built-ins only.
     QVariantList profileCalls() const { return m_profileCalls; }
@@ -42,6 +51,7 @@ public:
     {
         m_profiles.reset();
         m_forcedStatus.clear();
+        m_confirm.clear();
     }
     // While set, every call of `method` answers `status` (its other out-arguments empty) without
     // reaching the profiles: a refused or failed save for the pages' tests (RUY-465). "" clears it.
@@ -101,4 +111,5 @@ private:
     MockInputProfiles m_profiles;
     QVariantList m_profileCalls;
     QHash<QString, QString> m_forcedStatus;
+    QHash<QString, QString> m_confirm;
 };

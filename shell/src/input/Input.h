@@ -49,6 +49,18 @@ class Input : public QObject
     // "loading" before the first answer, "ok", or "failed" (the last ListDevices failed).
     Q_PROPERTY(QString devicesState READ devicesState NOTIFY devicesStateChanged)
 
+    // The Confirm button of the signed-in profile (06 section 11.2): "family" (as on the controller)
+    // | "south" (Bottom) | "east" (Right). "family" until the service has answered. Changing it
+    // (setConfirmButton) shows at once; a refusal puts the stored value back.
+    Q_PROPERTY(QString confirmButton READ confirmButton NOTIFY confirmButtonChanged)
+    // The service answered the last read of ConfirmButton (false: no Input1, the row is dimmed).
+    Q_PROPERTY(bool confirmButtonAvailable READ confirmButtonAvailable NOTIFY confirmButtonChanged)
+    // The pad of the last press (Input1.ActiveInputChanged) and its family ("xbox", "playstation",
+    // "nintendo", "generic", ...); "" until a pad has pressed since the shell started. RUY-41 builds
+    // the glyph sets on these two.
+    Q_PROPERTY(QString activeDevice READ activeDevice NOTIFY activeInputChanged)
+    Q_PROPERTY(QString activeFamily READ activeFamily NOTIFY activeInputChanged)
+
 public:
     explicit Input(std::unique_ptr<InputBackend> backend, QObject *parent = nullptr);
     ~Input() override;
@@ -69,6 +81,14 @@ public:
 
     QVariantList devices() const { return m_devices; }
     QString devicesState() const { return m_devicesState; }
+    QString confirmButton() const { return m_confirm; }
+    bool confirmButtonAvailable() const { return m_confirmAvailable; }
+    QString activeDevice() const { return m_activeDevice; }
+    QString activeFamily() const { return m_activeFamily; }
+    // Input1.SetConfirmButton(profile, mode) for the signed-in profile; a refusal (any status but
+    // "ok", or a failed call) is the signal confirmButtonRefused(status).
+    Q_INVOKABLE void setConfirmButton(const QString &mode);
+
     // Asks ListDevices again (Settings > Controllers' "Try again").
     Q_INVOKABLE void refreshDevices();
     // GetCapabilities(device_id): the answer arrives as capabilitiesFinished.
@@ -108,6 +128,10 @@ public:
     void setStorage(Storage *storage);
 
     // Tests only, and only with the mock backend (otherwise empty or no-ops).
+    // A pad presses: the service announces it as the active input.
+    Q_INVOKABLE void mockActiveInput(const QString &deviceId, const QString &family);
+    // The mode the mock service holds for a console profile.
+    Q_INVOKABLE QString mockConfirmButton(const QString &profile) const;
     // Every SetRoute that reached the mock service: [{ route, instance, appId, profile }].
     Q_INVOKABLE QVariantList mockCalls() const;
     Q_INVOKABLE void mockClearCalls();
@@ -149,6 +173,9 @@ signals:
     void serviceOwnedChanged();
     void devicesChanged();
     void devicesStateChanged();
+    void confirmButtonChanged();
+    void confirmButtonRefused(const QString &status);
+    void activeInputChanged();
     void capabilitiesFinished(const QString &deviceId, const QString &status, const QVariantList &capabilities);
     void testStartFinished(const QString &deviceId, const QString &status);
     void testInput(const QString &deviceId, const QString &input, int value, const QString &source);
@@ -201,6 +228,11 @@ private:
     QString m_status;
     QVariantList m_devices;
     QString m_devicesState = QStringLiteral("loading");
+    QString m_confirm = QStringLiteral("family");
+    QString m_previousConfirm = QStringLiteral("family");
+    bool m_confirmAvailable = false;
+    QString m_activeDevice;
+    QString m_activeFamily;
     quint64 m_nextToken = 1;
     QHash<quint64, Purpose> m_purposes;
     QPointer<Storage> m_storage;

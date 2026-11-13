@@ -28,7 +28,7 @@ use crate::acl;
 use crate::book::{Book, SaveAnswer, Summary};
 use crate::caps::Capability;
 use crate::engine::Engine;
-use crate::mapping::{Axis, Button, KeyBoard, KeyEvent, Mapper, NavKey};
+use crate::mapping::{Axis, Button, Confirm, KeyBoard, KeyEvent, Mapper, NavKey};
 use crate::pad::{
     diff, OutEvent, PadAxis, PadButton, PadInput, PadState, Rumble, TestEvent, ALL_AXES,
     PAD_PHYS_PREFIX, STICK_MAX, STICK_MIN, TRIGGER_MAX,
@@ -160,6 +160,13 @@ pub enum Notice {
     ProfilesChanged {
         profile: String,
     },
+    /// The `ConfirmButton` property changed: the active profile's mode (a switch or a set).
+    ConfirmButtonChanged,
+    /// The last press among the pads came from another device (`ActiveInputChanged`).
+    ActiveInput {
+        device_id: String,
+        family: String,
+    },
     /// A journal line (without the "ruya-inputd: " prefix).
     Journal(String),
 }
@@ -286,7 +293,15 @@ fn axis_held(axis: PadAxis, value: i32) -> bool {
     value.abs() >= full / 4
 }
 
-fn mapper_events(mapper: &mut Mapper, input: PadInput) -> Vec<KeyEvent> {
+/// One input of a pad of `family` as navigation keys. This is the seam of the family: the
+/// confirm setting reaches the shell's keys here and nowhere else (the virtual pads never see it),
+/// and `family` is `PadInfo::family` (identity.rs), the same value `ActiveInputChanged` reports.
+fn mapper_events(
+    mapper: &mut Mapper,
+    input: PadInput,
+    family: &str,
+    mode: Confirm,
+) -> Vec<KeyEvent> {
     let button = |b| -> Option<Button> {
         Some(match b {
             PadButton::South => Button::South,
@@ -304,7 +319,7 @@ fn mapper_events(mapper: &mut Mapper, input: PadInput) -> Vec<KeyEvent> {
     };
     match input {
         PadInput::Button(b, pressed) => match button(b) {
-            Some(b) => mapper.button(b, pressed),
+            Some(b) => mapper.button_as(b, pressed, family, mode),
             None => Vec::new(),
         },
         PadInput::Axis(PadAxis::LeftX, v) => {
@@ -368,6 +383,8 @@ pub struct Router<B: Backend> {
     tests: BTreeMap<String, ButtonTest>,
     /// The controller profiles of every console profile.
     book: Book,
+    /// The stable id of the pad whose press was announced last (`ActiveInputChanged`).
+    active_input: Option<String>,
 }
 
 impl<B: Backend> Router<B> {
@@ -389,6 +406,7 @@ impl<B: Backend> Router<B> {
             notices: Vec::new(),
             tests: BTreeMap::new(),
             book: Book::default(),
+            active_input: None,
         }
     }
 
@@ -479,6 +497,9 @@ impl<B: Backend> Router<B> {
         let Some(mut pad) = self.pads.remove(&key) else {
             return Vec::new();
         };
+        if self.active_input.as_deref() == Some(pad.info.id.as_str()) {
+            self.active_input = None;
+        }
         let held = pad.mapper.held_keys();
         let keys = self.board.pad_gone(&mut pad.mapper);
         self.backend.nav_keys(&keys);
@@ -496,13 +517,18 @@ impl<B: Backend> Router<B> {
     /// One batch of a pad's input (one evdev `SYN_REPORT`).
     pub fn input(&mut self, key: PadKey, inputs: &[PadInput]) {
         let app = self.route == Route::App;
+        let mode = self.book.confirm_button(&self.profile);
+        self.drain_book();
         let Some(pad) = self.pads.get_mut(&key) else {
             return;
         };
+        let family = pad.info.family.clone();
         let mut nav = Vec::new();
+        let mut pressed = false;
         for &input in inputs {
             pad.state.apply(input);
-            let events = mapper_events(&mut pad.mapper, input);
+            pressed |= matches!(input, PadInput::Button(_, true));
+            let events = mapper_events(&mut pad.mapper, input, &family, mode);
             if app {
                 // Navigation stops while an app has the focus; Guide always reaches the shell.
                 nav.extend(events.into_iter().filter(|&(k, _)| k == NavKey::Guide));
@@ -513,11 +539,22 @@ impl<B: Backend> Router<B> {
                 v.unmask(input);
             }
         }
+        let id = pad.info.id.clone();
         let keys = self.board.route(&nav);
         self.backend.nav_keys(&keys);
+        if pressed && self.active_input.as_deref() != Some(id.as_str()) {
+            self.active_input = Some(id.clone());
+            self.notices.push(Notice::ActiveInput {
+                device_id: id,
+                family,
+            });
+        }
         if !app {
             return;
         }
+        let Some(pad) = self.pads.get_mut(&key) else {
+            return;
+        };
         if let Some(v) = pad.virt.as_mut() {
             let target = v.target(&pad.state);
             let events = diff(&v.sent, &target);
@@ -836,6 +873,7 @@ impl<B: Backend> Router<B> {
         self.app_id = app_id.to_owned();
         self.profile = profile.to_owned();
         if profile_changed {
+            self.notices.push(Notice::ConfirmButtonChanged);
             let keys: Vec<PadKey> = self.pads.keys().copied().collect();
             for key in keys {
                 self.changed(key);
@@ -851,6 +889,39 @@ impl<B: Backend> Router<B> {
                 instance: instance.to_owned(),
             });
         }
+    }
+
+    // ---- the confirm button (06 §11.2) ------------------------------------------------------
+
+    /// The `ConfirmButton` property: the signed-in profile's mode ("family" with none).
+    pub fn confirm_button(&mut self) -> &'static str {
+        let profile = self.profile.clone();
+        let mode = self.book.confirm_button(&profile);
+        self.drain_book();
+        mode.as_str()
+    }
+
+    /// `SetConfirmButton`: `mode` is "family" | "south" | "east" for a profile account. It applies
+    /// from the next press on; a key held now is released as it was pressed.
+    pub fn set_confirm_button(&mut self, profile: &str, mode: &str) -> Status {
+        if !self.console_ok(profile) {
+            return Status::UnknownProfile;
+        }
+        let Some(mode) = Confirm::parse(mode) else {
+            return Status::Invalid;
+        };
+        let status = self.book.set_confirm_button(profile, mode);
+        self.drain_book();
+        if status == Status::Ok {
+            self.journal(format!(
+                "confirm button of ruya-{profile}: {}",
+                mode.as_str()
+            ));
+            if profile == self.profile {
+                self.notices.push(Notice::ConfirmButtonChanged);
+            }
+        }
+        status
     }
 
     // ---- controller profiles (06 §7) --------------------------------------------------------
@@ -2080,6 +2151,253 @@ mod tests {
         let a3 = r.add_pad(pad("a"), t0());
         let _ = a3;
         assert_eq!(r.devices()[1].instance, "a#3");
+    }
+
+    // ---- the confirm button (06 section 11.2) -----------------------------------------------
+
+    fn family_pad(id: &str, family: &str) -> PadInfo {
+        PadInfo {
+            family: family.into(),
+            ..pad(id)
+        }
+    }
+
+    /// The shell route with `profile` signed in.
+    fn signed_in(r: &mut Router<Fake>, profile: &str) {
+        assert_eq!(
+            r.set_route("shell", "", "", profile, SHELL, t0()),
+            Status::Ok
+        );
+    }
+
+    fn keys_of(r: &mut Router<Fake>) -> Vec<KeyEvent> {
+        nav(&r.backend_mut().take())
+    }
+
+    #[test]
+    fn a_nintendo_pad_confirms_with_its_right_button() {
+        let mut r = router();
+        let a = r.add_pad(family_pad("n", "nintendo"), t0());
+        signed_in(&mut r, "p1");
+        r.backend_mut().take();
+        r.input(a, &[press(PadButton::East), release(PadButton::East)]);
+        assert_eq!(
+            keys_of(&mut r),
+            vec![(NavKey::Accept, true), (NavKey::Accept, false)]
+        );
+        r.input(a, &[press(PadButton::South), release(PadButton::South)]);
+        assert_eq!(
+            keys_of(&mut r),
+            vec![(NavKey::Back, true), (NavKey::Back, false)]
+        );
+    }
+
+    #[test]
+    fn the_setting_swaps_per_family_and_unknown_families_stay_positional() {
+        let mut r = router();
+        let ps = r.add_pad(family_pad("ps", "playstation"), t0());
+        let nin = r.add_pad(family_pad("nin", "nintendo"), t0());
+        let odd = r.add_pad(family_pad("odd", "unheard-of"), t0());
+        signed_in(&mut r, "p1");
+        let south_of = |r: &mut Router<Fake>, pad| {
+            r.backend_mut().take();
+            r.input(pad, &[press(PadButton::South), release(PadButton::South)]);
+            keys_of(r)[0].0
+        };
+        assert_eq!(south_of(&mut r, ps), NavKey::Accept);
+        assert_eq!(south_of(&mut r, nin), NavKey::Back);
+        assert_eq!(south_of(&mut r, odd), NavKey::Accept);
+        assert_eq!(r.set_confirm_button("p1", "east"), Status::Ok);
+        assert_eq!(south_of(&mut r, ps), NavKey::Back, "Circle confirms");
+        assert_eq!(south_of(&mut r, nin), NavKey::Back);
+        assert_eq!(south_of(&mut r, odd), NavKey::Back);
+        assert_eq!(r.set_confirm_button("p1", "south"), Status::Ok);
+        assert_eq!(south_of(&mut r, ps), NavKey::Accept);
+        assert_eq!(
+            south_of(&mut r, nin),
+            NavKey::Accept,
+            "Bottom on a Nintendo pad"
+        );
+        assert_eq!(r.set_confirm_button("p1", "family"), Status::Ok);
+        assert_eq!(south_of(&mut r, nin), NavKey::Back);
+    }
+
+    #[test]
+    fn a_held_button_is_released_as_it_was_pressed_after_the_setting_changes() {
+        let mut r = router();
+        let a = r.add_pad(family_pad("x", "xbox"), t0());
+        signed_in(&mut r, "p1");
+        r.backend_mut().take();
+        r.input(a, &[press(PadButton::South)]);
+        assert_eq!(keys_of(&mut r), vec![(NavKey::Accept, true)]);
+        assert_eq!(r.set_confirm_button("p1", "east"), Status::Ok);
+        r.input(a, &[release(PadButton::South)]);
+        assert_eq!(keys_of(&mut r), vec![(NavKey::Accept, false)]);
+        // Held across a profile switch too: p2 has "family", p1 "east".
+        r.input(a, &[press(PadButton::South)]);
+        assert_eq!(keys_of(&mut r), vec![(NavKey::Back, true)]);
+        signed_in(&mut r, "p2");
+        r.input(a, &[release(PadButton::South)]);
+        assert_eq!(keys_of(&mut r), vec![(NavKey::Back, false)]);
+    }
+
+    #[test]
+    fn a_pad_that_vanishes_mid_press_leaves_no_key_down() {
+        let mut r = router();
+        let a = r.add_pad(family_pad("n", "nintendo"), t0());
+        signed_in(&mut r, "p1");
+        r.backend_mut().take();
+        r.input(a, &[press(PadButton::East)]);
+        assert_eq!(r.set_confirm_button("p1", "south"), Status::Ok);
+        assert_eq!(r.remove_pad(a), vec![NavKey::Accept]);
+        assert_eq!(
+            keys_of(&mut r),
+            vec![(NavKey::Accept, true), (NavKey::Accept, false)]
+        );
+    }
+
+    #[test]
+    fn the_setting_is_per_console_profile_and_follows_the_switch() {
+        let mut r = router();
+        let a = r.add_pad(family_pad("x", "xbox"), t0());
+        assert_eq!(r.confirm_button(), "family", "no profile");
+        signed_in(&mut r, "p1");
+        assert_eq!(r.set_confirm_button("p1", "east"), Status::Ok);
+        assert_eq!(r.confirm_button(), "east");
+        r.take_notices();
+        signed_in(&mut r, "p2");
+        assert_eq!(r.confirm_button(), "family");
+        assert!(
+            r.take_notices()
+                .iter()
+                .any(|n| matches!(n, Notice::ConfirmButtonChanged)),
+            "a switch announces the property"
+        );
+        // A set for the signed-in profile announces the property.
+        assert_eq!(r.set_confirm_button("p2", "south"), Status::Ok);
+        assert!(
+            r.take_notices()
+                .iter()
+                .any(|n| matches!(n, Notice::ConfirmButtonChanged)),
+            "a set for the active profile announces the property"
+        );
+        assert_eq!(r.set_confirm_button("p2", "family"), Status::Ok);
+        r.take_notices();
+        // Another profile's change is not the active profile's property.
+        assert_eq!(r.set_confirm_button("p1", "south"), Status::Ok);
+        assert!(
+            !r.take_notices()
+                .iter()
+                .any(|n| matches!(n, Notice::ConfirmButtonChanged)),
+            "another profile's change is not the property"
+        );
+        r.backend_mut().take();
+        r.input(a, &[press(PadButton::South)]);
+        assert_eq!(keys_of(&mut r), vec![(NavKey::Accept, true)]);
+        signed_in(&mut r, "p1");
+        assert_eq!(r.confirm_button(), "south");
+    }
+
+    #[test]
+    fn set_confirm_button_answers_ok_invalid_unknown_profile_or_failed() {
+        let mut r = router();
+        assert_eq!(r.set_confirm_button("p1", "Right"), Status::Invalid);
+        assert_eq!(r.set_confirm_button("p1", ""), Status::Invalid);
+        assert_eq!(
+            r.set_confirm_button("nobody", "east"),
+            Status::UnknownProfile
+        );
+        assert_eq!(r.set_confirm_button("", "east"), Status::UnknownProfile);
+        assert_eq!(r.set_confirm_button("root", "east"), Status::UnknownProfile);
+        assert_eq!(r.set_confirm_button("p1", "east"), Status::Ok);
+        let store = crate::book::MemStore {
+            fail: true,
+            ..Default::default()
+        };
+        r.set_book(Book::new(Box::new(store)));
+        signed_in(&mut r, "p1");
+        assert_eq!(r.set_confirm_button("p1", "east"), Status::Failed);
+        assert_eq!(
+            r.confirm_button(),
+            "family",
+            "a refused write changes nothing"
+        );
+    }
+
+    #[test]
+    fn the_setting_is_read_from_the_state_directory() {
+        let mut store = crate::book::MemStore::default();
+        store.files.insert(
+            ("p1".into(), crate::book::SETTINGS.into()),
+            r#"{"confirm_button":"east"}"#.into(),
+        );
+        store.files.insert(
+            ("p2".into(), crate::book::SETTINGS.into()),
+            r#"{"confirm_button":"sideways"}"#.into(),
+        );
+        let mut r = router();
+        r.set_book(Book::new(Box::new(store)));
+        signed_in(&mut r, "p1");
+        assert_eq!(r.confirm_button(), "east");
+        signed_in(&mut r, "p2");
+        assert_eq!(r.confirm_button(), "family", "a bad mode is not used");
+        assert!(journal(&mut r).iter().any(|l| l.contains("sideways")));
+        // The settings file is no profile.
+        let (_, list) = r.list_profiles("p1");
+        assert!(list.iter().all(|s| s.id != "_settings"), "{list:?}");
+    }
+
+    #[test]
+    fn the_virtual_pad_never_sees_the_confirm_setting() {
+        let events_for = |mode: &str| {
+            let mut r = router();
+            let a = r.add_pad(family_pad("n", "nintendo"), t0());
+            assert_eq!(r.save_profile("p1", SWAP).0, Status::Ok);
+            assert_eq!(r.assign_profile("p1", "global", "", "swap"), Status::Ok);
+            assert_eq!(r.set_confirm_button("p1", mode), Status::Ok);
+            app(&mut r, "i1", STK, "p1");
+            r.backend_mut().take();
+            r.input(a, &[press(PadButton::South), press(PadButton::East)]);
+            let calls = r.backend_mut().take();
+            assert!(nav(&calls).is_empty(), "no navigation key under an app");
+            writes(&calls)
+        };
+        let family = events_for("family");
+        assert!(!family.is_empty());
+        assert_eq!(family, events_for("east"));
+        assert_eq!(family, events_for("south"));
+    }
+
+    #[test]
+    fn the_active_input_is_announced_when_another_pad_presses() {
+        let active = |r: &mut Router<Fake>| -> Vec<(String, String)> {
+            r.take_notices()
+                .into_iter()
+                .filter_map(|n| match n {
+                    Notice::ActiveInput { device_id, family } => Some((device_id, family)),
+                    _ => None,
+                })
+                .collect()
+        };
+        let mut r = router();
+        let a = r.add_pad(family_pad("a", "playstation"), t0());
+        let b = r.add_pad(family_pad("b", "nintendo"), t0());
+        r.take_notices();
+        r.input(a, &[PadInput::Axis(PadAxis::LeftX, 100)]);
+        assert!(active(&mut r).is_empty(), "no press, no change");
+        r.input(a, &[press(PadButton::South)]);
+        r.input(a, &[release(PadButton::South), press(PadButton::East)]);
+        assert_eq!(
+            active(&mut r),
+            vec![("a".to_owned(), "playstation".to_owned())]
+        );
+        r.input(b, &[press(PadButton::East)]);
+        assert_eq!(
+            active(&mut r),
+            vec![("b".to_owned(), "nintendo".to_owned())]
+        );
+        r.input(a, &[release(PadButton::East)]);
+        assert!(active(&mut r).is_empty(), "a release is no press");
     }
 
     // ---- rumble ----------------------------------------------------------------------------

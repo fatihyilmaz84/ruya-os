@@ -37,6 +37,9 @@ public:
     // names. The answer arrives as profileReply with the same token and the out-arguments by name
     // (status "failed", the others empty, when the call itself failed).
     virtual void callProfile(quint64 token, const QString &method, const QVariantMap &args) = 0;
+    // Reads the ConfirmButton property (06 section 11.2: the signed-in profile's mode); the answer
+    // arrives as confirmButtonRead.
+    virtual void readConfirmButton() = 0;
 
 signals:
     // The newest SetRoute's answer: a status string of api/dbus/org.ruyaos.Input1.xml, or "failed"
@@ -59,6 +62,13 @@ signals:
     void testInput(const QString &deviceId, const QString &input, int value, const QString &source);
     void testEnded(const QString &deviceId, const QString &reason);
     void profileReply(quint64 token, const QString &method, const QVariantMap &args, const QVariantMap &reply);
+    // The ConfirmButton property answered: mode "family" | "south" | "east", ok false when the call
+    // failed (no service).
+    void confirmButtonRead(bool ok, const QString &mode);
+    // The property changed (a profile switch or SetConfirmButton): read it again.
+    void confirmButtonChanged();
+    // ActiveInputChanged(device_id, family): the last press came from that device.
+    void activeInputChanged(const QString &deviceId, const QString &family);
     // ProfilesChanged: the controller profiles of that console profile changed.
     void profilesChanged(const QString &profile);
 

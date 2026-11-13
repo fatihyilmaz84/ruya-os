@@ -91,7 +91,7 @@ Item {
             const methods = Input.profileMethods()
             compare(methods.map(m => m.name),
                     ["ListProfiles", "GetProfile", "SaveProfile", "ValidateProfile", "DeleteProfile", "AssignProfile",
-                     "GetEffectiveProfile"])
+                     "GetEffectiveProfile", "SetConfirmButton"])
             for (const m of methods) {
                 const body = new RegExp('<method name="' + m.name + '">([\\s\\S]*?)</method>').exec(xml)
                 verify(body, m.name + " is in the XML")
@@ -104,6 +104,9 @@ Item {
                 compare(m.out, args.filter(x => x.dir === "out").map(x => x.name), m.name + " out-arguments")
                 verify(args.filter(x => x.dir === "in").every(x => x.type === "s"), m.name + ": every in-argument is a string")
             }
+            verify(/<property name="ConfirmButton" type="s" access="read"\/>/.test(xml), "the ConfirmButton property (RUY-40)")
+            verify(/<signal name="ActiveInputChanged">\s*<arg name="device_id" type="s"\/>\s*<arg name="family" type="s"\/>/.test(xml),
+                   "ActiveInputChanged(device_id, family)")
             verify(/<signal name="ProfilesChanged">\s*<arg name="profile" type="s"\/>/.test(xml), "ProfilesChanged(profile)")
         }
 

@@ -6,7 +6,12 @@
 # so vm-input-probe.py holds its own bus connection), rumble is forwarded, and a killed service
 # is back within 0.5 s. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|fallback]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|fallback|confirm]
+# `confirm` (RUY-40) checks the family's confirm button with a uinput pad announcing Nintendo's vendor
+# id: BTN_EAST gives KEY_ENTER and BTN_SOUTH KEY_ESC on RuyaOS Navigation, `south` swaps them back, `east`
+# gives them to every family, the ConfirmButton property follows, bad modes and accounts are refused. It stops
+# ruya-compositor@tty1 for the block (an Accept must not reach a live Home, RUY-473) and starts it again; run
+# it alone, not inside `check`.
 # `check` runs the first four, then `caps` and `profiles`. `profiles` (RUY-42) checks the controller
 # profiles over busctl: the built-ins, validation (a bad file, 64 KiB + 1), storage in
 # /var/lib/ruya-input/profiles/<profile>/ (0700 / 0600, ruya-input's, unreadable to the profile
@@ -481,7 +486,41 @@ print(status if not bad else status + ": " + "; ".join(bad))
     wait "$padpid" 2>/dev/null
 }
 
+# RUY-40: the family's own confirm button. A uinput pad announcing Nintendo's vendor id (0x057e) must
+# give BTN_EAST = KEY_ENTER and BTN_SOUTH = KEY_ESC on RuyaOS Navigation; "south" swaps them back, "east"
+# gives every family the right button. An Accept must not reach a live Home (it launches an app,
+# RUY-473), so the compositor (and with it the shell) is stopped for the block and restarted by the
+# EXIT trap; the probe holds the route `shell` itself. Not part of `check` (it stops the screen).
+confirm_restore() {
+    systemctl start 'ruya-compositor@tty1' >/dev/null 2>&1
+}
+
+confirm_check() {
+    echo "--- the family's confirm button (RUY-40)"
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; return; }
+    systemctl is-active ruya-inputd >/dev/null || { bad "ruya-inputd is not active"; return; }
+    trap confirm_restore EXIT
+    systemctl stop 'ruya-compositor@tty1' >/dev/null 2>&1
+    local n=0
+    until ! pgrep -u ruya-shell -x ruya-shell >/dev/null || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
+    if pgrep -u ruya-shell -x ruya-shell >/dev/null; then
+        bad "the shell still runs: an Accept would reach Home"
+        confirm_restore; trap - EXIT
+        return
+    fi
+    ok "the compositor and the shell are stopped: no Accept can start anything"
+    python3 "$probe" confirm --profile "$me" || fail=1
+    confirm_restore
+    trap - EXIT
+    ok "the compositor is started again"
+}
+
 case "${1:-check}" in
+confirm)
+    two_profiles
+    [ -n "$me" ] && ok "profile $me" || { bad "need a profile"; exit 1; }
+    confirm_check
+    ;;
 check)
     two_profiles
     [ -n "$me" ] && [ -n "$other" ] && ok "profiles: $me signs in, $other is the other user" || { bad "need two profiles"; exit 1; }

@@ -329,6 +329,26 @@ impl InputIface {
         self.shared.with(|r| r.route().as_str().to_owned())
     }
 
+    fn set_confirm_button(&self, profile: &str, mode: &str) -> String {
+        self.shared
+            .with(|r| r.set_confirm_button(profile, mode))
+            .as_str()
+            .to_owned()
+    }
+
+    /// The signed-in profile's Confirm button: "family" | "south" | "east".
+    #[zbus(property)]
+    fn confirm_button(&self) -> String {
+        self.shared.with(|r| r.confirm_button().to_owned())
+    }
+
+    #[zbus(signal)]
+    async fn active_input_changed(
+        emitter: &SignalEmitter<'_>,
+        device_id: &str,
+        family: &str,
+    ) -> zbus::Result<()>;
+
     #[zbus(signal)]
     async fn device_added(emitter: &SignalEmitter<'_>, device: Dict) -> zbus::Result<()>;
 
@@ -385,6 +405,10 @@ pub async fn announce(connection: Connection, notices: async_channel::Receiver<N
             }
             Notice::ProfilesChanged { profile } => {
                 InputIface::profiles_changed(emitter, profile).await
+            }
+            Notice::ConfirmButtonChanged => iface.get().await.confirm_button_changed(emitter).await,
+            Notice::ActiveInput { device_id, family } => {
+                InputIface::active_input_changed(emitter, device_id, family).await
             }
             Notice::Journal(_) => Ok(()),
         };

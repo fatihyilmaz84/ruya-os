@@ -90,6 +90,10 @@ DBusInputBackend::DBusInputBackend(QObject *parent)
                   SLOT(onTestInput(QString, QString, int, QString)));
     m_bus.connect(Service, Path, Interface, QStringLiteral("TestEnded"), this, SLOT(onTestEnded(QString, QString)));
     m_bus.connect(Service, Path, Interface, QStringLiteral("ProfilesChanged"), this, SLOT(onProfilesChanged(QString)));
+    m_bus.connect(Service, Path, QStringLiteral("org.freedesktop.DBus.Properties"), QStringLiteral("PropertiesChanged"),
+                  this, SLOT(onPropertiesChanged(QString, QVariantMap, QStringList)));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("ActiveInputChanged"), this,
+                  SLOT(onActiveInputChanged(QString, QString)));
     // Who owns the name now, asked without blocking; a change that arrives first wins.
     if (auto *busInterface = m_bus.interface()) {
         auto *asked = new QDBusPendingCallWatcher(busInterface->asyncCall(QStringLiteral("NameHasOwner"), Service), this);
@@ -218,6 +222,37 @@ void DBusInputBackend::onTestInput(const QString &deviceId, const QString &input
 void DBusInputBackend::onTestEnded(const QString &deviceId, const QString &reason)
 {
     emit testEnded(deviceId, reason);
+}
+
+void DBusInputBackend::readConfirmButton()
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, QStringLiteral("org.freedesktop.DBus.Properties"),
+                                              QStringLiteral("Get"));
+    msg << Interface << QStringLiteral("ConfirmButton");
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+            qWarning("ruya-shell: Input1 ConfirmButton failed: %s", qPrintable(reply.errorMessage()));
+            emit confirmButtonRead(false, QString());
+            return;
+        }
+        emit confirmButtonRead(true, reply.arguments().at(0).value<QDBusVariant>().variant().toString());
+    });
+}
+
+void DBusInputBackend::onPropertiesChanged(const QString &interface, const QVariantMap &changed,
+                                           const QStringList &invalidated)
+{
+    if (interface == Interface
+        && (changed.contains(QStringLiteral("ConfirmButton")) || invalidated.contains(QStringLiteral("ConfirmButton"))))
+        emit confirmButtonChanged();
+}
+
+void DBusInputBackend::onActiveInputChanged(const QString &deviceId, const QString &family)
+{
+    emit activeInputChanged(deviceId, family);
 }
 
 void DBusInputBackend::onProfilesChanged(const QString &profile)
