@@ -891,7 +891,15 @@ impl<B: Backend> Router<B> {
                     profile: profile.to_owned(),
                     uid,
                 });
-                let keys: Vec<PadKey> = self.pads.keys().copied().collect();
+                // The pad the player uses (the last one that gave input) is created first, so it
+                // is `pad1` and SDL index 0; the others follow in key order (RUY-540).
+                let mut keys: Vec<PadKey> = self.pads.keys().copied().collect();
+                if let Some(active) = self.active_input.as_deref() {
+                    if let Some(i) = keys.iter().position(|k| self.pads[k].info.id == active) {
+                        let k = keys.remove(i);
+                        keys.insert(0, k);
+                    }
+                }
                 for key in keys {
                     self.create_virtual(key, now);
                 }
@@ -1681,6 +1689,54 @@ mod tests {
     }
 
     // ---- virtual pads ----------------------------------------------------------------------
+
+    #[test]
+    fn the_active_pad_becomes_pad1_and_is_created_first() {
+        let creations = |calls: &[Call]| -> Vec<(PadKey, String)> {
+            calls
+                .iter()
+                .filter_map(|c| match c {
+                    Call::Create(k, s) => Some((*k, s.phys.clone())),
+                    _ => None,
+                })
+                .collect()
+        };
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        let c = r.add_pad(pad("c"), t0());
+        // The second pad in key order is the one the player uses.
+        r.input(b, &[press(PadButton::South)]);
+        r.backend_mut().take();
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(
+            creations(&r.backend_mut().take()),
+            vec![
+                (b, "ruya-input/pad1".to_owned()),
+                (a, "ruya-input/pad2".to_owned()),
+                (c, "ruya-input/pad3".to_owned()),
+            ]
+        );
+        // A pad plugged in during the app takes the next free number.
+        let d = r.add_pad(pad("d"), t0());
+        assert_eq!(
+            creations(&r.backend_mut().take()),
+            vec![(d, "ruya-input/pad4".to_owned())]
+        );
+        // No active pad: key order, as before.
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        r.backend_mut().take();
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(
+            creations(&r.backend_mut().take()),
+            vec![
+                (a, "ruya-input/pad1".to_owned()),
+                (b, "ruya-input/pad2".to_owned())
+            ]
+        );
+    }
 
     #[test]
     fn a_virtual_pad_per_pad_exists_only_in_app() {

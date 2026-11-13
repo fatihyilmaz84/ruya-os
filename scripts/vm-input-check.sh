@@ -6,7 +6,7 @@
 # so vm-input-probe.py holds its own bus connection), rumble is forwarded, and a killed service
 # is back within 0.5 s. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|fallback|confirm|hold]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|fallback|confirm|hold|twopads]
 # `confirm` (RUY-40) checks the family's confirm button with a uinput pad announcing Nintendo's vendor
 # id: BTN_EAST gives KEY_ENTER and BTN_SOUTH KEY_ESC on RuyaOS Navigation, `south` swaps them back, `east`
 # gives them to every family, the ConfirmButton property follows, bad modes and accounts are refused. It stops
@@ -16,6 +16,9 @@
 # without the flag the left stick sends Right/Left, with it no arrow key (the D-pad still sends Right), a stick
 # held when the hold starts is released once, after StopTest a pushed stick stays quiet until it was neutral,
 # and the old one-argument StartTest is refused. Run it alone, not inside `check`.
+# `twopads` (RUY-540) checks the numbering of the virtual pads with two uinput pads: the pad that pressed last is
+# ruya-input/pad1, created first (the lower event node, SDL index 0), whichever of the two it is; the profile user opens
+# pad1 and hears that pad's button and not the idle pad's. It routes by its own bus connection and ends on `shell`.
 # `check` runs the first four, then `caps` and `profiles`. `profiles` (RUY-42) checks the controller
 # profiles over busctl: the built-ins, validation (a bad file, 64 KiB + 1), storage in
 # /var/lib/ruya-input/profiles/<profile>/ (0700 / 0600, ruya-input's, unreadable to the profile
@@ -539,6 +542,22 @@ confirm)
     two_profiles
     [ -n "$me" ] && ok "profile $me" || { bad "need a profile"; exit 1; }
     confirm_check
+    ;;
+twopads)
+    two_profiles
+    [ -n "$me" ] && ok "profile $me" || { bad "need a profile"; exit 1; }
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
+    dir="$(mktemp -d /var/tmp/ruya-input-check.XXXXXX)"
+    chmod 0755 "$dir"
+    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    while IFS= read -r line; do
+        case "$line" in
+        PASS:*) ok "${line#PASS: }" ;;
+        FAIL:*) bad "${line#FAIL: }" ;;
+        *) echo "$line"; bad "the probe printed an unexpected line (traceback?)" ;;
+        esac
+    done < <(cd "$dir" && python3 "$dir/vm-input-probe.py" twopads --user "ruya-$me" --profile "$me" 2>&1)
+    rm -rf "$dir"
     ;;
 hold)
     two_profiles
