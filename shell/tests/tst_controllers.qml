@@ -632,7 +632,7 @@ Item {
         }
 
         // The Button test of one pad with a few inputs pressed, for the layout shots (RUY-486).
-        function layoutShot(device, name, inputs) {
+        function layoutShot(dir, device, name, inputs) {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             if (device.id !== ds && device.id !== xbox && device.id !== pro) {
@@ -647,18 +647,18 @@ Item {
             for (const i of inputs.slice(0, 3))
                 Input.mockTestInput(device.id, i, 1, "raw:pad:1:0")
             settle()
-            grabImage(tc.shell).save(shotsDir + "/27-button-test-layout-" + name + "-en.png")
+            grabImage(tc.shell).save(dir + "27-button-test-layout-" + name + "-en.png")
         }
 
-        function test_zz_screenshots_layout_playstation() { layoutShot({ id: ds }, "playstation", ["select", "dpad_left", "l3", "guide"]) }
-        function test_zz_screenshots_layout_xbox() { layoutShot({ id: xbox }, "xbox", ["start", "dpad_down", "r3", "guide"]) }
-        function test_zz_screenshots_layout_nintendo() { layoutShot({ id: pro }, "nintendo", ["select", "dpad_right", "l3", "guide"]) }
+        function test_zz_screenshots_layout_playstation() { layoutShot(shotsDir + "/", { id: ds }, "playstation", ["select", "dpad_left", "l3", "guide"]) }
+        function test_zz_screenshots_layout_xbox() { layoutShot(shotsDir + "/", { id: xbox }, "xbox", ["start", "dpad_down", "r3", "guide"]) }
+        function test_zz_screenshots_layout_nintendo() { layoutShot(shotsDir + "/", { id: pro }, "nintendo", ["select", "dpad_right", "l3", "guide"]) }
         function test_zz_screenshots_layout_wiiu() {
-            layoutShot({ id: "bluetooth-057e-0330-c1d2e3f4a5b6", name: "Nintendo Wii Remote Pro Controller", family: "nintendo",
+            layoutShot(shotsDir + "/", { id: "bluetooth-057e-0330-c1d2e3f4a5b6", name: "Nintendo Wii Remote Pro Controller", family: "nintendo",
                          layout: "nintendo-wiiu", connection: "bluetooth", battery: 80 }, "nintendo-wiiu", ["select", "start", "dpad_up", "r3", "guide"])
         }
         function test_zz_screenshots_layout_generic() {
-            layoutShot({ id: "usb-2dc8-3106-aabbccddeeff", name: "8BitDo Pro 2", family: "generic", connection: "usb", battery: -1 },
+            layoutShot(shotsDir + "/", { id: "usb-2dc8-3106-aabbccddeeff", name: "8BitDo Pro 2", family: "generic", connection: "usb", battery: -1 },
                        "generic", ["select", "start", "dpad_down", "l3", "guide"])
         }
 
