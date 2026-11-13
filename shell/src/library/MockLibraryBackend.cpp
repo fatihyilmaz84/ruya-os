@@ -56,6 +56,9 @@ void MockLibraryBackend::reset(const QString &scenario)
             item("flatpak:org.example.Player", "app", "Open Player", 1760000000),
             item("flatpak:org.example.Browser", "app", "Web Browser", 0),
         };
+        // "unlisted": one more Flatpak app that the Store's catalogue does not know (RUY-16: no Details row).
+        if (scenario == QLatin1String("unlisted"))
+            m_items.append(item("flatpak:org.example.Unlisted", "app", "Unlisted App", 1762000000));
         if (withArt) {
             const QString dir = scenario.mid(4);
             for (int i = 0; i < m_items.size(); ++i)

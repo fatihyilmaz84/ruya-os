@@ -195,6 +195,9 @@ qt_add_qml_module(ruyashell
         qml/AppArt.qml
         qml/ArtCard.qml
         qml/HeroBlock.qml
+        qml/HoldRing.qml
+        qml/AcceptHold.qml
+        qml/OptionsMenu.qml
         qml/PrimaryButton.qml
         qml/SecondaryButton.qml
         qml/SectionNav.qml

@@ -14,10 +14,7 @@ Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
 {
     connect(m_backend.get(), &StoreBackend::searchFinished, this, [this](const QString &query, bool gamepadOnly, const QList<AppInfo> &apps) {
         const QVariantList list = toList(apps);
-        if (!m_available) {
-            m_available = true;
-            emit availableChanged();
-        }
+        setAvailable(true);
         const bool wanted = query == m_lastQuery && gamepadOnly == m_gamepadOnly;
         if (query.isEmpty() && !gamepadOnly) {
             m_catalogue = list;
@@ -51,6 +48,7 @@ Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
             const bool pending = std::any_of(apps.cbegin(), apps.cend(), [&id](const AppInfo &a) { return a.id == id && a.updateAvailable; });
             it = pending ? std::next(it) : m_added.erase(it);
         }
+        setAvailable(true);
         m_installed = toList(apps);
         emit installedChanged();
         // The apps already held keep their records: only their flags follow the installed set.
@@ -79,6 +77,7 @@ Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
         emit jobFinished(id, status);
     });
     connect(m_backend.get(), &StoreBackend::serviceLost, this, [this](const QHash<QString, QString> &jobApps) {
+        setAvailable(false); // until it answers a list again (the Options menu leaves out its rows meanwhile)
         // A job of the lost service never finishes; do not show it for ever. Pages waiting for
         // its result get "failed" so that they stop working.
         QStringList ids = m_jobs.keys(); // running; a queued job has no progress yet
@@ -178,6 +177,14 @@ void Store::search(const QString &query)
 {
     m_lastQuery = query;
     m_backend->search(query, m_gamepadOnly, 0);
+}
+
+void Store::setAvailable(bool available)
+{
+    if (m_available == available)
+        return;
+    m_available = available;
+    emit availableChanged();
 }
 
 void Store::setControllerFilter(const QString &filter)

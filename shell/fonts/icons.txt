@@ -45,6 +45,11 @@ download_done f091
 schedule efd6
 chevron_left e5cb
 chevron_right e5cc
+play_arrow e037
+close e5cd
+delete e92e
+bar_chart e26b
+more_horiz e5d3
 # Our own glyphs (T-199, scripts/add-pad-glyphs.py): the name, a private-use code point Material does
 # not use, and the word ruya. They are drawn, not downloaded.
 pad_playstation e005 ruya

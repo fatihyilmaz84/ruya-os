@@ -52,7 +52,7 @@ public:
     // The record of an item, or an empty object.
     Q_INVOKABLE QVariantMap item(const QString &id) const;
 
-    // Tests only, and only with the mock backend (otherwise a no-op). scenario: "" (the default library), "empty" (nothing installed) or "unplayed" (the default
+    // Tests only, and only with the mock backend (otherwise a no-op). scenario: "" (the default library), "empty" (nothing installed) or "unlisted" (the default items and one Flatpak app with no Store record) or "unplayed" (the default
     // items, none with a last played time) or "art:<dir>" (the default items with pictures: art.tile is
     // <dir>/<colour>.png, cycling red, blue, green, white, dark, redblue; T-281 screenshots).
     Q_INVOKABLE void resetMockForTests(const QString &scenario);

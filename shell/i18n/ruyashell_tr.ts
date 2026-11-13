@@ -508,7 +508,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ArtCard</name>
     <message>
-        <location filename="../qml/ArtCard.qml" line="+21"/>
+        <location filename="../qml/ArtCard.qml" line="+29"/>
         <source>Closing</source>
         <translation>Kapanıyor</translation>
     </message>
@@ -2332,12 +2332,34 @@ Bu geri alınamaz.</translation>
     <name>GamesPage</name>
     <message>
         <location filename="../qml/GamesPage.qml" line="+14"/>
-        <location line="+83"/>
+        <location line="+98"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
     <message>
-        <location line="-15"/>
+        <location line="-65"/>
+        <location line="+4"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <source>Options</source>
+        <translation>Seçenekler</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+2"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>Sections</source>
+        <translation>Bölümler</translation>
+    </message>
+    <message>
+        <location line="+47"/>
         <source>Show</source>
         <translation>Göster</translation>
     </message>
@@ -2357,7 +2379,7 @@ Bu geri alınamaz.</translation>
         <translation>Flatpak</translation>
     </message>
     <message>
-        <location line="+66"/>
+        <location line="+93"/>
         <source>No games yet — visit the Store</source>
         <translation>Henüz oyun yok — Mağaza&apos;yı ziyaret et</translation>
     </message>
@@ -2904,6 +2926,30 @@ Bu geri alınamaz.</translation>
         <location filename="../qml/Notifications.qml" line="+143"/>
         <source>%1 is in Notifications</source>
         <translation>%1: Bildirimlerde</translation>
+    </message>
+</context>
+<context>
+    <name>OptionsMenu</name>
+    <message>
+        <location filename="../qml/OptionsMenu.qml" line="+46"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>Close</source>
+        <translation>Kapat</translation>
+    </message>
+    <message>
+        <location line="+40"/>
+        <source>Options for %1</source>
+        <translation>%1 seçenekleri</translation>
+    </message>
+    <message>
+        <location line="+192"/>
+        <source>No options for this yet.</source>
+        <translation>Bunun için henüz seçenek yok.</translation>
     </message>
 </context>
 <context>
@@ -4101,7 +4147,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+612"/>
+        <location filename="../qml/Shell.qml" line="+616"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -4160,16 +4206,17 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+148"/>
+        <location line="+26"/>
         <source>Could not close %1.</source>
         <translation>%1 kapatılamadı.</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-25"/>
         <source>Could not close the running app.</source>
         <translation>Çalışan uygulama kapatılamadı.</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+64"/>
         <source>%1 did not close. Restart the console if it keeps running.</source>
         <translation>%1 kapanmadı. Çalışmaya devam ederse konsolu yeniden başlatın.</translation>
     </message>
@@ -4195,12 +4242,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+20"/>
+        <location line="+25"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
     <message>
-        <location line="-19"/>
+        <location line="-24"/>
         <source>Your library is empty</source>
         <translation>Kitaplığın boş</translation>
     </message>
@@ -4211,48 +4258,77 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+0"/>
+        <location line="+194"/>
         <source>Play</source>
         <translation>Oyna</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-194"/>
+        <location line="+196"/>
         <source>Resume</source>
         <translation>Devam et</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-196"/>
         <source>Closing…</source>
         <translation>Kapanıyor…</translation>
     </message>
     <message>
         <location line="+3"/>
+        <location line="+197"/>
         <source>Details</source>
         <translation>Ayrıntılar</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="-178"/>
         <source>Recent</source>
         <translation>Son oynananlar</translation>
     </message>
     <message>
-        <location line="+494"/>
-        <location line="+3"/>
+        <location line="+176"/>
+        <source>Close game</source>
+        <translation>Oyunu kapat</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Close app</source>
+        <translation>Uygulamayı kapat</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Your activity</source>
+        <translation>Etkinliğiniz</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Store options are unavailable right now.</source>
+        <translation>Mağaza seçenekleri şu anda kullanılamıyor.</translation>
+    </message>
+    <message>
+        <location line="+476"/>
+        <location line="+4"/>
+        <location line="+4"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+176"/>
+        <location line="-3"/>
+        <source>Options</source>
+        <translation>Seçenekler</translation>
+    </message>
+    <message>
+        <location line="+180"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
     </message>
     <message>
-        <location line="-200"/>
+        <location line="-206"/>
         <location line="+19"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1409"/>
+        <location line="-1603"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -4283,12 +4359,13 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1125"/>
+        <location line="+1321"/>
+        <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
     </message>
     <message>
-        <location line="+159"/>
+        <location line="+160"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>
@@ -4370,7 +4447,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>StickPage</name>
     <message>
-        <location filename="../qml/StickPage.qml" line="+21"/>
+        <location filename="../qml/StickPage.qml" line="+24"/>
         <source>Right stick</source>
         <translation>Sağ çubuk</translation>
     </message>

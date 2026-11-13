@@ -27,6 +27,14 @@ FocusScope {
 
     default property alias content: contentArea.data
 
+    // The Options menu (02 §1.7). A page with items that have one asks the Shell to open it:
+    // optionsRequested(surface, itemId, anchor, kind) with kind "card" | "pill" | "row". The Shell hands
+    // the page the function that lists an item's rows (to know whether to offer the Options hint) and,
+    // while a menu opened by this page is open, the id of its item (the card keeps its lift).
+    property var optionRows: null            // function (surface, itemId) -> rows
+    property string optionsOpenFor: ""
+    signal optionsRequested(string surface, string itemId, Item anchor, string kind)
+
     signal backRequested()
     // Ask the shell to push another page over this one (a detail page, T-111).
     signal openRequested(string key, var params)

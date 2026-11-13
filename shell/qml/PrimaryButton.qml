@@ -12,6 +12,14 @@ FocusScope {
     // Its action is unavailable for now (a game still closing, T-458): the fill and label dim to
     // disabledOpacity, the focus ring does not, and Accept still fires so the screen can say why.
     property bool dimmed: false
+    // Accept is handled by the owner (AcceptHold: on release, with a long press): the button then lets the
+    // key through instead of acting on the press (HeroBlock, RUY-16).
+    property bool acceptOnRelease: false
+    // Its Options menu is open (04 §5): the button keeps its look and loses only the focus ring.
+    property bool anchored: false
+    // The Hold ring replaces the label while it shows (the owner feeds both).
+    property bool holdShown: false
+    property real holdProgress: 0
 
     signal accepted()
 
@@ -31,11 +39,13 @@ FocusScope {
 
         Text {
             id: label
+            objectName: "buttonLabel"
             anchors.centerIn: parent
             text: button.text
             color: Theme.onPrimary
             font.pixelSize: Theme.typeHeadline * button.u
             font.weight: Theme.weightDemiBold
+            visible: !holdRing.shown
         }
     }
 
@@ -48,10 +58,33 @@ FocusScope {
         color: "transparent"
         border.width: Theme.focusRingWidth * button.u
         border.color: Theme.focusRing
-        opacity: button.activeFocus ? 1 : 0
+        opacity: button.activeFocus && !button.anchored ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: Theme.focusMs } }
     }
 
-    Keys.onReturnPressed: { Sfx.select(); button.accepted() }
-    Keys.onEnterPressed: { Sfx.select(); button.accepted() }
+    HoldRing {
+        id: holdRing
+        objectName: "buttonHoldRing"
+        anchors.centerIn: parent
+        u: button.u
+        shown: button.holdShown
+        progress: button.holdProgress
+    }
+
+    Keys.onReturnPressed: event => {
+        if (button.acceptOnRelease) {
+            event.accepted = false
+            return
+        }
+        Sfx.select()
+        button.accepted()
+    }
+    Keys.onEnterPressed: event => {
+        if (button.acceptOnRelease) {
+            event.accepted = false
+            return
+        }
+        Sfx.select()
+        button.accepted()
+    }
 }

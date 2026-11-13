@@ -186,9 +186,11 @@ Item {
 
         function test_menu_is_not_guide() {
             signInAsAda()
-            keyClick(Qt.Key_Menu)                      // the context-menu key (T-124)
+            keyClick(Qt.Key_Menu)                      // the context-menu key (T-124): the Options menu of the hero's item (RUY-16), never the Hub
             wait(200)
             compare(find("systemPanel").open, false)
+            verify(find("optionsMenu").shown, "Menu opens the Options menu on the hero's item")
+            keyClick(Qt.Key_Escape)
             verify(find("homePlay").activeFocus)
             keyClick(Qt.Key_HomePage)                  // Guide still opens it
             tryVerify(() => find("systemActions").activeFocus)

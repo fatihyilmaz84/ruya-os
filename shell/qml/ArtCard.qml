@@ -13,6 +13,14 @@ Item {
     property string title
     property string picture      // path or URL, may be empty
     property bool focused: false
+    // Its Options menu is open (04 §5, 02 §1.7): the card keeps its lift (scale, shadow, sheen, glow) but
+    // not the ring, so the menu's ring is the only one on screen. The owner sets it before the menu takes
+    // the focus, so the card does not blink.
+    property bool anchored: false
+    // The Hold ring (HoldRing) on the art while the owner holds Accept on this card.
+    property bool holdShown: false
+    property real holdProgress: 0
+    readonly property bool lit: focused || anchored
     property bool running: false
     property bool closing: false         // Close game was asked and the game has not ended yet (T-458)
     property bool installing: false
@@ -24,8 +32,8 @@ Item {
 
     implicitWidth: Theme.cardWidthShelf * u
     implicitHeight: Theme.cardArtHeight(width)      // stays 16:9 when a grid or row sets the width
-    scale: focused ? Theme.focusScale : 1.0
-    z: focused ? 1 : 0
+    scale: lit ? Theme.focusScale : 1.0
+    z: lit ? 1 : 0
     Behavior on scale { NumberAnimation { duration: Theme.focusMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeGlide } }
 
     Accessible.role: Accessible.Button
@@ -52,7 +60,7 @@ Item {
         u: card.u
         radius: art.radius        // one radius for the picture, the shadow's cut-out and the ring (T-314)
         kind: "lift"
-        active: card.focused
+        active: card.lit
         glow: art.glowColor       // the colour of the picture (T-281): the lift shadow takes it, and a halo on High
         glowStrength: art.glowStrength
         halo: true
@@ -74,7 +82,7 @@ Item {
             anchors.fill: parent
             u: card.u
             radius: art.radius
-            focused: card.focused
+            focused: card.lit
         }
 
         Rectangle {
@@ -110,6 +118,15 @@ Item {
         }
     }
 
+    // The long-press feedback, centred on the art (the ring below stays the last child: it lies on top of all).
+    HoldRing {
+        objectName: "cardHoldRing"
+        anchors.centerIn: art
+        u: card.u
+        shown: card.holdShown
+        progress: card.holdProgress
+    }
+
     // The focus ring (04 §4): its own item above the picture, the caption, the badge and the card
     // layers (a border on the art would be covered by the picture). It follows the art's scale, so
     // the Accept pulse shrinks it with the art.
@@ -120,7 +137,7 @@ Item {
         scale: art.scale
         radius: art.radius
         color: "transparent"
-        border.width: card.focused ? Theme.focusRingWidth * card.u : 0
+        border.width: card.focused && !card.anchored ? Theme.focusRingWidth * card.u : 0
         border.color: Theme.focusRing
     }
 }
