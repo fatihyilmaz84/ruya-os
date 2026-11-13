@@ -48,6 +48,10 @@ FocusScope {
     readonly property real goWidth: Math.max(cancelWidth, goMetrics.advanceWidth + 2 * buttonPad)
     readonly property bool stacked: cancelWidth + Theme.spaceM * u + goWidth > contentWidth
 
+    // At a big UI size the stacked buttons and the warning can make the card taller than the screen: it is scaled
+    // down about its centre until it fits between `spaceXl` margins (1 whenever it already does).
+    readonly property real fit: Math.min(1, (height - 2 * Theme.spaceXl * u) / (card.height + 96 * u))
+
     function open(id, name, note) {
         returnTo = Window.activeFocusItem
         appId = id
@@ -122,6 +126,7 @@ FocusScope {
     Rectangle {
         objectName: "uninstallPanel"
         anchors.centerIn: parent
+        scale: dialog.fit
         visible: dialog.step === "confirm"
         width: dialog.contentWidth + 120 * dialog.u
         height: card.height + 96 * dialog.u
@@ -153,7 +158,9 @@ FocusScope {
 
     Column {
         id: card
+        objectName: "uninstallCard"
         anchors.centerIn: parent
+        scale: dialog.fit
         visible: dialog.step === "confirm"
         width: dialog.contentWidth
         spacing: Theme.spaceL * dialog.u

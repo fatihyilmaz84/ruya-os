@@ -309,7 +309,11 @@ Item {
             compare(go.width, confirm().contentWidth)
             verify(cancel.y < go.y, "Cancel first")
             compare(cancel.x, go.x)
-            verify(findChild(confirm(), "uninstallPanel").width <= tc.shell.width, "the card fits the screen")
+            const panel = findChild(confirm(), "uninstallPanel")
+            verify(panel.width <= tc.shell.width, "the card fits the screen's width")
+            verify(panel.height * panel.scale <= tc.shell.height, "and its height: it is scaled down when it would not ("
+                   + [panel.height, panel.scale, tc.shell.height].join(" ") + ")")
+            compare(findChild(confirm(), "uninstallCard").scale, panel.scale, "the content scales with its card")
             // Up/Down move between the stacked buttons; Up from the top one reaches the toggle
             keyClick(Qt.Key_Down)
             verify(cancel.activeFocus)
