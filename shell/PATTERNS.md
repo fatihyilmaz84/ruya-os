@@ -24,6 +24,23 @@ Reusable settings rows. All extend `SettingControl` (a `FocusScope` with the lab
 | `ChoiceRow` | Left/Right cycle `options` (`[{value, label}]`), wrapping | `value`; `edited(value)` |
 | `SliderRow` | Left/Right step by `stepSize` within `from`..`to`, clamped | `value`; `edited(value)` |
 
+**Which row kind (planned, RUY-512..514; 04 §5 "Setting row kinds").** Pick the control by what A does, so the row's right end tells the player before they press it:
+
+| A does | Use | Looks like |
+|---|---|---|
+| Nothing: the row states a fact | `SettingRow { kind: "info" }` | No pill; hairline between facts; hint `B Back` |
+| Acts on a thing in a list (join a network, connect a device, pick a profile) | `SettingRow` (`kind: "item"`, the default) | Pill, value at the right; name the verb in `hints` if it is not Select |
+| Opens a page, a picker or the keyboard to change this row's value | `SettingRow { kind: "page" }` | Pill, value, chevron |
+| Does something now or after a confirm (a verb: Scan, Rename, Forget, Reset) | `SettingRow { kind: "action" }` | Centred DemiBold label; a status goes in `value`, drawn under it |
+| The one main step of a flow | `kind: "action"; emphasis: "primary"` | `primaryFill` pill |
+| Flips on/off | `ToggleRow` | Outlined switch, filled when on |
+| Picks one of a few values in place | `ChoiceRow` | Value between two round arrows; Left/Right, A next |
+| Sets a number in a range | `SliderRow` | Outlined track with a thumb |
+| Cannot be used and says why, with nothing to focus | `SettingRow { enabled: false }` | Flat line with an info icon |
+| Names the rows below it | `GroupLabel { text: ... }` | `typeHeadline` DemiBold heading, never focused |
+
+A label is a noun with a value (Wallpaper, Resolution) for `page`, `item` and `info`; a verb (Scan for networks, Forget %1) for `action`. A row that would be a verb *and* show a value is an action with a status line ("Add a device" / "Scanning…").
+
 `Badge` (`qml/Badge.qml`, 04 §5): `text`, `kind` (`neutral | success | info | warning`), `u`. Static, never focused; its `Accessible.name` is its text.
 
 A control changes its own value, then emits the signal; the owner writes the setting, resyncs the control, and keeps a `Binding` on it so external changes show (see `DisplayPane.qml`). `Sfx.navigateCount`/`selectCount`/`backCount` count cue requests so tests can check the sound path.
