@@ -168,7 +168,7 @@ Item {
             verify(menu().shown, "Menu opens it at once")
             verify(menu().activeFocus)
             compare(menu().title, "Turbo Racer")
-            compare(rowIds(), ["play", "details", "activity"])
+            compare(rowIds(), ["play", "details", "activity", "uninstall"])
             compare(menu().current, 0, "on the first row")
             compare(menu().placedSide, "right")
             // the anchor keeps its lift but not its ring: exactly one ring on screen
@@ -443,7 +443,7 @@ Item {
             verify(tc.shell.signedIn)
             toRecent()
             keyClick(Qt.Key_Menu)
-            compare(rowIds(), ["play", "details"], "no Your activity for Guest")
+            compare(rowIds(), ["play", "details", "uninstall"], "no Your activity for Guest")
             keyClick(Qt.Key_Escape)
             keyClick(Qt.Key_Right)                   // Counter Strike
             compare(find("recentRow").currentItem.itemId, "steam:730")
@@ -506,8 +506,8 @@ Item {
             // it answers again while the menu is open: Details comes back in place
             Store.mockServiceRegained()
             tryVerify(() => Store.available)
-            tryVerify(() => menu().rows.length === 3)
-            compare(rowIds(), ["play", "details", "activity"])
+            tryVerify(() => menu().rows.length === 4)
+            compare(rowIds(), ["play", "details", "activity", "uninstall"])
             verify(!note.visible)
         }
 

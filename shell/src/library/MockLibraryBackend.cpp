@@ -74,6 +74,12 @@ void MockLibraryBackend::reset(const QString &scenario)
     emit itemsChanged();
 }
 
+void MockLibraryBackend::removeItem(const QString &id)
+{
+    m_items.removeIf([&](const LibraryItem &i) { return i.id == id; });
+    emit itemsChanged();
+}
+
 void MockLibraryBackend::listItems()
 {
     listItemsDelayed(0);

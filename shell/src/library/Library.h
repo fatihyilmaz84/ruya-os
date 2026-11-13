@@ -60,6 +60,9 @@ public:
     // still due. No-ops with the D-Bus backend.
     Q_INVOKABLE void mockListDelayed(int ms);
     Q_INVOKABLE int mockPendingReplies() const;
+    // The service saw an app go (an uninstall finished, RUY-499): the item leaves the list and itemsChanged
+    // follows, as Library1's ItemsChanged does. A no-op with the D-Bus backend.
+    Q_INVOKABLE void mockRemoveItem(const QString &id);
 
 signals:
     void itemsChanged();

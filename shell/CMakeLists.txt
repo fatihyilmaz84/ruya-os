@@ -224,6 +224,7 @@ qt_add_qml_module(ruyashell
         qml/SettingsPage.qml
         qml/PowerPage.qml
         qml/PowerConfirm.qml
+        qml/UninstallConfirm.qml
         qml/HubPause.qml
         qml/QuickMenu.qml
         qml/HubGameCard.qml
