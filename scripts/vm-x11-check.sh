@@ -192,10 +192,10 @@ cleanup_all() {
     rm -rf "$work"
 }
 
-# X facts of a running X11 instance: xdir xn xcookie xlock xwl xsat. Waits up to 30 s for the display file and
+# X facts of a running X11 instance: xdir xn xcookie xwl xsat. Waits up to 30 s for the display file and
 # for the socket to be 0700 (the helper makes it private once Xwayland is up).
 x11_facts() { # <user> <app> <unit>
-    xuid="$(id -u "$1")"; xdir="/run/user/$xuid/ruya-x11/$2"; xn=""; xcookie=""; xlock=""; xwl=""; xsat=""
+    xuid="$(id -u "$1")"; xdir="/run/user/$xuid/ruya-x11/$2"; xn=""; xcookie=""; xwl=""; xsat=""
     n=0
     while [ "$n" -lt 60 ]; do
         if [ -s "$xdir/display" ]; then
@@ -206,7 +206,6 @@ x11_facts() { # <user> <app> <unit>
     done
     [ -n "$xn" ] && [ -S "$sdir/X$xn" ] || return 1
     xcookie="$(cookie_hex "$xdir/Xauthority")"
-    xlock="$(tr -d ' \n' < "/tmp/.X$xn-lock" 2>/dev/null)"
     xwl="$(pids_named "$1" "$3" Xwayland | head -1)"
     xsat="$(pids_named "$1" "$3" xwayland-satell | head -1)"
 }
@@ -286,7 +285,7 @@ check)
         env_="$(systemctl --user -M "$user@.host" show -p Environment "$ibo" </dev/null 2>&1 | cat)"
         echo "$env_" | tr ' ' '\n' | grep -q '^WAYLAND_DISPLAY=/run/ruya-wayland/' && ok "the unit has the profile's WAYLAND_DISPLAY" || bad "unit environment: $env_"
         echo "$env_" | tr ' ' '\n' | grep -q '^DISPLAY=' && bad "the unit has a DISPLAY" || ok "the unit has no DISPLAY"
-        execs="$(systemctl --user -M "$user@.host" show -p ExecStart --value "$ibo" </dev/null 2>&1 | cat)"
+        execs="$(systemctl --user -M "$user@.host" show -p ExecStart "$ibo" </dev/null 2>&1 | cat)"
         echo "$execs" | grep -q 'x11-run' && bad "the unit runs the x11-run helper: $execs" || ok "the unit does not run the x11-run helper"
         [ -e "/run/user/$muid/ruya-x11/$both" ] && bad "an X instance directory exists for $both" || ok "no X instance directory for $both"
         [ "$(ls "$sdir" 2>/dev/null | grep -c '^X')" = "$x_before" ] && ok "no X socket was made" || bad "an X socket appeared: $(ls "$sdir")"
@@ -300,7 +299,12 @@ check)
     t1="$(date +%s)"
     out="$(launch "$xapp" "$me")"; inst="$(echo "$out" | unit_of)"
     [ -n "$inst" ] && ok "Launch $xapp: $inst" || { bad "Launch $xapp: $out"; kill "$mon" 2>/dev/null; exit 1; }
-    execs="$(systemctl --user -M "$user@.host" show -p ExecStart --value "$inst" </dev/null 2>&1 | cat)"
+    # ExecStart is empty until systemd has started the unit's process: poll up to 10 s.
+    for _ in $(seq 1 20); do
+        execs="$(systemctl --user -M "$user@.host" show -p ExecStart "$inst" </dev/null 2>&1 | cat)"
+        case "$execs" in *path=*) break ;; esac
+        sleep 0.5
+    done
     echo "$execs" | grep -q 'x11-run' && ok "the unit's main process is the x11-run helper" || bad "the unit does not run x11-run: $execs"
     if x11_facts "$user" "$xapp" "$inst"; then
         ok "the X server of $xapp is display :$xn (socket $sdir/X$xn, 0700, cookie in $xdir)"
@@ -308,22 +312,26 @@ check)
         bad "no X display for $xapp within 30 s (journal: $(journalctl -u 'user@*' -b --no-pager -o cat 2>/dev/null | grep -a 'ruya-session\|x11' | tail -3 | tr '\n' '|'))"
         stop_app "$inst" >/dev/null; kill "$mon" 2>/dev/null; exit 1
     fi
-    echo "    pids: satellite=${xsat:-none} Xwayland=${xwl:-none} lock=${xlock:-none}"
+    echo "    pids: satellite=${xsat:-none} Xwayland=${xwl:-none}"
     [ "$(stat -c '%a %U' "$sdir/X$xn")" = "700 $user" ] && ok "$sdir/X$xn: 0700, owned by $user" || bad "$sdir/X$xn: $(stat -c '%a %U' "$sdir/X$xn")"
     [ "$(stat -c '%a %U' "$xdir")" = "700 $user" ] && ok "$xdir: 0700, owned by $user" || bad "$xdir: $(stat -c '%a %U' "$xdir")"
     [ "$(stat -c '%a %U' "$xdir/Xauthority")" = "600 $user" ] && ok "the cookie file: 0600, owned by $user" || bad "Xauthority: $(stat -c '%a %U' "$xdir/Xauthority")"
     [ "$(printf '%s' "$xcookie" | wc -c)" = 32 ] && ok "the cookie is 16 bytes" || bad "cookie: '$xcookie'"
     [ -n "$xsat" ] && ok "xwayland-satellite $xsat runs in the app's unit" || bad "no xwayland-satellite in the unit's cgroup"
     [ -n "$xwl" ] && ok "Xwayland $xwl runs in the app's unit" || bad "no Xwayland in the unit's cgroup"
-    # RUY-457 (2): the helper's readiness test wants the lock to name a child of the satellite.
-    if [ -n "$xlock" ]; then
-        lcomm="$(cat "/proc/$xlock/comm" 2>/dev/null)"; lppid="$(ps -o ppid= -p "$xlock" 2>/dev/null | tr -d ' ')"
-        echo "    lock names pid $xlock ($lcomm), parent $lppid"
-        [ "$lcomm" = Xwayland ] && [ -n "$xsat" ] && [ "$lppid" = "$xsat" ] \
-            && ok "the lock names Xwayland and its parent is the satellite (the helper's readiness test holds)" \
-            || bad "lock pid $xlock is '$lcomm' with parent $lppid, the satellite is $xsat: the helper's 'parent_of == satellite' assumption is wrong (RUY-457)"
+    # RUY-472: readiness is the satellite's READY=1, not a lock file; Xwayland is the satellite's child.
+    xwppid="$(ps -o ppid= -p "${xwl:-0}" 2>/dev/null | tr -d ' ')"
+    if [ -n "$xsat" ] && [ "$xwppid" = "$xsat" ]; then
+        ok "Xwayland's parent is the satellite"
     else
-        bad "no lock file /tmp/.X$xn-lock"
+        bad "Xwayland $xwl has parent '$xwppid', the satellite is '$xsat'"
+    fi
+    [ -S "$xdir/notify" ] && ok "the helper's notify socket $xdir/notify exists" || bad "no notify socket in $xdir"
+    xrec="$(tr -d ' \n' < "$xdir/satellite" 2>/dev/null)"
+    if [ -n "$xsat" ] && [ "$xrec" = "$xsat" ]; then
+        ok "the instance directory records the satellite pid"
+    else
+        bad "satellite record '$xrec' is not the satellite '$xsat'"
     fi
     echo "    Xwayland: $(tr '\0' ' ' < "/proc/${xwl:-0}/cmdline" 2>/dev/null)"
     tr '\0' ' ' < "/proc/${xwl:-0}/cmdline" 2>/dev/null | grep -q -- ' -auth ' && ok "Xwayland runs with -auth" || bad "Xwayland has no -auth"
