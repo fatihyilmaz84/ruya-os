@@ -203,6 +203,18 @@ def main(repo):
         "a label of 41 characters": with_setting(shadows, set_key("label", "x" * 41)),
         "a description of 161 characters": with_setting(shadows, set_key("description", "x" * 161)),
         "a bidi override in a label": with_setting(shadows, set_key("label", "Shadows ‮")),
+        "a zero-width space in a label": with_setting(shadows, set_key("label", "Sha\u200bdows")),
+        "a zero-width joiner in a label": with_setting(shadows, set_key("label", "Sha\u200ddows")),
+        "a word joiner in a label": with_setting(shadows, set_key("label", "Sha\u2060dows")),
+        "a byte order mark in a label": with_setting(shadows, set_key("label", "\ufeffShadows")),
+        "a soft hyphen in a label": with_setting(shadows, set_key("label", "Sha\u00addows")),
+        "a Hangul filler as the whole label": with_setting(shadows, set_key("label", "\u3164")),
+        "a halfwidth Hangul filler in a label": with_setting(shadows, set_key("label", "A\uffa0B")),
+        "a label of spaces only": with_setting(shadows, set_key("label", "   ")),
+        "a label of a no-break space only": with_setting(shadows, set_key("label", "\u00a0\u3000")),
+        "four combining marks in a row": with_setting(shadows, set_key("label", "e\u0301\u0302\u0303\u0304")),
+        "an invisible character in a unit": with_setting(distance, set_key("unit", "m\u200b")),
+        "an invisible character in a translation": with_setting(shadows, set_key("label", {"en": "Shadows", "tr": "G\u200bolgeler"})),
         "a control character in a label": with_setting(shadows, set_key("label", "Sha\ndows")),
         "a localised label with no en": with_setting(shadows, set_key("label", {"tr": "Gölgeler"})),
         "a language key that is not a code": with_setting(shadows, set_key("label", {"en": "Shadows", "Turkish": "Gölgeler"})),
@@ -229,6 +241,9 @@ def main(repo):
     for name, data in refused.items():
         if not validate(data, schema, schema):
             problems.append(f"the schema accepts {name}")
+    three_marks = with_setting(shadows, set_key("label", "e\u0301\u0302\u0303 and Gölgeler \u0131\u0307"))
+    if validate(three_marks, schema, schema):
+        problems.append("the schema refuses three combining marks in a row, or a plain accented text")
     if validate(exactly, schema, schema):
         problems.append("the schema refuses a file of exactly 200 settings")
 

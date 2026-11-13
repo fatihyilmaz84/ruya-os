@@ -240,6 +240,74 @@ TestCase {
         refused(parse(file([row({ label: "Sep\u2028arator" })])), "control", "a line separator")
     }
 
+    // Code points are built with cp()/marks(), never typed, so this file holds no invisible character.
+    function cp(code) {
+        return String.fromCodePoint(code)
+    }
+    function marks(n) {
+        let out = ""
+        for (let i = 0; i < n; ++i)
+            out += cp(0x301 + i)
+        return out
+    }
+    function withLabel(label) {
+        return parse(file([row({ label: label })]))
+    }
+    // The text of a file whose label holds a JSON escape (backslash, u, 4 hex digits).
+    function escaped(hex) {
+        return "{\"version\":1,\"settings\":[{\"id\":\"a\",\"label\":\"A" + cp(92) + "u" + hex.join(cp(92) + "u") + "B\",\"type\":\"bool\",\"category\":\"graphics\",\"default\":true}]}"
+    }
+
+    function test_refused_an_invisible_label() {
+        // format characters: the player would read something other than what the file says
+        refused(withLabel("Sha" + cp(0x200b) + "dows"), "invisible", "a zero-width space")
+        refused(withLabel("Sha" + cp(0x200d) + "dows"), "invisible", "a zero-width joiner")
+        refused(withLabel("Sha" + cp(0x200c) + "dows"), "invisible", "a zero-width non-joiner")
+        refused(withLabel("Sha" + cp(0x2060) + "dows"), "invisible", "a word joiner")
+        refused(withLabel("Sha" + cp(0xfeff) + "dows"), "byte order mark", "a byte order mark")
+        refused(GameSettings.parse(escaped(["feff"]), "en"), "(U+FEFF)", "a byte order mark written as an escape")
+        refused(withLabel("Sha" + cp(0xad) + "dows"), "invisible", "a soft hyphen")
+        refused(withLabel("Shadows" + cp(0xE0041)), "(U+E0041)", "a tag character")
+        refused(withLabel(cp(0xE0001)), "invisible", "a tag-only label")
+        refused(withLabel(cp(0x3164)), "(U+3164)", "a Hangul filler as the whole label")
+        refused(withLabel("A" + cp(0x115f) + "B"), "(U+115F)", "a Hangul choseong filler")
+        refused(withLabel("A" + cp(0x1160) + "B"), "(U+1160)", "a Hangul jungseong filler")
+        refused(withLabel("A" + cp(0xffa0) + "B"), "(U+FFA0)", "a halfwidth Hangul filler")
+        refused(parse(file([row({ type: "int", default: 1, min: 0, max: 2, unit: "m" + cp(0x200b) })])), "\"unit\"", "in a unit")
+        refused(parse(file([row({ type: "enum", default: "a", options: [{ value: "a", label: "x" + cp(0x200b) + "y" }] })])), "option 0", "in an option label")
+        refused(parse(file([row({ label: { en: "A", tr: "G" + cp(0x200b) + "olgeler" } })])), "(tr)", "in a translation")
+        refused(parse(file([row({ description: "help" + cp(0x2060) })])), "\"description\"", "in a description")
+    }
+
+    function test_refused_a_label_with_no_visible_character() {
+        refused(withLabel("   "), "no visible character", "spaces")
+        refused(withLabel(cp(0xa0)), "no visible character", "a no-break space")
+        refused(withLabel(cp(0x3000) + cp(0x2003)), "no visible character", "wide spaces")
+        refused(parse(file([row({ description: " " })])), "no visible character", "a description of one space")
+        refused(parse(file([row({ label: { en: "A", tr: "  " } })])), "no visible character", "a translation of spaces")
+        accepted(withLabel(" A "), "a space around a letter is fine")
+    }
+
+    function test_refused_a_zalgo_label() {
+        refused(withLabel("e" + marks(4)), "combining marks in a row", "4 marks on one letter")
+        refused(withLabel("a" + marks(3) + "b" + marks(4)), "combining marks in a row", "4 marks on the second letter")
+        refused(withLabel("e" + marks(3) + cp(0x20dd)), "combining marks in a row", "an enclosing mark counts")
+        accepted(withLabel("e" + marks(3) + " e" + marks(3) + " Gölgeler"), "3 marks, twice, are fine")
+    }
+
+    function test_refused_text_that_is_not_valid_unicode() {
+        // A lone surrogate written as a JSON escape: Qt keeps it in the string, so the rule sees it.
+        refused(GameSettings.parse(escaped(["d800"]), "en"), "lone surrogate", "a high surrogate alone")
+        refused(GameSettings.parse(escaped(["dc00"]), "en"), "lone surrogate", "a low surrogate alone")
+        refused(GameSettings.parse(escaped(["dc00", "d800"]), "en"), "lone surrogate", "a swapped pair")
+        accepted(GameSettings.parse(escaped(["d83d", "de80"]), "en"), "a surrogate pair is an ordinary character")
+    }
+
+    function test_refused_two_texts_for_one_language() {
+        refused(parse(file([row({ label: { en: "A", "pt-BR": "B", "pt-br": "C" } })])), "two texts for the language \"pt-br\"", "pt-BR and pt-br")
+        accepted(parse(file([row({ label: { en: "A", "pt-BR": "B", pt: "C" } })])), "pt-BR and pt are two languages")
+    }
+
     function test_refused_a_label_or_description_too_long() {
         refused(parse(file([row({ label: "x".repeat(41) })])), "longer than 40", "label 41")
         refused(parse(file([row({ description: "x".repeat(161) })])), "longer than 160", "description 161")

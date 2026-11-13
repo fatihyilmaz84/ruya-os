@@ -63,13 +63,18 @@ QVariantMap GameSettings::load(const QString &path, const QString &language) con
     if (file.size() > GameSettingsSchema::MaxFileBytes) {
         failed.error = QStringLiteral("the file is %1 bytes; at most %2 (64 KiB)")
                            .arg(file.size()).arg(GameSettingsSchema::MaxFileBytes);
+        qWarning("game settings: %s refused: %s", qUtf8Printable(path), qUtf8Printable(failed.error));
         return toMap(failed);
     }
     if (!file.open(QIODevice::ReadOnly)) {
         failed.error = QStringLiteral("the file cannot be read");
         return toMap(failed);
     }
-    return toMap(GameSettingsSchema::parse(file.read(GameSettingsSchema::MaxFileBytes + 1), language));
+    const GameSettingsSchema::Result result = GameSettingsSchema::parse(file.read(GameSettingsSchema::MaxFileBytes + 1), language);
+    // One line per refused file, for the developer who reads the log; the game gets no Game entry.
+    if (!result.ok)
+        qWarning("game settings: %s refused: %s", qUtf8Printable(path), qUtf8Printable(result.error));
+    return toMap(result);
 }
 
 QVariantMap GameSettings::forApp(const QString &appId, const QString &language) const

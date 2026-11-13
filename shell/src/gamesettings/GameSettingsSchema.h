@@ -46,7 +46,9 @@ struct Result
 Result parse(const QByteArray &bytes, const QString &language);
 
 // A single piece of text as a label would carry it: the plain-text rule used for every string in the
-// file (no control character, no line or paragraph separator, no bidirectional mark or override).
+// file (no control character, line or paragraph separator, Unicode format character (bidirectional marks,
+// zero-width characters, tags), Hangul filler or lone surrogate; at least one visible character; at most
+// 3 combining marks in a row).
 bool isPlainText(const QString &text);
 
 } // namespace GameSettingsSchema

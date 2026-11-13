@@ -33,30 +33,69 @@ const QRegularExpression &languageKeyPattern()
     return re;
 }
 
-bool isBadCodePoint(uint c)
+// The one plain-text rule, for EVERY text a game supplies (label, description, option label, unit, info
+// text): what the player reads must be what the file says. Refused: control characters, line and
+// paragraph separators, every Unicode format character (category Cf: the bidirectional marks,
+// embeddings, overrides and isolates, zero-width characters, the soft hyphen, the byte order mark, tag
+// characters), the Hangul fillers (blank letters), a text with no visible character, more than
+// MaxCombining combining marks in a row, and anything that is not valid Unicode (a lone surrogate).
+bool isInvisibleCodePoint(uint c, QChar::Category category)
 {
     return c < 0x20 || (c >= 0x7f && c <= 0x9f)           // control characters
         || c == 0x2028 || c == 0x2029                      // line and paragraph separators
-        || c == 0x61c || c == 0x200e || c == 0x200f        // Arabic letter mark, left/right-to-right marks
-        || (c >= 0x202a && c <= 0x202e)                    // embeddings and overrides
-        || (c >= 0x2066 && c <= 0x2069);                   // isolates
+        || category == QChar::Other_Format                 // Cf: bidi controls, zero-width, tags, ...
+        || c == 0x115f || c == 0x1160                      // Hangul choseong and jungseong fillers
+        || c == 0x3164 || c == 0xffa0;                     // Hangul filler, halfwidth Hangul filler
+}
+
+QString codePointText(uint c)
+{
+    return QStringLiteral("U+%1").arg(QString::number(c, 16).rightJustified(4, QLatin1Char('0')).toUpper());
 }
 
 // What went wrong with a piece of text, or "" when it is fine.
 QString textProblem(const QJsonValue &v, int maxLen)
 {
+    constexpr int MaxCombining = 3;
     if (!v.isString())
         return QStringLiteral("must be text");
-    const QList<uint> points = v.toString().toUcs4();
+    const QString text = v.toString();
+    // Decoded here and not with toUcs4(), which would hide a lone surrogate behind U+FFFD.
+    QList<uint> points;
+    for (int i = 0; i < text.size(); ++i) {
+        const QChar ch = text.at(i);
+        if (ch.isHighSurrogate() && i + 1 < text.size() && text.at(i + 1).isLowSurrogate()) {
+            points.append(QChar::surrogateToUcs4(ch, text.at(i + 1)));
+            ++i;
+        } else if (ch.isSurrogate()) {
+            return QStringLiteral("is not valid Unicode (a lone surrogate, %1)").arg(codePointText(ch.unicode()));
+        } else {
+            points.append(ch.unicode());
+        }
+    }
     if (points.isEmpty())
         return QStringLiteral("is empty");
     if (points.size() > maxLen)
         return QStringLiteral("is longer than %1 characters").arg(maxLen);
+    int marksInARow = 0;
+    bool visible = false;
     for (uint c : points) {
-        if (isBadCodePoint(c))
-            return QStringLiteral("contains a control or bidirectional character (U+%1)")
-                .arg(QString::number(c, 16).rightJustified(4, QLatin1Char('0')).toUpper());
+        const QChar::Category category = QChar::category(c);
+        if (isInvisibleCodePoint(c, category))
+            return QStringLiteral("contains a control, invisible or bidirectional character (%1)").arg(codePointText(c));
+        if (category == QChar::Mark_NonSpacing || category == QChar::Mark_SpacingCombining
+            || category == QChar::Mark_Enclosing) {
+            if (++marksInARow > MaxCombining)
+                return QStringLiteral("has more than %1 combining marks in a row").arg(MaxCombining);
+            continue;
+        }
+        marksInARow = 0;
+        if (category != QChar::Separator_Space && category != QChar::Separator_Line
+            && category != QChar::Separator_Paragraph)
+            visible = true;
     }
+    if (!visible)
+        return QStringLiteral("has no visible character");
     return {};
 }
 
@@ -102,6 +141,9 @@ QString readLocalised(const QJsonValue &v, int maxLen, const QStringList &candid
         const QString p = textProblem(it.value(), maxLen);
         if (!p.isEmpty())
             return QStringLiteral("(%1) %2").arg(it.key(), p);
+        if (byLanguage.contains(it.key().toLower()))
+            return QStringLiteral("has two texts for the language \"%1\" (language codes are compared without regard to case)")
+                .arg(it.key().toLower());
         byLanguage.insert(it.key().toLower(), it.value().toString());
     }
     for (const QString &c : candidates) {
@@ -473,6 +515,11 @@ Result parse(const QByteArray &bytes, const QString &language)
     Q_UNUSED(decoded)
     if (decoder.hasError())
         return refuse(QStringLiteral("the file is not valid UTF-8"));
+
+    // Qt's JSON reader drops a U+FEFF that starts a string, so the plain-text rule would never see it:
+    // a byte order mark anywhere in the file (UTF-8: EF BB BF) is refused here, before it can hide.
+    if (bytes.contains("\xEF\xBB\xBF"))
+        return refuse(QStringLiteral("the file contains a byte order mark (U+FEFF); save it as UTF-8 without one"));
 
     QJsonParseError parseError;
     const QJsonDocument doc = QJsonDocument::fromJson(bytes, &parseError);

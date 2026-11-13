@@ -4,6 +4,8 @@
 
 When the player opens Ruya Hub (the Guide button) your game is frozen. The Hub can then show **your game's own settings** (graphics quality, sensitivity, difficulty) in the console's look, drawn by the console and driven with a controller. You do not write any user interface: you ship **one data file** that describes your settings and, later (planned), exchange their values with the console.
 
+The Hub always shows the panel under **your game's name and icon**, so the player knows whose settings these are, and it draws every row itself. An `action` row only **sends a message to your game** (it is a button for your game's own feature, such as "Reset to defaults"); it never calls a function of the console.
+
 The console never trusts the file. It reads it as data, checks every limit below, and shows either all of it or nothing: a file with one mistake gives one error message and no Game entry in the Hub, never half a list. Nothing in the file is run, and a text in it is never shown as markup.
 
 ## Where the file goes
@@ -119,7 +121,7 @@ A key that is not in this chapter is an error, so a typo is found at once.
 
 ### Texts in the player's language
 
-A `label`, `description`, option label and `info` text is either a string, or an object with one text per language: `{ "en": "Shadows", "tr": "Gölgeler" }`. The console takes the profile's language, then the language without a region (`pt-BR` falls back to `pt`), then `en`; **`en` is required** in an object. At most 16 languages. A game that only speaks English can use plain strings.
+A `label`, `description`, option label and `info` text is either a string, or an object with one text per language: `{ "en": "Shadows", "tr": "Gölgeler" }`. The console takes the profile's language, then the language without a region (`pt-BR` falls back to `pt`), then `en`; **`en` is required** in an object. At most 16 languages. Language codes are compared without regard to case, and two keys that differ only in case (`pt-BR` and `pt-br`) are an error. A game that only speaks English can use plain strings.
 
 ### Showing a row only sometimes
 
@@ -145,13 +147,32 @@ One condition and no expressions: the row is shown while the setting `id` has th
 | `description` | 160 characters |
 | `unit` | 16 characters |
 
-Texts are **plain text on one line**. Control characters (a line break or a tab too), line and paragraph separators, and the Unicode bidirectional marks, embeddings, overrides and isolates (U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069) are refused wherever they are in the file. There is no markup and no image.
+Texts are **plain text on one line**, and what the player reads must be what the file says. A text in any place of the file (label, description, option label, translation, unit, info text) is refused when it contains:
+
+- a control character (a line break or a tab too), or a line or paragraph separator;
+- a Unicode format character (category Cf): the bidirectional marks, embeddings, overrides and isolates (U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069), the zero-width characters (U+200B, U+200C, U+200D), the word joiner (U+2060), the soft hyphen (U+00AD), the byte order mark (U+FEFF) and the tag characters (U+E0000 and up);
+- a Hangul filler (U+115F, U+1160, U+3164, U+FFA0), which draws as a blank letter;
+- no visible character at all (spaces only);
+- more than 3 combining marks in a row (a pile of accents);
+- anything that is not valid Unicode, such as a lone surrogate.
+
+There is no markup and no image.
 
 ## What the console checks, and what JSON Schema can check
 
-The machine-readable format is [`api/settings/game-settings.schema.json`](../../api/settings/game-settings.schema.json) (JSON Schema 2020-12). It covers the shape, the types, the limits above and the plain-text rule. The console also refuses what a schema cannot say: a duplicate id, a default outside `min` to `max` or an enum default that is not an option, a `visibleWhen` that points nowhere, at itself or in a circle, and a file over the size limit. The first problem found is the message; nothing of a broken file is used. `ruya app validate` will run both kinds of check at build time (planned, ADR-031).
+The machine-readable format is [`api/settings/game-settings.schema.json`](../../api/settings/game-settings.schema.json) (JSON Schema 2020-12). It covers the shape, the types, the limits above and, as far as a regular expression reaches (the Basic Multilingual Plane, the combining diacritics blocks), the plain-text rule. The console also refuses what a schema cannot say: a duplicate id; an `int` or `float` whose `min` is not below `max`, whose `step` is above `max - min`, or whose default is outside `min` to `max`; an enum with a repeated option value or a default that is not an option; two language keys of one text that differ only in case (`pt-BR` and `pt-br`); a `visibleWhen` that points nowhere, at itself or in a circle; a file over the size limit; and the plain-text rule on all of Unicode (the tag characters, every combining mark, a lone surrogate). The first problem found is the message; nothing of a broken file is used, the shell logs one line with it, and the game has no Game entry in the Hub. `ruya app validate` will run both kinds of check at build time (planned, ADR-031).
 
 You can check the shape of a file today with any JSON Schema validator, for example `check-jsonschema --schemafile api/settings/game-settings.schema.json settings.json`. The second kind of check is only in the console for now.
+
+## Versions
+
+The file says which format it is in: `"version": 1`.
+
+- **A new key or a new type comes only with a new version.** Version 1 has exactly the keys and types in this chapter, and a console refuses a key it does not know.
+- **A console refuses a version it does not know.** That game gets no Game entry in the Hub, and the shell logs one error naming the version. Nothing else about the game changes.
+- **A console may keep reading older versions** next to the newest one it knows, so a game does not have to ship a new file for every console release.
+- **Until the first release, version 1 itself may change** (this chapter is experimental). After it, a change to version 1 that is not backward compatible does not happen: it becomes version 2.
+- **Planned:** `ruya app validate` (ADR-031) will report an unknown version as an error that names the versions the installed console reads.
 
 ## Values and changes (planned)
 

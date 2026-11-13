@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "RuyaOS game settings, version 1 (experimental, ADR-035)",
-  "description": "A game ships this file as /app/share/ruya/settings.json in its Flatpak. The console reads it as untrusted data. JSON Schema cannot say everything: the shell also checks the file size (64 KiB), that ids are unique, that an int or float default lies in min..max, that an enum default is one of its options, that visibleWhen names another setting of the right kind and never forms a cycle. Docs: docs/developers/game-settings.md.",
+  "description": "A game ships this file as /app/share/ruya/settings.json in its Flatpak. The console reads it as untrusted data. JSON Schema cannot say everything: the shell also checks the file size (64 KiB), that ids are unique, that two language keys of one text differ even in case (pt-BR and pt-br), that an int or float has min below max, a step of at most max - min and a default in min..max, that enum option values are unique and the default is one of them, that visibleWhen names another setting that has a value, of a fitting kind, and never forms a cycle, and the plain-text rule on all of Unicode. A console refuses a version it does not know. Docs: docs/developers/game-settings.md.",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "settings"],
@@ -25,10 +25,10 @@
   },
   "$defs": {
     "plainText": {
-      "description": "One line of plain text: no control characters, no line or paragraph separators, no bidirectional marks, embeddings, overrides or isolates.",
+      "description": "One line of plain text. This pattern covers the Basic Multilingual Plane; the console's loader applies the same rule to all of Unicode. Refused: control characters and line or paragraph separators; Unicode format characters (category Cf: bidirectional marks, embeddings, overrides and isolates, zero-width characters, the soft hyphen, the byte order mark, and the tag characters U+E0000 to U+E007F, which a regular expression cannot reach here); the Hangul fillers; a text with no visible character (spaces only); four or more combining marks in a row (this pattern checks the combining diacritics blocks, the loader every combining mark); a lone surrogate (not valid Unicode).",
       "type": "string",
       "minLength": 1,
-      "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]*$"
+      "pattern": "^(?!.*[\u0300-\u036f\u1ab0-\u1aff\u1dc0-\u1dff\u20d0-\u20ff\ufe20-\ufe2f]{4})(?=.*[^\\s])[^\\u0000-\\u001f\\u007f-\\u009f\u00ad\u0600-\u0605\u061c\u06dd\u070f\u115f\u1160\u180e\u200b-\u200f\u2028-\u202e\u2060-\u206f\u3164\ufeff\uffa0\ufff9-\ufffb]*$"
     },
     "id": { "type": "string", "pattern": "^[a-z0-9_.]{1,64}$" },
     "optionValue": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,64}$" },
@@ -75,7 +75,7 @@
         "equals": { "type": ["boolean", "string", "number"] }
       }
     },
-    "unit": { "type": "string", "minLength": 1, "maxLength": 16, "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]*$" },
+    "unit": { "$ref": "#/$defs/plainText", "maxLength": 16 },
     "bool": {
       "type": "object",
       "additionalProperties": false,
