@@ -142,12 +142,16 @@ Item {
             verify(findChild(x, "padTrackFill_left_trigger").height > 0, "an analog trigger fills its track")
         }
 
+        function bottomOf(d, name) {
+            const c = findChild(d, name)
+            return c.y + c.height
+        }
+
         function test_the_wii_u_layout_has_the_dpad_and_the_faces_above_both_sticks() {
             const d = make("nintendo", "nintendo-wiiu")
-            const lowest = n => { const c = findChild(d, n); return c.y + c.height }
             const stickTop = Math.min(findChild(d, "padStick_left").y, findChild(d, "padStick_right").y)
             for (const n of ["dpad_up", "dpad_down", "dpad_left", "dpad_right", "north", "south", "east", "west"])
-                verify(lowest("padCtl_" + n) <= stickTop + 20 * d.u, n + " is above the sticks")
+                verify(bottomOf(d, "padCtl_" + n) <= stickTop + 20 * d.u, n + " is above the sticks")
             const x = make("xbox", "")
             verify(findChild(x, "padCtl_dpad_up").y > findChild(x, "padStick_left").y, "xbox: the D-pad is below the left stick")
         }
