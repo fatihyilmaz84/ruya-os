@@ -450,6 +450,8 @@ Item {
         function test_a_refused_save_restores_the_stored_value() {
             openStick("left")
             Input.mockSetProfileStatus("ValidateProfile", "invalid")
+            // The list cannot be read again either: the stored value comes back without it.
+            Input.mockSetProfileStatus("ListProfiles", "failed")
             keyClick(Qt.Key_Right)
             compare(find("rowInner").value, 9)
             tryVerify(() => hasToast("Could not save the change / Try again."), 2000, toastTexts().join("; "))
@@ -496,6 +498,11 @@ Item {
             fuzzyCompare(ring.x + ring.width / 2 - 160, 0.53 * 160, 0.5, "the raw ring at radius r")
             DeviceSettings.language = "tr"
             tryCompare(find("stickReadout"), "text", "Giriş 0,53 · Çıkış 0,50")
+            const left = find("axisStick")
+            const right = find("axisGameSees")
+            tryCompare(right, "text", "↑ Oyunun gördüğü")
+            verify(right.x >= left.x + left.width + 16 - 0.5,
+                   "the axis captions keep apart: " + (left.x + left.width) + " / " + right.x)
             DeviceSettings.language = "en"
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "controls")
@@ -693,6 +700,8 @@ Item {
 
         function shots(dir, lang, suffix) {
             plugStick()
+            wait(Storage.groupWindowMs + 300)            // the "Drive inserted" toast is not what these shots show
+            clearToasts()
             openControls()
             focusRow("controlsBody", "rowRemap")
             settle()

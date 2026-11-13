@@ -156,17 +156,24 @@ Page {
                         stickX: page.stickX
                         stickY: page.stickY
                     }
+                    // The axes' captions: a long one ("↑ Oyunun gördüğü") wraps rather than meet the other.
                     Item {
                         width: responsePlot.width
-                        height: axisLeft.height
+                        height: Math.max(axisLeft.height, axisRight.height)
                         Text {
                             id: axisLeft
+                            objectName: "axisStick"
                             text: qsTr("Stick →")
                             color: Theme.text
                             font.pixelSize: Theme.typeCaption * page.u
                         }
                         Text {
+                            id: axisRight
+                            objectName: "axisGameSees"
                             anchors.right: parent.right
+                            width: Math.min(implicitWidth, parent.width - axisLeft.width - Theme.spaceS * page.u)
+                            horizontalAlignment: Text.AlignRight
+                            wrapMode: Text.Wrap
                             text: qsTr("↑ Game sees")
                             color: Theme.text
                             font.pixelSize: Theme.typeCaption * page.u
