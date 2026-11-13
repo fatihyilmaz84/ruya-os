@@ -2,73 +2,72 @@
 
 The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand off at 50-60 % context; no no-op turns**). **Rewrite this file at the end of every lead session**; keep it under about 6 KB. Paper Plane is the source of truth (http://192.168.178.164:8687, project `RUY`); `docs/STATUS*.md` and `docs/tasks/T-*.md` are a frozen archive. This file is the lead's session record.
 
-## State at the end of lead-16 (Opus, 2026-11-13)
+## State at the end of lead-17 (Opus, 2026-11-13)
 
-- **Review range:** 72b5cb5..HEAD (this commit). Paper Plane `changes` cursor: **1463**.
-- **Merged and Done (each reviewed, its merge gate green):**
-  - RUY-42 (split by the lead): the mapping engine, profiles and Input1 profile methods.
-  - RUY-465: the Controls in games pages.
-  - RUY-413: the notification centre (round 2: the restart confirm, and app actions no longer run as console actions).
-  - RUY-444: the Bluetooth keyboard Connect gate (round 2: the VM check fixed, overlapping Pairs).
-  - RUY-472: X11 mode waits for the satellite's READY; the X lock it waited for never exists.
-  - RUY-40: the confirm button per family, plus ActiveInputChanged.
-  - RUY-486: the Button test layouts and the Wii U Pro (owner report).
-- **Images:**
-  - 0.0.73: queue 10/14; x11 FAIL led to RUY-472.
-  - **0.0.74 (main bdde129): x11 118 PASS, confirm 23 PASS, the rest as on RUY-390.** FAIL: RUY-493 (live remap) and RUY-441 (known).
-  - **The Dell runs 0.0.74** (rollback 0.0.73). RUY-486 is not in it.
-- **Pushed:** 40c8322; this handoff commit is pushed with push-main. CI was green for 9252ba9.
-- **Nothing in flight; no worktrees.** Branch `claude/design-pad-silhouettes-559410` (12dff12): 28 controller SVGs from the design session ([pad-silhouettes]), not merged. RUY-491 integrates them.
+- **Review range:** 984460e..HEAD (this commit). Paper Plane `changes` cursor: **1685**.
+- **Merged and Done** (each reviewed; merge gate green; UI ones with design and, for new flows, UX reviews):
+  - RUY-493: live remap (one router call per evdev frame). **Verified: vm on 0.0.75.**
+  - RUY-474: the shots harness kicks a stalled GPU window (the cause is not proven: RUY-510).
+  - RUY-479: StartTest's `hold_left_stick` (VM pending).
+  - RUY-16 and RUY-499 (split by the lead): the Options menu, the Hold ring, Accept on release, Uninstall… with the shared confirm and the admin PIN.
+  - RUY-491: 28 controller silhouettes, with one model table in the new crate `ruya-pads` (VM and Dell pending).
+  - RUY-512: one look per setting row kind (RUY-505 closed with it).
+- **Design sessions** (Claude Design canvases on Dreamglass; specs merged as planned, tickets filed):
+  - RUY-4, the Options menu: done.
+  - Controller menus: RUY-500..509.
+  - Control kinds: RUY-512..517.
+  - The game page, which merges Store and Details: RUY-523/524/532-534; no ratings, RUY-535.
+  - A gaming tuning audit (Opus): RUY-522, with RUY-525..531.
+- **Images:** 0.0.75 at aa1ad56 (RUY-486, RUY-493): 12/14 in the queue plus `vm-input-check check` PASS. The 2 FAILs are diagnosed and not regressions (RUY-473, RUY-521). **The Dell runs 0.0.75** (rollback 0.0.74).
+- **Nothing in flight; no builder worktrees.** The design sessions' worktrees (`.claude/worktrees/*`) are merged; archive them with the owner. `inspiring-chebyshev-c1c08c` (4402db0) is unknown; the owner was asked.
+- **Pushed:** ce7e315 mid-session; this handoff is pushed with push-main. CI was not checked.
 
 ## Owner decisions this session
-1. **Review every ticket before dispatching it** (LEAD.md 4b.1): a "Lead review before the build" comment. RUY-40 is the example.
-2. Controller profiles, all six recommendations accepted (06 §7, RUY-43's comments):
-   - USB-only sharing;
-   - no shipped per-game defaults;
-   - macros and turbo deferred and off for imports;
-   - the guest rule;
-   - several device profiles by `match`;
-   - a hidden platform level.
-
-   **RUY-490 (lead)** writes the spec and contract and blocks RUY-43.
+1. The silhouettes may ship (RUY-387, part answered).
+2. Nintendo pads stay positional in games, with a one-time question after pairing (RUY-503).
+3. No ratings on the game page for now (RUY-535; revisit with RUY-386).
+4. `split_lock_mitigate=0` as SteamOS does it (RUY-527).
+5. "One active controller per profile" (RUY-540 comment). Check it against ADR-017 and local co-op before building.
 
 ## Next, in this order
-1. **Dell, with the owner (0.0.74):**
-   - X11 hw: **Pong PASS** with the Wii U Pro.
-   - Alien Arena: has no controller code at all (RUY-435 comment; it needs RUY-45).
-   - **Attack Vector Alpha (Godot 3.6) crashes the satellite** (a wl_shm_pool protocol error): **RUY-494, high**.
-
-   Still to do: a Nintendo pad confirms with A, the Controllers page. Then build the next image (RUY-486), and check the owner's Wii U Pro and DualSense in the Button test.
-2. **RUY-493 (high):** after a live profile swap the next press is lost. A product bug or the probe's timing.
-3. RUY-41 (glyphs follow the controller; reads RUY-40's `activeFamily` and seam `routing.rs mapper_events`), RUY-479 (left-stick navigation in the stick editor), RUY-474 (GPU shots red on main), RUY-473 (VM check hygiene), RUY-441.
-4. Lead work:
-   - RUY-490 (profiles spec);
-   - RUY-483 (shell CPU wedge plus a watchdog; it did not reproduce on 0.0.74);
-   - RUY-448 and RUY-449 (from lead-15);
-   - RUY-487 (two family tables).
-5. File the xwayland-satellite upstream PR (owner approved; RUY-434's Outcome has the text). It has now passed the VM.
-6. The owner should answer RUY-387 (pad art licence) before RUY-491 ships the silhouettes.
+1. **The owner's two reports (analyse first, owner's request):**
+   - **RUY-538:** with two pads, a Controls in games change applies to both.
+   - **RUY-539:** a Hub profile switch doesn't freeze the running game (see RUY-87).
+2. **RUY-540 (high):** virtual pad numbering. pad1 is the BTreeMap-first pad, so LibreQuake listened to the idle Wii U Pro (live diagnosis on the Dell). Then RUY-541 (pads destroyed at every overlay).
+3. **Build the next image** (main has RUY-479, 16, 499, 491, 512). VM queue: RUY-479 `vm-input-check.sh hold`, RUY-491 `vm-devices-check.sh gamepads`. **Dell with the owner:**
+   - silhouettes for the DualSense and the Wii U Pro (Bluetooth pane, Controllers, toasts, Input1 `model`);
+   - the Options menu, Uninstall;
+   - the Button test layouts, the confirm button on a Nintendo pad.
+4. Ready builder work:
+   - RUY-513 and RUY-514 (row-kind migrations; parallel, now unblocked);
+   - RUY-523 → RUY-524 (game page);
+   - RUY-41 → RUY-500;
+   - RUY-17 (with RUY-520);
+   - RUY-525..531 (tuning, VM this task);
+   - RUY-494 (X11 shm crash).
+5. Lead work: RUY-490 (profiles spec), RUY-483 (shell wedge), RUY-519/543/516 (design follow-ups), and triage of about 30 `inbox` tickets.
 
 ## Concerns (ranked)
-1. The shell wedge (RUY-483): seen once, with no sound card. There is no watchdog yet.
-2. Lanes: two complex Opus builders took about 450-550k tokens per round. A split along contract and UI (RUY-42 → RUY-465) halved the risk; split earlier.
-3. Agents touching main by relative paths (lead-15). None seen this session.
+1. Input on real hardware: three owner-visible input bugs this session (RUY-538, 539, 540). The VM checks don't cover two pads of different families.
+2. `shots` is flaky on the shared desktop: two builders lose activation (RUY-511). Run at most one shots user at a time when possible.
+3. The shell wedge (RUY-483) has no watchdog yet.
 
-## Process changes in lead-16
-- Owner rule: review before dispatch (LEAD.md, memory).
-- `free-space.ps1` keeps only the two newest Dell OCI archives. Fourteen had filled F:, and make-disk refused to run.
-- `shell/CLAUDE.md` pruned from 13.2 to 8.8 KB: how-tos moved to `shell/PATTERNS.md`.
-- VM queue: when main's scripts are ahead of the image, run them from a detached worktree at the image's commit with an `output` junction. **Delete the junction with `(Get-Item ...).Delete()` before removing the worktree** (`cmd /c rmdir` did not remove it).
-- Paper Plane: no new problems found.
+## Process changes in lead-17
+- Split big UI tickets before dispatch (RUY-16 → RUY-499): each builder round stayed under about 430k.
+- VM queue for an image older than main: run from a detached worktree at the image's commit with an `output` junction (delete the junction first). The default queue omits `vm-input-check.sh`: run it explicitly.
+- Design sessions create their own follow-up tickets. Notes left in "shared notes" files are unreadable for the lead.
+- `.ts` merge recipe (LEAD.md 4b.1) gains `lconvert -no-obsolete`: the RUY-512 gate went red on four obsolete entries kept by lconvert.
+- Paper Plane: same-state move drops the new commit (EnigmaNL/PaperPlane#9, commented).
 
 ## Host facts learned
-- Never put backslashes in a Bash heredoc, `sed` or `python -c`: use Write/Edit. PowerShell 5.1 strips quotes and expands `$(...)` inside ssh arguments: put probes in a script file and scp it.
+- Never put backslashes in a Bash heredoc, `sed` or `python -c`: use Write/Edit. PowerShell 5.1 strips quotes inside ssh arguments: scp a script.
 - The Dell's `bootloader-update.service` fails on every boot (RUY-24, harmless).
-- Paper Plane REST: `POST /api/tools/<tool>`. A batch `update` is atomic: one refusal (e.g. missing criteria) stops all of it.
+- Paper Plane REST: `POST /api/tools/<tool>`; a batch `update` is atomic.
+- `start_session`'s `model` was ignored for Fable (it started on Opus).
 
 ## Quality signals (one row per lead session)
 
 | Date | Range reviewed | Tasks | Findings (fixed / filed) | `dev.ps1 test` | VM |
 |---|---|---|---|---|---|
-| 2026-11-12/13 (lead-15) | 7a46c55..72b5cb5 | RUY-1 (lead); 409, 410, 425, 421, 415, 422, 424, 430, 22, 435, 434, 436, 459, 406, 39 | round 2 for 409, 410; virtual-pad toast bug | 1310 QML + 107 skips | 0.0.71 queue 11/14 |
-| 2026-11-13 (lead-16) | 72b5cb5..HEAD | 42 (split), 465, 413, 444, 472, 40, 486 | round 2 for 413 (restart confirm, app actions) and 444 (VM check, overlapping Pairs); x11 never worked (RUY-472); shell wedge (RUY-483); live remap (RUY-493) | 1465 QML + 126 skips | 0.0.73 10/14; 0.0.74 x11 118 PASS, 2 FAIL filed |
+| 2026-11-13 (lead-16) | 72b5cb5..984460e | 42 (split), 465, 413, 444, 472, 40, 486 | round 2 for 413, 444; x11 never worked (RUY-472); RUY-483; RUY-493 | 1465 QML + 126 skips | 0.0.74 x11 118 PASS |
+| 2026-11-13 (lead-17) | 984460e..HEAD | 493, 474, 479, 16, 499, 491, 512; designs 4, 500-509, 512-517, 523-535 | round 2 for 16 (tests), 491 (Wii U Pro evdev name), 499 (hint band, PIN clear); owner bugs 538-540 | 1588 QML + 137 skips (RUY-512 gate) | 0.0.75 12/14 + input check PASS |
