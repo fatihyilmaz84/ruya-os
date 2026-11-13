@@ -27,7 +27,7 @@ The lead follows the root `CLAUDE.md` (rules, commit format, definition of done)
 
 ### 1. Orient (read only)
 - `LEAD-NOTES.md`: the previous lead's concerns and the **review range** (last reviewed commit).
-- Paper Plane (the source of truth since 2026-11-12, `CLAUDE.md`): `summary usage=true` (counts, in flight, blocked, waiting on the owner, stale claims, tokens), `list label=inbox`, `list label=owner-decision`, `list label=vm-queue`, `changes` since the cursor in `LEAD-NOTES.md`. `docs/STATUS*.md` and `docs/tasks/` are a frozen archive: never edit them.
+- Paper Plane (the source of truth since 2026-11-12, `CLAUDE.md`): `summary usage=true` (counts, in flight, blocked, waiting on the owner, stale claims, tokens), `list label=inbox`, `list label=owner-decision`, `list label=vm-queue`, `formation` with no arguments (the goals and their progress; `PLANNING.md` step 4), `changes` since the cursor in `LEAD-NOTES.md`. Pick builder work goal by goal: finish a formation's ready tickets before opening the next one. `docs/STATUS*.md` and `docs/tasks/` are a frozen archive: never edit them.
 - `git log --oneline <last-reviewed>..HEAD`: everything since the last lead review.
 - `git status` must be clean (see the rule above).
 

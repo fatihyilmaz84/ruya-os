@@ -8,7 +8,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 
 | What | Where |
 |---|---|
-| Open work, order, NEXT, inbox, blockers, owner decisions | Paper Plane (`summary`, `next`, `list label=...`) |
+| Open work, order, NEXT, inbox, blockers, owner decisions, goals | Paper Plane (`summary`, `next`, `list label=...`; goals are formations, `Formation:` in `get`) |
 | One task with its acceptance criteria; a finished task's Outcome | Its ticket (`get RUY-n`); old tasks also in the archive `docs/tasks/T-*.md` |
 | Roles (owner, Opus lead, Sonnet builder), the lead procedure, lead handoff | `docs/LEAD.md`, `docs/LEAD-NOTES.md` |
 | Product, architecture, decisions (ADRs) | `docs/specs/00-overview.md`; platform/image `01`, shell UX `02`, services/apps `03`, **design system `04`** (tokens, components, focus, copy) |
