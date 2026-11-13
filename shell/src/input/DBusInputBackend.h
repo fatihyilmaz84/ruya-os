@@ -23,11 +23,13 @@ public:
     void getCapabilities(const QString &deviceId) override;
     void startTest(const QString &deviceId) override;
     void stopTest(const QString &deviceId) override;
+    void callProfile(quint64 token, const QString &method, const QVariantMap &args) override;
 
 private slots:
     void onDevicesChanged();
     void onTestInput(const QString &deviceId, const QString &input, int value, const QString &source);
     void onTestEnded(const QString &deviceId, const QString &reason);
+    void onProfilesChanged(const QString &profile);
 
 private:
     QDBusConnection m_bus;

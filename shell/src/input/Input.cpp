@@ -1,7 +1,18 @@
 #include "Input.h"
 
 #include "DBusInputBackend.h"
+#include "InputProfileCalls.h"
 #include "MockInputBackend.h"
+#include "Storage.h"
+
+#include <QDate>
+#include <QJsonDocument>
+#include <QJsonObject>
+
+namespace {
+// The import cap (06 §7): a profile file is at most 64 KiB, refused unread when larger.
+constexpr int ImportCap = 64 * 1024;
+} // namespace
 
 Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
     : QObject(parent)
@@ -40,12 +51,14 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
     connect(m_backend.get(), &InputBackend::testStartFinished, this, &Input::testStartFinished);
     connect(m_backend.get(), &InputBackend::testInput, this, &Input::testInput);
     connect(m_backend.get(), &InputBackend::testEnded, this, &Input::testEnded);
+    connect(m_backend.get(), &InputBackend::profileReply, this, &Input::onProfileReply);
+    connect(m_backend.get(), &InputBackend::profilesChanged, this, &Input::profilesChanged);
     m_backend->refreshDevices();
 }
 
 Input::~Input() = default;
 
-Input *Input::create(QQmlEngine *, QJSEngine *)
+Input *Input::create(QQmlEngine *qmlEngine, QJSEngine *)
 {
     std::unique_ptr<InputBackend> backend;
     // Like Network and Profiles: D-Bus on Linux unless RUYA_SERVICES=mock, the mock elsewhere.
@@ -59,7 +72,230 @@ Input *Input::create(QQmlEngine *, QJSEngine *)
         backend = std::make_unique<MockInputBackend>();
     else
         backend = std::make_unique<DBusInputBackend>();
-    return new Input(std::move(backend));
+    auto *input = new Input(std::move(backend));
+    if (qmlEngine)
+        input->setStorage(qmlEngine->singletonInstance<Storage *>("RuyaShell", "Storage"));
+    return input;
+}
+
+void Input::setStorage(Storage *storage)
+{
+    if (m_storage)
+        disconnect(m_storage, nullptr, this, nullptr);
+    m_storage = storage;
+    if (!storage)
+        return;
+    connect(storage, &Storage::finished, this, [this](const QString &op, const QString &id, const QString &status) {
+        if (op == QLatin1String("saveReport") && m_export.active && m_export.storageStage && id == m_export.volumeId)
+            finishExport(status);
+    });
+    connect(storage, &Storage::fileRead, this,
+            [this](const QString &id, const QString &name, const QString &status, const QString &text) {
+                if (!m_import.active || !m_import.storageStage || id != m_import.volumeId || name != m_import.fileName)
+                    return;
+                m_import.storageStage = false;
+                if (status != QLatin1String("ok"))
+                    return finishImport(status);
+                m_import.text = text;
+                callProfile(QStringLiteral("ValidateProfile"), {{QStringLiteral("json"), text}}, Purpose::ImportValidate);
+            });
+}
+
+// ---- controller profiles (RUY-42) ----------------------------------------------------------
+
+void Input::callProfile(const QString &method, const QVariantMap &args, Purpose purpose)
+{
+    const quint64 token = m_nextToken++;
+    m_purposes.insert(token, purpose);
+    m_backend->callProfile(token, method, args);
+}
+
+void Input::listProfiles(const QString &profile)
+{
+    callProfile(QStringLiteral("ListProfiles"), {{QStringLiteral("profile"), profile}}, Purpose::Plain);
+}
+
+void Input::getProfile(const QString &profile, const QString &profileId)
+{
+    callProfile(QStringLiteral("GetProfile"),
+                {{QStringLiteral("profile"), profile}, {QStringLiteral("profile_id"), profileId}}, Purpose::Plain);
+}
+
+void Input::saveProfile(const QString &profile, const QString &json)
+{
+    callProfile(QStringLiteral("SaveProfile"), {{QStringLiteral("profile"), profile}, {QStringLiteral("json"), json}},
+                Purpose::Plain);
+}
+
+void Input::validateProfile(const QString &json)
+{
+    callProfile(QStringLiteral("ValidateProfile"), {{QStringLiteral("json"), json}}, Purpose::Plain);
+}
+
+void Input::deleteProfile(const QString &profile, const QString &profileId)
+{
+    callProfile(QStringLiteral("DeleteProfile"),
+                {{QStringLiteral("profile"), profile}, {QStringLiteral("profile_id"), profileId}}, Purpose::Plain);
+}
+
+void Input::assignProfile(const QString &profile, const QString &scope, const QString &scopeId, const QString &profileId)
+{
+    callProfile(QStringLiteral("AssignProfile"),
+                {{QStringLiteral("profile"), profile},
+                 {QStringLiteral("scope"), scope},
+                 {QStringLiteral("scope_id"), scopeId},
+                 {QStringLiteral("profile_id"), profileId}},
+                Purpose::Plain);
+}
+
+void Input::getEffectiveProfile(const QString &profile, const QString &deviceId, const QString &appId)
+{
+    callProfile(QStringLiteral("GetEffectiveProfile"),
+                {{QStringLiteral("profile"), profile}, {QStringLiteral("device_id"), deviceId}, {QStringLiteral("app_id"), appId}},
+                Purpose::Plain);
+}
+
+QString Input::exportFileName(const QString &profile) const
+{
+    return QStringLiteral("RuyaOS-controls-%1-%2.json").arg(profile, QDate::currentDate().toString(Qt::ISODate));
+}
+
+QVariantList Input::profileMethods() const
+{
+    return InputProfileCalls::describe();
+}
+
+void Input::exportProfile(const QString &profile, const QString &profileId, const QString &volumeId)
+{
+    const QString fileName = exportFileName(profile);
+    if (m_export.active || !m_storage) {
+        emit exportFinished(profile, profileId, volumeId, m_export.active ? QStringLiteral("busy") : QStringLiteral("failed"),
+                            fileName);
+        return;
+    }
+    m_export = Transfer{true, false, profile, profileId, volumeId, fileName, QString()};
+    callProfile(QStringLiteral("GetProfile"),
+                {{QStringLiteral("profile"), profile}, {QStringLiteral("profile_id"), profileId}}, Purpose::ExportGet);
+}
+
+void Input::finishExport(const QString &status)
+{
+    const Transfer done = m_export;
+    m_export = Transfer();
+    if (status != QLatin1String("ok"))
+        qWarning("ruya-shell: exporting controller profile %s of %s to %s answered %s", qPrintable(done.profileId),
+                 qPrintable(done.profile), qPrintable(done.volumeId), qPrintable(status));
+    emit exportFinished(done.profile, done.profileId, done.volumeId, status, done.fileName);
+}
+
+void Input::importProfile(const QString &profile, const QString &volumeId, const QString &fileName)
+{
+    if (m_import.active || !m_storage) {
+        emit importFinished(profile, volumeId, fileName, m_import.active ? QStringLiteral("busy") : QStringLiteral("failed"),
+                            QString(), {});
+        return;
+    }
+    m_import = Transfer{true, true, profile, QString(), volumeId, fileName, QString()};
+    m_storage->readFile(volumeId, fileName, ImportCap);
+}
+
+void Input::finishImport(const QString &status, const QStringList &errors)
+{
+    const Transfer done = m_import;
+    m_import = Transfer();
+    if (status != QLatin1String("ok"))
+        qInfo("ruya-shell: importing %s from %s answered %s%s%s", qPrintable(done.fileName), qPrintable(done.volumeId),
+              qPrintable(status), errors.isEmpty() ? "" : ": ", qPrintable(errors.join(QStringLiteral("; "))));
+    emit importFinished(done.profile, done.volumeId, done.fileName, status, done.profileId, errors);
+}
+
+void Input::onProfileReply(quint64 token, const QString &method, const QVariantMap &args, const QVariantMap &reply)
+{
+    const Purpose purpose = m_purposes.take(token);
+    const QString status = reply.value(QStringLiteral("status")).toString();
+    const QString profile = args.value(QStringLiteral("profile")).toString();
+    const QStringList errors = reply.value(QStringLiteral("errors")).toStringList();
+    switch (purpose) {
+    case Purpose::ExportGet:
+        if (!m_export.active)
+            return;
+        if (status != QLatin1String("ok"))
+            return finishExport(status);
+        m_export.storageStage = true;
+        m_storage->saveReport(m_export.volumeId, {{m_export.fileName, reply.value(QStringLiteral("json")).toString()}});
+        return;
+    case Purpose::ImportValidate:
+        if (!m_import.active)
+            return;
+        if (status != QLatin1String("ok"))
+            return finishImport(status, errors);
+        callProfile(QStringLiteral("SaveProfile"), {{QStringLiteral("profile"), m_import.profile}, {QStringLiteral("json"), m_import.text}},
+                    Purpose::ImportSave);
+        return;
+    case Purpose::ImportSave: {
+        if (!m_import.active)
+            return;
+        m_import.profileId = reply.value(QStringLiteral("profile_id")).toString();
+        if (status != QLatin1String("ok"))
+            return finishImport(status, errors);
+        // A global profile replaces the console profile's controls in games: it is assigned.
+        const QJsonObject doc = QJsonDocument::fromJson(m_import.text.toUtf8()).object();
+        if (doc.value(QStringLiteral("scope")).toObject().value(QStringLiteral("type")).toString() != QLatin1String("global"))
+            return finishImport(status);
+        callProfile(QStringLiteral("AssignProfile"),
+                    {{QStringLiteral("profile"), m_import.profile},
+                     {QStringLiteral("scope"), QStringLiteral("global")},
+                     {QStringLiteral("scope_id"), QString()},
+                     {QStringLiteral("profile_id"), m_import.profileId}},
+                    Purpose::ImportAssign);
+        return;
+    }
+    case Purpose::ImportAssign:
+        if (m_import.active)
+            finishImport(status);
+        return;
+    case Purpose::Plain:
+        break;
+    }
+    if (method == QLatin1String("SaveProfile") && status != QLatin1String("ok"))
+        qInfo("ruya-shell: Input1 SaveProfile for %s answered %s%s%s", qPrintable(profile), qPrintable(status),
+              errors.isEmpty() ? "" : ": ", qPrintable(errors.join(QStringLiteral("; "))));
+    if (method == QLatin1String("ListProfiles"))
+        emit profilesListed(profile, status, reply.value(QStringLiteral("profiles")).toList());
+    else if (method == QLatin1String("GetProfile"))
+        emit profileFetched(profile, args.value(QStringLiteral("profile_id")).toString(), status,
+                            reply.value(QStringLiteral("json")).toString());
+    else if (method == QLatin1String("SaveProfile"))
+        emit profileSaved(profile, status, reply.value(QStringLiteral("profile_id")).toString(), errors);
+    else if (method == QLatin1String("ValidateProfile"))
+        emit profileValidated(status, errors);
+    else if (method == QLatin1String("DeleteProfile"))
+        emit profileDeleted(profile, args.value(QStringLiteral("profile_id")).toString(), status);
+    else if (method == QLatin1String("AssignProfile"))
+        emit profileAssigned(profile, args.value(QStringLiteral("scope")).toString(), args.value(QStringLiteral("scope_id")).toString(),
+                             args.value(QStringLiteral("profile_id")).toString(), status);
+    else if (method == QLatin1String("GetEffectiveProfile"))
+        emit effectiveProfileFetched(profile, args.value(QStringLiteral("device_id")).toString(),
+                                     args.value(QStringLiteral("app_id")).toString(), status,
+                                     reply.value(QStringLiteral("json")).toString(), reply.value(QStringLiteral("chain")).toStringList());
+}
+
+QVariantList Input::mockProfileCalls() const
+{
+    auto *mock = qobject_cast<MockInputBackend *>(m_backend.get());
+    return mock ? mock->profileCalls() : QVariantList();
+}
+
+void Input::mockClearProfileCalls()
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        mock->clearProfileCalls();
+}
+
+void Input::mockResetProfiles()
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        mock->resetProfiles();
 }
 
 void Input::setRoute(const QString &route, const QString &instance, const QString &appId, const QString &profile)

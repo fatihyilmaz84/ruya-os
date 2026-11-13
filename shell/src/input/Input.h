@@ -2,12 +2,16 @@
 
 #include "InputBackend.h"
 
+#include <QHash>
 #include <QObject>
+#include <QPointer>
 #include <QQmlEngine>
 #include <QVariantList>
 #include <QVariantMap>
 
 #include <memory>
+
+class Storage;
 
 // QML face of org.ruyaos.Input1 (RUY-409): the shell tells Ruya Input who is in front, so a game
 // sees the signed-in profile's virtual pads only while it has the screen (06 §5.1-5.2). The shell is
@@ -16,6 +20,9 @@
 // name (the service restarted and is back in "shell") gets the current route again at once.
 // Since RUY-39 it also lists the connected controllers (ListDevices, asked again on every device
 // signal and every new owner of the name), their capabilities and the live button test.
+// Since RUY-42 it calls the controller profile members (06 §7) and moves a profile to and from a USB
+// drive through the Storage singleton (exportProfile, importProfile), so the pages need no
+// plumbing of their own.
 // Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux and the mock elsewhere.
 class Input : public QObject
 {
@@ -71,6 +78,35 @@ public:
     Q_INVOKABLE void startTest(const QString &deviceId);
     Q_INVOKABLE void stopTest(const QString &deviceId);
 
+    // Controller profiles (RUY-42, api/dbus/org.ruyaos.Input1.xml): one call each, the answer as the
+    // signal named after it. `profile` is the console profile ("p1"); summaries are maps with the
+    // XML's keys (id, name, scope, scope_id, inherits, builtin, assigned, match_family,
+    // match_device, layout, remapped, left_stick_changed, right_stick_changed, changed). A refused
+    // save's "path: message" lines are written to the journal; never show them as they are.
+    Q_INVOKABLE void listProfiles(const QString &profile);
+    Q_INVOKABLE void getProfile(const QString &profile, const QString &profileId);
+    Q_INVOKABLE void saveProfile(const QString &profile, const QString &json);
+    Q_INVOKABLE void validateProfile(const QString &json);
+    Q_INVOKABLE void deleteProfile(const QString &profile, const QString &profileId);
+    Q_INVOKABLE void assignProfile(const QString &profile, const QString &scope, const QString &scopeId,
+                                   const QString &profileId);
+    Q_INVOKABLE void getEffectiveProfile(const QString &profile, const QString &deviceId, const QString &appId);
+    // Export: GetProfile, then Storage.saveReport of one file named exportFileName(profile) onto
+    // the volume; the answer is exportFinished with GetProfile's status when that failed, else
+    // SaveReport's ("ok", "read-only", "full", "unsupported", ...), "busy" while an export runs.
+    Q_INVOKABLE void exportProfile(const QString &profile, const QString &profileId, const QString &volumeId);
+    // Import: Storage.readFile (capped at 64 KiB before it is read), ValidateProfile, SaveProfile and,
+    // for a profile of scope "global", AssignProfile so it applies; the answer is importFinished
+    // with the first status that was not "ok" (ReadFile's "too-large", "not-text", "not-found"...;
+    // Input1's "invalid", "not-allowed"...), "busy" while an import runs.
+    Q_INVOKABLE void importProfile(const QString &profile, const QString &volumeId, const QString &fileName);
+    // "RuyaOS-controls-<profile>-<yyyy-mm-dd>.json" for today (SaveReport's name rule).
+    Q_INVOKABLE QString exportFileName(const QString &profile) const;
+    // The profile members as the client calls them: [{ name, in: [...], out: [...] }] (the XML's).
+    Q_INVOKABLE QVariantList profileMethods() const;
+    // Where export and import read and write (the Storage singleton; set by create()).
+    void setStorage(Storage *storage);
+
     // Tests only, and only with the mock backend (otherwise empty or no-ops).
     // Every SetRoute that reached the mock service: [{ route, instance, appId, profile }].
     Q_INVOKABLE QVariantList mockCalls() const;
@@ -98,6 +134,11 @@ public:
     Q_INVOKABLE bool mockTestRunning(const QString &id) const;
     // The mock's three pads again, no test running, ListDevices working.
     Q_INVOKABLE void mockResetDevices();
+    // Controller profiles (RUY-42): every call that reached the mock as { method, args } (args by
+    // the XML's names), and the profiles back to the built-ins only.
+    Q_INVOKABLE QVariantList mockProfileCalls() const;
+    Q_INVOKABLE void mockClearProfileCalls();
+    Q_INVOKABLE void mockResetProfiles();
 
 signals:
     void routeChanged();
@@ -109,9 +150,45 @@ signals:
     void testStartFinished(const QString &deviceId, const QString &status);
     void testInput(const QString &deviceId, const QString &input, int value, const QString &source);
     void testEnded(const QString &deviceId, const QString &reason);
+    // The answers of the profile calls; status is a string of the XML, or "failed" when the call
+    // failed.
+    void profilesListed(const QString &profile, const QString &status, const QVariantList &profiles);
+    void profileFetched(const QString &profile, const QString &profileId, const QString &status, const QString &json);
+    void profileSaved(const QString &profile, const QString &status, const QString &profileId, const QStringList &errors);
+    void profileValidated(const QString &status, const QStringList &errors);
+    void profileDeleted(const QString &profile, const QString &profileId, const QString &status);
+    void profileAssigned(const QString &profile, const QString &scope, const QString &scopeId,
+                         const QString &profileId, const QString &status);
+    void effectiveProfileFetched(const QString &profile, const QString &deviceId, const QString &appId,
+                                 const QString &status, const QString &json, const QStringList &chain);
+    // The service's ProfilesChanged.
+    void profilesChanged(const QString &profile);
+    // fileName is the name the export used (also when it failed).
+    void exportFinished(const QString &profile, const QString &profileId, const QString &volumeId,
+                        const QString &status, const QString &fileName);
+    // profileId is the imported profile's id once SaveProfile took it; errors are the service's
+    // lines of a refused file (also in the journal).
+    void importFinished(const QString &profile, const QString &volumeId, const QString &fileName,
+                        const QString &status, const QString &profileId, const QStringList &errors);
 
 private:
     void send();
+    // What a profile call's answer is for.
+    enum class Purpose { Plain, ExportGet, ImportValidate, ImportSave, ImportAssign };
+    void callProfile(const QString &method, const QVariantMap &args, Purpose purpose);
+    void onProfileReply(quint64 token, const QString &method, const QVariantMap &args, const QVariantMap &reply);
+    void finishExport(const QString &status);
+    void finishImport(const QString &status, const QStringList &errors = {});
+    struct Transfer
+    {
+        bool active = false;
+        bool storageStage = false; // waiting for Storage (saveReport, readFile)
+        QString profile;
+        QString profileId;
+        QString volumeId;
+        QString fileName;
+        QString text;
+    };
 
     std::unique_ptr<InputBackend> m_backend;
     QString m_route;
@@ -121,4 +198,9 @@ private:
     QString m_status;
     QVariantList m_devices;
     QString m_devicesState = QStringLiteral("loading");
+    quint64 m_nextToken = 1;
+    QHash<quint64, Purpose> m_purposes;
+    QPointer<Storage> m_storage;
+    Transfer m_export;
+    Transfer m_import;
 };

@@ -5,9 +5,12 @@
 
   DRAFT (T-366 / RUY-2, lead 2026-11-12), partly built. ruya-inputd serves the Devices members
   ListDevices, DeviceAdded, DeviceChanged, DeviceRemoved and the Routing members SetRoute, Route,
-  RouteChanged since RUY-3 (T-367), and GetCapabilities and the button test (StartTest, StopTest,
-  TestInput, TestEnded) since RUY-39 (T-368); every other member below is still DRAFT and not
-  served (UI ownership T-397..T-399, Profiles T-369/T-370, OwnershipMode T-371). The design is docs/specs/06-input.md. Each task may change what it builds
+  RouteChanged since RUY-3 (T-367), GetCapabilities and the button test (StartTest, StopTest,
+  TestInput, TestEnded) since RUY-39 (T-368), and the controller profile members (ListProfiles,
+  GetProfile, SaveProfile, ValidateProfile, DeleteProfile, AssignProfile for the global scope,
+  GetEffectiveProfile, ProfilesChanged) since RUY-42 (T-369); every other member below is still
+  DRAFT and not served (UI ownership T-397..T-399, platform and game assignments T-370 / RUY-43,
+  OwnershipMode T-371). The design is docs/specs/06-input.md. Each task may change what it builds
   here (contracts are drafts until the first release, root CLAUDE.md); RUY-403's served-vs-XML
   test must check only the built members.
 
@@ -24,13 +27,18 @@
   Status strings are stable API:
     "ok"               success
     "unknown-device"   no connected device with that id
-    "unknown-profile"  no such console profile (SetRoute), or no such controller profile
+    "unknown-profile"  no such console profile (SetRoute, and every profile member: the console
+                       profile must be a profile account, as for SetRoute), or no such controller
+                       profile
     "unknown-app"      not an installed app id (assignments, ownership modes)
-    "invalid"          malformed argument, or a controller profile the schema refuses (errors says why)
+    "invalid"          malformed argument, or a controller profile the schema or the service's rules
+                       refuse (errors says why), or a parent (`inherits`) that does not exist
     "not-allowed"      the action does not fit the current state (a button test while an app is in
-                       front, deleting a built-in profile, a cycle in `inherits`)
+                       front, saving over or deleting a built-in profile, saving a profile of scope
+                       "builtin", a cycle in `inherits`, a chain of more than 8 `inherits` links,
+                       more than 64 stored profiles of one console profile)
     "busy"             a button test already runs for that device
-    "failed"           internal error
+    "failed"           internal error (also: the profiles could not be read or written)
 
   Records are a{sv} so fields can be added later (unknown keys are ignored).
 
@@ -58,9 +66,33 @@
   Routes: "shell" | "app" | "overlay" | "locked" (06 §5.1). Ownership modes: "managed" |
   "passthrough" | "steam" | "semantic" (06 §5.3).
 
-  Controller profiles are JSON text, schema docs/specs/schemas/input-profile-v1.json (06 §7).
-  Profile summary (a{sv}), keys: id s, name s, scope s ("builtin" | "global" | "platform" |
-  "game"), scope_id s (the app id for platform and game, else ""), inherits s, builtin b.
+  Controller profiles are JSON text, schema docs/specs/schemas/input-profile-v1.json (06 §7; the
+  format is public, docs/developers/controller-input.md). The service validates every profile on
+  load, save and import: the schema, plus the rules it cannot express (64 KiB, macro limits, button
+  and axis names, dead zones that leave a range, no self-inheritance, plain-text names;
+  services/ruya-inputd/src/profile.rs). Errors are "path: message" lines ("/mappings/0/to/code:
+  "jump" is not a button"); they are for the journal and never shown to the player as they are.
+  Built-in profiles: "default" (every input to itself, the default stick settings) and "nintendo"
+  (south and east, west and north swapped; inherits "default"). A profile without inherits
+  inherits from "default". Stored per console profile in /var/lib/ruya-input/profiles/<profile>/
+  (0700, owned by ruya-input).
+  Profile summary (a{sv}), keys:
+    id                  s   the profile id
+    name                s
+    scope               s   "builtin" | "global" | "platform" | "game"
+    scope_id            s   the app id for platform and game, else ""
+    inherits            s   its parent as the file says ("" means "default")
+    builtin             b
+    assigned            b   the console profile's global assignment names it
+    match_family        s   its own match.family, "" when none
+    match_device        s   its own match.device (a stable device id), "" when none
+    layout              s   "nintendo" when its chain holds the built-in "nintendo", else "standard"
+    remapped            u   buttons it maps differently from its parent (the "changed" count of a
+                            remap list on top of a layout)
+    left_stick_changed  b   the resolved left stick settings differ from the built-in default's
+    right_stick_changed b   the same for the right stick
+    changed             b   the resolved profile maps or sets anything differently from "default"
+  ListProfiles lists the built-ins first, then the stored profiles by id.
 -->
 <node>
   <interface name="org.ruyaos.Input1">
@@ -180,7 +212,11 @@
     </method>
     <property name="ConfirmButton" type="s" access="read"/>
 
-    <!-- Controller profiles (T-369, T-370), stored per console profile. -->
+    <!-- Controller profiles (T-369 built; platform and game assignments T-370), stored per console
+         profile (`profile`, which must be a profile account, else "unknown-profile"). Every change
+         (save, delete, assign) is one ProfilesChanged and reaches the virtual pads of that console
+         profile at once: what a pad emits is the resolved global profile when its own match fits
+         the pad (family, stable id), else "default" (06 §7). -->
     <method name="ListProfiles">
       <arg name="profile" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
@@ -192,7 +228,14 @@
       <arg name="status" type="s" direction="out"/>
       <arg name="json" type="s" direction="out"/>
     </method>
-    <!-- Creates or replaces (same id). Import is ValidateProfile, then SaveProfile. -->
+    <!-- GetProfile: the profile as stored (only what it sets; a built-in as the console has it);
+         "unknown-profile" for an id that is neither.
+         SaveProfile creates or replaces (same id). Import is ValidateProfile, then SaveProfile.
+         Status "ok" (profile_id is the id), "invalid" (errors say why: the file, or a parent that
+         does not exist), "not-allowed" (a built-in id or scope, a cycle, more than 8 links for it or
+         for a profile that inherits from it, a 65th profile), "failed" (not written; nothing
+         changed). The stored text is the service's own writing of the profile (keys sorted, whole
+         numbers without a fraction), not the caller's text. -->
     <method name="SaveProfile">
       <arg name="profile" type="s" direction="in"/>
       <arg name="json" type="s" direction="in"/>
@@ -200,18 +243,23 @@
       <arg name="profile_id" type="s" direction="out"/>
       <arg name="errors" type="as" direction="out"/>
     </method>
+    <!-- The file alone: "ok", or "invalid" with errors; its parent is checked by SaveProfile. -->
     <method name="ValidateProfile">
       <arg name="json" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
       <arg name="errors" type="as" direction="out"/>
     </method>
+    <!-- "ok", "unknown-profile", "not-allowed" (a built-in). Its children inherit from its parent
+         afterwards and keep their overrides; a global assignment that named it is removed. -->
     <method name="DeleteProfile">
       <arg name="profile" type="s" direction="in"/>
       <arg name="profile_id" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
     </method>
     <!-- scope: "global" (scope_id "") | "platform" | "game" (scope_id: the app id);
-         profile_id "" removes the assignment. -->
+         profile_id "" removes the assignment. Built today: "global", which names a built-in or a
+         global profile ("invalid" for one of scope platform or game, "unknown-profile" for an id
+         that does not exist); "platform" and "game" answer "invalid" until T-370 / RUY-43. -->
     <method name="AssignProfile">
       <arg name="profile" type="s" direction="in"/>
       <arg name="scope" type="s" direction="in"/>
@@ -220,7 +268,11 @@
       <arg name="status" type="s" direction="out"/>
     </method>
     <!-- What would apply to this device in this app: the resolved profile and its chain,
-         most specific first (game, platform, global, builtin). -->
+         most specific first (game, platform, global, builtin). json is one schema-v1 document: the
+         most specific profile's id, name, scope and match, no inherits, every mapping of the
+         chain, and both sticks' settings complete (the defaults filled in). device_id "" is a pad
+         that no match names; a device_id that is not connected is "unknown-device". app_id is ""
+         or an app id ("invalid" otherwise); until T-370 / RUY-43 it does not change the answer. -->
     <method name="GetEffectiveProfile">
       <arg name="profile" type="s" direction="in"/>
       <arg name="device_id" type="s" direction="in"/>

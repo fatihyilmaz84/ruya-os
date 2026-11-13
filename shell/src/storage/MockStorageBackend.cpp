@@ -1,5 +1,8 @@
 #include "MockStorageBackend.h"
 
+#include <QDateTime>
+#include <QRegularExpression>
+
 #include <algorithm>
 #include <utility>
 
@@ -85,9 +88,100 @@ void MockStorageBackend::saveReport(const QString &id, const QMap<QString, QStri
     } else if (!m_saveStatus.isEmpty()) {
         status = m_saveStatus;
     }
-    if (status == QLatin1String("ok"))
+    if (status == QLatin1String("ok")) {
         m_saved = files;
+        const qint64 now = QDateTime::currentSecsSinceEpoch();
+        for (auto it = files.cbegin(); it != files.cend(); ++it)
+            m_files[id].insert(it.key(), MockFile{it.value(), now});
+    }
     answer(QStringLiteral("saveReport"), id, status);
+}
+
+namespace {
+// The rules of services/ruya-devices/src/volume_files.rs.
+bool validSuffix(const QString &suffix)
+{
+    static const QRegularExpression re(QStringLiteral("^\\.[a-z0-9]{1,8}$"));
+    return re.match(suffix).hasMatch();
+}
+
+bool validFileName(const QString &name)
+{
+    if (name.isEmpty() || name.toUtf8().size() > 255 || name.startsWith(QLatin1Char('.')))
+        return false;
+    for (const QChar c : name) {
+        if (c == QLatin1Char('/') || c == QLatin1Char('\\') || c.category() == QChar::Other_Control)
+            return false;
+    }
+    return true;
+}
+} // namespace
+
+void MockStorageBackend::listFiles(const QString &id, const QString &suffix)
+{
+    const int at = indexOf(id);
+    QString status = QStringLiteral("ok");
+    QVariantList rows;
+    if (id.isEmpty() || !validSuffix(suffix)) {
+        status = QStringLiteral("invalid");
+    } else if (at < 0 || !m_entries.at(at).present) {
+        status = QStringLiteral("unknown-volume");
+    } else if (!m_entries.at(at).vol.removable || !m_entries.at(at).vol.mounted) {
+        status = QStringLiteral("unsupported");
+    } else {
+        struct Row
+        {
+            QString name;
+            MockFile file;
+        };
+        QList<Row> found;
+        const auto files = m_files.value(id);
+        for (auto it = files.cbegin(); it != files.cend(); ++it) {
+            const QString &name = it.key();
+            if (validFileName(name) && name.size() > suffix.size() && name.toLower().endsWith(suffix))
+                found.append({name, it.value()});
+        }
+        std::sort(found.begin(), found.end(), [](const Row &a, const Row &b) {
+            return a.file.modified != b.file.modified ? a.file.modified > b.file.modified : a.name < b.name;
+        });
+        for (const Row &r : found) {
+            rows.append(QVariantMap{
+                {QStringLiteral("name"), r.name},
+                {QStringLiteral("sizeBytes"), qint64(r.file.text.toUtf8().size())},
+                {QStringLiteral("modified"), r.file.modified},
+            });
+        }
+    }
+    QTimer::singleShot(0, this, [this, id, suffix, status, rows] { emit filesListed(id, suffix, status, rows); });
+}
+
+void MockStorageBackend::readFile(const QString &id, const QString &name, quint32 maxBytes)
+{
+    m_readCalls.append(id + QLatin1Char('/') + name);
+    const int at = indexOf(id);
+    QString status = QStringLiteral("ok");
+    QString text;
+    if (id.isEmpty() || !validFileName(name) || maxBytes == 0 || maxBytes > (1u << 20)) {
+        status = QStringLiteral("invalid");
+    } else if (at < 0 || !m_entries.at(at).present) {
+        status = QStringLiteral("unknown-volume");
+    } else if (!m_entries.at(at).vol.removable || !m_entries.at(at).vol.mounted) {
+        status = QStringLiteral("unsupported");
+    } else if (!m_files.value(id).contains(name)) {
+        status = QStringLiteral("not-found");
+    } else if (quint32(m_files.value(id).value(name).text.toUtf8().size()) > maxBytes) {
+        status = QStringLiteral("too-large");
+    } else if (!m_readStatus.isEmpty()) {
+        status = m_readStatus;
+    } else {
+        text = m_files.value(id).value(name).text;
+    }
+    QTimer::singleShot(0, this, [this, id, name, status, text] { emit fileRead(id, name, status, text); });
+}
+
+void MockStorageBackend::setFile(const QString &id, const QString &name, const QString &text, qint64 modified)
+{
+    m_files[id].insert(name, MockFile{text, modified});
 }
 
 void MockStorageBackend::holdEject(bool hold)
@@ -205,6 +299,9 @@ void MockStorageBackend::initState()
     m_saved.clear();
     m_saveCalls = 0;
     m_saveStatus.clear();
+    m_files.clear();
+    m_readStatus.clear();
+    m_readCalls.clear();
     m_scans.clear();
     m_scanning.clear();
     m_holdScan = false;

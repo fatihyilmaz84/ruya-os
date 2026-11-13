@@ -6,8 +6,12 @@
 # so vm-input-probe.py holds its own bus connection), rumble is forwarded, and a killed service
 # is back within 0.5 s. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|shell|fallback]
-# `check` runs the first four. `caps` (RUY-39 / T-368) lists the probe's uinput pad through ListDevices and
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|fallback]
+# `check` runs the first four, then `caps` and `profiles`. `profiles` (RUY-42) checks the controller
+# profiles over busctl: the built-ins, validation (a bad file, 64 KiB + 1), storage in
+# /var/lib/ruya-input/profiles/<profile>/ (0700 / 0600, ruya-input's, unreadable to the profile
+# user), a restart keeps them, the bus policy; `check`'s probe also remaps South to East on a live
+# virtual pad and reads East (the remap changes the virtual pad's output). `caps` (RUY-39 / T-368) lists the probe's uinput pad through ListDevices and
 # checks its GetCapabilities descriptor (an unknown model: what the kernel shows, nothing inferred) and
 # that StartTest answers; a test that busctl starts ends at once with reason "caller" (busctl leaves
 # the bus), which the journal says. Since RUY-409 the shell drives the route itself, so `check` and `shell`
@@ -150,6 +154,48 @@ restart_check() {
     fds="$(ls -l /proc/"$spid"/fd 2>/dev/null | grep -c " $node\$")"
     [ "$fds" -ge 1 ] && ok "the shell has the new navigation node $node open: it stays navigable" || bad "the shell does not hold $node open"
     [ "$(systemctl show -p NRestarts --value ruya-inputd)" -ge 3 ] && ok "systemd restarted it (NRestarts $(systemctl show -p NRestarts --value ruya-inputd))" || bad "NRestarts too low"
+}
+
+# Controller profiles (RUY-42, 06 section 7) over busctl: built-ins, validation and its hostile cases,
+# storage in the StateDirectory (0700 / 0600, owned by ruya-input), a restart keeps them, the bus
+# policy. The remap on a live virtual pad is in `check` (vm-input-probe.py).
+profiles_check() {
+    echo "--- controller profiles (RUY-42)"
+    local out dir file big
+    dir="/var/lib/ruya-input/profiles/$me"
+    file="$dir/vm-check-keep.json"
+    out="$(busctl --system call "$svc" "$path" "$ifc" ListProfiles s "$me" 2>&1)"
+    case "$out" in *'"ok"'*'"default"'*'"nintendo"'*) ok "ListProfiles lists the built-ins default and nintendo" ;; *) bad "ListProfiles: $out" ;; esac
+    out="$(busctl --system call "$svc" "$path" "$ifc" ListProfiles s shell 2>&1)"
+    case "$out" in *'"unknown-profile"'*) ok "ListProfiles for ruya-shell: unknown-profile" ;; *) bad "ListProfiles shell: $out" ;; esac
+    out="$(busctl --system call "$svc" "$path" "$ifc" ValidateProfile s '{"schema_version":2,"id":"x","name":"x","scope":{"type":"global"},"script":"rm -rf /"}' 2>&1)"
+    case "$out" in
+    *'"invalid"'*'/schema_version: must be 1'*|*'"invalid"'*'unknown field script'*)
+        echo "$out" | grep -q '/schema_version: must be 1' && echo "$out" | grep -q '/: unknown field script'             && ok "ValidateProfile refuses a bad file with path: message lines" || bad "ValidateProfile: $out" ;;
+    *) bad "ValidateProfile: $out" ;;
+    esac
+    big="$(python3 -c 'import json; print(json.dumps({"schema_version": 1, "id": "big", "name": "B", "scope": {"type": "global"}}) + " " * 65536)')"
+    out="$(busctl --system call "$svc" "$path" "$ifc" ValidateProfile s "$big" 2>&1)"
+    case "$out" in *'"invalid"'*'larger than 65536 bytes'*) ok "ValidateProfile refuses more than 64 KiB" ;; *) bad "ValidateProfile of 64 KiB + 1: ${out:0:200}" ;; esac
+    out="$(busctl --system call "$svc" "$path" "$ifc" SaveProfile ss "$me" '{"schema_version":1,"id":"vm-check-keep","name":"VM check","scope":{"type":"global"},"inherits":"nintendo"}' 2>&1)"
+    case "$out" in *'"ok" "vm-check-keep"'*) ok "SaveProfile: ok" ;; *) bad "SaveProfile: $out" ;; esac
+    [ "$(stat -c '%U %a' "$dir" 2>/dev/null)" = "ruya-input 700" ] && ok "$dir is ruya-input's, 0700" || bad "$dir: $(stat -c '%U %a' "$dir" 2>&1)"
+    [ "$(stat -c '%U %a' "$file" 2>/dev/null)" = "ruya-input 600" ] && ok "the profile file is ruya-input's, 0600" || bad "$file: $(stat -c '%U %a' "$file" 2>&1)"
+    runuser -u "ruya-$me" -- cat "$file" >/dev/null 2>&1 && bad "ruya-$me can read the stored profile" || ok "the profile user cannot read the stored file"
+    out="$(busctl --system call "$svc" "$path" "$ifc" DeleteProfile ss "$me" nintendo 2>&1)"
+    case "$out" in *'"not-allowed"'*) ok "DeleteProfile of a built-in: not-allowed" ;; *) bad "DeleteProfile nintendo: $out" ;; esac
+    out="$(busctl --system call "$svc" "$path" "$ifc" SaveProfile ss "$me" '{"schema_version":1,"id":"vm-check-orphan","name":"O","scope":{"type":"global"},"inherits":"ghost"}' 2>&1)"
+    case "$out" in *'"invalid"'*'no profile'*) ok "SaveProfile with a parent that does not exist: invalid" ;; *) bad "SaveProfile orphan: $out" ;; esac
+    systemctl restart ruya-inputd
+    sleep 1
+    out="$(busctl --system call "$svc" "$path" "$ifc" ListProfiles s "$me" 2>&1)"
+    case "$out" in *'"vm-check-keep"'*) ok "the profile survives a restart of the service" ;; *) bad "after the restart: $out" ;; esac
+    out="$(busctl --system call "$svc" "$path" "$ifc" GetEffectiveProfile sss "$me" "" "" 2>&1)"
+    case "$out" in *'"ok"'*'inner_deadzone'*) ok "GetEffectiveProfile answers the merged profile" ;; *) bad "GetEffectiveProfile: ${out:0:200}" ;; esac
+    out="$(runuser -u nobody -- busctl --system call "$svc" "$path" "$ifc" ListProfiles s "$me" 2>&1)" && bad "nobody could call ListProfiles: $out" || ok "nobody cannot call ListProfiles"
+    out="$(busctl --system call "$svc" "$path" "$ifc" DeleteProfile ss "$me" vm-check-keep 2>&1)"
+    case "$out" in *'"ok"'*) ok "DeleteProfile: ok" ;; *) bad "DeleteProfile: $out" ;; esac
+    [ ! -e "$file" ] && ok "the file is gone" || bad "$file is still there"
 }
 
 security_check() {
@@ -445,9 +491,15 @@ check)
     restart_check
     security_check
     caps_check
+    profiles_check
     ;;
 restart) restart_check ;;
 caps) caps_check ;;
+profiles)
+    two_profiles
+    [ -n "$me" ] && ok "profile $me" || { bad "need a profile"; exit 1; }
+    profiles_check
+    ;;
 security) security_check ;;
 fallback) fallback_check ;;
 shell)

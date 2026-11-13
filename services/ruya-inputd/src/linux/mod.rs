@@ -20,6 +20,7 @@ use evdev::{AbsoluteAxisType, AttributeSet, Device, EventType, FFEffectType, Inp
 
 use crate::accounts::PasswdAccounts;
 use crate::acl;
+use crate::book::{Book, DirStore};
 use crate::caps::{self, Part, Probe};
 use crate::dbus::{serve, DynBackend, Shared};
 use crate::identity::{self, Hardware};
@@ -571,10 +572,15 @@ impl Scanner {
     }
 }
 
-fn salt() -> Vec<u8> {
-    let dir = std::env::var_os("STATE_DIRECTORY")
+/// The unit's StateDirectory (`/var/lib/ruya-input`, 0700, owned by ruya-input).
+fn state_dir() -> PathBuf {
+    std::env::var_os("STATE_DIRECTORY")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(STATE_DIR));
+        .unwrap_or_else(|| PathBuf::from(STATE_DIR))
+}
+
+fn salt() -> Vec<u8> {
+    let dir = state_dir();
     let loaded =
         File::open("/dev/urandom").and_then(|mut r| identity::load_or_create_salt(&dir, &mut r));
     match loaded {
@@ -656,7 +662,12 @@ pub fn run() -> io::Result<()> {
         ff: ff_tx,
     };
     let backend: DynBackend = Box::new(backend);
-    let (shared, notices) = Shared::new(Router::new(backend, Box::new(PasswdAccounts)));
+    let mut router = Router::new(backend, Box::new(PasswdAccounts));
+    // Controller profiles (06 section 7): <state>/profiles/<console profile>/<id>.json.
+    router.set_book(Book::new(Box::new(DirStore::new(
+        state_dir().join("profiles"),
+    ))));
+    let (shared, notices) = Shared::new(router);
     // The navigation keyboard exists: the shell can navigate as soon as pads are found.
     notifier.send("READY=1");
 

@@ -60,6 +60,7 @@ No code, so no bus permission, and the safest way to extend the console. The for
 | AppStream keys (`x-ruya-*`, content rating, controller support) | [AppStream metadata](appstream-metadata.md) | public, written |
 | Game settings schema (`/app/share/ruya/settings.json`, ADR-035) | [Game settings](game-settings.md), `api/settings/game-settings.schema.json` | experimental, written (format only; delivering values to the console is Platform1, planned) |
 | Sound themes (cues, ambient bed) | [Sound themes](sound-themes.md) | public, written, checker built |
+| Controller profiles (the player's controls in games, exported to a USB drive; schema v1, `docs/specs/schemas/input-profile-v1.json`, RUY-42) | [Controller input](controller-input.md#the-players-controls-what-your-game-sees-is-already-remapped), `samples/controller-profile-example` | experimental, written (the service applies buttons, sticks and triggers; keys, mouse, layers and macros are planned, T-372) |
 | `.play` packages | `05-play-packages.md` (epic T-228) | parked by the owner |
 | Theme, wallpaper and icon packs | none | unplanned |
 

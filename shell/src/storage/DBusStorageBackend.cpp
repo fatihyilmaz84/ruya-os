@@ -228,6 +228,63 @@ void DBusStorageBackend::saveReport(const QString &id, const QMap<QString, QStri
     });
 }
 
+void DBusStorageBackend::listFiles(const QString &id, const QString &suffix)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListFiles"));
+    msg << id << suffix;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, id, suffix](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().size() < 2) {
+            qWarning("ruya-shell: Devices1.Storage ListFiles failed: %s", qPrintable(reply.errorMessage()));
+            emit filesListed(id, suffix, QStringLiteral("failed"), {});
+            return;
+        }
+        // aa{sv}: { name s, size_bytes x, modified x }
+        QVariantList rows;
+        const QDBusArgument arg = reply.arguments().at(1).value<QDBusArgument>();
+        arg.beginArray();
+        while (!arg.atEnd()) {
+            QVariantMap d;
+            arg.beginMap();
+            while (!arg.atEnd()) {
+                QString key;
+                QDBusVariant value;
+                arg.beginMapEntry();
+                arg >> key >> value;
+                arg.endMapEntry();
+                d.insert(key, value.variant());
+            }
+            arg.endMap();
+            rows.append(QVariantMap{
+                {QStringLiteral("name"), d.value(QStringLiteral("name")).toString()},
+                {QStringLiteral("sizeBytes"), d.value(QStringLiteral("size_bytes")).toLongLong()},
+                {QStringLiteral("modified"), d.value(QStringLiteral("modified")).toLongLong()},
+            });
+        }
+        arg.endArray();
+        emit filesListed(id, suffix, reply.arguments().constFirst().toString(), rows);
+    });
+}
+
+void DBusStorageBackend::readFile(const QString &id, const QString &name, quint32 maxBytes)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ReadFile"));
+    msg << id << name << maxBytes;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, id, name](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().size() < 2) {
+            qWarning("ruya-shell: Devices1.Storage ReadFile failed: %s", qPrintable(reply.errorMessage()));
+            emit fileRead(id, name, QStringLiteral("failed"), QString());
+            return;
+        }
+        emit fileRead(id, name, reply.arguments().at(0).toString(), reply.arguments().at(1).toString());
+    });
+}
+
 void DBusStorageBackend::onVolumesChanged()
 {
     refresh();
