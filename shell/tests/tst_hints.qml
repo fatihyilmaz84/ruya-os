@@ -298,7 +298,7 @@ Item {
             tryVerify(() => find("category_power"))
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowScreenSaver").activeFocus, 2000, "the first row has focus")
-            compare(tc.shown(), "Left/Right Change|B Back")
+            compare(tc.shown(), "Left/Right Change|A Next|B Back")
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("categoryList").activeFocus, 2000)
         }
