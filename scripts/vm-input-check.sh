@@ -23,6 +23,7 @@
 # `twopads` (RUY-540) checks the numbering of the virtual pads with two uinput pads: the pad that signed the profile in is
 # ruya-input/pad1, created first (the lower event node, SDL index 0), whichever of the two it is; the profile user opens
 # pad1 and hears that pad's button and not the idle pad's. It routes by its own bus connection and ends on `shell`.
+# The journal must show, on each entry to `app`, pad2 made only after pad1 was ready (RUY-541: a one-pad game gets pad1).
 # Then (RUY-545, probe `twoprofiles`) two slots assigned over Input1, the device's of one pad and the Nintendo family's
 # for a pad with Nintendo's vendor id: each virtual pad emits its own pad's profile, and emptying the family's slot
 # changes only that pad; a slot the profile's match does not name is refused. Afterwards each slot it used gets back the
@@ -51,7 +52,8 @@
 # not running, `check` skips this and works as before. `shell` (RUY-409) checks that the running shell drives the route:
 # sign-in routes `shell`, launching the Wayland test app (org.ruyaos.TestWaylandClient, which
 # `vm-session-check.sh display` installs) routes `app` and makes a virtual pad for a test pad, the
-# Guide opens the Hub and routes `overlay`, a kill -9 of the service gets the route again from the
+# Guide opens the Hub and routes `overlay` (RUY-541: the Hub's Freeze and the Thaw keep the same virtual pad event
+# node, the overlay names the app and inputd logs no pad destroyed or made meanwhile), a kill -9 of the service gets the route again from the
 # shell, and Lock routes `locked` and destroys the virtual pad. It also needs vm-inject-key.py in
 # /root. Run it after `check` or alone; it signs in the first profile (no PIN, or PIN 1234). On an empty profile store it creates the admin "Check Admin" (PIN 1234)
 # and a standard "Check Kid"; with one profile it adds "Check Other" with that admin's PIN 1234.
@@ -264,6 +266,11 @@ virtual_pad() {
         case "$(cat "$d/phys" 2>/dev/null)" in ruya-input/pad*) basename "$(ls -d "$d"/event* 2>/dev/null | head -1)"; return;; esac
     done
 }
+# How many running apps Session1 reports frozen (the form vm-app-check.sh greps for).
+frozen_count() {
+    runuser -u ruya-shell -- busctl --system --json=short call org.ruyaos.Session1 /org/ruyaos/Session1 org.ruyaos.Session1 ListRunning 2>/dev/null \
+        | grep -o '"frozen":{"type":"b","data":true}' | wc -l
+}
 wait_pad() {   # $1: present | gone, $2: seconds
     local n=0
     while [ "$n" -lt "$(( $2 * 10 ))" ]; do
@@ -354,12 +361,25 @@ shell_check() {
     wait_route app 60 && ok "the test app in front: the route is app" || bad "with the app in front the route reads '$(route_now)'"
     wait_pad present 5 && ok "the test pad has a virtual pad for $me ($(virtual_pad))" || bad "no virtual pad with the app in front"
 
+    # RUY-541: the Hub's Freeze keeps the app's virtual pad: the same event node under the Hub (frozen)
+    # and after the Thaw, the overlay names the app, and inputd logs no pad destroyed or made meanwhile.
+    local node_before hubsince n=0
+    node_before="$(virtual_pad)"
+    sleep 1                                      # journalctl --since has whole seconds
+    hubsince="$(date '+%Y-%m-%d %H:%M:%S')"
     python3 /root/vm-inject-key.py guide >/dev/null 2>&1
     wait_route overlay 10 && ok "Guide opened the Hub: the route is overlay" || bad "with the Hub open the route reads '$(route_now)'"
-    wait_pad gone 5 && ok "the Hub froze the app: its virtual pad is gone" || echo "NOTE: the virtual pad stays under the Hub (pause off?)"
+    until [ "$(frozen_count)" -ge 1 ] || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
+    [ "$(frozen_count)" -ge 1 ] && ok "the Hub froze the app" || bad "the Hub did not freeze the app (Pause games in the Hub off?)"
+    sleep 1                                      # an overlay without the instance would destroy the pad by now
+    [ -n "$node_before" ] && [ "$(virtual_pad)" = "$node_before" ] && ok "the frozen app keeps its virtual pad ($node_before)" || bad "under the Hub the virtual pad is '$(virtual_pad)', before it was '$node_before'"
     python3 /root/vm-inject-key.py guide >/dev/null 2>&1
     wait_route app 10 && ok "Guide closed the Hub: the route is app again" || bad "after the Hub the route reads '$(route_now)'"
-    wait_pad present 5 && ok "after the Thaw the app has a virtual pad again" || bad "no virtual pad after the Hub closed"
+    n=0; until [ "$(frozen_count)" = 0 ] || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
+    [ "$(frozen_count)" = 0 ] && ok "the app was thawed" || bad "the app is still frozen after the Hub closed"
+    [ "$(virtual_pad)" = "$node_before" ] && ok "after the Thaw the app has the same virtual pad ($node_before)" || bad "after the Thaw the virtual pad is '$(virtual_pad)', before the Hub '$node_before'"
+    line="$(journalctl -u ruya-inputd --since "$hubsince" --no-pager -o cat | grep -E "virtual pad ruya-input/pad[0-9]+ (destroyed|created )|route overlay instance '' ")"
+    [ -z "$line" ] && ok "journal: no virtual pad destroyed or made through the Hub, and the overlay named the app" || { echo "$line" | head -5; bad "journal: the Hub destroyed or made a virtual pad, or sent an overlay without the instance"; }
 
     # A restarted service starts in shell: the shell sends its route again (QDBusServiceWatcher).
     kill -9 "$(systemctl show -p MainPID --value ruya-inputd)"
@@ -642,7 +662,18 @@ twopads)
     install -m 0644 "$probe" "$dir/vm-input-probe.py"
     # With the compositor and the shell stopped (RUY-573): the shell's own SetRoute calls (its start,
     # a South press signing a no-PIN profile in) land between the probe's and fail it at random.
+    since="$(date '+%Y-%m-%d %H:%M:%S')"
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe twopads --user "ruya-$me"
+    # RUY-541: on each entry to `app` pad2 is made only after pad1 is ready (its ACL set), so a game that
+    # opens the first pad it can open gets pad1. "<entries> <pad2 made before pad1 was ready>".
+    order="$(journalctl -u ruya-inputd --since "$since" --no-pager -o cat \
+        | grep -E 'virtual pad ruya-input/pad[12] (created|ready) ' \
+        | awk '/pad1 created/ {r = 0} /pad1 ready/ {r = 1} /pad2 created/ {n++; if (!r) early++} END {print n + 0, early + 0}')"
+    case "$order" in
+        "0 "*) bad "journal: no pad2 was made during twopads" ;;
+        *" 0") ok "journal: pad2 was made after pad1 was ready, ${order%% *} times" ;;
+        *) bad "journal: pad2 was made before pad1 was ready (entries, early: $order)" ;;
+    esac
     echo "--- a profile per pad (RUY-545)"
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe twoprofiles --user "ruya-$me"
     rm -rf "$dir"

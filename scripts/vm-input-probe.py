@@ -777,7 +777,9 @@ def cmd_twopads(args):
                 bad(f"SetRoute app: {status}")
                 return fails
             v1 = wait_for(lambda: node_by("phys", "ruya-input/pad1")[0], 3)
-            v2 = wait_for(lambda: node_by("phys", "ruya-input/pad2")[0], 3)
+            # pad2 is made only once pad1's ACL is set or its 2 s udev fallback ran (RUY-541),
+            # seen by the service's 0.5 s tick: up to about 2.5 s after pad1, so wait 6 s.
+            v2 = wait_for(lambda: node_by("phys", "ruya-input/pad2")[0], 6)
             if not v1 or not v2:
                 bad(f"both virtual pads should exist (pad1 {v1}, pad2 {v2})")
                 return fails
@@ -840,7 +842,9 @@ def cmd_guide(args):
             bad(f"SetRoute app: {status}")
             return fails
         v1 = wait_for(lambda: node_by("phys", "ruya-input/pad1")[0], 3)
-        v2 = wait_for(lambda: node_by("phys", "ruya-input/pad2")[0], 3)
+        # pad2 is made only once pad1's ACL is set or its 2 s udev fallback ran (RUY-541),
+        # seen by the service's 0.5 s tick: up to about 2.5 s after pad1, so wait 6 s.
+        v2 = wait_for(lambda: node_by("phys", "ruya-input/pad2")[0], 6)
         if not v1 or not v2:
             bad(f"both virtual pads should exist (pad1 {v1}, pad2 {v2})")
             return fails
@@ -1045,7 +1049,9 @@ def cmd_twoprofiles(args):
                 bad(f"SetRoute {route[0]}: {status}")
                 return fails
         v1 = wait_for(lambda: node_by("phys", "ruya-input/pad1")[0], 3)
-        v2 = wait_for(lambda: node_by("phys", "ruya-input/pad2")[0], 3)
+        # pad2 is made only once pad1's ACL is set or its 2 s udev fallback ran (RUY-541),
+        # seen by the service's 0.5 s tick: up to about 2.5 s after pad1, so wait 6 s.
+        v2 = wait_for(lambda: node_by("phys", "ruya-input/pad2")[0], 6)
         if not v1 or not v2:
             bad(f"both virtual pads should exist (pad1 {v1}, pad2 {v2})")
             return fails

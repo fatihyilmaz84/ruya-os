@@ -6,10 +6,15 @@
 //! - Routes `shell`, `overlay` and `locked` produce navigation keys; `app` produces only Guide
 //!   (`KEY_HOMEPAGE`, always the shell's) and feeds the virtual pads.
 //! - Virtual pads (one per physical pad, phys `ruya-input/pad<n>`) exist only while the route is
-//!   `app` or `overlay` over the same app instance and profile. Any other route, another instance
-//!   or another profile destroys them (lock, switch, run end, Freeze): a descriptor the app opened
-//!   reads `ENODEV`, so nothing reaches it afterwards (an ACL change would not close it).
+//!   `app` or `overlay` over the same app instance and profile, frozen or not (a Freeze by the Hub
+//!   keeps them, RUY-541), and the `app` that follows it keeps the same devices. Any other route,
+//!   another instance or another profile destroys them (lock, switch, run end, an overlay that
+//!   names no app): a descriptor the app opened reads `ENODEV`, so nothing reaches it afterwards
+//!   (an ACL change would not close it).
 //! - `overlay` over the pads' instance holds them in neutral (once); no input reaches them.
+//! - Entering `app` for a new owner, pad1 (the profile's active controller) is made first and the
+//!   others wait until pad1's ACL is set or its udev fallback ran, so pad1 is the first pad an
+//!   app can open (RUY-541); a pad that arrives while pad1 waits waits too.
 //! - Entering `app`, a button or axis already held is not forwarded until it is let go (no
 //!   double input from the press that closed the overlay); leaving `shell`, every navigation key
 //!   but Guide is released.
@@ -428,6 +433,8 @@ pub struct Router<B: Backend> {
     pad_since_change: Option<String>,
     /// When pad input in `app` is announced to the shell as activity (RUY-588).
     activity: ActivityGate,
+    /// Pads whose virtual pad waits for pad1 to be ready (RUY-541), in the order they are made.
+    waiting: Vec<PadKey>,
 }
 
 impl<B: Backend> Router<B> {
@@ -453,6 +460,7 @@ impl<B: Backend> Router<B> {
             activity: ActivityGate::default(),
             profile_pad: None,
             pad_since_change: None,
+            waiting: Vec::new(),
         }
     }
 
@@ -540,7 +548,8 @@ impl<B: Backend> Router<B> {
         self.notices.push(Notice::DeviceAdded(self.record(&pad)));
         self.pads.insert(key, pad);
         if self.route == Route::App && self.owner.is_some() {
-            self.create_virtual(key, now);
+            self.waiting.push(key);
+            self.make_waiting(now);
         }
         key
     }
@@ -551,6 +560,8 @@ impl<B: Backend> Router<B> {
         let Some(mut pad) = self.pads.remove(&key) else {
             return Vec::new();
         };
+        // Pads waiting for this one as pad1 are made at the next tick (it has the clock).
+        self.waiting.retain(|&k| k != key);
         if self.active_input.as_deref() == Some(pad.info.id.as_str()) {
             self.active_input = None;
         }
@@ -718,7 +729,51 @@ impl<B: Backend> Router<B> {
                 }
             }
         }
+        self.waiting.clear();
         self.owner = None;
+    }
+
+    /// Pad1 exists and an app cannot open it yet: its ACL is not set and its udev fallback has not
+    /// run. The other pads wait meanwhile, so a game that opens the first pad it is offered (SDL
+    /// hot-plug, one pad) gets pad1 and not one whose ACL happened to be set first (RUY-541).
+    fn pad1_settling(&self) -> bool {
+        self.pads.values().any(|p| {
+            p.virt
+                .as_ref()
+                .is_some_and(|v| v.n == 1 && !v.ready && !v.fallback_tried)
+        })
+    }
+
+    /// Queues every pad that has no virtual pad and does not wait yet: the profile's active
+    /// controller first (it becomes pad1 when none exists, RUY-540), then key (connection) order.
+    fn queue_missing(&mut self) {
+        let mut keys: Vec<PadKey> = self
+            .pads
+            .iter()
+            .filter(|(k, p)| p.virt.is_none() && !self.waiting.contains(k))
+            .map(|(&k, _)| k)
+            .collect();
+        if let Some(active) = self.profile_pad.as_deref() {
+            if let Some(i) = keys.iter().position(|k| self.pads[k].info.id == active) {
+                let k = keys.remove(i);
+                keys.insert(0, k);
+            }
+        }
+        self.waiting.extend(keys);
+    }
+
+    /// Makes the waiting virtual pads in order while pad1 does not hold them back. With no pad1
+    /// (none yet, or it vanished) the first one made becomes pad1 and the rest wait for it.
+    fn make_waiting(&mut self, now: Instant) {
+        if self.route != Route::App || self.owner.is_none() {
+            return;
+        }
+        while !self.waiting.is_empty() && !self.pad1_settling() {
+            let key = self.waiting.remove(0);
+            if self.pads.get(&key).is_some_and(|p| p.virt.is_none()) {
+                self.create_virtual(key, now);
+            }
+        }
     }
 
     /// Sticks centred, nothing pressed, rumble stopped: the overlay is in front.
@@ -780,9 +835,16 @@ impl<B: Backend> Router<B> {
         }
     }
 
-    /// A processed udev event (the monitor): an `add` or `change` on one of our nodes sets the
-    /// ACL again, because logind's uaccess builtin rewrites it on every event.
+    /// `udev_event_at` with the real clock, for the tests that do not care about time.
+    #[cfg(test)]
     pub fn udev_event(&mut self, ev: &UdevEvent) {
+        self.udev_event_at(ev, Instant::now());
+    }
+
+    /// A processed udev event (the monitor): an `add` or `change` on one of our nodes sets the
+    /// ACL again, because logind's uaccess builtin rewrites it on every event. Pad1 ready: the
+    /// pads that waited for it are made (`now` is their creation time).
+    pub fn udev_event_at(&mut self, ev: &UdevEvent, now: Instant) {
         if !ev.is_event_node() || !matches!(ev.action.as_str(), "add" | "change") {
             return;
         }
@@ -798,11 +860,13 @@ impl<B: Backend> Router<B> {
         if let Some(key) = key {
             let why = format!("udev {}", ev.action);
             self.assert_acl(key, &ev.devname, &why);
+            self.make_waiting(now);
         }
     }
 
-    /// Timers: a virtual pad with no udev event after `UDEV_FALLBACK` gets its ACL anyway; a
-    /// button test sends the axis values it held back and ends after `TEST_IDLE` without input.
+    /// Timers: a virtual pad with no udev event after `UDEV_FALLBACK` gets its ACL anyway (then
+    /// the pads that waited for pad1 are made, also when that ACL could not be set); a button test
+    /// sends the axis values it held back and ends after `TEST_IDLE` without input.
     pub fn tick(&mut self, now: Instant) {
         self.tick_tests(now);
         let due: Vec<(PadKey, String)> = self
@@ -823,6 +887,7 @@ impl<B: Backend> Router<B> {
                 None => self.journal(format!("virtual pad {sysname} has no event node")),
             }
         }
+        self.make_waiting(now);
     }
 
     // ---- routing ----------------------------------------------------------------------------
@@ -917,7 +982,8 @@ impl<B: Backend> Router<B> {
         match r {
             Route::App if same_owner => {
                 if old != Route::App {
-                    // Back from the overlay: what is held now waits for its release.
+                    // Back from the overlay (the Hub, frozen or not: the same devices, RUY-541):
+                    // what is held now waits for its release.
                     for pad in self.pads.values_mut() {
                         let state = pad.state.clone();
                         if let Some(v) = pad.virt.as_mut() {
@@ -925,6 +991,8 @@ impl<B: Backend> Router<B> {
                         }
                     }
                 }
+                // A pad connected under the overlay gets its virtual pad now.
+                self.queue_missing();
             }
             Route::App => {
                 self.destroy_all();
@@ -934,17 +1002,9 @@ impl<B: Backend> Router<B> {
                     uid,
                 });
                 // The profile's active controller (the pad that signed it in) is created first, so
-                // it is `pad1` and SDL index 0; the others follow in key order (RUY-540).
-                let mut keys: Vec<PadKey> = self.pads.keys().copied().collect();
-                if let Some(active) = self.profile_pad.as_deref() {
-                    if let Some(i) = keys.iter().position(|k| self.pads[k].info.id == active) {
-                        let k = keys.remove(i);
-                        keys.insert(0, k);
-                    }
-                }
-                for key in keys {
-                    self.create_virtual(key, now);
-                }
+                // it is `pad1` and SDL index 0 (RUY-540); the others follow in key order once
+                // pad1 can be opened (RUY-541), below, when the route is `app`.
+                self.queue_missing();
             }
             Route::Overlay if same_owner => self.neutral_all(),
             Route::Overlay | Route::Shell | Route::Locked => self.destroy_all(),
@@ -964,6 +1024,7 @@ impl<B: Backend> Router<B> {
         self.instance = instance.to_owned();
         self.app_id = app_id.to_owned();
         self.profile = profile.to_owned();
+        self.make_waiting(now);
         if profile_changed {
             self.notices.push(Notice::ConfirmButtonChanged);
             let keys: Vec<PadKey> = self.pads.keys().copied().collect();
@@ -1551,6 +1612,11 @@ mod tests {
         );
     }
 
+    /// Pad1's udev fallback runs: the pads that waited for it are made now (RUY-541).
+    fn settle(r: &mut Router<Fake>) {
+        r.tick(Instant::now() + UDEV_FALLBACK);
+    }
+
     fn created(calls: &[Call]) -> Vec<VirtualSpec> {
         calls
             .iter()
@@ -1749,6 +1815,7 @@ mod tests {
         let a = r.add_pad(pad("a"), t0());
         let b = r.add_pad(pad("b"), t0());
         app(&mut r, "i1", STK, "p1");
+        settle(&mut r);
         r.backend_mut().take();
         for pad_key in [a, b] {
             r.input(pad_key, &[press(PadButton::South), press(PadButton::Guide)]);
@@ -1826,6 +1893,7 @@ mod tests {
         r.input(c, &[press(PadButton::South)]);
         r.backend_mut().take();
         app(&mut r, "i1", STK, "p1");
+        settle(&mut r);
         assert_eq!(
             creations(&r.backend_mut().take()),
             vec![
@@ -1846,6 +1914,7 @@ mod tests {
         let b = r.add_pad(pad("b"), t0());
         r.backend_mut().take();
         app(&mut r, "i1", STK, "p1");
+        settle(&mut r);
         assert_eq!(
             creations(&r.backend_mut().take()),
             vec![
@@ -1943,6 +2012,7 @@ mod tests {
         r.set_route("overlay", "", "", "p1", SHELL, t0());
         assert!(created(&r.backend_mut().take()).is_empty());
         app(&mut r, "i1", STK, "p1");
+        settle(&mut r);
         let specs = created(&r.backend_mut().take());
         assert_eq!(
             specs,
@@ -2044,7 +2114,7 @@ mod tests {
     }
 
     #[test]
-    fn lock_switch_run_end_and_freeze_destroy_the_virtual_pads() {
+    fn lock_switch_run_end_and_an_overlay_naming_no_app_destroy_the_virtual_pads() {
         // Lock.
         let mut r = router();
         r.add_pad(pad("a"), t0());
@@ -2065,14 +2135,251 @@ mod tests {
         // Run end: the shell is in front.
         r.set_route("shell", "", "", "p2", SHELL, t0());
         assert_eq!(destroyed(&r.backend_mut().take()), vec![4]);
-        // Freeze under the overlay: the shell passes the overlay with no instance.
+        // An overlay that names no app (the shell sent it over a frozen game before RUY-541):
+        // nobody owns the pads, so they go.
         app(&mut r, "i11", RACER, "p2");
         r.backend_mut().take();
         r.set_route("overlay", "", "", "p2", SHELL, t0());
         assert_eq!(destroyed(&r.backend_mut().take()), vec![5]);
-        // The Thaw: back in the app, fresh pads.
+        // Back in the app: fresh pads.
         app(&mut r, "i11", RACER, "p2");
         assert_eq!(created(&r.backend_mut().take()).len(), 1);
+    }
+
+    /// The journal lines that say a virtual pad was made or destroyed.
+    fn pad_lines(r: &mut Router<Fake>) -> Vec<String> {
+        journal(r)
+            .into_iter()
+            .filter(|l| l.contains(" created for ") || l.ends_with(" destroyed"))
+            .collect()
+    }
+
+    #[test]
+    fn a_hub_freeze_keeps_the_same_virtual_pads_through_overlay_and_back() {
+        // RUY-541: the Hub over the game, frozen, sends the overlay with the game's instance.
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        app(&mut r, "i1", STK, "p1");
+        settle(&mut r);
+        let sysnames = |r: &Router<Fake>| -> Vec<String> {
+            r.pads
+                .values()
+                .filter_map(|p| p.virt.as_ref().map(|v| v.sysname.clone()))
+                .collect()
+        };
+        let before = sysnames(&r);
+        assert_eq!(before.len(), 2, "both pads have a virtual pad");
+        r.input(a, &[press(PadButton::South)]);
+        r.backend_mut().take();
+        r.take_notices();
+        r.set_route("overlay", "i1", STK, "p1", SHELL, t0());
+        // Under the overlay (the game frozen): the one neutral frame, then nothing is written.
+        assert_eq!(
+            writes(&r.backend_mut().take()),
+            vec![(1, vec![(code::EV_KEY, code::BTN_SOUTH, 0)])]
+        );
+        r.input(a, &[release(PadButton::South), press(PadButton::East)]);
+        r.input(b, &[PadInput::Axis(PadAxis::LeftX, 20000)]);
+        // A pad connected under the overlay gets no virtual pad yet.
+        let c = r.add_pad(pad("c"), t0());
+        let calls = r.backend_mut().take();
+        assert!(writes(&calls).is_empty(), "nothing reaches a frozen game");
+        assert!(created(&calls).is_empty());
+        // The Thaw: the same devices, nothing destroyed or made for a and b.
+        app(&mut r, "i1", STK, "p1");
+        let calls = r.backend_mut().take();
+        assert!(destroyed(&calls).is_empty(), "{calls:?}");
+        assert_eq!(
+            created(&calls),
+            vec![VirtualSpec {
+                phys: "ruya-input/pad3".into(),
+                rumble: true
+            }],
+            "only the pad connected under the overlay is made"
+        );
+        assert_eq!(
+            pad_lines(&mut r),
+            vec!["virtual pad ruya-input/pad3 created for ruya-p1 (c)"]
+        );
+        let after: Vec<String> = sysnames(&r).into_iter().take(2).collect();
+        assert_eq!(after, before, "the same event nodes");
+        // What is held at the Thaw is masked until it is let go.
+        r.input(a, &[PadInput::Axis(PadAxis::LeftX, 0)]);
+        r.input(b, &[PadInput::Axis(PadAxis::LeftX, 21000)]);
+        r.input(a, &[release(PadButton::East)]);
+        assert!(
+            writes(&r.backend_mut().take()).is_empty(),
+            "held buttons stay masked"
+        );
+        r.input(a, &[press(PadButton::South)]);
+        assert_eq!(
+            writes(&r.backend_mut().take()),
+            vec![(1, vec![(code::EV_KEY, code::BTN_SOUTH, 1)])]
+        );
+        let _ = c;
+    }
+
+    #[test]
+    fn lock_and_a_profile_switch_still_make_new_pads_after_the_app() {
+        let mut r = router();
+        r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.take_notices();
+        // app -> locked -> app: destroyed and made again.
+        r.set_route("locked", "", "", "", SHELL, t0());
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(
+            pad_lines(&mut r),
+            vec![
+                "virtual pad ruya-input/pad1 destroyed",
+                "virtual pad ruya-input/pad1 created for ruya-p1 (a)"
+            ]
+        );
+        assert_eq!(destroyed(&r.backend_mut().take()), vec![1]);
+        // app -> another profile -> app: p1's pad goes and p2 gets a new one.
+        r.set_route("shell", "", "", "p2", SHELL, t0());
+        app(&mut r, "i1", STK, "p2");
+        assert_eq!(
+            pad_lines(&mut r),
+            vec![
+                "virtual pad ruya-input/pad1 destroyed",
+                "virtual pad ruya-input/pad1 created for ruya-p2 (a)"
+            ]
+        );
+        assert_eq!(destroyed(&r.backend_mut().take()), vec![2]);
+        // An overlay of the same instance but under the old profile is not the owner: destroyed.
+        r.set_route("overlay", "i1", STK, "p1", SHELL, t0());
+        assert_eq!(destroyed(&r.backend_mut().take()), vec![3]);
+    }
+
+    /// The order of the creations (pad key) and ACL writes (node) in `calls`.
+    fn order(calls: &[Call]) -> Vec<String> {
+        calls
+            .iter()
+            .filter_map(|c| match c {
+                Call::Create(k, s) => Some(format!("create {k} {}", s.phys)),
+                Call::WriteAcl(node) => Some(format!("acl {node}")),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_other_pads_are_made_once_pad1_is_ready() {
+        // pad1 ready by its udev event: then pad2 and pad3, at once.
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        let c = r.add_pad(pad("c"), t0());
+        r.input(b, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        r.backend_mut().take();
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(
+            order(&r.backend_mut().take()),
+            vec![format!("create {b} ruya-input/pad1")]
+        );
+        // A pad plugged in while pad1 is not ready waits too.
+        let d = r.add_pad(pad("d"), t0());
+        assert!(created(&r.backend_mut().take()).is_empty());
+        r.udev_event(&udev("add", "input101"));
+        assert_eq!(
+            order(&r.backend_mut().take()),
+            vec![
+                "acl /dev/input/event17".to_owned(),
+                format!("create {a} ruya-input/pad2"),
+                format!("create {c} ruya-input/pad3"),
+                format!("create {d} ruya-input/pad4"),
+            ]
+        );
+        let lines = journal(&mut r);
+        let ready = lines
+            .iter()
+            .position(|l| l.starts_with("virtual pad ruya-input/pad1 ready"));
+        let pad2 = lines
+            .iter()
+            .position(|l| l.starts_with("virtual pad ruya-input/pad2 created"));
+        assert!(ready.is_some() && ready < pad2, "{lines:?}");
+        // pad2's own ACL does not hold anything back; a pad plugged in now is made at once.
+        let e = r.add_pad(pad("e"), t0());
+        assert_eq!(
+            order(&r.backend_mut().take()),
+            vec![format!("create {e} ruya-input/pad5")]
+        );
+
+        // No udev event: the others follow pad1's fallback, also when its ACL write fails.
+        let mut r = router();
+        let start = t0();
+        let a = r.add_pad(pad("a"), start);
+        let b = r.add_pad(pad("b"), start);
+        assert_eq!(
+            r.set_route("app", "i1", STK, "p1", SHELL, start),
+            Status::Ok
+        );
+        r.backend_mut().acl_fails = true;
+        r.tick(start + UDEV_FALLBACK / 2);
+        assert_eq!(
+            order(&r.backend_mut().take()),
+            vec![format!("create {a} ruya-input/pad1")]
+        );
+        r.tick(start + UDEV_FALLBACK);
+        assert_eq!(
+            order(&r.backend_mut().take()),
+            vec![format!("create {b} ruya-input/pad2")]
+        );
+
+        // pad1 vanishes before it is ready: at the next tick the first waiting pad becomes pad1,
+        // and the next one waits for it.
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        let c = r.add_pad(pad("c"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.backend_mut().take();
+        r.remove_pad(a);
+        r.tick(t0());
+        assert_eq!(
+            order(&r.backend_mut().take()),
+            vec![format!("create {b} ruya-input/pad1")]
+        );
+        let _ = c;
+    }
+
+    #[test]
+    fn a_lock_while_pads_wait_for_pad1_leaves_no_queue_for_the_next_profile() {
+        // p1's app: b is pad1, a and c wait for it.
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        let c = r.add_pad(pad("c"), t0());
+        r.input(b, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(
+            order(&r.backend_mut().take()),
+            vec![format!("create {b} ruya-input/pad1")]
+        );
+        // Locked before pad1 is ready; c signs p2 in, and p2's app makes c pad1 first: the
+        // queue p1's app left (a, c) is gone with its pads.
+        r.set_route("locked", "", "", "", SHELL, t0());
+        r.input(c, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p2", SHELL, t0());
+        r.backend_mut().take();
+        app(&mut r, "i2", STK, "p2");
+        assert_eq!(
+            order(&r.backend_mut().take()),
+            vec![format!("create {c} ruya-input/pad1")]
+        );
+        settle(&mut r);
+        assert_eq!(
+            created(&r.backend_mut().take())
+                .into_iter()
+                .map(|s| s.phys)
+                .collect::<Vec<_>>(),
+            vec!["ruya-input/pad2", "ruya-input/pad3"]
+        );
+        let _ = a;
     }
 
     #[test]
@@ -2113,6 +2420,7 @@ mod tests {
         let a = r.add_pad(pad("a"), t0());
         let b = r.add_pad(pad("b"), t0());
         app(&mut r, "i1", STK, "p1");
+        settle(&mut r);
         r.backend_mut().take();
         r.take_notices();
         r.remove_pad(a);
@@ -3131,6 +3439,7 @@ mod tests {
         let a = r.add_pad(pad("a"), t0());
         let b = r.add_pad(family_pad("b", "nintendo"), t0());
         app(&mut r, "i1", STK, "p1");
+        settle(&mut r);
         let own = SWAP.replace(r#""id":"swap""#, r#""id":"own""#).replace(
             r#""scope":{"type":"global"},"#,
             r#""scope":{"type":"global"},"match":{"device":"a"},"#,
