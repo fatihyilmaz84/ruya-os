@@ -20,9 +20,12 @@ import RuyaShell
 // Every change is shown at once (`doc`) and saved in the background: ValidateProfile, SaveProfile,
 // AssignProfile when it is not assigned to its slot yet, then the slots to empty; a slider's change
 // waits 300 ms for the next step first (`change(..., true)`). One save runs at a time and the newest
-// change of each pad waits behind it, in order. A refused save toasts "Could not save the change" and `doc` goes
-// back to what the service has (`stored`). Reset gives the pad the default (`resetAll`).
-// Export and import go through Input.exportProfile / importProfile (Devices1.Storage).
+// change of each pad waits behind it, in order. A refused save toasts "Could not save the change" (for another
+// pad than the shown one: "... for <pad>") and `doc` goes back to what the service has (`stored`). Reset gives
+// the pad the default (`resetAll`).
+// Export and import go through Input.exportProfile / importProfile (Devices1.Storage). An import (RUY-595)
+// replaces its pad's waiting change (dropped), starts only once a save in flight has ended, and holds that
+// pad's new changes in the queue until ImportFinished; other pads' changes are saved meanwhile.
 // Also the words the pages share: button names and glyphs by family, the short pad name.
 QtObject {
     id: games
@@ -70,6 +73,10 @@ QtObject {
     property var queue: []
     property string exportVolume: ""    // an export waits for the save before it
     property bool importing: false
+    // An import that waits for the save in flight: { volumeId, fileName, targetId, targetSlot }, else null.
+    property var pendingImport: null
+    // The pad whose import is waiting or running (while `importing`): its changes wait in the queue until it ends.
+    property string importPad: ""
 
     readonly property bool busy: phase !== "" || queue.length > 0
     // The pad's "Controls in games" value: the service's word for what applies to it.
@@ -97,6 +104,10 @@ QtObject {
         queue = []
         inFlight = null
         phase = ""
+        if (pendingImport !== null) {
+            pendingImport = null
+            importing = false
+        }
         loadState = "loading"
         if (owner !== "")
             refresh()
@@ -374,10 +385,14 @@ QtObject {
     }
 
     function flush() {
-        if (phase !== "" || queue.length === 0 || owner === "")
+        if (phase !== "" || owner === "")
             return
-        inFlight = queue[0]
-        queue = queue.slice(1)
+        // The pad being imported into waits for ImportFinished (RUY-595).
+        const at = queue.findIndex(q => !(importing && q.padKey === importPad))
+        if (at < 0)
+            return
+        inFlight = queue[at]
+        queue = queue.filter((q, i) => i !== at)
         phase = "validate"
         Input.validateProfile(JSON.stringify(inFlight.doc))
     }
@@ -388,7 +403,9 @@ QtObject {
         inFlight = null
         saved(tag)
         refresh()
-        if (queue.length > 0)
+        if (pendingImport !== null)
+            startImport()
+        else if (queue.length > 0)
             flush()
         else if (exportVolume !== "")
             startExport()
@@ -421,11 +438,19 @@ QtObject {
             exportVolume = ""
             Notifications.show(qsTr("Could not save to the USB drive"), "error", "", "", qsTr("Try again."))
         } else {
-            Notifications.show(qsTr("Could not save the change"), "error", "", "", qsTr("Try again."))
+            // A refusal of another pad than the shown one names that pad (RUY-586).
+            const failedId = String(failedPad).split("/")[0]
+            const other = failedPad !== padKey ? ControllerPads.controllers().find(p => p.id === failedId) : null
+            if (other)
+                Notifications.show(qsTr("Could not save the change for %1").arg(shortName(other.name)), "error", "", "", qsTr("Try again."))
+            else
+                Notifications.show(qsTr("Could not save the change"), "error", "", "", qsTr("Try again."))
         }
         failed(tag)
         refresh()
-        if (queue.length > 0)
+        if (pendingImport !== null)
+            startImport()
+        else if (queue.length > 0)
             flush()
     }
 
@@ -483,7 +508,19 @@ QtObject {
         importing = true
         // Into the slot this page edits (RUY-572): the pad's own profile, else a copy for This <pad>.
         const target = pad ? editable() : { id: allId }
-        Input.importProfile(owner, volumeId, fileName, target.id, slotOf(target.match))
+        // The import replaces this pad's waiting change; a save in flight ends first (RUY-595).
+        importPad = padKey
+        queue = queue.filter(q => q.padKey !== padKey)
+        if (queue.length === 0)
+            debounceTimer.stop()
+        pendingImport = { volumeId: volumeId, fileName: fileName, targetId: target.id, targetSlot: slotOf(target.match) }
+        if (phase === "")
+            startImport()
+    }
+    function startImport() {
+        const p = pendingImport
+        pendingImport = null
+        Input.importProfile(owner, p.volumeId, p.fileName, p.targetId, p.targetSlot)
     }
 
     // ---- the answers -----------------------------------------------------------------------------
@@ -587,6 +624,7 @@ QtObject {
             if (profile !== games.owner)
                 return
             games.importing = false
+            games.flush()
             if (status === "ok") {
                 Notifications.show(qsTr("Controls imported"), "success", "", "", fileName)
                 games.refresh()

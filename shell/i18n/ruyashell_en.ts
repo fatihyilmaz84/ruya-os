@@ -2106,6 +2106,10 @@ This can&apos;t be undone.</translation>
         <translation>Could not save the change</translation>
     </message>
     <message>
+        <source>Could not save the change for %1</source>
+        <translation>Could not save the change for %1</translation>
+    </message>
+    <message>
         <location line="+154"/>
         <source>Saved to the USB drive</source>
         <translation>Saved to the USB drive</translation>

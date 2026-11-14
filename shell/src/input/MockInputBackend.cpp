@@ -347,9 +347,27 @@ void MockInputBackend::setNameOwned(bool owned)
         QTimer::singleShot(0, this, [this] { emit serviceAppeared(); });
 }
 
+void MockInputBackend::holdSaves(bool hold)
+{
+    m_holdSaves = hold;
+    if (hold)
+        return;
+    const QList<HeldCall> held = m_held;
+    m_held.clear();
+    m_replaying = true;
+    for (const HeldCall &h : held)
+        callProfile(h.token, QStringLiteral("SaveProfile"), h.args);
+    m_replaying = false;
+}
+
 void MockInputBackend::callProfile(quint64 token, const QString &method, const QVariantMap &args)
 {
-    m_profileCalls.append(QVariantMap{{QStringLiteral("method"), method}, {QStringLiteral("args"), args}});
+    if (!m_replaying)
+        m_profileCalls.append(QVariantMap{{QStringLiteral("method"), method}, {QStringLiteral("args"), args}});
+    if (m_holdSaves && method == QLatin1String("SaveProfile")) {
+        m_held.append({token, args});
+        return;
+    }
     QVariantMap reply;
     QString changed;
     if (m_fail || m_forcedStatus.contains(method)) {
