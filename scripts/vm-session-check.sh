@@ -892,8 +892,10 @@ check)
     case "$(freeze_app "$inst")" in 's "not-allowed"') ok "Freeze with nobody signed in: not-allowed";; *) bad "Freeze while locked";; esac
     case "$(thaw_app "$inst")" in 's "not-allowed"') ok "Thaw with nobody signed in: not-allowed";; *) bad "Thaw while locked";; esac
     [ "$(fstate "$user" "$inst")" = frozen ] && ok "and it stays frozen" || bad "$inst: FreezerState $(fstate "$user" "$inst") after the refused Thaw"
-    busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" "" >/dev/null 2>&1 \
-        || busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" 1234 >/dev/null 2>&1
+    # The reply status decides, not busctl's exit code: a wrong PIN is a successful call (RUY-441).
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" "" 2>&1)"
+    case "$out" in 'suu "ok"'*) ;; *'"wrong-pin"'*) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" 1234 2>&1)";; esac
+    case "$out" in 'suu "ok"'*) ok "$pid signed in again";; *) bad "SwitchTo $pid after the Lock: $out";; esac
     # The service thaws nothing at a sign-in: the shell's sweep does (it is stopped here), so a Thaw from
     # the check stands in for it.
     sleep 2
