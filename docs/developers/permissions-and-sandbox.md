@@ -27,7 +27,7 @@ Your game runs in a Flatpak sandbox as the profile's own Unix user. What it may 
 
 Use `--socket=wayland`. An X11-only game (`--socket=x11` or `--socket=fallback-x11` and no `--socket=wayland`) runs on a private X server of its own (*experimental*, [fullscreen-and-lifecycle.md](fullscreen-and-lifecycle.md)); do not add X11 next to Wayland, the console never uses it then. Do not add `--share=ipc` unless a library demands it.
 
-With `--share=network`, names resolve through the console's DNS (systemd-resolved). The console does not answer or ask LLMNR, and resolved's mDNS is off: a game that finds another machine on the home network by a bare host name gets no answer that way; do your own discovery (mDNS or a broadcast, which `--share=network` allows) or use an address.
+With `--share=network`, names resolve through the console's DNS (systemd-resolved). The console does not answer or ask LLMNR, and resolved's mDNS is off: a bare name such as `nas` or a `nas.local` name gets no answer from the system resolver. What still resolves: IP addresses and ordinary DNS names, including the names and search domain your home router hands out (for example `nas.fritz.box`). A game with LAN play, a media player that streams from a NAS or a casting app does its own discovery (mDNS with a resolver you ship, since the sandbox has no nss-mdns; SSDP/UPnP; a broadcast: `--share=network` allows all of them) or takes an address from the player's settings. The console itself does not answer mDNS for its name either: a casting receiver announces itself with its own mDNS. This changed in RUY-18 (2026-11-15): an app that resolved `.local` names before now gets "name not found".
 
 ## What the Store shows, and what is "High risk"
 
