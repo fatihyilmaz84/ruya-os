@@ -12,4 +12,5 @@ futures-lite = "2"
 blocking = "1"  # runs the scan (file and process I/O) off the executor; already in the tree through zbus
 
 [dev-dependencies]
+ruya-contract-test = { path = "../ruya-contract-test" }  # the served interface against api/dbus (RUY-403)
 tempfile = "3"

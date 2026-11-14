@@ -21,4 +21,5 @@ blocking = "1"  # runs the blocking NetworkManager calls off the executor; alrea
 libc = "0.2"  # statvfs: free space of a mounted volume (already in the tree through ruya-update)
 
 [dev-dependencies]
+ruya-contract-test = { path = "../ruya-contract-test" }  # the served interface against api/dbus (RUY-403)
 tempfile = "3"

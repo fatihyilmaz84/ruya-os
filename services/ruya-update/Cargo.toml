@@ -17,4 +17,5 @@ async-channel = "2"  # change events from the job thread to the signal emitter; 
 libc = "0.2"  # localtime_r: the local hour for the restart window (already in the tree)
 
 [dev-dependencies]
+ruya-contract-test = { path = "../ruya-contract-test" }  # the served interface against api/dbus (RUY-403)
 tempfile = "3"
