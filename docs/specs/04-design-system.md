@@ -271,6 +271,33 @@ One small set of card sizes. Design px at 1080p, multiplied by `u`; corner radiu
 
 **Text under a glowing card** (the Store caption) is text on the page ground plus the card's glow at full strength: check it for the reddest and brightest picture on every theme (§7). The app detail page's hero (560 x 315, 16:9; 704 x 396 on the planned game page, RUY-524) and the Home hero are art, not cards, and keep their own sizes. The wallpaper picker's 320 x 180 thumbnails belong to the picker.
 
+### 5.3 Proposals from the "Who's playing?" design (RUY-448, canvas "RuyaOS Who's Playing", 2026-11-14) *(proposed; the lead adds each to the tables above when its ticket is dispatched)*
+
+Tokens only from `shell/qml/Theme.qml`; sizes are design px x u. No new token is needed: every number is an existing token or a literal of its component (§8, fixed sizes inside a component).
+
+**1. Player chip (`PlayerChip.qml`), new** *(proposed; built by RUY-629)*
+| Player chip | `PlayerChip.qml` | proposed (RUY-448), built by RUY-629 | A player's round avatar with their seat number. The circle is `statusAvatarSize` (48 u) in the profile's avatar colour, with the initial in `typeCaption` Light, `text`. The **number dot** is a 28 u circle (a literal of this component) in `primaryFill`, the digit `typeMicro` Bold `onPrimary`, centred; its centre sits on the circle's bottom-right such that the dot overhangs the circle by 6 u (offset −6 u, literal) right and down. `showNumber` shows the dot (true only while two or more players are seated). Never focusable; accessible name "%1, player %2". Users: the status cluster (player 1's chip replaces its plain avatar, the other players' chips follow the name, `spaceS` apart, no names) and the Hub players row. The status cluster's width budget counts `(players − 1) × (statusAvatarSize + spaceS)`; battery chips give way first. |
+
+**2. Hub players row (inside "Quick menu"), new** *(proposed; built by RUY-629)*
+Add to the Quick menu row (and 02 §1.6, under the status row): **Players row** (not focusable): shown while two or more players are seated, under the status row with the Hub's column gap `spaceM`. Each player is a `PlayerChip` (with its number), `spaceS`, then the name `typeCaption` `text`, one line, capped at 110 u (literal) and elided at the end; `spaceM` between players. It wraps to a second line `spaceS` below when the players do not fit the panel's content width (640 u − 2 × `spaceL` = 568 u; from four players). It adds no focus stop: the Quick Hub keeps its five, its focus and Back.
+
+**3. PIN pad: the optional pad line** *(proposed; built by RUY-628)*
+Extend the "PIN pad" row: **player mode** `verifyPlayer(profile, deviceId)` checks with `Profiles.verifyPin` (never signs in) and emits `verified(pin)`. **Pad line** (any mode, only when `deviceId` is set; RUY-628 uses it in player mode and, in RUY-630, the admin mode): one line above the title, the pad's `Icon` (`DeviceIcons.iconFor`, `iconM`) then `spaceS` then the device name (`DeviceIcons.shownName`, capped at 30 characters) in `typeBody` `text`; the column gap between the pad line and the title is `spaceM`. Everything else of the PIN pad is unchanged (title `typeTitle` DemiBold, 4 dots 22 u with a 2 u `textDim` ring, the 36 u message line `typeCaption` `errorText`, keys 120 u in 140 u cells, `keyFocusFill` and the ring). Without a `deviceId` the geometry is exactly as built.
+
+**4. Profile card: the "Player n" badge** *(proposed; built by RUY-122)*
+Extend the "Profile card" row (`ProfileCard.qml`): property `playerSlot` (0 = none). When it is 1 or more, a `Badge` (neutral) "Player %1" sits centred `spaceXs` (8 u) under the name; the card's height stays `cardProfileHeight` (the badge sits in the card's space below the name: the name ends at 200 + `spaceM` + the `typeHeadline` line, the badge's `typeMicro` line fits in the remaining 320 u). The PIN badge stays on the avatar. Used only by "Who's playing?"; the picker passes 0.
+
+**5. Icon `add`** *(proposed; built by RUY-630)*
+Add `add e145` (Material Symbols Rounded, the pinned upstream font) to `shell/fonts/icons.txt` and the `Icon.qml` table, re-cut both static cuts with `scripts/subset-icons.sh` (WSL; the lead runs it or the dispatch allows it), 04 §3.7 list. Used by the **Add profile card** of "Who's playing?": the `ProfileCard` geometry with the avatar circle on `glass` and a 1 px `glassBorder`, the `add` icon at 96 u (the `typeHero` size) in `text`; focused `focusFill` under the 6 u `focusRing`. (The board drew a "+" in `typeHero` Light only because no icon existed; the icon replaces it. `person_add` is the alternative if the lead prefers it.) The **Guest card** (RUY-631) uses the same circle with the initial of "Guest" in `typeHero` Light instead of the icon.
+
+**6. Paused pill over a frozen game** *(proposed; built by RUY-122)*
+| Paused pill | inside `WhosPlaying.qml` (a `GlassPill`) | proposed (RUY-448), built by RUY-122 | Over a game frozen for "Who's playing?" only: a `GlassPill` (`glassStrong` over its blur, `GlassLayers`; `glassOpaque` when `blurMax` is 0), 80 u high (literal), padding 0 vertical and `spaceL` horizontal, the text "Paused · %1" (%1 = the game's name, capped at 30 characters by `Notifications.named`) in `typeBody` DemiBold `text`, one line; placed at the safe area's top-left (x = width × `safeArea`, y = height × `safeArea`: 96 × 54 u at 1080p). Not focusable. Not shown over Home or a page. |
+
+**Also rows the tickets add (not 04 proposals)**
+- "Who's playing prompt" (`WhosPlaying.qml`, RUY-122): its row lists the step layouts (Pick: pad line → `spaceM` → title `typeDisplay` Light → `spaceXxl` → cards `spaceXl` apart → `spaceL` → detail line 36 u → `spaceL` → Not now; Join or Switch / Move: the Dialog card with padding 48/60 u, max width 1300 u, avatar 120 u).
+- "Guest card" and "Add profile card" as variants of the Profile card row (RUY-631, RUY-630).
+- Canvas boards that are now stale: "RuyaOS Controller Ownership" (https://claude.ai/artifact/VWCR9PAMvizUMN4iXSaJ1Y): the foreign-pad toast, "Switch to <profile>?" and "Use this controller for <profile>?" are superseded by the prompt; tell the owner.
+
 ## 6. Writing
 
 - Sentence case everywhere ("Reduced motion", not "Reduced Motion"); the brand "RuyaOS" and language names are never translated.

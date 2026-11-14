@@ -215,29 +215,55 @@ Shell icons come from Google's **Material Symbols Rounded** (Apache-2.0), bundle
 
 **Consequences.** T-258 is parked by the owner (it keeps its text, options and criteria for the day the decision is reopened); the T-248 table loses its browser step; no browser engine in RuyaKit or the extension.
 
-### ADR-017 — Multiple controllers and local players — *Accepted (owner, 2026-11-07)*
-**Question.** What happens when a second controller connects: which pad drives the shell, who "owns" a pad, how a second person (a profile or a guest) plays in the same session. Nothing exists today: `ruya-inputd` turns every pad into the same navigation keys (ADR-003), and there is no owner or slot concept.
+### ADR-017 — Local players and the controller that drives the UI — *Accepted (owner, 2026-11-07; amended by the owner 2026-11-12, 2026-11-13 and 2026-11-14; this text folds the amendments in, RUY-448)*
 
-**Architecture fact.** ADR-004: one active profile session at a time, apps run as that profile's Unix user. Other people are therefore **local players inside the session**, never parallel sessions.
+**Question.** What happens when a second controller connects? Which pad drives the shell, how a pad belongs to a person, and how a second person (a profile or a guest) plays in the same session. The owner put it this way (2026-11-07): "when we add a second controller how do we use it; which controller is used by who; on PS it asks which user; what about guests". And on 2026-11-12: "we should ask for the user on connect. a profile should not have two controllers. for local coop, both users should be signed in". ADR-027's request (2026-11-09) also applies: "assign a controller to a user so the UI is not operated by two controllers at the same time, as on PlayStation 5".
 
-**Model.** A *controller registry* (per pad: id = BlueZ address or USB path, family, nickname, default owner profile or none) and *player slots* 1..N per session. Slot 1 is the session owner's pad. Assignment = slot → a profile or Guest; it lasts for the session (a Guest assignment is temporary and is wiped at session end, at "leave" or after idle). A pad that reconnects within 60 s gets its slot back.
+**Architecture fact.** ADR-004: one profile session at a time, and apps run as that profile's Unix user. Other people are therefore **players inside that session**, never parallel sessions.
 
-**Decisions (owner, 2026-11-07, "apply your recommendations").**
-1. **Shell navigation:** the slot 1 pad anywhere; **any** pad at the login screen and on the "Who's playing?" dialog; other pads navigate only inside apps.
-2. **What a non-owner player's profile means:** saves stay the session owner's per-app data. An assigned profile only **attributes** achievements (T-246) and play time (T-247). The **strictest age limit** of owner and players applies at launch (T-211). Guest = no attribution.
-3. **No PIN** to assign a pad to a profile for play (no data access is gained). Admin features never come from a non-slot-1 pad.
+**Decision.**
+1. **Seats and player 1** (owner 2026-11-07, 2026-11-13).
+   - A signed-in session has up to four seats (the number is a lead decision, 2026-11-14), each one profile on one pad.
+   - **Player 1** is the signed-in profile, and its **active controller** is the pad that signed it in (pressed Accept on the picker, or picked it in "Who's playing?"). A pad that pressed last does not take over.
+   - Player 1's pad is the app's first virtual pad (`pad1`, SDL index 0), and pad *n* is seat *n*. Only seated pads reach an app.
+2. **Who drives the UI** (owner 2026-11-13, 2026-11-14).
+   - On the picker, any pad acts.
+   - After sign-in, **only player 1's pad** (and the keyboard, always) navigates the shell. Other pads' buttons do nothing in the UI.
+   - While "Who's playing?" is open, **only the asking pad** (and the keyboard) answers it; player 1's pad cannot answer for it.
+   - Admin features come only through player 1's pad, behind the admin PIN.
+3. **Ask on connect** (owner 2026-11-12, 2026-11-13).
+   - A pad with no seat in this session asks "Who's playing?" at once: when it connects, when it presses a **button** (stick drift does not count), and when its Guide is pressed.
+   - While the prompt is open, the app in front is **paused as the Hub pauses it** (frozen). After a pick, or "Not now", the game **continues by itself** (owner 2026-11-14).
+   - "Not now" (Back) keeps that pad quiet until the game exits; its Guide still opens the prompt.
+   - A pad with a remembered owner opens the prompt with that profile preselected.
+4. **One controller per profile** (owner 2026-11-12). A profile holds at most one pad in a session. Picking a profile that already plays, player 1's own included, **moves** it to the new pad after a confirm (Cancel first). The old pad becomes unseated and asks again when next used.
+5. **Every player is signed in** (owner 2026-11-12, replacing 2026-11-07's "no PIN"). A profile with a PIN asks for it **on the TV, typed with the new controller**, for Join, Switch and Move alike (owner 2026-11-14). Guests need none.
+6. **Join or Switch** (owner 2026-11-13, RUY-384 closed). For a profile that does not play, the prompt offers **Join** (focused; it becomes the next player) and **Switch** (one step right; the console becomes that profile's session).
+   - On Switch, the old player 1's apps are frozen and kept as far as memory allows (ADR-019), and they come back when that profile signs in again. Nothing is closed silently. The old player 1's pad is an unseated pad in the new session.
+   - There is **no idle timer** of any kind: the pause makes the prompt visible to whoever is in the room.
+7. **Guests** (owner 2026-11-12, 2026-11-14). "Guest" can be picked more than once: Guest, Guest 2, Guest 3, numbered automatically.
+   - A guest **only joins**: no Switch, no PIN.
+   - Each guest is a **temporary profile user**, wiped when that guest leaves (its seat ends) or the session ends.
+   - Lead decision (2026-11-14): its uid comes from a range that is never handed out twice.
+   - A guest can still sign in alone from the picker (unchanged).
+8. **Add profile** stays in the prompt, behind an admin's PIN (owner 2026-11-14).
+9. **A seat outlives a lost pad for 60 s** (owner 2026-11-13 for player 1, 2026-11-14 for every player).
+   - The same pad coming back within the minute is the same player, with the same pad number.
+   - Player 1's loss pauses the app as if the Hub had opened. After the minute, player 1 is put on another pad through the prompt's Move.
+   - The other players leave after the minute.
+10. **Joins last the session.** A player leaves through sign-out, the end of their seat or (once designed) Leave in the Hub.
+11. **What a player's profile means** (owner 2026-11-07, unchanged):
+    - Saves stay player 1's, because apps run as player 1's user.
+    - The other players get their achievements (T-246) and play time (T-247) **attributed**. Guests get no attribution.
+    - The **strictest age limit** of everyone signed in applies at launch (T-211).
+12. **Shown on screen** (owner 2026-11-14): players appear in the top bar (avatars next to the profile) and in the Ruya Hub (a row of players). There is no "joined" toast.
 
-**Consequences.** New contract (registry, `Assign`/`Release`, signals), persistence root-only under `/var/lib`, a "Who's playing?" dialog and player chips, and, for apps to see slots in order, ordered virtual gamepads per slot with the physical pads hidden (needs the virtual-device layer of T-217/B-006). Epic and tasks: T-263 (spec), T-264 (services), T-265 (shell), T-266 (virtual pads), T-267 (default owner at login), T-268 (guest player).
-
-**Amendment (owner, 2026-11-12, lead-15: "we should ask for the user on connect. a profile should not have two controllers. for local coop, both users should be signed in", plus guest accounts; the four choices answered by the owner).** It replaces the points above and ADR-027 where they differ:
-1. **Ask on connect.** A controller that connects and has no player in this session opens "Who's playing?" at once; the old rule waited for its Guide press. While the prompt is open, **the app in front is paused like the Hub pauses it** (frozen), and the new controller (and the keyboard) drives the prompt. Back dismisses it: the pad stays unassigned and does nothing, and its Guide opens the prompt again. A pad with a default owner (T-267) opens the prompt with that profile preselected. On the picker the first pad signs in as before and becomes player 1.
-2. **One controller per profile.** A profile holds at most one pad in a session. Picking a profile that already has a pad moves the profile to the new pad and releases the old one, which asks "Who's playing?" again when it is next used.
-3. **Every player is signed in.** Picking a profile with a PIN asks for it, as on the picker. This replaces point 3's "no PIN". Admin features still come only from player 1's pad.
-4. **Guests.** "Guest" can be picked more than once (Guest 1, Guest 2, ...). Each is a temporary profile user whose data is deleted when that guest leaves or the session ends. A guest can also sign in alone from the picker (unchanged).
-5. **Join or switch** (owner, 2026-11-13, RUY-384 closed). The prompt offers **Join** (as the next player) and **Switch** (the console becomes that profile's session); both need the profile's PIN if it has one. On Switch, the old player 1's running apps are frozen and kept as far as memory allows (ADR-019) and come back when that profile signs in again; nothing is closed silently. There is no idle timer: the pause makes the prompt visible to whoever is in the room. A player whose pad died picks their own profile on another pad, and it moves there (point 2). Admin actions stay with player 1, behind that profile's PIN.
-6. **The active controller** (owner, 2026-11-13, lead-18: "one active controller per profile", fine-tuned in questions). (a) A profile's active controller is **the pad that signed it in** (pressed A on the picker, or picked it in "Who's playing?"). It is player 1 for that session: the app's first virtual pad (`pad1`, created first, so SDL index 0), and the only pad that navigates the shell while the profile is signed in (decision 1). A pad that last pressed a button does not take over. (b) Another pad becomes the active one only deliberately: Guide on that pad, then **Use this controller** in the Hub (and by point 2 when a profile is picked on it). (c) The profile's other pads reach the app only once they have joined (point 1). When an unjoined pad presses a **button** during a game (stick drift does not count), the game pauses and the prompt asks. **Not now** keeps that pad quiet until the game exits; its Guide still opens the prompt. (d) A joined player stays for the session (sign-out, Leave in the Hub). When that player Switches to their own profile (point 5), their pad signs that profile in and becomes its active controller; the first profile's apps freeze (RUY-87), and its pad is an unjoined pad in the new session. (e) **The active pad disconnects** (or its battery dies): the app pauses as if the Hub opened, and the slot is held for 60 s. If the pad reconnects, it is player 1 again. After that, or earlier through Guide on another pad, the Hub offers **Use this controller**. (f) Join asks for the profile's PIN, as point 3 says; Guest needs none.
-
-Unchanged: one active session; apps run as player 1's user, so **saves are player 1's**; other players get their achievements and play time attributed; the strictest age limit of everyone signed in applies (point 2).
+**Consequences.**
+- `Input1` gains seats (`JoinPlayer`, `LeavePlayer`, `ListPlayers`, `PlayersChanged`, `SetNavigator`, `ForeignInput`) in `ruya-inputd`, the one owner of the pads (ADR-024), and loses the draft `AssignPad`.
+- `Profiles1` gains `VerifyPin` and temporary guests.
+- The shell gets the "Who's playing?" prompt (design: canvas "RuyaOS Who's Playing", 2026-11-14), player chips and the Hub players row.
+- 06 §11.3 is the rule table.
+- Tickets: RUY-121, RUY-627, RUY-38, RUY-122, RUY-628, RUY-629, RUY-630, RUY-124, RUY-125, RUY-631 (formation RUY-553). RUY-123 (virtual pads per seat) is re-scoped by the lead.
 
 ### ADR-018 — Epic Games Store on RuyaOS — *Accepted (owner, 2026-11-12: option (a), "this will be an app that can be installed"); legal points open until a public release*
 **Question.** The owner asked for Epic Games Store integration the way Heroic does it. Heroic's Epic support is Legendary, an open-source (GPL-3.0) command-line client that uses Epic's unofficial web and launcher APIs; Epic offers no sanctioned third-party launcher API and may change or block it. Games run as Windows titles through Wine/Proton (no anti-cheat titles).
@@ -351,14 +377,13 @@ A per-game switch forces Xbox 360 for a game that handles the other families bad
 
 **Consequences.** T-388 (lead: spike and contract drafts), T-389 (Store1 jobs v2 and actions), T-390 (Update1 the same), T-391 (the Downloads page and a status-cluster pill), T-392 (stats and policy).
 
-### ADR-027 — The UI follows the controller: one owner pad set per signed-in profile, the family's own confirm button, the active controller's glyphs — *Accepted (lead, 2026-11-09; owner request: "assign a controller to a user so the UI is not operated by two controllers at the same time, as on PlayStation 5"; "a PlayStation and a Switch controller have different layouts; the UI should adapt to the active controller")*
-**Amended by the owner on 2026-11-12 (ADR-017 amendment):** a new controller asks "Who's playing?" when it connects, pausing the app in front; a profile has one controller; every player is signed in (PIN if set); several temporary guests. Where the points below say "a toast", "Guide offers" or "owner pads" (plural), the amendment wins; 06 §11.3 is updated when RUY-38 is replanned.
+### ADR-027 — The family's own confirm button and the active controller's glyphs — *Accepted (lead, 2026-11-09; owner request: "a PlayStation and a Switch controller have different layouts; the UI should adapt to the active controller")*
+**UI ownership** (which pad drives the shell) was part of this ADR. Since the owner's amendments of 2026-11-12/13/14 it is decided in **ADR-017** points 1–3 and 9 above, and 06 §11.3.
 **Decision.**
-- **UI ownership.** After sign-in, the pads assigned to the active profile (ADR-017 slots; at first the pad that signed in) are the only ones that navigate the shell. Another pad's buttons do nothing in the UI except Guide/PS/Home, which offers "Switch to <its profile>" (or "Who's playing?" for an unknown pad, ADR-017). On the picker any pad may act (02 §4.3, unchanged). **Never stranded** (requirements §10): when every owner pad is gone (disconnected, battery dead) the next pad that presses a button gets "Use this controller for <profile>?" and takes over on A; the keyboard always navigates.
-- **The family's own confirm button.** Accept and Back follow the controller's family, not the physical position: Xbox and generic A (south) / B (east); PlayStation Cross (south) / Circle (east), with the JP option Circle-to-confirm; **Nintendo A (east) / B (south)**. A Settings > Controllers row "Confirm button: as on the controller (default) / bottom / right" overrides it per profile. The mapping lives where pad events become shell actions (`ruya-inputd` today, the Ruya Input service of ADR-024 later), never in QML.
-- **Glyphs follow the active controller.** The shell keeps one active input: the family of the owner pad that sent the last input, or the keyboard. Every glyph names an **action** (`accept`, `back`, `options`, `tabNext` ...), never a letter: Xbox letters, PlayStation shapes (drawn by us), Nintendo letters in their positions, keyboard keys, a generic set for unknown pads. Glyph art and licence: our own drawings (the open owner question on pad art, T-199, stays: no vendor artwork).
+- *(the "family's own confirm button" bullet, unchanged)*
+- *(the "glyphs follow the active controller" bullet, unchanged, with one change: "the family of the owner pad that sent the last input" becomes "the family of the pad that navigates and sent the last input (player 1's, or the asking pad while "Who's playing?" is open)")*
 
-**Consequences.** T-396 (lead: spec in T-263's design and 06), T-397 (UI ownership), T-398 (family mapping and the Confirm row in `ruya-inputd`), T-399 (action glyphs and the active controller in the shell).
+**Consequences.** T-398 / RUY-40 and T-399 / RUY-41 (built). UI ownership moved to ADR-017 (RUY-38).
 
 ### ADR-028 — Games and saves: the OS indexes and protects, it does not own other launchers' files — *Accepted (lead, 2026-11-10; input: the owner's "Universal Game & Save Management System" proposal, `docs/archive/research/universal-game-and-save-management-proposal.md`); inside ADR-005, ADR-014, ADR-020, ADR-023, ADR-025*
 **Question.** The proposal asks for one authoritative game library and one universal save manager across emulators, Proton/Wine, native, Steam, Heroic and Lutris, with ~20 services, emulator adapters that launch and configure emulators, access leases on canonical game files, cloud sync and save conversion. How much of it fits RuyaOS?
