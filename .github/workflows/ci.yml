@@ -80,9 +80,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Qt
-        run: dnf -y install --setopt=install_weak_deps=False cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel qt6-qttools-devel qt6-linguist qt6-qtshadertools-devel qt6-qtbase-private-devel findutils gawk
+        run: dnf -y install --setopt=install_weak_deps=False cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel qt6-qttools-devel qt6-linguist qt6-qtshadertools-devel qt6-qtbase-private-devel qt6-qtwayland-devel findutils gawk
       - name: Build
-        run: cmake -S shell -B shell/build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build shell/build
+        run: cmake -S shell -B shell/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DRUYA_COMPOSITOR=ON -DRUYA_SOUNDS_RESOURCE=ON && cmake --build shell/build
       - name: qmllint
         # Direct call: the all_qmllint target does not fail on warnings; --max-warnings 0 does.
         run: /usr/lib64/qt6/bin/qmllint --max-warnings 0 @shell/build/.rcc/qmllint/ruyashell.rsp
