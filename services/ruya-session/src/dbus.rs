@@ -13,7 +13,7 @@ use zbus::{interface, Connection, MatchRule, MessageStream};
 
 use crate::directory::{profile_ids, ProfileDirectory, ProfileRow, ProfileSnapshot};
 use crate::session::{ExitReason, FrozenChange, Notice, RunningApp, Session, Status};
-use crate::spawner::{flatpak_app_version, valid_profile_id, Spawner, UnitEvent};
+use crate::spawner::{flatpak_app_version, valid_profile_id, Listing, Spawner, UnitEvent};
 use crate::usage::{DayRow, EndReason, SessionRecord, SystemZone, MAX_LIST};
 use crate::usage_store::FileStore;
 use crate::usage_tracker::{clear_route, may_read, Attention, ClearRoute, LiveApp, Tracker};
@@ -118,25 +118,52 @@ pub async fn adopt_running(
     if let Some(ids) = ids {
         lock(session).directory_mut().set(ids);
     }
-    let adopted = lock(session).adopt(unix_now(), Instant::now(), known);
-    let live: Vec<LiveApp> = adopted
-        .into_iter()
-        .map(|a| LiveApp {
-            version: flatpak_app_version(Path::new(FLATPAK_ROOT), &a.app_id),
-            instance: a.instance,
-            profile: a.profile,
-            app_id: a.app_id,
-            started: a.started,
-        })
-        .collect();
+    let (adopted, listed_all) = adopt_pass(session, known).await;
+    let live: Vec<LiveApp> = adopted.iter().map(live_app).collect();
     if !live.is_empty() {
         eprintln!("ruya-session: {} app(s) kept running", live.len());
     }
-    let recovered = usage_lock(usage).recover_with(unix_now(), &live, Instant::now());
+    let settled = known && listed_all;
+    // Not everything was seen: the leftover of an app that comes later stays open for it.
+    let recovered = usage_lock(usage).recover_with(unix_now(), &live, Instant::now(), settled);
     if !recovered.is_empty() {
         eprintln!("ruya-session: recovered play sessions of {recovered:?}");
     }
-    known && lock(session).adoption_complete()
+    settled
+}
+
+fn live_app(a: &RunningApp) -> LiveApp {
+    LiveApp {
+        version: flatpak_app_version(Path::new(FLATPAK_ROOT), &a.app_id),
+        instance: a.instance.clone(),
+        profile: a.profile.clone(),
+        app_id: a.app_id.clone(),
+        started: a.started,
+    }
+}
+
+/// One adoption pass: the units are listed on a thread of their own with the session unlocked
+/// (`loginctl` and a `systemctl` per profile may take seconds, and a `Session1` call must not
+/// wait for them), then the lock is taken to merge the answer. Returns the apps taken over by
+/// this pass and whether the listing saw everything (RUY-621).
+pub async fn adopt_pass(session: &Shared, profiles_known: bool) -> (Vec<RunningApp>, bool) {
+    let lister = lock(session).adopt_lister();
+    let (tx, rx) = async_channel::bounded(1);
+    let spawned = std::thread::Builder::new()
+        .name("adopt".to_owned())
+        .spawn(move || {
+            let _ = tx.send_blocking(lister());
+        });
+    let listing = match spawned {
+        Ok(_) => rx.recv().await.unwrap_or_default(),
+        Err(err) => {
+            eprintln!("ruya-session: cannot list the running apps: {err}");
+            Listing::default()
+        }
+    };
+    let mut s = lock(session);
+    let adopted = s.adopt_listed(listing, unix_now(), Instant::now(), profiles_known);
+    (adopted, s.adoption_complete())
 }
 
 /// The profile ids (system mode), and whether the directory is current.
@@ -173,17 +200,11 @@ pub async fn adopt_late(
         if let Some(ids) = ids {
             lock(session).directory_mut().set(ids);
         }
-        let late = lock(session).adopt_more(unix_now(), Instant::now(), known);
+        let (late, listed_all) = adopt_pass(session, known).await;
         for app in &late {
             eprintln!("ruya-session: adopted {} late", app.instance);
-            usage_lock(usage).app_started(
-                &app.instance,
-                &app.profile,
-                &app.app_id,
-                &flatpak_app_version(Path::new(FLATPAK_ROOT), &app.app_id),
-                Instant::now(),
-                app.started,
-            );
+            // Its leftover heartbeat, if one was kept open, goes on as one run.
+            usage_lock(usage).adopt_late(&live_app(app), Instant::now());
             // The shell may be connected already: it hears of the app as of one that started.
             let sent = async {
                 let iface = connection
@@ -202,11 +223,21 @@ pub async fn adopt_late(
                 eprintln!("ruya-session: emitting a signal failed: {err}");
             }
         }
-        if known && lock(session).adoption_complete() {
+        if known && listed_all {
+            settle_leftovers(usage);
             return;
         }
     }
     eprintln!("ruya-session: gave up looking for apps that kept running");
+    settle_leftovers(usage);
+}
+
+/// The adoption is over: the runs no app came back for end as crashed at their last heartbeat.
+fn settle_leftovers(usage: &SharedUsage) {
+    let recovered = usage_lock(usage).settle(unix_now());
+    if !recovered.is_empty() {
+        eprintln!("ruya-session: recovered play sessions of {recovered:?}");
+    }
 }
 
 fn usage_lock(shared: &SharedUsage) -> MutexGuard<'_, Tracker<FileStore, SystemZone>> {
@@ -892,9 +923,40 @@ pub async fn forward(
 mod tests {
     use super::*;
     use crate::session::Status;
-    use crate::spawner::{unit_name, FakeSpawner};
+    use crate::spawner::{unit_name, AdoptGate, FakeSpawner};
 
     const APP: &str = "org.ruyaos.Racer";
+
+    #[test]
+    fn a_session_call_does_not_wait_for_an_adoption_listing() {
+        // RUY-621: the listing (loginctl, a systemctl per profile) runs with the session unlocked.
+        let gate = Arc::new(AdoptGate::default());
+        let spawner: DynSpawner = Box::new(
+            FakeSpawner::new()
+                .with_app(APP)
+                .with_app("org.ruyaos.Puzzle")
+                .with_running("ruya-p1", APP, 1_000)
+                .with_adopt_gate(Arc::clone(&gate)),
+        );
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let shared: Shared = Arc::new(Mutex::new(Session::new(spawner, dir, Vec::new())));
+        let pass = shared.clone();
+        let worker =
+            std::thread::spawn(move || futures_lite::future::block_on(adopt_pass(&pass, true)));
+        gate.wait_entered();
+        // The listing is blocked inside the spawner: a Session1 call takes the lock at once.
+        let caller = shared.clone();
+        let (done, answered) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = done.send(lock(&caller).launch("org.ruyaos.Puzzle", "p1", 1).0);
+        });
+        let answer = answered.recv_timeout(Duration::from_secs(5));
+        gate.release();
+        assert_eq!(answer, Ok(Status::Ok), "the call waited for the listing");
+        let (adopted, complete) = worker.join().unwrap();
+        assert!(complete);
+        assert_eq!(adopted.len(), 1, "{adopted:?}");
+    }
 
     fn stopping_session() -> (Shared, String) {
         let spawner: DynSpawner = Box::new(FakeSpawner::new().with_app(APP));

@@ -43,6 +43,17 @@ pub struct RunningUnit {
     pub frozen: bool,
 }
 
+/// What one listing of the running app units saw (`Spawner::adopt_lister`).
+#[derive(Debug, Clone, Default)]
+pub struct Listing {
+    pub found: Vec<RunningUnit>,
+    /// Everything it was meant to see was seen (no `loginctl` or manager call failed or timed out).
+    pub complete: bool,
+}
+
+/// A listing that can run on any thread without the session lock (RUY-621).
+pub type AdoptLister = Box<dyn FnOnce() -> Listing + Send>;
+
 pub trait Spawner {
     /// Is this Flatpak application installed?
     fn is_installed(&self, app_id: &str) -> bool;
@@ -64,6 +75,15 @@ pub trait Spawner {
     /// is not taken over twice.
     fn adoption_complete(&self) -> bool {
         true
+    }
+    /// The same listing as `adopt_running` and `adoption_complete`, as a closure that does not
+    /// borrow the spawner: the caller runs it without holding the session lock, because it asks
+    /// other processes (`loginctl`, a `systemctl` per profile) and may take seconds (RUY-621).
+    /// The default lists at once and hands the answer back.
+    fn adopt_lister(&self) -> AdoptLister {
+        let found = self.adopt_running();
+        let complete = self.adoption_complete();
+        Box::new(move || Listing { found, complete })
     }
     /// Makes sure `user`'s sound server runs (`ruya-pulse@<user>.service` in `ruya-shell`'s
     /// manager, ADR-010, T-365) before an app of `user` starts. Returns once it is started.
@@ -127,6 +147,9 @@ impl<T: Spawner + ?Sized> Spawner for Box<T> {
     }
     fn adoption_complete(&self) -> bool {
         (**self).adoption_complete()
+    }
+    fn adopt_lister(&self) -> AdoptLister {
+        (**self).adopt_lister()
     }
     fn freeze(&self, unit: &str) -> Result<(), String> {
         (**self).freeze(unit)
@@ -1334,11 +1357,44 @@ struct FakeState {
     adopt_failures: u32,
     /// Did the last `adopt_running` fail?
     adopt_failed: bool,
+    /// Holds every listing of `adopt_lister` until released (RUY-621).
+    adopt_gate: Option<Arc<AdoptGate>>,
     last_env: Vec<(String, String)>,
     /// pid -> cgroup file (`process_cgroup`, T-459).
     processes: HashMap<u32, String>,
     /// uid -> user name (`user_name`).
     users: HashMap<u32, String>,
+}
+
+/// A listing that blocks, to show that nothing else waits for it: the listing says it is inside
+/// (`wait_entered`) and goes on when `release` is called.
+#[derive(Default)]
+pub struct AdoptGate {
+    state: Mutex<(bool, bool)>,
+    changed: std::sync::Condvar,
+}
+
+impl AdoptGate {
+    fn pass(&self) {
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        s.0 = true;
+        self.changed.notify_all();
+        while !s.1 {
+            s = self.changed.wait(s).unwrap_or_else(|e| e.into_inner());
+        }
+    }
+
+    pub fn wait_entered(&self) {
+        let mut s = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        while !s.0 {
+            s = self.changed.wait(s).unwrap_or_else(|e| e.into_inner());
+        }
+    }
+
+    pub fn release(&self) {
+        self.state.lock().unwrap_or_else(|e| e.into_inner()).1 = true;
+        self.changed.notify_all();
+    }
 }
 
 impl FakeSpawner {
@@ -1360,6 +1416,12 @@ impl FakeSpawner {
     /// (RUY-23).
     pub fn with_adopt_failures(self, times: u32) -> Self {
         self.lock().adopt_failures = times;
+        self
+    }
+
+    /// Every listing of `adopt_lister` blocks on this gate until it is released (RUY-621).
+    pub fn with_adopt_gate(self, gate: Arc<AdoptGate>) -> Self {
+        self.lock().adopt_gate = Some(gate);
         self
     }
 
@@ -1459,6 +1521,22 @@ impl FakeSpawner {
     }
 }
 
+/// One listing of the fake: the failures are used up one per call.
+fn fake_listing(state: &Mutex<FakeState>) -> Listing {
+    let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
+    state.calls.push("adopt".to_owned());
+    if state.adopt_failures > 0 {
+        state.adopt_failures -= 1;
+        state.adopt_failed = true;
+        return Listing::default();
+    }
+    state.adopt_failed = false;
+    Listing {
+        found: state.running.clone(),
+        complete: true,
+    }
+}
+
 impl Spawner for FakeSpawner {
     fn is_installed(&self, app_id: &str) -> bool {
         self.lock().installed.contains(app_id)
@@ -1507,15 +1585,18 @@ impl Spawner for FakeSpawner {
     }
 
     fn adopt_running(&self) -> Vec<RunningUnit> {
-        let mut state = self.lock();
-        state.calls.push("adopt".to_owned());
-        if state.adopt_failures > 0 {
-            state.adopt_failures -= 1;
-            state.adopt_failed = true;
-            return Vec::new();
-        }
-        state.adopt_failed = false;
-        state.running.clone()
+        fake_listing(&self.state).found
+    }
+
+    fn adopt_lister(&self) -> AdoptLister {
+        let state = Arc::clone(&self.state);
+        let gate = self.lock().adopt_gate.clone();
+        Box::new(move || {
+            if let Some(gate) = gate {
+                gate.pass();
+            }
+            fake_listing(&state)
+        })
     }
 
     fn adoption_complete(&self) -> bool {
