@@ -9,7 +9,7 @@ KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="ruya-input", MODE="0660", OPTIONS+="
 SUBSYSTEM!="input", GOTO="ruya_input_end"
 KERNEL!="event*", GOTO="ruya_input_end"
 
-# 3. Virtual pads (ruya-inputd, phys ruya-input/pad<n>): owned by ruya-input, no uaccess. The
+# 3. Virtual pads (ruya-inputd, phys ruya-input/pad<n>): owned by ruya-input, no uaccess (the tag is removed in 71-ruya-input-pad.rules, after systemd's 70-uaccess). The
 #    service gives each node one ACL entry, for the signed-in profile's user, after every udev
 #    event on it (systemd's 70-uaccess.rules still tags joysticks, and logind then rewrites the
 #    ACL). Other ruya-input/ devices (a keyboard or mouse for the compositor, RUY-45) keep uaccess.
