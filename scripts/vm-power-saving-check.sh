@@ -24,14 +24,15 @@
 #             the key. Without tracefs or debugfs the part prints "UNVERIFIED:" for what it could not read.
 #             That the page below did not move is not checked here (tst_power_saving.qml does).
 #   inhibit   RUY-561: an idle inhibitor counts only while its app is the front app. Needs a profile signed
-#             in (drive it from the host) and scripts/vm-idle-inhibit-client.py, vm-key-client.qml next to
+#             in (or a profile that exists: it is signed in from the guest) and scripts/vm-idle-inhibit-client.py, vm-key-client.qml next to
 #             this script. With RUYA_IDLE_DIVISOR=60 (the shell is restarted with the drop-in if it does not
 #             have it: sign in again when it asks) it starts the inhibiting client (journal: "idle inhibit
 #             +wayland:N" while it is in front), then the key client, whose window takes the front (the
 #             inhibiting app is behind it: "idle inhibit -wayland:N" must follow), then "display off"
 #             within 60 s although the inhibiting client still runs; when the key client ends, the
-#             inhibiting app is in front again and "+wayland:N" must come back; then (with vm-inject-key.py
-#             next to this script) Guide opens the Hub: "-wayland:N", and Guide again: "+wayland:N".
+#             inhibiting app is in front again and "+wayland:N" must come back. Before that, with the screen
+#             still on (with vm-inject-key.py next to this script), Guide opens the Hub: "-wayland:N", and
+#             Guide again: "+wayland:N". The profile is signed in from the guest (Profiles1.SwitchTo).
 # Hardware (the Dell, not this script): the DualSense disconnects after the Controllers-turn-off time and
 # reconnects on a button press; a TV's re-sync time after display off is recorded by hand.
 set -u
@@ -237,15 +238,24 @@ inhibit_check() {
         systemctl daemon-reload
         systemctl restart "$unit"
         added=1
-        echo "shell restarted with the divisor: sign in a profile now (waiting up to 180 s)"
+        restarted="$(date +%s)"
+        for _ in $(seq 1 60); do
+            journalctl -b -q -o cat -u "$unit" --since "@$restarted" | grep -q 'ruya-compositor: up' && break
+            sleep 1
+        done
+        sleep 5
     fi
-    active=""
-    for _ in $(seq 1 180); do
-        active="$(busctl --system get-property org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ActiveProfile 2>/dev/null | cut -d'"' -f2)"
-        [ -n "$active" ] && break
-        sleep 1
-    done
-    [ -n "$active" ] || { bad "no profile signed in"; return; }
+    # Nobody is there to sign in (the VM queue is unattended): sign the first profile in from the guest.
+    psvc=org.ruyaos.Profiles1
+    ppath=/org/ruyaos/Profiles1
+    active="$(busctl --system get-property $psvc $ppath $psvc ActiveProfile 2>/dev/null | cut -d'"' -f2)"
+    if [ -z "$active" ]; then
+        me="$(busctl --system call $psvc $ppath $psvc ListProfiles | grep -o '"p[0-9]*"' | tr -d '"' | head -n 1)"
+        [ -n "$me" ] || { bad "no profile to sign in (create one first)"; return; }
+        out="$(busctl --system call $psvc $ppath $psvc SwitchTo ss "$me" "")"
+        case "$out" in 'suu "ok"'*) ;; *) out="$(busctl --system call $psvc $ppath $psvc SwitchTo ss "$me" 1234)";; esac
+        case "$out" in 'suu "ok"'*) ok "signed $me in";; *) bad "SwitchTo $me: $out"; return;; esac
+    fi
     sleep 3
     run() { runuser -u ruya-shell -- env XDG_RUNTIME_DIR=/run/user/$uid WAYLAND_DISPLAY=ruya-0 "$@"; }
     start="$(date +%s)"
@@ -253,14 +263,8 @@ inhibit_check() {
     line="$(wait_log "$start" 'idle inhibit \+wayland:[0-9]+' 20)" && ok "the inhibiting app in front holds: $line" || bad "no '+wayland:N' after the inhibiting client started (see /var/tmp/vm-idle-inhibit-client.log)"
     n="$(echo "$line" | sed -n 's/.*wayland:\([0-9][0-9]*\).*/\1/p' | head -n 1)"
     if [ -n "$n" ]; then
-        behind="$(date +%s)"
-        run env QT_QPA_PLATFORM=wayland QT_QUICK_BACKEND=software /usr/bin/ruya-shell --load /var/tmp/vm-key-client.qml >/dev/null 2>&1 &
-        wait_log "$behind" "idle inhibit -wayland:$n" 20 >/dev/null && ok "another window in front: -wayland:$n" || bad "no '-wayland:$n' after another window took the front"
-        wait_log "$behind" 'display off' 75 >/dev/null && ok "display off although the inhibiting client still runs" || bad "no 'display off' within 75 s with the inhibitor behind"
-        back="$(date +%s)"
-        pkill -f '[v]m-key-client.qml'
-        wait_log "$back" "idle inhibit \+wayland:$n" 20 >/dev/null && ok "in front again: +wayland:$n" || bad "no '+wayland:$n' after the other window ended"
-        # The Hub over the app (needs vm-inject-key.py next to this script): Guide releases, Guide again takes it.
+        # The Hub over the app first, while the screen is on (after "display off" the first key only wakes it):
+        # Guide releases, Guide again takes it (needs vm-inject-key.py next to this script).
         if [ -f "$here/vm-inject-key.py" ]; then
             hub="$(date +%s)"
             python3 "$here/vm-inject-key.py" guide >/dev/null 2>&1
@@ -271,6 +275,13 @@ inhibit_check() {
         else
             echo "UNVERIFIED: vm-inject-key.py is not next to this script: the Hub step was not run"
         fi
+        behind="$(date +%s)"
+        run env QT_QPA_PLATFORM=wayland QT_QUICK_BACKEND=software /usr/bin/ruya-shell --load /var/tmp/vm-key-client.qml >/dev/null 2>&1 &
+        wait_log "$behind" "idle inhibit -wayland:$n" 20 >/dev/null && ok "another window in front: -wayland:$n" || bad "no '-wayland:$n' after another window took the front"
+        wait_log "$behind" 'display off' 75 >/dev/null && ok "display off although the inhibiting client still runs" || bad "no 'display off' within 75 s with the inhibitor behind"
+        back="$(date +%s)"
+        pkill -f '[v]m-key-client.qml'
+        wait_log "$back" "idle inhibit \+wayland:$n" 20 >/dev/null && ok "in front again: +wayland:$n" || bad "no '+wayland:$n' after the other window ended"
     fi
     pkill -f '[v]m-key-client.qml'
     pkill -f '[v]m-idle-inhibit-client.py'

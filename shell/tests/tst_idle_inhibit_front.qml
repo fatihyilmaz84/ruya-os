@@ -56,7 +56,7 @@ Item {
             verify(tc.shell)
             tc.shell.forceActiveFocus()
             tryVerify(() => Profiles.profiles.length === 3)
-            tryVerify(() => tc.shell.activeFocus || true)
+            tryVerify(() => findChild(tc.shell, "profileList").activeFocus, 2000, "the picker has the focus")
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
             tryCompare(Profiles, "activeProfile", "p2")
@@ -66,8 +66,7 @@ Item {
 
         // Launches Turbo Racer, adds its window, and registers an inhibitor on the window's surface.
         function playWithInhibitor() {
-            tryVerify(() => tc.shell.activeFocus || true)
-            tc.shell.focusCurrent()
+            tryVerify(() => findChild(tc.shell, "homePlay").activeFocus, 2000, "Play has the focus")
             keyClick(Qt.Key_Return)
             tryCompare(launchedSpy, "count", 1)
             tryVerify(() => Session.running.length === 1 && Session.running[0].state === "running")
