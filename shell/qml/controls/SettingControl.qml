@@ -197,7 +197,22 @@ FocusScope {
     readonly property real textWidth: control.centered ? Math.max(0, width - 2 * (Theme.spaceL + (hasIcon ? Theme.iconM + Theme.spaceS : 0)) * u)
                                                        : Math.max(0, width - labelText.x - trailingWidth - Theme.spaceL * u)
 
-    TailText {
+    // Not a TailText: its `implicitWidth` is the elided width, but `labelWanted` (SettingRow's room for the value,
+    // RUY-609) needs the label's whole width. The same cut at the end of the name, tail kept (TailText's rule).
+    TextMetrics {
+        id: labelMetrics
+        font: labelText.font
+        elide: Text.ElideRight
+        elideWidth: Math.max(0, control.textWidth - tailMetrics.advanceWidth)
+        text: control.label
+    }
+    TextMetrics {
+        id: tailMetrics
+        font: labelText.font
+        text: control.labelTail
+    }
+
+    Text {
         id: labelText
         objectName: "label"
         visible: control.labelVisible
@@ -215,9 +230,7 @@ FocusScope {
         width: Math.min(implicitWidth, control.textWidth)
         elide: Text.ElideRight
         textFormat: Text.PlainText      // a label can be a device's own name (Bluetooth, UPower): never markup
-        name: control.label
-        tail: control.labelTail
-        maxWidth: control.textWidth
+        text: control.labelTail === "" ? control.label : labelMetrics.elidedText + control.labelTail
         color: Qt.alpha(control.labelColor, control.dimmed ? Theme.disabledOpacity : 1)
         font.pixelSize: Theme.typeBody * control.u
         font.weight: control.labelWeight
