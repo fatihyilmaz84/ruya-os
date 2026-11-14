@@ -146,7 +146,7 @@ Item {
         function hintVerbs() {
             const bar = find("hintBar")
             const parts = []
-            for (const b of ["A", "Left/Right", "B"]) {
+            for (const b of ["accept", "left_right", "back"]) {
                 const h = findChild(bar, "hint_" + b)
                 if (h)
                     parts.push(b + " " + h.verb)
@@ -204,7 +204,7 @@ Item {
             for (let i = 0; i < 20 && focusedKey() !== "performance:interval"; ++i)
                 keyClick(Qt.Key_Down)
             compare(focusedKey(), "performance:interval")
-            compare(hintVerbs(), "A Next|Left/Right Change|B Back")
+            compare(hintVerbs(), "accept Next|left_right Change|back Back")
             compare(rowName("performance:interval"), "Update every, 0.5 s")
             keyClick(Qt.Key_Right)
             tryCompare(DeviceSettings, "performanceIntervalMs", 1000)
@@ -228,7 +228,7 @@ Item {
             verify(!find("quickMenuItem_performance:cpu"), "no reading rows")
             verify(!Performance.polling, "the panel asks for nothing: the game is frozen, the overlay shows the numbers")
             verify(!Performance.counting)
-            compare(hintVerbs(), "A Toggle|B Back")
+            compare(hintVerbs(), "accept Toggle|back Back")
             compare(rowName("performance:overlay"), "Performance overlay, Off")
             keyClick(Qt.Key_Escape)
         }

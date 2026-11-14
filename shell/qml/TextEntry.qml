@@ -56,11 +56,11 @@ FocusScope {
     // A types the focused key and Start finishes (T-285); after typing on a physical keyboard
     // Return finishes, so A has no verb then.
     readonly property var entryHints: keyboardMode
-        ? [{ button: "B", text: backDeletes ? qsTr("Delete") : qsTr("Cancel") },
-           { button: "Start", text: qsTr("Done") }]
-        : [{ button: "A", text: qsTr("Type") },
-           { button: "B", text: backDeletes ? qsTr("Delete") : qsTr("Cancel") },
-           { button: "Start", text: qsTr("Done") }]
+        ? [{ action: "back", text: backDeletes ? qsTr("Delete") : qsTr("Cancel") },
+           { action: "done", text: qsTr("Done") }]
+        : [{ action: "accept", text: qsTr("Type") },
+           { action: "back", text: backDeletes ? qsTr("Delete") : qsTr("Cancel") },
+           { action: "done", text: qsTr("Done") }]
     Accessible.description: backDeletes ? qsTr("Press Back to delete, Back on an empty field to cancel")
                                         : qsTr("Press Back to cancel")
 

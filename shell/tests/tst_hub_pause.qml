@@ -499,7 +499,7 @@ Item {
             verify(menu)
             menu.present()
             compare(menu.currentKey, "resume")
-            compare(menu.hints.map(h => h.button + " " + h.text), ["A Resume"])
+            compare(menu.hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text), ["accept Resume"])
             let closed = 0
             menu.closeRequested.connect(() => ++closed)
             keyClick(Qt.Key_Escape)

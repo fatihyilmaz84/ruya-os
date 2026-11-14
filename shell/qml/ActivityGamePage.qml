@@ -62,8 +62,8 @@ Page {
         anchors.fill: parent
         u: page.u
         focus: true
-        hints: strip.activeFocus ? [{ button: "Left/Right", text: qsTr("Browse") }, { button: "B", text: qsTr("Back") }]
-                                 : [{ button: "B", text: qsTr("Back") }]
+        hints: strip.activeFocus ? [{ actions: ["left", "right"], text: qsTr("Browse") }, { action: "back", text: qsTr("Back") }]
+                                 : [{ action: "back", text: qsTr("Back") }]
         onExitRequested: page.backRequested()
 
         Text {

@@ -45,14 +45,14 @@ Page {
     readonly property bool optionsOffered: grid.activeFocus && grid.currentIndex >= 0 && page.optionRows !== null
         && page.optionRows("games", page.shownIds[grid.currentIndex] ?? "").length > 0
     // On the filter row A steps the choice: the row's own hints (Change, Next) and the section switch (RUY-542).
-    hints: filterRow.activeFocus ? filterRow.hints.concat([{ buttons: ["LB", "RB"], text: qsTr("Sections") }])
-         : optionsOffered ? [{ button: "A", text: qsTr("Select") },
-                             { button: "Start", text: qsTr("Options") },
-                             { button: "B", text: qsTr("Back") },
-                             { buttons: ["LB", "RB"], text: qsTr("Sections") }]
-                          : [{ button: "A", text: qsTr("Select") },
-                             { button: "B", text: qsTr("Back") },
-                             { buttons: ["LB", "RB"], text: qsTr("Sections") }]
+    hints: filterRow.activeFocus ? filterRow.hints.concat([{ actions: ["tabPrev", "tabNext"], text: qsTr("Sections") }])
+         : optionsOffered ? [{ action: "accept", text: qsTr("Select") },
+                             { action: "options", text: qsTr("Options") },
+                             { action: "back", text: qsTr("Back") },
+                             { actions: ["tabPrev", "tabNext"], text: qsTr("Sections") }]
+                          : [{ action: "accept", text: qsTr("Select") },
+                             { action: "back", text: qsTr("Back") },
+                             { actions: ["tabPrev", "tabNext"], text: qsTr("Sections") }]
 
     function openOptions() {
         grid.forceLayout()

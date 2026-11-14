@@ -144,7 +144,7 @@ Item {
             compare(tc.builtPanes(), ["paneMyProfile"], "only My profile is built")
             verify(find("paneMyProfile").visible)
             verify(!find("paneComingSoon").visible)
-            compare(find("page_settings").hints.map(h => h.button + " " + h.text).join(", "), "A Select, B Back")
+            compare(find("page_settings").hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join(", "), "accept Select, back Back")
             enterPane("paneMyProfile")
             verify(find("rowWho").activeFocus, "the first row takes focus, as before")
             keyClick(Qt.Key_Escape)

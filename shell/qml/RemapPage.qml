@@ -18,7 +18,7 @@ Page {
     readonly property string family: pad ? pad.family : ""
 
     title: qsTr("Remap buttons")
-    hints: [{ button: "A", text: qsTr("Change") }, { button: "B", text: qsTr("Back") }]
+    hints: [{ action: "accept", text: qsTr("Change") }, { action: "back", text: qsTr("Back") }]
 
     Component.onCompleted: GameControls.show(padId)
 
@@ -64,7 +64,7 @@ Page {
     // A row of the list: the source's glyph and name, then what it acts as.
     component RemapRow: SettingControl {
         id: row
-        property string targetGlyph
+        property string targetPosition
         property string targetName
         property bool changed: false
         signal activated()
@@ -80,7 +80,8 @@ Page {
                 objectName: "targetGlyph"
                 anchors.verticalCenter: parent.verticalCenter
                 u: row.u
-                button: row.targetGlyph
+                position: row.targetPosition
+                family: page.family
                 Accessible.ignored: true
             }
             Text {
@@ -123,9 +124,10 @@ Page {
                 required property string modelData
                 objectName: "remap_" + modelData
                 u: page.u
-                glyph: GameControls.glyphOf(modelData, page.family)
+                glyphPosition: modelData
+                glyphFamily: page.family
                 label: GameControls.buttonName(modelData, page.family)
-                targetGlyph: GameControls.glyphOf(GameControls.targetOf(modelData), page.family)
+                targetPosition: GameControls.targetOf(modelData)
                 targetName: GameControls.buttonName(GameControls.targetOf(modelData), page.family)
                 changed: GameControls.isChanged(modelData)
                 dimmed: page.pad === null

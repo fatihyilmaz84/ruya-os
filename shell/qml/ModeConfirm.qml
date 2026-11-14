@@ -29,8 +29,8 @@ FocusScope {
     property bool keeping: false
 
     // What the buttons do while it is open (Shell.hintList): A follows the focused button.
-    readonly property var modalHints: [{ button: "A", text: keepButton.activeFocus ? qsTr("Keep") : qsTr("Revert") },
-                                       { button: "B", text: qsTr("Revert") }]
+    readonly property var modalHints: [{ action: "accept", text: keepButton.activeFocus ? qsTr("Keep") : qsTr("Revert") },
+                                       { action: "back", text: qsTr("Revert") }]
 
     // The mode on trial, for the text: "3840 × 2160, 60 Hz".
     readonly property string modeText: DisplayText.modeLabel(Display.pendingWidth, Display.pendingHeight,

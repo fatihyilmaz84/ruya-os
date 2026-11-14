@@ -156,21 +156,21 @@ Item {
         }
 
         // What the hint bar offers: A only where A does something (the two export rows).
-        function hintsOf(item) { return item.hints.map(h => h.button + " " + h.text).join("|") }
+        function hintsOf(item) { return item.hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|") }
 
         function test_the_hint_bar_offers_select_only_on_the_export_rows() {
             openSystemInfo()
             const page = find("page_systemInfo")
-            compare(hintsOf(page), "A Select|B Back", "Save report")
+            compare(hintsOf(page), "accept Select|back Back", "Save report")
             keyClick(Qt.Key_Down)
             tryVerify(() => find("sysAddresses").activeFocus)
-            compare(hintsOf(page), "A Toggle|B Back", "Include network addresses")
+            compare(hintsOf(page), "accept Toggle|back Back", "Include network addresses")
             keyClick(Qt.Key_Down)
             tryVerify(() => row("console/version").activeFocus)
-            compare(hintsOf(page), "B Back", "an information row does nothing on A")
+            compare(hintsOf(page), "back Back", "an information row does nothing on A")
             keyClick(Qt.Key_Up)
             tryVerify(() => find("sysAddresses").activeFocus)
-            compare(hintsOf(page), "A Toggle|B Back")
+            compare(hintsOf(page), "accept Toggle|back Back")
         }
 
         // RUY-514: the save row is an action, the facts are flat, the headings are GroupLabels and are never focused.

@@ -91,14 +91,14 @@ Item {
             start("")
             const grid = find("gamesGrid")
             tryVerify(() => grid.activeFocus, 2000)
-            const verbs = () => hintVerbs(["A", "Left/Right"])
-            compare(verbs(), "A Select|", "on the grid A selects")
+            const verbs = () => hintVerbs(["accept", "left_right"])
+            compare(verbs(), "accept Select|", "on the grid A selects")
             keyClick(Qt.Key_Up)
             verify(find("gamesFilter").activeFocus)
-            tryCompare(findChild(find("hintBar"), "hint_A"), "verb", "Next")
-            compare(verbs(), "A Next|Left/Right Change")
+            tryCompare(findChild(find("hintBar"), "hint_accept"), "verb", "Next")
+            compare(verbs(), "accept Next|left_right Change")
             keyClick(Qt.Key_Down)
-            tryCompare(findChild(find("hintBar"), "hint_A"), "verb", "Select")
+            tryCompare(findChild(find("hintBar"), "hint_accept"), "verb", "Select")
         }
 
         function test_launch_request() {

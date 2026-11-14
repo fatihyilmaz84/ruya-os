@@ -69,16 +69,16 @@ FocusScope {
     // before it) nor once the account exists (B does nothing); the keyboard and the PIN pad take B.
     readonly property var hints: {
         if (pairingStage)
-            return pairHint.timedOut ? [{ button: "A", text: qsTr("Try again") }, { button: "B", text: qsTr("Skip") }]
-                                     : [{ button: "B", text: qsTr("Skip") }]
+            return pairHint.timedOut ? [{ action: "accept", text: qsTr("Try again") }, { action: "back", text: qsTr("Skip") }]
+                                     : [{ action: "back", text: qsTr("Skip") }]
         if (pad.shown)
-            return [{ button: "B", text: qsTr("Cancel") }]
-        const a = { button: "A", text: step === stepAdmin || step === stepZone ? qsTr("Select") : qsTr("Next") }
+            return [{ action: "back", text: qsTr("Cancel") }]
+        const a = { action: "accept", text: step === stepAdmin || step === stepZone ? qsTr("Select") : qsTr("Next") }
         if (step === 0 || step === stepDone || busy)
             return step === 0 || step === stepDone ? [a] : []
         if (step === stepZone)
-            return [a, { button: "B", text: qsTr("Back") }, { button: "Start", text: qsTr("Skip") }]
-        return [a, { button: "B", text: qsTr("Back") }]
+            return [a, { action: "back", text: qsTr("Back") }, { action: "options", text: qsTr("Skip") }]
+        return [a, { action: "back", text: qsTr("Back") }]
     }
 
     signal finished()

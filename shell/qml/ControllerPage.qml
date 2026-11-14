@@ -227,13 +227,12 @@ Page {
             width: parent ? parent.width : 0
             height: visible ? noteRow.height : 0
 
-            // Accept is the right button (east) on a Nintendo pad as it is, and with "Right" on every pad.
-            readonly property bool acceptEast: page.confirmMode === "east"
-                                               || (page.confirmMode === "family" && page.pad.family === "nintendo")
-            // Position letters (A south, B east) until RUY-41's glyph sets.
-            readonly property string acceptLetter: acceptEast ? "B" : "A"
-            readonly property string backLetter: acceptEast ? "A" : "B"
-            readonly property string sentence: qsTr("On this controller: %1 confirms, %2 goes back.").arg(acceptLetter).arg(backLetter)
+            // This pad's own glyphs after its own Confirm choice (RUY-41: the family's printed labels;
+            // Accept is the right button on a Nintendo pad as it is, and with "Right" on every pad),
+            // whatever pad pressed last.
+            readonly property string acceptLabel: Glyphs.glyphFor("accept", page.pad.family, page.confirmMode).name
+            readonly property string backLabel: Glyphs.glyphFor("back", page.pad.family, page.confirmMode).name
+            readonly property string sentence: qsTr("On this controller: %1 confirms, %2 goes back.").arg(acceptLabel).arg(backLabel)
 
             Row {
                 id: noteRow
@@ -251,7 +250,9 @@ Page {
                     objectName: "confirmNoteAccept"
                     anchors.verticalCenter: parent.verticalCenter
                     u: page.u
-                    button: confirmNote.acceptLetter
+                    action: "accept"
+                    family: page.pad.family
+                    confirmMode: page.confirmMode
                 }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
@@ -263,7 +264,9 @@ Page {
                     objectName: "confirmNoteBack"
                     anchors.verticalCenter: parent.verticalCenter
                     u: page.u
-                    button: confirmNote.backLetter
+                    action: "back"
+                    family: page.pad.family
+                    confirmMode: page.confirmMode
                 }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter

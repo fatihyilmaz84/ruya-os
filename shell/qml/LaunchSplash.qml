@@ -27,7 +27,7 @@ FocusScope {
     property var guideKey: function (key) { return false }
 
     // What the hint bar says while the splash is up: nothing to press until it offers Close.
-    readonly property var hints: slow && !closing ? [{ button: "A", text: qsTr("Close") }, { button: "B", text: qsTr("Close") }] : []
+    readonly property var hints: slow && !closing ? [{ action: "accept", text: qsTr("Close") }, { action: "back", text: qsTr("Close") }] : []
     // Any of its animations is running (tests: none under reduced motion).
     readonly property bool animating: dotsAnimation.running || zoomAnimation.running
                                       || fadeAnimation.running || blurAnimation.running

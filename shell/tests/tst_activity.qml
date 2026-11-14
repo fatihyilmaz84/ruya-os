@@ -16,7 +16,7 @@ Item {
         Shell { anchors.fill: parent; version: "test"; focus: true }
     }
 
-    Component { id: glyphComponent; ButtonGlyph { button: "Left/Right" } }
+    Component { id: glyphComponent; ButtonGlyph { action: "left" } }
 
     SignalSpy { id: clearSpy; target: Usage; signalName: "clearFinished" }
 
@@ -131,11 +131,11 @@ Item {
 
         // ---- the words ----
 
-        // The hints drawn by the bar, "A Select|B Cancel" (T-285).
+        // The hints drawn by the bar, "accept Select|back Cancel" (T-285).
         function barHints() {
             const bar = find("hintBar")
             const parts = []
-            for (const b of ["Left/Right", "A", "B", "Start"]) {
+            for (const b of ["left_right", "accept", "back", "options"]) {
                 const h = findChild(bar, "hint_" + b)
                 if (h)
                     parts.push(b + " " + h.verb)
@@ -143,15 +143,18 @@ Item {
             return parts.join("|")
         }
 
-        // RUY-542: the "Left/Right" glyph is words and follows the language; its id stays for the code.
+        // RUY-542, RUY-41: the D-pad glyph of the Left/Right hints is an arrow (no words to translate);
+        // its name for a screen reader is words and follows the language; the action stays for the code.
         function test_left_right_glyph_is_translated() {
             const g = createTemporaryObject(glyphComponent, host)
-            compare(g.shown, "Left/Right")
+            compare(g.shown, "←")
+            compare(g.Accessible.name, "Left")
             DeviceSettings.language = "tr"
-            verify(g.shown !== "Left/Right", "Turkish shows its own words")
-            compare(g.button, "Left/Right")
+            tryVerify(() => g.Accessible.name !== "Left", 2000, "Turkish names it in its own words")
+            compare(g.shown, "←", "the arrow is the same in every language")
+            compare(g.action, "left")
             DeviceSettings.language = "en"
-            compare(g.shown, "Left/Right")
+            tryCompare(g.Accessible, "name", "Left")
         }
 
         function test_durations_in_plain_words() {
@@ -330,12 +333,12 @@ Item {
             verify(find("gameStrip").visible)
             verify(findChild(find("gameHeadStrip"), "groupLabelText"), "Last 30 days is a GroupLabel")
             verify(find("gameTotal").activeFocus, "the first row has focus")
-            compare(barHints(), "B Back", "a fact row only reads")
+            compare(barHints(), "back Back", "a fact row only reads")
             for (const n of ["gameTotal", "gameSessions", "gameFirst", "gameLast", "gameLongest", "gameAverage"])
                 compare(find(n).kind, "info", n)
             find("gameStrip").forceActiveFocus()
             tryVerify(() => find("gameStrip").activeFocus)
-            compare(barHints(), "Left/Right Browse|B Back", "the 30-day strip is read with Left and Right (T-285)")
+            compare(barHints(), "left_right Browse|back Back", "the 30-day strip is read with Left and Right (T-285)")
             const strip = findChild(find("gameStrip"), "chart")
             compare(strip.values.length, 30)
             compare(strip.highlightIndex, 29)

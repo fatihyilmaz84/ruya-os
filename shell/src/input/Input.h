@@ -5,6 +5,7 @@
 #include <QHash>
 #include <QObject>
 #include <QPointer>
+#include <QSet>
 #include <QQmlEngine>
 #include <QVariantList>
 #include <QVariantMap>
@@ -63,9 +64,13 @@ class Input : public QObject
     Q_PROPERTY(QVariantMap confirmButtons READ confirmButtons NOTIFY confirmButtonsChanged)
     // The last GetConfirmButtons answered "ok" (false: no Input1, the controller page's row is dimmed).
     Q_PROPERTY(bool confirmButtonsAvailable READ confirmButtonsAvailable NOTIFY confirmButtonsChanged)
-    // The pad of the last press (Input1.ActiveInputChanged) and its family ("xbox", "playstation",
-    // "nintendo", "generic", ...); "" until a pad has pressed since the shell started. RUY-41 builds
-    // the glyph sets on these two.
+    // The device of the last press and its family (06 §11.4, RUY-41): a pad as Input1's
+    // ActiveInputChanged names it ("xbox", "playstation", "nintendo", "generic", ...), or the
+    // family "keyboard" (activeDevice "") after a key from a real keyboard, told apart in the shell
+    // by the key event's source device (keyboardSourceOf). A key from the service's navigation
+    // device ("RuyaOS Navigation") while the keyboard is active brings the last pad back, since the
+    // service announces a pad only when it differs from the one before. "" until the first press.
+    // Never changes on a connect. The glyph table (Glyphs.qml) draws the hint bar from these.
     Q_PROPERTY(QString activeDevice READ activeDevice NOTIFY activeInputChanged)
     Q_PROPERTY(QString activeFamily READ activeFamily NOTIFY activeInputChanged)
 
@@ -74,6 +79,16 @@ public:
     ~Input() override;
 
     static Input *create(QQmlEngine *qmlEngine, QJSEngine *jsEngine);
+
+    // Who sent a key press, by its source device's name (06 §11.4): "pad" for the service's
+    // navigation keys ("RuyaOS Navigation"), "keyboard" for a real keyboard, "" when Qt cannot
+    // tell (no name, or Qt's own "core keyboard": a platform that does not name the device, a key
+    // the shell made). Only the keys the shell navigates or types with count; media, volume and
+    // power keys never switch the glyphs.
+    static QString keyboardSourceOf(const QString &deviceName, int key);
+
+    // Every key press of the application passes here (an application event filter).
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
     QString route() const { return m_route; }
     QString instance() const { return m_instance; }
@@ -147,6 +162,9 @@ public:
     // Tests only, and only with the mock backend (otherwise empty or no-ops).
     // A pad presses: the service announces it as the active input.
     Q_INVOKABLE void mockActiveInput(const QString &deviceId, const QString &family);
+    // A key press whose source device has this name, through the same path as a real key event
+    // (any backend: the keyboard is told apart in the shell).
+    Q_INVOKABLE void mockKeyFrom(const QString &deviceName, int key);
     // The service announces that a pad is being played (UserActive).
     Q_INVOKABLE void mockUserActive();
     // The mode the mock service holds for a controller of a console profile ("family" with none).
@@ -235,6 +253,8 @@ signals:
                         const QString &status, const QString &profileId, const QStringList &errors);
 
 private:
+    void setActiveInput(const QString &deviceId, const QString &family);
+    void noteKeyFrom(const QString &deviceName, int key);
     void send();
     // What a profile call's answer is for.
     enum class Purpose { Plain, ExportGet, ImportValidate, ImportSave, ImportAssign };
@@ -274,6 +294,9 @@ private:
     bool m_confirmsAvailable = false;
     QString m_activeDevice;
     QString m_activeFamily;
+    QString m_padDevice;           // the last pad Input1 announced (back after the keyboard)
+    QString m_padFamily;
+    QSet<QString> m_keySourcesLogged;
     quint64 m_nextToken = 1;
     QHash<quint64, Purpose> m_purposes;
     QPointer<Storage> m_storage;

@@ -32,8 +32,8 @@ FocusScope {
     readonly property int rowCount: found.count
     // What the buttons do on the screen on top (Shell's hint bar).
     readonly property var modalHints: stage === "try"
-        ? [{ button: "Start", text: qsTr("Continue") }, { button: "B", text: qsTr("Close") }]
-        : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Close") }]
+        ? [{ action: "options", text: qsTr("Continue") }, { action: "back", text: qsTr("Close") }]
+        : [{ action: "accept", text: qsTr("Select") }, { action: "back", text: qsTr("Close") }]
 
     signal closed()
 

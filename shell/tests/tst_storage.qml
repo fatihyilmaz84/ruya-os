@@ -740,7 +740,7 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/27-settings-storage-scan-partial.png")
         }
 
-        function shownHints() { return find("paneStorage").hints.map(h => h.button + " " + h.text).join("|") }
+        function shownHints() { return find("paneStorage").hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|") }
 
         // A row that does nothing on Accept says so: the hint bar offers Back only, and Accept is silent.
         function test_scan_rows_offer_back_only_and_accept_does_nothing() {
@@ -748,16 +748,16 @@ Item {
             tryVerify(() => volume("vol-stick") !== undefined)
             openStoragePane()
             tryVerify(() => find("storageScan_vol-stick_cat:games") !== null, 3000)
-            compare(shownHints(), "B Back", "the first row (This console) is a fact")
+            compare(shownHints(), "back Back", "the first row (This console) is a fact")
             compare(find("storageApps").kind, "info")
             compare(find("storageSystem").kind, "info")
             compare(find("storageVol_vol-stick").kind, "item")
             compare(find("storageEject_vol-stick").kind, "action")
             goTo("storageVol_vol-stick")
-            compare(shownHints(), "A Select|B Back", "a drive's own row does something")
+            compare(shownHints(), "accept Select|back Back", "a drive's own row does something")
             keyClick(Qt.Key_Down)
             tryVerify(() => find("storageScan_vol-stick_cat:games").activeFocus, 2000)
-            compare(shownHints(), "B Back", "a result row does nothing on Accept")
+            compare(shownHints(), "back Back", "a result row does nothing on Accept")
             const row = find("storageScan_vol-stick_cat:games")
             compare(row.kind, "info")
             let hit = 0
@@ -767,9 +767,9 @@ Item {
             compare(hit, 0, "Accept on a result row emits nothing")
             verify(row.activeFocus, "and focus stays")
             goTo("storageEject_vol-stick")
-            compare(shownHints(), "A Select|B Back", "Eject does something")
+            compare(shownHints(), "accept Select|back Back", "Eject does something")
             goTo("storageApps")
-            compare(shownHints(), "B Back")
+            compare(shownHints(), "back Back")
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("categoryList").activeFocus, 2000, "Back leaves")
         }

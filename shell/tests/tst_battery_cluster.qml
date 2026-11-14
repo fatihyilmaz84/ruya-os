@@ -461,8 +461,8 @@ Item {
                 verify(chip.Accessible.name.indexOf(d.percent + " percent") >= 0, d.name + " shows " + d.percent + ": " + chip.Accessible.name)
                 verify(chip.Accessible.name.indexOf(d.name) >= 0)
             }
-            compare(find("hintBar").hints[0].button + " " + find("hintBar").hints[0].text, "A Close", "the hint bar says what A does")
-            compare(find("hintBar").hints[1].button + " " + find("hintBar").hints[1].text, "B Back")
+            compare(find("hintBar").hints[0].action + " " + find("hintBar").hints[0].text, "accept Close", "the hint bar says what A does")
+            compare(find("hintBar").hints[1].action + " " + find("hintBar").hints[1].text, "back Back")
             keyClick(Qt.Key_Escape)
             tryVerify(() => !list.shown, 2000, "Back closes")
             tryVerify(() => more.activeFocus, 2000, "focus returns to the chip")

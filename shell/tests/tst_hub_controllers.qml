@@ -161,7 +161,7 @@ Item {
         function hintVerbs() {
             const bar = find("hintBar")
             const parts = []
-            for (const b of ["A", "Left/Right", "B"]) {
+            for (const b of ["accept", "left_right", "back"]) {
                 const h = findChild(bar, "hint_" + b)
                 if (h)
                     parts.push(b + " " + h.verb)
@@ -221,7 +221,7 @@ Item {
             // The readings are in `text`, never `textDim` (04 §7), and take focus so Up/Down walk them.
             compare(findChild(find("quickMenuItem_controllers:pad:usb-1"), "hubInfoValue").color, Theme.text)
             compare(focusedKey(), padKeys()[0], "the focus lands on the first pad")
-            compare(hintVerbs(), "B Back", "a reading has nothing to press")
+            compare(hintVerbs(), "back Back", "a reading has nothing to press")
             keyClick(Qt.Key_Return)
             compare(find("systemPanel").panelId, "controllers", "Accept on a reading does nothing")
             keyClick(Qt.Key_Escape)
@@ -381,7 +381,7 @@ Item {
             const app = playRacer()
             openControllers()
             goTo("controllers:settings")
-            compare(hintVerbs(), "A Open|B Back")
+            compare(hintVerbs(), "accept Open|back Back")
             keyClick(Qt.Key_Return)
             tryVerify(() => !find("systemPanel").open, 2000, "the Hub closes")
             tryVerify(() => find("page_settings") !== null, 2000, "Settings opens")

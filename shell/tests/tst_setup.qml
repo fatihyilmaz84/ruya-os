@@ -306,13 +306,13 @@ Item {
             compare(Profiles.profiles.length, 1)
         }
 
-        // The hint bar as "A Next|B Back", from the bar's own delegates.
+        // The hint bar as "accept Next|back Back", from the bar's own delegates.
         function hintsShown() {
             const bar = find("hintBar")
             if (!bar.visible)
                 return ""
             const parts = []
-            for (const b of ["A", "B", "Start"]) {
+            for (const b of ["accept", "back", "options", "done"]) {
                 const h = findChild(bar, "hint_" + b)
                 if (h)
                     parts.push(b + " " + h.verb)
@@ -322,33 +322,33 @@ Item {
 
         function test_hints_follow_the_step() {
             startShell()
-            compare(hintsShown(), "A Next", "welcome: nothing to go back to")
+            compare(hintsShown(), "accept Next", "welcome: nothing to go back to")
             goToStep(1)
-            compare(hintsShown(), "A Next|B Back")
+            compare(hintsShown(), "accept Next|back Back")
             goToStep(2)
-            compare(hintsShown(), "A Select|B Back|Start Skip", "time zone: Start skips it")
+            compare(hintsShown(), "accept Select|back Back|options Skip", "time zone: Start skips it")
             goToStep(3)
-            compare(hintsShown(), "A Next|B Back")
+            compare(hintsShown(), "accept Next|back Back")
             goToStep(4)
-            compare(hintsShown(), "A Select|B Back")
+            compare(hintsShown(), "accept Select|back Back")
             keyClick(Qt.Key_Return)                           // the name row opens the keyboard
             tryVerify(() => find("setupNameEntry").shown, 2000, "the keyboard opens")
             // The bar says what the keyboard says (T-285); Setup.hints has no branch of its own for it.
-            compare(hintsShown(), "A Type|B Cancel|Start Done")
-            compare(setup().hints.map(h => h.button + " " + h.text).join("|"), "A Select|B Back",
+            compare(hintsShown(), "accept Type|back Cancel|done Done")
+            compare(setup().hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "accept Select|back Back",
                     "Setup.hints does not answer for the keyboard")
             keyClick(Qt.Key_Escape)
             tryVerify(() => !find("setupNameEntry").shown, 2000)
-            compare(hintsShown(), "A Select|B Back")
+            compare(hintsShown(), "accept Select|back Back")
             setup().adminName = "Owner"
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Return)
             tryVerify(() => find("setupPinPad").shown, 2000)
-            compare(hintsShown(), "B Cancel")
+            compare(hintsShown(), "back Cancel")
             enterPin("2468")
             enterPin("2468")
             tryCompare(setup(), "step", 5)
-            compare(hintsShown(), "A Next", "done: the account exists, no Back")
+            compare(hintsShown(), "accept Next", "done: the account exists, no Back")
         }
 
         // ---- T-213: where are you? ----
@@ -495,7 +495,7 @@ Item {
             verify(find("setupWelcome").visible)
             compare(Bluetooth.mockPairingStarts(), 0, "the window was never opened")
             compare(Bluetooth.controllerPairing, "idle")
-            compare(hintsShown(), "A Next")
+            compare(hintsShown(), "accept Next")
         }
 
         function test_pairing_stage_comes_first_when_there_is_no_input_device() {
@@ -508,7 +508,7 @@ Item {
             compare(Bluetooth.mockPairingStarts(), 1)
             verify(find("setupPairHintText").text.indexOf("Hold the pairing button") >= 0)
             verify(!find("setupPairRetry").visible, "nothing to retry while waiting")
-            compare(hintsShown(), "B Skip")
+            compare(hintsShown(), "back Skip")
         }
 
         function test_the_pairing_stage_lists_the_steps_of_every_family() {
@@ -529,7 +529,7 @@ Item {
             const pad = Bluetooth.devices.find(d => d.id === "bt-pad-new")
             verify(pad && pad.paired && pad.connected, "the controller is paired and connected")
             tryCompare(Bluetooth, "controllerPairing", "idle", 2000, "the window is closed")
-            compare(hintsShown(), "A Next", "the numbered steps are as before")
+            compare(hintsShown(), "accept Next", "the numbered steps are as before")
             // the new controller can go on: A is Accept
             keyClick(Qt.Key_Return)
             tryCompare(setup(), "step", 1)
@@ -543,7 +543,7 @@ Item {
             compare(Bluetooth.controllerPairing, "timeout")
             verify(pairingVisible(), "still on the step")
             verify(find("setupPairHintText").text.indexOf("No controller was found") >= 0)
-            compare(hintsShown(), "A Try again|B Skip")
+            compare(hintsShown(), "accept Try again|back Skip")
             compare(Bluetooth.mockPairingStarts(), 1)
             Bluetooth.mockPairingScript("success")
             keyClick(Qt.Key_Return)                           // Try again

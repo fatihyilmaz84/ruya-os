@@ -535,7 +535,7 @@ Item {
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Right)
             compare(test.triedCount, 7)
-            compare(onb.modalHints[0].button, "Start")
+            compare(onb.modalHints[0].action, "options")
             keyClick(Qt.Key_Menu)                                           // Start continues
             tryVerify(() => !onb.shown, 2000)
             tryVerify(() => opener.activeFocus, 2000)

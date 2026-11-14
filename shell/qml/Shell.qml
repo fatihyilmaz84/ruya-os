@@ -690,7 +690,7 @@ FocusScope {
         function onRestartPendingChanged() {
             if (Update.restartPending)
                 Notifications.showSticky("update-restart", qsTr("Restarting in 2 minutes"), "warning", "",
-                                         qsTr("To finish the update"), qsTr("Press any button to wait"), "A",
+                                         qsTr("To finish the update"), qsTr("Press any button to wait"), "accept",
                                          { source: "updates", urgency: "critical", pinned: true,
                                            actions: [{ id: "restart", label: qsTr("Restart now") }] })
             else
@@ -2371,7 +2371,7 @@ FocusScope {
             if (p.modalHints !== undefined)
                 return p.modalHints
         }
-        return [{ button: "B", text: qsTr("Cancel") }]
+        return [{ action: "back", text: qsTr("Cancel") }]
     }
     readonly property var hintList: {
         if (modeConfirm.shown)
@@ -2390,18 +2390,18 @@ FocusScope {
         if (hasAncestor(activeItem, modalLayer))
             return modalHintsOf(activeItem)
         if (hasAncestor(activeItem, pinPadInPicker))
-            return [{ button: "B", text: qsTr("Cancel") }]
+            return [{ action: "back", text: qsTr("Cancel") }]
         if (!signedIn)
-            return setupActive ? setup.hints : [{ button: "A", text: qsTr("Select") }]
+            return setupActive ? setup.hints : [{ action: "accept", text: qsTr("Select") }]
         if (pageOpen)       // slots and pageStack are updated one after the other
             return slots.length > 0 ? (slots[slots.length - 1].page?.hints ?? []) : []
         if (homeOptionsAvailable) {
-            return [{ button: "A", text: qsTr("Select") },
-                    { button: "Start", text: qsTr("Options") },
-                    { buttons: ["LB", "RB"], text: qsTr("Sections") }]
+            return [{ action: "accept", text: qsTr("Select") },
+                    { action: "options", text: qsTr("Options") },
+                    { actions: ["tabPrev", "tabNext"], text: qsTr("Sections") }]
         }
-        return [{ button: "A", text: qsTr("Select") },
-                { buttons: ["LB", "RB"], text: qsTr("Sections") }]
+        return [{ action: "accept", text: qsTr("Select") },
+                { actions: ["tabPrev", "tabNext"], text: qsTr("Sections") }]
     }
     readonly property Item pinPadInPicker: picker.pinPadItem
 

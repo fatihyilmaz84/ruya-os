@@ -34,6 +34,8 @@ jobs:
         run: pwsh -NoProfile -File scripts/lint-tokens.ps1
       - name: QML member lint
         run: pwsh -NoProfile -File scripts/lint-qml-members.ps1
+      - name: Glyph action lint (hints name actions, RUY-41)
+        run: pwsh -NoProfile -File scripts/lint-glyph-actions.ps1
       - name: Setting note lint
         run: pwsh -NoProfile -File scripts/lint-setting-notes.ps1
       - name: CI lines lint (dnf and cmake lines equal in ci-shell-linux.sh)

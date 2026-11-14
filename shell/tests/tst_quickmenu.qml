@@ -162,7 +162,7 @@ Item {
         function hintVerbs() {
             const bar = find("hintBar")
             const parts = []
-            for (const b of ["A", "B"]) {
+            for (const b of ["accept", "back"]) {
                 const h = findChild(bar, "hint_" + b)
                 if (h)
                     parts.push(b + " " + h.verb)
@@ -216,7 +216,7 @@ Item {
             tryVerify(() => app.activeFocus && !find("systemPanel").open, 2000, "A on the game card resumes")
             openHub()
             compare(focusedKey(), "resume")
-            compare(hintVerbs(), "A Resume")
+            compare(hintVerbs(), "accept Resume")
             keyClick(Qt.Key_Escape)
             tryVerify(() => app.activeFocus && !find("systemPanel").open, 2000, "B resumes")
         }
@@ -313,7 +313,7 @@ Item {
             tryVerify(() => find("hubStatus").visible, 2000, "the status row is there")
             compare(focusedKey(), "volume", "the focus starts on the first row there is")
             verify(find("quickMenuItem_volume").focused)
-            compare(hintVerbs(), "A Mute|B Close")
+            compare(hintVerbs(), "accept Mute|back Close")
             keyClick(Qt.Key_Escape)
             tryVerify(() => !menu.open)
             tryVerify(() => find("homePlay").activeFocus, 2000, "Back returns to Play")
@@ -363,7 +363,7 @@ Item {
             verify(name.visible, "the focused tile's name is under it")
             compare(name.text, "Turbo Racer")
             compare(find("quickMenuItem_to:org.example.Racer").Accessible.name, "Switch to Turbo Racer")
-            compare(hintVerbs(), "A Switch|B Resume")
+            compare(hintVerbs(), "accept Switch|back Resume")
             // The focused tile's scale and ring stay inside the strip's view (its clip would cut them off).
             const view = findChild(strip, "hubRunningView")
             const card = findChild(find("quickMenuItem_to:org.example.Racer"), "hubRunningTile")
@@ -415,7 +415,7 @@ Item {
             const name = find("hubIconName")
             verify(name.visible)
             compare(name.text, data.title, "the focused icon's name is under it")
-            compare(hintVerbs(), "A Open|B Resume")
+            compare(hintVerbs(), "accept Open|back Resume")
             keyClick(Qt.Key_Return)
             if (data.tag === "power")
                 tryCompare(menu, "powerMode", true)
@@ -518,17 +518,17 @@ Item {
             start()
             threeGames()
             openHub()
-            compare(hintVerbs(), "A Resume")
+            compare(hintVerbs(), "accept Resume")
             goTo("home")
-            compare(hintVerbs(), "A Home|B Resume", "the hint names the button")
+            compare(hintVerbs(), "accept Home|back Resume", "the hint names the button")
             goTo("closeGame")
-            compare(hintVerbs(), "A Close game|B Resume")
+            compare(hintVerbs(), "accept Close game|back Resume")
             goTo("to:org.example.Racer")
-            compare(hintVerbs(), "A Switch|B Resume")
+            compare(hintVerbs(), "accept Switch|back Resume")
             goTo("volume")
-            compare(hintVerbs(), "A Mute|B Resume")
+            compare(hintVerbs(), "accept Mute|back Resume")
             goTo("panel:controllers")
-            compare(hintVerbs(), "A Open|B Resume")
+            compare(hintVerbs(), "accept Open|back Resume")
             keyClick(Qt.Key_Escape)
         }
 

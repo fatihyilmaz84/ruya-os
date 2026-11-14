@@ -151,7 +151,7 @@ Item {
         function hintVerbs() {
             const bar = find("hintBar")
             const parts = []
-            for (const b of ["A", "B", "Start"]) {
+            for (const b of ["accept", "back", "options"]) {
                 const h = findChild(bar, "hint_" + b)
                 if (h)
                     parts.push(b + " " + h.verb)
@@ -230,7 +230,7 @@ Item {
             compare(find("uninstallLine").text, "Saved data stays on this console.")
             verify(!find("uninstallWarning").visible)
             compare(find("uninstallGo").text, "Uninstall")
-            compare(hintVerbs(), "A Select|B Cancel")
+            compare(hintVerbs(), "accept Select|back Cancel")
             verify(!menu().shown, "the menu closed first")
             // the toggle changes the line and the danger label
             keyClick(Qt.Key_Up)
@@ -384,7 +384,7 @@ Item {
             keyClick(Qt.Key_Return)
             tryVerify(() => pad().shown, 2000)
             compare(findChild(pad(), "pinTitle").text, "Enter an admin's PIN")
-            compare(hintVerbs(), "B Cancel")
+            compare(hintVerbs(), "back Cancel")
             keyClick(Qt.Key_Escape)                      // Back on the empty pad
             tryVerify(() => !pad().shown && !confirm().shown, 2000, "Back cancels everything")
             tryVerify(() => find("recentRow").activeFocus, 2000)

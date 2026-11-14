@@ -5,7 +5,10 @@
 #include "MockInputBackend.h"
 #include "Storage.h"
 
+#include <QCoreApplication>
 #include <QDate>
+#include <QInputDevice>
+#include <QKeyEvent>
 #include <QJsonDocument>
 #include <QJsonObject>
 
@@ -18,6 +21,9 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
     : QObject(parent)
     , m_backend(std::move(backend))
 {
+    // Key presses tell the keyboard apart from the pads (06 §11.4).
+    if (QCoreApplication::instance())
+        QCoreApplication::instance()->installEventFilter(this);
     connect(m_backend.get(), &InputBackend::routeFinished, this, [this](const QString &status) {
         if (status != QLatin1String("ok"))
             qWarning("ruya-shell: Input1 SetRoute %s answered %s; sent again with the next change",
@@ -60,11 +66,9 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
     connect(m_backend.get(), &InputBackend::confirmButtonChanged, this, [this] { m_backend->readConfirmButton(); });
     connect(m_backend.get(), &InputBackend::activeInputChanged, this,
             [this](const QString &deviceId, const QString &family) {
-                if (deviceId == m_activeDevice && family == m_activeFamily)
-                    return;
-                m_activeDevice = deviceId;
-                m_activeFamily = family;
-                emit activeInputChanged();
+                m_padDevice = deviceId;
+                m_padFamily = family;
+                setActiveInput(deviceId, family);
             });
     connect(m_backend.get(), &InputBackend::userActive, this, &Input::userActive);
     connect(m_backend.get(), &InputBackend::devicesListed, this, [this](bool ok, const QVariantList &devices) {
@@ -561,6 +565,62 @@ void Input::startTest(const QString &deviceId, bool holdLeftStick)
 void Input::stopTest(const QString &deviceId)
 {
     m_backend->stopTest(deviceId);
+}
+
+void Input::setActiveInput(const QString &deviceId, const QString &family)
+{
+    if (deviceId == m_activeDevice && family == m_activeFamily)
+        return;
+    m_activeDevice = deviceId;
+    m_activeFamily = family;
+    emit activeInputChanged();
+}
+
+QString Input::keyboardSourceOf(const QString &deviceName, int key)
+{
+    // The keys the shell navigates or types with (shell/CLAUDE.md's key table, the text entry, 06
+    // §11.2's keyboard column); not volume, media or power keys, which a remote or a power
+    // button sends as a keyboard too.
+    const bool counts = key < Qt::Key_Escape
+                        || (key >= Qt::Key_Escape && key <= Qt::Key_PageDown)
+                        || key == Qt::Key_Menu || key == Qt::Key_HomePage
+                        || key == Qt::Key_Super_L || key == Qt::Key_Super_R || key == Qt::Key_Meta;
+    if (!counts || deviceName.isEmpty() || deviceName == QLatin1String("core keyboard"))
+        return {};
+    return deviceName == QLatin1String("RuyaOS Navigation") ? QStringLiteral("pad") : QStringLiteral("keyboard");
+}
+
+void Input::noteKeyFrom(const QString &deviceName, int key)
+{
+    if (!m_keySourcesLogged.contains(deviceName) && m_keySourcesLogged.size() < 16) {
+        // Once per source device, so the Dell and the VM show what Qt reports as a key's source.
+        m_keySourcesLogged.insert(deviceName);
+        qInfo("ruya-shell: key events come from \"%s\"", qPrintable(deviceName));
+    }
+    const QString source = keyboardSourceOf(deviceName, key);
+    if (source == QLatin1String("keyboard")) {
+        if (m_activeFamily != QLatin1String("keyboard"))
+            qInfo("ruya-shell: active input is the keyboard (\"%s\")", qPrintable(deviceName));
+        setActiveInput(QString(), QStringLiteral("keyboard"));
+    } else if (source == QLatin1String("pad") && m_activeFamily == QLatin1String("keyboard")) {
+        setActiveInput(m_padDevice, m_padFamily);
+    }
+}
+
+bool Input::eventFilter(QObject *watched, QEvent *event)
+{
+    // A key reaches the window and then the focused item: both pass here, which changes nothing.
+    if (event->type() == QEvent::KeyPress) {
+        auto *key = static_cast<QKeyEvent *>(event);
+        if (!key->isAutoRepeat())
+            noteKeyFrom(key->device() ? key->device()->name() : QString(), key->key());
+    }
+    return QObject::eventFilter(watched, event);
+}
+
+void Input::mockKeyFrom(const QString &deviceName, int key)
+{
+    noteKeyFrom(deviceName, key);
 }
 
 void Input::mockActiveInput(const QString &deviceId, const QString &family)

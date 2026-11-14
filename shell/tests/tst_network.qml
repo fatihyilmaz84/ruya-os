@@ -126,13 +126,13 @@ Item {
             // The fact: Up from the first network lands on it, A is silent, the bar offers Back only.
             keyClick(Qt.Key_Up)
             tryVerify(() => find("rowNetStatus").activeFocus, 2000, "Up skips the label and lands on the fact")
-            compare(pane.hints.map(h => h.button + " " + h.text).join("|"), "B Back")
+            compare(pane.hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "back Back")
             const selects = Sfx.selectCount
             keyClick(Qt.Key_Return)
             compare(Sfx.selectCount, selects, "Accept on the fact makes no sound")
             keyClick(Qt.Key_Down)
             tryVerify(() => find("wifi_wifi-lounge").activeFocus, 2000, "Down skips the label")
-            compare(pane.hints.map(h => h.button + " " + h.text).join("|"), "A Connect|B Back")
+            compare(pane.hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "accept Connect|back Back")
             // Back leaves from the fact too.
             keyClick(Qt.Key_Up)
             keyClick(Qt.Key_Escape)

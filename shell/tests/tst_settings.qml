@@ -63,7 +63,7 @@ Item {
             ToggleRow { objectName: "k_toggle"; label: "Toggle" }
             ChoiceRow { objectName: "k_choice"; label: "Choice"; options: [{ value: "a", label: "A" }, { value: "b", label: "B" }]; value: "a" }
             SliderRow { objectName: "k_slider"; label: "Slider"; from: 0; to: 10; value: 3 }
-            SettingRow { kind: "item"; objectName: "k_verb"; label: "Verb"; hints: [{ button: "A", text: "Connect" }, { button: "B", text: "Back" }] }
+            SettingRow { kind: "item"; objectName: "k_verb"; label: "Verb"; hints: [{ action: "accept", text: "Connect" }, { action: "back", text: "Back" }] }
             SettingRow { objectName: "k_fact3"; label: "Fact 3"; kind: "info"; value: "c" }
             SettingRow { kind: "info"; objectName: "k_message"; label: "Message"; enabled: false }
             SettingRow { objectName: "k_fact4"; label: "Fact 4"; kind: "info"; value: "d" }
@@ -76,7 +76,7 @@ Item {
         SettingsPane {
             width: 700
             height: 400
-            hints: [{ button: "B", text: "Mine" }]
+            hints: [{ action: "back", text: "Mine" }]
             ToggleRow { objectName: "o_toggle"; label: "T" }
         }
     }
@@ -785,8 +785,8 @@ Item {
             compare(spy.count, 1)
         }
 
-        // Hints as "A Select|B Back" from a pane's `hints` (what Settings shows in the bar).
-        function hintsOf(pane) { return pane.hints.map(h => h.button + " " + h.text).join("|") }
+        // Hints as "accept Select|back Back" from a pane's `hints` (what Settings shows in the bar).
+        function hintsOf(pane) { return pane.hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|") }
 
         // RUY-512: a fact has no pill at rest, a hairline only between two facts, the normal focus ring when
         // focused, and A is silent.
@@ -1093,10 +1093,10 @@ Item {
             const pane = createTemporaryObject(kindsPaneComponent, host)
             findChild(pane, "k_fact1").forceActiveFocus()
             tryCompare(pane, "focusedRow", findChild(pane, "k_fact1"))
-            compare(hintsOf(pane), "B Back", "fact")
-            const cases = [["k_item", "A Select|B Back"], ["k_page", "A Open|B Back"], ["k_action", "A Select|B Back"],
-                           ["k_toggle", "A Toggle|B Back"], ["k_choice", "Left/Right Change|A Next|B Back"],
-                           ["k_slider", "Left/Right Adjust|B Back"], ["k_verb", "A Connect|B Back"], ["k_fact3", "B Back"]]
+            compare(hintsOf(pane), "back Back", "fact")
+            const cases = [["k_item", "accept Select|back Back"], ["k_page", "accept Open|back Back"], ["k_action", "accept Select|back Back"],
+                           ["k_toggle", "accept Toggle|back Back"], ["k_choice", "left_right Change|accept Next|back Back"],
+                           ["k_slider", "left_right Adjust|back Back"], ["k_verb", "accept Connect|back Back"], ["k_fact3", "back Back"]]
             for (const [name, want] of cases) {
                 findChild(pane, name).forceActiveFocus()
                 tryCompare(pane, "focusedRow", findChild(pane, name))
@@ -1105,7 +1105,7 @@ Item {
             // A pane that sets its own hints keeps them.
             const own = createTemporaryObject(ownHintsPaneComponent, host)
             findChild(own, "o_toggle").forceActiveFocus()
-            compare(hintsOf(own), "B Mine")
+            compare(hintsOf(own), "back Mine")
         }
 
         // Shown in the real bar: Settings > Display opens on its Quality choice row.
@@ -1115,9 +1115,9 @@ Item {
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus)
             const bar = find("hintBar")
-            tryVerify(() => findChild(bar, "hint_Left/Right") !== null, 2000, "a choice row offers Left/Right")
-            compare(findChild(bar, "hint_A").verb, "Next")
-            compare(findChild(bar, "hint_B").verb, "Back")
+            tryVerify(() => findChild(bar, "hint_left_right") !== null, 2000, "a choice row offers Left/Right")
+            compare(findChild(bar, "hint_accept").verb, "Next")
+            compare(findChild(bar, "hint_back").verb, "Back")
             keyClick(Qt.Key_Escape)
         }
 
@@ -1125,9 +1125,9 @@ Item {
         function test_hint_verbs_are_turkish() {
             DeviceSettings.language = "tr"
             const pane = createTemporaryObject(kindsPaneComponent, host)
-            const cases = [["k_fact1", "B Geri"], ["k_item", "A Seç|B Geri"], ["k_page", "A Aç|B Geri"],
-                           ["k_toggle", "A Aç/Kapat|B Geri"], ["k_choice", "Left/Right Değiştir|A İleri|B Geri"],
-                           ["k_slider", "Left/Right Ayarla|B Geri"]]
+            const cases = [["k_fact1", "back Geri"], ["k_item", "accept Seç|back Geri"], ["k_page", "accept Aç|back Geri"],
+                           ["k_toggle", "accept Aç/Kapat|back Geri"], ["k_choice", "left_right Değiştir|accept İleri|back Geri"],
+                           ["k_slider", "left_right Ayarla|back Geri"]]
             for (const [name, want] of cases) {
                 findChild(pane, name).forceActiveFocus()
                 tryCompare(pane, "focusedRow", findChild(pane, name))
@@ -1231,7 +1231,7 @@ Item {
                     // Inside the page's content area, which ends above Page.qml's bottom margin.
                     const areaBottom = list.parent.mapToItem(tc.shell, 0, list.parent.height).y
                     verify(pillBottom <= areaBottom + 0.5, "About pill inside the content area, " + what + ": " + pillBottom + " vs " + areaBottom)
-                    for (const b of ["A", "B"]) {
+                    for (const b of ["accept", "back"]) {
                         const glyph = findChild(bar, "hint_" + b)
                         verify(glyph, "hint glyph " + b + " exists, " + what)
                         verify(pillBottom <= glyph.mapToItem(tc.shell, 0, 0).y + 0.5, "clear of glyph " + b + ", " + what)

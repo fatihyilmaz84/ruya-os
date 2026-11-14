@@ -135,7 +135,7 @@ Item {
         function hintVerbs() {
             const bar = find("hintBar")
             const parts = []
-            for (const b of ["A", "Left/Right", "B"]) {
+            for (const b of ["accept", "left_right", "back"]) {
                 const h = findChild(bar, "hint_" + b)
                 if (h)
                     parts.push(b + " " + h.verb)
@@ -213,12 +213,12 @@ Item {
         function test_the_volume_row_hint_is_adjust() {
             start()
             openAudio()
-            compare(hintVerbs(), "A Mute|Left/Right Adjust|B Back")
+            compare(hintVerbs(), "accept Mute|left_right Adjust|back Back")
             keyClick(Qt.Key_Escape)
             for (let i = 0; i < 20 && focusedKey() !== "volume"; ++i)
                 keyClick(Qt.Key_Up)
             compare(focusedKey(), "volume")
-            compare(hintVerbs(), "A Mute|Left/Right Adjust|B Close")
+            compare(hintVerbs(), "accept Mute|left_right Adjust|back Close")
             keyClick(Qt.Key_Escape)
         }
 
@@ -227,7 +227,7 @@ Item {
             openAudio()
             keyClick(Qt.Key_Down)
             compare(focusedKey(), "audio:mute")
-            compare(hintVerbs(), "A Toggle|B Back")
+            compare(hintVerbs(), "accept Toggle|back Back")
             compare(rowValue("audio:mute"), "Mute, Off")
             keyClick(Qt.Key_Return)
             tryCompare(Audio, "muted", true)
@@ -241,7 +241,7 @@ Item {
             start()
             openAudio()
             goTo("audio:output")
-            compare(hintVerbs(), "A Next|Left/Right Change|B Back")
+            compare(hintVerbs(), "accept Next|left_right Change|back Back")
             compare(rowValue("audio:output"), "Output, " + Audio.outputs.find(o => o.isDefault).name)
             const first = Audio.defaultSink
             // The headphone jack is empty: not offered. Right goes to the analog output, and the row follows.
@@ -321,7 +321,7 @@ Item {
             tryVerify(() => Audio.inputs.length === 2)
             openAudio()
             goTo("audio:mic")
-            compare(hintVerbs(), "A Next|Left/Right Change|B Back")
+            compare(hintVerbs(), "accept Next|left_right Change|back Back")
             compare(rowValue("audio:mic"), "Microphone, Built-in microphone")
             keyClick(Qt.Key_Right)
             tryCompare(Audio, "defaultInput", "usb-mic")
@@ -335,7 +335,7 @@ Item {
             start()
             openAudio()
             goTo("audio:mic")
-            compare(hintVerbs(), "B Back", "no Left/Right or A hint where nothing can change")
+            compare(hintVerbs(), "back Back", "no Left/Right or A hint where nothing can change")
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
             wait(50)
