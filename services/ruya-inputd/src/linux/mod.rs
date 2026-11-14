@@ -25,6 +25,7 @@ use crate::caps::{self, Part, Probe};
 use crate::dbus::{serve, DynBackend, Shared};
 use crate::identity::{self, Hardware};
 use crate::mapping::{KeyEvent, NavKey};
+use crate::nodes::{Ignored, Node};
 use crate::notify::{watchdog_interval, Notifier};
 use crate::pad::{code, Normalizer, OutEvent, PadLayout, Range, Rumble, OWN_PHYS_PREFIX};
 use crate::routing::{Backend, Created, PadInfo, PadKey, Router, VirtualId, VirtualSpec};
@@ -466,7 +467,9 @@ fn pump(mut device: Device, mut normalizer: Normalizer, mut serving: Serving) {
     }
 }
 
-fn event_nodes() -> Vec<PathBuf> {
+/// The event nodes with their inodes. A node that vanishes between the listing and the stat is
+/// left out (the next scan sees what is there).
+fn event_nodes() -> Vec<Node> {
     let Ok(dir) = std::fs::read_dir("/dev/input") else {
         return Vec::new();
     };
@@ -475,6 +478,10 @@ fn event_nodes() -> Vec<PathBuf> {
             p.file_name()
                 .and_then(|n| n.to_str())
                 .is_some_and(|n| n.starts_with("event"))
+        })
+        .filter_map(|path| {
+            let ino = std::fs::metadata(&path).ok()?.ino();
+            Some(Node { path, ino })
         })
         .collect()
 }
@@ -485,23 +492,25 @@ struct Scanner {
     salt: Vec<u8>,
     /// Paths served by a pump thread; a thread removes its path when it exits.
     active: Arc<Mutex<HashSet<PathBuf>>>,
-    /// Paths checked and found not to be physical gamepads.
-    ignored: HashSet<PathBuf>,
+    /// Nodes (path and inode) checked and found not to be physical gamepads: a new device on a
+    /// reused path has a new inode and is looked at again (RUY-624).
+    ignored: Ignored,
 }
 
 impl Scanner {
     fn scan(&mut self) {
-        let nodes = event_nodes();
-        self.ignored.retain(|p| nodes.contains(p));
-        for path in nodes {
-            if self.ignored.contains(&path) || lock(&self.active).contains(&path) {
-                continue;
-            }
-            match Device::open(&path) {
-                Ok(device) if is_gamepad(&device) && !is_own(&device) => self.serve(device, path),
-                Ok(_) => {
-                    self.ignored.insert(path);
+        let active = self.active.clone();
+        let todo = self
+            .ignored
+            .to_open(event_nodes(), |path| lock(&active).contains(path));
+        for node in todo {
+            match Device::open(&node.path) {
+                Ok(device) if is_gamepad(&device) && !is_own(&device) => {
+                    self.serve(device, node.path)
                 }
+                // The inode was read before the open: a node replaced in between is looked at
+                // again at the next scan.
+                Ok(_) => self.ignored.insert(&node),
                 // Not (yet) ours to open (the udev rule's ACL comes with the add event) or a
                 // node that vanished mid-scan: retry at the next scan.
                 Err(_) => {}
@@ -698,7 +707,7 @@ pub fn run() -> io::Result<()> {
         physicals,
         salt: salt(),
         active: Arc::default(),
-        ignored: HashSet::new(),
+        ignored: Ignored::default(),
     };
     let ping = watchdog_interval(std::env::var("WATCHDOG_USEC").ok().as_deref());
     let mut last_scan: Option<Instant> = None;

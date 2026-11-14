@@ -12,6 +12,7 @@ pub mod dbus;
 pub mod engine;
 pub mod identity;
 pub mod mapping;
+pub mod nodes;
 pub mod notify;
 pub mod pad;
 pub mod profile;
