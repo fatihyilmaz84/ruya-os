@@ -1648,7 +1648,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+93"/>
-        <location line="+30"/>
+        <location line="+31"/>
         <source>Import from USB drive</source>
         <translation>USB bellekten al</translation>
     </message>
@@ -3167,18 +3167,8 @@ Bu geri alınamaz.</translation>
 </context>
 <context>
     <name>PowerSavingPane</name>
-    <message>
-        <location filename="../qml/PowerSavingPane.qml" line="+16"/>
-        <source>Back</source>
-        <translation>Geri</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Change</source>
-        <translation>Değiştir</translation>
-    </message>
     <message numerus="yes">
-        <location line="+6"/>
+        <location filename="../qml/PowerSavingPane.qml" line="+19"/>
         <source>%n hour(s)</source>
         <translation>
             <numerusform>%n saat</numerusform>

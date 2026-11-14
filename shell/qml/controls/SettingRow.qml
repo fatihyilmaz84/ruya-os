@@ -3,30 +3,26 @@ import RuyaShell
 
 // Label plus a value text, in one of four kinds (RUY-512, 04 §5 "Setting row kinds"): what A does is
 // drawn at the row's right end.
-//  - "item" (default): a glass pill, the value at the right; A acts on the thing (Connect, Select).
+//  - "item": a glass pill, the value at the right; A acts on the thing (Connect, Select).
 //    `current: true` marks the one in use: DemiBold label and a filled check at the right.
 //  - "page": the value, then a chevron; A opens a page, a picker or the keyboard.
 //  - "action": the label centred, DemiBold; a `value` (or `detail`) is the status line under it.
 //    `emphasis: "primary"` makes it the one main verb of a flow (`primaryFill`).
-//  - "info": a fact. No pill, no sound, no signal; A is silent. `inert` is the same kind.
+//  - "info": a fact. No pill, no sound, no signal; A is silent.
+// `kind` is required: a row that forgets it fails when it is created (RUY-575), it never silently looks like an item.
 // A row with `enabled: false` is a message: flat like a fact, never focused, with an info icon.
 SettingControl {
     id: row
 
     property string value
-    property string kind: "item"
+    required property string kind
     // "" or "primary" (kind "action").
     property string emphasis: ""
     // The one in use, in a list where exactly one thing is (kind "item").
     property bool current: false
-    // A row that does nothing on Accept (a fact, a result): it makes no sound and emits nothing.
-    // The pane then also offers Back only in the hint bar while it has focus (04 section 5).
-    // Kept for the panes that set it; it means kind "info".
-    property bool inert: false
-
     // A message: disabled itself (`enabled` is false for a row under a disabled pane too, which is no message).
     readonly property bool isMessage: !enabled && (!parent || parent.enabled)
-    readonly property bool isFact: kind === "info" || inert
+    readonly property bool isFact: kind === "info"
     readonly property bool isAction: kind === "action" && !isFact
     readonly property bool isPage: kind === "page" && !isFact
     readonly property bool isCurrent: current && kind === "item" && !isFact
