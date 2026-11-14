@@ -460,9 +460,9 @@ Item {
             openStick("left")                            // the DualSense
             keyClick(Qt.Key_Right)
             verify(GameControls.busy, "the DualSense's change waits")
+            Input.mockSetProfileStatusOnce("ValidateProfile", "invalid")    // the first save is refused
             GameControls.show(pro)
             GameControls.setStick("left", "outer_deadzone", 0.05, false)
-            Input.mockSetProfileStatusOnce("ValidateProfile", "invalid")    // the first save is refused
             tryVerify(() => hasToast("Could not save the change / Try again."), 3000, toastTexts().join("; "))
             tryVerify(() => savesOf(proOwn).length === 1 || savesOf(dsOwn).length === 1, 3000, "the other pad's change is saved")
             tryVerify(() => !GameControls.busy, 3000)
