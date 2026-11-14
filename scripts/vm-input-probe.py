@@ -707,8 +707,8 @@ def cmd_twopads(args):
 
 def cmd_guide(args):
     """RUY-11: two pads in route `app`; the Guide button of either one gives KEY_HOMEPAGE (press, a long
-    hold, release) on RuyaOS Navigation and never a BTN_MODE on the game's virtual pad. The game
-    still gets the pad's other buttons (the pass-through is on, so the silence is not a dead pad)."""
+    hold, release) on RuyaOS Navigation and never a BTN_MODE on the game's virtual pad. A BTN_SOUTH
+    pressed while Guide is held must reach one of the virtual pads (the positive control: a dead pad would read nothing)."""
     fails = 0
 
     def ok(msg):
@@ -742,6 +742,9 @@ def cmd_guide(args):
             if not g.hello.startswith("OPEN ok"):
                 bad(f"{args.user} cannot open a virtual pad: {g.hello}")
                 return fails
+        if not wait_for(lambda: all(d.get("routed") for d in (devices() or []) if d.get("name") in (NAME, NAME + " 2")), 3):
+            bad("the pads are not routed to the virtual pads")
+            return fails
         nav = Nav()
         if nav.fd is None:
             bad("RuyaOS Navigation is not there")
@@ -753,14 +756,20 @@ def cmd_guide(args):
             nav.keys(0.1)
             pad.emit(EV_KEY, BTN_MODE, 1)
             time.sleep(0.6)                      # a long hold: the shell times it, the service just passes it
+            pad.emit(EV_KEY, BTN_SOUTH, 1)       # positive control: a live pad must carry this while Guide is held
+            pad.emit(EV_KEY, BTN_SOUTH, 0)
             pad.emit(EV_KEY, BTN_MODE, 0)
             keys = nav.keys(0.4)
             if (KEY_HOMEPAGE, 1) in keys and (KEY_HOMEPAGE, 0) in keys:
                 ok(f"pad {i}: Guide gives KEY_HOMEPAGE down and up on RuyaOS Navigation")
             else:
                 bad(f"pad {i}: Guide gave {keys} on RuyaOS Navigation")
-            for j, g in enumerate(games):
-                ev = g.events(300)
+            reads = [g.events(300) for g in games]
+            if not any(isinstance(ev, list) and (EV_KEY, BTN_SOUTH, 1) in ev for ev in reads):
+                bad(f"pad {i}: BTN_SOUTH reached no virtual pad (dead pad?): {reads}")
+            else:
+                ok(f"pad {i}: BTN_SOUTH reaches a virtual pad while Guide is held")
+            for j, ev in enumerate(reads):
                 if isinstance(ev, list) and not any(c == BTN_MODE for _, c, _ in ev):
                     ok(f"pad {i}: no BTN_MODE on virtual pad {j + 1}")
                 else:

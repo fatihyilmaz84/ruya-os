@@ -407,7 +407,7 @@ Item {
             tryVerify(() => find("page_settings") === null, 2000)
         }
 
-        // ---- Screenshots (dev.ps1 shots) ------------------------------------------------------------------------------------
+        // ---- Guide from any pad (RUY-11) ---------------------------------------------------------------------------------
 
         // RUY-11: a Guide from any pad is the shell's key (ruya-inputd sends KEY_HOMEPAGE for every pad).
         // The game on screen never sees it, short or long. Two pads are connected: the shell does not
@@ -424,7 +424,7 @@ Item {
             verify(app)
             tc.shell.addApp(app, "p2")
             tryVerify(() => app.activeFocus, 2000, "the app takes the focus")
-            for (let pad = 0; pad < 2; ++pad) {     // pad 0, then pad 1: the same key
+            for (let round = 0; round < 2; ++round) {   // once per pad; the shell cannot tell the pads apart
                 keyClick(Qt.Key_HomePage)             // short: opens the Hub
                 tryVerify(() => find("systemActions").activeFocus, 2000, "the Hub opens")
                 compare(find("systemPanel").powerMode, false)
@@ -439,6 +439,8 @@ Item {
             verify(find("systemPanel").open, "releasing after the hold does not close it")
             compare(app.keysSeen, 0, "the game never saw a Guide key")
         }
+
+        // ---- Screenshots (dev.ps1 shots) ------------------------------------------------------------------------------------
 
         function test_zz_screenshots_hub_controllers_panel() {
             if (!shotsDir)
