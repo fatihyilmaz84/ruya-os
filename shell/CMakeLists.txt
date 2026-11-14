@@ -166,7 +166,6 @@ qt_add_qml_module(ruyashell
         qml/Backdrop.qml
         qml/WallpaperLayer.qml
         qml/WallpaperPicker.qml
-        qml/FpsMeter.qml
         qml/ProfilePicker.qml
         qml/ControllerPairHint.qml
         qml/ControllerOnboarding.qml
