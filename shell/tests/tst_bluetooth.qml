@@ -797,14 +797,18 @@ Item {
             }
         }
 
-        // RUY-21: the low-battery toast names the device by the alias the player knows, not by the name that came
-        // along with the signal.
+        // RUY-21: the low-battery toast names the device by the alias the player knows, with the end of its
+        // address when another device has the same name.
         function test_low_battery_toast_names_the_paired_alias() {
             Bluetooth.mockSetName("bt-soundbar", "Living room bar")
             tryVerify(() => device("bt-soundbar").name === "Living room bar", 2000)
             Bluetooth.batteryLow("bt-soundbar", "upower-id-7", 10, "other", "")
             tryVerify(() => toastTexts().includes("Living room bar: battery low (10%)"), 2000)
             compare(toastTexts().filter(t => t.includes("upower-id-7")).length, 0)
+            Bluetooth.mockTwoPads()
+            tryVerify(() => Bluetooth.devices.length === 5, 2000)
+            Bluetooth.batteryLow("AA:00:00:00:00:05", "Wireless Controller", 9, "controller", "playstation")
+            tryVerify(() => toastTexts().includes("Wireless Controller (00:05): battery low (9%)"), 2000)
             // A device the list does not know keeps the name it came with.
             Bluetooth.batteryLow("AA:FF:FF:FF:FF:FF", "Stranger", 9, "other", "")
             tryVerify(() => toastTexts().includes("Stranger: battery low (9%)"), 2000)
@@ -815,9 +819,15 @@ Item {
         function test_primary_adapter_off_names_the_adapter() {
             openBluetoothPane()
             compare(BluetoothText.statusText("pair", "unavailable", "device"), "Bluetooth is off.")
+            Bluetooth.mockSetPrimaryOff("usb", "built-in")
+            tryCompare(Bluetooth, "primaryAdapterOff", "usb")
+            compare(Bluetooth.adapterInUse, "built-in")
+            compare(BluetoothText.statusText("pair", "unavailable", "device"), "The USB adapter is off. Bluetooth uses the built-in adapter.")
+            Bluetooth.mockSetPrimaryOff("built-in", "usb")
+            tryCompare(Bluetooth, "primaryAdapterOff", "built-in")
+            compare(BluetoothText.statusText("pair", "unavailable", "device"), "The built-in adapter is off. Bluetooth uses the USB adapter.")
             Bluetooth.mockSetPrimaryOff("hci1", "hci0")
             tryCompare(Bluetooth, "primaryAdapterOff", "hci1")
-            compare(Bluetooth.adapterInUse, "hci0")
             compare(BluetoothText.statusText("pair", "unavailable", "device"), "hci1 is off. Bluetooth uses hci0.")
             clearToasts()
             Bluetooth.startControllerPairing()

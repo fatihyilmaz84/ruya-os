@@ -481,7 +481,9 @@ pub trait Bluez: Send + Sync {
     fn set_alias(&self, adapter: &str, address: &str, alias: &str) -> Result<(), BtError>;
 }
 
-/// `(primary, other)` names when the primary adapter is off and another one is on, else `None`.
+/// `(primary, other)` when the primary adapter is off and another one is on, else `None`. Each is
+/// `"usb"` or `"built-in"` when the two adapters differ in that, else the `hciN` name: a person
+/// on a sofa knows the dongle, not `hci1` (RUY-21).
 fn off_primary(adapters: &[AdapterInfo], primary: Option<&str>) -> Option<(String, String)> {
     let primary = primary?;
     let first = adapters.iter().find(|a| a.path == primary)?;
@@ -491,6 +493,10 @@ fn off_primary(adapters: &[AdapterInfo], primary: Option<&str>) -> Option<(Strin
     let other = adapters
         .iter()
         .find(|a| a.path != primary && a.state.powered)?;
+    if first.usb != other.usb {
+        let kind = |usb: bool| if usb { "usb" } else { "built-in" };
+        return Some((kind(first.usb).to_owned(), kind(other.usb).to_owned()));
+    }
     Some((
         adapter_name(primary).to_owned(),
         adapter_name(&other.path).to_owned(),
@@ -1002,6 +1008,9 @@ impl<B: Bluez> Bluetooth<B> {
                     Ok(()) => {
                         let mut st = self.lock();
                         st.scan_adapter = Some(new.to_owned());
+                        // The read that saw the flip may have dropped the deadline (BlueZ had
+                        // said the old adapter was discovering): the moved scan keeps its own.
+                        st.scan_until = Some(until);
                         log::info(&format!(
                             "scan moved from {} to {}",
                             adapter_name(old),
@@ -4512,8 +4521,22 @@ mod tests {
         assert!(changes.adapters, "the property is announced");
         assert_eq!(
             bt.primary_off(),
+            Some(("usb".to_owned(), "built-in".to_owned())),
+            "hci1 is the USB one, hci0 the built-in one"
+        );
+        // Both USB: the adapters are told apart by their names.
+        let mut both = raw.clone();
+        for a in both.adapters.iter_mut() {
+            a.usb = true;
+        }
+        bt.bluez.set_raw(both);
+        bt.refresh().expect("reads");
+        assert_eq!(
+            bt.primary_off(),
             Some(("hci1".to_owned(), "hci0".to_owned()))
         );
+        bt.bluez.set_raw(raw.clone());
+        bt.refresh().expect("reads");
         // Everything off is "Bluetooth is off", not a named adapter.
         for a in raw.adapters.iter_mut() {
             a.state.powered = false;
@@ -4527,12 +4550,15 @@ mod tests {
     fn a_user_scan_leaves_the_old_primary_when_the_primary_flips() {
         let bt = two();
         assert_eq!(bt.start_scan(Instant::now()), Status::Ok);
+        bt.refresh().expect("reads"); // BlueZ says hci1 is discovering
         assert!(bt.bluez.adapter_state(HCI1).expect("hci1").discovering);
         flip_primary_to_hci0(&bt);
         // Nobody called stop_scan: the flip alone ended it on hci1 and moved it to hci0.
         assert!(!bt.bluez.adapter_state(HCI1).expect("hci1").discovering);
         assert!(bt.bluez.adapter_state(HCI0).expect("hci0").discovering);
         assert!(bt.scan_deadline().is_some(), "the deadline stays");
+        bt.refresh().expect("reads");
+        assert!(bt.scan_deadline().is_some(), "and survives the next read");
         assert_eq!(bt.stop_scan(), Status::Ok);
         assert!(!bt.bluez.adapter_state(HCI0).expect("hci0").discovering);
     }

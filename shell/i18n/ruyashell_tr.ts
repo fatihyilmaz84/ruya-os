@@ -830,7 +830,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>BluetoothText</name>
     <message>
-        <location filename="../qml/BluetoothText.qml" line="+29"/>
+        <location filename="../qml/BluetoothText.qml" line="+41"/>
         <source>Pairing failed. Put the controller in pairing mode again.</source>
         <translation>Eşleştirme başarısız. Kontrolcüyü yeniden eşleştirme kipine alın.</translation>
     </message>
@@ -855,13 +855,33 @@ Bu geri alınamaz.</translation>
         <translation>Bluetooth kapalı.</translation>
     </message>
     <message>
-        <location line="-1"/>
+        <location line="-15"/>
+        <source>The USB adapter</source>
+        <translation>USB adaptörü</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>the USB adapter</source>
+        <translation>USB adaptörünü</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The built-in adapter</source>
+        <translation>Yerleşik adaptör</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>the built-in adapter</source>
+        <translation>yerleşik adaptörü</translation>
+    </message>
+    <message>
+        <location line="+11"/>
         <source>%1 is off. Bluetooth uses %2.</source>
-        <extracomment>A toast. %1 and %2 are adapter names such as &quot;hci1&quot; and &quot;hci0&quot;; keep them as they are.</extracomment>
+        <extracomment>A toast. %1: the adapter that is off (&quot;The USB adapter&quot;, or a name such as &quot;hci1&quot;), %2: the one in use (&quot;the built-in adapter&quot; or &quot;hci0&quot;). Names such as hci0 stay as they are.</extracomment>
         <translation>%1 kapalı. Bluetooth %2 kullanıyor.</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+16"/>
         <source>That keyboard was not confirmed.</source>
         <translation>Bu klavye onaylanmadı.</translation>
     </message>

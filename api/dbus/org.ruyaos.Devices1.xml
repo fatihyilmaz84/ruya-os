@@ -375,9 +375,10 @@
 
     <!--
       Why StartScan, Pair and StartControllerPairing answer "unavailable" while Powered is true
-      (RUY-21). PrimaryAdapterOff is the name ("hci1") of the primary adapter when it is off and
-      another adapter is on; AdapterInUse is the name of an adapter that is on then. Both are ""
-      otherwise (all adapters on, all off, or no adapter), so a client says "Bluetooth is off"
+      (RUY-21). PrimaryAdapterOff describes the primary adapter when it is off and another adapter
+      is on; AdapterInUse describes an adapter that is on then. Each is "usb" or "built-in" when
+      the two adapters differ in that (the words a person knows), else the adapter's name ("hci1",
+      "hci0"). Both are "" otherwise (all adapters on, all off, or no adapter), so a client says "Bluetooth is off"
       only when Powered is false and names the adapter otherwise.
     -->
     <property name="PrimaryAdapterOff" type="s" access="read">

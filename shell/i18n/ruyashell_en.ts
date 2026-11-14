@@ -834,7 +834,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>BluetoothText</name>
     <message>
-        <location filename="../qml/BluetoothText.qml" line="+29"/>
+        <location filename="../qml/BluetoothText.qml" line="+41"/>
         <source>Pairing failed. Put the controller in pairing mode again.</source>
         <translation>Pairing failed. Put the controller in pairing mode again.</translation>
     </message>
@@ -859,13 +859,33 @@ This can&apos;t be undone.</translation>
         <translation>Bluetooth is off.</translation>
     </message>
     <message>
-        <location line="-1"/>
+        <location line="-15"/>
+        <source>The USB adapter</source>
+        <translation>The USB adapter</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>the USB adapter</source>
+        <translation>the USB adapter</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The built-in adapter</source>
+        <translation>The built-in adapter</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>the built-in adapter</source>
+        <translation>the built-in adapter</translation>
+    </message>
+    <message>
+        <location line="+11"/>
         <source>%1 is off. Bluetooth uses %2.</source>
-        <extracomment>A toast. %1 and %2 are adapter names such as &quot;hci1&quot; and &quot;hci0&quot;; keep them as they are.</extracomment>
+        <extracomment>A toast. %1: the adapter that is off (&quot;The USB adapter&quot;, or a name such as &quot;hci1&quot;), %2: the one in use (&quot;the built-in adapter&quot; or &quot;hci0&quot;). Names such as hci0 stay as they are.</extracomment>
         <translation>%1 is off. Bluetooth uses %2.</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+16"/>
         <source>That keyboard was not confirmed.</source>
         <translation>That keyboard was not confirmed.</translation>
     </message>
