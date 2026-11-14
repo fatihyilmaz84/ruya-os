@@ -5,7 +5,7 @@
 
   DRAFT (T-366 / RUY-2, lead 2026-11-12), partly built. ruya-inputd serves the Devices members
   ListDevices, DeviceAdded, DeviceChanged, DeviceRemoved and the Routing members SetRoute, Route,
-  RouteChanged since RUY-3 (T-367), GetCapabilities and the button test (StartTest, StopTest,
+  RouteChanged since RUY-3 (T-367), UserActive since RUY-588, GetCapabilities and the button test (StartTest, StopTest,
   TestInput, TestEnded) since RUY-39 (T-368), and the controller profile members (ListProfiles,
   GetProfile, SaveProfile, ValidateProfile, DeleteProfile, AssignProfile for the global scope,
   GetEffectiveProfile, ProfilesChanged) since RUY-42 (T-369); every other member below is still
@@ -200,6 +200,18 @@
       <arg name="route" type="s"/>
       <arg name="instance" type="s"/>
     </signal>
+
+    <!-- Someone is playing (RUY-588). While the route is "app" the pads' input goes to the game's
+         virtual pads and the shell sees none of it, so its idle clock would run on during play.
+         ruya-inputd sends this when a pad press, or a stick or trigger moved past a small threshold
+         (a quarter of a stick's range, a tenth of a trigger's), reached the app in front. It
+         carries nothing (no device, no button: it is not a key logger) and is sent at most once
+         per 30 s, so the bus stays quiet; the idle clock counts in minutes. In the other routes
+         pad input arrives as navigation keys, which the shell counts itself, so it is not sent.
+         Only the shell receives it (the bus policy of this interface, unchanged). The shell
+         ignores it while the screen saver or the dark screen is up: the pad's press wakes it as a
+         key does (the saver puts the route on "overlay", so the game does not get that press). -->
+    <signal name="UserActive"/>
 
     <!-- UI ownership and the active input (T-397..T-399, 06 §11). A foreign pad's press while a
          profile is signed in: `kind` is "press" (first press per pad and session, for the toast),

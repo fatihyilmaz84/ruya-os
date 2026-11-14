@@ -131,6 +131,8 @@ public:
     // Tests only, and only with the mock backend (otherwise empty or no-ops).
     // A pad presses: the service announces it as the active input.
     Q_INVOKABLE void mockActiveInput(const QString &deviceId, const QString &family);
+    // The service announces that a pad is being played (UserActive).
+    Q_INVOKABLE void mockUserActive();
     // The mode the mock service holds for a console profile.
     Q_INVOKABLE QString mockConfirmButton(const QString &profile) const;
     // Every SetRoute that reached the mock service: [{ route, instance, appId, profile }].
@@ -182,6 +184,9 @@ signals:
     void confirmButtonChanged();
     void confirmButtonRefused(const QString &status);
     void activeInputChanged();
+    // Someone is playing with a pad in the app in front (Input1.UserActive, RUY-588): the shell's
+    // own keys do not see that input. IdleClock counts it.
+    void userActive();
     void capabilitiesFinished(const QString &deviceId, const QString &status, const QVariantList &capabilities);
     void testStartFinished(const QString &deviceId, const QString &status);
     void testInput(const QString &deviceId, const QString &input, int value, const QString &source);

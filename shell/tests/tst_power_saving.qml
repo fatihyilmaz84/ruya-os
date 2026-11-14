@@ -737,6 +737,30 @@ Item {
             compare(IdleClock.idleSeconds, 0)
         }
 
+        // RUY-588: pad input to a game never reaches KeyRouter; Input1.UserActive stands for it.
+        function test_pad_activity_to_a_game_restarts_the_count() {
+            minutes(9)
+            compare(IdleClock.stage, "active")
+            Input.mockUserActive()
+            compare(IdleClock.idleSeconds, 0)
+            minutes(9)
+            compare(IdleClock.stage, "active", "9 min after the pad, not 18 after the key")
+            minutes(2)
+            compare(IdleClock.stage, "saver")
+        }
+
+        function test_pad_activity_does_not_wake_the_saver_by_itself() {
+            minutes(10)
+            compare(IdleClock.stage, "saver")
+            Input.mockUserActive()
+            compare(IdleClock.stage, "saver", "the key the pad also sends wakes it, KeyRouter eating it")
+            minutes(20)
+            compare(IdleClock.stage, "off")
+            Input.mockUserActive()
+            compare(IdleClock.stage, "off")
+            compare(ScreenPower.on, false)
+        }
+
         function test_input_after_1s_passes() {
             probe.forceActiveFocus()
             minutes(30)

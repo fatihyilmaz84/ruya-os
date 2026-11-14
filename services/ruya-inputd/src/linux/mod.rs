@@ -458,7 +458,7 @@ fn pump(mut device: Device, mut normalizer: Normalizer, mut serving: Serving) {
         for frame in frames {
             serving.shared.with(|r| {
                 if !frame.inputs.is_empty() {
-                    r.input(serving.key, &frame.inputs);
+                    r.input_at(serving.key, &frame.inputs, Instant::now());
                 }
                 r.test_input(serving.key, &frame.tests, Instant::now());
             });
@@ -656,6 +656,18 @@ pub fn run() -> io::Result<()> {
     router.set_book(Book::new(Box::new(DirStore::new(
         state_dir().join("profiles"),
     ))));
+    // RUYA_IDLE_DIVISOR (a debug aid, as for the shell's idle times) shortens the UserActive gap too.
+    if let Some(divisor) = std::env::var("RUYA_IDLE_DIVISOR")
+        .ok()
+        .and_then(|v| v.trim().parse::<f64>().ok())
+        .filter(|d| *d > 1.0)
+    {
+        router.set_activity_gap(
+            crate::activity::MIN_GAP
+                .div_f64(divisor)
+                .max(Duration::from_millis(500)),
+        );
+    }
     let (shared, notices) = Shared::new(router);
     // The navigation keyboard exists: the shell can navigate as soon as pads are found.
     notifier.send("READY=1");

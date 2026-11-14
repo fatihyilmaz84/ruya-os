@@ -635,6 +635,94 @@ def cmd_hold(args):
     return fails
 
 
+def signal_counter():
+    """A `busctl monitor` on Input1's UserActive; `count()` reads how many it has seen so far."""
+    mon = subprocess.Popen(["busctl", "--system", "monitor", "--match",
+                            "type='signal',interface='org.ruyaos.Input1',member='UserActive'"],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    seen = []
+    threading.Thread(target=lambda: [seen.append(1) for line in mon.stdout if "Member=UserActive" in line or "member=UserActive" in line],
+                     daemon=True).start()
+    return mon, lambda: len(seen)
+
+
+def cmd_useractive(args):
+    """RUY-588: Input1.UserActive reaches the bus once for a press in `app`, not again within the gap, never for
+    stick noise or in the shell route, and again after the gap (31 s; the service keeps its real 30 s here).
+    Run with the shell stopped, as twopads."""
+    fails = 0
+
+    def ok(msg):
+        print(f"PASS: {msg}", flush=True)
+
+    def bad(msg):
+        nonlocal fails
+        fails += 1
+        print(f"FAIL: {msg}", flush=True)
+
+    pad = FakePad()
+    mon = None
+    try:
+        if not wait_for(lambda: node_by("phys", PHYS)[0], 3):
+            bad("the uinput pad has no node")
+            return fails
+        bus = Bus()
+        mon, count = signal_counter()
+        time.sleep(1.0)
+        status = bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+        pad.emit(EV_KEY, BTN_SOUTH, 1)
+        pad.emit(EV_KEY, BTN_SOUTH, 0)
+        time.sleep(0.5)
+        ok("no UserActive for a press in the shell route") if count() == 0 else bad(f"{count()} UserActive in the shell route")
+        status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-3", "org.ruyaos.VmCheck", args.profile])
+        if status != "ok":
+            bad(f"SetRoute app: {status}")
+            return fails
+        pad.emit(EV_ABS, ABS_X, 1000)  # a resting thumb: under a quarter of the range
+        time.sleep(0.5)
+        ok("no UserActive for stick noise") if count() == 0 else bad(f"{count()} UserActive for stick noise")
+        pad.emit(EV_KEY, BTN_EAST, 1)
+        pad.emit(EV_KEY, BTN_EAST, 0)
+        time.sleep(0.5)
+        ok("one UserActive for a press in app") if count() == 1 else bad(f"{count()} UserActive after the first press, expected 1")
+        for _ in range(5):
+            pad.emit(EV_KEY, BTN_EAST, 1)
+            pad.emit(EV_KEY, BTN_EAST, 0)
+            time.sleep(1.0)
+        ok("no second UserActive within the gap") if count() == 1 else bad(f"{count()} UserActive within 30 s, expected 1")
+        time.sleep(26)
+        pad.emit(EV_KEY, BTN_EAST, 1)
+        pad.emit(EV_KEY, BTN_EAST, 0)
+        time.sleep(0.5)
+        ok("another UserActive after the gap") if count() == 2 else bad(f"{count()} UserActive after the gap, expected 2")
+    finally:
+        if mon:
+            mon.terminate()
+        pad.close()
+    return fails
+
+
+def cmd_playing(args):
+    """RUY-588: holds the route `app` and presses a button every `--every` s for `--seconds` s, like a game being
+    played; the shell (running, with RUYA_IDLE_DIVISOR) must not start its saver meanwhile."""
+    pad = FakePad()
+    try:
+        if not wait_for(lambda: node_by("phys", PHYS)[0], 3):
+            print("FAIL: the uinput pad has no node", flush=True)
+            sys.exit(1)
+        bus = Bus()
+        status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-4", "org.ruyaos.VmCheck", args.profile])
+        print(f"route app: {status}", flush=True)
+        end = time.monotonic() + args.seconds
+        while time.monotonic() < end:
+            pad.emit(EV_KEY, BTN_EAST, 1)
+            pad.emit(EV_KEY, BTN_EAST, 0)
+            time.sleep(args.every)
+        print("stopped pressing", flush=True)
+    finally:
+        pad.close()
+
+
 def cmd_twopads(args):
     """RUY-540: two pads, one of them signs the profile in; on entry to `app` that pad is ruya-input/pad1 (SDL
     index 0). Run twice, once with each pad the active one, so the key order cannot decide it."""
@@ -1218,6 +1306,12 @@ def main():
     tw = sub.add_parser("twoprofiles")
     tw.add_argument("--user", required=True)
     tw.add_argument("--profile", required=True)
+    ua = sub.add_parser("useractive")
+    ua.add_argument("--profile", required=True)
+    pl = sub.add_parser("playing")
+    pl.add_argument("--profile", required=True)
+    pl.add_argument("--seconds", type=float, default=30)
+    pl.add_argument("--every", type=float, default=2)
     nd = sub.add_parser("nodes")
     nd.add_argument("--user", required=True)
     nd.add_argument("--profile", required=True)
@@ -1231,6 +1325,8 @@ def main():
         sys.exit(1 if cmd_check(args) else 0)
     if args.cmd == "confirm":
         sys.exit(1 if cmd_confirm(args) else 0)
+    if args.cmd == "useractive":
+        sys.exit(1 if cmd_useractive(args) else 0)
     if args.cmd == "twopads":
         sys.exit(1 if cmd_twopads(args) else 0)
     if args.cmd == "guide":
@@ -1241,7 +1337,7 @@ def main():
         sys.exit(1 if cmd_nodes(args) else 0)
     if args.cmd == "hold":
         sys.exit(1 if cmd_hold(args) else 0)
-    {"game": cmd_game, "open": cmd_open, "restart": cmd_restart, "pad": cmd_pad, "navpad": cmd_navpad}[args.cmd](args)
+    {"game": cmd_game, "open": cmd_open, "restart": cmd_restart, "pad": cmd_pad, "navpad": cmd_navpad, "playing": cmd_playing}[args.cmd](args)
 
 
 if __name__ == "__main__":
