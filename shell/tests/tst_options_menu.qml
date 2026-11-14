@@ -86,6 +86,24 @@ Item {
         function sheetOf(menu) { return findChild(menu, "optionsSheet") }
         function rowOf(menu, id) { return findChild(menu, "optionsRow_" + id) }
 
+        // RUY-583: one journal line per opening (the VM check `vm-input-check.sh start` greps it), none for
+        // a second open() of a menu that is already up (a row rebuilt in place), and none per key.
+        function test_one_log_line_per_opening() {
+            const menu = menuOf(1)
+            const lines = []
+            menu.log = text => lines.push(text)
+            menu.open(anchorAt(548, 300, 400, 225), "card", "Turbo Racer", rowsOf(3, false), "")
+            compare(lines, ["ruya-shell: options menu open (card)"])
+            keyClick(Qt.Key_Down)
+            menu.open(anchorAt(548, 300, 400, 225), "card", "Turbo Racer", rowsOf(3, false), "")
+            compare(lines.length, 1)
+            keyClick(Qt.Key_Menu)
+            tryVerify(() => !menu.shown)
+            menu.open(anchorAt(96, 782, 320, 180), "pill", "Filter", rowsOf(2, false), "")
+            compare(lines.length, 2)
+            compare(lines[1], "ruya-shell: options menu open (pill)")
+        }
+
         // ---- the sheet's numbers ----
 
         // 7 rows + 1 divider = 698 u at 1080p; the divider delta is computed from the tokens, never 9.

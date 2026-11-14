@@ -23,10 +23,10 @@ size=$(du -h "$src" | cut -f1)
 # Keep this dnf line equal to ci.yml's "Install Qt" step.
 read -r -d '' inner <<'EOS'
 set -u
-dnf -y install --setopt=install_weak_deps=False cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel qt6-qttools-devel qt6-linguist qt6-qtshadertools-devel qt6-qtbase-private-devel findutils gawk >/logs/dnf.log 2>&1 || { tail -5 /logs/dnf.log; echo "STEP dnf: FAIL"; exit 1; }
+dnf -y install --setopt=install_weak_deps=False cmake ninja-build gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel qt6-qttools-devel qt6-linguist qt6-qtshadertools-devel qt6-qtbase-private-devel qt6-qtwayland-devel findutils gawk >/logs/dnf.log 2>&1 || { tail -5 /logs/dnf.log; echo "STEP dnf: FAIL"; exit 1; }
 echo "STEP dnf: ok"
 mkdir /work && cd /work && tar -xf /src.tar
-cmake -S shell -B shell/build -G Ninja -DCMAKE_BUILD_TYPE=Release >/logs/build.log 2>&1 && cmake --build shell/build >>/logs/build.log 2>&1 || { tail -30 /logs/build.log; echo "STEP build: FAIL"; exit 1; }
+cmake -S shell -B shell/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DRUYA_COMPOSITOR=ON -DRUYA_SOUNDS_RESOURCE=ON >/logs/build.log 2>&1 && cmake --build shell/build >>/logs/build.log 2>&1 || { tail -30 /logs/build.log; echo "STEP build: FAIL"; exit 1; }
 echo "STEP build: ok"
 if /usr/lib64/qt6/bin/qmllint --max-warnings 0 @shell/build/.rcc/qmllint/ruyashell.rsp >/logs/qmllint.log 2>&1; then echo "STEP qmllint: ok"
 else tail -30 /logs/qmllint.log; echo "STEP qmllint: FAIL"; exit 1; fi

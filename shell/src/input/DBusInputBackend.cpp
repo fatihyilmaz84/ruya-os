@@ -96,6 +96,7 @@ DBusInputBackend::DBusInputBackend(QObject *parent)
                   this, SLOT(onPropertiesChanged(QString, QVariantMap, QStringList)));
     m_bus.connect(Service, Path, Interface, QStringLiteral("ActiveInputChanged"), this,
                   SLOT(onActiveInputChanged(QString, QString)));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("UserActive"), this, SLOT(onUserActive()));
     // Who owns the name now, asked without blocking; a change that arrives first wins.
     if (auto *busInterface = m_bus.interface()) {
         auto *asked = new QDBusPendingCallWatcher(busInterface->asyncCall(QStringLiteral("NameHasOwner"), Service), this);
@@ -255,6 +256,11 @@ void DBusInputBackend::onPropertiesChanged(const QString &interface, const QVari
 void DBusInputBackend::onActiveInputChanged(const QString &deviceId, const QString &family)
 {
     emit activeInputChanged(deviceId, family);
+}
+
+void DBusInputBackend::onUserActive()
+{
+    emit userActive();
 }
 
 void DBusInputBackend::onProfilesChanged(const QString &profile)

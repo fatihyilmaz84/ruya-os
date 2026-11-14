@@ -596,25 +596,102 @@ pub fn reclaim_unit(app_id: &str) -> String {
 pub const RECLAIM_SCRIPT: &str =
     "while [ \"$#\" -ge 2 ]; do echo \"$1\" > \"$2\"; shift 2; done; exit 0";
 
-/// The frozen apps whose reclaim unit was really started (RUY-573): the thaw stops the
-/// `ruya-reclaim-*` unit only for these, never one that was not made (the reclaim thread can
-/// bail before it starts the unit).
+/// Where the reclaim of a frozen app stands (RUY-573, RUY-577).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ReclaimState {
+    /// Asked for, the thread has not started its unit yet.
+    Queued,
+    /// The unit was started: a thaw stops it.
+    Running,
+    /// Thawed before the start: the thread must not start the unit.
+    Cancelled,
+}
+
+/// The reclaims of frozen apps: the thaw stops the `ruya-reclaim-*` unit only for one that really
+/// started (RUY-573, never a unit that was not made), and a thaw before the start cancels the
+/// reclaim (RUY-577). Every reclaim has its own token (RUY-584): an older thread that outlives a
+/// re-freeze can neither start nor remove the newer reclaim's entry. The thread clears its entry
+/// when it ends.
 #[derive(Default)]
-pub struct ReclaimLedger(std::sync::Mutex<std::collections::HashSet<String>>);
+pub struct ReclaimLedger {
+    entries: std::sync::Mutex<std::collections::HashMap<String, (u64, ReclaimState)>>,
+    generation: std::sync::atomic::AtomicU64,
+}
+
+/// Which reclaim of a unit a thread belongs to.
+pub type ReclaimToken = u64;
 
 impl ReclaimLedger {
+    fn next_token(&self) -> ReclaimToken {
+        self.generation
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            + 1
+    }
+
+    /// A reclaim of `unit` was asked for; its thread has not started the unit yet. The token goes
+    /// to that thread; the entry replaces an older reclaim's.
+    pub fn queued(&self, unit: &str) -> ReclaimToken {
+        let token = self.next_token();
+        if let Ok(mut map) = self.entries.lock() {
+            map.insert(unit.to_owned(), (token, ReclaimState::Queued));
+        }
+        token
+    }
+
+    /// The unit of `unit`'s reclaim is started.
     pub fn started(&self, unit: &str) {
-        if let Ok(mut set) = self.0.lock() {
-            set.insert(unit.to_owned());
+        let token = self.next_token();
+        if let Ok(mut map) = self.entries.lock() {
+            map.insert(unit.to_owned(), (token, ReclaimState::Running));
         }
     }
 
-    /// Takes `unit` out; true when its reclaim had started.
+    /// Right before the thread starts the unit: false when a thaw cancelled this reclaim meanwhile
+    /// (its entry goes) or a newer reclaim replaced it; otherwise the reclaim counts as started.
+    pub fn try_start(&self, unit: &str, token: ReclaimToken) -> bool {
+        let Ok(mut map) = self.entries.lock() else {
+            return true;
+        };
+        match map.get(unit).copied() {
+            Some((t, ReclaimState::Cancelled)) if t == token => {
+                map.remove(unit);
+                false
+            }
+            Some((t, _)) if t == token => {
+                map.insert(unit.to_owned(), (token, ReclaimState::Running));
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// The reclaim thread ends (done, failed or bailed): its own entry goes, a cancelled one too;
+    /// a newer reclaim's entry stays.
+    pub fn finish(&self, unit: &str, token: ReclaimToken) {
+        if let Ok(mut map) = self.entries.lock() {
+            if map.get(unit).is_some_and(|(t, _)| *t == token) {
+                map.remove(unit);
+            }
+        }
+    }
+
+    /// The thaw: true when the reclaim's unit was started (stop it). A reclaim not yet started is
+    /// marked cancelled; one that is not there is left alone.
     pub fn take(&self, unit: &str) -> bool {
-        self.0
-            .lock()
-            .map(|mut set| set.remove(unit))
-            .unwrap_or(false)
+        let Ok(mut map) = self.entries.lock() else {
+            return false;
+        };
+        match map.get(unit).copied() {
+            Some((_, ReclaimState::Running)) => {
+                map.remove(unit);
+                true
+            }
+            Some((token, ReclaimState::Queued)) => {
+                map.insert(unit.to_owned(), (token, ReclaimState::Cancelled));
+                false
+            }
+            _ => false,
+        }
     }
 }
 
@@ -1786,6 +1863,72 @@ mod tests {
         assert!(!ledger.take("app-b.service"));
         assert!(ledger.take("app-a.service"));
         assert!(!ledger.take("app-a.service"), "taken once");
+    }
+
+    #[test]
+    fn a_finished_reclaim_is_not_stopped_by_a_later_thaw() {
+        let ledger = ReclaimLedger::default();
+        let t = ledger.queued("app-a.service");
+        assert!(ledger.try_start("app-a.service", t));
+        ledger.finish("app-a.service", t);
+        assert!(!ledger.take("app-a.service"), "collected unit: no stop");
+    }
+
+    #[test]
+    fn a_thaw_before_the_start_means_no_reclaim_runs() {
+        let ledger = ReclaimLedger::default();
+        let t = ledger.queued("app-a.service");
+        assert!(!ledger.take("app-a.service"), "nothing running to stop");
+        assert!(
+            !ledger.try_start("app-a.service", t),
+            "cancelled: no systemd-run"
+        );
+        ledger.finish("app-a.service", t);
+        // The next freeze reclaims again.
+        let t = ledger.queued("app-a.service");
+        assert!(ledger.try_start("app-a.service", t));
+        // A thaw without any reclaim marks nothing, and nothing starts without an entry.
+        assert!(!ledger.take("app-b.service"));
+        assert!(!ledger.try_start("app-b.service", t));
+    }
+
+    #[test]
+    fn an_older_reclaims_late_finish_leaves_the_newer_entry() {
+        let ledger = ReclaimLedger::default();
+        let old = ledger.queued("app-a.service");
+        assert!(ledger.try_start("app-a.service", old));
+        let new = ledger.queued("app-a.service");
+        ledger.finish("app-a.service", old);
+        assert!(ledger.try_start("app-a.service", new), "newer entry kept");
+        assert!(ledger.take("app-a.service"), "the thaw still stops it");
+        // Queued instead of started: the thaw still cancels the newer reclaim.
+        let newest = ledger.queued("app-a.service");
+        ledger.finish("app-a.service", old);
+        assert!(!ledger.take("app-a.service"));
+        assert!(!ledger.try_start("app-a.service", newest), "cancelled");
+    }
+
+    #[test]
+    fn an_older_threads_stale_token_does_not_start() {
+        let ledger = ReclaimLedger::default();
+        let old = ledger.queued("app-a.service");
+        let new = ledger.queued("app-a.service");
+        assert!(!ledger.try_start("app-a.service", old));
+        assert!(ledger.try_start("app-a.service", new));
+    }
+
+    #[test]
+    fn finish_removes_a_cancelled_entry() {
+        let ledger = ReclaimLedger::default();
+        let t = ledger.queued("app-a.service");
+        assert!(!ledger.take("app-a.service"));
+        ledger.finish("app-a.service", t);
+        assert!(ledger
+            .entries
+            .lock()
+            .unwrap()
+            .get("app-a.service")
+            .is_none());
     }
 
     fn job(user: &str, frozen: &[&str]) -> AudioJob {

@@ -53,6 +53,7 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
                 m_activeFamily = family;
                 emit activeInputChanged();
             });
+    connect(m_backend.get(), &InputBackend::userActive, this, &Input::userActive);
     connect(m_backend.get(), &InputBackend::devicesListed, this, [this](bool ok, const QVariantList &devices) {
         if (ok && devices != m_devices) {
             m_devices = devices;
@@ -344,6 +345,12 @@ void Input::mockResetProfiles()
         mock->resetProfiles();
 }
 
+void Input::mockSetProfileStatusOnce(const QString &method, const QString &status)
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        mock->setProfileStatusOnce(method, status);
+}
+
 void Input::mockSetProfileStatus(const QString &method, const QString &status)
 {
     if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
@@ -461,6 +468,12 @@ void Input::mockActiveInput(const QString &deviceId, const QString &family)
 {
     if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
         mock->sendActiveInput(deviceId, family);
+}
+
+void Input::mockUserActive()
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        emit mock->userActive();
 }
 
 QString Input::mockConfirmButton(const QString &profile) const

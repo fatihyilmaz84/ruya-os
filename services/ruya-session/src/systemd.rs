@@ -303,7 +303,7 @@ fn memory_current(cgroup: &str) -> Option<u64> {
 /// The reclaim of one frozen app (T-466), on its own thread: the unit and the app's active scopes,
 /// their cgroups from the manager, `reclaim_amount` of each one's `memory.current`, written by a
 /// transient unit of the profile user (`reclaim_command`). Logs what it asked and what moved.
-fn reclaim_app(unit: String, user: String, app_id: String, ledger: &ReclaimLedger) {
+fn reclaim_app(unit: String, user: String, app_id: String, ledger: &ReclaimLedger, token: u64) {
     let Some(listing) = list_scopes_command(&user, &app_id)
         .ok()
         .and_then(|args| run_bounded(&args, SYSTEMCTL_LIMIT))
@@ -332,8 +332,10 @@ fn reclaim_app(unit: String, user: String, app_id: String, ledger: &ReclaimLedge
         Ok(args) => args,
         Err(err) => return eprintln!("ruya-session: {unit}: no reclaim: {err}"),
     };
+    if !ledger.try_start(&unit, token) {
+        return eprintln!("ruya-session: {unit}: no reclaim, the app was thawed before it started");
+    }
     let started = Instant::now();
-    ledger.started(&unit);
     let done = run_bounded(&args, RECLAIM_LIMIT).is_some();
     let mib = |b: u64| b / (1024 * 1024);
     let was: u64 = before.iter().map(|(_, b)| b).sum();
@@ -581,11 +583,20 @@ impl Spawner for SystemdSpawner {
         let (user, app_id) = self.owner_of(unit)?;
         let unit = unit.to_owned();
         let ledger = Arc::clone(&self.reclaims);
-        std::thread::Builder::new()
+        let token = ledger.queued(&unit);
+        let spawned = std::thread::Builder::new()
             .name("reclaim".to_owned())
-            .spawn(move || reclaim_app(unit, user, app_id, &ledger))
-            .map(|_| ())
-            .map_err(|err| format!("cannot start a thread for the reclaim: {err}"))
+            .spawn({
+                let (unit, ledger) = (unit.clone(), Arc::clone(&ledger));
+                move || {
+                    reclaim_app(unit.clone(), user, app_id, &ledger, token);
+                    ledger.finish(&unit, token);
+                }
+            });
+        spawned.map(|_| ()).map_err(|err| {
+            ledger.finish(&unit, token);
+            format!("cannot start a thread for the reclaim: {err}")
+        })
     }
 
     /// `systemctl --user -M <user>@.host stop --no-block ruya-reclaim-<app>.service`, on its own

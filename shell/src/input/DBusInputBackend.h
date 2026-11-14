@@ -29,6 +29,7 @@ public:
 private slots:
     void onPropertiesChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated);
     void onActiveInputChanged(const QString &deviceId, const QString &family);
+    void onUserActive();
     void onDevicesChanged();
     void onTestInput(const QString &deviceId, const QString &input, int value, const QString &source);
     void onTestEnded(const QString &deviceId, const QString &reason);

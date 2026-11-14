@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks the power-saving parts of T-202 inside a running VM, as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-power-saving-check.sh scripts/vm-inject-key.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-power-saving-check.sh [service|audio|timeline|inhibit|all]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-power-saving-check.sh [service|audio|timeline|inhibit|padactive|all]
 #
 #   service   Devices1.Bluetooth.ReportIdle exists and answers "ok" (also with Bluetooth off, as in the VM)
 #   audio     Devices1.Audio.Playing exists and reads false on a quiet console, with the shell's ambient bed
@@ -39,6 +39,12 @@
 #             inhibiting app is in front again and "+wayland:N" must come back. Before that, with the screen
 #             still on (with vm-inject-key.py next to this script), Guide opens the Hub: "-wayland:N", and
 #             Guide again: "+wayland:N". The profile is signed in from the guest (Profiles1.SwitchTo).
+#   padactive RUY-588: a game played with a pad and no Wayland idle inhibitor holds the console awake. Needs
+#             scripts/vm-input-probe.py next to this script. Both the compositor unit and ruya-inputd get
+#             RUYA_IDLE_DIVISOR=60 (saver at ~10 s, the 30 s UserActive gap becomes 0.5 s); a profile is signed
+#             in from the guest; the probe holds route `app` and presses a uinput pad every 2 s for 25 s: the
+#             journal must show no "screen saver on" meanwhile, and the line within 40 s after the presses
+#             stop. The drop-ins are removed afterwards. Needs the shell running and nobody else pressing.
 # Hardware (the Dell, not this script): the DualSense disconnects after the Controllers-turn-off time and
 # reconnects on a button press; a TV's re-sync time after display off is recorded by hand.
 set -u
@@ -355,13 +361,65 @@ inhibit_check() {
     fi
 }
 
+padactive_check() {
+    echo "--- a pad played in an app without an inhibitor holds the saver off (RUY-588, RUYA_IDLE_DIVISOR=60)"
+    here="$(cd "$(dirname "$0")" && pwd)"
+    [ -f "$here/vm-input-probe.py" ] || { bad "vm-input-probe.py must be next to this script"; return; }
+    unit="ruya-compositor@tty1"
+    d1="/etc/systemd/system/$unit.service.d"
+    d2="/etc/systemd/system/ruya-inputd.service.d"
+    mkdir -p "$d1" "$d2"
+    printf '[Service]\nEnvironment=RUYA_IDLE_DIVISOR=60\n' > "$d1/zz-idle-divisor.conf"
+    printf '[Service]\nEnvironment=RUYA_IDLE_DIVISOR=60\n' > "$d2/zz-idle-divisor.conf"
+    systemctl daemon-reload
+    systemctl restart ruya-inputd
+    systemctl restart "$unit"
+    restarted="$(date +%s)"
+    for _ in $(seq 1 60); do
+        journalctl -b -q -o cat --since "@$restarted" | grep -q 'ruya-compositor: up' && break
+        sleep 1
+    done
+    sleep 1
+    psvc=org.ruyaos.Profiles1
+    ppath=/org/ruyaos/Profiles1
+    me="$(busctl --system call $psvc $ppath $psvc ListProfiles | grep -o '"p[0-9]*"' | tr -d '"' | head -n 1)"
+    if [ -z "$me" ]; then
+        bad "no profile to sign in (create one first)"
+    else
+        out="$(busctl --system call $psvc $ppath $psvc SwitchTo ss "$me" "")"
+        case "$out" in 'suu "ok"'*) ;; *) out="$(busctl --system call $psvc $ppath $psvc SwitchTo ss "$me" 1234)";; esac
+        case "$out" in 'suu "ok"'*) ok "signed $me in";; *) bad "SwitchTo $me: $out"; me="";; esac
+    fi
+    if [ -n "$me" ]; then
+        sleep 1
+        # The saver is 10 s away; the probe's first press comes at once. `start` is taken when it has the route.
+        python3 "$here/vm-input-probe.py" playing --profile "$me" --seconds 25 --every 2 > /var/tmp/vm-playing.log 2>&1 &
+        probepid=$!
+        for _ in $(seq 1 100); do grep -q 'route app' /var/tmp/vm-playing.log 2>/dev/null && break; sleep 0.1; done
+        start="$(date +%s)"
+        wait "$probepid" || bad "the probe failed (route not ok, or no UserActive seen)"
+        cat /var/tmp/vm-playing.log
+        stopped="$(date +%s)"
+        during="$(journalctl -b -q -o cat --since "@$start" --until "@$stopped" | grep -c 'screen saver on')"
+        [ "$during" = 0 ] && ok "no 'screen saver on' while the pad was played for 25 s (saver time is 10 s)" || bad "$during 'screen saver on' line(s) while the pad was played"
+        wait_log "$stopped" 'screen saver on \(idle' 40 >/dev/null && ok "the saver starts once the presses stop" || bad "no 'screen saver on' within 40 s after the presses stopped"
+    fi
+    rm -f "$d1/zz-idle-divisor.conf" "$d2/zz-idle-divisor.conf"
+    rmdir "$d1" "$d2" 2>/dev/null
+    systemctl daemon-reload
+    systemctl restart ruya-inputd
+    systemctl restart "$unit"
+    echo "(drop-ins removed, inputd and shell restarted)"
+}
+
 case "$part" in
     service) service_check ;;
     audio) audio_check ;;
     timeline) timeline_check ;;
     inhibit) inhibit_check ;;
+    padactive) padactive_check ;;
     all) service_check; audio_check; timeline_check ;;
-    *) echo "usage: $0 [service|audio|timeline|inhibit|all]"; exit 2 ;;
+    *) echo "usage: $0 [service|audio|timeline|inhibit|padactive|all]"; exit 2 ;;
 esac
 [ "$fail" = 0 ] && echo "ALL PASS" || echo "SOME FAILED"
 exit "$fail"

@@ -15,6 +15,28 @@ pub enum NavKey {
     NextTab,
 }
 
+impl NavKey {
+    /// The evdev key code "RuyaOS Navigation" emits (linux/input-event-codes.h). It is chosen by
+    /// the Qt key it becomes through the Wayland compositor's xkb keymap, not by its evdev name
+    /// (RUY-583): `KEY_COMPOSE` (127, `<MENU>`) is the keysym `Menu`, `Qt::Key_Menu`, which the
+    /// shell tests for Start; `KEY_MENU` (139) is `XF86MenuKB`, `Qt::Key_MenuKB`, which no handler
+    /// takes. `KEY_HOMEPAGE` (172) is `XF86HomePage` for Guide.
+    pub const fn evdev_code(self) -> u16 {
+        match self {
+            NavKey::Up => 103,      // KEY_UP
+            NavKey::Down => 108,    // KEY_DOWN
+            NavKey::Left => 105,    // KEY_LEFT
+            NavKey::Right => 106,   // KEY_RIGHT
+            NavKey::Accept => 28,   // KEY_ENTER
+            NavKey::Back => 1,      // KEY_ESC
+            NavKey::Menu => 127,    // KEY_COMPOSE
+            NavKey::Guide => 172,   // KEY_HOMEPAGE
+            NavKey::PrevTab => 104, // KEY_PAGEUP
+            NavKey::NextTab => 109, // KEY_PAGEDOWN
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Button {
     South,
@@ -354,6 +376,23 @@ impl KeyBoard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// RUY-583: Start must reach the shell as `Qt::Key_Menu`. Through xkb that is `KEY_COMPOSE`
+    /// (127, keysym `Menu`); `KEY_MENU` (139) becomes `XF86MenuKB`/`Qt::Key_MenuKB`, so Start did
+    /// nothing on the image while the off-Linux tests (which send `Qt.Key_Menu`) stayed green.
+    #[test]
+    fn menu_is_key_compose_not_key_menu() {
+        assert_eq!(NavKey::Menu.evdev_code(), 127, "KEY_COMPOSE");
+        assert_ne!(NavKey::Menu.evdev_code(), 139, "KEY_MENU is Qt::Key_MenuKB");
+        let mut codes: Vec<u16> = ALL_KEYS.iter().map(|k| k.evdev_code()).collect();
+        codes.sort_unstable();
+        codes.dedup();
+        assert_eq!(
+            codes.len(),
+            ALL_KEYS.len(),
+            "every navigation key has its own code"
+        );
+    }
 
     #[test]
     fn buttons_map_to_navigation() {

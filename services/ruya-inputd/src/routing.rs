@@ -25,6 +25,7 @@ use std::time::{Duration, Instant};
 
 use crate::accounts::{valid_app_id, valid_profile_id, Accounts};
 use crate::acl;
+use crate::activity::ActivityGate;
 use crate::book::{Book, SaveAnswer, Summary};
 use crate::caps::Capability;
 use crate::engine::Engine;
@@ -173,6 +174,9 @@ pub enum Notice {
         device_id: String,
         family: String,
     },
+    /// A pad press or a stick or trigger move reached the app in front (`UserActive`, RUY-588);
+    /// rate-limited by `ActivityGate`, carries nothing.
+    UserActive,
     /// A journal line (without the "ruya-inputd: " prefix).
     Journal(String),
 }
@@ -419,6 +423,11 @@ pub struct Router<B: Backend> {
     /// The stable id of the signed-in profile's active controller: the pad that gave the last input
     /// when the route first went to the profile (the sign-in). Kept until the profile changes (06 5.1).
     profile_pad: Option<String>,
+    /// The stable id of the pad that pressed last since the profile last changed. Only such a pad can
+    /// become the next profile's `profile_pad`; a keyboard sign-in leaves it `None` (ADR-017 am. 6b).
+    pad_since_change: Option<String>,
+    /// When pad input in `app` is announced to the shell as activity (RUY-588).
+    activity: ActivityGate,
 }
 
 impl<B: Backend> Router<B> {
@@ -441,11 +450,18 @@ impl<B: Backend> Router<B> {
             tests: BTreeMap::new(),
             book: Book::default(),
             active_input: None,
+            activity: ActivityGate::default(),
             profile_pad: None,
+            pad_since_change: None,
         }
     }
 
     /// Where the controller profiles live (in memory until this is called).
+    /// Shortens the 30 s between two `UserActive` (the VM checks run the shell's clock faster).
+    pub fn set_activity_gap(&mut self, gap: Duration) {
+        self.activity.set_gap(gap);
+    }
+
     pub fn set_book(&mut self, book: Book) {
         self.book = book;
     }
@@ -538,6 +554,9 @@ impl<B: Backend> Router<B> {
         if self.active_input.as_deref() == Some(pad.info.id.as_str()) {
             self.active_input = None;
         }
+        if self.pad_since_change.as_deref() == Some(pad.info.id.as_str()) {
+            self.pad_since_change = None;
+        }
         let held = pad.mapper.held_keys();
         let keys = self.board.pad_gone(&mut pad.mapper);
         self.backend.nav_keys(&keys);
@@ -552,8 +571,16 @@ impl<B: Backend> Router<B> {
         held
     }
 
-    /// One batch of a pad's input (one evdev `SYN_REPORT`).
+    /// `input_at` with the real clock, for the tests that do not care about time.
+    #[cfg(test)]
     pub fn input(&mut self, key: PadKey, inputs: &[PadInput]) {
+        self.input_at(key, inputs, Instant::now());
+    }
+
+    /// One batch of a pad's input (one evdev `SYN_REPORT`). In `app` the shell sees none of it, so
+    /// it is announced as `UserActive` (at most once per 30 s); in the other routes it arrives as
+    /// navigation keys, which the shell counts itself.
+    pub fn input_at(&mut self, key: PadKey, inputs: &[PadInput], now: Instant) {
         let app = self.route == Route::App;
         let mode = self.book.confirm_button(&self.profile);
         self.drain_book();
@@ -588,6 +615,9 @@ impl<B: Backend> Router<B> {
         let id = pad.info.id.clone();
         let keys = self.board.route(&nav);
         self.backend.nav_keys(&keys);
+        if pressed {
+            self.pad_since_change = Some(id.clone());
+        }
         if pressed && self.active_input.as_deref() != Some(id.as_str()) {
             self.active_input = Some(id.clone());
             self.notices.push(Notice::ActiveInput {
@@ -597,6 +627,9 @@ impl<B: Backend> Router<B> {
         }
         if !app {
             return;
+        }
+        if self.activity.note(inputs, now) {
+            self.notices.push(Notice::UserActive);
         }
         let Some(pad) = self.pads.get_mut(&key) else {
             return;
@@ -877,12 +910,9 @@ impl<B: Backend> Router<B> {
             !instance.is_empty() && o.instance == instance && o.profile == profile
         });
         if self.profile != profile {
-            // A sign-in or switch: the pad that gave the last input is this profile's controller.
-            self.profile_pad = if profile.is_empty() {
-                None
-            } else {
-                self.active_input.clone()
-            };
+            // A sign-in or switch: the pad that pressed since the last change is this profile's
+            // controller; a keyboard or touch sign-in has none (ADR-017 am. 6b).
+            self.profile_pad = self.pad_since_change.take().filter(|_| !profile.is_empty());
         }
         match r {
             Route::App if same_owner => {
@@ -1645,6 +1675,47 @@ mod tests {
 
     // ---- navigation keys -------------------------------------------------------------------
 
+    fn user_active(r: &mut Router<Fake>) -> usize {
+        r.take_notices()
+            .iter()
+            .filter(|n| matches!(n, Notice::UserActive))
+            .count()
+    }
+
+    #[test]
+    fn pad_input_to_an_app_is_announced_as_activity_once_per_gap() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        let t = t0();
+        r.take_notices();
+        r.input_at(a, &[press(PadButton::South)], t);
+        assert_eq!(user_active(&mut r), 1);
+        r.input_at(a, &[press(PadButton::East)], t + Duration::from_secs(5));
+        assert_eq!(user_active(&mut r), 0);
+        r.input_at(a, &[press(PadButton::East)], t + Duration::from_secs(31));
+        assert_eq!(user_active(&mut r), 1);
+    }
+
+    #[test]
+    fn stick_noise_to_an_app_is_not_activity() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.take_notices();
+        r.input_at(a, &[PadInput::Axis(PadAxis::LeftX, 500)], t0());
+        assert_eq!(user_active(&mut r), 0);
+    }
+
+    #[test]
+    fn input_outside_an_app_is_not_announced() {
+        // The shell, the overlay and the lock screen get navigation keys, which the shell counts.
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        r.input_at(a, &[press(PadButton::South)], t0());
+        assert_eq!(user_active(&mut r), 0);
+    }
+
     #[test]
     fn the_shell_gets_navigation_keys() {
         let mut r = router();
@@ -1808,6 +1879,58 @@ mod tests {
         r.backend_mut().take();
         app(&mut r, "i2", STK, "p2");
         assert_eq!(pad_of(&r.backend_mut().take(), "ruya-input/pad1"), Some(b));
+    }
+
+    fn pad1_of(calls: &[Call]) -> Option<PadKey> {
+        calls.iter().find_map(|c| match c {
+            Call::Create(k, s) if s.phys == "ruya-input/pad1" => Some(*k),
+            _ => None,
+        })
+    }
+
+    #[test]
+    fn a_keyboard_sign_in_does_not_inherit_the_previous_profiles_pad() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        // Pad b signs p1 in and is the last to press.
+        r.input(b, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        // Lock; p2 signs in from the keyboard: no pad pressed since the change.
+        r.set_route("locked", "", "", "", SHELL, t0());
+        r.set_route("shell", "", "", "p2", SHELL, t0());
+        r.backend_mut().take();
+        app(&mut r, "i2", STK, "p2");
+        assert_eq!(pad1_of(&r.backend_mut().take()), Some(a));
+    }
+
+    #[test]
+    fn a_pad_sign_in_makes_that_pad_pad1() {
+        let mut r = router();
+        let _a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        r.set_route("locked", "", "", "", SHELL, t0());
+        r.input(b, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        r.backend_mut().take();
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(pad1_of(&r.backend_mut().take()), Some(b));
+    }
+
+    #[test]
+    fn a_hub_switch_pressed_on_a_pad_makes_that_pad_pad1() {
+        let mut r = router();
+        let _a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        let c = r.add_pad(pad("c"), t0());
+        r.input(b, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        // In the Hub, pad c presses Switch profile: p1 goes straight to p2.
+        r.input(c, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p2", SHELL, t0());
+        r.backend_mut().take();
+        app(&mut r, "i2", STK, "p2");
+        assert_eq!(pad1_of(&r.backend_mut().take()), Some(c));
     }
 
     #[test]

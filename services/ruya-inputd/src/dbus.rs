@@ -366,6 +366,10 @@ impl InputIface {
         instance: &str,
     ) -> zbus::Result<()>;
 
+    /// Someone is playing (RUY-588): rate-limited by the core, carries nothing.
+    #[zbus(signal)]
+    async fn user_active(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
     /// `RouteChanged` (named apart from the `Route` property's own change helper).
     #[zbus(signal, name = "RouteChanged")]
     async fn route_switched(
@@ -414,6 +418,7 @@ pub async fn announce(connection: Connection, notices: async_channel::Receiver<N
             Notice::ActiveInput { device_id, family } => {
                 InputIface::active_input_changed(emitter, device_id, family).await
             }
+            Notice::UserActive => InputIface::user_active(emitter).await,
             Notice::Journal(_) => Ok(()),
         };
         if let Err(err) = result {

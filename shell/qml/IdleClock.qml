@@ -313,6 +313,16 @@ QtObject {
         function onGamepadConnected() { clock.noteInput() }
     }
 
+    // Pad input to the app in front (Input1.UserActive, RUY-588): in the `app` route it goes to the
+    // game's virtual pad and KeyRouter sees none of it. It counts as input like a key, except while
+    // the saver or the dark screen is up: then a pad press wakes through the navigation keys the
+    // overlay route sends (KeyRouter eats the first), and a UserActive that arrived ahead of that key
+    // would wake the screen and let the key through to the page under it.
+    readonly property Connections userWatch: Connections {
+        target: Input
+        function onUserActive() { if (!clock.covered) clock.noteInput("pad") }
+    }
+
     // Ends the wake guard on time even when nothing else looks at the clock.
     readonly property Timer guardTimer: Timer {
         objectName: "idleWakeGuard"

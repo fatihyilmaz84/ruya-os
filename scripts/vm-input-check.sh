@@ -6,7 +6,9 @@
 # so vm-input-probe.py holds its own bus connection), rumble is forwarded, and a killed service
 # is back within 0.5 s. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|fallback|confirm|hold|twopads|guide|nodes]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|fallback|confirm|hold|twopads|guide|nodes|start|useractive]
+# `useractive` (RUY-588) with the shell stopped like `twopads`: a uinput pad's press in route `app` makes ruya-inputd emit Input1.UserActive
+# once (seen with busctl monitor), not for stick noise or in route `shell`, not again within 30 s, and once more after them.
 # `confirm` (RUY-40) checks the family's confirm button with a uinput pad announcing Nintendo's vendor
 # id: BTN_EAST gives KEY_ENTER and BTN_SOUTH KEY_ESC on RuyaOS Navigation, `south` swaps them back, `east`
 # gives them to every family, the ConfirmButton property follows, bad modes and accounts are refused. It stops
@@ -28,6 +30,10 @@
 # `nodes` (RUY-446) checks the virtual pad node (phys ruya-input/pad<n>) the way 06 section 3 rule 3 says: ruya-input's,
 # user rw and nothing for group and other (getfacl; stat's group bits show the ACL mask), no uaccess tag, no ACL entry for
 # ruya-shell, the profile user's entry; a ruya-input/kbm* node keeps uaccess. Run it alone, not inside `check`.
+# `start` (RUY-583) checks the chain inputd -> evdev -> xkb -> Qt for Start: with the shell running at Home, a uinput pad taps
+# BTN_START; the shell must log "ruya-shell: options menu open (<card|pill|row>)" exactly once (the second tap closes the
+# menu and logs nothing), and `vm-inject-key.py menu` (KEY_COMPOSE) must open it too. Needs Home with a focused card (a
+# game installed) and vm-inject-key.py in /root. Run it alone, not inside `check`.
 # `check` runs the first four, then `caps` and `profiles`. `profiles` (RUY-42) checks the controller
 # profiles over busctl: the built-ins, validation (a bad file, 64 KiB + 1), storage in
 # /var/lib/ruya-input/profiles/<profile>/ (0700 / 0600, ruya-input's, unreadable to the profile
@@ -561,7 +567,49 @@ stopped_shell_probe() {
     ok "the compositor is started again"
 }
 
+# RUY-583: Start reaches the shell as Qt.Key_Menu (KEY_COMPOSE through xkb; KEY_MENU would be Qt.Key_MenuKB).
+count_shell_log() {
+    journalctl -b _UID="$suid" --since "$since" --no-pager -o cat | grep -a -c "$1"
+}
+
+start_check() {
+    echo "--- Start opens the Options menu (RUY-583)"
+    local padpid n
+    suid="$(id -u ruya-shell)"
+    pgrep -u ruya-shell -x ruya-shell >/dev/null || { bad "the shell is not running"; return; }
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; return; }
+    [ -f /root/vm-inject-key.py ] || { bad "/root/vm-inject-key.py is missing: copy it there"; return; }
+    stop_all_apps || { bad "an app is still running after Stop"; return; }
+    settle_route || return
+    sleep 2
+    since="$(date '+%Y-%m-%d %H:%M:%S')"
+    # Open with the pad's Start, close with its second Start.
+    python3 "$probe" navpad --settle 3 --start 2 > /var/tmp/ruya-input-start.log 2>&1 &
+    padpid=$!
+    wait "$padpid" 2>/dev/null
+    grep -q "^pad ready" /var/tmp/ruya-input-start.log || { bad "no test pad: $(cat /var/tmp/ruya-input-start.log)"; return; }
+    sleep 1
+    n="$(count_shell_log 'ruya-shell: options menu open (')"
+    if [ "$n" = 1 ]; then
+        ok "pad Start: the shell logged one 'options menu open' line ($(journalctl -b _UID="$suid" --since "$since" --no-pager -o cat | grep -a 'options menu open' | head -1))"
+    else
+        bad "pad Start (two taps): $n 'options menu open' lines, expected 1 (0 means Start never reached the shell as Qt.Key_Menu)"
+    fi
+    # The second tap closed it: the keyboard path (KEY_COMPOSE) opens it again.
+    since="$(date '+%Y-%m-%d %H:%M:%S')"
+    python3 /root/vm-inject-key.py menu >/dev/null 2>&1
+    sleep 1
+    n="$(count_shell_log 'ruya-shell: options menu open (')"
+    [ "$n" = 1 ] && ok "KEY_COMPOSE from a keyboard opens it too" || bad "KEY_COMPOSE: $n 'options menu open' lines, expected 1"
+    python3 /root/vm-inject-key.py menu >/dev/null 2>&1   # close it again
+}
+
 case "${1:-check}" in
+start)
+    two_profiles
+    [ -n "$me" ] && ok "profile $me signs in" || { bad "need a profile"; exit 1; }
+    start_check
+    ;;
 confirm)
     two_profiles
     [ -n "$me" ] && ok "profile $me" || { bad "need a profile"; exit 1; }
@@ -579,6 +627,17 @@ twopads)
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe twopads --user "ruya-$me"
     echo "--- a profile per pad (RUY-545)"
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe twoprofiles --user "ruya-$me"
+    rm -rf "$dir"
+    ;;
+useractive)
+    two_profiles
+    [ -n "$me" ] && ok "profile $me" || { bad "need a profile"; exit 1; }
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
+    dir="$(mktemp -d /var/tmp/ruya-input-check.XXXXXX)"
+    chmod 0755 "$dir"
+    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    echo "--- pad input to a game is announced as activity, at most every 30 s (RUY-588)"
+    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe useractive
     rm -rf "$dir"
     ;;
 guide)

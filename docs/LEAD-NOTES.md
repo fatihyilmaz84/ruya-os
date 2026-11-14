@@ -14,7 +14,8 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
   - RUY-573: reclaim takes escaped names; `twopads` runs with the shell stopped.
   - RUY-550 (lead): `revert-check.ps1` has a Rust mode.
   - Overnight: RUY-561 (an idle inhibitor counts only while its app is in front: the owner's screen saver report), RUY-513 + RUY-514 + RUY-575 (every setting row states its kind; `kind` is required, `inert` gone: the owner's report), RUY-473 (inputd check without the live shell; Verified: vm), RUY-441 (lead), RUY-451 (sheet blur in a Loader; hero decodes at drawn size).
-  - Lead review commits: 7ea2600 (a late kill keeps a SIGTERM stop a quit; the inhibit check's waits), 36279a7 (tst_timezone flake), 02-shell fixes.
+  - Morning (2026-11-14): RUY-446 (virtual pad nodes 0600, no uaccess), RUY-11 (Guide never reaches a game), RUY-563 (saver log lines), RUY-577 (reclaim ledger), RUY-571 (a refused save drops only that pad's change), **RUY-583 (Start opens Options: `KEY_COMPOSE`, the RUY-574 cause)**, RUY-551 (player 1 is a pad that pressed since the profile change).
+  - Lead review commits: d8fa59e (the Lock step retries on `pin-required`), 28f3b2a (repaired a builder's bad replace in dev-setup.md), 854d930 (the builder brief: check `git diff --stat`), 7ea2600 (a late kill keeps a SIGTERM stop a quit; the inhibit check's waits), 36279a7 (tst_timezone flake), 02-shell fixes.
 - **Owner decisions recorded:**
   - ADR-017 amendment 6, the active controller.
   - ADR-035 amendment: game settings from the game page (cache plus queue).
@@ -78,8 +79,8 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 
 ## In flight (kept current)
 - **0.0.78 at dfe06d7 (has everything for the Dell re-check): built and VM-checked.** All 21 queue checks pass except the audio input, which has no microphone without `-Audio` (expected). The session check's Lock step was fixed in d8fa59e and now passes. Not on the Dell yet: `bash scripts/dell-update.sh 0.0.78` once the owner switches it on.
-- RUY-571 round 2 (worktree `RuyaOS-worktrees\RUY-571`): the 02 sentence, the mock once-flag reset, a pinned assert.
-- RUY-577 round 1 handed over; `ruya-reviewer` is running. Its VM line (the reclaim lines in `vm-session-check.sh check`) is for the next image.
-- RUY-583 round 1 (worktree `RuyaOS-worktrees\RUY-583`): Start emits `KEY_COMPOSE`, so Qt sees `Key_Menu`. This is the RUY-574 cause, found in the code: `KEY_MENU` maps to `XF86MenuKB` in xkb.
-- Next for the free lane: RUY-562 (planned and reviewed: audio allows the saver, holds screen-off and sleep; a parked stream is not `Playing`).
+- RUY-562 round 2 (worktree `RuyaOS-worktrees\RUY-562`): the code review approved it; the design review is blocking on the 48-character row value (short value plus a note). **It merges only after RUY-588.**
+- RUY-588 round 1 (worktree `RuyaOS-worktrees\RUY-588`): pad input to a game counts as activity (an Input1 signal, at most once per 30 s). Without it, RUY-562 would let the saver come on over an X11/Wine game played with a pad: audio was the only holder.
+- RUY-576 round 1 (worktree `RuyaOS-worktrees\RUY-576`): CI and ci-shell-linux.sh compile the compositor.
+- Pending VM for the next image: `vm-input-check.sh start` (RUY-583), `twopads` (RUY-551), the reclaim lines (RUY-577), `vm-power-saving-check.sh audio` with `-Audio` (RUY-562), and RUY-588's check.
 - `scripts\free-space.ps1` is still to run (it shuts WSL down, so not while a builder uses it).
