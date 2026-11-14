@@ -112,7 +112,7 @@ if (-not $linuxRun) {
     ($linuxOut -split "`n") | Where-Object { $_.Trim() -ne "" } | Select-Object -Last 15 | ForEach-Object { Write-Host "    $($_.TrimEnd())" }
     if ($linuxCode -eq 10) { Stop-Push "the Linux CI job (ci-shell-linux.sh) is red: fix it, CI would fail on GitHub" }
     if ($linuxCode -eq 0) { Say "Linux CI job: PASSED" }
-    else { Write-Host "push-main: WARNING the Linux CI job could not run (exit $linuxCode: no WSL or podman, or an image build is running); pushing, CI on GitHub is the check" -ForegroundColor Yellow }
+    else { Write-Host "push-main: WARNING the Linux CI job could not run (exit ${linuxCode}: no WSL or podman, or an image build is running); pushing, CI on GitHub is the check" -ForegroundColor Yellow }
 }
 
 if ($DryRun) {
