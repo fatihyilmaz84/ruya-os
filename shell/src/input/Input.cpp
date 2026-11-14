@@ -219,14 +219,15 @@ void Input::finishExport(const QString &status)
     emit exportFinished(done.profile, done.profileId, done.volumeId, status, done.fileName);
 }
 
-void Input::importProfile(const QString &profile, const QString &volumeId, const QString &fileName)
+void Input::importProfile(const QString &profile, const QString &volumeId, const QString &fileName,
+                          const QString &targetId, const QString &targetSlot)
 {
     if (m_import.active || !m_storage) {
         emit importFinished(profile, volumeId, fileName, m_import.active ? QStringLiteral("busy") : QStringLiteral("failed"),
                             QString(), {});
         return;
     }
-    m_import = Transfer{true, true, profile, QString(), volumeId, fileName, QString()};
+    m_import = Transfer{true, true, profile, QString(), volumeId, fileName, QString(), targetId, targetSlot};
     m_storage->readFile(volumeId, fileName, ImportCap);
 }
 
@@ -260,6 +261,20 @@ void Input::onProfileReply(quint64 token, const QString &method, const QVariantM
             return;
         if (status != QLatin1String("ok"))
             return finishImport(status, errors);
+        if (!m_import.targetId.isEmpty()) {
+            // The slot the page edits (RUY-572): a global profile is saved as that slot's own.
+            QJsonObject doc = QJsonDocument::fromJson(m_import.text.toUtf8()).object();
+            if (doc.value(QStringLiteral("scope")).toObject().value(QStringLiteral("type")).toString() == QLatin1String("global")) {
+                doc.insert(QStringLiteral("id"), m_import.targetId);
+                doc.remove(QStringLiteral("match"));
+                const QString slot = m_import.targetSlot;
+                if (slot.startsWith(QLatin1String("device:")))
+                    doc.insert(QStringLiteral("match"), QJsonObject{{QStringLiteral("device"), slot.mid(7)}});
+                else if (slot.startsWith(QLatin1String("family:")))
+                    doc.insert(QStringLiteral("match"), QJsonObject{{QStringLiteral("family"), slot.mid(7)}});
+                m_import.text = QString::fromUtf8(QJsonDocument(doc).toJson(QJsonDocument::Compact));
+            }
+        }
         callProfile(QStringLiteral("SaveProfile"), {{QStringLiteral("profile"), m_import.profile}, {QStringLiteral("json"), m_import.text}},
                     Purpose::ImportSave);
         return;
