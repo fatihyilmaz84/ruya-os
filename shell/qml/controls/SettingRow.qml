@@ -60,7 +60,11 @@ SettingControl {
             verticalCenter: parent.verticalCenter
         }
         // A value never takes more than half the row (04 §5), so the label always stays readable; a longer one is elided.
-        width: Math.min(implicitWidth, row.width * 0.5)     // 0.5: a layout ratio, not a design token
+        // The label comes first (RUY-609): the value gets only what the label leaves (its whole width, the gap and the
+        // mark), but at least a quarter of the row, and then the label elides instead.
+        readonly property real labelLeaves: row.width - row.labelLeft - row.labelWanted -Theme.spaceS * row.u
+                                            - (row.isPage || row.isCurrent ? Theme.spaceS + row.markWidth : Theme.spaceL) * row.u
+        width: Math.min(implicitWidth, row.width * 0.5, Math.max(row.width * 0.25, labelLeaves))     // 0.5, 0.25: layout ratios, not design tokens
         elide: Text.ElideRight
         horizontalAlignment: Text.AlignRight
         textFormat: Text.PlainText      // a value may be a name from a drive (a wallpaper): never markup

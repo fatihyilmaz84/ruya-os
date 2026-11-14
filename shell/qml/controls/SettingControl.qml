@@ -37,6 +37,9 @@ FocusScope {
 
     // Where the label ends, so a subtype can place text after it (SliderRow's caption, T-312).
     readonly property real labelRight: labelText.x + labelText.width
+    // Where the label starts and how wide it wants to be, whole (SettingRow gives the value what is left, RUY-609).
+    readonly property real labelLeft: labelText.x
+    readonly property real labelWanted: labelText.implicitWidth
 
     // Optional second line under the label (RUY-39, 04 §5): `typeCaption` Regular in `text`, `spaceXxs`
     // under the label, both centred in the row together; one line, elided; appended to the accessible
@@ -202,8 +205,9 @@ FocusScope {
             // With a detail the pair is centred: the label moves up by half the detail and its gap.
             verticalCenterOffset: control.hasDetail ? -(detailText.height + Theme.spaceXxs * control.u) / 2 : 0
         }
-        width: control.hasDetail || control.centered ? Math.min(implicitWidth, control.textWidth) : implicitWidth
-        elide: control.hasDetail || control.centered ? Text.ElideRight : Text.ElideNone
+        // A label that is wider than the row leaves elides (RUY-609); otherwise it stays whole.
+        width: Math.min(implicitWidth, control.textWidth)
+        elide: Text.ElideRight
         textFormat: Text.PlainText      // a label can be a device's own name (Bluetooth, UPower): never markup
         text: control.label
         color: Qt.alpha(control.labelColor, control.dimmed ? Theme.disabledOpacity : 1)
