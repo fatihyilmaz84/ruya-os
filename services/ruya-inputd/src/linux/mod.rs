@@ -614,7 +614,7 @@ fn watch_udev(shared: Arc<Shared>, wake: mpsc::Sender<()>) {
         if !ev.is_event_node() {
             continue;
         }
-        shared.with(|r| r.udev_event(&ev));
+        shared.with(|r| r.udev_event_at(&ev, Instant::now()));
         if ev.action == "add" {
             let _ = wake.send(());
         }

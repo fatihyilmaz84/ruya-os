@@ -543,8 +543,9 @@ FocusScope {
     }
 
     // Tells Ruya Input who is in front (RUY-409, Input1.SetRoute): the app in front gets the profile's
-    // virtual pads, the Hub or a system dialog over it holds them in neutral, Lock and a frozen app
-    // have none. The app is the focused window's own instance (quickMenuApp: instanceOfWindow).
+    // virtual pads, the Hub or a system dialog over it holds them in neutral (also while the Hub has
+    // it frozen, RUY-541), Lock and Home have none. The app is the focused window's own instance
+    // (quickMenuApp: instanceOfWindow).
     InputRoute {
         id: inputRoute
         objectName: "inputRoute"

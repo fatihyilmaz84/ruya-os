@@ -176,7 +176,9 @@
          name gets a new owner (a restarted service starts in "shell").
            route     "shell" | "app" | "overlay" | "locked"
            instance  Session1's instance of the app in front for "app" and "overlay" (opaque: never
-                     parsed), else ""; "overlay" with "" is an overlay over a frozen app
+                     parsed), else ""; for "overlay" also while that app is frozen (the Hub's pause,
+                     RUY-541), so a Freeze by the Hub keeps the app's pads. "overlay" with "" (an
+                     overlay that names no app; the shell no longer sends it) destroys them
            app_id    the Flatpak id of that app (the service picks the game or platform profile by
                      it, RUY-43), "" exactly when instance is ""; only its form is checked (the
                      rule of Session1: three dot-separated parts or more), it is not looked up
@@ -184,9 +186,16 @@
                      and always for "locked"
          Status: "ok", "invalid" (unknown route, a malformed or missing instance or app_id, a
          profile for "locked"), "unknown-profile" (not a profile account: root, system users and
-         ruya-shell never are). Virtual pads exist only for "app", and stay (held in neutral) for
-         "overlay" with the same instance and profile; anything else destroys them, so an app's
-         open descriptor reads ENODEV. When the caller that set the route leaves the bus, the route
+         ruya-shell never are). Virtual pads exist only for "app", and stay for "overlay" with the
+         same instance and profile, frozen or not, and for the "app" that follows it: the same
+         devices (event nodes), held in neutral (one neutral frame when the overlay starts, then
+         nothing is written until the route is "app" again, so a frozen app finds no backlog at
+         its Thaw; a button held at that "app" is masked until it is let go). Anything else
+         destroys them ("locked", "shell", another instance or profile, "overlay" with ""), so
+         an app's open descriptor reads ENODEV and a pad never outlives its profile. On "app" for
+         a new owner pad1 (the profile's active controller) is made first and the other pads only
+         once pad1's ACL is set (or its 2 s udev fallback passed), so a game that opens the first
+         pad it is offered gets pad1. When the caller that set the route leaves the bus, the route
          becomes "locked". At start the route is "shell" with no profile. -->
     <method name="SetRoute">
       <arg name="route" type="s" direction="in"/>

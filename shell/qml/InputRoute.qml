@@ -8,13 +8,16 @@ import RuyaShell
 //            never with a profile, so no game can keep a pad
 //   shell    Home, a page, the Hub over Home, or a window whose running instance the shell does not
 //            know (Input1 needs the instance and the app id for "app")
-//   overlay  the Hub, a system dialog or the screen saver over the app in front: its pads are held in
-//            neutral; with the app frozen the instance and app id are "" (no pad for a frozen app)
+//   overlay  the Hub, a system dialog or the screen saver over the app in front, or that app frozen:
+//            always with its instance and app id, so its pads stay, held in neutral (RUY-541: a
+//            Freeze by the Hub keeps them; a one-pad game keeps the player's pad)
 //   app      the app in front has the keys and is not frozen
-// The app's pads are made again when it thaws (overlay with "" -> app). The calls are coalesced to
-// one per event-loop turn (Qt.callLater), so a change that moves several inputs at once (Lock clears
-// the profile and the app in front) sends only where it ends up. A failed call is logged by Input and
-// sent again with the next change; Input also sends the route again when the service restarts.
+// The Thaw (overlay -> app with the same instance) gives the app the same pads back. Lock, a profile
+// change and Home ("locked" or "shell", no instance) still make Input destroy them. The calls are
+// coalesced to one per event-loop turn (Qt.callLater), so a change that moves several inputs at once
+// (Lock clears the profile and the app in front) sends only where it ends up. A failed call is
+// logged by Input and sent again with the next change; Input also sends the route again when the
+// service restarts.
 QtObject {
     id: router
 
@@ -34,7 +37,7 @@ QtObject {
     readonly property string route: !signedIn ? "locked"
                                   : !appInFront || instance === "" || appId === "" ? "shell"
                                   : overlay || frozen ? "overlay" : "app"
-    readonly property string routeInstance: route === "app" || (route === "overlay" && !frozen) ? instance : ""
+    readonly property string routeInstance: route === "app" || route === "overlay" ? instance : ""
     readonly property string routeAppId: routeInstance !== "" ? appId : ""
     readonly property string routeProfile: route === "locked" ? "" : profile
 

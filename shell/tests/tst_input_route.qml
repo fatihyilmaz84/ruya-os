@@ -3,9 +3,9 @@ import QtTest
 import RuyaShell
 
 // The shell drives Ruya Input's route (RUY-409, 06 §5.1-5.2, Input1.SetRoute): "locked" at the
-// picker, "shell" at Home, "app" with the game in front, "overlay" with the Hub over it (with "" once
-// the Hub froze it), "app" again with fresh pads after the Thaw; Lock and a switch go through
-// "locked" with no profile. A failed call never blocks the UI and the next change sends the newest
+// picker, "shell" at Home, "app" with the game in front, "overlay" with the Hub over it (with its
+// instance also once the Hub froze it, RUY-541, so its pads stay), "app" again with the same pads after
+// the Thaw; Home, Lock and a switch take them away, a switch going through "locked" with no profile. A failed call never blocks the UI and the next change sends the newest
 // route; a restarted service (a new owner of the name) gets the current route again. The mock Input
 // service checks the arguments by the service's rules and models the virtual pads (mockPads).
 // Signs in as "Ada" (p2), controller keys only.
@@ -164,18 +164,23 @@ Item {
             verify(Input.mockPads(), "the game has its pads")
             const firstPads = Input.mockPadGeneration()
 
-            // Guide over the game: overlay with the instance at once (pads held), then "" once frozen.
+            // Guide over the game: overlay with the instance, also once the Hub froze it (RUY-541): the
+            // service sees the same owner and keeps the game's pads, held in neutral.
+            const hubFrom = Input.mockCalls().length
             openHub()
             tryVerify(() => recordOf(run.instance).frozen === true, 2000, "the Hub froze the game")
-            expectRoute("overlay", "", "", "p2", "the Hub over the frozen game")
-            verify(!Input.mockPads(), "a frozen game has no pad")
+            expectRoute("overlay", run.instance, "org.example.Racer", "p2", "the Hub over the frozen game")
+            verify(find("inputRoute").frozen, "the route object knows the game is frozen")
+            verify(Input.mockPads(), "a game the Hub froze keeps its pads")
+            compare(Input.mockPadGeneration(), firstPads, "the same pads, none made or destroyed")
             const frozenFrom = Input.mockCalls().length
-            // (Before the Freeze's answer the overlay names the game and keeps its pads; the mock
-            // answers within the same turn, so that step is coalesced away here: the pause-off test
-            // below covers the overlay with the instance.)
+            verify(Input.mockCalls().slice(hubFrom).every(c => c.route !== "overlay"
+                                                          || (c.instance === run.instance
+                                                              && c.appId === "org.example.Racer")),
+                   "every overlay call over the game named it")
 
             // Resume (B) with a Thaw that fails: the game has the focus but stays frozen, so the
-            // route stays overlay with "" and no pad is made for it.
+            // route stays overlay with its instance, and it keeps the same pads (held in neutral).
             Session.mockFailThaw(true)
             keyClick(Qt.Key_Escape)
             tryVerify(() => run.app.activeFocus, 2000, "the game has the focus again")
@@ -183,23 +188,24 @@ Item {
             tryVerify(() => Session.mockCalls().filter(c => c === "thaw " + run.instance).length === 1, 2000,
                       "the Thaw was sent (and failed)")
             verify(recordOf(run.instance).frozen, "the game is still frozen")
-            expectRoute("overlay", "", "", "p2", "a frozen game in front")
+            expectRoute("overlay", run.instance, "org.example.Racer", "p2", "a frozen game in front")
             verify(Input.mockCalls().slice(frozenFrom).every(c => c.route !== "app"),
                    "no app route was sent while the game was frozen")
-            verify(!Input.mockPads(), "a frozen game in front has no pad")
-            compare(Input.mockPadGeneration(), firstPads, "no pad was made for the frozen game")
+            verify(Input.mockPads(), "a frozen game in front keeps its pads")
+            compare(Input.mockPadGeneration(), firstPads, "no pad was made again for the frozen game")
             Session.mockFailThaw(false)
 
-            // The Hub again, then Resume: the Thaw works, then "app" with a new pad generation.
+            // The Hub again, then Resume: the Thaw works, then "app" with the same pads.
             openHub()
             keyClick(Qt.Key_Escape)
             tryVerify(() => run.app.activeFocus, 2000, "the game has the focus again")
             tryVerify(() => recordOf(run.instance).frozen === false, 2000, "the game runs again")
             expectRoute("app", run.instance, "org.example.Racer", "p2", "back in the game")
-            verify(Input.mockPads(), "the game has pads again")
-            verify(Input.mockPadGeneration() > firstPads, "pads were made again (a new generation)")
+            verify(Input.mockPads(), "the game has its pads")
+            compare(Input.mockPadGeneration(), firstPads, "the same pads after the Thaw, not new ones")
 
-            // Home from the Hub: the game stays frozen behind Home, the route is the shell's.
+            // Home from the Hub: the game stays frozen behind Home, the route is the shell's and the
+            // pads go (out of RUY-541's scope: Home over a frozen game still destroys them).
             openHub()
             goTo("home")
             keyClick(Qt.Key_Return)
@@ -209,6 +215,7 @@ Item {
             keyClick(Qt.Key_Return)                      // the Running card resumes it
             tryVerify(() => run.app.activeFocus, 2000, "the game is in front again")
             expectRoute("app", run.instance, "org.example.Racer", "p2", "resumed from its card")
+            verify(Input.mockPadGeneration() > firstPads, "after Home the game gets new pads")
 
             // Switch profile (Lock, then another profile): locked with no profile, then the new one.
             openHub()
