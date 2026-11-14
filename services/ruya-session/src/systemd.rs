@@ -303,12 +303,22 @@ fn memory_current(cgroup: &str) -> Option<u64> {
 /// The reclaim of one frozen app (T-466), on its own thread: the unit and the app's active scopes,
 /// their cgroups from the manager, `reclaim_amount` of each one's `memory.current`, written by a
 /// transient unit of the profile user (`reclaim_command`). Logs what it asked and what moved.
-fn reclaim_app(unit: String, user: String, app_id: String, ledger: &ReclaimLedger, token: u64) {
+///
+/// Returns false when the unit could not be started or timed out: the ledger keeps its entry then
+/// (`ReclaimLedger::settle`), so the next thaw stops an older unit that may still run (RUY-593).
+fn reclaim_app(
+    unit: String,
+    user: String,
+    app_id: String,
+    ledger: &ReclaimLedger,
+    token: u64,
+) -> bool {
     let Some(listing) = list_scopes_command(&user, &app_id)
         .ok()
         .and_then(|args| run_bounded(&args, SYSTEMCTL_LIMIT))
     else {
-        return eprintln!("ruya-session: {unit}: no reclaim, the scopes could not be listed");
+        eprintln!("ruya-session: {unit}: no reclaim, the scopes could not be listed");
+        return true;
     };
     let mut units = vec![unit.clone()];
     units.extend(active_app_scopes(&app_id, &listing));
@@ -316,7 +326,8 @@ fn reclaim_app(unit: String, user: String, app_id: String, ledger: &ReclaimLedge
         .ok()
         .and_then(|args| run_bounded(&args, SYSTEMCTL_LIMIT))
     else {
-        return eprintln!("ruya-session: {unit}: no reclaim, the cgroups could not be read");
+        eprintln!("ruya-session: {unit}: no reclaim, the cgroups could not be read");
+        return true;
     };
     let cgroups = parse_control_groups(&text);
     let before: Vec<(String, u64)> = cgroups
@@ -330,10 +341,14 @@ fn reclaim_app(unit: String, user: String, app_id: String, ledger: &ReclaimLedge
         .collect();
     let args = match reclaim_command(&user, &app_id, &targets) {
         Ok(args) => args,
-        Err(err) => return eprintln!("ruya-session: {unit}: no reclaim: {err}"),
+        Err(err) => {
+            eprintln!("ruya-session: {unit}: no reclaim: {err}");
+            return true;
+        }
     };
-    if !ledger.try_start(&unit, token) {
-        return eprintln!("ruya-session: {unit}: no reclaim, the app was thawed before it started");
+    if let Err(why) = ledger.try_start(&unit, token) {
+        eprintln!("ruya-session: {unit}: no reclaim, {}", why.reason());
+        return true;
     }
     let started = Instant::now();
     let done = run_bounded(&args, RECLAIM_LIMIT).is_some();
@@ -350,6 +365,7 @@ fn reclaim_app(unit: String, user: String, app_id: String, ledger: &ReclaimLedge
         mib(was),
         mib(now)
     );
+    done
 }
 
 pub struct SystemdSpawner {
@@ -589,8 +605,8 @@ impl Spawner for SystemdSpawner {
             .spawn({
                 let (unit, ledger) = (unit.clone(), Arc::clone(&ledger));
                 move || {
-                    reclaim_app(unit.clone(), user, app_id, &ledger, token);
-                    ledger.finish(&unit, token);
+                    let ok = reclaim_app(unit.clone(), user, app_id, &ledger, token);
+                    ledger.settle(&unit, token, ok);
                 }
             });
         spawned.map(|_| ()).map_err(|err| {

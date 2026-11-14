@@ -872,6 +872,22 @@ check)
             kill "$cpid" 2>/dev/null
         fi
     fi
+    # RUY-593 (RUY-585): a Freeze followed at once by a Thaw never reaches RECLAIM_AFTER, so no reclaim
+    # runs for it: after 35 s the journal has no 'memory reclaim' line for this freeze and the app runs on.
+    # If the thaw happened to land while a reclaim thread was queued, its refusal is logged with the
+    # wording of StartRefusal::Cancelled (spawner.rs); that line is shown when it is there, not required.
+    echo "--- a freeze thawed at once runs no reclaim (RUY-593)"
+    tquick="$(date +%s)"
+    slog2() { journalctl -u ruya-session -b --no-pager -o cat --since "@$tquick" 2>/dev/null; }
+    case "$(freeze_app "$inst")" in 's "ok"') ok "the quick Freeze answered ok";; *) bad "quick Freeze";; esac
+    case "$(thaw_app "$inst")" in 's "ok"') ok "the quick Thaw answered ok";; *) bad "quick Thaw";; esac
+    n=0; until [ "$n" -ge 35 ]; do sleep 1; n=$((n + 1)); done   # RECLAIM_AFTER (30 s) plus the tick and the thread
+    slog2 | grep -a "$inst: no reclaim, the app was thawed before it started" | head -1 | sed 's/^/    /'
+    slog2 | grep -a -q "$inst: memory reclaim"         && bad "a reclaim ran for a freeze that was thawed at once: $(slog2 | grep -a "$inst: memory reclaim" | head -1)"         || ok "no 'memory reclaim' line for the freeze thawed at once"
+    for u in "$inst" $scopes; do
+        [ "$(fstate "$user" "$u")" = running ] && ok "$u runs on after the quick Thaw" || bad "$u: FreezerState $(fstate "$user" "$u") after the quick Thaw"
+    done
+    kill -0 "$(pgrep -u "$user" -f "sleep 3000" | head -1)" 2>/dev/null && ok "the app's process runs on" || bad "the app's process is gone after the quick Freeze and Thaw"
     # T-165 (RUY-87): a profile that leaves has its apps frozen. ruya-session follows Profiles1's
     # ActiveProfile: the Lock freezes the running app of $pid, its unit and every active scope (the
     # dashed app id of RUY-546, whose scopes are named with \x2d). Before, nothing was frozen (RUY-539).
