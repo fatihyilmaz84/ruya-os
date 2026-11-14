@@ -1,5 +1,10 @@
 [Unit]
 Description=RuyaOS session service (org.ruyaos.Session1)
+# Start-up asks Profiles1 for the profile list (to stop the apps of a deleted profile), so the
+# profile service comes first (RUY-23; Dell 0.0.60: "Profiles1 not readable"). A profile's own
+# user manager has no unit to order after: the service asks again for a minute (`adopt_late`).
+Wants=ruya-profiles.service
+After=ruya-profiles.service
 Before=ruya-compositor@tty1.service
 
 [Service]

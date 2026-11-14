@@ -8,8 +8,8 @@ use std::sync::{Arc, Mutex};
 
 use async_channel::{Receiver, Sender};
 use ruya_session::dbus::{
-    adopt_running, forward, watch_active_profile, DynSpawner, SessionIface, SharedUsage, BUS_NAME,
-    OBJECT_PATH,
+    adopt_late, adopt_running, forward, watch_active_profile, DynSpawner, SessionIface,
+    SharedUsage, BUS_NAME, OBJECT_PATH,
 };
 use ruya_session::directory::ProfileSnapshot;
 use ruya_session::session::Session;
@@ -131,19 +131,22 @@ fn run() -> Result<(), Box<dyn Error>> {
         // Apps that kept running through a restart are taken over, and play runs that never
         // ended (crash, power cut) end at their last heartbeat, before the name is taken: the
         // first `ListRunning` of the shell already sees them.
-        adopt_running(&connection, &session, &usage, !dev).await;
+        let settled = adopt_running(&connection, &session, &usage, !dev).await;
         connection.request_name(BUS_NAME).await?;
         // A profile that leaves has its apps frozen (T-165): the watcher follows Profiles1.
         futures_lite::future::zip(
-            forward(
-                connection.clone(),
-                session.clone(),
-                usage,
-                !dev,
-                turn.clone(),
-                rx,
+            futures_lite::future::zip(
+                forward(
+                    connection.clone(),
+                    session.clone(),
+                    usage.clone(),
+                    !dev,
+                    turn.clone(),
+                    rx,
+                ),
+                adopt_late(&connection, &session, &usage, !dev, settled),
             ),
-            watch_active_profile(connection, session, turn),
+            watch_active_profile(connection.clone(), session.clone(), turn),
         )
         .await;
         Ok::<(), Box<dyn Error>>(())

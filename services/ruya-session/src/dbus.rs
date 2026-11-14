@@ -97,30 +97,27 @@ pub async fn fetch_profile_ids(connection: &Connection) -> zbus::Result<Vec<Stri
     Ok(profile_ids(rows))
 }
 
+/// How often a start-up adoption that did not see everything is tried again, and how many times
+/// (a minute in all): the system is still starting, a profile's manager is not up yet (RUY-23).
+pub const ADOPT_RETRY: Duration = Duration::from_secs(2);
+pub const ADOPT_TRIES: u32 = 30;
+
 /// Start-up, before the bus name is taken: the apps that kept running through a restart of this
 /// service become instances again (T-290), and the play ledger takes their open runs over
 /// instead of ending them. In system mode the profile list is asked first so that the units of
 /// a profile that no longer exists can be stopped; when it cannot be read nothing is stopped.
+/// True when everything was seen; false asks for `adopt_late` (a listing failed, or the profile
+/// list could not be read).
 pub async fn adopt_running(
     connection: &Connection,
     session: &Shared,
     usage: &SharedUsage,
     system: bool,
-) {
-    let known = if system {
-        match fetch_profile_ids(connection).await {
-            Ok(ids) => {
-                lock(session).directory_mut().set(ids);
-                true
-            }
-            Err(err) => {
-                eprintln!("ruya-session: Profiles1 not readable, no unit is stopped: {err}");
-                false
-            }
-        }
-    } else {
-        true
-    };
+) -> bool {
+    let (known, ids) = read_profiles(connection, system).await;
+    if let Some(ids) = ids {
+        lock(session).directory_mut().set(ids);
+    }
     let adopted = lock(session).adopt(unix_now(), Instant::now(), known);
     let live: Vec<LiveApp> = adopted
         .into_iter()
@@ -139,6 +136,77 @@ pub async fn adopt_running(
     if !recovered.is_empty() {
         eprintln!("ruya-session: recovered play sessions of {recovered:?}");
     }
+    known && lock(session).adoption_complete()
+}
+
+/// The profile ids (system mode), and whether the directory is current.
+async fn read_profiles(connection: &Connection, system: bool) -> (bool, Option<Vec<String>>) {
+    if !system {
+        return (true, None);
+    }
+    match fetch_profile_ids(connection).await {
+        Ok(ids) => (true, Some(ids)),
+        Err(err) => {
+            eprintln!("ruya-session: Profiles1 not readable, no unit is stopped: {err}");
+            (false, None)
+        }
+    }
+}
+
+/// After a start-up adoption that did not see everything: tries again every `ADOPT_RETRY` (up to
+/// `ADOPT_TRIES` times) until the profile list can be read and every manager answered, and takes
+/// over what runs there now. The apps found this way start a play run of their own (the open runs
+/// of the first pass were settled then). Runs beside `forward`.
+pub async fn adopt_late(
+    connection: &Connection,
+    session: &Shared,
+    usage: &SharedUsage,
+    system: bool,
+    settled: bool,
+) {
+    if settled {
+        return;
+    }
+    for _ in 0..ADOPT_TRIES {
+        async_io::Timer::after(ADOPT_RETRY).await;
+        let (known, ids) = read_profiles(connection, system).await;
+        if let Some(ids) = ids {
+            lock(session).directory_mut().set(ids);
+        }
+        let late = lock(session).adopt_more(unix_now(), Instant::now(), known);
+        for app in &late {
+            eprintln!("ruya-session: adopted {} late", app.instance);
+            usage_lock(usage).app_started(
+                &app.instance,
+                &app.profile,
+                &app.app_id,
+                &flatpak_app_version(Path::new(FLATPAK_ROOT), &app.app_id),
+                Instant::now(),
+                app.started,
+            );
+            // The shell may be connected already: it hears of the app as of one that started.
+            let sent = async {
+                let iface = connection
+                    .object_server()
+                    .interface::<_, SessionIface>(OBJECT_PATH)
+                    .await?;
+                SessionIface::app_started(
+                    iface.signal_emitter(),
+                    app.instance.clone(),
+                    app.app_id.clone(),
+                )
+                .await
+            }
+            .await;
+            if let Err(err) = sent {
+                eprintln!("ruya-session: emitting a signal failed: {err}");
+            }
+        }
+        if known && lock(session).adoption_complete() {
+            return;
+        }
+    }
+    eprintln!("ruya-session: gave up looking for apps that kept running");
 }
 
 fn usage_lock(shared: &SharedUsage) -> MutexGuard<'_, Tracker<FileStore, SystemZone>> {

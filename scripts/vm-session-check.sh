@@ -236,6 +236,13 @@ wait_audio() {
 }
 # The anon bytes of the cgroup the process $1 is in.
 anon_of() { awk '$1 == "anon" { print $2 }' "/sys/fs/cgroup$(cut -d: -f3 "/proc/$1/cgroup" 2>/dev/null)/memory.stat" 2>/dev/null; }
+# no_scopes_left <user> <pass text> <fail text> (RUY-23): no app-flatpak scope of the sleeper is
+# listed (any state) in the user's manager. A `systemctl` that fails is a FAIL, not "nothing listed".
+no_scopes_left() {
+    listed="$(systemctl --user -M "$1@.host" list-units --all --no-legend "app-flatpak-$sleeper_glob-*.scope" </dev/null 2>&1)" \
+        || { bad "list-units of $1's manager failed, so no scope could be checked: $listed"; return 1; }
+    if echo "$listed" | grep -q scope; then bad "$3"; else ok "$2"; fi
+}
 # The unit name out of 'ss "ok" "ruya-app-..."'.
 unit_of() { sed -n 's/^ss "ok" "\(.*\)"$/\1/p'; }
 # Waits for a line of the signal log (an extended-regex pattern), up to $2 seconds.
@@ -266,7 +273,9 @@ build_repo() {
     done
     printf '[Runtime]\nname=%s\nruntime=%s/x86_64/stable\nsdk=%s/x86_64/stable\n' "$rt" "$rt" "$rt" > "$work/rt/metadata"
     flatpak build-export --runtime "$work/repo" "$work/rt" stable >/dev/null 2>&1 || return 1
-    for spec in "$sleeper|exec sleep 3000" \
+    # The sleeper burns a little CPU before it sleeps (RUY-23): the run's scope then has CPU to
+    # read, which proves CPUUsageNSec works on a user scope (the journal's "scope gone, cpu N ms").
+    for spec in "$sleeper|i=0; while [ \$i -lt 50000 ]; do i=\$((i + 1)); done; exec sleep 3000" \
                 "$crasher|sleep 1; exit 3"; do
         id="${spec%%|*}"; body="${spec#*|}"
         mkdir -p "$work/$id/files/bin" "$work/$id/var"
@@ -402,6 +411,7 @@ restart)
         bad "the third launch did not stay up"
         echo "$out"; journalctl -M "$user@.host" --no-pager -n 25 2>&1 | cut -c1-220; journalctl -u ruya-session -b --no-pager -n 12 | cut -c1-220
     fi
+    trestart="$(date +%s)"
     systemctl restart ruya-session; n=0
     until running >/dev/null 2>&1 || [ "$n" -ge 60 ]; do sleep 1; n=$((n + 1)); done
     : > "$work/signals.log"
@@ -409,24 +419,23 @@ restart)
     busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &
     mon=$!
     sleep 2
-    # While the adopted app runs, the service follows it over its connection to the user manager:
-    # no `systemctl` process may be started for it (T-340; before it was one per unit every 2 s).
-    # The Flatpak scope watcher's `show` of the unit and its app-flatpak-*.scope every 5 s (T-363,
-    # scope.rs WATCH_EVERY) is a different poll and is not counted here.
-    n=0; spawned=0
-    while [ "$n" -lt 20 ]; do
-        pgrep -af "systemctl.*ruya-app" | grep -v "app-flatpak-" | grep -q systemctl && spawned=$((spawned + 1))
-        sleep 0.3; n=$((n + 1))
-    done
+    # While the adopted app runs, the service follows it over its connection to the user manager
+    # and starts no `systemctl` for it (T-340; before it was one per unit every 2 s). The follower
+    # runs `systemctl show` only while that connection is down, and says so in the journal ("no
+    # connection to the manager of ..." / "lost a user manager, looking at its apps every 2 s",
+    # follow.rs, systemd.rs). A 0.3 s `pgrep` loop for a short-lived `systemctl` could miss one;
+    # the journal cannot (RUY-23). The Flatpak scope watcher's `show` of the unit and its scope
+    # every 5 s (T-363, scope.rs WATCH_EVERY) is a different poll and logs nothing.
+    sleep 6
     pgrep -u "$user" -f systemd-stdio-bridge >/dev/null && ok "the bridge to the manager of $user is running" || bad "no systemd-stdio-bridge of $user: the service has no connection to the manager"
-    [ "$spawned" -eq 0 ] && ok "no systemctl process while following the adopted app (6 s)" || bad "systemctl ran $spawned times in 6 s while following"
-    journalctl -u ruya-session -b --no-pager | grep -a "no connection to the manager" | tail -2
+    polled="$(journalctl -u ruya-session -b --no-pager -o cat --since "@$trestart" 2>/dev/null | grep -a -E "no connection to the manager|looking at its apps every 2 s" | tail -3)"
+    [ -z "$polled" ] && ok "the follower never fell back to systemctl since the restart (journal)" || bad "the follower fell back to polling with systemctl: $polled"
     systemctl --user -M "$user@.host" kill --signal=SIGKILL --kill-whom=all "app-flatpak-$sleeper_glob-*.scope" </dev/null 2>&1 | cat
     wait_sig "\"member\":\"AppExited\".*$sleeper" 30 && ok "AppExited arrived for the adopted app that was killed" || bad "no AppExited for the killed adopted app"
     grep -E "\"member\":\"AppExited\".*$sleeper" "$work/signals.log" | head -1
     # The status comes from the manager's own signals now: a killed app is no clean `quit`.
     if grep -E "\"member\":\"AppExited\".*$sleeper" "$work/signals.log" | grep -q '"quit"'; then
-        echo "NOTE: the killed adopted app was reported as quit (the old poll's default); look at the exit code above"
+        bad "the killed adopted app was reported as quit (the old poll's default); look at the exit code above"
     else
         ok "the killed adopted app was not reported as a clean quit"
     fi
@@ -933,9 +942,12 @@ check)
     gone "sleep 3000" && ok "Stop ended the app itself, not only the unit (its scope is gone)" || bad "the app's process is still there after Stop"
     journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a -q "$inst: scope gone" \
         && ok "the run ended with its scope (journal: scope gone)" || bad "no 'scope gone' line for $inst in the journal"
+    # RUY-23: the sleeper burned CPU in its scope, so a run that read nothing from the user scope
+    # (CPUUsageNSec) ends with "cpu 0 ms" and fails here.
+    cpu="$(journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a "$inst: scope gone, cpu" | tail -1 | sed -n 's/.* cpu \([0-9][0-9]*\) ms.*/\1/p')"
+    [ "${cpu:-0}" -gt 0 ] && ok "the run read CPU from its user scope: $cpu ms (journal: scope gone, cpu)" || bad "scope gone, cpu ${cpu:-?} ms: no CPU was read from the user scope"
     gone "sleep 3001" && ok "Stop ended the app's second scope too (T-435)" || bad "the second app-flatpak-$sleeper scope survived Stop"
-    systemctl --user -M "$user@.host" list-units --all --no-legend "app-flatpak-$sleeper_glob-*.scope" </dev/null 2>&1 | grep -q scope \
-        && bad "an app-flatpak-$sleeper scope is still listed after Stop (active or failed)" || ok "no app-flatpak-$sleeper scope is left after Stop, not even a failed one"
+    no_scopes_left "$user" "no app-flatpak-$sleeper scope is left after Stop, not even a failed one" "an app-flatpak-$sleeper scope is still listed after Stop (active or failed)"
     running | grep -q "$inst" && bad "ListRunning still lists it" || ok "ListRunning is empty again"
     grep -a -q "session-probe: appExited $sleeper 0 quit\|session-probe: appExited $sleeper -\?[0-9]* quit" "$work/probe.log" && ok "the shell saw appExited quit" || bad "the shell did not see appExited quit"
     systemctl start ruya-compositor@tty1 && ok "the shell is started again" || bad "systemctl start ruya-compositor@tty1"
@@ -999,8 +1011,7 @@ check)
     echo "$line" | grep -q '"killed"' && ok "a SIGKILL from the system: reason killed" || bad "killed exit: $line"
     gone "sleep 3000" && ok "its process is gone" || bad "the process survived"
     gone "sleep 3002" && ok "the end of the run stopped the app's left-over scope (T-435 sweep)" || bad "the left-over app-flatpak-$sleeper-4343 scope survived the run's end"
-    systemctl --user -M "$user@.host" list-units --all --no-legend "app-flatpak-$sleeper_glob-*.scope" </dev/null 2>&1 | grep -q scope \
-        && bad "an app-flatpak-$sleeper scope is still listed after the run ended" || ok "no app-flatpak-$sleeper scope is listed after the run ended, not even a failed one"
+    no_scopes_left "$user" "no app-flatpak-$sleeper scope is listed after the run ended, not even a failed one" "an app-flatpak-$sleeper scope is still listed after the run ended"
 
     # T-472 (decided, 03 "Launch", Sound): ruya-shell does not linger. With the shell down past logind's
     # UserStopDelaySec (10 s) its manager ends, and with it PipeWire and every profile's ruya-pulse@

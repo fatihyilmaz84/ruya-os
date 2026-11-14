@@ -14,7 +14,9 @@
 //!   - reads the CPU of the unit and of the scope (`cpu_nsec`; the sum is the run's usage, kept
 //!     after the scope has gone);
 //!   - holds the unit's end (`on_unit_event`) while the scope lives, and hands it on when the
-//!     scope is gone, so a run ends when **both** are gone;
+//!     scope is gone, so a run ends when **both** are gone; while an end is held the scope is
+//!     looked at every second (`ATTACH_EVERY`), so a `Stop` that needed the kill ends well inside
+//!     the wait of the `Launch` after it;
 //!   - names the attached scope (`scope_of`, for a freeze, T-165);
 //!   - asks for the app's leftover scopes to be cleared when the run's end is handed on
 //!     (`take_sweeps`, T-435). A run can have more than one scope: an Electron app's sandboxed
@@ -160,7 +162,7 @@ impl RunScopes {
     /// An event of a unit on its way to the core. `Started` and the events of units without a
     /// live scope pass; the end of a unit whose scope still lives is kept (`None`) until `apply`
     /// sees the scope go.
-    pub fn on_unit_event(&mut self, event: UnitEvent) -> Option<UnitEvent> {
+    pub fn on_unit_event(&mut self, event: UnitEvent, now: Instant) -> Option<UnitEvent> {
         let unit = match &event {
             UnitEvent::Exited { unit, .. } | UnitEvent::ExecFailed { unit } => unit.clone(),
             UnitEvent::Started { .. } => return Some(event),
@@ -170,6 +172,9 @@ impl RunScopes {
         };
         if run.attached() {
             run.held.get_or_insert(event);
+            // The scope is looked at every second from now on, not every `WATCH_EVERY`: a `Stop`
+            // that needed the kill must end inside `LAUNCH_WAIT`, or the launch after it fails.
+            run.next_at = run.next_at.min(now + ATTACH_EVERY);
             return None;
         }
         self.end_run(&unit);
@@ -289,7 +294,12 @@ impl RunScopes {
                             if let Some(cpu) = scope.cpu_nsec {
                                 run.scope_cpu = Some(run.scope_cpu.map_or(cpu, |old| old.max(cpu)));
                             }
-                            run.next_at = now + WATCH_EVERY;
+                            run.next_at = now
+                                + if run.held.is_some() {
+                                    ATTACH_EVERY
+                                } else {
+                                    WATCH_EVERY
+                                };
                         }
                         None => {
                             eprintln!(
@@ -485,7 +495,7 @@ mod tests {
         round(&mut scopes, &mut mgr, late + WATCH_EVERY);
         assert_eq!(mgr.asked.len(), asked, "no more looks");
         // Its end passes at once.
-        assert_eq!(scopes.on_unit_event(exited(0)), Some(exited(0)));
+        assert_eq!(scopes.on_unit_event(exited(0), now), Some(exited(0)));
     }
 
     #[test]
@@ -524,7 +534,7 @@ mod tests {
         round(&mut scopes, &mut mgr, now);
         assert_eq!(scopes.scope_of(UNIT).as_deref(), Some(SCOPE));
         // The `flatpak run` front end ends first; the game keeps running: nothing ends yet.
-        assert_eq!(scopes.on_unit_event(exited(0)), None);
+        assert_eq!(scopes.on_unit_event(exited(0), now), None);
         mgr.set(gone_scope(UNIT));
         let mut at = now;
         for _ in 0..3 {
@@ -547,13 +557,65 @@ mod tests {
     }
 
     #[test]
+    fn a_held_end_looks_at_the_scope_every_second_so_a_killed_stop_ends_before_the_launch_gives_up()
+    {
+        let now = t0();
+        let mut scopes = RunScopes::new();
+        scopes.begin(UNIT, USER, APP, now);
+        let mut mgr = FakeManager::new(vec![unit_show(1000, None), scope_show(SCOPE, 1001, None)]);
+        round(&mut scopes, &mut mgr, now);
+        assert_eq!(scopes.scope_of(UNIT).as_deref(), Some(SCOPE));
+        // `Stop` was ignored, the kill came a moment before the unit's end: the unit ends, the
+        // scope goes with the kill. The scope was last looked at 2 s ago (every 5 s while the
+        // app runs).
+        let mut at = now + Duration::from_secs(2);
+        assert_eq!(scopes.on_unit_event(exited(137), at), None);
+        // The scope dies a little later than the unit ended: until then it is looked at every
+        // second, not every 5 s.
+        for _ in 0..2 {
+            at += Duration::from_secs(1);
+            let asked = mgr.asked.len();
+            assert!(round(&mut scopes, &mut mgr, at).is_empty());
+            assert_eq!(mgr.asked.len(), asked + 1, "looked at again a second later");
+        }
+        mgr.set(gone_scope(SCOPE));
+        let gone_at = at;
+        let released = loop {
+            at += Duration::from_secs(1);
+            let out = round(&mut scopes, &mut mgr, at);
+            if !out.is_empty() {
+                break out;
+            }
+            assert!(
+                at - gone_at < crate::dbus::LAUNCH_WAIT,
+                "the end must not outlast the wait of the Launch after the Stop"
+            );
+        };
+        assert_eq!(released, [exited(137)]);
+        assert!(
+            at - gone_at <= ATTACH_EVERY * 2,
+            "within a second or two, not the 5 s of WATCH_EVERY"
+        );
+        // The Launch that waited for it starts the new run, which attaches its own scope.
+        let mut sweeps = scopes.take_sweeps();
+        assert_eq!(sweeps.len(), 1);
+        sweeps.clear();
+        let fresh = "app-flatpak-net.supertuxkart.SuperTuxKart-4343.scope";
+        scopes.begin(UNIT, USER, APP, at);
+        mgr.set(unit_show(2000, None));
+        mgr.set(scope_show(fresh, 2001, None));
+        round(&mut scopes, &mut mgr, at);
+        assert_eq!(scopes.scope_of(UNIT).as_deref(), Some(fresh));
+    }
+
+    #[test]
     fn a_manager_that_does_not_answer_keeps_the_end_held_for_a_while_then_gives_it() {
         let now = t0();
         let mut scopes = RunScopes::new();
         scopes.begin(UNIT, USER, APP, now);
         let mut mgr = FakeManager::new(vec![scope_show(SCOPE, 1001, None)]);
         round(&mut scopes, &mut mgr, now);
-        assert_eq!(scopes.on_unit_event(exited(3)), None);
+        assert_eq!(scopes.on_unit_event(exited(3), now), None);
         mgr.down = true;
         let mut at = now;
         for _ in 0..MAX_MISSES - 1 {
@@ -573,12 +635,12 @@ mod tests {
         round(&mut scopes, &mut mgr, now);
         mgr.set(gone_scope(SCOPE));
         round(&mut scopes, &mut mgr, now + WATCH_EVERY);
-        assert_eq!(scopes.on_unit_event(exited(0)), Some(exited(0)));
+        assert_eq!(scopes.on_unit_event(exited(0), now), Some(exited(0)));
         // Events of units it does not know, and a start, pass.
         let other = UnitEvent::Started {
             unit: "ruya-app-ruya-p1-org.x.Y.service".to_owned(),
         };
-        assert_eq!(scopes.on_unit_event(other.clone()), Some(other));
+        assert_eq!(scopes.on_unit_event(other.clone(), now), Some(other));
     }
 
     fn sweep() -> Sweep {
@@ -603,7 +665,7 @@ mod tests {
         ]);
         round(&mut scopes, &mut mgr, now);
         assert_eq!(scopes.scope_of(UNIT).as_deref(), Some(SCOPE));
-        assert_eq!(scopes.on_unit_event(exited(139)), None);
+        assert_eq!(scopes.on_unit_event(exited(139), now), None);
         assert!(
             scopes.take_sweeps().is_empty(),
             "nothing while the run lives"
@@ -627,7 +689,7 @@ mod tests {
         // The unit ends with no scope attached (not held): swept as it passes.
         let mut scopes = RunScopes::new();
         scopes.begin(UNIT, USER, APP, now);
-        assert_eq!(scopes.on_unit_event(exited(0)), Some(exited(0)));
+        assert_eq!(scopes.on_unit_event(exited(0), now), Some(exited(0)));
         assert_eq!(scopes.take_sweeps(), [sweep()]);
         // The scope went first; the unit's end then passes and sweeps.
         let mut scopes = RunScopes::new();
@@ -637,14 +699,14 @@ mod tests {
         mgr.set(gone_scope(SCOPE));
         round(&mut scopes, &mut mgr, now + WATCH_EVERY);
         assert!(scopes.take_sweeps().is_empty(), "the unit still runs");
-        assert_eq!(scopes.on_unit_event(exited(0)), Some(exited(0)));
+        assert_eq!(scopes.on_unit_event(exited(0), now), Some(exited(0)));
         assert_eq!(scopes.take_sweeps(), [sweep()]);
         // The manager stops answering: the held end is given up with a sweep.
         let mut scopes = RunScopes::new();
         scopes.begin(UNIT, USER, APP, now);
         let mut mgr = FakeManager::new(vec![scope_show(SCOPE, 1001, None)]);
         round(&mut scopes, &mut mgr, now);
-        assert_eq!(scopes.on_unit_event(exited(0)), None);
+        assert_eq!(scopes.on_unit_event(exited(0), now), None);
         mgr.down = true;
         let mut at = now;
         for _ in 0..MAX_MISSES {
@@ -661,7 +723,7 @@ mod tests {
             code: 0,
             signaled: false,
         };
-        assert_eq!(scopes.on_unit_event(other.clone()), Some(other));
+        assert_eq!(scopes.on_unit_event(other.clone(), now), Some(other));
         assert!(scopes.take_sweeps().is_empty());
     }
 
