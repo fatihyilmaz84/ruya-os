@@ -9,6 +9,9 @@ FocusScope {
 
     property real u: 1
     property string label
+    // The end of a device's address that follows the label, " (00:05)" (DeviceIcons.shownParts, RUY-21): when the
+    // label is too long, it is cut before this tail, which stays whole (04 section 3, "Names from outside").
+    property string labelTail: ""
     // Optional colour dot before the label (e.g. a profile's avatar colour).
     property color swatch: "transparent"
     readonly property bool hasSwatch: swatch.a > 0
@@ -101,7 +104,7 @@ FocusScope {
     // What a screen reader says after the label: the subtype sets it (a value, "on"/"off").
     property string accessibleValue
     Accessible.role: Accessible.Button
-    Accessible.name: (accessibleValue.length > 0 ? label + ", " + accessibleValue : label)
+    Accessible.name: (accessibleValue.length > 0 ? label + labelTail + ", " + accessibleValue : label + labelTail)
                      + (detail !== "" ? ", " + detail : "")
     Accessible.focusable: true
 
@@ -194,6 +197,19 @@ FocusScope {
     readonly property real textWidth: control.centered ? Math.max(0, width - 2 * (Theme.spaceL + (hasIcon ? Theme.iconM + Theme.spaceS : 0)) * u)
                                                        : Math.max(0, width - labelText.x - trailingWidth - Theme.spaceL * u)
 
+    TextMetrics {
+        id: labelMetrics
+        font: labelText.font
+        elide: Text.ElideRight
+        elideWidth: Math.max(0, control.textWidth - tailMetrics.advanceWidth)
+        text: control.label
+    }
+    TextMetrics {
+        id: tailMetrics
+        font: labelText.font
+        text: control.labelTail
+    }
+
     Text {
         id: labelText
         objectName: "label"
@@ -212,7 +228,7 @@ FocusScope {
         width: Math.min(implicitWidth, control.textWidth)
         elide: Text.ElideRight
         textFormat: Text.PlainText      // a label can be a device's own name (Bluetooth, UPower): never markup
-        text: control.label
+        text: control.labelTail === "" ? control.label : labelMetrics.elidedText + control.labelTail
         color: Qt.alpha(control.labelColor, control.dimmed ? Theme.disabledOpacity : 1)
         font.pixelSize: Theme.typeBody * control.u
         font.weight: control.labelWeight

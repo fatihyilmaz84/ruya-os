@@ -713,15 +713,15 @@ Item {
             const a = "AA:00:00:00:00:04"
             const b = "AA:00:00:00:00:05"
             tryVerify(() => find("btDev_" + a) !== null && find("btDev_" + b) !== null, 2000, "a row for each pad")
-            compare(find("btDev_" + a).label, "Wireless Controller (00:04)")
-            compare(find("btDev_" + b).label, "Wireless Controller (00:05)")
+            compare(find("btDev_" + a).label + find("btDev_" + a).labelTail, "Wireless Controller (00:04)")
+            compare(find("btDev_" + b).label + find("btDev_" + b).labelTail, "Wireless Controller (00:05)")
             const nameA = find("btDev_" + a).Accessible.name
             const nameB = find("btDev_" + b).Accessible.name
             compare(nameA, "Wireless Controller (00:04), PlayStation controller, Connected · Battery 80%")
             compare(nameB, "Wireless Controller (00:05), PlayStation controller, Connected · Battery 55%")
             verify(nameA !== nameB, "a screen reader can tell them apart")
-            compare(find("btRename_" + a).label, "Rename Wireless Controller (00:04)")
-            compare(find("btForget_" + b).label, "Forget Wireless Controller (00:05)")
+            compare(find("btRename_" + a).label + find("btRename_" + a).labelTail, "Rename Wireless Controller (00:04)")
+            compare(find("btForget_" + b).label + find("btForget_" + b).labelTail, "Forget Wireless Controller (00:05)")
             compare(find("btDev_bt-pad-main").label, "Ruya Pad Pro", "a name nobody shares stays as it is")
             compare(find("btForget_bt-pad-old").label, "Forget Retro Pad")
             // Rename starts from the alias, not from the suffixed text.
@@ -775,6 +775,56 @@ Item {
                 keyClick(Qt.Key_Escape)
             tryVerify(() => !find("btRenameEntry").shown, 2000, "Back cancels")
             tryVerify(() => find("btRename_AA:00:00:00:00:05").activeFocus, 2000, "focus is back on the row")
+        }
+
+        // RUY-21: an elided Settings row keeps the last 5 characters of the address of a like-named pad.
+        function test_settings_rows_keep_the_address_tail_when_the_name_is_cut() {
+            Bluetooth.mockTwoPads()
+            tryVerify(() => Bluetooth.devices.length === 5, 2000)
+            const wide = "W".repeat(60)
+            Bluetooth.mockSetName("AA:00:00:00:00:04", wide)
+            Bluetooth.mockSetName("AA:00:00:00:00:05", wide)
+            tryVerify(() => device("AA:00:00:00:00:05").name === wide, 2000)
+            openBluetoothPane()
+            for (const prefix of ["btDev_", "btRename_", "btForget_"]) {
+                tryVerify(() => find(prefix + "AA:00:00:00:00:05") !== null, 2000)
+                const row = find(prefix + "AA:00:00:00:00:05")
+                const label = findChild(row, "label")
+                verify(label.text.indexOf("…") > 0, prefix + ": the name is cut: " + label.text)
+                verify(label.text.endsWith(" (00:05)"), prefix + ": the tail is whole: " + label.text)
+                verify(label.paintedWidth <= label.width + 0.5, prefix + ": one line inside its width")
+                verify(row.Accessible.name.indexOf(wide) >= 0 && row.Accessible.name.indexOf("(00:05)") > 0, "the screen reader gets it whole")
+            }
+        }
+
+        // RUY-21: the low-battery toast names the device by the alias the player knows, not by the name that came
+        // along with the signal.
+        function test_low_battery_toast_names_the_paired_alias() {
+            Bluetooth.mockSetName("bt-soundbar", "Living room bar")
+            tryVerify(() => device("bt-soundbar").name === "Living room bar", 2000)
+            Bluetooth.batteryLow("bt-soundbar", "upower-id-7", 10, "other", "")
+            tryVerify(() => toastTexts().includes("Living room bar: battery low (10%)"), 2000)
+            compare(toastTexts().filter(t => t.includes("upower-id-7")).length, 0)
+            // A device the list does not know keeps the name it came with.
+            Bluetooth.batteryLow("AA:FF:FF:FF:FF:FF", "Stranger", 9, "other", "")
+            tryVerify(() => toastTexts().includes("Stranger: battery low (9%)"), 2000)
+        }
+
+        // RUY-21: the main adapter is off and another one is on: the words name the adapter, "Bluetooth is off"
+        // stays for a radio that is off.
+        function test_primary_adapter_off_names_the_adapter() {
+            openBluetoothPane()
+            compare(BluetoothText.statusText("pair", "unavailable", "device"), "Bluetooth is off.")
+            Bluetooth.mockSetPrimaryOff("hci1", "hci0")
+            tryCompare(Bluetooth, "primaryAdapterOff", "hci1")
+            compare(Bluetooth.adapterInUse, "hci0")
+            compare(BluetoothText.statusText("pair", "unavailable", "device"), "hci1 is off. Bluetooth uses hci0.")
+            clearToasts()
+            Bluetooth.startControllerPairing()
+            tryVerify(() => toastTexts().includes("hci1 is off. Bluetooth uses hci0."), 2000)
+            Bluetooth.mockReset()
+            tryCompare(Bluetooth, "primaryAdapterOff", "")
+            compare(BluetoothText.statusText("pair", "unavailable", "device"), "Bluetooth is off.")
         }
 
         // T-334: forgetting one of two like pads leaves the other: its row stays (and loses the suffix,

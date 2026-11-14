@@ -25,6 +25,13 @@ Bluetooth::Bluetooth(std::unique_ptr<BluetoothBackend> backend, QObject *parent)
         m_inputPresent = present;
         emit controllerStateChanged();
     });
+    connect(m_backend.get(), &BluetoothBackend::adaptersChanged, this, [this](const QString &off, const QString &inUse) {
+        if (off == m_primaryOff && inUse == m_adapterInUse)
+            return;
+        m_primaryOff = off;
+        m_adapterInUse = inUse;
+        emit adaptersChanged();
+    });
     connect(m_backend.get(), &BluetoothBackend::controllerRejected, this, &Bluetooth::controllerRejected);
     connect(m_backend.get(), &BluetoothBackend::gamepadConnected, this, &Bluetooth::gamepadConnected);
     connect(m_backend.get(), &BluetoothBackend::gamepadDisconnected, this, &Bluetooth::gamepadDisconnected);
@@ -259,6 +266,12 @@ void Bluetooth::mockSetInputPresent(bool present)
 {
     if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
         mock->setInputPresent(present);
+}
+
+void Bluetooth::mockSetPrimaryOff(const QString &off, const QString &inUse)
+{
+    if (auto *mock = qobject_cast<MockBluetoothBackend *>(m_backend.get()))
+        mock->setPrimaryOff(off, inUse);
 }
 
 int Bluetooth::mockPairingStarts() const

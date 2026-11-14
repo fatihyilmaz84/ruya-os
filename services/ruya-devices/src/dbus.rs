@@ -27,6 +27,7 @@ use crate::idle_pads::IdleReport;
 #[cfg(target_os = "linux")]
 use crate::input::GamepadEvent;
 use crate::input::InputPresence;
+use crate::log;
 use crate::network::{self, Network, NetworkManager};
 use crate::performance::Performance;
 use crate::report;
@@ -883,6 +884,10 @@ impl BluetoothIface {
                     BatteriesIface::batteries_changed(emitter).await?;
                 }
             }
+            if changes.adapters {
+                self.primary_adapter_off_changed(emitter).await?;
+                self.adapter_in_use_changed(emitter).await?;
+            }
             if changes.pairing {
                 self.controller_pairing_state_changed(emitter).await?;
             }
@@ -893,7 +898,7 @@ impl BluetoothIface {
         }
         .await;
         if let Err(err) = result {
-            eprintln!("ruya-devices: emitting Bluetooth signals failed: {err}");
+            log::warn(&format!("emitting Bluetooth signals failed: {err}"));
         }
     }
 
@@ -902,7 +907,7 @@ impl BluetoothIface {
         let bt = self.bt.clone();
         match unblock(move || bt.refresh()).await {
             Ok(changes) => self.emit(emitter, &changes).await,
-            Err(err) => eprintln!("ruya-devices: reading BlueZ failed: {}", err.0),
+            Err(err) => log::warn(&format!("reading BlueZ failed: {}", err.0)),
         }
     }
 }
@@ -1082,6 +1087,21 @@ impl BluetoothIface {
         model: &str,
     ) -> zbus::Result<()>;
 
+    /// The primary adapter's name ("hci1") while it is off and another adapter is on, else "".
+    #[zbus(property)]
+    fn primary_adapter_off(&self) -> String {
+        self.bt
+            .primary_off()
+            .map(|(off, _)| off)
+            .unwrap_or_default()
+    }
+
+    /// The name of an adapter that is on while the primary one is off, else "".
+    #[zbus(property)]
+    fn adapter_in_use(&self) -> String {
+        self.bt.primary_off().map(|(_, on)| on).unwrap_or_default()
+    }
+
     #[zbus(property)]
     fn controller_pairing_state(&self) -> String {
         self.bt.pairing_state().as_str().to_owned()
@@ -1149,7 +1169,7 @@ pub async fn watch_bluetooth(connection: Connection, bt: SharedBluetooth) {
         .and_then(|b| b.arg(0, BLUEZ))
         .map(|b| b.build());
     let (Ok(signals), Ok(owner)) = (signals, owner) else {
-        return eprintln!("ruya-devices: cannot follow BlueZ");
+        return log::warn("cannot follow BlueZ");
     };
     let (signals, owner) = match (
         MessageStream::for_match_rule(signals, &connection, None).await,
@@ -1169,11 +1189,11 @@ pub async fn watch_bluetooth(connection: Connection, bt: SharedBluetooth) {
             .set_notifier(Arc::new(move || match bt.refresh() {
                 Ok(changes) if changes.any() => {
                     if let Err(err) = future::block_on(announce_bluetooth(&connection, &changes)) {
-                        eprintln!("ruya-devices: emitting Bluetooth signals failed: {err}");
+                        log::warn(&format!("emitting Bluetooth signals failed: {err}"));
                     }
                 }
                 Ok(_) => {}
-                Err(err) => eprintln!("ruya-devices: reading BlueZ failed: {}", err.0),
+                Err(err) => log::warn(&format!("reading BlueZ failed: {}", err.0)),
             }));
     }
     loop {
@@ -1238,11 +1258,11 @@ pub async fn watch_bluetooth(connection: Connection, bt: SharedBluetooth) {
         match changes {
             Ok(changes) if changes.any() => {
                 if let Err(err) = announce_bluetooth(&connection, &changes).await {
-                    eprintln!("ruya-devices: emitting Bluetooth signals failed: {err}");
+                    log::warn(&format!("emitting Bluetooth signals failed: {err}"));
                 }
             }
             Ok(_) => {}
-            Err(err) => eprintln!("ruya-devices: reading BlueZ failed: {}", err.0),
+            Err(err) => log::warn(&format!("reading BlueZ failed: {}", err.0)),
         }
     }
 }

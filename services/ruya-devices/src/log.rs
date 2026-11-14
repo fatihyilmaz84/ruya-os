@@ -12,6 +12,12 @@ pub fn info(line: &str) {
     buffer::push(line);
 }
 
+/// Writes `ruya-devices: <line>` for something that went wrong; the line starts `warning:` so
+/// the journal search finds it.
+pub fn warn(line: &str) {
+    info(&format!("warning: {line}"));
+}
+
 /// A name or address made safe for one journal line: control characters (a newline in a name
 /// a remote device chose) become `?`.
 pub fn clean(text: &str) -> String {

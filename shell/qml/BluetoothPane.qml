@@ -33,7 +33,8 @@ SettingsPane {
         }
         for (let i = 0; i < list.length; ++i) {
             const d = list[i]
-            const entry = { devId: d.id, name: d.name, shown: DeviceIcons.shownName(list, d), deviceKind: d.kind, family: d.family ?? "", silhouette: d.model ?? "", paired: d.paired,
+            const entry = { devId: d.id, name: d.name, shown: DeviceIcons.shownName(list, d), shownBase: DeviceIcons.shownParts(list, d).name,
+                            shownTail: DeviceIcons.shownParts(list, d).tail, deviceKind: d.kind, family: d.family ?? "", silhouette: d.model ?? "", paired: d.paired,
                             bonded: d.bonded ?? true, connected: d.connected, trusted: d.trusted ?? false, battery: d.battery }
             let at = -1
             for (let j = 0; j < deviceModel.count; ++j) {
@@ -238,7 +239,7 @@ SettingsPane {
                 return
             }
             if (op === "controller-pairing" && status !== "ok" && status !== "busy") {
-                Notifications.show(status === "unavailable" ? qsTr("Bluetooth is off.")
+                Notifications.show(status === "unavailable" ? BluetoothText.unavailableText()
                                                             : qsTr("Could not start looking for controllers."), "warning")
                 return
             }
@@ -384,6 +385,8 @@ SettingsPane {
             required property string devId
             required property string name
             required property string shown
+            required property string shownBase
+            required property string shownTail
             required property string deviceKind
             required property string family
             required property string silhouette   // the controller model (not `model`: a delegate has one)
@@ -396,7 +399,8 @@ SettingsPane {
             kind: "item"
             visible: Bluetooth.powered
             u: pane.u
-            label: shown
+            label: shownBase
+            labelTail: shownTail
             iconName: DeviceIcons.iconFor(deviceKind, family, silhouette)
             value: pane.deviceValue(pane.busyId === devId, paired, bonded, connected, battery, deviceKind, trusted)
             // The screen reader says the name, what it is, then the state: "DualSense, PlayStation
@@ -411,13 +415,16 @@ SettingsPane {
         SettingRow {
             required property string devId
             required property string shown
+            required property string shownBase
+            required property string shownTail
             required property bool paired
             required property bool bonded
             objectName: "btRepair_" + devId
             kind: "action"
             visible: paired && !bonded && Bluetooth.powered
             u: pane.u
-            label: qsTr("Pair again %1").arg(shown)
+            label: qsTr("Pair again %1").arg(shownBase)
+            labelTail: shownTail
             value: qsTr("Put it in pairing mode first")
             onActivated: pane.startRepair(devId)
         }
@@ -429,13 +436,16 @@ SettingsPane {
             required property string devId
             required property string name
             required property string shown
+            required property string shownBase
+            required property string shownTail
             required property string deviceKind
             required property bool paired
             objectName: "btRename_" + devId
             kind: "action"
             visible: paired && deviceKind === "controller" && Bluetooth.powered
             u: pane.u
-            label: qsTr("Rename %1").arg(shown)
+            label: qsTr("Rename %1").arg(shownBase)
+            labelTail: shownTail
             onActivated: pane.askRename(devId, name, shown)
         }
     }
@@ -445,12 +455,15 @@ SettingsPane {
         SettingRow {
             required property string devId
             required property string shown
+            required property string shownBase
+            required property string shownTail
             required property bool paired
             objectName: "btForget_" + devId
             kind: "action"
             visible: paired && Bluetooth.powered
             u: pane.u
-            label: qsTr("Forget %1").arg(shown)
+            label: qsTr("Forget %1").arg(shownBase)
+            labelTail: shownTail
             onActivated: pane.askForget(devId, shown)
         }
     }

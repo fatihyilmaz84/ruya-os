@@ -72,6 +72,8 @@ Item {
             return qsTr("Controller connected.")
         if (exhausted)
             return qsTr("Press A to start pairing.")
+        if (startStatus === "unavailable" && Bluetooth.primaryAdapterOff !== "")
+            return BluetoothText.unavailableText()
         if (startStatus === "unavailable")
             return qsTr("Bluetooth is off or missing, so a controller cannot be paired here.")
         if (failed)

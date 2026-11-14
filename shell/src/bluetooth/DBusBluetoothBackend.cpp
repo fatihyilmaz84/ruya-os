@@ -127,7 +127,9 @@ void DBusBluetoothBackend::refreshState()
         deliverState(request, props.value(QStringLiteral("Powered")).toBool(),
                      props.value(QStringLiteral("Discovering")).toBool(),
                      props.value(QStringLiteral("ControllerPairingState"), QStringLiteral("idle")).toString(),
-                     props.value(QStringLiteral("InputPresent"), true).toBool());
+                     props.value(QStringLiteral("InputPresent"), true).toBool(),
+                     props.value(QStringLiteral("PrimaryAdapterOff")).toString(),
+                     props.value(QStringLiteral("AdapterInUse")).toString());
     });
 }
 

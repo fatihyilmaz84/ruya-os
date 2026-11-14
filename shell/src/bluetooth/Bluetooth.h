@@ -37,6 +37,10 @@ class Bluetooth : public QObject
     // does not flash a "no controller" hint at start-up; inputKnown says the service answered.
     Q_PROPERTY(bool inputPresent READ inputPresent NOTIFY controllerStateChanged)
     Q_PROPERTY(bool inputKnown READ inputKnown NOTIFY controllerStateChanged)
+    // The primary adapter ("hci1") while it is off and another adapter ("hci0") is on, else "": a scan or a pairing
+    // then answers "unavailable" although `powered` is true (RUY-21).
+    Q_PROPERTY(QString primaryAdapterOff READ primaryAdapterOff NOTIFY adaptersChanged)
+    Q_PROPERTY(QString adapterInUse READ adapterInUse NOTIFY adaptersChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
 
 public:
@@ -57,6 +61,8 @@ public:
     bool isMock() const { return m_backend->isMock(); }
     QString controllerPairing() const { return m_controllerPairing; }
     bool inputPresent() const { return m_inputPresent; }
+    QString primaryAdapterOff() const { return m_primaryOff; }
+    QString adapterInUse() const { return m_adapterInUse; }
     bool inputKnown() const { return m_inputKnown; }
 
     Q_INVOKABLE void setPowered(bool on);
@@ -105,6 +111,7 @@ public:
     // present; how many times the window was started.
     Q_INVOKABLE void mockPairingScript(const QString &outcome);
     Q_INVOKABLE void mockSetInputPresent(bool present);
+    Q_INVOKABLE void mockSetPrimaryOff(const QString &off, const QString &inUse);
     // A device that was hidden is found now; a game controller appears or goes away (T-260).
     Q_INVOKABLE void mockReveal(const QString &id);
     Q_INVOKABLE void mockSetName(const QString &id, const QString &name);   // any text, as a device could send it
@@ -130,6 +137,7 @@ signals:
     void devicesChanged();
     void gamepadsChanged();
     void controllerStateChanged();
+    void adaptersChanged();
     // A device that is not a controller tried to pair while the window was open.
     void controllerRejected();
     // A game controller appeared or went away (USB or Bluetooth, T-260). family: "playstation" | "xbox" |
@@ -156,6 +164,8 @@ private:
     QString m_controllerPairing = QStringLiteral("idle");
     bool m_inputPresent = true;
     bool m_inputKnown = false;
+    QString m_primaryOff;
+    QString m_adapterInUse;
     QVariantList m_devices;
     QVariantList m_gamepads;
     QSet<QString> m_lowReported;

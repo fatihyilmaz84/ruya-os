@@ -37,6 +37,8 @@ public:
     void setPairingScript(const QString &outcome) { m_pairingScript = outcome; }
     // A keyboard or gamepad is (not) connected. True at first, so every other screen is as before.
     void setInputPresent(bool present);
+    // Two adapters, the primary off and the other on (RUY-21): scans and pairing answer "unavailable".
+    void setPrimaryOff(const QString &off, const QString &inUse);
     int pairingStarts() const { return m_pairingStarts; }
     int idleReports() const { return m_idleReports; }
     int lastIdleSeconds() const { return m_lastIdleSeconds; }
@@ -117,6 +119,8 @@ private:
     QString m_pairing = QStringLiteral("idle");
     QString m_pairingScript = QStringLiteral("wait");
     bool m_inputPresent = true;
+    QString m_primaryOff;
+    QString m_inUse;
     int m_pairingStarts = 0;
     int m_idleReports = 0;
     int m_lastIdleSeconds = -1;
