@@ -120,10 +120,9 @@ Item {
                 const art = find(name)
                 const img = findChild(art, "artImage")
                 verify(art.width > 0, name)
-                verify(art.decodeLimit >= Math.max(art.width, art.height), name + ": covers the drawn size")
-                verify(art.decodeLimit <= Math.max(art.width, art.height) * 4, name + ": bounded by it")
-                compare(img.sourceSize.width, art.decodeLimit, name)
-                compare(img.sourceSize.height, art.decodeLimit, name)
+                const dpr = art.Screen.devicePixelRatio
+                compare(img.sourceSize.width, Math.max(1, Math.ceil(art.width * dpr)), name)
+                compare(img.sourceSize.height, Math.max(1, Math.ceil(art.height * dpr)), name)
             }
         }
 

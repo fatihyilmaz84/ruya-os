@@ -994,6 +994,7 @@ Item {
         function test_zz_sheet_after_an_app(data) {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
+            failOnWarning(/is not assigned a valid texture provider/)   // RUY-451: closing a sheet (GPU only)
             setWallpaper("daybreak")
             openPicker()
             const sheet = find("wallpaperPanel")

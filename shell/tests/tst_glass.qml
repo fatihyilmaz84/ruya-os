@@ -321,7 +321,6 @@ Item {
         // masked the whole blur away on a GPU: every opening after the first was a flat sheet (`shots`
         // Wallpaper::test_zz_sheet_after_an_app, which checks the pixels).
         function test_sheet_hands_the_new_mask_layer_to_the_blur_on_every_opening() {
-            failOnWarning(/is not assigned a valid texture provider/)
             const layer = createTemporaryObject(layerComponent, host)
             const modal = createTemporaryObject(fadingModalComponent, layer)
             const sheet = findChild(modal, "fadingSheet")

@@ -1276,7 +1276,9 @@ FocusScope {
                 monogram: false
                 shimmer: false
                 // Decoded at the drawn size, not the file's (up to ~19 MB a layer, two layers, held behind an app).
-                decodeLimit: Math.ceil(Math.max(width, height) * Screen.devicePixelRatio)
+                // At least 1 px a side: before layout it decodes tiny and again once sized, never at file size.
+                decodeSize: Qt.size(Math.max(1, Math.ceil(width * Screen.devicePixelRatio)),
+                                    Math.max(1, Math.ceil(height * Screen.devicePixelRatio)))
                 bare: wallpaperLayer.has     // over a wallpaper an item without art shows the wallpaper, not a colour field
                 Behavior on opacity { NumberAnimation { duration: Theme.tintMs; easing.type: Easing.InOutQuad } }
             }
