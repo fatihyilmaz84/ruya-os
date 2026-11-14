@@ -21,6 +21,10 @@
   python3 vm-input-probe.py twoprofiles --user ruya-p1 --profile p1
       (root; RUY-545) two pads, a device's and a family's global slot: each virtual pad emits its own
       pad's profile, emptying one slot changes only that pad (vm-input-check.sh twopads runs it)
+  python3 vm-input-probe.py nodes --profile p1 --user ruya-p1
+      (root; RUY-446) the virtual pad nodes (phys ruya-input/pad<n>) are ruya-input's, user rw only, with no
+      uaccess tag and no entry for ruya-shell, and the profile user's ACL entry; a node whose phys is
+      ruya-input/kbm* keeps uaccess (vm-input-check.sh nodes runs it)
   python3 vm-input-probe.py navpad [--settle S] [--lefts N] [--rights M]
       (root; RUY-410) a uinput pad that, S seconds after it is ready, taps the D-pad left N times and
       right M times, then A (the emergency reader's keys: Left, Right, Return); prints "pad ready <node>"
@@ -705,6 +709,79 @@ def cmd_twopads(args):
     return fails
 
 
+def udev_tags(node):
+    """The TAGS and CURRENT_TAGS values of `node` from udev's database."""
+    out = subprocess.run(["udevadm", "info", "-q", "property", "-n", node], capture_output=True, text=True).stdout
+    tags = set()
+    for line in out.splitlines():
+        if line.startswith(("TAGS=", "CURRENT_TAGS=")):
+            tags |= {t for t in line.split("=", 1)[1].split(":") if t}
+    return tags
+
+
+def cmd_nodes(args):
+    """RUY-446: a virtual pad node is ruya-input's with user rw and no group or other access, carries no
+    uaccess tag and no ACL entry for ruya-shell; a ruya-input/kbm* node keeps uaccess."""
+    fails = 0
+
+    def ok(msg):
+        print(f"PASS: {msg}", flush=True)
+
+    def bad(msg):
+        nonlocal fails
+        fails += 1
+        print(f"FAIL: {msg}", flush=True)
+
+    pad = FakePad(phys="vm-check/pad0", name=NAME)
+    kbm = None
+    bus = None
+    try:
+        if not wait_for(lambda: len([d for d in (devices() or []) if d.get("name") == NAME]) == 1, 5):
+            bad("ListDevices does not list the pad")
+            return fails
+        bus = Bus()
+        status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-446", "org.ruyaos.VmCheck", args.profile])
+        if status != "ok":
+            bad(f"SetRoute app: {status}")
+            return fails
+        node = wait_for(lambda: node_by("phys", "ruya-input/pad1")[0], 3)
+        if not node:
+            bad("no virtual pad exists in the route app")
+            return fails
+        # The service's ACL entry comes after the add event; wait for it before reading the node.
+        wait_for(lambda: args.user in acl_users(node)[1], 3)
+        nodes = [node]
+        for n in nodes:
+            owner, named = acl_users(n)
+            acl = subprocess.run(["getfacl", "-p", n], capture_output=True, text=True).stdout.splitlines()
+            owner_ok = owner == "ruya-input"
+            base_ok = "user::rw-" in acl and "group::---" in acl and "other::---" in acl
+            ok(f"{n} is owned by ruya-input, user rw, group and other nothing") if owner_ok and base_ok else bad(
+                f"{n}: owner {owner}, getfacl {[l for l in acl if l.startswith(('user::', 'group::', 'other::'))]}")
+            tags = udev_tags(n)
+            ok(f"{n} has no uaccess tag") if "uaccess" not in tags else bad(f"{n} carries the uaccess tag: {sorted(tags)}")
+            ok(f"{n} has no ACL entry for ruya-shell (named: {named})") if "ruya-shell" not in named else bad(
+                f"{n} has an ACL entry for ruya-shell: {named}")
+            ok(f"{n} has the profile user's ACL entry") if args.user in named else bad(f"{n}: no entry for {args.user}: {named}")
+        # A keyboard or mouse (the kbm rule of 06 section 3) keeps uaccess: stand in with a uinput device.
+        kbm = FakePad(0x1234, 0x567A, "ruya-input/kbm-check", NAME + " kbm")
+        knode = wait_for(lambda: node_by("phys", "ruya-input/kbm-check")[0], 3)
+        if not knode:
+            bad("the ruya-input/kbm stand-in has no node")
+        else:
+            time.sleep(0.5)
+            ok(f"{knode} (ruya-input/kbm*) keeps the uaccess tag") if "uaccess" in udev_tags(knode) else bad(
+                f"{knode} (ruya-input/kbm*) lost the uaccess tag: {sorted(udev_tags(knode))}")
+    finally:
+        if bus:
+            bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+            bus.close()
+        if kbm:
+            kbm.close()
+        pad.close()
+    return fails
+
+
 def cmd_twoprofiles(args):
     """RUY-545: two pads, two global slots assigned over Input1: pad A's own device profile (South as
     East) and the Nintendo family's (South as LB) for pad B, a pad with Nintendo's vendor id. In `app`
@@ -1047,6 +1124,9 @@ def main():
     tw = sub.add_parser("twoprofiles")
     tw.add_argument("--user", required=True)
     tw.add_argument("--profile", required=True)
+    nd = sub.add_parser("nodes")
+    nd.add_argument("--user", required=True)
+    nd.add_argument("--profile", required=True)
     n = sub.add_parser("navpad")
     n.add_argument("--settle", type=float, default=2.5)
     n.add_argument("--lefts", type=int, default=0)
@@ -1060,6 +1140,8 @@ def main():
         sys.exit(1 if cmd_twopads(args) else 0)
     if args.cmd == "twoprofiles":
         sys.exit(1 if cmd_twoprofiles(args) else 0)
+    if args.cmd == "nodes":
+        sys.exit(1 if cmd_nodes(args) else 0)
     if args.cmd == "hold":
         sys.exit(1 if cmd_hold(args) else 0)
     {"game": cmd_game, "open": cmd_open, "restart": cmd_restart, "pad": cmd_pad, "navpad": cmd_navpad}[args.cmd](args)

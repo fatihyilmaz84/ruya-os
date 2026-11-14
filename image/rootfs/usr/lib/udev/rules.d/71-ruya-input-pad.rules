@@ -1,0 +1,10 @@
+# Virtual pads and the uaccess tag (06-input.md section 3, rule 3; RUY-446).
+# 70-ruya-input.rules leaves the virtual pads (phys ruya-input/pad<n>) untagged, but systemd's
+# 70-uaccess.rules sorts after it and tags every joystick, a virtual pad included. That made logind give
+# the seat's user, ruya-shell, an ACL entry on the node. This file sorts after 70-uaccess.rules and
+# before 73-seat-late.rules (which applies the ACL), so the tag is gone when logind looks. Keyboards and
+# mice (ruya-input/kbm*) are not matched: they keep uaccess, the shell's libinput reads them.
+SUBSYSTEM!="input", GOTO="ruya_input_pad_end"
+KERNEL!="event*", GOTO="ruya_input_pad_end"
+ATTRS{phys}=="ruya-input/pad*", TAG-="uaccess", OWNER="ruya-input", MODE="0600"
+LABEL="ruya_input_pad_end"
