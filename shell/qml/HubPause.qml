@@ -18,7 +18,8 @@ import RuyaShell
 //
 // The sweep: a frozen app of the signed-in profile that is in neither list was frozen behind this
 // object's back (a shell restart while a game was frozen, a Thaw the service refused because the
-// profile was switched as the Hub closed, a Freeze served after its Thaw): it is thawed. It runs on
+// profile was switched as the Hub closed, a Freeze served after its Thaw, which since RUY-570 can only
+// happen for `asked` apps: the service announces the profile change's freezes inside the freezer's turn): it is thawed. It runs on
 // every change of the running list and of the signed-in profile.
 //
 // The belt (T-464): an app in `asked` that runs again while another app or Home is in front is frozen
