@@ -7,7 +7,7 @@ use serde_json::Value;
 
 use crate::audio::{Kind, Sink, Source, SourceKind};
 use crate::output_policy::{Avail, OutKind, Output};
-use crate::park::PARKED_SINK;
+use crate::park::{PARKED_KEY, PARKED_SINK, TARGET_KEY};
 
 /// The outputs and the default node name from a `pw-dump` document. `node.name` is the id (it
 /// survives reboots), `node.description` the display name.
@@ -466,17 +466,49 @@ fn route_kind(port: &str, bus: &str, api: &str) -> OutKind {
 /// for as long as Home is up, and it must not hold the screen saver off. A stream is the shell's
 /// when its `application.process.binary` is [`SHELL_BINARY`] (libpulse fills it in from the process;
 /// Qt Multimedia has no way to set a stream's `media.role`). An app's stream still counts.
+///
+/// **A parked stream does not count (RUY-562):** a game the Hub froze keeps its stream, which
+/// PipeWire still reports as running. `park.rs` moves it to `PARKED_SINK` and marks it with
+/// `PARKED_KEY` (and `TARGET_KEY` = `PARKED_SINK`) in the `default` metadata; either mark, or the
+/// same target in the node's own properties, makes it silent here.
 pub fn parse_playing(json: &str) -> bool {
     let Ok(doc) = serde_json::from_str::<Value>(json) else {
         return false;
     };
+    let parked = parked_nodes(&doc);
     doc.as_array().into_iter().flatten().any(|obj| {
         obj.get("type").and_then(Value::as_str) == Some("PipeWire:Interface:Node")
+            && !obj["id"].as_u64().is_some_and(|id| parked.contains(&id))
+            && obj["info"]["props"][TARGET_KEY].as_str() != Some(PARKED_SINK)
             && obj["info"]["props"]["media.class"].as_str() == Some("Stream/Output/Audio")
             && obj["info"]["state"].as_str() == Some("running")
             && !corked(&obj["info"]["props"])
             && !shells_own(&obj["info"]["props"])
     })
+}
+
+/// The nodes the `default` metadata marks as parked (RUY-562): `PARKED_KEY` set, or the target
+/// pointing at `PARKED_SINK`.
+fn parked_nodes(doc: &Value) -> Vec<u64> {
+    let mut out = Vec::new();
+    for obj in doc.as_array().into_iter().flatten() {
+        if obj["type"].as_str() != Some("PipeWire:Interface:Metadata")
+            || obj["props"]["metadata.name"].as_str() != Some("default")
+        {
+            continue;
+        }
+        for e in obj["metadata"].as_array().into_iter().flatten() {
+            let Some(subject) = e["subject"].as_u64() else {
+                continue;
+            };
+            let key = e["key"].as_str();
+            let to_parked = key == Some(TARGET_KEY) && e["value"].as_str() == Some(PARKED_SINK);
+            if key == Some(PARKED_KEY) || to_parked {
+                out.push(subject);
+            }
+        }
+    }
+    out
 }
 
 /// `application.process.binary` of the shell's streams (its executable is `ruya-shell`).
@@ -1061,6 +1093,35 @@ mod tests {
         )));
         // A stream without the property (a bare pipewire client) counts.
         assert!(parse_playing(&format!("[{}]", stream(1, "running", ""))));
+    }
+
+    #[test]
+    fn a_parked_stream_does_not_play_but_an_unparked_one_beside_it_does() {
+        let meta = |entries: &str| {
+            format!(
+                r#"{{"id":9,"type":"PipeWire:Interface:Metadata","props":{{"metadata.name":"default"}},"metadata":[{entries}]}}"#
+            )
+        };
+        let key = r#"{"subject":2,"key":"ruya.parked","type":"Spa:String:JSON","value":"{}"}"#;
+        let target =
+            r#"{"subject":2,"key":"target.object","type":"Spa:String","value":"ruya-parked"}"#;
+        let dump = |m: &str| format!("[{},{}]", stream(2, "running", GAME), meta(m));
+        assert!(parse_playing(&dump("")), "no mark: plays");
+        assert!(!parse_playing(&dump(key)), "PARKED_KEY");
+        assert!(!parse_playing(&dump(target)), "target is the parked sink");
+        let other = r#"{"subject":2,"key":"target.object","type":"Spa:String","value":"alsa_out"}"#;
+        assert!(parse_playing(&dump(other)), "another target plays");
+        // The node's own property.
+        let own = format!(r#"{GAME},"target.object":"ruya-parked""#);
+        assert!(!parse_playing(&format!("[{}]", stream(2, "running", &own))));
+        // A second, unparked stream still plays.
+        let both = format!(
+            "[{},{},{}]",
+            stream(2, "running", GAME),
+            stream(3, "running", GAME),
+            meta(key)
+        );
+        assert!(parse_playing(&both));
     }
 
     #[test]

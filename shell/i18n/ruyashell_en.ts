@@ -3247,7 +3247,12 @@ This can&apos;t be undone.</translation>
         <translation>Sleep is not available on this console yet</translation>
     </message>
     <message>
-        <location line="-24"/>
+        <location line="+39"/>
+        <source>Sound doesn&apos;t stop the screen saver.</source>
+        <translation>Sound doesn&apos;t stop the screen saver.</translation>
+    </message>
+    <message>
+        <location line="-63"/>
         <source>Screen saver</source>
         <translation>Screen saver</translation>
     </message>
@@ -4188,7 +4193,7 @@ This can&apos;t be undone.</translation>
         <translation>Wallpaper could not be loaded</translation>
     </message>
     <message>
-        <location line="+354"/>
+        <location line="+358"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
@@ -4295,7 +4300,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1697"/>
+        <location line="-1701"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -4326,7 +4331,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1415"/>
+        <location line="+1419"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>

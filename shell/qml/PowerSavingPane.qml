@@ -116,4 +116,15 @@ SettingsPane {
         label: qsTr("Keeping the console awake")
         value: IdleClock.held ? pane.heldText(IdleInhibit.reasons) : qsTr("Nothing")
     }
+
+    // RUY-562: audio keeps the screen on and the console awake, but not the saver away.
+    Text {
+        objectName: "audioNote"
+        width: parent ? parent.width : 0
+        visible: IdleInhibit.reasons.indexOf("audio") >= 0
+        text: qsTr("Sound doesn't stop the screen saver.")
+        color: Theme.text
+        font.pixelSize: Theme.typeCaption * pane.u
+        wrapMode: Text.Wrap
+    }
 }

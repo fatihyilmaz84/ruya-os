@@ -11,6 +11,12 @@
 #             PipeWire then reports it as not running Playing must become false, otherwise the part
 #             prints "UNVERIFIED:" because SIGSTOP is not a real cork: try a player's pause on the Dell),
 #             and checks that Playing is false again once the player is gone.
+#             RUY-562: then, with RUYA_IDLE_DIVISOR=60 (a drop-in on the compositor unit; the shell is
+#             restarted and the drop-in removed again), a silent pw-cat stream plays as ruya-shell for ~50 s:
+#             the journal must show "screen saver on" (~10 s) and "idle inhibit +audio" and no "display off"
+#             while it plays (audio holds screen off and sleep, not the saver); after it stops "display off"
+#             must follow (~30 s). Needs a sound card: boot the VM with `smoke-test.ps1 -Audio` (as
+#             vm-audio-check.sh); without one Playing never becomes true and the part says so (UNVERIFIED).
 #   timeline  shortens every power-saving time by 60 (RUYA_IDLE_DIVISOR=60: 10 minutes -> 10 s) with a
 #             drop-in on the compositor unit, restarts the shell, waits without any input and reads the
 #             journal: screen saver at ~10 s, display off at ~30 s (and whether DPMS worked: "dpms" or
@@ -122,6 +128,50 @@ audio_check() {
     kill -KILL "$player" 2>/dev/null
     wait "$player" 2>/dev/null
     wait_playing false 8 && ok "Playing is false again once the stream is gone" || bad "Playing stayed true after the stream ended: $(playing)"
+    audio_saver_check
+}
+
+# RUY-562: audio lets the saver start and holds only "display off" and sleep.
+audio_saver_check() {
+    echo "--- audio holds display off and sleep, not the saver (RUYA_IDLE_DIVISOR=60: saver ~10 s, display off ~30 s)"
+    local unit="ruya-compositor@tty1" dropin start player log
+    dropin="/etc/systemd/system/$unit.service.d"
+    mkdir -p "$dropin"
+    printf '[Service]\nEnvironment=RUYA_IDLE_DIVISOR=60\n' >"$dropin/zz-idle-divisor.conf"
+    systemctl daemon-reload
+    systemctl restart "$unit"
+    start="$(date +%s)"
+    for _ in $(seq 1 60); do
+        journalctl -b -q -o cat --since "@$start" | grep -q 'ruya-compositor: up' && break
+        sleep 1
+    done
+    sleep 3
+    start="$(date +%s)"
+    runuser -u ruya-shell -- env "XDG_RUNTIME_DIR=/run/user/$uid" pw-cat -p --raw --rate 48000 --channels 2 --format s16 /dev/zero >/dev/null 2>&1 &
+    player=$!
+    if ! wait_playing true 10; then
+        echo "UNVERIFIED: Playing never became true (no sound card? boot the VM with smoke-test.ps1 -Audio): the audio/saver part did not run"
+    else
+        sleep 50
+        log="$(journalctl -b -q -o cat --since "@$start" | grep -E 'ruya-shell: (display|screen saver|idle inhibit)' || true)"
+        echo "$log"
+        echo "$log" | grep -q 'idle inhibit +audio' && ok "audio is logged as a holder" || bad "no 'idle inhibit +audio' line"
+        echo "$log" | grep -q 'screen saver on (idle' && ok "the screen saver started while audio played" || bad "no 'screen saver on' within 50 s of playing audio"
+        echo "$log" | grep -q 'display off' && bad "the display went off while audio played" || ok "no 'display off' in 50 s of audio (30 s would be due)"
+        kill -KILL "$player" 2>/dev/null
+        pkill -KILL -x pw-cat
+        wait "$player" 2>/dev/null
+        local stopped
+        stopped="$(date +%s)"
+        wait_log "$stopped" 'display off' 60 >/dev/null && ok "display off follows once audio stopped" || bad "no 'display off' within 60 s after audio stopped"
+    fi
+    kill -KILL "$player" 2>/dev/null
+    pkill -KILL -x pw-cat
+    rm -f "$dropin/zz-idle-divisor.conf"
+    rmdir "$dropin" 2>/dev/null
+    systemctl daemon-reload
+    systemctl restart "$unit"
+    echo "(drop-in removed, shell restarted)"
 }
 
 timeline_check() {
