@@ -1275,6 +1275,8 @@ FocusScope {
                 clip: false
                 monogram: false
                 shimmer: false
+                // Decoded at the drawn size, not the file's (up to ~19 MB a layer, two layers, held behind an app).
+                decodeLimit: Math.ceil(Math.max(width, height) * Screen.devicePixelRatio)
                 bare: wallpaperLayer.has     // over a wallpaper an item without art shows the wallpaper, not a colour field
                 Behavior on opacity { NumberAnimation { duration: Theme.tintMs; easing.type: Easing.InOutQuad } }
             }

@@ -107,7 +107,7 @@ Item {
     // through the fade-out (until the opacity is 0), and goes while the owner is hidden (T-430).
     Loader {
         objectName: "haloLoader"
-        active: shadow.haloShown && shadow.visible && (shadow.shown || shadow.opacity > 0)
+        active: shadow.haloShown && shadow.visible
         sourceComponent: SmoothMask {
             objectName: "haloEffect"
             x: box.x
