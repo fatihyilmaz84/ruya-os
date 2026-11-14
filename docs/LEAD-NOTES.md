@@ -13,6 +13,8 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
   - RUY-87: a profile switch freezes the previous profile's apps (the owner's report RUY-539).
   - RUY-573: reclaim takes escaped names; `twopads` runs with the shell stopped.
   - RUY-550 (lead): `revert-check.ps1` has a Rust mode.
+  - Overnight: RUY-561 (an idle inhibitor counts only while its app is in front: the owner's screen saver report), RUY-513 + RUY-514 + RUY-575 (every setting row states its kind; `kind` is required, `inert` gone: the owner's report), RUY-473 (inputd check without the live shell; Verified: vm), RUY-441 (lead), RUY-451 (sheet blur in a Loader; hero decodes at drawn size).
+  - Lead review commits: 7ea2600 (a late kill keeps a SIGTERM stop a quit; the inhibit check's waits), 36279a7 (tst_timezone flake), 02-shell fixes.
 - **Owner decisions recorded:**
   - ADR-017 amendment 6, the active controller.
   - ADR-035 amendment: game settings from the game page (cache plus queue).
@@ -20,10 +22,10 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
   - Formations are used for goals.
   - Ruya Music is parked after v1, with six answers on RUY-565.
   - RUY-562: music allows the screen saver.
-- **Images:** 0.0.76 at 9398dda.
-  - VM: 12/18 PASS. The 2 new FAILs are diagnosed and fixed in RUY-573; the 2 known ones are RUY-473 and RUY-521.
-  - **The Dell runs 0.0.76** (rollback 0.0.75). The owner switched the Dell off for the night.
-  - 0.0.76 lacks RUY-545, 87, 573 and 561.
+- **Images:**
+  - 0.0.76 at 9398dda: **on the Dell** (rollback 0.0.75); the owner switched the Dell off for the night.
+  - 0.0.77 at 0403ed5: built, not on the Dell. VM: input check/hold/twopads incl. twoprofiles PASS (RUY-540, 545 Verified: vm), the reclaim lines PASS (RUY-573), x11 PASS. Its 2 FAILs are fixed on main in 7ea2600 (an exit-reason race; the inhibit check's wrong `-u`); `inputd` is fixed by RUY-473.
+  - **Next image (0.0.78) from main** has everything for the owner's Dell re-check: per-pad controls, freeze on switch, the screen saver, row kinds.
 - **In flight:** see the bottom section (kept current while the session runs).
 
 ## Next, in this order
@@ -75,6 +77,6 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 | 2026-11-14 (lead-18) | 2c83b80..HEAD | 544, 540, 546, 545, 87, 573, 561, 550; analyses 538, 539, screensaver | round 2 for 544, 540, 545, 561; 2 product bugs found by VM (reclaim `\x2d`), 1 check race | 1596 QML + 137 skips | 0.0.76 12/18 (4 explained) |
 
 ## In flight (kept current)
-- RUY-561 round 2 (worktree `RuyaOS-worktrees\RUY-561`): the Hub releases the inhibitor, plus tests.
-- RUY-513 round 1 (worktree `RuyaOS-worktrees\RUY-513`).
-- Next: RUY-514 when a lane frees, then 0.0.77.
+- RUY-446 round 1 (worktree `RuyaOS-worktrees\RUY-446`): virtual pad nodes 0600 without uaccess; the builder builds its own image and runs the VM.
+- RUY-11 round 1 (worktree `RuyaOS-worktrees\RUY-11`): Guide is built; the ticket shrank to tests, a VM step and dev docs (`ruya-api-reviewer` at merge).
+- Next: 0.0.78 from main after RUY-446 (one image at a time), then the full VM queue: the defaults, plus `vm-input-check.sh check|hold|twopads`, `vm-devices-check.sh gamepads` and `vm-power-saving-check.sh inhibit`.
