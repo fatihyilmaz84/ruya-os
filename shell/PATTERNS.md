@@ -40,6 +40,7 @@ Reusable settings rows. All extend `SettingControl` (a `FocusScope` with the lab
 | Sets a number in a range | `SliderRow` | Outlined track with a thumb |
 | Cannot be used and says why, with nothing to focus | `SettingRow { enabled: false }` | Flat line with an info icon |
 | Names the rows below it | `GroupLabel { text: ... }` | `typeHeadline` DemiBold heading, never focused |
+| One sentence about the row above (a consequence, not a value) | `SettingNote { u: pane.u; text: ... }` (RUY-590) | `typeCaption` `text`, wrapped, full column width, not focusable; never a raw `Text` (the test lint rejects it) |
 
 `SettingControl.flat` (no fill and no layers at rest) and `ruleBelow` (the hairline) are the fact look; `SettingRow` sets `flat` for `kind: "info"` and `enabled: false`, and any other `SettingControl` can set it (System information's inline row). `SettingsPane` sets `ruleBelow` after each layout of its column: true on a fact whose next visible item is also a fact. `SettingControl.hints` defaults by kind (fact `B Back`; item and action `A Select`; page `A Open`; toggle `A Toggle`; choice `Left/Right Change`, `A Next`; slider `Left/Right Adjust`) and `SettingsPane.hints` shows the focused row's; a row names its own verb with `hints: [{ button: "A", text: qsTr("Connect") }, { button: "B", text: qsTr("Back") }]`, and a pane that sets `hints:` itself still wins.
 

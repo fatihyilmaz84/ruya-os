@@ -414,6 +414,16 @@ function Test-Tokens {
     Record "QML member lint self-check (rejects a ternary inside a product in an anchor offset, accepts the working form)" ($offsetRejected -and $LASTEXITCODE -eq 0)
     Remove-Item -Recurse -Force $memberFix -ErrorAction SilentlyContinue
 
+    Step "setting note lint (a note under a row in a Settings pane is a SettingNote, RUY-590)"
+    & (Join-Path $PSScriptRoot "lint-setting-notes.ps1")
+    Record "setting note lint" ($LASTEXITCODE -eq 0)
+    $noteFix = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-notes-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Force $noteFix | Out-Null
+    [IO.File]::WriteAllText((Join-Path $noteFix "BadPane.qml"), "import QtQuick`nItem {`n    Text {`n        font.pixelSize: Theme.typeCaption * u`n        wrapMode: Text.Wrap`n    }`n}`n")
+    & (Join-Path $PSScriptRoot "lint-setting-notes.ps1") -QmlDir $noteFix 6>&1 | Out-Null
+    Record "setting note lint self-check (rejects a raw Text note in a pane)" ($LASTEXITCODE -ne 0)
+    Remove-Item -Recurse -Force $noteFix -ErrorAction SilentlyContinue
+
     # Self-check: the lint must reject a literal font size.
     $fixture = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-" + [guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $fixture | Out-Null
