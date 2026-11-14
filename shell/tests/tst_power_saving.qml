@@ -34,6 +34,7 @@ Item {
         property var defaultNow: null         // IdleClock's own clock source (monotonic), kept to test it
         property var defaultSlept: null
         property var defaultWallNow: null
+        property var defaultLog: null
 
         function find(name) { return findChild(tc.shell, name) }
         // The fake clock moves in steps of at most a minute, as the real timer looks at it: a bigger
@@ -63,6 +64,7 @@ Item {
             tc.defaultNow = IdleClock.now
             tc.defaultSlept = IdleClock.slept
             tc.defaultWallNow = IdleClock.wallNow
+            tc.defaultLog = IdleClock.log
             IdleClock.saverStarted.connect(() => tc.order.push("saver"))
             IdleClock.displayOffStarted.connect(() => tc.order.push("off"))
             IdleClock.sleepRequested.connect(() => tc.order.push("sleep"))
@@ -106,6 +108,7 @@ Item {
             IdleClock.now = tc.defaultNow
             IdleClock.slept = tc.defaultSlept
             IdleClock.wallNow = tc.defaultWallNow
+            IdleClock.log = tc.defaultLog
             IdleClock.reset()
             setTimes(10, 30, 60, 15)
             DeviceSettings.reducedMotion = false
@@ -126,6 +129,32 @@ Item {
             tryVerify(() => saver.visible)
             compare(IdleClock.covered, true)
             compare(ScreenPower.on, true, "the display is still on under the saver")
+        }
+
+        // RUY-563: the saver writes one journal line when it starts and one when it ends, with the reason.
+        function test_saver_logs_one_line_on_and_one_off_with_the_reason() {
+            const lines = []
+            IdleClock.log = text => lines.push(text)
+            seconds(599)
+            compare(lines.length, 0, "nothing before the saver")
+            seconds(1)
+            compare(lines.length, 1)
+            compare(lines[0], "ruya-shell: screen saver on (idle 600 s, stage saver)")
+            minutes(25)
+            compare(IdleClock.stage, "off")
+            compare(lines.length, 1, "no line while it stays on, nor for the deeper stage")
+            IdleClock.noteInput()
+            compare(lines.length, 2)
+            compare(lines[1], "ruya-shell: screen saver off (input, was off)")
+            IdleClock.noteInput()
+            compare(lines.length, 2, "input while awake is not a saver line")
+            minutes(10)
+            compare(IdleClock.stage, "saver")
+            compare(lines.length, 3)
+            tc.slept += 3600 * 1000
+            jump(3600 * 1000)
+            compare(lines.length, 4)
+            compare(lines[3], "ruya-shell: screen saver off (resume, was saver)")
         }
 
         function test_display_off_and_sleep_follow_in_order() {

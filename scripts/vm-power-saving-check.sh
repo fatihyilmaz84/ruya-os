@@ -134,8 +134,9 @@ timeline_check() {
     done
     echo "shell is up; waiting 45 s without input"
     sleep 45
-    log="$(journalctl -b -q -o cat --since "@$start" | grep -E 'ruya-shell: (display|idle inhibit)' || true)"
+    log="$(journalctl -b -q -o cat --since "@$start" | grep -E 'ruya-shell: (display|screen saver|idle inhibit)' || true)"
     echo "$log"
+    echo "$log" | grep -q 'screen saver on (idle' && ok "the screen saver started (its own journal line)" || bad "no 'screen saver on' line after 45 s"
     echo "$log" | grep -q 'display off' && ok "the display was switched off" || bad "no 'display off' line after 45 s"
     echo "$log" | grep -q 'display off (dpms)' && ok "DPMS was used (eglfs_kms)" || echo "NOTE: no DPMS ('black frame only' or none): the picture goes black, the monitor stays on"
     if echo "$log" | grep -q 'display off'; then wake_check "$start"; else bad "no wake check: the display never went off"; fi
