@@ -87,6 +87,9 @@ leaves: other packages depend on them (`udisks2` through `libblockdev-*`, `skope
 Mesa (`mesa-dri-drivers`, `mesa-vulkan-drivers`, 240 MB, plus `llvm-libs`, 147 MB) is required by Qt and needed by every GPU
 that is not NVIDIA, and by the VM (software rendering).
 
+Gaming kernel settings are rootfs files, not packages (`01` §1.5): `image/rootfs/usr/lib/modules-load.d/ruyaos-ntsync.conf` loads
+the `ntsync` module that the `kernel` package ships (RUY-525: `/dev/ntsync` for Proton).
+
 ### Drivers and firmware (ADR-009: all of it stays)
 
 | Leaf | Why |

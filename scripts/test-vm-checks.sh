@@ -356,6 +356,31 @@ expect_contains "the override is reset" "$log" "override --system --reset org.ru
 expect_contains "the app is uninstalled" "$log" "uninstall --system -y --noninteractive org.ruyaos.HelloGame"
 expect_contains "the remote is deleted" "$log" "remote-delete --system --force ruyaos-hello-test"
 
+# --- vm-gaming-check.sh (RUY-525): each assertion can fail -------------------------------------------
+echo "vm-gaming-check.sh: ntsync, each assertion can fail"
+gm="$tmp/gaming/bin"; mkdir -p "$gm"
+printf '#!/bin/sh\nif [ "${FAKE_NO_NTSYNC:-}" ]; then echo "Module Size Used by"; else echo "Module Size Used by"; echo "ntsync 24576 0"; fi\n' > "$gm/lsmod"
+printf '#!/bin/sh\ncase "$*" in *%%a*) echo "${FAKE_MODE:-666}" ;; *%%U*) echo root:root ;; *) echo system_u:object_r:device_t:s0 ;; esac\n' > "$gm/stat"
+printf '#!/bin/sh\nexit 0\n' > "$gm/getent"
+printf '#!/bin/sh\n[ -n "${FAKE_OPEN_FAIL:-}" ] && exit 1\nexit 0\n' > "$gm/python3"
+chmod +x "$gm"/*
+rungame() { NTSYNC_DEV="${DEVPATH:-/dev/null}" PATH="$gm:$PATH" bash "$here/vm-gaming-check.sh" "$@" 2>&1; }
+out="$(rungame)"; rc=$?
+expect_contains "all good: passes" "$out" "ALL CHECKS PASSED"
+[ "$rc" = 0 ] && pass "all good: exit 0" || fail "all good: exit $rc"
+out="$(FAKE_NO_NTSYNC=1 rungame)"; rc=$?
+expect_contains "module not loaded fails" "$out" "FAIL: module ntsync is not loaded"
+[ "$rc" = 1 ] && pass "module not loaded: exit 1" || fail "module not loaded: exit $rc"
+out="$(DEVPATH="$tmp/no-such-dev" rungame)"
+expect_contains "no device fails" "$out" "FAIL: $tmp/no-such-dev is not a character device"
+out="$(FAKE_MODE=660 rungame)"
+expect_contains "mode 0660 fails" "$out" "FAIL: /dev/null mode is 660"
+out="$(FAKE_OPEN_FAIL=1 rungame)"
+expect_contains "a user who cannot open the device fails" "$out" "cannot open /dev/null read-write"
+out="$(rungame flatpak)"; rc=$?
+expect_contains "flatpak without an app id is a usage error" "$out" "usage: vm-gaming-check.sh flatpak <app-id>"
+[ "$rc" = 2 ] && pass "flatpak without an app id: exit 2" || fail "flatpak without an app id: exit $rc"
+
 echo
 if [ "$fails" = 0 ]; then echo "vm-check tests: all passed"; else echo "vm-check tests: $fails failed"; fi
 exit $(( fails > 0 ))
