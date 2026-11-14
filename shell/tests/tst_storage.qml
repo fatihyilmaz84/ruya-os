@@ -397,6 +397,7 @@ Item {
                    "in this order")
             verify(find("storageSystem").y < find("storageVol_vol-internal").y, "above the drives")
             compare(find("storageHeadingDrives").text, "Drives")
+            verify(findChild(find("storageHeadingDrives"), "groupLabelText"), "Drives is a GroupLabel")
         }
 
         // With the profile data known (a later root source): its own row, and the rest is "System".
