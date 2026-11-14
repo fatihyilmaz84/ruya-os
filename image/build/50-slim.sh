@@ -40,6 +40,10 @@ remove=(
     # kernel crash dumps, the image-building tool and the archive repo definitions.
     avahi libdaemon toolbox stalld irqbalance iptables-services
     kdump-utils kexec-tools makedumpfile chunkah fedora-repos-archive
+    # Setuid helpers nobody uses (RUY-18): no account logs in to elevate; the services are root
+    # units, support reaches the console as root over SSH. (pkexec and pam_timestamp_check belong
+    # to polkit and pam, which stay: the Containerfile drops their setuid bit instead.)
+    sudo sudo-python-plugin
 )
 
 # Packages the transaction must never contain (the task's list, plus what ruya-session and the

@@ -15,6 +15,7 @@ banned=(
     nfs-utils rpcbind avahi toolbox lvm2 dmraid
     'python3-botocore' 'python3-boto3' 'python3-s3transfer'
     kdump-utils 'xorg-x11-server*'
+    sudo
 )
 # Allowed although they match: ffmpeg's libavformat links libsmbclient, which needs these.
 # (samba-client-libs etc. cannot go without removing ffmpeg and Qt Multimedia, see 50-slim.sh.)
@@ -47,6 +48,15 @@ for scope in "" "--global"; do
             found=1
         fi
     done < <(systemctl $scope list-unit-files --state=enabled --no-legend)
+done
+
+# Setuid/setgid helpers the console must not carry (RUY-18, 01-platform.md section 3): sudo is
+# removed (50-slim.sh), pkexec and pam_timestamp_check lose their bit in the Containerfile.
+for f in /usr/bin/sudo /usr/bin/pkexec /usr/bin/pam_timestamp_check /usr/sbin/pam_timestamp_check; do
+    if [ -e "$f" ] && [ -n "$(find "$f" -maxdepth 0 -perm /6000)" ]; then
+        echo "98-guard: setuid/setgid helper in the image: $f"
+        found=1
+    fi
 done
 
 # Dangling enablement links (a removed package's unit).

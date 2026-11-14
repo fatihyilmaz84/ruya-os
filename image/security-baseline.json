@@ -1,5 +1,5 @@
 {
-  "_comment": "Security baseline of the development image 0.0.61, checked by scripts/vm-security-check.sh (T-424). Measured with 'vm-security-check.sh measure' on a booted image. A looser value needs a reason in the same commit.",
+  "_comment": "Security baseline of the development image 0.0.61 (ports as proto:scope:port, LLMNR off and no sudo/pkexec/pam_timestamp_check setuid since RUY-18), checked by scripts/vm-security-check.sh (T-424). Measured with 'vm-security-check.sh measure' on a booted image. A looser value needs a reason in the same commit.",
   "units": {
     "ruya-boot-marker.service": {
       "max_exposure": 9.6,
@@ -44,28 +44,20 @@
   },
   "ports": [
     {
-      "port": "tcp:22",
+      "port": "tcp:any:22",
       "reason": "sshd, development image only (LISTEN on 0.0.0.0 and [::]); not for release (T-425)"
     },
     {
-      "port": "tcp:53",
+      "port": "tcp:loopback:53",
       "reason": "systemd-resolved stub on 127.0.0.53/127.0.0.54, loopback only"
     },
     {
-      "port": "tcp:5355",
-      "reason": "systemd-resolved LLMNR responder, all interfaces; should be off (Inbox)"
-    },
-    {
-      "port": "udp:323",
+      "port": "udp:loopback:323",
       "reason": "chronyd command port (time sync), loopback; measured 0.0.61"
     },
     {
-      "port": "udp:53",
+      "port": "udp:loopback:53",
       "reason": "systemd-resolved stub on 127.0.0.53/127.0.0.54, loopback only"
-    },
-    {
-      "port": "udp:5355",
-      "reason": "systemd-resolved LLMNR responder, all interfaces; should be off (Inbox)"
     }
   ],
   "unconfined": [
@@ -136,24 +128,12 @@
       "reason": "NVIDIA driver (ADR-009), loads nvidia-uvm/device nodes for non-root users"
     },
     {
-      "path": "/usr/bin/pam_timestamp_check",
-      "reason": "not needed on a console OS (services use polkitd over D-Bus, not the binary), should go (Inbox)"
-    },
-    {
       "path": "/usr/bin/passwd",
       "reason": "Fedora default (shadow-utils / util-linux)"
     },
     {
-      "path": "/usr/bin/pkexec",
-      "reason": "not needed on a console OS (services use polkitd over D-Bus, not the binary), should go (Inbox)"
-    },
-    {
       "path": "/usr/bin/su",
       "reason": "Fedora default (shadow-utils / util-linux)"
-    },
-    {
-      "path": "/usr/bin/sudo",
-      "reason": "sudo, Fedora default; not needed on a console OS (Inbox)"
     },
     {
       "path": "/usr/bin/umount",

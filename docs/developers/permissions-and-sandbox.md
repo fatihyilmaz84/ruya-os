@@ -27,6 +27,8 @@ Your game runs in a Flatpak sandbox as the profile's own Unix user. What it may 
 
 Use `--socket=wayland`. An X11-only game (`--socket=x11` or `--socket=fallback-x11` and no `--socket=wayland`) runs on a private X server of its own (*experimental*, [fullscreen-and-lifecycle.md](fullscreen-and-lifecycle.md)); do not add X11 next to Wayland, the console never uses it then. Do not add `--share=ipc` unless a library demands it.
 
+With `--share=network`, names resolve through the console's DNS (systemd-resolved). The console does not answer or ask LLMNR, and resolved's mDNS is off: a game that finds another machine on the home network by a bare host name gets no answer that way; do your own discovery (mDNS or a broadcast, which `--share=network` allows) or use an address.
+
 ## What the Store shows, and what is "High risk"
 
 The Store reads your app's metadata and lists these, in this order (`ruya-store`, `shell/qml/AppDetailPage.qml`):
