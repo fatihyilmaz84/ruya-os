@@ -6,7 +6,7 @@
 # so vm-input-probe.py holds its own bus connection), rumble is forwarded, and a killed service
 # is back within 0.5 s. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|fallback|confirm|hold|twopads]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|fallback|confirm|hold|twopads|guide]
 # `confirm` (RUY-40) checks the family's confirm button with a uinput pad announcing Nintendo's vendor
 # id: BTN_EAST gives KEY_ENTER and BTN_SOUTH KEY_ESC on RuyaOS Navigation, `south` swaps them back, `east`
 # gives them to every family, the ConfirmButton property follows, bad modes and accounts are refused. It stops
@@ -23,6 +23,8 @@
 # for a pad with Nintendo's vendor id: each virtual pad emits its own pad's profile, and emptying the family's slot
 # changes only that pad; a slot the profile's match does not name is refused. Afterwards each slot it used gets back the
 # profile it held before (ListProfiles read first) and its own profiles are deleted.
+# `guide` (RUY-11) with two uinput pads in route `app` (shell stopped like `twopads`): the Guide button of either pad, held
+# 0.6 s, gives KEY_HOMEPAGE down and up on RuyaOS Navigation and no BTN_MODE on either virtual pad the profile user reads.
 # `check` runs the first four, then `caps` and `profiles`. `profiles` (RUY-42) checks the controller
 # profiles over busctl: the built-ins, validation (a bad file, 64 KiB + 1), storage in
 # /var/lib/ruya-input/profiles/<profile>/ (0700 / 0600, ruya-input's, unreadable to the profile
@@ -574,6 +576,17 @@ twopads)
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe twopads --user "ruya-$me"
     echo "--- a profile per pad (RUY-545)"
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe twoprofiles --user "ruya-$me"
+    rm -rf "$dir"
+    ;;
+guide)
+    two_profiles
+    [ -n "$me" ] && ok "profile $me" || { bad "need a profile"; exit 1; }
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
+    dir="$(mktemp -d /var/tmp/ruya-input-check.XXXXXX)"
+    chmod 0755 "$dir"
+    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    echo "--- Guide never reaches a game (RUY-11)"
+    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe guide --user "ruya-$me"
     rm -rf "$dir"
     ;;
 hold)

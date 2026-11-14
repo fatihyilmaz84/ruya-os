@@ -705,6 +705,86 @@ def cmd_twopads(args):
     return fails
 
 
+def cmd_guide(args):
+    """RUY-11: two pads in route `app`; the Guide button of either one gives KEY_HOMEPAGE (press, a long
+    hold, release) on RuyaOS Navigation and never a BTN_MODE on the game's virtual pad. A BTN_SOUTH
+    pressed while Guide is held must reach one of the virtual pads (the positive control: a dead pad would read nothing)."""
+    fails = 0
+
+    def ok(msg):
+        print(f"PASS: {msg}", flush=True)
+
+    def bad(msg):
+        nonlocal fails
+        fails += 1
+        print(f"FAIL: {msg}", flush=True)
+
+    pads = [FakePad(phys="vm-check/pad0", name=NAME), FakePad(0x1234, 0x5679, "vm-check/pad1", NAME + " 2")]
+    bus = None
+    game = None
+    try:
+        if not wait_for(lambda: len([d for d in (devices() or []) if d.get("name") in (NAME, NAME + " 2")]) == 2, 5):
+            bad("ListDevices does not list both pads")
+            return fails
+        bus = Bus()
+        status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-guide", "org.ruyaos.VmCheck", args.profile])
+        if status != "ok":
+            bad(f"SetRoute app: {status}")
+            return fails
+        v1 = wait_for(lambda: node_by("phys", "ruya-input/pad1")[0], 3)
+        v2 = wait_for(lambda: node_by("phys", "ruya-input/pad2")[0], 3)
+        if not v1 or not v2:
+            bad(f"both virtual pads should exist (pad1 {v1}, pad2 {v2})")
+            return fails
+        games = [Game(args.user, v1), Game(args.user, v2)]
+        game = games
+        for g in games:
+            if not g.hello.startswith("OPEN ok"):
+                bad(f"{args.user} cannot open a virtual pad: {g.hello}")
+                return fails
+        if not wait_for(lambda: all(d.get("routed") for d in (devices() or []) if d.get("name") in (NAME, NAME + " 2")), 3):
+            bad("the pads are not routed to the virtual pads")
+            return fails
+        nav = Nav()
+        if nav.fd is None:
+            bad("RuyaOS Navigation is not there")
+            return fails
+        nav.keys(0.3)
+        for i, pad in enumerate(pads):
+            for g in games:
+                g.events(100)
+            nav.keys(0.1)
+            pad.emit(EV_KEY, BTN_MODE, 1)
+            time.sleep(0.6)                      # a long hold: the shell times it, the service just passes it
+            pad.emit(EV_KEY, BTN_SOUTH, 1)       # positive control: a live pad must carry this while Guide is held
+            pad.emit(EV_KEY, BTN_SOUTH, 0)
+            pad.emit(EV_KEY, BTN_MODE, 0)
+            keys = nav.keys(0.4)
+            if (KEY_HOMEPAGE, 1) in keys and (KEY_HOMEPAGE, 0) in keys:
+                ok(f"pad {i}: Guide gives KEY_HOMEPAGE down and up on RuyaOS Navigation")
+            else:
+                bad(f"pad {i}: Guide gave {keys} on RuyaOS Navigation")
+            reads = [g.events(300) for g in games]
+            if not any(isinstance(ev, list) and (EV_KEY, BTN_SOUTH, 1) in ev for ev in reads):
+                bad(f"pad {i}: BTN_SOUTH reached no virtual pad (dead pad?): {reads}")
+            else:
+                ok(f"pad {i}: BTN_SOUTH reaches a virtual pad while Guide is held")
+            for j, ev in enumerate(reads):
+                if isinstance(ev, list) and not any(c == BTN_MODE for _, c, _ in ev):
+                    ok(f"pad {i}: no BTN_MODE on virtual pad {j + 1}")
+                else:
+                    bad(f"pad {i}: virtual pad {j + 1} read {ev}")
+    finally:
+        for g in (game or []):
+            g.close()
+        if bus:
+            bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+            bus.close()
+        for p in pads:
+            p.close()
+    return fails
+
+
 def cmd_twoprofiles(args):
     """RUY-545: two pads, two global slots assigned over Input1: pad A's own device profile (South as
     East) and the Nintendo family's (South as LB) for pad B, a pad with Nintendo's vendor id. In `app`
@@ -1044,6 +1124,9 @@ def main():
     tp = sub.add_parser("twopads")
     tp.add_argument("--user", required=True)
     tp.add_argument("--profile", required=True)
+    gd = sub.add_parser("guide")
+    gd.add_argument("--user", required=True)
+    gd.add_argument("--profile", required=True)
     tw = sub.add_parser("twoprofiles")
     tw.add_argument("--user", required=True)
     tw.add_argument("--profile", required=True)
@@ -1058,6 +1141,8 @@ def main():
         sys.exit(1 if cmd_confirm(args) else 0)
     if args.cmd == "twopads":
         sys.exit(1 if cmd_twopads(args) else 0)
+    if args.cmd == "guide":
+        sys.exit(1 if cmd_guide(args) else 0)
     if args.cmd == "twoprofiles":
         sys.exit(1 if cmd_twoprofiles(args) else 0)
     if args.cmd == "hold":

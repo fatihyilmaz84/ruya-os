@@ -1673,6 +1673,32 @@ mod tests {
     }
 
     #[test]
+    fn guide_from_either_of_two_pads_reaches_the_shell_and_neither_game_pad() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.backend_mut().take();
+        for pad_key in [a, b] {
+            r.input(pad_key, &[press(PadButton::South), press(PadButton::Guide)]);
+            let calls = r.backend_mut().take();
+            assert_eq!(nav(&calls), vec![(NavKey::Guide, true)]);
+            for (_, events) in writes(&calls) {
+                assert!(!events.iter().any(|e| e.1 == code::BTN_MODE), "{events:?}");
+            }
+            r.input(
+                pad_key,
+                &[release(PadButton::Guide), release(PadButton::South)],
+            );
+            let calls = r.backend_mut().take();
+            assert_eq!(nav(&calls), vec![(NavKey::Guide, false)]);
+            for (_, events) in writes(&calls) {
+                assert!(!events.iter().any(|e| e.1 == code::BTN_MODE), "{events:?}");
+            }
+        }
+    }
+
+    #[test]
     fn entering_an_app_releases_held_navigation_keys_once() {
         let mut r = router();
         let a = r.add_pad(pad("a"), t0());

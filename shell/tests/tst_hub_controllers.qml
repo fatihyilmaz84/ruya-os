@@ -25,6 +25,18 @@ Item {
         }
     }
 
+    // A game that takes every key and counts them.
+    Component {
+        id: countingAppComponent
+        Item {
+            objectName: "standInApp"
+            property string appId: "org.example.Racer"
+            property int keysSeen: 0
+            Keys.onPressed: event => { keysSeen++; event.accepted = true }
+            Keys.onReleased: event => { keysSeen++; event.accepted = true }
+        }
+    }
+
     // A "game" with something to look at behind the Hub (screenshots).
     Component {
         id: pictureAppComponent
@@ -393,6 +405,39 @@ Item {
             compare(find("page_settings").current.key, "controllers")
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("page_settings") === null, 2000)
+        }
+
+        // ---- Guide from any pad (RUY-11) ---------------------------------------------------------------------------------
+
+        // RUY-11: a Guide from any pad is the shell's key (ruya-inputd sends KEY_HOMEPAGE for every pad).
+        // The game on screen never sees it, short or long. Two pads are connected: the shell does not
+        // care which one was pressed.
+        function test_guide_from_two_pads_opens_the_hub_and_power_and_never_reaches_the_game() {
+            start()
+            Bluetooth.mockTwoPads()
+            plugIn("usb-1", "Xbox Controller", "xbox")
+            tryVerify(() => Bluetooth.gamepads.length >= 2)
+            keyClick(Qt.Key_Return)
+            tryCompare(launchedSpy, "count", 1)
+            tryVerify(() => Session.running.length === 1)
+            const app = createTemporaryObject(countingAppComponent, host)
+            verify(app)
+            tc.shell.addApp(app, "p2")
+            tryVerify(() => app.activeFocus, 2000, "the app takes the focus")
+            for (let round = 0; round < 2; ++round) {   // once per pad; the shell cannot tell the pads apart
+                keyClick(Qt.Key_HomePage)             // short: opens the Hub
+                tryVerify(() => find("systemActions").activeFocus, 2000, "the Hub opens")
+                compare(find("systemPanel").powerMode, false)
+                keyClick(Qt.Key_HomePage)             // short again: closes it
+                tryVerify(() => app.activeFocus, 2000, "the game has the focus again")
+                verify(!find("systemPanel").open)
+            }
+            keyPress(Qt.Key_HomePage)                 // long: the power choices
+            tryVerify(() => find("systemActions").activeFocus, 2000, "the Hub opens on press")
+            tryCompare(find("systemPanel"), "powerMode", true, Theme.guideHoldMs + 2000)
+            keyRelease(Qt.Key_HomePage)
+            verify(find("systemPanel").open, "releasing after the hold does not close it")
+            compare(app.keysSeen, 0, "the game never saw a Guide key")
         }
 
         // ---- Screenshots (dev.ps1 shots) ------------------------------------------------------------------------------------
