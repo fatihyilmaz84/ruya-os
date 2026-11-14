@@ -1579,7 +1579,6 @@ FocusScope {
                     PlayerChip {
                         required property var modelData
                         objectName: "playerChip_" + modelData.slot
-                        anchors.verticalCenter: parent.verticalCenter
                         u: root.u
                         profileId: modelData.profile
                         slot: modelData.slot
