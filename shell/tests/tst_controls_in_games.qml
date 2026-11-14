@@ -60,6 +60,7 @@ Item {
 
         function cleanup() {
             clearToasts()
+            Input.mockHoldSaves(false)
             Input.mockResetProfiles()
             DeviceSettings.language = "en"
         }
@@ -463,10 +464,140 @@ Item {
             Input.mockSetProfileStatusOnce("ValidateProfile", "invalid")    // the first save is refused
             GameControls.show(pro)
             GameControls.setStick("left", "outer_deadzone", 0.05, false)
-            tryVerify(() => hasToast("Could not save the change / Try again."), 3000, toastTexts().join("; "))
+            tryVerify(() => hasToast("Could not save the change for DualSense / Try again."), 3000, toastTexts().join("; "))
+            verify(!hasToast("Could not save the change / Try again."), "the refused pad is named, not the shown one")
             tryVerify(() => savesOf(proOwn).length === 1, 3000, "the other pad's change is saved")
             tryVerify(() => !GameControls.busy, 3000)
             compare(savesOf(proOwn).length + savesOf(dsOwn).length, 1, "only the refused pad's change is lost")
+        }
+
+        // RUY-586: the shown pad's own refusal keeps the plain toast.
+        function test_a_refused_save_of_the_shown_pad_keeps_the_plain_toast() {
+            openStick("left")                            // the DualSense, shown
+            Input.mockSetProfileStatusOnce("ValidateProfile", "invalid")
+            GameControls.setStick("left", "outer_deadzone", 0.05, false)
+            tryVerify(() => hasToast("Could not save the change / Try again."), 3000, toastTexts().join("; "))
+            tryVerify(() => !GameControls.busy, 3000)
+            compare(toastTexts().filter(t => t.indexOf(" for ") >= 0).length, 0, toastTexts().join("; "))
+        }
+
+        // RUY-595: an import drops the pad's waiting change (it would be saved after the import).
+        function test_an_import_drops_the_pads_waiting_change() {
+            plugStick()
+            Storage.mockSetFile("vol-stick", "mine.json", profileText("mine", { inherits: "nintendo" }), 1731456000)
+            openControls()
+            GameControls.setStick("left", "inner_deadzone", 0.2, true)   // waits 300 ms
+            verify(GameControls.busy, "the change waits")
+            GameControls.importFrom("vol-stick", "mine.json")
+            tryVerify(() => !GameControls.importing && !GameControls.busy, 3000)
+            compare(savesOf(dsOwn).length, 1, "only the import is saved")
+            compare(savesOf(dsOwn)[0].inherits, "nintendo")
+            tryVerify(() => chainOf(ds)[0] === dsOwn, 2000)
+        }
+
+        // RUY-595: an import starts after the save in flight; a new edit waits behind the import.
+        function test_an_import_waits_for_the_save_in_flight() {
+            plugStick()
+            Storage.mockSetFile("vol-stick", "mine.json", profileText("mine", { inherits: "nintendo" }), 1731456000)
+            openControls()
+            Input.mockHoldSaves(true)
+            GameControls.setStick("left", "inner_deadzone", 0.2, false)
+            tryCompare(GameControls, "phase", "save")
+            GameControls.importFrom("vol-stick", "mine.json")
+            verify(GameControls.pendingImport !== null, "the import waits")
+            GameControls.setStick("left", "outer_deadzone", 0.05, false)   // behind the import
+            verify(GameControls.busy)
+            compare(calls("ValidateProfile").length, 1, "the import did not start")
+            Input.mockHoldSaves(false)
+            tryVerify(() => !GameControls.importing && !GameControls.busy, 3000)
+            const saves = savesOf(dsOwn)
+            compare(saves.length, 2, "the first edit and the import; the edit made meanwhile is dropped")
+            compare(saves[0].inherits, undefined)
+            compare(saves[1].inherits, "nintendo", "the import is what the service ends with")
+            compare(saves[1].settings, undefined)
+        }
+
+        // RUY-595: while the import runs, the pad's new edit is held; an accepted import drops it.
+        function test_an_edit_during_a_running_import_is_held_and_dropped_when_accepted() {
+            plugStick()
+            Storage.mockSetFile("vol-stick", "mine.json", profileText("mine", { inherits: "nintendo" }), 1731456000)
+            openControls()
+            Input.mockHoldSaves(true)
+            GameControls.importFrom("vol-stick", "mine.json")
+            compare(GameControls.phase, "", "no save in flight: the import runs at once")
+            tryVerify(() => calls("SaveProfile").length === 1, 3000, "the import's save is held")
+            const validates = calls("ValidateProfile").length
+            GameControls.setStick("left", "outer_deadzone", 0.05, false)
+            compare(GameControls.queue.length, 1, "the edit waits behind the import")
+            compare(GameControls.phase, "", "and does not start")
+            compare(calls("ValidateProfile").length, validates)
+            Input.mockHoldSaves(false)
+            tryVerify(() => !GameControls.importing && !GameControls.busy, 3000)
+            compare(savesOf(dsOwn).length, 1, "only the import was saved")
+            compare(savesOf(dsOwn)[0].inherits, "nintendo")
+        }
+
+        // RUY-595: after a refused import the held edit is saved as usual.
+        function test_an_edit_during_a_refused_import_is_saved_after_it() {
+            plugStick()
+            Storage.mockSetFile("vol-stick", "bad.json", "not json at all", 1731456000)
+            openControls()
+            GameControls.importFrom("vol-stick", "bad.json")
+            GameControls.setStick("left", "outer_deadzone", 0.05, false)
+            compare(GameControls.queue.length, 1, "the edit waits behind the import")
+            tryVerify(() => hasToast("That file can't be used / It isn't a RuyaOS controls file."), 3000, toastTexts().join("; "))
+            tryVerify(() => savesOf(dsOwn).length === 1, 3000, "the edit is saved")
+            tryVerify(() => !GameControls.busy, 3000)
+        }
+
+        // RUY-595: an import on one pad's page leaves another pad's waiting change to be saved.
+        function test_an_import_keeps_another_pads_waiting_change() {
+            const proOwn = "controls-device-" + pro
+            plugStick()
+            Storage.mockSetFile("vol-stick", "mine.json", profileText("mine", { inherits: "nintendo" }), 1731456000)
+            openControls()
+            GameControls.show(pro)
+            GameControls.setStick("left", "outer_deadzone", 0.05, true)    // the Pro Controller's change waits
+            GameControls.show(ds)
+            GameControls.importFrom("vol-stick", "mine.json")
+            tryVerify(() => savesOf(proOwn).length === 1, 3000, "the other pad's change is saved")
+            tryVerify(() => !GameControls.importing && !GameControls.busy, 3000)
+            compare(savesOf(dsOwn).length, 1, "the DualSense has only the import")
+            compare(savesOf(dsOwn)[0].inherits, "nintendo")
+        }
+
+        // RUY-595: a new owner does not inherit the old one's import hold.
+        function test_an_owner_change_ends_the_import_hold() {
+            plugStick()
+            Storage.mockSetFile("vol-stick", "mine.json", profileText("mine", { inherits: "nintendo" }), 1731456000)
+            openControls()
+            Input.mockHoldSaves(true)
+            GameControls.importFrom("vol-stick", "mine.json")
+            tryVerify(() => calls("SaveProfile").length === 1, 3000, "the import's save is held")
+            verify(GameControls.importing)
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            verify(!GameControls.importing, "the hold ended with the owner")
+            verify(GameControls.pendingImport === null)
+        }
+
+        // RUY-595: an export that waited for the save in flight still runs after the import that went first.
+        function test_an_export_waiting_behind_an_import_still_runs() {
+            plugStick()
+            Storage.mockSetFile("vol-stick", "mine.json", profileText("mine", { inherits: "nintendo" }), 1731456000)
+            given(dsOwn, { match: { device: ds } }, "device:" + ds, ds)
+            openControls()
+            tryVerify(() => GameControls.stored !== null, 2000)
+            Input.mockHoldSaves(true)
+            GameControls.setStick("left", "inner_deadzone", 0.2, false)
+            tryCompare(GameControls, "phase", "save")
+            GameControls.importFrom("vol-stick", "mine.json")
+            GameControls.exportTo("vol-stick")
+            compare(GameControls.exportVolume, "vol-stick", "the export waits")
+            Input.mockHoldSaves(false)
+            tryVerify(() => hasToast("Saved to the USB drive / " + Input.exportFileName("p2")), 4000, toastTexts().join("; "))
+            tryVerify(() => !GameControls.importing && !GameControls.busy, 3000)
+            compare(GameControls.exportVolume, "")
         }
 
         function confirmReset() {

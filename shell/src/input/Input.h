@@ -176,6 +176,8 @@ public:
     // Every later call of `method` answers `status` ("" = as the mock service would; reset by
     // mockResetProfiles): a refused save for the Controls in games pages (RUY-465).
     Q_INVOKABLE void mockSetProfileStatus(const QString &method, const QString &status);
+    // While true SaveProfile calls wait (recorded, not carried out); false carries them out in order (RUY-595).
+    Q_INVOKABLE void mockHoldSaves(bool hold);
     Q_INVOKABLE void mockSetProfileStatusOnce(const QString &method, const QString &status);
 
 signals:

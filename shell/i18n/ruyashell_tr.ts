@@ -2101,6 +2101,10 @@ Bu geri alınamaz.</translation>
         <translation>Değişiklik kaydedilemedi</translation>
     </message>
     <message>
+        <source>Could not save the change for %1</source>
+        <translation>%1 için değişiklik kaydedilemedi</translation>
+    </message>
+    <message>
         <location line="+154"/>
         <source>Saved to the USB drive</source>
         <translation>USB belleğe kaydedildi</translation>

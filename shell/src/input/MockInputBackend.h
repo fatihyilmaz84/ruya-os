@@ -52,6 +52,8 @@ public:
         m_profiles.reset();
         m_forcedStatus.clear();
         m_forcedOnce.clear();
+        m_holdSaves = false;
+        m_held.clear();
         m_confirm.clear();
     }
     // While set, every call of `method` answers `status` (its other out-arguments empty) without
@@ -64,6 +66,10 @@ public:
         else
             m_forcedStatus.insert(method, status);
     }
+
+    // While on, SaveProfile calls are recorded but not carried out nor answered until the hold ends;
+    // then they run in order (RUY-595: a save still in flight).
+    void holdSaves(bool hold);
 
     // Like setProfileStatus, but only the next call of `method` is answered so (RUY-571).
     void setProfileStatusOnce(const QString &method, const QString &status)
@@ -125,6 +131,10 @@ private:
     bool m_pads = false;
     int m_padGeneration = 0;
     bool m_fail = false;
+    bool m_holdSaves = false;
+    bool m_replaying = false;
+    struct HeldCall { quint64 token; QVariantMap args; };
+    QList<HeldCall> m_held;
     bool m_listFail = false;
     QVariantList m_devices;
     QSet<QString> m_tests;
