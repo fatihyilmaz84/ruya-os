@@ -104,10 +104,8 @@ QtObject {
         queue = []
         inFlight = null
         phase = ""
-        if (pendingImport !== null) {
-            pendingImport = null
-            importing = false
-        }
+        pendingImport = null
+        importing = false       // the old owner's ImportFinished is ignored; its hold on the queue ends
         loadState = "loading"
         if (owner !== "")
             refresh()
@@ -623,8 +621,17 @@ QtObject {
         function onImportFinished(profile, volumeId, fileName, status, profileId, errors) {
             if (profile !== games.owner)
                 return
+            // An accepted import replaces the pad's controls: what was edited meanwhile was built on the
+            // document from before it and is dropped; after a refusal it is saved as usual.
+            if (status === "ok") {
+                games.queue = games.queue.filter(q => q.padKey !== games.importPad)
+                if (games.queue.length === 0)
+                    games.debounceTimer.stop()
+            }
             games.importing = false
             games.flush()
+            if (games.phase === "" && games.queue.length === 0 && games.exportVolume !== "")
+                games.startExport()     // an export that waited for the import
             if (status === "ok") {
                 Notifications.show(qsTr("Controls imported"), "success", "", "", fileName)
                 games.refresh()
