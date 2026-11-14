@@ -35,8 +35,13 @@
     </message>
     <message>
         <location line="+1"/>
-        <source>GPL-3.0-or-later; icon font Apache-2.0; Inter typeface OFL-1.1</source>
-        <translation>GPL-3.0 veya üzeri; simge yazı tipi Apache-2.0; Inter yazı tipi OFL-1.1</translation>
+        <source>GPL-3.0-or-later</source>
+        <translation>GPL-3.0 veya üzeri</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Icon font: Apache-2.0. Inter typeface: OFL-1.1.</source>
+        <translation>Simge yazı tipi: Apache-2.0. Inter yazı tipi: OFL-1.1.</translation>
     </message>
     <message>
         <location line="+7"/>

@@ -37,7 +37,12 @@ SettingsPane {
         kind: "info"
         u: pane.u
         label: qsTr("Licence")
-        value: qsTr("GPL-3.0-or-later; icon font Apache-2.0; Inter typeface OFL-1.1")
+        value: qsTr("GPL-3.0-or-later")
+    }
+    SettingNote {
+        objectName: "aboutLicenceNote"
+        u: pane.u
+        text: qsTr("Icon font: Apache-2.0. Inter typeface: OFL-1.1.")
     }
     SettingRow {
         id: systemInfoRow

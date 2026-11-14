@@ -928,8 +928,6 @@ Item {
             openPowerPane()
             IdleInhibit.acquire("audio")
             IdleInhibit.acquire("job")
-            IdleInhibit.acquire("update")
-            IdleInhibit.acquire("wayland:3")
             settle()
             grabImage(tc.shell).save(shotsDir + "/92-power-saving-held-tr-720p.png")
             host.width = 1920
@@ -942,6 +940,10 @@ Item {
             tryVerify(() => find("rowKeepingAwake").activeFocus, 2000)
             settle()
             grabImage(tc.shell).save(shotsDir + "/92-power-saving-held-tr-large.png")
+            IdleInhibit.acquire("update")                // four holders: the first and "ve 3 tane daha"
+            IdleInhibit.acquire("wayland:3")
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/92-power-saving-held-4-tr-large.png")
             Display.setUiScale(0)
             host.width = 1280
             host.height = 720
