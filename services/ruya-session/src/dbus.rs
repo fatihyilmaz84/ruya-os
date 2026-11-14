@@ -365,12 +365,7 @@ impl SessionIface {
             .collect()
     }
 
-    async fn report_presence(
-        &self,
-        profile: &str,
-        instance: &str,
-        attention: &str,
-    ) -> String {
+    async fn report_presence(&self, profile: &str, instance: &str, attention: &str) -> String {
         let Some(attention) = Attention::parse(attention) else {
             return "invalid".to_owned();
         };
