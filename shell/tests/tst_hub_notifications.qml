@@ -85,13 +85,11 @@ Item {
             NotificationCentre.mockSetNow(-1)
             TimeZone.mockSetNow(-1)
             tryCompare(NotificationCentre, "quiet", false)
-            Notifications.durationMs = 60000
             launchedSpy.clear()
             clearToasts()
         }
 
         function cleanup() {
-            Notifications.durationMs = Theme.toastMs
             Notifications.appInFront = false
             Notifications.overlayOpen = false
             DeviceSettings.language = "en"
@@ -479,10 +477,9 @@ Item {
             compare(Sfx.notificationCount, cues + 1, "and a cue with it on")
         }
 
-        function test_show_each_for_drives_the_toast_time() {
+        // Named to run first: the file never assigns `durationMs`, so the product's own binding is what is read.
+        function test_a_show_each_for_drives_the_toast_time() {
             start()
-            // The binding the product has (other tests replace it with a number).
-            Notifications.durationMs = Qt.binding(() => NotificationCentre.toastSeconds * 1000)
             compare(Notifications.durationMs, 4000, "the default is 4 s")
             openPane()
             rowFocus("rowNotifToastSeconds")
