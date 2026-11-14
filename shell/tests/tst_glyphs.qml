@@ -259,6 +259,47 @@ Item {
             compare(g.Accessible.name, "Enter")
         }
 
+        // A page of one controller draws that pad's glyphs in the hint bar, whatever pad pressed last
+        // (lead decision, RUY-41 round 2; 04 §3.7).
+        function test_a_controllers_own_pages_draw_its_glyphs() {
+            signIn()
+            Input.mockActiveInput(xbox, "xbox")
+            tryCompare(Input, "activeFamily", "xbox")
+            openControllerPage(ds)
+            const bar = findChild(tc.shell, "hintBar")
+            tryVerify(() => findChild(bar, "hint_accept") !== null, 2000, "the controller page offers Accept")
+            compare(drawn(glyphsOf(bar, "hint_accept")[0]), "shape:cross", "the DualSense's page: its Cross, not Xbox's A")
+            compare(drawn(glyphsOf(bar, "hint_back")[0]), "shape:circle")
+            keyClick(Qt.Key_Return)                      // Button test
+            tryCompare(tc.shell, "currentPage", "buttonTest")
+            tryVerify(() => findChild(bar, "hint_back") !== null && glyphsOf(bar, "hint_back")[0].kind === "shape", 2000,
+                      "the Button test's hint draws the pad's Circle")
+            compare(drawn(glyphsOf(bar, "hint_back")[0]), "shape:circle")
+            compare(Input.activeFamily, "xbox", "the active input did not change")
+            keyClick(Qt.Key_Escape)
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "controller")
+            tryVerify(() => findChild(tc.shell, "rowButtonTest").activeFocus, 2000, "back on Button test")
+            keyClick(Qt.Key_Escape)                      // back to Settings: the active input's glyphs again
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => findChild(bar, "hint_back") !== null && drawn(glyphsOf(bar, "hint_back")[0]) === "B", 2000,
+                      "Settings draws the active Xbox pad's B")
+        }
+
+        function openControllerPage(id) {
+            tc.shell.openPage("settings", { category: "controllers" })
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => findChild(tc.shell, "categoryList").activeFocus, 2000)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => findChild(tc.shell, "paneControllers").activeFocus, 2000)
+            for (let i = 0; i < 6 && !findChild(tc.shell, "pad_" + id).activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(findChild(tc.shell, "pad_" + id).activeFocus)
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "controller")
+            tryVerify(() => findChild(tc.shell, "rowButtonTest") !== null && findChild(tc.shell, "rowButtonTest").activeFocus, 2000)
+        }
+
         // ---- screenshots: Home's and Settings' hint bars per family, a PlayStation pad's page ---------
 
         function signIn() {

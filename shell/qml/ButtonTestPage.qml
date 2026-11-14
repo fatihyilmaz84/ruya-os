@@ -19,6 +19,9 @@ Page {
     readonly property string padId: String((params ?? {}).id ?? "")
     readonly property var current: ControllerPads.controllers().find(p => p.id === padId) ?? null
     property var pad: ({ id: padId, name: "", family: "", layout: "", connection: "", percent: -1, state: "", slot: 0 })
+    // The hint bar draws this pad's buttons (RUY-41).
+    glyphFamily: pad.family ?? ""
+    glyphConfirmMode: String(Input.confirmButtons[padId] ?? "family")
     onCurrentChanged: if (current) pad = current
 
     title: qsTr("Button test")

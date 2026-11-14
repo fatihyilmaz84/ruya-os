@@ -2393,8 +2393,15 @@ FocusScope {
             return [{ action: "back", text: qsTr("Cancel") }]
         if (!signedIn)
             return setupActive ? setup.hints : [{ action: "accept", text: qsTr("Select") }]
-        if (pageOpen)       // slots and pageStack are updated one after the other
-            return slots.length > 0 ? (slots[slots.length - 1].page?.hints ?? []) : []
+        if (pageOpen) {     // slots and pageStack are updated one after the other
+            const top = slots.length > 0 ? slots[slots.length - 1].page : null
+            if (!top)
+                return []
+            const own = top.hints ?? []
+            // A page of one controller draws that pad's glyphs (RUY-41).
+            return (top.glyphFamily ?? "") === "" ? own
+                : own.map(h => Object.assign({ family: top.glyphFamily, confirmMode: top.glyphConfirmMode }, h))
+        }
         if (homeOptionsAvailable) {
             return [{ action: "accept", text: qsTr("Select") },
                     { action: "options", text: qsTr("Options") },

@@ -7,7 +7,7 @@ import RuyaShell
 // of 06 §11.1 (accept, back, options, ...), never letters (lint-glyph-actions.ps1); ButtonGlyph draws
 // each on the active input (RUY-41). A hint with two actions and one verb (LB RB Sections) gives
 // { actions: ["tabPrev", "tabNext"], text }; an optional `family` draws one device's glyph whatever
-// the active input is (the capture dialog's Esc). Never focusable; the shell decides what it says
+// the active input is (the capture dialog's Esc), and `confirmMode` with it (a page of one controller, Page.glyphFamily). Never focusable; the shell decides what it says
 // and whether it shows.
 Item {
     id: bar
@@ -44,11 +44,13 @@ Item {
                 // Each glyph carries its own action and family, so no glyph reads the hint row while
                 // the bar's model changes and the rows go.
                 Repeater {
-                    model: hint.actions.map(a => ({ action: a, family: hint.modelData.family ?? "" }))
+                    model: hint.actions.map(a => ({ action: a, family: hint.modelData.family ?? "",
+                                                    confirmMode: hint.modelData.confirmMode ?? "" }))
                     delegate: ButtonGlyph {
                         required property var modelData
                         action: modelData.action
                         family: modelData.family !== "" ? modelData.family : Input.activeFamily
+                        confirmMode: modelData.confirmMode !== "" ? modelData.confirmMode : Input.confirmButton
                         u: bar.u
                     }
                 }

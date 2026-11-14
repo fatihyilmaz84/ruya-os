@@ -17,7 +17,12 @@ FocusScope {
     property real marginX: 0
     property real marginY: 0
 
-    // What the buttons do on this page, for the shell's hint bar (T-158): a list of { button, text }.
+    // A page that shows one controller (its page, its Button test, its Controls in games pages) draws
+    // that pad's glyphs in the hint bar, after that pad's Confirm choice, whatever pad pressed last
+    // (RUY-41, 04 §3.7): set its family and mode here. "" = the active input's.
+    property string glyphFamily: ""
+    property string glyphConfirmMode: ""
+    // What the buttons do on this page, for the shell's hint bar (T-158): a list of { action, text }.
     // Override it for a page with nothing to select: `hints: page.backOnlyHints`.
     readonly property var backOnlyHints: [{ action: "back", text: qsTr("Back") }]
     property var hints: [

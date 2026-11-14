@@ -15,6 +15,9 @@ Page {
 
     readonly property string padId: String((params ?? {}).id ?? "")
     readonly property var pad: GameControls.padFor(padId)
+    // The hint bar draws this pad's buttons (RUY-41).
+    glyphFamily: pad ? pad.family : ""
+    glyphConfirmMode: String(Input.confirmButtons[padId] ?? "family")
     readonly property string family: pad ? pad.family : ""
 
     title: qsTr("Remap buttons")

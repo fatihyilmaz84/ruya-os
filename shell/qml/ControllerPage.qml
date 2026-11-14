@@ -24,6 +24,8 @@ Page {
     onCurrentChanged: if (current) pad = current
     // This pad's Confirm button for the signed-in profile (RUY-603): "family" | "south" | "east".
     readonly property string confirmMode: String(Input.confirmButtons[padId] ?? "family")
+    glyphFamily: pad.family ?? ""
+    glyphConfirmMode: confirmMode
     Component.onCompleted: {
         if (current)
             pad = current

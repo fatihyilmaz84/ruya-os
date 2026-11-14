@@ -313,7 +313,7 @@ Item {
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Down)
             verify(!find("activityWeek").activeFocus)
-            verify(tc.shown().indexOf("Left/Right") < 0, "other rows: " + tc.shown())
+            verify(tc.shown().indexOf("left_right") < 0, "other rows: " + tc.shown())
         }
 
         function test_picker_pin_pad() {
