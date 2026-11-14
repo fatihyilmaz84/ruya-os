@@ -619,6 +619,7 @@ Item {
             tryCompare(Input, "activeFamily", "playstation")
             compare(pageFind("confirmNoteAccept").shown, "A")
             compare(pageFind("confirmNoteAccept").kind, "text", "still the Nintendo letter, not a PlayStation shape")
+            verify(row.Accessible.name.endsWith("On this controller: A confirms, B goes back."), "the sentence too: " + row.Accessible.name)
             closeController(pro)
             const dsRow = reopenConfirm(ds)
             compare(pageFind("confirmNoteAccept").shape, "cross", "a PlayStation pad as on the controller: Cross")

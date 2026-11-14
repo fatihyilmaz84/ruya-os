@@ -169,6 +169,17 @@ Item {
             compare(drawn(glyphsOf(bar, "hint_options")[0]), "Menu")
         }
 
+        // A ButtonGlyph that names no family draws the active input's (the toast footer, any caller).
+        function test_a_glyph_without_a_family_follows_the_active_input() {
+            const g = createTemporaryObject(glyphComponent, host, { action: "accept" })
+            compare(drawn(g), "A")
+            Input.mockActiveInput(ds, "playstation")
+            tryCompare(Input, "activeFamily", "playstation")
+            compare(drawn(g), "shape:cross")
+            Input.mockKeyFrom("USB Keyboard", Qt.Key_Return)
+            compare(drawn(g), "Enter")
+        }
+
         function test_accept_follows_the_active_pads_confirm_mode() {
             const bar = createTemporaryObject(barComponent, host)
             Input.setRoute("shell", "", "", "p2")
