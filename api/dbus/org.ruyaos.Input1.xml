@@ -34,8 +34,8 @@
     "unknown-app"      not an installed app id (assignments, ownership modes)
     "invalid"          malformed argument, or a controller profile the schema or the service's rules
                        refuse (errors says why), or a parent (`inherits`) that does not exist
-    "not-allowed"      the action does not fit the current state (a button test while an app is in
-                       front or the picker is up, saving over or deleting a built-in profile, saving a profile of scope
+    "not-allowed"      the action does not fit the current state (a button test under the route "app"
+                       or "locked", saving over or deleting a built-in profile, saving a profile of scope
                        "builtin", a cycle in `inherits`, a chain of more than 8 `inherits` links,
                        more than 64 stored profiles of one console profile)
     "busy"             a button test already runs for that device
