@@ -30,6 +30,11 @@
       (root; RUY-410) a uinput pad that, S seconds after it is ready, taps the D-pad left N times and
       right M times, then A (the emergency reader's keys: Left, Right, Return); prints "pad ready <node>"
       and then "sent"
+  python3 vm-input-probe.py signals --user ruya-p1 --profile p1
+      (root; RUY-594) Input1's broadcast signals reach only root and ruya-shell: listeners run as root and ruya-shell
+      (they must hear TestInput and UserActive while a pad is pressed) and as nobody, the profile user, ruya-link and
+      ruya-library when they exist (they must hear none); `listen` is the listener (vm-security-check.sh signals runs it
+      through vm-input-check.sh signals)
 """
 import argparse
 import errno
@@ -37,6 +42,7 @@ import fcntl
 import glob
 import json
 import os
+import pwd
 import select
 import socket
 import struct
@@ -169,6 +175,7 @@ class Bus:
                 return text
 
     def _message(self):
+        self.member = None
         head = self._recv(16)
         kind = head[1]
         body_len, _, fields_len = struct.unpack_from("<III", head, 4)
@@ -185,6 +192,8 @@ class Bus:
             if t in ("s", "o"):
                 i += -(16 + i) % 4
                 n = struct.unpack_from("<I", fields, i)[0]
+                if code == 3:
+                    self.member = fields[i + 4:i + 4 + n].decode(errors="replace")
                 i += 4 + n + 1
             elif t == "g":
                 i += 1 + fields[i] + 1
@@ -746,6 +755,128 @@ def cmd_useractive(args):
         if mon:
             mon.terminate()
         pad.close()
+    return fails
+
+
+BUS_NAMES = ("NameOwnerChanged", "NameAcquired", "NameLost")
+
+
+def cmd_listen(args):
+    """RUY-594: a plain bus client (what any app's user could run) that matches Input1's signals and the bus's
+    NameOwnerChanged. Prints `ready`, then `heard <member>` for each Input1 signal it receives and `bus <member>`
+    for the bus's own (the control: this client does get broadcasts), `done` after --seconds."""
+    bus = Bus()
+    for rule in (f"type='signal',sender='{SVC}'", "type='signal',sender='org.freedesktop.DBus',member='NameOwnerChanged'"):
+        bus.call("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "AddMatch", [rule])
+    print("ready", flush=True)
+    end = time.monotonic() + args.seconds
+    while end - time.monotonic() > 0:
+        bus.sock.settimeout(end - time.monotonic())
+        try:
+            kind, _reply, _body = bus._message()
+        except (socket.timeout, TimeoutError):
+            break
+        if kind == 4 and bus.member:
+            print(("bus " if bus.member in BUS_NAMES else "heard ") + bus.member, flush=True)
+    print("done", flush=True)
+
+
+def listen_as(user, seconds):
+    """Starts `listen` as `user` (uid, gid, no supplementary groups); returns the process."""
+    extra = {}
+    if user != "root":
+        entry = pwd.getpwnam(user)
+        extra = {"user": entry.pw_uid, "group": entry.pw_gid, "extra_groups": []}
+    return subprocess.Popen([sys.executable, os.path.abspath(__file__), "listen", "--seconds", str(seconds)],
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd="/", **extra)
+
+
+def cmd_signals(args):
+    """RUY-594: Input1's broadcasts (TestInput, UserActive, ...) reach root and ruya-shell and nobody else.
+    Listeners as the receivers must hear TestInput and UserActive; listeners as the others must hear no Input1 signal
+    but must hear the bus's own NameOwnerChanged (so the silence is the policy's, not a dead listener). Run with the
+    shell stopped, as useractive."""
+    fails = 0
+
+    def ok(msg):
+        print(f"PASS: {msg}", flush=True)
+
+    def bad(msg):
+        nonlocal fails
+        fails += 1
+        print(f"FAIL: {msg}", flush=True)
+
+    def exists(name):
+        try:
+            pwd.getpwnam(name)
+            return True
+        except KeyError:
+            return False
+
+    receivers = ["root", "ruya-shell"]
+    outsiders = [u for u in ("nobody", args.user, "ruya-link", "ruya-library") if exists(u)]
+    for name in ("ruya-link", "ruya-library"):
+        if name not in outsiders:
+            print(f"note: no account {name} on this image, not tested", flush=True)
+    seconds = 16
+    procs = {}
+    pad = None
+    bus = None
+    try:
+        for u in receivers + outsiders:
+            procs[u] = listen_as(u, seconds)
+        for u, pr in procs.items():
+            ready = select.select([pr.stdout], [], [], 8)[0] and pr.stdout.readline().strip()
+            if ready != "ready":
+                bad(f"the listener for {u} did not start: {ready!r}")
+                return fails
+        Bus().sock.close()  # the bus announces the name's coming and going to every listener
+        pad = FakePad()
+        row = wait_for(lambda: next((d for d in (devices() or []) if d.get("name") == NAME), None), 5)
+        if not row:
+            bad("ListDevices does not list the pad")
+            return fails
+        bus = Bus()
+        if bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile]) != "ok":
+            bad("SetRoute shell was refused")
+            return fails
+        if bus.call(SVC, PATH, IFC, "StartTest", [row["id"], False]) != "ok":
+            bad("StartTest was refused")
+            return fails
+        pad.emit(EV_KEY, BTN_EAST, 1)
+        pad.emit(EV_KEY, BTN_EAST, 0)
+        time.sleep(0.5)
+        bus.call(SVC, PATH, IFC, "StopTest", [row["id"]])
+        if bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-5", "org.ruyaos.VmCheck", args.profile]) != "ok":
+            bad("SetRoute app was refused")
+            return fails
+        pad.emit(EV_KEY, BTN_EAST, 1)
+        pad.emit(EV_KEY, BTN_EAST, 0)
+        time.sleep(1.0)
+    finally:
+        if pad:
+            pad.close()
+        if bus:
+            bus.close()
+        heard = {}
+        for u, pr in procs.items():
+            try:
+                out, _ = pr.communicate(timeout=seconds + 10)
+            except subprocess.TimeoutExpired:
+                pr.kill()
+                out, _ = pr.communicate()
+            heard[u] = [l.strip() for l in out.splitlines()]
+    for u in receivers:
+        members = sorted({l[6:] for l in heard[u] if l.startswith("heard ")})
+        missing = [m for m in ("TestInput", "UserActive") if m not in members]
+        ok(f"{u} receives Input1's signals ({', '.join(members)})") if not missing else bad(
+            f"{u} did not receive {', '.join(missing)} (heard: {', '.join(members) or 'nothing'})")
+    for u in outsiders:
+        members = sorted({l[6:] for l in heard[u] if l.startswith("heard ")})
+        control = sum(1 for l in heard[u] if l.startswith("bus "))
+        ok(f"{u} receives no Input1 signal") if not members else bad(f"{u} received Input1's {', '.join(members)}")
+        ok(f"{u}'s listener was alive (it heard the bus's own {control} NameOwnerChanged)") if control else bad(
+            f"{u}'s listener heard nothing at all: its silence proves nothing")
     return fails
 
 
@@ -1371,6 +1502,11 @@ def main():
     tw.add_argument("--profile", required=True)
     ua = sub.add_parser("useractive")
     ua.add_argument("--profile", required=True)
+    ls = sub.add_parser("listen")
+    ls.add_argument("--seconds", type=float, default=10)
+    sg = sub.add_parser("signals")
+    sg.add_argument("--user", required=True)
+    sg.add_argument("--profile", required=True)
     pl = sub.add_parser("playing")
     pl.add_argument("--profile", required=True)
     pl.add_argument("--seconds", type=float, default=30)
@@ -1390,6 +1526,8 @@ def main():
         sys.exit(1 if cmd_confirm(args) else 0)
     if args.cmd == "useractive":
         sys.exit(1 if cmd_useractive(args) else 0)
+    if args.cmd == "signals":
+        sys.exit(1 if cmd_signals(args) else 0)
     if args.cmd == "twopads":
         sys.exit(1 if cmd_twopads(args) else 0)
     if args.cmd == "guide":
@@ -1400,7 +1538,7 @@ def main():
         sys.exit(1 if cmd_nodes(args) else 0)
     if args.cmd == "hold":
         sys.exit(1 if cmd_hold(args) else 0)
-    {"game": cmd_game, "open": cmd_open, "restart": cmd_restart, "pad": cmd_pad, "navpad": cmd_navpad, "playing": cmd_playing}[args.cmd](args)
+    {"listen": cmd_listen, "game": cmd_game, "open": cmd_open, "restart": cmd_restart, "pad": cmd_pad, "navpad": cmd_navpad, "playing": cmd_playing}[args.cmd](args)
 
 
 if __name__ == "__main__":

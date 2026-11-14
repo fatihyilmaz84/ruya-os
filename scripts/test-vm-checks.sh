@@ -11,6 +11,8 @@
 #   - vm-x11-check.sh      only a real refusal passes a negative probe; vm-x11-client.py against a fake X server
 #                          (test-vm-x11-client.py); vm-security-check.sh's x11 step (abstract listener, socket
 #                          mode and owner, Xwayland's -auth, -nolisten local and SELinux domain)
+#   - vm-security-check.sh the busrecv step (a service's signals go to root and ruya-shell only: RUY-594) and the
+#                          `signals` mode; vm-input-probe.py's signal listener (test-vm-input-probe.py)
 # Needs bash and python3 (python on Windows). Exit 0 = all pass.
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -228,8 +230,9 @@ chmod +x "$sec"/bin/*
 mkdir -p "$sec/x11"
 printf 'root:x:0:0:root:/root:/bin/bash\nruya-shell:x:990:990::/var/lib/ruya-shell:/usr/sbin/nologin\n' > "$sec/passwd"
 printf 'root:!locked:19000::::::\nruya-shell:!*:19000::::::\n' > "$sec/shadow"
+busgood="$here/../image/rootfs/usr/share/dbus-1/system.d"   # the policies we ship are the good fixture
 runsec() { # env assignments are inherited from the caller's prefix
-    SEC_BASELINE="$sec/baseline.json" SEC_X11DIR="$sec/x11" SEC_UNITDIRS="$sec/units" SEC_PASSWD="${PW:-$sec/passwd}" SEC_SHADOW="${SH:-$sec/shadow}" \
+    SEC_BUSPOLICY="${BUS:-$busgood}" SEC_BASELINE="$sec/baseline.json" SEC_X11DIR="$sec/x11" SEC_UNITDIRS="$sec/units" SEC_PASSWD="${PW:-$sec/passwd}" SEC_SHADOW="${SH:-$sec/shadow}" \
         PATH="${EXTRA_BIN:+$EXTRA_BIN:}$sec/bin:$PATH" bash "$here/vm-security-check.sh" "$@" 2>&1
 }
 out="$(runsec)"; rc=$?
@@ -274,6 +277,50 @@ expect_contains "a unit missing from the baseline: FAIL" "$out" "FAIL: unit ruya
 rm -f "$sec/units/ruya-new.service"
 out="$(runsec measure)"
 expect_contains "measure prints a draft baseline" "$out" '"max_exposure": 1.1'
+
+# --- the bus receive rules (RUY-594) ---
+echo "vm-security-check.sh: the bus policy's receive rules"
+out="$(runsec)"
+for n in Devices1 Input1 Library1 Profiles1 Session1 Store1 Update1; do
+    expect_contains "the shipped $n policy: its signals go to root and ruya-shell only" "$out" "PASS: busrecv: org.ruyaos.$n signals go to root and ruya-shell only"
+done
+mkdir -p "$sec/bus"
+mutate_bus() { # name, file, sed script: a copy of the shipped policies with one file changed
+    rm -rf "$sec/bus/$1"; mkdir -p "$sec/bus/$1"; cp "$busgood"/org.ruyaos.*.conf "$sec/bus/$1/"
+    sed -i -e "$3" "$sec/bus/$1/$2"
+    grep -q "" "$sec/bus/$1/$2"
+}
+mutate_bus nodeny org.ruyaos.Input1.conf '/<deny receive_sender=/d'
+out="$(BUS="$sec/bus/nodeny" runsec)"; rc=$?
+expect_contains "no default deny receive_sender: FAIL" "$out" "FAIL: busrecv: org.ruyaos.Input1.conf: no default-context deny receive_sender for org.ruyaos.Input1"
+[ "$rc" = 1 ] && pass "no default deny receive_sender: exit 1" || fail "no default deny receive_sender: exit $rc"
+mutate_bus noroot org.ruyaos.Session1.conf '/<policy user="root">/,/<\/policy>/{/receive_sender/d}'
+out="$(BUS="$sec/bus/noroot" runsec)"
+expect_contains "no receive allow for root: FAIL" "$out" "FAIL: busrecv: org.ruyaos.Session1.conf: signals of org.ruyaos.Session1 are allowed to ruya-shell, want root and ruya-shell"
+mutate_bus noshell org.ruyaos.Store1.conf '/<policy user="ruya-shell">/,/<\/policy>/{/receive_sender/d}'
+out="$(BUS="$sec/bus/noshell" runsec)"
+expect_contains "no receive allow for ruya-shell: FAIL" "$out" "FAIL: busrecv: org.ruyaos.Store1.conf: signals of org.ruyaos.Store1 are allowed to root, want root and ruya-shell"
+mutate_bus other org.ruyaos.Profiles1.conf 's|^</busconfig>|  <policy user="nobody"><allow receive_sender="org.ruyaos.Profiles1" receive_type="signal"/></policy></busconfig>|'
+out="$(BUS="$sec/bus/other" runsec)"
+expect_contains "a receive allow for another user: FAIL" "$out" "FAIL: busrecv: org.ruyaos.Profiles1.conf: unexpected receive rule allow for org.ruyaos.Profiles1 in policy nobody"
+mutate_bus notype org.ruyaos.Update1.conf 's| receive_type="signal"||'
+out="$(BUS="$sec/bus/notype" runsec)"
+expect_contains "a receive rule without receive_type: FAIL" "$out" "FAIL: busrecv: org.ruyaos.Update1.conf: a receive rule for org.ruyaos.Update1 without receive_type=signal"
+mkdir -p "$sec/bus/empty"
+out="$(BUS="$sec/bus/empty" runsec)"
+expect_contains "no policy files: FAIL, not a skip" "$out" "FAIL: busrecv: no org.ruyaos.*.conf to check"
+# `signals` runs vm-input-check.sh from the same directory; its absence is a FAIL
+out="$(SEC_INPUT_CHECK="$sec/nowhere/vm-input-check.sh" bash "$here/vm-security-check.sh" signals 2>&1)"; rc=$?
+expect_contains "signals without vm-input-check.sh: FAIL" "$out" "FAIL: signals: vm-input-check.sh and vm-input-probe.py must be next to this script"
+[ "$rc" = 1 ] && pass "signals without the scripts: exit 1" || fail "signals without the scripts: exit $rc"
+mkdir -p "$sec/sig"; touch "$sec/sig/vm-input-probe.py"
+printf '#!/bin/sh
+echo "ran signals step: $*"
+exit 3
+' > "$sec/sig/vm-input-check.sh"
+out="$(SEC_INPUT_CHECK="$sec/sig/vm-input-check.sh" bash "$here/vm-security-check.sh" signals 2>&1)"; rc=$?
+expect_contains "signals runs vm-input-check.sh signals" "$out" "ran signals step: signals"
+[ "$rc" = 3 ] && pass "signals passes the step's exit status on" || fail "signals: exit $rc, wanted 3"
 
 # --- the X11 assertions (RUY-436, ADR-034 point 5) ---
 echo "vm-security-check.sh: the X11 isolation assertions"
@@ -341,6 +388,11 @@ out="$(python3 "$here/test-vm-x11-client.py" 2>&1)"; rc=$?
 echo "$out"
 fails=$((fails + $(echo "$out" | grep -c '^    FAIL')))
 [ "$rc" = 0 ] && pass "test-vm-x11-client.py exit 0" || fail "test-vm-x11-client.py exit $rc"
+echo "vm-input-probe.py: the signal listener (RUY-594)"
+out="$(python3 "$here/test-vm-input-probe.py" 2>&1)"; rc=$?
+echo "$out"
+fails=$((fails + $(echo "$out" | grep -c '^    FAIL')))
+[ "$rc" = 0 ] && pass "test-vm-input-probe.py exit 0" || fail "test-vm-input-probe.py exit $rc"
 
 # --- vm-sample-check.sh: an early failure still cleans -----------------------------------------------
 echo "vm-sample-check.sh: cleanup runs when a step fails early"

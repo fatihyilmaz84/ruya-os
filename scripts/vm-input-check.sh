@@ -8,9 +8,13 @@
 # 500 ms and the worst at most 1000 ms: the first run after heavy checks is slow (644 ms once; a lone re-run
 # gave 190-426 ms), and the 1000 ms ceiling still catches a real regression. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|fallback|confirm|hold|twopads|guide|nodes|start|useractive]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|fallback|confirm|hold|twopads|guide|nodes|start|useractive|signals]
 # `useractive` (RUY-588) with the shell stopped like `twopads`: a uinput pad's press in route `app` makes ruya-inputd emit Input1.UserActive
 # once (seen with busctl monitor), not for stick noise or in route `shell`, not again within 30 s, and once more after them.
+# `signals` (RUY-594) with the shell stopped like `useractive`: Input1's broadcast signals reach only root and ruya-shell (the bus
+# policy's receive rules). Plain bus clients (vm-input-probe.py listen) run as root and ruya-shell and must hear TestInput and
+# UserActive while a pad is pressed; as nobody, the profile user, ruya-link and ruya-library they must hear none, and must hear the
+# bus's own NameOwnerChanged (so their silence is the policy's). `vm-security-check.sh signals` runs this step.
 # `confirm` (RUY-40) checks the family's confirm button with a uinput pad announcing Nintendo's vendor
 # id: BTN_EAST gives KEY_ENTER and BTN_SOUTH KEY_ESC on RuyaOS Navigation, `south` swaps them back, `east`
 # gives them to every family. Per controller (RUY-603): a second pad set to `south` while the first is `east`
@@ -690,6 +694,17 @@ useractive)
     install -m 0644 "$probe" "$dir/vm-input-probe.py"
     echo "--- pad input to a game is announced as activity, at most every 30 s (RUY-588)"
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe useractive
+    rm -rf "$dir"
+    ;;
+signals)
+    two_profiles
+    [ -n "$me" ] && ok "profile $me" || { bad "need a profile"; exit 1; }
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
+    dir="$(mktemp -d /var/tmp/ruya-input-check.XXXXXX)"
+    chmod 0755 "$dir"
+    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    echo "--- Input1's signals reach only root and ruya-shell (RUY-594)"
+    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe signals --user "ruya-$me"
     rm -rf "$dir"
     ;;
 guide)
