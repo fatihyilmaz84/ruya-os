@@ -9,6 +9,11 @@
 # accepted when it is younger than 24 hours, its commit exists, and `git diff` from that commit to
 # HEAD is empty (same content: the full test is skipped) or touches only docs\*.md (only
 # `dev.ps1 docs` runs, the group of every check that reads docs\). Anything else runs `dev.ps1 test`.
+#
+# Linux CI job (RUY-549): when shell/**, .github/workflows/ci.yml or scripts/ci-shell-linux.sh differ from the
+# commit in output\last-green-linux.txt (or there is no such marker), it runs ci-shell-linux.sh in WSL
+# (warm cache about 10 min or less, cold 20-40 min) and refuses the push when a CI step is red (exit 10).
+# No WSL or podman, or a running image build: one warning line, then the push. -DryRun only says whether it would run.
 param([switch]$DryRun)
 
 # Continue: every step checks its exit code; under Stop, PowerShell 5.1 turns git's normal stderr
@@ -64,6 +69,51 @@ if ($mode -eq "same") {
 
 & (Join-Path $PSScriptRoot "scan-secrets.ps1")
 if ($LASTEXITCODE -ne 0) { Stop-Push "scan-secrets.ps1 failed" }
+
+# CI's Fedora `shell` job, once per push (RUY-549): when shell/**, ci.yml or ci-shell-linux.sh differ from the
+# last commit that passed it (output\last-green-linux.txt, written by ci-shell-linux.sh), run it in WSL. Exit 10
+# = a CI step is red: refuse. Any other exit (no WSL, no podman, an image build running) = warn and push.
+$linuxPaths = @("shell", ".github/workflows/ci.yml", "scripts/ci-shell-linux.sh")
+$linuxMarker = Join-Path $Repo "output\last-green-linux.txt"
+$linuxRun = $true
+$linuxWhy = "no Linux green marker (output\last-green-linux.txt)"
+if (Test-Path -LiteralPath $linuxMarker) {
+    $lf = @{}
+    foreach ($line in [IO.File]::ReadAllLines($linuxMarker)) { if ($line -match '^(\w+) (\S+)$') { $lf[$Matches[1]] = $Matches[2] } }
+    $lsha = $lf["commit"]
+    $lok = $false
+    if ($lsha -match '^[0-9a-f]{40}$') {
+        & $git cat-file -e "$lsha^{commit}" 2>$null
+        $lok = ($LASTEXITCODE -eq 0)
+    }
+    if ($lok) {
+        $lchanged = @(& $git diff --name-only --no-renames $lsha $head -- $linuxPaths)
+        if ($lchanged.Count -eq 0) {
+            $linuxRun = $false
+            $linuxWhy = "$($lsha.Substring(0, 10)) passed the Linux CI job and shell/**, ci.yml and ci-shell-linux.sh are unchanged since"
+        } else {
+            $linuxWhy = "$($lchanged.Count) of shell/**, ci.yml, ci-shell-linux.sh changed since the last Linux green $($lsha.Substring(0, 10)) (first: $($lchanged[0]))"
+        }
+    } else {
+        $linuxWhy = "the Linux green marker names no commit this repository has"
+    }
+}
+if (-not $linuxRun) {
+    Say "SKIPPED the Linux CI job: $linuxWhy"
+} elseif ($DryRun) {
+    Say "(dry run) would run the Linux CI job (scripts/ci-shell-linux.sh in WSL; warm about 10 min or less, cold 20-40 min; not run in a dry run): $linuxWhy"
+} else {
+    Say "running the Linux CI job in WSL: $linuxWhy"
+    $drive = $Repo.Substring(0, 1).ToLower()
+    $wslRepo = "/mnt/$drive" + ($Repo.Substring(2) -replace '\\', '/')
+    $tree = "$(& $git rev-parse "$head^{tree}")".Trim()
+    $linuxOut = & wsl -d FedoraLinux-44 -u root env "RUYA_CI_COMMIT=$head" "RUYA_CI_TREE=$tree" bash "$wslRepo/scripts/ci-shell-linux.sh" 2>&1 | Out-String
+    $linuxCode = $LASTEXITCODE
+    ($linuxOut -split "`n") | Where-Object { $_.Trim() -ne "" } | Select-Object -Last 15 | ForEach-Object { Write-Host "    $($_.TrimEnd())" }
+    if ($linuxCode -eq 10) { Stop-Push "the Linux CI job (ci-shell-linux.sh) is red: fix it, CI would fail on GitHub" }
+    if ($linuxCode -eq 0) { Say "Linux CI job: PASSED" }
+    else { Write-Host "push-main: WARNING the Linux CI job could not run (exit ${linuxCode}: no WSL or podman, or an image build is running); pushing, CI on GitHub is the check" -ForegroundColor Yellow }
+}
 
 if ($DryRun) {
     Say "(dry run) would push $(& $git log --oneline -1 $head) as main to origin; pushed nothing"
