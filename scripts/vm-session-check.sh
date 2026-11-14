@@ -883,7 +883,8 @@ check)
     case "$(thaw_app "$inst")" in 's "ok"') ok "the quick Thaw answered ok";; *) bad "quick Thaw";; esac
     n=0; until [ "$n" -ge 35 ]; do sleep 1; n=$((n + 1)); done   # RECLAIM_AFTER (30 s) plus the tick and the thread
     slog2 | grep -a "$inst: no reclaim, the app was thawed before it started" | head -1 | sed 's/^/    /'
-    slog2 | grep -a -q "$inst: memory reclaim"         && bad "a reclaim ran for a freeze that was thawed at once: $(slog2 | grep -a "$inst: memory reclaim" | head -1)"         || ok "no 'memory reclaim' line for the freeze thawed at once"
+    # Without swap a wrong reclaim logs 'no swap is active' instead, so both lines count (review).
+    slog2 | grep -a -q "$inst: memory reclaim\|$inst: no swap is active" && bad "a reclaim ran for a freeze that was thawed at once: $(slog2 | grep -a "$inst: memory reclaim\|$inst: no swap is active" | head -1)" || ok "no reclaim line for the freeze thawed at once"
     for u in "$inst" $scopes; do
         [ "$(fstate "$user" "$u")" = running ] && ok "$u runs on after the quick Thaw" || bad "$u: FreezerState $(fstate "$user" "$u") after the quick Thaw"
     done
