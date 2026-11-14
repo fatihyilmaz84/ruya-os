@@ -461,7 +461,10 @@ close_check() {
     wait_pad gone 5 && ok "... and the virtual pad is gone" || bad "a virtual pad still exists after the exit: $(virtual_pad)"
 
     # The order, by the journal's own clock: the game's unit has no later line than the first destroyed pad.
-    unit_ts="$(journalctl -u "$inst" --since "@${closets%.*}" --no-pager -o short-unix 2>/dev/null | awk 'NF {t = $1} END {print t}')"
+    # The app's unit lives in the profile's user manager, so `-u` (system units) finds nothing: match the user-unit
+    # fields (its own lines and the manager's Stopping/Stopped lines). Only numeric stamps count: an empty result
+    # used to print "-- No entries --", whose "--" compared as 0 and passed (lead-20, 0.0.81 queue).
+    unit_ts="$(journalctl _SYSTEMD_USER_UNIT="$inst" + USER_UNIT="$inst" --since "@${closets%.*}" --no-pager -o short-unix 2>/dev/null | awk '$1 ~ /^[0-9]+(\.[0-9]+)?$/ {t = $1} END {print t}')"
     first="$(journalctl -u ruya-inputd --since "@${closets%.*}" --no-pager -o short-unix 2>/dev/null | grep -E "virtual pad ruya-input/pad[0-9]+ destroyed" | head -1)"
     destroyed_ts="${first%% *}"
     if [ -z "$destroyed_ts" ]; then
