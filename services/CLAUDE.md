@@ -19,6 +19,7 @@ Cargo workspace. Each service is a crate named `ruya-<name>` that serves `org.ru
 - **Tests:** every rule in the pure core has a unit test. Tests must run on Windows (`cargo test`), so keep Linux-only code out of the core.
 - **Both targets must be clean:** `dev.ps1 rust` runs clippy for Windows *and* `x86_64-unknown-linux-gnu` with `-D warnings`. Run `cargo fmt` before committing.
 - **No `unwrap()`/`expect()`** on paths reachable from D-Bus input. Return a status string instead (`invalid`, `failed`, …). `expect()` is fine only where the invariant has just been checked, with a message saying so.
+- **Navigation keys are chosen by the Qt key they become through xkb, not by the evdev name** (RUY-583): `NavKey::evdev_code` in `mapping.rs`. Start is `KEY_COMPOSE` (xkb `Menu`, `Qt::Key_Menu`); `KEY_MENU` would be `XF86MenuKB`, `Qt::Key_MenuKB`, which no shell handler takes. Check a new key in the VM (`vm-input-check.sh start` is the pattern), because the off-Linux tests send Qt keys directly.
 - **Secrets** (PIN hashes, tokens) never appear in D-Bus replies, logs or errors.
 - `Cargo.lock` is committed and builds use `--locked`. A new dependency needs a one-line justification in the commit message. Prefer pure-Rust crates: they must build on Windows **and** in the Fedora image.
 

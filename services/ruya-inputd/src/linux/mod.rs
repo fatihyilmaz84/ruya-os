@@ -39,18 +39,8 @@ const NAV_NAME: &str = "RuyaOS Navigation";
 const STATE_DIR: &str = "/var/lib/ruya-input";
 
 fn nav_to_key(key: NavKey) -> Key {
-    match key {
-        NavKey::Up => Key::KEY_UP,
-        NavKey::Down => Key::KEY_DOWN,
-        NavKey::Left => Key::KEY_LEFT,
-        NavKey::Right => Key::KEY_RIGHT,
-        NavKey::Accept => Key::KEY_ENTER,
-        NavKey::Back => Key::KEY_ESC,
-        NavKey::Menu => Key::KEY_MENU,
-        NavKey::Guide => Key::KEY_HOMEPAGE,
-        NavKey::PrevTab => Key::KEY_PAGEUP,
-        NavKey::NextTab => Key::KEY_PAGEDOWN,
-    }
+    // The codes (and why Menu is KEY_COMPOSE, not KEY_MENU) are in `NavKey::evdev_code`.
+    Key::new(key.evdev_code())
 }
 
 fn build_nav_keyboard() -> io::Result<VirtualDevice> {

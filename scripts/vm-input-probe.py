@@ -25,7 +25,7 @@
       (root; RUY-446) the virtual pad nodes (phys ruya-input/pad<n>) are ruya-input's, user rw only, with no
       uaccess tag and no entry for ruya-shell, and the profile user's ACL entry; a node whose phys is
       ruya-input/kbm* keeps uaccess (vm-input-check.sh nodes runs it)
-  python3 vm-input-probe.py navpad [--settle S] [--lefts N] [--rights M]
+  python3 vm-input-probe.py navpad [--settle S] [--lefts N] [--rights M] [--start K]
       (root; RUY-410) a uinput pad that, S seconds after it is ready, taps the D-pad left N times and
       right M times, then A (the emergency reader's keys: Left, Right, Return); prints "pad ready <node>"
       and then "sent"
@@ -49,6 +49,7 @@ UI_FF_UPLOAD, UI_FF_ERASE = 1, 2
 FF_RUMBLE = 0x50
 BTN_SOUTH, BTN_EAST, BTN_MODE = 0x130, 0x131, 0x13C
 BTN_TL = 0x136
+BTN_START = 0x13B
 KEYS = [0x130, 0x131, 0x133, 0x134, 0x136, 0x137, 0x13A, 0x13B, 0x13C, 0x13D, 0x13E]
 ABS_X, ABS_Y, ABS_Z, ABS_RX, ABS_RY, ABS_RZ, ABS_HAT0X, ABS_HAT0Y = 0, 1, 2, 3, 4, 5, 0x10, 0x11
 KEY_ENTER, KEY_ESC, KEY_HOMEPAGE = 28, 1, 172
@@ -487,7 +488,12 @@ def cmd_navpad(args):
             tap(EV_ABS, ABS_HAT0X, -1)
         for _ in range(args.rights):
             tap(EV_ABS, ABS_HAT0X, 1)
-        tap(EV_KEY, BTN_SOUTH, 1)
+        if args.start:
+            # RUY-583: Start (Options) taps; the shell opens the Options menu on the first and closes it on the second.
+            for _ in range(args.start):
+                tap(EV_KEY, BTN_START, 1)
+        else:
+            tap(EV_KEY, BTN_SOUTH, 1)
         print("sent", flush=True)
         time.sleep(1)
     finally:
@@ -1219,6 +1225,7 @@ def main():
     n.add_argument("--settle", type=float, default=2.5)
     n.add_argument("--lefts", type=int, default=0)
     n.add_argument("--rights", type=int, default=0)
+    n.add_argument("--start", type=int, default=0, help="tap BTN_START this many times instead of BTN_SOUTH")
     args = ap.parse_args()
     if args.cmd == "check":
         sys.exit(1 if cmd_check(args) else 0)

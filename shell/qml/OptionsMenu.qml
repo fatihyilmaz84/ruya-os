@@ -89,8 +89,12 @@ FocusScope {
 
     // ---- opening and closing ----
     property Item returnTo: null
+    // Where the one journal line per opening goes (RUY-583, the VM check reads it); tests replace it.
+    property var log: text => console.info(text)
 
     function open(anchorItem, anchorKind, name, newRows, newNote) {
+        if (!shown)
+            log("ruya-shell: options menu open (" + anchorKind + ")")
         closeAnim.stop()
         openAnim.stop()
         anchor = anchorItem
