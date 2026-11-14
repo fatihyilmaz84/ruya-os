@@ -15,12 +15,16 @@ Rectangle {
     color: Theme.primaryFill
 
     Accessible.role: Accessible.StaticText
-    Accessible.name: button
+    Accessible.name: shown
+
+    // The name drawn on the glyph: the pad's own letters stay as they are, the two-way "Left/Right"
+    // is words and is translated (RUY-542).
+    readonly property string shown: button === "Left/Right" ? qsTr("Left/Right") : button
 
     Text {
         id: letter
         anchors.centerIn: parent
-        text: glyph.button
+        text: glyph.shown
         color: Theme.onPrimary
         font.pixelSize: Theme.typeMicro * glyph.u
         font.weight: Theme.weightBold

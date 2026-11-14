@@ -16,6 +16,8 @@ Item {
         Shell { anchors.fill: parent; version: "test"; focus: true }
     }
 
+    Component { id: glyphComponent; ButtonGlyph { button: "Left/Right" } }
+
     SignalSpy { id: clearSpy; target: Usage; signalName: "clearFinished" }
 
     // An item in the shell's modal layer, as a PIN pad or the keyboard puts there.
@@ -139,6 +141,17 @@ Item {
                     parts.push(b + " " + h.verb)
             }
             return parts.join("|")
+        }
+
+        // RUY-542: the "Left/Right" glyph is words and follows the language; its id stays for the code.
+        function test_left_right_glyph_is_translated() {
+            const g = createTemporaryObject(glyphComponent, host)
+            compare(g.shown, "Left/Right")
+            DeviceSettings.language = "tr"
+            verify(g.shown !== "Left/Right", "Turkish shows its own words")
+            compare(g.button, "Left/Right")
+            DeviceSettings.language = "en"
+            compare(g.shown, "Left/Right")
         }
 
         function test_durations_in_plain_words() {

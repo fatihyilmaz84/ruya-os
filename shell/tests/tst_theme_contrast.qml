@@ -230,7 +230,7 @@ Item {
             unreadableFact.text = Qt.color("#586078")
             verify(failures(unreadableFact).some(f => f.indexOf("fact text") >= 0), "a fact's text on the bare backdrop")
 
-            const lightOnLight =Themes.snapshot(Themes.byKey("daylight"))
+            const lightOnLight = Themes.snapshot(Themes.byKey("daylight"))
             lightOnLight.glass = Qt.color("#08ffffff")      // Daylight with its frosted glass nearly clear
             lightOnLight.text = Qt.color("#f2f4f8")         // ... and light text left over from a dark theme
             verify(failures(lightOnLight).length > 0, "light text on a light theme")

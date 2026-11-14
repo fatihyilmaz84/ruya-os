@@ -44,7 +44,9 @@ Page {
     // (02 §1.7). An item with an empty menu gets no Options hint (the rest stays); its Menu key still opens the empty menu.
     readonly property bool optionsOffered: grid.activeFocus && grid.currentIndex >= 0 && page.optionRows !== null
         && page.optionRows("games", page.shownIds[grid.currentIndex] ?? "").length > 0
-    hints: optionsOffered ? [{ button: "A", text: qsTr("Select") },
+    // On the filter row A steps the choice: the row's own hints (Change, Next) and the section switch (RUY-542).
+    hints: filterRow.activeFocus ? filterRow.hints.concat([{ buttons: ["LB", "RB"], text: qsTr("Sections") }])
+         : optionsOffered ? [{ button: "A", text: qsTr("Select") },
                              { button: "Start", text: qsTr("Options") },
                              { button: "B", text: qsTr("Back") },
                              { buttons: ["LB", "RB"], text: qsTr("Sections") }]

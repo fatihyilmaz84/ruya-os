@@ -60,6 +60,20 @@ FocusScope {
         }
     }
 
+    // What decides the hairlines, per child: visible, height > 0, flat, enabled. A row that changes one in
+    // place (a kind, `enabled`, `flat`) may not change the column's height, so no relayout follows: this
+    // binding re-evaluates on any of them and the rules are recomputed (RUY-542).
+    readonly property string ruleKey: {
+        let k = ""
+        for (let i = 0; i < column.children.length; ++i) {
+            const c = column.children[i]
+            const row = c as SettingControl
+            k += (c && c.visible && c.height > 0 ? "1" : "0") + (row && row.flat ? "f" : "-") + (row && row.enabled ? "e" : "-") + ","
+        }
+        return k
+    }
+    onRuleKeyChanged: Qt.callLater(updateRules)
+
     // Visible rows (and spacers) of the column in order, with a height.
     function laidOutRows() {
         const found = []
