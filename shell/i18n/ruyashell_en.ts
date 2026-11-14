@@ -3219,6 +3219,14 @@ This can&apos;t be undone.</translation>
         <source>an app</source>
         <translation>an app</translation>
     </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%1 and %n more</source>
+        <translation>
+            <numerusform>%1 and %n more</numerusform>
+            <numerusform>%1 and %n more</numerusform>
+        </translation>
+    </message>
     <message>
         <location line="+15"/>
         <location line="+2"/>

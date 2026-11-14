@@ -3205,6 +3205,13 @@ Bu geri alınamaz.</translation>
         <source>an app</source>
         <translation>bir uygulama</translation>
     </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%1 and %n more</source>
+        <translation>
+            <numerusform>%1 ve %n tane daha</numerusform>
+        </translation>
+    </message>
     <message>
         <location line="+15"/>
         <location line="+2"/>
