@@ -823,7 +823,10 @@ function Do-Shell {
     Test-TestMembers
     Step "qmllint (module context)"
     # --max-warnings 0: without it qmllint exits 0 even when it reports warnings.
-    Invoke-Native "qmllint" { qmllint --max-warnings 0 "@$ShellBuild\.rcc\qmllint\ruyashell.rsp" }
+    # RUY-582: qmllint's Info/Warning lines go to stderr. Start-Process (no 2>&1) lets them print as they are,
+    # so PowerShell 5.1 never wraps them in NativeCommandError records; the verdict is the exit code only.
+    $lint = Start-Process (Get-Command qmllint).Source -ArgumentList @("--max-warnings", "0", "`"@$ShellBuild\.rcc\qmllint\ruyashell.rsp`"") -NoNewWindow -Wait -PassThru
+    Record "qmllint" ($lint.ExitCode -eq 0)
     # T-462: the probe path of `shots` (a window that presents no frames stops it), without a display:
     # the window is never shown, so the probe must report "no frames" even though offscreen draws.
     Step "Display probe self-check (no frames -> asleep)"

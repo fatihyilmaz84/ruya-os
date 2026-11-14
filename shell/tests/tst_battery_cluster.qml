@@ -107,11 +107,9 @@ Item {
             tryVerify(() => settled() && pillIsLaidOut(), 2000, what + ": the chips and the pill are laid out")
             // Re-read for up to 2 s: a change of the clock text re-budgets the chips at once and the pill
             // follows a frame later; an overlap that stays is still reported, with its numbers.
+            // RUY-582: waits on the condition itself (a fixed count of 50 ms waits ran short under load at 4K).
             let problem = clusterProblem(size, what)
-            for (let i = 0; i < 40 && problem !== ""; ++i) {
-                wait(50)
-                problem = clusterProblem(size, what)
-            }
+            tryVerify(() => { problem = clusterProblem(size, what); return problem === "" }, 2000, what)
             compare(problem, "")
             const row = find("batteryStatus")
             // The name is not squeezed under about six characters.
