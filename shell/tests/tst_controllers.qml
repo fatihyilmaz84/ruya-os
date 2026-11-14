@@ -121,6 +121,8 @@ Item {
             compare(padRow(ds).kind, "page")
             compare(find("rowControlsInGames").kind, "page")
             compare(find("rowPadsPair").kind, "action")
+            compare(find("rowPadsRetry").kind, "action")
+            compare(find("rowControlsInGamesLast").kind, "page")
             compare(hintVerbs(), "A Open|B Back", "a pad row opens its page")
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "controller")
@@ -134,6 +136,18 @@ Item {
             verify(heading.Accessible.role === Accessible.Heading)
             for (const name of ["cap_buttons", "cap_gyro"])
                 compare(find(name).kind, "info", name)
+            // The last fact of the run has no hairline (04 section 5), also after the rows came late and in Turkish.
+            const lastCap = () => {
+                const rows = Array.from(findChild(find("page_controller"), "controllerBody").focusableRows()).filter(r => r.objectName.startsWith("cap_"))
+                return rows[rows.length - 1]
+            }
+            tryVerify(() => lastCap() !== undefined)
+            tryCompare(lastCap(), "ruleBelow", false)
+            verify(findChild(find("page_controller"), "controllerBody").focusableRows().filter(r => r.objectName.startsWith("cap_")).slice(0, -1).every(r => r.ruleBelow), "the others have one")
+            DeviceSettings.language = "tr"
+            wait(100)
+            tryCompare(lastCap(), "ruleBelow", false)
+            DeviceSettings.language = "en"
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Down)
             verify(find("cap_buttons").activeFocus, "Down from Controls in games skips the heading")

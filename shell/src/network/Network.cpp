@@ -81,6 +81,12 @@ void Network::mockWifiScript(const QString &status)
         mock->setWifiScript(status);
 }
 
+void Network::mockClearNetworks()
+{
+    if (auto *mock = qobject_cast<MockNetworkBackend *>(m_backend.get()))
+        mock->clearNetworks();
+}
+
 void Network::mockWifiSupported(bool supported)
 {
     if (auto *mock = qobject_cast<MockNetworkBackend *>(m_backend.get()))
