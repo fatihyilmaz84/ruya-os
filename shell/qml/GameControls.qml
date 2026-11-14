@@ -425,7 +425,7 @@ QtObject {
         }
         failed(tag)
         refresh()
-        if (queue.length > 0 && exportVolume === "")
+        if (queue.length > 0)
             flush()
     }
 

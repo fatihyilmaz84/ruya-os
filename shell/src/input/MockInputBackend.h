@@ -51,12 +51,14 @@ public:
     {
         m_profiles.reset();
         m_forcedStatus.clear();
+        m_forcedOnce.clear();
         m_confirm.clear();
     }
     // While set, every call of `method` answers `status` (its other out-arguments empty) without
     // reaching the profiles: a refused or failed save for the pages' tests (RUY-465). "" clears it.
     void setProfileStatus(const QString &method, const QString &status)
     {
+        m_forcedOnce.remove(method);
         if (status.isEmpty())
             m_forcedStatus.remove(method);
         else

@@ -464,7 +464,7 @@ Item {
             GameControls.show(pro)
             GameControls.setStick("left", "outer_deadzone", 0.05, false)
             tryVerify(() => hasToast("Could not save the change / Try again."), 3000, toastTexts().join("; "))
-            tryVerify(() => savesOf(proOwn).length === 1 || savesOf(dsOwn).length === 1, 3000, "the other pad's change is saved")
+            tryVerify(() => savesOf(proOwn).length === 1, 3000, "the other pad's change is saved")
             tryVerify(() => !GameControls.busy, 3000)
             compare(savesOf(proOwn).length + savesOf(dsOwn).length, 1, "only the refused pad's change is lost")
         }
