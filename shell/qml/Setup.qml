@@ -466,6 +466,7 @@ FocusScope {
         SettingRow {
             id: nameRow
             objectName: "setupNameRow"
+            kind: "page"
             u: setup.u
             label: qsTr("Name")
             value: setup.adminName.length > 0 ? setup.adminName : qsTr("Not set")
@@ -475,6 +476,8 @@ FocusScope {
         SettingRow {
             id: createRow
             objectName: "setupCreateRow"
+            kind: "action"
+            emphasis: "primary"
             u: setup.u
             label: qsTr("Choose a PIN and finish")
             value: setup.busy ? qsTr("Creating…") : ""

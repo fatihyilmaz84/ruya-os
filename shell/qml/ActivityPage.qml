@@ -176,6 +176,7 @@ Page {
                 required property var modelData
                 required property int index
                 objectName: "activityTop_" + index
+                kind: "page"
                 u: page.u
                 iconName: "sports_esports"
                 label: page.nameOf(modelData.appId)
@@ -200,6 +201,7 @@ Page {
         SettingRow {
             id: longestRow
             objectName: "activityLongest"
+            kind: "info"
             u: page.u
             visible: page.showData && (Usage.highlights.longestMonth?.seconds ?? 0) > 0
             label: qsTr("Longest session this month")
@@ -209,6 +211,7 @@ Page {
         SettingRow {
             id: streakRow
             objectName: "activityStreak"
+            kind: "info"
             u: page.u
             visible: page.showData && (Usage.highlights.streak ?? 0) > 0
             label: qsTr("You have played %n day(s) in a row.", "", Usage.highlights.streak ?? 0)
@@ -219,6 +222,7 @@ Page {
                 required property var modelData
                 required property int index
                 objectName: "activityLapsed_" + index
+                kind: "page"
                 u: page.u
                 label: qsTr("You have not played %1 for %n day(s).", "", modelData.days).arg(page.nameOf(modelData.appId))
                 onActivated: page.openRequested("activityGame", ({ appId: modelData.appId }))
@@ -262,6 +266,7 @@ Page {
                         required property int seconds
                         required property bool running
                         objectName: "activitySession_" + appId + "_" + start
+                        kind: "page"
                         u: page.u
                         label: page.nameOf(appId)
                         value: running ? qsTr("%1, playing now").arg(TimeZone.formatClock(start * 1000))
@@ -275,6 +280,7 @@ Page {
         SettingRow {
             id: clearRow
             objectName: "activityClear"
+            kind: "action"
             u: page.u
             visible: page.showData
             label: qsTr("Clear my activity")

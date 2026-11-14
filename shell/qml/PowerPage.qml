@@ -39,6 +39,8 @@ Page {
 
         SettingRow {
             objectName: "powerSuspend"
+            kind: "action"
+            dimmed: !Power.canSuspend
             u: page.u
             label: qsTr("Suspend")
             value: Power.canSuspend ? "" : qsTr("Not available")
@@ -46,6 +48,8 @@ Page {
         }
         SettingRow {
             objectName: "powerRestart"
+            kind: "action"
+            dimmed: !Power.canRestart
             u: page.u
             label: qsTr("Restart")
             value: Power.canRestart ? "" : qsTr("Not available")
@@ -53,6 +57,8 @@ Page {
         }
         SettingRow {
             objectName: "powerOff"
+            kind: "action"
+            dimmed: !Power.canPowerOff
             u: page.u
             label: qsTr("Power off")
             value: Power.canPowerOff ? "" : qsTr("Not available")

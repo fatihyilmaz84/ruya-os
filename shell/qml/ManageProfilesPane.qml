@@ -166,6 +166,7 @@ ProfilePaneBase {
             id: profileRow
             required property var modelData
             objectName: "profileRow_" + modelData.id
+            kind: "item"
             u: pane.u
             swatch: modelData.avatar
             label: modelData.name
@@ -179,6 +180,7 @@ ProfilePaneBase {
     SettingRow {
         id: renameRow
         objectName: "rowRename"
+        kind: "action"
         u: pane.u
         visible: pane.canRename
         label: qsTr("Rename %1").arg(pane.selected?.name ?? "")
@@ -187,6 +189,7 @@ ProfilePaneBase {
     SettingRow {
         id: deleteRow
         objectName: "rowDelete"
+        kind: "action"
         u: pane.u
         visible: pane.canDelete
         label: qsTr("Delete %1").arg(pane.selected?.name ?? "")
@@ -196,6 +199,7 @@ ProfilePaneBase {
     SettingRow {
         id: addRow
         objectName: "rowAdd"
+        kind: "action"
         u: pane.u
         visible: pane.isAdmin
         label: qsTr("Add profile")
@@ -211,6 +215,7 @@ ProfilePaneBase {
     SettingRow {
         id: nameRow
         objectName: "rowNewName"
+        kind: "page"
         u: pane.u
         visible: pane.isAdmin && pane.adding
         label: qsTr("Name")
@@ -250,6 +255,8 @@ ProfilePaneBase {
     SettingRow {
         id: createRow
         objectName: "rowCreate"
+        kind: "action"
+        emphasis: "primary"
         u: pane.u
         visible: pane.isAdmin && pane.adding
         label: qsTr("Create profile")

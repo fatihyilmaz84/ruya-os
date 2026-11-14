@@ -66,6 +66,8 @@ Item {
             tc.shell.openPage("power")
             tryCompare(tc.shell, "currentPage", "power")
             tryVerify(() => find("powerSuspend") && find("powerSuspend").activeFocus, 2000, "first row has focus")
+            for (const n of ["powerSuspend", "powerRestart", "powerOff"])
+                compare(find(n).kind, "action", n)
         }
 
         function test_page_rows_and_back() {

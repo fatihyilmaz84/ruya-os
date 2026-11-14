@@ -186,6 +186,12 @@ Item {
             compare(find("rowRollback").visible, false, "rollback is for admins")
             goToRow("rowUpdate")
             compare(find("rowUpdate").label, "Check for updates")
+            compare(find("rowUpdate").kind, "action")
+            compare(find("rowVersion").kind, "info")
+            compare(find("rowTimezone").kind, "page")
+            const heading = find("updatesHeading")
+            verify(findChild(heading, "groupLabelText"), "Updates is a GroupLabel")
+            verify(!find("rowUpdate").parent.children.some(c => c === heading && c.activeFocus), "never focused")
             const shownBefore = Notifications.shownCount
 
             keyClick(Qt.Key_Return)
@@ -260,6 +266,7 @@ Item {
             openSystemPane("p1", "1234")                  // Player One: admin
             verify(find("rowChannel").visible)
             verify(find("rowRollback").visible)
+            compare(find("rowRollback").kind, "action")
             goToRow("rowRollback")
 
             keyClick(Qt.Key_Return)
