@@ -105,6 +105,7 @@ SettingsPane {
 
     SettingRow {
         objectName: "rowOrderNote"
+        kind: "info"
         u: pane.u
         visible: pane.note[0].length > 0
         label: pane.note[0]
@@ -113,6 +114,7 @@ SettingsPane {
 
     SettingRow {
         objectName: "rowKeepingAwake"
+        kind: "info"
         u: pane.u
         label: qsTr("Keeping the console awake")
         value: IdleClock.held ? pane.heldText(IdleInhibit.reasons) : qsTr("Nothing")

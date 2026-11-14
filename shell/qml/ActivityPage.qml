@@ -114,12 +114,9 @@ Page {
         anchors.fill: parent
         u: page.u
         focus: true
-        // The chart and the two highlight facts only read; the other rows do something on Accept.
-        // The chart is read with Left and Right (a bar at a time); the two highlight facts only read.
+        // The chart is read with Left and Right (a bar at a time); every other row gives its own hints by kind.
         hints: chartRow.activeFocus ? [{ button: "Left/Right", text: qsTr("Browse") }, { button: "B", text: qsTr("Back") }]
-               : (longestRow.activeFocus || streakRow.activeFocus)
-               ? [{ button: "B", text: qsTr("Back") }]
-               : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+               : focusedRow ? (focusedRow as SettingControl).hints : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
         onExitRequested: page.backRequested()
 
         // Shown instead of the data.
@@ -158,15 +155,11 @@ Page {
             highlightIndex: (page.week.days ?? []).length - 1
         }
 
-        Text {
+        GroupLabel {
             objectName: "activityHeadTop"
-            width: parent ? parent.width : 0
             visible: page.showData && Usage.top.length > 0
-            topPadding: Theme.spaceS * page.u
             text: qsTr("Most played, last 30 days")
-            color: Theme.text
-            font.pixelSize: Theme.typeBody * page.u
-            font.weight: Theme.weightDemiBold
+            u: page.u
         }
         Repeater {
             id: topRepeater
@@ -176,6 +169,7 @@ Page {
                 required property var modelData
                 required property int index
                 objectName: "activityTop_" + index
+                kind: "page"
                 u: page.u
                 iconName: "sports_esports"
                 label: page.nameOf(modelData.appId)
@@ -184,22 +178,19 @@ Page {
             }
         }
 
-        Text {
+        GroupLabel {
             objectName: "activityHeadHighlights"
-            width: parent ? parent.width : 0
             visible: page.showData && highlightsPresent
             readonly property bool highlightsPresent: (Usage.highlights.longestMonth?.seconds ?? 0) > 0
                                                       || (Usage.highlights.streak ?? 0) > 0
                                                       || (Usage.highlights.lapsed ?? []).length > 0
-            topPadding: Theme.spaceS * page.u
             text: qsTr("Highlights")
-            color: Theme.text
-            font.pixelSize: Theme.typeBody * page.u
-            font.weight: Theme.weightDemiBold
+            u: page.u
         }
         SettingRow {
             id: longestRow
             objectName: "activityLongest"
+            kind: "info"
             u: page.u
             visible: page.showData && (Usage.highlights.longestMonth?.seconds ?? 0) > 0
             label: qsTr("Longest session this month")
@@ -209,6 +200,7 @@ Page {
         SettingRow {
             id: streakRow
             objectName: "activityStreak"
+            kind: "info"
             u: page.u
             visible: page.showData && (Usage.highlights.streak ?? 0) > 0
             label: qsTr("You have played %n day(s) in a row.", "", Usage.highlights.streak ?? 0)
@@ -219,6 +211,7 @@ Page {
                 required property var modelData
                 required property int index
                 objectName: "activityLapsed_" + index
+                kind: "page"
                 u: page.u
                 label: qsTr("You have not played %1 for %n day(s).", "", modelData.days).arg(page.nameOf(modelData.appId))
                 onActivated: page.openRequested("activityGame", ({ appId: modelData.appId }))
@@ -262,6 +255,7 @@ Page {
                         required property int seconds
                         required property bool running
                         objectName: "activitySession_" + appId + "_" + start
+                        kind: "page"
                         u: page.u
                         label: page.nameOf(appId)
                         value: running ? qsTr("%1, playing now").arg(TimeZone.formatClock(start * 1000))
@@ -275,6 +269,7 @@ Page {
         SettingRow {
             id: clearRow
             objectName: "activityClear"
+            kind: "action"
             u: page.u
             visible: page.showData
             label: qsTr("Clear my activity")

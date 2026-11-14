@@ -79,6 +79,7 @@ Page {
 
         SettingRow {
             objectName: "gameTotal"
+            kind: "info"
             u: page.u
             visible: Usage.ready && page.played
             label: qsTr("Time played")
@@ -86,6 +87,7 @@ Page {
         }
         SettingRow {
             objectName: "gameSessions"
+            kind: "info"
             u: page.u
             visible: Usage.ready && page.played
             label: qsTr("Times played")
@@ -93,6 +95,7 @@ Page {
         }
         SettingRow {
             objectName: "gameFirst"
+            kind: "info"
             u: page.u
             visible: Usage.ready && page.played
             label: qsTr("First played")
@@ -100,6 +103,7 @@ Page {
         }
         SettingRow {
             objectName: "gameLast"
+            kind: "info"
             u: page.u
             visible: Usage.ready && page.played
             label: qsTr("Last played")
@@ -107,6 +111,7 @@ Page {
         }
         SettingRow {
             objectName: "gameLongest"
+            kind: "info"
             u: page.u
             visible: Usage.ready && page.played
             label: qsTr("Longest session")
@@ -114,20 +119,17 @@ Page {
         }
         SettingRow {
             objectName: "gameAverage"
+            kind: "info"
             u: page.u
             visible: Usage.ready && page.played
             label: qsTr("Average session")
             value: DurationText.plain(page.game.average ?? 0)
         }
-        Text {
+        GroupLabel {
             objectName: "gameHeadStrip"
-            width: parent ? parent.width : 0
             visible: Usage.ready && page.played
-            topPadding: Theme.spaceS * page.u
             text: qsTr("Last 30 days")
-            color: Theme.text
-            font.pixelSize: Theme.typeBody * page.u
-            font.weight: Theme.weightDemiBold
+            u: page.u
         }
         ChartRow {
             id: strip

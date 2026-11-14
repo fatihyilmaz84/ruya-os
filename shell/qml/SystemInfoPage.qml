@@ -168,6 +168,8 @@ Page {
         readonly property real fraction: entry ? entry.fraction : -1
         accessibleValue: value
         Accessible.role: Accessible.StaticText
+        flat: true                      // the fact look (04 section 5); the pane draws the hairlines
+        hintKind: "info"
 
         Text {
             id: valueText
@@ -201,16 +203,12 @@ Page {
         anchors.fill: parent
         u: page.u
         focus: true
-        // Only the two export rows do something on Accept; the information rows are read-only, so
-        // while one has focus the hint bar offers Back only.
-        hints: (saveRow.activeFocus || addressesRow.activeFocus)
-               ? [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
-               : [{ button: "B", text: qsTr("Back") }]
         onExitRequested: page.backRequested()
 
         SettingRow {
             id: saveRow
             objectName: "sysSave"
+            kind: "action"
             u: page.u
             label: qsTr("Save report to USB drive")
             value: page.saveState === "saving" ? qsTr("Saving…") : ""
@@ -249,16 +247,11 @@ Page {
                 role: "kind"
                 DelegateChoice {
                     roleValue: "heading"
-                    Text {
-                        id: heading
+                    GroupLabel {
                         required property string sectionId
                         objectName: "sysHeading_" + sectionId
-                        width: parent ? parent.width : 0
-                        topPadding: Theme.spaceS * page.u
+                        u: page.u
                         text: sysRows.titles[sectionId] ?? ""
-                        color: Theme.text
-                        font.pixelSize: Theme.typeBody * page.u
-                        font.weight: Theme.weightDemiBold
                     }
                 }
                 DelegateChoice {

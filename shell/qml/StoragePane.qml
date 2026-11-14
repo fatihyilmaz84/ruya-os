@@ -26,12 +26,6 @@ SettingsPane {
 
     readonly property var internal: Storage.internal
 
-    // Only a drive's own row and its Eject row do something on Accept; the "This console" rows and
-    // the scan rows are facts, so while one has focus the hint bar offers Back only (04 section 5).
-    // Each row says so when it takes focus.
-    property bool actionFocused: false
-    hints: actionFocused ? [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
-                         : [{ button: "B", text: qsTr("Back") }]
     // Less than this much free and the usage bar turns to the warning colour.
     readonly property real lowFreeFraction: 0.10
 
@@ -65,7 +59,7 @@ SettingsPane {
         return bytes >= 0 ? Storage.formatBytes(bytes) : "—"
     }
 
-    // A settings row with a usage bar between the label and the value. Read-only.
+    // A fact row with a usage bar between the label and the value.
     component UsageRow: SettingControl {
         id: usage
         property string value
@@ -73,6 +67,8 @@ SettingsPane {
         property bool low               // turns the bar to the warning colour
         readonly property color fillColor: low ? Theme.warningText : Theme.text
         accessibleValue: value
+        flat: true                      // the fact look (04 section 5)
+        hintKind: "info"
 
         Text {
             id: usageValue
@@ -381,7 +377,6 @@ SettingsPane {
 
     UsageRow {
         objectName: "storageInternal"
-        onActiveFocusChanged: if (activeFocus) pane.actionFocused = false
         u: pane.u
         label: qsTr("Free space")
         value: pane.freeText()
@@ -391,8 +386,7 @@ SettingsPane {
 
     SettingRow {
         objectName: "storageApps"
-        inert: true
-        onActiveFocusChanged: if (activeFocus) pane.actionFocused = false
+        kind: "info"
         u: pane.u
         label: qsTr("Apps and games")
         value: pane.sizeText(pane.internal.appsBytes)
@@ -400,8 +394,7 @@ SettingsPane {
 
     SettingRow {
         objectName: "storageData"
-        inert: true
-        onActiveFocusChanged: if (activeFocus) pane.actionFocused = false
+        kind: "info"
         visible: pane.dataKnown()
         u: pane.u
         label: qsTr("Profile data")
@@ -410,21 +403,17 @@ SettingsPane {
 
     SettingRow {
         objectName: "storageSystem"
-        inert: true
-        onActiveFocusChanged: if (activeFocus) pane.actionFocused = false
+        kind: "info"
         u: pane.u
         label: pane.dataKnown() ? qsTr("System") : qsTr("Other")
         value: pane.sizeText(pane.internal.systemBytes)
     }
 
-    Text {
+    GroupLabel {
         objectName: "storageHeadingDrives"
-        width: parent ? parent.width : 0
         visible: Storage.volumes.length > 0
-        topPadding: Theme.spaceS * pane.u
         text: qsTr("Drives")
-        color: Theme.text
-        font.pixelSize: Theme.typeBody * pane.u
+        u: pane.u
     }
 
     Repeater {
@@ -443,8 +432,7 @@ SettingsPane {
                       : entryKind === "eject" ? "storageEject_" + volId
                       : "storageScan_" + volId + "_" + sub
             visible: shown
-            inert: entryKind === "scan"
-            onActiveFocusChanged: if (activeFocus) pane.actionFocused = entryKind !== "scan"
+            kind: entryKind === "eject" ? "action" : entryKind === "scan" ? "info" : "item"
             u: pane.u
             // What was found on a drive sits a step in from the drive's own row.
             x: entryKind === "scan" ? Theme.spaceL * pane.u : 0

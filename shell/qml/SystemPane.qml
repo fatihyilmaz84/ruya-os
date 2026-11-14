@@ -352,6 +352,7 @@ SettingsPane {
     SettingRow {
         id: zoneRow
         objectName: "rowTimezone"
+        kind: "page"
         u: pane.u
         visible: pane.isAdmin
         label: qsTr("Time zone")
@@ -425,17 +426,15 @@ SettingsPane {
         wrapMode: Text.Wrap
     }
 
-    Text {
+    GroupLabel {
         objectName: "updatesHeading"
-        width: parent ? parent.width : 0
-        topPadding: Theme.spaceS * pane.u
+        u: pane.u
         text: qsTr("Updates")
-        color: Theme.text
-        font.pixelSize: Theme.typeBody * pane.u
     }
 
     SettingRow {
         objectName: "rowVersion"
+        kind: "info"
         u: pane.u
         label: qsTr("Version")
         value: Update.current + " · " + pane.channelLabel(Update.channel)
@@ -474,6 +473,7 @@ SettingsPane {
     SettingRow {
         id: updateRow
         objectName: "rowUpdate"
+        kind: "action"
         u: pane.u
         label: pane.updateLabel()
         value: pane.updateValue()
@@ -483,6 +483,7 @@ SettingsPane {
     SettingRow {
         id: rollbackRow
         objectName: "rowRollback"
+        kind: "action"
         u: pane.u
         visible: pane.isAdmin && Update.rollbackAvailable
         label: qsTr("Roll back to the previous version")
@@ -500,13 +501,10 @@ SettingsPane {
         wrapMode: Text.Wrap
     }
 
-    Text {
+    GroupLabel {
         objectName: "healthHeading"
-        width: parent ? parent.width : 0
-        topPadding: Theme.spaceS * pane.u
         text: qsTr("Device health")
-        color: Theme.text
-        font.pixelSize: Theme.typeBody * pane.u
+        u: pane.u
     }
 
     Text {

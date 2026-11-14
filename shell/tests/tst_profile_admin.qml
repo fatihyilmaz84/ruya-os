@@ -207,6 +207,13 @@ Item {
             goToRow("rowAdd")
             keyClick(Qt.Key_Return)
             tryVerify(() => find("rowNewName").activeFocus, 2000, "the form opens on the name row")
+            compare(find("rowAdd").kind, "action")
+            compare(find("rowNewName").kind, "page")
+            compare(find("rowCreate").kind, "action")
+            compare(find("rowCreate").primary, true, "Create profile is the main verb: primaryFill")
+            compare(find("rowRename").kind, "action")
+            compare(find("rowDelete").kind, "action")
+            compare(find("profileRow_p1").kind, "item")
         }
 
         function nameRowValue() { return findChild(find("rowNewName"), "value").text }
@@ -468,6 +475,9 @@ Item {
             signIn("p2", "")                              // Ada, a standard profile
             openMyProfilePane()
             verify(find("category_profiles") === null, "Manage profiles is not listed for a standard profile")
+            compare(find("rowWho").kind, "info")
+            compare(find("rowRenameMe").kind, "action")
+            compare(find("rowActivity").kind, "page")
             compare(findChild(find("rowWho"), "label").text, "Ada")
             compare(findChild(find("rowWho"), "value").text, "Standard")
             verify(find("rowChangePin").visible)

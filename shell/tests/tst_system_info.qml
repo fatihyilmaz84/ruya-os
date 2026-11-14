@@ -164,13 +164,28 @@ Item {
             compare(hintsOf(page), "A Select|B Back", "Save report")
             keyClick(Qt.Key_Down)
             tryVerify(() => find("sysAddresses").activeFocus)
-            compare(hintsOf(page), "A Select|B Back", "Include network addresses")
+            compare(hintsOf(page), "A Toggle|B Back", "Include network addresses")
             keyClick(Qt.Key_Down)
             tryVerify(() => row("console/version").activeFocus)
             compare(hintsOf(page), "B Back", "an information row does nothing on A")
             keyClick(Qt.Key_Up)
             tryVerify(() => find("sysAddresses").activeFocus)
-            compare(hintsOf(page), "A Select|B Back")
+            compare(hintsOf(page), "A Toggle|B Back")
+        }
+
+        // RUY-514: the save row is an action, the facts are flat, the headings are GroupLabels and are never focused.
+        function test_row_kinds_and_headings() {
+            openSystemInfo()
+            compare(find("sysSave").kind, "action")
+            const fact = row("console/version")
+            verify(fact, "a fact row")
+            compare(fact.flat, true, "the fact look")
+            compare(fact.hintKind, "info")
+            const heading = find("sysHeading_cpu")
+            verify(heading, "a heading")
+            verify(findChild(heading, "groupLabelText"), "it is a GroupLabel")
+            const body = find("sysBody")
+            verify(!body.focusableRows().some(r => r.objectName.startsWith("sysHeading_")), "never focused")
         }
 
         // A row's label can be a device's own name: it is never read as markup.

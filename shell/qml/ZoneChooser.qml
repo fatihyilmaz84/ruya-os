@@ -217,17 +217,28 @@ FocusScope {
             text: zoneRow.label
             color: Theme.text
             font.pixelSize: Theme.typeBody * chooser.u
-            font.weight: zoneRow.restingSelection ? Theme.weightDemiBold : Theme.weightRegular
+            font.weight: zoneRow.restingSelection || zoneRow.marked ? Theme.weightDemiBold : Theme.weightRegular
         }
         Text {
             id: markText
-            objectName: "currentMark"
+            objectName: "currentWord"
             visible: zoneRow.marked
-            anchors { right: parent.right; rightMargin: Theme.spaceL * chooser.u; verticalCenter: parent.verticalCenter }
+            anchors { right: markIcon.left; rightMargin: Theme.spaceXxs * chooser.u; verticalCenter: parent.verticalCenter }
             text: qsTr("Current")
             color: Theme.text           // on translucent glass textDim is too faint
             font.pixelSize: Theme.typeCaption * chooser.u
             font.weight: Theme.weightDemiBold
+        }
+        // The same mark as SettingRow's current item (04 section 5).
+        Icon {
+            id: markIcon
+            objectName: "currentMark"
+            visible: zoneRow.marked
+            anchors { right: parent.right; rightMargin: Theme.spaceS * chooser.u; verticalCenter: parent.verticalCenter }
+            u: chooser.u
+            name: "check_circle"
+            filled: true
+            color: Theme.text
         }
     }
 

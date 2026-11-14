@@ -255,11 +255,19 @@ Item {
             compare(chooser.region, "Other", "it opens on the current zone's region (UTC)")
             compare(chooser.selectedZone, "UTC")
             compare(find("zoneCity_UTC").marked, true, "and marks the current zone")
+            compare(find("rowTimezone").kind, "page")
+            // RUY-514: the check mark is drawn on the current zone's row only.
+            compare(findChild(find("zoneCity_UTC"), "currentMark").visible, true)
+            compare(findChild(find("zoneCity_UTC"), "currentMark").name, "check_circle")
+            compare(findChild(find("zoneRegion_Other"), "currentMark").visible, true, "the region of the current zone")
+            compare(findChild(find("zoneRegion_Europe"), "currentMark").visible, false, "another region")
+            compare(findChild(find("zoneRegion_Europe"), "currentWord").visible, false)
 
             pressUntil(Qt.Key_Up, () => chooser.region === "Europe", "Up reaches Europe")
             verify(find("zoneRegions").activeFocus)
             keyClick(Qt.Key_Return)
             tryVerify(() => find("zoneCities").activeFocus, 2000, "the cities have focus")
+            compare(findChild(find("zoneCity_Europe/Berlin"), "currentMark").visible, false, "a Europe city")
             pressUntil(Qt.Key_Down, () => chooser.selectedZone === "Europe/Istanbul", "Down reaches Istanbul")
             keyClick(Qt.Key_Return)
             tryVerify(() => !picker.shown, 2000, "the picker closes")
@@ -285,13 +293,13 @@ Item {
         function test_the_picker_says_what_a_and_b_do() {
             openSystemPane("p1", "1234")
             goToRow("rowTimezone")
-            compare(hintsShown(), "A Select|B Back", "the pane")
+            compare(hintsShown(), "A Open|B Back", "the pane")
             keyClick(Qt.Key_Return)
             tryVerify(() => find("zoneRegions").activeFocus, 2000)
             compare(hintsShown(), "A Select|B Cancel", "the picker: A chooses, B cancels")
             keyClick(Qt.Key_Escape)
             tryVerify(() => !find("zonePicker").shown, 2000)
-            compare(hintsShown(), "A Select|B Back")
+            compare(hintsShown(), "A Open|B Back")
         }
 
         function test_the_selected_region_stays_marked_while_the_cities_have_focus() {

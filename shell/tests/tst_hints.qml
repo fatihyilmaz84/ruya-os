@@ -138,12 +138,21 @@ Item {
             keyClick(Qt.Key_Return)
             tryVerify(() => find("paneAbout").activeFocus, 2000, "About took focus")
             compare(tc.shown(), "B Back", "a fact row of About does nothing on A")
+            // RUY-514: the rows state their kind, and A on a fact makes no sound.
+            for (const n of ["aboutVersion", "aboutQt", "aboutServices", "aboutLicence"])
+                compare(find(n).kind, "info", n)
+            compare(find("aboutSystemInfo").kind, "page")
+            const selects = Sfx.selectCount
+            keyClick(Qt.Key_Return)
+            wait(100)
+            compare(Sfx.selectCount, selects, "Accept on Image version changes no Sfx count")
+            verify(find("aboutVersion").activeFocus, "and focus stays")
             // The last row opens System information (T-226): that one row offers A.
             for (let i = 0; i < 3; ++i)
                 keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Down)
             tryVerify(() => find("aboutSystemInfo").activeFocus, 2000)
-            compare(tc.shown(), "A Select|B Back", "the System information row")
+            compare(tc.shown(), "A Open|B Back", "the System information row")
             keyClick(Qt.Key_Up)
             tryVerify(() => !find("aboutSystemInfo").activeFocus, 2000)
             compare(tc.shown(), "B Back")

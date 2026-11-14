@@ -16,10 +16,6 @@ ProfilePaneBase {
     namePrefix: "myProfile"
     fallbackRow: changePinRow
 
-    // The identity row is read-only: on it the hint bar shows Back only (04 Settings pane rule).
-    hints: whoRow.activeFocus ? [{ button: "B", text: qsTr("Back") }]
-                              : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
-
     readonly property bool canRename: myRole === "admin" || myRole === "standard"
     readonly property bool canChangePin: myRole === "admin" || myRole === "standard"
     readonly property bool canRemovePin: myRole === "standard" && (me.hasPin ?? false)
@@ -91,6 +87,7 @@ ProfilePaneBase {
     SettingRow {
         id: whoRow
         objectName: "rowWho"
+        kind: "info"
         u: pane.u
         swatch: pane.me.avatar ?? "transparent"
         label: pane.me.name ?? ""
@@ -99,6 +96,7 @@ ProfilePaneBase {
     SettingRow {
         id: renameRow
         objectName: "rowRenameMe"
+        kind: "action"
         u: pane.u
         visible: pane.canRename
         label: qsTr("Rename %1").arg(pane.me.name ?? "")
@@ -108,6 +106,7 @@ ProfilePaneBase {
     SettingRow {
         id: changePinRow
         objectName: "rowChangePin"
+        kind: "action"
         u: pane.u
         visible: pane.canChangePin
         label: (pane.me.hasPin ?? false) ? qsTr("Change my PIN") : qsTr("Set a PIN")
@@ -115,6 +114,7 @@ ProfilePaneBase {
     }
     SettingRow {
         objectName: "rowRemovePin"
+        kind: "action"
         u: pane.u
         visible: pane.canRemovePin
         label: qsTr("Remove my PIN")
@@ -123,6 +123,7 @@ ProfilePaneBase {
     SettingRow {
         id: activityRow
         objectName: "rowActivity"
+        kind: "page"
         u: pane.u
         visible: Profiles.activeProfile !== ""
         label: qsTr("Activity")

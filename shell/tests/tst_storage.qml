@@ -397,6 +397,7 @@ Item {
                    "in this order")
             verify(find("storageSystem").y < find("storageVol_vol-internal").y, "above the drives")
             compare(find("storageHeadingDrives").text, "Drives")
+            verify(findChild(find("storageHeadingDrives"), "groupLabelText"), "Drives is a GroupLabel")
         }
 
         // With the profile data known (a later root source): its own row, and the rest is "System".
@@ -748,13 +749,17 @@ Item {
             openStoragePane()
             tryVerify(() => find("storageScan_vol-stick_cat:games") !== null, 3000)
             compare(shownHints(), "B Back", "the first row (This console) is a fact")
+            compare(find("storageApps").kind, "info")
+            compare(find("storageSystem").kind, "info")
+            compare(find("storageVol_vol-stick").kind, "item")
+            compare(find("storageEject_vol-stick").kind, "action")
             goTo("storageVol_vol-stick")
             compare(shownHints(), "A Select|B Back", "a drive's own row does something")
             keyClick(Qt.Key_Down)
             tryVerify(() => find("storageScan_vol-stick_cat:games").activeFocus, 2000)
             compare(shownHints(), "B Back", "a result row does nothing on Accept")
             const row = find("storageScan_vol-stick_cat:games")
-            verify(row.inert)
+            compare(row.kind, "info")
             let hit = 0
             row.activated.connect(() => { hit++ })
             keyClick(Qt.Key_Return)
