@@ -886,9 +886,6 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
-    <name>ButtonGlyph</name>
-</context>
-<context>
     <name>ButtonTest</name>
     <message>
         <location filename="../qml/ButtonTest.qml" line="+96"/>
@@ -944,7 +941,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ButtonTestPage</name>
     <message>
-        <location filename="../qml/ButtonTestPage.qml" line="+24"/>
+        <location filename="../qml/ButtonTestPage.qml" line="+29"/>
         <source>Button test</source>
         <translation>Düğme testi</translation>
     </message>
@@ -965,11 +962,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+107"/>
+        <location line="+87"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
     <message>
-        <location line="-7"/>
+        <location line="-94"/>
         <source>x&#xa0;%1  y&#xa0;%2</source>
         <translation>x&#xa0;%1  y&#xa0;%2</translation>
     </message>
@@ -984,44 +982,24 @@ Bu geri alınamaz.</translation>
         <translation>Yok</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Cross (south)</source>
-        <translation>Çarpı (alt)</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>A (south)</source>
-        <translation>A (alt)</translation>
+        <location line="+2"/>
+        <source>%1 (south)</source>
+        <translation>%1 (alt)</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Circle (east)</source>
-        <translation>Daire (sağ)</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>B (east)</source>
-        <translation>B (sağ)</translation>
+        <source>%1 (east)</source>
+        <translation>%1 (sağ)</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Square (west)</source>
-        <translation>Kare (sol)</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>X (west)</source>
-        <translation>X (sol)</translation>
+        <source>%1 (west)</source>
+        <translation>%1 (sol)</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Triangle (north)</source>
-        <translation>Üçgen (üst)</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Y (north)</source>
-        <translation>Y (üst)</translation>
+        <source>%1 (north)</source>
+        <translation>%1 (üst)</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -1096,17 +1074,7 @@ Bu geri alınamaz.</translation>
         <translation> · </translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>L2 · R2</source>
-        <translation>L2 · R2</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>LT · RT</source>
-        <translation>LT · RT</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+14"/>
         <source>Gyro</source>
         <translation>Jiroskop</translation>
     </message>
@@ -1311,7 +1279,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+49"/>
+        <location filename="../qml/ControllerPage.qml" line="+51"/>
         <source>Works</source>
         <translation>Çalışıyor</translation>
     </message>
@@ -1690,7 +1658,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControlsPage</name>
     <message>
-        <location filename="../qml/ControlsPage.qml" line="+24"/>
+        <location filename="../qml/ControlsPage.qml" line="+27"/>
         <source>Controls in games</source>
         <translation>Oyunlardaki kontroller</translation>
     </message>
@@ -3044,7 +3012,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Page</name>
     <message>
-        <location filename="../qml/Page.qml" line="+24"/>
+        <location filename="../qml/Page.qml" line="+29"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -3880,7 +3848,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>RemapPage</name>
     <message>
-        <location filename="../qml/RemapPage.qml" line="+20"/>
+        <location filename="../qml/RemapPage.qml" line="+23"/>
         <source>Remap buttons</source>
         <translation>Düğmeleri yeniden ata</translation>
     </message>
@@ -3944,7 +3912,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SettingControl</name>
     <message>
-        <location filename="../qml/controls/SettingControl.qml" line="+72"/>
+        <location filename="../qml/controls/SettingControl.qml" line="+75"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -4242,7 +4210,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+663"/>
+        <location filename="../qml/Shell.qml" line="+691"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -4301,22 +4269,22 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+148"/>
-        <location line="+26"/>
+        <location line="+29"/>
         <source>Could not close %1.</source>
         <translation>%1 kapatılamadı.</translation>
     </message>
     <message>
-        <location line="-25"/>
+        <location line="-28"/>
         <source>Could not close the running app.</source>
         <translation>Çalışan uygulama kapatılamadı.</translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+67"/>
         <source>%1 did not close. Restart the console if it keeps running.</source>
         <translation>%1 kapanmadı. Çalışmaya devam ederse konsolu yeniden başlatın.</translation>
     </message>
     <message>
-        <location line="+70"/>
+        <location line="+74"/>
         <source>%1 has no window yet.</source>
         <translation>%1 henüz bir pencere açmadı.</translation>
     </message>
@@ -4416,7 +4384,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+472"/>
-        <location line="+4"/>
+        <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
         <translation>Seç</translation>
@@ -4432,13 +4400,13 @@ Bu geri alınamaz.</translation>
         <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
     </message>
     <message>
-        <location line="-206"/>
+        <location line="-213"/>
         <location line="+19"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1701"/>
+        <location line="-1708"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -4469,7 +4437,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1419"/>
+        <location line="+1433"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
@@ -4557,7 +4525,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>StickPage</name>
     <message>
-        <location filename="../qml/StickPage.qml" line="+24"/>
+        <location filename="../qml/StickPage.qml" line="+27"/>
         <source>Right stick</source>
         <translation>Sağ çubuk</translation>
     </message>
@@ -4567,7 +4535,7 @@ Bu geri alınamaz.</translation>
         <translation>Sol çubuk</translation>
     </message>
     <message>
-        <location line="+70"/>
+        <location line="+72"/>
         <source>Right stick reset</source>
         <translation>Sağ çubuk sıfırlandı</translation>
     </message>

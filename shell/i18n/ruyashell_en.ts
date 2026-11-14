@@ -890,9 +890,6 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
-    <name>ButtonGlyph</name>
-</context>
-<context>
     <name>ButtonTest</name>
     <message>
         <location filename="../qml/ButtonTest.qml" line="+96"/>
@@ -948,7 +945,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ButtonTestPage</name>
     <message>
-        <location filename="../qml/ButtonTestPage.qml" line="+24"/>
+        <location filename="../qml/ButtonTestPage.qml" line="+29"/>
         <source>Button test</source>
         <translation>Button test</translation>
     </message>
@@ -969,11 +966,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+107"/>
+        <location line="+87"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
     <message>
-        <location line="-7"/>
+        <location line="-94"/>
         <source>x&#xa0;%1  y&#xa0;%2</source>
         <translation>x&#xa0;%1  y&#xa0;%2</translation>
     </message>
@@ -988,44 +986,24 @@ This can&apos;t be undone.</translation>
         <translation>None</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Cross (south)</source>
-        <translation>Cross (south)</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>A (south)</source>
-        <translation>A (south)</translation>
+        <location line="+2"/>
+        <source>%1 (south)</source>
+        <translation>%1 (south)</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Circle (east)</source>
-        <translation>Circle (east)</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>B (east)</source>
-        <translation>B (east)</translation>
+        <source>%1 (east)</source>
+        <translation>%1 (east)</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Square (west)</source>
-        <translation>Square (west)</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>X (west)</source>
-        <translation>X (west)</translation>
+        <source>%1 (west)</source>
+        <translation>%1 (west)</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Triangle (north)</source>
-        <translation>Triangle (north)</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Y (north)</source>
-        <translation>Y (north)</translation>
+        <source>%1 (north)</source>
+        <translation>%1 (north)</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -1100,17 +1078,7 @@ This can&apos;t be undone.</translation>
         <translation> · </translation>
     </message>
     <message>
-        <location line="+13"/>
-        <source>L2 · R2</source>
-        <translation>L2 · R2</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>LT · RT</source>
-        <translation>LT · RT</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location line="+14"/>
         <source>Gyro</source>
         <translation>Gyro</translation>
     </message>
@@ -1315,7 +1283,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+49"/>
+        <location filename="../qml/ControllerPage.qml" line="+51"/>
         <source>Works</source>
         <translation>Works</translation>
     </message>
@@ -1694,7 +1662,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControlsPage</name>
     <message>
-        <location filename="../qml/ControlsPage.qml" line="+24"/>
+        <location filename="../qml/ControlsPage.qml" line="+27"/>
         <source>Controls in games</source>
         <translation>Controls in games</translation>
     </message>
@@ -3055,7 +3023,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Page</name>
     <message>
-        <location filename="../qml/Page.qml" line="+24"/>
+        <location filename="../qml/Page.qml" line="+29"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -3896,7 +3864,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>RemapPage</name>
     <message>
-        <location filename="../qml/RemapPage.qml" line="+20"/>
+        <location filename="../qml/RemapPage.qml" line="+23"/>
         <source>Remap buttons</source>
         <translation>Remap buttons</translation>
     </message>
@@ -3960,7 +3928,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>SettingControl</name>
     <message>
-        <location filename="../qml/controls/SettingControl.qml" line="+72"/>
+        <location filename="../qml/controls/SettingControl.qml" line="+75"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -4258,7 +4226,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+663"/>
+        <location filename="../qml/Shell.qml" line="+691"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -4317,22 +4285,22 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+148"/>
-        <location line="+26"/>
+        <location line="+29"/>
         <source>Could not close %1.</source>
         <translation>Could not close %1.</translation>
     </message>
     <message>
-        <location line="-25"/>
+        <location line="-28"/>
         <source>Could not close the running app.</source>
         <translation>Could not close the running app.</translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+67"/>
         <source>%1 did not close. Restart the console if it keeps running.</source>
         <translation>%1 did not close. Restart the console if it keeps running.</translation>
     </message>
     <message>
-        <location line="+70"/>
+        <location line="+74"/>
         <source>%1 has no window yet.</source>
         <translation>%1 has no window yet.</translation>
     </message>
@@ -4432,7 +4400,7 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+472"/>
-        <location line="+4"/>
+        <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
         <translation>Select</translation>
@@ -4448,13 +4416,13 @@ This can&apos;t be undone.</translation>
         <translation>The chosen sound theme can&apos;t be used. The standard one plays instead.</translation>
     </message>
     <message>
-        <location line="-206"/>
+        <location line="-213"/>
         <location line="+19"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1701"/>
+        <location line="-1708"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -4485,7 +4453,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1419"/>
+        <location line="+1433"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
@@ -4573,7 +4541,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>StickPage</name>
     <message>
-        <location filename="../qml/StickPage.qml" line="+24"/>
+        <location filename="../qml/StickPage.qml" line="+27"/>
         <source>Right stick</source>
         <translation>Right stick</translation>
     </message>
@@ -4583,7 +4551,7 @@ This can&apos;t be undone.</translation>
         <translation>Left stick</translation>
     </message>
     <message>
-        <location line="+70"/>
+        <location line="+72"/>
         <source>Right stick reset</source>
         <translation>Right stick reset</translation>
     </message>
