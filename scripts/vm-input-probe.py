@@ -710,11 +710,12 @@ def cmd_twopads(args):
 
 
 def udev_tags(node):
-    """The TAGS and CURRENT_TAGS values of `node` from udev's database."""
+    """The CURRENT_TAGS of `node` from udev's database."""
     out = subprocess.run(["udevadm", "info", "-q", "property", "-n", node], capture_output=True, text=True).stdout
     tags = set()
     for line in out.splitlines():
-        if line.startswith(("TAGS=", "CURRENT_TAGS=")):
+        # CURRENT_TAGS only: TAGS keeps every tag a rule ever added, a removed one included.
+        if line.startswith("CURRENT_TAGS="):
             tags |= {t for t in line.split("=", 1)[1].split(":") if t}
     return tags
 
@@ -779,6 +780,10 @@ def cmd_nodes(args):
         if kbm:
             kbm.close()
         pad.close()
+        # Leave no device behind: a later check in the same boot counts the pads ListDevices lists.
+        wait_for(lambda: not [d for d in (devices() or []) if d.get("name", "").startswith(NAME)]
+                 and not node_by("phys", "vm-check/pad0")[0] and not node_by("phys", "ruya-input/kbm-check")[0], 5)
+        time.sleep(1.5)
     return fails
 
 
