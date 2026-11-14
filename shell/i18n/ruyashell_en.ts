@@ -894,7 +894,7 @@ This can&apos;t be undone.</translation>
     <message>
         <location filename="../qml/ButtonGlyph.qml" line="+22"/>
         <source>Left/Right</source>
-        <translation type="unfinished"></translation>
+        <translation>Left/Right</translation>
     </message>
 </context>
 <context>
