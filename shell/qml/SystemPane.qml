@@ -517,7 +517,7 @@ SettingsPane {
         width: parent ? parent.width : 0
         visible: sensorModel.count === 0
         text: qsTr("No temperature sensors were found on this device.")
-        color: Theme.textDim
+        color: Theme.text
         font.pixelSize: Theme.typeBody * pane.u
         wrapMode: Text.Wrap
     }

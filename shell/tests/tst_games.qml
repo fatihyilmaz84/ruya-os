@@ -82,6 +82,21 @@ Item {
             verify(grid.activeFocus, "Down returns to the grid")
         }
 
+        // RUY-542: on the filter row A steps the choice, so the bar says Next, not Select.
+        function test_filter_row_hints_say_what_a_does() {
+            start("")
+            const grid = find("gamesGrid")
+            tryVerify(() => grid.activeFocus, 2000)
+            const verbs = () => ["A", "Left/Right"].map(b => { const h = findChild(find("hintBar"), "hint_" + b); return h ? b + " " + h.verb : "" }).join("|")
+            compare(verbs(), "A Select|", "on the grid A selects")
+            keyClick(Qt.Key_Up)
+            verify(find("gamesFilter").activeFocus)
+            tryCompare(findChild(find("hintBar"), "hint_A"), "verb", "Next")
+            compare(verbs(), "A Next|Left/Right Change")
+            keyClick(Qt.Key_Down)
+            tryCompare(findChild(find("hintBar"), "hint_A"), "verb", "Select")
+        }
+
         function test_launch_request() {
             start("")
             tryVerify(() => find("gamesGrid").activeFocus, 2000)

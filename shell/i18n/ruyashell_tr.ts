@@ -39,7 +39,7 @@
         <translation>GPL-3.0 veya üzeri</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Icon font: Apache-2.0. Inter typeface: OFL-1.1.</source>
         <translation>Simge yazı tipi: Apache-2.0. Inter yazı tipi: OFL-1.1.</translation>
     </message>
@@ -883,6 +883,14 @@ Bu geri alınamaz.</translation>
         <location line="+0"/>
         <source>Could not connect.</source>
         <translation>Bağlanılamadı.</translation>
+    </message>
+</context>
+<context>
+    <name>ButtonGlyph</name>
+    <message>
+        <location filename="../qml/ButtonGlyph.qml" line="+22"/>
+        <source>Left/Right</source>
+        <translation>Sol/Sağ</translation>
     </message>
 </context>
 <context>
@@ -2087,35 +2095,37 @@ Bu geri alınamaz.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+418"/>
-        <location line="+158"/>
+        <location filename="../qml/GameControls.qml" line="+437"/>
+        <location line="+182"/>
         <source>Could not save to the USB drive</source>
         <translation>USB belleğe kaydedilemedi</translation>
     </message>
     <message>
-        <location line="-158"/>
+        <location line="-182"/>
+        <location line="+6"/>
         <location line="+2"/>
-        <location line="+156"/>
-        <location line="+26"/>
+        <location line="+174"/>
+        <location line="+36"/>
         <source>Try again.</source>
         <translation>Yeniden dene.</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-210"/>
         <source>Could not save the change</source>
         <translation>Değişiklik kaydedilemedi</translation>
     </message>
     <message>
+        <location line="-2"/>
         <source>Could not save the change for %1</source>
         <translation>%1 için değişiklik kaydedilemedi</translation>
     </message>
     <message>
-        <location line="+154"/>
+        <location line="+174"/>
         <source>Saved to the USB drive</source>
         <translation>USB belleğe kaydedildi</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+19"/>
         <source>Controls imported</source>
         <translation>Kontroller alındı</translation>
     </message>
@@ -2239,7 +2249,7 @@ Bu geri alınamaz.</translation>
     <name>GamesPage</name>
     <message>
         <location filename="../qml/GamesPage.qml" line="+14"/>
-        <location line="+118"/>
+        <location line="+120"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
@@ -2261,7 +2271,8 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="-2"/>
+        <location line="-6"/>
+        <location line="+4"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
@@ -2300,7 +2311,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>HubPause</name>
     <message>
-        <location filename="../qml/HubPause.qml" line="+124"/>
+        <location filename="../qml/HubPause.qml" line="+125"/>
         <source>Could not resume the game. Open Ruya Hub and choose Resume.</source>
         <translation>Oyun sürdürülemedi. Ruya Hub&apos;ı açıp Devam et&apos;i seçin.</translation>
     </message>
@@ -2859,7 +2870,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 seçenekleri</translation>
     </message>
     <message>
-        <location line="+204"/>
+        <location line="+208"/>
         <source>No options for this yet.</source>
         <translation>Bunun için henüz seçenek yok.</translation>
     </message>
@@ -3211,14 +3222,14 @@ Bu geri alınamaz.</translation>
         <translation>bir uygulama</translation>
     </message>
     <message numerus="yes">
-        <location line="+1"/>
+        <location line="+7"/>
         <source>%1 and %n more</source>
         <translation>
             <numerusform>%1 ve %n tane daha</numerusform>
         </translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+12"/>
         <location line="+2"/>
         <source>The screen saver never shows</source>
         <translation>Ekran koruyucu hiç görünmez</translation>
@@ -4105,7 +4116,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+662"/>
+        <location filename="../qml/Shell.qml" line="+663"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -5234,18 +5245,18 @@ Bu geri alınamaz.</translation>
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+133"/>
-        <location line="+318"/>
+        <location line="+312"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-318"/>
-        <location line="+317"/>
+        <location line="-312"/>
+        <location line="+311"/>
         <source>Stable</source>
         <translation>Kararlı</translation>
     </message>
     <message>
-        <location line="-312"/>
+        <location line="-306"/>
         <source>Last checked %1</source>
         <translation>Son kontrol: %1</translation>
     </message>
@@ -5355,7 +5366,7 @@ Bu geri alınamaz.</translation>
         <translation>Saat henüz internetten ayarlanmadı, bu yüzden saat yanlış olabilir.</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+29"/>
         <source>Time zone set to %1</source>
         <translation>Saat dilimi %1 olarak ayarlandı</translation>
     </message>
@@ -5375,7 +5386,7 @@ Bu geri alınamaz.</translation>
         <translation>Çevrimiçi oyunların bağlantısı duraklatılmışken kopabilir.</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+80"/>
         <source>Device health</source>
         <translation>Cihaz sağlığı</translation>
     </message>
@@ -5385,14 +5396,14 @@ Bu geri alınamaz.</translation>
         <translation>Bu cihazda sıcaklık sensörü bulunamadı.</translation>
     </message>
     <message>
-        <location line="-208"/>
+        <location line="-202"/>
         <location line="+8"/>
-        <location line="+79"/>
+        <location line="+76"/>
         <source>Only an admin can do this.</source>
         <translation>Bunu yalnızca bir yönetici yapabilir.</translation>
     </message>
     <message>
-        <location line="-285"/>
+        <location line="-282"/>
         <source>The console is warm. Nothing needs to be done.</source>
         <translation>Konsol sıcak. Yapılması gereken bir şey yok.</translation>
     </message>
@@ -5412,7 +5423,7 @@ Bu geri alınamaz.</translation>
         <translation>Dil</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location line="+87"/>
         <source>Updates</source>
         <translation>Güncellemeler</translation>
     </message>

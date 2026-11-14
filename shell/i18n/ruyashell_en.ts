@@ -39,7 +39,7 @@
         <translation>GPL-3.0-or-later</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Icon font: Apache-2.0. Inter typeface: OFL-1.1.</source>
         <translation>Icon font: Apache-2.0. Inter typeface: OFL-1.1.</translation>
     </message>
@@ -887,6 +887,14 @@ This can&apos;t be undone.</translation>
         <location line="+0"/>
         <source>Could not connect.</source>
         <translation>Could not connect.</translation>
+    </message>
+</context>
+<context>
+    <name>ButtonGlyph</name>
+    <message>
+        <location filename="../qml/ButtonGlyph.qml" line="+22"/>
+        <source>Left/Right</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -2092,35 +2100,37 @@ This can&apos;t be undone.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+418"/>
-        <location line="+158"/>
+        <location filename="../qml/GameControls.qml" line="+437"/>
+        <location line="+182"/>
         <source>Could not save to the USB drive</source>
         <translation>Could not save to the USB drive</translation>
     </message>
     <message>
-        <location line="-158"/>
+        <location line="-182"/>
+        <location line="+6"/>
         <location line="+2"/>
-        <location line="+156"/>
-        <location line="+26"/>
+        <location line="+174"/>
+        <location line="+36"/>
         <source>Try again.</source>
         <translation>Try again.</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-210"/>
         <source>Could not save the change</source>
         <translation>Could not save the change</translation>
     </message>
     <message>
+        <location line="-2"/>
         <source>Could not save the change for %1</source>
         <translation>Could not save the change for %1</translation>
     </message>
     <message>
-        <location line="+154"/>
+        <location line="+174"/>
         <source>Saved to the USB drive</source>
         <translation>Saved to the USB drive</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+19"/>
         <source>Controls imported</source>
         <translation>Controls imported</translation>
     </message>
@@ -2244,7 +2254,7 @@ This can&apos;t be undone.</translation>
     <name>GamesPage</name>
     <message>
         <location filename="../qml/GamesPage.qml" line="+14"/>
-        <location line="+118"/>
+        <location line="+120"/>
         <source>Games</source>
         <translation>Games</translation>
     </message>
@@ -2266,7 +2276,8 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="-2"/>
+        <location line="-6"/>
+        <location line="+4"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
@@ -2305,7 +2316,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>HubPause</name>
     <message>
-        <location filename="../qml/HubPause.qml" line="+124"/>
+        <location filename="../qml/HubPause.qml" line="+125"/>
         <source>Could not resume the game. Open Ruya Hub and choose Resume.</source>
         <translation>Could not resume the game. Open Ruya Hub and choose Resume.</translation>
     </message>
@@ -2870,7 +2881,7 @@ This can&apos;t be undone.</translation>
         <translation>Options for %1</translation>
     </message>
     <message>
-        <location line="+204"/>
+        <location line="+208"/>
         <source>No options for this yet.</source>
         <translation>No options for this yet.</translation>
     </message>
@@ -3225,7 +3236,7 @@ This can&apos;t be undone.</translation>
         <translation>an app</translation>
     </message>
     <message numerus="yes">
-        <location line="+1"/>
+        <location line="+7"/>
         <source>%1 and %n more</source>
         <translation>
             <numerusform>%1 and %n more</numerusform>
@@ -3233,7 +3244,7 @@ This can&apos;t be undone.</translation>
         </translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+12"/>
         <location line="+2"/>
         <source>The screen saver never shows</source>
         <translation>The screen saver never shows</translation>
@@ -4121,7 +4132,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+662"/>
+        <location filename="../qml/Shell.qml" line="+663"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -5250,18 +5261,18 @@ This can&apos;t be undone.</translation>
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+133"/>
-        <location line="+318"/>
+        <location line="+312"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-318"/>
-        <location line="+317"/>
+        <location line="-312"/>
+        <location line="+311"/>
         <source>Stable</source>
         <translation>Stable</translation>
     </message>
     <message>
-        <location line="-312"/>
+        <location line="-306"/>
         <source>Last checked %1</source>
         <translation>Last checked %1</translation>
     </message>
@@ -5371,7 +5382,7 @@ This can&apos;t be undone.</translation>
         <translation>The clock has not been set from the internet yet, so the time may be wrong.</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+29"/>
         <source>Time zone set to %1</source>
         <translation>Time zone set to %1</translation>
     </message>
@@ -5391,7 +5402,7 @@ This can&apos;t be undone.</translation>
         <translation>Online games can lose their connection while paused.</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+80"/>
         <source>Device health</source>
         <translation>Device health</translation>
     </message>
@@ -5401,14 +5412,14 @@ This can&apos;t be undone.</translation>
         <translation>No temperature sensors were found on this device.</translation>
     </message>
     <message>
-        <location line="-208"/>
+        <location line="-202"/>
         <location line="+8"/>
-        <location line="+79"/>
+        <location line="+76"/>
         <source>Only an admin can do this.</source>
         <translation>Only an admin can do this.</translation>
     </message>
     <message>
-        <location line="-285"/>
+        <location line="-282"/>
         <source>The console is warm. Nothing needs to be done.</source>
         <translation>The console is warm. Nothing needs to be done.</translation>
     </message>
@@ -5428,7 +5439,7 @@ This can&apos;t be undone.</translation>
         <translation>Language</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location line="+87"/>
         <source>Updates</source>
         <translation>Updates</translation>
     </message>

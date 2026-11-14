@@ -96,13 +96,14 @@ Item {
                 GroupLabel { u: sheetRoot.u; text: qsTr("Sound") }
                 SettingRow { u: sheetRoot.u; label: qsTr("Model"); value: "RuyaOS box"; kind: "info"; ruleBelow: true }
                 SettingRow { u: sheetRoot.u; label: qsTr("Version"); value: "0.1"; kind: "info" }
-                SettingRow { kind: "item"; u: sheetRoot.u; label: qsTr("Analog output"); value: qsTr("Current"); current: true }
+                SettingRow { objectName: "sheet_item"; kind: "item"; u: sheetRoot.u; label: qsTr("Analog output"); value: qsTr("Current"); current: true }
                 SettingRow { u: sheetRoot.u; label: qsTr("Wallpaper"); value: qsTr("Default"); kind: "page" }
                 SettingRow { u: sheetRoot.u; label: qsTr("Scan for networks"); value: qsTr("Scanning…"); kind: "action" }
                 SettingRow { u: sheetRoot.u; label: qsTr("Create profile"); kind: "action"; emphasis: "primary" }
-                ToggleRow { u: sheetRoot.u; label: qsTr("Reduce motion"); checked: true }
-                ChoiceRow { u: sheetRoot.u; label: qsTr("Quality"); options: [{ value: "a", label: qsTr("Default") }, { value: "b", label: qsTr("Balanced") }]; value: "a" }
-                SliderRow { u: sheetRoot.u; label: qsTr("Brightness"); from: 0; to: 100; value: 50; unit: "%" }
+                ToggleRow { objectName: "sheet_toggle"; u: sheetRoot.u; label: qsTr("Reduce motion"); checked: true }
+                ToggleRow { u: sheetRoot.u; label: qsTr("Play sounds"); checked: false }
+                ChoiceRow { objectName: "sheet_choice"; u: sheetRoot.u; label: qsTr("Quality"); options: [{ value: "a", label: qsTr("Default") }, { value: "b", label: qsTr("Balanced") }]; value: "a" }
+                SliderRow { objectName: "sheet_slider"; u: sheetRoot.u; label: qsTr("Brightness"); from: 0; to: 100; value: 50; unit: "%" }
                 SettingRow { kind: "info"; u: sheetRoot.u; label: qsTr("Sleep is not available"); enabled: false }
             }
         }
@@ -851,6 +852,16 @@ Item {
             compare(rule("k_fact4"), false, "never after the last fact of a run")
         }
 
+        function test_hairline_follows_an_in_place_change() {
+            const pane = createTemporaryObject(kindsPaneComponent, host)
+            tryVerify(() => findChild(pane, "k_fact1").ruleBelow === true)
+            // Fact 2 stops being a fact in place (no relayout: same height): fact 1 loses its hairline.
+            findChild(pane, "k_fact2").enabled = false
+            tryCompare(findChild(pane, "k_fact1"), "ruleBelow", false)
+            findChild(pane, "k_fact2").enabled = true
+            tryCompare(findChild(pane, "k_fact1"), "ruleBelow", true)
+        }
+
         function test_page_row_has_a_chevron() {
             const page = createTemporaryObject(pageComponent, host)
             const chevron = findChild(page, "chevron")
@@ -1314,6 +1325,13 @@ Item {
                     waitForRendering(sheet)
                     wait(400)
                     grabImage(sheet).save(shotsDir + "/512-row-kinds-" + theme + ".png")
+                    // A focused row of each kind (RUY-542); the sheet above shows both toggle states.
+                    for (const kind of ["item", "toggle", "choice", "slider"]) {
+                        findChild(sheet, "sheet_" + kind).forceActiveFocus()
+                        verify(findChild(sheet, "sheet_" + kind).activeFocus, kind)
+                        wait(400)
+                        grabImage(sheet).save(shotsDir + "/512-row-kinds-focus-" + kind + "-" + theme + ".png")
+                    }
                     sheet.destroy()
                     host.height = 720
                 }
