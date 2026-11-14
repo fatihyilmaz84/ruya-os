@@ -30,6 +30,11 @@
       (root; RUY-410) a uinput pad that, S seconds after it is ready, taps the D-pad left N times and
       right M times, then A (the emergency reader's keys: Left, Right, Return); prints "pad ready <node>"
       and then "sent"
+  python3 vm-input-probe.py players --user ruya-p1 --profile p1 --other p2
+      (root; RUY-121) the players' seats: three uinput pads, A signs p1 in (seat 1), JoinPlayer(B, p2) is seat 2;
+      in the route app pad1 is A and pad2 is B, the unseated C has none; LeavePlayer(2) removes pad2 only
+      (vm-input-check.sh players runs it). Since RUY-121 only a seated pad gets a virtual pad, so every mode
+      that needs one seats its pads with JoinPlayer (join_player) or a press before the sign-in.
   python3 vm-input-probe.py signals --user ruya-p1 --profile p1
       (root; RUY-594) Input1's broadcast signals reach only root and ruya-shell: listeners run as root and ruya-shell
       (they must hear TestInput and UserActive while a pad is pressed) and as nobody, the profile user, ruya-link and
@@ -143,7 +148,7 @@ class Bus:
         b += struct.pack("<I", 0)  # header fields length, patched below
         self._pad(b, 8)
         fields_start = len(b)
-        sig = "".join("b" if isinstance(a, bool) else "s" for a in args)
+        sig = "".join("b" if isinstance(a, bool) else "u" if isinstance(a, int) else "s" for a in args)
         fields = [(1, "o", path), (2, "s", iface), (3, "s", member), (6, "s", dest)]
         if sig:
             fields.append((8, "g", sig))
@@ -162,6 +167,9 @@ class Bus:
             if isinstance(a, bool):
                 self._pad(b, 4)
                 b += struct.pack("<I", 1 if a else 0)
+            elif isinstance(a, int):
+                self._pad(b, 4)
+                b += struct.pack("<I", a)
             else:
                 self._str(b, a)
         struct.pack_into("<I", b, 4, len(b) - body_start)
@@ -169,6 +177,7 @@ class Bus:
         while True:
             kind, reply_to, body = self._message()
             if reply_to == self.serial:
+                self.body = body
                 text = self._first_string(body)
                 if kind == 3:
                     raise RuntimeError(f"{member}: D-Bus error {text}")
@@ -205,6 +214,18 @@ class Bus:
             else:
                 break
         return kind, reply_to, body
+
+    @staticmethod
+    def status_and_slot(body):
+        """A reply body of signature (su), JoinPlayer's: (status, slot); slot 0 when it is missing."""
+        if len(body) < 4:
+            return "", 0
+        n = struct.unpack_from("<I", body, 0)[0]
+        status = body[4:4 + n].decode(errors="replace")
+        off = 4 + n + 1
+        off += -off % 4
+        slot = struct.unpack_from("<I", body, off)[0] if len(body) >= off + 4 else 0
+        return status, slot
 
     @staticmethod
     def _first_string(body):
@@ -318,6 +339,44 @@ def devices():
     except (ValueError, KeyError, IndexError):
         return None
     return [{k: v["data"] for k, v in row.items()} for row in rows]
+
+
+def rows_of(text):
+    """The rows of a `busctl --json=short` reply whose first value is aa{sv} (ListDevices, ListPlayers), each as
+    {key: value}; None when the text is not such a reply."""
+    try:
+        rows = json.loads(text)["data"][0]
+        return [{k: v["data"] for k, v in row.items()} for row in rows]
+    except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+        return None
+
+
+def players():
+    """Input1.ListPlayers (RUY-121) through busctl, the rows {slot, profile, device_id, held, held_secs}; None when
+    the call failed."""
+    out = subprocess.run(["busctl", "--system", "--json=short", "call", SVC, PATH, IFC, "ListPlayers"],
+                         capture_output=True, text=True)
+    return rows_of(out.stdout) if out.returncode == 0 else None
+
+
+def seats_of(rows):
+    """(slot, profile, device_id) of every player row, by slot."""
+    return sorted((r.get("slot"), r.get("profile"), r.get("device_id")) for r in (rows or []))
+
+
+def join_player(bus, device_id, profile):
+    """RUY-121: Input1.JoinPlayer over the probe's own connection; (status, slot). Only a seated pad gets a virtual
+    pad: JoinPlayer of the signed-in profile makes that pad seat 1 (pad1)."""
+    bus.call(SVC, PATH, IFC, "JoinPlayer", [device_id, profile])
+    return Bus.status_and_slot(bus.body)
+
+
+def join_by_name(bus, name, profile, timeout=5):
+    """join_player for the pad ListDevices calls `name`; ("no such pad", 0) when it is not listed."""
+    row = wait_for(lambda: next((d for d in (devices() or []) if d.get("name") == name), None), timeout)
+    if not row:
+        return "no such pad", 0
+    return join_player(bus, row["id"], profile)
 
 
 def assigned_slots(profile):
@@ -950,6 +1009,11 @@ def cmd_twopads(args):
             other_pad.emit(EV_KEY, BTN_SOUTH, 1)
             other_pad.emit(EV_KEY, BTN_SOUTH, 0)
             time.sleep(0.3)
+            # RUY-121: only a seated pad gets a virtual pad; the other pad joins as the other profile (seat 2).
+            joined = join_by_name(bus, NAME + " 2" if other_pad is pads[1] else NAME, args.other)
+            if joined != ("ok", 2):
+                bad(f"JoinPlayer of the other pad as {args.other}: {joined}")
+                return fails
             status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-2", "org.ruyaos.VmCheck", args.profile])
             if status != "ok":
                 bad(f"SetRoute app: {status}")
@@ -1019,6 +1083,12 @@ def cmd_guide(args):
         if status != "ok":
             bad(f"SetRoute app: {status}")
             return fails
+        # RUY-121: only seated pads get a virtual pad: pad0 is player 1, pad1 joins as the other profile.
+        for name, profile, want in ((NAME, args.profile, ("ok", 1)), (NAME + " 2", args.other, ("ok", 2))):
+            joined = join_by_name(bus, name, profile)
+            if joined != want:
+                bad(f"JoinPlayer {name} as {profile}: {joined}")
+                return fails
         v1 = wait_for(lambda: node_by("phys", "ruya-input/pad1")[0], 3)
         # pad2 is made only once pad1's ACL is set or its 2 s udev fallback ran (RUY-541),
         # seen by the service's 0.5 s tick: up to about 2.5 s after pad1, so wait 6 s.
@@ -1110,6 +1180,10 @@ def cmd_nodes(args):
         status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-446", "org.ruyaos.VmCheck", args.profile])
         if status != "ok":
             bad(f"SetRoute app: {status}")
+            return fails
+        joined = join_by_name(bus, NAME, args.profile)
+        if joined != ("ok", 1):
+            bad(f"JoinPlayer of the pad as {args.profile} (RUY-121: only a seated pad gets a virtual pad): {joined}")
             return fails
         node = wait_for(lambda: node_by("phys", "ruya-input/pad1")[0], 3)
         if not node:
@@ -1214,13 +1288,20 @@ def cmd_twoprofiles(args):
                 return fails
             slots.append(slot)
         ok(f"two slots assigned: device:{a_id}, family:nintendo")
-        # Pad A signs the profile in, so it is ruya-input/pad1 (RUY-540) and pad B is pad2.
-        for route in (["locked", "", "", ""], None, ["shell", "", "", args.profile],
+        # Pad A signs the profile in, so it is ruya-input/pad1 (RUY-540); pad B joins as the other profile
+        # (RUY-121: only a seated pad gets a virtual pad), so it is pad2.
+        for route in (["locked", "", "", ""], None, ["shell", "", "", args.profile], "join",
                       ["app", "vm-check-3", "org.ruyaos.VmCheck", args.profile]):
             if route is None:
                 pad_a.emit(EV_KEY, BTN_SOUTH, 1)
                 pad_a.emit(EV_KEY, BTN_SOUTH, 0)
                 time.sleep(0.3)
+                continue
+            if route == "join":
+                joined = join_by_name(bus, names[1], args.other)
+                if joined != ("ok", 2):
+                    bad(f"JoinPlayer of pad B as {args.other}: {joined}")
+                    return fails
                 continue
             status = bus.call(SVC, PATH, IFC, "SetRoute", route)
             if status != "ok":
@@ -1264,6 +1345,132 @@ def cmd_twoprofiles(args):
                 bus.call(SVC, PATH, IFC, "AssignProfile", [args.profile, "global", slot, before.get(slot, "")])
             for pid in saved:
                 bus.call(SVC, PATH, IFC, "DeleteProfile", [args.profile, pid])
+            bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+            bus.close()
+        for p in pads:
+            p.close()
+    return fails
+
+
+def cmd_players(args):
+    """RUY-121: the players' seats. Pad A presses while nobody is signed in and the profile signs in: ListPlayers
+    (busctl --json=short) has seat 1 = A. JoinPlayer(B, the second profile) answers "ok" 2. In the route `app`
+    ruya-input/pad1 is A and pad2 is B (each pad's button reaches its own virtual pad, read as the profile user). A
+    third pad, C, that never joined is no player and has no seat's number (no pad3); with the seat gate off
+    (SEAT_GATE, the image until RUY-122) it still gets a virtual pad after the seats, ruya-input/pad5, which only its
+    button reaches (with the gate on it would get none: this check changes with RUY-122). LeavePlayer(2): pad2 is
+    gone (ENODEV), pad1 stays, and B, unseated now, gets a pad after the seats (pad6)."""
+    fails = 0
+
+    def ok(msg):
+        print(f"PASS: {msg}", flush=True)
+
+    def bad(msg):
+        nonlocal fails
+        fails += 1
+        print(f"FAIL: {msg}", flush=True)
+
+    names = [NAME, NAME + " 2", NAME + " 3"]
+    pads = [FakePad(phys="vm-check/pad0", name=names[0]), FakePad(0x1234, 0x5679, "vm-check/pad1", names[1]),
+            FakePad(0x1234, 0x567A, "vm-check/pad2", names[2])]
+    pad_a, pad_b, pad_c = pads
+    bus = None
+    games = []
+    try:
+        rows = wait_for(lambda: [d for d in (devices() or []) if d.get("name") in names], 5) or []
+        if len(rows) != 3:
+            bad(f"ListDevices does not list the three pads: {rows}")
+            return fails
+        ids = {d["name"]: d["id"] for d in rows}
+        a_id, b_id, c_id = ids[names[0]], ids[names[1]], ids[names[2]]
+        bus = Bus()
+        for route in (["locked", "", "", ""], None, ["shell", "", "", args.profile]):
+            if route is None:
+                pad_a.emit(EV_KEY, BTN_SOUTH, 1)
+                pad_a.emit(EV_KEY, BTN_SOUTH, 0)
+                time.sleep(0.3)
+                continue
+            status = bus.call(SVC, PATH, IFC, "SetRoute", route)
+            if status != "ok":
+                bad(f"SetRoute {route[0]}: {status}")
+                return fails
+        seated = players()
+        want = [(1, args.profile, a_id)]
+        ok(f"ListPlayers: seat 1 is {args.profile} on pad A ({a_id})") if seats_of(seated) == want \
+            else bad(f"ListPlayers after A signed {args.profile} in: {seated}, want {want}")
+        status, slot = join_player(bus, b_id, args.other)
+        ok(f"JoinPlayer(B, {args.other}) answers ok 2") if (status, slot) == ("ok", 2) \
+            else bad(f"JoinPlayer(B, {args.other}) answered {status} {slot}")
+        want = [(1, args.profile, a_id), (2, args.other, b_id)]
+        seated = players()
+        ok("ListPlayers: seat 2 is the second profile on pad B") if seats_of(seated) == want \
+            else bad(f"ListPlayers after the join: {seated}, want {want}")
+        slots = {d["id"]: (d.get("slot"), d.get("profile")) for d in (devices() or [])}
+        ok("the device records name the seats (A 1, B 2, C 0)") \
+            if (slots.get(a_id), slots.get(b_id), slots.get(c_id)) == ((1, args.profile), (2, args.other), (0, "")) \
+            else bad(f"device records' slot and profile: {slots}")
+        status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-players", "org.ruyaos.VmCheck", args.profile])
+        if status != "ok":
+            bad(f"SetRoute app: {status}")
+            return fails
+        v1 = wait_for(lambda: node_by("phys", "ruya-input/pad1")[0], 3)
+        # pad2 is made only once pad1's ACL is set or its 2 s udev fallback ran (RUY-541): wait 6 s.
+        v2 = wait_for(lambda: node_by("phys", "ruya-input/pad2")[0], 6)
+        if not v1 or not v2:
+            bad(f"pad1 and pad2 should exist (pad1 {v1}, pad2 {v2})")
+            return fails
+        v5 = wait_for(lambda: node_by("phys", "ruya-input/pad5")[0], 3)
+        v3 = node_by("phys", "ruya-input/pad3")[0]
+        ok("the unseated pad C has no seat's number (no ruya-input/pad3)") if not v3 \
+            else bad(f"a pad3 exists, but only two players joined: {v3}")
+        ok(f"seat gate off (until RUY-122): the unseated pad C still has a pad after the seats, ruya-input/pad5 ({v5})") \
+            if v5 else bad("seat gate off: the unseated pad C has no ruya-input/pad5")
+        if not v5:
+            return fails
+        wait_for(lambda: all(d.get("routed") for d in (devices() or []) if d["id"] in (a_id, b_id, c_id)), 3)
+        game1, game2, game5 = Game(args.user, v1), Game(args.user, v2), Game(args.user, v5)
+        games += [game1, game2, game5]
+        if not all(g.hello.startswith("OPEN ok") for g in (game1, game2, game5)):
+            bad(f"{args.user} cannot open pad1, pad2 and pad5: {game1.hello} / {game2.hello} / {game5.hello}")
+            return fails
+        for who, pad, mine, other in (("A", pad_a, game1, game2), ("B", pad_b, game2, game1)):
+            pad.emit(EV_KEY, BTN_EAST, 1)
+            pad.emit(EV_KEY, BTN_EAST, 0)
+            got = mine.events_until(lambda ev: len(ev) >= 2)
+            heard = other.events(200)
+            n = 1 if who == "A" else 2
+            ok(f"pad {who}'s button reaches pad{n} only") \
+                if isinstance(got, list) and (EV_KEY, BTN_EAST, 1) in got and heard == [] \
+                else bad(f"pad {who}: pad{n} read {got}, the other read {heard}")
+        pad_c.emit(EV_KEY, BTN_EAST, 1)
+        pad_c.emit(EV_KEY, BTN_EAST, 0)
+        got = game5.events_until(lambda ev: len(ev) >= 2)
+        heard = (game1.events(200), game2.events(200))
+        ok("pad C's button reaches pad5 only, not a player's pad") \
+            if isinstance(got, list) and (EV_KEY, BTN_EAST, 1) in got and heard == ([], []) \
+            else bad(f"pad C: pad5 read {got}, pad1 and pad2 read {heard}")
+        status = bus.call(SVC, PATH, IFC, "LeavePlayer", [2])
+        ok("LeavePlayer(2) answers ok") if status == "ok" else bad(f"LeavePlayer(2) answered {status}")
+        ok("pad2 is gone") if wait_for(lambda: not node_by("phys", "ruya-input/pad2")[0], 2) \
+            else bad("pad2 survived LeavePlayer(2)")
+        got = game2.events(200)
+        ok("the game's descriptor of pad2 reads ENODEV") if got == "ERR ENODEV" else bad(f"pad2 read {got} after the leave")
+        ok("pad1 stays, the same node") if node_by("phys", "ruya-input/pad1")[0] == v1 \
+            else bad(f"pad1 is {node_by('phys', 'ruya-input/pad1')[0]}, before {v1}")
+        ok("pad5 (C) stays, the same node") if node_by("phys", "ruya-input/pad5")[0] == v5 \
+            else bad(f"pad5 is {node_by('phys', 'ruya-input/pad5')[0]}, before {v5}")
+        ok("seat gate off: B, unseated now, has a pad after the seats (pad6)") \
+            if wait_for(lambda: node_by("phys", "ruya-input/pad6")[0], 3) else bad("B has no ruya-input/pad6 after the leave")
+        seated = players()
+        want = [(1, args.profile, a_id)]
+        ok("ListPlayers: only seat 1 is left") if seats_of(seated) == want else bad(f"ListPlayers after the leave: {seated}")
+    finally:
+        for g in games:
+            try:
+                g.close()
+            except (OSError, ValueError, subprocess.TimeoutExpired):
+                g.p.kill()
+        if bus:
             bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
             bus.close()
         for p in pads:
@@ -1340,6 +1547,9 @@ def cmd_check(args):
         t_route = time.monotonic()
         status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-1", "org.ruyaos.VmCheck", args.profile])
         expect(status == "ok", f"SetRoute app for {args.profile}: ok", f"SetRoute app: {status}")
+        # RUY-121: only a seated pad gets a virtual pad; the probe's pad is player 1.
+        joined = join_player(bus, rid, args.profile)
+        expect(joined == ("ok", 1), "JoinPlayer: the pad is player 1", f"JoinPlayer answered {joined}")
         expect(route_prop() == "app", "the Route property reads app", f"Route reads {route_prop()}")
         vnode, vsys = wait_for(lambda: node_by("phys", "ruya-input/pad1")[0] and node_by("phys", "ruya-input/pad1"), 3) or (None, None)
         if not vnode:
@@ -1458,8 +1668,10 @@ def cmd_check(args):
         game = None
 
         status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-2", "org.ruyaos.VmCheck", args.profile])
-        expect(status == "ok" and wait_for(lambda: node_by("phys", "ruya-input/pad1")[0], 3),
-               "a new app route makes a new virtual pad", f"second SetRoute app: {status}")
+        # The lock emptied the seats (RUY-121): the pad joins again.
+        joined = join_player(bus, rid, args.profile)
+        expect(status == "ok" and joined == ("ok", 1) and wait_for(lambda: node_by("phys", "ruya-input/pad1")[0], 3),
+               "a new app route makes a new virtual pad", f"second SetRoute app: {status}, JoinPlayer {joined}")
         bus.close()
         bus = None
         expect(wait_for(lambda: route_prop() == "locked", 3), "the route caller left the bus: Route is locked", f"Route reads {route_prop()}")
@@ -1494,12 +1706,19 @@ def main():
     tp = sub.add_parser("twopads")
     tp.add_argument("--user", required=True)
     tp.add_argument("--profile", required=True)
+    tp.add_argument("--other", required=True, help="the profile the second pad joins as (RUY-121)")
     gd = sub.add_parser("guide")
     gd.add_argument("--user", required=True)
     gd.add_argument("--profile", required=True)
+    gd.add_argument("--other", required=True, help="the profile the second pad joins as (RUY-121)")
     tw = sub.add_parser("twoprofiles")
     tw.add_argument("--user", required=True)
     tw.add_argument("--profile", required=True)
+    tw.add_argument("--other", required=True, help="the profile pad B joins as (RUY-121)")
+    py = sub.add_parser("players")
+    py.add_argument("--user", required=True)
+    py.add_argument("--profile", required=True)
+    py.add_argument("--other", required=True, help="the profile that joins as player 2")
     ua = sub.add_parser("useractive")
     ua.add_argument("--profile", required=True)
     ls = sub.add_parser("listen")
@@ -1534,6 +1753,8 @@ def main():
         sys.exit(1 if cmd_guide(args) else 0)
     if args.cmd == "twoprofiles":
         sys.exit(1 if cmd_twoprofiles(args) else 0)
+    if args.cmd == "players":
+        sys.exit(1 if cmd_players(args) else 0)
     if args.cmd == "nodes":
         sys.exit(1 if cmd_nodes(args) else 0)
     if args.cmd == "hold":

@@ -9,8 +9,9 @@
 
 // Transport behind the Input QML singleton (RUY-409): org.ruyaos.Input1 of ruya-inputd over D-Bus,
 // or an in-memory mock: the routing (SetRoute, 06 §5.1-5.2, RUY-409), the devices, their
-// capabilities and the button test (RUY-39 / T-368), the controller profiles (RUY-42 / T-369);
-// UI ownership and ownership modes follow with their tasks (T-371, T-397).
+// capabilities and the button test (RUY-39 / T-368), the controller profiles (RUY-42 / T-369), the
+// players' seats (RUY-121, ADR-017); UI ownership and ownership modes follow with their tasks
+// (RUY-38, T-371).
 class InputBackend : public QObject
 {
     Q_OBJECT
@@ -43,6 +44,14 @@ public:
     // Input1.GetConfirmButtons(profile) (RUY-603: the profile's choice per controller); the answer
     // arrives as confirmButtonsRead (the newest request only).
     virtual void readConfirmButtons(const QString &profile) = 0;
+    // Input1.JoinPlayer(device_id, profile) (RUY-121); the answer arrives as joinFinished (status
+    // "failed" and slot 0 when the call itself failed).
+    virtual void joinPlayer(const QString &deviceId, const QString &profile) = 0;
+    // Input1.LeavePlayer(slot); the answer arrives as leaveFinished.
+    virtual void leavePlayer(uint slot) = 0;
+    // Input1.ListPlayers; the answer arrives as playersListed (the newest outcome only: a
+    // PlayersChanged that arrived meanwhile wins over an older answer).
+    virtual void refreshPlayers() = 0;
 
 signals:
     // The newest SetRoute's answer: a status string of api/dbus/org.ruyaos.Input1.xml, or "failed"
@@ -79,6 +88,13 @@ signals:
     void userActive();
     // ProfilesChanged: the controller profiles of that console profile changed.
     void profilesChanged(const QString &profile);
+    // The answers of JoinPlayer and LeavePlayer: a status of the XML, or "failed" when the call
+    // itself failed; slot is the seat taken (0 unless "ok").
+    void joinFinished(const QString &deviceId, const QString &profile, const QString &status, uint slot);
+    void leaveFinished(uint slot, const QString &status);
+    // ListPlayers answered (ok) or failed, or PlayersChanged carried the list (ok): player records as
+    // maps with the XML's keys (slot, profile, device_id, held, held_secs), by slot.
+    void playersListed(bool ok, const QVariantList &players);
 
 protected:
     void setServiceOwned(bool owned)
@@ -111,8 +127,19 @@ protected:
             emit confirmButtonsRead(profile, status, buttons);
     }
 
+    quint64 beginPlayersRequest() { return m_playersSeq.begin(); }
+    void deliverPlayers(quint64 request, bool ok, const QVariantList &players)
+    {
+        if (m_playersSeq.accept(request))
+            emit playersListed(ok, players);
+    }
+    // PlayersChanged carries the whole list and is newer than every ListPlayers answer still on its
+    // way, so it takes a number of its own.
+    void deliverPlayersSignal(const QVariantList &players) { deliverPlayers(m_playersSeq.begin(), true, players); }
+
 private:
     RequestSequence m_seq;
+    RequestSequence m_playersSeq;
     RequestSequence m_devicesSeq;
     RequestSequence m_confirmsSeq;
     bool m_serviceOwned = true;

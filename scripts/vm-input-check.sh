@@ -8,7 +8,14 @@
 # 500 ms and the worst at most 1000 ms: the first run after heavy checks is slow (644 ms once; a lone re-run
 # gave 190-426 ms), and the 1000 ms ceiling still catches a real regression. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|close|fallback|confirm|hold|twopads|guide|nodes|start|useractive|signals]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|close|fallback|confirm|hold|twopads|guide|nodes|start|useractive|signals|players]
+# `players` (RUY-121) with the shell stopped like `twopads`: three uinput pads; a second profile "Check Player" is made with
+# CreateProfile (as the admin $me, PIN 1234) and removed at the end. Pad A presses, then the probe routes the profile: ListPlayers
+# (busctl --json=short) has seat 1 = A; JoinPlayer(B, the second profile) answers ok 2; in the route app ruya-input/pad1 is A and
+# pad2 is B (read as the profile user), the unseated third pad has no seat's number but, with the seat gate off (the image until
+# RUY-122), a pad after the seats (pad5) that only its button reaches; LeavePlayer(2) removes pad2 and pad1 stays. Since RUY-121 only a
+# seated pad gets a virtual pad: the other modes seat their pads (JoinPlayer, or a press before the sign-in), and `twopads`,
+# `guide` and the probe's `twoprofiles` seat the second pad as the other profile.
 # `useractive` (RUY-588) with the shell stopped like `twopads`: a uinput pad's press in route `app` makes ruya-inputd emit Input1.UserActive
 # once (seen with busctl monitor), not for stick noise or in route `shell`, not again within 30 s, and once more after them.
 # `signals` (RUY-594) with the shell stopped like `useractive`: Input1's broadcast signals reach only root and ruya-shell (the bus
@@ -344,6 +351,37 @@ restore_state() {
     settle_route && ok "the route is given back: the shell routes shell again"
 }
 
+# RUY-121: only a seated pad gets a virtual pad, and SwitchTo over busctl signs $me in without a pad (no press):
+# the test pad of `vm-input-probe.py pad` ("Ruya VM Check Pad") joins as $me, which makes it player 1 (pad1).
+seat_test_pad() {
+    local id="" out n=0
+    until [ -n "$id" ] || [ "$n" -ge 50 ]; do
+        id="$(busctl --system --json=short call "$svc" "$path" "$ifc" ListDevices 2>/dev/null | python3 -c '
+import json, sys
+try:
+    rows = json.load(sys.stdin)["data"][0]
+except (ValueError, KeyError, IndexError):
+    rows = []
+print(next((r["id"]["data"] for r in rows if r.get("name", {}).get("data") == "Ruya VM Check Pad"), ""))')"
+        [ -n "$id" ] || { sleep 0.1; n=$((n + 1)); }
+    done
+    [ -n "$id" ] || { bad "the test pad is not in ListDevices"; return 1; }
+    out="$(busctl --system call "$svc" "$path" "$ifc" JoinPlayer ss "$id" "$me")"
+    case "$out" in 'su "ok" 1') ok "JoinPlayer: the test pad is player 1 ($id)" ;; *) bad "JoinPlayer $id $me: $out"; return 1 ;; esac
+    test_pad="$id"
+}
+# Waits up to $1 seconds for a virtual pad with phys ruya-input/pad1 (player 1's).
+wait_pad1() {
+    local d n=0
+    while [ "$n" -lt "$(( $1 * 10 ))" ]; do
+        for d in /sys/class/input/input*; do
+            [ "$(cat "$d/phys" 2>/dev/null)" = ruya-input/pad1 ] && return 0
+        done
+        sleep 0.1; n=$((n + 1))
+    done
+    return 1
+}
+
 shell_check() {
     echo "--- the shell drives the route (RUY-409)"
     local wclient=org.ruyaos.TestWaylandClient ssvc=org.ruyaos.Session1 spath=/org/ruyaos/Session1
@@ -366,6 +404,7 @@ shell_check() {
     sign_in_me && ok "$me signed in" || { kill "$padpid"; return; }
     wait_route shell 5 && ok "signed in at Home: the route is shell" || bad "after sign-in the route reads '$(route_now)'"
     [ -z "$(virtual_pad)" ] && ok "no virtual pad at Home" || bad "a virtual pad exists at Home: $(virtual_pad)"
+    seat_test_pad || { kill "$padpid"; return; }
 
     out="$(runuser -u ruya-shell -- busctl --system call "$ssvc" "$spath" "$ssvc" Launch ss "$wclient" "$me")"
     inst=""; case "$out" in 'ss "ok" '*) inst="$(echo "$out" | cut -d'"' -f4)";; esac
@@ -396,7 +435,13 @@ shell_check() {
     # A restarted service starts in shell: the shell sends its route again (QDBusServiceWatcher).
     kill -9 "$(systemctl show -p MainPID --value ruya-inputd)"
     wait_route app 10 && ok "after kill -9 the shell routed app again" || bad "after kill -9 the route reads '$(route_now)'"
-    wait_pad present 5 && ok "... and the app has a virtual pad again" || bad "no virtual pad after the restart"
+    # A new process knows no seats (RUY-121): the shell joins the players it knew again (Input replays them on the
+    # new owner), so the test pad is player 1 and pad1 again. With the seat gate off (until RUY-122) an unseated pad
+    # would get a virtual pad too (pad5), so this waits for pad1 and for seat 1 on the test pad, not for any pad.
+    wait_pad1 5 && ok "... and the app has pad1 again" || bad "no ruya-input/pad1 after the restart: the shell did not join its players again"
+    busctl --system call "$svc" "$path" "$ifc" ListPlayers | grep -q "\"$test_pad\"" \
+        && ok "ListPlayers: the shell seated the test pad again ($test_pad)" \
+        || bad "after the restart ListPlayers lacks the test pad: $(busctl --system call "$svc" "$path" "$ifc" ListPlayers)"
 
     busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
     wait_route locked 5 && ok "Lock with the app in front: the route is locked" || bad "after Lock the route reads '$(route_now)'"
@@ -435,6 +480,7 @@ close_check() {
     grep -q "^pad ready" /var/tmp/ruya-input-pad.log && ok "a test pad is connected" || { bad "no test pad: $(cat /var/tmp/ruya-input-pad.log)"; kill "$padpid"; return; }
     stop_all_apps && ok "no app is running before the test app starts" || { bad "an app is still running after Stop"; kill "$padpid"; return; }
     settle_route || { kill "$padpid"; return; }
+    seat_test_pad || { kill "$padpid"; return; }
 
     out="$(runuser -u ruya-shell -- busctl --system call "$ssvc" "$spath" "$ssvc" Launch ss "$wclient" "$me")"
     inst=""; case "$out" in 'ss "ok" '*) inst="$(echo "$out" | cut -d'"' -f4)";; esac
@@ -749,7 +795,7 @@ twopads)
     # With the compositor and the shell stopped (RUY-573): the shell's own SetRoute calls (its start,
     # a South press signing a no-PIN profile in) land between the probe's and fail it at random.
     since="$(date '+%Y-%m-%d %H:%M:%S')"
-    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe twopads --user "ruya-$me"
+    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe twopads --user "ruya-$me" --other "$other"
     # RUY-541: on each entry to `app` pad2 is made only after pad1 is ready (its ACL set), so a game that
     # opens the first pad it can open gets pad1. "<entries> <pad2 made before pad1 was ready>".
     order="$(journalctl -u ruya-inputd --since "$since" --no-pager -o cat \
@@ -761,8 +807,25 @@ twopads)
         *) bad "journal: pad2 was made before pad1 was ready (entries, early: $order)" ;;
     esac
     echo "--- a profile per pad (RUY-545)"
-    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe twoprofiles --user "ruya-$me"
+    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe twoprofiles --user "ruya-$me" --other "$other"
     rm -rf "$dir"
+    ;;
+players)
+    # RUY-121: the players' seats, with three uinput pads and a profile made for player 2 (removed at the end).
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
+    two_profiles
+    [ -n "$me" ] && ok "profile $me signs in" || { bad "need a profile"; exit 1; }
+    echo "--- the players' seats (RUY-121): a second profile for player 2"
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" CreateProfile sssss "$me" 1234 "Check Player" standard "")"
+    player2=""; case "$out" in 'ssuu "ok" '*) player2="$(echo "$out" | cut -d'"' -f4)" ;; esac
+    [ -n "$player2" ] && ok "CreateProfile made $player2 (Check Player)" || { bad "CreateProfile Check Player: $out"; echo "SOME CHECKS FAILED"; exit 1; }
+    dir="$(mktemp -d "${CHECK_TMP:-/var/tmp}/ruya-input-check.XXXXXX")"
+    chmod 0755 "$dir"
+    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe players --user "ruya-$me" --other "$player2"
+    rm -rf "$dir"
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" DeleteProfile sss "$me" 1234 "$player2")"
+    case "$out" in 'suu "ok"'*) ok "DeleteProfile $player2: the check's profile is removed" ;; *) bad "DeleteProfile $player2: $out" ;; esac
     ;;
 useractive)
     two_profiles
@@ -794,7 +857,7 @@ guide)
     chmod 0755 "$dir"
     install -m 0644 "$probe" "$dir/vm-input-probe.py"
     echo "--- Guide never reaches a game (RUY-11)"
-    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe guide --user "ruya-$me"
+    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe guide --user "ruya-$me" --other "$other"
     rm -rf "$dir"
     ;;
 nodes)

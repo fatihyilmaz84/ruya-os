@@ -69,6 +69,30 @@ QVariantMap recordOf(const QVariantMap &d)
         {QStringLiteral("routed"), d.value(QStringLiteral("routed")).toBool()},
     };
 }
+
+// One player record of ListPlayers and PlayersChanged with the XML's keys and types (RUY-121).
+QVariantMap playerOf(const QVariantMap &d)
+{
+    return {
+        {QStringLiteral("slot"), d.value(QStringLiteral("slot")).toUInt()},
+        {QStringLiteral("profile"), d.value(QStringLiteral("profile")).toString()},
+        {QStringLiteral("device_id"), d.value(QStringLiteral("device_id")).toString()},
+        {QStringLiteral("held"), d.value(QStringLiteral("held")).toBool()},
+        {QStringLiteral("held_secs"), d.value(QStringLiteral("held_secs")).toUInt()},
+    };
+}
+
+// aa{sv} of player records.
+QVariantList playersOf(const QVariant &value)
+{
+    QVariantList list;
+    const QDBusArgument arg = value.value<QDBusArgument>();
+    arg.beginArray();
+    while (!arg.atEnd())
+        list.append(playerOf(parseDict(arg)));
+    arg.endArray();
+    return list;
+}
 } // namespace
 
 DBusInputBackend::DBusInputBackend(QObject *parent)
@@ -97,6 +121,8 @@ DBusInputBackend::DBusInputBackend(QObject *parent)
     m_bus.connect(Service, Path, Interface, QStringLiteral("ActiveInputChanged"), this,
                   SLOT(onActiveInputChanged(QString, QString)));
     m_bus.connect(Service, Path, Interface, QStringLiteral("UserActive"), this, SLOT(onUserActive()));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("PlayersChanged"), this,
+                  SLOT(onPlayersChanged(QDBusMessage)));
     // Who owns the name now, asked without blocking; a change that arrives first wins.
     if (auto *busInterface = m_bus.interface()) {
         auto *asked = new QDBusPendingCallWatcher(busInterface->asyncCall(QStringLiteral("NameHasOwner"), Service), this);
@@ -297,6 +323,68 @@ void DBusInputBackend::onUserActive()
 void DBusInputBackend::onProfilesChanged(const QString &profile)
 {
     emit profilesChanged(profile);
+}
+
+// JoinPlayer(device_id s, profile s) -> (status s, slot u) (RUY-121).
+void DBusInputBackend::joinPlayer(const QString &deviceId, const QString &profile)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("JoinPlayer"));
+    msg << deviceId << profile;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, deviceId, profile](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString, uint> reply = *w;
+        if (!reply.isValid()) {
+            qWarning("ruya-shell: Input1 JoinPlayer failed: %s", qPrintable(reply.error().message()));
+            emit joinFinished(deviceId, profile, QStringLiteral("failed"), 0);
+            return;
+        }
+        emit joinFinished(deviceId, profile, reply.argumentAt<0>(), reply.argumentAt<1>());
+    });
+}
+
+// LeavePlayer(slot u) -> status s.
+void DBusInputBackend::leavePlayer(uint slot)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("LeavePlayer"));
+    msg << slot;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, slot](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString> reply = *w;
+        if (!reply.isValid()) {
+            qWarning("ruya-shell: Input1 LeavePlayer failed: %s", qPrintable(reply.error().message()));
+            emit leaveFinished(slot, QStringLiteral("failed"));
+            return;
+        }
+        emit leaveFinished(slot, reply.argumentAt<0>());
+    });
+}
+
+// ListPlayers -> players aa{sv}.
+void DBusInputBackend::refreshPlayers()
+{
+    const quint64 request = beginPlayersRequest();
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListPlayers"));
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+            qWarning("ruya-shell: Input1 ListPlayers failed: %s", qPrintable(reply.errorMessage()));
+            deliverPlayers(request, false, {});
+            return;
+        }
+        deliverPlayers(request, true, playersOf(reply.arguments().at(0)));
+    });
+}
+
+// PlayersChanged(players aa{sv}): the whole list, once per change.
+void DBusInputBackend::onPlayersChanged(const QDBusMessage &message)
+{
+    if (message.arguments().isEmpty())
+        return;
+    deliverPlayersSignal(playersOf(message.arguments().at(0)));
 }
 
 // Every profile call is built from the table (InputProfileCalls.h): the in-arguments in the XML's

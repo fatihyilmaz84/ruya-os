@@ -3,6 +3,7 @@
 #include "InputBackend.h"
 
 #include <QDBusConnection>
+#include <QDBusMessage>
 #include <QDBusServiceWatcher>
 
 // Client of org.ruyaos.Input1 (api/dbus/org.ruyaos.Input1.xml) on the system bus, or the session
@@ -26,6 +27,9 @@ public:
     void callProfile(quint64 token, const QString &method, const QVariantMap &args) override;
     void readConfirmButton() override;
     void readConfirmButtons(const QString &profile) override;
+    void joinPlayer(const QString &deviceId, const QString &profile) override;
+    void leavePlayer(uint slot) override;
+    void refreshPlayers() override;
 
 private slots:
     void onPropertiesChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated);
@@ -35,6 +39,7 @@ private slots:
     void onTestInput(const QString &deviceId, const QString &input, int value, const QString &source);
     void onTestEnded(const QString &deviceId, const QString &reason);
     void onProfilesChanged(const QString &profile);
+    void onPlayersChanged(const QDBusMessage &message);
 
 private:
     QDBusConnection m_bus;

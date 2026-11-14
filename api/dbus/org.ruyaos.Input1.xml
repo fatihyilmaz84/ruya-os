@@ -9,8 +9,11 @@
   TestInput, TestEnded) since RUY-39 (T-368), and the controller profile members (ListProfiles,
   GetProfile, SaveProfile, ValidateProfile, DeleteProfile, AssignProfile for the global scope,
   GetEffectiveProfile, ProfilesChanged) since RUY-42 (T-369), SetConfirmButton, ConfirmButton and
-  ActiveInputChanged since RUY-40 (per controller, with GetConfirmButtons, since RUY-603); every other member below is still
-  DRAFT and not served (UI ownership T-397..T-399, platform and game assignments T-370 / RUY-43,
+  ActiveInputChanged since RUY-40 (per controller, with GetConfirmButtons, since RUY-603), and the
+  players (JoinPlayer, LeavePlayer, ListPlayers, PlayersChanged; the device record's slot and
+  profile) since RUY-121 (ADR-017 seats; the seat gate is off until RUY-122, see Players); every other
+  member below is still
+  DRAFT and not served (ForeignInput RUY-38, platform and game assignments T-370 / RUY-43,
   OwnershipMode T-371). The design is docs/specs/06-input.md. Each task may change what it builds
   here (contracts are drafts until the first release, root CLAUDE.md); RUY-403's served-vs-XML
   test must check only the built members.
@@ -37,8 +40,10 @@
     "not-allowed"      the action does not fit the current state (a button test under the route "app"
                        or "locked", saving over or deleting a built-in profile, saving a profile of scope
                        "builtin", a cycle in `inherits`, a chain of more than 8 `inherits` links,
-                       more than 64 stored profiles of one console profile)
+                       more than 64 stored profiles of one console profile, JoinPlayer or LeavePlayer
+                       with nobody signed in, LeavePlayer of seat 1)
     "busy"             a button test already runs for that device
+    "full"             JoinPlayer: every seat (4) is taken (RUY-121)
     "failed"           internal error (also: the profiles could not be read or written)
 
   Records are a{sv} so fields can be added later (unknown keys are ignored).
@@ -58,9 +63,10 @@
                     for the family's default drawing (RUY-486; a missing key is "")
     battery     i   0..100, or -1 when unknown or not on battery
     charging    b
-    slot        u   ADR-017 player slot, 0 when none (T-264 fills it)
-    profile     s   the console profile that owns the pad ("" when none); until T-264 every pad
-                    is the route's profile's
+    slot        u   the seat the pad holds (ADR-017, 1..4; the player record's slot), 0 when it is
+                    not seated (RUY-121). DeviceChanged is sent when it changes.
+    profile     s   the profile seated on the pad, "" when it is not seated (RUY-121; also every
+                    pad while nobody is signed in). DeviceChanged is sent when it changes.
     routed      b   the pad has a virtual pad for that profile and its node's ACL is set (after
                     udev's last event on it): an app of the profile can open it now
 
@@ -198,10 +204,13 @@
          nothing is written until the route is "app" again, so a frozen app finds no backlog at
          its Thaw; a button held at that "app" is masked until it is let go). Anything else
          destroys them ("locked", "shell", another instance or profile, "overlay" with ""), so
-         an app's open descriptor reads ENODEV and a pad never outlives its profile. On "app" for
-         a new owner pad1 (the profile's active controller) is made first and the other pads only
-         once pad1's ACL is set (or its 2 s udev fallback passed), so a game that opens the first
-         pad it is offered gets pad1. When the caller that set the route leaves the bus, the route
+         an app's open descriptor reads ENODEV and a pad never outlives its profile. Only a seated
+         pad has a virtual pad, and its number is its seat (phys ruya-input/pad<slot>; Players
+         below, RUY-121; until RUY-122 the seat gate is off and unseated pads follow as pad5 and up). On "app" for a new owner pad1 (seat 1's pad, the profile's active
+         controller) is made first and the other seated pads only once pad1's ACL is set (or its
+         2 s udev fallback passed), so a game that opens the first pad it is offered gets pad1.
+         A profile change (sign-in, switch, lock) seats the new profile in seat 1 and empties the
+         others (Players). When the caller that set the route leaves the bus, the route
          becomes "locked". At start the route is "shell" with no profile. -->
     <method name="SetRoute">
       <arg name="route" type="s" direction="in"/>
@@ -228,19 +237,81 @@
          key does (the saver puts the route on "overlay", so the game does not get that press). -->
     <signal name="UserActive"/>
 
-    <!-- UI ownership and the active input (T-397..T-399, 06 §11). A foreign pad's press while a
+    <!-- Players (DRAFT, served since RUY-121; ADR-017 points 1, 4 and 6, 06 §11.3). While a profile
+         is signed in (the route's profile is not "") the session has 4 seats; a seat is one profile
+         on one pad. Seat 1 is player 1: the signed-in profile, on the pad that signed it in (the
+         profile's active controller, 06 §5.1 "Numbering"), or on no pad ("") after a keyboard or
+         touch sign-in. Seats 2-4 start empty. Any profile change (a sign-in, a switch, Lock, the
+         route's caller leaving the bus) empties every seat and seats the new profile, if any, in
+         seat 1: a joined player stays for the session. A pad holds at most one profile, and a
+         profile at most one pad. Only seated pads get a virtual pad, and pad n is seat n (phys
+         ruya-input/pad<n>); an unseated pad's input reaches no app (navigation and Guide are not
+         changed by seats yet: RUY-38). A seated pad that disconnects frees its seat (2-4), or
+         leaves seat 1 with device_id "" (until RUY-627's 60 s hold).
+         The seat gate is OFF until RUY-122 (the prompt that calls JoinPlayer; ruya-inputd's
+         SEAT_GATE): meanwhile an unseated connected pad still gets a virtual pad in "app" (and what
+         "overlay" keeps), numbered after the seats (ruya-input/pad5 and up, the lowest free number,
+         in connect order), so pad1..pad4 stay the seats' and a join renumbers no other live pad.
+         Seats, ListPlayers and every member here work the same either way.
+         A restarted service knows no seats: the shell joins the players it last knew again on the
+         name's new owner (seat 1's pad as the route's profile, then the others by slot).
+         The service never sees a PIN: the shell checks it (Profiles1) before it calls JoinPlayer.
+         The journal names ids only: "player <n> is ruya-<profile> on <device id>" ("on no pad" for
+         seat 1 without one) and "player <n> left".
+
+         JoinPlayer(device_id, profile): seats `profile` on the connected pad `device_id`.
+           - profile is the signed-in profile: the pad becomes seat 1's (player 1's active
+             controller); the pad seat 1 had is unseated.
+           - profile sits in seat n (2-4) on another pad: it moves to this pad and keeps seat n;
+             the old pad is unseated.
+           - the pad already sits as another profile: that profile leaves its seat first (seat 1
+             keeps its profile and has no pad then).
+           - otherwise the profile takes the lowest free seat of 2-4.
+           - the same pad and profile again: "ok" with its seat, nothing changes, no signal.
+           A move destroys the old pad's virtual pad and makes one with the same number for the new
+           pad (under "overlay" when the app is in front again); leaving destroys it. Live virtual
+           pads are never renumbered.
+           Status (checked in this order): "invalid" (not a device id: [a-z0-9:-], 1..64),
+           "not-allowed" (nobody is signed in: route "locked", or "shell" with profile ""),
+           "unknown-profile" (not a profile account, the SetRoute rule), "unknown-device" (no
+           connected pad with that id), "full" (no free seat; nothing changes), "ok". slot: the seat
+           taken (1..4), 0 unless "ok".
+         LeavePlayer(slot): empties seat `slot` (its pad is unseated, its virtual pad destroyed).
+           Status: "invalid" (0 or more than 4), "not-allowed" (nobody signed in, or seat 1), "ok"
+           (also for a seat that is already empty: nothing changes, no signal).
+         ListPlayers: the seated players, by slot. PlayersChanged carries the whole list, once per
+         change (Join, Leave, a profile change, a seated pad that disconnects).
+         Player record (a{sv}), keys:
+           slot       u   1..4
+           profile    s   the console profile id
+           device_id  s   the pad's stable id (the device record's id), "" when the seat has no pad
+                          (seat 1 after a keyboard sign-in or after its pad disconnected)
+           held       b   always false (RUY-627: the 60 s hold of a seat whose pad is gone)
+           held_secs  u   always 0 (RUY-627: the seconds left of that hold) -->
+    <method name="JoinPlayer">
+      <arg name="device_id" type="s" direction="in"/>
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="slot" type="u" direction="out"/>
+    </method>
+    <method name="LeavePlayer">
+      <arg name="slot" type="u" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+    <method name="ListPlayers">
+      <arg name="players" type="aa{sv}" direction="out"/>
+    </method>
+    <signal name="PlayersChanged">
+      <arg name="players" type="aa{sv}"/>
+    </signal>
+
+    <!-- UI ownership and the active input (T-397..T-399, 06 §11; RUY-38). A foreign pad's press while a
          profile is signed in: `kind` is "press" (first press per pad and session, for the toast),
          "guide" (switch / Who's playing) or "takeover" (every owner pad is gone). -->
     <signal name="ForeignInput">
       <arg name="device_id" type="s"/>
       <arg name="kind" type="s"/>
     </signal>
-    <!-- Make a pad an owner pad of the console profile ("" releases it). -->
-    <method name="AssignPad">
-      <arg name="device_id" type="s" direction="in"/>
-      <arg name="profile" type="s" direction="in"/>
-      <arg name="status" type="s" direction="out"/>
-    </method>
     <!-- The device of the last press (owner pads once T-264 has them: today every pad, 06 §11.4);
          family as in the device record. Sent when the device differs from the last announced one,
          not on every press. The keyboard is the shell's own knowledge, not reported here. -->

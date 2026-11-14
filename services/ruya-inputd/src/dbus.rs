@@ -14,6 +14,7 @@ use zbus::{interface, Connection, MatchRule, MessageStream};
 
 use crate::book::Summary;
 use crate::routing::{Backend, DeviceRecord, Notice, Router, Status};
+use crate::seats::Player;
 
 pub const BUS_NAME: &str = "org.ruyaos.Input1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Input1";
@@ -123,6 +124,22 @@ fn record(d: &DeviceRecord) -> Dict {
         ("slot", Value::from(d.slot)),
         ("profile", Value::from(d.profile.clone())),
         ("routed", Value::from(d.routed)),
+    ];
+    entries
+        .into_iter()
+        .filter_map(|(k, v)| OwnedValue::try_from(v).ok().map(|v| (k.to_owned(), v)))
+        .collect()
+}
+
+/// A player record of `ListPlayers` and `PlayersChanged` (the keys of the XML; `held` and
+/// `held_secs` are RUY-627's, false and 0 until then).
+fn player(p: &Player) -> Dict {
+    let entries = vec![
+        ("slot", Value::from(p.slot)),
+        ("profile", Value::from(p.profile.clone())),
+        ("device_id", Value::from(p.device_id.clone())),
+        ("held", Value::from(false)),
+        ("held_secs", Value::from(0u32)),
     ];
     entries
         .into_iter()
@@ -328,6 +345,30 @@ impl InputIface {
     #[zbus(signal)]
     async fn profiles_changed(emitter: &SignalEmitter<'_>, profile: &str) -> zbus::Result<()>;
 
+    /// Seats a profile on a pad (RUY-121): the status and the seat taken.
+    #[zbus(out_args("status", "slot"))]
+    fn join_player(&self, device_id: &str, profile: &str) -> (String, u32) {
+        let (status, slot) = self
+            .shared
+            .with(|r| r.join_player(device_id, profile, Instant::now()));
+        (status.as_str().to_owned(), slot)
+    }
+
+    fn leave_player(&self, slot: u32) -> String {
+        self.shared
+            .with(|r| r.leave_player(slot, Instant::now()))
+            .as_str()
+            .to_owned()
+    }
+
+    fn list_players(&self) -> Vec<Dict> {
+        self.shared
+            .with(|r| r.players().iter().map(player).collect())
+    }
+
+    #[zbus(signal)]
+    async fn players_changed(emitter: &SignalEmitter<'_>, players: Vec<Dict>) -> zbus::Result<()>;
+
     #[zbus(property)]
     fn route(&self) -> String {
         self.shared.with(|r| r.route().as_str().to_owned())
@@ -426,6 +467,9 @@ pub async fn announce(connection: Connection, notices: async_channel::Receiver<N
                 InputIface::active_input_changed(emitter, device_id, family).await
             }
             Notice::UserActive => InputIface::user_active(emitter).await,
+            Notice::PlayersChanged(players) => {
+                InputIface::players_changed(emitter, players.iter().map(player).collect()).await
+            }
             Notice::Journal(_) => Ok(()),
         };
         if let Err(err) = result {
@@ -513,5 +557,22 @@ mod tests {
         assert_eq!(text("family"), "playstation");
         assert_eq!(text("model"), "dualsense");
         assert_eq!(dict.len(), 12, "the contract's keys, no more");
+    }
+
+    #[test]
+    fn a_player_record_has_the_contract_keys() {
+        let dict = player(&Player {
+            slot: 2,
+            profile: "p2".into(),
+            device_id: "usb-045e-028e-0123456789ab".into(),
+        });
+        assert_eq!(dict.get("slot").map(|v| &**v), Some(&Value::U32(2)));
+        assert_eq!(dict.get("held").map(|v| &**v), Some(&Value::Bool(false)));
+        assert_eq!(dict.get("held_secs").map(|v| &**v), Some(&Value::U32(0)));
+        match dict.get("device_id").map(|v| &**v) {
+            Some(Value::Str(s)) => assert_eq!(s.as_str(), "usb-045e-028e-0123456789ab"),
+            other => panic!("device_id: {other:?}"),
+        }
+        assert_eq!(dict.len(), 5, "the contract's keys, no more");
     }
 }

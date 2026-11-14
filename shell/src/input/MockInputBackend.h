@@ -17,6 +17,10 @@
 // over Bluetooth whose motion node does not open), each with the descriptor ruya-inputd's rules
 // (caps.rs) give that model; the button test follows the service: only in the route "shell", one
 // per device, ended by StopTest, a route other than "shell" or the pad going.
+// Players (RUY-121): the service's seats and statuses (routing.rs, seats.rs): a profile change seats
+// the new profile in seat 1 on the pad of the last sendActiveInput since the change before ("" for
+// none), Join/Leave follow rules (a) to (e), a removed pad frees its seat, and the device records'
+// slot and profile follow. PlayersChanged is not heard while the name has no owner.
 class MockInputBackend final : public InputBackend
 {
     Q_OBJECT
@@ -38,6 +42,13 @@ public:
     // active pad's for the route's profile.
     void readConfirmButton() override;
     void readConfirmButtons(const QString &profile) override;
+    void joinPlayer(const QString &deviceId, const QString &profile) override;
+    void leavePlayer(uint slot) override;
+    void refreshPlayers() override;
+    // Tests: the seats the mock service holds now (player records, by slot).
+    QVariantList players() const { return playerList(); }
+    // Tests: every later JoinPlayer answers `status` and changes nothing ("" clears it).
+    void setFailJoin(const QString &status) { m_failJoin = status; }
     // Tests: the press of a pad is announced (ActiveInputChanged); the property follows that pad.
     void sendActiveInput(const QString &deviceId, const QString &family);
     // Tests: the mode stored for a controller of a console profile ("family" when none).
@@ -128,6 +139,17 @@ public:
 
 private:
     void setDefaultDevices();
+    // A seat: a profile on a pad ("" = none); an empty profile is an empty seat.
+    struct Seat
+    {
+        QString profile;
+        QString device;
+    };
+    QVariantList playerList() const;
+    int seatOfDevice(const QString &deviceId) const;
+    // After the seats changed from `before`: the device records follow, PlayersChanged is sent.
+    void seatsChanged(const QVariantList &before);
+    bool applySeatsToDevices();
 
     QVariantList m_calls;
     QString m_route = QStringLiteral("shell");
@@ -153,4 +175,7 @@ private:
     QHash<QString, QVariantMap> m_confirm;   // profile -> device id -> "south" | "east"
     bool m_confirmsDelayed = false;
     QString m_activeDevice;
+    QList<Seat> m_seats;           // 4 while a profile is signed in (index 0 is seat 1), else none
+    QString m_padSinceChange;      // the pad of the last press since the profile last changed
+    QString m_failJoin;
 };

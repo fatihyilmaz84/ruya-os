@@ -8,21 +8,21 @@
 use ruya_contract_test::{assert_interfaces_are, assert_serves};
 use ruya_inputd::accounts::FixedAccounts;
 use ruya_inputd::dbus::{DynBackend, InputIface, Shared};
-use ruya_inputd::routing::{NullBackend, Router};
+use ruya_inputd::routing::{NullBackend, Router, SEAT_GATE};
 
-/// Contract members of `Input1` with no implementation yet (the XML header: UI ownership
-/// T-397..T-399, platform and game assignments T-370 / RUY-43, OwnershipMode T-371).
-const NOT_BUILT: &[&str] = &[
-    "ForeignInput",
-    "AssignPad",
-    "GetOwnershipMode",
-    "SetOwnershipMode",
-];
+/// Contract members of `Input1` with no implementation yet (the XML header: ForeignInput RUY-38,
+/// platform and game assignments T-370 / RUY-43, OwnershipMode T-371). The players (JoinPlayer,
+/// LeavePlayer, ListPlayers, PlayersChanged) are built since RUY-121.
+const NOT_BUILT: &[&str] = &["ForeignInput", "GetOwnershipMode", "SetOwnershipMode"];
 
 #[test]
 fn input1_matches_the_contract() {
     let backend: DynBackend = Box::new(NullBackend);
-    let router = Router::new(backend, Box::new(FixedAccounts(vec![("p1".into(), 1001)])));
+    let router = Router::new(
+        backend,
+        Box::new(FixedAccounts(vec![("p1".into(), 1001)])),
+        SEAT_GATE,
+    );
     let (shared, _notices) = Shared::new(router);
     let iface = InputIface::new(shared);
     assert_serves("org.ruyaos.Input1.xml", &iface, NOT_BUILT);

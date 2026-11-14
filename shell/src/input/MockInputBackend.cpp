@@ -231,6 +231,18 @@ void MockInputBackend::addDevice(const QVariantMap &device)
 void MockInputBackend::removeDevice(const QString &id)
 {
     m_devices.removeIf([&id](const QVariant &d) { return d.toMap().value(QStringLiteral("id")).toString() == id; });
+    // A seated pad frees its seat (2-4) or leaves seat 1 without a pad (RUY-121).
+    const int at = seatOfDevice(id);
+    if (at >= 0) {
+        const QVariantList before = playerList();
+        if (at == 0)
+            m_seats[0].device.clear();
+        else
+            m_seats[at] = {};
+        seatsChanged(before);
+    }
+    if (m_padSinceChange == id)
+        m_padSinceChange.clear();
     endTest(id, QStringLiteral("gone"));
     QTimer::singleShot(0, this, [this] { emit devicesChanged(); });
 }
@@ -310,8 +322,18 @@ void MockInputBackend::setRoute(const QString &route, const QString &instance, c
         m_route = route;
         m_instance = instance;
         m_profile = profile;
-        if (profileChanged)
+        if (profileChanged) {
             QTimer::singleShot(0, this, [this] { emit confirmButtonChanged(); });
+            // RUY-121: the new profile is seat 1, on the pad that pressed since the last change.
+            const QVariantList before = playerList();
+            m_seats.clear();
+            if (!profile.isEmpty()) {
+                m_seats = QList<Seat>(4);
+                m_seats[0] = {profile, m_padSinceChange};
+            }
+            m_padSinceChange.clear();
+            seatsChanged(before);
+        }
         if (route == QLatin1String("app") || route == QLatin1String("locked")) {      // like inputd (RUY-611)
             const QList<QString> running = m_tests.values();
             for (const QString &id : running)
@@ -360,6 +382,7 @@ void MockInputBackend::sendActiveInput(const QString &deviceId, const QString &f
     const bool other = deviceId != m_activeDevice;
     const QString before = confirmButtonOf(m_profile, m_activeDevice);
     m_activeDevice = deviceId;
+    m_padSinceChange = deviceId;
     emit activeInputChanged(deviceId, family);
     if (other && confirmButtonOf(m_profile, deviceId) != before)
         QTimer::singleShot(0, this, [this] { emit confirmButtonChanged(); });
@@ -373,6 +396,10 @@ void MockInputBackend::restart()
     m_profile.clear();
     m_activeDevice.clear();   // a restarted service has seen no press yet
     m_pads = false;
+    // Nor does it know the seats; a process that is gone sends no PlayersChanged.
+    m_seats.clear();
+    m_padSinceChange.clear();
+    applySeatsToDevices();
     setServiceOwned(true);
     QTimer::singleShot(0, this, [this] { emit serviceAppeared(); });
 }
@@ -448,4 +475,148 @@ void MockInputBackend::callProfile(quint64 token, const QString &method, const Q
         if (!changed.isEmpty())
             emit profilesChanged(changed);
     });
+}
+
+QVariantList MockInputBackend::playerList() const
+{
+    QVariantList out;
+    for (int i = 0; i < m_seats.size(); ++i) {
+        if (m_seats.at(i).profile.isEmpty())
+            continue;
+        out.append(QVariantMap{
+            {QStringLiteral("slot"), uint(i + 1)},
+            {QStringLiteral("profile"), m_seats.at(i).profile},
+            {QStringLiteral("device_id"), m_seats.at(i).device},
+            {QStringLiteral("held"), false},
+            {QStringLiteral("held_secs"), 0u},
+        });
+    }
+    return out;
+}
+
+int MockInputBackend::seatOfDevice(const QString &deviceId) const
+{
+    if (deviceId.isEmpty())
+        return -1;
+    for (int i = 0; i < m_seats.size(); ++i) {
+        if (!m_seats.at(i).profile.isEmpty() && m_seats.at(i).device == deviceId)
+            return i;
+    }
+    return -1;
+}
+
+// The device records' slot and profile from the seats; true when one changed.
+bool MockInputBackend::applySeatsToDevices()
+{
+    bool changed = false;
+    for (QVariant &d : m_devices) {
+        QVariantMap record = d.toMap();
+        const int at = seatOfDevice(record.value(QStringLiteral("id")).toString());
+        const uint slot = at >= 0 ? uint(at + 1) : 0u;
+        const QString profile = at >= 0 ? m_seats.at(at).profile : QString();
+        if (record.value(QStringLiteral("slot")).toUInt() == slot
+            && record.value(QStringLiteral("profile")).toString() == profile)
+            continue;
+        record.insert(QStringLiteral("slot"), slot);
+        record.insert(QStringLiteral("profile"), profile);
+        d = record;
+        changed = true;
+    }
+    return changed;
+}
+
+void MockInputBackend::seatsChanged(const QVariantList &before)
+{
+    if (applySeatsToDevices())
+        QTimer::singleShot(0, this, [this] { emit devicesChanged(); });
+    const QVariantList now = playerList();
+    // A signal from a service whose name has no owner is not heard.
+    if (now != before && serviceOwned())
+        QTimer::singleShot(0, this, [this, now] { deliverPlayersSignal(now); });
+}
+
+// The service's rules (routing.rs join_player, seats.rs): the checks in the XML's order, then
+// rules (a) to (e); "full" changes nothing.
+void MockInputBackend::joinPlayer(const QString &deviceId, const QString &profile)
+{
+    const bool known = std::any_of(m_devices.cbegin(), m_devices.cend(), [&deviceId](const QVariant &d) {
+        return d.toMap().value(QStringLiteral("id")).toString() == deviceId;
+    });
+    QString status = QStringLiteral("ok");
+    uint slot = 0;
+    if (m_fail)
+        status = QStringLiteral("failed");
+    else if (!m_failJoin.isEmpty())
+        status = m_failJoin;
+    else if (!deviceIdOk(deviceId))
+        status = QStringLiteral("invalid");
+    else if (m_seats.isEmpty())
+        status = QStringLiteral("not-allowed");
+    else if (!consoleIdOk(profile))
+        status = QStringLiteral("unknown-profile");
+    else if (!known)
+        status = QStringLiteral("unknown-device");
+    if (status == QLatin1String("ok")) {
+        const int at = seatOfDevice(deviceId);
+        if (at >= 0 && m_seats.at(at).profile == profile) {
+            slot = uint(at + 1);                         // (e) the same again: nothing changes
+        } else {
+            QList<Seat> next = m_seats;
+            if (at == 0)
+                next[0].device.clear();                  // (c) player 1 stays, without a pad
+            else if (at > 0)
+                next[at] = {};                           // (c) that profile leaves first
+            int mine = -1;
+            for (int i = 0; i < next.size(); ++i) {
+                if (next.at(i).profile == profile)
+                    mine = i;
+            }
+            if (mine >= 0) {
+                next[mine].device = deviceId;            // (a), (b): the seat moves to the pad
+            } else {
+                for (int i = 1; i < next.size() && mine < 0; ++i) {
+                    if (next.at(i).profile.isEmpty())
+                        mine = i;                        // (d) the lowest free seat of 2-4
+                }
+                if (mine >= 0)
+                    next[mine] = {profile, deviceId};
+            }
+            if (mine < 0) {
+                status = QStringLiteral("full");
+            } else {
+                const QVariantList before = playerList();
+                m_seats = next;
+                slot = uint(mine + 1);
+                seatsChanged(before);
+            }
+        }
+    }
+    QTimer::singleShot(0, this, [this, deviceId, profile, status, slot] {
+        emit joinFinished(deviceId, profile, status, slot);
+    });
+}
+
+void MockInputBackend::leavePlayer(uint slot)
+{
+    QString status = QStringLiteral("ok");
+    if (m_fail)
+        status = QStringLiteral("failed");
+    else if (slot == 0 || slot > 4)
+        status = QStringLiteral("invalid");
+    else if (m_seats.isEmpty() || slot == 1)
+        status = QStringLiteral("not-allowed");
+    if (status == QLatin1String("ok") && !m_seats.at(int(slot) - 1).profile.isEmpty()) {
+        const QVariantList before = playerList();
+        m_seats[int(slot) - 1] = {};
+        seatsChanged(before);
+    }
+    QTimer::singleShot(0, this, [this, slot, status] { emit leaveFinished(slot, status); });
+}
+
+void MockInputBackend::refreshPlayers()
+{
+    const quint64 request = beginPlayersRequest();
+    const bool ok = !m_fail;
+    const QVariantList list = ok ? playerList() : QVariantList();
+    QTimer::singleShot(0, this, [this, request, ok, list] { deliverPlayers(request, ok, list); });
 }

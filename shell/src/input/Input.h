@@ -23,7 +23,8 @@ class Storage;
 // signal and every new owner of the name), their capabilities and the live button test.
 // Since RUY-42 it calls the controller profile members (06 §7) and moves a profile to and from a USB
 // drive through the Storage singleton (exportProfile, importProfile), so the pages need no
-// plumbing of their own.
+// plumbing of their own. Since RUY-121 it keeps the players' seats (players, joinPlayer,
+// leavePlayer; 06 §11.3): only a seated pad reaches a game, pad n is seat n.
 // Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux and the mock elsewhere.
 class Input : public QObject
 {
@@ -73,6 +74,13 @@ class Input : public QObject
     // Never changes on a connect. The glyph table (Glyphs.qml) draws the hint bar from these.
     Q_PROPERTY(QString activeDevice READ activeDevice NOTIFY activeInputChanged)
     Q_PROPERTY(QString activeFamily READ activeFamily NOTIFY activeInputChanged)
+    // The seated players (Input1.ListPlayers and PlayersChanged, RUY-121, 06 §11.3): maps with the
+    // XML's keys (slot 1..4, profile, device_id "" for seat 1 without a pad, held, held_secs), by
+    // slot; empty while nobody is signed in. Asked again whenever the name gets a new owner, after
+    // the players it held join again (a restarted service knows no seats: seat 1's pad joins as the
+    // route's profile, then the others by slot; those answers are not joinFinished). The last good
+    // list stays while a newer ListPlayers fails.
+    Q_PROPERTY(QVariantList players READ players NOTIFY playersChanged)
 
 public:
     explicit Input(std::unique_ptr<InputBackend> backend, QObject *parent = nullptr);
@@ -116,6 +124,15 @@ public:
     Q_INVOKABLE void setConfirmButton(const QString &deviceId, const QString &mode);
     // Asks GetConfirmButtons again (a controller page when it opens).
     Q_INVOKABLE void refreshConfirmButtons();
+
+    QVariantList players() const { return m_players; }
+    // Input1.JoinPlayer(device_id, profile): seats the profile on the pad (06 §11.3: player 1's
+    // own profile moves seat 1 to that pad, a seated profile moves and keeps its seat, else the
+    // lowest free seat). Check the profile's PIN (Profiles1) first: the service never sees it. The
+    // answer is joinFinished; `players` follows from PlayersChanged.
+    Q_INVOKABLE void joinPlayer(const QString &deviceId, const QString &profile);
+    // Input1.LeavePlayer(slot) for seats 2..4; the answer is leaveFinished.
+    Q_INVOKABLE void leavePlayer(int slot);
 
     // Asks ListDevices again (Settings > Controllers' "Try again").
     Q_INVOKABLE void refreshDevices();
@@ -172,6 +189,10 @@ public:
     // While true the mock's GetConfirmButtons answers 300 ms late, with what it held when asked
     // (the late-reply test).
     Q_INVOKABLE void mockDelayConfirmButtons(bool delayed);
+    // The seats the mock service holds now (player records), and a status every later JoinPlayer
+    // answers without changing anything ("" clears it).
+    Q_INVOKABLE QVariantList mockPlayers() const;
+    Q_INVOKABLE void mockFailJoin(const QString &status);
     // Every SetRoute that reached the mock service: [{ route, instance, appId, profile }].
     Q_INVOKABLE QVariantList mockCalls() const;
     Q_INVOKABLE void mockClearCalls();
@@ -224,6 +245,12 @@ signals:
     void confirmButtonsChanged();
     void confirmButtonRefused(const QString &deviceId, const QString &status);
     void activeInputChanged();
+    void playersChanged();
+    // JoinPlayer and LeavePlayer answered: a status of the XML ("ok", "unknown-device",
+    // "unknown-profile", "not-allowed", "full", "invalid") or "failed" when the call failed; slot is
+    // the seat taken, 0 unless "ok".
+    void joinFinished(const QString &deviceId, const QString &profile, const QString &status, int slot);
+    void leaveFinished(int slot, const QString &status);
     // Someone is playing with a pad in the app in front (Input1.UserActive, RUY-588): the shell's
     // own keys do not see that input. IdleClock counts it.
     void userActive();
@@ -254,6 +281,16 @@ signals:
 
 private:
     void setActiveInput(const QString &deviceId, const QString &family);
+    // After a new owner of the name: the players last known join again (RUY-121), each once the
+    // service lists its pad (continueReplay, on every device list).
+    void replayPlayers();
+    void continueReplay();
+    struct Replay
+    {
+        QString device;
+        QString profile;
+        uint slot = 0;
+    };
     void noteKeyFrom(const QString &deviceName, int key);
     void send();
     // What a profile call's answer is for.
@@ -284,6 +321,10 @@ private:
     QString m_profile;
     QString m_status;
     QVariantList m_devices;
+    QVariantList m_players;
+    QHash<QString, int> m_replays;   // "device|profile" -> JoinPlayer calls of the replay not answered
+    QList<Replay> m_replayQueue;     // players to join again once their pad is listed, by slot
+    QString m_replayProfile;         // the profile the queue was made for
     QString m_devicesState = QStringLiteral("loading");
     QString m_confirm = QStringLiteral("family");
     bool m_confirmAvailable = false;
