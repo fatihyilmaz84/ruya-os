@@ -58,6 +58,13 @@ pub trait Spawner {
     fn adopt_running(&self) -> Vec<RunningUnit> {
         Vec::new()
     }
+    /// Did the last `adopt_running` see everything it was meant to? False while a listing
+    /// failed (the system was still starting: a profile's manager not up yet), so that the
+    /// caller asks again (RUY-23). `adopt_running` can be called again: a unit it has taken over
+    /// is not taken over twice.
+    fn adoption_complete(&self) -> bool {
+        true
+    }
     /// Makes sure `user`'s sound server runs (`ruya-pulse@<user>.service` in `ruya-shell`'s
     /// manager, ADR-010, T-365) before an app of `user` starts. Returns once it is started.
     fn start_sound(&self, _user: &str) -> Result<(), String> {
@@ -117,6 +124,9 @@ impl<T: Spawner + ?Sized> Spawner for Box<T> {
     }
     fn adopt_running(&self) -> Vec<RunningUnit> {
         (**self).adopt_running()
+    }
+    fn adoption_complete(&self) -> bool {
+        (**self).adoption_complete()
     }
     fn freeze(&self, unit: &str) -> Result<(), String> {
         (**self).freeze(unit)
@@ -1320,6 +1330,10 @@ struct FakeState {
     /// `swap_active` answers this.
     swap: bool,
     running: Vec<RunningUnit>,
+    /// The next `adopt_running` calls that fail (list nothing, report an incomplete adoption).
+    adopt_failures: u32,
+    /// Did the last `adopt_running` fail?
+    adopt_failed: bool,
     last_env: Vec<(String, String)>,
     /// pid -> cgroup file (`process_cgroup`, T-459).
     processes: HashMap<u32, String>,
@@ -1339,6 +1353,13 @@ impl FakeSpawner {
 
     pub fn with_app(self, app_id: &str) -> Self {
         self.lock().installed.insert(app_id.to_owned());
+        self
+    }
+
+    /// The first `times` calls of `adopt_running` fail, as when the system is still starting
+    /// (RUY-23).
+    pub fn with_adopt_failures(self, times: u32) -> Self {
+        self.lock().adopt_failures = times;
         self
     }
 
@@ -1488,7 +1509,17 @@ impl Spawner for FakeSpawner {
     fn adopt_running(&self) -> Vec<RunningUnit> {
         let mut state = self.lock();
         state.calls.push("adopt".to_owned());
+        if state.adopt_failures > 0 {
+            state.adopt_failures -= 1;
+            state.adopt_failed = true;
+            return Vec::new();
+        }
+        state.adopt_failed = false;
         state.running.clone()
+    }
+
+    fn adoption_complete(&self) -> bool {
+        !self.lock().adopt_failed
     }
 
     fn freeze(&self, unit: &str) -> Result<(), String> {

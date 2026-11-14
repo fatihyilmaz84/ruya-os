@@ -46,7 +46,8 @@ use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 use zbus::{Connection, MatchRule, MessageStream};
 
 use crate::follow::{
-    bridge_args, parse_signal, Backoff, Follower, ManagerLink, Probe, Wake, BRIDGE_PROGRAM,
+    bridge_args, existence, parse_signal, Backoff, Follower, ManagerLink, Probe, Wake,
+    BRIDGE_PROGRAM,
 };
 use crate::scope::{RunScopes, Sweep};
 use crate::spawner::{
@@ -91,7 +92,7 @@ impl Gate {
     fn deliver(&self, event: UnitEvent) {
         let (passed, sweeps) = {
             let mut scopes = self.scopes.lock().unwrap_or_else(|e| e.into_inner());
-            let passed = scopes.on_unit_event(event);
+            let passed = scopes.on_unit_event(event, Instant::now());
             (passed, scopes.take_sweeps())
         };
         sweep(sweeps);
@@ -378,6 +379,8 @@ pub struct SystemdSpawner {
     swap: Arc<std::sync::atomic::AtomicBool>,
     /// The reclaims whose unit was started, for `cancel_reclaim` (RUY-573).
     reclaims: Arc<ReclaimLedger>,
+    /// Did the last `adopt_running` fail to ask loginctl or a profile's manager (RUY-23)?
+    adopt_failed: std::sync::atomic::AtomicBool,
 }
 
 impl SystemdSpawner {
@@ -416,6 +419,7 @@ impl SystemdSpawner {
             audio: Mutex::new(audio),
             swap,
             reclaims: Arc::new(ReclaimLedger::default()),
+            adopt_failed: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -649,7 +653,12 @@ impl Spawner for SystemdSpawner {
         user_name_of(uid)
     }
 
+    fn adoption_complete(&self) -> bool {
+        !self.adopt_failed.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
     fn adopt_running(&self) -> Vec<RunningUnit> {
+        let mut failed = false;
         let users = Command::new("loginctl")
             .args(["list-users", "--no-legend", "--no-pager"])
             .stdin(Stdio::null())
@@ -660,12 +669,14 @@ impl Spawner for SystemdSpawner {
             .map(|out| parse_profile_users(&String::from_utf8_lossy(&out.stdout)))
             .unwrap_or_else(|| {
                 eprintln!("ruya-session: loginctl list-users failed: no app is adopted");
+                failed = true;
                 Vec::new()
             });
         let mut found = Vec::new();
         for user in users {
             let Some(text) = show_units(&user, "ruya-app-*.service") else {
                 eprintln!("ruya-session: cannot list the apps of {user}");
+                failed = true;
                 continue;
             };
             let mut mine = Vec::new();
@@ -673,6 +684,16 @@ impl Spawner for SystemdSpawner {
                 let Some(app_id) = unit_app_id(&user, &show.id) else {
                     continue;
                 };
+                // Taken over (or started by us) already: a second pass skips it.
+                if self
+                    .gate
+                    .units
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .contains_key(&show.id)
+                {
+                    continue;
+                }
                 self.gate
                     .units
                     .lock()
@@ -716,6 +737,8 @@ impl Spawner for SystemdSpawner {
                 found.push(u);
             }
         }
+        self.adopt_failed
+            .store(failed, std::sync::atomic::Ordering::SeqCst);
         found
     }
 }
@@ -971,32 +994,78 @@ impl ManagerLink for UserLink {
         }
     }
 
-    /// No manager for the user at all (its profile was deleted) is a clear "no"; otherwise the
-    /// manager itself says whether the unit is active.
+    /// Asked step by step (`follow::existence`): is there such a user (the user database), does
+    /// its manager run (`user@<uid>.service`), what does the manager say of the unit. Only a
+    /// clear answer is a "no"; an error of any step keeps the unit (RUY-23).
     fn exists(&mut self, unit: &str) -> Option<bool> {
-        let manager = Command::new("loginctl")
-            .args(["show-user", &self.user, "--property=State", "--value"])
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
-            .output()
-            .ok()?;
-        if !manager.status.success() {
-            return Some(false);
-        }
-        let out = Command::new("systemctl")
-            .args(["--user", "--no-pager"])
-            .arg(format!("--machine={}@.host", self.user))
-            .args(["is-active", unit])
-            .stdin(Stdio::null())
-            .stderr(Stdio::null())
-            .output()
-            .ok()?;
-        match String::from_utf8_lossy(&out.stdout).trim() {
-            "active" | "activating" | "deactivating" | "reloading" => Some(true),
-            "inactive" | "failed" => Some(false),
-            _ => None,
-        }
+        let uid = lookup_uid(&self.user);
+        let user_known = match uid {
+            Ok(found) => Some(found.is_some()),
+            Err(_) => None,
+        };
+        existence(
+            user_known,
+            || manager_running(uid.ok().flatten()?),
+            || unit_state(&self.user, unit),
+        )
     }
+}
+
+/// The uid of a Unix user: `Ok(None)` when the user database says there is no such user, `Err`
+/// (the errno) when it could not be asked.
+fn lookup_uid(name: &str) -> Result<Option<u32>, i32> {
+    let Ok(name) = std::ffi::CString::new(name) else {
+        return Err(libc::EINVAL);
+    };
+    let mut buf = vec![0 as libc::c_char; 4096];
+    // SAFETY: an all-zero `passwd` is a valid value for getpwnam_r to fill in.
+    let mut pwd: libc::passwd = unsafe { std::mem::zeroed() };
+    let mut result: *mut libc::passwd = std::ptr::null_mut();
+    // SAFETY: every pointer is valid for the call and `buf.len()` is the buffer's real size.
+    let rc = unsafe {
+        libc::getpwnam_r(
+            name.as_ptr(),
+            &mut pwd,
+            buf.as_mut_ptr(),
+            buf.len(),
+            &mut result,
+        )
+    };
+    match rc {
+        0 if !result.is_null() => Ok(Some(pwd.pw_uid)),
+        // The documented "no such user" answers.
+        0 | libc::ENOENT | libc::ESRCH | libc::EBADF | libc::EPERM => Ok(None),
+        err => Err(err),
+    }
+}
+
+/// Does the system manager run `user@<uid>.service`, the user's manager? `None` when
+/// `systemctl` could not be run or said something else.
+fn manager_running(uid: u32) -> Option<bool> {
+    let out = Command::new("systemctl")
+        .args(["is-active", &format!("user@{uid}.service")])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    match String::from_utf8_lossy(&out.stdout).trim() {
+        "active" | "reloading" => Some(true),
+        "inactive" | "failed" => Some(false),
+        _ => None,
+    }
+}
+
+/// `systemctl is-active` of the unit in the user's manager (only asked when that runs).
+fn unit_state(user: &str, unit: &str) -> Option<String> {
+    let out = Command::new("systemctl")
+        .args(["--user", "--no-pager"])
+        .arg(format!("--machine={user}@.host"))
+        .args(["is-active", unit])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    Some(String::from_utf8_lossy(&out.stdout).trim().to_owned())
 }
 
 /// One app's `systemd-run --wait`, on its own thread.

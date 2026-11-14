@@ -588,6 +588,21 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         self.list()
     }
 
+    /// Did the last `adopt` see everything (`Spawner::adoption_complete`)? When not, `adopt_more`
+    /// asks again later (RUY-23).
+    pub fn adoption_complete(&self) -> bool {
+        self.spawner.adoption_complete()
+    }
+
+    /// A later pass of `adopt` (the profile's manager was not up at start-up): returns only the
+    /// apps taken over now, the ones `adopt` already listed are not repeated.
+    pub fn adopt_more(&mut self, unix: i64, now: Instant, profiles_known: bool) -> Vec<RunningApp> {
+        let before: Vec<String> = self.list().into_iter().map(|a| a.instance).collect();
+        let mut all = self.adopt(unix, now, profiles_known);
+        all.retain(|a| !before.contains(&a.instance));
+        all
+    }
+
     /// The instance a process belongs to (T-459): its cgroup is read, and the instance whose unit,
     /// or one of whose app's Flatpak scopes (`is_app_scope`, any of an Electron app's two), holds
     /// it in the manager of that instance's own user is the answer. The deepest unit on the
@@ -2133,6 +2148,31 @@ mod tests {
         let mut s = restarted();
         s.adopt(5_000, Instant::now(), true);
         s.adopt(5_001, Instant::now(), true);
+        assert_eq!(s.list().len(), 2);
+    }
+
+    #[test]
+    fn an_adoption_that_found_nothing_is_tried_again_and_takes_over_what_runs_then() {
+        // The boot race (Dell 0.0.60): the profile's manager is not up when the service
+        // starts, the listing fails, and it answers a moment later.
+        let spawner = FakeSpawner::new()
+            .with_app(APP)
+            .with_app(PUZZLE)
+            .with_running("ruya-p1", APP, 1_000)
+            .with_running("ruya-p2", PUZZLE, 2_000)
+            .with_adopt_failures(2);
+        let dir = ProfileSnapshot::new(["p1".to_owned(), "p2".to_owned()]);
+        let mut s = Session::new(spawner, dir, vec![]);
+        assert!(s.adopt(5_000, Instant::now(), true).is_empty());
+        assert!(!s.adoption_complete(), "the caller is told to ask again");
+        assert!(s.adopt_more(5_002, Instant::now(), true).is_empty());
+        assert!(!s.adoption_complete());
+        let late = s.adopt_more(5_004, Instant::now(), true);
+        assert_eq!(late.len(), 2, "both apps are taken over now");
+        assert!(late.iter().all(|a| a.state == State::Running));
+        assert!(s.adoption_complete());
+        // A further pass finds them already taken: nothing is listed twice or announced again.
+        assert!(s.adopt_more(5_006, Instant::now(), true).is_empty());
         assert_eq!(s.list().len(), 2);
     }
 

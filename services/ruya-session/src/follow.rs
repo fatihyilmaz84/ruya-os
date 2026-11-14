@@ -10,7 +10,8 @@
 //!
 //! A unit is never given up on a failed look: after `WATCH_MAX_MISSES` of them in a row the
 //! manager is asked whether the unit still exists (`ManagerLink::exists`), and only a "no" ends
-//! the watch. The OS is behind `ManagerLink` (`systemd.rs`), so all of this runs on every host
+//! the watch; an Alive look in between starts the count again, and an error of logind or of
+//! the user database is not a "no" (`existence`). The OS is behind `ManagerLink` (`systemd.rs`), so all of this runs on every host
 //! against a fake manager.
 
 use std::time::Duration;
@@ -61,8 +62,34 @@ pub trait ManagerLink {
     fn reconnect(&mut self, pause: Duration) -> bool;
     /// Looks at one unit (a bus call when connected, a `systemctl show` otherwise).
     fn probe(&mut self, unit: &str) -> Probe;
-    /// Does the unit still exist? `None` when that cannot be told either (then it is kept).
+    /// Does the unit still exist? `Some(false)` only when the manager answered that it does not
+    /// (`existence`: the user is unknown, its manager is stopped, or the unit is inactive);
+    /// `None` when that cannot be told either, a hiccup of logind or the user database among
+    /// them (then the unit is kept).
     fn exists(&mut self, unit: &str) -> Option<bool>;
+}
+
+/// The answer of `ManagerLink::exists`, from what the system said, asked step by step:
+/// whether the profile user exists (`user_known`: `Some(false)` is a clear "no such user",
+/// `None` is "the user database could not be asked"), whether its manager runs, and the unit's
+/// state (`active`, `inactive`, ...). A step that could not be asked ends in `None`, which keeps
+/// the unit: an error is never taken for a "no" (RUY-23).
+pub fn existence(
+    user_known: Option<bool>,
+    manager_running: impl FnOnce() -> Option<bool>,
+    unit_state: impl FnOnce() -> Option<String>,
+) -> Option<bool> {
+    if !user_known? {
+        return Some(false);
+    }
+    if !manager_running()? {
+        return Some(false);
+    }
+    match unit_state()?.trim() {
+        "active" | "activating" | "deactivating" | "reloading" => Some(true),
+        "inactive" | "failed" => Some(false),
+        _ => None,
+    }
 }
 
 struct Watched {
@@ -547,6 +574,73 @@ mod tests {
             assert!(f.step(&mut link).is_empty());
         }
         assert!(!f.is_done());
+    }
+
+    #[test]
+    fn alive_between_unknowns_resets_misses() {
+        // One failed look short of the threshold, a good one, again: eight failed looks in all,
+        // but never WATCH_MAX_MISSES in a row, so the manager is not even asked and the unit
+        // stays.
+        let mut link = FakeLink {
+            exists: Some(false),
+            ..FakeLink::default()
+        };
+        let streak = || (0..WATCH_MAX_MISSES - 1).map(|_| Probe::Unknown);
+        let looks: VecDeque<Probe> = streak()
+            .chain([alive(A)])
+            .chain(streak())
+            .chain([alive(A)])
+            .collect();
+        let rounds = looks.len();
+        link.probes.insert(A.to_owned(), looks);
+        let mut f = Follower::new(&units(&[A]));
+        for _ in 0..rounds {
+            assert!(f.step(&mut link).is_empty());
+        }
+        assert_eq!(
+            link.exists_asked, 0,
+            "the count started again at each Alive"
+        );
+        assert!(!f.is_done());
+        // The same looks without the Alive in between reach the threshold.
+        let mut link = FakeLink {
+            exists: Some(false),
+            ..FakeLink::default()
+        };
+        link.probes
+            .insert(A.to_owned(), VecDeque::from([Probe::Unknown]));
+        let mut f = Follower::new(&units(&[A]));
+        for _ in 0..WATCH_MAX_MISSES - 1 {
+            assert!(f.step(&mut link).is_empty());
+        }
+        assert_eq!(f.step(&mut link), [exited(A, 0, false)]);
+    }
+
+    #[test]
+    fn user_link_error_is_not_user_unknown() {
+        let never = || -> Option<bool> { panic!("not asked") };
+        let no_state = || -> Option<String> { panic!("not asked") };
+        // The user database could not be asked: the unit is kept, nothing else is asked.
+        assert_eq!(existence(None, never, no_state), None);
+        // A clear "no such user" ends the watch, without asking more.
+        assert_eq!(existence(Some(false), never, no_state), Some(false));
+        // The user exists, its manager is stopped: the unit is gone with it.
+        assert_eq!(existence(Some(true), || Some(false), no_state), Some(false));
+        // The user exists but logind (the manager's state) could not be asked: kept.
+        assert_eq!(existence(Some(true), || None, no_state), None);
+        // The manager runs: the unit's own state decides, and an unreadable one keeps it.
+        let state = |s: &'static str| move || Some(s.to_owned());
+        for (said, kept) in [
+            ("active", Some(true)),
+            ("deactivating", Some(true)),
+            ("inactive", Some(false)),
+            ("failed", Some(false)),
+            ("", None),
+            ("unknown", None),
+        ] {
+            assert_eq!(existence(Some(true), || Some(true), state(said)), kept);
+        }
+        assert_eq!(existence(Some(true), || Some(true), || None), None);
     }
 
     #[test]
