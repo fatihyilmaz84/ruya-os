@@ -132,6 +132,8 @@ This file is also `samples/controller-profile-example/profile.json`, and the con
 
 **Stick maths** (06-input.md section 7): with `r` the stick's distance from the centre (0..1), `r' = clamp((r - inner_deadzone) / (1 - inner_deadzone - outer_deadzone), 0, 1)`; the curve gives `c` = `r'` (linear), `r'²` (precise) or `√r'` (aggressive); the output is 0 when `r'` is 0, else `anti_deadzone + (1 - anti_deadzone) · c`, times `sensitivity`, at most 1, in the stick's own direction; `invert_x` and `invert_y` flip an axis afterwards. A trigger uses `trigger_threshold` as its dead zone.
 
+**Reserved ids:** an `id` starting with `controls-` names the console's own global slots, so only a profile with `scope.type` `global` may use it; the console refuses any other scope with such an id.
+
 **To check a file off the console:** any JSON Schema 2020-12 validator with the schema above covers everything but the extra rules; `ruya-inputd --session` (on a Linux desktop) answers `org.ruyaos.Input1.ValidateProfile` on the session bus with the console's own verdict. Games do not read or write these files; the console's settings do.
 
 ## What is built, and what is not

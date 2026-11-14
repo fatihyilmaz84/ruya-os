@@ -427,6 +427,10 @@ QStringList MockInputProfiles::validate(const QString &text, QJsonObject *out)
                 c.pattern(s.value(key), QStringLiteral("/scope/") + key, QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$"));
         }
     }
+    // The service's rule (RUY-596): the "controls-" prefix names the global slots, no other scope takes it.
+    if (o.value(QStringLiteral("id")).toString().startsWith(QLatin1String("controls-"))
+        && o.value(QStringLiteral("scope")).toObject().value(QStringLiteral("type")).toString() != QLatin1String("global"))
+        c.err(QStringLiteral("/id"), QStringLiteral("the \"controls-\" prefix is reserved for global profiles"));
     if (o.contains(QStringLiteral("inherits"))) {
         c.pattern(o.value(QStringLiteral("inherits")), QStringLiteral("/inherits"), QStringLiteral("^[a-z0-9][a-z0-9._-]{0,63}$"));
         if (o.value(QStringLiteral("inherits")) == o.value(QStringLiteral("id")))

@@ -566,6 +566,22 @@ Item {
             compare(savesOf(dsOwn)[0].inherits, "nintendo")
         }
 
+        // RUY-596: a game-scope file with another pad's controls-device id is refused; that pad's profile stays.
+        function test_an_import_may_not_take_another_pads_reserved_id() {
+            const proOwn = "controls-device-" + pro
+            plugStick()
+            given(proOwn, { match: { device: pro }, settings: { left_stick: { inner_deadzone: 0.12 } } }, "device:" + pro, pro)
+            Storage.mockSetFile("vol-stick", "steal.json",
+                                profileText(proOwn, { scope: { type: "game", game_id: "quake" } }), 1731456000)
+            openControls()
+            const before = calls("SaveProfile").length
+            GameControls.importFrom("vol-stick", "steal.json")
+            tryVerify(() => hasToast("That file can't be used / It isn't a RuyaOS controls file."), 3000, toastTexts().join("; "))
+            tryVerify(() => !GameControls.importing && !GameControls.busy, 3000)
+            compare(calls("SaveProfile").length, before, "nothing was saved")
+            compare(chainOf(pro)[0], proOwn, "the other pad keeps its profile")
+        }
+
         // RUY-595: a new owner does not inherit the old one's import hold.
         function test_an_owner_change_ends_the_import_hold() {
             plugStick()
