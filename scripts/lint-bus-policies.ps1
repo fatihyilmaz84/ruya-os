@@ -9,6 +9,10 @@
 #        (never a whole destination or interface), and never `own`;
 #      - a service user (ruya-library, ruya-input) may `allow own` only.
 #   3. No other policy kind (group, at_console, mandatory, other users).
+#   4. Signals (RUY-594): a service's signals are broadcasts, so for every bus name the file allows, the default
+#      context has `deny receive_sender="<name>" receive_type="signal"` and BOTH `user="root"` and `user="ruya-shell"`
+#      have `allow receive_sender="<name>" receive_type="signal"` (the receive rules always name receive_type=signal:
+#      a rule without it would also drop a method reply, which ADR-029's ruya-link calls need).
 param([string]$Root, [switch]$SelfTest)
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path -Parent $PSScriptRoot
@@ -28,6 +32,8 @@ function Test-BusPolicyFile([string]$Path) {
 
     $allowedNames = New-Object System.Collections.Generic.HashSet[string]
     $deniedNames = New-Object System.Collections.Generic.HashSet[string]
+    $deniedRecv = New-Object System.Collections.Generic.HashSet[string]
+    $allowedRecv = New-Object System.Collections.Generic.HashSet[string]   # "<user>|<name>"
     foreach ($p in $doc.SelectNodes("//policy")) {
         $ctx = $p.GetAttribute("context"); $user = $p.GetAttribute("user")
         $rules = @($p.ChildNodes | Where-Object { $_.NodeType -eq "Element" })
@@ -35,6 +41,10 @@ function Test-BusPolicyFile([string]$Path) {
             foreach ($r in $rules) {
                 if ($r.LocalName -eq "allow") { $errs.Add("default context has an allow ($($r.OuterXml))") }
                 elseif ($r.LocalName -eq "deny" -and $r.HasAttribute("send_destination")) { [void]$deniedNames.Add($r.GetAttribute("send_destination")) }
+                elseif ($r.LocalName -eq "deny" -and $r.HasAttribute("receive_sender")) {
+                    if ($r.GetAttribute("receive_type") -eq "signal") { [void]$deniedRecv.Add($r.GetAttribute("receive_sender")) }
+                    else { $errs.Add("a receive deny must name receive_type=signal ($($r.OuterXml))") }
+                }
             }
             continue
         }
@@ -45,6 +55,10 @@ function Test-BusPolicyFile([string]$Path) {
         foreach ($r in $rules) {
             if ($r.LocalName -ne "allow") { continue }
             foreach ($a in "own", "send_destination") { if ($r.HasAttribute($a)) { [void]$allowedNames.Add($r.GetAttribute($a)) } }
+            if ($r.HasAttribute("receive_sender") -and $user -in @("root", "ruya-shell")) {
+                if ($r.GetAttribute("receive_type") -eq "signal") { [void]$allowedRecv.Add("$user|$($r.GetAttribute('receive_sender'))") }
+                else { $errs.Add("a receive allow must name receive_type=signal ($($r.OuterXml))") }
+            }
             if ($user -eq "ruya-link") {
                 if ($r.HasAttribute("own")) { $errs.Add("ruya-link may not own a name ($($r.OuterXml))") }
                 if (-not ($r.HasAttribute("send_destination") -and $r.HasAttribute("send_member"))) { $errs.Add("ruya-link allow needs send_destination and send_member ($($r.OuterXml))") }
@@ -59,6 +73,10 @@ function Test-BusPolicyFile([string]$Path) {
     }
     foreach ($n in $allowedNames) {
         if (-not $deniedNames.Contains($n)) { $errs.Add("no default-context deny send_destination for $n") }
+        if (-not $deniedRecv.Contains($n)) { $errs.Add("no default-context deny receive_sender (receive_type signal) for $n") }
+        foreach ($u in "root", "ruya-shell") {
+            if (-not $allowedRecv.Contains("$u|$n")) { $errs.Add("$u has no allow receive_sender (receive_type signal) for $n") }
+        }
     }
     if ($allowedNames.Count -eq 0 -and $deniedNames.Count -eq 0) { $errs.Add("no policy rules found") }
     return $errs
@@ -82,16 +100,22 @@ if ($bad -eq 0) { Write-Host "ok: bus policies are deny-by-default" }
 if ($SelfTest) {
     $good = @'
 <busconfig>
-  <policy user="root"><allow own="org.x.A1"/><allow send_destination="org.x.A1"/></policy>
-  <policy user="ruya-shell"><allow send_destination="org.x.A1"/></policy>
+  <policy user="root"><allow own="org.x.A1"/><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/></policy>
+  <policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/></policy>
   <policy user="ruya-link"><allow send_destination="org.x.A1" send_member="Ping"/></policy>
-  <policy context="default"><deny send_destination="org.x.A1"/></policy>
+  <policy context="default"><deny send_destination="org.x.A1"/><deny receive_sender="org.x.A1" receive_type="signal"/></policy>
 </busconfig>
 '@
     $cases = @(
         @{ Name = "the good fixture (control)"; From = ""; To = ""; Expect = 0 },
         @{ Name = "a missing default deny"; From = '<deny send_destination="org.x.A1"/>'; To = ""; Expect = 1 },
         @{ Name = "an allow in the default context"; From = '<deny send_destination="org.x.A1"/>'; To = '<deny send_destination="org.x.A1"/><allow send_destination="org.x.A1"/>'; Expect = 1 },
+        @{ Name = "a missing default deny receive_sender"; From = '<deny receive_sender="org.x.A1" receive_type="signal"/>'; To = ""; Expect = 1 },
+        @{ Name = "a default deny receive_sender without receive_type"; From = '<deny receive_sender="org.x.A1" receive_type="signal"/>'; To = '<deny receive_sender="org.x.A1"/>'; Expect = 1 },
+        @{ Name = "no receive allow for ruya-shell"; From = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/></policy>'; To = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/></policy>'; Expect = 1 },
+        @{ Name = "no receive allow for root"; From = '<allow own="org.x.A1"/><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/>'; To = '<allow own="org.x.A1"/><allow send_destination="org.x.A1"/>'; Expect = 1 },
+        @{ Name = "a receive allow without receive_type"; From = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/>'; To = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1"/>'; Expect = 1 },
+        @{ Name = "ruya-link receiving the service's signals"; From = '<allow send_destination="org.x.A1" send_member="Ping"/>'; To = '<allow send_destination="org.x.A1" send_member="Ping"/><allow receive_sender="org.x.A1" receive_type="signal"/>'; Expect = 1 },
         @{ Name = "an allow for another user"; From = '<policy user="ruya-shell">'; To = '<policy user="nobody">'; Expect = 1 },
         @{ Name = "a group policy"; From = '<policy user="ruya-shell">'; To = '<policy group="wheel">'; Expect = 1 },
         @{ Name = "ruya-link allowing a whole destination"; From = ' send_member="Ping"'; To = ""; Expect = 1 },

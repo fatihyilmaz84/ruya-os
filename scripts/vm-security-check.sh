@@ -2,7 +2,7 @@
 # Security posture of a booted image against image/security-baseline.json (T-424). Runs in the VM as
 # root, like the other vm-*-check.sh (the lead's queue copies it to /root together with the baseline):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-security-check.sh image/security-baseline.json root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-security-check.sh [check|measure]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-security-check.sh [check|measure|signals]
 # Steps (each prints PASS or FAIL lines; any FAIL makes the exit status 1):
 #   units     every ruya-*.service in the image: systemd-analyze security exposure <= its baseline value
 #   ports     listening TCP/UDP sockets (ss -H -tuln), as proto:port, equal the baseline set
@@ -11,6 +11,12 @@
 #   accounts  only baseline accounts have a login shell or a usable password
 #   x11       (RUY-436, ADR-034) no abstract @/tmp/.X11-unix listener; every X* socket is 0700 and owned by a profile
 #             user (ruya-p<N>); every running Xwayland has -auth and -nolisten local and runs in a baseline domain
+#   busrecv   (RUY-594) every /usr/share/dbus-1/system.d/org.ruyaos.*.conf denies receiving the service's signals in the
+#             default context and allows them to root and ruya-shell only (the policy as installed; `signals` proves the bus keeps it)
+# `signals` (RUY-594; not part of `check`: it stops the compositor for about 25 s and needs a pad-capable VM) runs
+# `vm-input-check.sh signals` from this directory (copy it and vm-input-probe.py next to this script): plain bus clients as root
+# and ruya-shell hear Input1's TestInput and UserActive while a pad is pressed; as nobody, a profile user, ruya-link and
+# ruya-library they hear none (and do hear the bus's own NameOwnerChanged, so the silence is the policy's).
 # `measure` prints a draft baseline of THIS system (to update the baseline file: review the diff, and give
 # every looser value a "reason" in the same commit). A missing tool is a FAIL, never a SKIP.
 # Host tests (scripts/test-vm-checks.sh) set SEC_* variables to point at fixtures and put fakes in PATH.
@@ -27,8 +33,21 @@ x11dir="${SEC_X11DIR:-/tmp/.X11-unix}"
 passwd="${SEC_PASSWD:-/etc/passwd}"
 shadow="${SEC_SHADOW:-/etc/shadow}"
 
+buspolicy="${SEC_BUSPOLICY:-/usr/share/dbus-1/system.d}"
+
 mode="${1:-check}"
-case "$mode" in check|measure) ;; *) echo "usage: $0 [check|measure]"; exit 2 ;; esac
+case "$mode" in check|measure|signals) ;; *) echo "usage: $0 [check|measure|signals]"; exit 2 ;; esac
+
+if [ "$mode" = signals ]; then
+    # A missing script is a FAIL, never a skip.
+    sigcheck="${SEC_INPUT_CHECK:-$here/vm-input-check.sh}"
+    if [ ! -f "$sigcheck" ] || [ ! -f "$(dirname "$sigcheck")/vm-input-probe.py" ]; then
+        echo "FAIL: signals: vm-input-check.sh and vm-input-probe.py must be next to this script (scp them to /root)"
+        echo "SOME CHECKS FAILED"
+        exit 1
+    fi
+    exec bash "$sigcheck" signals
+fi
 
 t="$(mktemp -d)"
 trap 'rm -rf "$t"' EXIT
@@ -72,6 +91,8 @@ find "$usr" -xdev -type f \( -perm -4000 -o -perm -2000 \) 2> "$t/find1.err" | s
 [ -s "$t/find1.err" ] && echo "find setuid: $(head -1 "$t/find1.err")" >> "$t/gather-errors.txt"
 find "$usr" "$etc" -xdev ! -type l -perm -0002 2> "$t/find2.err" | sort > "$t/ww.txt" || true
 [ -s "$t/find2.err" ] && echo "find world-writable: $(head -1 "$t/find2.err")" >> "$t/gather-errors.txt"
+mkdir "$t/bus"
+cp "$buspolicy"/org.ruyaos.*.conf "$t/bus/" 2>/dev/null || echo "no org.ruyaos.*.conf in $buspolicy" >> "$t/gather-errors.txt"
 cp "$passwd" "$t/passwd.txt" 2>> "$t/gather-errors.txt" || echo "cannot read $passwd" >> "$t/gather-errors.txt"
 cp "$shadow" "$t/shadow.txt" 2>> "$t/gather-errors.txt" || echo "cannot read $shadow" >> "$t/gather-errors.txt"
 
@@ -282,6 +303,47 @@ for pid, domain, argv in xwayland:
         bad("Xwayland %s runs in SELinux domain %s, not in the baseline (%s)" % (pid, domain, ", ".join(sorted(bd)) or "none"))
 if not xwayland:
     ok("no Xwayland is running (X11 apps start one on demand)")
+
+# busrecv (RUY-594): a service's signals are broadcasts; the policy decides who receives them
+import xml.etree.ElementTree as ET
+bus_dir = os.path.join(t, "bus")
+bus_files = sorted(os.listdir(bus_dir)) if os.path.isdir(bus_dir) else []
+if not bus_files:
+    bad("busrecv: no org.ruyaos.*.conf to check")
+for fname in bus_files:
+    try:
+        root = ET.parse(os.path.join(bus_dir, fname)).getroot()
+    except Exception as e:
+        bad("busrecv: %s is not valid XML: %s" % (fname, e))
+        continue
+    names, recv_deny, recv_allow = set(), set(), {}
+    for pol in root.iter("policy"):
+        user, ctx = pol.get("user"), pol.get("context")
+        for rule in pol:
+            sender, rtype = rule.get("receive_sender"), rule.get("receive_type")
+            if rule.tag == "allow":
+                for a in ("own", "send_destination"):
+                    if rule.get(a):
+                        names.add(rule.get(a))
+            if sender is None:
+                continue
+            if rtype != "signal":
+                bad("busrecv: %s: a receive rule for %s without receive_type=signal (%s)" % (fname, sender, rule.tag))
+            elif rule.tag == "deny" and ctx == "default":
+                recv_deny.add(sender)
+            elif rule.tag == "allow" and user in ("root", "ruya-shell"):
+                recv_allow.setdefault(sender, set()).add(user)
+            else:
+                bad("busrecv: %s: unexpected receive rule %s for %s in policy %s" % (fname, rule.tag, sender, user or ctx))
+    if not names:
+        bad("busrecv: %s names no bus name" % fname)
+    for n in sorted(names):
+        if n not in recv_deny:
+            bad("busrecv: %s: no default-context deny receive_sender for %s (any client could receive its signals)" % (fname, n))
+        elif recv_allow.get(n, set()) != {"root", "ruya-shell"}:
+            bad("busrecv: %s: signals of %s are allowed to %s, want root and ruya-shell" % (fname, n, ", ".join(sorted(recv_allow.get(n, []))) or "nobody"))
+        else:
+            ok("busrecv: %s signals go to root and ruya-shell only" % n)
 
 print("SOME CHECKS FAILED" if failed else "ALL CHECKS PASSED")
 sys.exit(1 if failed else 0)
