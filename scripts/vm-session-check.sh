@@ -49,6 +49,27 @@ uid="$(id -u ruya-shell)"
 fail=0
 ok() { echo "PASS: $*"; }
 bad() { echo "FAIL: $*"; fail=1; }
+# RUY-404: the Freeze part and the shell-restart step stop the compositor (and the first one enables
+# the shell's linger). A run that aborts in between (Ctrl-C, ssh drop, `exit`) leaves the VM without
+# a shell; this EXIT trap starts it again and takes back only the linger this run enabled. The flags
+# are set right before the stop / enable and cleared right after the start / disable.
+# --- restore trap begin (test-vm-checks.sh sources these lines)
+stopped_compositor=no
+enabled_linger=no
+restore_vm() {
+    if [ "$stopped_compositor" = yes ]; then
+        echo "restore: starting ruya-compositor@tty1 again (the run ended with the shell stopped)"
+        systemctl start ruya-compositor@tty1 && stopped_compositor=no
+    fi
+    if [ "$enabled_linger" = yes ]; then
+        echo "restore: taking back the linger of ruya-shell this run enabled"
+        loginctl disable-linger ruya-shell && enabled_linger=no
+    fi
+}
+trap restore_vm EXIT
+# --- restore trap end
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 as_shell() { runuser -u ruya-shell -- "$@"; }
 # extra_scope <user> <unit> <seconds>: a `sleep <seconds>` in a scope of that user's manager, in the
@@ -225,13 +246,19 @@ audio_probe() {
     runuser -u ruya-shell -- env XDG_RUNTIME_DIR="/run/user/$uid" pw-dump > "$work/pw-audio.json" 2>/dev/null \
         && python3 -I -c "$probe_py" "$work/pw-audio.json" "$1"
 }
-# wait_audio <pid> <extended regex> <seconds>: waits until audio_probe prints a line matching it.
+# RUY-404: every wait prints one line saying what it waited for and how long: "    wait ok|bad: <what>
+# (N s of M s)". The label is the optional last argument; without it the pattern is printed.
+wait_report() { # <ok|bad> <what> <waited> <limit>
+    echo "    wait $1: $2 ($3 s of $4 s)"
+}
+# wait_audio <pid> <extended regex> <seconds> [label]: waits until audio_probe prints a line matching it.
 wait_audio() {
     n=0
     while [ "$n" -lt "$3" ]; do
-        audio_probe "$1" | grep -E -q "$2" && return 0
+        audio_probe "$1" | grep -E -q "$2" && { wait_report ok "${4:-audio: $2}" "$n" "$3"; return 0; }
         sleep 1; n=$((n + 1))
     done
+    wait_report bad "${4:-audio: $2}" "$n" "$3"
     return 1
 }
 # The anon bytes of the cgroup the process $1 is in.
@@ -245,13 +272,14 @@ no_scopes_left() {
 }
 # The unit name out of 'ss "ok" "ruya-app-..."'.
 unit_of() { sed -n 's/^ss "ok" "\(.*\)"$/\1/p'; }
-# Waits for a line of the signal log (an extended-regex pattern), up to $2 seconds.
+# Waits for a line of the signal log (an extended-regex pattern), up to $2 seconds; $3 is an optional label.
 wait_sig() {
     n=0
     while [ "$n" -lt "$2" ]; do
-        grep -E -q "$1" "$work/signals.log" && return 0
+        grep -E -q "$1" "$work/signals.log" && { wait_report ok "${3:-signal: $1}" "$n" "$2"; return 0; }
         sleep 1; n=$((n + 1))
     done
+    wait_report bad "${3:-signal: $1}" "$n" "$2"
     return 1
 }
 # Waits until `$1` (a command line) has no process of the profile user ($user, else ruya-p1) any more, up to 15 s.
@@ -319,13 +347,14 @@ except OSError as e:
 }
 # The shell's journal since the unix second $1.
 shell_log_since() { journalctl -b _UID="$uid" --since "@$1" --no-pager -o cat 2>/dev/null; }
-# Waits for an extended-regex line $1 in the shell's journal since $2, up to $3 seconds.
+# Waits for an extended-regex line $1 in the shell's journal since $2, up to $3 seconds; $4 is an optional label.
 wait_shell() {
     n=0
     while [ "$n" -lt "$3" ]; do
-        shell_log_since "$2" | grep -a -E -q "$1" && return 0
+        shell_log_since "$2" | grep -a -E -q "$1" && { wait_report ok "${4:-shell journal: $1}" "$n" "$3"; return 0; }
         sleep 1; n=$((n + 1))
     done
+    wait_report bad "${4:-shell journal: $1}" "$n" "$3"
     return 1
 }
 
@@ -748,9 +777,12 @@ check)
     # The card, though, is the seat session's alone (logind's uaccess ACL on /dev/snd): with the shell
     # stopped its PipeWire sees only auto_null, so the card is read here, with the shell still running.
     echo "    cards with the shell running: $(audio_probe 0 | sed -n 's/^cards=//p')"
+    freeze_ran=yes
     shell_lingered=no
     loginctl show-user ruya-shell -p Linger 2>/dev/null | grep -q yes && shell_lingered=yes
     loginctl enable-linger ruya-shell
+    [ "$shell_lingered" = yes ] || enabled_linger=yes
+    stopped_compositor=yes
     systemctl stop ruya-compositor@tty1 && ok "the shell is stopped for the Freeze checks" || bad "systemctl stop ruya-compositor@tty1"
     sleep 1; : > "$work/signals.log"   # the sweep's FrozenChanged lines must not satisfy the waits below
     # T-466: a sound client in a third scope of the app plays (silence) through the profile's own sound
@@ -950,10 +982,11 @@ check)
     no_scopes_left "$user" "no app-flatpak-$sleeper scope is left after Stop, not even a failed one" "an app-flatpak-$sleeper scope is still listed after Stop (active or failed)"
     running | grep -q "$inst" && bad "ListRunning still lists it" || ok "ListRunning is empty again"
     grep -a -q "session-probe: appExited $sleeper 0 quit\|session-probe: appExited $sleeper -\?[0-9]* quit" "$work/probe.log" && ok "the shell saw appExited quit" || bad "the shell did not see appExited quit"
-    systemctl start ruya-compositor@tty1 && ok "the shell is started again" || bad "systemctl start ruya-compositor@tty1"
+    systemctl start ruya-compositor@tty1 && { stopped_compositor=no; ok "the shell is started again"; } || bad "systemctl start ruya-compositor@tty1"
     # The linger goes back once the shell's seat session holds the manager again.
     n=0; until loginctl list-sessions --no-legend 2>/dev/null | grep -E -q "ruya-shell +seat0" || [ "$n" -ge 10 ]; do sleep 1; n=$((n + 1)); done
     [ "$shell_lingered" = yes ] || loginctl disable-linger ruya-shell
+    enabled_linger=no
 
     echo "--- an app that exits non-zero"
     out="$(launch "$crasher" "$pid")"; inst2="$(echo "$out" | unit_of)"
@@ -1022,13 +1055,14 @@ check)
     [ "$(loginctl show-user ruya-shell -p Linger --value 2>/dev/null)" = no ] && ok "ruya-shell does not linger" \
         || bad "ruya-shell lingers ($(loginctl show-user ruya-shell -p Linger 2>&1)): its WirePlumber would probe the card while logind writes its ACL"
     t0="$(date +%s)"
+    stopped_compositor=yes
     systemctl stop ruya-compositor@tty1 && ok "the shell is stopped" || bad "systemctl stop ruya-compositor@tty1"
     n=0; while systemctl is-active --quiet "user@$uid.service" && [ "$n" -lt 25 ]; do sleep 1; n=$((n + 1)); done
     systemctl is-active --quiet "user@$uid.service" && bad "ruya-shell's manager still runs 25 s after the shell stopped" \
         || ok "ruya-shell's manager ended $(( $(date +%s) - t0 )) s after the shell stopped (UserStopDelaySec)"
     [ -e "/run/ruya-pulse/$user/native" ] && bad "ruya-pulse@$user's socket outlived the manager" || ok "ruya-pulse@$user ended with the manager"
     n="$(( $(date +%s) - t0 ))"; [ "$n" -lt 20 ] && sleep "$(( 20 - n ))"
-    systemctl start ruya-compositor@tty1 && ok "the shell is started again after $(( $(date +%s) - t0 )) s" || bad "systemctl start ruya-compositor@tty1"
+    systemctl start ruya-compositor@tty1 && { stopped_compositor=no; ok "the shell is started again after $(( $(date +%s) - t0 )) s"; } || bad "systemctl start ruya-compositor@tty1"
     n=0; until loginctl list-sessions --no-legend 2>/dev/null | grep -E -q "ruya-shell +seat0" || [ "$n" -ge 10 ]; do sleep 1; n=$((n + 1)); done
     systemctl is-active --quiet "user@$uid.service" && ok "ruya-shell's manager is back with the shell's seat session" || bad "ruya-shell's manager did not come back with the shell"
 
@@ -1065,5 +1099,10 @@ check)
     journalctl -u ruya-session -b --no-pager -p warning | tail -5
     ;;
 esac
+# RUY-404: after a failure in the Freeze part, the last park-audio line of ruya-session's journal once more.
+if [ "$fail" != 0 ] && [ "${freeze_ran:-no}" = yes ]; then
+    echo "--- last park-audio line of ruya-session (a check of the Freeze part failed)"
+    journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a "park-audio" | tail -1 | sed 's/^/    /'
+fi
 [ "$fail" = 0 ] && echo "ALL CHECKS PASSED" || echo "SOME CHECKS FAILED"
 exit "$fail"
