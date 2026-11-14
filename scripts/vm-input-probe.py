@@ -675,7 +675,10 @@ def cmd_twopads(args):
                 return fails
             n1 = int(os.path.basename(v1).replace("event", ""))
             n2 = int(os.path.basename(v2).replace("event", ""))
-            ok(f"pad{active + 1} signed in: pad1 is {v1}, pad2 is {v2}") if n1 < n2 else bad(f"pad1 ({v1}) was created after pad2 ({v2})")
+            # No PASS for the node order: it holds whichever pad was used. The two button checks
+            # below are the assertion on which physical pad drives pad1.
+            if n1 >= n2:
+                bad(f"pad1 ({v1}) was created after pad2 ({v2})")
             wait_for(lambda: all(d.get("routed") for d in (devices() or []) if d.get("name") in (NAME, NAME + " 2")), 3)
             game = Game(args.user, v1)
             if not game.hello.startswith("OPEN ok"):

@@ -596,6 +596,28 @@ pub fn reclaim_unit(app_id: &str) -> String {
 pub const RECLAIM_SCRIPT: &str =
     "while [ \"$#\" -ge 2 ]; do echo \"$1\" > \"$2\"; shift 2; done; exit 0";
 
+/// The frozen apps whose reclaim unit was really started (RUY-573): the thaw stops the
+/// `ruya-reclaim-*` unit only for these, never one that was not made (the reclaim thread can
+/// bail before it starts the unit).
+#[derive(Default)]
+pub struct ReclaimLedger(std::sync::Mutex<std::collections::HashSet<String>>);
+
+impl ReclaimLedger {
+    pub fn started(&self, unit: &str) {
+        if let Ok(mut set) = self.0.lock() {
+            set.insert(unit.to_owned());
+        }
+    }
+
+    /// Takes `unit` out; true when its reclaim had started.
+    pub fn take(&self, unit: &str) -> bool {
+        self.0
+            .lock()
+            .map(|mut set| set.remove(unit))
+            .unwrap_or(false)
+    }
+}
+
 /// A cgroup of a profile user's manager, as `systemctl show -p ControlGroup` gives it: absolute,
 /// under `/user.slice/`, no `..`, only the characters unit names use.
 pub fn valid_user_cgroup(path: &str) -> bool {
@@ -672,7 +694,7 @@ pub fn control_groups_command(user: &str, units: &[String]) -> Result<Vec<String
             u.is_empty()
                 || !u
                     .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || "._-@".contains(c))
+                    .all(|c| c.is_ascii_alphanumeric() || "._-@\\".contains(c))
         })
     {
         return Err(format!("not unit names: {units:?}"));
@@ -1733,12 +1755,37 @@ mod tests {
         ])));
         assert!(control_groups_command("ruya-p1", &[]).is_err());
         assert!(control_groups_command("ruya-p1", &ids(&["a b"])).is_err());
+        // A dash in the id is escaped in the scope's name (RUY-546): the backslash passes.
+        let scopes = active_app_scopes(
+            "org.x.Dash-App",
+            "app-flatpak-org.x.Dash\\x2dApp-12.scope loaded active running x\n",
+        );
+        let mut units = ids(&["a.service"]);
+        units.extend(scopes);
+        let args = control_groups_command("ruya-p1", &units).expect("escaped scope name");
+        assert!(args.ends_with(&ids(&[
+            "a.service",
+            "app-flatpak-org.x.Dash\\x2dApp-12.scope"
+        ])));
         let text = "/user.slice/user-1001.slice/user@1001.service/app.slice/a.service\n\n\
                     /user.slice/user-1001.slice/user@1001.service/app.slice/b.scope\n\n\n\
                     /user.slice/user-1001.slice/user@1001.service/app.slice/a.service\n";
         assert_eq!(parse_control_groups(text).len(), 2);
         // A unit that is gone has an empty ControlGroup: nothing.
         assert!(parse_control_groups("\n\n").is_empty());
+    }
+
+    #[test]
+    fn only_a_started_reclaim_is_stopped_by_the_thaw() {
+        let ledger = ReclaimLedger::default();
+        assert!(
+            !ledger.take("app-a.service"),
+            "never started: nothing to stop"
+        );
+        ledger.started("app-a.service");
+        assert!(!ledger.take("app-b.service"));
+        assert!(ledger.take("app-a.service"));
+        assert!(!ledger.take("app-a.service"), "taken once");
     }
 
     fn job(user: &str, frozen: &[&str]) -> AudioJob {
