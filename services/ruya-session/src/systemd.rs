@@ -56,7 +56,7 @@ use crate::spawner::{
     reclaim_amount, reclaim_command, sweep_commands, unit_app_id, unit_name, LineTail, RunFollower,
     RunningUnit, ShowUnit, SHOW_PROPERTIES, SWAP_COMMAND,
 };
-use crate::spawner::{AudioJob, AudioQueue, DisplayMode, Spawner, UnitEvent, PARK_RETRY};
+use crate::spawner::{AudioJob, AudioQueue, DisplayMode, ReclaimLedger, Spawner, UnitEvent, PARK_RETRY};
 use crate::x11::{display_mode_x11, X11_OVERRIDES};
 use std::ffi::OsString;
 use zbus::address::transport::{Transport, Unixexec};
@@ -301,7 +301,7 @@ fn memory_current(cgroup: &str) -> Option<u64> {
 /// The reclaim of one frozen app (T-466), on its own thread: the unit and the app's active scopes,
 /// their cgroups from the manager, `reclaim_amount` of each one's `memory.current`, written by a
 /// transient unit of the profile user (`reclaim_command`). Logs what it asked and what moved.
-fn reclaim_app(unit: String, user: String, app_id: String) {
+fn reclaim_app(unit: String, user: String, app_id: String, ledger: &ReclaimLedger) {
     let Some(listing) = list_scopes_command(&user, &app_id)
         .ok()
         .and_then(|args| run_bounded(&args, SYSTEMCTL_LIMIT))
@@ -331,6 +331,7 @@ fn reclaim_app(unit: String, user: String, app_id: String) {
         Err(err) => return eprintln!("ruya-session: {unit}: no reclaim: {err}"),
     };
     let started = Instant::now();
+    ledger.started(&unit);
     let done = run_bounded(&args, RECLAIM_LIMIT).is_some();
     let mib = |b: u64| b / (1024 * 1024);
     let was: u64 = before.iter().map(|(_, b)| b).sum();
@@ -355,6 +356,8 @@ pub struct SystemdSpawner {
     audio: Mutex<std::sync::mpsc::Sender<AudioJob>>,
     /// Is swap active, as `watch_swap` last read it (T-466).
     swap: Arc<std::sync::atomic::AtomicBool>,
+    /// The reclaims whose unit was started, for `cancel_reclaim` (RUY-573).
+    reclaims: Arc<ReclaimLedger>,
 }
 
 impl SystemdSpawner {
@@ -392,6 +395,7 @@ impl SystemdSpawner {
             gate,
             audio: Mutex::new(audio),
             swap,
+            reclaims: Arc::new(ReclaimLedger::default()),
         }
     }
 
@@ -574,9 +578,10 @@ impl Spawner for SystemdSpawner {
     fn reclaim(&self, unit: &str) -> Result<(), String> {
         let (user, app_id) = self.owner_of(unit)?;
         let unit = unit.to_owned();
+        let ledger = Arc::clone(&self.reclaims);
         std::thread::Builder::new()
             .name("reclaim".to_owned())
-            .spawn(move || reclaim_app(unit, user, app_id))
+            .spawn(move || reclaim_app(unit, user, app_id, &ledger))
             .map(|_| ())
             .map_err(|err| format!("cannot start a thread for the reclaim: {err}"))
     }
@@ -584,6 +589,9 @@ impl Spawner for SystemdSpawner {
     /// `systemctl --user -M <user>@.host stop --no-block ruya-reclaim-<app>.service`, on its own
     /// thread (the thaw must not wait for it).
     fn cancel_reclaim(&self, unit: &str) {
+        if !self.reclaims.take(unit) {
+            return; // the reclaim never started its unit (RUY-573): nothing to stop
+        }
         let Ok((user, app_id)) = self.owner_of(unit) else {
             return;
         };

@@ -523,6 +523,7 @@ hold_check() {
 # The probe command $1 with the compositor (and the shell) stopped, so no Accept or arrow reaches Home.
 stopped_shell_probe() {
     local what="$1"
+    shift
     [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; return; }
     systemctl is-active ruya-inputd >/dev/null || { bad "ruya-inputd is not active"; return; }
     trap confirm_restore EXIT
@@ -535,7 +536,13 @@ stopped_shell_probe() {
         return
     fi
     ok "the compositor and the shell are stopped: no Accept can start anything"
-    python3 "$probe" "$what" --profile "$me" || fail=1
+    # The probe's lines are shown as they are; a FAIL: line, a traceback or a non-zero exit fails the check.
+    local out rc=0
+    out="$(cd "${probe_cwd:-.}" && python3 "${probe_py:-$probe}" "$what" "$@" --profile "$me" 2>&1)" || rc=$?
+    [ -n "$out" ] && echo "$out"
+    if [ "$rc" -ne 0 ] || printf '%s\n' "$out" | grep -qE '^(FAIL:|Traceback )'; then
+        fail=1
+    fi
     confirm_restore
     trap - EXIT
     ok "the compositor is started again"
@@ -554,21 +561,11 @@ twopads)
     dir="$(mktemp -d /var/tmp/ruya-input-check.XXXXXX)"
     chmod 0755 "$dir"
     install -m 0644 "$probe" "$dir/vm-input-probe.py"
-    while IFS= read -r line; do
-        case "$line" in
-        PASS:*) ok "${line#PASS: }" ;;
-        FAIL:*) bad "${line#FAIL: }" ;;
-        *) echo "$line"; bad "the probe printed an unexpected line (traceback?)" ;;
-        esac
-    done < <(cd "$dir" && python3 "$dir/vm-input-probe.py" twopads --user "ruya-$me" --profile "$me" 2>&1)
+    # With the compositor and the shell stopped (RUY-573): the shell's own SetRoute calls (its start,
+    # a South press signing a no-PIN profile in) land between the probe's and fail it at random.
+    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe twopads --user "ruya-$me"
     echo "--- a profile per pad (RUY-545)"
-    while IFS= read -r line; do
-        case "$line" in
-        PASS:*) ok "${line#PASS: }" ;;
-        FAIL:*) bad "${line#FAIL: }" ;;
-        *) echo "$line"; bad "the probe printed an unexpected line (traceback?)" ;;
-        esac
-    done < <(cd "$dir" && python3 "$dir/vm-input-probe.py" twoprofiles --user "ruya-$me" --profile "$me" 2>&1)
+    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe twoprofiles --user "ruya-$me"
     rm -rf "$dir"
     ;;
 hold)
