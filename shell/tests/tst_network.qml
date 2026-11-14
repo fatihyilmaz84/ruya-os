@@ -103,6 +103,55 @@ Item {
             verify(find("wifi_wifi-cafe").value.includes("Open"))
         }
 
+        // RUY-513: the kinds, the group label, the current network, the silent fact.
+        function test_row_kinds_and_group_label() {
+            openNetworkPane()
+            compare(find("rowNetStatus").kind, "info")
+            compare(find("rowScan").kind, "action")
+            compare(find("wifi_wifi-lounge").kind, "item")
+            compare(find("forget_wifi-lounge").kind, "action")
+            const label = find("wifiGroupLabel")
+            verify(label.visible, "the label shows with Wi-Fi rows")
+            compare(label.text, "Wi-Fi networks")
+            verify(label.y < find("wifi_wifi-lounge").y, "above the first Wi-Fi row")
+            const pane = find("paneNetwork")
+            // No Wi-Fi rows: no label; they come back: the label too.
+            Network.mockClearNetworks()
+            tryVerify(() => find("wifi_wifi-lounge") === null, 3000, "the Wi-Fi rows are gone")
+            verify(!label.visible, "no Wi-Fi rows, no label")
+            Network.mockReset()
+            tryVerify(() => find("wifi_wifi-lounge") !== null && find("wifi_wifi-lounge").visible, 3000, "the rows are back")
+            verify(label.visible, "the label is back with them")
+            tryVerify(() => find("wifi_wifi-lounge") !== null)
+            // The fact: Up from the first network lands on it, A is silent, the bar offers Back only.
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("rowNetStatus").activeFocus, 2000, "Up skips the label and lands on the fact")
+            compare(pane.hints.map(h => h.button + " " + h.text).join("|"), "B Back")
+            const selects = Sfx.selectCount
+            keyClick(Qt.Key_Return)
+            compare(Sfx.selectCount, selects, "Accept on the fact makes no sound")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("wifi_wifi-lounge").activeFocus, 2000, "Down skips the label")
+            compare(pane.hints.map(h => h.button + " " + h.text).join("|"), "A Connect|B Back")
+            // Back leaves from the fact too.
+            keyClick(Qt.Key_Up)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000, "Back leaves from the fact row")
+        }
+
+        function test_current_network_follows_the_join() {
+            openNetworkPane()
+            const rows = ["wifi_wifi-lounge", "wifi_wifi-home", "wifi_wifi-cafe"]
+            verify(rows.every(r => find(r).current === false), "none is in use at the start")
+            goTo("wifi_wifi-cafe", 2)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("wifi_wifi-cafe").current, 2000, "the joined network is current")
+            verify(!find("wifi_wifi-lounge").current && !find("wifi_wifi-home").current)
+            Network.connectWifi("wifi-lounge", "")
+            tryVerify(() => find("wifi_wifi-lounge").current, 2000, "another one joined: the mark moves")
+            verify(!find("wifi_wifi-cafe").current)
+        }
+
         function test_connect_wpa() {
             openNetworkPane()
             goTo("wifi_wifi-home", 1)

@@ -99,6 +99,7 @@ Item {
             // Up from the first row reaches the toolbar, Right the toggle.
             keyClick(Qt.Key_Up)
             verify(find("storeSearch").activeFocus)
+            compare(find("storeSearch").kind, "page", "RUY-513: Search opens the keyboard")
             keyClick(Qt.Key_Right)
             verify(find("storeShowAll").activeFocus)
             compare(find("storeShowAll").checked, false)

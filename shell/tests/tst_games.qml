@@ -182,6 +182,7 @@ Item {
             start("empty")
             verify(find("gamesEmpty").visible)
             tryVerify(() => find("gamesOpenStore").activeFocus, 2000, "the button has focus")
+            compare(find("gamesOpenStore").kind, "action", "RUY-513")
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "store")
         }

@@ -91,6 +91,7 @@ SettingsPane {
     SettingRow {
         id: wallpaper
         objectName: "rowWallpaper"
+        kind: "page"
         u: pane.u
         label: qsTr("Wallpaper")
         value: DisplayText.wallpaperName(DeviceSettings.wallpaper)
@@ -145,7 +146,7 @@ SettingsPane {
             if (r.current)
                 notes.push(qsTr("Current"))
             list.push({ key: r.width + "x" + r.height, label: DisplayText.resolutionLabel(r.width, r.height),
-                        note: notes.join(" · ") })
+                        note: notes.join(" · "), current: r.current === true })
         }
         return list
     }
@@ -160,7 +161,8 @@ SettingsPane {
                 notes.push(qsTr("Recommended"))
             if (r.current)
                 notes.push(qsTr("Current"))
-            list.push({ key: String(r.refreshMhz), label: DisplayText.refreshLabel(r.refreshMhz), note: notes.join(" · ") })
+            list.push({ key: String(r.refreshMhz), label: DisplayText.refreshLabel(r.refreshMhz), note: notes.join(" · "),
+                        current: r.current === true })
         }
         return list
     }
@@ -168,6 +170,7 @@ SettingsPane {
     SettingRow {
         id: resolution
         objectName: "rowResolution"
+        kind: "page"
         u: pane.u
         visible: Display.available
         label: qsTr("Resolution")
@@ -181,6 +184,7 @@ SettingsPane {
     SettingRow {
         id: refresh
         objectName: "rowRefreshRate"
+        kind: "page"
         u: pane.u
         visible: Display.available && pane.refreshEntries.length > 1     // one rate, or none known: nothing to choose
         label: qsTr("Refresh rate")
@@ -257,6 +261,7 @@ SettingsPane {
     SettingRow {
         id: resetRow
         objectName: "rowResetDisplay"
+        kind: "action"
         u: pane.u
         label: qsTr("Reset display settings")
         onActivated: {

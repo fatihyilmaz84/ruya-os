@@ -161,6 +161,32 @@ Item {
 
         // ---- the entries and the page --------------------------------------------------------------------------
 
+        // RUY-513: the kinds of the page's rows, and the hints they now give by themselves.
+        function test_row_kinds_and_hints() {
+            openControls()
+            const kinds = { rowRemap: "page", rowLeftStick: "page", rowRightStick: "page", rowExport: "action",
+                            rowImport: "action", rowReset: "action", rowNoDrive: "info" }
+            for (const name in kinds)
+                compare(find(name).kind, kinds[name], name)
+            compare(hintVerbs(), "Left/Right Change|A Next|B Back", "a choice")
+            focusRow("controlsBody", "rowRemap")
+            compare(hintVerbs(), "A Open|B Back")
+            focusRow("controlsBody", "rowReset")
+            compare(hintVerbs(), "A Select|B Back")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "settings")
+        }
+
+        function test_the_stick_pages_reset_row_is_an_action_with_the_default_hints() {
+            openStick("left")
+            compare(find("rowResetStick").kind, "action")
+            compare(hintVerbs(), "Left/Right Adjust|B Back", "a slider")
+            focusRow("stickBody", "rowResetStick")
+            compare(hintVerbs(), "A Select|B Back")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "controls")
+        }
+
         function test_the_settings_row_opens_the_page_and_back_returns() {
             openPaneOnControls()
             compare(find("paneControllers").focusableRows().map(r => r.objectName),
@@ -223,7 +249,7 @@ Item {
             focusRow("controlsBody", "rowExport")
             compare(hintVerbs(), "A Select|B Back")
             focusRow("controlsBody", "rowReset")
-            compare(hintVerbs(), "A Open|B Back")
+            compare(hintVerbs(), "A Select|B Back")
             keyClick(Qt.Key_Left)
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("rowControlsInGames").activeFocus, 2000, "Left leaves the page too")

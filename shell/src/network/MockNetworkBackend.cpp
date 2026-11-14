@@ -79,6 +79,12 @@ void MockNetworkBackend::setWifiSupported(bool supported)
     publishState();
 }
 
+void MockNetworkBackend::clearNetworks()
+{
+    m_networks.clear();
+    publishNetworks();
+}
+
 void MockNetworkBackend::setCable(bool plugged)
 {
     m_cable = plugged;

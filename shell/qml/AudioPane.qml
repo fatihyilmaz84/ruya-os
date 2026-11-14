@@ -212,6 +212,8 @@ SettingsPane {
             required property bool sinkActive
             required property bool sinkDefault
             objectName: "sink_" + sinkId
+            kind: "item"
+            current: sinkDefault
             u: pane.u
             label: sinkName
             iconName: pane.outputIcon(sinkKind)
@@ -231,6 +233,7 @@ SettingsPane {
     SettingRow {
         id: testSound
         objectName: "rowTestSound"
+        kind: "action"
         u: pane.u
         visible: Audio.outputs.length > 0
         label: qsTr("Test sound")
@@ -325,6 +328,7 @@ SettingsPane {
     SettingRow {
         id: deleteRow
         objectName: "rowDeleteSoundTheme"
+        kind: "action"
         u: pane.u
         visible: pane.savedTheme !== undefined
         label: pane.savedTheme ? qsTr("Delete “%1”").arg(pane.savedTheme.name) : ""
@@ -374,6 +378,7 @@ SettingsPane {
             required property string themeName
             required property string themePath
             objectName: "driveTheme_" + themeId
+            kind: "action"
             u: pane.u
             label: qsTr("Use “%1” from the USB drive").arg(themeName)
             value: SoundThemes.importState === "copying" && pane.copyingPath === themePath ? qsTr("Copying…") : ""
@@ -396,10 +401,10 @@ SettingsPane {
             required property string folder
             required property string firstProblem
             objectName: "driveRefused_" + refusedId
+            kind: "info"
             u: pane.u
             label: qsTr("Can't use “%1”").arg(pane.shortName(folder))
             value: SoundThemeText.describe(firstProblem)
-            onActivated: Notifications.show(qsTr("“%1” can't be used. %2.").arg(pane.shortName(folder)).arg(SoundThemeText.describe(firstProblem)), "warning")
         }
     }
 }

@@ -554,12 +554,12 @@ Bu geri alınamaz.</translation>
         <translation>Deneme sesi çalınamadı.</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+25"/>
         <source>%1: %2.</source>
         <translation>%1: %2.</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+14"/>
         <source>Test sound</source>
         <translation>Deneme sesi</translation>
     </message>
@@ -599,7 +599,7 @@ Bu geri alınamaz.</translation>
         <translation>Ses teması</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
         <location line="+11"/>
         <source>Delete “%1”</source>
         <translation>“%1” temasını sil</translation>
@@ -615,7 +615,7 @@ Bu geri alınamaz.</translation>
         <translation>Temayı bir USB sürücüsünden yeniden kopyalayabilirsiniz.</translation>
     </message>
     <message>
-        <location line="+38"/>
+        <location line="+39"/>
         <source>Use “%1” from the USB drive</source>
         <translation>USB sürücüsündeki “%1” temasını kullan</translation>
     </message>
@@ -625,14 +625,9 @@ Bu geri alınamaz.</translation>
         <translation>Kopyalanıyor…</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+22"/>
         <source>Can&apos;t use “%1”</source>
         <translation>“%1” kullanılamıyor</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>“%1” can&apos;t be used. %2.</source>
-        <translation>“%1” kullanılamıyor. %2.</translation>
     </message>
 </context>
 <context>
@@ -733,12 +728,12 @@ Bu geri alınamaz.</translation>
         <translation>Bağlı</translation>
     </message>
     <message>
-        <location line="+128"/>
+        <location line="+131"/>
         <source>Pair a new controller</source>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
     <message>
-        <location line="+111"/>
+        <location line="+113"/>
         <source>Pair again %1</source>
         <translation>%1 cihazını yeniden eşleştir</translation>
     </message>
@@ -748,12 +743,12 @@ Bu geri alınamaz.</translation>
         <translation>Önce eşleştirme moduna alın</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Rename %1</source>
         <translation>%1 adını değiştir</translation>
     </message>
     <message>
-        <location line="-257"/>
+        <location line="-263"/>
         <source>Paired</source>
         <translation>Eşleşti</translation>
     </message>
@@ -813,12 +808,12 @@ Bu geri alınamaz.</translation>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Bluetooth is off</source>
         <translation>Bluetooth kapalı</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Add a device</source>
         <translation>Cihaz ekle</translation>
     </message>
@@ -828,8 +823,8 @@ Bu geri alınamaz.</translation>
         <translation>Taranıyor…</translation>
     </message>
     <message>
-        <location line="-194"/>
-        <location line="+344"/>
+        <location line="-196"/>
+        <location line="+351"/>
         <source>Forget %1</source>
         <translation>%1 cihazını unut</translation>
     </message>
@@ -1405,23 +1400,12 @@ Bu geri alınamaz.</translation>
         <translation>Kontrolcü bağlantısı kesildi</translation>
     </message>
     <message>
-        <location line="+58"/>
-        <source>Open</source>
-        <translation>Aç</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <location line="+1"/>
-        <source>Back</source>
-        <translation>Geri</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+64"/>
         <source>Button test</source>
         <translation>Düğme testi</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Controls in games</source>
         <translation>Oyunlardaki kontroller</translation>
     </message>
@@ -1436,12 +1420,12 @@ Bu geri alınamaz.</translation>
         <translation>Varsayılan</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+8"/>
         <source>What it can do</source>
         <translation>Neler yapabilir</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+9"/>
         <source>Controllers can&apos;t be read right now.</source>
         <translation>Kontrolcüler şu an okunamıyor.</translation>
     </message>
@@ -1555,49 +1539,22 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllersPane</name>
     <message>
-        <location filename="../qml/ControllersPane.qml" line="+35"/>
-        <source>Open</source>
-        <translation>Aç</translation>
-    </message>
-    <message>
-        <location line="-1"/>
-        <location line="+1"/>
-        <location line="+1"/>
-        <source>Back</source>
-        <translation>Geri</translation>
-    </message>
-    <message>
-        <location line="-3"/>
-        <source>Change</source>
-        <translation>Değiştir</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Next</source>
-        <translation>İleri</translation>
-    </message>
-    <message>
-        <location line="+3"/>
-        <source>Select</source>
-        <translation>Seç</translation>
-    </message>
-    <message>
-        <location line="+108"/>
+        <location filename="../qml/ControllersPane.qml" line="+139"/>
         <source>No controllers connected.</source>
         <translation>Bağlı kontrolcü yok.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Controllers can&apos;t be read right now.</source>
         <translation>Kontrolcüler şu an okunamıyor.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Try again</source>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+36"/>
         <location line="+20"/>
         <source>Confirm button</source>
         <translation>Onay düğmesi</translation>
@@ -1618,7 +1575,7 @@ Bu geri alınamaz.</translation>
         <translation>Sağdaki</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+23"/>
         <source>Could not change the confirm button</source>
         <translation>Onay düğmesi değiştirilemedi</translation>
     </message>
@@ -1653,7 +1610,7 @@ Bu geri alınamaz.</translation>
         <translation>geri gider.</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+23"/>
         <location line="+24"/>
         <source>Controls in games</source>
         <translation>Oyunlardaki kontroller</translation>
@@ -1682,7 +1639,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
     <message>
-        <location line="-96"/>
+        <location line="-97"/>
         <location line="+119"/>
         <source>%1: %2.</source>
         <translation>%1: %2.</translation>
@@ -1770,42 +1727,17 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+51"/>
+        <location line="+43"/>
         <source>Default</source>
         <translation>Varsayılan</translation>
     </message>
     <message>
-        <location line="-31"/>
-        <source>Back</source>
-        <translation>Geri</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Change</source>
-        <translation>Değiştir</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Next</source>
-        <translation>İleri</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Open</source>
-        <translation>Aç</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Select</source>
-        <translation>Seç</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="-21"/>
         <source>Applies to</source>
         <translation>Uygulandığı kontrolcüler</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+10"/>
         <source>Button layout</source>
         <translation>Düğme düzeni</translation>
     </message>
@@ -1847,12 +1779,12 @@ Bu geri alınamaz.</translation>
         <translation>Önce bir USB bellek tak.</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+7"/>
         <source>Reset to default</source>
         <translation>Varsayılana sıfırla</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+4"/>
         <source>Reset controls in games?</source>
         <translation>Oyunlardaki kontroller sıfırlansın mı?</translation>
     </message>
@@ -1968,7 +1900,7 @@ Bu geri alınamaz.</translation>
         <translation>Tema</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+13"/>
         <source>Wallpaper</source>
         <translation>Duvar kağıdı</translation>
     </message>
@@ -1995,19 +1927,19 @@ Bu geri alınamaz.</translation>
         <translation>Geçerli</translation>
     </message>
     <message>
-        <location line="+11"/>
-        <location line="+118"/>
+        <location line="+13"/>
+        <location line="+120"/>
         <source>Resolution</source>
         <translation>Çözünürlük</translation>
     </message>
     <message>
-        <location line="-105"/>
-        <location line="+127"/>
+        <location line="-106"/>
+        <location line="+128"/>
         <source>Refresh rate</source>
         <translation>Yenileme hızı</translation>
     </message>
     <message>
-        <location line="-101"/>
+        <location line="-102"/>
         <source>Could not change the brightness.</source>
         <translation>Parlaklık değiştirilemedi.</translation>
     </message>
@@ -2022,7 +1954,7 @@ Bu geri alınamaz.</translation>
         <translation>Arayüz boyutu</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+20"/>
         <source>Reset display settings</source>
         <translation>Ekran ayarlarını sıfırla</translation>
     </message>
@@ -2162,26 +2094,26 @@ Bu geri alınamaz.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+273"/>
-        <location line="+153"/>
+        <location filename="../qml/GameControls.qml" line="+418"/>
+        <location line="+158"/>
         <source>Could not save to the USB drive</source>
         <translation>USB belleğe kaydedilemedi</translation>
     </message>
     <message>
-        <location line="-153"/>
+        <location line="-158"/>
         <location line="+2"/>
-        <location line="+151"/>
+        <location line="+156"/>
         <location line="+26"/>
         <source>Try again.</source>
         <translation>Yeniden dene.</translation>
     </message>
     <message>
-        <location line="-177"/>
+        <location line="-182"/>
         <source>Could not save the change</source>
         <translation>Değişiklik kaydedilemedi</translation>
     </message>
     <message>
-        <location line="+149"/>
+        <location line="+154"/>
         <source>Saved to the USB drive</source>
         <translation>USB belleğe kaydedildi</translation>
     </message>
@@ -2363,7 +2295,7 @@ Bu geri alınamaz.</translation>
         <translation>Henüz oyun yok — Mağaza&apos;yı ziyaret et</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Open the Store</source>
         <translation>Mağaza&apos;yı aç</translation>
     </message>
@@ -2743,7 +2675,7 @@ Bu geri alınamaz.</translation>
         <translation>Ağ unutulamadı.</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
         <source>Wired connection</source>
         <translation>Kablolu bağlantı</translation>
     </message>
@@ -2753,12 +2685,27 @@ Bu geri alınamaz.</translation>
         <translation>Ağ</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+8"/>
+        <source>Wi-Fi networks</source>
+        <translation>Wi-Fi ağları</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Connect</source>
+        <translation>Bağlan</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>Scan for networks</source>
         <translation>Ağları tara</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+14"/>
         <source>Forget %1</source>
         <translation>%1 ağını unut</translation>
     </message>
@@ -2921,12 +2868,12 @@ Bu geri alınamaz.</translation>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+41"/>
         <source>Options for %1</source>
         <translation>%1 seçenekleri</translation>
     </message>
     <message>
-        <location line="+202"/>
+        <location line="+204"/>
         <source>No options for this yet.</source>
         <translation>Bunun için henüz seçenek yok.</translation>
     </message>
@@ -4164,7 +4111,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+618"/>
+        <location filename="../qml/Shell.qml" line="+622"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -4544,52 +4491,22 @@ Bu geri alınamaz.</translation>
         <translation>Çubuğun hareketini görmek için bir kontrolcü bağla.</translation>
     </message>
     <message>
-        <location line="+18"/>
-        <source>Back</source>
-        <translation>Geri</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Adjust</source>
-        <translation>Ayarla</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Change</source>
-        <translation>Değiştir</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Next</source>
-        <translation>İleri</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Toggle</source>
-        <translation>Aç/Kapat</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Select</source>
-        <translation>Seç</translation>
-    </message>
-    <message>
-        <location line="+6"/>
+        <location line="+20"/>
         <source>Inner dead zone</source>
         <translation>İç ölü bölge</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+13"/>
         <source>Outer dead zone</source>
         <translation>Dış ölü bölge</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+13"/>
         <source>Anti dead zone</source>
         <translation>Ters ölü bölge</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+13"/>
         <source>Response curve</source>
         <translation>Tepki eğrisi</translation>
     </message>
@@ -4609,12 +4526,12 @@ Bu geri alınamaz.</translation>
         <translation>Agresif</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+9"/>
         <source>Sensitivity</source>
         <translation>Duyarlılık</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+13"/>
         <source>Invert up and down</source>
         <translation>Yukarı ve aşağıyı ters çevir</translation>
     </message>
@@ -4826,7 +4743,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelleme var</translation>
     </message>
     <message>
-        <location line="+126"/>
+        <location line="+127"/>
         <source>Search</source>
         <translation>Ara</translation>
     </message>

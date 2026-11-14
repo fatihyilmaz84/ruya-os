@@ -115,6 +115,8 @@ FocusScope {
                 required property var modelData
                 objectName: picker.objectName + "Entry_" + modelData.key
                 u: picker.u
+                kind: "item"
+                current: modelData.current === true
                 label: modelData.label
                 value: modelData.note
                 onActivated: {

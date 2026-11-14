@@ -121,10 +121,18 @@ SettingsPane {
 
     SettingRow {
         objectName: "rowNetStatus"
+        kind: "info"
         u: pane.u
         label: Network.primary.kind === "ethernet" ? qsTr("Wired connection")
              : Network.primary.name ?? qsTr("Network")
         value: pane.stateText(Network.state)
+    }
+
+    GroupLabel {
+        objectName: "wifiGroupLabel"
+        u: pane.u
+        visible: wifiModel.count > 0
+        text: qsTr("Wi-Fi networks")
     }
 
     Repeater {
@@ -138,6 +146,9 @@ SettingsPane {
             required property bool known
             required property bool active
             objectName: "wifi_" + netId
+            kind: "item"
+            current: active
+            hints: [{ button: "A", text: qsTr("Connect") }, { button: "B", text: qsTr("Back") }]
             u: pane.u
             label: ssid
             value: pane.wifiValue(active, known, security, signal)
@@ -147,6 +158,7 @@ SettingsPane {
 
     SettingRow {
         objectName: "rowScan"
+        kind: "action"
         u: pane.u
         label: qsTr("Scan for networks")
         onActivated: Network.scan()
@@ -159,6 +171,7 @@ SettingsPane {
             required property string ssid
             required property bool known
             objectName: "forget_" + netId
+            kind: "action"
             visible: known
             u: pane.u
             label: qsTr("Forget %1").arg(ssid)

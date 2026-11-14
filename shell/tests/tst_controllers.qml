@@ -115,6 +115,48 @@ Item {
 
         // ---- the pane ------------------------------------------------------------------------------------------
 
+        // The capability rows of the controller page, top to bottom.
+        function capRows() {
+            return findChild(find("page_controller"), "controllerBody").focusableRows().filter(r => r.objectName.startsWith("cap_"))
+        }
+
+        // RUY-513: the kinds of the pane's rows and of the controller page's.
+        function test_row_kinds() {
+            openPane()
+            compare(padRow(ds).kind, "page")
+            compare(find("rowControlsInGames").kind, "page")
+            compare(find("rowPadsPair").kind, "action")
+            compare(find("rowPadsRetry").kind, "action")
+            compare(find("rowControlsInGamesLast").kind, "page")
+            compare(hintVerbs(), "A Open|B Back", "a pad row opens its page")
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "controller")
+            tryVerify(() => find("rowButtonTest") !== null && find("rowButtonTest").activeFocus, 2000)
+            compare(find("rowButtonTest").kind, "page")
+            compare(findChild(find("page_controller"), "rowControlsInGames").kind, "page")
+            const heading = find("capsHeading")
+            verify(heading !== null && heading.visible, "the heading is there")
+            compare(heading.text, "What it can do")
+            verify(heading.focusable === undefined, "a group label is never focusable")
+            verify(heading.Accessible.role === Accessible.Heading)
+            for (const name of ["cap_buttons", "cap_gyro"])
+                compare(find(name).kind, "info", name)
+            // The last fact of the run has no hairline (04 section 5), also after the rows came late and in Turkish.
+            tryVerify(() => capRows().length > 1)
+            tryCompare(capRows()[capRows().length - 1], "ruleBelow", false)
+            verify(capRows().slice(0, -1).every(r => r.ruleBelow), "the others have one")
+            DeviceSettings.language = "tr"
+            wait(100)
+            tryCompare(capRows()[capRows().length - 1], "ruleBelow", false)
+            DeviceSettings.language = "en"
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            verify(find("cap_buttons").activeFocus, "Down from Controls in games skips the heading")
+            compare(find("page_controller").hints.map(h => h.button + " " + h.text).join("|"), "B Back")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "settings")
+        }
+
         function test_the_list_shows_every_connected_pad() {
             openPane()
             compare(rowNames(), ["pad_" + ds, "pad_" + pro, "pad_" + xbox, "rowConfirmButton", "rowControlsInGames", "rowPadsPair"],

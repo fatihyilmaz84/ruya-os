@@ -156,14 +156,12 @@ Page {
         anchors { left: parent.left; leftMargin: (470 + Theme.spaceXxl) * page.u; right: parent.right; top: parent.top; bottom: parent.bottom }
         u: page.u
         focus: true
-        // The capability rows are read-only: Back only while one has focus.
-        hints: testRow.activeFocus || controlsRow.activeFocus ? [{ button: "A", text: qsTr("Open") }, { button: "B", text: qsTr("Back") }]
-                                   : [{ button: "B", text: qsTr("Back") }]
         onExitRequested: page.backRequested()
 
         SettingRow {
             id: testRow
             objectName: "rowButtonTest"
+            kind: "page"
             u: page.u
             label: qsTr("Button test")
             onActivated: page.openRequested("buttonTest", ({ id: page.padId }))
@@ -172,30 +170,23 @@ Page {
         SettingRow {
             id: controlsRow
             objectName: "rowControlsInGames"
+            kind: "page"
             u: page.u
             label: qsTr("Controls in games")
             value: GameControls.changedFor(page.pad) ? qsTr("Changed") : qsTr("Default")
             onActivated: page.openRequested("controls", ({ id: page.padId }))
         }
 
-        // The group label (04 §5 "Pane group label"): not focusable, 8 u more above it than a row gap.
-        Item {
+        GroupLabel {
             objectName: "capsHeading"
+            u: page.u
             visible: page.capsState !== "loading"
-            width: parent ? parent.width : 0
-            height: headingText.height + Theme.spaceXs * page.u
-            Text {
-                id: headingText
-                anchors { left: parent.left; leftMargin: Theme.spaceL * page.u; bottom: parent.bottom }
-                text: qsTr("What it can do")
-                color: Theme.text
-                font.pixelSize: Theme.typeCaption * page.u
-                font.weight: Theme.weightDemiBold
-            }
+            text: qsTr("What it can do")
         }
 
         SettingRow {
             objectName: "capsFailed"
+            kind: "info"
             visible: page.capsState === "failed"
             enabled: false
             u: page.u
@@ -207,8 +198,8 @@ Page {
             SettingRow {
                 required property var modelData
                 objectName: "cap_" + modelData.name
+                kind: "info"
                 u: page.u
-                inert: true
                 label: page.capabilityLabel(modelData.name)
                 value: page.levelText(modelData.level)
             }

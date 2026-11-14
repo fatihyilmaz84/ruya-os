@@ -174,6 +174,23 @@ Item {
             verify(["item", "action", "page", "info"].indexOf(rename.kind) >= 0, "rename row kind is " + rename.kind)
         }
 
+        // RUY-513: the kinds set by the pane (devices stay items; the verbs are actions).
+        function test_row_kinds() {
+            openBluetoothPane()
+            compare(find("btDev_bt-pad-main").kind, "item")
+            compare(find("rowBtAdd").kind, "action")
+            compare(find("rowBtPairController").kind, "action")
+            compare(find("btRename_bt-pad-main").kind, "action")
+            compare(find("btForget_bt-pad-main").kind, "action")
+            Bluetooth.mockSetBonded("bt-pad-old", false)
+            tryCompare(find("btRepair_bt-pad-old"), "visible", true)
+            compare(find("btRepair_bt-pad-old").kind, "action")
+            verify(find("btDev_bt-pad-main").current === false, "several can be connected: no current mark")
+            Bluetooth.setPowered(false)
+            tryCompare(find("rowBtOff"), "visible", true)
+            compare(find("rowBtOff").kind, "info")
+        }
+
         function test_power_off_hides_and_stops_scan() {
             openBluetoothPane()
             verify(find("rowBtAdd").visible)

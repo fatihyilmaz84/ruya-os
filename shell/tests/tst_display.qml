@@ -331,6 +331,35 @@ Item {
 
         // ---- the pane ----
 
+        // RUY-513: the kinds of the rows, and the Mode picker's current mode.
+        function test_row_kinds_and_the_current_mode() {
+            openDisplayPane()
+            compare(find("rowWallpaper").kind, "page")
+            compare(find("rowResolution").kind, "page")
+            compare(find("rowRefreshRate").kind, "page")
+            compare(find("rowResetDisplay").kind, "action")
+            downTo("rowResolution")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("resolutionPicker").shown)
+            tryVerify(() => find("resolutionPickerEntry_3840x2160").activeFocus)
+            const entries = ["3840x2160", "1920x1080", "1280x720"].map(k => find("resolutionPickerEntry_" + k))
+            verify(entries.every(e => e !== null))
+            compare(entries.filter(e => e.current).length, 1, "exactly one mode is current")
+            verify(entries[0].current, "the mode in use")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("resolutionPicker").shown)
+            compare(chooseSize(1920, 1080), "ok")
+            tryCompare(Display, "confirming", true)
+            Display.keep()
+            tryCompare(Display, "currentWidth", 1920)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("resolutionPicker").shown)
+            tryVerify(() => find("resolutionPickerEntry_1920x1080") !== null)
+            const after = ["3840x2160", "1920x1080", "1280x720"].map(k => find("resolutionPickerEntry_" + k))
+            verify(after[1].current && !after[0].current && !after[2].current, "the mark follows the change")
+            keyClick(Qt.Key_Escape)
+        }
+
         function test_the_pane_lists_the_modes_and_marks_the_recommended_one() {
             openDisplayPane()
             downTo("rowResolution")

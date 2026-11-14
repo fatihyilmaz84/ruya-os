@@ -398,6 +398,7 @@ Page {
             SettingRow {
                 id: searchRow
                 objectName: "storeSearch"
+                kind: "page"
                 width: toolbar.width * 0.5 - Theme.spaceS * page.u
                 u: page.u
                 label: qsTr("Search")

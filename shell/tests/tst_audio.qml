@@ -196,6 +196,20 @@ Item {
             compare(find("sink_hdmi-0").value, "")
         }
 
+        // RUY-513: the default output is the one `current` item, and the mark follows a change.
+        function test_the_default_output_is_the_current_item() {
+            openAudioPane()
+            const sinks = Audio.sinks.map(k => find("sink_" + k.id))
+            verify(sinks.length >= 2 && sinks.every(r => r.kind === "item"), "outputs are items")
+            compare(sinks.filter(r => r.current).length, 1, "exactly one output is current")
+            verify(find("sink_hdmi-0").current)
+            Audio.setOutput("analog-0")
+            tryVerify(() => find("sink_analog-0").current, 2000, "the mark follows")
+            verify(!find("sink_hdmi-0").current)
+            compare(Audio.sinks.map(k => find("sink_" + k.id)).filter(r => r.current).length, 1)
+            compare(find("rowTestSound").kind, "action")
+        }
+
         function test_unavailable_output_is_greyed_with_its_reason_and_cannot_be_chosen() {
             openAudioPane()
             const row = find("sink_headphones-0")
