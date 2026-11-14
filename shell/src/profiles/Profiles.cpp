@@ -88,6 +88,16 @@ QVariantMap Profiles::active() const
     return {};
 }
 
+QString Profiles::nameOf(const QString &id) const
+{
+    for (const QVariant &v : m_profiles) {
+        const QVariantMap p = v.toMap();
+        if (p.value(QStringLiteral("id")).toString() == id)
+            return p.value(QStringLiteral("name")).toString();
+    }
+    return {};
+}
+
 void Profiles::refresh()
 {
     m_backend->refresh();

@@ -3328,6 +3328,19 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>PlayerChip</name>
+    <message>
+        <location filename="../qml/PlayerChip.qml" line="34"/>
+        <source>Guest %1</source>
+        <translation>Guest %1</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>%1, player %2</source>
+        <translation>%1, player %2</translation>
+    </message>
+</context>
+<context>
     <name>PowerConfirm</name>
     <message>
         <location filename="../qml/PowerConfirm.qml" line="+34"/>

@@ -160,6 +160,7 @@ qt_add_qml_module(ruyashell
         qml/ToastLayer.qml
         qml/VolumeOsd.qml
         qml/Badge.qml
+        qml/PlayerChip.qml
         qml/ButtonGlyph.qml
         qml/Glyphs.qml
         qml/HintBar.qml

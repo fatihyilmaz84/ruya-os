@@ -3316,6 +3316,19 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>PlayerChip</name>
+    <message>
+        <location filename="../qml/PlayerChip.qml" line="34"/>
+        <source>Guest %1</source>
+        <translation>Misafir %1</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>%1, player %2</source>
+        <translation>%1, %2. oyuncu</translation>
+    </message>
+</context>
+<context>
     <name>PowerConfirm</name>
     <message>
         <location filename="../qml/PowerConfirm.qml" line="+34"/>
