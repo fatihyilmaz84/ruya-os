@@ -88,7 +88,9 @@ Mesa (`mesa-dri-drivers`, `mesa-vulkan-drivers`, 240 MB, plus `llvm-libs`, 147 M
 that is not NVIDIA, and by the VM (software rendering).
 
 Gaming kernel settings are rootfs files, not packages (`01` §1.5): `image/rootfs/usr/lib/modules-load.d/ruyaos-ntsync.conf` loads
-the `ntsync` module that the `kernel` package ships (RUY-525: `/dev/ntsync` for Proton).
+the `ntsync` module that the `kernel` package ships (RUY-525: `/dev/ntsync` for Proton), and
+`image/rootfs/usr/lib/sysctl.d/60-ruyaos-gaming.conf` sets `vm.max_map_count` and `kernel.split_lock_mitigate` as SteamOS does
+(RUY-527).
 
 ### Drivers and firmware (ADR-009: all of it stays)
 

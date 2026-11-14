@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Checks the image's gaming kernel settings (RUY-525 ntsync; docs/specs/01-platform.md 1.5)
+# Checks the image's gaming kernel settings (RUY-525 ntsync, RUY-527 sysctls; docs/specs/01-platform.md 1.5)
 # inside a running VM, as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-gaming-check.sh root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-gaming-check.sh [check|flatpak <app-id>]
@@ -7,6 +7,7 @@
 #   check    ntsync: the module is loaded (lsmod), /dev/ntsync is a character device with mode 0666, a
 #            profile user (the first ruya-p<N>; "nobody" when no profile exists yet) opens it read-write
 #            (python3), and its owner and SELinux label are printed for the record.
+#            sysctl: vm.max_map_count = 2147483642 and kernel.split_lock_mitigate = 0.
 #   flatpak <app-id>   information only (RUY-525 criterion 3): does the sandbox of an installed Flatpak app
 #            see /dev/ntsync with --device=all and with --device=dri only? Prints INFO lines, never fails
 #            the run; prints UNVERIFIED when flatpak or the app is missing.
@@ -34,6 +35,12 @@ check() {
             bad "$user cannot open $dev read-write"
         fi
     fi
+
+    echo "--- sysctl"
+    mm="$(sysctl -n vm.max_map_count 2>&1)"
+    [ "$mm" = 2147483642 ] && ok "vm.max_map_count = 2147483642" || bad "vm.max_map_count = $mm (expected 2147483642; Fedora's 10-map-count.conf is 1048576)"
+    sl="$(sysctl -n kernel.split_lock_mitigate 2>&1)"
+    [ "$sl" = 0 ] && ok "kernel.split_lock_mitigate = 0" || bad "kernel.split_lock_mitigate = $sl (expected 0; the kernel default is 1)"
 }
 
 flatpak_info() {
