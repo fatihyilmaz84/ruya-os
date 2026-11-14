@@ -15,6 +15,17 @@ Item {
         Shell { anchors.fill: parent; version: "test"; focus: true }
     }
 
+    Component {
+        id: factRowComponent
+        SettingRow {
+            kind: "info"
+            width: 1200
+            height: 80
+            label: "Keeping the console awake"
+            value: "a download or install, a system update, audio playing, an app, and more words"
+        }
+    }
+
     // Takes the keys when the shell is not meant to: what the page below would have seen.
     Item {
         id: probe
@@ -623,6 +634,39 @@ Item {
             tryVerify(() => find("homePlay").activeFocus, 2000, "Play regains focus")
         }
 
+        // RUY-589: at most two phrases, then "and N more".
+        function test_the_held_text_names_two_reasons_then_counts_the_rest() {
+            openPowerPane()
+            const row = find("rowKeepingAwake")
+            IdleInhibit.acquire("job")
+            compare(row.value, "a download or install")
+            IdleInhibit.acquire("audio")
+            compare(row.value, "audio playing, a download or install", "two read as they did")
+            IdleInhibit.acquire("update")
+            compare(row.value, "audio playing and 2 more")
+            IdleInhibit.acquire("wayland:3")
+            compare(row.value, "audio playing and 3 more")
+            IdleInhibit.release("wayland:3")
+            IdleInhibit.release("update")
+            IdleInhibit.release("audio")
+            IdleInhibit.release("job")
+        }
+
+        function test_a_fact_value_never_takes_more_than_half_the_row() {
+            const row = createTemporaryObject(factRowComponent, host)
+            verify(row)
+            const label = findChild(row, "label")
+            const value = findChild(row, "value")
+            verify(value.implicitWidth > row.width * 0.5, "the test value is longer than half a row")
+            compare(value.width, row.width * 0.5)
+            verify(value.truncated, "the long value is elided")
+            compare(label.truncated, false, "the label stays whole")
+            verify(label.x + label.contentWidth < value.x, "the label ends before the value")
+            row.value = "Nothing"
+            verify(!value.truncated)
+            compare(value.width, value.implicitWidth)
+        }
+
         function test_a_later_step_at_or_before_an_earlier_one_gets_a_note() {
             openPowerPane()
             compare(find("rowOrderNote").visible, false, "the defaults are in order")
@@ -874,6 +918,39 @@ Item {
             minutes(10)
             settle()
             grabImage(tc.shell).save(shotsDir + "/92-screen-saver-performance-en.png")
+        }
+
+        // RUY-589: audio and a job held at once, in Turkish, at 720p, 1080p and the large UI size.
+        function test_zz_screenshots_held_tr() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            DeviceSettings.language = "tr"
+            openPowerPane()
+            IdleInhibit.acquire("audio")
+            IdleInhibit.acquire("job")
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/92-power-saving-held-tr-720p.png")
+            host.width = 1920
+            host.height = 1080
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/92-power-saving-held-tr-1080p.png")
+            Display.setUiScale(150)
+            for (let i = 0; i < 6 && !find("rowKeepingAwake").activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            tryVerify(() => find("rowKeepingAwake").activeFocus, 2000)
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/92-power-saving-held-tr-large.png")
+            IdleInhibit.acquire("update")                // four holders: the first and "ve 3 tane daha"
+            IdleInhibit.acquire("wayland:3")
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/92-power-saving-held-4-tr-large.png")
+            Display.setUiScale(0)
+            host.width = 1280
+            host.height = 720
+            IdleInhibit.release("wayland:3")
+            IdleInhibit.release("update")
+            IdleInhibit.release("job")
+            IdleInhibit.release("audio")
         }
     }
 }

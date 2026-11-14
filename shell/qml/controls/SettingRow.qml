@@ -46,7 +46,7 @@ SettingControl {
     Accessible.checked: isCurrent
     // What the right end takes beyond the usual spaceL margin, for the label and detail to end before.
     trailingWidth: isAction ? 0
-                   : (value !== "" ? valueText.implicitWidth + Theme.spaceS * u : 0)
+                   : (value !== "" ? valueText.width + Theme.spaceS * u : 0)
                      + (isPage || isCurrent ? (markWidth + Theme.spaceS - Theme.spaceL) * u : 0)
 
     Text {
@@ -59,6 +59,10 @@ SettingControl {
             rightMargin: (row.isPage || row.isCurrent ? Theme.spaceXxs : Theme.spaceL) * row.u
             verticalCenter: parent.verticalCenter
         }
+        // A value never takes more than half the row (04 §5), so the label always stays readable; a longer one is elided.
+        width: Math.min(implicitWidth, row.width * 0.5)     // 0.5: a layout ratio, not a design token
+        elide: Text.ElideRight
+        horizontalAlignment: Text.AlignRight
         textFormat: Text.PlainText      // a value may be a name from a drive (a wallpaper): never markup
         text: row.value
         color: Theme.text

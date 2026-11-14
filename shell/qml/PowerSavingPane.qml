@@ -35,6 +35,10 @@ SettingsPane {
             if (!words.includes(w))
                 words.push(w)
         }
+        // One or two phrases read in full; three or more show the first and "and N more", so the count
+        // always fits in half a row (RUY-589, 04 §5).
+        if (words.length > 2)
+            return qsTr("%1 and %n more", "", words.length - 1).arg(words[0])
         return words.join(", ")
     }
 
