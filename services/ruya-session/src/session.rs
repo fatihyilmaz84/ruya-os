@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use crate::directory::ProfileDirectory;
 use crate::spawner::{
     app_env, is_app_scope, parse_cgroup, unit_app_id, valid_app_id, valid_profile_id,
-    with_pulse_server, Spawner, UnitEvent,
+    with_pulse_server, AdoptLister, Listing, Spawner, UnitEvent,
 };
 
 /// After `Stop`, the app has this long to quit before it is killed. It counts from the stop
@@ -195,6 +195,8 @@ pub struct Session<S, D> {
     /// The signed-in profile as the last `profile_changed` saw it (RUY-568): what the start check
     /// falls back to when `Profiles1` cannot be read.
     last_active: Option<String>,
+    /// Did the listing `adopt` merged last see everything (RUY-23)?
+    adopted_all: bool,
 }
 
 impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
@@ -215,6 +217,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             frozen_changes: Vec::new(),
             audio_sent: HashMap::new(),
             last_active: None,
+            adopted_all: true,
         }
     }
 
@@ -525,12 +528,37 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         std::mem::take(&mut self.frozen_changes)
     }
 
-    /// Start-up: takes over the app units that run already (a restart of this service does not
-    /// end the apps). They are `running` from the start and announce nothing; their end is
-    /// reported like any other. When the profiles are `known` (the directory is current), a unit
-    /// of a profile that no longer exists is stopped and never listed. Returns what was adopted.
+    /// The listing of the running app units as a closure for the caller to run without the
+    /// session lock (RUY-621): `loginctl` and a `systemctl` per profile may take seconds, and a
+    /// `Session1` call must not wait for them. `adopt_listed` takes its result.
+    pub fn adopt_lister(&self) -> AdoptLister {
+        self.spawner.adopt_lister()
+    }
+
+    /// Start-up and every later pass: takes over the app units that run already (a restart of
+    /// this service does not end the apps). Lists them itself; the service lists outside the
+    /// lock and calls `adopt_listed`.
     pub fn adopt(&mut self, unix: i64, now: Instant, profiles_known: bool) -> Vec<RunningApp> {
-        for found in self.spawner.adopt_running() {
+        let listing = (self.spawner.adopt_lister())();
+        self.adopt_listed(listing, unix, now, profiles_known)
+    }
+
+    /// Merges a `listing`: the units are `running` from the start and announce nothing; their
+    /// end is reported like any other. A unit this session knows already is skipped (a pass can
+    /// race a normal launch, or an earlier pass). When the profiles are `known` (the directory is
+    /// current), a unit of a profile that no longer exists is stopped and never listed. Returns
+    /// the apps taken over by this call, not the ones an earlier pass listed.
+    pub fn adopt_listed(
+        &mut self,
+        listing: Listing,
+        unix: i64,
+        now: Instant,
+        profiles_known: bool,
+    ) -> Vec<RunningApp> {
+        self.adopted_all = listing.complete;
+        let mut gained: Vec<String> = Vec::new();
+        let mut units: Vec<String> = Vec::new();
+        for found in listing.found {
             let Some(profile) = found
                 .user
                 .strip_prefix("ruya-")
@@ -539,6 +567,11 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 continue;
             };
             if !valid_app_id(&found.app_id) || self.instances.iter().any(|i| i.unit == found.unit) {
+                continue;
+            }
+            // Ended while the listing ran beside the event loop: its end found no instance and
+            // was dropped, so adding it now would leave a unit nothing ever ends (RUY-621).
+            if !self.spawner.tracks(&found.unit) {
                 continue;
             }
             let orphan = profiles_known && self.directory.unix_user(profile).is_none();
@@ -575,32 +608,27 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                     }
                 }
             }
+            gained.push(inst.user.clone());
+            units.push(inst.unit.clone());
             self.instances.push(inst);
         }
-        // Whatever was parked before the restart is set right: frozen apps parked, the rest put
-        // back (T-466).
-        let mut users: Vec<String> = self.instances.iter().map(|i| i.user.clone()).collect();
-        users.sort();
-        users.dedup();
-        for user in users {
+        // Whatever was parked before the restart is set right for the users that gained an
+        // instance: frozen apps parked, the rest put back (T-466). The others are unchanged.
+        gained.sort();
+        gained.dedup();
+        for user in gained {
             self.sync_audio(&user, true);
         }
         self.list()
+            .into_iter()
+            .filter(|a| units.contains(&a.instance))
+            .collect()
     }
 
-    /// Did the last `adopt` see everything (`Spawner::adoption_complete`)? When not, `adopt_more`
-    /// asks again later (RUY-23).
+    /// Did the last merged listing see everything? When not, the service lists again later
+    /// (RUY-23).
     pub fn adoption_complete(&self) -> bool {
-        self.spawner.adoption_complete()
-    }
-
-    /// A later pass of `adopt` (the profile's manager was not up at start-up): returns only the
-    /// apps taken over now, the ones `adopt` already listed are not repeated.
-    pub fn adopt_more(&mut self, unix: i64, now: Instant, profiles_known: bool) -> Vec<RunningApp> {
-        let before: Vec<String> = self.list().into_iter().map(|a| a.instance).collect();
-        let mut all = self.adopt(unix, now, profiles_known);
-        all.retain(|a| !before.contains(&a.instance));
-        all
+        self.adopted_all
     }
 
     /// The instance a process belongs to (T-459): its cgroup is read, and the instance whose unit,
@@ -2144,6 +2172,25 @@ mod tests {
     }
 
     #[test]
+    fn a_listed_unit_that_ended_before_the_merge_is_not_adopted() {
+        // Its end arrived while the listing ran beside the event loop and found no instance; the
+        // unit must not come back as a running app that nothing ends (RUY-621).
+        let gone = crate::spawner::unit_name("ruya-p1", APP);
+        let spawner = FakeSpawner::new().with_app(APP).with_ended_unit(&gone);
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, vec![]);
+        let listing = Listing {
+            found: vec![unit_of("ruya-p1", APP)],
+            complete: true,
+        };
+        assert!(s
+            .adopt_listed(listing, 5_000, Instant::now(), true)
+            .is_empty());
+        assert!(s.list().is_empty());
+        assert!(s.spawner.audio_calls().is_empty());
+    }
+
+    #[test]
     fn adopting_twice_does_not_duplicate() {
         let mut s = restarted();
         s.adopt(5_000, Instant::now(), true);
@@ -2165,15 +2212,96 @@ mod tests {
         let mut s = Session::new(spawner, dir, vec![]);
         assert!(s.adopt(5_000, Instant::now(), true).is_empty());
         assert!(!s.adoption_complete(), "the caller is told to ask again");
-        assert!(s.adopt_more(5_002, Instant::now(), true).is_empty());
+        assert!(s.adopt(5_002, Instant::now(), true).is_empty());
         assert!(!s.adoption_complete());
-        let late = s.adopt_more(5_004, Instant::now(), true);
+        let late = s.adopt(5_004, Instant::now(), true);
         assert_eq!(late.len(), 2, "both apps are taken over now");
         assert!(late.iter().all(|a| a.state == State::Running));
         assert!(s.adoption_complete());
         // A further pass finds them already taken: nothing is listed twice or announced again.
-        assert!(s.adopt_more(5_006, Instant::now(), true).is_empty());
+        assert!(s.adopt(5_006, Instant::now(), true).is_empty());
         assert_eq!(s.list().len(), 2);
+    }
+
+    fn unit_of(user: &str, app: &str) -> crate::spawner::RunningUnit {
+        crate::spawner::RunningUnit {
+            unit: crate::spawner::unit_name(user, app),
+            user: user.to_owned(),
+            app_id: app.to_owned(),
+            started: 1_000,
+            frozen: false,
+        }
+    }
+
+    #[test]
+    fn a_listing_that_failed_leaves_the_adoption_incomplete_and_the_next_one_takes_over() {
+        // A timeout of loginctl or a manager is a listing that is not complete (RUY-621): not
+        // "nothing runs".
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(FakeSpawner::new().with_app(APP), dir, vec![]);
+        let failed = Listing {
+            found: vec![],
+            complete: false,
+        };
+        assert!(s
+            .adopt_listed(failed, 5_000, Instant::now(), true)
+            .is_empty());
+        assert!(!s.adoption_complete());
+        let ok = Listing {
+            found: vec![unit_of("ruya-p1", APP)],
+            complete: true,
+        };
+        assert_eq!(s.adopt_listed(ok, 5_002, Instant::now(), true).len(), 1);
+        assert!(s.adoption_complete());
+    }
+
+    #[test]
+    fn a_listed_unit_the_session_knows_is_not_taken_twice() {
+        // A pass that raced a normal launch: the unit is in the registry when the lock is taken.
+        let spawner = FakeSpawner::new().with_app(APP);
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, vec![]);
+        let (_, unit) = s.launch(APP, "p1", 1);
+        let listing = Listing {
+            found: vec![unit_of("ruya-p1", APP)],
+            complete: true,
+        };
+        assert!(s
+            .adopt_listed(listing, 5_000, Instant::now(), true)
+            .is_empty());
+        assert_eq!(s.list().len(), 1);
+        assert_eq!(s.list()[0].instance, unit);
+    }
+
+    #[test]
+    fn audio_is_synced_only_for_the_users_that_gained_an_instance() {
+        let dir = ProfileSnapshot::new(["p1".to_owned(), "p2".to_owned()]);
+        let mut s = Session::new(
+            FakeSpawner::new().with_app(APP).with_app(PUZZLE),
+            dir,
+            vec![],
+        );
+        let pass = |found: Vec<_>| Listing {
+            found,
+            complete: false,
+        };
+        let p1 = unit_of("ruya-p1", APP);
+        let p2 = unit_of("ruya-p2", PUZZLE);
+        s.adopt_listed(pass(vec![p1.clone()]), 5_000, Instant::now(), true);
+        assert_eq!(s.spawner.audio_calls().len(), 1);
+        // Later passes list p1's unit again and add p2's: only p2 is synced, once.
+        s.adopt_listed(pass(vec![p1.clone()]), 5_002, Instant::now(), true);
+        assert_eq!(s.spawner.audio_calls().len(), 1, "nothing gained");
+        s.adopt_listed(
+            pass(vec![p1.clone(), p2.clone()]),
+            5_004,
+            Instant::now(),
+            true,
+        );
+        s.adopt_listed(pass(vec![p1, p2]), 5_006, Instant::now(), true);
+        let calls = s.spawner.audio_calls();
+        assert_eq!(calls.len(), 2, "{calls:?}");
+        assert!(calls[0].starts_with("ruya-p1 ") && calls[1].starts_with("ruya-p2 "));
     }
 
     #[test]

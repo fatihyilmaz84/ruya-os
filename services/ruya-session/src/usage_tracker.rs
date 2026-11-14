@@ -127,6 +127,13 @@ fn key_instance(key: &str) -> Option<&str> {
     key.split_once('-').map(|(_, rest)| rest)
 }
 
+/// Is the heartbeat `key` / `s` of `profile` the run of the live app `l`?
+fn leftover_of(l: &LiveApp, profile: &str, key: &str, s: &SessionRecord) -> bool {
+    l.profile == profile
+        && l.app_id == s.app_id
+        && key_instance(key) == Some(sanitize(&l.instance).as_str())
+}
+
 pub struct Tracker<S, Z> {
     store: S,
     zone: Z,
@@ -169,50 +176,33 @@ impl<S: UsageStore, Z: Zone> Tracker<S, Z> {
     /// Start-up, nothing running: runs that never ended (crash, power cut) end at their last
     /// heartbeat. Returns the profiles whose ledger changed.
     pub fn recover(&mut self, unix: i64) -> Vec<String> {
-        self.recover_with(unix, &[], Instant::now())
+        self.recover_with(unix, &[], Instant::now(), true)
     }
 
     /// Start-up when this service restarted but the apps did not: a leftover heartbeat of an app
     /// that is still `live` is not an ended run. It is taken over where it left off (the time it
     /// had, its start, its file, so the end writes the one row and no second one), and a live app
     /// with no heartbeat starts a run now, dated from when the app started. Every other leftover
-    /// ends at its last heartbeat as in `recover`. Returns the profiles whose ledger changed.
-    pub fn recover_with(&mut self, unix: i64, live: &[LiveApp], now: Instant) -> Vec<String> {
+    /// ends at its last heartbeat as in `recover`, but only when the adoption is `complete`:
+    /// otherwise the app may still come (`adopt_late`), so the leftover stays open until
+    /// `settle` (RUY-621). Returns the profiles whose ledger changed.
+    pub fn recover_with(
+        &mut self,
+        unix: i64,
+        live: &[LiveApp],
+        now: Instant,
+        complete: bool,
+    ) -> Vec<String> {
         let mut changed = Vec::new();
         let mut taken = vec![false; live.len()];
-        for (profile, key, mut s) in self.store.list_open() {
-            let found = live.iter().position(|l| {
-                l.profile == profile
-                    && l.app_id == s.app_id
-                    && key_instance(&key) == Some(sanitize(&l.instance).as_str())
-            });
+        for (profile, key, s) in self.store.list_open() {
+            let found = live.iter().position(|l| leftover_of(l, &profile, &key, &s));
             if let Some(at) = found.filter(|&at| !taken[at]) {
                 taken[at] = true;
-                if !self.open.iter().any(|o| o.instance == live[at].instance) {
-                    self.open.push(Open {
-                        instance: live[at].instance.clone(),
-                        profile,
-                        app_id: s.app_id.clone(),
-                        version: s.app_version.clone(),
-                        key,
-                        start: s.start,
-                        ms: s
-                            .days
-                            .iter()
-                            .map(|(d, secs)| (*d, u64::from(*secs) * 1000))
-                            .collect(),
-                        last_mark: now,
-                        last_beat: now,
-                        dirty: false,
-                        reason: None,
-                    });
-                }
+                self.take_over(&live[at], profile, key, &s, now);
                 continue;
             }
-            s.open = false;
-            s.reason = EndReason::Crashed;
-            self.store.remove_open(&profile, &key);
-            if s.foreground_seconds >= MIN_SESSION_SECS && self.add_session(&profile, s, unix) {
+            if complete && self.crash_leftover(profile.clone(), &key, s, unix) {
                 changed.push(profile);
             }
         }
@@ -226,6 +216,98 @@ impl<S: UsageStore, Z: Zone> Tracker<S, Z> {
                     now,
                     l.started,
                 );
+            }
+        }
+        changed
+    }
+
+    /// The run of `l` goes on from where its heartbeat left off.
+    fn take_over(
+        &mut self,
+        l: &LiveApp,
+        profile: String,
+        key: String,
+        s: &SessionRecord,
+        now: Instant,
+    ) {
+        if self.open.iter().any(|o| o.instance == l.instance) {
+            return;
+        }
+        self.open.push(Open {
+            instance: l.instance.clone(),
+            profile,
+            app_id: s.app_id.clone(),
+            version: s.app_version.clone(),
+            key,
+            start: s.start,
+            ms: s
+                .days
+                .iter()
+                .map(|(d, secs)| (*d, u64::from(*secs) * 1000))
+                .collect(),
+            last_mark: now,
+            last_beat: now,
+            dirty: false,
+            reason: None,
+        });
+    }
+
+    /// A run that never ended ends at its last heartbeat. True when the ledger got a row.
+    fn crash_leftover(
+        &mut self,
+        profile: String,
+        key: &str,
+        mut s: SessionRecord,
+        unix: i64,
+    ) -> bool {
+        s.open = false;
+        s.reason = EndReason::Crashed;
+        self.store.remove_open(&profile, key);
+        s.foreground_seconds >= MIN_SESSION_SECS && self.add_session(&profile, s, unix)
+    }
+
+    /// An app found by a later adoption pass (the first one did not see it). Its leftover
+    /// heartbeat, kept open by `recover_with`, is taken over as the first pass would have; an
+    /// app without one starts a run dated from its start.
+    pub fn adopt_late(&mut self, l: &LiveApp, now: Instant) {
+        let leftover = self
+            .store
+            .list_open()
+            .into_iter()
+            .find(|(profile, key, s)| {
+                leftover_of(l, profile, key, s)
+                    && !self
+                        .open
+                        .iter()
+                        .any(|o| o.profile == *profile && o.key == *key)
+            });
+        match leftover {
+            Some((profile, key, s)) => self.take_over(l, profile, key, &s, now),
+            None => self.app_started(
+                &l.instance,
+                &l.profile,
+                &l.app_id,
+                &l.version,
+                now,
+                l.started,
+            ),
+        }
+    }
+
+    /// The adoption is over (complete, or given up): every leftover no live run took over ends at
+    /// its last heartbeat. Returns the profiles whose ledger changed.
+    pub fn settle(&mut self, unix: i64) -> Vec<String> {
+        let mut changed = Vec::new();
+        for (profile, key, s) in self.store.list_open() {
+            if self
+                .open
+                .iter()
+                .any(|o| o.profile == profile && o.key == key)
+            {
+                continue;
+            }
+            if self.crash_leftover(profile.clone(), &key, s, unix) {
+                changed.push(profile);
             }
         }
         changed
@@ -720,7 +802,7 @@ mod tests {
     #[test]
     fn a_restart_mid_session_keeps_counting_and_writes_one_row() {
         let (mut t2, mut c, started) = restarted_after_60s();
-        let changed = t2.recover_with(c.wall, &[live(IA, "p1", A, started)], c.now());
+        let changed = t2.recover_with(c.wall, &[live(IA, "p1", A, started)], c.now(), true);
         assert!(changed.is_empty(), "the run did not end");
         assert_eq!(t2.store().opens.len(), 1, "its heartbeat file is kept");
         // What was counted before the restart shows, as a running session.
@@ -758,7 +840,7 @@ mod tests {
         let mut t = tracker();
         let mut c = Clock::new();
         let started = c.wall - 300;
-        let changed = t.recover_with(c.wall, &[live(IA, "p1", A, started)], c.now());
+        let changed = t.recover_with(c.wall, &[live(IA, "p1", A, started)], c.now(), true);
         assert!(changed.is_empty());
         run(&mut t, &mut c, 30, "p1", Some(IA), Attention::Active);
         quit(&mut t, &c, IA);
@@ -781,7 +863,7 @@ mod tests {
         let store = std::mem::take(&mut t.store);
         let mut t2 = Tracker::new(store, FixedZone(0));
         // Only B is still running; A is not.
-        let changed = t2.recover_with(c.wall, &[live(IB, "p1", B, c.wall - 120)], c.now());
+        let changed = t2.recover_with(c.wall, &[live(IB, "p1", B, c.wall - 120)], c.now(), true);
         assert_eq!(changed, ["p1"]);
         assert_eq!(t2.store().opens.len(), 1);
         let s = sessions(&mut t2, "p1", &c);
@@ -795,9 +877,42 @@ mod tests {
     }
 
     #[test]
+    fn a_leftover_kept_open_is_taken_over_by_the_app_adopted_late_as_one_row() {
+        let (mut t2, mut c, started) = restarted_after_60s();
+        // The first pass did not see the app (its manager was not up): the leftover stays.
+        let changed = t2.recover_with(c.wall, &[], c.now(), false);
+        assert!(changed.is_empty());
+        assert_eq!(t2.store().opens.len(), 1, "its heartbeat file is kept");
+        // A later pass finds the app: the run goes on from the heartbeat.
+        t2.adopt_late(&live(IA, "p1", A, started), c.now());
+        assert!(t2.settle(c.wall).is_empty(), "nothing is left to end");
+        run(&mut t2, &mut c, 40, "p1", Some(IA), Attention::Active);
+        assert_eq!(quit(&mut t2, &c, IA).as_deref(), Some("p1"));
+        let s = sessions(&mut t2, "p1", &c);
+        assert_eq!(s.len(), 1, "{s:?}");
+        assert_eq!((s[0].foreground_seconds, s[0].start), (100, started));
+        assert_eq!(s[0].reason, EndReason::Quit);
+        assert!(t2.store().opens.is_empty());
+    }
+
+    #[test]
+    fn a_leftover_whose_app_never_comes_back_ends_as_crashed_when_the_adoption_is_over() {
+        let (mut t2, c, _) = restarted_after_60s();
+        assert!(t2.recover_with(c.wall, &[], c.now(), false).is_empty());
+        assert!(sessions(&mut t2, "p1", &c).iter().all(|x| x.open));
+        assert_eq!(t2.settle(c.wall), ["p1"]);
+        assert!(t2.store().opens.is_empty());
+        let s = sessions(&mut t2, "p1", &c);
+        assert_eq!(
+            (s.len(), s[0].reason, s[0].foreground_seconds),
+            (1, EndReason::Crashed, 60)
+        );
+    }
+
+    #[test]
     fn a_leftover_is_not_taken_by_an_app_of_another_profile() {
         let (mut t2, c, started) = restarted_after_60s();
-        let changed = t2.recover_with(c.wall, &[live(IA, "p2", A, started)], c.now());
+        let changed = t2.recover_with(c.wall, &[live(IA, "p2", A, started)], c.now(), true);
         assert_eq!(changed, ["p1"], "p1's run ended at its heartbeat");
         assert!(sessions(&mut t2, "p1", &c).iter().all(|x| !x.open));
     }

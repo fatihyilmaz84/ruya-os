@@ -58,7 +58,8 @@ use crate::spawner::{
     RunningUnit, ShowUnit, SHOW_PROPERTIES, SWAP_COMMAND,
 };
 use crate::spawner::{
-    AudioJob, AudioQueue, DisplayMode, ReclaimLedger, Spawner, UnitEvent, PARK_RETRY,
+    AdoptLister, AudioJob, AudioQueue, DisplayMode, Listing, ReclaimLedger, Spawner, UnitEvent,
+    PARK_RETRY,
 };
 use crate::x11::{display_mode_x11, X11_OVERRIDES};
 use std::ffi::OsString;
@@ -380,7 +381,7 @@ pub struct SystemdSpawner {
     /// The reclaims whose unit was started, for `cancel_reclaim` (RUY-573).
     reclaims: Arc<ReclaimLedger>,
     /// Did the last `adopt_running` fail to ask loginctl or a profile's manager (RUY-23)?
-    adopt_failed: std::sync::atomic::AtomicBool,
+    adopt_failed: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl SystemdSpawner {
@@ -419,7 +420,7 @@ impl SystemdSpawner {
             audio: Mutex::new(audio),
             swap,
             reclaims: Arc::new(ReclaimLedger::default()),
-            adopt_failed: std::sync::atomic::AtomicBool::new(false),
+            adopt_failed: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 
@@ -658,88 +659,109 @@ impl Spawner for SystemdSpawner {
     }
 
     fn adopt_running(&self) -> Vec<RunningUnit> {
-        let mut failed = false;
-        let users = Command::new("loginctl")
-            .args(["list-users", "--no-legend", "--no-pager"])
-            .stdin(Stdio::null())
-            .stderr(Stdio::inherit())
-            .output()
-            .ok()
-            .filter(|out| out.status.success())
-            .map(|out| parse_profile_users(&String::from_utf8_lossy(&out.stdout)))
-            .unwrap_or_else(|| {
-                eprintln!("ruya-session: loginctl list-users failed: no app is adopted");
-                failed = true;
-                Vec::new()
-            });
-        let mut found = Vec::new();
-        for user in users {
-            let Some(text) = show_units(&user, "ruya-app-*.service") else {
-                eprintln!("ruya-session: cannot list the apps of {user}");
-                failed = true;
+        (self.adopt_lister())().found
+    }
+
+    fn tracks(&self, unit: &str) -> bool {
+        // `Gate::send` removes a unit before it hands its end on.
+        self.gate
+            .units
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains_key(unit)
+    }
+
+    fn adopt_lister(&self) -> AdoptLister {
+        let gate = self.gate.clone();
+        let failed = Arc::clone(&self.adopt_failed);
+        Box::new(move || list_running_apps(&gate, &failed))
+    }
+}
+
+/// The app units that run in every profile user's manager, taken over (`Spawner::adopt_lister`).
+/// Every external call is bounded (`SYSTEMCTL_LIMIT`); one that fails or times out makes the
+/// listing incomplete, never an empty answer taken for "nothing runs" (RUY-621).
+fn list_running_apps(gate: &Gate, adopt_failed: &std::sync::atomic::AtomicBool) -> Listing {
+    let mut failed = false;
+    let args: Vec<String> = ["loginctl", "list-users", "--no-legend", "--no-pager"]
+        .iter()
+        .map(|s| (*s).to_owned())
+        .collect();
+    let users = run_bounded(&args, SYSTEMCTL_LIMIT)
+        .map(|out| parse_profile_users(&out))
+        .unwrap_or_else(|| {
+            eprintln!("ruya-session: loginctl list-users failed: no app is adopted");
+            failed = true;
+            Vec::new()
+        });
+    let mut found = Vec::new();
+    for user in users {
+        let Some(text) = show_units(&user, "ruya-app-*.service") else {
+            eprintln!("ruya-session: cannot list the apps of {user}");
+            failed = true;
+            continue;
+        };
+        let mut mine = Vec::new();
+        for show in parse_show(&text).into_iter().filter(ShowUnit::alive) {
+            let Some(app_id) = unit_app_id(&user, &show.id) else {
                 continue;
             };
-            let mut mine = Vec::new();
-            for show in parse_show(&text).into_iter().filter(ShowUnit::alive) {
-                let Some(app_id) = unit_app_id(&user, &show.id) else {
-                    continue;
-                };
-                // Taken over (or started by us) already: a second pass skips it.
-                if self
-                    .gate
-                    .units
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .contains_key(&show.id)
-                {
-                    continue;
-                }
-                self.gate
-                    .units
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .insert(show.id.clone(), (user.clone(), app_id.clone()));
-                self.gate
-                    .scopes
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .begin(&show.id, &user, &app_id, Instant::now());
-                mine.push(RunningUnit {
-                    unit: show.id,
-                    user: user.clone(),
-                    app_id,
-                    started: show.entered,
-                    frozen: matches!(show.freezer_state.as_str(), "frozen" | "freezing"),
-                });
-            }
-            if mine.is_empty() {
+            // Taken over (or started by us) already: a second pass skips it.
+            if gate
+                .units
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .contains_key(&show.id)
+            {
                 continue;
             }
-            // One thread and one connection per manager, however many apps it runs.
-            let names: Vec<String> = mine.iter().map(|u| u.unit.clone()).collect();
-            let gate = self.gate.clone();
-            let who = user.clone();
-            let spawned = std::thread::Builder::new()
-                .name("watch".to_owned())
-                .spawn(move || follow_user(&who, &names, &gate));
-            if let Err(err) = spawned {
-                eprintln!("ruya-session: cannot watch the apps of {user}: {err}");
-                let mut registry = self.gate.units.lock().unwrap_or_else(|e| e.into_inner());
-                let mut scopes = self.gate.scopes.lock().unwrap_or_else(|e| e.into_inner());
-                for u in &mine {
-                    registry.remove(&u.unit);
-                    scopes.forget(&u.unit);
-                }
-                continue;
-            }
-            for u in mine {
-                eprintln!("ruya-session: adopted {}", u.unit);
-                found.push(u);
-            }
+            gate.units
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(show.id.clone(), (user.clone(), app_id.clone()));
+            gate.scopes.lock().unwrap_or_else(|e| e.into_inner()).begin(
+                &show.id,
+                &user,
+                &app_id,
+                Instant::now(),
+            );
+            mine.push(RunningUnit {
+                unit: show.id,
+                user: user.clone(),
+                app_id,
+                started: show.entered,
+                frozen: matches!(show.freezer_state.as_str(), "frozen" | "freezing"),
+            });
         }
-        self.adopt_failed
-            .store(failed, std::sync::atomic::Ordering::SeqCst);
-        found
+        if mine.is_empty() {
+            continue;
+        }
+        // One thread and one connection per manager, however many apps it runs.
+        let names: Vec<String> = mine.iter().map(|u| u.unit.clone()).collect();
+        let watcher = gate.clone();
+        let who = user.clone();
+        let spawned = std::thread::Builder::new()
+            .name("watch".to_owned())
+            .spawn(move || follow_user(&who, &names, &watcher));
+        if let Err(err) = spawned {
+            eprintln!("ruya-session: cannot watch the apps of {user}: {err}");
+            let mut registry = gate.units.lock().unwrap_or_else(|e| e.into_inner());
+            let mut scopes = gate.scopes.lock().unwrap_or_else(|e| e.into_inner());
+            for u in &mine {
+                registry.remove(&u.unit);
+                scopes.forget(&u.unit);
+            }
+            continue;
+        }
+        for u in mine {
+            eprintln!("ruya-session: adopted {}", u.unit);
+            found.push(u);
+        }
+    }
+    adopt_failed.store(failed, std::sync::atomic::Ordering::SeqCst);
+    Listing {
+        found,
+        complete: !failed,
     }
 }
 
@@ -749,23 +771,20 @@ fn show_units(user: &str, pattern: &str) -> Option<String> {
     show_many(user, &[pattern.to_owned()])
 }
 
-/// The same for several names or patterns in one call.
+/// The same for several names or patterns in one call. Bounded (`SYSTEMCTL_LIMIT`): a manager
+/// that does not answer is a failed call, not a wait without end (RUY-621).
 fn show_many(user: &str, names: &[String]) -> Option<String> {
-    let mut cmd = Command::new("systemctl");
-    cmd.args(["--user", "--no-pager", "--timestamp=unix"])
-        .arg(format!("--machine={user}@.host"))
-        .arg("show");
+    let mut args: Vec<String> = ["systemctl", "--user", "--no-pager", "--timestamp=unix"]
+        .iter()
+        .map(|s| (*s).to_owned())
+        .collect();
+    args.push(format!("--machine={user}@.host"));
+    args.push("show".to_owned());
     for property in SHOW_PROPERTIES {
-        cmd.arg(format!("--property={property}"));
+        args.push(format!("--property={property}"));
     }
-    let out = cmd
-        .args(names)
-        .stdin(Stdio::null())
-        .stderr(Stdio::inherit())
-        .output()
-        .ok()
-        .filter(|out| out.status.success())?;
-    Some(String::from_utf8_lossy(&out.stdout).into_owned())
+    args.extend(names.iter().cloned());
+    run_bounded(&args, SYSTEMCTL_LIMIT)
 }
 
 /// Follows the adopted units of one profile user until the last one has ended.
@@ -1033,7 +1052,8 @@ fn lookup_uid(name: &str) -> Result<Option<u32>, i32> {
     };
     match rc {
         0 if !result.is_null() => Ok(Some(pwd.pw_uid)),
-        // The documented "no such user" answers.
+        // The documented "no such user" answers. EPERM read this way is harmless: profile users
+        // are in /etc/passwd, which nothing here is denied (RUY-621).
         0 | libc::ENOENT | libc::ESRCH | libc::EBADF | libc::EPERM => Ok(None),
         err => Err(err),
     }
