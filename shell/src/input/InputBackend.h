@@ -37,9 +37,12 @@ public:
     // names. The answer arrives as profileReply with the same token and the out-arguments by name
     // (status "failed", the others empty, when the call itself failed).
     virtual void callProfile(quint64 token, const QString &method, const QVariantMap &args) = 0;
-    // Reads the ConfirmButton property (06 section 11.2: the signed-in profile's mode); the answer
-    // arrives as confirmButtonRead.
+    // Reads the ConfirmButton property (06 section 11.2: the active controller's mode for the
+    // signed-in profile, RUY-603); the answer arrives as confirmButtonRead.
     virtual void readConfirmButton() = 0;
+    // Input1.GetConfirmButtons(profile) (RUY-603: the profile's choice per controller); the answer
+    // arrives as confirmButtonsRead (the newest request only).
+    virtual void readConfirmButtons(const QString &profile) = 0;
 
 signals:
     // The newest SetRoute's answer: a status string of api/dbus/org.ruyaos.Input1.xml, or "failed"
@@ -65,8 +68,11 @@ signals:
     // The ConfirmButton property answered: mode "family" | "south" | "east", ok false when the call
     // failed (no service).
     void confirmButtonRead(bool ok, const QString &mode);
-    // The property changed (a profile switch or SetConfirmButton): read it again.
+    // The property changed (a profile switch, another active pad or SetConfirmButton): read it again.
     void confirmButtonChanged();
+    // GetConfirmButtons answered: status "ok" (buttons: device id -> "south" | "east"), else a
+    // status of the XML or "failed" (buttons empty).
+    void confirmButtonsRead(const QString &profile, const QString &status, const QVariantMap &buttons);
     // ActiveInputChanged(device_id, family): the last press came from that device.
     void activeInputChanged(const QString &deviceId, const QString &family);
     // UserActive: a pad is being played in the app in front (RUY-588; at most every 30 s, no content).
@@ -98,8 +104,16 @@ protected:
             emit devicesListed(ok, devices);
     }
 
+    quint64 beginConfirmsRequest() { return m_confirmsSeq.begin(); }
+    void deliverConfirms(quint64 request, const QString &profile, const QString &status, const QVariantMap &buttons)
+    {
+        if (m_confirmsSeq.accept(request))
+            emit confirmButtonsRead(profile, status, buttons);
+    }
+
 private:
     RequestSequence m_seq;
     RequestSequence m_devicesSeq;
+    RequestSequence m_confirmsSeq;
     bool m_serviceOwned = true;
 };

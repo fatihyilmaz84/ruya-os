@@ -333,14 +333,21 @@ impl InputIface {
         self.shared.with(|r| r.route().as_str().to_owned())
     }
 
-    fn set_confirm_button(&self, profile: &str, mode: &str) -> String {
+    fn set_confirm_button(&self, profile: &str, device: &str, mode: &str) -> String {
         self.shared
-            .with(|r| r.set_confirm_button(profile, mode))
+            .with(|r| r.set_confirm_button(profile, device, mode))
             .as_str()
             .to_owned()
     }
 
-    /// The signed-in profile's Confirm button: "family" | "south" | "east".
+    /// The console profile's Confirm button per controller (RUY-603): device id -> mode.
+    #[zbus(out_args("status", "buttons"))]
+    fn get_confirm_buttons(&self, profile: &str) -> (String, HashMap<String, String>) {
+        let (status, map) = self.shared.with(|r| r.confirm_buttons(profile));
+        (status.as_str().to_owned(), map.into_iter().collect())
+    }
+
+    /// The active controller's Confirm button for the signed-in profile: "family" | "south" | "east".
     #[zbus(property)]
     fn confirm_button(&self) -> String {
         self.shared.with(|r| r.confirm_button().to_owned())

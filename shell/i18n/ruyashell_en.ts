@@ -1320,7 +1320,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+44"/>
+        <location filename="../qml/ControllerPage.qml" line="+49"/>
         <source>Works</source>
         <translation>Works</translation>
     </message>
@@ -1400,7 +1400,17 @@ This can&apos;t be undone.</translation>
         <translation>Microphone</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+31"/>
+        <source>Could not change the confirm button</source>
+        <translation>Could not change the confirm button</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Try again.</source>
+        <translation>Try again.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>Controller disconnected</source>
         <translation>Controller disconnected</translation>
     </message>
@@ -1425,7 +1435,58 @@ This can&apos;t be undone.</translation>
         <translation>Default</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+12"/>
+        <location line="+20"/>
+        <source>Confirm in menus</source>
+        <translation>Confirm in menus</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <source>As on the controller</source>
+        <translation>As on the controller</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Bottom</source>
+        <translation>Bottom</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Right</source>
+        <translation>Right</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Not available</source>
+        <translation>Not available</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1: %2.</source>
+        <translation>%1: %2.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>On this controller: %1 confirms, %2 goes back.</source>
+        <translation>On this controller: %1 confirms, %2 goes back.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>On this controller:</source>
+        <translation>On this controller:</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>confirms,</source>
+        <translation>confirms,</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>goes back.</source>
+        <translation>goes back.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
         <source>What it can do</source>
         <translation>What it can do</translation>
     </message>
@@ -1544,7 +1605,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllersPane</name>
     <message>
-        <location filename="../qml/ControllersPane.qml" line="+139"/>
+        <location filename="../qml/ControllersPane.qml" line="+131"/>
         <source>No controllers connected.</source>
         <translation>No controllers connected.</translation>
     </message>
@@ -1559,70 +1620,13 @@ This can&apos;t be undone.</translation>
         <translation>Try again</translation>
     </message>
     <message>
-        <location line="+36"/>
-        <location line="+20"/>
-        <source>Confirm button</source>
-        <translation>Confirm button</translation>
-    </message>
-    <message>
-        <location line="-18"/>
-        <source>As on the controller</source>
-        <translation>As on the controller</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Bottom</source>
-        <translation>Bottom</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Right</source>
-        <translation>Right</translation>
-    </message>
-    <message>
-        <location line="+23"/>
-        <source>Could not change the confirm button</source>
-        <translation>Could not change the confirm button</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Try again.</source>
-        <translation>Try again.</translation>
-    </message>
-    <message>
-        <location line="+20"/>
-        <source>On this controller: %1 confirms, %2 goes back.</source>
-        <translation>On this controller: %1 confirms, %2 goes back.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On the keyboard: Enter confirms, Esc goes back.</source>
-        <translation>On the keyboard: Enter confirms, Esc goes back.</translation>
-    </message>
-    <message>
-        <location line="+11"/>
-        <source>On this controller:</source>
-        <translation>On this controller:</translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>confirms,</source>
-        <translation>confirms,</translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>goes back.</source>
-        <translation>goes back.</translation>
-    </message>
-    <message>
-        <location line="+23"/>
+        <location line="+38"/>
         <location line="+24"/>
         <source>Controls in games</source>
         <translation>Controls in games</translation>
     </message>
     <message>
-        <location line="-113"/>
-        <location line="+90"/>
+        <location line="-23"/>
         <source>Not available</source>
         <translation>Not available</translation>
     </message>
@@ -1644,8 +1648,7 @@ This can&apos;t be undone.</translation>
         <translation>Pair a new controller</translation>
     </message>
     <message>
-        <location line="-97"/>
-        <location line="+119"/>
+        <location line="+22"/>
         <source>%1: %2.</source>
         <translation>%1: %2.</translation>
     </message>

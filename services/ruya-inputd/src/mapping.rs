@@ -125,7 +125,7 @@ fn button_key(button: Button, accept: Button) -> NavKey {
     }
 }
 
-/// The "Confirm button" setting of a console profile (06 section 11.2).
+/// The "Confirm in menus" setting of one controller for a console profile (06 section 11.2, RUY-603).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Confirm {
     /// As on the controller: the family's own button (the default).

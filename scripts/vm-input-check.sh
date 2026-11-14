@@ -13,7 +13,10 @@
 # once (seen with busctl monitor), not for stick noise or in route `shell`, not again within 30 s, and once more after them.
 # `confirm` (RUY-40) checks the family's confirm button with a uinput pad announcing Nintendo's vendor
 # id: BTN_EAST gives KEY_ENTER and BTN_SOUTH KEY_ESC on RuyaOS Navigation, `south` swaps them back, `east`
-# gives them to every family, the ConfirmButton property follows, bad modes and accounts are refused. It stops
+# gives them to every family. Per controller (RUY-603): a second pad set to `south` while the first is `east`
+# confirms with its bottom button and the first with its right one, GetConfirmButtons lists both, `family`
+# removes each; the ConfirmButton property is the mode of the pad that pressed last; bad modes, bad device ids,
+# accounts and the old two-argument call are refused. It stops
 # ruya-compositor@tty1 for the block (an Accept must not reach a live Home, RUY-473) and starts it again; run
 # it alone, not inside `check`.
 # `hold` (RUY-479) checks StartTest(device_id, hold_left_stick) with the same pad and the same stopped compositor:
@@ -550,7 +553,7 @@ print(status if not bad else status + ": " + "; ".join(bad))
 
 # RUY-40: the family's own confirm button. A uinput pad announcing Nintendo's vendor id (0x057e) must
 # give BTN_EAST = KEY_ENTER and BTN_SOUTH = KEY_ESC on RuyaOS Navigation; "south" swaps them back, "east"
-# gives every family the right button. An Accept must not reach a live Home (it launches an app,
+# gives every family the right button; per controller since RUY-603 (a second pad keeps its own mode). An Accept must not reach a live Home (it launches an app,
 # RUY-473), so the compositor (and with it the shell) is stopped for the block and restarted by the
 # EXIT trap; the probe holds the route `shell` itself. Not part of `check` (it stops the screen).
 confirm_restore() {
@@ -558,7 +561,7 @@ confirm_restore() {
 }
 
 confirm_check() {
-    echo "--- the family's confirm button (RUY-40)"
+    echo "--- the family's confirm button, per controller (RUY-40, RUY-603)"
     stopped_shell_probe confirm
 }
 

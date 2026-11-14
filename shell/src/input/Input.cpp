@@ -35,7 +35,20 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
             send();
         m_backend->refreshDevices();
         m_backend->readConfirmButton();
+        refreshConfirmButtons();
     });
+    connect(m_backend.get(), &InputBackend::confirmButtonsRead, this,
+            [this](const QString &profile, const QString &status, const QVariantMap &buttons) {
+                if (profile != m_profile)
+                    return;                       // asked for the profile before a switch
+                const bool ok = status == QLatin1String("ok");
+                if (!ok)
+                    qInfo("ruya-shell: Input1 GetConfirmButtons answered %s", qPrintable(status));
+                m_confirmsStored = ok ? buttons : QVariantMap();
+                const bool availabilityChanged = ok != m_confirmsAvailable;
+                m_confirmsAvailable = ok;
+                showConfirmButtons(availabilityChanged);
+            });
     connect(m_backend.get(), &InputBackend::confirmButtonRead, this, [this](bool ok, const QString &mode) {
         const QString next = ok ? mode : QStringLiteral("family");
         if (ok == m_confirmAvailable && next == m_confirm)
@@ -74,18 +87,60 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
     connect(m_backend.get(), &InputBackend::profilesChanged, this, &Input::profilesChanged);
     m_backend->refreshDevices();
     m_backend->readConfirmButton();
+    refreshConfirmButtons();
 }
 
 Input::~Input() = default;
 
-void Input::setConfirmButton(const QString &mode)
+// What the rows show: the service's choices with every change still on its way on top, so a read
+// that answers before a set does not take the new value back.
+void Input::showConfirmButtons(bool force)
 {
-    if (mode == m_confirm && m_confirmAvailable)
+    QVariantMap next = m_confirmsStored;
+    for (auto it = m_confirmsWanted.cbegin(); it != m_confirmsWanted.cend(); ++it) {
+        if (it.value() == QLatin1String("family"))
+            next.remove(it.key());
+        else
+            next.insert(it.key(), it.value());
+    }
+    if (!force && next == m_confirms)
         return;
-    m_previousConfirm = m_confirm;
-    m_confirm = mode;                 // shown at once; the answer confirms or puts the old one back
-    emit confirmButtonChanged();
-    callProfile(QStringLiteral("SetConfirmButton"), {{QStringLiteral("profile"), m_profile}, {QStringLiteral("mode"), mode}},
+    m_confirms = next;
+    emit confirmButtonsChanged();
+}
+
+void Input::forgetConfirmButtons()
+{
+    const bool had = !m_confirms.isEmpty() || m_confirmsAvailable;
+    m_confirms.clear();
+    m_confirmsStored.clear();
+    m_confirmsWanted.clear();
+    m_confirmsInFlight.clear();
+    m_confirmsAvailable = false;
+    if (had)
+        emit confirmButtonsChanged();
+}
+
+void Input::refreshConfirmButtons()
+{
+    if (m_profile.isEmpty()) {
+        forgetConfirmButtons();           // nobody signed in: no choices to show
+        return;
+    }
+    m_backend->readConfirmButtons(m_profile);
+}
+
+void Input::setConfirmButton(const QString &deviceId, const QString &mode)
+{
+    const QString shown = m_confirms.value(deviceId, QStringLiteral("family")).toString();
+    if (mode == shown && m_confirmsAvailable)
+        return;
+    // Shown at once; the answer confirms it or puts the stored value back.
+    m_confirmsWanted.insert(deviceId, mode);
+    m_confirmsInFlight[deviceId] += 1;
+    showConfirmButtons(false);
+    callProfile(QStringLiteral("SetConfirmButton"),
+                {{QStringLiteral("profile"), m_profile}, {QStringLiteral("device"), deviceId}, {QStringLiteral("mode"), mode}},
                 Purpose::Plain);
 }
 
@@ -311,12 +366,26 @@ void Input::onProfileReply(quint64 token, const QString &method, const QVariantM
         break;
     }
     if (method == QLatin1String("SetConfirmButton")) {
-        if (status != QLatin1String("ok")) {
-            qInfo("ruya-shell: Input1 SetConfirmButton answered %s", qPrintable(status));
-            m_confirm = m_previousConfirm;
-            emit confirmButtonChanged();
-            emit confirmButtonRefused(status);
+        if (profile != m_profile)
+            return;                           // a set for the profile before a switch
+        const QString device = args.value(QStringLiteral("device")).toString();
+        const QString mode = args.value(QStringLiteral("mode")).toString();
+        if (m_confirmsInFlight.contains(device) && --m_confirmsInFlight[device] <= 0) {
+            m_confirmsInFlight.remove(device);
+            m_confirmsWanted.remove(device);   // the newest change has its answer
         }
+        const bool ok = status == QLatin1String("ok");
+        if (ok) {
+            if (mode == QLatin1String("family"))
+                m_confirmsStored.remove(device);
+            else
+                m_confirmsStored.insert(device, mode);
+        } else {
+            qInfo("ruya-shell: Input1 SetConfirmButton for %s answered %s", qPrintable(device), qPrintable(status));
+        }
+        showConfirmButtons(false);
+        if (!ok)
+            emit confirmButtonRefused(device, status);
         return;
     }
     if (method == QLatin1String("SaveProfile") && status != QLatin1String("ok"))
@@ -386,11 +455,20 @@ void Input::setRoute(const QString &route, const QString &instance, const QStrin
     if (same && (m_status.isEmpty() || m_status == QLatin1String("ok")))
         return;
     if (!same) {
+        const bool profileChanged = profile != m_profile;
         m_route = route;
         m_instance = instance;
         m_appId = appId;
         m_profile = profile;
         emit routeChanged();
+        if (profileChanged) {
+            // Another profile's choices: the last one's are not shown while its own are on their way.
+            m_confirmsStored.clear();
+            m_confirmsWanted.clear();
+            m_confirmsInFlight.clear();
+            showConfirmButtons(false);
+            refreshConfirmButtons();
+        }
     }
     send();
 }
@@ -497,10 +575,16 @@ void Input::mockUserActive()
         emit mock->userActive();
 }
 
-QString Input::mockConfirmButton(const QString &profile) const
+QString Input::mockConfirmButton(const QString &profile, const QString &deviceId) const
 {
     auto *mock = qobject_cast<MockInputBackend *>(m_backend.get());
-    return mock ? mock->confirmButtonOf(profile) : QString();
+    return mock ? mock->confirmButtonOf(profile, deviceId) : QString();
+}
+
+void Input::mockDelayConfirmButtons(bool delayed)
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        mock->setConfirmButtonsDelayed(delayed);
 }
 
 void Input::mockAddDevice(const QVariantMap &device)

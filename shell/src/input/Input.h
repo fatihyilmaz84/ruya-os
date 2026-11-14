@@ -49,12 +49,20 @@ class Input : public QObject
     // "loading" before the first answer, "ok", or "failed" (the last ListDevices failed).
     Q_PROPERTY(QString devicesState READ devicesState NOTIFY devicesStateChanged)
 
-    // The Confirm button of the signed-in profile (06 section 11.2): "family" (as on the controller)
-    // | "south" (Bottom) | "east" (Right). "family" until the service has answered. Changing it
-    // (setConfirmButton) shows at once; a refusal puts the stored value back.
+    // The Confirm button of the active controller (the pad of the last press) for the signed-in
+    // profile (06 section 11.2, Input1.ConfirmButton, RUY-603): "family" (as on the controller) |
+    // "south" (Bottom) | "east" (Right). "family" until the service has answered. RUY-41's glyphs
+    // follow it.
     Q_PROPERTY(QString confirmButton READ confirmButton NOTIFY confirmButtonChanged)
-    // The service answered the last read of ConfirmButton (false: no Input1, the row is dimmed).
+    // The service answered the last read of ConfirmButton.
     Q_PROPERTY(bool confirmButtonAvailable READ confirmButtonAvailable NOTIFY confirmButtonChanged)
+    // The signed-in profile's Confirm button per controller (Input1.GetConfirmButtons, RUY-603):
+    // device id -> "south" | "east"; a pad that is absent is "family". Read again on a profile
+    // switch and when the service appears. A change (setConfirmButton) shows at once; a refusal
+    // puts the stored value back.
+    Q_PROPERTY(QVariantMap confirmButtons READ confirmButtons NOTIFY confirmButtonsChanged)
+    // The last GetConfirmButtons answered "ok" (false: no Input1, the controller page's row is dimmed).
+    Q_PROPERTY(bool confirmButtonsAvailable READ confirmButtonsAvailable NOTIFY confirmButtonsChanged)
     // The pad of the last press (Input1.ActiveInputChanged) and its family ("xbox", "playstation",
     // "nintendo", "generic", ...); "" until a pad has pressed since the shell started. RUY-41 builds
     // the glyph sets on these two.
@@ -83,11 +91,16 @@ public:
     QString devicesState() const { return m_devicesState; }
     QString confirmButton() const { return m_confirm; }
     bool confirmButtonAvailable() const { return m_confirmAvailable; }
+    QVariantMap confirmButtons() const { return m_confirms; }
+    bool confirmButtonsAvailable() const { return m_confirmsAvailable; }
     QString activeDevice() const { return m_activeDevice; }
     QString activeFamily() const { return m_activeFamily; }
-    // Input1.SetConfirmButton(profile, mode) for the signed-in profile; a refusal (any status but
-    // "ok", or a failed call) is the signal confirmButtonRefused(status).
-    Q_INVOKABLE void setConfirmButton(const QString &mode);
+    // Input1.SetConfirmButton(profile, device, mode) for one controller of the signed-in profile
+    // (RUY-603); a refusal (any status but "ok", or a failed call) is the signal
+    // confirmButtonRefused(deviceId, status).
+    Q_INVOKABLE void setConfirmButton(const QString &deviceId, const QString &mode);
+    // Asks GetConfirmButtons again (a controller page when it opens).
+    Q_INVOKABLE void refreshConfirmButtons();
 
     // Asks ListDevices again (Settings > Controllers' "Try again").
     Q_INVOKABLE void refreshDevices();
@@ -136,8 +149,11 @@ public:
     Q_INVOKABLE void mockActiveInput(const QString &deviceId, const QString &family);
     // The service announces that a pad is being played (UserActive).
     Q_INVOKABLE void mockUserActive();
-    // The mode the mock service holds for a console profile.
-    Q_INVOKABLE QString mockConfirmButton(const QString &profile) const;
+    // The mode the mock service holds for a controller of a console profile ("family" with none).
+    Q_INVOKABLE QString mockConfirmButton(const QString &profile, const QString &deviceId) const;
+    // While true the mock's GetConfirmButtons answers 300 ms late, with what it held when asked
+    // (the late-reply test).
+    Q_INVOKABLE void mockDelayConfirmButtons(bool delayed);
     // Every SetRoute that reached the mock service: [{ route, instance, appId, profile }].
     Q_INVOKABLE QVariantList mockCalls() const;
     Q_INVOKABLE void mockClearCalls();
@@ -187,7 +203,8 @@ signals:
     void devicesChanged();
     void devicesStateChanged();
     void confirmButtonChanged();
-    void confirmButtonRefused(const QString &status);
+    void confirmButtonsChanged();
+    void confirmButtonRefused(const QString &deviceId, const QString &status);
     void activeInputChanged();
     // Someone is playing with a pad in the app in front (Input1.UserActive, RUY-588): the shell's
     // own keys do not see that input. IdleClock counts it.
@@ -225,6 +242,8 @@ private:
     void onProfileReply(quint64 token, const QString &method, const QVariantMap &args, const QVariantMap &reply);
     void finishExport(const QString &status);
     void finishImport(const QString &status, const QStringList &errors = {});
+    void showConfirmButtons(bool force);
+    void forgetConfirmButtons();
     struct Transfer
     {
         bool active = false;
@@ -247,8 +266,12 @@ private:
     QVariantList m_devices;
     QString m_devicesState = QStringLiteral("loading");
     QString m_confirm = QStringLiteral("family");
-    QString m_previousConfirm = QStringLiteral("family");
     bool m_confirmAvailable = false;
+    QVariantMap m_confirms;        // shown: what the service holds, with the changes on their way
+    QVariantMap m_confirmsStored;  // what the service answered or took
+    QHash<QString, QString> m_confirmsWanted;  // device -> the newest mode on its way
+    QHash<QString, int> m_confirmsInFlight;    // device -> SetConfirmButton calls not answered yet
+    bool m_confirmsAvailable = false;
     QString m_activeDevice;
     QString m_activeFamily;
     quint64 m_nextToken = 1;

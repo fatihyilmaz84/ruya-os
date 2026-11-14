@@ -1316,7 +1316,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+44"/>
+        <location filename="../qml/ControllerPage.qml" line="+49"/>
         <source>Works</source>
         <translation>Çalışıyor</translation>
     </message>
@@ -1396,7 +1396,17 @@ Bu geri alınamaz.</translation>
         <translation>Mikrofon</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+31"/>
+        <source>Could not change the confirm button</source>
+        <translation>Onay düğmesi değiştirilemedi</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Try again.</source>
+        <translation>Yeniden dene.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>Controller disconnected</source>
         <translation>Kontrolcü bağlantısı kesildi</translation>
     </message>
@@ -1421,7 +1431,58 @@ Bu geri alınamaz.</translation>
         <translation>Varsayılan</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+12"/>
+        <location line="+20"/>
+        <source>Confirm in menus</source>
+        <translation>Menülerde onay</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <source>As on the controller</source>
+        <translation>Kontrolcüdeki gibi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Bottom</source>
+        <translation>Alttaki</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Right</source>
+        <translation>Sağdaki</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Not available</source>
+        <translation>Kullanılamıyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1: %2.</source>
+        <translation>%1: %2.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>On this controller: %1 confirms, %2 goes back.</source>
+        <translation>Bu kontrolcüde: %1 onaylar, %2 geri gider.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>On this controller:</source>
+        <translation>Bu kontrolcüde:</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>confirms,</source>
+        <translation>onaylar,</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>goes back.</source>
+        <translation>geri gider.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
         <source>What it can do</source>
         <translation>Neler yapabilir</translation>
     </message>
@@ -1540,7 +1601,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllersPane</name>
     <message>
-        <location filename="../qml/ControllersPane.qml" line="+139"/>
+        <location filename="../qml/ControllersPane.qml" line="+131"/>
         <source>No controllers connected.</source>
         <translation>Bağlı kontrolcü yok.</translation>
     </message>
@@ -1555,70 +1616,13 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+36"/>
-        <location line="+20"/>
-        <source>Confirm button</source>
-        <translation>Onay düğmesi</translation>
-    </message>
-    <message>
-        <location line="-18"/>
-        <source>As on the controller</source>
-        <translation>Kontrolcüdeki gibi</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Bottom</source>
-        <translation>Alttaki</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Right</source>
-        <translation>Sağdaki</translation>
-    </message>
-    <message>
-        <location line="+23"/>
-        <source>Could not change the confirm button</source>
-        <translation>Onay düğmesi değiştirilemedi</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Try again.</source>
-        <translation>Yeniden dene.</translation>
-    </message>
-    <message>
-        <location line="+20"/>
-        <source>On this controller: %1 confirms, %2 goes back.</source>
-        <translation>Bu kontrolcüde: %1 onaylar, %2 geri gider.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On the keyboard: Enter confirms, Esc goes back.</source>
-        <translation>Klavyede: Enter onaylar, Esc geri gider.</translation>
-    </message>
-    <message>
-        <location line="+11"/>
-        <source>On this controller:</source>
-        <translation>Bu kontrolcüde:</translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>confirms,</source>
-        <translation>onaylar,</translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>goes back.</source>
-        <translation>geri gider.</translation>
-    </message>
-    <message>
-        <location line="+23"/>
+        <location line="+38"/>
         <location line="+24"/>
         <source>Controls in games</source>
         <translation>Oyunlardaki kontroller</translation>
     </message>
     <message>
-        <location line="-113"/>
-        <location line="+90"/>
+        <location line="-23"/>
         <source>Not available</source>
         <translation>Kullanılamıyor</translation>
     </message>
@@ -1640,8 +1644,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
     <message>
-        <location line="-97"/>
-        <location line="+119"/>
+        <location line="+22"/>
         <source>%1: %2.</source>
         <translation>%1: %2.</translation>
     </message>

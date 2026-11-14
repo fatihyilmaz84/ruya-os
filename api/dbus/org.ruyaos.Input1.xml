@@ -8,7 +8,8 @@
   RouteChanged since RUY-3 (T-367), UserActive since RUY-588, GetCapabilities and the button test (StartTest, StopTest,
   TestInput, TestEnded) since RUY-39 (T-368), and the controller profile members (ListProfiles,
   GetProfile, SaveProfile, ValidateProfile, DeleteProfile, AssignProfile for the global scope,
-  GetEffectiveProfile, ProfilesChanged) since RUY-42 (T-369); every other member below is still
+  GetEffectiveProfile, ProfilesChanged) since RUY-42 (T-369), SetConfirmButton, ConfirmButton and
+  ActiveInputChanged since RUY-40 (per controller, with GetConfirmButtons, since RUY-603); every other member below is still
   DRAFT and not served (UI ownership T-397..T-399, platform and game assignments T-370 / RUY-43,
   OwnershipMode T-371). The design is docs/specs/06-input.md. Each task may change what it builds
   here (contracts are drafts until the first release, root CLAUDE.md); RUY-403's served-vs-XML
@@ -243,19 +244,34 @@
       <arg name="family" type="s"/>
     </signal>
     <!-- mode: "family" (as on the controller, default) | "south" | "east" (06 §11.2). Per console
-         profile (`profile`, which must be a profile account), kept in ruya-input's state directory
-         and applied from the next press on; a button held now is released as it was pressed.
-         It changes the shell's navigation keys only (accept and back); the virtual pads stay
-         positional. Status: "ok", "invalid" (not one of the modes), "unknown-profile" (not a
-         profile account), "failed" (not written; nothing changed). -->
+         profile (`profile`, which must be a profile account) and per controller (`device`, the
+         pad's stable id of the device record, as Controls in games uses it; the pad need not be
+         connected) (RUY-603), kept in ruya-input's state directory and applied from that pad's next
+         press on; a button held now is released as it was pressed. "family" removes the pad's
+         choice (a pad with none is "family"). It changes the shell's navigation keys only (accept
+         and back); the virtual pads stay positional. Status: "ok", "invalid" (not one of the
+         modes, or not a device id), "unknown-profile" (not a profile account), "failed" (not
+         written; nothing changed). -->
     <method name="SetConfirmButton">
       <arg name="profile" type="s" direction="in"/>
+      <arg name="device" type="s" direction="in"/>
       <arg name="mode" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
     </method>
-    <!-- ConfirmButton: the mode of the signed-in profile (the route's), "family" with none; it
-         changes with PropertiesChanged on SetConfirmButton for that profile and on a profile
-         switch. -->
+    <!-- The console profile's choices, device id -> mode ("south" | "east"; a pad with no choice
+         is absent and is "family"), for the controller pages (RUY-603). Status: "ok",
+         "unknown-profile" (not a profile account), "failed" (not read; buttons empty). -->
+    <method name="GetConfirmButtons">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="buttons" type="a{ss}" direction="out"/>
+    </method>
+    <!-- ConfirmButton: the mode of the active controller (the pad of the last press, as
+         ActiveInputChanged reports it) for the signed-in profile (the route's); "family" with no
+         profile, no active pad or no choice for that pad. PropertiesChanged is sent when the value
+         may have changed: on SetConfirmButton for the active pad, on a profile switch, and when
+         another pad becomes the active one (or the active pad goes) with another mode. The
+         shell's accept and back glyphs follow it (RUY-41). -->
     <property name="ConfirmButton" type="s" access="read"/>
 
     <!-- Controller profiles (T-369 built; platform and game assignments T-370), stored per console

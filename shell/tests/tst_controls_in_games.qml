@@ -191,8 +191,8 @@ Item {
         function test_the_settings_row_opens_the_page_and_back_returns() {
             openPaneOnControls()
             compare(find("paneControllers").focusableRows().map(r => r.objectName),
-                    ["pad_" + ds, "pad_" + pro, "pad_" + xbox, "rowConfirmButton", "rowControlsInGames", "rowPadsPair"],
-                    "after the pads and the Confirm button (RUY-40), before Pair")
+                    ["pad_" + ds, "pad_" + pro, "pad_" + xbox, "rowControlsInGames", "rowPadsPair"],
+                    "after the pads, before Pair (the Confirm button is on each controller page, RUY-603)")
             tryCompare(find("rowControlsInGames"), "value", "Default")
             compare(hintVerbs(), "A Open|B Back")
             keyClick(Qt.Key_Return)
@@ -1147,8 +1147,7 @@ Item {
             tryCompare(Input, "devicesState", "failed")
             tryVerify(() => find("rowPadsRetry").activeFocus, 2000)
             compare(rowNames("paneControllers"),
-                    ["rowPadsRetry", "rowConfirmButtonUnavailable", "rowControlsInGames", "rowPadsPair"])
-            keyClick(Qt.Key_Down)
+                    ["rowPadsRetry", "rowControlsInGames", "rowPadsPair"])
             keyClick(Qt.Key_Down)
             verify(find("rowControlsInGames").activeFocus)
             verify(find("rowControlsInGames").dimmed)

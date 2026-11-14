@@ -6,7 +6,9 @@ import RuyaShell
 // the way to its Button test and to Controls in games (RUY-465). Opened with params { id } (Input1's stable id). Left, not focusable:
 // the family glyph at `cardIconSize`, the name, the kind in words, the connection, the battery and
 // the player (when the record has one). Right, a pane: "Button test" (focus first), "Controls in games"
-// (value "Default" / "Changed"; opens ControlsPage for this pad), then the group
+// (value "Default" / "Changed"; opens ControlsPage for this pad), "Confirm in menus" (RUY-603: this pad's
+// "As on the controller" / "Bottom" / "Right" for the signed-in profile, with a note naming the buttons
+// that confirm and go back on it; dimmed "Not available" without Input1), then the group
 // "What it can do" with one read-only row per capability the model has (Input1.GetCapabilities, in
 // descriptor order; buttons, sticks and the D-pad are one row, the battery is in the left column),
 // each saying "Works", "Not passed to games", "Not available now" or "Not supported yet" (06 §4.3).
@@ -20,10 +22,13 @@ Page {
     readonly property var current: ControllerPads.controllers().find(p => p.id === padId) ?? null
     property var pad: ({ id: padId, name: "", family: "", connection: "", percent: -1, state: "", slot: 0 })
     onCurrentChanged: if (current) pad = current
+    // This pad's Confirm button for the signed-in profile (RUY-603): "family" | "south" | "east".
+    readonly property string confirmMode: String(Input.confirmButtons[padId] ?? "family")
     Component.onCompleted: {
         if (current)
             pad = current
         Input.requestCapabilities(padId)
+        Input.refreshConfirmButtons()
         GameControls.refresh()
     }
 
@@ -89,6 +94,10 @@ Page {
             Qt.callLater(body.reflow)
         }
         function onDevicesChanged() { page.checkGone() }
+        function onConfirmButtonRefused(deviceId) {
+            if (deviceId === page.padId)
+                Notifications.show(qsTr("Could not change the confirm button"), "error", "", "", qsTr("Try again."))
+        }
     }
 
     // The pad disconnected: the page closes (once), with a toast that names it. A page that is
@@ -175,6 +184,94 @@ Page {
             label: qsTr("Controls in games")
             value: GameControls.changedFor(page.pad) ? qsTr("Changed") : qsTr("Default")
             onActivated: page.openRequested("controls", ({ id: page.padId }))
+        }
+
+        // Confirm in menus (RUY-603, 06 §11.2): this pad's own choice for the signed-in profile
+        // (Input.confirmButtons; Left/Right apply it at once through Input1.SetConfirmButton, a refusal
+        // puts the stored value back and toasts); dimmed "Not available" without Input1.
+        ChoiceRow {
+            id: confirmRow
+            objectName: "rowConfirmButton"
+            visible: Input.confirmButtonsAvailable
+            u: page.u
+            label: qsTr("Confirm in menus")
+            options: [
+                { value: "family", label: qsTr("As on the controller") },
+                { value: "south", label: qsTr("Bottom") },
+                { value: "east", label: qsTr("Right") },
+            ]
+            value: page.confirmMode
+            // The row shows the stored value: Input.confirmButtons changes at once and goes back on a refusal.
+            onEdited: v => {
+                Input.setConfirmButton(page.padId, v)
+                confirmRow.value = Qt.binding(() => page.confirmMode)
+            }
+            accessibleValue: currentLabel + ". " + confirmNote.sentence
+        }
+        SettingRow {
+            objectName: "rowConfirmButtonUnavailable"
+            kind: "item"
+            visible: !Input.confirmButtonsAvailable
+            dimmed: true
+            u: page.u
+            label: qsTr("Confirm in menus")
+            value: qsTr("Not available")
+            onActivated: Notifications.show(qsTr("%1: %2.").arg(label).arg(value), "info")
+        }
+
+        // The note under the row: which buttons confirm and go back on this pad, after its setting.
+        Item {
+            id: confirmNote
+            objectName: "confirmNote"
+            visible: confirmRow.visible
+            width: parent ? parent.width : 0
+            height: visible ? noteRow.height : 0
+
+            // Accept is the right button (east) on a Nintendo pad as it is, and with "Right" on every pad.
+            readonly property bool acceptEast: page.confirmMode === "east"
+                                               || (page.confirmMode === "family" && page.pad.family === "nintendo")
+            // Position letters (A south, B east) until RUY-41's glyph sets.
+            readonly property string acceptLetter: acceptEast ? "B" : "A"
+            readonly property string backLetter: acceptEast ? "A" : "B"
+            readonly property string sentence: qsTr("On this controller: %1 confirms, %2 goes back.").arg(acceptLetter).arg(backLetter)
+
+            Row {
+                id: noteRow
+                objectName: "confirmNoteRow"
+                spacing: Theme.spaceXs * page.u
+                leftPadding: Theme.spaceL * page.u
+                y: -4 * page.u                 // 4 u closer to its row than the row gap (04 §5)
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: qsTr("On this controller:")
+                    color: Theme.text
+                    font.pixelSize: Theme.typeCaption * page.u
+                }
+                ButtonGlyph {
+                    objectName: "confirmNoteAccept"
+                    anchors.verticalCenter: parent.verticalCenter
+                    u: page.u
+                    button: confirmNote.acceptLetter
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: qsTr("confirms,")
+                    color: Theme.text
+                    font.pixelSize: Theme.typeCaption * page.u
+                }
+                ButtonGlyph {
+                    objectName: "confirmNoteBack"
+                    anchors.verticalCenter: parent.verticalCenter
+                    u: page.u
+                    button: confirmNote.backLetter
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: qsTr("goes back.")
+                    color: Theme.text
+                    font.pixelSize: Theme.typeCaption * page.u
+                }
+            }
         }
 
         GroupLabel {
