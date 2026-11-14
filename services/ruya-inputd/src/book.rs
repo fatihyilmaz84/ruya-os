@@ -928,7 +928,10 @@ mod tests {
     #[test]
     fn the_controls_prefix_is_for_global_profiles() {
         let game = |id: &str| {
-            profile(id, "").replace(r#"{"type":"global"}"#, r#"{"type":"game","game_id":"quake"}"#)
+            profile(id, "").replace(
+                r#"{"type":"global"}"#,
+                r#"{"type":"game","game_id":"quake"}"#,
+            )
         };
         let (status, errors) = Book::validate(&game("controls-device-x"));
         assert_eq!(status, Status::Invalid);
@@ -939,7 +942,10 @@ mod tests {
         let mut b = book();
         let (status, _, errors) = b.save("p1", &game("controls-device-x"));
         assert_eq!((status, errors.len()), (Status::Invalid, 1));
-        assert_eq!(b.get("p1", "controls-device-x"), Err(Status::UnknownProfile));
+        assert_eq!(
+            b.get("p1", "controls-device-x"),
+            Err(Status::UnknownProfile)
+        );
         assert_eq!(Book::validate(&game("my-quake")).0, Status::Ok);
         assert_eq!(Book::validate(&profile("controls-all", "")).0, Status::Ok);
         assert_eq!(b.save("p1", &profile("controls-all", "")).0, Status::Ok);
