@@ -41,12 +41,14 @@ Item {
 
                 readonly property string verb: modelData.text
 
+                // Each glyph carries its own action and family, so no glyph reads the hint row while
+                // the bar's model changes and the rows go.
                 Repeater {
-                    model: hint.actions
+                    model: hint.actions.map(a => ({ action: a, family: hint.modelData.family ?? "" }))
                     delegate: ButtonGlyph {
-                        required property string modelData
-                        action: modelData
-                        family: hint.modelData.family ?? Input.activeFamily
+                        required property var modelData
+                        action: modelData.action
+                        family: modelData.family !== "" ? modelData.family : Input.activeFamily
                         u: bar.u
                     }
                 }
