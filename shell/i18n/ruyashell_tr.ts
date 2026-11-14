@@ -3193,8 +3193,8 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>sound playing (the screen saver can still start)</source>
-        <translation>ses çalıyor (ekran koruyucu yine de başlayabilir)</translation>
+        <source>audio playing</source>
+        <translation>ses çalıyor</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -3233,7 +3233,12 @@ Bu geri alınamaz.</translation>
         <translation>Uyku bu konsolda henüz kullanılamıyor</translation>
     </message>
     <message>
-        <location line="-24"/>
+        <location line="+39"/>
+        <source>Sound doesn&apos;t stop the screen saver.</source>
+        <translation>Ses, ekran koruyucuyu engellemez.</translation>
+    </message>
+    <message>
+        <location line="-63"/>
         <source>Screen saver</source>
         <translation>Ekran koruyucu</translation>
     </message>
@@ -4173,7 +4178,7 @@ Bu geri alınamaz.</translation>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+354"/>
+        <location line="+358"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -4280,7 +4285,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1697"/>
+        <location line="-1701"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -4311,7 +4316,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1415"/>
+        <location line="+1419"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
