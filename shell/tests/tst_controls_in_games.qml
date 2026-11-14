@@ -1072,6 +1072,7 @@ Item {
             tryCompare(tc.shell, "currentPage", "controls")
             // RUY-572: the page after an edit: Applies to = This DualSense, a Remap count.
             tryCompare(GameControls, "appliesTo", "device")
+            focusRow("controlsBody", "rowAppliesTo")
             clearToasts()
             settle()
             grabImage(tc.shell).save(dir + "28-controls-edited-" + lang + suffix + ".png")
