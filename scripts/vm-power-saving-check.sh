@@ -37,7 +37,7 @@
 #             scripts/vm-input-probe.py next to this script. Both the compositor unit and ruya-inputd get
 #             RUYA_IDLE_DIVISOR=60 (saver at ~10 s, the 30 s UserActive gap becomes 0.5 s); a profile is signed
 #             in from the guest; the probe holds route `app` and presses a uinput pad every 2 s for 25 s: the
-#             journal must show no "screen saver on" meanwhile, and the line within ~20 s after the presses
+#             journal must show no "screen saver on" meanwhile, and the line within 40 s after the presses
 #             stop. The drop-ins are removed afterwards. Needs the shell running and nobody else pressing.
 # Hardware (the Dell, not this script): the DualSense disconnects after the Controllers-turn-off time and
 # reconnects on a button press; a TV's re-sync time after display off is recorded by hand.
@@ -329,7 +329,7 @@ padactive_check() {
         journalctl -b -q -o cat --since "@$restarted" | grep -q 'ruya-compositor: up' && break
         sleep 1
     done
-    sleep 5
+    sleep 1
     psvc=org.ruyaos.Profiles1
     ppath=/org/ruyaos/Profiles1
     me="$(busctl --system call $psvc $ppath $psvc ListProfiles | grep -o '"p[0-9]*"' | tr -d '"' | head -n 1)"
@@ -341,9 +341,14 @@ padactive_check() {
         case "$out" in 'suu "ok"'*) ok "signed $me in";; *) bad "SwitchTo $me: $out"; me="";; esac
     fi
     if [ -n "$me" ]; then
-        sleep 3
+        sleep 1
+        # The saver is 10 s away; the probe's first press comes at once. `start` is taken when it has the route.
+        python3 "$here/vm-input-probe.py" playing --profile "$me" --seconds 25 --every 2 > /var/tmp/vm-playing.log 2>&1 &
+        probepid=$!
+        for _ in $(seq 1 100); do grep -q 'route app' /var/tmp/vm-playing.log 2>/dev/null && break; sleep 0.1; done
         start="$(date +%s)"
-        python3 "$here/vm-input-probe.py" playing --profile "$me" --seconds 25 --every 2 || bad "the probe failed"
+        wait "$probepid" || bad "the probe failed (route not ok, or no UserActive seen)"
+        cat /var/tmp/vm-playing.log
         stopped="$(date +%s)"
         during="$(journalctl -b -q -o cat --since "@$start" --until "@$stopped" | grep -c 'screen saver on')"
         [ "$during" = 0 ] && ok "no 'screen saver on' while the pad was played for 25 s (saver time is 10 s)" || bad "$during 'screen saver on' line(s) while the pad was played"

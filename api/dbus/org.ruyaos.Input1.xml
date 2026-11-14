@@ -204,11 +204,11 @@
     <!-- Someone is playing (RUY-588). While the route is "app" the pads' input goes to the game's
          virtual pads and the shell sees none of it, so its idle clock would run on during play.
          ruya-inputd sends this when a pad press, or a stick or trigger moved past a small threshold
-         (a quarter of a stick's range, a tenth of a trigger's), reached the app in front. It
+         (a quarter of a stick's range, a tenth of a trigger's), reached the app route (any pad, also one that is not the profile's). It
          carries nothing (no device, no button: it is not a key logger) and is sent at most once
          per 30 s, so the bus stays quiet; the idle clock counts in minutes. In the other routes
          pad input arrives as navigation keys, which the shell counts itself, so it is not sent.
-         Only the shell receives it (the bus policy of this interface, unchanged). The shell
+         The payload is empty, so whoever can match the broadcast learns only that someone plays. The shell
          ignores it while the screen saver or the dark screen is up: the pad's press wakes it as a
          key does (the saver puts the route on "overlay", so the game does not get that press). -->
     <signal name="UserActive"/>

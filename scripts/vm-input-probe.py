@@ -711,14 +711,24 @@ def cmd_playing(args):
             print("FAIL: the uinput pad has no node", flush=True)
             sys.exit(1)
         bus = Bus()
+        mon, count = signal_counter()
+        time.sleep(0.5)
         status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-4", "org.ruyaos.VmCheck", args.profile])
         print(f"route app: {status}", flush=True)
+        if status != "ok":
+            print(f"FAIL: SetRoute app answered {status}", flush=True)
+            sys.exit(1)
         end = time.monotonic() + args.seconds
         while time.monotonic() < end:
             pad.emit(EV_KEY, BTN_EAST, 1)
             pad.emit(EV_KEY, BTN_EAST, 0)
             time.sleep(args.every)
         print("stopped pressing", flush=True)
+        mon.terminate()
+        if count() < 1:
+            print("FAIL: no UserActive was seen: the presses did not reach the app route", flush=True)
+            sys.exit(1)
+        print(f"UserActive seen {count()} time(s)", flush=True)
     finally:
         pad.close()
 
