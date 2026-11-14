@@ -63,6 +63,14 @@ public:
             m_forcedStatus.insert(method, status);
     }
 
+    // Like setProfileStatus, but only the next call of `method` is answered so (RUY-571).
+    void setProfileStatusOnce(const QString &method, const QString &status)
+    {
+        setProfileStatus(method, status);
+        if (!status.isEmpty())
+            m_forcedOnce.insert(method);
+    }
+
     // Tests (RUY-39). A pad connects (a device record; `capabilities` a list of
     // { name, hardware, driver, available, output }, else none) or changes (same id), or goes.
     void addDevice(const QVariantMap &device);
@@ -124,5 +132,6 @@ private:
     MockInputProfiles m_profiles;
     QVariantList m_profileCalls;
     QHash<QString, QString> m_forcedStatus;
+    QSet<QString> m_forcedOnce;
     QHash<QString, QString> m_confirm;
 };

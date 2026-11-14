@@ -344,6 +344,12 @@ void Input::mockResetProfiles()
         mock->resetProfiles();
 }
 
+void Input::mockSetProfileStatusOnce(const QString &method, const QString &status)
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        mock->setProfileStatusOnce(method, status);
+}
+
 void Input::mockSetProfileStatus(const QString &method, const QString &status)
 {
     if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))

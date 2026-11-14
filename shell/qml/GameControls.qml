@@ -408,11 +408,15 @@ QtObject {
 
     function fail() {
         const tag = inFlight ? inFlight.tag : ""
+        const failedPad = inFlight ? inFlight.padKey : padKey
         phase = ""
         inFlight = null
-        queue = []
-        debounceTimer.stop()
-        doc = stored            // every row shows what the service has again
+        // Only this pad's waiting change goes with the refusal; another pad's is saved next.
+        queue = queue.filter(q => q.padKey !== failedPad)
+        if (queue.length === 0)
+            debounceTimer.stop()
+        if (!queue.some(q => q.padKey === padKey))
+            doc = stored        // every row shows what the service has again
         if (exportVolume !== "") {
             exportVolume = ""
             Notifications.show(qsTr("Could not save to the USB drive"), "error", "", "", qsTr("Try again."))
@@ -421,6 +425,8 @@ QtObject {
         }
         failed(tag)
         refresh()
+        if (queue.length > 0 && exportVolume === "")
+            flush()
     }
 
     // Everything back to the default for the pad (and the pads of its slot): its own stored

@@ -453,6 +453,22 @@ Item {
             compare(chainOf(pro)[0], proOwn)
         }
 
+        // RUY-571: a refused save drops that pad's waiting change only; the other pad's is saved next.
+        function test_a_refused_save_keeps_the_other_pads_waiting_change() {
+            const proOwn = "controls-device-" + pro
+            Input.mockClearProfileCalls()
+            openStick("left")                            // the DualSense
+            keyClick(Qt.Key_Right)
+            verify(GameControls.busy, "the DualSense's change waits")
+            GameControls.show(pro)
+            GameControls.setStick("left", "outer_deadzone", 0.05, false)
+            Input.mockSetProfileStatusOnce("ValidateProfile", "invalid")    // the first save is refused
+            tryVerify(() => hasToast("Could not save the change / Try again."), 3000, toastTexts().join("; "))
+            tryVerify(() => savesOf(proOwn).length === 1 || savesOf(dsOwn).length === 1, 3000, "the other pad's change is saved")
+            tryVerify(() => !GameControls.busy, 3000)
+            compare(savesOf(proOwn).length + savesOf(dsOwn).length, 1, "only the refused pad's change is lost")
+        }
+
         function confirmReset() {
             focusRow("controlsBody", "rowReset")
             keyClick(Qt.Key_Return)
