@@ -34,6 +34,8 @@ QtObject {
     property var slept: () => MonotonicClock.sleptMs()
     // The time of day in ms since the epoch, for the screen saver's clock only. Replaced in tests.
     property var wallNow: () => Date.now()
+    // Where the saver's two journal lines go (RUY-563); tests replace it to read them.
+    property var log: text => console.info(text)
     // Input within this long after the screen came back from off only wakes: the TV is still
     // re-syncing and a press then is as likely a bounce as a command. To be tuned on the Dell.
     readonly property int wakeGapMs: 1000
@@ -102,7 +104,7 @@ QtObject {
 
     // Input of any kind (a key, a button, the pointer, the Guide button). The first one after the
     // saver or the dark screen only wakes: KeyRouter has already eaten it (`swallowInput`).
-    function noteInput() {
+    function noteInput(reason) {
         lastInputMs = now()
         lastEvalMs = lastInputMs
         if (padReported) {
@@ -110,16 +112,17 @@ QtObject {
             Bluetooth.reportIdle(0, padAfter, false)
         }
         if (stage !== "active")
-            wake()
+            wake(typeof reason === "string" ? reason : "input")
         idleSeconds = 0
         quietSeconds = 0
         inputNoted()
         schedule()
     }
 
-    function wake() {
+    function wake(reason) {
         const was = stage
         stage = "active"
+        log("ruya-shell: screen saver off (" + reason + ", was " + was + ")")
         if (was === "off" || was === "sleep") {
             ScreenPower.setOn(true)
             wakeGuardUntilMs = now() + wakeGapMs
@@ -150,7 +153,7 @@ QtObject {
         const resumed = sleptNow - lastSleptMs > 1000
         lastSleptMs = sleptNow
         if (resumed || t - lastEvalMs > gapMs) {
-            noteInput()
+            noteInput("resume")
             return
         }
         if (wakeGuard && t >= wakeGuardUntilMs)
@@ -177,8 +180,10 @@ QtObject {
     }
 
     function enter(target) {
-        if (stage === "active")
+        if (stage === "active") {
             saverStarted()          // the first step away from active, whichever stage it lands on
+            log("ruya-shell: screen saver on (idle " + idleSeconds + " s, stage " + target + ")")
+        }
         const from = stage
         stage = target
         if (target === "off" || target === "sleep") {
