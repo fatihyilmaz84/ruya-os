@@ -2418,6 +2418,14 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>HubIconRow</name>
+    <message>
+        <location filename="../qml/HubIconRow.qml" line="+45"/>
+        <source>%1, new</source>
+        <translation>%1, new</translation>
+    </message>
+</context>
+<context>
     <name>HubPause</name>
     <message>
         <location filename="../qml/HubPause.qml" line="+125"/>
@@ -2858,12 +2866,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+323"/>
+        <location line="+313"/>
         <source>Clear all</source>
         <translation>Clear all</translation>
     </message>
     <message>
-        <location line="-321"/>
+        <location line="-311"/>
         <source>Toggle</source>
         <translation>Toggle</translation>
     </message>
@@ -2888,33 +2896,7 @@ This can&apos;t be undone.</translation>
         <translation>Clear</translation>
     </message>
     <message>
-        <location line="+9"/>
-        <source>Just now</source>
-        <translation>Just now</translation>
-    </message>
-    <message numerus="yes">
-        <location line="+2"/>
-        <source>%n min ago</source>
-        <translation>
-            <numerusform>%n min ago</numerusform>
-            <numerusform>%n min ago</numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="+5"/>
-        <source>Yesterday</source>
-        <translation>Yesterday</translation>
-    </message>
-    <message numerus="yes">
-        <location line="+1"/>
-        <source>%n days ago</source>
-        <translation>
-            <numerusform>%n day ago</numerusform>
-            <numerusform>%n days ago</numerusform>
-        </translation>
-    </message>
-    <message>
-        <location line="+265"/>
+        <location line="+272"/>
         <location line="+57"/>
         <source>Notifications</source>
         <translation>Notifications</translation>
@@ -2961,9 +2943,139 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Notifications</name>
     <message>
-        <location filename="../qml/Notifications.qml" line="+143"/>
+        <location filename="../qml/Notifications.qml" line="+162"/>
+        <source>Just now</source>
+        <translation>Just now</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+2"/>
+        <source>%n min ago</source>
+        <translation>
+            <numerusform>%n min ago</numerusform>
+            <numerusform>%n min ago</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Yesterday</source>
+        <translation>Yesterday</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%n days ago</source>
+        <translation>
+            <numerusform>%n day ago</numerusform>
+            <numerusform>%n days ago</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+41"/>
         <source>%1 is in Notifications</source>
         <translation>%1 is in Notifications</translation>
+    </message>
+</context>
+<context>
+    <name>NotificationsPane</name>
+    <message>
+        <location filename="../qml/NotificationsPane.qml" line="+21"/>
+        <source>System</source>
+        <translation>System</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Updates</source>
+        <translation>Updates</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Devices</source>
+        <translation>Devices</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Store and downloads</source>
+        <translation>Store and downloads</translation>
+    </message>
+    <message>
+        <location line="+30"/>
+        <source>%1 s</source>
+        <translation>%1 s</translation>
+    </message>
+    <message>
+        <location line="+54"/>
+        <source>Quiet mode</source>
+        <translation>Quiet mode</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Quiet hours until %1</source>
+        <translation>Quiet hours until %1</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Don&apos;t interrupt games</source>
+        <translation>Don&apos;t interrupt games</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Over a game, only urgent notifications show.</source>
+        <translation>Over a game, only urgent notifications show.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Quiet hours</source>
+        <translation>Quiet hours</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Off</source>
+        <translation>Off</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>On</source>
+        <translation>On</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Quiet from</source>
+        <translation>Quiet from</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Quiet until</source>
+        <translation>Quiet until</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Show each for</source>
+        <translation>Show each for</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Notification sounds</source>
+        <translation>Notification sounds</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Show notifications from</source>
+        <translation>Show notifications from</translation>
+    </message>
+    <message>
+        <location line="+21"/>
+        <location line="+9"/>
+        <source>Clear history</source>
+        <translation>Clear history</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>Clear the notification history?</source>
+        <translation>Clear the notification history?</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Pinned notifications stay until what they are about is dealt with.</source>
+        <translation>Pinned notifications stay until what they are about is dealt with.</translation>
     </message>
 </context>
 <context>
@@ -3570,37 +3682,39 @@ This can&apos;t be undone.</translation>
 <context>
     <name>QuickMenu</name>
     <message>
-        <location filename="../qml/QuickMenu.qml" line="+372"/>
+        <location filename="../qml/QuickMenu.qml" line="+448"/>
         <source>Bluetooth</source>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="-96"/>
-        <location line="+175"/>
+        <location line="-164"/>
+        <location line="+245"/>
         <source>Mute</source>
         <translation>Mute</translation>
     </message>
     <message>
-        <location line="-174"/>
+        <location line="-244"/>
         <location line="+13"/>
         <location line="+21"/>
+        <location line="+23"/>
         <source>Off</source>
         <translation>Off</translation>
     </message>
     <message>
-        <location line="+401"/>
+        <location line="+455"/>
         <source>Not connected</source>
         <translation>Not connected</translation>
     </message>
     <message>
-        <location line="-435"/>
+        <location line="-512"/>
         <location line="+13"/>
         <location line="+21"/>
+        <location line="+23"/>
         <source>On</source>
         <translation>On</translation>
     </message>
     <message>
-        <location line="-228"/>
+        <location line="-254"/>
         <source>Could not switch the audio output.</source>
         <translation>Could not switch the audio output.</translation>
     </message>
@@ -3610,7 +3724,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not switch the microphone.</translation>
     </message>
     <message>
-        <location line="+186"/>
+        <location line="+189"/>
         <source>Audio</source>
         <translation>Audio</translation>
     </message>
@@ -3640,7 +3754,41 @@ This can&apos;t be undone.</translation>
         <translation>Update every</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+19"/>
+        <source>Notifications</source>
+        <translation>Notifications</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Quiet mode</source>
+        <translation>Quiet mode</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Quiet hours until %1</source>
+        <translation>Quiet hours until %1</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>No notifications</source>
+        <translation>No notifications</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Clear all</source>
+        <translation>Clear all</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+3"/>
+        <source>See all (%n)</source>
+        <translation>
+            <numerusform>See all (%n)</numerusform>
+            <numerusform>See all (%n)</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <location line="+86"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
@@ -3660,20 +3808,20 @@ This can&apos;t be undone.</translation>
         <translation>%1 s</translation>
     </message>
     <message>
-        <location line="+67"/>
-        <location line="+16"/>
+        <location line="+69"/>
+        <location line="+23"/>
         <location line="+16"/>
         <source>Resume</source>
         <translation>Resume</translation>
     </message>
     <message>
-        <location line="-30"/>
-        <location line="+21"/>
+        <location line="-37"/>
+        <location line="+28"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="-16"/>
+        <location line="-23"/>
         <source>Adjust</source>
         <translation>Adjust</translation>
     </message>
@@ -3694,12 +3842,19 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+11"/>
+        <location line="+4"/>
+        <location line="+14"/>
         <source>Open</source>
         <translation>Open</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="-14"/>
+        <location line="+2"/>
+        <source>Clear</source>
+        <translation>Clear</translation>
+    </message>
+    <message>
+        <location line="+23"/>
         <source>Home</source>
         <translation>Home</translation>
     </message>
@@ -3709,28 +3864,28 @@ This can&apos;t be undone.</translation>
         <translation>Close game</translation>
     </message>
     <message>
-        <location line="-140"/>
+        <location line="-149"/>
         <source>Volume</source>
         <translation>Volume</translation>
     </message>
     <message>
-        <location line="+141"/>
+        <location line="+150"/>
         <source>Switch profile</source>
         <translation>Switch profile</translation>
     </message>
     <message>
-        <location line="-147"/>
-        <location line="+403"/>
+        <location line="-156"/>
+        <location line="+412"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-291"/>
+        <location line="-298"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+43"/>
         <source>Suspend</source>
         <translation>Suspend</translation>
     </message>
@@ -3745,13 +3900,13 @@ This can&apos;t be undone.</translation>
         <translation>Power off</translation>
     </message>
     <message>
-        <location line="-38"/>
-        <location line="+39"/>
+        <location line="-45"/>
+        <location line="+46"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="-205"/>
+        <location line="-282"/>
         <source>Output</source>
         <translation>Output</translation>
     </message>
@@ -3771,7 +3926,7 @@ This can&apos;t be undone.</translation>
         <translation>Performance overlay</translation>
     </message>
     <message>
-        <location line="+155"/>
+        <location line="+232"/>
         <source>Switch</source>
         <translation>Switch</translation>
     </message>
@@ -3802,23 +3957,23 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+224"/>
+        <location line="+231"/>
         <location line="+1"/>
         <source>%1, %2</source>
         <translation>%1, %2</translation>
     </message>
     <message>
-        <location line="-106"/>
+        <location line="-113"/>
         <source>Ruya Hub</source>
         <translation>Ruya Hub</translation>
     </message>
     <message>
-        <location line="+103"/>
+        <location line="+110"/>
         <source>Resume %1, %2</source>
         <translation>Resume %1, %2</translation>
     </message>
     <message>
-        <location line="-359"/>
+        <location line="-366"/>
         <source>Just started</source>
         <translation>Just started</translation>
     </message>
@@ -3833,7 +3988,7 @@ This can&apos;t be undone.</translation>
         <translation>Paused</translation>
     </message>
     <message>
-        <location line="+359"/>
+        <location line="+366"/>
         <source>Volume, muted</source>
         <translation>Volume, muted</translation>
     </message>
@@ -3843,7 +3998,7 @@ This can&apos;t be undone.</translation>
         <translation>Volume %1</translation>
     </message>
     <message>
-        <location line="-525"/>
+        <location line="-541"/>
         <source>Muted</source>
         <translation>Muted</translation>
     </message>
@@ -3977,12 +4132,12 @@ This can&apos;t be undone.</translation>
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+13"/>
-        <location line="+120"/>
+        <location line="+122"/>
         <source>Settings</source>
         <translation>Settings</translation>
     </message>
     <message>
-        <location line="-85"/>
+        <location line="-87"/>
         <source>My profile</source>
         <translation>My profile</translation>
     </message>
@@ -4018,6 +4173,11 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>Notifications</source>
+        <translation>Notifications</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Storage</source>
         <translation>Storage</translation>
     </message>
@@ -4042,7 +4202,7 @@ This can&apos;t be undone.</translation>
         <translation>About</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+23"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -4052,7 +4212,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+292"/>
+        <location line="+305"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -4315,7 +4475,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 has no window yet.</translation>
     </message>
     <message>
-        <location line="+76"/>
+        <location line="+81"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
@@ -4409,7 +4569,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 was uninstalled.</translation>
     </message>
     <message>
-        <location line="+472"/>
+        <location line="+475"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -4421,18 +4581,18 @@ This can&apos;t be undone.</translation>
         <translation>Options</translation>
     </message>
     <message>
-        <location line="+180"/>
+        <location line="+183"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>The chosen sound theme can&apos;t be used. The standard one plays instead.</translation>
     </message>
     <message>
-        <location line="-213"/>
-        <location line="+19"/>
+        <location line="-218"/>
+        <location line="+21"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1708"/>
+        <location line="-1716"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -4463,13 +4623,13 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1433"/>
+        <location line="+1441"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
     </message>
     <message>
-        <location line="+160"/>
+        <location line="+163"/>
         <source>mock services</source>
         <translation>mock services</translation>
     </message>

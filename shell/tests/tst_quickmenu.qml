@@ -4,7 +4,7 @@ import RuyaShell
 
 // The Quick Hub (T-448, T-471, 02 §1.6): what Guide opens. One screen, no scroll, at most five focus stops:
 // the status row (not focusable), the game card (Resume, focus first), Home | Close game, the running strip
-// (art tiles of the other running apps), Volume and the panel icons (Audio, Controllers, Performance, Power).
+// (art tiles of the other running apps), Volume and the panel icons (Audio, Controllers, Performance, Notifications, Power).
 // Without a game: the strip, Volume and the icons. Controller keys only. Signs in as "Ada" (p2).
 Item {
     id: host
@@ -242,10 +242,10 @@ Item {
             verify(find("quickMenuItem_to:org.example.Puzzle").focused && !find("quickMenuItem_to:org.example.Racer").focused)
             keyClick(Qt.Key_Right)
             compare(focusedKey(), "to:org.example.Puzzle", "the strip stops at its end")
-            // The icons: Audio, Controllers, Performance, Power, and it stops there.
+            // The icons: Audio, Controllers, Performance, Notifications, Power, and it stops there.
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Down)
-            for (const key of ["panel:controllers", "panel:performance", "panel:power", "panel:power"]) {
+            for (const key of ["panel:controllers", "panel:performance", "panel:notifications", "panel:power", "panel:power"]) {
                 keyClick(Qt.Key_Right)
                 compare(focusedKey(), key)
                 verify(find("quickMenuItem_" + key).focused)
@@ -299,6 +299,47 @@ Item {
                 verify(y >= -0.5 && y + row.height <= list.height + 0.5, menu.itemKeys[i] + " lies inside the list")
             }
             keyClick(Qt.Key_Escape)
+        }
+
+        // The Notifications panel (RUY-414) at its fullest: Quiet mode, four items (one pinned, long words), Clear all
+        // and See all, seven rows, never a scroll at 100 % UI size.
+        function test_the_notifications_panel_fits_data() {
+            return [{ tag: "720p", parentItem: host }, { tag: "1080p", parentItem: bigHost }]
+        }
+        function test_the_notifications_panel_fits(data) {
+            start(data.parentItem)
+            const words = "A rather long notification title that has to be cut off at the end of the row"
+            for (let i = 0; i < 5; ++i)
+                Notifications.show(words + " " + i, "info", "", "", "And a detail that is long as well, to be cut", { source: "devices" })
+            Notifications.showSticky("fit-pinned", words, "warning", "", "Pinned", "", "", { source: "updates", pinned: true })
+            tryVerify(() => NotificationCentre.count === 6, 2000)
+            openHub()
+            const menu = find("systemPanel")
+            goTo("panel:notifications")
+            keyClick(Qt.Key_Return)
+            tryCompare(menu, "panelId", "notifications")
+            tryCompare(menu, "swap", 1)
+            tryCompare(menu, "settled", true)
+            const list = find("systemActions")
+            compare(menu.itemKeys.length, 7, "Quiet mode, four items, Clear all, See all")
+            compare(list.count, 7)
+            verify(list.contentHeight <= list.height + 0.5, "the rows fit: " + list.contentHeight + " in " + list.height)
+            verify(!find("hubMoreBelow").needed && !find("hubMoreAbove").needed, "no scroll cue")
+            const panel = find("guidePanel")
+            const top = panel.mapToItem(tc.shell, 0, 0).y
+            verify(top >= menu.marginY - 0.5, "the panel starts inside the safe area: " + top)
+            verify(top + panel.height <= menu.height - menu.marginY - menu.bottomReserve + 0.5,
+                   "and ends above the hint bar: " + (top + panel.height))
+            for (let i = 0; i < list.count; ++i) {
+                const row = list.itemAtIndex(i)
+                verify(row, "row " + i + " is built")
+                const y = row.mapToItem(list, 0, 0).y
+                verify(y >= -0.5 && y + row.height <= list.height + 0.5, menu.itemKeys[i] + " lies inside the list")
+            }
+            keyClick(Qt.Key_Escape)
+            keyClick(Qt.Key_Escape)
+            Notifications.remove("fit-pinned")
+            NotificationCentre.mockReset()
         }
 
         function test_the_hub_without_an_app_is_the_same_minus_the_app_part() {
@@ -473,7 +514,7 @@ Item {
             for (const row of menu.itemKeys)
                 controls.push(...menu.controlsOf(row))
             compare(controls, ["resume", "home", "closeGame", "to:org.example.Racer", "to:org.example.Puzzle",
-                               "volume", "panel:audio", "panel:controllers", "panel:performance", "panel:power"],
+                               "volume", "panel:audio", "panel:controllers", "panel:performance", "panel:notifications", "panel:power"],
                     "nothing else: no Recent, no tiles, no Display, no Switch profile")
             for (const gone of ["quickTile_wifi", "quickTile_bluetooth", "quickTile_mute", "quickTile_mic",
                                 "quickMenuItem_panel:display", "quickMenuItem_switch", "quickMenuItem_close",

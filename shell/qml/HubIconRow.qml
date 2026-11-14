@@ -5,12 +5,15 @@ import RuyaShell
 // Hub icon row (04 §5, 02 §1.6, T-471): the Quick Hub's panel entries as one row of round icon buttons
 // (`buttonHeight` across, an `iconM` glyph, the Hub row's fill and focus), spread across the panel's
 // width; the focused one's name (typeCaption DemiBold) is centred under it. One focus stop: the owner's
-// list has the focus, `currentIndex` is the button Left/Right stand on, and the owner handles Accept.
+// list has the focus, `currentIndex` is the button Left/Right stand on, and the owner handles Accept. An item
+// with `badge: true` (the Notifications icon with unread items, RUY-414) carries a dot at the top right:
+// 18 u across, `primaryFill` with a hairline of the Hub's fill around it; a dot, never a count, and the
+// accessible name says "new".
 Item {
     id: row
 
     property real u: 1
-    // [{ key ("panel:<id>"), icon, label }]
+    // [{ key ("panel:<id>"), icon, label, badge (optional) }]
     property var items: []
     property int currentIndex: 0
     property bool focused: false        // the row has the focus
@@ -39,7 +42,7 @@ Item {
 
             objectName: "quickMenuItem_" + modelData.key
             Accessible.role: Accessible.Button
-            Accessible.name: label
+            Accessible.name: modelData.badge === true ? qsTr("%1, new").arg(label) : label
             x: index * (row.button + row.gap)
             width: row.button
             height: row.button
@@ -54,6 +57,18 @@ Item {
                 u: row.u
                 name: entry.modelData.icon
                 filled: entry.focused
+            }
+            Rectangle {
+                objectName: "hubIconDot_" + entry.modelData.key
+                visible: entry.modelData.badge === true
+                x: parent.width - width - 12 * row.u
+                y: 12 * row.u
+                width: 18 * row.u
+                height: width
+                radius: width / 2
+                color: Theme.primaryFill
+                border.width: 2 * row.u
+                border.color: Theme.glassOpaque
             }
         }
     }

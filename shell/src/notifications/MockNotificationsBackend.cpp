@@ -218,6 +218,13 @@ void MockNotificationsBackend::post(const QString &profile, const QString &key, 
         later(0, [this, key] { emit posted(key, QStringLiteral("invalid"), 0); });
         return;
     }
+    // A source that is off keeps nothing (SourcesEnabled: "not kept and not shown"): "ok", and no item (id 0).
+    const QVariantMap enabled = m_settings.value(profile).sourcesEnabled;
+    const QString sourceKey = item.source == QLatin1String("app") ? QStringLiteral("app:") + item.appId : item.source;
+    if (enabled.contains(sourceKey) && !enabled.value(sourceKey).toBool()) {
+        later(0, [this, key] { emit posted(key, QStringLiteral("ok"), 0); });
+        return;
+    }
     QList<Entry> &list = m_lists[profile];
     if (!key.isEmpty()) {           // one item per key: the new one replaces the earlier one
         for (int i = 0; i < list.size(); ++i) {
