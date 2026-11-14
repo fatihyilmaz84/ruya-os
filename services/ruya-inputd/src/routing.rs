@@ -419,6 +419,9 @@ pub struct Router<B: Backend> {
     /// The stable id of the signed-in profile's active controller: the pad that gave the last input
     /// when the route first went to the profile (the sign-in). Kept until the profile changes (06 5.1).
     profile_pad: Option<String>,
+    /// The stable id of the pad that pressed last since the profile last changed. Only such a pad can
+    /// become the next profile's `profile_pad`; a keyboard sign-in leaves it `None` (ADR-017 am. 6b).
+    pad_since_change: Option<String>,
 }
 
 impl<B: Backend> Router<B> {
@@ -442,6 +445,7 @@ impl<B: Backend> Router<B> {
             book: Book::default(),
             active_input: None,
             profile_pad: None,
+            pad_since_change: None,
         }
     }
 
@@ -538,6 +542,9 @@ impl<B: Backend> Router<B> {
         if self.active_input.as_deref() == Some(pad.info.id.as_str()) {
             self.active_input = None;
         }
+        if self.pad_since_change.as_deref() == Some(pad.info.id.as_str()) {
+            self.pad_since_change = None;
+        }
         let held = pad.mapper.held_keys();
         let keys = self.board.pad_gone(&mut pad.mapper);
         self.backend.nav_keys(&keys);
@@ -588,6 +595,9 @@ impl<B: Backend> Router<B> {
         let id = pad.info.id.clone();
         let keys = self.board.route(&nav);
         self.backend.nav_keys(&keys);
+        if pressed {
+            self.pad_since_change = Some(id.clone());
+        }
         if pressed && self.active_input.as_deref() != Some(id.as_str()) {
             self.active_input = Some(id.clone());
             self.notices.push(Notice::ActiveInput {
@@ -877,12 +887,9 @@ impl<B: Backend> Router<B> {
             !instance.is_empty() && o.instance == instance && o.profile == profile
         });
         if self.profile != profile {
-            // A sign-in or switch: the pad that gave the last input is this profile's controller.
-            self.profile_pad = if profile.is_empty() {
-                None
-            } else {
-                self.active_input.clone()
-            };
+            // A sign-in or switch: the pad that pressed since the last change is this profile's
+            // controller; a keyboard or touch sign-in has none (ADR-017 am. 6b).
+            self.profile_pad = self.pad_since_change.take().filter(|_| !profile.is_empty());
         }
         match r {
             Route::App if same_owner => {
@@ -1808,6 +1815,58 @@ mod tests {
         r.backend_mut().take();
         app(&mut r, "i2", STK, "p2");
         assert_eq!(pad_of(&r.backend_mut().take(), "ruya-input/pad1"), Some(b));
+    }
+
+    fn pad1_of(calls: &[Call]) -> Option<PadKey> {
+        calls.iter().find_map(|c| match c {
+            Call::Create(k, s) if s.phys == "ruya-input/pad1" => Some(*k),
+            _ => None,
+        })
+    }
+
+    #[test]
+    fn a_keyboard_sign_in_does_not_inherit_the_previous_profiles_pad() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        // Pad b signs p1 in and is the last to press.
+        r.input(b, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        // Lock; p2 signs in from the keyboard: no pad pressed since the change.
+        r.set_route("locked", "", "", "", SHELL, t0());
+        r.set_route("shell", "", "", "p2", SHELL, t0());
+        r.backend_mut().take();
+        app(&mut r, "i2", STK, "p2");
+        assert_eq!(pad1_of(&r.backend_mut().take()), Some(a));
+    }
+
+    #[test]
+    fn a_pad_sign_in_makes_that_pad_pad1() {
+        let mut r = router();
+        let _a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        r.set_route("locked", "", "", "", SHELL, t0());
+        r.input(b, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        r.backend_mut().take();
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(pad1_of(&r.backend_mut().take()), Some(b));
+    }
+
+    #[test]
+    fn a_hub_switch_pressed_on_a_pad_makes_that_pad_pad1() {
+        let mut r = router();
+        let _a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        let c = r.add_pad(pad("c"), t0());
+        r.input(b, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        // In the Hub, pad c presses Switch profile: p1 goes straight to p2.
+        r.input(c, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p2", SHELL, t0());
+        r.backend_mut().take();
+        app(&mut r, "i2", STK, "p2");
+        assert_eq!(pad1_of(&r.backend_mut().take()), Some(c));
     }
 
     #[test]
