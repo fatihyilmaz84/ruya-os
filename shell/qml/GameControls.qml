@@ -481,7 +481,9 @@ QtObject {
         if (importing)
             return
         importing = true
-        Input.importProfile(owner, volumeId, fileName)
+        // Into the slot this page edits (RUY-572): the pad's own profile, else a copy for This <pad>.
+        const target = pad ? editable() : { id: allId }
+        Input.importProfile(owner, volumeId, fileName, target.id, slotOf(target.match))
     }
 
     // ---- the answers -----------------------------------------------------------------------------

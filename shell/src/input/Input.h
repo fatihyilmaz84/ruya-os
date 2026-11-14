@@ -119,8 +119,11 @@ public:
     // Import: Storage.readFile (capped at 64 KiB before it is read), ValidateProfile, SaveProfile and,
     // for a profile of scope "global", AssignProfile so it applies; the answer is importFinished
     // with the first status that was not "ok" (ReadFile's "too-large", "not-text", "not-found"...;
-    // Input1's "invalid", "not-allowed"...), "busy" while an import runs.
-    Q_INVOKABLE void importProfile(const QString &profile, const QString &volumeId, const QString &fileName);
+    // Input1's "invalid", "not-allowed"...), "busy" while an import runs. With a `targetId`, a global
+    // profile is saved under that id with the `match` of `targetSlot` ("" = none, all controllers;
+    // "family:<f>"; "device:<id>") and assigned there (RUY-572: the slot the page edits).
+    Q_INVOKABLE void importProfile(const QString &profile, const QString &volumeId, const QString &fileName,
+                                   const QString &targetId = QString(), const QString &targetSlot = QString());
     // "RuyaOS-controls-<profile>-<yyyy-mm-dd>.json" for today (SaveReport's name rule).
     Q_INVOKABLE QString exportFileName(const QString &profile) const;
     // The profile members as the client calls them: [{ name, in: [...], out: [...] }] (the XML's).
@@ -229,6 +232,8 @@ private:
         QString volumeId;
         QString fileName;
         QString text;
+        QString targetId;   // import: the id the profile is saved under ("" keeps the file's own)
+        QString targetSlot; // import: the slot it is assigned to ("", "family:<f>", "device:<id>")
     };
 
     std::unique_ptr<InputBackend> m_backend;

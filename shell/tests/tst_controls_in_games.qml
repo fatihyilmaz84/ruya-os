@@ -868,6 +868,41 @@ Item {
             tryVerify(() => GameControls.changed)
         }
 
+        // RUY-572: an import on a pad's page lands in the slot that page edits, not in all controllers.
+        function test_an_import_on_one_pad_s_page_changes_only_that_pad() {
+            Storage.mockSetFile("vol-stick", "mine.json", profileText("mine", { inherits: "nintendo" }), 1731456000)
+            const picker = openImport()
+            tryVerify(() => find("controlsImportFile_0").activeFocus, 2000)
+            compare(GameControls.pad.id, ds, "the DualSense's page")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => hasToast("Controls imported / mine.json"), 2000, toastTexts().join("; "))
+            tryVerify(() => !picker.shown, 2000)
+            const saved = savesOf(dsOwn)
+            compare(saved.length, 1, "saved as the DualSense's own profile")
+            compare(saved[0].match, { device: ds })
+            compare(savesOf("mine").length, 0, "not under the file's own id")
+            tryVerify(() => chainOf(ds)[0] === dsOwn, 2000, "the DualSense takes it")
+            compare(chainOf(ds)[1], "nintendo")
+            compare(chainOf(pro), ["default"], "the Pro Controller is untouched")
+            tryCompare(find("rowAppliesTo"), "currentLabel", "This DualSense")
+        }
+
+        function test_an_import_with_applies_to_all_controllers_goes_to_the_all_slot() {
+            given("controls-all", {}, "", ds)
+            Storage.mockSetFile("vol-stick", "mine.json", profileText("mine", { inherits: "nintendo" }), 1731456000)
+            const picker = openImport()
+            compare(find("rowAppliesTo").currentLabel, "All controllers")
+            tryVerify(() => find("controlsImportFile_0").activeFocus, 2000)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => hasToast("Controls imported / mine.json"), 2000, toastTexts().join("; "))
+            tryVerify(() => !picker.shown, 2000)
+            compare(savesOf("controls-all").length, 2, "the given one and the import")
+            verify(savesOf("controls-all")[1].match === undefined, "no slot narrower than all")
+            tryVerify(() => chainOf(pro)[0] === "controls-all", 2000, "the Pro Controller takes it too")
+            compare(chainOf(pro)[1], "nintendo")
+            compare(savesOf(dsOwn).length, 0, "no copy for the DualSense")
+        }
+
         function test_a_refused_import_keeps_the_sheet_open() {
             Storage.mockSetFile("vol-stick", "big.json", profileText("big") + " ".repeat(65536), 1731456000)
             Storage.mockSetFile("vol-stick", "bad.json", '{"schema_version":2}', 1731369600)
@@ -1035,6 +1070,12 @@ Item {
             tryVerify(() => find("remap_west").activeFocus, 2000)
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "controls")
+            // RUY-572: the page after an edit: Applies to = This DualSense, a Remap count.
+            tryCompare(GameControls, "appliesTo", "device")
+            focusRow("controlsBody", "rowAppliesTo")
+            clearToasts()
+            settle()
+            grabImage(tc.shell).save(dir + "28-controls-edited-" + lang + suffix + ".png")
             // The stick editor: default, then inner 12 % and Precise with the stick pushed.
             focusRow("controlsBody", "rowLeftStick")
             keyClick(Qt.Key_Return)
