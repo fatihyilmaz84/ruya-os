@@ -6,7 +6,8 @@
 //! A second counts for an app when the shell says the profile is active (not idle, locked or
 //! suspended), the app is the foreground app, and the report is fresh. Ticks arrive about once a
 //! second; one tick counts at most `MAX_STEP`, so a stalled process or a suspend cannot count the
-//! time it missed.
+//! time it missed. A profile switch pauses the old profile's runs (they stay open, uncounted,
+//! until the profile is back or the app exits).
 
 use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
@@ -317,8 +318,10 @@ impl<S: UsageStore, Z: Zone> Tracker<S, Z> {
         self.add_session(&o.profile, s, unix).then_some(o.profile)
     }
 
-    /// The shell's report of who is in front. A different profile ends the previous one's
-    /// sessions (T-165: a switch stops its apps). Returns the profiles whose ledger changed.
+    /// The shell's report of who is in front. A profile switch pauses the previous profile's
+    /// runs (RUY-569: a switch freezes its apps, signing back in resumes them): they stay open,
+    /// do not accrue while their profile is away, and end at `app_exited` with its real reason.
+    /// Returns the profiles whose ledger changed (none: nothing finishes here).
     pub fn presence(
         &mut self,
         profile: &str,
@@ -329,32 +332,15 @@ impl<S: UsageStore, Z: Zone> Tracker<S, Z> {
     ) -> Vec<String> {
         // What happened until now happened under the old state.
         self.accrue(now, unix);
-        let mut changed = Vec::new();
-        let switched = self
-            .presence
-            .as_ref()
-            .is_some_and(|p| !p.profile.is_empty() && !profile.is_empty() && p.profile != profile);
-        if switched {
-            let old = self
-                .presence
-                .as_ref()
-                .map(|p| p.profile.clone())
-                .unwrap_or_default();
-            let (ended, keep): (Vec<Open>, Vec<Open>) = std::mem::take(&mut self.open)
-                .into_iter()
-                .partition(|o| o.profile == old);
-            self.open = keep;
-            for o in ended {
-                changed.extend(self.finish(o, EndReason::Quit, unix));
-            }
-        }
         self.presence = Some(Presence {
             profile: profile.to_owned(),
             foreground: foreground.filter(|f| !f.is_empty()).map(str::to_owned),
             attention,
             at: now,
         });
-        changed
+        // A switch ends nothing: the old profile's runs stay open (their apps are frozen, not
+        // stopped) and `counts` skips them while another profile is in front.
+        Vec::new()
     }
 
     fn counts(&self, o: &Open, now: Instant) -> bool {
@@ -846,23 +832,24 @@ mod tests {
     }
 
     #[test]
-    fn a_profile_switch_ends_the_old_profiles_sessions() {
+    fn a_profile_switch_pauses_the_old_profiles_runs() {
         let mut t = tracker();
         let mut c = Clock::new();
         start(&mut t, &c, IA, "p1", A);
         run(&mut t, &mut c, 60, "p1", Some(IA), Attention::Active);
         run(&mut t, &mut c, 30, "p1", Some(IA), Attention::Locked); // the picker
         let changed = t.presence("p2", None, Attention::Active, c.now(), c.wall);
-        assert_eq!(changed, ["p1"]);
+        assert!(changed.is_empty());
+        // Nothing finished: p1's run is still open.
+        assert_eq!(t.open.len(), 1);
+        run(&mut t, &mut c, 120, "p2", None, Attention::Active);
+        run(&mut t, &mut c, 30, "p1", Some(IA), Attention::Active);
+        assert_eq!(quit(&mut t, &c, IA), Some("p1".to_owned()));
         let s = sessions(&mut t, "p1", &c);
         assert_eq!(
             (s.len(), s[0].foreground_seconds, s[0].reason),
-            (1, 60, EndReason::Quit)
+            (1, 90, EndReason::Quit)
         );
-        // The exit that follows finds nothing to end (no second session).
-        assert_eq!(quit(&mut t, &c, IA), None);
-        assert_eq!(sessions(&mut t, "p1", &c).len(), 1);
-        // And p2 sees nothing of it.
         assert!(sessions(&mut t, "p2", &c).is_empty());
         // Locking and unlocking the same profile does not end anything.
         start(&mut t, &c, IB, "p2", B);
@@ -871,6 +858,24 @@ mod tests {
         run(&mut t, &mut c, 30, "p2", Some(IB), Attention::Active);
         quit(&mut t, &c, IB);
         assert_eq!(sessions(&mut t, "p2", &c)[0].foreground_seconds, 60);
+    }
+
+    #[test]
+    fn an_app_that_exits_while_its_profile_is_away_ends_with_its_reason() {
+        let mut t = tracker();
+        let mut c = Clock::new();
+        start(&mut t, &c, IA, "p1", A);
+        run(&mut t, &mut c, 60, "p1", Some(IA), Attention::Active);
+        run(&mut t, &mut c, 20, "p1", Some(IA), Attention::Locked);
+        run(&mut t, &mut c, 100, "p2", None, Attention::Active);
+        let ended = t.app_exited(IA, Some(EndReason::Crashed), c.now(), c.wall);
+        assert_eq!(ended, Some("p1".to_owned()));
+        let s = sessions(&mut t, "p1", &c);
+        assert_eq!(
+            (s.len(), s[0].foreground_seconds, s[0].reason),
+            (1, 60, EndReason::Crashed)
+        );
+        assert!(sessions(&mut t, "p2", &c).is_empty());
     }
 
     #[test]
