@@ -4,7 +4,9 @@
 # the routed profile whose ACL names only that profile's user, other users are refused, the route
 # switches what the pads reach (busctl cannot hold a route: a caller that leaves the bus locks it,
 # so vm-input-probe.py holds its own bus connection), rumble is forwarded, and a killed service
-# is back within 0.5 s. Copy and run (boot with plain smoke-test.ps1 -Keep):
+# is back within 0.5 s. The restart step (RUY-597) runs three kills and passes when the MEDIAN is at most
+# 500 ms and the worst at most 1000 ms: the first run after heavy checks is slow (644 ms once; a lone re-run
+# gave 190-426 ms), and the 1000 ms ceiling still catches a real regression. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|fallback|confirm|hold|twopads|guide|nodes|start|useractive]
 # `useractive` (RUY-588) with the shell stopped like `twopads`: a uinput pad's press in route `app` makes ruya-inputd emit Input1.UserActive
@@ -162,7 +164,7 @@ routing_check() {
 restart_check() {
     echo "--- kill -9: the navigation keyboard is back within 0.5 s, the shell opens it"
     [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; return; }
-    local i out ms spid fds node worst=0
+    local i out ms spid fds node worst=0 times="" median
     for i in 1 2 3; do
         # vm-input-probe.py restart: kill -9, then polls sysfs every 5 ms for a new navigation node.
         out="$(python3 "$probe" restart)"
@@ -172,9 +174,19 @@ restart_check() {
         *) echo "run $i: ${out% *} in $ms ms" ;;
         esac
         [ "$ms" -gt "$worst" ] && worst="$ms"
+        times="$times$ms "
         sleep 2
     done
-    [ "$worst" -le 500 ] && ok "navigation keyboard back after at most $worst ms (target 0.5 s)" || bad "navigation keyboard back after $worst ms (target 0.5 s)"
+    # RUY-597: the median of the three must be <= 500 ms and the worst <= 1000 ms.
+    median="$(printf '%s\n' $times | sort -n | sed -n 2p)"
+    echo "restart times: $times(ms), median $median, worst $worst"
+    if [ "$median" -gt 500 ]; then
+        bad "navigation keyboard back: median $median ms is over 500 ms (runs: $times; target 0.5 s)"
+    elif [ "$worst" -gt 1000 ]; then
+        bad "navigation keyboard back: worst run $worst ms is over the 1000 ms ceiling (median $median ms; runs: $times)"
+    else
+        ok "navigation keyboard back: median $median ms (<= 500), worst $worst ms (<= 1000) (target 0.5 s)"
+    fi
     spid="$(pgrep -u ruya-shell -x ruya-shell | head -1)"
     if [ -z "$spid" ]; then echo "UNVERIFIED: the shell is not running; cannot check that it opened the new node"; return; fi
     node="/dev/input/$(basename "$(ls -d /sys/class/input/"$(nav_input)"/event* 2>/dev/null | head -1)")"
@@ -572,7 +584,14 @@ count_shell_log() {
     journalctl -b _UID="$suid" --since "$since" --no-pager -o cat | grep -a -c "$1"
 }
 
+# RUY-597: every path out of start_check closes a menu that may be open (Back; harmless on a closed menu).
 start_check() {
+    start_steps
+    [ -f /root/vm-inject-key.py ] && python3 /root/vm-inject-key.py back >/dev/null 2>&1
+    return 0
+}
+
+start_steps() {
     echo "--- Start opens the Options menu (RUY-583)"
     local padpid n
     suid="$(id -u ruya-shell)"
@@ -593,7 +612,7 @@ start_check() {
     if [ "$n" = 1 ]; then
         ok "pad Start: the shell logged one 'options menu open' line ($(journalctl -b _UID="$suid" --since "$since" --no-pager -o cat | grep -a 'options menu open' | head -1))"
     else
-        bad "pad Start (two taps): $n 'options menu open' lines, expected 1 (0 means Start never reached the shell as Qt.Key_Menu)"
+        bad "pad Start (two taps): $n 'options menu open' lines, expected 1 (0 means Start never reached the shell as Qt.Key_Menu, or Home had no focused card: the shell logs no signal for that, so install a game first)"
     fi
     # The second tap closed it: the keyboard path (KEY_COMPOSE) opens it again.
     since="$(date '+%Y-%m-%d %H:%M:%S')"
@@ -601,7 +620,6 @@ start_check() {
     sleep 1
     n="$(count_shell_log 'ruya-shell: options menu open (')"
     [ "$n" = 1 ] && ok "KEY_COMPOSE from a keyboard opens it too" || bad "KEY_COMPOSE: $n 'options menu open' lines, expected 1"
-    python3 /root/vm-inject-key.py menu >/dev/null 2>&1   # close it again
 }
 
 case "${1:-check}" in

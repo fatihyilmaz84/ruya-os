@@ -9,7 +9,7 @@ event the daemon would produce. Run it as root in the VM:
   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-inject-key.py root@127.0.0.1:/root/
   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 python3 /root/vm-inject-key.py guide [--hold 2.5]
 
-Keys: guide (KEY_HOMEPAGE), menu (KEY_COMPOSE, the key xkb turns into Qt.Key_Menu; RUY-583), home (KEY_HOME), meta (KEY_LEFTMETA).
+Keys: guide (KEY_HOMEPAGE), menu (KEY_COMPOSE, the key xkb turns into Qt.Key_Menu; RUY-583), home (KEY_HOME), meta (KEY_LEFTMETA), back (KEY_ESC, Back; RUY-597).
 --hold N keeps the key down for N seconds (the Guide long press); the guest's key repeat
 applies as it would for a real held key.
 """
@@ -19,7 +19,7 @@ import os
 import struct
 import time
 
-KEYS = {"guide": 172, "menu": 127, "home": 102, "meta": 125}
+KEYS = {"guide": 172, "menu": 127, "home": 102, "meta": 125, "back": 1}
 
 EV_SYN, EV_KEY = 0, 1
 UI_SET_EVBIT = 0x40045564
