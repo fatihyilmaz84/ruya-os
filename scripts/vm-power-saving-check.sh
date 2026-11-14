@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks the power-saving parts of T-202 inside a running VM, as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-power-saving-check.sh scripts/vm-inject-key.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-power-saving-check.sh [service|audio|timeline|all]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-power-saving-check.sh [service|audio|timeline|inhibit|all]
 #
 #   service   Devices1.Bluetooth.ReportIdle exists and answers "ok" (also with Bluetooth off, as in the VM)
 #   audio     Devices1.Audio.Playing exists and reads false on a quiet console, with the shell's ambient bed
@@ -23,6 +23,14 @@
 #             flip, counted through the drm_vblank_event_delivered tracepoint in tracefs) in the 4 s after
 #             the key. Without tracefs or debugfs the part prints "UNVERIFIED:" for what it could not read.
 #             That the page below did not move is not checked here (tst_power_saving.qml does).
+#   inhibit   RUY-561: an idle inhibitor counts only while its app is the front app. Needs a profile signed
+#             in (drive it from the host) and scripts/vm-idle-inhibit-client.py, vm-key-client.qml next to
+#             this script. With RUYA_IDLE_DIVISOR=60 (the shell is restarted with the drop-in if it does not
+#             have it: sign in again when it asks) it starts the inhibiting client (journal: "idle inhibit
+#             +wayland:N" while it is in front), then the key client, whose window takes the front (the
+#             inhibiting app is behind it: "idle inhibit -wayland:N" must follow), then "display off"
+#             within 60 s although the inhibiting client still runs; when the key client ends, the
+#             inhibiting app is in front again and "+wayland:N" must come back.
 # Hardware (the Dell, not this script): the DualSense disconnects after the Controllers-turn-off time and
 # reconnects on a button press; a TV's re-sync time after display off is recorded by hand.
 set -u
@@ -197,12 +205,80 @@ wake_check() {
     fi
 }
 
+# RUY-561: the journal lines for the reason "wayland:N" since $1 (epoch seconds).
+inhibit_log() { journalctl -b -q -o cat --since "@$1" | grep -E 'ruya-shell: idle inhibit [+-]wayland:|ruya-shell: display off' || true; }
+
+# Waits up to $3 s for the pattern $2 in the journal since $1; prints the matching line.
+wait_log() {
+    local since="$1" pat="$2" t="$3"
+    for _ in $(seq 1 "$t"); do
+        journalctl -b -q -o cat --since "@$since" | grep -E "$pat" | head -n 1 | grep . && return 0
+        sleep 1
+    done
+    return 1
+}
+
+inhibit_check() {
+    echo "--- an idle inhibitor counts only while its app is in front (RUYA_IDLE_DIVISOR=60)"
+    here="$(cd "$(dirname "$0")" && pwd)"
+    for f in vm-idle-inhibit-client.py vm-key-client.qml; do
+        [ -f "$here/$f" ] || { bad "$f must be next to this script"; return; }
+    done
+    install -m 0644 "$here/vm-idle-inhibit-client.py" /var/tmp/vm-idle-inhibit-client.py
+    install -m 0644 "$here/vm-key-client.qml" /var/tmp/vm-key-client.qml
+    unit="ruya-compositor@tty1"
+    dropin="/etc/systemd/system/$unit.service.d"
+    added=0
+    shellpid="$(pgrep -u ruya-shell -x ruya-shell | head -n 1)"
+    if ! tr '\0' '\n' < "/proc/$shellpid/environ" 2>/dev/null | grep -qx 'RUYA_IDLE_DIVISOR=60'; then
+        mkdir -p "$dropin"
+        printf '[Service]\nEnvironment=RUYA_IDLE_DIVISOR=60\n' > "$dropin/zz-idle-divisor.conf"
+        systemctl daemon-reload
+        systemctl restart "$unit"
+        added=1
+        echo "shell restarted with the divisor: sign in a profile now (waiting up to 180 s)"
+    fi
+    active=""
+    for _ in $(seq 1 180); do
+        active="$(busctl --system get-property org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ActiveProfile 2>/dev/null | cut -d'"' -f2)"
+        [ -n "$active" ] && break
+        sleep 1
+    done
+    [ -n "$active" ] || { bad "no profile signed in"; return; }
+    sleep 3
+    run() { runuser -u ruya-shell -- env XDG_RUNTIME_DIR=/run/user/$uid WAYLAND_DISPLAY=ruya-0 "$@"; }
+    start="$(date +%s)"
+    run python3 /var/tmp/vm-idle-inhibit-client.py >/var/tmp/vm-idle-inhibit-client.log 2>&1 &
+    line="$(wait_log "$start" 'idle inhibit \+wayland:[0-9]+' 20)" && ok "the inhibiting app in front holds: $line" || bad "no '+wayland:N' after the inhibiting client started (see /var/tmp/vm-idle-inhibit-client.log)"
+    n="$(echo "$line" | sed -n 's/.*wayland:\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+    if [ -n "$n" ]; then
+        behind="$(date +%s)"
+        run env QT_QPA_PLATFORM=wayland QT_QUICK_BACKEND=software /usr/bin/ruya-shell --load /var/tmp/vm-key-client.qml >/dev/null 2>&1 &
+        wait_log "$behind" "idle inhibit -wayland:$n" 20 >/dev/null && ok "another window in front: -wayland:$n" || bad "no '-wayland:$n' after another window took the front"
+        wait_log "$behind" 'display off' 75 >/dev/null && ok "display off although the inhibiting client still runs" || bad "no 'display off' within 75 s with the inhibitor behind"
+        back="$(date +%s)"
+        pkill -f '[v]m-key-client.qml'
+        wait_log "$back" "idle inhibit \+wayland:$n" 20 >/dev/null && ok "in front again: +wayland:$n" || bad "no '+wayland:$n' after the other window ended"
+    fi
+    pkill -f '[v]m-key-client.qml'
+    pkill -f '[v]m-idle-inhibit-client.py'
+    echo "$(inhibit_log "$start")"
+    if [ "$added" = 1 ]; then
+        rm -f "$dropin/zz-idle-divisor.conf"
+        rmdir "$dropin" 2>/dev/null
+        systemctl daemon-reload
+        systemctl restart "$unit"
+        echo "(drop-in removed, shell restarted)"
+    fi
+}
+
 case "$part" in
     service) service_check ;;
     audio) audio_check ;;
     timeline) timeline_check ;;
+    inhibit) inhibit_check ;;
     all) service_check; audio_check; timeline_check ;;
-    *) echo "usage: $0 [service|audio|timeline|all]"; exit 2 ;;
+    *) echo "usage: $0 [service|audio|timeline|inhibit|all]"; exit 2 ;;
 esac
 [ "$fail" = 0 ] && echo "ALL PASS" || echo "SOME FAILED"
 exit "$fail"

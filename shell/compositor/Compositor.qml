@@ -127,9 +127,10 @@ WaylandCompositor {
 
     // Apps that ask for the screen to stay on (video players, games): each inhibitor is a reason
     // the idle clock does not count down (T-202; the shell's debug row lists them, the log has +/-).
+    // It counts only while its surface's app is the front app (RUY-561): Shell.heldInhibitors decides.
     IdleInhibitManager {
-        onInhibitorAdded: id => IdleInhibit.acquire("wayland:" + id)
-        onInhibitorRemoved: id => IdleInhibit.release("wayland:" + id)
+        onInhibitorAdded: (id, surface) => win.shell.addInhibitor(id, surface)
+        onInhibitorRemoved: id => win.shell.removeInhibitor(id)
     }
 
     XdgShell {
