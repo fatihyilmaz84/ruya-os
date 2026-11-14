@@ -192,9 +192,17 @@ pub struct Session<S, D> {
     /// The last sound request per profile user (`app_audio`: frozen apps, running apps), kept
     /// while it has a frozen app (T-466).
     audio_sent: HashMap<String, (Vec<String>, Vec<String>)>,
+    /// The signed-in profile as the last `profile_changed` saw it (RUY-568): what the start check
+    /// falls back to when `Profiles1` cannot be read.
+    last_active: Option<String>,
 }
 
 impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
+    /// The signed-in profile the watcher saw last (`""`: locked), `None` before its first value.
+    pub fn last_active(&self) -> Option<&str> {
+        self.last_active.as_deref()
+    }
+
     /// `env` is handed to every app (for instance `SDL_VIDEODRIVER`).
     pub fn new(spawner: S, directory: D, env: Vec<(String, String)>) -> Self {
         Session {
@@ -206,6 +214,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             instances: Vec::new(),
             frozen_changes: Vec::new(),
             audio_sent: HashMap::new(),
+            last_active: None,
         }
     }
 
@@ -428,6 +437,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         new: &str,
         now: Instant,
     ) -> Vec<(String, Status)> {
+        self.last_active = Some(new.to_owned());
         if old == Some(new) {
             return Vec::new();
         }
@@ -454,6 +464,22 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 (self.instances[at].unit.clone(), status)
             })
             .collect()
+    }
+
+    /// RUY-568: an app that reached running (`on_event(Started)`) after its profile left is frozen
+    /// now, through the freezer path of `profile_changed`; `profile_changed` freezes only apps
+    /// that were already running. `active` is the signed-in profile now (`""`: locked). Returns
+    /// the outcome when a freeze was tried, `None` when there was nothing to do: an unknown,
+    /// hidden, not running or frozen instance, or one of the signed-in profile.
+    pub fn freeze_if_away(&mut self, instance: &str, active: &str, now: Instant) -> Option<Status> {
+        let at = self.instances.iter().position(|i| {
+            i.unit == instance
+                && !i.hidden
+                && !i.frozen
+                && i.state == State::Running
+                && i.profile != active
+        })?;
+        Some(self.freeze_at(at, now))
     }
 
     /// Thaws a running app of the signed-in profile (T-457). The OS is asked even when the app is
@@ -1293,6 +1319,90 @@ mod tests {
         s.profile_changed(Some(""), "p1", Instant::now());
         assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
         assert!(!frozen_of(&s, &unit));
+    }
+
+    // ---- An app that reaches running after its profile left (RUY-568) -------------------------
+
+    fn started(s: &mut Session<FakeSpawner, ProfileSnapshot>, unit: &str) {
+        assert!(s
+            .on_event(UnitEvent::Started {
+                unit: unit.to_owned()
+            })
+            .is_some());
+    }
+
+    #[test]
+    fn an_app_that_reaches_running_after_its_profile_left_is_frozen_then() {
+        let mut s = session();
+        let (status, unit) = s.launch(APP, "p1", 100);
+        assert_eq!(status, Status::Ok);
+        // p1 leaves while the app is still starting: nothing to freeze yet.
+        assert!(s
+            .profile_changed(Some("p1"), "p2", Instant::now())
+            .is_empty());
+        assert!(freezes(&s).is_empty());
+        // Still starting: the check has nothing to freeze yet.
+        assert_eq!(s.freeze_if_away(&unit, "p2", Instant::now()), None);
+        assert!(freezes(&s).is_empty());
+        started(&mut s, &unit);
+        assert_eq!(
+            s.freeze_if_away(&unit, "p2", Instant::now()),
+            Some(Status::Ok)
+        );
+        assert!(frozen_of(&s, &unit));
+        assert_eq!(freezes(&s), [format!("freeze {unit}")]);
+        assert_eq!(
+            s.take_frozen_changes(),
+            [FrozenChange {
+                instance: unit.clone(),
+                frozen: true
+            }]
+        );
+        // A second check leaves it alone.
+        assert_eq!(s.freeze_if_away(&unit, "p2", Instant::now()), None);
+        assert_eq!(freezes(&s).len(), 1);
+    }
+
+    #[test]
+    fn an_app_whose_profile_signed_in_again_before_the_check_is_not_frozen() {
+        let mut s = session();
+        let (_, unit) = s.launch(APP, "p1", 100);
+        s.profile_changed(Some("p1"), "p2", Instant::now());
+        s.profile_changed(Some("p2"), "p1", Instant::now());
+        started(&mut s, &unit);
+        assert_eq!(s.freeze_if_away(&unit, "p1", Instant::now()), None);
+        assert!(!frozen_of(&s, &unit));
+        assert!(freezes(&s).is_empty());
+        assert!(s.take_frozen_changes().is_empty());
+    }
+
+    #[test]
+    fn an_app_of_the_signed_in_profile_is_not_frozen_when_it_starts() {
+        let mut s = session();
+        let (_, unit) = s.launch(APP, "p1", 100);
+        started(&mut s, &unit);
+        assert_eq!(s.freeze_if_away(&unit, "p1", Instant::now()), None);
+        assert!(!frozen_of(&s, &unit));
+        assert!(freezes(&s).is_empty());
+        // Unknown instances are ignored too.
+        assert_eq!(s.freeze_if_away("nope.service", "p2", Instant::now()), None);
+    }
+
+    #[test]
+    fn a_hidden_instance_is_never_frozen_at_its_start() {
+        let spawner = FakeSpawner::new()
+            .with_app(APP)
+            .with_running("ruya-p9", APP, 1_000);
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, vec![]);
+        s.adopt(5_000, Instant::now(), true);
+        let orphan = unit_name("ruya-p9", APP);
+        // The orphan is being stopped; make it look running, so only `hidden` keeps it out.
+        let at = s.instances.iter().position(|i| i.unit == orphan).unwrap();
+        assert!(s.instances[at].hidden);
+        s.instances[at].state = State::Running;
+        assert_eq!(s.freeze_if_away(&orphan, "p1", Instant::now()), None);
+        assert!(!s.spawner.calls().contains(&format!("freeze {orphan}")));
     }
 
     // ---- The sound of a frozen app (T-466) ----------------------------------------------------
