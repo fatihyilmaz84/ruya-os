@@ -1333,6 +1333,10 @@ Item {
                         grabImage(sheet).save(shotsDir + "/512-row-kinds-focus-" + kind + "-" + theme + ".png")
                     }
                     sheet.destroy()
+                    // The sheet's rows took the window's active focus (RUY-610): hand it back to the shell, so the
+                    // keys of openSettings() below reach Home and not nothing.
+                    tc.shell.forceActiveFocus()
+                    tryVerify(() => find("homePlay").activeFocus, 2000, "Home has focus again after the sheet")
                     host.height = 720
                 }
                 wait(1200)                               // the theme has blended

@@ -667,6 +667,27 @@ Item {
             compare(value.width, value.implicitWidth)
         }
 
+        // RUY-609: at the large UI size a label longer than half the row used to be drawn over by the value.
+        function test_a_long_label_is_never_overlapped_by_the_value_at_the_large_size() {
+            const row = createTemporaryObject(factRowComponent, host, { u: 1.5, label: "Konsolu uyanık tutan",
+                                                                         value: "ses çalıyor, bir indirme veya kurulum, bir sistem güncellemesi, bir uygulama" })
+            verify(row)
+            const label = findChild(row, "label")
+            const value = findChild(row, "value")
+            row.width = Math.round((label.x + label.implicitWidth) * 1.6)     // the label is more than half of the row
+            verify(label.x + label.implicitWidth > row.width * 0.5, "the label is longer than half the row")
+            verify(value.implicitWidth > row.width * 0.5, "the value wants more than half the row")
+            verify(label.x + label.width <= value.x, "the label ends before the value")
+            verify(value.x + value.width <= row.width, "the value is inside the row")
+            compare(label.truncated, false, "the label wins: it stays whole while the value elides")
+            verify(value.truncated, "the value elides")
+            verify(value.width >= row.width * 0.25 - 1, "the value keeps a quarter at least")
+            row.width = 200       // so narrow that the label itself must elide
+            verify(label.truncated, "a label wider than the row elides")
+            verify(label.x + label.width <= value.x, "still the label ends before the value")
+            verify(value.x >= 0 && value.x + value.width <= row.width)
+        }
+
         function test_a_later_step_at_or_before_an_earlier_one_gets_a_note() {
             openPowerPane()
             compare(find("rowOrderNote").visible, false, "the defaults are in order")
