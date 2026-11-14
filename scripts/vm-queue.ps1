@@ -74,6 +74,17 @@ $files += (Join-Path $Repo "image\security-baseline.json")   # vm-security-check
 & scp @scp @files "root@127.0.0.1:/root/" 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { $lines.Add("FAIL copy helper files to the guest (scp exit $LASTEXITCODE)"); $failed++ }
 
+# ---- a signed-in profile for the checks that need one (RUY-473): on a fresh disk nothing has made one
+$needsProfile = @($Checks | Where-Object { $_ -match "^vm-x11-check\.sh" }).Count -gt 0
+if ($needsProfile) {
+    Write-Host "== vm-goto.ps1 home (a profile for the x11 check)"
+    $gotoOut = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "vm-goto.ps1") home *>&1 | ForEach-Object { "$_" }
+    $gotoCode = $LASTEXITCODE
+    $gotoOut | Set-Content -Encoding UTF8 (Join-Path $outDir "vm-goto-home.log")
+    if ($gotoCode -ne 0) { $lines.Add("FAIL vm-goto.ps1 home (exit $gotoCode): $(Keyline $gotoOut)"); $failed++ }
+    else { $lines.Add("PASS vm-goto.ps1 home (a profile for the x11 check)") }
+}
+
 # ---- run
 foreach ($c in $Checks) {
     $parts = @($c -split "\s+" | Where-Object { $_ })

@@ -458,7 +458,7 @@ check)
     t3="$(date +%s)"
     case "$(stop_app "$inst")" in 's "ok"') ok "Stop $inst answered ok" ;; *) bad "Stop: $(stop_app "$inst")" ;; esac
     wait_sig "\"member\":\"AppExited\".*$xapp" 30 && ok "AppExited for $xapp" || bad "no AppExited for $xapp within 30 s"
-    grep -E "\"member\":\"AppExited\".*$xapp" "$work/signals.log" | head -1 | grep -q '"quit"' && ok "reason quit" || bad "AppExited for $xapp is not 'quit'"
+    grep -E "\"member\":\"AppExited\".*$xapp" "$work/signals.log" | head -1 | grep -q '"quit"' && ok "reason quit" || bad "AppExited for $xapp is not 'quit': $(grep -E "\"member\":\"AppExited\".*$xapp" "$work/signals.log" | head -1)"
     wait_shell "ruya-compositor: app gone" "$t3" 20 && ok "the window went away (app gone)" || bad "no 'app gone' after Stop"
     n=0; while [ "$n" -lt 20 ] && { kill -0 "$xwl" 2>/dev/null || kill -0 "$xsat" 2>/dev/null; }; do sleep 0.5; n=$((n + 1)); done
     kill -0 "$xwl" 2>/dev/null && bad "Xwayland $xwl survived Stop" || ok "Xwayland $xwl is gone"
