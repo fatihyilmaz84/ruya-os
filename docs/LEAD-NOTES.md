@@ -77,6 +77,9 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 | 2026-11-14 (lead-18) | 2c83b80..HEAD | 544, 540, 546, 545, 87, 573, 561, 550; analyses 538, 539, screensaver | round 2 for 544, 540, 545, 561; 2 product bugs found by VM (reclaim `\x2d`), 1 check race | 1596 QML + 137 skips | 0.0.76 12/18 (4 explained) |
 
 ## In flight (kept current)
-- RUY-446 round 1 (worktree `RuyaOS-worktrees\RUY-446`): virtual pad nodes 0600 without uaccess; the builder builds its own image and runs the VM.
-- RUY-11 round 1 (worktree `RuyaOS-worktrees\RUY-11`): Guide is built; the ticket shrank to tests, a VM step and dev docs (`ruya-api-reviewer` at merge).
-- Next: 0.0.78 from main after RUY-446 (one image at a time), then the full VM queue: the defaults, plus `vm-input-check.sh check|hold|twopads`, `vm-devices-check.sh gamepads` and `vm-power-saving-check.sh inhibit`.
+- **0.0.78 at dfe06d7 (has everything for the Dell re-check): built and VM-checked.** All 21 queue checks pass except the audio input, which has no microphone without `-Audio` (expected). The session check's Lock step was fixed in d8fa59e and now passes. Not on the Dell yet: `bash scripts/dell-update.sh 0.0.78` once the owner switches it on.
+- RUY-571 round 2 (worktree `RuyaOS-worktrees\RUY-571`): the 02 sentence, the mock once-flag reset, a pinned assert.
+- RUY-577 round 1 handed over; `ruya-reviewer` is running. Its VM line (the reclaim lines in `vm-session-check.sh check`) is for the next image.
+- RUY-583 round 1 (worktree `RuyaOS-worktrees\RUY-583`): Start emits `KEY_COMPOSE`, so Qt sees `Key_Menu`. This is the RUY-574 cause, found in the code: `KEY_MENU` maps to `XF86MenuKB` in xkb.
+- Next for the free lane: RUY-562 (planned and reviewed: audio allows the saver, holds screen-off and sleep; a parked stream is not `Playing`).
+- `scripts\free-space.ps1` is still to run (it shuts WSL down, so not while a builder uses it).
