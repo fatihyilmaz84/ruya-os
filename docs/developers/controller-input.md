@@ -79,6 +79,7 @@ What this means for a game:
 - **While your game is in front the pads type no keys** (only Guide, which goes to the console): the press arrives once, on your virtual pad.
 - **B is Esc on the console's screens**, not in your game; still, do not quit on Esc (rule 7: a keyboard has one).
 - **The Guide key never reaches you**, neither as a key nor as a pad button. The shell's `KeyRouter` takes it while your game is in front (Ruya Hub opens and, by default, freezes your game; it gets nothing while the Hub is open and receives input again when it closes).
+- **This holds for every connected controller, and for a long press** *(experimental, RUY-11)*. Any pad's Guide button is the console's: a short press opens or closes Ruya Hub, holding it for 2 seconds switches the Hub to the power choices. Neither the press, the hold nor the release is sent to your virtual pads (`BTN_MODE` is declared on them so SDL's mapping applies, but it is never pressed), whichever pad it came from and whatever the player's controller profile says. **You cannot rebind, intercept or time it**, and a controller profile cannot map another button onto it. Do not wait for a Guide event to pause: you are frozen by the Hub, not asked.
 
 ## What your game sees: a virtual pad of its own
 
