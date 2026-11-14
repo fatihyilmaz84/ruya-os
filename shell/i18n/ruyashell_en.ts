@@ -4,28 +4,17 @@
 <context>
     <name>AboutPane</name>
     <message>
-        <location filename="../qml/AboutPane.qml" line="+15"/>
-        <source>Select</source>
-        <translation>Select</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <location line="+1"/>
-        <source>Back</source>
-        <translation>Back</translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location filename="../qml/AboutPane.qml" line="+18"/>
         <source>Image version</source>
         <translation>Image version</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+7"/>
         <source>Qt version</source>
         <translation>Qt version</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+7"/>
         <source>System services</source>
         <translation>System services</translation>
     </message>
@@ -40,7 +29,7 @@
         <translation>D-Bus</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <source>Licence</source>
         <translation>Licence</translation>
     </message>
@@ -50,7 +39,7 @@
         <translation>GPL-3.0-or-later; icon font Apache-2.0; Inter typeface OFL-1.1</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+7"/>
         <source>System information</source>
         <translation>System information</translation>
     </message>
@@ -84,32 +73,32 @@
         <translation>You have not played this yet. When you do, the time you spend shows up here.</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Time played</source>
         <translation>Time played</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Times played</source>
         <translation>Times played</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>First played</source>
         <translation>First played</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Last played</source>
         <translation>Last played</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Longest session</source>
         <translation>Longest session</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Average session</source>
         <translation>Average session</translation>
     </message>
@@ -219,7 +208,7 @@
         <translation>Most played, last 30 days</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>%1, last played %2</source>
         <translation>%1, last played %2</translation>
     </message>
@@ -229,19 +218,19 @@
         <translation>Highlights</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Longest session this month</source>
         <translation>Longest session this month</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+45"/>
-        <location line="+17"/>
+        <location line="+47"/>
+        <location line="+18"/>
         <source>%1, %2</source>
         <translation>%1, %2</translation>
     </message>
     <message numerus="yes">
-        <location line="-54"/>
+        <location line="-56"/>
         <source>You have played %n day(s) in a row.</source>
         <translation>
             <numerusform>You have played %n day in a row.</numerusform>
@@ -249,7 +238,7 @@
         </translation>
     </message>
     <message numerus="yes">
-        <location line="+9"/>
+        <location line="+10"/>
         <source>You have not played %1 for %n day(s).</source>
         <translation>
             <numerusform>You have not played %1 for %n day.</numerusform>
@@ -262,12 +251,12 @@
         <translation>History</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+35"/>
         <source>%1, playing now</source>
         <translation>%1, playing now</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+14"/>
         <location line="+4"/>
         <source>Clear my activity</source>
         <translation>Clear my activity</translation>
@@ -2167,26 +2156,26 @@ This can&apos;t be undone.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+273"/>
-        <location line="+153"/>
+        <location filename="../qml/GameControls.qml" line="+418"/>
+        <location line="+158"/>
         <source>Could not save to the USB drive</source>
         <translation>Could not save to the USB drive</translation>
     </message>
     <message>
-        <location line="-153"/>
+        <location line="-158"/>
         <location line="+2"/>
-        <location line="+151"/>
+        <location line="+156"/>
         <location line="+26"/>
         <source>Try again.</source>
         <translation>Try again.</translation>
     </message>
     <message>
-        <location line="-177"/>
+        <location line="-182"/>
         <source>Could not save the change</source>
         <translation>Could not save the change</translation>
     </message>
     <message>
-        <location line="+149"/>
+        <location line="+154"/>
         <source>Saved to the USB drive</source>
         <translation>Saved to the USB drive</translation>
     </message>
@@ -2471,7 +2460,7 @@ This can&apos;t be undone.</translation>
         <translation>Profile “%1” deleted</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+25"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
@@ -2481,17 +2470,17 @@ This can&apos;t be undone.</translation>
         <translation>You</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
         <source>Rename %1</source>
         <translation>Rename %1</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Delete %1</source>
         <translation>Delete %1</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
         <source>Add profile</source>
         <translation>Add profile</translation>
     </message>
@@ -2501,7 +2490,7 @@ This can&apos;t be undone.</translation>
         <translation>Close</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
         <source>Name</source>
         <translation>Name</translation>
     </message>
@@ -2536,7 +2525,7 @@ This can&apos;t be undone.</translation>
         <translation>Protect with a PIN</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+11"/>
         <source>Create profile</source>
         <translation>Create profile</translation>
     </message>
@@ -2630,17 +2619,17 @@ This can&apos;t be undone.</translation>
         <translation>PIN changed.</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+19"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Rename %1</source>
         <translation>Rename %1</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
         <source>Change my PIN</source>
         <translation>Change my PIN</translation>
     </message>
@@ -2650,12 +2639,12 @@ This can&apos;t be undone.</translation>
         <translation>Set a PIN</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Remove my PIN</source>
         <translation>Remove my PIN</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Activity</source>
         <translation>Activity</translation>
     </message>
@@ -2932,12 +2921,12 @@ This can&apos;t be undone.</translation>
         <translation>Close</translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+41"/>
         <source>Options for %1</source>
         <translation>Options for %1</translation>
     </message>
     <message>
-        <location line="+202"/>
+        <location line="+204"/>
         <source>No options for this yet.</source>
         <translation>No options for this yet.</translation>
     </message>
@@ -3225,24 +3214,24 @@ This can&apos;t be undone.</translation>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+36"/>
         <source>Suspend</source>
         <translation>Suspend</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+7"/>
-        <location line="+7"/>
+        <location line="+9"/>
+        <location line="+9"/>
         <source>Not available</source>
         <translation>Not available</translation>
     </message>
     <message>
-        <location line="-8"/>
+        <location line="-10"/>
         <source>Restart</source>
         <translation>Restart</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+9"/>
         <source>Power off</source>
         <translation>Power off</translation>
     </message>
@@ -3359,7 +3348,7 @@ This can&apos;t be undone.</translation>
         <translation>Controllers turn off</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+19"/>
         <source>Keeping the console awake</source>
         <translation>Keeping the console awake</translation>
     </message>
@@ -4081,12 +4070,12 @@ This can&apos;t be undone.</translation>
     <message>
         <location line="+17"/>
         <location line="+63"/>
-        <location line="+81"/>
+        <location line="+84"/>
         <source>Press A to continue</source>
         <translation>Press A to continue</translation>
     </message>
     <message>
-        <location line="-313"/>
+        <location line="-316"/>
         <location line="+219"/>
         <source>Network</source>
         <translation>Network</translation>
@@ -4140,7 +4129,7 @@ This can&apos;t be undone.</translation>
         <translation>You will be the admin of this console. Choose a name and a PIN of 4 to 6 digits.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Name</source>
         <translation>Name</translation>
     </message>
@@ -4155,7 +4144,7 @@ This can&apos;t be undone.</translation>
         <translation>Your name</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Choose a PIN and finish</source>
         <translation>Choose a PIN and finish</translation>
     </message>
@@ -4165,8 +4154,8 @@ This can&apos;t be undone.</translation>
         <translation>Creating…</translation>
     </message>
     <message>
-        <location line="-273"/>
-        <location line="+300"/>
+        <location line="-276"/>
+        <location line="+303"/>
         <source>You&apos;re all set</source>
         <translation>You&apos;re all set</translation>
     </message>
@@ -4179,7 +4168,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+618"/>
+        <location filename="../qml/Shell.qml" line="+662"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -4642,7 +4631,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+301"/>
+        <location filename="../qml/StoragePane.qml" line="+297"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 is still in use. Close what uses it and try again.</translation>
     </message>
@@ -4667,24 +4656,13 @@ This can&apos;t be undone.</translation>
         <translation>Not supported</translation>
     </message>
     <message>
-        <location line="-255"/>
-        <location line="+256"/>
+        <location line="-257"/>
+        <location line="+258"/>
         <source>%1 free of %2</source>
         <translation>%1 free of %2</translation>
     </message>
     <message>
-        <location line="-282"/>
-        <source>Select</source>
-        <translation>Select</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <location line="+1"/>
-        <source>Back</source>
-        <translation>Back</translation>
-    </message>
-    <message>
-        <location line="+72"/>
+        <location line="-209"/>
         <source>Games</source>
         <translation>Games</translation>
     </message>
@@ -4739,33 +4717,33 @@ This can&apos;t be undone.</translation>
         <translation>This console</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>Free space</source>
         <translation>Free space</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+10"/>
         <source>Apps and games</source>
         <translation>Apps and games</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+9"/>
         <source>Profile data</source>
         <translation>Profile data</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>System</source>
         <translation>System</translation>
     </message>
     <message>
-        <location line="-273"/>
-        <location line="+273"/>
+        <location line="-269"/>
+        <location line="+269"/>
         <source>Other</source>
         <translation>Other</translation>
     </message>
     <message>
-        <location line="-284"/>
+        <location line="-280"/>
         <source>Plug it in again</source>
         <translation>Plug it in again</translation>
     </message>
@@ -4780,12 +4758,12 @@ This can&apos;t be undone.</translation>
         <translation>Nothing found here</translation>
     </message>
     <message>
-        <location line="+279"/>
+        <location line="+275"/>
         <source>Drives</source>
         <translation>Drives</translation>
     </message>
     <message>
-        <location line="-266"/>
+        <location line="-262"/>
         <source>Eject %1</source>
         <translation>Eject %1</translation>
     </message>
@@ -4914,18 +4892,7 @@ This can&apos;t be undone.</translation>
         <translation>The report could not be saved.</translation>
     </message>
     <message>
-        <location line="+156"/>
-        <source>Select</source>
-        <translation>Select</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <location line="+1"/>
-        <source>Back</source>
-        <translation>Back</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+162"/>
         <source>Save report to USB drive</source>
         <translation>Save report to USB drive</translation>
     </message>
@@ -5360,18 +5327,18 @@ This can&apos;t be undone.</translation>
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+133"/>
-        <location line="+319"/>
+        <location line="+318"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-319"/>
-        <location line="+318"/>
+        <location line="-318"/>
+        <location line="+317"/>
         <source>Stable</source>
         <translation>Stable</translation>
     </message>
     <message>
-        <location line="-313"/>
+        <location line="-312"/>
         <source>Last checked %1</source>
         <translation>Last checked %1</translation>
     </message>
@@ -5471,7 +5438,7 @@ This can&apos;t be undone.</translation>
         <translation>The update could not be started.</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+32"/>
         <source>Time zone</source>
         <translation>Time zone</translation>
     </message>
@@ -5511,14 +5478,14 @@ This can&apos;t be undone.</translation>
         <translation>No temperature sensors were found on this device.</translation>
     </message>
     <message>
-        <location line="-210"/>
+        <location line="-211"/>
         <location line="+8"/>
-        <location line="+78"/>
+        <location line="+79"/>
         <source>Only an admin can do this.</source>
         <translation>Only an admin can do this.</translation>
     </message>
     <message>
-        <location line="-284"/>
+        <location line="-285"/>
         <source>The console is warm. Nothing needs to be done.</source>
         <translation>The console is warm. Nothing needs to be done.</translation>
     </message>
@@ -5543,7 +5510,7 @@ This can&apos;t be undone.</translation>
         <translation>Updates</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+7"/>
         <source>Version</source>
         <translation>Version</translation>
     </message>
@@ -5558,7 +5525,7 @@ This can&apos;t be undone.</translation>
         <translation>Restart automatically for updates</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+24"/>
         <source>Roll back to the previous version</source>
         <translation>Roll back to the previous version</translation>
     </message>
@@ -6027,7 +5994,7 @@ This can&apos;t be undone.</translation>
         <translation>Current</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+33"/>
         <source>Region</source>
         <translation>Region</translation>
     </message>

@@ -4,28 +4,17 @@
 <context>
     <name>AboutPane</name>
     <message>
-        <location filename="../qml/AboutPane.qml" line="+15"/>
-        <source>Select</source>
-        <translation>Seç</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <location line="+1"/>
-        <source>Back</source>
-        <translation>Geri</translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location filename="../qml/AboutPane.qml" line="+18"/>
         <source>Image version</source>
         <translation>Sistem sürümü</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+7"/>
         <source>Qt version</source>
         <translation>Qt sürümü</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+7"/>
         <source>System services</source>
         <translation>Sistem hizmetleri</translation>
     </message>
@@ -40,7 +29,7 @@
         <translation>D-Bus</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <source>Licence</source>
         <translation>Lisans</translation>
     </message>
@@ -50,7 +39,7 @@
         <translation>GPL-3.0 veya üzeri; simge yazı tipi Apache-2.0; Inter yazı tipi OFL-1.1</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+7"/>
         <source>System information</source>
         <translation>Sistem bilgisi</translation>
     </message>
@@ -84,32 +73,32 @@
         <translation>Bunu henüz oynamadınız. Oynadığınızda harcadığınız süre burada görünür.</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Time played</source>
         <translation>Oynama süresi</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Times played</source>
         <translation>Oynama sayısı</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>First played</source>
         <translation>İlk oynama</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Last played</source>
         <translation>Son oynama</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Longest session</source>
         <translation>En uzun oturum</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Average session</source>
         <translation>Ortalama oturum</translation>
     </message>
@@ -219,7 +208,7 @@
         <translation>En çok oynanan, son 30 gün</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>%1, last played %2</source>
         <translation>%1, son oynama: %2</translation>
     </message>
@@ -229,26 +218,26 @@
         <translation>Öne çıkanlar</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+11"/>
         <source>Longest session this month</source>
         <translation>Bu ayın en uzun oturumu</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+45"/>
-        <location line="+17"/>
+        <location line="+47"/>
+        <location line="+18"/>
         <source>%1, %2</source>
         <translation>%1, %2</translation>
     </message>
     <message numerus="yes">
-        <location line="-54"/>
+        <location line="-56"/>
         <source>You have played %n day(s) in a row.</source>
         <translation>
             <numerusform>Üst üste %n gündür oynuyorsunuz.</numerusform>
         </translation>
     </message>
     <message numerus="yes">
-        <location line="+9"/>
+        <location line="+10"/>
         <source>You have not played %1 for %n day(s).</source>
         <translation>
             <numerusform>%1 oyununu %n gündür oynamadınız.</numerusform>
@@ -260,12 +249,12 @@
         <translation>Geçmiş</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+35"/>
         <source>%1, playing now</source>
         <translation>%1, şimdi oynanıyor</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+14"/>
         <location line="+4"/>
         <source>Clear my activity</source>
         <translation>Etkinliğimi temizle</translation>
@@ -2162,26 +2151,26 @@ Bu geri alınamaz.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+273"/>
-        <location line="+153"/>
+        <location filename="../qml/GameControls.qml" line="+418"/>
+        <location line="+158"/>
         <source>Could not save to the USB drive</source>
         <translation>USB belleğe kaydedilemedi</translation>
     </message>
     <message>
-        <location line="-153"/>
+        <location line="-158"/>
         <location line="+2"/>
-        <location line="+151"/>
+        <location line="+156"/>
         <location line="+26"/>
         <source>Try again.</source>
         <translation>Yeniden dene.</translation>
     </message>
     <message>
-        <location line="-177"/>
+        <location line="-182"/>
         <source>Could not save the change</source>
         <translation>Değişiklik kaydedilemedi</translation>
     </message>
     <message>
-        <location line="+149"/>
+        <location line="+154"/>
         <source>Saved to the USB drive</source>
         <translation>USB belleğe kaydedildi</translation>
     </message>
@@ -2466,7 +2455,7 @@ Bu geri alınamaz.</translation>
         <translation>“%1” profili silindi</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+25"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
@@ -2476,17 +2465,17 @@ Bu geri alınamaz.</translation>
         <translation>Siz</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
         <source>Rename %1</source>
         <translation>%1 profilini yeniden adlandır</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Delete %1</source>
         <translation>%1 profilini sil</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
         <source>Add profile</source>
         <translation>Profil ekle</translation>
     </message>
@@ -2496,7 +2485,7 @@ Bu geri alınamaz.</translation>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+15"/>
         <source>Name</source>
         <translation>Ad</translation>
     </message>
@@ -2531,7 +2520,7 @@ Bu geri alınamaz.</translation>
         <translation>PIN ile koru</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+11"/>
         <source>Create profile</source>
         <translation>Profil oluştur</translation>
     </message>
@@ -2624,17 +2613,17 @@ Bu geri alınamaz.</translation>
         <translation>PIN değiştirildi.</translation>
     </message>
     <message>
-        <location line="+18"/>
+        <location line="+19"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Rename %1</source>
         <translation>%1 profilini yeniden adlandır</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
         <source>Change my PIN</source>
         <translation>PIN&apos;imi değiştir</translation>
     </message>
@@ -2644,12 +2633,12 @@ Bu geri alınamaz.</translation>
         <translation>PIN belirle</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
         <source>Remove my PIN</source>
         <translation>PIN&apos;imi kaldır</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Activity</source>
         <translation>Etkinlik</translation>
     </message>
@@ -2921,12 +2910,12 @@ Bu geri alınamaz.</translation>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="+40"/>
+        <location line="+41"/>
         <source>Options for %1</source>
         <translation>%1 seçenekleri</translation>
     </message>
     <message>
-        <location line="+202"/>
+        <location line="+204"/>
         <source>No options for this yet.</source>
         <translation>Bunun için henüz seçenek yok.</translation>
     </message>
@@ -3213,24 +3202,24 @@ Bu geri alınamaz.</translation>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+36"/>
         <source>Suspend</source>
         <translation>Askıya al</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+7"/>
-        <location line="+7"/>
+        <location line="+9"/>
+        <location line="+9"/>
         <source>Not available</source>
         <translation>Kullanılamıyor</translation>
     </message>
     <message>
-        <location line="-8"/>
+        <location line="-10"/>
         <source>Restart</source>
         <translation>Yeniden başlat</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+9"/>
         <source>Power off</source>
         <translation>Kapat</translation>
     </message>
@@ -3345,7 +3334,7 @@ Bu geri alınamaz.</translation>
         <translation>Kontrolcüler kapanır</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+19"/>
         <source>Keeping the console awake</source>
         <translation>Konsolu uyanık tutan</translation>
     </message>
@@ -4066,12 +4055,12 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="+17"/>
         <location line="+63"/>
-        <location line="+81"/>
+        <location line="+84"/>
         <source>Press A to continue</source>
         <translation>Devam etmek için A&apos;ya basın</translation>
     </message>
     <message>
-        <location line="-313"/>
+        <location line="-316"/>
         <location line="+219"/>
         <source>Network</source>
         <translation>Ağ</translation>
@@ -4125,7 +4114,7 @@ Bu geri alınamaz.</translation>
         <translation>Bu konsolun yöneticisi siz olacaksınız. Bir ad ve 4 ila 6 haneli bir PIN seçin.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Name</source>
         <translation>Ad</translation>
     </message>
@@ -4140,7 +4129,7 @@ Bu geri alınamaz.</translation>
         <translation>Adınız</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Choose a PIN and finish</source>
         <translation>PIN seçin ve bitirin</translation>
     </message>
@@ -4150,8 +4139,8 @@ Bu geri alınamaz.</translation>
         <translation>Oluşturuluyor…</translation>
     </message>
     <message>
-        <location line="-273"/>
-        <location line="+300"/>
+        <location line="-276"/>
+        <location line="+303"/>
         <source>You&apos;re all set</source>
         <translation>Her şey hazır</translation>
     </message>
@@ -4164,7 +4153,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+618"/>
+        <location filename="../qml/Shell.qml" line="+662"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -4627,7 +4616,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+301"/>
+        <location filename="../qml/StoragePane.qml" line="+297"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 hâlâ kullanımda. Kullanan uygulamayı kapatıp tekrar deneyin.</translation>
     </message>
@@ -4652,24 +4641,13 @@ Bu geri alınamaz.</translation>
         <translation>Desteklenmiyor</translation>
     </message>
     <message>
-        <location line="-255"/>
-        <location line="+256"/>
+        <location line="-257"/>
+        <location line="+258"/>
         <source>%1 free of %2</source>
         <translation>%2 içinde %1 boş</translation>
     </message>
     <message>
-        <location line="-282"/>
-        <source>Select</source>
-        <translation>Seç</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <location line="+1"/>
-        <source>Back</source>
-        <translation>Geri</translation>
-    </message>
-    <message>
-        <location line="+72"/>
+        <location line="-209"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
@@ -4724,33 +4702,33 @@ Bu geri alınamaz.</translation>
         <translation>Bu konsol</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>Free space</source>
         <translation>Boş alan</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+10"/>
         <source>Apps and games</source>
         <translation>Uygulamalar ve oyunlar</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+9"/>
         <source>Profile data</source>
         <translation>Profil verileri</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>System</source>
         <translation>Sistem</translation>
     </message>
     <message>
-        <location line="-273"/>
-        <location line="+273"/>
+        <location line="-269"/>
+        <location line="+269"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="-284"/>
+        <location line="-280"/>
         <source>Plug it in again</source>
         <translation>Yeniden takın</translation>
     </message>
@@ -4765,12 +4743,12 @@ Bu geri alınamaz.</translation>
         <translation>Burada bir şey bulunamadı</translation>
     </message>
     <message>
-        <location line="+279"/>
+        <location line="+275"/>
         <source>Drives</source>
         <translation>Sürücüler</translation>
     </message>
     <message>
-        <location line="-266"/>
+        <location line="-262"/>
         <source>Eject %1</source>
         <translation>%1 sürücüsünü çıkar</translation>
     </message>
@@ -4899,18 +4877,7 @@ Bu geri alınamaz.</translation>
         <translation>Rapor kaydedilemedi.</translation>
     </message>
     <message>
-        <location line="+156"/>
-        <source>Select</source>
-        <translation>Seç</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <location line="+1"/>
-        <source>Back</source>
-        <translation>Geri</translation>
-    </message>
-    <message>
-        <location line="+7"/>
+        <location line="+162"/>
         <source>Save report to USB drive</source>
         <translation>Raporu USB sürücüye kaydet</translation>
     </message>
@@ -5345,18 +5312,18 @@ Bu geri alınamaz.</translation>
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+133"/>
-        <location line="+319"/>
+        <location line="+318"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-319"/>
-        <location line="+318"/>
+        <location line="-318"/>
+        <location line="+317"/>
         <source>Stable</source>
         <translation>Kararlı</translation>
     </message>
     <message>
-        <location line="-313"/>
+        <location line="-312"/>
         <source>Last checked %1</source>
         <translation>Son kontrol: %1</translation>
     </message>
@@ -5456,7 +5423,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelleme başlatılamadı.</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+32"/>
         <source>Time zone</source>
         <translation>Saat dilimi</translation>
     </message>
@@ -5496,14 +5463,14 @@ Bu geri alınamaz.</translation>
         <translation>Bu cihazda sıcaklık sensörü bulunamadı.</translation>
     </message>
     <message>
-        <location line="-210"/>
+        <location line="-211"/>
         <location line="+8"/>
-        <location line="+78"/>
+        <location line="+79"/>
         <source>Only an admin can do this.</source>
         <translation>Bunu yalnızca bir yönetici yapabilir.</translation>
     </message>
     <message>
-        <location line="-284"/>
+        <location line="-285"/>
         <source>The console is warm. Nothing needs to be done.</source>
         <translation>Konsol sıcak. Yapılması gereken bir şey yok.</translation>
     </message>
@@ -5528,7 +5495,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncellemeler</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+7"/>
         <source>Version</source>
         <translation>Sürüm</translation>
     </message>
@@ -5543,7 +5510,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncellemeler için otomatik yeniden başlat</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+24"/>
         <source>Roll back to the previous version</source>
         <translation>Önceki sürüme dön</translation>
     </message>
@@ -6009,7 +5976,7 @@ Bu geri alınamaz.</translation>
         <translation>Geçerli</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+33"/>
         <source>Region</source>
         <translation>Bölge</translation>
     </message>
