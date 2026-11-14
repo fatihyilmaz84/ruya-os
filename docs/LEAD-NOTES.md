@@ -15,19 +15,19 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 - **Images:** 0.0.80 built at 588f81e (CHAIN OK; build 57 min, disk 27, oci 11) and installed on the Dell; it lacks RUY-603.
 
 ## In flight at handoff (check first)
-1. **LibreQuake still gets no pad input from launch on 0.0.80** (Wii U Pro only, no Hub; owner report 2026-11-14 ~16:30, the part the first diagnosis couldn't explain). A diagnostic agent was capturing the live state when lead-19 handed off: read its result on the latest owner-report ticket, or re-run the diagnosis (route, virtual pad + ACL + the game's fd, FreezerState, physical presses) and file the fix as high priority. RUY-603 (Confirm per controller) is merged and Done (needs 0.0.81 and `vm-input-check.sh confirm`); RUY-500 has the re-plan comment.
+1. **LibreQuake "no pad from launch" solved:** the game's own cfg had `joy_device "-1"`, saved when the owner quit from the Hub on 0.0.79 (pads destroyed before the game exited). The owner has control again (a hotplug re-opened pad1); the owner was told to re-select the gamepad in LibreQuake's options, else fix line 124 of `/var/home/ruya-p1/.var/app/io.github.lavenderdotpet.LibreQuake/data/id1/ironwail.cfg`. **RUY-611** (high, top of the board): quitting from the Hub must not unplug pads before the game exits. RUY-603 (Confirm per controller) is merged and Done (needs 0.0.81 and `vm-input-check.sh confirm`); RUY-500 has the re-plan comment.
 2. **RUY-549 round 2** (`t/RUY-549b-fresh-cache`, worktree RUY-549b): the warm cache's stale-QML fix (hash manifest). Code done, test green; **proof runs B/C/D pending** (in the builder's HANDOFF on the ticket: unchanged tree, a changed file with an old mtime must turn tst_settings red, then green). Run them when WSL is idle, then merge. Until then push-main's Linux step may test stale QML on a warm run: run `ci-shell-linux.sh --cold` if a Linux result looks wrong.
-3. **0.0.80 is on the Dell** (rollback 0.0.79; `bootloader-update` red as before); **its VM queue has not run**: `vm-queue.ps1` (the RUY-390 comments list the new checks: session freeze-then-thaw, input shell/twopads/check/start/confirm, journal lines) -> `dell-update.sh 0.0.80` -> owner on the Dell: LibreQuake with both pads, Hub twice, Guide -> "Use this controller" on the DualSense.
+3. **0.0.80 is on the Dell** (rollback 0.0.79; `bootloader-update` red as before); **its VM queue has not run**: `vm-queue.ps1` (the RUY-390 comments list the new checks: session freeze-then-thaw, input shell/twopads/check/start, journal lines; `confirm` needs 0.0.81) -> owner on the Dell: LibreQuake with both pads, Hub twice, Guide -> "Use this controller" on the DualSense.
 4. **Shots read (lead-19):** RUY-589's large-UI shot shows the value over the label -> **RUY-609** (high, Ready); RUY-542's row-kinds shot fails on the GPU -> **RUY-610** (Ready). 589 and 542 go to Done with those.
 5. Worktree folders `RUY-547`, `RUY-590` could not be deleted (locked files): remove them.
 
 ## Next (Ready, ordered)
-- **RUY-594** (Input1 signals only to the shell; VM this task) -> **RUY-525 + 527** paired (ntsync, gaming sysctls; one image build) -> the rest of the gaming tuning (528-531, each with a Dell number).
+- **RUY-611** (Hub quit keeps pads) -> **RUY-41** (controller glyphs: PlayStation shapes etc.; owner asked "when", promised next lead session; write the lead review first) -> RUY-609, RUY-610 -> **RUY-594** (Input1 signals only to the shell; VM this task) -> **RUY-525 + 527** paired (ntsync, gaming sysctls; one image build) -> the rest of the gaming tuning (528-531, each with a Dell number).
 - Lead work: **RUY-483** (shell watchdog, owner asked), RUY-490, RUY-120; the game page needs RUY-523 and a design board first (RUY-524 comment).
 - Inbox: about 45 tickets; new today: 598, 601, 602, 604, 606, 607, 608.
 
 ## Concerns (ranked)
-1. Real hardware: nothing since 0.0.79 is on the Dell; RUY-541's fix is unchecked there.
+1. Real hardware: 0.0.80 is on the Dell but its VM queue hasn't run, and RUY-541's Hub-freeze case is not yet checked there with two pads.
 2. A locked desktop blocks every `shots` run: UI tickets pile up merged-but-not-Done.
 3. Builders ran WSL work during the lead's image build (RUY-549): WSL contention slowed the chain past an hour. Tell builders the WSL order explicitly.
 
