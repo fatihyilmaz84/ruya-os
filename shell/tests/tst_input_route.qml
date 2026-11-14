@@ -4,9 +4,10 @@ import RuyaShell
 
 // The shell drives Ruya Input's route (RUY-409, 06 §5.1-5.2, Input1.SetRoute): "locked" at the
 // picker, "shell" at Home, "app" with the game in front, "overlay" with the Hub over it (with its
-// instance also once the Hub froze it, RUY-541, so its pads stay), "app" again with the same pads after
-// the Thaw; Home, Lock and a switch take them away, a switch going through "locked" with no profile. A failed call never blocks the UI and the next change sends the newest
-// route; a restarted service (a new owner of the name) gets the current route again. The mock Input
+// instance also once the Hub froze it, RUY-541, so its pads stay), "app" again with the same pads
+// after the Thaw; Home, Lock and a switch take them away, a switch going through "locked" with no
+// profile. A failed call never blocks the UI and the next change sends the newest route; a
+// restarted service (a new owner of the name) gets the current route again. The mock Input
 // service checks the arguments by the service's rules and models the virtual pads (mockPads).
 // Signs in as "Ada" (p2), controller keys only.
 Item {

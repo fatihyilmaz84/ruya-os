@@ -2347,6 +2347,42 @@ mod tests {
     }
 
     #[test]
+    fn a_lock_while_pads_wait_for_pad1_leaves_no_queue_for_the_next_profile() {
+        // p1's app: b is pad1, a and c wait for it.
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        let c = r.add_pad(pad("c"), t0());
+        r.input(b, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(
+            order(&r.backend_mut().take()),
+            vec![format!("create {b} ruya-input/pad1")]
+        );
+        // Locked before pad1 is ready; c signs p2 in, and p2's app makes c pad1 first: the
+        // queue p1's app left (a, c) is gone with its pads.
+        r.set_route("locked", "", "", "", SHELL, t0());
+        r.input(c, &[press(PadButton::South)]);
+        r.set_route("shell", "", "", "p2", SHELL, t0());
+        r.backend_mut().take();
+        app(&mut r, "i2", STK, "p2");
+        assert_eq!(
+            order(&r.backend_mut().take()),
+            vec![format!("create {c} ruya-input/pad1")]
+        );
+        settle(&mut r);
+        assert_eq!(
+            created(&r.backend_mut().take())
+                .into_iter()
+                .map(|s| s.phys)
+                .collect::<Vec<_>>(),
+            vec!["ruya-input/pad2", "ruya-input/pad3"]
+        );
+        let _ = a;
+    }
+
+    #[test]
     fn another_profile_never_inherits_a_pad_even_with_the_same_instance() {
         let mut r = router();
         r.add_pad(pad("a"), t0());
