@@ -594,6 +594,31 @@ Item {
         function shots(dir, suffix, t) {
             start()
             fill(t)
+            // Settings > Notifications first (the game comes later and would keep the keys).
+            NotificationCentre.setSetting("QuietHours", ({ enabled: true, from: "22:00", to: "07:00" }))
+            tryCompare(NotificationCentre.quietHours, "enabled", true)
+            openPane()
+            wait(400)
+            waitForRendering(tc.shell)
+            grabImage(tc.shell).save(dir + "settings-notifications-1" + suffix + ".png")
+            rowFocus("rowNotifSource_devices")
+            wait(300)
+            waitForRendering(tc.shell)
+            grabImage(tc.shell).save(dir + "settings-notifications-2-sources" + suffix + ".png")
+            rowFocus("rowNotifClearHistory")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("notifClearConfirm") !== null && find("notifClearConfirm").shown, 2000)
+            wait(400)
+            waitForRendering(tc.shell)
+            grabImage(tc.shell).save(dir + "settings-notifications-3-clear" + suffix + ".png")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("notifClearConfirm").shown, 2000)
+            keyClick(Qt.Key_Escape)                     // the category list
+            keyClick(Qt.Key_Escape)                     // Home
+            tryCompare(tc.shell, "currentPage", "")
+            tryVerify(() => find("homePlay").activeFocus, 3000, "Home has the focus again")
+            NotificationCentre.setSetting("QuietHours", ({ enabled: false, from: "22:00", to: "07:00" }))
+            // The Hub over a game.
             playRacer(pictureAppComponent)
             openHub()
             tryVerify(() => Session.running.length === 1 && Session.running[0].frozen === true, 2000)
@@ -623,24 +648,6 @@ Item {
             keyClick(Qt.Key_Escape)
             keyClick(Qt.Key_Escape)
             tryCompare(menu(), "open", false)
-            // Settings > Notifications
-            NotificationCentre.setSetting("QuietHours", ({ enabled: true, from: "22:00", to: "07:00" }))
-            tryCompare(NotificationCentre.quietHours, "enabled", true)
-            openPane()
-            wait(400)
-            waitForRendering(tc.shell)
-            grabImage(tc.shell).save(dir + "settings-notifications-1" + suffix + ".png")
-            rowFocus("rowNotifSource_devices")
-            wait(300)
-            waitForRendering(tc.shell)
-            grabImage(tc.shell).save(dir + "settings-notifications-2-sources" + suffix + ".png")
-            rowFocus("rowNotifClearHistory")
-            keyClick(Qt.Key_Return)
-            tryVerify(() => find("notifClearConfirm") !== null && find("notifClearConfirm").shown, 2000)
-            wait(400)
-            waitForRendering(tc.shell)
-            grabImage(tc.shell).save(dir + "settings-notifications-3-clear" + suffix + ".png")
-            keyClick(Qt.Key_Escape)
         }
 
         function test_zz_screenshots() {
