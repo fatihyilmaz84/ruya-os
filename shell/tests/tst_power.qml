@@ -280,8 +280,14 @@ Item {
             Power.mockSetCapabilities("no", "yes", "yes")
             tryVerify(() => !Power.canSuspend)
             openPowerPage()
+            compare(find("powerSuspend").dimmed, true)
+            const before = Notifications.shownCount
             keyClick(Qt.Key_Return)                    // Suspend is not allowed
-            wait(100)
+            tryVerify(() => Notifications.shownCount > before, 2000, "it says why")
+            const texts = []
+            for (let i = 0; i < Notifications.model.count; ++i)
+                texts.push(Notifications.model.get(i).text)
+            verify(texts.includes("Suspend: Not available."), "name: reason, never a silent no-op")
             verify(!find("powerConfirmDialog").shown)
             verify(find("powerSuspend").activeFocus, "focus stays on the row")
             compare(Power.actionCount, 0)

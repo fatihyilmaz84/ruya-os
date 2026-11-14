@@ -103,7 +103,7 @@
         <translation>Ortalama oturum</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+6"/>
         <source>Last 30 days</source>
         <translation>Son 30 gün</translation>
     </message>
@@ -166,19 +166,18 @@
         <translation>Etkinliğiniz temizlenemedi.</translation>
     </message>
     <message>
-        <location line="+23"/>
-        <location line="+2"/>
+        <location line="+22"/>
         <location line="+1"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="-3"/>
+        <location line="-1"/>
         <source>Browse</source>
         <translation>Gez</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+1"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -203,22 +202,22 @@
         <translation>Bu hafta</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+21"/>
         <source>Most played, last 30 days</source>
         <translation>En çok oynanan, son 30 gün</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+15"/>
         <source>%1, last played %2</source>
         <translation>%1, son oynama: %2</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+11"/>
         <source>Highlights</source>
         <translation>Öne çıkanlar</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+9"/>
         <source>Longest session this month</source>
         <translation>Bu ayın en uzun oturumu</translation>
     </message>
@@ -2582,18 +2581,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>MyProfilePane</name>
     <message>
-        <location filename="../qml/MyProfilePane.qml" line="+20"/>
-        <location line="+1"/>
-        <source>Back</source>
-        <translation>Geri</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Select</source>
-        <translation>Seç</translation>
-    </message>
-    <message>
-        <location line="+42"/>
+        <location filename="../qml/MyProfilePane.qml" line="+59"/>
         <source>Profile renamed.</source>
         <translation>Profil yeniden adlandırıldı.</translation>
     </message>
@@ -3207,14 +3195,20 @@ Bu geri alınamaz.</translation>
         <translation>Askıya al</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-25"/>
+        <location line="+26"/>
         <location line="+9"/>
         <location line="+9"/>
         <source>Not available</source>
         <translation>Kullanılamıyor</translation>
     </message>
     <message>
-        <location line="-10"/>
+        <location line="-44"/>
+        <source>%1: %2.</source>
+        <translation>%1: %2.</translation>
+    </message>
+    <message>
+        <location line="+34"/>
         <source>Restart</source>
         <translation>Yeniden başlat</translation>
     </message>
@@ -4743,12 +4737,12 @@ Bu geri alınamaz.</translation>
         <translation>Burada bir şey bulunamadı</translation>
     </message>
     <message>
-        <location line="+275"/>
+        <location line="+273"/>
         <source>Drives</source>
         <translation>Sürücüler</translation>
     </message>
     <message>
-        <location line="-262"/>
+        <location line="-260"/>
         <source>Eject %1</source>
         <translation>%1 sürücüsünü çıkar</translation>
     </message>
@@ -5453,17 +5447,17 @@ Bu geri alınamaz.</translation>
         <translation>Çevrimiçi oyunların bağlantısı duraklatılmışken kopabilir.</translation>
     </message>
     <message>
-        <location line="+85"/>
+        <location line="+83"/>
         <source>Device health</source>
         <translation>Cihaz sağlığı</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+19"/>
         <source>No temperature sensors were found on this device.</source>
         <translation>Bu cihazda sıcaklık sensörü bulunamadı.</translation>
     </message>
     <message>
-        <location line="-211"/>
+        <location line="-208"/>
         <location line="+8"/>
         <location line="+79"/>
         <source>Only an admin can do this.</source>

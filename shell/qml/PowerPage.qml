@@ -13,11 +13,11 @@ Page {
         return action === "suspend" ? Power.canSuspend : action === "restart" ? Power.canRestart : Power.canPowerOff
     }
 
-    function request(action) {
+    function request(action, name) {
         if (allowed(action))
             confirm.open(action)
         else
-            Sfx.back()
+            Notifications.show(qsTr("%1: %2.").arg(name).arg(qsTr("Not available")), "warning")
     }
 
     PowerConfirm {
@@ -44,7 +44,7 @@ Page {
             u: page.u
             label: qsTr("Suspend")
             value: Power.canSuspend ? "" : qsTr("Not available")
-            onActivated: page.request("suspend")
+            onActivated: page.request("suspend", label)
         }
         SettingRow {
             objectName: "powerRestart"
@@ -53,7 +53,7 @@ Page {
             u: page.u
             label: qsTr("Restart")
             value: Power.canRestart ? "" : qsTr("Not available")
-            onActivated: page.request("restart")
+            onActivated: page.request("restart", label)
         }
         SettingRow {
             objectName: "powerOff"
@@ -62,7 +62,7 @@ Page {
             u: page.u
             label: qsTr("Power off")
             value: Power.canPowerOff ? "" : qsTr("Not available")
-            onActivated: page.request("poweroff")
+            onActivated: page.request("poweroff", label)
         }
     }
 }

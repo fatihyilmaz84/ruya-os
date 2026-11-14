@@ -409,14 +409,11 @@ SettingsPane {
         value: pane.sizeText(pane.internal.systemBytes)
     }
 
-    Text {
+    GroupLabel {
         objectName: "storageHeadingDrives"
-        width: parent ? parent.width : 0
         visible: Storage.volumes.length > 0
-        topPadding: Theme.spaceS * pane.u
         text: qsTr("Drives")
-        color: Theme.text
-        font.pixelSize: Theme.typeBody * pane.u
+        u: pane.u
     }
 
     Repeater {

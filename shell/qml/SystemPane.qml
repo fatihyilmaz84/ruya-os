@@ -501,13 +501,10 @@ SettingsPane {
         wrapMode: Text.Wrap
     }
 
-    Text {
+    GroupLabel {
         objectName: "healthHeading"
-        width: parent ? parent.width : 0
-        topPadding: Theme.spaceS * pane.u
         text: qsTr("Device health")
-        color: Theme.text
-        font.pixelSize: Theme.typeBody * pane.u
+        u: pane.u
     }
 
     Text {

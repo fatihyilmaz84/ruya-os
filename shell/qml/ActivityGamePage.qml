@@ -125,15 +125,11 @@ Page {
             label: qsTr("Average session")
             value: DurationText.plain(page.game.average ?? 0)
         }
-        Text {
+        GroupLabel {
             objectName: "gameHeadStrip"
-            width: parent ? parent.width : 0
             visible: Usage.ready && page.played
-            topPadding: Theme.spaceS * page.u
             text: qsTr("Last 30 days")
-            color: Theme.text
-            font.pixelSize: Theme.typeBody * page.u
-            font.weight: Theme.weightDemiBold
+            u: page.u
         }
         ChartRow {
             id: strip

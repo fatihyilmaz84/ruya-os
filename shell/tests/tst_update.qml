@@ -191,7 +191,10 @@ Item {
             compare(find("rowTimezone").kind, "page")
             const heading = find("updatesHeading")
             verify(findChild(heading, "groupLabelText"), "Updates is a GroupLabel")
-            verify(!find("rowUpdate").parent.children.some(c => c === heading && c.activeFocus), "never focused")
+            const rows = find("paneSystem").focusableRows()
+            verify(rows.length > 0 && rows.some(r => r === find("rowUpdate")), "the pane has focusable rows")
+            verify(!rows.some(r => r === heading || r === find("healthHeading")), "headings are never focused")
+            verify(findChild(find("healthHeading"), "groupLabelText"), "Device health is a GroupLabel too")
             const shownBefore = Notifications.shownCount
 
             keyClick(Qt.Key_Return)
