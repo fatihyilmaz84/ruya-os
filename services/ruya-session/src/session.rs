@@ -1331,6 +1331,9 @@ mod tests {
             .profile_changed(Some("p1"), "p2", Instant::now())
             .is_empty());
         assert!(freezes(&s).is_empty());
+        // Still starting: the check has nothing to freeze yet.
+        assert_eq!(s.freeze_if_away(&unit, "p2", Instant::now()), None);
+        assert!(freezes(&s).is_empty());
         started(&mut s, &unit);
         assert_eq!(
             s.freeze_if_away(&unit, "p2", Instant::now()),
@@ -1384,6 +1387,10 @@ mod tests {
         let mut s = Session::new(spawner, dir, vec![]);
         s.adopt(5_000, Instant::now(), true);
         let orphan = unit_name("ruya-p9", APP);
+        // The orphan is being stopped; make it look running, so only `hidden` keeps it out.
+        let at = s.instances.iter().position(|i| i.unit == orphan).unwrap();
+        assert!(s.instances[at].hidden);
+        s.instances[at].state = State::Running;
         assert_eq!(s.freeze_if_away(&orphan, "p1", Instant::now()), None);
         assert!(!s.spawner.calls().contains(&format!("freeze {orphan}")));
     }
