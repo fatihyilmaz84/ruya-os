@@ -25,7 +25,7 @@ import RuyaShell
 // the pad the default (`resetAll`).
 // Export and import go through Input.exportProfile / importProfile (Devices1.Storage). An import (RUY-595)
 // replaces its pad's waiting change (dropped), starts only once a save in flight has ended, and holds that
-// pad's new changes in the queue until ImportFinished; other pads' changes are saved meanwhile.
+// pad's new changes in the queue until ImportFinished (an accepted import then drops them, a refused one saves them); other pads' changes are saved meanwhile.
 // Also the words the pages share: button names and glyphs by family, the short pad name.
 QtObject {
     id: games
