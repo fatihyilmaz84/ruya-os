@@ -751,10 +751,12 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
 fn exit_reason(inst: &Instance, code: i32, signaled: bool) -> (i32, ExitReason) {
     if inst.state == State::Stopping {
         // Asked to stop: the stop itself is a SIGTERM, so dying of a signal is still a quit.
-        // Only an exit after the kill of `tick` is "killed".
+        // Only a death by the kill of `tick` (SIGKILL) is "killed": the unit's end can be held for
+        // its scope past the grace, so `tick` may send its kill to a unit that already died of
+        // the SIGTERM (VM 0.0.77, lead-18).
         return (
             code,
-            if signaled && inst.kill_sent {
+            if signaled && inst.kill_sent && code == 9 {
                 ExitReason::Killed
             } else {
                 ExitReason::Quit
@@ -1740,6 +1742,19 @@ mod tests {
             1
         );
         assert_eq!(reason(s.on_event(exited(&unit, 9, true))), (9, "killed"));
+    }
+
+    #[test]
+    fn a_stop_that_ended_by_its_sigterm_is_a_quit_even_after_a_late_kill() {
+        // The unit died of the stop's SIGTERM, but its end reached the core only after the grace
+        // (held for the app's scope), so `tick` had already sent its kill.
+        let mut s = session();
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        s.stop(&unit, t0);
+        s.tick(t0 + STOP_GRACE);
+        assert!(s.spawner.calls().iter().any(|c| c.starts_with("kill")));
+        assert_eq!(reason(s.on_event(exited(&unit, 15, true))), (15, "quit"));
     }
 
     #[test]

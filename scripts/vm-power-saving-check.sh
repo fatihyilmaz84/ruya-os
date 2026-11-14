@@ -129,7 +129,7 @@ timeline_check() {
     start="$(date +%s)"
     # Wait for the shell to log its first line, then watch the journal for the display.
     for _ in $(seq 1 60); do
-        journalctl -b -q -o cat -u "$unit" --since "@$start" | grep -q 'ruya-compositor: up' && break
+        journalctl -b -q -o cat --since "@$start" | grep -q 'ruya-compositor: up' && break
         sleep 1
     done
     echo "shell is up; waiting 45 s without input"
@@ -240,7 +240,8 @@ inhibit_check() {
         added=1
         restarted="$(date +%s)"
         for _ in $(seq 1 60); do
-            journalctl -b -q -o cat -u "$unit" --since "@$restarted" | grep -q 'ruya-compositor: up' && break
+            # No -u: PAMName=ruya-shell files the shell's lines under its session scope, not the unit.
+            journalctl -b -q -o cat --since "@$restarted" | grep -q 'ruya-compositor: up' && break
             sleep 1
         done
         sleep 5
@@ -266,6 +267,14 @@ inhibit_check() {
         # The Hub over the app first, while the screen is on (after "display off" the first key only wakes it):
         # Guide releases, Guide again takes it (needs vm-inject-key.py next to this script).
         if [ -f "$here/vm-inject-key.py" ]; then
+            # A dark screen (the divisor makes the saver come fast) eats the first key as a wake: wake it
+            # first with a key the shell swallows, so the Guide below opens the Hub.
+            if journalctl -b -q -o cat | grep -E 'display (off|on)' | tail -n 1 | grep -q 'display off'; then
+                woke="$(date +%s)"
+                python3 "$here/vm-inject-key.py" menu >/dev/null 2>&1
+                wait_log "$woke" 'display on' 10 >/dev/null || echo "note: no 'display on' after the wake key"
+                sleep 2
+            fi
             hub="$(date +%s)"
             python3 "$here/vm-inject-key.py" guide >/dev/null 2>&1
             wait_log "$hub" "idle inhibit -wayland:$n" 20 >/dev/null && ok "the Hub open over the app: -wayland:$n" || bad "no '-wayland:$n' with the Hub open"
