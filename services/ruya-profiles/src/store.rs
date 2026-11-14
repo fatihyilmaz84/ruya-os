@@ -51,12 +51,33 @@ impl Profile {
     }
 }
 
+/// A temporary guest (RUY-125): a profile user with no name and no PIN, wiped on Lock, on a
+/// session change and at service start. Kept apart from `profiles`, so nothing that lists or
+/// changes profiles can reach it by accident.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Guest {
+    pub id: String,
+    pub avatar: String,
+    /// 1, 2 or 3: the shell names it "Guest", "Guest 2", "Guest 3".
+    pub number: u32,
+    pub uid: u32,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Data {
     #[serde(default)]
     next_id: u32,
+    /// The lowest guest uid not handed out yet; only goes up (0 = none handed out so far).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    next_guest_uid: u32,
     #[serde(default, rename = "profile")]
     profiles: Vec<Profile>,
+    #[serde(default, rename = "guest", skip_serializing_if = "Vec::is_empty")]
+    guests: Vec<Guest>,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 #[derive(Debug)]
@@ -102,6 +123,46 @@ impl Store {
         profile.id = format!("p{}", self.data.next_id);
         self.data.profiles.push(profile);
         self.data.profiles.last().unwrap()
+    }
+
+    /// Takes the next profile id for a guest: `next_id` goes up now, so the id is never handed out
+    /// again even when making the guest fails.
+    pub fn reserve_id(&mut self) -> String {
+        self.data.next_id += 1;
+        format!("p{}", self.data.next_id)
+    }
+
+    pub fn guests(&self) -> &[Guest] {
+        &self.data.guests
+    }
+
+    pub fn guest(&self, id: &str) -> Option<&Guest> {
+        self.data.guests.iter().find(|g| g.id == id)
+    }
+
+    pub fn insert_guest(&mut self, guest: Guest) {
+        self.data.guests.push(guest);
+    }
+
+    pub fn remove_guest(&mut self, id: &str) -> Option<(usize, Guest)> {
+        let index = self.data.guests.iter().position(|g| g.id == id)?;
+        Some((index, self.data.guests.remove(index)))
+    }
+
+    pub fn restore_guest(&mut self, index: usize, guest: Guest) {
+        self.data
+            .guests
+            .insert(index.min(self.data.guests.len()), guest);
+    }
+
+    /// The lowest guest uid not handed out yet (`first` when none was).
+    pub fn next_guest_uid(&self, first: u32) -> u32 {
+        self.data.next_guest_uid.max(first)
+    }
+
+    /// Moves the guest uid counter on; it never goes back.
+    pub fn set_next_guest_uid(&mut self, uid: u32) {
+        self.data.next_guest_uid = self.data.next_guest_uid.max(uid);
     }
 
     /// Removes a profile from memory; `next_id` is untouched so ids are never reused.
@@ -187,6 +248,36 @@ mod tests {
         store.insert(profile("A", Role::Admin));
         store.data.profiles.clear(); // simulate deletion
         assert_eq!(store.insert(profile("B", Role::Standard)).id, "p2");
+    }
+
+    #[test]
+    fn guests_and_the_guest_uid_counter_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("profiles.toml");
+        let mut store = Store::open(&path).unwrap();
+        assert_eq!(store.next_guest_uid(50000), 50000);
+        store.insert(profile("Ada", Role::Admin));
+        let id = store.reserve_id();
+        assert_eq!(id, "p2");
+        store.insert_guest(Guest {
+            id: id.clone(),
+            avatar: "#d9483a".into(),
+            number: 1,
+            uid: 50000,
+        });
+        store.set_next_guest_uid(50001);
+        store.set_next_guest_uid(40000); // never goes back
+        store.save().unwrap();
+
+        let reopened = Store::open(&path).unwrap();
+        assert_eq!(reopened.guests(), store.guests());
+        assert_eq!(reopened.profiles().len(), 1, "a guest is not a profile");
+        assert_eq!(reopened.next_guest_uid(50000), 50001);
+        assert_eq!(
+            reopened.peek_next_id(),
+            "p3",
+            "a guest's id is never reused"
+        );
     }
 
     #[test]

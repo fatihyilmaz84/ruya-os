@@ -10,6 +10,7 @@ constexpr int FreeAttempts = 5;
 constexpr int FirstLockoutSecs = 30;
 constexpr int MaxLockoutSecs = 3600;
 constexpr int MaxNameChars = 32;
+constexpr int MaxGuests = 3; // service.rs MAX_GUESTS
 
 const QStringList AvatarColours = {
     QStringLiteral("#3a5bd9"), QStringLiteral("#d9483a"), QStringLiteral("#2fa37a"),
@@ -98,7 +99,30 @@ void MockProfilesBackend::refreshAfter(int ms)
         emit availabilityChanged(true);
         emit listed(list);
         emit activeChanged(m_active);
+        publishGuests();
     });
+}
+
+bool MockProfilesBackend::isGuest(const QString &id) const
+{
+    return std::any_of(m_guests.cbegin(), m_guests.cend(), [&](const GuestInfo &g) { return g.id == id; });
+}
+
+void MockProfilesBackend::publishGuests()
+{
+    QList<GuestInfo> list = m_guests;
+    std::sort(list.begin(), list.end(), [](const GuestInfo &a, const GuestInfo &b) { return a.number < b.number; });
+    // ProfilesChanged, then the shell's ListGuests: the newest list so far.
+    if (acceptGuests(beginGuestsRequest()))
+        emit guestsListed(list);
+}
+
+void MockProfilesBackend::wipeGuests()
+{
+    if (m_guests.isEmpty())
+        return;
+    m_guests.clear();
+    publishGuests();
 }
 
 void MockProfilesBackend::publishList()
@@ -119,9 +143,11 @@ void MockProfilesBackend::resetForTests(bool empty)
         seed();
     }
     m_active.clear();
+    m_guests.clear();
     QTimer::singleShot(0, this, [this] {
         emit activeChanged(m_active);
         publishList();
+        publishGuests();
     });
 }
 
@@ -155,6 +181,7 @@ void MockProfilesBackend::finish(const QString &id, const QString &status, int a
 {
     QTimer::singleShot(0, this, [this, id, status, attemptsLeft, retryAfterSecs] {
         if (status == QLatin1String("ok") && m_active != id) {
+            wipeGuests(); // a switch to another profile ends the session
             m_active = id;
             emit activeChanged(m_active);
         }
@@ -164,6 +191,8 @@ void MockProfilesBackend::finish(const QString &id, const QString &status, int a
 
 void MockProfilesBackend::switchTo(const QString &id, const QString &pin)
 {
+    if (isGuest(id))
+        return finish(id, QStringLiteral("not-allowed")); // a guest only joins
     const Outcome o = authenticate(id, pin);
     finish(id, o.status, o.attemptsLeft, o.retryAfterSecs);
 }
@@ -175,6 +204,7 @@ void MockProfilesBackend::lock()
             m_active.clear();
             emit activeChanged(m_active);
         }
+        wipeGuests();
     });
 }
 
@@ -238,6 +268,8 @@ void MockProfilesBackend::setPin(const QString &id, const QString &oldPin, const
         });
     };
 
+    if (isGuest(id))
+        return reply(QStringLiteral("not-allowed"));
     Entry *e = find(id);
     if (!e)
         return reply(QStringLiteral("unknown-profile"));
@@ -269,6 +301,8 @@ void MockProfilesBackend::renameProfile(const QString &actorId, const QString &a
         });
     };
 
+    if (isGuest(id) || isGuest(actorId))
+        return reply(QStringLiteral("not-allowed"));
     Entry *target = find(id);
     if (!target)
         return reply(QStringLiteral("unknown-profile"));
@@ -295,6 +329,8 @@ void MockProfilesBackend::deleteProfile(const QString &adminId, const QString &a
         });
     };
 
+    if (isGuest(id))
+        return reply(QStringLiteral("not-allowed"));
     const Entry *target = find(id);
     if (!target)
         return reply(QStringLiteral("unknown-profile"));
@@ -324,4 +360,55 @@ void MockProfilesBackend::verifyAdmin(const QString &adminId, const QString &adm
         return reply(QStringLiteral("not-allowed"));
     const Outcome auth = authenticate(adminId, adminPin);
     reply(auth.status, auth.attemptsLeft, auth.retryAfterSecs);
+}
+
+void MockProfilesBackend::verifyPin(const QString &id, const QString &pin)
+{
+    auto reply = [this, id](const QString &status, int attemptsLeft = 0, int retryAfterSecs = 0) {
+        QTimer::singleShot(0, this, [this, id, status, attemptsLeft, retryAfterSecs] {
+            emit pinVerified(id, status, attemptsLeft, retryAfterSecs);
+        });
+    };
+    if (isGuest(id))
+        return reply(QStringLiteral("not-allowed"));
+    // The same check and lockout as switchTo; the active profile stays.
+    const Outcome auth = authenticate(id, pin);
+    reply(auth.status, auth.attemptsLeft, auth.retryAfterSecs);
+}
+
+void MockProfilesBackend::createGuest()
+{
+    auto reply = [this](const QString &status, const QString &id = {}, int number = 0) {
+        QTimer::singleShot(0, this, [this, status, id, number] {
+            if (status == QLatin1String("ok"))
+                publishGuests(); // the list first, so the caller sees the guest on "ok"
+            emit guestCreated(status, id, number);
+        });
+    };
+    if (m_active.isEmpty() || m_guests.size() >= MaxGuests)
+        return reply(QStringLiteral("not-allowed"));
+    int number = 1;
+    while (std::any_of(m_guests.cbegin(), m_guests.cend(), [&](const GuestInfo &g) { return g.number == number; }))
+        ++number;
+    GuestInfo guest;
+    guest.id = QStringLiteral("p%1").arg(m_nextId++);
+    guest.avatar = AvatarColours.at(int(m_entries.size() + number - 1) % AvatarColours.size());
+    guest.number = number;
+    m_guests.append(guest);
+    reply(QStringLiteral("ok"), guest.id, number);
+}
+
+void MockProfilesBackend::removeGuest(const QString &id)
+{
+    auto reply = [this, id](const QString &status) {
+        QTimer::singleShot(0, this, [this, id, status] {
+            if (status == QLatin1String("ok"))
+                publishGuests();
+            emit guestRemoved(id, status);
+        });
+    };
+    if (!isGuest(id))
+        return reply(QStringLiteral("unknown-profile")); // a kept profile is never removed here
+    m_guests.removeIf([&](const GuestInfo &g) { return g.id == id; });
+    reply(QStringLiteral("ok"));
 }

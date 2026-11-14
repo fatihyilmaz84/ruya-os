@@ -15,6 +15,14 @@ struct ProfileInfo
     bool hasPin = false;
 };
 
+// A temporary guest (ListGuests): no name, the shell writes "Guest" / "Guest %1" from number.
+struct GuestInfo
+{
+    QString id;
+    QString avatar; // "#rrggbb"
+    int number = 0; // 1, 2 or 3
+};
+
 // Transport behind the Profiles QML singleton: the real org.ruyaos.Profiles1 service over
 // D-Bus, or an in-memory mock for development hosts and tests. All results arrive
 // asynchronously through signals, so QML code behaves the same with either.
@@ -39,6 +47,10 @@ public:
     virtual void deleteProfile(const QString &adminId, const QString &adminPin, const QString &id) = 0;
     // Mirrors VerifyAdmin: checks the admin's PIN and changes nothing.
     virtual void verifyAdmin(const QString &adminId, const QString &adminPin) = 0;
+    // Mirror VerifyPin (a profile's PIN, no sign-in), CreateGuest and RemoveGuest (RUY-125).
+    virtual void verifyPin(const QString &id, const QString &pin) = 0;
+    virtual void createGuest() = 0;
+    virtual void removeGuest(const QString &id) = 0;
 
 signals:
     void listed(const QList<ProfileInfo> &profiles);
@@ -52,6 +64,12 @@ signals:
     void renameFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
     void deleteFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
     void verifyAdminFinished(const QString &adminId, const QString &status, int attemptsLeft, int retryAfterSecs);
+    void pinVerified(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
+    // `id` and `number` are set on "ok" ("" and 0 otherwise).
+    void guestCreated(const QString &status, const QString &id, int number);
+    void guestRemoved(const QString &id, const QString &status);
+    // The live temporary guests (ListGuests), by number.
+    void guestsListed(const QList<GuestInfo> &guests);
     void availabilityChanged(bool available);
 
 protected:
@@ -67,7 +85,11 @@ protected:
         if (acceptList(request))
             emit listed(profiles);
     }
+    // The guest list is a model of its own: its own sequence.
+    quint64 beginGuestsRequest() { return m_guestsSeq.begin(); }
+    bool acceptGuests(quint64 request) { return m_guestsSeq.accept(request); }
 
 private:
     RequestSequence m_listSeq;
+    RequestSequence m_guestsSeq;
 };

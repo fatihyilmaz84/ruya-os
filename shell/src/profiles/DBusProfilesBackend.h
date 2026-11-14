@@ -24,6 +24,9 @@ public:
                        const QString &name) override;
     void deleteProfile(const QString &adminId, const QString &adminPin, const QString &id) override;
     void verifyAdmin(const QString &adminId, const QString &adminPin) override;
+    void verifyPin(const QString &id, const QString &pin) override;
+    void createGuest() override;
+    void removeGuest(const QString &id) override;
 
 private slots:
     void onProfilesChanged();
@@ -31,6 +34,7 @@ private slots:
 
 private:
     void fetchActive();
+    void fetchGuests();
 
     QDBusConnection m_bus;
 };

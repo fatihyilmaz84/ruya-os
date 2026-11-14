@@ -22,6 +22,20 @@ Profiles::Profiles(std::unique_ptr<ProfilesBackend> backend, QObject *parent)
         emit profilesChanged();
         emit activeProfileChanged(); // `active` resolves against the new list
     });
+    connect(m_backend.get(), &ProfilesBackend::guestsListed, this, [this](const QList<GuestInfo> &list) {
+        QVariantList out;
+        for (const GuestInfo &g : list) {
+            out.append(QVariantMap{
+                {QStringLiteral("id"), g.id},
+                {QStringLiteral("avatar"), g.avatar},
+                {QStringLiteral("number"), g.number},
+            });
+        }
+        if (out != m_guests) {
+            m_guests = out;
+            emit guestsChanged();
+        }
+    });
     connect(m_backend.get(), &ProfilesBackend::activeChanged, this, [this](const QString &id) {
         if (id != m_active) {
             m_active = id;
@@ -40,6 +54,9 @@ Profiles::Profiles(std::unique_ptr<ProfilesBackend> backend, QObject *parent)
     connect(m_backend.get(), &ProfilesBackend::renameFinished, this, &Profiles::renameFinished);
     connect(m_backend.get(), &ProfilesBackend::deleteFinished, this, &Profiles::deleteFinished);
     connect(m_backend.get(), &ProfilesBackend::verifyAdminFinished, this, &Profiles::verifyAdminFinished);
+    connect(m_backend.get(), &ProfilesBackend::pinVerified, this, &Profiles::pinVerified);
+    connect(m_backend.get(), &ProfilesBackend::guestCreated, this, &Profiles::guestCreated);
+    connect(m_backend.get(), &ProfilesBackend::guestRemoved, this, &Profiles::guestRemoved);
     m_backend->refresh();
 }
 
@@ -111,6 +128,21 @@ void Profiles::deleteProfile(const QString &adminId, const QString &adminPin, co
 void Profiles::verifyAdmin(const QString &adminId, const QString &adminPin)
 {
     m_backend->verifyAdmin(adminId, adminPin);
+}
+
+void Profiles::verifyPin(const QString &id, const QString &pin)
+{
+    m_backend->verifyPin(id, pin);
+}
+
+void Profiles::createGuest()
+{
+    m_backend->createGuest();
+}
+
+void Profiles::removeGuest(const QString &id)
+{
+    m_backend->removeGuest(id);
 }
 
 bool Profiles::resetMockForTests(const QString &state)

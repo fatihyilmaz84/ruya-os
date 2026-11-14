@@ -32,6 +32,23 @@ QList<ProfileInfo> parseProfiles(const QDBusArgument &arg)
     arg.endArray();
     return out;
 }
+
+QList<GuestInfo> parseGuests(const QDBusArgument &arg)
+{
+    QList<GuestInfo> out;
+    arg.beginArray();
+    while (!arg.atEnd()) {
+        GuestInfo g;
+        uint number = 0;
+        arg.beginStructure();
+        arg >> g.id >> g.avatar >> number;
+        arg.endStructure();
+        g.number = int(number);
+        out.append(g);
+    }
+    arg.endArray();
+    return out;
+}
 } // namespace
 
 DBusProfilesBackend::DBusProfilesBackend(QObject *parent)
@@ -63,6 +80,25 @@ void DBusProfilesBackend::refresh()
         emit availabilityChanged(true);
         emit listed(parseProfiles(reply.arguments().constFirst().value<QDBusArgument>()));
         fetchActive();
+    });
+    fetchGuests();
+}
+
+void DBusProfilesBackend::fetchGuests()
+{
+    const quint64 request = beginGuestsRequest();
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListGuests"));
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+            qWarning("ruya-shell: Profiles1.ListGuests failed: %s", qPrintable(reply.errorMessage()));
+            acceptGuests(request); // an older success arriving later must not undo this outcome
+            return;
+        }
+        if (acceptGuests(request))
+            emit guestsListed(parseGuests(reply.arguments().constFirst().value<QDBusArgument>()));
     });
 }
 
@@ -186,6 +222,50 @@ void DBusProfilesBackend::verifyAdmin(const QString &adminId, const QString &adm
             return;
         }
         emit verifyAdminFinished(adminId, reply.argumentAt<0>(), int(reply.argumentAt<1>()), int(reply.argumentAt<2>()));
+    });
+}
+
+void DBusProfilesBackend::verifyPin(const QString &id, const QString &pin)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("VerifyPin"));
+    msg << id << pin;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, id](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString, uint, uint> reply = *w;   // status, attempts_left, retry_after_secs
+        if (!reply.isValid()) {
+            emit pinVerified(id, QStringLiteral("failed"), 0, 0);
+            return;
+        }
+        emit pinVerified(id, reply.argumentAt<0>(), int(reply.argumentAt<1>()), int(reply.argumentAt<2>()));
+    });
+}
+
+void DBusProfilesBackend::createGuest()
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("CreateGuest"));
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString, QString, uint> reply = *w;   // status, id, number
+        if (!reply.isValid()) {
+            emit guestCreated(QStringLiteral("failed"), {}, 0);
+            return;
+        }
+        // The guest list refreshes via ProfilesChanged.
+        emit guestCreated(reply.argumentAt<0>(), reply.argumentAt<1>(), int(reply.argumentAt<2>()));
+    });
+}
+
+void DBusProfilesBackend::removeGuest(const QString &id)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("RemoveGuest"));
+    msg << id;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, id](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString> reply = *w;   // status
+        emit guestRemoved(id, reply.isValid() ? reply.argumentAt<0>() : QStringLiteral("failed"));
     });
 }
 

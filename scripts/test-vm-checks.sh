@@ -13,6 +13,7 @@
 #                          mode and owner, Xwayland's -auth, -nolisten local and SELinux domain)
 #   - vm-security-check.sh the busrecv step (a service's signals go to root and ruya-shell only: RUY-594) and the
 #                          `signals` mode; vm-input-probe.py's signal listener (test-vm-input-probe.py)
+#   - vm-profiles-check.sh the `guests` mode (RUY-125) against a fake Profiles1: each assertion can FAIL
 # Needs bash and python3 (python on Windows). Exit 0 = all pass.
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -474,6 +475,131 @@ SESS_LOG="$tmp/sess.log"; : > "$SESS_LOG"
 out="$(cat "$SESS_LOG")"
 expect_contains "closed stdout: the compositor is still started" "$out" "systemctl start ruya-compositor@tty1"
 expect_contains "closed stdout: the linger is still taken back" "$out" "loginctl disable-linger ruya-shell"
+
+# --- vm-profiles-check.sh guests (RUY-125): each assertion can fail ---------------------------------
+# A fake Profiles1 (busctl --json=short) and getent over one JSON state file; FAKE_BUG breaks one rule.
+# The paths go in as arguments (a Windows python reads converted arguments, not MSYS paths in env).
+echo "vm-profiles-check.sh guests: each assertion can fail"
+cat > "$tmp/fake-profiles.py" <<'PYEOF'
+import json, os, sys
+state_path, homes, tool = sys.argv[1], sys.argv[2], sys.argv[3]
+args = sys.argv[4:]
+bug = os.environ.get("FAKE_BUG", "")
+try:
+    with open(state_path) as f:
+        st = json.load(f)
+except FileNotFoundError:
+    st = {"active": "", "next_id": 2, "next_uid": 50000, "guests": [], "users": {}}
+
+def save():
+    with open(state_path, "w") as f:
+        json.dump(st, f)
+
+def reply(sig, *data):
+    print(json.dumps({"type": sig, "data": list(data)}))
+
+def remove(gid):
+    st["guests"] = [g for g in st["guests"] if g["id"] != gid]
+    if bug != "keep_user":
+        st["users"].pop(gid, None)
+        try:
+            os.rmdir(os.path.join(homes, "ruya-" + gid))
+        except OSError:
+            pass
+    if bug == "reuse":
+        st["next_uid"] = 50000
+
+def wipe():
+    for g in list(st["guests"]):
+        remove(g["id"])
+
+if tool == "getent":
+    db, key = args[0], args[1]
+    name = key[5:] if key.startswith("ruya-") else ""
+    if db == "passwd" and name in st["users"]:
+        uid = st["users"][name]
+        print("ruya-%s:x:%d:%d:RuyaOS profile (guest):/var/home/ruya-%s:/usr/sbin/nologin" % (name, uid, uid, name))
+        sys.exit(0)
+    sys.exit(2)
+
+a = [x for x in args if not x.startswith("--")]
+if a[0] == "get-property":
+    print(json.dumps({"type": "s", "data": st["active"]}))
+    sys.exit(0)
+method, rest = a[4], a[6:]
+if method == "Lock":
+    if bug != "no_wipe":
+        wipe()
+    st["active"] = ""
+elif method == "SwitchTo":
+    if rest == ["p1", "1234"]:
+        if st["active"] != "p1":
+            wipe()
+        st["active"] = "p1"
+        reply("suu", "ok", 0, 0)
+    else:
+        reply("suu", "wrong-pin", 4, 0)
+elif method == "VerifyPin":
+    if bug == "verify_switches":
+        st["active"] = "p2"  # a VerifyPin that signs another profile in
+    reply("suu", "ok" if rest == ["p1", "1234"] else "wrong-pin", 0, 0)
+elif method == "CreateGuest":
+    if not st["active"] or (len(st["guests"]) >= 3 and bug != "cap"):
+        reply("ssu", "not-allowed", "", 0)
+    else:
+        number = 1
+        while any(g["number"] == number for g in st["guests"]):
+            number += 1
+        st["next_id"] += 1
+        gid = "p%d" % st["next_id"]
+        uid = 1000 + st["next_id"] if bug == "range" else st["next_uid"]
+        st["next_uid"] += 1
+        st["users"][gid] = uid
+        os.makedirs(os.path.join(homes, "ruya-" + gid), exist_ok=True)
+        st["guests"].append({"id": gid, "number": number})
+        reply("ssu", "ok", gid, number)
+elif method == "RemoveGuest":
+    if any(g["id"] == rest[0] for g in st["guests"]):
+        remove(rest[0])
+        reply("s", "ok")
+    else:
+        reply("s", "unknown-profile")
+elif method == "ListProfiles":
+    rows = [["p1", "Check Admin", "#3a5bd9", "admin", True]]
+    if bug == "listed":
+        rows += [[g["id"], "Guest", "#d9483a", "guest", False] for g in st["guests"]]
+    reply("a(ssssb)", rows)
+elif method == "ListGuests":
+    reply("a(ssu)", [[g["id"], "#d9483a", g["number"]] for g in st["guests"]])
+save()
+PYEOF
+mkdir -p "$tmp/prof-bin"
+for t in busctl getent; do
+    printf '#!/bin/sh\nexec python3 "$PROF_PY" "$PROF_STATE" "$PROF_HOMES" %s "$@"\n' "$t" > "$tmp/prof-bin/$t"
+    chmod +x "$tmp/prof-bin/$t"
+done
+runprof() { # FAKE_BUG comes from the caller's prefix
+    rm -rf "$tmp/prof"; mkdir -p "$tmp/prof/home"
+    PROF_PY="$tmp/fake-profiles.py" PROF_STATE="$tmp/prof/state.json" PROF_HOMES="$tmp/prof/home" \
+        RUYA_HOME_ROOT="$tmp/prof/home" PATH="$tmp/prof-bin:$PATH" bash "$here/vm-profiles-check.sh" guests 2>&1
+}
+out="$(runprof)"; rc=$?
+expect_contains "a good service passes" "$out" "ALL CHECKS PASSED"
+expect_lacks "a good service: no FAIL" "$out" "FAIL"
+[ "$rc" = 0 ] && pass "a good service: exit 0" || fail "a good service: exit $rc"
+for case in \
+    "cap|FAIL: a fourth CreateGuest" \
+    "range|is no guest user in 50000-59999" \
+    "listed|FAIL: ListProfiles lists the guest(s)" \
+    "keep_user|FAIL: RemoveGuest left the user" \
+    "no_wipe|FAIL: Lock left the guests" \
+    "verify_switches|FAIL: VerifyPin changed ActiveProfile" \
+    "reuse|is not greater than"; do
+    bug="${case%%|*}"; needle="${case#*|}"
+    out="$(FAKE_BUG="$bug" runprof)"; rc=$?
+    expect_contains "guests, bug $bug: caught" "$out" "$needle"
+    [ "$rc" = 1 ] && pass "guests, bug $bug: exit 1" || fail "guests, bug $bug: exit $rc"
+done
 
 echo
 if [ "$fails" = 0 ]; then echo "vm-check tests: all passed"; else echo "vm-check tests: $fails failed"; fi

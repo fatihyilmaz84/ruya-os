@@ -3,10 +3,10 @@
 
 use std::time::{Duration, Instant};
 
-use crate::accounts::Accounts;
+use crate::accounts::{AccountKind, Accounts, GUEST_UIDS};
 use crate::lockout::{Gate, Lockout};
 use crate::pin;
-use crate::store::{Profile, Role, Store};
+use crate::store::{Guest, Profile, Role, Store};
 
 /// Stable status strings of the D-Bus API.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,6 +19,8 @@ pub enum Status {
     NotAllowed,
     Invalid,
     Failed,
+    /// CreateGuest: every guest uid has been handed out once.
+    Full,
 }
 
 impl Status {
@@ -32,6 +34,7 @@ impl Status {
             Status::NotAllowed => "not-allowed",
             Status::Invalid => "invalid",
             Status::Failed => "failed",
+            Status::Full => "full",
         }
     }
 }
@@ -53,6 +56,27 @@ impl Outcome {
     }
 }
 
+/// The answer of `create_guest`: id and number are set on `Ok` only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GuestOutcome {
+    pub status: Status,
+    pub id: String,
+    pub number: u32,
+}
+
+impl GuestOutcome {
+    fn of(status: Status) -> GuestOutcome {
+        GuestOutcome {
+            status,
+            id: String::new(),
+            number: 0,
+        }
+    }
+}
+
+/// Temporary guests at once: four seats (RUY-121), and player 1 is a profile.
+pub const MAX_GUESTS: u32 = 3;
+
 const MAX_NAME_CHARS: usize = 32;
 const AVATAR_COLOURS: [&str; 6] = [
     "#3a5bd9", "#d9483a", "#2fa37a", "#7a5bd9", "#d99a3a", "#3aa7d9",
@@ -66,17 +90,33 @@ pub struct ProfileService<A: Accounts> {
 }
 
 impl<A: Accounts> ProfileService<A> {
+    /// Starts the service on a store. Temporary guests left by an earlier run (a crash, a power
+    /// cut) belong to no session any more: they are wiped here.
     pub fn new(store: Store, accounts: A) -> Self {
-        ProfileService {
+        let mut svc = ProfileService {
             store,
             lockout: Lockout::default(),
             accounts,
             active: None,
-        }
+        };
+        svc.wipe_guests();
+        svc
     }
 
+    /// The kept profiles; temporary guests are never among them (`guests`).
     pub fn profiles(&self) -> &[Profile] {
         self.store.profiles()
+    }
+
+    /// The live temporary guests, by number.
+    pub fn guests(&self) -> Vec<&Guest> {
+        let mut guests: Vec<&Guest> = self.store.guests().iter().collect();
+        guests.sort_by_key(|g| g.number);
+        guests
+    }
+
+    fn is_guest(&self, id: &str) -> bool {
+        self.store.guest(id).is_some()
     }
 
     pub fn active(&self) -> Option<&str> {
@@ -124,16 +164,132 @@ impl<A: Accounts> ProfileService<A> {
         }
     }
 
+    /// A temporary guest only joins (ADR-017 point 7): it never becomes the active profile.
+    /// A switch to another profile ends the session, and with it every temporary guest.
     pub fn switch_to(&mut self, id: &str, given_pin: &str, now: Instant) -> Outcome {
+        if self.is_guest(id) {
+            return Outcome::of(Status::NotAllowed);
+        }
         let outcome = self.authenticate(id, given_pin, now);
         if outcome.status == Status::Ok {
+            if self.active.as_deref() != Some(id) {
+                self.wipe_guests();
+            }
             self.active = Some(id.to_owned());
         }
         outcome
     }
 
+    /// Checks a profile's PIN like `switch_to` (the same lockout) and changes nothing: a player
+    /// who joins the session is signed in without becoming the active profile.
+    pub fn verify_pin(&mut self, id: &str, given_pin: &str, now: Instant) -> Outcome {
+        if self.is_guest(id) {
+            return Outcome::of(Status::NotAllowed);
+        }
+        self.authenticate(id, given_pin, now)
+    }
+
+    /// Back to the picker: the session ends, and every temporary guest is wiped.
     pub fn lock(&mut self) {
         self.active = None;
+        self.wipe_guests();
+    }
+
+    /// Makes a temporary guest for the signed-in session. Its uid is the lowest one in
+    /// `GUEST_UIDS` never handed out before and not in use; the counter is saved before the
+    /// user is made, so a uid is never handed out twice, even after a failure.
+    pub fn create_guest(&mut self) -> GuestOutcome {
+        let live = self.store.guests();
+        if self.active.is_none() || live.len() >= MAX_GUESTS as usize {
+            return GuestOutcome::of(Status::NotAllowed);
+        }
+        let Some(number) = (1..=MAX_GUESTS).find(|n| live.iter().all(|g| g.number != *n)) else {
+            return GuestOutcome::of(Status::NotAllowed);
+        };
+        let mut uid = self.store.next_guest_uid(*GUEST_UIDS.start());
+        loop {
+            if !GUEST_UIDS.contains(&uid) {
+                eprintln!(
+                    "ruya-profiles: CreateGuest -> full (guest uids {}-{} are used up)",
+                    GUEST_UIDS.start(),
+                    GUEST_UIDS.end()
+                );
+                return GuestOutcome::of(Status::Full);
+            }
+            match self.accounts.id_in_use(uid) {
+                Ok(false) => break,
+                Ok(true) => uid += 1,
+                Err(err) => {
+                    eprintln!("ruya-profiles: CreateGuest -> failed (uid {uid}: {err})");
+                    return GuestOutcome::of(Status::Failed);
+                }
+            }
+        }
+        // The id and the uid are taken for good before the user exists.
+        let id = self.store.reserve_id();
+        self.store.set_next_guest_uid(uid + 1);
+        if let Err(err) = self.store.save() {
+            eprintln!("ruya-profiles: CreateGuest -> failed (store: {err})");
+            return GuestOutcome::of(Status::Failed);
+        }
+        if let Err(err) = self.accounts.create(&id, AccountKind::Guest { uid }) {
+            eprintln!("ruya-profiles: CreateGuest {id} uid {uid} -> failed ({err})");
+            if let Err(err) = self.accounts.remove_guest(&id, uid) {
+                eprintln!("ruya-profiles: removing the half-made guest {id}: {err}");
+            }
+            return GuestOutcome::of(Status::Failed);
+        }
+        let colour = (self.store.profiles().len() + number as usize - 1) % AVATAR_COLOURS.len();
+        self.store.insert_guest(Guest {
+            id: id.clone(),
+            avatar: AVATAR_COLOURS[colour].to_owned(),
+            number,
+            uid,
+        });
+        if let Err(err) = self.store.save() {
+            eprintln!("ruya-profiles: CreateGuest {id} -> failed (store: {err})");
+            self.store.remove_guest(&id);
+            if let Err(err) = self.accounts.remove_guest(&id, uid) {
+                eprintln!("ruya-profiles: removing the unsaved guest {id}: {err}");
+            }
+            return GuestOutcome::of(Status::Failed);
+        }
+        eprintln!("ruya-profiles: CreateGuest {id} uid {uid} number {number} -> ok");
+        GuestOutcome {
+            status: Status::Ok,
+            id,
+            number,
+        }
+    }
+
+    /// Wipes one temporary guest: its record, its Unix user and its home. A regular profile is
+    /// never removed here (`unknown-profile`). Like `delete_profile`, the store is saved first
+    /// and a failed removal of the user puts the guest back.
+    pub fn remove_guest(&mut self, id: &str) -> Status {
+        let Some((index, guest)) = self.store.remove_guest(id) else {
+            return Status::UnknownProfile;
+        };
+        if self.store.save().is_err() {
+            self.store.restore_guest(index, guest);
+            return Status::Failed;
+        }
+        if let Err(err) = self.accounts.remove_guest(id, guest.uid) {
+            eprintln!("ruya-profiles: removing guest {id}: {err}");
+            self.store.restore_guest(index, guest);
+            let _ = self.store.save();
+            return Status::Failed;
+        }
+        Status::Ok
+    }
+
+    /// Wipes every temporary guest (session end, service start). A guest whose user cannot be
+    /// removed stays listed, so the next wipe tries again.
+    fn wipe_guests(&mut self) {
+        let ids: Vec<String> = self.store.guests().iter().map(|g| g.id.clone()).collect();
+        for id in ids {
+            let status = self.remove_guest(&id);
+            eprintln!("ruya-profiles: wipe guest {id} -> {}", status.as_str());
+        }
     }
 
     /// Returns the outcome (status plus attempts left / retry time after a failed admin PIN)
@@ -192,7 +348,7 @@ impl<A: Accounts> ProfileService<A> {
         };
 
         let id = self.store.peek_next_id();
-        if self.accounts.create(&id).is_err() {
+        if self.accounts.create(&id, AccountKind::Regular).is_err() {
             return (Outcome::of(Status::Failed), None);
         }
         let avatar = AVATAR_COLOURS[self.store.profiles().len() % AVATAR_COLOURS.len()].to_owned();
@@ -211,6 +367,9 @@ impl<A: Accounts> ProfileService<A> {
 
     /// Like `create_profile`, the outcome carries attempts left / retry time for a wrong old PIN.
     pub fn set_pin(&mut self, id: &str, old_pin: &str, new_pin: &str, now: Instant) -> Outcome {
+        if self.is_guest(id) {
+            return Outcome::of(Status::NotAllowed);
+        }
         let Some(role) = self.store.get(id).map(|p| p.role) else {
             return Outcome::of(Status::UnknownProfile);
         };
@@ -250,6 +409,9 @@ impl<A: Accounts> ProfileService<A> {
         name: &str,
         now: Instant,
     ) -> Outcome {
+        if self.is_guest(id) || self.is_guest(actor_id) {
+            return Outcome::of(Status::NotAllowed);
+        }
         if self.store.get(id).is_none() {
             return Outcome::of(Status::UnknownProfile);
         }
@@ -302,6 +464,9 @@ impl<A: Accounts> ProfileService<A> {
         id: &str,
         now: Instant,
     ) -> Outcome {
+        if self.is_guest(id) {
+            return Outcome::of(Status::NotAllowed);
+        }
         let Some(target_role) = self.store.get(id).map(|p| p.role) else {
             return Outcome::of(Status::UnknownProfile);
         };
@@ -353,6 +518,11 @@ pub fn switch_line(id: &str, outcome: &Outcome) -> String {
         "ruya-profiles: SwitchTo {id} -> {}",
         outcome.status.as_str()
     )
+}
+
+/// The journal line of one `VerifyPin` call: like `switch_line`, never the PIN.
+pub fn verify_line(id: &str, outcome: &Outcome) -> String {
+    switch_line(id, outcome).replacen("SwitchTo", "VerifyPin", 1)
 }
 
 /// The journal line of one `Lock` call.
@@ -654,14 +824,46 @@ mod tests {
         );
     }
 
+    type Shared<T> = std::sync::Arc<std::sync::Mutex<T>>;
+
+    /// Fake accounts: records the useradd arguments of every create, every removal, and answers
+    /// `id_in_use` from a set of taken ids.
     #[derive(Clone, Default)]
     struct Recording {
-        removed: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+        removed: Shared<Vec<String>>,
+        /// (id, uid) of every guest removal asked for.
+        removed_guests: Shared<Vec<(String, u32)>>,
+        /// `useradd_args` of every create.
+        created: Shared<Vec<Vec<String>>>,
+        in_use: Shared<Vec<u32>>,
         fail: bool,
+        fail_create: Shared<bool>,
+        fail_remove_guest: Shared<bool>,
+    }
+
+    impl Recording {
+        fn guest_uids(&self) -> Vec<u32> {
+            self.created
+                .lock()
+                .unwrap()
+                .iter()
+                .filter_map(|args| {
+                    let at = args.iter().position(|a| a == "--uid")?;
+                    args[at + 1].parse().ok()
+                })
+                .collect()
+        }
     }
 
     impl Accounts for Recording {
-        fn create(&self, _profile_id: &str) -> std::io::Result<()> {
+        fn create(&self, profile_id: &str, kind: AccountKind) -> std::io::Result<()> {
+            self.created
+                .lock()
+                .unwrap()
+                .push(crate::accounts::useradd_args(profile_id, kind));
+            if *self.fail_create.lock().unwrap() {
+                return Err(std::io::Error::other("useradd failed"));
+            }
             Ok(())
         }
         fn remove(&self, profile_id: &str) -> std::io::Result<()> {
@@ -670,6 +872,19 @@ mod tests {
             }
             self.removed.lock().unwrap().push(profile_id.to_owned());
             Ok(())
+        }
+        fn remove_guest(&self, profile_id: &str, uid: u32) -> std::io::Result<()> {
+            if *self.fail_remove_guest.lock().unwrap() {
+                return Err(std::io::Error::other("userdel failed"));
+            }
+            self.removed_guests
+                .lock()
+                .unwrap()
+                .push((profile_id.to_owned(), uid));
+            Ok(())
+        }
+        fn id_in_use(&self, id: u32) -> std::io::Result<bool> {
+            Ok(self.in_use.lock().unwrap().contains(&id))
         }
     }
 
@@ -814,5 +1029,285 @@ mod tests {
         let mut again = ProfileService::new(store, NoAccounts);
         assert_eq!(again.profiles().len(), 2);
         assert_eq!(again.switch_to("p1", "1234", now).status, Status::Ok);
+    }
+
+    // ---- RUY-125: VerifyPin and temporary guests ----
+
+    /// The recording fixture with p1 (admin, PIN 1234) signed in.
+    fn signed_in(accounts: Recording) -> (tempfile::TempDir, ProfileService<Recording>, Instant) {
+        let (dir, mut svc, now) = recording_fixture(accounts);
+        assert_eq!(svc.switch_to("p1", "1234", now).status, Status::Ok);
+        (dir, svc, now)
+    }
+
+    fn guest_numbers(svc: &ProfileService<Recording>) -> Vec<u32> {
+        svc.guests().iter().map(|g| g.number).collect()
+    }
+
+    #[test]
+    fn verify_pin_checks_and_never_signs_in() {
+        let (_dir, mut svc, now) = recording_fixture(Recording::default());
+        assert_eq!(svc.switch_to("p2", "", now).status, Status::Ok);
+        let o = svc.verify_pin("p1", "1234", now);
+        assert_eq!((o.status, o.attempts_left), (Status::Ok, 0));
+        assert_eq!(svc.active(), Some("p2"), "the right PIN does not switch");
+        let o = svc.verify_pin("p1", "0000", now);
+        assert_eq!(
+            (o.status, o.attempts_left),
+            (Status::WrongPin, FREE_ATTEMPTS - 1)
+        );
+        let o = svc.verify_pin("p1", "", now);
+        assert_eq!(
+            (o.status, o.attempts_left),
+            (Status::PinRequired, FREE_ATTEMPTS - 1)
+        );
+        assert_eq!(svc.verify_pin("p2", "", now).status, Status::Ok, "no PIN");
+        assert_eq!(
+            svc.verify_pin("nope", "", now).status,
+            Status::UnknownProfile
+        );
+        assert_eq!(svc.active(), Some("p2"), "VerifyPin never switches");
+    }
+
+    #[test]
+    fn verify_pin_shares_the_lockout_with_switch_to() {
+        let (_dir, mut svc, now) = recording_fixture(Recording::default());
+        for _ in 1..FREE_ATTEMPTS {
+            assert_eq!(svc.verify_pin("p1", "0000", now).status, Status::WrongPin);
+        }
+        let o = svc.verify_pin("p1", "0000", now);
+        assert_eq!(
+            (o.status, o.retry_after),
+            (Status::LockedOut, FIRST_LOCKOUT)
+        );
+        assert_eq!(svc.switch_to("p1", "1234", now).status, Status::LockedOut);
+        assert_eq!(svc.verify_pin("p1", "1234", now).status, Status::LockedOut);
+        assert_eq!(svc.active(), None);
+    }
+
+    #[test]
+    fn guests_are_numbered_lowest_free_and_capped_at_three() {
+        let (_dir, mut svc, _now) = signed_in(Recording::default());
+        let mut ids = Vec::new();
+        for expected in 1..=MAX_GUESTS {
+            let g = svc.create_guest();
+            assert_eq!((g.status, g.number), (Status::Ok, expected));
+            ids.push(g.id);
+        }
+        assert_eq!(ids, ["p3", "p4", "p5"], "ids come from the profile counter");
+        assert_eq!(svc.create_guest(), GuestOutcome::of(Status::NotAllowed));
+        assert_eq!(svc.remove_guest("p3"), Status::Ok);
+        assert_eq!(guest_numbers(&svc), [2, 3]);
+        let g = svc.create_guest();
+        assert_eq!((g.status, g.id.as_str(), g.number), (Status::Ok, "p6", 1));
+        assert_eq!(guest_numbers(&svc), [1, 2, 3]);
+        // Avatars come from the CreateProfile palette.
+        assert!(svc
+            .guests()
+            .iter()
+            .all(|g| AVATAR_COLOURS.contains(&g.avatar.as_str())));
+    }
+
+    #[test]
+    fn a_guest_needs_a_signed_in_profile() {
+        let (_dir, mut svc, _now) = recording_fixture(Recording::default());
+        assert_eq!(svc.create_guest(), GuestOutcome::of(Status::NotAllowed));
+        assert!(svc.guests().is_empty());
+    }
+
+    #[test]
+    fn guests_are_not_profiles_and_only_join() {
+        let (_dir, mut svc, now) = signed_in(Recording::default());
+        let g = svc.create_guest();
+        assert_eq!(g.status, Status::Ok);
+        let ids: Vec<_> = svc.profiles().iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, ["p1", "p2"], "ListProfiles never shows a guest");
+        let id = g.id.as_str();
+        assert_eq!(svc.switch_to(id, "", now).status, Status::NotAllowed);
+        assert_eq!(svc.verify_pin(id, "", now).status, Status::NotAllowed);
+        assert_eq!(svc.set_pin(id, "", "4321", now).status, Status::NotAllowed);
+        assert_eq!(
+            svc.rename_profile("p1", "1234", id, "Bob", now).status,
+            Status::NotAllowed
+        );
+        assert_eq!(
+            svc.rename_profile(id, "", id, "Bob", now).status,
+            Status::NotAllowed
+        );
+        assert_eq!(
+            svc.delete_profile("p1", "1234", id, now).status,
+            Status::NotAllowed
+        );
+        assert_eq!(svc.active(), Some("p1"));
+        assert_eq!(svc.guests().len(), 1, "nothing removed the guest");
+    }
+
+    #[test]
+    fn remove_guest_never_removes_a_profile() {
+        let accounts = Recording::default();
+        let (_dir, mut svc, _now) = signed_in(accounts.clone());
+        assert_eq!(svc.remove_guest("p2"), Status::UnknownProfile);
+        assert_eq!(svc.remove_guest("nope"), Status::UnknownProfile);
+        assert_eq!(svc.profiles().len(), 2);
+        assert!(accounts.removed.lock().unwrap().is_empty());
+        assert!(accounts.removed_guests.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn remove_guest_wipes_the_user_and_a_failure_keeps_the_guest() {
+        let accounts = Recording::default();
+        let (dir, mut svc, _now) = signed_in(accounts.clone());
+        let g = svc.create_guest();
+        *accounts.fail_remove_guest.lock().unwrap() = true;
+        assert_eq!(svc.remove_guest(&g.id), Status::Failed);
+        assert_eq!(svc.guests().len(), 1);
+        *accounts.fail_remove_guest.lock().unwrap() = false;
+        assert_eq!(svc.remove_guest(&g.id), Status::Ok);
+        assert_eq!(
+            *accounts.removed_guests.lock().unwrap(),
+            vec![(g.id.clone(), 50000)]
+        );
+        assert!(svc.guests().is_empty());
+        let store = Store::open(dir.path().join("profiles.toml")).unwrap();
+        assert!(store.guests().is_empty(), "the removal is saved");
+    }
+
+    #[test]
+    fn lock_and_a_profile_change_wipe_every_guest() {
+        let accounts = Recording::default();
+        let (dir, mut svc, now) = signed_in(accounts.clone());
+        svc.create_guest();
+        svc.create_guest();
+        // Signing the same profile in again is not a session change.
+        assert_eq!(svc.switch_to("p1", "1234", now).status, Status::Ok);
+        assert_eq!(svc.guests().len(), 2);
+        // A failed switch changes nothing either.
+        assert_eq!(svc.switch_to("p1", "0000", now).status, Status::WrongPin);
+        assert_eq!(svc.guests().len(), 2);
+        assert_eq!(svc.switch_to("p2", "", now).status, Status::Ok);
+        assert!(svc.guests().is_empty(), "a switch ends the session");
+        assert_eq!(accounts.removed_guests.lock().unwrap().len(), 2);
+
+        svc.create_guest();
+        svc.lock();
+        assert!(svc.guests().is_empty(), "Lock ends the session");
+        assert_eq!(accounts.removed_guests.lock().unwrap().len(), 3);
+        let store = Store::open(dir.path().join("profiles.toml")).unwrap();
+        assert!(store.guests().is_empty());
+    }
+
+    #[test]
+    fn a_restart_wipes_every_guest() {
+        let accounts = Recording::default();
+        let (dir, mut svc, _now) = signed_in(accounts.clone());
+        svc.create_guest();
+        svc.create_guest();
+        drop(svc); // a crash: no Lock
+        let store = Store::open(dir.path().join("profiles.toml")).unwrap();
+        assert_eq!(store.guests().len(), 2, "the guests were persisted");
+        let again = ProfileService::new(store, accounts.clone());
+        assert!(again.guests().is_empty());
+        let removed: Vec<_> = accounts
+            .removed_guests
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(id, _)| id.clone())
+            .collect();
+        assert_eq!(removed, ["p3", "p4"]);
+        let store = Store::open(dir.path().join("profiles.toml")).unwrap();
+        assert!(store.guests().is_empty());
+    }
+
+    #[test]
+    fn guest_uids_go_up_and_are_never_reused() {
+        let accounts = Recording::default();
+        let (dir, mut svc, now) = signed_in(accounts.clone());
+        let a = svc.create_guest();
+        let b = svc.create_guest();
+        assert_eq!(svc.remove_guest(&b.id), Status::Ok);
+        assert_eq!(svc.remove_guest(&a.id), Status::Ok);
+        svc.create_guest();
+        svc.lock();
+        // A restart reads the counter back.
+        drop(svc);
+        let store = Store::open(dir.path().join("profiles.toml")).unwrap();
+        let mut svc = ProfileService::new(store, accounts.clone());
+        assert_eq!(svc.switch_to("p1", "1234", now).status, Status::Ok);
+        svc.create_guest();
+        assert_eq!(accounts.guest_uids(), [50000, 50001, 50002, 50003]);
+    }
+
+    #[test]
+    fn a_uid_in_use_is_skipped_and_a_failed_create_burns_its_uid() {
+        let accounts = Recording::default();
+        accounts
+            .in_use
+            .lock()
+            .unwrap()
+            .extend([50000, 50001, 50003]);
+        let (_dir, mut svc, _now) = signed_in(accounts.clone());
+        let g = svc.create_guest();
+        assert_eq!(g.status, Status::Ok);
+        assert_eq!(svc.guests()[0].uid, 50002);
+        *accounts.fail_create.lock().unwrap() = true;
+        let failed = svc.create_guest();
+        assert_eq!(failed, GuestOutcome::of(Status::Failed));
+        assert_eq!(svc.guests().len(), 1, "no record of a failed guest");
+        assert_eq!(
+            accounts.removed_guests.lock().unwrap().last(),
+            Some(&("p4".to_owned(), 50004)),
+            "the half-made user is removed"
+        );
+        *accounts.fail_create.lock().unwrap() = false;
+        let g = svc.create_guest();
+        assert_eq!((g.status, g.id.as_str()), (Status::Ok, "p5"));
+        assert_eq!(accounts.guest_uids(), [50002, 50004, 50005]);
+    }
+
+    #[test]
+    fn the_guest_range_runs_out() {
+        let accounts = Recording::default();
+        let (dir, svc, now) = signed_in(accounts.clone());
+        drop(svc);
+        // A store whose counter is at the last guest uid.
+        let path = dir.path().join("profiles.toml");
+        let text = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(&path, format!("next_guest_uid = 59999\n{text}")).unwrap();
+        let store = Store::open(&path).unwrap();
+        let mut svc = ProfileService::new(store, accounts.clone());
+        svc.switch_to("p1", "1234", now);
+        assert_eq!(svc.create_guest().status, Status::Ok);
+        assert_eq!(svc.create_guest(), GuestOutcome::of(Status::Full));
+        assert_eq!(accounts.guest_uids(), [59999]);
+    }
+
+    #[test]
+    fn useradd_gets_a_guest_uid_for_a_guest_and_a_cap_for_a_profile() {
+        let accounts = Recording::default();
+        let (_dir, mut svc, now) = signed_in(accounts.clone());
+        svc.create_guest();
+        svc.create_profile("p1", "1234", "Bo", "standard", "", now);
+        let created = accounts.created.lock().unwrap().clone();
+        // p1 and p2 (the fixture), the guest p3, the profile p4.
+        assert_eq!(created.len(), 4);
+        for args in [&created[0], &created[1], &created[3]] {
+            let joined = args.join(" ");
+            assert!(joined.contains("-K UID_MAX=49999"), "{joined}");
+            assert!(!joined.contains("--uid"), "{joined}");
+        }
+        let guest = created[2].join(" ");
+        assert!(guest.contains("--uid 50000"), "{guest}");
+        assert!(guest.contains("RuyaOS profile (guest)"), "{guest}");
+        assert!(!guest.contains("UID_MAX"), "{guest}");
+    }
+
+    #[test]
+    fn verify_pin_journal_line_never_has_the_pin() {
+        let (_dir, mut svc, now) = recording_fixture(Recording::default());
+        let o = svc.verify_pin("p1", "9876", now);
+        let line = verify_line("p1", &o);
+        assert_eq!(line, "ruya-profiles: VerifyPin p1 -> wrong-pin");
+        assert!(!line.contains("9876"));
     }
 }
