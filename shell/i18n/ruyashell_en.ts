@@ -3207,8 +3207,8 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>audio playing</source>
-        <translation>audio playing</translation>
+        <source>sound playing (the screen saver can still start)</source>
+        <translation>sound playing (the screen saver can still start)</translation>
     </message>
     <message>
         <location line="+1"/>

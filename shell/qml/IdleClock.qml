@@ -11,7 +11,9 @@ import RuyaShell
 //   - `quietSeconds`: the same, but time during which something holds the console awake (an
 //     `IdleInhibit` reason: an app's Wayland idle-inhibitor, a Store job, an update being fetched,
 //     audio playing) counts as activity. The countdown of the stages below runs on this one, so
-//     "nothing idles while something is going on" is a single rule.
+//     "nothing idles while something is going on" is a single rule. One exception (RUY-562):
+//     audio holds "screen off" and "sleep" but not the saver, which runs on its own countdown
+//     (`lastSaverBusyMs`) that every holder but audio keeps at zero.
 //   - `stage`: "active" -> "saver" -> "off" -> "sleep", entered when `quietSeconds` reaches the
 //     times of DeviceSettings (Off/never = 0 skips a stage). A stage is only ever left by input
 //     (`noteInput()`), or by the machine having been asleep (a resume).
@@ -61,6 +63,8 @@ QtObject {
     // ---- state ----
     property double lastInputMs: now()
     property double lastBusyMs: lastInputMs
+    // The same, for the holders that also hold the saver (everything but audio, RUY-562).
+    property double lastSaverBusyMs: lastInputMs
     property double lastEvalMs: lastInputMs
     property double lastSleptMs: slept()
     // Until when (`now()` ms) input is swallowed after waking from the dark screen or from sleep.
@@ -76,6 +80,10 @@ QtObject {
     // `wakeGapMs` after the screen came back.
     readonly property bool swallowInput: covered || wakeGuard
     readonly property bool held: IdleInhibit.held
+    // Held by something that also stops the saver. Audio holds only screen-off and sleep (RUY-562:
+    // the saver may start over music; the TV is the speaker, so the display stays on and the
+    // console awake). Every other reason holds all three steps.
+    readonly property bool saverHeld: IdleInhibit.reasons.some(r => r !== "audio")
     // Why the console is held awake right now, for the Power saving pane ("" when it is not).
     readonly property string heldBy: IdleInhibit.reasons.join(", ")
 
@@ -92,12 +100,14 @@ QtObject {
         return name === "sleep" ? 3 : name === "off" ? 2 : name === "saver" ? 1 : 0
     }
 
-    function stageFor(quiet) {
+    // `quiet`: seconds without input or any holder; `saverQuiet`: the same for the holders that
+    // hold the saver (all but audio).
+    function stageFor(quiet, saverQuiet) {
         if (sleepAfter > 0 && quiet >= sleepAfter)
             return "sleep"
         if (offAfter > 0 && quiet >= offAfter)
             return "off"
-        if (saverAfter > 0 && quiet >= saverAfter)
+        if (saverAfter > 0 && saverQuiet >= saverAfter)
             return "saver"
         return "active"
     }
@@ -161,10 +171,13 @@ QtObject {
         lastEvalMs = t
         if (held)
             lastBusyMs = t
+        if (saverHeld)
+            lastSaverBusyMs = t
         idleSeconds = Math.max(0, Math.floor((t - lastInputMs) / 1000))
         quietSeconds = Math.max(0, Math.floor((t - Math.max(lastInputMs, lastBusyMs)) / 1000))
+        const saverQuiet = Math.max(0, Math.floor((t - Math.max(lastInputMs, lastSaverBusyMs)) / 1000))
 
-        const target = stageFor(quietSeconds)
+        const target = stageFor(quietSeconds, saverQuiet)
         if (rank(target) > rank(stage))
             enter(target)
 
@@ -204,6 +217,7 @@ QtObject {
         stage = "active"
         lastInputMs = now()
         lastBusyMs = lastInputMs
+        lastSaverBusyMs = lastInputMs
         lastEvalMs = lastInputMs
         lastSleptMs = slept()
         wakeGuard = false
@@ -223,11 +237,18 @@ QtObject {
         const t = now()
         if (stage === "sleep") {
             consider(heartbeatMs)               // the resume check
-        } else if (!held) {
-            const quiet = (t - Math.max(lastInputMs, lastBusyMs)) / 1000
-            for (const at of [saverAfter, offAfter, sleepAfter]) {
-                if (at > 0 && at > quiet)
-                    consider((at - quiet) * 1000)
+        } else {
+            if (!held) {
+                const quiet = (t - Math.max(lastInputMs, lastBusyMs)) / 1000
+                for (const at of [offAfter, sleepAfter]) {
+                    if (at > 0 && at > quiet)
+                        consider((at - quiet) * 1000)
+                }
+            }
+            if (!saverHeld) {
+                const saverQuiet = (t - Math.max(lastInputMs, lastSaverBusyMs)) / 1000
+                if (saverAfter > 0 && saverAfter > saverQuiet)
+                    consider((saverAfter - saverQuiet) * 1000)
             }
         }
         if (padAfter > 0 && stage !== "sleep") {
@@ -248,6 +269,10 @@ QtObject {
     onHeldChanged: {
         // The countdown starts again from the moment the last holder lets go.
         lastBusyMs = now()
+        evaluate()
+    }
+    onSaverHeldChanged: {
+        lastSaverBusyMs = now()
         evaluate()
     }
     onSaverAfterChanged: evaluate()

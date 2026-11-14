@@ -3193,8 +3193,8 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>audio playing</source>
-        <translation>ses çalıyor</translation>
+        <source>sound playing (the screen saver can still start)</source>
+        <translation>ses çalıyor (ekran koruyucu yine de başlayabilir)</translation>
     </message>
     <message>
         <location line="+1"/>

@@ -30,7 +30,7 @@ SettingsPane {
         for (const r of reasons) {
             const w = r === "job" ? qsTr("a download or install")
                     : r === "update" ? qsTr("a system update")
-                    : r === "audio" ? qsTr("audio playing")
+                    : r === "audio" ? qsTr("sound playing (the screen saver can still start)")
                     : qsTr("an app")
             if (!words.includes(w))
                 words.push(w)

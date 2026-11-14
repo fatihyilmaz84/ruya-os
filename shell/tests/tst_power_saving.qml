@@ -364,16 +364,48 @@ Item {
             tryVerify(() => IdleInhibit.reasons.indexOf("update") < 0, 5000)
         }
 
-        function test_audio_playing_prevents_idling() {
+        // RUY-562: audio lets the saver start, and holds only the screen-off and sleep steps.
+        function test_audio_playing_lets_the_saver_start_but_holds_screen_off_and_sleep() {
             Audio.mockSetPlaying(true)
             tryVerify(() => Audio.playing)
             tryVerify(() => IdleInhibit.reasons.indexOf("audio") >= 0)
-            minutes(40)
+            minutes(9)
             compare(IdleClock.stage, "active")
+            minutes(1)
+            compare(IdleClock.stage, "saver", "the saver starts over music")
+            minutes(200)
+            compare(IdleClock.stage, "saver", "no display-off and no sleep while it plays")
+            compare(ScreenPower.on, true)
+            compare(Power.actionCount, 0)
             Audio.mockSetPlaying(false)
             tryVerify(() => IdleInhibit.reasons.indexOf("audio") < 0)
-            minutes(10)
-            compare(IdleClock.stage, "saver")
+            minutes(29)
+            compare(IdleClock.stage, "saver", "the screen-off countdown starts again at the stop")
+            minutes(1)
+            compare(IdleClock.stage, "off")
+        }
+
+        function test_audio_and_another_holder_hold_the_saver_until_the_other_lets_go() {
+            Audio.mockSetPlaying(true)
+            tryVerify(() => IdleInhibit.reasons.indexOf("audio") >= 0)
+            IdleInhibit.acquire("job")
+            minutes(40)
+            compare(IdleClock.stage, "active", "a job holds the saver even while music plays")
+            IdleInhibit.release("job")
+            minutes(9)
+            compare(IdleClock.stage, "active")
+            minutes(1)
+            compare(IdleClock.stage, "saver", "only audio is left: the saver starts")
+        }
+
+        function test_every_holder_but_audio_holds_the_saver() {
+            for (const reason of ["job", "update", "wayland:3"]) {
+                IdleClock.reset()
+                IdleInhibit.acquire(reason)
+                minutes(40)
+                compare(IdleClock.stage, "active", reason + " holds the saver")
+                IdleInhibit.release(reason)
+            }
         }
 
         // T-313: the shell's own ambient bed is a running PipeWire stream, but Devices1 leaves the
@@ -577,7 +609,8 @@ Item {
             compare(find("rowKeepingAwake").kind, "info")
             compare(find("rowKeepingAwake").value, "Nothing")
             IdleInhibit.acquire("audio")
-            compare(find("rowKeepingAwake").value, "audio playing", "a stuck holder is named")
+            compare(find("rowKeepingAwake").value, "sound playing (the screen saver can still start)",
+                    "a stuck holder is named, with what it still allows")
             IdleInhibit.release("audio")
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("categoryList").activeFocus, 2000, "Back leaves the pane for the list")
