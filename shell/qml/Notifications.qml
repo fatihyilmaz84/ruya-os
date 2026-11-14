@@ -15,12 +15,17 @@ import RuyaShell
 //   - an app in front with "Don't interrupt games" on (the default): only critical items show, as
 //     the compact toast; with it off, or with the Hub over the app, warnings, errors and critical ones;
 //   - the screen saver (IdleClock.covered): a toast waits until the screen is back; it is never
-//     drawn over the saver and wakes nothing.
+//     drawn over the saver and wakes nothing;
+//   - quiet hours (RUY-414, NotificationCentre.quietHours): the same as quiet mode while the console's
+//     clock is inside the span; the manual flag is not touched;
+//   - a source turned off (NotificationCentre.sourcesEnabled): no item and no toast.
 QtObject {
     id: notifications
 
     readonly property int maxVisible: 3
-    property int durationMs: Theme.toastMs          // overridable (tests use a short one)
+    // How long a toast stays: the profile's "Show each for" (NotificationCentre.toastSeconds, RUY-414);
+    // tests assign a short one, which replaces the binding.
+    property int durationMs: NotificationCentre.toastSeconds * 1000
 
     // Toasts on screen, oldest first: { toastId, text, kind, iconText, iconName, detail, footer,
     // footerAction, footerIcon, sticky, key, urgency }.
@@ -39,7 +44,56 @@ QtObject {
     // games" does not hold back its answers.
     property bool overlayOpen: false
     readonly property bool saverOn: IdleClock.covered
-    readonly property bool quiet: NotificationCentre.quiet
+    // Quiet mode, by hand or by the schedule: the manual flag stays what the player set, quiet hours only
+    // add to it (RUY-414).
+    readonly property bool quiet: NotificationCentre.quiet || inQuietHours
+    readonly property bool inQuietHours: quietNow(NotificationCentre.quietHours, clockNow)
+    // "HH:MM" on the centre's clock in the console's zone; read again at each minute change.
+    property string clockNow: ""
+    Component.onCompleted: readClock()
+    // "HH:MM" -> minutes since midnight; -1 when it is not a time.
+    function minutesOf(text) {
+        const m = /^([01][0-9]|2[0-3]):([0-5][0-9])$/.exec(String(text ?? ""))
+        return m ? Number(m[1]) * 60 + Number(m[2]) : -1
+    }
+    // Is `clock` inside the schedule {enabled, from, to}? `to` may be before `from` (over midnight); from
+    // equal to to is an empty span.
+    function quietNow(hours, clock) {
+        if (!hours || hours.enabled !== true)
+            return false
+        const from = minutesOf(hours.from)
+        const to = minutesOf(hours.to)
+        const now = minutesOf(clock)
+        if (from < 0 || to < 0 || now < 0 || from === to)
+            return false
+        return from < to ? (now >= from && now < to) : (now >= from || now < to)
+    }
+    function readClock() {
+        clockNow = TimeZone.formatClock(NotificationCentre.nowMs())
+        clockTimer.interval = TimeZone.msToNextTick(NotificationCentre.nowMs())
+        clockTimer.restart()
+    }
+    // One single-shot timer for the schedule, armed for the next minute; it does not depend on the Hub
+    // (the Hub's budgets: nothing polls while it is hidden).
+    readonly property Timer clockTimer: Timer {
+        repeat: false
+        onTriggered: notifications.readClock()
+    }
+    // The zone or the clock was set (a test pins it): read again at once.
+    readonly property Connections clockLink: Connections {
+        target: TimeZone
+        function onClockTextChanged() { notifications.readClock() }
+        function onTimezoneChanged() { notifications.readClock() }
+    }
+    // The end of the span while quiet hours hold ("" otherwise): the Quiet mode rows name it.
+    readonly property string quietUntil: inQuietHours ? NotificationCentre.quietHours.to : ""
+
+    // Does the profile want items of this source? `source`: "system" | "updates" | "devices" | "store" |
+    // "app" (then `appId`). A source that is not listed is on (SourcesEnabled).
+    function sourceOn(source, appId) {
+        const key = source === "app" ? "app:" + (appId ?? "") : source
+        return NotificationCentre.sourcesEnabled[key] !== false
+    }
     readonly property bool dontInterrupt: NotificationCentre.dontInterruptGames
 
     onAppInFrontChanged: reconsider()
@@ -102,6 +156,23 @@ QtObject {
         pending = back.concat(pending)
     }
 
+    // How long ago an item came: "Just now", "2 min ago", the local time today (T-213), "Yesterday",
+    // "3 days ago". `nowMs` is the clock it is read against (NotificationCentre.nowMs()). The centre sheet
+    // and the Hub's Notifications panel both say it this way.
+    function ageText(ms, nowMs) {
+        const diff = Math.max(0, nowMs - ms)
+        if (diff < 60000)
+            return qsTr("Just now")
+        if (diff < 3600000)
+            return qsTr("%n min ago", "", Math.floor(diff / 60000))
+        const day = TimeZone.formatIsoDate(ms)
+        if (day === TimeZone.formatIsoDate(nowMs))
+            return TimeZone.formatClock(ms)
+        if (day === TimeZone.formatIsoDate(nowMs - 86400000))
+            return qsTr("Yesterday")
+        return qsTr("%n days ago", "", Math.max(2, Math.round(diff / 86400000)))
+    }
+
     // A name that came from outside (a game, an app, a device) as it may appear in a toast: at most
     // `max` characters, cut with an ellipsis, so the rest of the sentence always survives (04 section 6).
     function named(name, max) {
@@ -162,6 +233,8 @@ QtObject {
     function show(text, kind, iconText, iconName, detail, options) {
         const k = normalKind(kind)
         const o = options ?? {}
+        if (!sourceOn(o.source ?? "system", o.appId))
+            return                      // a source turned off makes no toast and keeps no item (RUY-414)
         keep("", text, k, iconName, detail, o)
         const link = linkFooter(o.actions)
         enqueue({ text: text, kind: k, iconText: iconText ?? "", iconName: iconName ?? "",
@@ -177,6 +250,8 @@ QtObject {
         dropToast(key)
         const k = normalKind(kind)
         const o = options ?? {}
+        if (!sourceOn(o.source ?? "system", o.appId))
+            return
         keep(key, text, k, "", detail, o)
         const own = footer ?? ""
         const link = own === "" ? linkFooter(o.actions) : ""
@@ -252,6 +327,7 @@ QtObject {
                                     footerIcon: link !== "" ? "notifications" : "", sticky: false, key: "",
                                     urgency: item.urgency ?? "normal" })
         }
+        function onSettingsChanged() { notifications.readClock() }      // the schedule was set
         function onProfileChanged() {
             const keys = Object.keys(notifications.keyed)
             for (let i = 0; i < keys.length; ++i)

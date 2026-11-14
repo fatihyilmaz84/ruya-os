@@ -151,7 +151,7 @@
 
     <!-- Per-source switches (RUY-414): source ("system", "updates", "devices", "store", or
          "app:<app id>") -> on. A source that is not listed is on. An item of a source that is off
-         is not kept and not shown. -->
+         is not kept and not shown (Post answers "ok" with id 0). -->
     <property name="SourcesEnabled" type="a{sb}" access="readwrite">
       <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
     </property>

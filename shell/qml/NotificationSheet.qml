@@ -87,17 +87,7 @@ FocusScope {
 
     // "Just now", "2 min ago", the local time today (T-213), "Yesterday", "3 days ago".
     function timeText(ms) {
-        const diff = Math.max(0, nowMs - ms)
-        if (diff < 60000)
-            return qsTr("Just now")
-        if (diff < 3600000)
-            return qsTr("%n min ago", "", Math.floor(diff / 60000))
-        const day = TimeZone.formatIsoDate(ms)
-        if (day === TimeZone.formatIsoDate(nowMs))
-            return TimeZone.formatClock(ms)
-        if (day === TimeZone.formatIsoDate(nowMs - 86400000))
-            return qsTr("Yesterday")
-        return qsTr("%n days ago", "", Math.max(2, Math.round(diff / 86400000)))
+        return Notifications.ageText(ms, nowMs)
     }
 
     function open() {

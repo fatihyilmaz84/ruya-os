@@ -1193,6 +1193,10 @@ FocusScope {
         } else if (action.startsWith("settings:")) {
             NotificationCentre.invoke(item.id, action)
             notificationSheet.close()
+            if (systemPanel.open) {         // from the Hub (RUY-414): it leaves the Hub like its own Settings links
+                openSettingsFromHub(action.slice(9))
+                return
+            }
             while (pageOpen)
                 closePage()
             Sfx.page()
@@ -1206,6 +1210,7 @@ FocusScope {
         if ((item.appId ?? "") === "")
             return
         notificationSheet.close()
+        systemPanel.open = false            // an app opens: the Hub leaves too (RUY-414), as its own launches do
         launchApp(item.appId, titleOfApp(item.appId), "")
     }
 
@@ -2285,7 +2290,7 @@ FocusScope {
         id: modalLayer
         objectName: "modalLayer"
         anchors.fill: parent
-        z: 15
+        z: notificationSheet.visible && systemPanel.open ? 21 : 15
         glassSource: l0          // the layer the glass sheets of the picker modals blur
     }
 
@@ -2344,7 +2349,8 @@ FocusScope {
         onClosed: Qt.callLater(root.rescueFocus)      // its return target may be gone (nothing is hidden any more)
     }
 
-    // The notification centre (RUY-413): a sheet in the modal layer, opened from the bell.
+    // The notification centre (RUY-413): a sheet in the modal layer, opened from the bell, or from the Hub's
+    // Notifications panel (RUY-414), where the layer is raised above the Hub (z 20) while the sheet shows.
     NotificationSheet {
         id: notificationSheet
         objectName: "notificationSheet"
@@ -2411,6 +2417,8 @@ FocusScope {
     readonly property var hintList: {
         if (modeConfirm.shown)
             return modeConfirm.modalHints
+        if (notificationSheet.shown)        // the sheet over the Hub says its own buttons (RUY-414)
+            return notificationSheet.modalHints
         if (systemPanel.open)
             return systemPanel.hints
         if (powerConfirm.shown)           // the centre's Restart now asks here (RUY-413)
@@ -2548,6 +2556,9 @@ FocusScope {
             Profiles.lock()                  // signedIn -> false; routeFocus() shows the picker
         }
         onSettingsRequested: category => root.openSettingsFromHub(category)
+        onNotificationsRequested: notificationSheet.open()
+        onNotificationActionRequested: (item, action) => root.runNotificationAction(item, action)
+        onNotificationOpenRequested: item => root.openNotificationSource(item)
         onPowerRequested: action => powerConfirm.open(action)    // focus returns here if cancelled
     }
 

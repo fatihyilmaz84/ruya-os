@@ -234,6 +234,7 @@ qt_add_qml_module(ruyashell
         qml/NotificationBell.qml
         qml/NotificationRow.qml
         qml/NotificationSheet.qml
+        qml/NotificationsPane.qml
         qml/LaunchSplash.qml
         qml/ThermalNotice.qml
         qml/ThermalPolicy.qml

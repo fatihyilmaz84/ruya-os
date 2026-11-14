@@ -67,6 +67,11 @@ Item {
     signal switchProfileRequested()
     signal powerRequested(string action)
     signal settingsRequested(string category) // a panel's link to Settings: the shell leaves the Hub and opens it
+    // The Notifications panel (RUY-414): "See all" opens the centre sheet above the Hub; A on an item runs its
+    // first action (Shell.runNotificationAction) or opens its source (Shell.openNotificationSource).
+    signal notificationsRequested()
+    signal notificationActionRequested(var item, string action)
+    signal notificationOpenRequested(var item)
 
     // A pad came or went (the Controllers panel's rows): the list follows and the focus stays in the panel.
     Connections {
@@ -254,15 +259,18 @@ Item {
 
     // ---- panels (T-450, T-452): a panel replaces the Quick Hub's rows in this same list ---------------------
     // The panels that exist, in the order of their icons (02 §1.6); an icon appears only when its panel is built.
-    readonly property var panelIds: ["audio", "controllers", "performance"]
+    readonly property var panelIds: ["audio", "controllers", "performance", "notifications"]
     onPanelIdsChanged: rebuild()
 
     // A panel is a table of row descriptors (T-452), the one place a row's behaviour is written:
-    //   { key, label, kind: "toggle" | "choice" | "slider" | "info" | "action",
-    //     value(): the text at the right (toggle, choice, slider) or under the label (info; none: the label alone),
+    //   { key, label, kind: "toggle" | "choice" | "slider" | "info" | "action" | "item",
+    //     value(): the text at the right (toggle, choice, slider) or under the label (info; none: the label alone;
+    //       item: the detail line under the title),
+    //     item (kind "item", a notification): the centre's item; activate() runs its first action or opens its
+    //       source and clears it; clear() clears it (Start, the Menu key; absent on a pinned item),
     //     icon: an icon name before an info row's text (optional),
     //     fraction(): 0..1, how far a slider's bar is full (slider),
-    //     activate(): Accept (toggle, action; a slider's is optional: Volume mutes),
+    //     activate(): Accept (toggle, action; a slider's is optional: Volume mutes), verb: the action's hint ("Open"),
     //     adjust(delta): Left/Right, delta -1 or +1 (slider),
     //     choices(): [{ id, name, current }] and select(id) (choice; `async` when the answer comes later) }
     // The hint bar, the delegate, Accept and Left/Right all derive from `kind`. To add a panel: list it in
@@ -316,7 +324,74 @@ Item {
                   select: ms => { DeviceSettings.performanceIntervalMs = ms } }
             ] }
         }
+        if (id === "notifications")
+            return notificationsPanel()
         return null
+    }
+
+    // ---- the Notifications panel (RUY-414, 02 §1.6) -------------------------------------------------------
+    // Quiet mode (focus lands here), the four newest items (pinned first, as the centre lists them), Clear all
+    // while there is something to clear, and See all (N), which opens the centre sheet above the Hub.
+    property double notifNow: 0        // the clock the ages are read against; set on opening and each minute while shown
+    function notificationsPanel() {
+        const all = NotificationCentre.items
+        const shownItems = all.slice(0, 4)
+        const manual = NotificationCentre.quiet
+        return { title: qsTr("Notifications"), rows: [
+            { key: "notifications:quiet", label: qsTr("Quiet mode"), kind: "toggle",
+              value: () => manual ? qsTr("On") : (Notifications.inQuietHours ? qsTr("Quiet hours until %1").arg(Notifications.quietUntil) : qsTr("Off")),
+              activate: () => NotificationCentre.setQuiet(!NotificationCentre.quiet) },
+            ...(shownItems.length === 0 ? [
+                { key: "notifications:none", label: qsTr("No notifications"), kind: "info" }
+            ] : shownItems.map(it => ({
+                key: "notifications:n:" + it.id, label: it.title ?? "", kind: "item", item: it,
+                value: () => itemDetail(it),
+                activate: () => runItem(it),
+                clear: it.pinned ? undefined : (() => NotificationCentre.dismiss(it.id)) }))),
+            ...(all.some(i => !i.pinned) ? [
+                { key: "notifications:clear", label: qsTr("Clear all"), kind: "action", verb: qsTr("Clear all"),
+                  activate: () => NotificationCentre.dismissAll() }
+            ] : []),
+            { key: "notifications:all", label: qsTr("See all (%n)", "", all.length), kind: "action",
+              activate: () => menu.notificationsRequested() }
+        ] }
+    }
+    // "2 min ago · Download finished": the age first, then the item's detail.
+    function itemDetail(it) {
+        const age = Notifications.ageText(it.time ?? 0, notifNow)
+        return (it.body ?? "") !== "" ? qsTr("%1 · %2").arg(age).arg(it.body) : age
+    }
+    // A on an item: its first action (the shell runs it; an app's goes back to the app), else its app opens;
+    // an item that does neither is cleared. The item goes with it (a pinned one stays until its source ends it).
+    function runItem(it) {
+        const actions = it.actions ?? []
+        if (actions.length > 0) {
+            menu.notificationActionRequested(it, actions[0].id)
+        } else if ((it.appId ?? "") !== "") {
+            menu.notificationOpenRequested(it)
+            if (!it.pinned)
+                NotificationCentre.dismiss(it.id)
+        } else if (!it.pinned) {
+            NotificationCentre.dismiss(it.id)
+        }
+    }
+    function readNotifClock() { notifNow = NotificationCentre.nowMs() }
+    // What the player sees changed under the open panel (an item came, went, or was cleared): the rows follow.
+    Connections {
+        target: NotificationCentre
+        function onItemsChanged() {
+            if (menu.panelId === "notifications") {
+                menu.readNotifClock()
+                menu.rebuild()
+            }
+        }
+    }
+    // The ages move on while the panel is shown, and only then (the Hub polls nothing while hidden, 02 §1.6).
+    Timer {
+        interval: 60000
+        repeat: true
+        running: menu.open && menu.panelId === "notifications"
+        onTriggered: menu.readNotifClock()
     }
     // A panel icon's glyph and name (the name shows under the focused icon and is its accessible name).
     function iconOf(id) {
@@ -324,6 +399,7 @@ Item {
         case "audio": return "volume_up"
         case "controllers": return "sports_esports"
         case "performance": return "monitoring"
+        case "notifications": return "notifications"
         case "power": return "power_settings_new"
         }
         return ""
@@ -421,6 +497,8 @@ Item {
         row.select(next.id)
     }
     function openPanel(id) {
+        if (id === "notifications")
+            readNotifClock()
         panelId = id
         actions.currentIndex = 0               // the panel's first row
         actions.positionViewAtBeginning()
@@ -453,7 +531,14 @@ Item {
             case "choice": return row.choices().length < 2 ? [back]
                                   : [{ action: "accept", text: qsTr("Next") }, { actions: ["left", "right"], text: qsTr("Change") }, back]
             case "toggle": return [{ action: "accept", text: qsTr("Toggle") }, back]
-            case "action": return [{ action: "accept", text: qsTr("Open") }, back]
+            case "action": return [{ action: "accept", text: row.verb ?? qsTr("Open") }, back]
+            case "item": {
+                const it = row.item
+                const first = (it.actions ?? [])[0]
+                const verb = first ? first.label : ((it.appId ?? "") !== "" ? qsTr("Open") : (it.pinned ? "" : qsTr("Clear")))
+                return [...(verb !== "" ? [{ action: "accept", text: verb }] : []),
+                        ...(row.clear ? [{ action: "options", text: qsTr("Clear") }] : []), back]
+            }
             }
             return [back]               // info: nothing to press
         }
@@ -823,6 +908,12 @@ Item {
                                 menu.stepColumn(rowKey, toRight ? 1 : -1)
                             } else if (event.isAutoRepeat) {
                                 // Holding Guide repeats the key: not a second press that would close us.
+                            } else if ((event.key === Qt.Key_Menu || event.key === Qt.Key_Delete) && row && row.kind === "item") {
+                                // Start clears the item, as in the centre sheet; a pinned one has no clear().
+                                if (row.clear) {
+                                    Sfx.select()
+                                    row.clear()
+                                }
                             } else if (menu.powerMode && BackKey.isBackOrBackspace(event.key)) {
                                 Sfx.back()
                                 menu.activate("back")
@@ -854,6 +945,7 @@ Item {
                             readonly property bool isInfo: row !== null && row.kind === "info"
                             readonly property bool isSlider: row !== null && row.kind === "slider"
                             readonly property bool isAction: row !== null && row.kind === "action"
+            readonly property bool isItem: row !== null && row.kind === "item"
                             // (each reads `row` itself: the flags above may not have followed a changed `row` yet)
                             readonly property string rowText: row !== null && !isVolume && row.kind !== "slider" && row.value ? row.value() : ""
                             readonly property string sliderText: row !== null && row.kind === "slider" && row.value ? row.value() : ""
@@ -961,7 +1053,8 @@ Item {
                                     objectName: "hubIconRow"
                                     width: action.width
                                     u: menu.u
-                                    items: menu.iconIds.map(id => ({ key: "panel:" + id, icon: menu.iconOf(id), label: menu.titleOf(id) }))
+                                    items: menu.iconIds.map(id => ({ key: "panel:" + id, icon: menu.iconOf(id), label: menu.titleOf(id),
+                                                    badge: id === "notifications" && NotificationCentre.unreadCount > 0 }))
                                     currentIndex: menu.iconCol
                                     focused: action.focused
                                 }
@@ -969,7 +1062,7 @@ Item {
 
                             Text {
                                 id: itemLabel
-                                visible: !action.special && !action.isInfo
+                                visible: !action.special && !action.isInfo && !action.isItem
                                 readonly property real leftEdge: Theme.spaceL * menu.u
                                 // Slider and panel rows start at the left edge; the others are centred.
                                 x: action.isSlider || (action.isPanelRow && !action.isAction) ? leftEdge : (action.width - width) / 2
@@ -1016,7 +1109,7 @@ Item {
                             Row {
                                 id: panelValue
                                 objectName: "hubRowValue"
-                                visible: action.isPanelRow && !action.isInfo && !action.isSlider
+                                visible: action.isPanelRow && !action.isInfo && !action.isSlider && !action.isItem
                                 anchors { right: parent.right; rightMargin: Theme.spaceL * menu.u; verticalCenter: parent.verticalCenter }
                                 spacing: Theme.spaceXs * menu.u
                                 readonly property bool arrows: action.isChoice && action.row.choices().length > 1
@@ -1045,6 +1138,60 @@ Item {
                                     text: "›"
                                     color: Theme.text
                                     font.pixelSize: Theme.typeBody * menu.u
+                                }
+                            }
+                            // A notification (an item row, RUY-414): the kind's 48 u badge, the title and under it the age and
+                            // the detail, compact enough for four of them without a scroll.
+                            Rectangle {
+                                id: itemBadge
+                                objectName: "hubItemBadge"
+                                visible: action.isItem
+                                x: (action.height - width) / 2
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 48 * menu.u              // token-ok: compact notification badge, 04 §5
+                                height: width
+                                radius: width / 2
+                                color: Theme.toastBadgeFill(action.isItem ? (action.row.item.kind ?? "info") : "info")
+                                Icon {
+                                    anchors.centerIn: parent
+                                    u: menu.u
+                                    size: 28            // token-ok: glyph of the compact badge
+                                    color: Theme.toastColor(action.isItem ? (action.row.item.kind ?? "info") : "info")
+                                    name: {
+                                        if (!action.isItem)
+                                            return ""
+                                        const it = action.row.item
+                                        return (it.icon ?? "") !== "" ? it.icon
+                                             : it.kind === "success" ? "check_circle"
+                                             : it.kind === "warning" ? "warning"
+                                             : it.kind === "error" ? "error" : "info"
+                                    }
+                                }
+                            }
+                            Column {
+                                id: itemTexts
+                                visible: action.isItem
+                                x: itemBadge.x + itemBadge.width + Theme.spaceS * menu.u
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: action.width - x - Theme.spaceL * menu.u
+                                Text {
+                                    objectName: "hubItemTitle"
+                                    width: parent.width
+                                    textFormat: Text.PlainText      // an app's words: never markup (T-286)
+                                    text: action.label
+                                    color: Theme.text
+                                    font.pixelSize: Theme.typeBody * menu.u
+                                    font.weight: Theme.weightDemiBold
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    objectName: "hubItemDetail"
+                                    width: parent.width
+                                    textFormat: Text.PlainText
+                                    text: action.rowText
+                                    color: Theme.text
+                                    font.pixelSize: Theme.typeCaption * menu.u
+                                    elide: Text.ElideRight
                                 }
                             }
                             // A reading (an info row, T-452): the label small above, the value under it at the full width, so
