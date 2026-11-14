@@ -25,7 +25,7 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 - **Images:**
   - **0.0.79 at fd8548e: built; VM 25/25 PASS**, the new checks included (input `start`, `useractive`; power-saving `padactive`, `audio`; reclaim lines). One timing flake passed on a re-run (RUY-597).
   - 0.0.79 doesn't contain RUY-568 or RUY-572 (merged after it).
-  - **The Dell still runs 0.0.76.** Next: `bash scripts/dell-update.sh 0.0.79` when the owner has it on (the oci archive is in `output/`; check it survived free-space).
+  - **The Dell runs 0.0.79** (installed at the end of lead-18; rollback 0.0.76). `system: degraded` only from `bootloader-update.service`: bootupd refuses the shim update under Secure Boot without the MS UEFI CA 2023 cert (known, RUY-24).
 
 ## Next, in this order
 1. **Dell with the owner on 0.0.79:**
@@ -51,7 +51,7 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
    - triage of about 45 `inbox` tickets.
 
 ## Concerns (ranked)
-1. Real hardware still lags the VM: the Dell is on 0.0.76. Everything owner-facing since then is VM-verified only.
+1. Real hardware: 0.0.79 is on the Dell but not yet checked by the owner. Everything owner-facing since 0.0.76 is VM-verified only.
 2. Builders' scripted edits. One `replace` rewrote 100 lines of dev-setup.md (fixed in 28f3b2a; the brief now asks for `git diff --stat`). Reviewers compare word-diffs.
 3. `shots` needs an unlocked desktop. Several overnight shots are unverified (RUY-562's note).
 4. Three builders ran at once twice tonight (small tickets). Keep to two.
