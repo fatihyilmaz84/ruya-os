@@ -5,6 +5,7 @@
 
 pub mod accounts;
 pub mod acl;
+pub mod activity;
 pub mod book;
 pub mod caps;
 pub mod dbus;

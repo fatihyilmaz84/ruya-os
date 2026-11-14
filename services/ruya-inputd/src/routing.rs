@@ -25,6 +25,7 @@ use std::time::{Duration, Instant};
 
 use crate::accounts::{valid_app_id, valid_profile_id, Accounts};
 use crate::acl;
+use crate::activity::ActivityGate;
 use crate::book::{Book, SaveAnswer, Summary};
 use crate::caps::Capability;
 use crate::engine::Engine;
@@ -173,6 +174,9 @@ pub enum Notice {
         device_id: String,
         family: String,
     },
+    /// A pad press or a stick or trigger move reached the app in front (`UserActive`, RUY-588);
+    /// rate-limited by `ActivityGate`, carries nothing.
+    UserActive,
     /// A journal line (without the "ruya-inputd: " prefix).
     Journal(String),
 }
@@ -422,6 +426,8 @@ pub struct Router<B: Backend> {
     /// The stable id of the pad that pressed last since the profile last changed. Only such a pad can
     /// become the next profile's `profile_pad`; a keyboard sign-in leaves it `None` (ADR-017 am. 6b).
     pad_since_change: Option<String>,
+    /// When pad input in `app` is announced to the shell as activity (RUY-588).
+    activity: ActivityGate,
 }
 
 impl<B: Backend> Router<B> {
@@ -444,12 +450,18 @@ impl<B: Backend> Router<B> {
             tests: BTreeMap::new(),
             book: Book::default(),
             active_input: None,
+            activity: ActivityGate::default(),
             profile_pad: None,
             pad_since_change: None,
         }
     }
 
     /// Where the controller profiles live (in memory until this is called).
+    /// Shortens the 30 s between two `UserActive` (the VM checks run the shell's clock faster).
+    pub fn set_activity_gap(&mut self, gap: Duration) {
+        self.activity.set_gap(gap);
+    }
+
     pub fn set_book(&mut self, book: Book) {
         self.book = book;
     }
@@ -559,8 +571,16 @@ impl<B: Backend> Router<B> {
         held
     }
 
-    /// One batch of a pad's input (one evdev `SYN_REPORT`).
+    /// `input_at` with the real clock, for the tests that do not care about time.
+    #[cfg(test)]
     pub fn input(&mut self, key: PadKey, inputs: &[PadInput]) {
+        self.input_at(key, inputs, Instant::now());
+    }
+
+    /// One batch of a pad's input (one evdev `SYN_REPORT`). In `app` the shell sees none of it, so
+    /// it is announced as `UserActive` (at most once per 30 s); in the other routes it arrives as
+    /// navigation keys, which the shell counts itself.
+    pub fn input_at(&mut self, key: PadKey, inputs: &[PadInput], now: Instant) {
         let app = self.route == Route::App;
         let mode = self.book.confirm_button(&self.profile);
         self.drain_book();
@@ -607,6 +627,9 @@ impl<B: Backend> Router<B> {
         }
         if !app {
             return;
+        }
+        if self.activity.note(inputs, now) {
+            self.notices.push(Notice::UserActive);
         }
         let Some(pad) = self.pads.get_mut(&key) else {
             return;
@@ -1651,6 +1674,47 @@ mod tests {
     }
 
     // ---- navigation keys -------------------------------------------------------------------
+
+    fn user_active(r: &mut Router<Fake>) -> usize {
+        r.take_notices()
+            .iter()
+            .filter(|n| matches!(n, Notice::UserActive))
+            .count()
+    }
+
+    #[test]
+    fn pad_input_to_an_app_is_announced_as_activity_once_per_gap() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        let t = t0();
+        r.take_notices();
+        r.input_at(a, &[press(PadButton::South)], t);
+        assert_eq!(user_active(&mut r), 1);
+        r.input_at(a, &[press(PadButton::East)], t + Duration::from_secs(5));
+        assert_eq!(user_active(&mut r), 0);
+        r.input_at(a, &[press(PadButton::East)], t + Duration::from_secs(31));
+        assert_eq!(user_active(&mut r), 1);
+    }
+
+    #[test]
+    fn stick_noise_to_an_app_is_not_activity() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        app(&mut r, "i1", STK, "p1");
+        r.take_notices();
+        r.input_at(a, &[PadInput::Axis(PadAxis::LeftX, 500)], t0());
+        assert_eq!(user_active(&mut r), 0);
+    }
+
+    #[test]
+    fn input_outside_an_app_is_not_announced() {
+        // The shell, the overlay and the lock screen get navigation keys, which the shell counts.
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        r.input_at(a, &[press(PadButton::South)], t0());
+        assert_eq!(user_active(&mut r), 0);
+    }
 
     #[test]
     fn the_shell_gets_navigation_keys() {

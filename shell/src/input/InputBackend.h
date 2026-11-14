@@ -69,6 +69,8 @@ signals:
     void confirmButtonChanged();
     // ActiveInputChanged(device_id, family): the last press came from that device.
     void activeInputChanged(const QString &deviceId, const QString &family);
+    // UserActive: a pad is being played in the app in front (RUY-588; at most every 30 s, no content).
+    void userActive();
     // ProfilesChanged: the controller profiles of that console profile changed.
     void profilesChanged(const QString &profile);
 
