@@ -675,7 +675,7 @@ check)
     cp /root/vm-session-probe.qml "$work/probe.qml" && chmod 755 "$work" && chmod 644 "$work/probe.qml"
     : > "$work/probe.log"; chmod 666 "$work/probe.log"
     as_shell env XDG_RUNTIME_DIR="/run/user/$uid" QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 \
-        timeout 100 ruya-shell --load "$work/probe.qml" > "$work/probe.log" 2>&1 &
+        timeout 600 ruya-shell --load "$work/probe.qml" > "$work/probe.log" 2>&1 &   # outlives every step; pkill ends it (100 s was too short after RUY-593's 35 s step)
     n=0
     until grep -a -q "session-probe: mock=false running=.*$sleeper/$pid/running" "$work/probe.log" || [ "$n" -ge 60 ]; do sleep 1; n=$((n + 1)); done
     grep -a "session-probe" "$work/probe.log" | tail -3
