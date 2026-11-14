@@ -25,6 +25,7 @@ public:
     void stopTest(const QString &deviceId) override;
     void callProfile(quint64 token, const QString &method, const QVariantMap &args) override;
     void readConfirmButton() override;
+    void readConfirmButtons(const QString &profile) override;
 
 private slots:
     void onPropertiesChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated);

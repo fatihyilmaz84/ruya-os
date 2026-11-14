@@ -11,8 +11,9 @@
   python3 vm-input-probe.py pad <seconds>    (root) holds a uinput "physical" pad for that long
       (RUY-409: the shell's route makes its virtual pad); prints "pad ready <node>" once it has a node
   python3 vm-input-probe.py confirm --profile p1
-      (root; RUY-40) a uinput pad with Nintendo's vendor id: the Confirm button swaps Enter and Esc
-      for BTN_EAST and BTN_SOUTH by mode (vm-input-check.sh confirm stops the compositor first)
+      (root; RUY-40, RUY-603) a uinput pad with Nintendo's vendor id: the Confirm button swaps Enter and
+      Esc for BTN_EAST and BTN_SOUTH by mode; a second pad keeps its own mode (each pad confirms with
+      its own choice), GetConfirmButtons lists them (vm-input-check.sh confirm stops the compositor first)
   python3 vm-input-probe.py hold --profile p1
       (root; RUY-479) StartTest(device_id, hold_left_stick): with the flag a pushed left stick sends
       no arrow key (the D-pad still does), a stick held when the test starts is released once, and
@@ -501,10 +502,13 @@ def cmd_navpad(args):
 
 
 def cmd_confirm(args):
-    """RUY-40: a uinput pad announcing Nintendo's vendor id (0x057e) turns BTN_EAST into Enter and
-    BTN_SOUTH into Esc; "south" swaps them back and "east" gives every family the right button. The
-    probe holds the route `shell` for the profile on its own bus connection (the shell must not
-    run, or its Home would act on the Enter); prints PASS:/FAIL: lines."""
+    """RUY-40, per controller since RUY-603: a uinput pad announcing Nintendo's vendor id (0x057e)
+    turns BTN_EAST into Enter and BTN_SOUTH into Esc; "south" swaps them back and "east" gives every
+    family the right button. Each pad has its own choice: a second (generic) pad set to "south"
+    while the first is "east" confirms with its bottom button, the first with its right one.
+    ConfirmButton is the mode of the pad that pressed last. The probe holds the route `shell` for
+    the profile on its own bus connection (the shell must not run, or its Home would act on the
+    Enter); prints PASS:/FAIL: lines."""
     fails = 0
 
     def ok(msg):
@@ -516,26 +520,34 @@ def cmd_confirm(args):
         print(f"FAIL: {msg}", flush=True)
 
     pad = FakePad(vendor=0x057E, product=0x2009)
+    other = FakePad(0x1234, 0x5679, "vm-check/pad1", NAME + " 2")
     bus = None
     try:
-        row = wait_for(lambda: next((d for d in (devices() or []) if d.get("name") == NAME), None), 5)
-        if not row:
-            bad("ListDevices does not list the pad")
+        def both():
+            by_name = {r.get("name"): r for r in (devices() or [])}
+            return by_name if NAME in by_name and NAME + " 2" in by_name else None
+
+        rows = wait_for(both, 5)
+        if not rows:
+            bad("ListDevices does not list both pads")
             return fails
+        row, row2 = rows[NAME], rows[NAME + " 2"]
         if row.get("family") == "nintendo":
             ok(f"the pad with vendor 0x057e is family nintendo ({row['id']})")
         else:
             bad(f"the pad with vendor 0x057e has family '{row.get('family')}'")
+        ok(f"the second pad is family {row2.get('family')} ({row2['id']})")
         bus = Bus()
         status = bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
         ok("route shell for the profile") if status == "ok" else bad(f"SetRoute answered {status}")
         nav = Nav()
         nav.keys(0.3)
+        label = {KEY_ENTER: "KEY_ENTER", KEY_ESC: "KEY_ESC"}
 
-        def tap(button):
-            pad.emit(EV_KEY, button, 1)
+        def tap(which, button):
+            which.emit(EV_KEY, button, 1)
             time.sleep(0.1)
-            pad.emit(EV_KEY, button, 0)
+            which.emit(EV_KEY, button, 0)
             return nav.keys(0.4)
 
         def prop():
@@ -543,28 +555,63 @@ def cmd_confirm(args):
                                  capture_output=True, text=True).stdout.strip()
             return out.split(" ", 1)[1].strip('"') if " " in out else out
 
-        def expect(mode, east_key, south_key):
-            status = bus.call(SVC, PATH, IFC, "SetConfirmButton", [args.profile, mode])
-            ok(f"SetConfirmButton {mode}: ok") if status == "ok" else bad(f"SetConfirmButton {mode} answered {status}")
-            ok(f"ConfirmButton reads {mode}") if prop() == mode else bad(f"ConfirmButton reads '{prop()}', not {mode}")
-            for name, button, want in (("BTN_EAST", BTN_EAST, east_key), ("BTN_SOUTH", BTN_SOUTH, south_key)):
-                got = tap(button)
-                label = {KEY_ENTER: "KEY_ENTER", KEY_ESC: "KEY_ESC"}[want]
-                if got == [(want, 1), (want, 0)]:
-                    ok(f"mode {mode}: {name} gives {label}")
-                else:
-                    bad(f"mode {mode}: {name} gave {got}, wanted {label} down and up")
+        def choices():
+            out = subprocess.run(["busctl", "--system", "--json=short", "call", SVC, PATH, IFC, "GetConfirmButtons",
+                                  "s", args.profile], capture_output=True, text=True)
+            try:
+                status, buttons = json.loads(out.stdout)["data"]
+            except (ValueError, KeyError, TypeError):
+                return None
+            return buttons if status == "ok" else None
 
-        expect("family", KEY_ENTER, KEY_ESC)       # a Nintendo pad: A (east) confirms
-        expect("south", KEY_ESC, KEY_ENTER)        # Bottom: the south button confirms
-        expect("east", KEY_ENTER, KEY_ESC)         # Right
-        expect("family", KEY_ENTER, KEY_ESC)       # back to the default
-        status = bus.call(SVC, PATH, IFC, "SetConfirmButton", [args.profile, "sideways"])
+        def set_mode(dev, mode):
+            status = bus.call(SVC, PATH, IFC, "SetConfirmButton", [args.profile, dev["id"], mode])
+            ok(f"SetConfirmButton {dev['name']} {mode}: ok") if status == "ok" else bad(
+                f"SetConfirmButton {dev['name']} {mode} answered {status}")
+
+        def expect(which, dev, mode, east_key, south_key):
+            for name, button, want in (("BTN_EAST", BTN_EAST, east_key), ("BTN_SOUTH", BTN_SOUTH, south_key)):
+                got = tap(which, button)
+                if got == [(want, 1), (want, 0)]:
+                    ok(f"{dev['name']} {mode}: {name} gives {label[want]}")
+                else:
+                    bad(f"{dev['name']} {mode}: {name} gave {got}, wanted {label[want]} down and up")
+            # The pad just pressed is the active one: the property is its mode.
+            ok(f"ConfirmButton reads {mode} after {dev['name']} pressed") if prop() == mode else bad(
+                f"ConfirmButton reads '{prop()}' after {dev['name']} pressed, not {mode}")
+
+        for mode, east_key, south_key in (("family", KEY_ENTER, KEY_ESC),   # a Nintendo pad: A (east) confirms
+                                          ("south", KEY_ESC, KEY_ENTER),    # Bottom: the south button confirms
+                                          ("east", KEY_ENTER, KEY_ESC)):    # Right
+            set_mode(row, mode)
+            expect(pad, row, mode, east_key, south_key)
+        # Per pad (RUY-603): the first pad stays on "east", the second gets "south".
+        set_mode(row2, "south")
+        expect(other, row2, "south", KEY_ESC, KEY_ENTER)
+        expect(pad, row, "east", KEY_ENTER, KEY_ESC)
+        got = choices()
+        want = {row["id"]: "east", row2["id"]: "south"}
+        ok("GetConfirmButtons lists both pads' choices") if got == want else bad(f"GetConfirmButtons: {got}, wanted {want}")
+        # Back to the default: "family" removes each pad's choice.
+        set_mode(row, "family")
+        set_mode(row2, "family")
+        expect(pad, row, "family", KEY_ENTER, KEY_ESC)
+        got = choices()
+        ok("GetConfirmButtons is empty again") if got == {} else bad(f"GetConfirmButtons after the reset: {got}")
+        status = bus.call(SVC, PATH, IFC, "SetConfirmButton", [args.profile, row["id"], "sideways"])
         ok("SetConfirmButton sideways: invalid") if status == "invalid" else bad(f"sideways answered {status}")
-        status = bus.call(SVC, PATH, IFC, "SetConfirmButton", ["root", "east"])
+        status = bus.call(SVC, PATH, IFC, "SetConfirmButton", [args.profile, "Not An Id", "east"])
+        ok("SetConfirmButton for a bad device id: invalid") if status == "invalid" else bad(f"a bad device id answered {status}")
+        status = bus.call(SVC, PATH, IFC, "SetConfirmButton", ["root", row["id"], "east"])
         ok("SetConfirmButton for root: unknown-profile") if status == "unknown-profile" else bad(f"root answered {status}")
+        try:
+            status = bus.call(SVC, PATH, IFC, "SetConfirmButton", [args.profile, "east"])
+            bad(f"the old SetConfirmButton(profile, mode) was answered {status}")
+        except RuntimeError:
+            ok("the old SetConfirmButton(profile, mode) is refused: the signature is (s, s, s)")
     finally:
         pad.close()
+        other.close()
         if bus:
             bus.close()
     return fails

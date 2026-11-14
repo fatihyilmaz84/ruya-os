@@ -34,15 +34,19 @@ public:
     // The controller profiles (RUY-42): MockInputProfiles answers, asynchronously, and a change is
     // one ProfilesChanged after the reply.
     void callProfile(quint64 token, const QString &method, const QVariantMap &args) override;
-    // The Confirm button per console profile (RUY-40); the property is the route's profile's.
+    // The Confirm button per console profile and controller (RUY-40, RUY-603); the property is the
+    // active pad's for the route's profile.
     void readConfirmButton() override;
-    // Tests: the press of a pad is announced (ActiveInputChanged).
-    void sendActiveInput(const QString &deviceId, const QString &family)
+    void readConfirmButtons(const QString &profile) override;
+    // Tests: the press of a pad is announced (ActiveInputChanged); the property follows that pad.
+    void sendActiveInput(const QString &deviceId, const QString &family);
+    // Tests: the mode stored for a controller of a console profile ("family" when none).
+    QString confirmButtonOf(const QString &profile, const QString &deviceId) const
     {
-        emit activeInputChanged(deviceId, family);
+        return m_confirm.value(profile).value(deviceId, QStringLiteral("family")).toString();
     }
-    // Tests: the mode stored for a console profile ("family" when none).
-    QString confirmButtonOf(const QString &profile) const { return m_confirm.value(profile, QStringLiteral("family")); }
+    // Tests: GetConfirmButtons answers 300 ms late, with what was held when it was asked.
+    void setConfirmButtonsDelayed(bool delayed) { m_confirmsDelayed = delayed; }
     // Tests: every profile call as { method, args }, oldest first; the profiles back to the
     // built-ins only.
     QVariantList profileCalls() const { return m_profileCalls; }
@@ -55,6 +59,7 @@ public:
         m_holdSaves = false;
         m_held.clear();
         m_confirm.clear();
+        m_confirmsDelayed = false;
     }
     // While set, every call of `method` answers `status` (its other out-arguments empty) without
     // reaching the profiles: a refused or failed save for the pages' tests (RUY-465). "" clears it.
@@ -145,5 +150,7 @@ private:
     QVariantList m_profileCalls;
     QHash<QString, QString> m_forcedStatus;
     QSet<QString> m_forcedOnce;
-    QHash<QString, QString> m_confirm;
+    QHash<QString, QVariantMap> m_confirm;   // profile -> device id -> "south" | "east"
+    bool m_confirmsDelayed = false;
+    QString m_activeDevice;
 };

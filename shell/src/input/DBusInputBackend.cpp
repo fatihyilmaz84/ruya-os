@@ -245,6 +245,37 @@ void DBusInputBackend::readConfirmButton()
     });
 }
 
+// GetConfirmButtons(profile) -> (status s, buttons a{ss}) (RUY-603).
+void DBusInputBackend::readConfirmButtons(const QString &profile)
+{
+    const quint64 request = beginConfirmsRequest();
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("GetConfirmButtons"));
+    msg << profile;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request, profile](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage reply = w->reply();
+        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().size() != 2) {
+            qWarning("ruya-shell: Input1 GetConfirmButtons failed: %s", qPrintable(reply.errorMessage()));
+            deliverConfirms(request, profile, QStringLiteral("failed"), {});
+            return;
+        }
+        QVariantMap buttons;
+        const QDBusArgument arg = reply.arguments().at(1).value<QDBusArgument>();
+        arg.beginMap();
+        while (!arg.atEnd()) {
+            QString device;
+            QString mode;
+            arg.beginMapEntry();
+            arg >> device >> mode;
+            arg.endMapEntry();
+            buttons.insert(device, mode);
+        }
+        arg.endMap();
+        deliverConfirms(request, profile, reply.arguments().at(0).toString(), buttons);
+    });
+}
+
 void DBusInputBackend::onPropertiesChanged(const QString &interface, const QVariantMap &changed,
                                            const QStringList &invalidated)
 {

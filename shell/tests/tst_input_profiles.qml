@@ -105,6 +105,9 @@ Item {
                 verify(args.filter(x => x.dir === "in").every(x => x.type === "s"), m.name + ": every in-argument is a string")
             }
             verify(/<property name="ConfirmButton" type="s" access="read"\/>/.test(xml), "the ConfirmButton property (RUY-40)")
+            // The D-Bus client reads GetConfirmButtons by position: (status s, buttons a{ss}) (RUY-603).
+            verify(/<method name="GetConfirmButtons">\s*<arg name="profile" type="s" direction="in"\/>\s*<arg name="status" type="s" direction="out"\/>\s*<arg name="buttons" type="a\{ss\}" direction="out"\/>\s*<\/method>/.test(xml),
+                   "GetConfirmButtons(profile) -> (status, buttons a{ss})")
             verify(/<signal name="ActiveInputChanged">\s*<arg name="device_id" type="s"\/>\s*<arg name="family" type="s"\/>/.test(xml),
                    "ActiveInputChanged(device_id, family)")
             verify(/<signal name="ProfilesChanged">\s*<arg name="profile" type="s"\/>/.test(xml), "ProfilesChanged(profile)")

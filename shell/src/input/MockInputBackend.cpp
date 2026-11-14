@@ -324,8 +324,45 @@ void MockInputBackend::setRoute(const QString &route, const QString &instance, c
 void MockInputBackend::readConfirmButton()
 {
     const bool ok = !m_fail;
-    const QString mode = m_confirm.value(m_profile, QStringLiteral("family"));
+    const QString mode = confirmButtonOf(m_profile, m_activeDevice);
     QTimer::singleShot(0, this, [this, ok, mode] { emit confirmButtonRead(ok, ok ? mode : QString()); });
+}
+
+namespace {
+// The service's rules (routing.rs): a profile account (the mock takes any id of the profile form)
+// and a stable device id (profile.rs valid_device).
+bool consoleIdOk(const QString &profile)
+{
+    static const QRegularExpression re(QStringLiteral("^[A-Za-z0-9_-]{1,32}$"));
+    return re.match(profile).hasMatch();
+}
+bool deviceIdOk(const QString &device)
+{
+    static const QRegularExpression re(QStringLiteral("^[a-z0-9:-]{1,64}$"));
+    return re.match(device).hasMatch();
+}
+} // namespace
+
+void MockInputBackend::readConfirmButtons(const QString &profile)
+{
+    const quint64 request = beginConfirmsRequest();
+    const QString status = m_fail                  ? QStringLiteral("failed")
+                           : !consoleIdOk(profile) ? QStringLiteral("unknown-profile")
+                                                   : QStringLiteral("ok");
+    // What the service holds now, also when the answer is late.
+    const QVariantMap buttons = status == QLatin1String("ok") ? m_confirm.value(profile) : QVariantMap();
+    QTimer::singleShot(m_confirmsDelayed ? 300 : 0, this,
+                       [this, request, profile, status, buttons] { deliverConfirms(request, profile, status, buttons); });
+}
+
+void MockInputBackend::sendActiveInput(const QString &deviceId, const QString &family)
+{
+    const bool other = deviceId != m_activeDevice;
+    const QString before = confirmButtonOf(m_profile, m_activeDevice);
+    m_activeDevice = deviceId;
+    emit activeInputChanged(deviceId, family);
+    if (other && confirmButtonOf(m_profile, deviceId) != before)
+        QTimer::singleShot(0, this, [this] { emit confirmButtonChanged(); });
 }
 
 void MockInputBackend::restart()
@@ -334,6 +371,7 @@ void MockInputBackend::restart()
     m_route = QStringLiteral("shell");
     m_instance.clear();
     m_profile.clear();
+    m_activeDevice.clear();   // a restarted service has seen no press yet
     m_pads = false;
     setServiceOwned(true);
     QTimer::singleShot(0, this, [this] { emit serviceAppeared(); });
@@ -379,20 +417,27 @@ void MockInputBackend::callProfile(quint64 token, const QString &method, const Q
         if (m_forcedOnce.remove(method))
             m_forcedStatus.remove(method);
     } else if (method == QLatin1String("SetConfirmButton")) {
-        // The service's rules (routing.rs): the mode first, then the profile account (the mock takes
-        // any id of the profile form); the answer is ok, invalid or unknown-profile.
-        static const QRegularExpression consoleId(QStringLiteral("^[A-Za-z0-9_-]{1,32}$"));
+        // The service's rules (routing.rs): the profile account, the mode, then the device id; the
+        // answer is ok, unknown-profile or invalid. "family" removes the pad's choice.
         const QString profile = args.value(QStringLiteral("profile")).toString();
+        const QString device = args.value(QStringLiteral("device")).toString();
         const QString mode = args.value(QStringLiteral("mode")).toString();
         QString status = QStringLiteral("ok");
-        if (!consoleId.match(profile).hasMatch())
+        if (!consoleIdOk(profile))
             status = QStringLiteral("unknown-profile");
         else if (mode != QLatin1String("family") && mode != QLatin1String("south") && mode != QLatin1String("east"))
             status = QStringLiteral("invalid");
+        else if (!deviceIdOk(device))
+            status = QStringLiteral("invalid");
         reply.insert(QStringLiteral("status"), status);
         if (status == QLatin1String("ok")) {
-            m_confirm.insert(profile, mode);
-            if (profile == m_profile)
+            const QString before = confirmButtonOf(profile, device);
+            QVariantMap &pads = m_confirm[profile];
+            if (mode == QLatin1String("family"))
+                pads.remove(device);
+            else
+                pads.insert(device, mode);
+            if (profile == m_profile && device == m_activeDevice && mode != before)
                 QTimer::singleShot(0, this, [this] { emit confirmButtonChanged(); });
         }
     } else {

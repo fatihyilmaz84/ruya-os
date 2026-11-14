@@ -275,7 +275,9 @@ struct Shelf {
     profiles: BTreeMap<String, Profile>,
     /// The global assignments by slot.
     global: BTreeMap<Slot, String>,
-    confirm: Confirm,
+    /// The Confirm button per controller (device id; RUY-603): only `South` and `East` are kept,
+    /// a pad that is absent is `Family`.
+    confirm: BTreeMap<String, Confirm>,
 }
 
 fn builtins() -> BTreeMap<String, Profile> {
@@ -408,20 +410,14 @@ impl Book {
         // (slot, id); no slot for the one assignment of a file older than RUY-545, placed by its
         // profile's match once the profiles are read.
         let mut global: Vec<(Option<Slot>, String)> = Vec::new();
-        let mut confirm = Confirm::Family;
+        let mut confirm = BTreeMap::new();
         for (name, text) in files {
             if name == SETTINGS {
                 match serde_json::from_str::<serde_json::Value>(&text) {
-                    Ok(v) => match v.get("confirm_button").and_then(|m| m.as_str()) {
-                        None => {}
-                        Some(m) => match Confirm::parse(m) {
-                            Some(c) => confirm = c,
-                            None => self.journal.push(format!(
-                                "{console}/{name}: confirm_button \"{m}\" is not a mode: not used"
-                            )),
-                        },
-                    },
-                    Err(_) => self
+                    Ok(v) if v.is_object() => {
+                        confirm = self.confirm_buttons_of(console, &name, &v);
+                    }
+                    _ => self
                         .journal
                         .push(format!("{console}/{name} is not a settings file: not used")),
                 }
@@ -518,28 +514,90 @@ impl Book {
         Ok(())
     }
 
-    /// The console profile's Confirm button (06 section 11.2): `Family` for an empty or unknown
-    /// profile or when the settings cannot be read.
-    pub fn confirm_button(&mut self, console: &str) -> Confirm {
+    /// The settings file's `{"confirm_buttons": {"<device>": "south" | "east"}}` (RUY-603). A bad
+    /// entry is journaled and not used; "family" is the same as no entry. The profile-wide
+    /// `confirm_button` of RUY-40 is dropped (a pre-release draft): every pad is "family" until
+    /// it is set again, and the next write leaves it out.
+    fn confirm_buttons_of(
+        &mut self,
+        console: &str,
+        name: &str,
+        v: &serde_json::Value,
+    ) -> BTreeMap<String, Confirm> {
+        let mut out = BTreeMap::new();
+        if let Some(old) = v.get("confirm_button") {
+            self.journal.push(format!(
+                "{console}/{name}: the profile-wide confirm_button {old} is dropped (per controller since RUY-603)"
+            ));
+        }
+        match v.get("confirm_buttons") {
+            None => {}
+            Some(serde_json::Value::Object(pads)) => {
+                for (device, mode) in pads {
+                    match (
+                        profile::valid_device(device),
+                        mode.as_str().and_then(Confirm::parse),
+                    ) {
+                        (true, Some(Confirm::Family)) => {}
+                        (true, Some(c)) => {
+                            out.insert(device.clone(), c);
+                        }
+                        _ => self.journal.push(format!(
+                            "{console}/{name}: the confirm button {mode} of \"{device}\" is not used"
+                        )),
+                    }
+                }
+            }
+            Some(_) => self.journal.push(format!(
+                "{console}/{name}: confirm_buttons is not a map: not used"
+            )),
+        }
+        out
+    }
+
+    /// A controller's Confirm button for the console profile (06 section 11.2, RUY-603): `Family`
+    /// for an empty or unknown profile, a pad with no choice, or when the settings cannot be read.
+    pub fn confirm_button(&mut self, console: &str, device: &str) -> Confirm {
         if !profile::valid_id(console) || self.load(console).is_err() {
             return Confirm::Family;
         }
-        self.shelf(console).confirm
+        self.shelf(console)
+            .confirm
+            .get(device)
+            .copied()
+            .unwrap_or(Confirm::Family)
     }
 
-    /// `SetConfirmButton`: written whole before it applies (a refused write changes nothing).
-    pub fn set_confirm_button(&mut self, console: &str, mode: Confirm) -> Status {
+    /// `GetConfirmButtons`: every pad with a choice (device id -> `South` | `East`).
+    pub fn confirm_buttons(&mut self, console: &str) -> Result<BTreeMap<String, Confirm>, Status> {
+        self.load(console)?;
+        Ok(self.shelf(console).confirm.clone())
+    }
+
+    /// `SetConfirmButton` for one pad: the whole settings document is written before it applies (a
+    /// refused write changes nothing); `Family` removes the pad's entry.
+    pub fn set_confirm_button(&mut self, console: &str, device: &str, mode: Confirm) -> Status {
         if let Err(status) = self.load(console) {
             return status;
         }
-        let text = serde_json::json!({ "confirm_button": mode.as_str() });
+        let mut next = self.shelf(console).confirm.clone();
+        if mode == Confirm::Family {
+            next.remove(device);
+        } else {
+            next.insert(device.to_owned(), mode);
+        }
+        let pads: serde_json::Map<String, serde_json::Value> = next
+            .iter()
+            .map(|(d, m)| (d.clone(), serde_json::Value::from(m.as_str())))
+            .collect();
+        let text = serde_json::json!({ "confirm_buttons": pads });
         if let Err(e) = self.store.write(console, SETTINGS, &text.to_string()) {
             self.journal
                 .push(format!("saving the settings of {console} failed: {e}"));
             return Status::Failed;
         }
         if let Some(shelf) = self.shelves.get_mut(console) {
-            shelf.confirm = mode;
+            shelf.confirm = next;
         }
         Status::Ok
     }
@@ -1559,6 +1617,46 @@ mod tests {
         ] {
             assert!(journal.contains(needle), "{needle:?} not in {journal}");
         }
+    }
+
+    /// RUY-603: the settings document holds one entry per pad with a choice, written whole; the
+    /// profile-wide value of RUY-40 is not written again.
+    #[test]
+    fn the_confirm_buttons_are_written_per_pad() {
+        let mut store = MemStore::default();
+        store.files.insert(
+            ("p1".into(), SETTINGS.into()),
+            r#"{"confirm_button":"east"}"#.into(),
+        );
+        let mut b = Book::new(Box::new(store));
+        assert_eq!(b.confirm_button("p1", "pad-a"), Confirm::Family);
+        assert_eq!(
+            b.set_confirm_button("p1", "pad-a", Confirm::East),
+            Status::Ok
+        );
+        assert_eq!(
+            b.set_confirm_button("p1", "pad-b", Confirm::South),
+            Status::Ok
+        );
+        assert_eq!(
+            files(&mut b)[SETTINGS],
+            r#"{"confirm_buttons":{"pad-a":"east","pad-b":"south"}}"#
+        );
+        assert_eq!(
+            b.set_confirm_button("p1", "pad-a", Confirm::Family),
+            Status::Ok
+        );
+        assert_eq!(
+            files(&mut b)[SETTINGS],
+            r#"{"confirm_buttons":{"pad-b":"south"}}"#,
+            "family removes the entry"
+        );
+        assert_eq!(b.confirm_button("p1", "pad-b"), Confirm::South);
+        assert_eq!(
+            b.confirm_button("p2", "pad-b"),
+            Confirm::Family,
+            "per profile"
+        );
     }
 
     #[test]

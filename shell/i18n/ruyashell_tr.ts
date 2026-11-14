@@ -1303,7 +1303,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+44"/>
+        <location filename="../qml/ControllerPage.qml" line="+49"/>
         <source>Works</source>
         <translation>Çalışıyor</translation>
     </message>
@@ -1383,7 +1383,17 @@ Bu geri alınamaz.</translation>
         <translation>Mikrofon</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+31"/>
+        <source>Could not change the confirm button</source>
+        <translation>Onay düğmesi değiştirilemedi</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Try again.</source>
+        <translation>Yeniden dene.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>Controller disconnected</source>
         <translation>Kontrolcü bağlantısı kesildi</translation>
     </message>
@@ -1408,7 +1418,58 @@ Bu geri alınamaz.</translation>
         <translation>Varsayılan</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+12"/>
+        <location line="+20"/>
+        <source>Confirm in menus</source>
+        <translation>Menülerde onay</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <source>As on the controller</source>
+        <translation>Kontrolcüdeki gibi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Bottom</source>
+        <translation>Alttaki</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Right</source>
+        <translation>Sağdaki</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Not available</source>
+        <translation>Kullanılamıyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1: %2.</source>
+        <translation>%1: %2.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>On this controller: %1 confirms, %2 goes back.</source>
+        <translation>Bu kontrolcüde: %1 onaylar, %2 geri gider.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>On this controller:</source>
+        <translation>Bu kontrolcüde:</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>confirms,</source>
+        <translation>onaylar,</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>goes back.</source>
+        <translation>geri gider.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
         <source>What it can do</source>
         <translation>Neler yapabilir</translation>
     </message>
@@ -1527,7 +1588,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllersPane</name>
     <message>
-        <location filename="../qml/ControllersPane.qml" line="+139"/>
+        <location filename="../qml/ControllersPane.qml" line="+131"/>
         <source>No controllers connected.</source>
         <translation>Bağlı kontrolcü yok.</translation>
     </message>
@@ -1542,70 +1603,13 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+36"/>
-        <location line="+20"/>
-        <source>Confirm button</source>
-        <translation>Onay düğmesi</translation>
-    </message>
-    <message>
-        <location line="-18"/>
-        <source>As on the controller</source>
-        <translation>Kontrolcüdeki gibi</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Bottom</source>
-        <translation>Alttaki</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Right</source>
-        <translation>Sağdaki</translation>
-    </message>
-    <message>
-        <location line="+23"/>
-        <source>Could not change the confirm button</source>
-        <translation>Onay düğmesi değiştirilemedi</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Try again.</source>
-        <translation>Yeniden dene.</translation>
-    </message>
-    <message>
-        <location line="+20"/>
-        <source>On this controller: %1 confirms, %2 goes back.</source>
-        <translation>Bu kontrolcüde: %1 onaylar, %2 geri gider.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>On the keyboard: Enter confirms, Esc goes back.</source>
-        <translation>Klavyede: Enter onaylar, Esc geri gider.</translation>
-    </message>
-    <message>
-        <location line="+11"/>
-        <source>On this controller:</source>
-        <translation>Bu kontrolcüde:</translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>confirms,</source>
-        <translation>onaylar,</translation>
-    </message>
-    <message>
-        <location line="+14"/>
-        <source>goes back.</source>
-        <translation>geri gider.</translation>
-    </message>
-    <message>
-        <location line="+23"/>
+        <location line="+38"/>
         <location line="+24"/>
         <source>Controls in games</source>
         <translation>Oyunlardaki kontroller</translation>
     </message>
     <message>
-        <location line="-113"/>
-        <location line="+90"/>
+        <location line="-23"/>
         <source>Not available</source>
         <translation>Kullanılamıyor</translation>
     </message>
@@ -1627,8 +1631,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
     <message>
-        <location line="-97"/>
-        <location line="+119"/>
+        <location line="+22"/>
         <source>%1: %2.</source>
         <translation>%1: %2.</translation>
     </message>
@@ -2082,35 +2085,37 @@ Bu geri alınamaz.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+418"/>
-        <location line="+158"/>
+        <location filename="../qml/GameControls.qml" line="+437"/>
+        <location line="+182"/>
         <source>Could not save to the USB drive</source>
         <translation>USB belleğe kaydedilemedi</translation>
     </message>
     <message>
-        <location line="-158"/>
+        <location line="-182"/>
+        <location line="+6"/>
         <location line="+2"/>
-        <location line="+156"/>
-        <location line="+26"/>
+        <location line="+174"/>
+        <location line="+36"/>
         <source>Try again.</source>
         <translation>Yeniden dene.</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-210"/>
         <source>Could not save the change</source>
         <translation>Değişiklik kaydedilemedi</translation>
     </message>
     <message>
+        <location line="-2"/>
         <source>Could not save the change for %1</source>
         <translation>%1 için değişiklik kaydedilemedi</translation>
     </message>
     <message>
-        <location line="+154"/>
+        <location line="+174"/>
         <source>Saved to the USB drive</source>
         <translation>USB belleğe kaydedildi</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+19"/>
         <source>Controls imported</source>
         <translation>Kontroller alındı</translation>
     </message>
@@ -2295,7 +2300,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>HubPause</name>
     <message>
-        <location filename="../qml/HubPause.qml" line="+124"/>
+        <location filename="../qml/HubPause.qml" line="+125"/>
         <source>Could not resume the game. Open Ruya Hub and choose Resume.</source>
         <translation>Oyun sürdürülemedi. Ruya Hub&apos;ı açıp Devam et&apos;i seçin.</translation>
     </message>
@@ -2854,7 +2859,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 seçenekleri</translation>
     </message>
     <message>
-        <location line="+204"/>
+        <location line="+208"/>
         <source>No options for this yet.</source>
         <translation>Bunun için henüz seçenek yok.</translation>
     </message>
@@ -4093,7 +4098,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+662"/>
+        <location filename="../qml/Shell.qml" line="+663"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -5222,18 +5227,18 @@ Bu geri alınamaz.</translation>
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+133"/>
-        <location line="+318"/>
+        <location line="+312"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-318"/>
-        <location line="+317"/>
+        <location line="-312"/>
+        <location line="+311"/>
         <source>Stable</source>
         <translation>Kararlı</translation>
     </message>
     <message>
-        <location line="-312"/>
+        <location line="-306"/>
         <source>Last checked %1</source>
         <translation>Son kontrol: %1</translation>
     </message>
@@ -5343,7 +5348,7 @@ Bu geri alınamaz.</translation>
         <translation>Saat henüz internetten ayarlanmadı, bu yüzden saat yanlış olabilir.</translation>
     </message>
     <message>
-        <location line="+32"/>
+        <location line="+29"/>
         <source>Time zone set to %1</source>
         <translation>Saat dilimi %1 olarak ayarlandı</translation>
     </message>
@@ -5363,7 +5368,7 @@ Bu geri alınamaz.</translation>
         <translation>Çevrimiçi oyunların bağlantısı duraklatılmışken kopabilir.</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+80"/>
         <source>Device health</source>
         <translation>Cihaz sağlığı</translation>
     </message>
@@ -5373,14 +5378,14 @@ Bu geri alınamaz.</translation>
         <translation>Bu cihazda sıcaklık sensörü bulunamadı.</translation>
     </message>
     <message>
-        <location line="-208"/>
+        <location line="-202"/>
         <location line="+8"/>
-        <location line="+79"/>
+        <location line="+76"/>
         <source>Only an admin can do this.</source>
         <translation>Bunu yalnızca bir yönetici yapabilir.</translation>
     </message>
     <message>
-        <location line="-285"/>
+        <location line="-282"/>
         <source>The console is warm. Nothing needs to be done.</source>
         <translation>Konsol sıcak. Yapılması gereken bir şey yok.</translation>
     </message>
@@ -5400,7 +5405,7 @@ Bu geri alınamaz.</translation>
         <translation>Dil</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location line="+87"/>
         <source>Updates</source>
         <translation>Güncellemeler</translation>
     </message>
