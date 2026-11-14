@@ -1292,6 +1292,10 @@ else:
     say("FAIL", "a vanished pad left a key down: KEY_DOWN=%s KEY_ENTER=%s" % (down(nav, KEY_DOWN), down(nav, KEY_ENTER)))
 
 # 2. Two pads hold Down; one lets go; the key stays down until the last one does.
+# (RUY-473: section 1 destroyed a pad on the same keyboard; make sure both keys are up and settled first.)
+wait_for(nav, KEY_DOWN, False, 3)
+wait_for(nav, KEY_ENTER, False, 3)
+time.sleep(1)
 p1, p2 = make_pad("b"), make_pad("c")
 if not (picked_up(nav, p1) and picked_up(nav, p2)):
     say("FAIL", "ruya-inputd did not take both virtual pads")
@@ -1318,8 +1322,23 @@ for fd in (p1, p2):
 inputd_check() {
     echo "--- ruya-inputd (T-337): a vanished pad releases its keys, two pads share a key"
     if systemctl is-active ruya-inputd >/dev/null; then ok "ruya-inputd is active"; else bad "ruya-inputd not active"; return; fi
-    local line out
+    # RUY-473: the A press becomes KEY_ENTER, which would launch the focused Home tile and flip the route to
+    # `app` (releasing every held key). Same pattern as stopped_shell_probe in vm-input-check.sh (RUY-573):
+    # the compositor (and with it the shell) is stopped for the block and restarted by the EXIT trap.
+    inputd_restore() { systemctl start 'ruya-compositor@tty1' >/dev/null 2>&1; }
+    trap inputd_restore EXIT
+    systemctl stop 'ruya-compositor@tty1' >/dev/null 2>&1
+    local line out w=0 nfail0="$fail"
+    until ! pgrep -u ruya-shell -x ruya-shell >/dev/null || [ "$w" -ge 50 ]; do sleep 0.1; w=$((w + 1)); done
+    if pgrep -u ruya-shell -x ruya-shell >/dev/null; then
+        bad "the shell still runs: an Accept would reach Home"
+        inputd_restore; trap - EXIT
+        return
+    fi
+    ok "the compositor and the shell are stopped: no Accept can start anything"
     out="$(python3 -c "$inputd_py" 2>&1)"
+    inputd_restore
+    trap - EXIT
     while IFS= read -r line; do
         case "$line" in
         PASS:*) ok "${line#PASS: }" ;;
@@ -1328,6 +1347,7 @@ inputd_check() {
         *) echo "$line"; bad "inputd check printed an unexpected line (traceback?)" ;;
         esac
     done <<<"$out"
+    [ "$fail" != "$nfail0" ] && { echo "--- ruya-inputd journal (last 30 lines)"; journalctl -u ruya-inputd --no-pager -n 30 2>&1; }
     case "$out" in *UNVERIFIED:*) return ;; esac
     if journalctl -u ruya-inputd --no-pager -n 40 2>/dev/null | grep -q 'gone: .*; released'; then
         ok "ruya-inputd logged the vanished pad and what it released"

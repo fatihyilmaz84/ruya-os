@@ -457,8 +457,16 @@ caps_check() {
     since="$(date '+%Y-%m-%d %H:%M:%S')"
     python3 "$probe" pad 20 > /var/tmp/ruya-input-caps.log 2>&1 &
     padpid=$!
-    until grep -q "^pad " /var/tmp/ruya-input-caps.log || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
-    grep -q "^pad ready" /var/tmp/ruya-input-caps.log || { bad "no test pad: $(cat /var/tmp/ruya-input-caps.log)"; kill "$padpid" 2>/dev/null; return; }
+    # RUY-473: 15 s (the probe itself waits 3 s; right after restart_check's kill -9 of inputd 5 s was too short).
+    until grep -q "^pad " /var/tmp/ruya-input-caps.log || [ "$n" -ge 150 ]; do sleep 0.1; n=$((n + 1)); done
+    if ! grep -q "^pad ready" /var/tmp/ruya-input-caps.log; then
+        bad "no test pad: $(cat /var/tmp/ruya-input-caps.log)"
+        pgrep -af vm-input-probe
+        ls -l /dev/uinput
+        journalctl -u ruya-inputd --no-pager -n 20 2>&1
+        kill "$padpid" 2>/dev/null
+        return
+    fi
     n=0
     until id="$(busctl --system --json=short call "$svc" "$path" "$ifc" ListDevices 2>/dev/null | python3 -c '
 import json, sys
