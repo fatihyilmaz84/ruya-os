@@ -192,9 +192,17 @@ pub struct Session<S, D> {
     /// The last sound request per profile user (`app_audio`: frozen apps, running apps), kept
     /// while it has a frozen app (T-466).
     audio_sent: HashMap<String, (Vec<String>, Vec<String>)>,
+    /// The signed-in profile as the last `profile_changed` saw it (RUY-568): what the start check
+    /// falls back to when `Profiles1` cannot be read.
+    last_active: Option<String>,
 }
 
 impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
+    /// The signed-in profile the watcher saw last (`""`: locked), `None` before its first value.
+    pub fn last_active(&self) -> Option<&str> {
+        self.last_active.as_deref()
+    }
+
     /// `env` is handed to every app (for instance `SDL_VIDEODRIVER`).
     pub fn new(spawner: S, directory: D, env: Vec<(String, String)>) -> Self {
         Session {
@@ -206,6 +214,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             instances: Vec::new(),
             frozen_changes: Vec::new(),
             audio_sent: HashMap::new(),
+            last_active: None,
         }
     }
 
@@ -428,6 +437,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         new: &str,
         now: Instant,
     ) -> Vec<(String, Status)> {
+        self.last_active = Some(new.to_owned());
         if old == Some(new) {
             return Vec::new();
         }

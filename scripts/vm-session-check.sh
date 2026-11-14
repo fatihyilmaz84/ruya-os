@@ -944,10 +944,11 @@ check)
     [ -n "$instl" ] && ok "Launch: $instl" || bad "Launch for the early Lock: $out"
     tlock2="$(date +%s)"
     busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
-    if grep -a -q "\"member\":\"AppStarted\"" "$work/signals.log"; then
-        echo "note: the app reported started before the Lock came; the Lock froze it (unit tests carry the starting case)"
+    # ListRunning tells the race: an instance still `starting` after the Lock was won by the Lock.
+    if running | grep -q '"starting"'; then
+        echo "note: the app was still starting after the Lock (the race was won)"
     else
-        echo "note: the Lock came before the app reported started (the race was won)"
+        echo "note: the app was already running when the Lock came; the Lock froze it (unit tests carry the starting case)"
     fi
     wait_sig "\"member\":\"AppStarted\".*$sleeper" 30 && ok "AppStarted arrived" || bad "no AppStarted within 30 s"
     wait_sig "\"member\":\"FrozenChanged\".*$instl.*true" 15 && ok "FrozenChanged(true) for the app launched before the Lock" \

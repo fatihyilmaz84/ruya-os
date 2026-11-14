@@ -628,8 +628,9 @@ where
 /// RUY-568: an app that reached running is frozen at once when its profile is not the signed-in
 /// one, so a game that was still starting when its profile left does not run on hidden. Like
 /// `follow_active`, the profile is read (`read`, `None` when it cannot be) in the freezer's turn,
-/// so a profile that signed in again before the turn has nothing frozen. Returns the `frozen`
-/// changes to announce.
+/// so a profile that signed in again before the turn has nothing frozen. When it cannot be read,
+/// the profile the watcher saw last (`Session::last_active`) decides; with none known, nothing is
+/// frozen. Returns the `frozen` changes to announce.
 async fn freeze_started<F, Fut>(
     session: &Shared,
     turn: &FreezerTurn,
@@ -641,10 +642,11 @@ where
     Fut: std::future::Future<Output = Option<String>>,
 {
     let _turn = turn.lock().await;
-    let Some(active) = read().await else {
+    let read = read().await;
+    let mut session = lock(session);
+    let Some(active) = read.or_else(|| session.last_active().map(str::to_owned)) else {
         return Vec::new();
     };
-    let mut session = lock(session);
     if session.freeze_if_away(instance, &active, Instant::now()) == Some(Status::Ok) {
         eprintln!(
             "ruya-session: froze {instance}: its profile is not signed in (now \"{active}\")"
@@ -784,12 +786,23 @@ pub async fn forward(
             // System mode only: `--session` has no signed-in profile to compare with.
             if let (true, Some(instance)) = (system, started) {
                 let changes = freeze_started(&session, &turn, &instance, || async {
-                    fetch_active_profile(&connection)
-                        .await
-                        .map_err(|err| {
-                            eprintln!("ruya-session: Profiles1 ActiveProfile not readable: {err}")
-                        })
-                        .ok()
+                    // Bounded: a hung ruya-profiles must not stall the event pump.
+                    let read = async {
+                        fetch_active_profile(&connection)
+                            .await
+                            .map_err(|err| {
+                                eprintln!(
+                                    "ruya-session: Profiles1 ActiveProfile not readable: {err}"
+                                )
+                            })
+                            .ok()
+                    };
+                    let timeout = async {
+                        async_io::Timer::after(Duration::from_secs(2)).await;
+                        eprintln!("ruya-session: Profiles1 ActiveProfile read timed out");
+                        None
+                    };
+                    futures_lite::future::or(read, timeout).await
                 })
                 .await;
                 if !changes.is_empty() {
@@ -1013,7 +1026,64 @@ mod tests {
             }));
         assert!(changes.is_empty());
         assert!(!is_frozen(&shared, &unit));
-        // Profiles1 not readable: nothing is frozen either.
+        // Profiles1 not readable and no value seen yet: nothing is frozen.
+        let changes =
+            futures_lite::future::block_on(freeze_started(&shared, &turn, &unit, || async {
+                None
+            }));
+        assert!(changes.is_empty());
+        assert!(!is_frozen(&shared, &unit));
+    }
+
+    #[test]
+    fn the_start_check_reads_the_profile_after_the_turn_comes_not_before() {
+        // The value is read once the turn is ours: a read made while waiting would see "p2",
+        // but p1 signed in again meanwhile.
+        let (shared, unit, _) = signed_in_session();
+        let turn: FreezerTurn = Arc::new(async_lock::Mutex::new(()));
+        let cell = Arc::new(Mutex::new("p2".to_owned()));
+        futures_lite::future::block_on(async {
+            let held = turn.lock().await;
+            let mut check = Box::pin(freeze_started(&shared, &turn, &unit, || {
+                let cell = cell.clone();
+                async move { Some(lock_cell(&cell)) }
+            }));
+            assert!(futures_lite::future::poll_once(&mut check).await.is_none());
+            *cell.lock().unwrap_or_else(|e| e.into_inner()) = "p1".to_owned();
+            drop(held);
+            assert!(check.await.is_empty());
+        });
+        assert!(!is_frozen(&shared, &unit));
+    }
+
+    fn lock_cell(cell: &Arc<Mutex<String>>) -> String {
+        cell.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    #[test]
+    fn an_unreadable_profiles1_falls_back_to_the_profile_the_watcher_saw_last() {
+        let turn: FreezerTurn = Arc::new(async_lock::Mutex::new(()));
+        // The watcher saw p2 sign in while p1's app was still starting: it is frozen when it runs.
+        let spawner: DynSpawner = Box::new(FakeSpawner::new().with_app(APP));
+        let dir = ProfileSnapshot::new(["p1".to_owned(), "p2".to_owned()]);
+        let shared: Shared = Arc::new(Mutex::new(Session::new(spawner, dir, Vec::new())));
+        let (_, unit) = lock(&shared).launch(APP, "p1", 1);
+        let mut last = Some("p1".to_owned());
+        futures_lite::future::block_on(follow_active(&shared, &turn, &mut last, || async {
+            Some("p2".to_owned())
+        }));
+        lock(&shared).on_event(UnitEvent::Started { unit: unit.clone() });
+        let changes =
+            futures_lite::future::block_on(freeze_started(&shared, &turn, &unit, || async {
+                None
+            }));
+        assert_eq!(changes.len(), 1);
+        assert!(is_frozen(&shared, &unit));
+        // The watcher saw p1: nothing is frozen.
+        let (shared, unit, mut last) = signed_in_session();
+        futures_lite::future::block_on(follow_active(&shared, &turn, &mut last, || async {
+            Some("p1".to_owned())
+        }));
         let changes =
             futures_lite::future::block_on(freeze_started(&shared, &turn, &unit, || async {
                 None
