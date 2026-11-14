@@ -883,6 +883,17 @@ impl Check {
                 self.err("/inherits", "a profile cannot inherit from itself");
             }
         }
+        // The `controls-` prefix names the global slots the shell edits (`controls-all`,
+        // `controls-family-<f>`, `controls-device-<id>`): no other scope may take such an id, or an
+        // import could replace another pad's stored profile (RUY-596).
+        if let (Some(id), Some(scope)) = (&id, &scope) {
+            if id.starts_with("controls-") && *scope != Scope::Global {
+                self.err(
+                    "/id",
+                    "the \"controls-\" prefix is reserved for global profiles",
+                );
+            }
+        }
         if !self.errors.is_empty() {
             return None;
         }

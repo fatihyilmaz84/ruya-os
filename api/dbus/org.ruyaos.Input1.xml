@@ -273,7 +273,10 @@
          does not exist), "not-allowed" (a built-in id or scope, a cycle, more than 8 links for it or
          for a profile that inherits from it, a 65th profile), "failed" (not written; nothing
          changed). The stored text is the service's own writing of the profile (keys sorted, whole
-         numbers without a fraction), not the caller's text. -->
+         numbers without a fraction), not the caller's text.
+         The "controls-" id prefix is reserved for global profiles (the shell's slot ids
+         controls-all, controls-family-<f>, controls-device-<id>): a profile with that prefix and
+         another scope is "invalid" (error "/id: ..."), in ValidateProfile and in SaveProfile. -->
     <method name="SaveProfile">
       <arg name="profile" type="s" direction="in"/>
       <arg name="json" type="s" direction="in"/>
@@ -281,7 +284,8 @@
       <arg name="profile_id" type="s" direction="out"/>
       <arg name="errors" type="as" direction="out"/>
     </method>
-    <!-- The file alone: "ok", or "invalid" with errors; its parent is checked by SaveProfile. -->
+    <!-- The file alone: "ok", or "invalid" with errors; its parent is checked by SaveProfile.
+         Same rules as SaveProfile, including the reserved "controls-" id prefix (global only). -->
     <method name="ValidateProfile">
       <arg name="json" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
