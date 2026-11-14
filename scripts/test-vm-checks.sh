@@ -6,7 +6,8 @@
 #   - vm-devices-check.sh  picks the volume by its keys, whatever the order of the keys
 #   - vm-storage-check.sh  a refused action is pkcheck exit 1 (not any non-zero); an error reply from
 #                          ListVolumes is not "the volume left the list"
-#   - vm-security-check.sh each step (exposure, port, SELinux, setuid, world-writable, account) can FAIL
+#   - vm-security-check.sh each step (exposure, port, SELinux, setuid, world-writable, account) can FAIL; a port
+#                          is keyed with its scope (loopback or any), so a loopback listener on every address FAILs
 #   - vm-sample-check.sh   an early failure still cleans up (trap on EXIT)
 #   - vm-x11-check.sh      only a real refusal passes a negative probe; vm-x11-client.py against a fake X server
 #                          (test-vm-x11-client.py); vm-security-check.sh's x11 step (abstract listener, socket
@@ -177,7 +178,7 @@ sec="$tmp/sec"; mkdir -p "$sec/bin" "$sec/units"
 touch "$sec/units/ruya-aaa.service" "$sec/units/ruya-bbb@.service"
 cat > "$sec/baseline.json" <<'JSONEOF'
 {"units": {"ruya-aaa.service": {"max_exposure": 1.1, "reason": "t"}, "ruya-bbb@.service": {"max_exposure": 2.0, "reason": "t"}},
- "ports": [{"port": "tcp:22", "reason": "sshd"}, {"port": "udp:68", "reason": "dhcp"}],
+ "ports": [{"port": "tcp:any:22", "reason": "sshd"}, {"port": "udp:any:68", "reason": "dhcp"}, {"port": "tcp:loopback:53", "reason": "stub"}, {"port": "udp:loopback:323", "reason": "chronyd"}],
  "unconfined": [{"process": "ruya-odd", "reason": "t"}],
  "setid": [{"path": "/usr/bin/passwd", "reason": "t"}],
  "accounts": [{"name": "root", "reason": "t"}],
@@ -204,6 +205,11 @@ esac
 echo "tcp LISTEN 0 128 0.0.0.0:22 0.0.0.0:*"
 echo "tcp LISTEN 0 128 [::]:22 [::]:*"
 echo "udp UNCONN 0 0 192.168.1.5:68 0.0.0.0:*"
+echo "udp UNCONN 0 0 [::1]:323 [::]:*"
+echo "udp UNCONN 0 0 127.0.0.1:323 0.0.0.0:*"
+# the resolved stub: on loopback (127.0.0.53, bound to lo), or (FAKE_STUB_ANY) on every address
+if [ -n "${FAKE_STUB_ANY:-}" ]; then echo "tcp LISTEN 0 4096 0.0.0.0:53 0.0.0.0:*"
+else echo "tcp LISTEN 0 4096 127.0.0.53%lo:53 0.0.0.0:*"; echo "tcp LISTEN 0 4096 [::ffff:127.0.0.54]:53 [::]:*"; fi
 [ -n "${FAKE_EXTRA_PORT:-}" ] && echo "tcp LISTEN 0 5 0.0.0.0:$FAKE_EXTRA_PORT 0.0.0.0:*"
 exit 0
 SHIMEOF
@@ -247,7 +253,22 @@ out="$(FAKE_EXP_AAA=1.2 runsec)"; rc=$?
 expect_contains "a higher exposure: FAIL" "$out" "FAIL: unit ruya-aaa.service: exposure 1.2 is above the baseline 1.1"
 [ "$rc" = 1 ] && pass "a higher exposure: exit 1" || fail "a higher exposure: exit $rc"
 out="$(FAKE_EXTRA_PORT=8080 runsec)"
-expect_contains "an extra port: FAIL" "$out" "FAIL: unexpected listening sockets: tcp:8080"
+expect_contains "an extra port: FAIL" "$out" "FAIL: unexpected listening sockets: tcp:any:8080"
+# RUY-18: the scope is part of the key, so a loopback listener that moves to every address fails
+out="$(runsec)"
+expect_contains "loopback and any ports are keyed by scope" "$out" "PASS: listening sockets equal the baseline: tcp:any:22, tcp:loopback:53, udp:any:68, udp:loopback:323"
+out="$(FAKE_STUB_ANY=1 runsec)"; rc=$?
+expect_contains "a loopback port on every address: FAIL" "$out" "FAIL: unexpected listening sockets: tcp:any:53"
+expect_contains "a loopback port on every address: the loopback one is missing" "$out" "FAIL: baseline sockets not listening: tcp:loopback:53"
+[ "$rc" = 1 ] && pass "a loopback port on every address: exit 1" || fail "a loopback port on every address: exit $rc"
+sed 's/"tcp:any:22"/"tcp:22"/' "$sec/baseline.json" > "$sec/baseline-oldports.json"
+out="$(SEC_BASELINE="$sec/baseline-oldports.json" SEC_BUSPOLICY="$busgood" SEC_X11DIR="$sec/x11" SEC_UNITDIRS="$sec/units" SEC_PASSWD="$sec/passwd" SEC_SHADOW="$sec/shadow" PATH="$sec/bin:$PATH" bash "$here/vm-security-check.sh" 2>&1)"
+expect_contains "a baseline port without a scope: FAIL" "$out" "FAIL: baseline ports not written as proto:scope:port (scope loopback or any): tcp:22"
+out="$(SEC_BASELINE="$here/../image/security-baseline.json" SEC_BUSPOLICY="$busgood" SEC_X11DIR="$sec/x11" SEC_UNITDIRS="$sec/units" SEC_PASSWD="$sec/passwd" SEC_SHADOW="$sec/shadow" PATH="$sec/bin:$PATH" bash "$here/vm-security-check.sh" 2>&1)"
+expect_lacks "the shipped baseline writes every port as proto:scope:port" "$out" "baseline ports not written"
+expect_lacks "the shipped baseline has no LLMNR port (RUY-18)" "$out" ":5355"
+out="$(runsec measure)"
+expect_contains "measure keys ports by scope" "$out" '"port": "tcp:loopback:53"'
 out="$(FAKE_ENFORCE=Permissive runsec)"
 expect_contains "Permissive: FAIL" "$out" "FAIL: SELinux is 'Permissive'"
 out="$(FAKE_UNCONFINED=ruya-evil runsec)"

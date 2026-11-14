@@ -5,7 +5,8 @@
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-security-check.sh [check|measure|signals]
 # Steps (each prints PASS or FAIL lines; any FAIL makes the exit status 1):
 #   units     every ruya-*.service in the image: systemd-analyze security exposure <= its baseline value
-#   ports     listening TCP/UDP sockets (ss -H -tuln), as proto:port, equal the baseline set
+#   ports     listening TCP/UDP sockets (ss -H -tuln), as proto:scope:port (scope loopback or any, RUY-18),
+#             equal the baseline set
 #   selinux   getenforce is Enforcing; no ruya-* process in unconfined_service_t unless the baseline names it
 #   files     setuid/setgid files under /usr equal the baseline; nothing under /usr or /etc is world-writable
 #   accounts  only baseline accounts have a login shell or a usable password
@@ -122,11 +123,29 @@ for l in lines("units.txt"):
     name, val = l.split()
     units[name] = None if val == "ERR" else float(val)
 
+# RUY-18: a port is keyed proto:scope:port, so a listener that moves from loopback to every address fails.
+# scope "loopback": 127.0.0.0/8, ::1 (also IPv4-mapped) or bound to the lo interface ("127.0.0.53%lo:53");
+# scope "any": everything else, a wildcard (0.0.0.0, [::], *) or a network address: reachable from outside.
+import ipaddress
+def port_scope(addr):
+    addr, _, iface = addr.partition("%")
+    addr = addr.strip("[]")
+    if iface == "lo":
+        return "loopback"
+    try:
+        ip = ipaddress.ip_address(addr)
+    except ValueError:
+        return "any"
+    if getattr(ip, "ipv4_mapped", None):
+        ip = ip.ipv4_mapped
+    return "loopback" if ip.is_loopback else "any"
+PORT_KEY = re.compile(r"(tcp|udp):(loopback|any):[0-9]+")
 ports = set()
 for l in lines("ss.txt"):
     f = l.split()
     if len(f) >= 5 and f[0] in ("tcp", "udp"):
-        ports.add(f[0] + ":" + f[4].rsplit(":", 1)[-1])
+        addr, _, port = f[4].rpartition(":")
+        ports.add("%s:%s:%s" % (f[0], port_scope(addr), port))
 
 enforce = read("getenforce.txt").strip()
 
@@ -231,6 +250,9 @@ for u in sorted(set(bu) - set(units)):
 # ports
 bp = {e["port"] for e in base.get("ports", [])}
 need_reasons("ports", "port")
+oldkeys = sorted(p for p in bp if not PORT_KEY.fullmatch(str(p)))
+if oldkeys:
+    bad("baseline ports not written as proto:scope:port (scope loopback or any): " + ", ".join(map(str, oldkeys)))
 if ports == bp:
     ok("listening sockets equal the baseline: " + ", ".join(sorted(ports)) if ports else "no listening sockets, as the baseline")
 else:

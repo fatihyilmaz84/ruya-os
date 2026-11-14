@@ -63,12 +63,11 @@ every build).
 | `fedora-flathub-remote` | the signed Flathub `.flatpakrepo`, used by `ruya-flathub-remote.service`. It pulls `flatpak`, which `ruya-store`, `ruya-library` and `ruya-session` run; `bubblewrap` and `xdg-dbus-proxy` come with it (sandbox) |
 | `greenboot-default-health-checks` | `greenboot`, the automatic rollback (`greenboot-healthcheck.service`) |
 | `chrony` | the clock: TLS, update checks, the scheduled night restart |
-| `sudo`, `sudo-python-plugin` | base; `ruya-profiles` does not use it, support does |
 | `cloud-utils-growpart` | `bootc-generic-growpart` grows the root partition of a disk image on first boot |
 
 `udisks2` (USB storage, `ruya-devices`), `polkit`, `dbus-broker`, `python3` and `skopeo`/`podman` are not
 leaves: other packages depend on them (`udisks2` through `libblockdev-*`, `skopeo` and `podman` through `bootc`,
-`greenboot` and `rpm-ostree`; `python3` through `sudo-python-plugin` and `python3-libdnf5`). `vm-*-check.sh` need
+`greenboot` and `rpm-ostree`; `python3` through `python3-libdnf5`). `vm-*-check.sh` need
 `python3` and `pkaction`/`pkcheck` in the guest.
 
 ### Gaming and media (codecs, GPU video, controllers)
@@ -139,6 +138,7 @@ Measured on 0.0.45-fw: 100 requested packages, 101 with the one dependent (`lvm2
 | NFS | `nfs-utils`, `nfs-client-utils`, `nfsv3-client-utils`, `nfsv4-client-utils`, `nfs-common-utils`, `libnfsidmap`, `rpcbind`, `quota`, `quota-nls` | no network file systems |
 | LVM | `lvm2`, `device-mapper-persistent-data`, `device-mapper-event`, `device-mapper-event-libs`, `libaio`, and `lvm2-libs` (dependent) | the root is a plain xfs partition. `mdadm` stays: `udisks2` requires `libblockdev-mdraid`. The initramfs omits the `lvm` and `clevis` modules (`60-ruyaos-slim.conf`) |
 | Daemons and tools | `avahi`, `libdaemon`, `toolbox`, `stalld`, `irqbalance`, `iptables-services` | mDNS, toolbox containers, realtime stall detector, IRQ balancing, iptables-save restore (NetworkManager uses nftables) |
+| Setuid helpers (RUY-18) | `sudo`, `sudo-python-plugin` | nobody logs in to elevate: the services are root units and support reaches the console as root over SSH. `pkexec` (polkit) and `pam_timestamp_check` (pam) stay installed without their setuid bit (Containerfile); `98-guard.sh` bans `sudo` and fails on either bit |
 | Crash dumps and build tools | `kdump-utils`, `kexec-tools`, `makedumpfile`, `chunkah`, `fedora-repos-archive` | `kdump` is not set up on a console; the others are for building images |
 
 Considered and **kept**, with the reason:

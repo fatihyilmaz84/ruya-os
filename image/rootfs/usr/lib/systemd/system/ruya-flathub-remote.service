@@ -18,6 +18,28 @@ ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
 NoNewPrivileges=yes
+# Hardening (RUY-18): root, but every file it writes is root's own (/var/lib/flatpak), so it needs no
+# capability. No UMask=0077: the remote's files must stay readable to ruya-library and the profile users.
+# Inet families stay allowed although remote-add fetches nothing (the .flatpakrepo carries the key):
+# flatpak's libraries may resolve or probe, and a refused socket() would fail the unit at first boot.
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+PrivateDevices=yes
+PrivateIPC=yes
+ProtectProc=invisible
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
 
 [Install]
 WantedBy=multi-user.target

@@ -68,6 +68,21 @@ ExecStartPre=-/usr/bin/ruya-devices --display-guard
 # headset disconnected and took the shell down (T-197, Dell).
 Environment=QT_AUDIO_BACKEND=pulseaudio
 ExecStart=/usr/bin/ruya-shell
+# Hardening (RUY-18), only what cannot take the DRM card, /dev/input, the tty or the logind session
+# away: no ProtectSystem, PrivateDevices or DevicePolicy here (eglfs opens the card and the input
+# nodes itself; with no device policy set, ProtectClock adds no device allow-list either). The shell
+# starts no process of its own (apps run in the profile users' managers, through ruya-session) and
+# sets no realtime priority itself, so it needs no kernel module, kernel log, clock, hostname, new
+# setuid file, personality or realtime scheduler. For a unit with User= these seccomp-based settings
+# imply NoNewPrivileges=yes: a setuid helper the GPU driver might run (nvidia-modprobe, when the
+# NVIDIA nodes are missing) would run without its bit (to be confirmed on NVIDIA hardware).
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectClock=yes
+ProtectHostname=yes
+LockPersonality=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
 Restart=always
 RestartSec=1
 

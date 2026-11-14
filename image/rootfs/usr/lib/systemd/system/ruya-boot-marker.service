@@ -8,6 +8,39 @@ After=ruya-compositor@tty1.service
 [Service]
 Type=oneshot
 ExecStart=/bin/sh -c 'if /usr/libexec/ruyaos/wait-shell-ready 120; then echo "RUYA_BOOT_OK $(cat /usr/lib/ruyaos/version)" > /dev/ttyS0; else echo "RUYA_BOOT_FAIL $(cat /usr/lib/ruyaos/version)" > /dev/ttyS0; fi'
+# Hardening (RUY-18): it only reads the journal (journalctl -b, as root: the journal files are root's,
+# so no capability is needed), /usr/lib/ruyaos/version and the passwd entry of ruya-shell, and writes
+# one line to /dev/ttyS0 (root's own device node). No ProcSubset=pid: journalctl -b reads the boot id
+# from /proc/sys/kernel/random/boot_id. No PrivateDevices: it would hide /dev/ttyS0; DevicePolicy=closed
+# with the one DeviceAllow does that job.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+PrivateIPC=yes
+DevicePolicy=closed
+DeviceAllow=/dev/ttyS0 w
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+UMask=0077
+ProtectProc=invisible
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
 
 [Install]
 # Both targets: an installer (Anaconda) leaves default.target at multi-user.target (T-178).

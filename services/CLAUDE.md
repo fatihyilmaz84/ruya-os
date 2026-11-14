@@ -27,7 +27,7 @@ Cargo workspace. Each service is a crate named `ruya-<name>` that serves `org.ru
 ## Integrating a new service into the OS (all three are needed)
 
 1. A systemd unit in `image/rootfs/usr/lib/systemd/system/ruya-<name>.service`. Copy the hardening block from `ruya-profiles.service` (`Type=dbus`, `ProtectSystem=strict`, `NoNewPrivileges`, a minimal `CapabilityBoundingSet`, `SystemCallFilter=@system-service`, `UMask=0077`, …) and open only the paths it needs. Check it in the VM with `systemd-analyze security ruya-<name>`; aim for "OK" (`ruya-profiles` is 1.6).
-2. A D-Bus policy in `image/rootfs/usr/share/dbus-1/system.d/org.ruyaos.<Name>1.conf`: only root owns the name, and only `ruya-shell` and root may call it.
+2. A D-Bus policy in `image/rootfs/usr/share/dbus-1/system.d/org.ruyaos.<Name>1.conf`: only root owns the name, and only `ruya-shell` and root may call it. Its default context denies `own`, `send_destination` and the service's signals in writing (`scripts/lint-bus-policies.ps1` refuses a policy without them; copy `org.ruyaos.Profiles1.conf`).
 3. `image/Containerfile`: install the binary in the `services-build` stage and add it to `systemctl enable`.
 
 These are image changes: build the image and check them in the VM (`docs/dev-setup.md`; a `scripts/vm-<name>-check.sh` like `vm-profiles-check.sh`). A task is not `done` until the service runs there.
