@@ -115,20 +115,26 @@ Item {
         layer.enabled: sheet.engaged && sheet.blurred
         layer.smooth: true
     }
-    SmoothMask {
-        objectName: "glassSheetBlur"
+    // Made only while the mask's layer is on, and so again on every opening: MultiEffect is handed the
+    // new layer, and a closed sheet holds no effect pointing at a mask without a texture ("Texture ... is
+    // not assigned a valid texture provider" on every close, RUY-451). A mask whose layer was turned off
+    // and on again under the same `maskSource` masked everything away, and every opening after the first
+    // showed a flat sheet (T-387, reproduced on a GPU in `shots`).
+    Loader {
         anchors.fill: parent
-        visible: sheet.blurred
-        source: crop
-        // Given only while the mask's layer is on, so each opening hands MultiEffect the new layer: a mask
-        // whose layer was turned off and on again under the same `maskSource` masked everything away, and
-        // every opening after the first showed a flat sheet (T-387, reproduced on a GPU in `shots`).
-        maskSource: mask.layer.enabled ? mask : null
-        blurEnabled: true
-        blur: 1.0
-        blurMax: Theme.blurMax
-        brightness: -0.08
-        saturation: 0.3
+        active: mask.layer.enabled
+        sourceComponent: SmoothMask {
+            objectName: "glassSheetBlur"
+            anchors.fill: parent
+            visible: sheet.blurred
+            source: crop
+            maskSource: mask
+            blurEnabled: true
+            blur: 1.0
+            blurMax: Theme.blurMax
+            brightness: -0.08
+            saturation: 0.3
+        }
     }
     Rectangle {
         objectName: "glassSheetFill"

@@ -254,7 +254,7 @@ Item {
             verify(l.tintVisible, "a modal carries the tint")
             verify(l.sheenVisible && l.rimVisible, "sheen and rim stay on opaque glass")
             compare(l.grainVisible, false, "no grain where nothing is blurred")
-            compare(findChild(sheet, "glassSheetBlur").visible, false)
+            compare(findChild(sheet, "glassSheetBlur"), null, "no blur effect is made")
             compare(l.radius, Theme.radiusL * sheet.u)
         }
 
@@ -270,7 +270,7 @@ Item {
             DeviceSettings.effectsQuality = "performance"
             compare(sheet.blurred, false, "the Performance tier: no blur")
             compare(sheet.fillColor, Theme.glassOpaque, "opaque glass, never translucent over sharp art")
-            compare(findChild(sheet, "glassSheetBlur").visible, false)
+            verify(findChild(sheet, "glassSheetBlur") === null || !findChild(sheet, "glassSheetBlur").visible)
             compare(sheet.shadow.shown, false, "and no shadow")
             verify(findChild(sheet, "glassSheetLayers").sheenVisible && findChild(sheet, "glassSheetLayers").rimVisible)
         }
@@ -325,18 +325,19 @@ Item {
             const modal = createTemporaryObject(fadingModalComponent, layer)
             const sheet = findChild(modal, "fadingSheet")
             const mask = findChild(sheet, "glassSheetMask")
-            const blur = findChild(sheet, "glassSheetBlur")
             tryVerify(() => sheet.source === layer.glassSource, 2000, "found on the modal layer")
-            compare(blur.maskSource, null, "no mask before the first opening (it has no layer)")
+            compare(findChild(sheet, "glassSheetBlur"), null, "no effect before the first opening (the mask has no layer)")
             for (let opening = 1; opening <= 2; ++opening) {
                 modal.shown = true
                 verify(mask.layer.enabled, "opening " + opening + ": the mask's layer is on")
+                const blur = findChild(sheet, "glassSheetBlur")
+                verify(blur !== null, "opening " + opening + ": an effect is made")
                 verify(blur.maskSource === mask, "opening " + opening + ": the blur is cut by it")
                 tryCompare(modal, "opacity", 1, 2000)
                 modal.shown = false
                 tryCompare(sheet, "engaged", false, 3000, "let go once the modal is hidden")
                 compare(mask.layer.enabled, false)
-                compare(blur.maskSource, null, "opening " + opening + ": the blur lets go of the layer with it")
+                tryVerify(() => findChild(sheet, "glassSheetBlur") === null, 2000, "opening " + opening + ": the effect goes with the layer")
             }
         }
 

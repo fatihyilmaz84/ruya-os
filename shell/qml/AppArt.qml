@@ -15,6 +15,7 @@ Rectangle {
     property bool monogram: true // the letter; off for full-screen art (the Home hero)
     property real monogramSize: Theme.typeHero   // the letter's size (a type token); smaller art takes a smaller one (the Hub's running strip)
     property bool shimmer: true  // the gleam while loading; off for the Home hero (it fades in over the backdrop)
+    property size decodeSize: Qt.size(0, 0)  // pixels the picture is decoded at (Qt crops to cover it); 0x0 is the file's size (the Home hero sets it, RUY-451)
     property bool bare: false    // no fallback fill: the Home hero over a wallpaper shows the wallpaper until the picture is there (T-208)
 
     // The picture's load state. While it loads (not when it failed or is absent) a gleam crosses
@@ -126,6 +127,8 @@ Rectangle {
                                           : /^[A-Za-z]:\//.test(art.picture) ? "file:///" + art.picture : art.picture) : ""
         fillMode: Image.PreserveAspectCrop
         asynchronous: true
+        // Decoded at the size asked (0x0: the file's size); PreserveAspectCrop then yields exactly that (RUY-451).
+        sourceSize: art.decodeSize
         layer.enabled: art.masked && visible
         layer.smooth: true
         layer.effect: SmoothMask {

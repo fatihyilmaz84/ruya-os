@@ -113,6 +113,19 @@ Item {
                 verify(!findChild(find(name), "artMonogram").visible, name)
         }
 
+        // RUY-451: the hero decodes its picture at the drawn size, not the file's (up to ~19 MB a layer).
+        function test_hero_art_is_decoded_at_the_drawn_size() {
+            start("")
+            for (const name of ["heroArtA", "heroArtB"]) {
+                const art = find(name)
+                const img = findChild(art, "artImage")
+                verify(art.width > 0, name)
+                const dpr = art.Screen.devicePixelRatio
+                compare(img.sourceSize.width, Math.max(1, Math.ceil(art.width * dpr)), name)
+                compare(img.sourceSize.height, Math.max(1, Math.ceil(art.height * dpr)), name)
+            }
+        }
+
         function test_hero_art_does_not_shimmer() {
             start("")
             for (const name of ["heroArtA", "heroArtB"]) {
