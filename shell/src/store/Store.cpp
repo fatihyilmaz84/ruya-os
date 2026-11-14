@@ -261,6 +261,8 @@ QVariantMap Store::rowIds(bool gamepadOnly) const
         const QString c = m.value(controller).toString();
         if (gamepadOnly && c != QLatin1String("full") && c != QLatin1String("partial"))
             continue;
+        if (!m.value(QStringLiteral("compatible"), true).toBool())
+            continue; // needs a newer API level: not listed (its page still opens, RUY-156)
         const QString appId = m.value(id).toString();
         all.append(appId);
         if (m.value(source).toString() == QLatin1String("official"))

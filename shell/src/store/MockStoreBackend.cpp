@@ -61,7 +61,11 @@ void MockStoreBackend::initState()
             "", {"audio", "gamepad", "network"}, 840),
         app("org.example.Broken", "Broken App", "Always fails to install; for tests.", "Example Games", "official",
             "partial", "all", {"audio"}, 20),
+        app("org.example.Future", "Next Gen Studio", "Needs a newer RuyaOS than this mock console has.", "Example Games",
+            "official", "none", "all", {"audio"}, 30),
     };
+    // The mock console is at API level 0; this app asks for more, so the service would say compatible=false.
+    m_apps[indexOf(QStringLiteral("org.example.Future"))].compatible = false;
     // Installed from the start; Open Chess has an update that adds a permission, Text Editor one that adds none.
     for (const char *id : {"org.example.Puzzle", "org.example.Chess", "org.example.Editor"})
         m_apps[indexOf(QString::fromLatin1(id))].installed = true;

@@ -46,6 +46,7 @@ build_repo() {
   <project_license>MIT</project_license>
   <developer_name>RuyaOS</developer_name>
   <description><p>Nothing to see.</p></description>
+  <custom><value key="x-ruya-min-api-level">99</value></custom>
 </component>
 EOF
     sign="--gpg-sign=$key --gpg-homedir=$work/gpg"
@@ -108,6 +109,11 @@ check)
     flatpak remotes --system --columns=name,options
     busctl --system call "$svc" "$path" "$ifc" ListRemotes
 
+    # RUY-156: the console names its API level (os-release; /etc/os-release is a symlink to /usr/lib).
+    for f in /usr/lib/os-release /etc/os-release; do
+        grep -Eq '^RUYA_API_LEVEL=[0-9]+$' "$f" && ok "$f has RUYA_API_LEVEL" || bad "$f has no RUYA_API_LEVEL"
+    done
+
     echo "--- catalogue"
     # AddRemote answers at once; the catalogue is read again in the background (it asks every remote).
     n=0
@@ -129,6 +135,9 @@ check)
     echo "$got" | head -c 800; echo
     # T-156: the record carries new_permissions, empty for an app with no update.
     echo "$got" | grep -q '"new_permissions" as 0' && ok "GetApp reports an empty new_permissions" || bad "GetApp new_permissions: $got"
+    # RUY-156: the test app asks for API level 99 (x-ruya-min-api-level), far above the console's.
+    echo "$got" | grep -q '"compatible" b false' && ok "GetApp reports compatible=false for a minimum of 99" || bad "GetApp compatible: $got"
+    echo "$list" | grep -q '"compatible" b false' && ok "Search carries compatible=false" || bad "Search compatible: $list"
     case "$(busctl --system call "$svc" "$path" "$ifc" GetApp s org.nope.Missing)" in 'sa{sv} "unknown-app"'*) ok "GetApp of an unknown id";; *) bad "GetApp unknown";; esac
 
     echo "--- Install"

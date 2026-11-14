@@ -2,7 +2,7 @@ import QtQuick
 import QtTest
 import RuyaShell
 
-// Store page and app detail page against the mock catalogue (12 apps, 9 with controller support).
+// Store page and app detail page against the mock catalogue (13 apps, 9 with controller support, one needing a newer API level).
 // Controller keys only. Signs in as "Ada" (p2, no PIN).
 Item {
     id: host
@@ -105,7 +105,7 @@ Item {
             compare(find("storeShowAll").checked, false)
             keyClick(Qt.Key_Return)
             tryCompare(Store, "controllerFilter", "any")
-            tryVerify(() => Store.results.length === 12)
+            tryVerify(() => Store.results.length === 13)
             tryVerify(() => apps.ids.indexOf("org.example.Browser") >= 0, 2000, "Browser shows with all apps")
             keyClick(Qt.Key_Return)
             tryCompare(Store, "controllerFilter", "gamepad")
@@ -555,6 +555,60 @@ Item {
             tryCompare(tc.shell, "currentPage", "store")
             openApp("org.example.Racer")
             compare(find("detailAge").text, "Ages 7+")
+        }
+
+        // RUY-156: an app that needs a newer API level than the console is not listed anywhere, but
+        // the catalogue still knows it and its page opens, with Install off and a line saying why.
+        function test_incompatible_app_is_not_listed() {
+            const id = "org.example.Future"
+            compare(Store.app(id).compatible, false)
+            openStore()
+            for (const r of ["featured", "games", "apps", "installed"])
+                compare(find("storeRow_" + r).ids.indexOf(id), -1, "not in " + r)
+            Store.controllerFilter = "any"   // the page starts on "controller apps only"; the mock app has no controller support
+            find("storeSearchEntry").accepted("next gen")
+            tryVerify(() => Store.results.some(a => a.id === id), 2000, "the search itself finds it")
+            compare(Store.rowIds(false).all.indexOf(id), -1, "the results grid does not list it")
+            compare(find("appCard_" + id), null)
+        }
+
+        function test_incompatible_app_page_cannot_install() {
+            const id = "org.example.Future"
+            tc.shell.openPage("appDetail", { appId: id })
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
+            tryCompare(find("page_appDetail"), "detailsReady", true)
+            compare(find("detailPrimary").text, "Install")
+            compare(find("detailPrimary").active, false, "Install is off")
+            compare(find("detailCompat").visible, true)
+            compare(find("detailCompat").text, "Needs a newer RuyaOS")
+            keyClick(Qt.Key_Return)
+            wait(50)
+            compare(Object.keys(Store.jobs).length, 0, "no install started")
+            compare(Store.app(id).installed, false)
+            verify(find("detailPrimary").activeFocus, "focus stays on the button")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => tc.shell.currentPage !== "appDetail", 2000, "Back leaves the page")
+        }
+
+        function test_compatible_app_page_has_no_notice() {
+            tc.shell.openPage("appDetail", { appId: "org.example.Racer" })
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryCompare(find("page_appDetail"), "detailsReady", true)
+            compare(find("detailCompat").visible, false)
+            compare(find("detailPrimary").active, true)
+        }
+
+        function test_installed_incompatible_app_stays_and_says_so() {
+            const id = "org.example.Future"
+            Store.install(id)
+            tryVerify(() => Store.app(id).installed === true, 10000)
+            tc.shell.openPage("appDetail", { appId: id })
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryCompare(find("page_appDetail"), "detailsReady", true)
+            compare(find("detailCompat").visible, true)
+            compare(find("detailCompat").text, "Needs a newer RuyaOS than this console has. It stays installed.")
+            compare(find("detailUninstall").visible, true, "never removed by itself")
         }
 
         function test_zz_screenshots() {

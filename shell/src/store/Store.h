@@ -17,7 +17,7 @@
 //
 // App records are plain objects: { id, name, summary, description, developer, source,
 // controller, ageRating, permissions, newPermissions, installedSize, icon, tile, hero, installed,
-// updateAvailable }. permissions and newPermissions (what the available update adds) are complete
+// updateAvailable, compatible }. permissions and newPermissions (what the available update adds) are complete
 // only after loadApp() of that app has answered.
 class Store : public QObject
 {

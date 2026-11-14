@@ -26,7 +26,7 @@ Item {
         function init() {
             verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             Store.mockReset()
-            tryVerify(() => Store.catalogue.length === 12)
+            tryVerify(() => Store.catalogue.length === 13)
             tryVerify(() => Store.installed.length === 3)
             tryVerify(() => Store.mockPendingReplies() === 0)   // the reset's own replies have landed
             finished.clear()
@@ -38,7 +38,7 @@ Item {
 
         function test_search() {
             const all = Store.catalogue
-            compare(all.length, 12)
+            compare(all.length, 13)
             const sources = new Set(all.map(a => a.source))
             compare(sources.size, 3)
             const levels = new Set(all.map(a => a.controller))
@@ -50,13 +50,13 @@ Item {
             tryVerify(() => Store.results.length === 1)
             compare(Store.results[0].id, "org.example.Chess")
             Store.search("")
-            tryVerify(() => Store.results.length === 12)
+            tryVerify(() => Store.results.length === 13)
         }
 
         function test_install_patches_flags_without_a_new_search() {
             const id = "org.example.Racer"
             Store.search("")
-            tryVerify(() => Store.results.length === 12)
+            tryVerify(() => Store.results.length === 13)
             const searches = Store.mockSearchCount()
             Store.install(id)
             tryCompare(finished, "count", 1)
@@ -78,22 +78,22 @@ Item {
             tryVerify(() => Store.mockSearchCount() === searches + 2) // the catalogue and the query
             tryVerify(() => Store.results.length === 1)
             compare(Store.results[0].id, "org.example.Chess")
-            compare(Store.catalogue.length, 12)
+            compare(Store.catalogue.length, 13)
             Store.search("")
-            tryVerify(() => Store.results.length === 12)
+            tryVerify(() => Store.results.length === 13)
         }
 
         function test_controller_filter() {
             compare(Store.controllerFilter, "any")
             Store.controllerFilter = "gamepad"
             tryVerify(() => Store.results.length === 9 && Store.results.every(a => a.controller !== "none"))
-            compare(Store.catalogue.length, 12, "the catalogue stays whole")
+            compare(Store.catalogue.length, 13, "the catalogue stays whole")
             Store.search("editor")
             tryVerify(() => Store.results.length === 0)
             Store.controllerFilter = "any"
             tryVerify(() => Store.results.length === 1)
             Store.search("")
-            tryVerify(() => Store.results.length === 12)
+            tryVerify(() => Store.results.length === 13)
         }
 
         function test_install_lifecycle() {

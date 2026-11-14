@@ -10,4 +10,7 @@ sed -i -e 's/^NAME=.*/NAME="RuyaOS"/' \
 grep -qx 'NAME="RuyaOS"' "$f"
 grep -qx "PRETTY_NAME=\"RuyaOS ${version}\"" "$f"
 grep -qx 'ID=fedora' "$f"
+# The API level apps can ask for (x-ruya-min-api-level; RUY-156). 0 = experimental, no promise.
+grep -q '^RUYA_API_LEVEL=' "$f" || echo 'RUYA_API_LEVEL=0' >> "$f"
+grep -qx 'RUYA_API_LEVEL=0' "$f"
 echo "92-branding: $(grep '^PRETTY_NAME=' "$f")"

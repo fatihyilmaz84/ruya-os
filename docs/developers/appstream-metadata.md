@@ -98,6 +98,7 @@ Replace the licence, the developer, the URLs and the `org.ruyaos` id with yours.
 | `<supports>` / `<recommends>` with `<control>gamepad</control>` | Controller support, together with `x-ruya-controller` | built |
 | `x-ruya-controller` | Overrides the guess from `<control>` | built |
 | `x-ruya-hero`, `x-ruya-logo` | The Store's pictures | built |
+| `x-ruya-min-api-level` | The lowest API level the app needs, an integer (default 0; missing, negative or not a number counts as 0). The Store hides an app above the console's `RUYA_API_LEVEL` and its page says "Needs a newer RuyaOS" with Install off | built (`ruya-store`, RUY-156) |
 | `x-ruya-launch-mode` | How the shell starts the app | **planned**: nothing reads it yet; set `fullscreen` |
 | `<screenshots>`, `<releases>`, `<url>`, `<branding>` | Flathub and other stores; the console does not show them yet | not used yet |
 | `x-ruya-save-paths`, `x-ruya-cache-paths` | Narrow what the backup copies ([Saves and data](saves-and-data.md)) | **planned** (T-215) |

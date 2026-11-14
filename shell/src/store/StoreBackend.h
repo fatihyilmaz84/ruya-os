@@ -29,6 +29,7 @@ struct AppInfo
     QString hero;
     bool installed = false;
     bool updateAvailable = false;
+    bool compatible = true; // false: needs a newer API level than this console has (hidden from lists)
 
     // The record as QML sees it (camelCase keys).
     QVariantMap toVariant() const
@@ -50,6 +51,7 @@ struct AppInfo
             {QStringLiteral("hero"), hero},
             {QStringLiteral("installed"), installed},
             {QStringLiteral("updateAvailable"), updateAvailable},
+            {QStringLiteral("compatible"), compatible},
         };
     }
 };

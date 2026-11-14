@@ -16,6 +16,8 @@ pub struct Component {
     /// "full" | "partial" | "none"
     pub controller: String,
     pub age_rating: String,
+    /// `x-ruya-min-api-level`: the API level the app needs; 0 when missing or not an integer.
+    pub min_api_level: u32,
     pub icon: String,
     pub tile: String,
     pub hero: String,
@@ -222,6 +224,7 @@ fn on_text(b: &mut Builder, stack: &[Open], text: &str, icon_base: &str) {
         ("control", "recommends" | "supports") if text == "gamepad" => b.gamepad = true,
         ("value", "custom") => match top.key.as_str() {
             "x-ruya-controller" => b.custom_controller = text.to_owned(),
+            "x-ruya-min-api-level" => b.c.min_api_level = crate::level::parse_level(text),
             "x-ruya-hero" => b.c.hero = text.to_owned(),
             "x-ruya-logo" => b.c.tile = text.to_owned(),
             _ => {}
@@ -412,6 +415,27 @@ mod tests {
         assert_eq!(plain.controller, "none");
         assert_eq!(plain.age_rating, "", "no rating in the metadata");
         assert_eq!(plain.icon, "");
+    }
+
+    #[test]
+    fn the_minimum_api_level_is_an_integer_or_zero() {
+        let level = |value: &str| {
+            let xml = format!(
+                r#"<components><component><id>org.example.A</id><name>A</name>
+                <custom><value key="x-ruya-min-api-level">{value}</value></custom></component></components>"#
+            );
+            parse(&xml, "/i")[0].min_api_level
+        };
+        assert_eq!(level("0"), 0);
+        assert_eq!(level("3"), 3);
+        assert_eq!(level("99"), 99);
+        assert_eq!(level("-1"), 0);
+        assert_eq!(level("new"), 0);
+        let plain = parse(
+            "<components><component><id>org.example.B</id><name>B</name></component></components>",
+            "/i",
+        );
+        assert_eq!(plain[0].min_api_level, 0, "missing");
     }
 
     #[test]

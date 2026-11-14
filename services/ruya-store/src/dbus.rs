@@ -204,6 +204,7 @@ fn record(app: &App) -> Dict {
         ("hero", Value::from(app.hero.clone())),
         ("installed", Value::from(app.installed)),
         ("update_available", Value::from(app.update_available)),
+        ("compatible", Value::from(app.compatible)),
     ];
     // An unknown rating is left out: the client keeps its own default.
     if !app.age_rating.is_empty() {

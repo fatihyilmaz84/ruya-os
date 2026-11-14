@@ -6,7 +6,7 @@ Status: **Draft v1** · Parent: [00-overview](00-overview.md)
 
 ### 1.1 Base
 - `FROM quay.io/fedora/fedora-bootc:<N>`, pinned to a Fedora major release. Track N and N+1 in CI so rebases happen deliberately.
-- **One image for all hardware** (ADR-009): RPM Fusion codecs and the NVIDIA driver are always included. Build steps are ordered scripts in `image/build/NN-*.sh` (repos → base → codecs → NVIDIA → slim → services → initramfs → branding → guard → cleanup), bind-mounted at build time so they aren't shipped.
+- **One image for all hardware** (ADR-009): RPM Fusion codecs and the NVIDIA driver are always included. Build steps are ordered scripts in `image/build/NN-*.sh` (repos → base → codecs → NVIDIA → slim → services → initramfs → branding → guard → cleanup), bind-mounted at build time so they aren't shipped. Branding (`92-branding.sh`) also writes `RUYA_API_LEVEL=<n>` (starts at `0`) into `/usr/lib/os-release`: the API level apps can ask for with `x-ruya-min-api-level` (RUY-156).
 - Every build runs `bootc container lint` and fails if it reports problems.
 
 ### 1.2 Package set (starting point; verify names against the target Fedora release)

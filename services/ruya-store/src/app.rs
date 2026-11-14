@@ -80,6 +80,11 @@ pub struct App {
     pub controller: String,
     /// "all" | "7+" | "12+" | "16+" | "18+", "" when the metadata has no rating.
     pub age_rating: String,
+    /// The API level the app asks for (`x-ruya-min-api-level`), 0 when it names none.
+    pub min_api_level: u32,
+    /// `min_api_level` is not above this console's level. True for an app AppStream does not
+    /// describe; the shell hides an incompatible app from the Store lists.
+    pub compatible: bool,
     pub permissions: Vec<String>,
     /// What the available update adds to the installed version's permissions; only `get_app`
     /// fills it, empty without an update.

@@ -59,6 +59,10 @@
     hero            s    URL or ""
     installed       b
     update_available b   only ever true when installed
+    compatible      b    false when the app's x-ruya-min-api-level is above this console's RUYA_API_LEVEL
+                         (os-release): the shell hides it from the lists and its page cannot install
+                         it. Absent from an older service: a client reads it as true. Installed apps
+                         that no longer fit stay installed.
 -->
 <node>
   <interface name="org.ruyaos.Store1">

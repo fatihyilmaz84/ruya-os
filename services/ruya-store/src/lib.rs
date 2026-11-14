@@ -8,5 +8,6 @@ pub mod flatpak;
 #[cfg(target_os = "linux")]
 pub mod flatpak_cli;
 pub mod jobs;
+pub mod level;
 pub mod queue;
 pub mod service;
