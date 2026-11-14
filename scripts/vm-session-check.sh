@@ -57,6 +57,7 @@ bad() { echo "FAIL: $*"; fail=1; }
 stopped_compositor=no
 enabled_linger=no
 restore_vm() {
+    trap '' PIPE HUP   # a closed stdout (ssh with piped output) must not kill the restore
     if [ "$stopped_compositor" = yes ]; then
         echo "restore: starting ruya-compositor@tty1 again (the run ended with the shell stopped)"
         systemctl start ruya-compositor@tty1 && stopped_compositor=no
@@ -250,6 +251,12 @@ audio_probe() {
 # (N s of M s)". The label is the optional last argument; without it the pattern is printed.
 wait_report() { # <ok|bad> <what> <waited> <limit>
     echo "    wait $1: $2 ($3 s of $4 s)"
+}
+# wait_seat: waits up to 10 s for ruya-shell's seat session (its manager is held by it again).
+wait_seat() {
+    n=0
+    until loginctl list-sessions --no-legend 2>/dev/null | grep -E -q "ruya-shell +seat0" || [ "$n" -ge 10 ]; do sleep 1; n=$((n + 1)); done
+    if [ "$n" -lt 10 ]; then wait_report ok "ruya-shell's seat session" "$n" 10; else wait_report bad "ruya-shell's seat session" "$n" 10; fi
 }
 # wait_audio <pid> <extended regex> <seconds> [label]: waits until audio_probe prints a line matching it.
 wait_audio() {
@@ -780,8 +787,8 @@ check)
     freeze_ran=yes
     shell_lingered=no
     loginctl show-user ruya-shell -p Linger 2>/dev/null | grep -q yes && shell_lingered=yes
-    loginctl enable-linger ruya-shell
     [ "$shell_lingered" = yes ] || enabled_linger=yes
+    loginctl enable-linger ruya-shell
     stopped_compositor=yes
     systemctl stop ruya-compositor@tty1 && ok "the shell is stopped for the Freeze checks" || bad "systemctl stop ruya-compositor@tty1"
     sleep 1; : > "$work/signals.log"   # the sweep's FrozenChanged lines must not satisfy the waits below
@@ -984,7 +991,7 @@ check)
     grep -a -q "session-probe: appExited $sleeper 0 quit\|session-probe: appExited $sleeper -\?[0-9]* quit" "$work/probe.log" && ok "the shell saw appExited quit" || bad "the shell did not see appExited quit"
     systemctl start ruya-compositor@tty1 && { stopped_compositor=no; ok "the shell is started again"; } || bad "systemctl start ruya-compositor@tty1"
     # The linger goes back once the shell's seat session holds the manager again.
-    n=0; until loginctl list-sessions --no-legend 2>/dev/null | grep -E -q "ruya-shell +seat0" || [ "$n" -ge 10 ]; do sleep 1; n=$((n + 1)); done
+    wait_seat
     [ "$shell_lingered" = yes ] || loginctl disable-linger ruya-shell
     enabled_linger=no
 
@@ -1063,7 +1070,7 @@ check)
     [ -e "/run/ruya-pulse/$user/native" ] && bad "ruya-pulse@$user's socket outlived the manager" || ok "ruya-pulse@$user ended with the manager"
     n="$(( $(date +%s) - t0 ))"; [ "$n" -lt 20 ] && sleep "$(( 20 - n ))"
     systemctl start ruya-compositor@tty1 && { stopped_compositor=no; ok "the shell is started again after $(( $(date +%s) - t0 )) s"; } || bad "systemctl start ruya-compositor@tty1"
-    n=0; until loginctl list-sessions --no-legend 2>/dev/null | grep -E -q "ruya-shell +seat0" || [ "$n" -ge 10 ]; do sleep 1; n=$((n + 1)); done
+    wait_seat
     systemctl is-active --quiet "user@$uid.service" && ok "ruya-shell's manager is back with the shell's seat session" || bad "ruya-shell's manager did not come back with the shell"
 
     echo "--- Launch while the unit of an earlier run is gone: a fresh launch works again"

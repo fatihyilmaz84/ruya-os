@@ -467,6 +467,13 @@ expect_contains "abort in the shell-restart step starts the compositor" "$out" "
 expect_lacks "a linger that was there before is left alone" "$out" "disable-linger"
 out="$(runtrap 'stopped_compositor=yes; enabled_linger=yes; stopped_compositor=no; enabled_linger=no; exit 0')"
 [ -z "$out" ] && pass "a clean run (flags cleared) calls neither systemctl nor loginctl" || fail "a clean run called: $out"
+# RUY-404 round 2: with stdout closed (ssh with piped output that went away) the trap's echo raises
+# SIGPIPE; the restore must still happen. The child's stdout is a pipe whose reader is already gone.
+SESS_LOG="$tmp/sess.log"; : > "$SESS_LOG"
+( SESS_LOG="$SESS_LOG" PATH="$tmp/sess-bin:$PATH" bash -c ". '$trapsrc'; stopped_compositor=yes; enabled_linger=yes; echo go; exit 1" 2>/dev/null | true ) 2>/dev/null
+out="$(cat "$SESS_LOG")"
+expect_contains "closed stdout: the compositor is still started" "$out" "systemctl start ruya-compositor@tty1"
+expect_contains "closed stdout: the linger is still taken back" "$out" "loginctl disable-linger ruya-shell"
 
 echo
 if [ "$fails" = 0 ]; then echo "vm-check tests: all passed"; else echo "vm-check tests: $fails failed"; fi
