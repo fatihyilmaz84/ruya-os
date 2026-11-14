@@ -703,6 +703,17 @@ hold_check() {
     stopped_shell_probe hold
 }
 
+# ruya-inputd announces UserActive at most every 30 s, and the gate is one timestamp for the whole
+# service; a check that counts UserActive restarts the service first, so a press of an earlier check
+# (the queue runs `close` right before) cannot swallow its first announcement (lead-21, 0.0.83 queue).
+fresh_activity_gate() {
+    systemctl restart ruya-inputd || { bad "ruya-inputd did not restart"; return 1; }
+    local n=0
+    until busctl --system introspect org.ruyaos.Input1 /org/ruyaos/Input1 >/dev/null 2>&1 || [ "$n" -ge 50 ]; do sleep 0.2; n=$((n + 1)); done
+    if [ "$n" -ge 50 ]; then bad "ruya-inputd is not on the bus 10 s after its restart"; return 1; fi
+    ok "ruya-inputd restarted: the 30 s activity gate starts empty"
+}
+
 # The probe command $1 with the compositor (and the shell) stopped, so no Accept or arrow reaches Home.
 stopped_shell_probe() {
     local what="$1"
@@ -835,6 +846,7 @@ useractive)
     chmod 0755 "$dir"
     install -m 0644 "$probe" "$dir/vm-input-probe.py"
     echo "--- pad input to a game is announced as activity, at most every 30 s (RUY-588)"
+    fresh_activity_gate || exit 1
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe useractive
     rm -rf "$dir"
     ;;
@@ -846,6 +858,7 @@ signals)
     chmod 0755 "$dir"
     install -m 0644 "$probe" "$dir/vm-input-probe.py"
     echo "--- Input1's signals reach only root and ruya-shell (RUY-594)"
+    fresh_activity_gate || exit 1
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe signals --user "ruya-$me"
     rm -rf "$dir"
     ;;
