@@ -34,6 +34,12 @@ jobs:
         run: pwsh -NoProfile -File scripts/lint-tokens.ps1
       - name: QML member lint
         run: pwsh -NoProfile -File scripts/lint-qml-members.ps1
+      - name: Setting note lint
+        run: pwsh -NoProfile -File scripts/lint-setting-notes.ps1
+      - name: CI lines lint (dnf and cmake lines equal in ci-shell-linux.sh)
+        run: |
+          pwsh -NoProfile -File scripts/lint-ci-lines.ps1
+          pwsh -NoProfile -File scripts/lint-ci-lines.ps1 -SelfTest
       - name: Icon lint
         run: pwsh -NoProfile -File scripts/lint-icons.ps1
       - name: Spec lint (components named in 04)

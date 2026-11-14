@@ -422,7 +422,28 @@ function Test-Tokens {
     [IO.File]::WriteAllText((Join-Path $noteFix "BadPane.qml"), "import QtQuick`nItem {`n    Text {`n        font.pixelSize: Theme.typeCaption * u`n        wrapMode: Text.Wrap`n    }`n}`n")
     & (Join-Path $PSScriptRoot "lint-setting-notes.ps1") -QmlDir $noteFix 6>&1 | Out-Null
     Record "setting note lint self-check (rejects a raw Text note in a pane)" ($LASTEXITCODE -ne 0)
+    # RUY-591: the other raw-note forms (a one-line Text, a `Text { id:` opener, Text.WordWrap) and a Text that is not a note.
+    $noteForms = [ordered]@{
+        "a one-line Text note" = @("    Text { font.pixelSize: Theme.typeCaption * u; wrapMode: Text.Wrap }", $false)
+        "a Text { id: n opener" = @("    Text { id: n`n        font.pixelSize: Theme.typeCaption * u`n        wrapMode: Text.Wrap`n    }", $false)
+        "Text.WordWrap" = @("    Text {`n        font.pixelSize: Theme.typeCaption * u`n        wrapMode: Text.WordWrap`n    }", $false)
+        "a caption Text without wrapping (a glyph)" = @("    Text { font.pixelSize: Theme.typeCaption * u }", $true)
+    }
+    foreach ($form in $noteForms.Keys) {
+        Remove-Item -Recurse -Force $noteFix -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Force $noteFix | Out-Null
+        [IO.File]::WriteAllText((Join-Path $noteFix "FormPane.qml"), "import QtQuick`nItem {`n" + $noteForms[$form][0] + "`n}`n")
+        & (Join-Path $PSScriptRoot "lint-setting-notes.ps1") -QmlDir $noteFix 6>&1 | Out-Null
+        $formOk = if ($noteForms[$form][1]) { $LASTEXITCODE -eq 0 } else { $LASTEXITCODE -ne 0 }
+        Record "setting note lint self-check ($form)" $formOk
+    }
     Remove-Item -Recurse -Force $noteFix -ErrorAction SilentlyContinue
+
+    Step "CI lines lint (ci.yml and ci-shell-linux.sh keep the same dnf packages and cmake flags, RUY-591)"
+    & (Join-Path $PSScriptRoot "lint-ci-lines.ps1")
+    Record "CI lines lint" ($LASTEXITCODE -eq 0)
+    & (Join-Path $PSScriptRoot "lint-ci-lines.ps1") -SelfTest
+    Record "CI lines lint self-test (equal, drifted package, drifted flag, drifted generator)" ($LASTEXITCODE -eq 0)
 
     # Self-check: the lint must reject a literal font size.
     $fixture = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-" + [guid]::NewGuid().ToString("N"))
