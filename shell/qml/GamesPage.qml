@@ -219,6 +219,7 @@ Page {
             SettingRow {
                 id: storeButton
                 objectName: "gamesOpenStore"
+                kind: "action"
                 width: 480 * page.u
                 u: page.u
                 label: qsTr("Open the Store")

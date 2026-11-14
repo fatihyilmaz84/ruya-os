@@ -63,20 +63,12 @@ Page {
         focus: true
         onExitRequested: page.backRequested()
 
-        // "choice" | "open" | "action": what the hint bar offers on the focused row.
-        property string focusedKind: "choice"
-        readonly property var back: ({ button: "B", text: qsTr("Back") })
-        hints: focusedKind === "choice" ? [{ button: "Left/Right", text: qsTr("Change") }, { button: "A", text: qsTr("Next") }, back]
-               : focusedKind === "open" ? [{ button: "A", text: qsTr("Open") }, back]
-               : [{ button: "A", text: qsTr("Select") }, back]
-
         ChoiceRow {
             id: appliesRow
             objectName: "rowAppliesTo"
             u: page.u
             label: qsTr("Applies to")
             options: page.appliesOptions
-            onActiveFocusChanged: if (activeFocus) body.focusedKind = "choice"
             onEdited: v => GameControls.setAppliesTo(v)
         }
         Binding { target: appliesRow; property: "value"; value: GameControls.appliesValue }
@@ -87,54 +79,53 @@ Page {
             u: page.u
             label: qsTr("Button layout")
             options: page.layoutOptions
-            onActiveFocusChanged: if (activeFocus) body.focusedKind = "choice"
             onEdited: v => GameControls.setLayout(v)
         }
         Binding { target: layoutRow; property: "value"; value: GameControls.layout }
 
         SettingRow {
             objectName: "rowRemap"
+            kind: "page"
             u: page.u
             label: qsTr("Remap buttons")
             value: GameControls.remapCount > 0 ? qsTr("%n changed", "", GameControls.remapCount) : qsTr("Default")
-            onActiveFocusChanged: if (activeFocus) body.focusedKind = "open"
             onActivated: page.openRequested("controlsRemap", ({ id: page.padId }))
         }
 
         SettingRow {
             objectName: "rowLeftStick"
+            kind: "page"
             u: page.u
             label: qsTr("Left stick")
             value: page.stickValue("left")
-            onActiveFocusChanged: if (activeFocus) body.focusedKind = "open"
             onActivated: page.openRequested("controlsStick", ({ id: page.padId, side: "left" }))
         }
 
         SettingRow {
             objectName: "rowRightStick"
+            kind: "page"
             u: page.u
             label: qsTr("Right stick")
             value: page.stickValue("right")
-            onActiveFocusChanged: if (activeFocus) body.focusedKind = "open"
             onActivated: page.openRequested("controlsStick", ({ id: page.padId, side: "right" }))
         }
 
         SettingRow {
             objectName: "rowExport"
+            kind: "action"
             visible: page.drive !== null
             u: page.u
             label: qsTr("Export to USB drive")
             value: page.drive ? page.drive.label : ""
-            onActiveFocusChanged: if (activeFocus) body.focusedKind = "action"
             onActivated: GameControls.exportTo(page.drive.id)
         }
 
         SettingRow {
             objectName: "rowImport"
+            kind: "action"
             visible: page.drive !== null
             u: page.u
             label: qsTr("Import from USB drive")
-            onActiveFocusChanged: if (activeFocus) body.focusedKind = "open"
             onActivated: {
                 importSlot.active = true
                 page.importPicker.open(page.drive)
@@ -143,6 +134,7 @@ Page {
 
         SettingRow {
             objectName: "rowNoDrive"
+            kind: "info"
             visible: page.drive === null
             enabled: false                       // an unavailable line (04 §5): its label is the message
             u: page.u
@@ -151,9 +143,9 @@ Page {
 
         SettingRow {
             objectName: "rowReset"
+            kind: "action"
             u: page.u
             label: qsTr("Reset to default")
-            onActiveFocusChanged: if (activeFocus) body.focusedKind = "open"
             onActivated: {
                 resetSlot.active = true
                 const dialog = page.resetConfirm

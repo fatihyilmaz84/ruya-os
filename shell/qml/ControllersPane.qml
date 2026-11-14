@@ -30,12 +30,6 @@ SettingsPane {
     readonly property bool failed: Input.devicesState === "failed"
     readonly property bool loading: Input.devicesState === "loading"
 
-    hints: confirmRow.activeFocus ? [{ button: "Left/Right", text: qsTr("Change") }, { button: "A", text: qsTr("Next") },
-                                     { button: "B", text: qsTr("Back") }]
-         : pane.focusedPad ? [{ button: "A", text: qsTr("Open") }, { button: "B", text: qsTr("Back") }]
-                           : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
-    property bool focusedPad: false
-
     ListModel { id: padModel }
 
     // The Confirm button row needs a pad to be about (like the note under it); with none connected the
@@ -138,6 +132,7 @@ SettingsPane {
 
     SettingRow {
         objectName: "rowPadsNone"
+        kind: "info"
         visible: !pane.failed && !pane.loading && padModel.count === 0
         enabled: false                       // information: an unavailable line (04 §5)
         u: pane.u
@@ -146,6 +141,7 @@ SettingsPane {
 
     SettingRow {
         objectName: "rowPadsFailed"
+        kind: "info"
         visible: pane.failed
         enabled: false
         u: pane.u
@@ -155,10 +151,10 @@ SettingsPane {
     SettingRow {
         id: retryRow
         objectName: "rowPadsRetry"
+        kind: "action"
         visible: pane.failed
         u: pane.u
         label: qsTr("Try again")
-        onActiveFocusChanged: if (activeFocus) pane.focusedPad = false
         onActivated: Input.refreshDevices()
     }
 
@@ -174,6 +170,7 @@ SettingsPane {
             required property string player
             readonly property bool padRow: true
             objectName: "pad_" + padId
+            kind: "page"
             visible: !pane.failed            // the last list is not shown as if it were current
             u: pane.u
             label: name
@@ -183,7 +180,6 @@ SettingsPane {
             // "DualSense Wireless Controller, PlayStation controller, Player 1, Bluetooth · Battery 62 %"
             // (SettingControl appends the detail).
             accessibleValue: DeviceIcons.kindText("controller", family) + (player !== "" ? ", " + player : "")
-            onActiveFocusChanged: if (activeFocus) pane.focusedPad = true
             onActivated: pane.controllerRequested(padId)
         }
     }
@@ -207,16 +203,15 @@ SettingsPane {
             confirmRow.value = Qt.binding(() => Input.confirmButton)
         }
         accessibleValue: currentLabel + ". " + confirmNote.sentence
-        onActiveFocusChanged: if (activeFocus) pane.focusedPad = false
     }
     SettingRow {
         objectName: "rowConfirmButtonUnavailable"
+        kind: "item"
         visible: pane.failed || (pane.confirmShown && !Input.confirmButtonAvailable)
         dimmed: true
         u: pane.u
         label: qsTr("Confirm button")
         value: qsTr("Not available")
-        onActiveFocusChanged: if (activeFocus) pane.focusedPad = false
         onActivated: Notifications.show(qsTr("%1: %2.").arg(label).arg(value), "info")
     }
     Connections {
@@ -301,20 +296,20 @@ SettingsPane {
     SettingRow {
         id: controlsRow
         objectName: "rowControlsInGames"
+        kind: "page"
         visible: pane.failed || (!pane.loading && padModel.count > 0)
         dimmed: pane.failed
         u: pane.u
         label: qsTr("Controls in games")
         value: pane.failed ? qsTr("Not available") : GameControls.changedFor(GameControls.padFor("")) ? qsTr("Changed") : qsTr("Default")
-        onActiveFocusChanged: if (activeFocus) pane.focusedPad = true     // it opens a page: A Open
         onActivated: pane.openControls(controlsRow)
     }
 
     SettingRow {
         objectName: "rowPadsPair"
+        kind: "action"
         u: pane.u
         label: qsTr("Pair a new controller")
-        onActiveFocusChanged: if (activeFocus) pane.focusedPad = false
         onActivated: {
             pane.modalReturn = Window.activeFocusItem
             onboardingSlot.active = true
@@ -326,11 +321,11 @@ SettingsPane {
     SettingRow {
         id: controlsLastRow
         objectName: "rowControlsInGamesLast"
+        kind: "page"
         visible: !pane.failed && !pane.loading && padModel.count === 0
         u: pane.u
         label: qsTr("Controls in games")
         value: GameControls.changedFor(GameControls.padFor("")) ? qsTr("Changed") : qsTr("Default")
-        onActiveFocusChanged: if (activeFocus) pane.focusedPad = true
         onActivated: pane.openControls(controlsLastRow)
     }
 

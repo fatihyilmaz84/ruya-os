@@ -282,6 +282,7 @@ SettingsPane {
 
     SettingRow {
         objectName: "rowBtOff"
+        kind: "info"
         visible: !Bluetooth.powered
         enabled: false                       // information, not a stop
         u: pane.u
@@ -290,6 +291,7 @@ SettingsPane {
 
     SettingRow {
         objectName: "rowBtAdd"
+        kind: "action"
         visible: Bluetooth.powered
         u: pane.u
         label: qsTr("Add a device")
@@ -299,6 +301,7 @@ SettingsPane {
 
     SettingRow {
         objectName: "rowBtPairController"
+        kind: "action"
         visible: Bluetooth.powered
         u: pane.u
         label: qsTr("Pair a new controller")
@@ -390,6 +393,7 @@ SettingsPane {
             required property bool trusted
             required property int battery
             objectName: "btDev_" + devId
+            kind: "item"
             visible: Bluetooth.powered
             u: pane.u
             label: shown
@@ -410,6 +414,7 @@ SettingsPane {
             required property bool paired
             required property bool bonded
             objectName: "btRepair_" + devId
+            kind: "action"
             visible: paired && !bonded && Bluetooth.powered
             u: pane.u
             label: qsTr("Pair again %1").arg(shown)
@@ -427,6 +432,7 @@ SettingsPane {
             required property string deviceKind
             required property bool paired
             objectName: "btRename_" + devId
+            kind: "action"
             visible: paired && deviceKind === "controller" && Bluetooth.powered
             u: pane.u
             label: qsTr("Rename %1").arg(shown)
@@ -441,6 +447,7 @@ SettingsPane {
             required property string shown
             required property bool paired
             objectName: "btForget_" + devId
+            kind: "action"
             visible: paired && Bluetooth.powered
             u: pane.u
             label: qsTr("Forget %1").arg(shown)

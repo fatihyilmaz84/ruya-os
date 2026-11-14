@@ -352,6 +352,7 @@ Item {
             Storage.mockPlugStick()
             tryVerify(() => find("driveTheme_drive:Ruya Stick/Glassy") !== null, 5000, "the stick's theme gets a row")
             verify(find("driveTheme_drive:Ruya Stick/Plain"))
+            compare(find("driveTheme_drive:Ruya Stick/Glassy").kind, "action", "RUY-513")
             verify(!find("driveTheme_drive:Ruya Stick/Broken"), "a broken theme is not offered")
             verify(find("rowSoundTheme").activeFocus, "focus stays when rows appear")
 
@@ -444,6 +445,7 @@ Item {
             const del = find("rowDeleteSoundTheme")
             tryVerify(() => del.visible, 2000, "a saved theme can be deleted")
             compare(del.label, "Delete “Plain”")
+            compare(del.kind, "action", "RUY-513")
             keyClick(Qt.Key_Down)
             tryVerify(() => del.activeFocus, 2000, "Down from the choice row reaches Delete")
 
@@ -538,8 +540,9 @@ Item {
             goTo(row)
             clearToasts()
             keyClick(Qt.Key_Return)
-            tryVerify(() => tc.toastTexts().includes("“Broken” can't be used. The theme.json file has a mistake."), 2000)
+            compare(tc.toastTexts().length, 0, "a fact: Accept says nothing, the value already holds the reason (RUY-513)")
             verify(find(row).activeFocus, "focus stays on the row")
+            compare(find(row).kind, "info")
             DeviceSettings.language = "tr"
             tryCompare(find(row), "value", "theme.json dosyasında bir hata var")
             DeviceSettings.language = "en"

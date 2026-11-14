@@ -115,6 +115,33 @@ Item {
 
         // ---- the pane ------------------------------------------------------------------------------------------
 
+        // RUY-513: the kinds of the pane's rows and of the controller page's.
+        function test_row_kinds() {
+            openPane()
+            compare(padRow(ds).kind, "page")
+            compare(find("rowControlsInGames").kind, "page")
+            compare(find("rowPadsPair").kind, "action")
+            compare(hintVerbs(), "A Open|B Back", "a pad row opens its page")
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "controller")
+            tryVerify(() => find("rowButtonTest") !== null && find("rowButtonTest").activeFocus, 2000)
+            compare(find("rowButtonTest").kind, "page")
+            compare(findChild(find("page_controller"), "rowControlsInGames").kind, "page")
+            const heading = find("capsHeading")
+            verify(heading !== null && heading.visible, "the heading is there")
+            compare(heading.text, "What it can do")
+            verify(heading.focusable === undefined, "a group label is never focusable")
+            verify(heading.Accessible.role === Accessible.Heading)
+            for (const name of ["cap_buttons", "cap_gyro"])
+                compare(find(name).kind, "info", name)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            verify(find("cap_buttons").activeFocus, "Down from Controls in games skips the heading")
+            compare(find("page_controller").hints.map(h => h.button + " " + h.text).join("|"), "B Back")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "settings")
+        }
+
         function test_the_list_shows_every_connected_pad() {
             openPane()
             compare(rowNames(), ["pad_" + ds, "pad_" + pro, "pad_" + xbox, "rowConfirmButton", "rowControlsInGames", "rowPadsPair"],

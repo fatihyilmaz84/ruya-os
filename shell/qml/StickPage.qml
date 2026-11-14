@@ -258,14 +258,6 @@ Page {
         focus: true
         onExitRequested: page.backRequested()
 
-        // "slider" | "choice" | "toggle" | "action"
-        property string focusedKind: "slider"
-        readonly property var back: ({ button: "B", text: qsTr("Back") })
-        hints: focusedKind === "slider" ? [{ button: "Left/Right", text: qsTr("Adjust") }, back]
-               : focusedKind === "choice" ? [{ button: "Left/Right", text: qsTr("Change") }, { button: "A", text: qsTr("Next") }, back]
-               : focusedKind === "toggle" ? [{ button: "A", text: qsTr("Toggle") }, back]
-               : [{ button: "A", text: qsTr("Select") }, back]
-
         SliderRow {
             id: innerRow
             objectName: "rowInner"
@@ -275,7 +267,6 @@ Page {
             to: 30
             stepSize: 1
             unit: "%"
-            onActiveFocusChanged: if (activeFocus) body.focusedKind = "slider"
             onEdited: v => GameControls.setStick(page.side, "inner_deadzone", v / 100, true)
         }
         Binding { target: innerRow; property: "value"; value: Math.round(page.settings.inner_deadzone * 100) }
@@ -289,7 +280,6 @@ Page {
             to: 20
             stepSize: 1
             unit: "%"
-            onActiveFocusChanged: if (activeFocus) body.focusedKind = "slider"
             onEdited: v => GameControls.setStick(page.side, "outer_deadzone", v / 100, true)
         }
         Binding { target: outerRow; property: "value"; value: Math.round(page.settings.outer_deadzone * 100) }
@@ -303,7 +293,6 @@ Page {
             to: 30
             stepSize: 1
             unit: "%"
-            onActiveFocusChanged: if (activeFocus) body.focusedKind = "slider"
             onEdited: v => GameControls.setStick(page.side, "anti_deadzone", v / 100, true)
         }
         Binding { target: antiRow; property: "value"; value: Math.round(page.settings.anti_deadzone * 100) }
@@ -315,7 +304,6 @@ Page {
             label: qsTr("Response curve")
             options: [{ value: "linear", label: qsTr("Linear") }, { value: "precise", label: qsTr("Precise") },
                       { value: "aggressive", label: qsTr("Aggressive") }]
-            onActiveFocusChanged: if (activeFocus) body.focusedKind = "choice"
             onEdited: v => GameControls.setStick(page.side, "curve", v, false)
         }
         Binding { target: curveRow; property: "value"; value: page.settings.curve }
@@ -329,7 +317,6 @@ Page {
             to: 150
             stepSize: 5
             unit: "%"
-            onActiveFocusChanged: if (activeFocus) body.focusedKind = "slider"
             onEdited: v => GameControls.setStick(page.side, "sensitivity", v / 100, true)
         }
         Binding { target: sensitivityRow; property: "value"; value: Math.round(page.settings.sensitivity * 100) }
@@ -339,16 +326,15 @@ Page {
             objectName: "rowInvert"
             u: page.u
             label: qsTr("Invert up and down")
-            onActiveFocusChanged: if (activeFocus) body.focusedKind = "toggle"
             onToggled: on => GameControls.setStick(page.side, "invert_y", on, false)
         }
         Binding { target: invertRow; property: "checked"; value: page.settings.invert_y === true }
 
         SettingRow {
             objectName: "rowResetStick"
+            kind: "action"
             u: page.u
             label: qsTr("Reset this stick")
-            onActiveFocusChanged: if (activeFocus) body.focusedKind = "action"
             onActivated: GameControls.resetStick(page.side)
         }
     }
