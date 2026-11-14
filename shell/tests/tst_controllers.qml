@@ -438,6 +438,25 @@ Item {
             compare(find("padTrackFill_left_trigger").height, 0, "ZL is a button: its track stays empty")
         }
 
+        function test_a_wii_u_pro_names_its_face_buttons_the_nintendo_way() {
+            const wiiu = "bluetooth-057e-0330-c1d2e3f4a5b6"
+            Input.mockAddDevice({ id: wiiu, name: "Nintendo Wii Remote Pro Controller", family: "nintendo",
+                                  layout: "nintendo-wiiu", connection: "bluetooth", battery: 80 })
+            tryVerify(() => Input.devices.length === 4)
+            openTest(wiiu)
+            const letter = (pos) => find("padCtl_" + pos).children.filter(c => c.text !== undefined)[0].text
+            compare(letter("north"), "X")
+            compare(letter("east"), "A")
+            compare(letter("south"), "B")
+            compare(letter("west"), "Y")
+            const last = [["south", "B (south)"], ["east", "A (east)"], ["west", "Y (west)"], ["north", "X (north)"],
+                          ["l1", "L"], ["r1", "R"], ["left_trigger", "ZL"], ["right_trigger", "ZR"]]
+            for (const [input, text] of last) {
+                Input.mockTestInput(wiiu, input, input.endsWith("trigger") ? 32767 : 1, "raw:pad:1:0")
+                tryCompare(find("raw_last"), "text", text)
+            }
+        }
+
         function test_a_switch_pro_takes_the_nintendo_drawing() {
             openTest(pro)
             compare(find("padDiagram").kind, "nintendo")

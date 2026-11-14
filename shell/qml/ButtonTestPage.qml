@@ -239,14 +239,15 @@ Page {
         const ps = pad.family === "playstation"
         switch (input) {
         case "": return qsTr("None")
-        case "south": return ps ? qsTr("Cross (south)") : qsTr("A (south)")
-        case "east": return ps ? qsTr("Circle (east)") : qsTr("B (east)")
-        case "west": return ps ? qsTr("Square (west)") : qsTr("X (west)")
-        case "north": return ps ? qsTr("Triangle (north)") : qsTr("Y (north)")
-        case "l1": return ps ? "L1" : "LB"
-        case "r1": return ps ? "R1" : "RB"
-        case "left_trigger": return ps ? "L2" : "LT"
-        case "right_trigger": return ps ? "R2" : "RT"
+        // RUY-622: the word comes from the one glyph table (Glyphs), so a Nintendo pad reads B (south).
+        case "south": return qsTr("%1 (south)").arg(Glyphs.labelForPosition("south", pad.family))
+        case "east": return qsTr("%1 (east)").arg(Glyphs.labelForPosition("east", pad.family))
+        case "west": return qsTr("%1 (west)").arg(Glyphs.labelForPosition("west", pad.family))
+        case "north": return qsTr("%1 (north)").arg(Glyphs.labelForPosition("north", pad.family))
+        case "l1":
+        case "r1":
+        case "left_trigger":
+        case "right_trigger": return Glyphs.labelForPosition(input, pad.family)
         case "l3": return qsTr("Left stick click")
         case "r3": return qsTr("Right stick click")
         case "left_x":
@@ -313,7 +314,7 @@ Page {
                     model: [
                         { key: "left", label: qsTr("Left stick"), value: page.stickText("left") },
                         { key: "right", label: qsTr("Right stick"), value: page.stickText("right") },
-                        { key: "triggers", label: page.pad.family === "playstation" ? qsTr("L2 · R2") : qsTr("LT · RT"), value: page.triggerText() },
+                        { key: "triggers", label: qsTr("%1 · %2").arg(Glyphs.labelForPosition("left_trigger", page.pad.family)).arg(Glyphs.labelForPosition("right_trigger", page.pad.family)), value: page.triggerText() },
                         { key: "gyro", label: qsTr("Gyro"), value: page.gyroText() },
                         { key: "last", label: qsTr("Last input"), value: page.inputText(page.lastInput) },
                         { key: "source", label: qsTr("Source"), value: page.lastSource !== "" ? page.lastSource : "\u2014" }
