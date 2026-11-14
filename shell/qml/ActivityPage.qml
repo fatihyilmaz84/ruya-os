@@ -116,7 +116,7 @@ Page {
         focus: true
         // The chart is read with Left and Right (a bar at a time); every other row gives its own hints by kind.
         hints: chartRow.activeFocus ? [{ button: "Left/Right", text: qsTr("Browse") }, { button: "B", text: qsTr("Back") }]
-               : focusedRow ? focusedRow.hints : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+               : focusedRow ? (focusedRow as SettingControl).hints : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
         onExitRequested: page.backRequested()
 
         // Shown instead of the data.
