@@ -6,7 +6,7 @@ use zbus::interface;
 use zbus::object_server::SignalEmitter;
 
 use crate::accounts::Accounts;
-use crate::service::ProfileService;
+use crate::service::{lock_line, switch_line, ProfileService};
 
 /// Chosen at runtime: real Unix users on the system bus, none in `--session` dev mode.
 pub type DynAccounts = Box<dyn Accounts + Send + Sync>;
@@ -57,6 +57,7 @@ impl ProfilesIface {
     ) -> (String, u32, u32) {
         let before = self.svc.active().map(str::to_owned);
         let outcome = self.svc.switch_to(id, pin, Instant::now());
+        eprintln!("{}", switch_line(id, &outcome));
         if self.svc.active().map(str::to_owned) != before {
             let _ = self.active_profile_changed(&emitter).await;
         }
@@ -68,6 +69,7 @@ impl ProfilesIface {
     }
 
     async fn lock(&mut self, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) {
+        eprintln!("{}", lock_line());
         if self.svc.active().is_some() {
             self.svc.lock();
             let _ = self.active_profile_changed(&emitter).await;

@@ -397,6 +397,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         }
         match self.spawner.freeze(&inst.unit) {
             Ok(()) => {
+                eprintln!("{}", freezer_line(&inst.unit, "Freeze"));
                 inst.frozen = true;
                 inst.frozen_at = Some(now);
                 inst.reclaim = Reclaim::Waiting;
@@ -498,6 +499,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         }
         match self.spawner.thaw(&inst.unit) {
             Ok(()) => {
+                eprintln!("{}", freezer_line(&inst.unit, "Thaw"));
                 if inst.frozen {
                     inst.frozen = false;
                     inst.frozen_at = None;
@@ -802,6 +804,13 @@ fn exit_reason(inst: &Instance, code: i32, signaled: bool) -> (i32, ExitReason) 
     (code, reason)
 }
 
+/// The journal line of a freezer call the OS accepted (RUY-547): `froze <unit> (Freeze)` or
+/// `thawed <unit> (Thaw)`. Failures have their own lines.
+fn freezer_line(unit: &str, verb: &str) -> String {
+    let done = if verb == "Freeze" { "froze" } else { "thawed" };
+    format!("ruya-session: {done} {unit} ({verb})")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -954,6 +963,18 @@ mod tests {
             .into_iter()
             .find(|a| a.instance == unit)
             .is_some_and(|a| a.frozen)
+    }
+
+    #[test]
+    fn freezer_lines_name_the_unit_and_the_verb() {
+        assert_eq!(
+            freezer_line("ruya-p1-app.service", "Freeze"),
+            "ruya-session: froze ruya-p1-app.service (Freeze)"
+        );
+        assert_eq!(
+            freezer_line("ruya-p1-app.service", "Thaw"),
+            "ruya-session: thawed ruya-p1-app.service (Thaw)"
+        );
     }
 
     #[test]

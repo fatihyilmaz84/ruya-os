@@ -341,11 +341,47 @@ impl<A: Accounts> ProfileService<A> {
     }
 }
 
+/// The journal line of one `SwitchTo` call (RUY-547): the profile id and the status the reply
+/// carries. It takes no PIN, so no PIN (nor its length) can reach the log. The id is the
+/// caller's string: control characters are replaced so a call cannot forge a log line.
+pub fn switch_line(id: &str, outcome: &Outcome) -> String {
+    let id: String = id
+        .chars()
+        .map(|c| if c.is_control() { '?' } else { c })
+        .collect();
+    format!(
+        "ruya-profiles: SwitchTo {id} -> {}",
+        outcome.status.as_str()
+    )
+}
+
+/// The journal line of one `Lock` call.
+pub fn lock_line() -> &'static str {
+    "ruya-profiles: Lock -> ok"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::accounts::NoAccounts;
     use crate::lockout::{FIRST_LOCKOUT, FREE_ATTEMPTS};
+
+    #[test]
+    fn journal_lines_name_the_profile_and_status_and_never_the_pin() {
+        let mut f = fixture();
+        let wrong = f.svc.switch_to("p1", "9876", f.now);
+        let line = switch_line("p1", &wrong);
+        assert_eq!(line, "ruya-profiles: SwitchTo p1 -> wrong-pin");
+        let right = f.svc.switch_to("p1", "1234", f.now);
+        let line = switch_line("p1", &right);
+        assert_eq!(line, "ruya-profiles: SwitchTo p1 -> ok");
+        assert!(!line.contains("1234") && !line.contains("9876"));
+        assert_eq!(
+            switch_line("a\nb", &wrong),
+            "ruya-profiles: SwitchTo a?b -> wrong-pin"
+        );
+        assert_eq!(lock_line(), "ruya-profiles: Lock -> ok");
+    }
 
     struct Fixture {
         dir: tempfile::TempDir,

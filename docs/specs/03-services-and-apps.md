@@ -110,6 +110,7 @@ Most PC GPUs don't expose CEC. Supported only with a USB-CEC adapter (Pulse-Eigh
 
 ## 3. Logging, crashes, telemetry
 - journald is the only log store. `ruya-*` services log in structured form.
+- A profile switch leaves a trail (RUY-547), one line per D-Bus call, never per tick or input event: `ruya-profiles: SwitchTo <profile id> -> <status>` (the status the reply carries; never the PIN, its length or digits) and `ruya-profiles: Lock -> ok`; `ruya-session: froze <unit> (Freeze)` / `thawed <unit> (Thaw)` for every freeze or thaw the OS accepted (failures keep their own lines).
 - Crashes go to `systemd-coredump`. The shell shows "App X closed unexpectedly". Uploading a report is opt-in.
 - **No telemetry by default.** Any future metrics need opt-in in OOBE and a public data list.
 
