@@ -12,7 +12,8 @@
 # `players` (RUY-121) with the shell stopped like `twopads`: three uinput pads; a second profile "Check Player" is made with
 # CreateProfile (as the admin $me, PIN 1234) and removed at the end. Pad A presses, then the probe routes the profile: ListPlayers
 # (busctl --json=short) has seat 1 = A; JoinPlayer(B, the second profile) answers ok 2; in the route app ruya-input/pad1 is A and
-# pad2 is B (read as the profile user), the third pad has none; LeavePlayer(2) removes pad2 and pad1 stays. Since RUY-121 only a
+# pad2 is B (read as the profile user), the unseated third pad has no seat's number but, with the seat gate off (the image until
+# RUY-122), a pad after the seats (pad5) that only its button reaches; LeavePlayer(2) removes pad2 and pad1 stays. Since RUY-121 only a
 # seated pad gets a virtual pad: the other modes seat their pads (JoinPlayer, or a press before the sign-in), and `twopads`,
 # `guide` and the probe's `twoprofiles` seat the second pad as the other profile.
 # `useractive` (RUY-588) with the shell stopped like `twopads`: a uinput pad's press in route `app` makes ruya-inputd emit Input1.UserActive
@@ -367,6 +368,18 @@ print(next((r["id"]["data"] for r in rows if r.get("name", {}).get("data") == "R
     [ -n "$id" ] || { bad "the test pad is not in ListDevices"; return 1; }
     out="$(busctl --system call "$svc" "$path" "$ifc" JoinPlayer ss "$id" "$me")"
     case "$out" in 'su "ok" 1') ok "JoinPlayer: the test pad is player 1 ($id)" ;; *) bad "JoinPlayer $id $me: $out"; return 1 ;; esac
+    test_pad="$id"
+}
+# Waits up to $1 seconds for a virtual pad with phys ruya-input/pad1 (player 1's).
+wait_pad1() {
+    local d n=0
+    while [ "$n" -lt "$(( $1 * 10 ))" ]; do
+        for d in /sys/class/input/input*; do
+            [ "$(cat "$d/phys" 2>/dev/null)" = ruya-input/pad1 ] && return 0
+        done
+        sleep 0.1; n=$((n + 1))
+    done
+    return 1
 }
 
 shell_check() {
@@ -422,9 +435,13 @@ shell_check() {
     # A restarted service starts in shell: the shell sends its route again (QDBusServiceWatcher).
     kill -9 "$(systemctl show -p MainPID --value ruya-inputd)"
     wait_route app 10 && ok "after kill -9 the shell routed app again" || bad "after kill -9 the route reads '$(route_now)'"
-    # A new process knows no seats (RUY-121): the test pad joins again.
-    seat_test_pad
-    wait_pad present 5 && ok "... and the app has a virtual pad again" || bad "no virtual pad after the restart"
+    # A new process knows no seats (RUY-121): the shell joins the players it knew again (Input replays them on the
+    # new owner), so the test pad is player 1 and pad1 again. With the seat gate off (until RUY-122) an unseated pad
+    # would get a virtual pad too (pad5), so this waits for pad1 and for seat 1 on the test pad, not for any pad.
+    wait_pad1 5 && ok "... and the app has pad1 again" || bad "no ruya-input/pad1 after the restart: the shell did not join its players again"
+    busctl --system call "$svc" "$path" "$ifc" ListPlayers | grep -q "\"$test_pad\"" \
+        && ok "ListPlayers: the shell seated the test pad again ($test_pad)" \
+        || bad "after the restart ListPlayers lacks the test pad: $(busctl --system call "$svc" "$path" "$ifc" ListPlayers)"
 
     busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
     wait_route locked 5 && ok "Lock with the app in front: the route is locked" || bad "after Lock the route reads '$(route_now)'"

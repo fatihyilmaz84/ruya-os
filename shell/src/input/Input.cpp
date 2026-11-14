@@ -12,6 +12,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+#include <algorithm>
+
 namespace {
 // The import cap (06 §7): a profile file is at most 64 KiB, refused unread when larger.
 constexpr int ImportCap = 64 * 1024;
@@ -39,6 +41,9 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
     connect(m_backend.get(), &InputBackend::serviceAppeared, this, [this] {
         if (!m_route.isEmpty())
             send();
+        // A new process knows no seats (RUY-121): the route alone reads as a keyboard sign-in, so the
+        // players the shell last knew join again, after the route, as their pads are listed.
+        replayPlayers();
         m_backend->refreshDevices();
         m_backend->refreshPlayers();
         m_backend->readConfirmButton();
@@ -77,6 +82,8 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
             m_devices = devices;
             emit devicesChanged();
         }
+        if (ok)
+            continueReplay();
         const QString state = ok ? QStringLiteral("ok") : QStringLiteral("failed");
         if (state != m_devicesState) {
             m_devicesState = state;
@@ -95,6 +102,13 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
                 if (status != QLatin1String("ok"))
                     qInfo("ruya-shell: Input1 JoinPlayer %s as %s answered %s", qPrintable(deviceId),
                           qPrintable(profile), qPrintable(status));
+                // The shell's own replay after a restart is nobody's join: it is not announced.
+                const QString key = deviceId + QLatin1Char('|') + profile;
+                if (m_replays.value(key) > 0) {
+                    if (--m_replays[key] == 0)
+                        m_replays.remove(key);
+                    return;
+                }
                 emit joinFinished(deviceId, profile, status, int(slot));
             });
     connect(m_backend.get(), &InputBackend::leaveFinished, this, [this](uint slot, const QString &status) {
@@ -115,6 +129,57 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
 }
 
 Input::~Input() = default;
+
+// Seat 1 first, as the route's profile (a seat 1 without a pad has nothing to join), then the other
+// players by slot, so each gets its own seat back in the restarted service.
+void Input::replayPlayers()
+{
+    m_replayQueue.clear();
+    m_replayProfile = m_profile;
+    if (m_profile.isEmpty())
+        return;
+    QList<QVariantMap> seats;
+    for (const QVariant &p : std::as_const(m_players))
+        seats.append(p.toMap());
+    std::sort(seats.begin(), seats.end(), [](const QVariantMap &a, const QVariantMap &b) {
+        return a.value(QStringLiteral("slot")).toUInt() < b.value(QStringLiteral("slot")).toUInt();
+    });
+    for (const QVariantMap &p : std::as_const(seats)) {
+        const uint slot = p.value(QStringLiteral("slot")).toUInt();
+        const QString device = p.value(QStringLiteral("device_id")).toString();
+        const QString profile = slot == 1 ? m_profile : p.value(QStringLiteral("profile")).toString();
+        if (device.isEmpty() || profile.isEmpty())
+            continue;
+        m_replayQueue.append({device, profile, slot});
+    }
+}
+
+// A restarted service lists its pads only after its first scan, which may come after the shell's
+// route: each player joins again once the service lists its pad, in slot order; a pad not listed
+// yet waits for the next list (every device signal asks for one). A profile change drops the rest.
+void Input::continueReplay()
+{
+    if (m_replayQueue.isEmpty())
+        return;
+    if (m_profile != m_replayProfile) {
+        m_replayQueue.clear();
+        return;
+    }
+    QSet<QString> listed;
+    for (const QVariant &d : std::as_const(m_devices))
+        listed.insert(d.toMap().value(QStringLiteral("id")).toString());
+    QList<Replay> waiting;
+    for (const Replay &r : std::as_const(m_replayQueue)) {
+        if (!listed.contains(r.device)) {
+            waiting.append(r);
+            continue;
+        }
+        qInfo("ruya-shell: Input1 has a new owner: player %u joins again on %s", r.slot, qPrintable(r.device));
+        ++m_replays[r.device + QLatin1Char('|') + r.profile];
+        m_backend->joinPlayer(r.device, r.profile);
+    }
+    m_replayQueue = waiting;
+}
 
 void Input::joinPlayer(const QString &deviceId, const QString &profile)
 {

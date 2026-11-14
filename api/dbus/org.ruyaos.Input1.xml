@@ -11,7 +11,8 @@
   GetEffectiveProfile, ProfilesChanged) since RUY-42 (T-369), SetConfirmButton, ConfirmButton and
   ActiveInputChanged since RUY-40 (per controller, with GetConfirmButtons, since RUY-603), and the
   players (JoinPlayer, LeavePlayer, ListPlayers, PlayersChanged; the device record's slot and
-  profile) since RUY-121 (ADR-017 seats); every other member below is still
+  profile) since RUY-121 (ADR-017 seats; the seat gate is off until RUY-122, see Players); every other
+  member below is still
   DRAFT and not served (ForeignInput RUY-38, platform and game assignments T-370 / RUY-43,
   OwnershipMode T-371). The design is docs/specs/06-input.md. Each task may change what it builds
   here (contracts are drafts until the first release, root CLAUDE.md); RUY-403's served-vs-XML
@@ -205,7 +206,7 @@
          destroys them ("locked", "shell", another instance or profile, "overlay" with ""), so
          an app's open descriptor reads ENODEV and a pad never outlives its profile. Only a seated
          pad has a virtual pad, and its number is its seat (phys ruya-input/pad<slot>; Players
-         below, RUY-121). On "app" for a new owner pad1 (seat 1's pad, the profile's active
+         below, RUY-121; until RUY-122 the seat gate is off and unseated pads follow as pad5 and up). On "app" for a new owner pad1 (seat 1's pad, the profile's active
          controller) is made first and the other seated pads only once pad1's ACL is set (or its
          2 s udev fallback passed), so a game that opens the first pad it is offered gets pad1.
          A profile change (sign-in, switch, lock) seats the new profile in seat 1 and empties the
@@ -247,6 +248,13 @@
          ruya-input/pad<n>); an unseated pad's input reaches no app (navigation and Guide are not
          changed by seats yet: RUY-38). A seated pad that disconnects frees its seat (2-4), or
          leaves seat 1 with device_id "" (until RUY-627's 60 s hold).
+         The seat gate is OFF until RUY-122 (the prompt that calls JoinPlayer; ruya-inputd's
+         SEAT_GATE): meanwhile an unseated connected pad still gets a virtual pad in "app" (and what
+         "overlay" keeps), numbered after the seats (ruya-input/pad5 and up, the lowest free number,
+         in connect order), so pad1..pad4 stay the seats' and a join renumbers no other live pad.
+         Seats, ListPlayers and every member here work the same either way.
+         A restarted service knows no seats: the shell joins the players it last knew again on the
+         name's new owner (seat 1's pad as the route's profile, then the others by slot).
          The service never sees a PIN: the shell checks it (Profiles1) before it calls JoinPlayer.
          The journal names ids only: "player <n> is ruya-<profile> on <device id>" ("on no pad" for
          seat 1 without one) and "player <n> left".

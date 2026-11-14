@@ -6,8 +6,8 @@ import RuyaShell
 // service, which keeps ruya-inputd's rules (routing.rs, seats.rs): a sign-in seats player 1 on the
 // pad that signed in (the pad of the last mockActiveInput since the lock, or none for a keyboard
 // sign-in); JoinPlayer and LeavePlayer answer the XML's statuses; PlayersChanged reaches
-// Input.players; a new owner of the name has the list asked again. No Shell: nothing else calls
-// SetRoute here.
+// Input.players; a new owner of the name has the list asked again, after the players the shell knew
+// joined again (a restarted service knows no seats). No Shell: nothing else calls SetRoute here.
 Item {
     id: host
     width: 1280
@@ -149,6 +149,20 @@ Item {
             tryVerify(() => seats(Input.players) === "1:p1:" + host.dualSense, 2000, seats(Input.players))
             Input.mockRemoveDevice(host.dualSense)
             tryVerify(() => seats(Input.players) === "1:p1:", 2000, seats(Input.players))
+        }
+
+        function test_the_players_join_again_when_the_service_restarts() {
+            signInWith(host.dualSense, "p1")
+            compare(join(host.xbox, "p2"), ["ok", 2])
+            const both = "1:p1:" + host.dualSense + " 2:p2:" + host.xbox
+            tryVerify(() => seats(Input.players) === both, 2000, seats(Input.players))
+            const joins = joinSpy.count
+            // A new process knows no seats; the shell's route alone would seat player 1 on no pad.
+            Input.mockRestart()
+            tryVerify(() => seats(Input.mockPlayers()) === both, 2000,
+                      "the restarted service has the players again: " + seats(Input.mockPlayers()))
+            tryVerify(() => seats(Input.players) === both, 2000, seats(Input.players))
+            compare(joinSpy.count, joins, "the shell's replay is not announced as a join")
         }
 
         function test_the_list_is_asked_again_when_the_name_gets_a_new_owner() {

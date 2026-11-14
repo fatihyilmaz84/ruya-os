@@ -76,8 +76,10 @@ class Input : public QObject
     Q_PROPERTY(QString activeFamily READ activeFamily NOTIFY activeInputChanged)
     // The seated players (Input1.ListPlayers and PlayersChanged, RUY-121, 06 §11.3): maps with the
     // XML's keys (slot 1..4, profile, device_id "" for seat 1 without a pad, held, held_secs), by
-    // slot; empty while nobody is signed in. Asked again whenever the name gets a new owner. The
-    // last good list stays while a newer ListPlayers fails.
+    // slot; empty while nobody is signed in. Asked again whenever the name gets a new owner, after
+    // the players it held join again (a restarted service knows no seats: seat 1's pad joins as the
+    // route's profile, then the others by slot; those answers are not joinFinished). The last good
+    // list stays while a newer ListPlayers fails.
     Q_PROPERTY(QVariantList players READ players NOTIFY playersChanged)
 
 public:
@@ -279,6 +281,16 @@ signals:
 
 private:
     void setActiveInput(const QString &deviceId, const QString &family);
+    // After a new owner of the name: the players last known join again (RUY-121), each once the
+    // service lists its pad (continueReplay, on every device list).
+    void replayPlayers();
+    void continueReplay();
+    struct Replay
+    {
+        QString device;
+        QString profile;
+        uint slot = 0;
+    };
     void noteKeyFrom(const QString &deviceName, int key);
     void send();
     // What a profile call's answer is for.
@@ -310,6 +322,9 @@ private:
     QString m_status;
     QVariantList m_devices;
     QVariantList m_players;
+    QHash<QString, int> m_replays;   // "device|profile" -> JoinPlayer calls of the replay not answered
+    QList<Replay> m_replayQueue;     // players to join again once their pad is listed, by slot
+    QString m_replayProfile;         // the profile the queue was made for
     QString m_devicesState = QStringLiteral("loading");
     QString m_confirm = QStringLiteral("family");
     bool m_confirmAvailable = false;
