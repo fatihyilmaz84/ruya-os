@@ -1,80 +1,50 @@
 # Lead notes (handoff between lead sessions)
 
-The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand off at 50-60 % context; no no-op turns**). **Rewrite this file at the end of every lead session**; keep it under about 6 KB. Paper Plane is the source of truth (http://192.168.178.164:8687, project `RUY`); `docs/STATUS*.md` and `docs/tasks/T-*.md` are a frozen archive. **Goals are formations** (`formation` lists them; `PLANNING.md` step 4). This file is the lead's session record.
+The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand off at 50-60 % context; no no-op turns; up to four lanes since 2026-11-14**). **Rewrite this file at the end of every lead session**; keep it under about 6 KB. Paper Plane is the source of truth (http://192.168.178.164:8687, project `RUY`); `docs/STATUS*.md` and `docs/tasks/T-*.md` are a frozen archive. **Goals are formations** (`formation` lists them; `PLANNING.md` step 4). This file is the lead's session record.
 
-## State after lead-18 (Opus, 2026-11-13/14; ran overnight)
+## State after lead-19 (Opus, 2026-11-14)
 
-- **Review range:** 2c83b80..e962e98. Paper Plane `changes` cursor: **2217**.
-- **Merged and Done (27 tickets), each reviewed and gated green:**
-  - Owner reports: RUY-545 (per-pad controls), RUY-87 (switch freezes), RUY-561 + RUY-562 (screen saver: inhibitors only in front; audio lets the saver start), RUY-513/514/575 (row kinds; `kind` required), **RUY-583 (Start opens Options: Start emits `KEY_COMPOSE`, because `KEY_MENU` reaches Qt as `Key_MenuKB`)**.
-  - Controllers: RUY-540, 551, 571, 572, 446 (pad nodes 0600, no uaccess), 11 (Guide never reaches a game).
-  - Idle: RUY-588 (pad input to a game counts as activity: `Input1.UserActive`), 563 (saver log lines).
-  - Freeze: RUY-546, 573, 577, 584 (reclaim ledger with tokens), 568 (an app that starts after its profile left is frozen).
-  - CI and checks: RUY-544, 576 (CI compiles the compositor), 473, 441, 550 (Rust revert-check), 451.
-- **Owner decisions:**
-  - ADR-017 amendment 6 (the active controller).
-  - ADR-035 amendment (game settings from the game page).
-  - All agents have full rights on the Dell.
-  - Formations are used for goals.
-  - Ruya Music is parked after v1 (RUY-565).
-  - Music allows the screen saver.
-  - **GitHub issues may always be filed** (2026-11-14; Paper Plane: [EnigmaNL/PaperPlane#11](https://github.com/EnigmaNL/PaperPlane/issues/11), formation deletion).
-- **Lead decisions to confirm with the owner:**
-  - Audio holds screen-off and sleep (TVs on HDMI go to standby and cut the sound).
-  - An import lands in the page's own slot (RUY-572).
-- **Images:**
-  - **0.0.79 at fd8548e: built; VM 25/25 PASS**, the new checks included (input `start`, `useractive`; power-saving `padactive`, `audio`; reclaim lines). One timing flake passed on a re-run (RUY-597).
-  - 0.0.79 doesn't contain RUY-568 or RUY-572 (merged after it).
-  - **The Dell runs 0.0.79** (installed at the end of lead-18; rollback 0.0.76). `system: degraded` only from `bootloader-update.service`: bootupd refuses the shim update under Secure Boot without the MS UEFI CA 2023 cert (known, RUY-24).
+- **Review range:** e962e98..HEAD. Paper Plane `changes` cursor: about **2600** (read `changes` from 2218 if unsure).
+- **Merged and Done (16):** RUY-593 (+585), 595 (+586), 570, 590, 592, 597 (+587), 541, 569, 596, 591 (+600), 547, 582 (+439), 549 round 1, 605, plus RUY-589 and RUY-542, which are merged but **not Done: their shots are unread** (the Windows session was locked).
+- **Owner report fixed:** LibreQuake lost the pad after a Hub open (RUY-541: pads kept through a Hub Freeze; pad1 made ready before the others). Diagnosed on the Dell by an agent; the DualSense not reaching a one-pad game after a Wii U Pro sign-in is by design (ADR-017 am. 6, owner confirmed).
+- **Owner decisions (2026-11-14):**
+  - up to four builder lanes (LEAD.md 4b);
+  - keep player 1 = the pad that signed in; "All controllers" keeps family slots; audio keeps the TV on; an import lands in the page's own slot;
+  - the Confirm button per controller per profile (RUY-603);
+  - **stay on Fedora's kernel** (01, Kernel row).
+- **Images:** 0.0.80 chain started at 588f81e (`output/chain/summary.txt`); it lacks RUY-603. The Dell still runs 0.0.79 unless the chain, the VM queue and `dell-update.sh 0.0.80` finished (check `ssh ... rpm-ostree status`).
 
-## Next, in this order
-1. **Dell with the owner on 0.0.79:**
-   - a Controls in games change on one pad only;
-   - a Hub switch freezes the game;
-   - LibreQuake with two pads;
-   - the saver behind Home and with music playing (the Power saving note "Sound doesn't stop the screen saver.": its shot is unverified);
-   - **Start on the DualSense and `+` on the Wii U Pro** (RUY-574 is still open for this);
-   - a game played with a pad and no inhibitor gets no saver.
-   - Owner question: should "All controllers" empty the family slot too (RUY-572 point 3)?
-2. **Next image (0.0.80)** for RUY-568's start-race step and RUY-572.
-3. **Ready builder work by goal:**
-   - controllers (RUY-552): 586, 595, 596, 594 (Input1 receive policy, image change), 503/500/504;
-   - freeze (RUY-554): 569, 570, 585, 593;
-   - CI (RUY-555): 549, 548, 591, 592 (lost-tests.sh hangs in Git Bash), 597;
-   - row kinds (RUY-557): 589 (cap long values), 590 (a shared SettingNote: the owner's "do we declare them every time?");
-   - menus (RUY-559): 587.
-   - Most of these are `inbox`: plan them first (acceptance criteria and a lead review).
-4. **Lead work:**
-   - the RUY-120 spec (local players; RUY-551's notes are on it);
-   - RUY-490;
-   - RUY-483 (shell wedge);
-   - triage of about 45 `inbox` tickets.
+## In flight at handoff (check first)
+1. **RUY-603** (Confirm per controller): APPROVED (code + design), **not merged yet**: it waits for the 0.0.80 chain to end (the chain builds from the main checkout). Merge `t/RUY-603-confirm-per-pad`, gate, Done; comment on RUY-500 (re-plan: the pane keeps only "Button layout in games"; extract a shared GlyphNote; the design review's SPEC GAP text is on RUY-603's review).
+2. **RUY-549 round 2** (`t/RUY-549b-fresh-cache`, worktree RUY-549b): the warm cache's stale-QML fix (hash manifest). Code done, test green; **proof runs B/C/D pending** (in the builder's HANDOFF on the ticket: unchanged tree, a changed file with an old mtime must turn tst_settings red, then green). Run them when WSL is idle, then merge. Until then push-main's Linux step may test stale QML on a warm run: run `ci-shell-linux.sh --cold` if a Linux result looks wrong.
+3. **0.0.80:** chain -> `vm-queue.ps1` (the RUY-390 comments list the new checks: session freeze-then-thaw, input shell/twopads/check/start/confirm, journal lines) -> `dell-update.sh 0.0.80` -> owner on the Dell: LibreQuake with both pads, Hub twice, Guide -> "Use this controller" on the DualSense.
+4. **Shots** on an unlocked desktop: RUY-589 (92-power-saving-held-*, 8-settings-about) and RUY-542 (512-row-kinds-*, System with no sensors); then the design reviewer, then Done.
+5. Worktree folders `RUY-547`, `RUY-590` could not be deleted (locked files): remove them.
+
+## Next (Ready, ordered)
+- **RUY-594** (Input1 signals only to the shell; VM this task) -> **RUY-525 + 527** paired (ntsync, gaming sysctls; one image build) -> the rest of the gaming tuning (528-531, each with a Dell number).
+- Lead work: **RUY-483** (shell watchdog, owner asked), RUY-490, RUY-120; the game page needs RUY-523 and a design board first (RUY-524 comment).
+- Inbox: about 45 tickets; new today: 598, 601, 602, 604, 606, 607, 608.
 
 ## Concerns (ranked)
-1. Real hardware: 0.0.79 is on the Dell but not yet checked by the owner. Everything owner-facing since 0.0.76 is VM-verified only.
-2. Builders' scripted edits. One `replace` rewrote 100 lines of dev-setup.md (fixed in 28f3b2a; the brief now asks for `git diff --stat`). Reviewers compare word-diffs.
-3. `shots` needs an unlocked desktop. Several overnight shots are unverified (RUY-562's note).
-4. Three builders ran at once twice tonight (small tickets). Keep to two.
+1. Real hardware: nothing since 0.0.79 is on the Dell; RUY-541's fix is unchecked there.
+2. A locked desktop blocks every `shots` run: UI tickets pile up merged-but-not-Done.
+3. Builders ran WSL work during the lead's image build (RUY-549): WSL contention slowed the chain past an hour. Tell builders the WSL order explicitly.
 
-## Process changes in lead-18
-- Formations for goals, with a REST fallback (`POST /api/tools/formation`).
-- `scripts/ci-shell-linux.sh`; `revert-check.ps1` Rust mode; the mandatory HANDOFF `revert:` line.
-- The builder brief: read `git diff --stat main` before each commit, and never global-replace prose.
-- A lead review of every ticket before dispatch (kept). The lead re-reviews round 2s itself when the diff is small.
-- Don't run `lost-tests.sh` in builders until RUY-592 is fixed. Compare test names with `git grep`.
+## Process changes in lead-19
+- Four lanes (owner). Small diffs (scripts, < 100 lines) reviewed by the lead itself, larger ones by reviewers.
+- `lost-tests.ps1` replaces the hanging `.sh` (RUY-592); `lint-ci-lines.ps1` and a wider `lint-setting-notes.ps1` in CI (RUY-591); push-main runs CI's Fedora shell job once per push (RUY-549; its first use caught its own stale-cache bug).
+- Paper Plane: [EnigmaNL/PaperPlane#12](https://github.com/EnigmaNL/PaperPlane/issues/12) (batch entries can't carry `override`).
 
 ## Host facts learned
 - The VM queue copies scripts from main: merge script changes only after the queue ends.
-- A queue run clears `output\vm-queue`: copy the logs first. `summary.txt` holds only 15 lines.
+- The image chain builds from the main checkout: no merge into main while it runs.
 - The merge gate refuses a dirty main tree, so commit the notes before gating.
-- `wsl ... pgrep -fa "podman build"` before any WSL-heavy step.
+- `wsl ... pgrep -fa "podman build|make-disk|ci-shell"` before any WSL-heavy step.
 
 ## Quality signals (one row per lead session)
 
 | Date | Range reviewed | Tasks | Findings (fixed / filed) | `dev.ps1 test` | VM |
 |---|---|---|---|---|---|
-| 2026-11-13 (lead-17) | 984460e..2c83b80 | 493, 474, 479, 16, 499, 491, 512; designs | round 2 for 16, 491, 499; owner bugs 538-540 | 1588 QML + 137 skips | 0.0.75 12/14 + input PASS |
-| 2026-11-14 (lead-18) | 2c83b80..e962e98 | 27 merged (above) | round 2 for 544, 540, 545, 561, 571, 562, 588, 568; RUY-588 found in review (a saver over games); a bad replace caught; about 20 inbox tickets filed | 1625 QML + 137 skips | 0.0.79 25/25 (1 re-run) |
-
-## In flight
-- None. No builder is running, and every worktree is removed.
+| 2026-11-14 (lead-18) | 2c83b80..e962e98 | 27 merged | round 2 for 8; about 20 inbox | 1625 QML + 137 skips | 0.0.79 25/25 |
+| 2026-11-14 (lead-19) | e962e98..HEAD | 16 merged (+6 absorbed), 603 approved | round 2+ for 595, 589 (x2), 541, 542, 549; About licence cut found in review; stale CI cache found by its first use; 11 inbox filed | 1641 QML + 138 skips; Fedora cold 1641/0 | 0.0.80 pending |
