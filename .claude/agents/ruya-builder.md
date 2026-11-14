@@ -27,7 +27,7 @@ You never decide or expand what is public. The ticket's `surface:` label (missin
 
 ## Self-check before the HANDOFF (what reviews keep finding)
 
-- **Revert test:** every new test fails when you temporarily undo the change it covers. Use `.\scripts\revert-check.ps1 -File <path> -Old '<text>' -New '<text>'` (it rebuilds, runs the tests, restores the file and rebuilds again; a hand-made mutation once "stayed green" on a stale binary). Say which change you undid in the Outcome comment.
+- **Revert test:** every new test fails when you temporarily undo the change it covers. Use `.\scripts\revert-check.ps1 -File <path> -Old '<text>' -New '<text>'` (it rebuilds, runs the tests, restores the file and rebuilds again; a hand-made mutation once "stayed green" on a stale binary). A file under `services\<crate>\` runs `cargo test -p <crate>`, with `-Test <name filter>` (lead-18). Say which change you undid in the Outcome comment.
 - **No test lost:** `bash scripts/lost-tests.sh` prints nothing (a rename or a deliberate removal is named in the Outcome comment with its reason; T-147 deleted nine silently).
 - **Keep `output\shell-shots\review\` until the lead has merged:** the UX and design reviewers look at those PNGs (a builder's scratch cleanup removed them once). Clean other scratch only.
 - **Focus** is asserted after every navigation step that matters; geometry has a property test at the size a real caller sets.
