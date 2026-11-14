@@ -56,7 +56,9 @@ use crate::spawner::{
     reclaim_amount, reclaim_command, sweep_commands, unit_app_id, unit_name, LineTail, RunFollower,
     RunningUnit, ShowUnit, SHOW_PROPERTIES, SWAP_COMMAND,
 };
-use crate::spawner::{AudioJob, AudioQueue, DisplayMode, ReclaimLedger, Spawner, UnitEvent, PARK_RETRY};
+use crate::spawner::{
+    AudioJob, AudioQueue, DisplayMode, ReclaimLedger, Spawner, UnitEvent, PARK_RETRY,
+};
 use crate::x11::{display_mode_x11, X11_OVERRIDES};
 use std::ffi::OsString;
 use zbus::address::transport::{Transport, Unixexec};

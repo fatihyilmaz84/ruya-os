@@ -611,7 +611,10 @@ impl ReclaimLedger {
 
     /// Takes `unit` out; true when its reclaim had started.
     pub fn take(&self, unit: &str) -> bool {
-        self.0.lock().map(|mut set| set.remove(unit)).unwrap_or(false)
+        self.0
+            .lock()
+            .map(|mut set| set.remove(unit))
+            .unwrap_or(false)
     }
 }
 
@@ -1775,7 +1778,10 @@ mod tests {
     #[test]
     fn only_a_started_reclaim_is_stopped_by_the_thaw() {
         let ledger = ReclaimLedger::default();
-        assert!(!ledger.take("app-a.service"), "never started: nothing to stop");
+        assert!(
+            !ledger.take("app-a.service"),
+            "never started: nothing to stop"
+        );
         ledger.started("app-a.service");
         assert!(!ledger.take("app-b.service"));
         assert!(ledger.take("app-a.service"));
