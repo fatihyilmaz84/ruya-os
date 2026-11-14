@@ -254,9 +254,13 @@ wait_report() { # <ok|bad> <what> <waited> <limit>
 }
 # wait_seat: waits up to 10 s for ruya-shell's seat session (its manager is held by it again).
 wait_seat() {
-    n=0
-    until loginctl list-sessions --no-legend 2>/dev/null | grep -E -q "ruya-shell +seat0" || [ "$n" -ge 10 ]; do sleep 1; n=$((n + 1)); done
-    if [ "$n" -lt 10 ]; then wait_report ok "ruya-shell's seat session" "$n" 10; else wait_report bad "ruya-shell's seat session" "$n" 10; fi
+    n=0; seat=no
+    while :; do
+        loginctl list-sessions --no-legend 2>/dev/null | grep -E -q "ruya-shell +seat0" && { seat=yes; break; }
+        [ "$n" -ge 10 ] && break
+        sleep 1; n=$((n + 1))
+    done
+    if [ "$seat" = yes ]; then wait_report ok "ruya-shell's seat session" "$n" 10; else wait_report bad "ruya-shell's seat session" "$n" 10; fi
 }
 # wait_audio <pid> <extended regex> <seconds> [label]: waits until audio_probe prints a line matching it.
 wait_audio() {

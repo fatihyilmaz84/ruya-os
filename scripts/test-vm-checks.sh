@@ -470,7 +470,7 @@ out="$(runtrap 'stopped_compositor=yes; enabled_linger=yes; stopped_compositor=n
 # RUY-404 round 2: with stdout closed (ssh with piped output that went away) the trap's echo raises
 # SIGPIPE; the restore must still happen. The child's stdout is a pipe whose reader is already gone.
 SESS_LOG="$tmp/sess.log"; : > "$SESS_LOG"
-( SESS_LOG="$SESS_LOG" PATH="$tmp/sess-bin:$PATH" bash -c ". '$trapsrc'; stopped_compositor=yes; enabled_linger=yes; echo go; exit 1" 2>/dev/null | true ) 2>/dev/null
+( SESS_LOG="$SESS_LOG" PATH="$tmp/sess-bin:$PATH" bash -c ". '$trapsrc'; stopped_compositor=yes; enabled_linger=yes; sleep 0.3; echo go; exit 1" 2>/dev/null | true ) 2>/dev/null
 out="$(cat "$SESS_LOG")"
 expect_contains "closed stdout: the compositor is still started" "$out" "systemctl start ruya-compositor@tty1"
 expect_contains "closed stdout: the linger is still taken back" "$out" "loginctl disable-linger ruya-shell"
