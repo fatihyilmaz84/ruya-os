@@ -504,13 +504,22 @@ Item {
         }
 
         function test_the_test_needs_the_shell_route() {
-            // Another route (the Hub over a game): the service refuses; back in "shell" it starts again.
+            // The route "app" ends the test; back in "shell" it starts again. An overlay with a game's instance
+            // (a game frozen or closing behind Home, RUY-611) keeps it: before, any route but "shell" ended it.
             openTest(ds)
-            Input.setRoute("overlay", "", "", "p2")
-            tryVerify(() => !Input.mockTestRunning(ds), 2000, "a route change ends the test")
+            Input.setRoute("overlay", "i1", "org.example.Racer", "p2")
+            tryCompare(Input, "status", "ok")
+            verify(Input.mockTestRunning(ds), "an overlay keeps the test")
+            Input.setRoute("app", "i1", "org.example.Racer", "p2")
+            tryVerify(() => !Input.mockTestRunning(ds), 2000, "a route change to the app ends the test")
             compare(tc.shell.currentPage, "buttonTest", "the page stays")
             Input.setRoute("shell", "", "", "p2")
             tryVerify(() => Input.mockTestRunning(ds), 2000, "started again in the shell")
+            // Also when the route comes back as an overlay with the held game (the test page stays open at Home).
+            Input.setRoute("app", "i1", "org.example.Racer", "p2")
+            tryVerify(() => !Input.mockTestRunning(ds), 2000, "ended again by the app route")
+            Input.setRoute("overlay", "i1", "org.example.Racer", "p2")
+            tryVerify(() => Input.mockTestRunning(ds), 2000, "started again under the overlay")
         }
 
         // ---- Confirm in menus, per controller (RUY-40, RUY-603) ----------------------------------------------------
