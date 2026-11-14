@@ -698,8 +698,7 @@ fn list_running_apps(gate: &Gate, adopt_failed: &std::sync::atomic::AtomicBool) 
                 continue;
             };
             // Taken over (or started by us) already: a second pass skips it.
-            if self
-                .gate
+            if gate
                 .units
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
