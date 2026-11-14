@@ -4,7 +4,7 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 
 ## State of lead-18 (Opus, 2026-11-13/14; the owner let it run overnight)
 
-- **Review range:** 2c83b80..HEAD. Paper Plane `changes` cursor: about 1690 (read `changes` from there).
+- **Review range:** 2c83b80..HEAD. Paper Plane `changes` cursor: 1897.
 - **Merged and Done** (each reviewed; gate green):
   - RUY-544: CI is green again (Fedora qmllint role clash, the 1 px title box), plus `scripts/ci-shell-linux.sh`.
   - RUY-540: pad1 is the pad that signed the profile in.
