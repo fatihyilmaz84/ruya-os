@@ -55,8 +55,10 @@ Page {
             Input.stopTest(testingId)
         testingId = ""
     }
+    // The service runs a test in "shell" and in "overlay" (a game held behind Home, RUY-611).
+    readonly property bool testRoute: Input.route === "shell" || Input.route === "overlay"
     function restart() {
-        if (!gone && testingId !== "" && Input.route === "shell")
+        if (!gone && testingId !== "" && page.testRoute)
             Input.startTest(testingId, page.holdsStick)
     }
 
@@ -77,7 +79,7 @@ Page {
                 Qt.callLater(page.restart)
         }
         function onRouteChanged() {
-            if (Input.route === "shell")
+            if (page.testRoute)
                 Qt.callLater(page.restart)
         }
         function onServiceOwnedChanged() {

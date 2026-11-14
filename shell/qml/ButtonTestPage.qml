@@ -9,7 +9,7 @@ import RuyaShell
 //
 // Leaving: Back pressed twice (the second press within 1000 ms of the first) or held 1000 ms. Nothing
 // else leaves: every other key is taken here, except Guide, which opens the Hub as usual (the
-// service ends the test on the route change; it starts again when the route is "shell" again). One
+// service ends the test on the route change; it starts again when the route is "shell" or "overlay" again). One
 // Back press only says "Press [back] again to leave." and shows on the drawing like any button. When
 // the service ends the test after 2 minutes without input the page closes with the toast "Button
 // test ended". The pad disconnecting closes it (the controller page below says so).
@@ -17,6 +17,8 @@ Page {
     id: page
 
     readonly property string padId: String((params ?? {}).id ?? "")
+    // The service runs a test in "shell" and in "overlay" (a game held behind Home, RUY-611).
+    readonly property bool testRoute: Input.route === "shell" || Input.route === "overlay"
     readonly property var current: ControllerPads.controllers().find(p => p.id === padId) ?? null
     property var pad: ({ id: padId, name: "", family: "", layout: "", connection: "", percent: -1, state: "", slot: 0 })
     onCurrentChanged: if (current) pad = current
@@ -111,7 +113,7 @@ Page {
                 return
             page.running = false
             // Ended by a route change that is already over (back in the shell): start again.
-            if (reason === "route" && Input.route === "shell")
+            if (reason === "route" && page.testRoute)
                 Qt.callLater(page.restart)
             if (reason === "idle") {
                 page.gone = true
@@ -122,7 +124,7 @@ Page {
         function onRouteChanged() {
             // Back from the Hub: the service ended the test on the route change; start it again.
             // Later: the facade announces the route before it sends SetRoute.
-            if (Input.route === "shell" && !page.running && !page.gone)
+            if (page.testRoute && !page.running && !page.gone)
                 Qt.callLater(page.restart)
         }
         function onServiceOwnedChanged() {

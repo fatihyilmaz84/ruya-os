@@ -191,7 +191,7 @@ void MockInputBackend::startTest(const QString &deviceId, bool holdLeftStick)
         status = QStringLiteral("failed");
     else if (!known)
         status = QStringLiteral("unknown-device");
-    else if (m_route != QLatin1String("shell"))
+    else if (m_route != QLatin1String("shell") && m_route != QLatin1String("overlay"))     // RUY-611: a game held behind Home
         status = QStringLiteral("not-allowed");
     else if (m_tests.contains(deviceId))
         status = QStringLiteral("busy");
@@ -312,7 +312,7 @@ void MockInputBackend::setRoute(const QString &route, const QString &instance, c
         m_profile = profile;
         if (profileChanged)
             QTimer::singleShot(0, this, [this] { emit confirmButtonChanged(); });
-        if (route != QLatin1String("shell")) {
+        if (route == QLatin1String("app") || route == QLatin1String("locked")) {      // like inputd (RUY-611)
             const QList<QString> running = m_tests.values();
             for (const QString &id : running)
                 endTest(id, QStringLiteral("route"));

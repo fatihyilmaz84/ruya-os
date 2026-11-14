@@ -5,8 +5,9 @@ import RuyaShell
 // The shell drives Ruya Input's route (RUY-409, 06 §5.1-5.2, Input1.SetRoute): "locked" at the
 // picker, "shell" at Home, "app" with the game in front, "overlay" with the Hub over it (with its
 // instance also once the Hub froze it, RUY-541, so its pads stay), "app" again with the same pads
-// after the Thaw; Home, Lock and a switch take them away, a switch going through "locked" with no
-// profile. A failed call never blocks the UI and the next change sends the newest route; a
+// after the Thaw; Home over a frozen game and a Close keep them until the game has exited (RUY-611:
+// "overlay" with its instance); Lock, a switch and the exit take them away, a switch going through
+// "locked" with no profile. A failed call never blocks the UI and the next change sends the newest route; a
 // restarted service (a new owner of the name) gets the current route again. The mock Input
 // service checks the arguments by the service's rules and models the virtual pads (mockPads).
 // Signs in as "Ada" (p2), controller keys only.
@@ -31,6 +32,7 @@ Item {
     }
 
     SignalSpy { id: launchedSpy; target: Session; signalName: "launchFinished" }
+    SignalSpy { id: testSpy; target: Input; signalName: "testStartFinished" }
 
     TestCase {
         id: tc
@@ -205,18 +207,21 @@ Item {
             verify(Input.mockPads(), "the game has its pads")
             compare(Input.mockPadGeneration(), firstPads, "the same pads after the Thaw, not new ones")
 
-            // Home from the Hub: the game stays frozen behind Home, the route is the shell's and the
-            // pads go (out of RUY-541's scope: Home over a frozen game still destroys them).
+            // Home from the Hub: the game stays frozen behind Home and keeps its pads (RUY-611: before,
+            // Home destroyed them, and a game thawed later by Close read "Gamepad removed" and saved
+            // it): the route is "overlay" with the game's instance, held in neutral.
             openHub()
             goTo("home")
             keyClick(Qt.Key_Return)
             tryVerify(() => find("recentRow").activeFocus, 2000, "Home, the focus on the game's card")
-            expectRoute("shell", "", "", "p2", "Home with the game behind it")
-            verify(!Input.mockPads(), "no pads at Home")
+            expectRoute("overlay", run.instance, "org.example.Racer", "p2", "Home with the frozen game behind it")
+            verify(Input.mockPads(), "the frozen game keeps its pads at Home")
+            compare(Input.mockPadGeneration(), firstPads, "the same pads at Home")
             keyClick(Qt.Key_Return)                      // the Running card resumes it
             tryVerify(() => run.app.activeFocus, 2000, "the game is in front again")
+            tryVerify(() => recordOf(run.instance).frozen === false, 2000, "the game runs again")
             expectRoute("app", run.instance, "org.example.Racer", "p2", "resumed from its card")
-            verify(Input.mockPadGeneration() > firstPads, "after Home the game gets new pads")
+            compare(Input.mockPadGeneration(), firstPads, "the same pads after the resume, not new ones")
 
             // Switch profile (Lock, then another profile): locked with no profile, then the new one.
             openHub()
@@ -263,6 +268,150 @@ Item {
             expectRoute("app", run.instance, "org.example.Racer", "p2", "back in the game")
             compare(Input.mockPadGeneration(), pads, "the same pads, not new ones")
             checkCalls()
+        }
+
+        // RUY-611: a game saves its controller choice on quit (LibreQuake: "Gamepad removed" ->
+        // joy_device -1), so its pads stay until its instance has exited when it is closed from the Hub:
+        // the route stays "overlay" with the instance while the exit is held (mockStopDelay), then
+        // "shell". Today's code sent "shell" at once (Home) and the pads died before the game quit.
+        function test_close_from_the_hub_keeps_the_pads_until_the_game_has_exited() {
+            start()
+            signIn(1, "p2")
+            const run = playRacer()
+            expectRoute("app", run.instance, "org.example.Racer", "p2", "the game in front")
+            const pads = Input.mockPadGeneration()
+            Session.mockStopDelay(3000)
+            openHub()
+            tryVerify(() => recordOf(run.instance).frozen === true, 2000, "the Hub froze the game")
+            const from = Input.mockCalls().length
+            goTo("closeGame")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => Session.mockCalls().some(c => c === "stop " + run.instance), 2000, "Stop was asked")
+            tryVerify(() => tc.shell.closingScreen && !tc.shell.appOpen, 2000, "Home with the closing screen")
+            tryCompare(find("launchSplash"), "opacity", 1, 2000)
+            verify(recordOf(run.instance) !== undefined, "the game has not exited yet")
+            expectRoute("overlay", run.instance, "org.example.Racer", "p2", "closing, the exit still to come")
+            verify(Input.mockPads(), "the pads stay while the game exits")
+            compare(Input.mockPadGeneration(), pads, "the same pads, none made or destroyed")
+            verify(Input.mockCalls().slice(from).every(c => c.route === "overlay" && c.instance === run.instance),
+                   "no shell or locked route was sent before the game exited")
+            // The exit: the route goes to the shell and the pads with it.
+            tryVerify(() => recordOf(run.instance) === undefined, 6000, "the game quit")
+            expectRoute("shell", "", "", "p2", "the game has exited")
+            verify(!Input.mockPads(), "the pads go once the game has exited")
+            checkCalls()
+        }
+
+        // The Options menu's Close game on the game's card at Home: the game is frozen behind Home, so
+        // its pads were kept at Home (RUY-611) and Close's thaw does not take them either.
+        function test_close_from_the_options_menu_keeps_the_pads_until_the_game_has_exited() {
+            start()
+            signIn(1, "p2")
+            const run = playRacer()
+            expectRoute("app", run.instance, "org.example.Racer", "p2", "the game in front")
+            const pads = Input.mockPadGeneration()
+            Session.mockStopDelay(3000)
+            openHub()
+            tryVerify(() => recordOf(run.instance).frozen === true, 2000, "the Hub froze the game")
+            goTo("home")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("recentRow").activeFocus, 2000, "Home, the focus on the game's card")
+            expectRoute("overlay", run.instance, "org.example.Racer", "p2", "Home with the frozen game behind it")
+            verify(recordOf(run.instance).frozen, "the game is frozen behind Home")
+            verify(Input.mockPads(), "the frozen game has its pads at Home")
+            compare(Input.mockPadGeneration(), pads, "the same pads at Home")
+            const from = Input.mockCalls().length
+            keyClick(Qt.Key_Menu)                        // Options: Resume, Close game
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => Session.mockCalls().some(c => c === "stop " + run.instance), 2000, "Stop was asked")
+            tryVerify(() => recordOf(run.instance).frozen === false, 2000, "Close thawed it")
+            tryVerify(() => tc.shell.closingScreen, 2000, "the closing screen is up")
+            tryCompare(find("launchSplash"), "opacity", 1, 2000)
+            verify(recordOf(run.instance) !== undefined, "the game has not exited yet")
+            expectRoute("overlay", run.instance, "org.example.Racer", "p2", "the thawed game still closing")
+            verify(Input.mockPads(), "the pads stay while the game exits")
+            compare(Input.mockPadGeneration(), pads, "the same pads, none made or destroyed")
+            verify(Input.mockCalls().slice(from).every(c => c.route === "overlay" && c.instance === run.instance),
+                   "no shell or locked route was sent before the game exited")
+            tryVerify(() => recordOf(run.instance) === undefined, 6000, "the game quit")
+            expectRoute("shell", "", "", "p2", "the game has exited")
+            verify(!Input.mockPads(), "the pads go once the game has exited")
+            checkCalls()
+        }
+
+        // The old rules stay: Lock over a frozen game behind Home destroys its pads (a pad never outlives
+        // its profile).
+        function test_lock_still_destroys_the_pads_of_a_game_held_behind_home() {
+            start()
+            signIn(1, "p2")
+            const run = playRacer()
+            expectRoute("app", run.instance, "org.example.Racer", "p2", "the game in front")
+            openHub()
+            tryVerify(() => recordOf(run.instance).frozen === true, 2000, "the Hub froze the game")
+            goTo("home")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("recentRow").activeFocus, 2000, "Home, the focus on the game's card")
+            expectRoute("overlay", run.instance, "org.example.Racer", "p2", "Home with the frozen game behind it")
+            verify(Input.mockPads(), "the frozen game has its pads at Home")
+            Profiles.lock()
+            expectRoute("locked", "", "", "", "locked with the game behind")
+            verify(!Input.mockPads(), "Lock destroys the pads of the frozen game")
+            checkCalls()
+        }
+
+        // A game that is not frozen behind Home (the Hub's pause is off) has no pads to keep: Home destroys
+        // them as before, and closing it makes none.
+        function test_a_game_that_is_not_frozen_behind_home_loses_its_pads_as_before() {
+            DeviceSettings.pauseGamesInHub = false
+            start()
+            signIn(1, "p2")
+            const run = playRacer()
+            expectRoute("app", run.instance, "org.example.Racer", "p2", "the game in front")
+            openHub()
+            expectRoute("overlay", run.instance, "org.example.Racer", "p2", "the Hub over the running game")
+            goTo("home")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("recentRow").activeFocus, 2000, "Home, the focus on the game's card")
+            verify(!recordOf(run.instance).frozen, "the game runs behind Home")
+            expectRoute("shell", "", "", "p2", "Home with a running game behind it")
+            verify(!Input.mockPads(), "no pads for a game that is not frozen")
+            const from = Input.mockCalls().length
+            Session.mockStopDelay(300)
+            keyClick(Qt.Key_Menu)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => Session.mockCalls().some(c => c === "stop " + run.instance), 2000, "Stop was asked")
+            tryVerify(() => recordOf(run.instance) === undefined, 6000, "the game quit")
+            expectRoute("shell", "", "", "p2", "the game has exited")
+            verify(!Input.mockPads(), "closing a game with no pads made none")
+            verify(Input.mockCalls().slice(from).every(c => c.route === "shell"), "no overlay was sent for it")
+            checkCalls()
+        }
+
+        // The Controllers pages' button test runs at Home although a frozen game's pads are held there
+        // (the route is "overlay", RUY-611), and the game's pads stay while it runs.
+        function test_the_button_test_runs_while_a_frozen_game_is_held_behind_home() {
+            start()
+            signIn(1, "p2")
+            const run = playRacer()
+            expectRoute("app", run.instance, "org.example.Racer", "p2", "the game in front")
+            const pads = Input.mockPadGeneration()
+            openHub()
+            tryVerify(() => recordOf(run.instance).frozen === true, 2000, "the Hub froze the game")
+            goTo("home")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("recentRow").activeFocus, 2000, "Home, the focus on the game's card")
+            expectRoute("overlay", run.instance, "org.example.Racer", "p2", "Home with the frozen game behind it")
+            verify(Input.mockPads(), "the frozen game has its pads at Home")
+            Input.mockAddDevice({ id: "pad-under-test", name: "Pad under test" })
+            testSpy.clear()
+            Input.startTest("pad-under-test", false)
+            tryCompare(testSpy, "count", 1)
+            compare(testSpy.signalArguments[0][1], "ok", "StartTest is allowed under the held overlay")
+            verify(Input.mockPads(), "the held game keeps its pads during the test")
+            compare(Input.mockPadGeneration(), pads, "the same pads")
+            Input.stopTest("pad-under-test")
         }
 
         // A failed call is logged, never blocks the UI, and the next change sends the newest route.

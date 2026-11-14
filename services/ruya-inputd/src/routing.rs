@@ -1022,7 +1022,9 @@ impl<B: Backend> Router<B> {
             Route::Overlay if same_owner => self.neutral_all(),
             Route::Overlay | Route::Shell | Route::Locked => self.destroy_all(),
         }
-        if r != Route::Shell {
+        // A test goes on in `shell` and `overlay` (RUY-611: a game frozen or closing behind Home
+        // keeps its pads, so the shell's route is `overlay` while the Controllers pages test).
+        if matches!(r, Route::App | Route::Locked) {
             let running: Vec<String> = self.tests.keys().cloned().collect();
             for id in running {
                 self.end_test(&id, "route");
@@ -1320,7 +1322,7 @@ impl<B: Backend> Router<B> {
         !self.tests.is_empty()
     }
 
-    /// `Input1.StartTest`: only while the route is `shell`, one test per device. With
+    /// `Input1.StartTest`: only while the route is `shell` or `overlay`, one test per device. With
     /// `hold_left_stick` the pad's left stick sends no navigation key until the test ends (its
     /// D-pad and buttons still navigate), and a direction it holds now is released once.
     pub fn start_test(
@@ -1333,7 +1335,7 @@ impl<B: Backend> Router<B> {
         if !self.pads.values().any(|p| p.info.id == device_id) {
             return Status::UnknownDevice;
         }
-        if self.route != Route::Shell {
+        if !matches!(self.route, Route::Shell | Route::Overlay) {
             return Status::NotAllowed;
         }
         if self.tests.contains_key(device_id) {
@@ -2683,7 +2685,7 @@ mod tests {
     }
 
     #[test]
-    fn the_test_starts_only_in_the_shell_and_once_per_device() {
+    fn the_test_starts_only_in_the_shell_or_an_overlay_and_once_per_device() {
         let mut r = router();
         let now = t0();
         r.add_pad(pad("a"), now);
@@ -2697,6 +2699,17 @@ mod tests {
         assert_eq!(r.start_test("a", false, SHELL, now), Status::Ok);
         assert!(r.testing());
         assert_eq!(r.start_test("a", false, SHELL, now), Status::Busy);
+        // RUY-611: a game frozen behind Home keeps its pads under `overlay`; the Controllers pages
+        // test there. The picker (`locked`) and an app in front still refuse.
+        r.stop_test("a");
+        assert_eq!(
+            r.set_route("overlay", "i1", STK, "p1", SHELL, now),
+            Status::Ok
+        );
+        assert_eq!(r.start_test("a", false, SHELL, now), Status::Ok);
+        assert_eq!(r.set_route("locked", "", "", "", SHELL, now), Status::Ok);
+        assert!(!r.testing(), "locked ends the test");
+        assert_eq!(r.start_test("a", false, SHELL, now), Status::NotAllowed);
     }
 
     #[test]
@@ -2809,7 +2822,11 @@ mod tests {
         // A sign-in keeps the route "shell": the test goes on.
         assert_eq!(r.set_route("shell", "", "", "p1", SHELL, now), Status::Ok);
         assert!(ended(&r.take_notices()).is_empty());
-        r.set_route("overlay", "", "", "p1", SHELL, now);
+        // RUY-611: an overlay (a game's pads held behind Home) keeps it too; the app route ends it.
+        r.set_route("overlay", "i1", STK, "p1", SHELL, now);
+        assert!(ended(&r.take_notices()).is_empty());
+        assert!(r.testing());
+        r.set_route("app", "i1", STK, "p1", SHELL, now);
         assert_eq!(
             ended(&r.take_notices()),
             vec![("c".to_owned(), "route".to_owned())]
@@ -2893,7 +2910,8 @@ mod tests {
                 }
                 "idle" => r.tick(now + Duration::from_secs(121)),
                 "route" => {
-                    r.set_route("overlay", "i1", STK, "p1", SHELL, now);
+                    // RUY-611: an overlay no longer ends a test; `locked` and `app` do.
+                    r.set_route("locked", "", "", "", SHELL, now);
                     r.set_route("shell", "", "", "p1", SHELL, now);
                 }
                 "gone" => {

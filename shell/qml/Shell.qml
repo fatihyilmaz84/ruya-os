@@ -556,6 +556,34 @@ FocusScope {
         appId: root.quickMenuApp ? root.quickMenuApp.appId : ""
         frozen: root.quickMenuApp ? root.quickMenuApp.frozen : false
         overlay: systemPanel.open || modeConfirm.shown || IdleClock.covered
+        heldInstance: root.heldGame ? root.heldGame.instance : ""
+        heldAppId: root.heldGame ? root.heldGame.appId : ""
+    }
+
+    // The game whose pads outlive the screen with no app in front (RUY-611, 06 §5.2): a game can still
+    // read its pads while it is frozen behind Home or the Hub, and while it is being closed (Close thaws
+    // it so it can quit), and games save their controller choice on quit (LibreQuake wrote joy_device -1
+    // after "Gamepad removed"). So the route stays "overlay" with its instance
+    //   - while the game that was in front last is frozen (Home or the Hub over it), and
+    //   - while an instance Close asked to stop, whose pads the route held when Close began, has not
+    //     ended (AppExited, a refused Stop or the kill check, which release `closePadHold`).
+    // Lock, a profile switch and a game that is not frozen behind Home keep the old rule (the pads go).
+    property string lastFrontInstance: ""
+    property string closePadHold: ""
+    onQuickMenuAppChanged: {
+        if (quickMenuApp && quickMenuApp.instance !== "")
+            lastFrontInstance = quickMenuApp.instance
+    }
+    readonly property var heldGame: {
+        if (!signedIn)
+            return null
+        const mine = Session.running.filter(r => r.profile === Profiles.activeProfile)
+        const closing = closePadHold !== "" && closingInstances.includes(closePadHold)
+                        ? mine.find(r => r.instance === closePadHold) : undefined
+        if (closing)
+            return closing
+        const front = lastFrontInstance !== "" ? mine.find(r => r.instance === lastFrontInstance) : undefined
+        return front && front.frozen && front.state !== "stopping" ? front : null
     }
 
     // The liquid pill's specular clock runs only with no app in front, the window shown and input
@@ -995,6 +1023,9 @@ FocusScope {
     function startClose(instance, appId, title, picture) {
         closeState = { instance: instance, appId: appId, title: title, picture: picture }
         closingInstances = closingInstances.includes(instance) ? closingInstances : closingInstances.concat([instance])
+        // The pads the route holds for this game stay until it has exited (RUY-611); a game whose pads
+        // are not held now (not frozen behind Home) has none to keep.
+        closePadHold = inputRoute.routeInstance === instance ? instance : closePadHold
         closeSplashTimer.restart()
         Session.stop(instance)          // a frozen game: the service thaws it first, so it can quit (T-457)
     }
@@ -1067,6 +1098,8 @@ FocusScope {
     // The service refused or could not Stop `instance`: it is not closing.
     function stopRefused(instance) {
         closingInstances = closingInstances.filter(i => i !== instance)
+        if (closePadHold === instance)
+            closePadHold = ""
         if (closeState && closeState.instance === instance)
             endClose()
     }
@@ -1074,6 +1107,8 @@ FocusScope {
     // AppExited for an instance Close asked to stop ends the screen; "killed" is checked once the list has
     // been refreshed (the kill itself needs no message, an instance still listed after it does).
     function closeEnded(instance, appId, reason) {
+        if (closePadHold === instance)
+            closePadHold = ""           // the game has exited: its pads may go
         if (closeState && closeState.instance === instance)
             endClose()
         if (reason === "killed" && closingInstances.includes(instance)) {
