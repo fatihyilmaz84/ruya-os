@@ -60,6 +60,7 @@ branch: t/RUY-n-slug   commit: <sha>
 summary: <2-3 sentences>
 criteria: <all met, proofs in the Outcome comment | unmet: <id> - <why>, ...>
 checks: test <ALL GREEN: N QML + M skips, R Rust | failed: what>, shots <n/a | N, reviewed: files>
+revert: <each new test file: the change undone with revert-check.ps1 -> CAUGHT | none: no new test>   (never "not run": run it)
 vm: <n/a | pending lead run: <check> | this task: <version tag>, RUYA_BOOT_OK, <check> results>
 deviations: <none | one line each, with why>
 possibly public: <none | what an app could now reach, tagged experimental>
