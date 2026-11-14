@@ -365,29 +365,20 @@ impl SessionIface {
             .collect()
     }
 
-    async fn report_presence(
-        &self,
-        profile: &str,
-        instance: &str,
-        attention: &str,
-        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
-    ) -> String {
+    async fn report_presence(&self, profile: &str, instance: &str, attention: &str) -> String {
         let Some(attention) = Attention::parse(attention) else {
             return "invalid".to_owned();
         };
         if !profile.is_empty() && !valid_profile_id(profile) {
             return "invalid".to_owned();
         }
-        let changed = usage_lock(&self.usage).presence(
+        usage_lock(&self.usage).presence(
             profile,
             Some(instance),
             attention,
             Instant::now(),
             unix_now(),
         );
-        for p in changed {
-            let _ = Self::usage_changed(&emitter, p).await;
-        }
         "ok".to_owned()
     }
 
