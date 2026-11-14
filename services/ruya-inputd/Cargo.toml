@@ -19,4 +19,5 @@ evdev = "=0.12.2"
 libc = "0.2"  # uinput, EVIOCSFF and xattr calls, the udev netlink monitor (already in the tree)
 
 [dev-dependencies]
+ruya-contract-test = { path = "../ruya-contract-test" }  # the served interface against api/dbus (RUY-403)
 tempfile = "3"

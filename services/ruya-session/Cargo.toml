@@ -13,3 +13,7 @@ async-io = "2"  # the stop-grace timer; already in the tree through zbus
 async-channel = "2"  # unit events from the spawner to the adapter; already in the tree through zbus
 async-lock = "3"  # Freeze and Thaw in the order they arrive (T-457); already in the tree through zbus
 libc = "0.2"  # localtime_r for the device time zone in the play ledger (already in the tree through ruya-update)
+
+[dev-dependencies]
+ruya-contract-test = { path = "../ruya-contract-test" }  # the served interface against api/dbus (RUY-403)
+tempfile = "3"
