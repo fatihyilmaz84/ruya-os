@@ -35,7 +35,7 @@
     "invalid"          malformed argument, or a controller profile the schema or the service's rules
                        refuse (errors says why), or a parent (`inherits`) that does not exist
     "not-allowed"      the action does not fit the current state (a button test while an app is in
-                       front, saving over or deleting a built-in profile, saving a profile of scope
+                       front or the picker is up, saving over or deleting a built-in profile, saving a profile of scope
                        "builtin", a cycle in `inherits`, a chain of more than 8 `inherits` links,
                        more than 64 stored profiles of one console profile)
     "busy"             a button test already runs for that device
@@ -131,10 +131,12 @@
     </signal>
 
     <!-- Live button test (T-368, built). StartTest: "ok", "unknown-device", "not-allowed" (the
-         route is not "shell"), "busy" (a test already runs for that device). StopTest: "ok" (also
-         when no test runs), "unknown-device". A test ends by StopTest, by a route other than
-         "shell", when its pad disconnects, when its caller leaves the bus, or 120 s after the
-         pad's last input; each end is one TestEnded.
+         route is "app" or "locked"), "busy" (a test already runs for that device). StopTest: "ok"
+         (also when no test runs), "unknown-device". A test ends by StopTest, by the route "app" or
+         "locked", when its pad disconnects, when its caller leaves the bus, or 120 s after the
+         pad's last input; each end is one TestEnded. ("overlay" is allowed since RUY-611: with a
+         frozen or closing game behind Home the shell's route is "overlay" with that game's
+         instance, so its pads stay, and the Controllers pages must still run their test.)
          TestInput, while a test runs, for every input of that pad:
            input   the normalised name (06 §4.2: south east west north l1 r1 select start guide
                    l3 r3 dpad_up dpad_down dpad_left dpad_right, left_x left_y right_x right_y
@@ -178,8 +180,11 @@
            route     "shell" | "app" | "overlay" | "locked"
            instance  Session1's instance of the app in front for "app" and "overlay" (opaque: never
                      parsed), else ""; for "overlay" also while that app is frozen (the Hub's pause,
-                     RUY-541), so a Freeze by the Hub keeps the app's pads. "overlay" with "" (an
-                     overlay that names no app; the shell no longer sends it) destroys them
+                     RUY-541), so a Freeze by the Hub keeps the app's pads; also with no app in front
+                     (RUY-611): the shell sends "overlay" with the instance of a game that is frozen
+                     behind Home or the Hub, and of a game being closed until it has exited (it saves
+                     its controller choice on quit), so its pads outlive the Close. "overlay" with ""
+                     (an overlay that names no app; the shell no longer sends it) destroys them
            app_id    the Flatpak id of that app (the service picks the game or platform profile by
                      it, RUY-43), "" exactly when instance is ""; only its form is checked (the
                      rule of Session1: three dot-separated parts or more), it is not looked up

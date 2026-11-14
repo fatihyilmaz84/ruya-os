@@ -8,7 +8,7 @@
 # 500 ms and the worst at most 1000 ms: the first run after heavy checks is slow (644 ms once; a lone re-run
 # gave 190-426 ms), and the 1000 ms ceiling still catches a real regression. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|fallback|confirm|hold|twopads|guide|nodes|start|useractive]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|close|fallback|confirm|hold|twopads|guide|nodes|start|useractive]
 # `useractive` (RUY-588) with the shell stopped like `twopads`: a uinput pad's press in route `app` makes ruya-inputd emit Input1.UserActive
 # once (seen with busctl monitor), not for stick noise or in route `shell`, not again within 30 s, and once more after them.
 # `confirm` (RUY-40) checks the family's confirm button with a uinput pad announcing Nintendo's vendor
@@ -61,6 +61,11 @@
 # /root. Run it after `check` or alone; it signs in the first profile (no PIN, or PIN 1234). On an empty profile store it creates the admin "Check Admin" (PIN 1234)
 # and a standard "Check Kid"; with one profile it adds "Check Other" with that admin's PIN 1234.
 # Profiles that were there are used as they are; the ones the check made stay (a fresh disk).
+# `close` (RUY-611) closes a running game from the Hub the way a player does (Guide, Down, Right, Return on Close game, injected by
+# vm-inject-key.py): the game's virtual pad must stay until its unit is gone (a game saves its controller choice on quit;
+# LibreQuake saved joy_device -1 after its pads were destroyed under it), so the journal shows no "virtual pad ... destroyed"
+# before the last journal line of the game's unit, the route stays overlay with the game's instance until the exit and is
+# shell afterwards. Needs the shell running, the Wayland test app (see `shell`), vm-input-probe.py and vm-inject-key.py.
 # `fallback` (RUY-410) checks the compositor's emergency pad reader: it masks ruya-inputd
 # (systemctl mask --runtime --now), waits for the shell's journal line "ruya-shell: input fallback on"
 # (3 s without an owner of org.ruyaos.Input1), locks to the picker and lets a uinput pad
@@ -410,6 +415,77 @@ shell_check() {
     fi
 }
 
+# RUY-611: Close game from the Hub keeps the game's virtual pads until its unit is gone. Needs the shell, the Wayland
+# test app, the probe (a uinput pad) and vm-inject-key.py in /root, like shell_check.
+close_check() {
+    echo "--- Close game from the Hub keeps the pads until the game has exited (RUY-611)"
+    local wclient=org.ruyaos.TestWaylandClient ssvc=org.ruyaos.Session1 spath=/org/ruyaos/Session1
+    local out inst padpid node_before closets unit_ts destroyed_ts first n=0
+    pgrep -u ruya-shell -x ruya-shell >/dev/null || { bad "the shell is not running"; return; }
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; return; }
+    [ -f /root/vm-inject-key.py ] || { bad "/root/vm-inject-key.py is missing: copy it there"; return; }
+    flatpak info --system "$wclient" >/dev/null 2>&1 || { bad "$wclient is not installed: run 'vm-session-check.sh display' (then display-clean) first"; return; }
+    python3 "$probe" pad 300 > /var/tmp/ruya-input-pad.log 2>&1 &
+    padpid=$!
+    until grep -q "^pad " /var/tmp/ruya-input-pad.log || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
+    grep -q "^pad ready" /var/tmp/ruya-input-pad.log && ok "a test pad is connected" || { bad "no test pad: $(cat /var/tmp/ruya-input-pad.log)"; kill "$padpid"; return; }
+    stop_all_apps && ok "no app is running before the test app starts" || { bad "an app is still running after Stop"; kill "$padpid"; return; }
+    settle_route || { kill "$padpid"; return; }
+
+    out="$(runuser -u ruya-shell -- busctl --system call "$ssvc" "$spath" "$ssvc" Launch ss "$wclient" "$me")"
+    inst=""; case "$out" in 'ss "ok" '*) inst="$(echo "$out" | cut -d'"' -f4)";; esac
+    [ -n "$inst" ] && ok "Launch $wclient as $me: $inst" || { bad "Launch: $out"; kill "$padpid"; return; }
+    wait_route app 60 && ok "the test app in front: the route is app" || bad "with the app in front the route reads '$(route_now)'"
+    wait_pad present 5 && ok "the test pad has a virtual pad for $me ($(virtual_pad))" || bad "no virtual pad with the app in front"
+    node_before="$(virtual_pad)"
+
+    python3 /root/vm-inject-key.py guide >/dev/null 2>&1
+    wait_route overlay 10 && ok "Guide opened the Hub: the route is overlay" || bad "with the Hub open the route reads '$(route_now)'"
+    n=0; until [ "$(frozen_count)" -ge 1 ] || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
+    [ "$(frozen_count)" -ge 1 ] && ok "the Hub froze the app" || bad "the Hub did not freeze the app (Pause games in the Hub off?)"
+    [ -n "$node_before" ] && [ "$(virtual_pad)" = "$node_before" ] && ok "the frozen app keeps its virtual pad ($node_before)" || bad "under the Hub the virtual pad is '$(virtual_pad)', before it was '$node_before'"
+
+    # Resume is focused when the Hub opens: Down, then Right is Close game (it shares the row with Home), Return.
+    closets="$(date +%s.%N)"
+    python3 /root/vm-inject-key.py down right return >/dev/null 2>&1
+    n=0
+    until ! runuser -u ruya-shell -- busctl --system call "$ssvc" "$spath" "$ssvc" ListRunning 2>/dev/null | grep -q "$inst" || [ "$n" -ge 100 ]; do
+        sleep 0.1; n=$((n + 1))
+    done
+    if runuser -u ruya-shell -- busctl --system call "$ssvc" "$spath" "$ssvc" ListRunning 2>/dev/null | grep -q "$inst"; then
+        bad "Close game from the Hub did not end $inst (did the key presses reach the Hub?)"
+    else
+        ok "Close game ended $inst"
+    fi
+    wait_route shell 10 && ok "after the exit the route is shell" || bad "after the exit the route reads '$(route_now)'"
+    wait_pad gone 5 && ok "... and the virtual pad is gone" || bad "a virtual pad still exists after the exit: $(virtual_pad)"
+
+    # The order, by the journal's own clock: the game's unit has no later line than the first destroyed pad.
+    unit_ts="$(journalctl -u "$inst" --since "@${closets%.*}" --no-pager -o short-unix 2>/dev/null | awk 'NF {t = $1} END {print t}')"
+    first="$(journalctl -u ruya-inputd --since "@${closets%.*}" --no-pager -o short-unix 2>/dev/null | grep -E "virtual pad ruya-input/pad[0-9]+ destroyed" | head -1)"
+    destroyed_ts="${first%% *}"
+    if [ -z "$destroyed_ts" ]; then
+        bad "journal: no 'virtual pad ... destroyed' line after the Close"
+    elif [ -z "$unit_ts" ]; then
+        bad "journal: no line of $inst after the Close (was it run?)"
+    elif awk -v d="$destroyed_ts" -v u="$unit_ts" 'BEGIN {exit !(d + 0 >= u + 0)}'; then
+        ok "journal: the first pad destroyed ($destroyed_ts) is not before the game's unit ended ($unit_ts)"
+    else
+        echo "$first"
+        bad "journal: a virtual pad was destroyed at $destroyed_ts, before the game's unit ended at $unit_ts"
+    fi
+    # The route changes only when the game is gone: the first `route shell` line after the Close is not before the unit's end.
+    first="$(journalctl -u ruya-inputd --since "@${closets%.*}" --no-pager -o short-unix 2>/dev/null | grep -E "ruya-inputd: route (shell|locked) " | head -1)"
+    if [ -n "$first" ] && [ -n "$unit_ts" ] && awk -v d="${first%% *}" -v u="$unit_ts" 'BEGIN {exit !(d + 0 >= u + 0)}'; then
+        ok "journal: the route left the game only after its unit ended"
+    else
+        echo "$first"
+        bad "journal: the route went to shell or locked before the game's unit ended (or no such line)"
+    fi
+    kill "$padpid" 2>/dev/null
+    stop_all_apps >/dev/null 2>&1
+}
+
 # The first profile without a PIN, as "<index> <id>" in picker order (ListProfiles), or "".
 profile_without_pin() {
     busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | python3 -c '
@@ -741,6 +817,11 @@ shell)
     two_profiles
     [ -n "$me" ] && ok "profile $me signs in" || { bad "need a profile"; exit 1; }
     shell_check
+    ;;
+close)
+    two_profiles
+    [ -n "$me" ] && ok "profile $me signs in" || { bad "need a profile"; exit 1; }
+    close_check
     ;;
 esac
 [ "$fail" = 0 ] && echo "ALL CHECKS PASSED" || echo "SOME CHECKS FAILED"
