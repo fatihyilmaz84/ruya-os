@@ -257,9 +257,10 @@ Item {
             compare(find("zoneCity_UTC").marked, true, "and marks the current zone")
             compare(find("rowTimezone").kind, "page")
             // RUY-514: the check mark is drawn on the current zone's row only.
-            compare(findChild(find("zoneCity_UTC"), "currentMark").visible, true)
+            // tryVerify: the rows lay out after the picker opens (red once on a loaded host, lead-18).
+            tryVerify(() => findChild(find("zoneCity_UTC"), "currentMark").visible, 2000, "the current zone's mark")
             compare(findChild(find("zoneCity_UTC"), "currentMark").name, "check_circle")
-            compare(findChild(find("zoneRegion_Other"), "currentMark").visible, true, "the region of the current zone")
+            tryVerify(() => findChild(find("zoneRegion_Other"), "currentMark").visible, 2000, "the region of the current zone")
             compare(findChild(find("zoneRegion_Europe"), "currentMark").visible, false, "another region")
             compare(findChild(find("zoneRegion_Europe"), "currentWord").visible, false)
 
