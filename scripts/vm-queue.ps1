@@ -96,7 +96,7 @@ foreach ($c in $Checks) {
     $path = Join-Path $PSScriptRoot $script
     if (-not (Test-Path $path)) { $lines.Add("SKIPPED $name : $script does not exist"); continue }
     $isSh = $script.EndsWith(".sh")
-    if ($isSh -and $rest.Count -ge 1 -and -not (Select-String -Path $path -Quiet -Pattern ("^\s*([\w-]+\|)*" + [regex]::Escape($rest[0]) + "(\|[\w-]+)*\)"))) {
+    if ($isSh -and $rest.Count -ge 1 -and -not (Select-String -Path $path -Quiet -Pattern ("(^\s*|\bin\s+)([\w-]+\|)*" + [regex]::Escape($rest[0]) + "(\|[\w-]+)*\)"))) {   # also `case "$mode" in a|b) ;;` on one line (lead-20)
         $lines.Add("SKIPPED $name : mode '$($rest[0])' not in $script"); continue
     }
     $ts = Get-Date

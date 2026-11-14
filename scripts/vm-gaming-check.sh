@@ -29,7 +29,7 @@ check() {
         if [ "$mode" = 666 ]; then ok "$dev mode is 0666 (profile users need no udev rule)"; else bad "$dev mode is $mode, expected 0666 (a udev rule would be needed for profile users)"; fi
         user="$(getent passwd | awk -F: '$1 ~ /^ruya-p[0-9]+$/ {print $1; exit}')"
         if [ -z "$user" ]; then user=nobody; echo "info: no profile user exists yet, trying as nobody"; fi
-        if runuser -u "$user" -- python3 -c 'import sys; open(sys.argv[1], "rb+").close()' "$dev"; then
+        if runuser -u "$user" -- python3 -c 'import os, sys; os.close(os.open(sys.argv[1], os.O_RDWR))' "$dev"; then
             ok "$user opens $dev read-write"
         else
             bad "$user cannot open $dev read-write"
