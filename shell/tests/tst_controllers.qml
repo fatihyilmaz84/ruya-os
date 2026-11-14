@@ -115,6 +115,11 @@ Item {
 
         // ---- the pane ------------------------------------------------------------------------------------------
 
+        // The capability rows of the controller page, top to bottom.
+        function capRows() {
+            return findChild(find("page_controller"), "controllerBody").focusableRows().filter(r => r.objectName.startsWith("cap_"))
+        }
+
         // RUY-513: the kinds of the pane's rows and of the controller page's.
         function test_row_kinds() {
             openPane()
@@ -137,16 +142,12 @@ Item {
             for (const name of ["cap_buttons", "cap_gyro"])
                 compare(find(name).kind, "info", name)
             // The last fact of the run has no hairline (04 section 5), also after the rows came late and in Turkish.
-            const lastCap = () => {
-                const rows = Array.from(findChild(find("page_controller"), "controllerBody").focusableRows()).filter(r => r.objectName.startsWith("cap_"))
-                return rows[rows.length - 1]
-            }
-            tryVerify(() => lastCap() !== undefined)
-            tryCompare(lastCap(), "ruleBelow", false)
-            verify(findChild(find("page_controller"), "controllerBody").focusableRows().filter(r => r.objectName.startsWith("cap_")).slice(0, -1).every(r => r.ruleBelow), "the others have one")
+            tryVerify(() => capRows().length > 1)
+            tryCompare(capRows()[capRows().length - 1], "ruleBelow", false)
+            verify(capRows().slice(0, -1).every(r => r.ruleBelow), "the others have one")
             DeviceSettings.language = "tr"
             wait(100)
-            tryCompare(lastCap(), "ruleBelow", false)
+            tryCompare(capRows()[capRows().length - 1], "ruleBelow", false)
             DeviceSettings.language = "en"
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Down)
