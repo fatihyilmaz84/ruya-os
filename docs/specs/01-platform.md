@@ -21,6 +21,7 @@ Status: **Draft v1** · Parent: [00-overview](00-overview.md)
 | Audio | `pipewire`, `pipewire-pulseaudio`, `pipewire-alsa`, `wireplumber`. **Not** `pulseaudio` or `jack-audio-connection-kit`, which conflict. |
 | Network/BT | `NetworkManager`, `NetworkManager-wifi`, `bluez` (`bluetooth.service` enabled, with a drop-in that lets it run without an adapter, T-173), `upower`, `iwlwifi-*` firmware |
 | Storage | `udisks2`, `exfatprogs`, `ntfs-3g` (or kernel `ntfs3`) |
+| Kernel | Fedora's own kernel from the `fedora-bootc` base (7.3.3-200.fc44 on 0.0.79), signed for Secure Boot and updated with every image build. **Owner decision (2026-11-14): stay on Fedora's kernel**; no third-party gaming kernel (CachyOS, BORE) and no own build, because either would need Secure Boot off or our own signing key enrolled on every console. Gaming gains come from settings (RUY-525..531), each measured on the Dell. |
 | Apps | `flatpak`, `xdg-desktop-portal` (+ a portal backend, see 03 §4.4) |
 | X11-only apps | `xorg-x11-server-Xwayland`, `xcb-util-cursor`, `open-sans-fonts`, and `/usr/bin/xwayland-satellite` built in the image from Fedora's source RPM with two patches for Qt's `xdg_wm_base` v1 and `wl_output` v2 (ADR-034, RUY-434; [`image-packages.md`](../image-packages.md)). Nothing starts them at boot. |
 | Health | `greenboot`, `greenboot-default-health-checks` |
