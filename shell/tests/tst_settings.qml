@@ -27,19 +27,19 @@ Item {
         }
     }
     Component { id: sliderComponent; SliderRow { label: "Slider"; width: 700; from: 0; to: 3; stepSize: 1; value: 1 } }
-    Component { id: plainComponent; SettingRow { label: "Plain"; width: 700; value: "x" } }
+    Component { id: plainComponent; SettingRow { kind: "item"; label: "Plain"; width: 700; value: "x" } }
     // A bare pane of six rows, the last two hidden (T-190): "late" rows appear below the focus.
     Component {
         id: barePaneComponent
         SettingsPane {
             width: 700
             height: 384                          // four rows (84) and three gaps (16)
-            SettingRow { objectName: "r0"; label: "Row 0" }
-            SettingRow { objectName: "r1"; label: "Row 1" }
-            SettingRow { objectName: "r2"; label: "Row 2" }
-            SettingRow { objectName: "r3"; label: "Row 3" }
-            SettingRow { objectName: "r4"; label: "Row 4"; visible: false }
-            SettingRow { objectName: "r5"; label: "Row 5"; visible: false }
+            SettingRow { kind: "item"; objectName: "r0"; label: "Row 0" }
+            SettingRow { kind: "item"; objectName: "r1"; label: "Row 1" }
+            SettingRow { kind: "item"; objectName: "r2"; label: "Row 2" }
+            SettingRow { kind: "item"; objectName: "r3"; label: "Row 3" }
+            SettingRow { kind: "item"; objectName: "r4"; label: "Row 4"; visible: false }
+            SettingRow { kind: "item"; objectName: "r5"; label: "Row 5"; visible: false }
         }
     }
 
@@ -47,8 +47,8 @@ Item {
     Component { id: factComponent; SettingRow { label: "Fact"; kind: "info"; width: 700; value: "x" } }
     Component { id: pageComponent; SettingRow { label: "Page"; kind: "page"; width: 700; value: "Default" } }
     Component { id: actionComponent; SettingRow { label: "Scan for networks"; kind: "action"; width: 700 } }
-    Component { id: currentComponent; SettingRow { label: "Analog output"; width: 700; value: "Current" } }
-    Component { id: messageComponent; SettingRow { label: "Sleep is not available"; width: 700; enabled: false } }
+    Component { id: currentComponent; SettingRow { kind: "item"; label: "Analog output"; width: 700; value: "Current" } }
+    Component { id: messageComponent; SettingRow { kind: "info"; label: "Sleep is not available"; width: 700; enabled: false } }
     // A pane with one row of every kind and a group label (hints, hairlines, Up/Down).
     Component {
         id: kindsPaneComponent
@@ -57,18 +57,18 @@ Item {
             height: 1400
             SettingRow { objectName: "k_fact1"; label: "Fact 1"; kind: "info"; value: "a" }
             SettingRow { objectName: "k_fact2"; label: "Fact 2"; kind: "info"; value: "b" }
-            SettingRow { objectName: "k_item"; label: "Item" }
+            SettingRow { kind: "item"; objectName: "k_item"; label: "Item" }
             SettingRow { objectName: "k_page"; label: "Page"; kind: "page" }
             SettingRow { objectName: "k_action"; label: "Action"; kind: "action" }
             ToggleRow { objectName: "k_toggle"; label: "Toggle" }
             ChoiceRow { objectName: "k_choice"; label: "Choice"; options: [{ value: "a", label: "A" }, { value: "b", label: "B" }]; value: "a" }
             SliderRow { objectName: "k_slider"; label: "Slider"; from: 0; to: 10; value: 3 }
-            SettingRow { objectName: "k_verb"; label: "Verb"; hints: [{ button: "A", text: "Connect" }, { button: "B", text: "Back" }] }
+            SettingRow { kind: "item"; objectName: "k_verb"; label: "Verb"; hints: [{ button: "A", text: "Connect" }, { button: "B", text: "Back" }] }
             SettingRow { objectName: "k_fact3"; label: "Fact 3"; kind: "info"; value: "c" }
-            SettingRow { objectName: "k_message"; label: "Message"; enabled: false }
+            SettingRow { kind: "info"; objectName: "k_message"; label: "Message"; enabled: false }
             SettingRow { objectName: "k_fact4"; label: "Fact 4"; kind: "info"; value: "d" }
             GroupLabel { objectName: "k_group"; text: "Buttons" }
-            SettingRow { objectName: "k_last"; label: "Last" }
+            SettingRow { kind: "item"; objectName: "k_last"; label: "Last" }
         }
     }
     Component {
@@ -96,14 +96,14 @@ Item {
                 GroupLabel { u: sheetRoot.u; text: qsTr("Sound") }
                 SettingRow { u: sheetRoot.u; label: qsTr("Model"); value: "RuyaOS box"; kind: "info"; ruleBelow: true }
                 SettingRow { u: sheetRoot.u; label: qsTr("Version"); value: "0.1"; kind: "info" }
-                SettingRow { u: sheetRoot.u; label: qsTr("Analog output"); value: qsTr("Current"); current: true }
+                SettingRow { kind: "item"; u: sheetRoot.u; label: qsTr("Analog output"); value: qsTr("Current"); current: true }
                 SettingRow { u: sheetRoot.u; label: qsTr("Wallpaper"); value: qsTr("Default"); kind: "page" }
                 SettingRow { u: sheetRoot.u; label: qsTr("Scan for networks"); value: qsTr("Scanning…"); kind: "action" }
                 SettingRow { u: sheetRoot.u; label: qsTr("Create profile"); kind: "action"; emphasis: "primary" }
                 ToggleRow { u: sheetRoot.u; label: qsTr("Reduce motion"); checked: true }
                 ChoiceRow { u: sheetRoot.u; label: qsTr("Quality"); options: [{ value: "a", label: qsTr("Default") }, { value: "b", label: qsTr("Balanced") }]; value: "a" }
                 SliderRow { u: sheetRoot.u; label: qsTr("Brightness"); from: 0; to: 100; value: 50; unit: "%" }
-                SettingRow { u: sheetRoot.u; label: qsTr("Sleep is not available"); enabled: false }
+                SettingRow { kind: "info"; u: sheetRoot.u; label: qsTr("Sleep is not available"); enabled: false }
             }
         }
     }
@@ -821,12 +821,18 @@ Item {
             keyClick(Qt.Key_Enter)
             compare(spy.count, 0, "A emits nothing")
             compare(Sfx.selectCount, selects, "A makes no sound")
+        }
 
-            // `inert` is the same kind.
-            const old = createTemporaryObject(plainComponent, host, { inert: true })
-            compare(findChild(old, "rowFill").color.a, 0)
-            compare(findChild(old, "rowLayers").visible, false)
-            compare(old.hintKind, "info")
+        function test_kind_is_required() {
+            // A row that forgets its kind is not created at all (RUY-575): it can't silently look like an item.
+            let made = null
+            let failed = false
+            try {
+                made = Qt.createQmlObject('import QtQuick; import RuyaShell; SettingRow { label: "x" }', host)
+            } catch (e) {
+                failed = /[Rr]equired/.test(String(e))
+            }
+            verify(failed || made === null, "a SettingRow without kind must not be created")
         }
 
         function test_pane_sets_the_hairline_between_facts_only() {

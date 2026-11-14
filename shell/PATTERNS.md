@@ -30,7 +30,7 @@ Reusable settings rows. All extend `SettingControl` (a `FocusScope` with the lab
 | A does | Use | Looks like |
 |---|---|---|
 | Nothing: the row states a fact | `SettingRow { kind: "info" }` | No pill; hairline between facts; hint `B Back` |
-| Acts on a thing in a list (join a network, connect a device, pick a profile) | `SettingRow` (`kind: "item"`, the default) | Pill, value at the right; name the verb in `hints` if it is not Select |
+| Acts on a thing in a list (join a network, connect a device, pick a profile) | `SettingRow` (`kind: "item"`; `kind` is always set) | Pill, value at the right; name the verb in `hints` if it is not Select |
 | Is the one in use, in a list where only one can be (default output, connected Wi-Fi, current mode) | `SettingRow { current: true }` (an item) | DemiBold label, its word, filled check at the right |
 | Opens a page, a picker or the keyboard to change this row's value | `SettingRow { kind: "page" }` | Pill, value, chevron |
 | Does something now or after a confirm (a verb: Scan, Rename, Forget, Reset) | `SettingRow { kind: "action" }` | Centred DemiBold label; a status goes in `value`, drawn under it |
@@ -41,7 +41,7 @@ Reusable settings rows. All extend `SettingControl` (a `FocusScope` with the lab
 | Cannot be used and says why, with nothing to focus | `SettingRow { enabled: false }` | Flat line with an info icon |
 | Names the rows below it | `GroupLabel { text: ... }` | `typeHeadline` DemiBold heading, never focused |
 
-`SettingControl.flat` (no fill and no layers at rest) and `ruleBelow` (the hairline) are the fact look; `SettingRow` sets `flat` for `kind: "info"`, `inert` and `enabled: false`, and any other `SettingControl` can set it (System information's inline row). `SettingsPane` sets `ruleBelow` after each layout of its column: true on a fact whose next visible item is also a fact. `SettingControl.hints` defaults by kind (fact `B Back`; item and action `A Select`; page `A Open`; toggle `A Toggle`; choice `Left/Right Change`, `A Next`; slider `Left/Right Adjust`) and `SettingsPane.hints` shows the focused row's; a row names its own verb with `hints: [{ button: "A", text: qsTr("Connect") }, { button: "B", text: qsTr("Back") }]`, and a pane that sets `hints:` itself still wins.
+`SettingControl.flat` (no fill and no layers at rest) and `ruleBelow` (the hairline) are the fact look; `SettingRow` sets `flat` for `kind: "info"` and `enabled: false`, and any other `SettingControl` can set it (System information's inline row). `SettingsPane` sets `ruleBelow` after each layout of its column: true on a fact whose next visible item is also a fact. `SettingControl.hints` defaults by kind (fact `B Back`; item and action `A Select`; page `A Open`; toggle `A Toggle`; choice `Left/Right Change`, `A Next`; slider `Left/Right Adjust`) and `SettingsPane.hints` shows the focused row's; a row names its own verb with `hints: [{ button: "A", text: qsTr("Connect") }, { button: "B", text: qsTr("Back") }]`, and a pane that sets `hints:` itself still wins.
 
 A label is a noun with a value (Wallpaper, Resolution) for `page`, `item` and `info`; a verb (Scan for networks, Forget %1) for `action`. A row that would be a verb *and* show a value is an action with a status line ("Add a device" / "Scanning…").
 

@@ -27,7 +27,7 @@ Item {
         id: rowsComponent
         Column {
             width: 900
-            SettingRow { objectName: "plainRow"; label: "<b>x</b><img src=\"qrc:/none.png\">"; value: "<b>x</b><img src=\"qrc:/none.png\">" }
+            SettingRow { objectName: "plainRow"; kind: "item"; label: "<b>x</b><img src=\"qrc:/none.png\">"; value: "<b>x</b><img src=\"qrc:/none.png\">" }
             ChoiceRow {
                 objectName: "plainChoice"
                 label: "<b>x</b><img src=\"qrc:/none.png\">"

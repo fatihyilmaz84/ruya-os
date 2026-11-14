@@ -137,6 +137,7 @@ FocusScope {
 
         SettingRow {
             objectName: "controlsImportNone"
+            kind: "info"
             visible: picker.empty
             enabled: false                     // an unavailable line (04 §5)
             u: picker.u
@@ -169,6 +170,7 @@ FocusScope {
                 required property int index
                 required property var modelData
                 objectName: "controlsImportFile_" + index
+                kind: "item"
                 width: list.width
                 u: picker.u
                 label: modelData.name
