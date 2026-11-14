@@ -123,7 +123,9 @@ mod tests {
         round(&mut ignored, vec![node("/dev/input/event7", 10)], |_| false);
         assert!(ignored.to_open(Vec::new(), never_active).is_empty());
         assert_eq!(
-            ignored.to_open(vec![node("/dev/input/event7", 10)], never_active).len(),
+            ignored
+                .to_open(vec![node("/dev/input/event7", 10)], never_active)
+                .len(),
             1
         );
     }
