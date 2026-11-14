@@ -571,8 +571,8 @@ pub async fn watch_active_profile(connection: Connection, session: Shared, turn:
                 })
                 .ok()
         };
-        let changes = follow_active(&session, &turn, &mut last, read).await;
-        if !changes.is_empty() {
+        // The announcement is made in the turn (`emit`), like Freeze and Thaw do.
+        let emit = |changes: Vec<FrozenChange>| async {
             if let Ok(iface) = connection
                 .object_server()
                 .interface::<_, SessionIface>(OBJECT_PATH)
@@ -580,7 +580,8 @@ pub async fn watch_active_profile(connection: Connection, session: Shared, turn:
             {
                 emit_frozen(iface.signal_emitter(), changes).await;
             }
-        }
+        };
+        follow_active(&session, &turn, &mut last, read, emit).await;
         if futures_lite::StreamExt::next(&mut stream).await.is_none() {
             return eprintln!(
                 "ruya-session: the bus closed, the signed-in profile is not followed"
@@ -594,35 +595,43 @@ pub async fn watch_active_profile(connection: Connection, session: Shared, turn:
 /// `last`, the apps of `last` are frozen (all but the new profile's when `last` is not known yet).
 /// Reading the value in the turn, not taking it from the signal, means that a Thaw sent just before
 /// the change (the Hub closing as Switch profile locks) is served first and the game ends frozen,
-/// and that a profile that left and came back before its turn has nothing frozen. Returns the
-/// `frozen` changes to announce.
-async fn follow_active<F, Fut>(
+/// and that a profile that left and came back before its turn has nothing frozen. The `frozen`
+/// changes are handed to `emit` while the turn is still held (RUY-570), so a Thaw served next
+/// cannot be announced before the Freeze it follows.
+async fn follow_active<F, Fut, E, EFut>(
     session: &Shared,
     turn: &FreezerTurn,
     last: &mut Option<String>,
     read: F,
-) -> Vec<FrozenChange>
-where
+    emit: E,
+) where
     F: FnOnce() -> Fut,
     Fut: std::future::Future<Output = Option<String>>,
+    E: FnOnce(Vec<FrozenChange>) -> EFut,
+    EFut: std::future::Future<Output = ()>,
 {
     let _turn = turn.lock().await;
     let Some(active) = read().await else {
-        return Vec::new();
+        return;
     };
     if last.as_deref() == Some(active.as_str()) {
-        return Vec::new();
+        return;
     }
-    let mut session = lock(session);
-    for (unit, status) in session.profile_changed(last.as_deref(), &active, Instant::now()) {
-        if status == Status::Ok {
-            eprintln!(
-                "ruya-session: froze {unit}: its profile is not signed in (now \"{active}\")"
-            );
+    let changes = {
+        let mut session = lock(session);
+        for (unit, status) in session.profile_changed(last.as_deref(), &active, Instant::now()) {
+            if status == Status::Ok {
+                eprintln!(
+                    "ruya-session: froze {unit}: its profile is not signed in (now \"{active}\")"
+                );
+            }
         }
+        *last = Some(active);
+        session.take_frozen_changes()
+    };
+    if !changes.is_empty() {
+        emit(changes).await;
     }
-    *last = Some(active);
-    session.take_frozen_changes()
 }
 
 /// RUY-568: an app that reached running is frozen at once when its profile is not the signed-in
@@ -895,6 +904,52 @@ mod tests {
         (shared, unit, Some("p1".to_owned()))
     }
 
+    /// `follow_active` with an `emit` that collects what would be announced.
+    async fn follow<F, Fut>(
+        shared: &Shared,
+        turn: &FreezerTurn,
+        last: &mut Option<String>,
+        read: F,
+    ) -> Vec<FrozenChange>
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = Option<String>>,
+    {
+        let out = Mutex::new(Vec::new());
+        follow_active(shared, turn, last, read, |c| async {
+            *out.lock().unwrap_or_else(|e| e.into_inner()) = c;
+        })
+        .await;
+        out.into_inner().unwrap_or_else(|e| e.into_inner())
+    }
+
+    #[test]
+    fn the_change_is_announced_while_the_freezer_turn_is_still_held() {
+        // RUY-570: a Thaw served right after the watcher must not announce before the Freeze.
+        let (shared, unit, mut last) = signed_in_session();
+        let turn: FreezerTurn = Arc::new(async_lock::Mutex::new(()));
+        let held_in_emit = Mutex::new(None);
+        let (turn_ref, seen) = (&turn, &held_in_emit);
+        futures_lite::future::block_on(follow_active(
+            &shared,
+            &turn,
+            &mut last,
+            || async { Some("p2".to_owned()) },
+            |changes| async move {
+                *seen.lock().unwrap_or_else(|e| e.into_inner()) =
+                    Some(turn_ref.try_lock().is_none());
+                assert_eq!(changes.len(), 1);
+            },
+        ));
+        assert_eq!(
+            *held_in_emit.lock().unwrap(),
+            Some(true),
+            "emitted inside the turn"
+        );
+        assert!(is_frozen(&shared, &unit));
+        assert!(turn.try_lock().is_some(), "the turn is released afterwards");
+    }
+
     fn is_frozen(shared: &Shared, unit: &str) -> bool {
         lock(shared)
             .list()
@@ -914,7 +969,7 @@ mod tests {
         let turn: FreezerTurn = Arc::new(async_lock::Mutex::new(()));
         futures_lite::future::block_on(async {
             let thaw_turn = turn.lock().await;
-            let mut change = Box::pin(follow_active(&shared, &turn, &mut last, || async {
+            let mut change = Box::pin(follow(&shared, &turn, &mut last, || async {
                 Some(String::new())
             }));
             assert!(
@@ -943,24 +998,20 @@ mod tests {
         // before the watcher's turn came, so it reads "p1" and nothing changes.
         let (shared, unit, mut last) = signed_in_session();
         let turn: FreezerTurn = Arc::new(async_lock::Mutex::new(()));
-        let changes =
-            futures_lite::future::block_on(follow_active(&shared, &turn, &mut last, || async {
-                Some("p1".to_owned())
-            }));
+        let changes = futures_lite::future::block_on(follow(&shared, &turn, &mut last, || async {
+            Some("p1".to_owned())
+        }));
         assert!(changes.is_empty());
         assert!(!is_frozen(&shared, &unit));
         // An unreadable Profiles1 changes nothing either, and the last value is kept.
         let changes =
-            futures_lite::future::block_on(follow_active(&shared, &turn, &mut last, || async {
-                None
-            }));
+            futures_lite::future::block_on(follow(&shared, &turn, &mut last, || async { None }));
         assert!(changes.is_empty());
         assert_eq!(last.as_deref(), Some("p1"));
         // Then p2 signs in: p1's game is frozen.
-        let changes =
-            futures_lite::future::block_on(follow_active(&shared, &turn, &mut last, || async {
-                Some("p2".to_owned())
-            }));
+        let changes = futures_lite::future::block_on(follow(&shared, &turn, &mut last, || async {
+            Some("p2".to_owned())
+        }));
         assert_eq!(changes.len(), 1);
         assert!(is_frozen(&shared, &unit));
     }
@@ -971,10 +1022,9 @@ mod tests {
         let (shared, unit, _) = signed_in_session();
         let mut last = None;
         let turn: FreezerTurn = Arc::new(async_lock::Mutex::new(()));
-        let changes =
-            futures_lite::future::block_on(follow_active(&shared, &turn, &mut last, || async {
-                Some(String::new())
-            }));
+        let changes = futures_lite::future::block_on(follow(&shared, &turn, &mut last, || async {
+            Some(String::new())
+        }));
         assert_eq!(changes.len(), 1);
         assert!(is_frozen(&shared, &unit));
     }
@@ -989,7 +1039,7 @@ mod tests {
         let mut last = Some("p1".to_owned());
         let turn: FreezerTurn = Arc::new(async_lock::Mutex::new(()));
         futures_lite::future::block_on(async {
-            let changes = follow_active(&shared, &turn, &mut last, || async {
+            let changes = follow(&shared, &turn, &mut last, || async {
                 Some("p2".to_owned())
             })
             .await;
@@ -1069,7 +1119,7 @@ mod tests {
         let shared: Shared = Arc::new(Mutex::new(Session::new(spawner, dir, Vec::new())));
         let (_, unit) = lock(&shared).launch(APP, "p1", 1);
         let mut last = Some("p1".to_owned());
-        futures_lite::future::block_on(follow_active(&shared, &turn, &mut last, || async {
+        futures_lite::future::block_on(follow(&shared, &turn, &mut last, || async {
             Some("p2".to_owned())
         }));
         lock(&shared).on_event(UnitEvent::Started { unit: unit.clone() });
@@ -1081,7 +1131,7 @@ mod tests {
         assert!(is_frozen(&shared, &unit));
         // The watcher saw p1: nothing is frozen.
         let (shared, unit, mut last) = signed_in_session();
-        futures_lite::future::block_on(follow_active(&shared, &turn, &mut last, || async {
+        futures_lite::future::block_on(follow(&shared, &turn, &mut last, || async {
             Some("p1".to_owned())
         }));
         let changes =
