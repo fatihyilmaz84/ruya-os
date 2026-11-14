@@ -358,6 +358,8 @@ void MockInputBackend::callProfile(quint64 token, const QString &method, const Q
                 reply.insert(name, QVariant());
         }
         reply.insert(QStringLiteral("status"), m_fail ? QStringLiteral("failed") : m_forcedStatus.value(method));
+        if (m_forcedOnce.remove(method))
+            m_forcedStatus.remove(method);
     } else if (method == QLatin1String("SetConfirmButton")) {
         // The service's rules (routing.rs): the mode first, then the profile account (the mock takes
         // any id of the profile form); the answer is ok, invalid or unknown-profile.

@@ -51,16 +51,26 @@ public:
     {
         m_profiles.reset();
         m_forcedStatus.clear();
+        m_forcedOnce.clear();
         m_confirm.clear();
     }
     // While set, every call of `method` answers `status` (its other out-arguments empty) without
     // reaching the profiles: a refused or failed save for the pages' tests (RUY-465). "" clears it.
     void setProfileStatus(const QString &method, const QString &status)
     {
+        m_forcedOnce.remove(method);
         if (status.isEmpty())
             m_forcedStatus.remove(method);
         else
             m_forcedStatus.insert(method, status);
+    }
+
+    // Like setProfileStatus, but only the next call of `method` is answered so (RUY-571).
+    void setProfileStatusOnce(const QString &method, const QString &status)
+    {
+        setProfileStatus(method, status);
+        if (!status.isEmpty())
+            m_forcedOnce.insert(method);
     }
 
     // Tests (RUY-39). A pad connects (a device record; `capabilities` a list of
@@ -124,5 +134,6 @@ private:
     MockInputProfiles m_profiles;
     QVariantList m_profileCalls;
     QHash<QString, QString> m_forcedStatus;
+    QSet<QString> m_forcedOnce;
     QHash<QString, QString> m_confirm;
 };
