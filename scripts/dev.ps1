@@ -414,6 +414,28 @@ function Test-Tokens {
     Record "QML member lint self-check (rejects a ternary inside a product in an anchor offset, accepts the working form)" ($offsetRejected -and $LASTEXITCODE -eq 0)
     Remove-Item -Recurse -Force $memberFix -ErrorAction SilentlyContinue
 
+    Step "glyph action lint (hints and glyphs name actions or positions, never letters, RUY-41)"
+    & (Join-Path $PSScriptRoot "lint-glyph-actions.ps1")
+    Record "glyph action lint" ($LASTEXITCODE -eq 0)
+    $glyphFix = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-glyphs-" + [guid]::NewGuid().ToString("N"))
+    $glyphForms = [ordered]@{
+        "a button letter in a hint" = @("    readonly property var hints: [{ button: `"A`", text: qsTr(`"Select`") }]", $false)
+        "two letters in a hint" = @("    readonly property var hints: [{ buttons: [`"LB`", `"RB`"], text: qsTr(`"Sections`") }]", $false)
+        "a letter named as an action" = @("    readonly property var hints: [{ action: `"A`", text: qsTr(`"Select`") }]", $false)
+        "a letter in an action pair" = @("    readonly property var hints: [{ actions: [`"LB`", `"tabNext`"], text: qsTr(`"Sections`") }]", $false)
+        "a letter as a position" = @("    ButtonGlyph { position: `"A`" }", $false)
+        "actions and positions" = @("    readonly property var hints: [{ action: `"accept`", text: qsTr(`"Select`") }, { actions: [`"tabPrev`", `"tabNext`"], text: qsTr(`"Sections`") }]`n    ButtonGlyph { position: `"south`" }", $true)
+    }
+    foreach ($form in $glyphForms.Keys) {
+        Remove-Item -Recurse -Force $glyphFix -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Force $glyphFix | Out-Null
+        [IO.File]::WriteAllText((Join-Path $glyphFix "Form.qml"), "import QtQuick`nItem {`n" + $glyphForms[$form][0] + "`n}`n")
+        & (Join-Path $PSScriptRoot "lint-glyph-actions.ps1") -QmlDir $glyphFix 6>&1 | Out-Null
+        $formOk = if ($glyphForms[$form][1]) { $LASTEXITCODE -eq 0 } else { $LASTEXITCODE -ne 0 }
+        Record "glyph action lint self-check ($form)" $formOk
+    }
+    Remove-Item -Recurse -Force $glyphFix -ErrorAction SilentlyContinue
+
     Step "setting note lint (a note under a row in a Settings pane is a SettingNote, RUY-590)"
     & (Join-Path $PSScriptRoot "lint-setting-notes.ps1")
     Record "setting note lint" ($LASTEXITCODE -eq 0)

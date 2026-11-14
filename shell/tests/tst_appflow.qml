@@ -135,7 +135,7 @@ Item {
         function hintVerbs() {
             const bar = find("hintBar")
             const parts = []
-            for (const b of ["A", "B"]) {
+            for (const b of ["accept", "back"]) {
                 const h = findChild(bar, "hint_" + b)
                 if (h)
                     parts.push(b + " " + h.verb)
@@ -195,7 +195,7 @@ Item {
             tryVerify(() => find("hubGameCard") !== null, 2000, "the game card is there")
             compare(find("hubCardTitle").text, "Turbo Racer")
             compare(find("hubCardState").text, "Just started")
-            compare(hintVerbs(), "A Resume")
+            compare(hintVerbs(), "accept Resume")
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Up)
             keyClick(Qt.Key_Right)
@@ -223,7 +223,7 @@ Item {
             verify(find("quickMenuItem_volume"), "the volume row is there")
             // T-471: nothing runs, so the first row is Volume and it has the focus.
             verify(find("quickMenuItem_volume").focused, "the first row has the focus")
-            compare(hintVerbs(), "A Mute|B Close")
+            compare(hintVerbs(), "accept Mute|back Close")
             keyClick(Qt.Key_Escape)
             tryVerify(() => !find("systemPanel").open)
             tryVerify(() => find("homePlay").activeFocus, 2000, "Back returns to Play")
@@ -606,7 +606,7 @@ Item {
             tryVerify(() => splash.slow, 3000, "20 s (shortened here) without a window")
             compare(find("launchStatus").text, "Still starting…")
             tryVerify(() => find("launchClose").activeFocus, 2000, "Close has the focus")
-            compare(hintVerbs(), "A Close|B Close")
+            compare(hintVerbs(), "accept Close|back Close")
             const instance = Session.running[0].instance
             keyClick(Qt.Key_Return)
             tryCompare(stoppedSpy, "count", 1)

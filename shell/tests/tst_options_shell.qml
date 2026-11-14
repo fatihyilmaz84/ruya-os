@@ -106,7 +106,7 @@ Item {
             if (!bar.visible)
                 return ""
             const parts = []
-            for (const b of ["A", "B", "Start", "LBRB"]) {
+            for (const b of ["accept", "back", "options", "tabPrev_tabNext"]) {
                 const h = findChild(bar, "hint_" + b)
                 if (h)
                     parts.push(b + " " + h.verb)
@@ -175,7 +175,7 @@ Item {
             verify(card.anchored)
             compare(findChild(card, "cardRing").border.width, 0)
             tryCompare(card, "scale", Theme.focusScale)
-            compare(hintVerbs(), "A Select|B Close")
+            compare(hintVerbs(), "accept Select|back Close")
             keyClick(Qt.Key_Escape)
             verify(!menu().shown)
             verify(row.activeFocus, "the focus is back on the card")
@@ -447,12 +447,12 @@ Item {
             keyClick(Qt.Key_Escape)
             keyClick(Qt.Key_Right)                   // Counter Strike
             compare(find("recentRow").currentItem.itemId, "steam:730")
-            compare(hintVerbs(), "A Select|LBRB Sections", "no Options hint for an empty menu")
+            compare(hintVerbs(), "accept Select|tabPrev_tabNext Sections", "no Options hint for an empty menu")
             keyClick(Qt.Key_Menu)
             verify(menu().shown, "the options button still opens the empty menu")
             compare(rowIds(), [])
             verify(findChild(menu(), "optionsEmpty").visible)
-            compare(hintVerbs(), "B Close")
+            compare(hintVerbs(), "back Close")
             keyClick(Qt.Key_Escape)
             verify(find("recentRow").activeFocus)
         }
@@ -462,35 +462,35 @@ Item {
             toRecent()
             keyClick(Qt.Key_Right)
             compare(find("recentRow").currentItem.itemId, "steam:730")
-            compare(hintVerbs(), "A Select|Start Options|LBRB Sections")
+            compare(hintVerbs(), "accept Select|options Options|tabPrev_tabNext Sections")
             keyClick(Qt.Key_Menu)
             compare(rowIds(), ["activity"])
         }
 
         function test_the_options_hint_on_home_and_games() {
             start()
-            compare(hintVerbs(), "A Select|Start Options|LBRB Sections")
+            compare(hintVerbs(), "accept Select|options Options|tabPrev_tabNext Sections")
             keyClick(Qt.Key_Up)
-            compare(hintVerbs(), "A Select|LBRB Sections", "none on the nav")
+            compare(hintVerbs(), "accept Select|tabPrev_tabNext Sections", "none on the nav")
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Up)
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "games")
             tryVerify(() => find("gamesGrid").activeFocus, 2000)
-            compare(hintVerbs(), "A Select|B Back|Start Options|LBRB Sections")
+            compare(hintVerbs(), "accept Select|back Back|options Options|tabPrev_tabNext Sections")
             keyClick(Qt.Key_Right)
-            compare(hintVerbs(), "A Select|B Back|Start Options|LBRB Sections", "a Steam game's activity row is a menu")
+            compare(hintVerbs(), "accept Select|back Back|options Options|tabPrev_tabNext Sections", "a Steam game's activity row is a menu")
         }
 
         // An item with an empty menu loses only the Options hint: Sections stays on Games.
         function test_games_hints_keep_sections_for_an_empty_menu() {
             start(2, "p3")
             openGames()
-            compare(hintVerbs(), "A Select|B Back|Start Options|LBRB Sections")
+            compare(hintVerbs(), "accept Select|back Back|options Options|tabPrev_tabNext Sections")
             keyClick(Qt.Key_Right)                   // Counter Strike: nothing for Guest
             compare(find("gamesGrid").currentItem.itemId, "steam:730")
-            compare(hintVerbs(), "A Select|B Back|LBRB Sections")
+            compare(hintVerbs(), "accept Select|back Back|tabPrev_tabNext Sections")
         }
 
         function test_the_store_down_leaves_out_details_and_shows_the_note() {

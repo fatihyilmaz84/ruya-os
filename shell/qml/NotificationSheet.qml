@@ -64,23 +64,23 @@ FocusScope {
 
     // What the hint bar says (Shell.modalHintsOf).
     readonly property var modalHints: {
-        const close = { button: "B", text: qsTr("Close") }
+        const close = { action: "back", text: qsTr("Close") }
         if (stop === "clear")
-            return [{ button: "A", text: qsTr("Clear all") }, close]
+            return [{ action: "accept", text: qsTr("Clear all") }, close]
         if (stop === "quiet")
-            return [{ button: "A", text: qsTr("Toggle") }, close]
+            return [{ action: "accept", text: qsTr("Toggle") }, close]
         const it = currentItem
         if (!it)
             return [close]
         const out = []
         if (currentActions.length > 0)
-            out.push({ button: "A", text: qsTr("Select") })
+            out.push({ action: "accept", text: qsTr("Select") })
         else if ((it.appId ?? "") !== "")
-            out.push({ button: "A", text: qsTr("Open") })
+            out.push({ action: "accept", text: qsTr("Open") })
         if (currentActions.length > 1)
-            out.push({ button: "Left/Right", text: qsTr("Choose") })
+            out.push({ actions: ["left", "right"], text: qsTr("Choose") })
         if (!it.pinned)
-            out.push({ button: "Start", text: qsTr("Clear") })
+            out.push({ action: "options", text: qsTr("Clear") })
         out.push(close)
         return out
     }

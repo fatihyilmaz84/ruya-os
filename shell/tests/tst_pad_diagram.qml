@@ -115,6 +115,22 @@ Item {
             return k.children.filter(c => c.text !== undefined).map(c => c.text).join("")
         }
 
+        // RUY-41: the face buttons carry the family's glyph of their position (north east south west).
+        function test_the_face_buttons_carry_the_family_glyphs() {
+            const letters = [["xbox", ["Y", "B", "A", "X"]], ["nintendo", ["X", "A", "B", "Y"]]]
+            for (const [family, want] of letters) {
+                const d = make(family, "")
+                compare(["north", "east", "south", "west"].map(p => text(d, "padCtl_" + p)), want, family)
+            }
+            const ps = make("playstation", "")
+            compare(["north", "east", "south", "west"].map(p => findChild(ps, "padGlyph_" + p).shape),
+                    ["triangle", "circle", "cross", "square"])
+            verify(findChild(ps, "padGlyph_south").visible, "the shape is drawn")
+            compare(text(ps, "padCtl_south"), "", "no letter under the shape")
+            const generic = make("generic", "")
+            compare(findChild(generic, "padGlyph_east").dotPosition, "east")
+        }
+
         function test_select_start_and_guide_say_the_family_words() {
             const table = [
                 ["playstation", "", ["Create", "Options", "Guide", "L2", "R2"]],

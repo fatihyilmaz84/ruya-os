@@ -16,6 +16,9 @@ Page {
 
     readonly property string padId: String((params ?? {}).id ?? "")
     readonly property var pad: GameControls.padFor(padId)
+    // The hint bar draws this pad's buttons (RUY-41).
+    glyphFamily: pad ? pad.family : ""
+    glyphConfirmMode: String(Input.confirmButtons[padId] ?? "family")
     readonly property string family: pad ? pad.family : ""
     // The drive export and import use: the first mounted removable volume, a writable one first.
     readonly property var drive: Storage.volumes.find(v => v.removable && v.mounted && !v.readOnly)

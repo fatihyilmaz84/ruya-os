@@ -23,7 +23,7 @@ QtObject {
     property int durationMs: Theme.toastMs          // overridable (tests use a short one)
 
     // Toasts on screen, oldest first: { toastId, text, kind, iconText, iconName, detail, footer,
-    // footerButton, footerIcon, sticky, key, urgency }.
+    // footerAction, footerIcon, sticky, key, urgency }.
     readonly property ListModel model: ListModel {}
     readonly property int pendingCount: pending.length
     readonly property int shownCount: shown        // toasts that have appeared, ever
@@ -57,7 +57,7 @@ QtObject {
                 if (!t.sticky)
                     continue
                 hold.unshift({ text: t.text, kind: t.kind, iconText: t.iconText, iconName: t.iconName,
-                               detail: t.detail, footer: t.footer, footerButton: t.footerButton,
+                               detail: t.detail, footer: t.footer, footerAction: t.footerAction,
                                footerIcon: t.footerIcon, sticky: true, key: t.key, urgency: t.urgency })
                 model.remove(i)
             }
@@ -95,7 +95,7 @@ QtObject {
             if (eligible(t))
                 continue
             back.unshift({ text: t.text, kind: t.kind, iconText: t.iconText, iconName: t.iconName,
-                           detail: t.detail, footer: t.footer, footerButton: t.footerButton,
+                           detail: t.detail, footer: t.footer, footerAction: t.footerAction,
                            footerIcon: t.footerIcon, sticky: t.sticky, key: t.key, urgency: t.urgency })
             model.remove(i)
         }
@@ -165,15 +165,15 @@ QtObject {
         keep("", text, k, iconName, detail, o)
         const link = linkFooter(o.actions)
         enqueue({ text: text, kind: k, iconText: iconText ?? "", iconName: iconName ?? "",
-                  detail: detail ?? "", footer: link, footerButton: "", footerIcon: link !== "" ? "notifications" : "",
+                  detail: detail ?? "", footer: link, footerAction: "", footerIcon: link !== "" ? "notifications" : "",
                   sticky: false, key: "", urgency: o.urgency ?? "normal" })
     }
 
     // A toast that does not dismiss itself; it stays until remove(key). One per key: showing
     // the same key again replaces the earlier one (its item in the centre too). `footer` is an
-    // instruction line under the text; `footerButton` ("A", "B", ...) draws that button's glyph before
+    // instruction line under the text; `footerAction` (an action: "accept", "back", ...) draws its glyph before
     // it. Without a footer of its own, an item with actions gets the link footer.
-    function showSticky(key, text, kind, iconText, detail, footer, footerButton, options) {
+    function showSticky(key, text, kind, iconText, detail, footer, footerAction, options) {
         dropToast(key)
         const k = normalKind(kind)
         const o = options ?? {}
@@ -181,7 +181,7 @@ QtObject {
         const own = footer ?? ""
         const link = own === "" ? linkFooter(o.actions) : ""
         enqueue({ text: text, kind: k, iconText: iconText ?? "", iconName: "",
-                  detail: detail ?? "", footer: link !== "" ? link : own, footerButton: link !== "" ? "" : (footerButton ?? ""),
+                  detail: detail ?? "", footer: link !== "" ? link : own, footerAction: link !== "" ? "" : (footerAction ?? ""),
                   footerIcon: link !== "" ? "notifications" : "", sticky: true, key: key, urgency: o.urgency ?? "normal" })
     }
 
@@ -227,7 +227,7 @@ QtObject {
             pending = pending.slice(0, at).concat(pending.slice(at + 1))
             model.append({ toastId: nextId++, text: next.text, kind: next.kind, iconText: next.iconText,
                            iconName: next.iconName, detail: next.detail, footer: next.footer,
-                           footerButton: next.footerButton, footerIcon: next.footerIcon, sticky: next.sticky,
+                           footerAction: next.footerAction, footerIcon: next.footerIcon, sticky: next.sticky,
                            key: next.key, urgency: next.urgency })
             shown += 1
             if (!NotificationCentre.sounds)
@@ -248,7 +248,7 @@ QtObject {
             const actions = item.actions ?? []
             const link = notifications.linkFooter(actions)
             notifications.enqueue({ text: item.title, kind: notifications.normalKind(item.kind), iconText: "",
-                                    iconName: item.icon ?? "", detail: item.body ?? "", footer: link, footerButton: "",
+                                    iconName: item.icon ?? "", detail: item.body ?? "", footer: link, footerAction: "",
                                     footerIcon: link !== "" ? "notifications" : "", sticky: false, key: "",
                                     urgency: item.urgency ?? "normal" })
         }

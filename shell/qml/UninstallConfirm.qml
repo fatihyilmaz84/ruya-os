@@ -31,8 +31,8 @@ FocusScope {
     property bool pendingWipe: false
 
     // What the hint bar says while this is open (Shell.modalHintsOf).
-    readonly property var modalHints: step === "pin" ? [{ button: "B", text: qsTr("Cancel") }]
-                                                     : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Cancel") }]
+    readonly property var modalHints: step === "pin" ? [{ action: "back", text: qsTr("Cancel") }]
+                                                     : [{ action: "accept", text: qsTr("Select") }, { action: "back", text: qsTr("Cancel") }]
 
     signal started(string appId, bool deleteData, var context)
     signal closed()

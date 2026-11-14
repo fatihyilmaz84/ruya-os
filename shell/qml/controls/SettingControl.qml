@@ -20,10 +20,12 @@ FocusScope {
     readonly property string shownIconName: iconName !== "" ? iconName : defaultIconName
     readonly property bool hasIcon: shownIconName !== "" && !hasSwatch
     // Optional controller button in the icon slot (RUY-465, 04 §5): a `ButtonGlyph` at `glyphSize`
-    // (the size of `iconM`) for a row about one button (Remap buttons). The button's name is the
-    // label, so the glyph is decorative too. Not together with a swatch or an icon.
-    property string glyph
-    readonly property bool hasGlyph: glyph !== "" && !hasSwatch && !hasIcon
+    // (the size of `iconM`) for a row about one button (Remap buttons): the glyph of that button
+    // position on a pad of `glyphFamily` (RUY-41). The button's name is the label, so the glyph is
+    // decorative too. Not together with a swatch or an icon.
+    property string glyphPosition
+    property string glyphFamily
+    readonly property bool hasGlyph: glyphPosition !== "" && !hasSwatch && !hasIcon
 
     // The row is there but cannot be used now (an audio output that is not connected, T-348): its label
     // and icon are drawn at Theme.disabledOpacity (a value text, e.g. the reason, stays whole). It still takes
@@ -70,20 +72,20 @@ FocusScope {
     // { button, text }. `hintKind` picks the default; a row names its own verb with `hints:`.
     property string hintKind: "item"
     property var hints: {
-        const back = { button: "B", text: qsTr("Back") }
+        const back = { action: "back", text: qsTr("Back") }
         switch (hintKind) {
         case "info":
             return [back]
         case "page":
-            return [{ button: "A", text: qsTr("Open") }, back]
+            return [{ action: "accept", text: qsTr("Open") }, back]
         case "toggle":
-            return [{ button: "A", text: qsTr("Toggle") }, back]
+            return [{ action: "accept", text: qsTr("Toggle") }, back]
         case "choice":
-            return [{ button: "Left/Right", text: qsTr("Change") }, { button: "A", text: qsTr("Next") }, back]
+            return [{ actions: ["left", "right"], text: qsTr("Change") }, { action: "accept", text: qsTr("Next") }, back]
         case "slider":
-            return [{ button: "Left/Right", text: qsTr("Adjust") }, back]
+            return [{ actions: ["left", "right"], text: qsTr("Adjust") }, back]
         default:
-            return [{ button: "A", text: qsTr("Select") }, back]
+            return [{ action: "accept", text: qsTr("Select") }, back]
         }
     }
 
@@ -182,7 +184,8 @@ FocusScope {
         visible: control.hasGlyph
         anchors { left: parent.left; leftMargin: Theme.spaceL * control.u; verticalCenter: parent.verticalCenter }
         u: control.u
-        button: control.glyph
+        position: control.glyphPosition
+        family: control.glyphFamily
         opacity: control.dimmed ? Theme.disabledOpacity : 1
         Accessible.ignored: true
     }

@@ -442,30 +442,30 @@ Item {
     // Left/Right is named where it changes a value.
     readonly property var hints: {
         const key = currentKey
-        const back = { button: "B", text: powerMode || panelId !== "" ? qsTr("Back") : (hasApp ? qsTr("Resume") : qsTr("Close")) }
+        const back = { action: "back", text: powerMode || panelId !== "" ? qsTr("Back") : (hasApp ? qsTr("Resume") : qsTr("Close")) }
         if (powerMode)
-            return [{ button: "A", text: qsTr("Select") }, back]
+            return [{ action: "accept", text: qsTr("Select") }, back]
         const row = rowOf(key)
         if (row) {
             switch (row.kind) {
-            case "slider": return [...(row.activate ? [{ button: "A", text: qsTr("Mute") }] : []),
-                                   { button: "Left/Right", text: qsTr("Adjust") }, back]
+            case "slider": return [...(row.activate ? [{ action: "accept", text: qsTr("Mute") }] : []),
+                                   { actions: ["left", "right"], text: qsTr("Adjust") }, back]
             case "choice": return row.choices().length < 2 ? [back]
-                                  : [{ button: "A", text: qsTr("Next") }, { button: "Left/Right", text: qsTr("Change") }, back]
-            case "toggle": return [{ button: "A", text: qsTr("Toggle") }, back]
-            case "action": return [{ button: "A", text: qsTr("Open") }, back]
+                                  : [{ action: "accept", text: qsTr("Next") }, { actions: ["left", "right"], text: qsTr("Change") }, back]
+            case "toggle": return [{ action: "accept", text: qsTr("Toggle") }, back]
+            case "action": return [{ action: "accept", text: qsTr("Open") }, back]
             }
             return [back]               // info: nothing to press
         }
         if (key === "resume")           // B resumes too, but the verb is shown once (RUY-401)
-            return [{ button: "A", text: qsTr("Resume") }]
+            return [{ action: "accept", text: qsTr("Resume") }]
         if (key === "home" || key === "closeGame")      // the hint names the button (UX review, T-471)
-            return [{ button: "A", text: labelOf(key) }, back]
+            return [{ action: "accept", text: labelOf(key) }, back]
         if (key.startsWith("to:"))
-            return [{ button: "A", text: qsTr("Switch") }, back]
+            return [{ action: "accept", text: qsTr("Switch") }, back]
         if (key.startsWith("panel:"))
-            return [{ button: "A", text: qsTr("Open") }, back]
-        return [{ button: "A", text: qsTr("Select") }, back]
+            return [{ action: "accept", text: qsTr("Open") }, back]
+        return [{ action: "accept", text: qsTr("Select") }, back]
     }
 
     // The name of a control or a row (a delegate's label, a control's accessible name).

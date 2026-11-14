@@ -411,7 +411,7 @@ Item {
             compare(restartToast().text, "Restarting in 2 minutes")
             compare(restartToast().detail, "To finish the update")
             compare(restartToast().footer, "Press any button to wait")
-            compare(restartToast().footerButton, "A")
+            compare(restartToast().footerAction, "accept")
             compare(restartToast().kind, "warning")
             wait(600)
             verify(restartToast() !== null, "it does not dismiss itself")

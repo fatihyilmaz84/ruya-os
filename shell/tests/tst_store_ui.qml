@@ -395,11 +395,11 @@ Item {
             tryVerify(() => Store.app("org.example.Editor").updateAvailable === false)
         }
 
-        // The hints drawn by the bar, "A Select|B Cancel" (T-285).
+        // The hints drawn by the bar, "accept Select|back Cancel" (T-285).
         function barHints() {
             const bar = find("hintBar")
             const parts = []
-            for (const b of ["Left/Right", "A", "B", "Start"]) {
+            for (const b of ["left_right", "accept", "back", "options"]) {
                 const h = findChild(bar, "hint_" + b)
                 if (h)
                     parts.push(b + " " + h.verb)
@@ -423,7 +423,7 @@ Item {
             verify(find("detailUninstall").activeFocus)
             keyClick(Qt.Key_Return)
             tryVerify(() => find("uninstallCancel").activeFocus, 2000, "Cancel is the default")
-            compare(barHints(), "A Select|B Cancel", "the confirmation says what A and B do (T-285)")
+            compare(barHints(), "accept Select|back Cancel", "the confirmation says what A and B do (T-285)")
             // Cancel changes nothing.
             keyClick(Qt.Key_Return)
             tryVerify(() => find("detailUninstall").activeFocus)

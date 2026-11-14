@@ -378,7 +378,7 @@ Item {
             compare(empty.y, 36 + menu.titleHeight + 16)
             compare(sheetOf(menu).height, 36 + menu.titleHeight + 16 + empty.implicitHeight + 36)
             compare(menu.modalHints.length, 1)
-            compare(menu.modalHints[0].button, "B")
+            compare(menu.modalHints[0].action, "back")
             verify(menu.activeFocus, "the sheet holds the focus itself")
             keyClick(Qt.Key_Return)
             verify(menu.shown, "Accept does nothing on an empty menu")
@@ -389,7 +389,7 @@ Item {
         function test_rows_hint_is_select_and_close() {
             const menu = menuOf(1)
             menu.open(anchorAt(548, 300, 400, 225), "card", "T", rowsOf(2, false), "")
-            compare(menu.modalHints.map(h => h.button + " " + h.text).join("|"), "A Select|B Close")
+            compare(menu.modalHints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "accept Select|back Close")
         }
 
         function test_the_error_note_ends_the_menu() {
@@ -411,7 +411,7 @@ Item {
             verify(findChild(menu, "optionsNote").visible)
             verify(!findChild(menu, "optionsEmpty").visible)
             compare(findChild(menu, "optionsNote").y, menu.bodyTop)
-            compare(menu.modalHints.map(h => h.button).join(""), "B")
+            compare(menu.modalHints.map(h => h.action).join(""), "back")
         }
 
         function test_a_long_title_is_cut_at_the_end_on_one_line() {

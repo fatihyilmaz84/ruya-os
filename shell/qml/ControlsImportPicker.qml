@@ -25,8 +25,8 @@ FocusScope {
     property var files: []
     readonly property bool empty: listState !== "loading" && files.length === 0
 
-    readonly property var modalHints: empty ? [{ button: "B", text: qsTr("Cancel") }]
-                                            : [{ button: "A", text: qsTr("Import") }, { button: "B", text: qsTr("Cancel") }]
+    readonly property var modalHints: empty ? [{ action: "back", text: qsTr("Cancel") }]
+                                            : [{ action: "accept", text: qsTr("Import") }, { action: "back", text: qsTr("Cancel") }]
 
     signal closed()
 

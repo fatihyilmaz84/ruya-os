@@ -15,8 +15,8 @@ FocusScope {
     // What the buttons do while this pane has focus (the hint bar, T-158): a list of
     // { button, text }. By default the focused row's own (`SettingControl.hints`, by its kind, RUY-512);
     // a pane that sets `hints:` itself still wins (a pane with nothing to select sets
-    // `hints: [{ button: "B", text: qsTr("Back") }]`).
-    property var hints: focusedRow ? focusedRow.hints : [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+    // `hints: [{ action: "back", text: qsTr("Back") }]`).
+    property var hints: focusedRow ? focusedRow.hints : [{ action: "accept", text: qsTr("Select") }, { action: "back", text: qsTr("Back") }]
 
     // The row of the column that holds the active focus now, or null. Read from the window, so it
     // follows every move without a handler per row.

@@ -20,7 +20,7 @@ FocusScope {
     property bool awaitingCopy: false        // a copy asked for by this picker is running
 
     // What the buttons do while it is open (Shell.modalHintsOf, the hint bar).
-    readonly property var modalHints: [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Cancel") }]
+    readonly property var modalHints: [{ action: "accept", text: qsTr("Select") }, { action: "back", text: qsTr("Cancel") }]
 
     signal closed()
 

@@ -26,7 +26,7 @@ import RuyaShell
 // Export and import go through Input.exportProfile / importProfile (Devices1.Storage). An import (RUY-595)
 // replaces its pad's waiting change (dropped), starts only once a save in flight has ended, and holds that
 // pad's new changes in the queue until ImportFinished (an accepted import then drops them, a refused one saves them); other pads' changes are saved meanwhile.
-// Also the words the pages share: button names and glyphs by family, the short pad name.
+// Also the words the pages share: button names by family (the glyphs: Glyphs.qml), the short pad name.
 QtObject {
     id: games
 
@@ -675,16 +675,17 @@ QtObject {
         }
         return ""
     }
-    // The button's name as the family prints it (face buttons by position until RUY-41's glyphs).
+    // The button's name as the family prints it (face buttons: the glyph table's labels, RUY-41).
+    // Its glyph is ButtonGlyph { position: input; family }.
     function buttonName(input, family) {
         const ps = family === "playstation"
         const nin = family === "nintendo"
         switch (input) {
         case "none": return qsTr("Nothing")
-        case "south": return ps ? qsTr("Cross") : "A"
-        case "east": return ps ? qsTr("Circle") : "B"
-        case "west": return ps ? qsTr("Square") : "X"
-        case "north": return ps ? qsTr("Triangle") : "Y"
+        case "south":
+        case "east":
+        case "west":
+        case "north": return Glyphs.labelForPosition(input, family)
         case "l1": return ps ? "L1" : nin ? "L" : "LB"
         case "r1": return ps ? "R1" : nin ? "R" : "RB"
         case "left_trigger": return ps ? "L2" : nin ? "ZL" : "LT"
@@ -699,26 +700,5 @@ QtObject {
         case "start": return ps ? qsTr("Options") : nin ? qsTr("Plus") : qsTr("Menu")
         }
         return input
-    }
-    // The text of a ButtonGlyph for the input: at most two letters, so it fits the row's icon slot.
-    function glyphOf(input, family) {
-        const ps = family === "playstation"
-        const nin = family === "nintendo"
-        switch (input) {
-        case "none": return "–"
-        case "south": return "A"
-        case "east": return "B"
-        case "west": return "X"
-        case "north": return "Y"
-        case "l3": return ps ? "L3" : "LS"
-        case "r3": return ps ? "R3" : "RS"
-        case "dpad_up": return "↑"
-        case "dpad_down": return "↓"
-        case "dpad_left": return "←"
-        case "dpad_right": return "→"
-        case "select": return ps ? "C" : nin ? "−" : "V"
-        case "start": return ps ? "O" : nin ? "+" : "M"
-        }
-        return buttonName(input, family)
     }
 }

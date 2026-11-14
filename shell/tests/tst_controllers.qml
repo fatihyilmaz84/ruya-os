@@ -85,7 +85,7 @@ Item {
         function padRow(id) { return find("pad_" + id) }
 
         function hintVerbs() {
-            return find("page_settings").hints.map(h => h.button + " " + h.text).join("|")
+            return find("page_settings").hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|")
         }
 
         // The pane's focusable rows, top to bottom, by objectName.
@@ -128,7 +128,7 @@ Item {
             compare(find("rowPadsPair").kind, "action")
             compare(find("rowPadsRetry").kind, "action")
             compare(find("rowControlsInGamesLast").kind, "page")
-            compare(hintVerbs(), "A Open|B Back", "a pad row opens its page")
+            compare(hintVerbs(), "accept Open|back Back", "a pad row opens its page")
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "controller")
             tryVerify(() => find("rowButtonTest") !== null && find("rowButtonTest").activeFocus, 2000)
@@ -155,7 +155,7 @@ Item {
                    "Confirm in menus follows Controls in games (RUY-603)")
             keyClick(Qt.Key_Down)
             verify(find("cap_buttons").activeFocus, "Down from Confirm in menus skips the heading")
-            compare(find("page_controller").hints.map(h => h.button + " " + h.text).join("|"), "B Back")
+            compare(find("page_controller").hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "back Back")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "settings")
         }
@@ -176,17 +176,17 @@ Item {
             compare(padRow(ds).iconName, "pad_dualsense", "the record names the model: its own silhouette")
             compare(padRow(ds).Accessible.name,
                     "DualSense Wireless Controller, PlayStation controller, Bluetooth · Battery 62 %, charging")
-            compare(hintVerbs(), "A Open|B Back")
+            compare(hintVerbs(), "accept Open|back Back")
             keyClick(Qt.Key_Down)
             verify(padRow(pro).activeFocus)
             keyClick(Qt.Key_Down)
             verify(padRow(xbox).activeFocus)
             keyClick(Qt.Key_Down)
             verify(find("rowControlsInGames").activeFocus)
-            compare(hintVerbs(), "A Open|B Back", "Controls in games opens a page")
+            compare(hintVerbs(), "accept Open|back Back", "Controls in games opens a page")
             keyClick(Qt.Key_Down)
             verify(find("rowPadsPair").activeFocus)
-            compare(hintVerbs(), "A Select|B Back")
+            compare(hintVerbs(), "accept Select|back Back")
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("categoryList").activeFocus, 2000, "Back returns to the category list")
             compare(find("page_settings").current.key, "controllers", "on Controllers")
@@ -323,7 +323,7 @@ Item {
         function test_the_controller_page_lists_what_the_pad_can_do() {
             openController(ds)
             compare(find("page_controller").title, "DualSense Wireless Controller")
-            compare(find("page_controller").hints.map(h => h.button + " " + h.text).join("|"), "A Open|B Back")
+            compare(find("page_controller").hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "accept Open|back Back")
             tryVerify(() => find("cap_buttons") !== null, 2000, "the capabilities arrived")
             compare(find("cap_buttons").value, "Works")
             compare(find("cap_analog_triggers").value, "Works")
@@ -338,13 +338,13 @@ Item {
             verify(find("capsHeading").visible)
             keyClick(Qt.Key_Down)
             verify(findChild(find("page_controller"), "rowControlsInGames").activeFocus, "Controls in games after Button test (RUY-465)")
-            compare(find("page_controller").hints.map(h => h.button + " " + h.text).join("|"), "A Open|B Back")
+            compare(find("page_controller").hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "accept Open|back Back")
             keyClick(Qt.Key_Down)
             verify(findChild(find("page_controller"), "rowConfirmButton").activeFocus, "Confirm in menus after it (RUY-603)")
-            compare(find("page_controller").hints.map(h => h.button + " " + h.text).join("|"), "Left/Right Change|A Next|B Back")
+            compare(find("page_controller").hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "left_right Change|accept Next|back Back")
             keyClick(Qt.Key_Down)
             verify(find("cap_buttons").activeFocus, "the capability rows take the focus, for scrolling")
-            compare(find("page_controller").hints.map(h => h.button + " " + h.text).join("|"), "B Back")
+            compare(find("page_controller").hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "back Back")
             keyClick(Qt.Key_Return)                      // read-only: nothing happens
             compare(tc.shell.currentPage, "controller")
             verify(find("cap_buttons").activeFocus)
@@ -448,7 +448,8 @@ Item {
             openTest(ds)
             keyClick(Qt.Key_Escape)
             compare(tc.shell.currentPage, "buttonTest", "one Back press does not leave")
-            compare(find("testMessage").text, "Press B again to leave.")
+            compare(find("testMessage").text, "Press Circle again to leave.", "the back button of this PlayStation pad (RUY-41)")
+            compare(find("testMessageGlyph").shape, "circle")
             verify(find("buttonTestKeys").activeFocus)
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "controller")
@@ -567,7 +568,7 @@ Item {
             const row = openConfirm(ds)
             compare(row.label, "Confirm in menus")
             compare(row.currentLabel, "As on the controller")
-            compare(find("page_controller").hints.map(h => h.button + " " + h.text).join("|"), "Left/Right Change|A Next|B Back")
+            compare(find("page_controller").hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "left_right Change|accept Next|back Back")
             Input.mockClearProfileCalls()
             keyClick(Qt.Key_Right)
             compare(row.currentLabel, "Bottom")
@@ -600,35 +601,39 @@ Item {
             closeController(ds)
             row = reopenConfirm(xbox)
             compare(row.currentLabel, "As on the controller", "another pad: its own choice")
-            compare(pageFind("confirmNoteAccept").button, "A")
+            compare(pageFind("confirmNoteAccept").shown, "A")
             keyClick(Qt.Key_Right)                       // Bottom
             tryVerify(() => Input.mockConfirmButton("p2", xbox) === "south", 2000)
             compare(Input.mockConfirmButton("p2", ds), "east", "the first pad keeps its choice")
             closeController(xbox)
             row = reopenConfirm(ds)
             compare(row.currentLabel, "Right", "the first pad's page shows its own")
-            compare(pageFind("confirmNoteAccept").button, "B", "Circle (east) confirms on it")
-            compare(pageFind("confirmNoteBack").button, "A")
+            compare(pageFind("confirmNoteAccept").shape, "circle", "Circle (east) confirms on it")
+            compare(pageFind("confirmNoteBack").shape, "cross")
         }
 
         function test_the_note_names_the_buttons_of_this_pad() {
             let row = openConfirm(pro)
-            compare(pageFind("confirmNoteAccept").button, "B", "A on a Pro Controller is the right button")
-            compare(pageFind("confirmNoteBack").button, "A")
+            // RUY-41: the pad's printed letters; A on a Pro Controller is the right button (east).
+            compare(pageFind("confirmNoteAccept").shown, "A", "A on a Pro Controller is the right button")
+            compare(pageFind("confirmNoteBack").shown, "B")
             compare(row.Accessible.name.indexOf("Confirm in menus"), 0)
-            verify(row.Accessible.name.endsWith("On this controller: B confirms, A goes back."), row.Accessible.name)
-            keyClick(Qt.Key_Right)                       // Bottom
-            compare(pageFind("confirmNoteAccept").button, "A")
-            compare(pageFind("confirmNoteBack").button, "B")
+            verify(row.Accessible.name.endsWith("On this controller: A confirms, B goes back."), row.Accessible.name)
+            keyClick(Qt.Key_Right)                       // Bottom: the bottom button is B on a Nintendo pad
+            compare(pageFind("confirmNoteAccept").shown, "B")
+            compare(pageFind("confirmNoteBack").shown, "A")
             keyClick(Qt.Key_Right)                       // Right
-            compare(pageFind("confirmNoteAccept").button, "B")
+            compare(pageFind("confirmNoteAccept").shown, "A")
             Input.mockActiveInput(ds, "playstation")     // another pad pressing does not change this page's note
             tryCompare(Input, "activeFamily", "playstation")
-            compare(pageFind("confirmNoteAccept").button, "B")
+            compare(pageFind("confirmNoteAccept").shown, "A")
+            compare(pageFind("confirmNoteAccept").kind, "text", "still the Nintendo letter, not a PlayStation shape")
+            verify(row.Accessible.name.endsWith("On this controller: A confirms, B goes back."), "the sentence too: " + row.Accessible.name)
             closeController(pro)
-            reopenConfirm(ds)
-            compare(pageFind("confirmNoteAccept").button, "A", "a PlayStation pad as on the controller: Cross")
-            compare(pageFind("confirmNoteBack").button, "B")
+            const dsRow = reopenConfirm(ds)
+            compare(pageFind("confirmNoteAccept").shape, "cross", "a PlayStation pad as on the controller: Cross")
+            compare(pageFind("confirmNoteBack").shape, "circle")
+            verify(dsRow.Accessible.name.endsWith("On this controller: Cross confirms, Circle goes back."), dsRow.Accessible.name)
         }
 
         function test_a_refused_change_puts_the_stored_value_back() {
@@ -771,7 +776,7 @@ Item {
             settle()
             keyClick(Qt.Key_Escape)                      // one Back press: the message asks for the second
             wait(300)
-            verify(find("testMessage").text.startsWith(lang === "en" ? "Press B again" : "Çıkmak için B"))
+            verify(find("testMessage").text.startsWith(lang === "en" ? "Press Circle again" : "Çıkmak için Daire"))
             grabImage(tc.shell).save(dir + "27-button-test-pressed-" + lang + ".png")
             tryVerify(() => !find("page_buttonTest").awaitingSecondBack, 3000)
             keyClick(Qt.Key_Escape)                      // the wait for the second press is over: two presses

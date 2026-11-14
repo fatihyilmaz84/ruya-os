@@ -14,8 +14,8 @@ import RuyaShell
 // left, D-pad lower left, right stick lower right of centre), "nintendo" (as xbox, its own words) and
 // "nintendo-wiiu" (D-pad and face buttons up, both sticks low). Every stick, D-pad key, face button,
 // pill and the touchpad lies inside the body (`bodyContains`, tested); only the shoulders and the
-// triggers sit on its edge, as on a real pad. Face buttons carry the position letters (Y B A X) until
-// RUY-41's glyphs; paddles and misc1 are not drawn (the raw panel shows them). Decorative: the page
+// triggers sit on its edge, as on a real pad. Face buttons carry the family's glyphs (RUY-41,
+// Glyphs.qml); paddles and misc1 are not drawn (the raw panel shows them). Decorative: the page
 // says in words what was pressed.
 Item {
     id: diagram
@@ -89,17 +89,34 @@ Item {
         property string input
         property string glyph
         property string look: "idle"
+        // A face button: the family's printed glyph of its position (RUY-41), not `glyph`.
+        property string position: ""
+        property string family: ""
+        readonly property var entry: position !== "" ? Glyphs.glyphForPosition(position, family) : null
+        readonly property string shown: entry ? (entry.kind === "text" ? entry.text : "") : glyph
         objectName: "padCtl_" + input
         color: look === "held" ? Theme.primaryFill : look === "tried" ? Theme.selectedFill : Theme.glass
         border.width: (look === "idle" ? 1 : look === "tried" ? 2 : 0) * u
         border.color: look === "tried" ? Theme.glassRimLit : Theme.glassBorder
         Text {
             anchors.centerIn: parent
-            visible: key.glyph !== ""
-            text: key.glyph
+            visible: key.shown !== ""
+            text: key.shown
             color: key.look === "held" ? Theme.onPrimary : Theme.text
-            font.pixelSize: (key.width >= 72 * key.u && key.glyph.length <= 3 ? Theme.typeBody : Theme.typeMicro) * key.u
+            font.pixelSize: (key.width >= 72 * key.u && key.shown.length <= 3 ? Theme.typeBody : Theme.typeMicro) * key.u
             font.weight: Theme.weightDemiBold
+        }
+        // The PlayStation shapes and the generic dots, drawn by ButtonGlyph at the key's size.
+        ButtonGlyph {
+            objectName: "padGlyph_" + key.input
+            visible: key.entry !== null && key.entry.kind !== "text"
+            anchors.centerIn: parent
+            u: key.height / Theme.glyphSize
+            position: key.position
+            family: key.family
+            color: "transparent"
+            ink: key.look === "held" ? Theme.onPrimary : Theme.text
+            Accessible.ignored: true
         }
     }
 
@@ -157,9 +174,11 @@ Item {
         }
     }
 
-    // Shoulders, select / start, Guide, the D-pad and the face buttons (by position, with the
-    // position letters), in box units; places and words per layout above. The home glyph comes with
-    // RUY-41's icon subset; until then the word. shape: "pill" | "key" (radiusS) | "round".
+    // Shoulders, select / start, Guide, the D-pad and the face buttons (by position, with the family's
+    // glyph of the position from Glyphs.qml: Y B A X, X A B Y on a Nintendo pad, our own PlayStation
+    // shapes, the generic dots), in box units; places and words per layout above. The home glyph
+    // waits for the icon subset (RUY-41 could not cut it); until then the word. shape: "pill" | "key"
+    // (radiusS) | "round".
     readonly property real dpadX: spot.dpad[0]
     readonly property real dpadY: spot.dpad[1]
     readonly property var keys: [
@@ -172,10 +191,10 @@ Item {
         { input: "dpad_down", x: dpadX + 62, y: dpadY + 124, w: 56, h: 56, shape: "key", glyph: "" },
         { input: "dpad_left", x: dpadX, y: dpadY + 62, w: 56, h: 56, shape: "key", glyph: "" },
         { input: "dpad_right", x: dpadX + 124, y: dpadY + 62, w: 56, h: 56, shape: "key", glyph: "" },
-        { input: "north", x: 764, y: 170, w: 72, h: 72, shape: "round", glyph: "Y" },
-        { input: "east", x: 838, y: 244, w: 72, h: 72, shape: "round", glyph: "B" },
-        { input: "south", x: 764, y: 318, w: 72, h: 72, shape: "round", glyph: "A" },
-        { input: "west", x: 690, y: 244, w: 72, h: 72, shape: "round", glyph: "X" }
+        { input: "north", x: 764, y: 170, w: 72, h: 72, shape: "round", glyph: "", position: "north" },
+        { input: "east", x: 838, y: 244, w: 72, h: 72, shape: "round", glyph: "", position: "east" },
+        { input: "south", x: 764, y: 318, w: 72, h: 72, shape: "round", glyph: "", position: "south" },
+        { input: "west", x: 690, y: 244, w: 72, h: 72, shape: "round", glyph: "", position: "west" }
     ]
 
     // Touchpad (PlayStation only).
@@ -206,6 +225,8 @@ Item {
             look: diagram.look(modelData.input)
             input: modelData.input
             glyph: modelData.glyph
+            position: modelData.position ?? ""
+            family: diagram.family
             x: modelData.x * diagram.u
             y: modelData.y * diagram.u
             width: modelData.w * diagram.u

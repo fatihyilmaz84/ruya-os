@@ -103,7 +103,7 @@ Item {
             return find("centreList").activeFocus && s.stop === "row" && s.focusKey === "n:" + idOf(title)
         }
         function hintText() {
-            return find("hintBar").hints.map(h => (h.button ?? h.buttons.join("+")) + " " + h.text).join(", ")
+            return find("hintBar").hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join(", ")
         }
 
         // Posts through the one entry point, with the mock's clock at `at`.
@@ -279,7 +279,7 @@ Item {
             const row = findChild(rowOf(idOf("Drive inserted")), "notificationRow")
             verify(row.expanded, "the focused row shows its actions")
             compare(findChild(row, "notificationAction_0").color, Theme.primaryFill)
-            compare(hintText(), "A Select, Start Clear, B Close")
+            compare(hintText(), "accept Select, options Clear, back Close")
             const invoked = NotificationCentre.mockCalls("invoke")
             keyClick(Qt.Key_Return)
             tryVerify(() => !sheet().shown, 2000, "an action that leaves closes the centre")
@@ -307,7 +307,7 @@ Item {
             tryVerify(() => !sheet().shown, 2000, "the centre closed")
             tryVerify(() => findChild(confirm, "powerCancel").activeFocus, 2000, "Cancel has the focus")
             compare(Power.actionCount, restarts, "nothing restarted yet")
-            compare(hintText(), "A Select, B Cancel")
+            compare(hintText(), "accept Select, back Cancel")
             keyClick(Qt.Key_Escape)
             tryVerify(() => !confirm.shown)
             tryVerify(() => find("notificationBell").activeFocus, 2000, "Cancel: the focus is back on the bell")
@@ -396,7 +396,7 @@ Item {
             clearToasts()
             openCentre()
             tryVerify(() => rowFocused("Match found"))
-            compare(hintText(), "A Select, Left/Right Choose, Start Clear, B Close")
+            compare(hintText(), "accept Select, left_right Choose, options Clear, back Close")
             const row = findChild(rowOf(idOf("Match found")), "notificationRow")
             compare(row.pick, 0)
             keyClick(Qt.Key_Right)
@@ -444,7 +444,7 @@ Item {
             tryVerify(() => find("centreQuiet").activeFocus, 2000, "Up from the first row: Quiet mode")
             keyClick(Qt.Key_Up)
             tryVerify(() => find("centreClearAll").activeFocus, 2000, "then Clear all")
-            compare(hintText(), "A Clear all, B Close")
+            compare(hintText(), "accept Clear all, back Close")
             keyClick(Qt.Key_Return)
             tryVerify(() => NotificationCentre.count === 1, 2000, "Clear all clears")
             compare(NotificationCentre.items[0].title, "The console is too hot", "the pinned item stays")
@@ -528,7 +528,7 @@ Item {
         function test_quiet_mode() {
             openCentre()
             tryVerify(() => find("centreQuiet").activeFocus, 2000, "nothing kept: the focus is on Quiet mode")
-            compare(hintText(), "A Toggle, B Close")
+            compare(hintText(), "accept Toggle, back Close")
             keyClick(Qt.Key_Return)
             tryCompare(NotificationCentre, "quiet", true, 2000, "A on Quiet mode turns it on")
             verify(find("centreQuiet").checked)

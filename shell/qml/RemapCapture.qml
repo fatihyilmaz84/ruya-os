@@ -39,7 +39,7 @@ FocusScope {
     // The time left, 1 -> 0 over timeoutMs (the bar).
     property real remaining: 1
 
-    readonly property var modalHints: [{ button: "Esc", text: qsTr("Cancel") }]
+    readonly property var modalHints: [{ action: "back", family: "keyboard", text: qsTr("Cancel") }]
 
     signal capturedInput(string input)
     signal cancelled()
@@ -207,7 +207,8 @@ FocusScope {
                 objectName: "remapCaptureSource"
                 anchors.verticalCenter: parent.verticalCenter
                 u: 2 * dialog.u                    // 80 u: glyphSize × 2, this dialog's literal (04 §5)
-                button: GameControls.glyphOf(dialog.source, dialog.family)
+                position: dialog.source
+                family: dialog.family
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter

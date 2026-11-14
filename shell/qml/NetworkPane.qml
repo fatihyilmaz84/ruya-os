@@ -148,7 +148,7 @@ SettingsPane {
             objectName: "wifi_" + netId
             kind: "item"
             current: active
-            hints: [{ button: "A", text: qsTr("Connect") }, { button: "B", text: qsTr("Back") }]
+            hints: [{ action: "accept", text: qsTr("Connect") }, { action: "back", text: qsTr("Back") }]
             u: pane.u
             label: ssid
             value: pane.wifiValue(active, known, security, signal)

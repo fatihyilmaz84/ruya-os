@@ -78,7 +78,7 @@ Page {
 
     // The focused pane says which hints it shows (SettingsPane.hints); the category list and a
     // category without a pane yet (A does nothing there) have their own.
-    readonly property var listHints: [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Back") }]
+    readonly property var listHints: [{ action: "accept", text: qsTr("Select") }, { action: "back", text: qsTr("Back") }]
     hints: currentPane === null ? backOnlyHints
          : currentPane.activeFocus ? currentPane.hints
          : listHints

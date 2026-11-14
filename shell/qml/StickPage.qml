@@ -16,6 +16,9 @@ Page {
     readonly property string padId: String((params ?? {}).id ?? "")
     readonly property string side: (params ?? {}).side === "right" ? "right" : "left"
     readonly property var pad: GameControls.padFor(padId)
+    // The hint bar draws this pad's buttons (RUY-41).
+    glyphFamily: pad ? pad.family : ""
+    glyphConfirmMode: String(Input.confirmButtons[padId] ?? "family")
     readonly property var settings: GameControls.stick(side)
     // The left stick's arrow keys are held while its test runs (06 §11.1), so trying it does not move
     // the focus; the right stick sends none.

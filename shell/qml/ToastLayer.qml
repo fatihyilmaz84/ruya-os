@@ -100,7 +100,7 @@ Item {
             required property string iconName
             required property string detail
             required property string footer
-            required property string footerButton
+            required property string footerAction
             required property string footerIcon
             required property bool sticky
 
@@ -229,14 +229,14 @@ Item {
                 spacing: Theme.spaceS * layer.u
                 ButtonGlyph {
                     id: footerGlyph
-                    visible: toast.footerButton !== ""
-                    button: toast.footerButton
+                    visible: toast.footerAction !== ""
+                    action: toast.footerAction
                     u: layer.u
                 }
                 Icon {
                     id: footerBell
                     objectName: "toastFooterIcon"
-                    visible: toast.footerIcon !== "" && toast.footerButton === ""
+                    visible: toast.footerIcon !== "" && toast.footerAction === ""
                     anchors.verticalCenter: parent.verticalCenter
                     name: toast.footerIcon
                     size: 32

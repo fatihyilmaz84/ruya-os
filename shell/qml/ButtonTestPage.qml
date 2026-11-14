@@ -21,10 +21,13 @@ Page {
     readonly property bool testRoute: Input.route === "shell" || Input.route === "overlay"
     readonly property var current: ControllerPads.controllers().find(p => p.id === padId) ?? null
     property var pad: ({ id: padId, name: "", family: "", layout: "", connection: "", percent: -1, state: "", slot: 0 })
+    // The hint bar draws this pad's buttons (RUY-41).
+    glyphFamily: pad.family ?? ""
+    glyphConfirmMode: String(Input.confirmButtons[padId] ?? "family")
     onCurrentChanged: if (current) pad = current
 
     title: qsTr("Button test")
-    hints: [{ button: "B", text: qsTr("Press twice or hold to leave") }]
+    hints: [{ action: "back", text: qsTr("Press twice or hold to leave") }]
 
     // What the stream said: input -> held now / pressed once; axis -> value; the newest input.
     property var held: ({})
@@ -356,7 +359,9 @@ Page {
         readonly property var parts: (page.awaitingSecondBack
                                       ? qsTr("Press %1 again to leave.")
                                       : qsTr("Press any button to see it light up. Press %1 twice or hold it to leave.")).split("%1")
-        readonly property string text: parts.join("B")
+        // The back button of this pad after its own Confirm choice (RUY-41), as the glyph and in words.
+        readonly property string confirmMode: String(Input.confirmButtons[page.padId] ?? "family")
+        readonly property string text: parts.join(Glyphs.glyphFor("back", page.pad.family, confirmMode).name)
         x: 34 * page.u
         y: 628 * page.u
         spacing: Theme.spaceXs * page.u
@@ -367,9 +372,12 @@ Page {
             font.pixelSize: Theme.typeBody * page.u
         }
         ButtonGlyph {
+            objectName: "testMessageGlyph"
             anchors.verticalCenter: parent.verticalCenter
             u: page.u
-            button: "B"
+            action: "back"
+            family: page.pad.family
+            confirmMode: message.confirmMode
         }
         Text {
             anchors.verticalCenter: parent.verticalCenter

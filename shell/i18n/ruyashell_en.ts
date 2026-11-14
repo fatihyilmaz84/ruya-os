@@ -891,11 +891,6 @@ This can&apos;t be undone.</translation>
 </context>
 <context>
     <name>ButtonGlyph</name>
-    <message>
-        <location filename="../qml/ButtonGlyph.qml" line="+22"/>
-        <source>Left/Right</source>
-        <translation>Left/Right</translation>
-    </message>
 </context>
 <context>
     <name>ButtonTest</name>
@@ -1466,7 +1461,7 @@ This can&apos;t be undone.</translation>
         <translation>%1: %2.</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+16"/>
         <source>On this controller: %1 confirms, %2 goes back.</source>
         <translation>On this controller: %1 confirms, %2 goes back.</translation>
     </message>
@@ -1476,12 +1471,12 @@ This can&apos;t be undone.</translation>
         <translation>On this controller:</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+14"/>
         <source>confirms,</source>
         <translation>confirms,</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+14"/>
         <source>goes back.</source>
         <translation>goes back.</translation>
     </message>
@@ -2168,32 +2163,12 @@ This can&apos;t be undone.</translation>
         <translation>Nintendo controllers</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
         <source>Nothing</source>
         <translation>Nothing</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Cross</source>
-        <translation>Cross</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Circle</source>
-        <translation>Circle</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Square</source>
-        <translation>Square</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Triangle</source>
-        <translation>Triangle</translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location line="+9"/>
         <source>Left stick click</source>
         <translation>Left stick click</translation>
     </message>
@@ -2314,6 +2289,154 @@ This can&apos;t be undone.</translation>
         <location line="+11"/>
         <source>Open the Store</source>
         <translation>Open the Store</translation>
+    </message>
+</context>
+<context>
+    <name>Glyphs</name>
+    <message>
+        <location filename="../qml/Glyphs.qml" line="+59"/>
+        <source>Nothing</source>
+        <translation>Nothing</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Left stick click</source>
+        <translation>Left stick click</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Right stick click</source>
+        <translation>Right stick click</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+71"/>
+        <source>Up</source>
+        <translation>Up</translation>
+    </message>
+    <message>
+        <location line="-70"/>
+        <location line="+71"/>
+        <source>Down</source>
+        <translation>Down</translation>
+    </message>
+    <message>
+        <location line="-70"/>
+        <location line="+71"/>
+        <source>Left</source>
+        <translation>Left</translation>
+    </message>
+    <message>
+        <location line="-70"/>
+        <location line="+71"/>
+        <source>Right</source>
+        <translation>Right</translation>
+    </message>
+    <message>
+        <location line="-69"/>
+        <location line="+38"/>
+        <source>Create</source>
+        <translation>Create</translation>
+    </message>
+    <message>
+        <location line="-38"/>
+        <location line="+38"/>
+        <source>Minus</source>
+        <translation>Minus</translation>
+    </message>
+    <message>
+        <location line="-38"/>
+        <location line="+38"/>
+        <source>View</source>
+        <translation>View</translation>
+    </message>
+    <message>
+        <location line="-37"/>
+        <location line="+36"/>
+        <source>Options</source>
+        <translation>Options</translation>
+    </message>
+    <message>
+        <location line="-36"/>
+        <location line="+36"/>
+        <source>Plus</source>
+        <translation>Plus</translation>
+    </message>
+    <message>
+        <location line="-36"/>
+        <location line="+36"/>
+        <source>Menu</source>
+        <translation>Menu</translation>
+    </message>
+    <message>
+        <location line="-25"/>
+        <source>Cross</source>
+        <translation>Cross</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Bottom button</source>
+        <translation>Bottom button</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Circle</source>
+        <translation>Circle</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Right button</source>
+        <translation>Right button</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Square</source>
+        <translation>Square</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Left button</source>
+        <translation>Left button</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Triangle</source>
+        <translation>Triangle</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Top button</source>
+        <translation>Top button</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Home</source>
+        <translation>Home</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Guide</source>
+        <translation>Guide</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>D-pad</source>
+        <translation>D-pad</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Page Up</source>
+        <translation>Page Up</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Page Down</source>
+        <translation>Page Down</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Arrows</source>
+        <translation>Arrows</translation>
     </message>
 </context>
 <context>
@@ -2924,7 +3047,7 @@ This can&apos;t be undone.</translation>
         <translation>Home</translation>
     </message>
     <message>
-        <location line="+150"/>
+        <location line="+169"/>
         <source>Touchpad</source>
         <translation>Touchpad</translation>
     </message>
@@ -3765,7 +3888,7 @@ This can&apos;t be undone.</translation>
         <translation>Press the new button for %1</translation>
     </message>
     <message>
-        <location line="+58"/>
+        <location line="+59"/>
         <source>Any button on the %1. Nothing for 5 seconds cancels.</source>
         <translation>Any button on the %1. Nothing for 5 seconds cancels.</translation>
     </message>
@@ -3837,7 +3960,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>SettingControl</name>
     <message>
-        <location filename="../qml/controls/SettingControl.qml" line="+70"/>
+        <location filename="../qml/controls/SettingControl.qml" line="+72"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>

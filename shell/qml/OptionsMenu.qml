@@ -43,8 +43,8 @@ FocusScope {
 
     // The hint bar (Shell.modalHintsOf): Select only when there is a row to select.
     readonly property var modalHints: rows.length > 0
-        ? [{ button: "A", text: qsTr("Select") }, { button: "B", text: qsTr("Close") }]
-        : [{ button: "B", text: qsTr("Close") }]
+        ? [{ action: "accept", text: qsTr("Select") }, { action: "back", text: qsTr("Close") }]
+        : [{ action: "back", text: qsTr("Close") }]
 
     signal activated(string id)
     signal closed()

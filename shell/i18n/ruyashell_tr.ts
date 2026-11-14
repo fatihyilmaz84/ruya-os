@@ -887,11 +887,6 @@ Bu geri alınamaz.</translation>
 </context>
 <context>
     <name>ButtonGlyph</name>
-    <message>
-        <location filename="../qml/ButtonGlyph.qml" line="+22"/>
-        <source>Left/Right</source>
-        <translation>Sol/Sağ</translation>
-    </message>
 </context>
 <context>
     <name>ButtonTest</name>
@@ -1462,7 +1457,7 @@ Bu geri alınamaz.</translation>
         <translation>%1: %2.</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+16"/>
         <source>On this controller: %1 confirms, %2 goes back.</source>
         <translation>Bu kontrolcüde: %1 onaylar, %2 geri gider.</translation>
     </message>
@@ -1472,12 +1467,12 @@ Bu geri alınamaz.</translation>
         <translation>Bu kontrolcüde:</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+14"/>
         <source>confirms,</source>
         <translation>onaylar,</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+14"/>
         <source>goes back.</source>
         <translation>geri gider.</translation>
     </message>
@@ -2163,32 +2158,12 @@ Bu geri alınamaz.</translation>
         <translation>Nintendo kontrolcüleri</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
         <source>Nothing</source>
         <translation>Hiçbiri</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Cross</source>
-        <translation>Çarpı</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Circle</source>
-        <translation>Daire</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Square</source>
-        <translation>Kare</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Triangle</source>
-        <translation>Üçgen</translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location line="+9"/>
         <source>Left stick click</source>
         <translation>Sol çubuğa basma</translation>
     </message>
@@ -2309,6 +2284,154 @@ Bu geri alınamaz.</translation>
         <location line="+11"/>
         <source>Open the Store</source>
         <translation>Mağaza&apos;yı aç</translation>
+    </message>
+</context>
+<context>
+    <name>Glyphs</name>
+    <message>
+        <location filename="../qml/Glyphs.qml" line="+59"/>
+        <source>Nothing</source>
+        <translation>Hiçbiri</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Left stick click</source>
+        <translation>Sol çubuğa basma</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Right stick click</source>
+        <translation>Sağ çubuğa basma</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+71"/>
+        <source>Up</source>
+        <translation>Yukarı</translation>
+    </message>
+    <message>
+        <location line="-70"/>
+        <location line="+71"/>
+        <source>Down</source>
+        <translation>Aşağı</translation>
+    </message>
+    <message>
+        <location line="-70"/>
+        <location line="+71"/>
+        <source>Left</source>
+        <translation>Sol</translation>
+    </message>
+    <message>
+        <location line="-70"/>
+        <location line="+71"/>
+        <source>Right</source>
+        <translation>Sağ</translation>
+    </message>
+    <message>
+        <location line="-69"/>
+        <location line="+38"/>
+        <source>Create</source>
+        <translation>Create</translation>
+    </message>
+    <message>
+        <location line="-38"/>
+        <location line="+38"/>
+        <source>Minus</source>
+        <translation>Eksi</translation>
+    </message>
+    <message>
+        <location line="-38"/>
+        <location line="+38"/>
+        <source>View</source>
+        <translation>View</translation>
+    </message>
+    <message>
+        <location line="-37"/>
+        <location line="+36"/>
+        <source>Options</source>
+        <translation>Options</translation>
+    </message>
+    <message>
+        <location line="-36"/>
+        <location line="+36"/>
+        <source>Plus</source>
+        <translation>Artı</translation>
+    </message>
+    <message>
+        <location line="-36"/>
+        <location line="+36"/>
+        <source>Menu</source>
+        <translation>Menu</translation>
+    </message>
+    <message>
+        <location line="-25"/>
+        <source>Cross</source>
+        <translation>Çarpı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Bottom button</source>
+        <translation>Alttaki düğme</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Circle</source>
+        <translation>Daire</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Right button</source>
+        <translation>Sağdaki düğme</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Square</source>
+        <translation>Kare</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Left button</source>
+        <translation>Soldaki düğme</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Triangle</source>
+        <translation>Üçgen</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Top button</source>
+        <translation>Üstteki düğme</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Home</source>
+        <translation>Ana ekran</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Guide</source>
+        <translation>Rehber</translation>
+    </message>
+    <message>
+        <location line="+26"/>
+        <source>D-pad</source>
+        <translation>Yön tuşları</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Page Up</source>
+        <translation>Sayfa yukarı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Page Down</source>
+        <translation>Sayfa aşağı</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Arrows</source>
+        <translation>Ok tuşları</translation>
     </message>
 </context>
 <context>
@@ -2913,7 +3036,7 @@ Bu geri alınamaz.</translation>
         <translation>Ana ekran</translation>
     </message>
     <message>
-        <location line="+150"/>
+        <location line="+169"/>
         <source>Touchpad</source>
         <translation>Dokunmatik yüzey</translation>
     </message>
@@ -3749,7 +3872,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 için yeni düğmeye bas</translation>
     </message>
     <message>
-        <location line="+58"/>
+        <location line="+59"/>
         <source>Any button on the %1. Nothing for 5 seconds cancels.</source>
         <translation>%1 üzerindeki herhangi bir düğme. 5 saniye basmazsan iptal olur.</translation>
     </message>
@@ -3821,7 +3944,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SettingControl</name>
     <message>
-        <location filename="../qml/controls/SettingControl.qml" line="+70"/>
+        <location filename="../qml/controls/SettingControl.qml" line="+72"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>

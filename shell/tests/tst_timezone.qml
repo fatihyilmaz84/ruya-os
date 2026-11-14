@@ -283,7 +283,7 @@ Item {
             if (!bar.visible)
                 return ""
             const parts = []
-            for (const b of ["A", "B"]) {
+            for (const b of ["accept", "back"]) {
                 const h = findChild(bar, "hint_" + b)
                 if (h)
                     parts.push(b + " " + h.verb)
@@ -294,13 +294,13 @@ Item {
         function test_the_picker_says_what_a_and_b_do() {
             openSystemPane("p1", "1234")
             goToRow("rowTimezone")
-            compare(hintsShown(), "A Open|B Back", "the pane")
+            compare(hintsShown(), "accept Open|back Back", "the pane")
             keyClick(Qt.Key_Return)
             tryVerify(() => find("zoneRegions").activeFocus, 2000)
-            compare(hintsShown(), "A Select|B Cancel", "the picker: A chooses, B cancels")
+            compare(hintsShown(), "accept Select|back Cancel", "the picker: A chooses, B cancels")
             keyClick(Qt.Key_Escape)
             tryVerify(() => !find("zonePicker").shown, 2000)
-            compare(hintsShown(), "A Open|B Back")
+            compare(hintsShown(), "accept Open|back Back")
         }
 
         function test_the_selected_region_stays_marked_while_the_cities_have_focus() {

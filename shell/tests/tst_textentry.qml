@@ -126,30 +126,30 @@ Item {
         // T-194: the entry says what Back does now, to the hint bar (entryHints) and to a screen
         // reader (Accessible.description): delete while there is text on a controller, cancel when
         // the field is empty or after typing on a physical keyboard.
-        function shownHint() { return entry.entryHints.map(h => h.button + " " + h.text).join("|") }
+        function shownHint() { return entry.entryHints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|") }
 
         function test_back_cue() {
             openEntry("Name", "ab")
-            compare(shownHint(), "A Type|B Delete|Start Done")
+            compare(shownHint(), "accept Type|back Delete|done Done")
             compare(entry.Accessible.description, "Press Back to delete, Back on an empty field to cancel")
             keyClick(Qt.Key_Escape)
             compare(entry.text, "a")
-            compare(shownHint(), "A Type|B Delete|Start Done")
+            compare(shownHint(), "accept Type|back Delete|done Done")
             keyClick(Qt.Key_Escape)
             compare(entry.text, "")
-            compare(shownHint(), "A Type|B Cancel|Start Done", "an empty field: Back cancels")
+            compare(shownHint(), "accept Type|back Cancel|done Done", "an empty field: Back cancels")
             compare(entry.Accessible.description, "Press Back to cancel")
             pressKey("a")
-            compare(shownHint(), "A Type|B Delete|Start Done", "typing brings the delete cue back")
+            compare(shownHint(), "accept Type|back Delete|done Done", "typing brings the delete cue back")
             keyClick(Qt.Key_Backspace)
-            compare(shownHint(), "B Cancel|Start Done", "a physical key was used: no A")
+            compare(shownHint(), "back Cancel|done Done", "a physical key was used: no A")
             // After typing on a physical keyboard Esc cancels at once.
             keyClick("x")
             compare(entry.text, "x")
-            compare(shownHint(), "B Cancel|Start Done", "keyboard mode: Esc cancels even with text, Return is Done (no A)")
+            compare(shownHint(), "back Cancel|done Done", "keyboard mode: Esc cancels even with text, Return is Done (no A)")
             compare(entry.Accessible.description, "Press Back to cancel")
             keyClick(Qt.Key_Left)                      // the D-pad takes over again
-            compare(shownHint(), "A Type|B Delete|Start Done")
+            compare(shownHint(), "accept Type|back Delete|done Done")
         }
 
         // T-179: Backspace is Back on pages, but in a text field it only deletes.
