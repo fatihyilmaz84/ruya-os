@@ -444,6 +444,37 @@ out="$(rungame flatpak)"; rc=$?
 expect_contains "flatpak without an app id is a usage error" "$out" "usage: vm-gaming-check.sh flatpak <app-id>"
 [ "$rc" = 2 ] && pass "flatpak without an app id: exit 2" || fail "flatpak without an app id: exit $rc"
 
+# --- vm-session-check.sh: the EXIT trap (RUY-404) -------------------------------------------------
+# The trap logic is the block between the "restore trap" markers; a child bash runs it with fake
+# systemctl/loginctl that log their calls, sets the flags the way the Freeze part does and exits.
+trapsrc="$tmp/restore-trap.sh"
+sed -n '/^# --- restore trap begin/,/^# --- restore trap end/p' "$here/vm-session-check.sh" > "$trapsrc"
+[ -s "$trapsrc" ] && pass "vm-session-check.sh has the restore trap block" || fail "no restore trap block in vm-session-check.sh"
+mkdir -p "$tmp/sess-bin"
+for t in systemctl loginctl; do
+    printf '#!/bin/sh\necho "%s $*" >> "$SESS_LOG"\nexit 0\n' "$t" >"$tmp/sess-bin/$t"; chmod +x "$tmp/sess-bin/$t"
+done
+runtrap() { # <flag setup commands>: runs them, then `exit 1` as an aborted run; prints the stub call log
+    SESS_LOG="$tmp/sess.log"; : > "$SESS_LOG"
+    SESS_LOG="$SESS_LOG" PATH="$tmp/sess-bin:$PATH" bash -c ". '$trapsrc'; $1" >/dev/null 2>&1
+    cat "$SESS_LOG"
+}
+out="$(runtrap 'stopped_compositor=yes; enabled_linger=yes; exit 1')"
+expect_contains "abort in the Freeze part starts the compositor" "$out" "systemctl start ruya-compositor@tty1"
+expect_contains "abort in the Freeze part takes back the linger it enabled" "$out" "loginctl disable-linger ruya-shell"
+out="$(runtrap 'stopped_compositor=yes; enabled_linger=no; exit 1')"
+expect_contains "abort in the shell-restart step starts the compositor" "$out" "systemctl start ruya-compositor@tty1"
+expect_lacks "a linger that was there before is left alone" "$out" "disable-linger"
+out="$(runtrap 'stopped_compositor=yes; enabled_linger=yes; stopped_compositor=no; enabled_linger=no; exit 0')"
+[ -z "$out" ] && pass "a clean run (flags cleared) calls neither systemctl nor loginctl" || fail "a clean run called: $out"
+# RUY-404 round 2: with stdout closed (ssh with piped output that went away) the trap's echo raises
+# SIGPIPE; the restore must still happen. The child's stdout is a pipe whose reader is already gone.
+SESS_LOG="$tmp/sess.log"; : > "$SESS_LOG"
+( SESS_LOG="$SESS_LOG" PATH="$tmp/sess-bin:$PATH" bash -c ". '$trapsrc'; stopped_compositor=yes; enabled_linger=yes; echo go; exit 1" 2>/dev/null | true ) 2>/dev/null
+out="$(cat "$SESS_LOG")"
+expect_contains "closed stdout: the compositor is still started" "$out" "systemctl start ruya-compositor@tty1"
+expect_contains "closed stdout: the linger is still taken back" "$out" "loginctl disable-linger ruya-shell"
+
 echo
 if [ "$fails" = 0 ]; then echo "vm-check tests: all passed"; else echo "vm-check tests: $fails failed"; fi
 exit $(( fails > 0 ))
