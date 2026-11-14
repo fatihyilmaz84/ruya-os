@@ -149,6 +149,7 @@ The player sits about 3 m from a TV. These rules are the console's own design ru
 - **Controller conventions:** A accepts, B goes back, D-pad and left stick move, Start opens a menu. Hold Up or Down: the focus repeats after about 400 ms, then accelerates.
 - **Back from your top menu is not "quit":** there is nothing to quit to; the Guide is the way out.
 - **No pointer and no keyboard needed.** If you need text (a name), use your own on-screen keyboard: the console does not offer one to apps.
+- **Idle inhibitor (RUY-561, not yet seen on hardware):** if your game asks the compositor to keep the screen on (Wayland `idle-inhibit`, which SDL does with its screen saver off), that holds only while your game is in front: not behind Home, not under the Hub, not frozen, not while another profile is signed in. Create it once; the console takes it back by itself when you are in front again.
 - **Hide the mouse cursor** unless the mouse moved recently (the shell shows its own pointer only after movement and hides it after 3 seconds).
 
 ## Checklist

@@ -30,7 +30,8 @@
 #             +wayland:N" while it is in front), then the key client, whose window takes the front (the
 #             inhibiting app is behind it: "idle inhibit -wayland:N" must follow), then "display off"
 #             within 60 s although the inhibiting client still runs; when the key client ends, the
-#             inhibiting app is in front again and "+wayland:N" must come back.
+#             inhibiting app is in front again and "+wayland:N" must come back; then (with vm-inject-key.py
+#             next to this script) Guide opens the Hub: "-wayland:N", and Guide again: "+wayland:N".
 # Hardware (the Dell, not this script): the DualSense disconnects after the Controllers-turn-off time and
 # reconnects on a button press; a TV's re-sync time after display off is recorded by hand.
 set -u
@@ -259,6 +260,17 @@ inhibit_check() {
         back="$(date +%s)"
         pkill -f '[v]m-key-client.qml'
         wait_log "$back" "idle inhibit \+wayland:$n" 20 >/dev/null && ok "in front again: +wayland:$n" || bad "no '+wayland:$n' after the other window ended"
+        # The Hub over the app (needs vm-inject-key.py next to this script): Guide releases, Guide again takes it.
+        if [ -f "$here/vm-inject-key.py" ]; then
+            hub="$(date +%s)"
+            python3 "$here/vm-inject-key.py" guide >/dev/null 2>&1
+            wait_log "$hub" "idle inhibit -wayland:$n" 20 >/dev/null && ok "the Hub open over the app: -wayland:$n" || bad "no '-wayland:$n' with the Hub open"
+            hub2="$(date +%s)"
+            python3 "$here/vm-inject-key.py" guide >/dev/null 2>&1
+            wait_log "$hub2" "idle inhibit \+wayland:$n" 20 >/dev/null && ok "the Hub closed: +wayland:$n" || bad "no '+wayland:$n' after the Hub closed"
+        else
+            echo "UNVERIFIED: vm-inject-key.py is not next to this script: the Hub step was not run"
+        fi
     fi
     pkill -f '[v]m-key-client.qml'
     pkill -f '[v]m-idle-inhibit-client.py'

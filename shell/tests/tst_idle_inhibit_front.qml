@@ -37,8 +37,15 @@ Item {
 
         function held() { return IdleInhibit.reasons.indexOf("wayland:1") >= 0 }
 
+        function cleanup() {
+            DeviceSettings.pauseGamesInHub = true
+            Session.mockFailFreeze(false)
+            Session.mockFailThaw(false)
+        }
+
         function init() {
             verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
+            DeviceSettings.pauseGamesInHub = true
             Library.resetMockForTests("")
             Session.mockReset()
             IdleInhibit.releaseAll()
@@ -63,7 +70,7 @@ Item {
             tc.shell.focusCurrent()
             keyClick(Qt.Key_Return)
             tryCompare(launchedSpy, "count", 1)
-            tryVerify(() => Session.running.length === 1)
+            tryVerify(() => Session.running.length === 1 && Session.running[0].state === "running")
             const app = createTemporaryObject(appComponent, host)
             tc.shell.addApp(app, "p2")
             tryCompare(tc.shell, "focusedApp", app)
@@ -79,6 +86,50 @@ Item {
             tc.shell.appsBehindHome = false
             tc.shell.focusApp(tc.shell.apps[0].item)
             tryVerify(() => held(), 2000, "back in front: taken again")
+        }
+
+        function test_another_window_in_front_releases() {
+            const first = playWithInhibitor()
+            tryVerify(() => held())
+            const second = createTemporaryObject(appComponent, host, { surface: ({ name: "second" }) })
+            tc.shell.addApp(second, "p2")
+            tryCompare(tc.shell, "focusedApp", second)
+            tryVerify(() => !held(), 2000, "another window took the front: released")
+            tc.shell.focusApp(first)
+            tryCompare(tc.shell, "focusedApp", first)
+            tryVerify(() => held(), 2000, "back in front: held")
+        }
+
+        function test_the_hub_releases_and_closing_it_takes_it_again() {
+            DeviceSettings.pauseGamesInHub = false          // nothing is frozen: the Hub alone must release
+            playWithInhibitor()
+            tryVerify(() => held())
+            keyClick(Qt.Key_HomePage)
+            tryVerify(() => findChild(tc.shell, "systemPanel").open)
+            tryVerify(() => !held(), 2000, "the Hub is open over the app: released")
+            compare(Session.running[0].frozen === true, false, "and the game is not frozen")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !findChild(tc.shell, "systemPanel").open)
+            tryVerify(() => held(), 2000, "the Hub closed: held again")
+        }
+
+        function test_hub_then_home_with_pause_on_stays_released_until_the_card_resumes() {
+            playWithInhibitor()
+            tryVerify(() => held())
+            keyClick(Qt.Key_HomePage)
+            tryVerify(() => findChild(tc.shell, "quickMenuItem_resume").focused)
+            tryVerify(() => Session.running[0].frozen === true, 2000, "the Hub froze it")
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)                         // Home
+            tryVerify(() => !tc.shell.appOpen, 2000)
+            tryVerify(() => Session.running[0].frozen === true, 2000, "the Hub froze it")
+            wait(100)
+            verify(!held(), "frozen and behind Home: released")
+            tryVerify(() => findChild(tc.shell, "recentRow").activeFocus, 2000)
+            keyClick(Qt.Key_Return)                         // Accept on its Running card
+            tryVerify(() => tc.shell.appOpen, 2000)
+            tryVerify(() => Session.running[0].frozen === false, 2000)
+            tryVerify(() => held(), 2000, "resumed from the card: held again")
         }
 
         function test_frozen_releases() {
