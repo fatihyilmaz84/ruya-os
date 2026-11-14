@@ -13,6 +13,9 @@
 #                          mode and owner, Xwayland's -auth, -nolisten local and SELinux domain)
 #   - vm-security-check.sh the busrecv step (a service's signals go to root and ruya-shell only: RUY-594) and the
 #                          `signals` mode; vm-input-probe.py's signal listener (test-vm-input-probe.py)
+#   - vm-input-check.sh    the `players` mode (RUY-121): no probe or a refused CreateProfile fails, the probe gets the
+#                          second profile, which is removed afterwards (also after a FAIL); the probe's JoinPlayer
+#                          reply and ListPlayers parsing (test-vm-input-probe.py)
 # Needs bash and python3 (python on Windows). Exit 0 = all pass.
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -443,6 +446,64 @@ expect_contains "split_lock_mitigate 1 fails" "$out" "FAIL: kernel.split_lock_mi
 out="$(rungame flatpak)"; rc=$?
 expect_contains "flatpak without an app id is a usage error" "$out" "usage: vm-gaming-check.sh flatpak <app-id>"
 [ "$rc" = 2 ] && pass "flatpak without an app id: exit 2" || fail "flatpak without an app id: exit $rc"
+
+# --- vm-input-check.sh players (RUY-121): the second profile is made and removed, the probe gets it ---------
+echo "vm-input-check.sh players: the probe, the second profile and its removal"
+pl="$tmp/players"; mkdir -p "$pl/bin" "$pl/alone" "$pl/with" "$pl/tmp"
+# busctl as Profiles1 and Input1: ListProfiles has p1; CreateProfile answers $FAKE_CREATE; every call is logged.
+cat > "$pl/bin/busctl" <<'SHIMEOF'
+#!/bin/sh
+echo "busctl $*" >> "$FAKE_LOG"
+case "$*" in
+*ListProfiles*) echo 'aa{sv} 1 2 "id" s "p1" "name" s "Check Admin"' ;;
+*CreateProfile*) if [ -n "${FAKE_CREATE:-}" ]; then echo "$FAKE_CREATE"; else echo 'ssuu "ok" "p7" 0 0'; fi ;;
+*DeleteProfile*) echo 'suu "ok" 0 0' ;;
+*) echo '' ;;
+esac
+exit 0
+SHIMEOF
+cat > "$pl/bin/systemctl" <<'SHIMEOF'
+#!/bin/sh
+exit 0
+SHIMEOF
+# pgrep: the shell is not running (stopped_shell_probe stops it).
+cat > "$pl/bin/pgrep" <<'SHIMEOF'
+#!/bin/sh
+exit 1
+SHIMEOF
+chmod +x "$pl/bin"/*
+cp "$here/vm-input-check.sh" "$pl/alone/"
+cp "$here/vm-input-check.sh" "$pl/with/"
+# A stand-in probe: logs its arguments, passes, or fails with FAKE_PROBE_FAIL.
+cat > "$pl/with/vm-input-probe.py" <<'SHIMEOF'
+import os, sys
+with open(os.environ["FAKE_LOG"], "a") as f:
+    f.write("probe " + " ".join(sys.argv[1:]) + "\n")
+print("FAIL: stand-in probe" if os.environ.get("FAKE_PROBE_FAIL") else "PASS: stand-in probe")
+SHIMEOF
+runplayers() { # <dir>
+    : > "$tmp/players.log"
+    FAKE_LOG="$tmp/players.log" CHECK_TMP="$pl/tmp" PATH="$pl/bin:$PATH" bash "$1/vm-input-check.sh" players 2>&1
+}
+out="$(runplayers "$pl/alone")"; rc=$?
+expect_contains "players without the probe: FAIL" "$out" "vm-input-probe.py is missing: copy it next to this script"
+[ "$rc" = 1 ] && pass "players without the probe: exit 1" || fail "players without the probe: exit $rc"
+expect_lacks "players without the probe: no profile is made" "$(cat "$tmp/players.log")" "CreateProfile"
+out="$(FAKE_CREATE='ssuu "not-allowed" "" 0 0' runplayers "$pl/with")"; rc=$?
+expect_contains "a refused CreateProfile: FAIL" "$out" 'FAIL: CreateProfile Check Player: ssuu "not-allowed"'
+[ "$rc" = 1 ] && pass "a refused CreateProfile: exit 1" || fail "a refused CreateProfile: exit $rc"
+expect_lacks "a refused CreateProfile: the probe does not run" "$(cat "$tmp/players.log")" "probe players"
+out="$(runplayers "$pl/with")"; rc=$?
+log="$(cat "$tmp/players.log")"
+expect_contains "players: the probe gets the second profile" "$log" "probe players --user ruya-p1 --other p7 --profile p1"
+expect_contains "players: the profile is made as the admin" "$log" 'CreateProfile sssss p1 1234 Check Player standard'
+expect_contains "players: the second profile is removed" "$log" "DeleteProfile sss p1 1234 p7"
+expect_contains "players: all good passes" "$out" "ALL CHECKS PASSED"
+[ "$rc" = 0 ] && pass "players: exit 0" || fail "players: exit $rc"
+out="$(FAKE_PROBE_FAIL=1 runplayers "$pl/with")"; rc=$?
+expect_contains "players: a FAIL of the probe fails the check" "$out" "SOME CHECKS FAILED"
+[ "$rc" = 1 ] && pass "players: a FAIL of the probe: exit 1" || fail "players: a FAIL of the probe: exit $rc"
+expect_contains "players: the profile is removed after a FAIL too" "$(cat "$tmp/players.log")" "DeleteProfile sss p1 1234 p7"
 
 echo
 if [ "$fails" = 0 ]; then echo "vm-check tests: all passed"; else echo "vm-check tests: $fails failed"; fi

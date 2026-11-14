@@ -17,6 +17,7 @@ pub mod notify;
 pub mod pad;
 pub mod profile;
 pub mod routing;
+pub mod seats;
 pub mod udev;
 
 #[cfg(target_os = "linux")]

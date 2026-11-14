@@ -40,6 +40,7 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
         if (!m_route.isEmpty())
             send();
         m_backend->refreshDevices();
+        m_backend->refreshPlayers();
         m_backend->readConfirmButton();
         refreshConfirmButtons();
     });
@@ -83,6 +84,24 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
         }
     });
     connect(m_backend.get(), &InputBackend::devicesChanged, this, [this] { m_backend->refreshDevices(); });
+    connect(m_backend.get(), &InputBackend::playersListed, this, [this](bool ok, const QVariantList &players) {
+        if (!ok || players == m_players)
+            return;
+        m_players = players;
+        emit playersChanged();
+    });
+    connect(m_backend.get(), &InputBackend::joinFinished, this,
+            [this](const QString &deviceId, const QString &profile, const QString &status, uint slot) {
+                if (status != QLatin1String("ok"))
+                    qInfo("ruya-shell: Input1 JoinPlayer %s as %s answered %s", qPrintable(deviceId),
+                          qPrintable(profile), qPrintable(status));
+                emit joinFinished(deviceId, profile, status, int(slot));
+            });
+    connect(m_backend.get(), &InputBackend::leaveFinished, this, [this](uint slot, const QString &status) {
+        if (status != QLatin1String("ok"))
+            qInfo("ruya-shell: Input1 LeavePlayer %u answered %s", slot, qPrintable(status));
+        emit leaveFinished(int(slot), status);
+    });
     connect(m_backend.get(), &InputBackend::capabilitiesFinished, this, &Input::capabilitiesFinished);
     connect(m_backend.get(), &InputBackend::testStartFinished, this, &Input::testStartFinished);
     connect(m_backend.get(), &InputBackend::testInput, this, &Input::testInput);
@@ -90,11 +109,34 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
     connect(m_backend.get(), &InputBackend::profileReply, this, &Input::onProfileReply);
     connect(m_backend.get(), &InputBackend::profilesChanged, this, &Input::profilesChanged);
     m_backend->refreshDevices();
+    m_backend->refreshPlayers();
     m_backend->readConfirmButton();
     refreshConfirmButtons();
 }
 
 Input::~Input() = default;
+
+void Input::joinPlayer(const QString &deviceId, const QString &profile)
+{
+    m_backend->joinPlayer(deviceId, profile);
+}
+
+void Input::leavePlayer(int slot)
+{
+    m_backend->leavePlayer(slot < 0 ? 0u : uint(slot));
+}
+
+QVariantList Input::mockPlayers() const
+{
+    auto *mock = qobject_cast<MockInputBackend *>(m_backend.get());
+    return mock ? mock->players() : QVariantList();
+}
+
+void Input::mockFailJoin(const QString &status)
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        mock->setFailJoin(status);
+}
 
 // What the rows show: the service's choices with every change still on its way on top, so a read
 // that answers before a set does not take the new value back.

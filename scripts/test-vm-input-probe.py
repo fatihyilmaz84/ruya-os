@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Host test of scripts/vm-input-probe.py's signal listener (RUY-594): Bus reads a signal's member from the
+"""Host test of scripts/vm-input-probe.py's signal listener (RUY-594) and of its players helpers (RUY-121:
+JoinPlayer's (su) reply, a u argument, ListPlayers' busctl JSON): Bus reads a signal's member from the
 header, and `listen` prints "heard <member>" for Input1's signals and "bus <member>" for the bus's own, and
 nothing for a method reply. The VM check (vm-input-check.sh signals) relies on that split. Run by
 scripts/test-vm-checks.sh. Prints "    ok   ..." and "    FAIL ..." lines like that script; exit 1 on a failure."""
@@ -97,6 +98,69 @@ check("a method return has no member", kind != 4 and bus.member is None, (kind, 
 check("and still names the call it answers", reply_to == 5, reply_to)
 kind, _reply, _body = bus._message()
 check("the next signal's member replaces the old one", kind == 4 and bus.member == "NameOwnerChanged", bus.member)
+
+# --- RUY-121: JoinPlayer's (su) reply, a u argument (LeavePlayer) and ListPlayers' busctl JSON -----------------
+
+def reply_su(reply_to, status, slot):
+    """A method return with the body (su), as JoinPlayer answers."""
+    body = bytearray()
+    e = status.encode()
+    body.extend(struct.pack("<I", len(e)) + e + b"\0")
+    pad(body, 4)
+    body.extend(struct.pack("<I", slot))
+    fields = bytearray()
+    pad(fields, 8)
+    fields.append(5)
+    fields.extend(bytes([1]) + b"u\0")
+    pad(fields, 4)
+    fields.extend(struct.pack("<I", reply_to))
+    pad(fields, 8)
+    fields.append(8)
+    fields.extend(bytes([1]) + b"g\0")
+    fields.extend(bytes([2]) + b"su\0")
+    head = b"l" + bytes([2, 0, 1]) + struct.pack("<II", len(body), 1) + struct.pack("<I", len(fields))
+    out = bytearray(head) + fields
+    pad(out, 8)
+    return bytes(out) + bytes(body)
+
+
+def real_bus(messages):
+    """A probe.Bus with its own call(), past AUTH and Hello, reading `messages`; the peer socket is returned too."""
+    a, b = socket.socketpair()
+    for m in messages:
+        b.sendall(m)
+    bus = probe.Bus.__new__(probe.Bus)
+    bus.sock, bus.buf, bus.serial, bus.name, bus.member = a, b"", 0, ":1.9", None
+    return bus, b
+
+
+check("status_and_slot reads (su)", probe.Bus.status_and_slot(reply_su(1, "ok", 2)[-12:]) == ("ok", 2),
+      probe.Bus.status_and_slot(reply_su(1, "ok", 2)[-12:]))
+check("status_and_slot of a short body is empty", probe.Bus.status_and_slot(b"") == ("", 0))
+bus, peer = real_bus([reply_su(1, "ok", 2), reply_su(2, "full", 0)])
+got = probe.join_player(bus, "usb-1234-5679-0123456789ab", "p2")
+check("join_player gives JoinPlayer's status and slot", got == ("ok", 2), got)
+got = probe.join_player(bus, "usb-1234-567a-0123456789ab", "p3")
+check("... and a refusal with slot 0", got == ("full", 0), got)
+sent = peer.recv(65536)
+check("JoinPlayer is sent with the signature ss", b"\x08\x01g\x00\x02ss\x00" in sent, sent[:120])
+bus, peer = real_bus([reply_su(1, "ok", 0)])
+bus.call("org.ruyaos.Input1", "/org/ruyaos/Input1", "org.ruyaos.Input1", "LeavePlayer", [2])
+sent = peer.recv(65536)
+check("an int argument is sent as u (LeavePlayer)", b"\x08\x01g\x00\x01u\x00" in sent and sent.endswith(struct.pack("<I", 2)),
+      sent[-24:])
+listed = ('{"type":"aa{sv}","data":[[{"slot":{"type":"u","data":2},"profile":{"type":"s","data":"p7"},'
+          '"device_id":{"type":"s","data":"usb-1234-5679-0123456789ab"},"held":{"type":"b","data":false},'
+          '"held_secs":{"type":"u","data":0}},{"slot":{"type":"u","data":1},"profile":{"type":"s","data":"p1"},'
+          '"device_id":{"type":"s","data":"usb-1234-5678-0123456789ab"},"held":{"type":"b","data":false},'
+          '"held_secs":{"type":"u","data":0}}]]}')
+rows = probe.rows_of(listed)
+check("rows_of reads ListPlayers' busctl JSON", rows is not None and rows[0]["profile"] == "p7" and rows[0]["held"] is False, rows)
+check("seats_of sorts the players by slot",
+      probe.seats_of(rows) == [(1, "p1", "usb-1234-5678-0123456789ab"), (2, "p7", "usb-1234-5679-0123456789ab")],
+      probe.seats_of(rows))
+check("rows_of of something else is None", probe.rows_of("Call failed: no such method") is None
+      and probe.rows_of('{"data": []}') is None)
 
 bus = fake_bus([message(4, "TestInput"), message(4, "NameOwnerChanged"), message(2, reply_to=2), message(4, "UserActive")])
 probe.Bus = lambda: bus
