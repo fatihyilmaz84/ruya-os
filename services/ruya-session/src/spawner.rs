@@ -85,6 +85,13 @@ pub trait Spawner {
         let complete = self.adoption_complete();
         Box::new(move || Listing { found, complete })
     }
+    /// Does the spawner still follow `unit`? False once its end was handed on (or when it never
+    /// was followed). A listing that ran beside the event loop may name a unit that ended
+    /// before the merge; `Session::adopt_listed` skips it, its end event having found no
+    /// instance (RUY-621).
+    fn tracks(&self, _unit: &str) -> bool {
+        true
+    }
     /// Makes sure `user`'s sound server runs (`ruya-pulse@<user>.service` in `ruya-shell`'s
     /// manager, ADR-010, T-365) before an app of `user` starts. Returns once it is started.
     fn start_sound(&self, _user: &str) -> Result<(), String> {
@@ -150,6 +157,9 @@ impl<T: Spawner + ?Sized> Spawner for Box<T> {
     }
     fn adopt_lister(&self) -> AdoptLister {
         (**self).adopt_lister()
+    }
+    fn tracks(&self, unit: &str) -> bool {
+        (**self).tracks(unit)
     }
     fn freeze(&self, unit: &str) -> Result<(), String> {
         (**self).freeze(unit)
@@ -1357,6 +1367,8 @@ struct FakeState {
     adopt_failures: u32,
     /// Did the last `adopt_running` fail?
     adopt_failed: bool,
+    /// Units whose end came before the listing was merged: `tracks` says no (RUY-621).
+    ended: HashSet<String>,
     /// Holds every listing of `adopt_lister` until released (RUY-621).
     adopt_gate: Option<Arc<AdoptGate>>,
     last_env: Vec<(String, String)>,
@@ -1416,6 +1428,12 @@ impl FakeSpawner {
     /// (RUY-23).
     pub fn with_adopt_failures(self, times: u32) -> Self {
         self.lock().adopt_failures = times;
+        self
+    }
+
+    /// The unit ended after it was listed and before the listing was merged (RUY-621).
+    pub fn with_ended_unit(self, unit: &str) -> Self {
+        self.lock().ended.insert(unit.to_owned());
         self
     }
 
@@ -1586,6 +1604,10 @@ impl Spawner for FakeSpawner {
 
     fn adopt_running(&self) -> Vec<RunningUnit> {
         fake_listing(&self.state).found
+    }
+
+    fn tracks(&self, unit: &str) -> bool {
+        !self.lock().ended.contains(unit)
     }
 
     fn adopt_lister(&self) -> AdoptLister {

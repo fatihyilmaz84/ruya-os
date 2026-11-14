@@ -182,8 +182,9 @@ async fn read_profiles(connection: &Connection, system: bool) -> (bool, Option<V
 
 /// After a start-up adoption that did not see everything: tries again every `ADOPT_RETRY` (up to
 /// `ADOPT_TRIES` times) until the profile list can be read and every manager answered, and takes
-/// over what runs there now. The apps found this way start a play run of their own (the open runs
-/// of the first pass were settled then). Runs beside `forward`.
+/// over what runs there now. An app found this way takes over its kept open play run (a leftover
+/// heartbeat) or starts one; the leftovers nobody took end when the adoption is over. Runs beside
+/// `forward`.
 pub async fn adopt_late(
     connection: &Connection,
     session: &Shared,
@@ -201,10 +202,13 @@ pub async fn adopt_late(
             lock(session).directory_mut().set(ids);
         }
         let (late, listed_all) = adopt_pass(session, known).await;
+        // The play runs first: no await (and no end of an app) comes between the merge and them.
         for app in &late {
             eprintln!("ruya-session: adopted {} late", app.instance);
             // Its leftover heartbeat, if one was kept open, goes on as one run.
             usage_lock(usage).adopt_late(&live_app(app), Instant::now());
+        }
+        for app in &late {
             // The shell may be connected already: it hears of the app as of one that started.
             let sent = async {
                 let iface = connection

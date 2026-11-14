@@ -569,6 +569,11 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             if !valid_app_id(&found.app_id) || self.instances.iter().any(|i| i.unit == found.unit) {
                 continue;
             }
+            // Ended while the listing ran beside the event loop: its end found no instance and
+            // was dropped, so adding it now would leave a unit nothing ever ends (RUY-621).
+            if !self.spawner.tracks(&found.unit) {
+                continue;
+            }
             let orphan = profiles_known && self.directory.unix_user(profile).is_none();
             let mut inst = Instance {
                 unit: found.unit,
@@ -2164,6 +2169,25 @@ mod tests {
         let mut s = Session::new(spawner, dir, vec![]);
         assert!(s.adopt(5_000, Instant::now(), true).is_empty());
         assert!(s.spawner.calls().iter().all(|c| !c.starts_with("stop")));
+    }
+
+    #[test]
+    fn a_listed_unit_that_ended_before_the_merge_is_not_adopted() {
+        // Its end arrived while the listing ran beside the event loop and found no instance; the
+        // unit must not come back as a running app that nothing ends (RUY-621).
+        let gone = crate::spawner::unit_name("ruya-p1", APP);
+        let spawner = FakeSpawner::new().with_app(APP).with_ended_unit(&gone);
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, vec![]);
+        let listing = Listing {
+            found: vec![unit_of("ruya-p1", APP)],
+            complete: true,
+        };
+        assert!(s
+            .adopt_listed(listing, 5_000, Instant::now(), true)
+            .is_empty());
+        assert!(s.list().is_empty());
+        assert!(s.spawner.audio_calls().is_empty());
     }
 
     #[test]

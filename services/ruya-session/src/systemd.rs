@@ -662,6 +662,15 @@ impl Spawner for SystemdSpawner {
         (self.adopt_lister())().found
     }
 
+    fn tracks(&self, unit: &str) -> bool {
+        // `Gate::send` removes a unit before it hands its end on.
+        self.gate
+            .units
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains_key(unit)
+    }
+
     fn adopt_lister(&self) -> AdoptLister {
         let gate = self.gate.clone();
         let failed = Arc::clone(&self.adopt_failed);
