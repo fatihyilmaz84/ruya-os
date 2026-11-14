@@ -6,7 +6,7 @@ use zbus::interface;
 use zbus::object_server::SignalEmitter;
 
 use crate::accounts::Accounts;
-use crate::service::{lock_line, switch_line, ProfileService};
+use crate::service::{lock_line, switch_line, verify_line, ProfileService};
 
 /// Chosen at runtime: real Unix users on the system bus, none in `--session` dev mode.
 pub type DynAccounts = Box<dyn Accounts + Send + Sync>;
@@ -28,6 +28,10 @@ pub struct ProfilesIface {
 impl ProfilesIface {
     pub fn new(svc: ProfileService<DynAccounts>) -> Self {
         ProfilesIface { svc }
+    }
+
+    fn guest_ids(&self) -> Vec<String> {
+        self.svc.guests().iter().map(|g| g.id.clone()).collect()
     }
 }
 
@@ -56,11 +60,25 @@ impl ProfilesIface {
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> (String, u32, u32) {
         let before = self.svc.active().map(str::to_owned);
+        let guests = self.guest_ids();
         let outcome = self.svc.switch_to(id, pin, Instant::now());
         eprintln!("{}", switch_line(id, &outcome));
         if self.svc.active().map(str::to_owned) != before {
             let _ = self.active_profile_changed(&emitter).await;
         }
+        if self.guest_ids() != guests {
+            let _ = Self::profiles_changed(&emitter).await; // the session's guests were wiped
+        }
+        (
+            outcome.status.as_str().to_owned(),
+            outcome.attempts_left,
+            retry_secs(outcome.retry_after),
+        )
+    }
+
+    async fn verify_pin(&mut self, id: &str, pin: &str) -> (String, u32, u32) {
+        let outcome = self.svc.verify_pin(id, pin, Instant::now());
+        eprintln!("{}", verify_line(id, &outcome));
         (
             outcome.status.as_str().to_owned(),
             outcome.attempts_left,
@@ -70,10 +88,50 @@ impl ProfilesIface {
 
     async fn lock(&mut self, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) {
         eprintln!("{}", lock_line());
-        if self.svc.active().is_some() {
-            self.svc.lock();
+        let was_active = self.svc.active().is_some();
+        let guests = self.guest_ids();
+        self.svc.lock();
+        if was_active {
             let _ = self.active_profile_changed(&emitter).await;
         }
+        if self.guest_ids() != guests {
+            let _ = Self::profiles_changed(&emitter).await;
+        }
+    }
+
+    async fn create_guest(
+        &mut self,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> (String, String, u32) {
+        let outcome = self.svc.create_guest();
+        if outcome.status == crate::Status::Ok {
+            let _ = Self::profiles_changed(&emitter).await;
+        }
+        (
+            outcome.status.as_str().to_owned(),
+            outcome.id,
+            outcome.number,
+        )
+    }
+
+    async fn remove_guest(
+        &mut self,
+        id: &str,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let status = self.svc.remove_guest(id);
+        if status == crate::Status::Ok {
+            let _ = Self::profiles_changed(&emitter).await;
+        }
+        status.as_str().to_owned()
+    }
+
+    fn list_guests(&self) -> Vec<(String, String, u32)> {
+        self.svc
+            .guests()
+            .iter()
+            .map(|g| (g.id.clone(), g.avatar.clone(), g.number))
+            .collect()
     }
 
     async fn create_profile(

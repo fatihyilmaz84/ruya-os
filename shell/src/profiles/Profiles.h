@@ -17,6 +17,8 @@ class Profiles : public QObject
     QML_SINGLETON
 
     Q_PROPERTY(QVariantList profiles READ profiles NOTIFY profilesChanged)
+    // The live temporary guests (RUY-125), by number: {id, avatar, number}. Never in `profiles`.
+    Q_PROPERTY(QVariantList guests READ guests NOTIFY guestsChanged)
     Q_PROPERTY(QString activeProfile READ activeProfile NOTIFY activeProfileChanged)
     Q_PROPERTY(QVariantMap active READ active NOTIFY activeProfileChanged)
     Q_PROPERTY(bool available READ isAvailable NOTIFY availableChanged)
@@ -29,6 +31,7 @@ public:
     static Profiles *create(QQmlEngine *qmlEngine, QJSEngine *jsEngine);
 
     QVariantList profiles() const { return m_profiles; }
+    QVariantList guests() const { return m_guests; }
     QString activeProfile() const { return m_active; }
     QVariantMap active() const;
     bool isAvailable() const { return m_available; }
@@ -50,6 +53,13 @@ public:
     // Contract: VerifyAdmin. For actions of other services behind an admin PIN (a system
     // rollback). The result arrives as verifyAdminFinished.
     Q_INVOKABLE void verifyAdmin(const QString &adminId, const QString &adminPin);
+    // Contract: VerifyPin. Checks a profile's PIN for a player who joins; the active profile
+    // stays. The result arrives as pinVerified.
+    Q_INVOKABLE void verifyPin(const QString &id, const QString &pin = {});
+    // Contract: CreateGuest / RemoveGuest. A temporary guest for the signed-in session; the
+    // results arrive as guestCreated / guestRemoved, the list as `guests`.
+    Q_INVOKABLE void createGuest();
+    Q_INVOKABLE void removeGuest(const QString &id);
     // Tests only, and only with the mock backend (otherwise a no-op that returns false):
     // "seeded" (the three default profiles) or "empty" (first boot).
     Q_INVOKABLE bool resetMockForTests(const QString &state);
@@ -60,6 +70,7 @@ public:
 
 signals:
     void profilesChanged();
+    void guestsChanged();
     void activeProfileChanged();
     void availableChanged();
     // status: see api/dbus/org.ruyaos.Profiles1.xml
@@ -71,10 +82,16 @@ signals:
     void renameFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
     void deleteFinished(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
     void verifyAdminFinished(const QString &adminId, const QString &status, int attemptsLeft, int retryAfterSecs);
+    void pinVerified(const QString &id, const QString &status, int attemptsLeft, int retryAfterSecs);
+    // status: "ok", "not-allowed", "full", "failed"; id and number are set on "ok".
+    void guestCreated(const QString &status, const QString &id, int number);
+    // status: "ok", "unknown-profile", "failed".
+    void guestRemoved(const QString &id, const QString &status);
 
 private:
     std::unique_ptr<ProfilesBackend> m_backend;
     QVariantList m_profiles;
+    QVariantList m_guests;
     QString m_active;
     bool m_available = false;
 };

@@ -10,7 +10,9 @@
 // CreateProfile, PIN rules for SetPin, and one lockout counter shared by every PIN check
 // (5 free attempts, then 30 s doubling up to an hour). It is not the security
 // implementation. Seeded profiles: p1 "Player One" (admin, PIN 1234), p2 "Ada" (no PIN),
-// p3 "Guest".
+// p3 "Guest". Temporary guests (RUY-125) follow the service too: only while a profile is signed
+// in, at most 3, numbered lowest free, never in the profile list, wiped on lock() and on a
+// switch to another profile. There are no Unix users, so no uids.
 class MockProfilesBackend final : public ProfilesBackend
 {
     Q_OBJECT
@@ -32,6 +34,9 @@ public:
                        const QString &name) override;
     void deleteProfile(const QString &adminId, const QString &adminPin, const QString &id) override;
     void verifyAdmin(const QString &adminId, const QString &adminPin) override;
+    void verifyPin(const QString &id, const QString &pin) override;
+    void createGuest() override;
+    void removeGuest(const QString &id) override;
 
     // Tests: back to the seeded profiles, or to an empty store (first boot); clears
     // lockouts and the active profile.
@@ -59,9 +64,14 @@ private:
     // The single place PINs are checked; every failure counts towards lockout.
     Outcome authenticate(const QString &id, const QString &pin);
     void publishList();
+    void publishGuests();
+    bool isGuest(const QString &id) const;
+    // Session end (lock, a switch to another profile): every temporary guest goes.
+    void wipeGuests();
     void finish(const QString &id, const QString &status, int attemptsLeft = 0, int retryAfterSecs = 0);
 
     QList<Entry> m_entries;
+    QList<GuestInfo> m_guests; // temporary guests, never in m_entries
     QString m_active;
     int m_nextId = 1; // ids are never reused
     int m_pending = 0; // list replies not delivered yet
