@@ -456,6 +456,22 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             .collect()
     }
 
+    /// RUY-568: an app that reached running (`on_event(Started)`) after its profile left is frozen
+    /// now, through the freezer path of `profile_changed`; `profile_changed` freezes only apps
+    /// that were already running. `active` is the signed-in profile now (`""`: locked). Returns
+    /// the outcome when a freeze was tried, `None` when there was nothing to do: an unknown,
+    /// hidden, not running or frozen instance, or one of the signed-in profile.
+    pub fn freeze_if_away(&mut self, instance: &str, active: &str, now: Instant) -> Option<Status> {
+        let at = self.instances.iter().position(|i| {
+            i.unit == instance
+                && !i.hidden
+                && !i.frozen
+                && i.state == State::Running
+                && i.profile != active
+        })?;
+        Some(self.freeze_at(at, now))
+    }
+
     /// Thaws a running app of the signed-in profile (T-457). The OS is asked even when the app is
     /// not known to be frozen (a restart of this service forgets it); thawing a running app is a
     /// no-op there. A failed thaw keeps `frozen`, so a later Thaw or Stop tries again.
@@ -1293,6 +1309,83 @@ mod tests {
         s.profile_changed(Some(""), "p1", Instant::now());
         assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
         assert!(!frozen_of(&s, &unit));
+    }
+
+    // ---- An app that reaches running after its profile left (RUY-568) -------------------------
+
+    fn started(s: &mut Session<FakeSpawner, ProfileSnapshot>, unit: &str) {
+        assert!(s
+            .on_event(UnitEvent::Started {
+                unit: unit.to_owned()
+            })
+            .is_some());
+    }
+
+    #[test]
+    fn an_app_that_reaches_running_after_its_profile_left_is_frozen_then() {
+        let mut s = session();
+        let (status, unit) = s.launch(APP, "p1", 100);
+        assert_eq!(status, Status::Ok);
+        // p1 leaves while the app is still starting: nothing to freeze yet.
+        assert!(s
+            .profile_changed(Some("p1"), "p2", Instant::now())
+            .is_empty());
+        assert!(freezes(&s).is_empty());
+        started(&mut s, &unit);
+        assert_eq!(
+            s.freeze_if_away(&unit, "p2", Instant::now()),
+            Some(Status::Ok)
+        );
+        assert!(frozen_of(&s, &unit));
+        assert_eq!(freezes(&s), [format!("freeze {unit}")]);
+        assert_eq!(
+            s.take_frozen_changes(),
+            [FrozenChange {
+                instance: unit.clone(),
+                frozen: true
+            }]
+        );
+        // A second check leaves it alone.
+        assert_eq!(s.freeze_if_away(&unit, "p2", Instant::now()), None);
+        assert_eq!(freezes(&s).len(), 1);
+    }
+
+    #[test]
+    fn an_app_whose_profile_signed_in_again_before_the_check_is_not_frozen() {
+        let mut s = session();
+        let (_, unit) = s.launch(APP, "p1", 100);
+        s.profile_changed(Some("p1"), "p2", Instant::now());
+        s.profile_changed(Some("p2"), "p1", Instant::now());
+        started(&mut s, &unit);
+        assert_eq!(s.freeze_if_away(&unit, "p1", Instant::now()), None);
+        assert!(!frozen_of(&s, &unit));
+        assert!(freezes(&s).is_empty());
+        assert!(s.take_frozen_changes().is_empty());
+    }
+
+    #[test]
+    fn an_app_of_the_signed_in_profile_is_not_frozen_when_it_starts() {
+        let mut s = session();
+        let (_, unit) = s.launch(APP, "p1", 100);
+        started(&mut s, &unit);
+        assert_eq!(s.freeze_if_away(&unit, "p1", Instant::now()), None);
+        assert!(!frozen_of(&s, &unit));
+        assert!(freezes(&s).is_empty());
+        // Unknown instances are ignored too.
+        assert_eq!(s.freeze_if_away("nope.service", "p2", Instant::now()), None);
+    }
+
+    #[test]
+    fn a_hidden_instance_is_never_frozen_at_its_start() {
+        let spawner = FakeSpawner::new()
+            .with_app(APP)
+            .with_running("ruya-p9", APP, 1_000);
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, vec![]);
+        s.adopt(5_000, Instant::now(), true);
+        let orphan = unit_name("ruya-p9", APP);
+        assert_eq!(s.freeze_if_away(&orphan, "p1", Instant::now()), None);
+        assert!(!s.spawner.calls().contains(&format!("freeze {orphan}")));
     }
 
     // ---- The sound of a frozen app (T-466) ----------------------------------------------------

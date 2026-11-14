@@ -933,6 +933,34 @@ check)
     line="$(grep -E "\"member\":\"AppExited\".*$crasher" "$work/signals.log" | head -1)"
     echo "$line" | grep -q '"crashed"' && echo "$line" | grep -q ',3,' && ok "reason crashed, exit code 3" || bad "crasher exit: $line"
 
+    # RUY-568: an app that reaches running after its profile left is frozen then. Launch, Lock at once
+    # (before the unit reports started when the VM is slow enough), expect it frozen. When the app
+    # starts before the Lock, the Lock itself freezes it (the step above): the unit tests carry the
+    # starting case (`an_app_that_reaches_running_after_its_profile_left_is_frozen_then`), this step
+    # proves the whole path ends frozen and says which of the two happened.
+    echo "--- an app launched, then its profile leaves at once, is frozen (RUY-568)"
+    : > "$work/signals.log"
+    out="$(launch "$sleeper" "$pid")"; instl="$(echo "$out" | unit_of)"
+    [ -n "$instl" ] && ok "Launch: $instl" || bad "Launch for the early Lock: $out"
+    tlock2="$(date +%s)"
+    busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
+    if grep -a -q "\"member\":\"AppStarted\"" "$work/signals.log"; then
+        echo "note: the app reported started before the Lock came; the Lock froze it (unit tests carry the starting case)"
+    else
+        echo "note: the Lock came before the app reported started (the race was won)"
+    fi
+    wait_sig "\"member\":\"AppStarted\".*$sleeper" 30 && ok "AppStarted arrived" || bad "no AppStarted within 30 s"
+    wait_sig "\"member\":\"FrozenChanged\".*$instl.*true" 15 && ok "FrozenChanged(true) for the app launched before the Lock" \
+        || bad "no FrozenChanged(true) within 15 s for $instl"
+    [ "$(fstate "$user" "$instl")" = frozen ] && ok "$instl is frozen (FreezerState)" || bad "$instl: FreezerState $(fstate "$user" "$instl") after the early Lock"
+    journalctl -u ruya-session -b --no-pager -o cat --since "@$tlock2" 2>/dev/null | grep -a -q "froze $instl: its profile is not signed in" \
+        && ok "journal: froze $instl: its profile is not signed in" || bad "no 'froze $instl' line in the journal"
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" "" 2>&1)"
+    case "$out" in 'suu "ok"'*) ;; *'"wrong-pin"'*|*'"pin-required"'*) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" 1234 2>&1)";; esac
+    case "$out" in 'suu "ok"'*) ok "$pid signed in again";; *) bad "SwitchTo $pid after the early Lock: $out";; esac
+    case "$(stop_app "$instl")" in 's "ok"') ok "Stop of the frozen app answered ok";; *) bad "Stop of $instl";; esac
+    wait_sig "\"member\":\"AppExited\".*$sleeper" 20 && ok "AppExited arrived" || bad "no AppExited after the Stop"
+
     echo "--- an app killed from outside (SIGKILL to its own scope; a second scope of it is left over)"
     attached() { journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a "$1: attached app-flatpak-$sleeper_re-"; }
     a0="$(attached "ruya-app-$user-$sleeper.service" | wc -l)"

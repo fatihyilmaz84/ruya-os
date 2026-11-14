@@ -135,7 +135,14 @@ fn run() -> Result<(), Box<dyn Error>> {
         connection.request_name(BUS_NAME).await?;
         // A profile that leaves has its apps frozen (T-165): the watcher follows Profiles1.
         futures_lite::future::zip(
-            forward(connection.clone(), session.clone(), usage, !dev, rx),
+            forward(
+                connection.clone(),
+                session.clone(),
+                usage,
+                !dev,
+                turn.clone(),
+                rx,
+            ),
             watch_active_profile(connection, session, turn),
         )
         .await;
