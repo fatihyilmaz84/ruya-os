@@ -277,7 +277,7 @@ Item {
         }
 
         function familyShots(dir, name, device, family) {
-            if (!dir)
+            if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             signIn()
             if (family === "keyboard")
@@ -286,19 +286,19 @@ Item {
                 Input.mockActiveInput(device, family)
             tryCompare(Input, "activeFamily", family)
             wait(800)
-            grabImage(tc.shell).save(dir + "/41-glyphs-home-" + name + "-en.png")
+            grabImage(tc.shell).save(dir + "41-glyphs-home-" + name + "-en.png")
             tc.shell.openPage("settings")
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => findChild(tc.shell, "categoryList").activeFocus, 2000)
             keyClick(Qt.Key_Right)                       // into a pane: Change / Next / Back on a choice row
             wait(800)
-            grabImage(tc.shell).save(dir + "/41-glyphs-settings-" + name + "-en.png")
+            grabImage(tc.shell).save(dir + "41-glyphs-settings-" + name + "-en.png")
         }
-        function test_zz_screenshots_xbox() { familyShots(shotsDir, "xbox", xbox, "xbox") }
-        function test_zz_screenshots_playstation() { familyShots(shotsDir, "playstation", ds, "playstation") }
-        function test_zz_screenshots_nintendo() { familyShots(shotsDir, "nintendo", pro, "nintendo") }
-        function test_zz_screenshots_generic() { familyShots(shotsDir, "generic", "usb-2dc8-3106-aabbccddeeff", "generic") }
-        function test_zz_screenshots_keyboard() { familyShots(shotsDir, "keyboard", "", "keyboard") }
+        function test_zz_screenshots_xbox() { familyShots(shotsDir + "/", "xbox", xbox, "xbox") }
+        function test_zz_screenshots_playstation() { familyShots(shotsDir + "/", "playstation", ds, "playstation") }
+        function test_zz_screenshots_nintendo() { familyShots(shotsDir + "/", "nintendo", pro, "nintendo") }
+        function test_zz_screenshots_generic() { familyShots(shotsDir + "/", "generic", "usb-2dc8-3106-aabbccddeeff", "generic") }
+        function test_zz_screenshots_keyboard() { familyShots(shotsDir + "/", "keyboard", "", "keyboard") }
 
         function test_zz_screenshots_playstation_controller_page() {
             if (!shotsDir)
