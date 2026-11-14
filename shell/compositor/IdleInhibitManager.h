@@ -3,6 +3,7 @@
 #include <QtQml/qqml.h>
 #include <QtQml/QQmlParserStatus>
 #include <QtWaylandCompositor/QWaylandCompositor>
+#include <QtWaylandCompositor/QWaylandSurface>
 #include <QtWaylandCompositor/QWaylandCompositorExtensionTemplate>
 
 #include "qwayland-server-idle-inhibit-unstable-v1.h"
@@ -38,7 +39,9 @@ public:
 
 signals:
     // `id` is unique for the life of the process: the shell holds the reason "wayland:<id>".
-    void inhibitorAdded(int id);
+    // `surface` is the surface the inhibitor is for (null if the client gave none that is known). The
+    // inhibitor is reported removed once: when the app destroys it, the client goes, or the surface dies.
+    void inhibitorAdded(int id, QWaylandSurface *surface);
     void inhibitorRemoved(int id);
 
 protected:

@@ -222,6 +222,46 @@ FocusScope {
         return null
     }
 
+    // Wayland idle inhibitors (RUY-561): `idle-inhibit-unstable-v1` says an inhibitor applies only while
+    // its surface is visible, so an app holds the console awake only while it is the front app: shown to
+    // the signed-in profile (a lock or a switch hides it), not behind Home or the picker, not under the open Hub, and not
+    // frozen. "Frozen" is the Session1 record's (ruya-session also freezes a profile's apps when it
+    // leaves), not `appFrozen`, which counts only what the Hub froze. The compositor reports each
+    // inhibitor {id, surface}; `heldInhibitors` is the decision, one function for every state.
+    property var inhibitors: []
+    property var inhibitorsHeld: []
+    function addInhibitor(id, surface) {
+        inhibitors = inhibitors.filter(i => i.id !== id).concat([{ id: id, surface: surface }])
+    }
+    function removeInhibitor(id) {
+        inhibitors = inhibitors.filter(i => i.id !== id)
+    }
+    function inhibitorHolds(inhibitor) {
+        if (!inhibitor.surface || !appOpen || systemPanel.open)           // the Hub over the app: not in front
+            return false
+        const record = apps.find(r => r.item.surface === inhibitor.surface)
+        if (!record || record.item !== focusedApp || !appShownTo(record.profile))
+            return false
+        const run = instanceOfWindow(record)
+        return !(run && run.frozen)
+    }
+    readonly property var heldInhibitors: inhibitors.filter(i => inhibitorHolds(i)).map(i => i.id)
+    // Takes and lets go of "wayland:<id>" so that each is acquired and released once.
+    onHeldInhibitorsChanged: syncInhibitors()
+    onInhibitorsChanged: syncInhibitors()
+    function syncInhibitors() {
+        const now = heldInhibitors
+        for (const id of inhibitorsHeld) {
+            if (!now.includes(id))
+                IdleInhibit.release("wayland:" + id)
+        }
+        for (const id of now) {
+            if (!inhibitorsHeld.includes(id))
+                IdleInhibit.acquire("wayland:" + id)
+        }
+        inhibitorsHeld = now
+    }
+
     function addApp(item, profile) {
         if (!item || recordOf(item))
             return

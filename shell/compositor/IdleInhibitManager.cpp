@@ -7,27 +7,42 @@
 class IdleInhibitManager::Inhibitor : public QtWaylandServer::zwp_idle_inhibitor_v1
 {
 public:
-    Inhibitor(IdleInhibitManager *owner, struct ::wl_client *client, int id, int version, int number)
+    Inhibitor(IdleInhibitManager *owner, struct ::wl_client *client, int id, int version, int number,
+              QWaylandSurface *surface)
         : QtWaylandServer::zwp_idle_inhibitor_v1(client, id, version)
         , m_owner(owner)
         , m_number(number)
     {
-        emit m_owner->inhibitorAdded(m_number);
+        emit m_owner->inhibitorAdded(m_number, surface);
+        // The surface can die before the inhibitor: it stops counting then (RUY-561).
+        if (surface)
+            m_surfaceGone = QObject::connect(surface, &QObject::destroyed, owner, [this]() { reportRemoved(); });
     }
 
 protected:
     void zwp_idle_inhibitor_v1_destroy(Resource *resource) override { wl_resource_destroy(resource->handle); }
     void zwp_idle_inhibitor_v1_destroy_resource(Resource *) override
     {
-        if (m_owner)
-            emit m_owner->inhibitorRemoved(m_number);
+        QObject::disconnect(m_surfaceGone); // the lambda points at this object
+        reportRemoved();
         delete this;
     }
 
 private:
+    void reportRemoved()
+    {
+        if (m_removed)
+            return;
+        m_removed = true;
+        if (m_owner)
+            emit m_owner->inhibitorRemoved(m_number);
+    }
+
     // The manager can be gone before the client's resources are (the compositor shuts down).
     QPointer<IdleInhibitManager> m_owner;
     int m_number;
+    bool m_removed = false;
+    QMetaObject::Connection m_surfaceGone;
 };
 
 IdleInhibitManager::IdleInhibitManager(QWaylandCompositor *compositor)
@@ -65,6 +80,7 @@ void IdleInhibitManager::zwp_idle_inhibit_manager_v1_destroy(Resource *resource)
 void IdleInhibitManager::zwp_idle_inhibit_manager_v1_create_inhibitor(Resource *resource, uint32_t id,
                                                                       struct ::wl_resource *surface)
 {
-    Q_UNUSED(surface) // the inhibitor counts while it exists; the app destroys it when it stops
-    new Inhibitor(this, resource->client(), int(id), resource->version(), m_next++);
+    // Whether it counts is the shell's decision (it follows the surface's app); only the surface is kept.
+    new Inhibitor(this, resource->client(), int(id), resource->version(), m_next++,
+                  surface ? QWaylandSurface::fromResource(surface) : nullptr);
 }
