@@ -423,7 +423,9 @@ struct Serving {
 impl Drop for Serving {
     fn drop(&mut self) {
         lock(&self.physicals).remove(&self.key);
-        let held = self.shared.with(|r| r.remove_pad(self.key));
+        let held = self
+            .shared
+            .with(|r| r.remove_pad_at(self.key, Instant::now()));
         // What the pad held; a key another pad still holds stays down on the keyboard.
         let released = if held.is_empty() {
             "nothing".to_owned()
@@ -535,6 +537,7 @@ impl Scanner {
             rumble: device
                 .supported_ff()
                 .is_some_and(|ff| ff.contains(FFEffectType::FF_RUMBLE)),
+            port_bound: identity::port_bound(&hw),
         };
         let normalizer = Normalizer::new(layout(&device, &hw));
         // SAFETY: the descriptor belongs to `device`, which outlives this borrow.
@@ -678,6 +681,15 @@ pub fn run() -> io::Result<()> {
                 .div_f64(divisor)
                 .max(Duration::from_millis(500)),
         );
+    }
+    // RUYA_SEAT_HOLD_SECS (the VM checks only) shortens the 60 s a seat waits for its pad (RUY-627).
+    let hold = std::env::var("RUYA_SEAT_HOLD_SECS").ok();
+    if let Some(hold) = crate::routing::seat_hold_from_env(hold.as_deref()) {
+        eprintln!(
+            "ruya-inputd: RUYA_SEAT_HOLD_SECS: a seat is held {} s, not 60 (a test setting)",
+            hold.as_secs()
+        );
+        router.set_seat_hold(hold);
     }
     let (shared, notices) = Shared::new(router);
     // The navigation keyboard exists: the shell can navigate as soon as pads are found.

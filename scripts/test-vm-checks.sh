@@ -17,7 +17,9 @@
 #   - vm-profiles-check.sh the `guests` mode (RUY-125) against a fake Profiles1: each assertion can FAIL
 #   - vm-input-check.sh    the `players` mode (RUY-121): no probe or a refused CreateProfile fails, the probe gets the
 #                          second profile, which is removed afterwards (also after a FAIL); the probe's JoinPlayer
-#                          reply and ListPlayers parsing (test-vm-input-probe.py)
+#                          reply and ListPlayers parsing (test-vm-input-probe.py); the `seathold` mode (RUY-627): the
+#                          RUYA_SEAT_HOLD_SECS drop-in is there for the probe and gone afterwards (also after a FAIL), a
+#                          missing journal line fails; the probe's udevadm-monitor and ListPlayers helpers
 # Needs bash and python3 (python on Windows). Exit 0 = all pass.
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -681,6 +683,50 @@ out="$(FAKE_PROBE_FAIL=1 runplayers "$pl/with")"; rc=$?
 expect_contains "players: a FAIL of the probe fails the check" "$out" "SOME CHECKS FAILED"
 [ "$rc" = 1 ] && pass "players: a FAIL of the probe: exit 1" || fail "players: a FAIL of the probe: exit $rc"
 expect_contains "players: the profile is removed after a FAIL too" "$(cat "$tmp/players.log")" "DeleteProfile sss p1 1234 p7"
+# --- vm-input-check.sh seathold (RUY-627): the drop-in, the restarts, the profile, the probe ------------------
+echo "vm-input-check.sh seathold: RUYA_SEAT_HOLD_SECS=5 as a drop-in, removed again, the probe gets the profiles"
+sh_dir="$tmp/seathold"; mkdir -p "$sh_dir/bin" "$sh_dir/dropin"
+cp "$pl/bin/busctl" "$pl/bin/pgrep" "$sh_dir/bin/"
+# systemctl logs its arguments and what the drop-in says at each call.
+cat > "$sh_dir/bin/systemctl" <<'SHIMEOF'
+#!/bin/sh
+echo "systemctl $* [$(cat "$FAKE_DROPIN/50-ruya-check-seat-hold.conf" 2>/dev/null | tr '\n' ' ')]" >> "$FAKE_LOG"
+exit 0
+SHIMEOF
+# journalctl: the service's line about the shortened hold, unless FAKE_NO_HOLD_LINE.
+cat > "$sh_dir/bin/journalctl" <<'SHIMEOF'
+#!/bin/sh
+[ -n "${FAKE_NO_HOLD_LINE:-}" ] || echo "ruya-inputd: RUYA_SEAT_HOLD_SECS: a seat is held 5 s, not 60 (a test setting)"
+exit 0
+SHIMEOF
+chmod +x "$sh_dir/bin"/*
+runseathold() { # <dir>
+    : > "$tmp/seathold.log"
+    FAKE_LOG="$tmp/seathold.log" FAKE_DROPIN="$sh_dir/dropin" SEATHOLD_DROPIN_DIR="$sh_dir/dropin" CHECK_TMP="$pl/tmp" \
+        PATH="$sh_dir/bin:$PATH" bash "$1/vm-input-check.sh" seathold 2>&1
+}
+out="$(runseathold "$pl/alone")"; rc=$?
+expect_contains "seathold without the probe: FAIL" "$out" "vm-input-probe.py is missing: copy it next to this script"
+[ "$rc" = 1 ] && pass "seathold without the probe: exit 1" || fail "seathold without the probe: exit $rc"
+expect_lacks "seathold without the probe: no drop-in" "$(cat "$tmp/seathold.log")" "RUYA_SEAT_HOLD_SECS"
+out="$(runseathold "$pl/with")"; rc=$?
+log="$(cat "$tmp/seathold.log")"
+expect_contains "seathold: the restart runs with the drop-in" "$log" "systemctl restart ruya-inputd [[Service] Environment=RUYA_SEAT_HOLD_SECS=5 ]"
+expect_contains "seathold: the probe gets the second profile" "$log" "probe seathold --user ruya-p1 --other p7 --profile p1"
+expect_contains "seathold: the service is restarted without the drop-in" "$log" "systemctl restart ruya-inputd []"
+[ -e "$sh_dir/dropin/50-ruya-check-seat-hold.conf" ] && fail "seathold: the drop-in is left behind" || pass "seathold: the drop-in is removed"
+expect_contains "seathold: the second profile is removed" "$log" "DeleteProfile sss p1 1234 p7"
+expect_contains "seathold: the journal line passes" "$out" "PASS: ruya-inputd journals the shortened hold"
+expect_contains "seathold: all good passes" "$out" "ALL CHECKS PASSED"
+[ "$rc" = 0 ] && pass "seathold: exit 0" || fail "seathold: exit $rc"
+out="$(FAKE_NO_HOLD_LINE=1 runseathold "$pl/with")"; rc=$?
+expect_contains "seathold: no journal line about the hold: FAIL" "$out" "FAIL: no 'RUYA_SEAT_HOLD_SECS: a seat is held 5 s' line"
+[ "$rc" = 1 ] && pass "seathold: no journal line: exit 1" || fail "seathold: no journal line: exit $rc"
+out="$(FAKE_PROBE_FAIL=1 runseathold "$pl/with")"; rc=$?
+expect_contains "seathold: a FAIL of the probe fails the check" "$out" "SOME CHECKS FAILED"
+[ "$rc" = 1 ] && pass "seathold: a FAIL of the probe: exit 1" || fail "seathold: a FAIL of the probe: exit $rc"
+[ -e "$sh_dir/dropin/50-ruya-check-seat-hold.conf" ] && fail "seathold: the drop-in is left after a FAIL" || pass "seathold: the drop-in is removed after a FAIL too"
+expect_contains "seathold: the profile is removed after a FAIL too" "$(cat "$tmp/seathold.log")" "DeleteProfile sss p1 1234 p7"
 
 echo
 if [ "$fails" = 0 ]; then echo "vm-check tests: all passed"; else echo "vm-check tests: $fails failed"; fi

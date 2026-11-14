@@ -72,6 +72,13 @@ pub fn stable_id(hw: &Hardware, salt: &[u8]) -> String {
     )
 }
 
+/// Whether the stable id names the USB port rather than the pad: a USB pad without a serial, so
+/// the same pad in another socket is another id, and two such pads of one model are told apart
+/// only by their sockets (06 §4.1 "Like pads", RUY-627).
+pub fn port_bound(hw: &Hardware) -> bool {
+    hw.bus == BUS_USB && hw.serial.trim().is_empty()
+}
+
 /// Xbox wireless receivers: one USB device, up to four pads behind it.
 const RECEIVERS: [(u16, u16); 3] = [(0x045e, 0x0719), (0x045e, 0x0291), (0x045e, 0x02a9)];
 
@@ -202,6 +209,10 @@ mod tests {
         let mut b = other_port.clone();
         b.serial = "ABC123".into();
         assert_eq!(stable_id(&a, b"s"), stable_id(&b, b"s"));
+        // Only the serial-less USB pad's id names its socket (a like pad, RUY-627).
+        assert!(port_bound(&base));
+        assert!(!port_bound(&a));
+        assert!(!port_bound(&dualsense_bt()));
     }
 
     #[test]

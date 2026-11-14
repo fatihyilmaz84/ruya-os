@@ -8,7 +8,13 @@
 # 500 ms and the worst at most 1000 ms: the first run after heavy checks is slow (644 ms once; a lone re-run
 # gave 190-426 ms), and the 1000 ms ceiling still catches a real regression. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|close|fallback|confirm|hold|twopads|guide|nodes|start|useractive|signals|players]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|close|fallback|confirm|hold|twopads|guide|nodes|start|useractive|signals|players|seathold]
+# `seathold` (RUY-627; `hold` is RUY-479's StartTest check) with the shell stopped like `players`: a runtime drop-in sets
+# RUYA_SEAT_HOLD_SECS=5 on ruya-inputd (journaled at start; the drop-in is removed and the service restarted at the end, also
+# after a FAIL) and a second profile "Check Player" is made and removed. Uinput pad B is seat 2 in `app` (ruya-input/pad2);
+# B's device is destroyed and made again with the same phys (its stable id) within the hold: ListPlayers (JSON) has seat 2
+# held, then held false with B's id, pad2 keeps its sysname, and `udevadm monitor` saw no remove of it; B destroyed again,
+# after 6 s seat 2 is gone and so is pad2.
 # `players` (RUY-121) with the shell stopped like `twopads`: three uinput pads; a second profile "Check Player" is made with
 # CreateProfile (as the admin $me, PIN 1234) and removed at the end. Pad A presses, then the probe routes the profile: ListPlayers
 # (busctl --json=short) has seat 1 = A; JoinPlayer(B, the second profile) answers ok 2; in the route app ruya-input/pad1 is A and
@@ -835,6 +841,37 @@ players)
     install -m 0644 "$probe" "$dir/vm-input-probe.py"
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe players --user "ruya-$me" --other "$player2"
     rm -rf "$dir"
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" DeleteProfile sss "$me" 1234 "$player2")"
+    case "$out" in 'suu "ok"'*) ok "DeleteProfile $player2: the check's profile is removed" ;; *) bad "DeleteProfile $player2: $out" ;; esac
+    ;;
+seathold)
+    # RUY-627: the seat hold under RUYA_SEAT_HOLD_SECS=5, with a profile made for player 2 (removed at the end).
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
+    two_profiles
+    [ -n "$me" ] && ok "profile $me signs in" || { bad "need a profile"; exit 1; }
+    echo "--- a seat is held while its pad is gone (RUY-627): RUYA_SEAT_HOLD_SECS=5, a second profile for player 2"
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" CreateProfile sssss "$me" 1234 "Check Player" standard "")"
+    player2=""; case "$out" in 'ssuu "ok" '*) player2="$(echo "$out" | cut -d'"' -f4)" ;; esac
+    [ -n "$player2" ] && ok "CreateProfile made $player2 (Check Player)" || { bad "CreateProfile Check Player: $out"; echo "SOME CHECKS FAILED"; exit 1; }
+    dropin="${SEATHOLD_DROPIN_DIR:-/run/systemd/system/ruya-inputd.service.d}"
+    mkdir -p "$dropin"
+    printf '[Service]\nEnvironment=RUYA_SEAT_HOLD_SECS=5\n' > "$dropin/50-ruya-check-seat-hold.conf"
+    since="$(date '+%Y-%m-%d %H:%M:%S')"
+    systemctl daemon-reload
+    systemctl restart ruya-inputd
+    n=0; until name_owned || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
+    journalctl -u ruya-inputd --since "$since" --no-pager -o cat | grep -q 'RUYA_SEAT_HOLD_SECS: a seat is held 5 s' \
+        && ok "ruya-inputd journals the shortened hold (RUYA_SEAT_HOLD_SECS=5)" \
+        || bad "no 'RUYA_SEAT_HOLD_SECS: a seat is held 5 s' line after the restart"
+    dir="$(mktemp -d "${CHECK_TMP:-/var/tmp}/ruya-input-check.XXXXXX")"
+    chmod 0755 "$dir"
+    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe seathold --user "ruya-$me" --other "$player2"
+    rm -rf "$dir"
+    rm -f "$dropin/50-ruya-check-seat-hold.conf"
+    systemctl daemon-reload
+    systemctl restart ruya-inputd
+    ok "the drop-in is removed and ruya-inputd restarted with the 60 s hold"
     out="$(busctl --system call "$psvc" "$ppath" "$psvc" DeleteProfile sss "$me" 1234 "$player2")"
     case "$out" in 'suu "ok"'*) ok "DeleteProfile $player2: the check's profile is removed" ;; *) bad "DeleteProfile $player2: $out" ;; esac
     ;;

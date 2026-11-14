@@ -1685,6 +1685,134 @@ def cmd_check(args):
     return fails
 
 
+def udev_removes(text, sysname):
+    """The `remove` lines of `udevadm monitor` output (KERNEL or UDEV) for the input device `sysname` (input23) or
+    an event node under it; a longer name (input230) does not count."""
+    out = []
+    for line in text.splitlines():
+        parts = line.split()
+        # "KERNEL[12.3] remove /devices/..." and "UDEV  [12.3] remove /devices/...".
+        if "remove" not in parts[:3]:
+            continue
+        i = parts.index("remove")
+        if i + 1 >= len(parts):
+            continue
+        path = parts[i + 1].rstrip("/") + "/"
+        if "/" + sysname + "/" in path:
+            out.append(line.strip())
+    return out
+
+
+def player_row(rows, slot):
+    """The ListPlayers row of seat `slot`, or None."""
+    return next((r for r in (rows or []) if r.get("slot") == slot), None)
+
+
+def cmd_seathold(args):
+    """RUY-627: a seat is held while its pad is gone, under RUYA_SEAT_HOLD_SECS=5 (vm-input-check.sh seathold sets
+    it). Pad A signs the profile in (seat 1), pad B joins as the second profile (seat 2), and in the route `app`
+    B has ruya-input/pad2. B's uinput device is destroyed: ListPlayers has seat 2 held, with B's id, and pad2 stays.
+    B is made again with the same phys (its stable id, as a Bluetooth pad's address would be) within the hold:
+    seat 2 is B's again (held false), pad2 has the same sysname, and `udevadm monitor` saw no `remove` of it (the
+    game would have seen its pad go). B is destroyed again and the hold runs out (6 s): seat 2 is gone, and so is
+    pad2."""
+    fails = 0
+
+    def ok(msg):
+        print(f"PASS: {msg}", flush=True)
+
+    def bad(msg):
+        nonlocal fails
+        fails += 1
+        print(f"FAIL: {msg}", flush=True)
+
+    names = [NAME, NAME + " B"]
+    b_phys = "vm-check/hold-b"
+    pad_a = FakePad(phys="vm-check/pad0", name=names[0])
+    pad_b = FakePad(0x1234, 0x5679, b_phys, names[1])
+    bus = None
+    monitor = None
+    try:
+        rows = wait_for(lambda: [d for d in (devices() or []) if d.get("name") in names], 5) or []
+        if len(rows) != 2:
+            bad(f"ListDevices does not list the two pads: {rows}")
+            return fails
+        ids = {d["name"]: d["id"] for d in rows}
+        a_id, b_id = ids[names[0]], ids[names[1]]
+        bus = Bus()
+        for route in (["locked", "", "", ""], None, ["shell", "", "", args.profile]):
+            if route is None:
+                pad_a.emit(EV_KEY, BTN_SOUTH, 1)
+                pad_a.emit(EV_KEY, BTN_SOUTH, 0)
+                time.sleep(0.3)
+                continue
+            status = bus.call(SVC, PATH, IFC, "SetRoute", route)
+            if status != "ok":
+                bad(f"SetRoute {route[0]}: {status}")
+                return fails
+        status, slot = join_player(bus, b_id, args.other)
+        if (status, slot) != ("ok", 2):
+            bad(f"JoinPlayer(B, {args.other}) answered {status} {slot}")
+            return fails
+        ok(f"B ({b_id}) is seat 2")
+        status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-seathold", "org.ruyaos.VmCheck", args.profile])
+        if status != "ok":
+            bad(f"SetRoute app: {status}")
+            return fails
+        wait_for(lambda: node_by("phys", "ruya-input/pad2")[0], 6)
+        node2, sys2 = node_by("phys", "ruya-input/pad2")
+        if not node2:
+            bad("B has no ruya-input/pad2 in the route app")
+            return fails
+        ok(f"B is ruya-input/pad2 ({sys2}, {node2})")
+        monitor = subprocess.Popen(["udevadm", "monitor", "--kernel", "--udev", "--subsystem-match=input"],
+                                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        time.sleep(0.5)
+        pad_b.close()
+        row = wait_for(lambda: (r := player_row(players(), 2)) and r.get("held") and r, 3)
+        if row and row.get("device_id") == b_id and 1 <= row.get("held_secs", 0) <= 5:
+            ok(f"B gone: seat 2 is held with B's id, {row.get('held_secs')} s left")
+        else:
+            bad(f"B gone: seat 2 should be held with {b_id} and 1-5 s left: {players()}")
+        ok("pad2 stays while B is gone") if node_by("phys", "ruya-input/pad2")[1] == sys2 \
+            else bad(f"pad2 is {node_by('phys', 'ruya-input/pad2')} while B is gone, before {sys2}")
+        time.sleep(1)
+        pad_b = FakePad(0x1234, 0x5679, b_phys, names[1])
+        row = wait_for(lambda: (r := player_row(players(), 2)) and not r.get("held") and r, 4)
+        if row and row.get("device_id") == b_id and row.get("held_secs") == 0:
+            ok("B back within the hold: seat 2 is B's again, held false")
+        else:
+            bad(f"B back: seat 2 should be B's, not held: {players()}")
+        time.sleep(0.5)
+        ok(f"pad2 is the same device ({sys2})") if node_by("phys", "ruya-input/pad2")[1] == sys2 \
+            else bad(f"pad2 is {node_by('phys', 'ruya-input/pad2')} after B came back, before {sys2}")
+        monitor.terminate()
+        seen = monitor.communicate(timeout=5)[0]
+        monitor = None
+        removes = udev_removes(seen, sys2)
+        ok(f"udevadm monitor saw no remove of pad2 ({sys2})") if not removes \
+            else bad(f"pad2 was removed and made again: {removes}")
+        pad_b.close()
+        gone = wait_for(lambda: player_row(players(), 2) is None and not node_by("phys", "ruya-input/pad2")[0], 8)
+        ok("B gone again for 6 s: seat 2 is free and pad2 is gone") if gone \
+            else bad(f"after the hold: ListPlayers {players()}, pad2 {node_by('phys', 'ruya-input/pad2')}")
+        seat1 = player_row(players(), 1)
+        ok("seat 1 stays A's") if seat1 and seat1.get("device_id") == a_id and not seat1.get("held") \
+            else bad(f"seat 1: {seat1}")
+    finally:
+        if monitor:
+            monitor.kill()
+        if bus:
+            bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+            bus.close()
+        for p in (pad_a, pad_b):
+            try:
+                p.close()
+            except OSError:
+                pass
+    return fails
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1719,6 +1847,10 @@ def main():
     py.add_argument("--user", required=True)
     py.add_argument("--profile", required=True)
     py.add_argument("--other", required=True, help="the profile that joins as player 2")
+    sh = sub.add_parser("seathold")
+    sh.add_argument("--user", required=True)
+    sh.add_argument("--profile", required=True)
+    sh.add_argument("--other", required=True, help="the profile that joins as player 2")
     ua = sub.add_parser("useractive")
     ua.add_argument("--profile", required=True)
     ls = sub.add_parser("listen")
@@ -1755,6 +1887,8 @@ def main():
         sys.exit(1 if cmd_twoprofiles(args) else 0)
     if args.cmd == "players":
         sys.exit(1 if cmd_players(args) else 0)
+    if args.cmd == "seathold":
+        sys.exit(1 if cmd_seathold(args) else 0)
     if args.cmd == "nodes":
         sys.exit(1 if cmd_nodes(args) else 0)
     if args.cmd == "hold":

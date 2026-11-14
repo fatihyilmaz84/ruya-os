@@ -7,7 +7,9 @@ import RuyaShell
 // pad that signed in (the pad of the last mockActiveInput since the lock, or none for a keyboard
 // sign-in); JoinPlayer and LeavePlayer answer the XML's statuses; PlayersChanged reaches
 // Input.players; a new owner of the name has the list asked again, after the players the shell knew
-// joined again (a restarted service knows no seats). No Shell: nothing else calls SetRoute here.
+// joined again (a restarted service knows no seats). A removed seated pad holds its seat (RUY-627):
+// held with the seconds left, restored when the same pad is added again, freed when the hold runs
+// out (Input.mockSeatHoldMs shortens it). No Shell: nothing else calls SetRoute here.
 Item {
     id: host
     width: 1280
@@ -29,6 +31,7 @@ Item {
             verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             Input.mockFail(false)
             Input.mockFailJoin("")
+            Input.mockSeatHoldMs(60000)
             Input.mockNameOwned(true)
             Input.mockResetDevices()
             route("locked", "")
@@ -39,6 +42,7 @@ Item {
 
         function cleanup() {
             Input.mockFailJoin("")
+            Input.mockSeatHoldMs(60000)
             Input.mockNameOwned(true)
         }
 
@@ -144,11 +148,65 @@ Item {
                       seats(Input.players))
             tryVerify(() => deviceRecord(host.xbox).slot === 0 && deviceRecord(host.pro).slot === 2, 2000,
                       "the records follow")
-            // A seated pad that goes frees its seat; player 1's leaves seat 1 without a pad.
+            // A seated pad that goes frees its seat when its hold runs out (RUY-627, shortened here);
+            // player 1's leaves seat 1 without a pad.
+            Input.mockSeatHoldMs(200)
             Input.mockRemoveDevice(host.pro)
-            tryVerify(() => seats(Input.players) === "1:p1:" + host.dualSense, 2000, seats(Input.players))
+            tryVerify(() => seats(Input.players) === "1:p1:" + host.dualSense, 3000, seats(Input.players))
             Input.mockRemoveDevice(host.dualSense)
-            tryVerify(() => seats(Input.players) === "1:p1:", 2000, seats(Input.players))
+            tryVerify(() => seats(Input.players) === "1:p1:" && !Input.players[0].held, 3000,
+                      JSON.stringify(Input.players))
+        }
+
+        function heldOf(list) {
+            return list.map(p => p.slot + ":" + p.held).join(" ")
+        }
+
+        function test_a_removed_seated_pad_holds_its_seat_until_it_is_back() {
+            signInWith(host.dualSense, "p1")
+            compare(join(host.xbox, "p2"), ["ok", 2])
+            const both = "1:p1:" + host.dualSense + " 2:p2:" + host.xbox
+            tryVerify(() => seats(Input.players) === both, 2000, seats(Input.players))
+            // RUY-627: the seat keeps its pad's id, held, with the whole seconds left.
+            Input.mockRemoveDevice(host.xbox)
+            tryVerify(() => heldOf(Input.players) === "1:false 2:true", 2000, JSON.stringify(Input.players))
+            compare(seats(Input.players), both)
+            const left = Input.players[1].held_secs
+            verify(left > 55 && left <= 60, "held_secs " + left)
+            compare(Input.players[0].held_secs, 0)
+            tryVerify(() => deviceRecord(host.xbox) === undefined, 2000, "the pad is gone from the list")
+            // Player 1's pad is held the same way.
+            Input.mockRemoveDevice(host.dualSense)
+            tryVerify(() => heldOf(Input.players) === "1:true 2:true", 2000, JSON.stringify(Input.players))
+            // Back within the hold: each seat is its pad's again.
+            Input.mockAddDevice({ id: host.xbox, family: "xbox" })
+            Input.mockAddDevice({ id: host.dualSense, family: "playstation" })
+            tryVerify(() => heldOf(Input.players) === "1:false 2:false", 2000, JSON.stringify(Input.players))
+            compare(seats(Input.players), both)
+            compare(Input.players[1].held_secs, 0)
+            tryVerify(() => deviceRecord(host.xbox) !== undefined && deviceRecord(host.xbox).slot === 2, 2000,
+                      "the record names seat 2 again")
+            compare(JSON.stringify(Input.mockPlayers()), JSON.stringify(Input.players))
+        }
+
+        function test_a_shortened_hold_runs_out() {
+            Input.mockSeatHoldMs(500)
+            signInWith(host.dualSense, "p1")
+            compare(join(host.xbox, "p2"), ["ok", 2])
+            Input.mockRemoveDevice(host.xbox)
+            tryVerify(() => heldOf(Input.players) === "1:false 2:true", 2000, JSON.stringify(Input.players))
+            // At its end seat 2 is free.
+            tryVerify(() => seats(Input.players) === "1:p1:" + host.dualSense, 3000, seats(Input.players))
+            // Seat 1 keeps its profile without a pad.
+            Input.mockRemoveDevice(host.dualSense)
+            tryVerify(() => heldOf(Input.players) === "1:true", 2000, JSON.stringify(Input.players))
+            tryVerify(() => seats(Input.players) === "1:p1:" && heldOf(Input.players) === "1:false", 3000,
+                      JSON.stringify(Input.players))
+            // The same pad back after the hold is not seated.
+            Input.mockAddDevice({ id: host.xbox, family: "xbox" })
+            tryVerify(() => deviceRecord(host.xbox) !== undefined, 2000, "the pad is listed")
+            compare(deviceRecord(host.xbox).slot, 0)
+            compare(seats(Input.players), "1:p1:")
         }
 
         function test_the_players_join_again_when_the_service_restarts() {

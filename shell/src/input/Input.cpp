@@ -203,6 +203,12 @@ void Input::mockFailJoin(const QString &status)
         mock->setFailJoin(status);
 }
 
+void Input::mockSeatHoldMs(int ms)
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        mock->setSeatHoldMs(ms);
+}
+
 // What the rows show: the service's choices with every change still on its way on top, so a read
 // that answers before a set does not take the new value back.
 void Input::showConfirmButtons(bool force)
