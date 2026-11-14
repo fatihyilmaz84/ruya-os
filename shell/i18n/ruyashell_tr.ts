@@ -281,7 +281,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+49"/>
+        <location filename="../qml/AppDetailPage.qml" line="+51"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -451,7 +451,17 @@ Bu geri alınamaz.</translation>
         <translation>Etkinliğiniz</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location line="+85"/>
+        <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
+        <translation>Bu konsoldakinden daha yeni bir RuyaOS gerekiyor. Yüklü kalır.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Needs a newer RuyaOS</source>
+        <translation>Daha yeni bir RuyaOS gerekiyor</translation>
+    </message>
+    <message>
+        <location line="+20"/>
         <source>This app can</source>
         <translation>Bu uygulama şunları yapabilir</translation>
     </message>

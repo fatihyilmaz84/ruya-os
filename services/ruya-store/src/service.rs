@@ -91,6 +91,8 @@ pub struct Store<F: Flatpak> {
     state: Mutex<State>,
     /// Where the job table is kept across restarts; `None` keeps it in memory only.
     jobs_file: Option<PathBuf>,
+    /// This console's API level (`RUYA_API_LEVEL`); an app asking for more is not `compatible`.
+    api_level: u32,
 }
 
 impl<F: Flatpak> Store<F> {
@@ -99,7 +101,14 @@ impl<F: Flatpak> Store<F> {
             flatpak,
             state: Mutex::new(State::default()),
             jobs_file: None,
+            api_level: crate::level::api_level(),
         }
+    }
+
+    /// Sets the console's API level (tests; the service reads os-release).
+    pub fn with_api_level(mut self, level: u32) -> Self {
+        self.api_level = level;
+        self
     }
 
     /// Like `new`, with the job table kept in `path`: what a previous run wrote is loaded (its
@@ -121,6 +130,7 @@ impl<F: Flatpak> Store<F> {
                 ..State::default()
             }),
             jobs_file: Some(path),
+            api_level: crate::level::api_level(),
         }
     }
 
@@ -167,7 +177,7 @@ impl<F: Flatpak> Store<F> {
                 .get(&key)
                 .cloned()
                 .unwrap_or_default();
-            let mut app = app_from(entry.id.as_str(), component);
+            let mut app = app_from(entry.id.as_str(), component, self.api_level);
             app.remote = entry.remote.clone();
             app.source = trust_of(&entry.remote).to_owned();
             app.installed_size = entry.installed_size;
@@ -177,7 +187,7 @@ impl<F: Flatpak> Store<F> {
         // Installed apps no remote offers any more (a removed source) still have to be listed.
         for app in &installed {
             if !catalogue.iter().any(|c| c.id == app.id) {
-                let mut gone = app_from(app.id.as_str(), None);
+                let mut gone = app_from(app.id.as_str(), None, self.api_level);
                 gone.remote = app.remote.clone();
                 gone.source = trust_of(&app.remote).to_owned();
                 gone.installed_size = app.installed_size;
@@ -648,7 +658,7 @@ fn valid_remote_url(url: &str) -> bool {
         && !url.chars().any(|c| c.is_control() || c.is_whitespace())
 }
 
-fn app_from(id: &str, component: Option<&Component>) -> App {
+fn app_from(id: &str, component: Option<&Component>, api_level: u32) -> App {
     match component {
         Some(c) => App {
             id: id.to_owned(),
@@ -662,6 +672,8 @@ fn app_from(id: &str, component: Option<&Component>) -> App {
             developer: c.developer.clone(),
             controller: c.controller.clone(),
             age_rating: c.age_rating.clone(),
+            min_api_level: c.min_api_level,
+            compatible: c.min_api_level <= api_level,
             icon: c.icon.clone(),
             tile: c.tile.clone(),
             hero: c.hero.clone(),
@@ -671,6 +683,7 @@ fn app_from(id: &str, component: Option<&Component>) -> App {
             id: id.to_owned(),
             name: fallback_name(id),
             controller: "none".to_owned(),
+            compatible: true,
             ..App::default()
         },
     }
@@ -1343,6 +1356,41 @@ mod tests {
         );
     }
 
+    const LEVELS: &str = r#"<components origin="ruyaos">
+      <component type="desktop-application"><id>org.ruya.Racer</id><name>Turbo Racer</name>
+        <custom><value key="x-ruya-min-api-level">2</value></custom></component>
+      <component type="desktop-application"><id>org.ruya.Puzzle</id><name>Block Puzzle</name>
+        <custom><value key="x-ruya-min-api-level">99</value></custom></component>
+      <component type="desktop-application"><id>org.ruya.Editor</id><name>Text Editor</name></component>
+    </components>"#;
+
+    #[test]
+    fn compatible_follows_the_console_level() {
+        let build = |level: u32| {
+            let f = FakeFlatpak::default()
+                .with_remote("ruyaos", "RuyaOS", true)
+                .with_app("ruyaos", "org.ruya.Racer", 1)
+                .with_app("ruyaos", "org.ruya.Puzzle", 1)
+                .with_app("ruyaos", "org.ruya.Editor", 1)
+                .with_app("ruyaos", "org.ruya.NoMetadata", 1)
+                .with_appstream("ruyaos", LEVELS);
+            let s = Store::new(f).with_api_level(level);
+            s.refresh().unwrap();
+            s
+        };
+        let compatible = |s: &Store<FakeFlatpak>, id: &str| s.get_app(id).1.compatible;
+        let s = build(2);
+        assert!(
+            compatible(&s, "org.ruya.Racer"),
+            "the minimum equals the level"
+        );
+        assert!(!compatible(&s, "org.ruya.Puzzle"), "99 is above 2");
+        assert!(compatible(&s, "org.ruya.Editor"), "no key means 0");
+        assert!(compatible(&s, "org.ruya.NoMetadata"), "no metadata at all");
+        let s = build(1);
+        assert!(!compatible(&s, "org.ruya.Racer"));
+        assert!(compatible(&build(99), "org.ruya.Puzzle"));
+    }
     #[test]
     fn the_limit_caps_the_result() {
         let s = store(fake());

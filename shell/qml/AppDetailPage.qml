@@ -14,6 +14,8 @@ Page {
     readonly property var job: Store.jobs[appId] ?? null
     readonly property bool installed: app.installed ?? false
     readonly property bool hasUpdate: app.updateAvailable ?? false
+    // False: the app needs a newer API level than this console has (RUY-156). An older service does not say.
+    readonly property bool compatible: app.compatible ?? true
     readonly property var highRisk: ["all-devices", "host-files", "session-bus"]
 
     // A Standard profile needs an admin's PIN to install an app with a high-risk permission, and to
@@ -127,7 +129,7 @@ Page {
     }
 
     function primaryAction() {
-        if (page.working || page.pinStep !== "idle")
+        if (!page.compatible || page.working || page.pinStep !== "idle")
             return
         if (!page.detailsReady) {
             // Not known yet whether a PIN is needed: do it as soon as the permissions are in.
@@ -298,7 +300,7 @@ Page {
                     : !page.installed ? qsTr("Install")
                     : page.hasUpdate ? qsTr("Update")
                     : qsTr("Open")
-                active: !page.working && (!page.installed || page.hasUpdate)
+                active: page.compatible && !page.working && (!page.installed || page.hasUpdate)
                 onActivated: page.primaryAction()
                 Keys.onDownPressed: if (uninstall.visible) { Sfx.navigate(); uninstall.forceActiveFocus() }
             }
@@ -397,6 +399,18 @@ Page {
             text: page.controllerText(page.app.controller ?? "none")
             color: Theme.text
             font.pixelSize: Theme.typeCaption * page.u
+        }
+
+        // An app that needs a newer RuyaOS cannot be installed; one already installed keeps running.
+        Text {
+            objectName: "detailCompat"
+            visible: !page.compatible
+            width: parent.width
+            text: page.installed ? qsTr("Needs a newer RuyaOS than this console has. It stays installed.") : qsTr("Needs a newer RuyaOS")
+            color: Theme.text
+            font.pixelSize: Theme.typeCaption * page.u
+            font.weight: Theme.weightDemiBold
+            wrapMode: Text.Wrap
         }
 
         Text {

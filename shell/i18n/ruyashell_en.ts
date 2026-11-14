@@ -283,7 +283,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+49"/>
+        <location filename="../qml/AppDetailPage.qml" line="+51"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -453,7 +453,17 @@ This can&apos;t be undone.</translation>
         <translation>Your activity</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location line="+85"/>
+        <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
+        <translation>Needs a newer RuyaOS than this console has. It stays installed.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Needs a newer RuyaOS</source>
+        <translation>Needs a newer RuyaOS</translation>
+    </message>
+    <message>
+        <location line="+20"/>
         <source>This app can</source>
         <translation>This app can</translation>
     </message>
