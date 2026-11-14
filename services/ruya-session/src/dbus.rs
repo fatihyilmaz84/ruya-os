@@ -370,7 +370,6 @@ impl SessionIface {
         profile: &str,
         instance: &str,
         attention: &str,
-        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> String {
         let Some(attention) = Attention::parse(attention) else {
             return "invalid".to_owned();
@@ -378,16 +377,13 @@ impl SessionIface {
         if !profile.is_empty() && !valid_profile_id(profile) {
             return "invalid".to_owned();
         }
-        let changed = usage_lock(&self.usage).presence(
+        usage_lock(&self.usage).presence(
             profile,
             Some(instance),
             attention,
             Instant::now(),
             unix_now(),
         );
-        for p in changed {
-            let _ = Self::usage_changed(&emitter, p).await;
-        }
         "ok".to_owned()
     }
 

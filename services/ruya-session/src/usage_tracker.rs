@@ -321,7 +321,6 @@ impl<S: UsageStore, Z: Zone> Tracker<S, Z> {
     /// The shell's report of who is in front. A profile switch pauses the previous profile's
     /// runs (RUY-569: a switch freezes its apps, signing back in resumes them): they stay open,
     /// do not accrue while their profile is away, and end at `app_exited` with its real reason.
-    /// Returns the profiles whose ledger changed (none: nothing finishes here).
     pub fn presence(
         &mut self,
         profile: &str,
@@ -329,7 +328,7 @@ impl<S: UsageStore, Z: Zone> Tracker<S, Z> {
         attention: Attention,
         now: Instant,
         unix: i64,
-    ) -> Vec<String> {
+    ) {
         // What happened until now happened under the old state.
         self.accrue(now, unix);
         self.presence = Some(Presence {
@@ -340,7 +339,6 @@ impl<S: UsageStore, Z: Zone> Tracker<S, Z> {
         });
         // A switch ends nothing: the old profile's runs stay open (their apps are frozen, not
         // stopped) and `counts` skips them while another profile is in front.
-        Vec::new()
     }
 
     fn counts(&self, o: &Open, now: Instant) -> bool {
@@ -838,8 +836,7 @@ mod tests {
         start(&mut t, &c, IA, "p1", A);
         run(&mut t, &mut c, 60, "p1", Some(IA), Attention::Active);
         run(&mut t, &mut c, 30, "p1", Some(IA), Attention::Locked); // the picker
-        let changed = t.presence("p2", None, Attention::Active, c.now(), c.wall);
-        assert!(changed.is_empty());
+        t.presence("p2", None, Attention::Active, c.now(), c.wall);
         // Nothing finished: p1's run is still open.
         assert_eq!(t.open.len(), 1);
         run(&mut t, &mut c, 120, "p2", None, Attention::Active);
