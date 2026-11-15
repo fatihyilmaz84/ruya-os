@@ -31,6 +31,8 @@ FocusScope {
     property string tryFamily: ""                  // its family, connection and raw name (for the games step)
     property string tryTransport: ""
     property string tryRawName: ""
+    property bool tryPadGone: false               // the tried pad left Input1: never look for another
+    property var padsAtOpen: []                    // Input1 ids listed when the screen opened
     property string tryPadId: ""                   // its Input1 id, once Input1 lists it; kept for the games step
     property bool choosing: false                  // the games step waits for its save
     property string chosen: ""                     // the layout being saved
@@ -62,6 +64,7 @@ FocusScope {
             if (d.paired)
                 pairedBefore[d.id] = true
         }
+        padsAtOpen = Input.devices.map(d => d.id)
         phases = {}
         stage = "pair"
         family = "playstation"
@@ -183,6 +186,7 @@ FocusScope {
         tryTransport = transport
         tryRawName = rawName
         tryPadId = ""
+        tryPadGone = false
         stage = "try"
         resolveTried()
     }
@@ -191,7 +195,7 @@ FocusScope {
     // Input1 lists the pad, so it is tried again whenever the list changes). The layout of a
     // Nintendo pad is read while it is being tried, so Start knows it.
     function resolveTried() {
-        if (tryPadId !== "")
+        if (tryPadId !== "" || tryPadGone)
             return
         const id = triedPadId()
         if (id === "")
@@ -209,21 +213,29 @@ FocusScope {
             resolveTried()
         } else if (!Input.devices.some(d => d.id === tryPadId)) {
             tryPadId = ""
+            tryPadGone = true
             if (stage === "games")
                 onb.close()
         }
     }
 
-    // The Input1 id of the pad being tried: the Nintendo pad of that connection (the one with its
-    // name when there are several), else "". Only Nintendo pads get the games step.
+    // The Input1 id of the pad being tried, else "". Only Nintendo pads get the games step. A pad
+    // that is new since the screen opened qualifies (the name decides where several do); a pad that
+    // was already listed is taken only over USB and only when its name is the tried pad's.
     function triedPadId() {
         if (tryFamily !== "nintendo")
             return ""
         const plain = n => DeviceIcons.plain(n).toLowerCase()
-        let list = Input.devices.filter(d => d.family === "nintendo" && d.connection === tryTransport)
-        if (list.length > 1)
-            list = list.filter(d => plain(d.name) === plain(tryRawName))
-        return list.length === 1 ? list[0].id : ""
+        const list = Input.devices.filter(d => d.family === "nintendo" && d.connection === tryTransport)
+        const isNew = d => !padsAtOpen.includes(d.id)
+        const sameName = d => plain(d.name) === plain(tryRawName)
+        const fresh = list.filter(isNew)
+        // Over Bluetooth the tried pad was paired in this screen, so a pad listed before is another one.
+        const pool = fresh.length > 0 || tryTransport === "bluetooth" ? fresh : list
+        const named = pool.filter(sameName)
+        if (named.length === 1)
+            return named[0].id
+        return pool.length === 1 && isNew(pool[0]) ? pool[0].id : ""
     }
 
     // Start on the try stage: the games step for a Nintendo pad that still has the Standard layout

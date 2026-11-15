@@ -722,6 +722,7 @@ Item {
             signedIn()
             Input.saveProfile("p2", JSON.stringify({ schema_version: 1, id: "controls-all", name: "All",
                                                       scope: { type: "global" },
+                                                      mappings: [{ from: "l1", to: { type: "button", code: "r1" } }],
                                                       settings: { left_stick: { inner_deadzone: 0.12 } } }))
             Input.assignProfile("p2", "global", "", "controls-all")
             tryVerify(() => Input.mockProfileCalls().filter(c => c.method === "AssignProfile").length === 1)
@@ -735,6 +736,9 @@ Item {
             compare(s.length, 1)
             compare(s[0].id, "controls-device-" + procon)
             compare(s[0].inherits, "nintendo")
+            compare(s[0].match.device, procon)
+            compare(s[0].mappings, [{ from: "l1", to: { type: "button", code: "r1" } }], "the copy keeps the shared mappings")
+            compare(s[0].settings.left_stick.inner_deadzone, 0.12, "and its stick settings")
             compare(s.filter(p => p.id === "controls-all").length, 0, "the shared profile is not rewritten")
         }
 
@@ -753,6 +757,70 @@ Item {
             tryCompare(GameControls, "layout", "standard")
             keyClick(Qt.Key_Menu)
             tryCompare(onb, "stage", "games")
+        }
+
+        // RUY-703 case 1: another Nintendo pad is listed; the pad being tried is not yet.
+        function test_a_pad_not_yet_listed_is_not_taken_for_another_nintendo_pad() {
+            signedIn()                                  // a Pro Controller (usb) is listed
+            const wiiu = "usb-057e-0330-c1d2e3f4a5b6"
+            onb.open()
+            usb(true, "usb-wiiu", "Nintendo RVL-CNT-01-UC", "nintendo")
+            tryCompare(onb, "stage", "try")
+            compare(onb.tryPadId, "", "the listed Pro Controller is not the pad being tried")
+            Input.mockAddDevice({ id: wiiu, name: "Nintendo RVL-CNT-01-UC", family: "nintendo", model: "wiiu_pro",
+                                  connection: "usb" })
+            tryCompare(onb, "tryPadId", wiiu)
+            keyClick(Qt.Key_Menu)
+            tryCompare(onb, "stage", "games")
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !onb.shown, 3000)
+            compare(saves().map(p => p.id), ["controls-device-" + wiiu])
+        }
+
+        function test_a_tried_pad_that_leaves_is_not_replaced_by_another_nintendo_pad() {
+            signedIn()                                  // an older Pro Controller of the same name stays listed
+            const tried = "usb-057e-2009-ffeeddccbbaa"
+            onb.open()
+            Input.mockAddDevice({ id: tried, name: "Pro Controller", family: "nintendo", model: "switch_pro",
+                                  connection: "usb" })
+            tryVerify(() => Input.devices.length === 5)
+            usb(true, "usb-try", "Pro Controller", "nintendo")
+            tryCompare(onb, "stage", "try")
+            tryCompare(onb, "tryPadId", tried)
+            Input.mockRemoveDevice(tried)
+            tryVerify(() => Input.devices.length === 4)
+            compare(onb.tryPadId, "")
+            Input.mockRemoveDevice("usb-045e-0b12-8e01c2d4a9f3")        // the list changes again
+            tryVerify(() => Input.devices.length === 3)
+            wait(100)
+            compare(onb.tryPadId, "", "never looks for another pad once its own left")
+            keyClick(Qt.Key_Menu)
+            tryVerify(() => !onb.shown, 2000)
+            compare(saves().length, 0)
+        }
+
+        // A second Switch Pro paired while one is connected: Input1 has not listed it yet.
+        function test_an_old_bluetooth_pad_of_the_same_name_is_not_the_pad_being_tried() {
+            signedIn()
+            Input.mockAddDevice({ id: "bluetooth-057e-2009-111111111111", name: "Ruya Pad", family: "nintendo",
+                                  model: "switch_pro", connection: "bluetooth" })     // listed before, same name
+            tryVerify(() => Input.devices.length === 5)
+            const second = "bluetooth-057e-2009-0a0b0c0d0e0f"
+            Bluetooth.mockPairingScript("wait")
+            Bluetooth.mockSetFamily("bt-pad-new", "nintendo")
+            onb.open()
+            Bluetooth.mockReveal("bt-pad-new")
+            tryVerify(() => find("onbRow_bt-pad-new") !== null, 2000)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryCompare(find("onbRow_bt-pad-new"), "phase", "done")
+            keyClick(Qt.Key_Return)
+            tryCompare(onb, "stage", "try")
+            compare(onb.tryPadId, "", "the pad listed before is not this one")
+            Input.mockAddDevice({ id: second, name: "Ruya Pad", family: "nintendo", model: "switch_pro",
+                                  connection: "bluetooth" })
+            tryCompare(onb, "tryPadId", second)
         }
 
         function test_the_games_step_in_turkish() {
