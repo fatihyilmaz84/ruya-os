@@ -709,6 +709,21 @@ Item {
             tryVerify(() => !onb.shown, 3000)
         }
 
+        // RUY-714: GameControls stops being ready after the try stage (setOwnLayout then saves nothing); A must
+        // not leave the screen waiting for a save that never starts.
+        function test_A_while_GameControls_is_not_ready_closes_and_does_not_lock_the_screen() {
+            signedIn()
+            tryPadAndStart("Pro Controller", "nintendo")
+            tryCompare(onb, "stage", "games")
+            keyClick(Qt.Key_Down)
+            GameControls.loadedKey = null
+            verify(!GameControls.ready)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !onb.shown, 2000, "the screen closes instead of waiting")
+            verify(!onb.choosing)
+            compare(saves().length, 0)
+        }
+
         // The reviewer's case: the pad leaves while the step is open; nothing is saved for another pad.
         function test_a_pad_that_leaves_while_the_step_is_open_saves_nothing() {
             signedIn()

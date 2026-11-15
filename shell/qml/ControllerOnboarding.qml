@@ -277,7 +277,11 @@ FocusScope {
         }
         choosing = true
         chosen = value
-        GameControls.setOwnLayout(value)
+        // Nothing is saved while GameControls is not ready (RUY-714): the screen closes, not locks.
+        if (!GameControls.setOwnLayout(value)) {
+            choosing = false
+            onb.close()
+        }
     }
 
     function moveChips(delta) {
