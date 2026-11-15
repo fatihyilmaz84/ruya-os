@@ -7,7 +7,8 @@ import RuyaShell
 // presses Guide, only while a profile is signed in; over a game it pauses it like the Hub (the Freeze,
 // route "overlay") and the game resumes by itself after a pick or Not now; asking pads queue; the
 // asking pad navigates while it is open; Pick (focus, detail line, badges), Join or Switch, the errors,
-// the waiting text, the padless seat 1 (Join as player 1), and the geometry at 1080p. The Xbox pad
+// the waiting text, the padless seat 1 (its card joins at once: no Move), and the geometry at 1080p. Move
+// and the PIN are tst_whos_playing_pin.qml (RUY-628). The Xbox pad
 // signs Player One (p1) in; the DualSense and the Pro Controller have no player.
 Item {
     id: host
@@ -469,18 +470,19 @@ Item {
             compare(badgeOn(0).text, "Player 1")
             compare(badgeOn(1).visible, true)
             compare(badgeOn(1).text, "Player 2")
-            // Accept on a profile that plays (Move) does nothing until RUY-628.
+            // Accept on a profile that plays opens Move (RUY-628, tst_whos_playing_pin.qml); Back returns.
             list.currentIndex = 0
             keyClick(Qt.Key_Return)
-            wait(50)
-            compare(prompt().step, "pick")
-            verify(list.activeFocus)
+            tryVerify(() => find("whosPlayingMoveCancel").activeFocus, 2000)
+            compare(prompt().step, "move")
             compare(joinSpy.count, 1, "only the test's own join")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => list.activeFocus, 2000)
             keyClick(Qt.Key_Escape)
             tryVerify(() => !prompt().shown, 2000, "Back = Not now")
         }
 
-        function test_a_free_card_has_no_badge_or_detail_and_a_pin_card_stays_on_pick() {
+        function test_a_free_card_has_no_badge_or_detail_and_a_pin_card_opens_join_or_switch() {
             signIn()
             // Ada signs in on the Xbox pad instead, so Player One (PIN) is free.
             Profiles.lock()
@@ -498,16 +500,16 @@ Item {
             compare(list.currentIndex, 0, "Player One, the first profile without a pad")
             compare(badgeOn(0).visible, false, "a free profile has no Player badge")
             compare(find("whosPlayingDetail").text, "")
-            keyClick(Qt.Key_Return)
-            wait(50)
-            compare(prompt().step, "pick", "a PIN profile stays on Pick until RUY-628")
-            verify(list.activeFocus)
-            compare(joinSpy.count, 0)
-            compare(find("whosPlayingDetail").text, "Needs a PIN: coming soon", "the cue says why")
             keyClick(Qt.Key_Right)
-            verify(find("whosPlayingDetail").text.endsWith("Picking it moves Ada here."), "Ada's own line: the notice went")
+            verify(find("whosPlayingDetail").text.endsWith("Picking it moves Ada here."), "Ada's own line")
             keyClick(Qt.Key_Left)
-            compare(find("whosPlayingDetail").text, "", "and does not come back by itself")
+            compare(find("whosPlayingDetail").text, "")
+            // A PIN profile opens Join or Switch like any free one; the PIN comes after (RUY-628).
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("whosPlayingJoin").activeFocus, 2000, "a PIN card opens Join or Switch")
+            compare(prompt().step, "confirm")
+            compare(find("whosPlayingConfirmTitle").text, "Join in or switch to Player One?")
+            compare(joinSpy.count, 0)
         }
 
         // ---- step "Join or Switch" ----------------------------------------------------------------------------
@@ -711,7 +713,7 @@ Item {
             const list = find("whosPlayingCards")
             tryVerify(() => list.activeFocus, 2000)
             compare(list.currentIndex, 1, "Ada, player 1 without a pad, has the focus first (one press back)")
-            compare(find("whosPlayingDetail").text, "Picking it makes this controller player 1.")
+            compare(find("whosPlayingDetail").text, "", "no pad to name, no Move (RUY-628)")
             compare(badgeOn(1).text, "Player 1")
             list.currentIndex = 1
             verify(list.activeFocus)
@@ -789,10 +791,33 @@ Item {
                     grabImage(tc.shell).save(shotsDir + "/" + tag + "-toast.png")
                     Input.mockFailJoin("")
                     keyClick(Qt.Key_Escape)
-                    keyClick(Qt.Key_Escape)
-                    tryVerify(() => !tc.shell || !find("whosPlaying").shown, 2000)
+                    tryVerify(() => find("whosPlayingCards").activeFocus, 2000)
                     while (Notifications.model.count > 0)
                         Notifications.dismiss(Notifications.model.get(0).toastId)
+                    // Move (RUY-628): Player One plays on the Xbox pad; then the PIN with the pad line, a wrong PIN.
+                    keyClick(Qt.Key_Left)
+                    keyClick(Qt.Key_Return)
+                    tryVerify(() => find("whosPlayingMoveCancel").activeFocus, 2000)
+                    wait(600)
+                    grabImage(tc.shell).save(shotsDir + "/" + tag + "-move.png")
+                    keyClick(Qt.Key_Right)
+                    keyClick(Qt.Key_Return)
+                    const pinPad = find("whosPlayingPin")
+                    tryVerify(() => pinPad.shown && findChild(pinPad, "pinKeys").activeFocus, 2000)
+                    wait(500)
+                    grabImage(tc.shell).save(shotsDir + "/" + tag + "-pin.png")
+                    for (let i = 0; i < 4; ++i)
+                        keyClick(Qt.Key_0)
+                    keyClick(Qt.Key_Enter)
+                    tryVerify(() => findChild(pinPad, "pinMessage").text !== "", 2000)
+                    wait(500)
+                    grabImage(tc.shell).save(shotsDir + "/" + tag + "-wrongpin.png")
+                    keyClick(Qt.Key_Escape)                     // the empty pad: back to Move
+                    tryVerify(() => find("whosPlayingMoveCancel").activeFocus, 2000)
+                    keyClick(Qt.Key_Escape)
+                    tryVerify(() => find("whosPlayingCards").activeFocus, 2000)
+                    keyClick(Qt.Key_Escape)
+                    tryVerify(() => !tc.shell || !find("whosPlaying").shown, 2000)
                     playRacer()
                     askWith(host.pro)
                     wait(500)

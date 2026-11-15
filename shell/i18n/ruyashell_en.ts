@@ -3302,7 +3302,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>PinPad</name>
     <message>
-        <location filename="../qml/PinPad.qml" line="+166"/>
+        <location filename="../qml/PinPad.qml" line="+201"/>
         <source>PINs don&apos;t match</source>
         <translation>PINs don&apos;t match</translation>
     </message>
@@ -3320,15 +3320,15 @@ This can&apos;t be undone.</translation>
         <translation>Could not sign in (%1).</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+78"/>
         <location line="+6"/>
-        <location line="+19"/>
+        <location line="+43"/>
         <source>Enter PIN for %1</source>
         <translation>Enter PIN for %1</translation>
     </message>
     <message>
-        <location line="-24"/>
-        <location line="+25"/>
+        <location line="-48"/>
+        <location line="+49"/>
         <source>Confirm PIN</source>
         <translation>Confirm PIN</translation>
     </message>
@@ -3356,17 +3356,17 @@ This can&apos;t be undone.</translation>
 <context>
     <name>PlayerChip</name>
     <message>
-        <location filename="../qml/PlayerChip.qml" line="+34"/>
+        <location filename="../qml/PlayerChip.qml" line="+38"/>
         <source>Guest %1</source>
         <translation>Guest %1</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>%1, player %2</source>
         <translation>%1, player %2</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-1"/>
         <source>%1, player %2, held</source>
         <translation>%1, player %2, held</translation>
     </message>
@@ -3924,12 +3924,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="-156"/>
-        <location line="+464"/>
+        <location line="+465"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-350"/>
+        <location line="-351"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
@@ -4006,7 +4006,7 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+284"/>
+        <location line="+285"/>
         <location line="+1"/>
         <source>%1, %2</source>
         <translation>%1, %2</translation>
@@ -4022,7 +4022,7 @@ This can&apos;t be undone.</translation>
         <translation>Resume %1, %2</translation>
     </message>
     <message>
-        <location line="-419"/>
+        <location line="-420"/>
         <source>Just started</source>
         <translation>Just started</translation>
     </message>
@@ -4037,7 +4037,7 @@ This can&apos;t be undone.</translation>
         <translation>Paused</translation>
     </message>
     <message>
-        <location line="+419"/>
+        <location line="+420"/>
         <source>Volume, muted</source>
         <translation>Volume, muted</translation>
     </message>
@@ -4047,7 +4047,7 @@ This can&apos;t be undone.</translation>
         <translation>Volume %1</translation>
     </message>
     <message>
-        <location line="-594"/>
+        <location line="-595"/>
         <source>Muted</source>
         <translation>Muted</translation>
     </message>
@@ -4534,7 +4534,7 @@ This can&apos;t be undone.</translation>
         <translation>Wallpaper could not be loaded</translation>
     </message>
     <message>
-        <location line="+371"/>
+        <location line="+374"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
@@ -4641,7 +4641,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1811"/>
+        <location line="-1814"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -4672,7 +4672,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1536"/>
+        <location line="+1539"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
@@ -6176,44 +6176,34 @@ This can&apos;t be undone.</translation>
 <context>
     <name>WhosPlaying</name>
     <message>
-        <location filename="../qml/WhosPlaying.qml" line="+81"/>
+        <location filename="../qml/WhosPlaying.qml" line="+85"/>
         <location line="+1"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
         <location line="-1"/>
-        <location line="+533"/>
+        <location line="+613"/>
         <source>Not now</source>
         <translation>Not now</translation>
     </message>
     <message>
-        <location line="-532"/>
+        <location line="-612"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+23"/>
-        <source>Needs a PIN: coming soon</source>
-        <translation>Needs a PIN: coming soon</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Picking it makes this controller player 1.</source>
-        <translation>Picking it makes this controller player 1.</translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location line="+30"/>
         <source>another controller</source>
         <translation>another controller</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Now on %2. Picking it moves %1 here.</source>
         <translation>Now on %2. Picking it moves %1 here.</translation>
     </message>
     <message>
-        <location line="+168"/>
+        <location line="+237"/>
         <source>%1 could not join</source>
         <translation>%1 could not join</translation>
     </message>
@@ -6223,7 +6213,7 @@ This can&apos;t be undone.</translation>
         <translation>Try again.</translation>
     </message>
     <message>
-        <location line="+194"/>
+        <location line="+202"/>
         <source>Paused · %1</source>
         <translation>Paused · %1</translation>
     </message>
@@ -6243,7 +6233,7 @@ This can&apos;t be undone.</translation>
         <translation>Profiles</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+36"/>
         <source>Waiting for the profiles service…</source>
         <translation>Waiting for the profiles service…</translation>
     </message>
@@ -6253,12 +6243,22 @@ This can&apos;t be undone.</translation>
         <translation>Join in or switch to %1?</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+0"/>
+        <source>Move %1 to this controller?</source>
+        <translation>Move %1 to this controller?</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>%2 stops playing as %1.</source>
+        <translation>%2 stops playing as %1.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Join: %1 plays alongside %2. Switch: %1 becomes player 1, and %2&apos;s games are paused and kept.</source>
         <translation>Join: %1 plays alongside %2. Switch: %1 becomes player 1, and %2&apos;s games are paused and kept.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Join</source>
         <translation>Join</translation>
     </message>
@@ -6266,6 +6266,16 @@ This can&apos;t be undone.</translation>
         <location line="+10"/>
         <source>Switch</source>
         <translation>Switch</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Move</source>
+        <translation>Move</translation>
     </message>
 </context>
 <context>

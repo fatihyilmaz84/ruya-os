@@ -3291,7 +3291,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>PinPad</name>
     <message>
-        <location filename="../qml/PinPad.qml" line="+166"/>
+        <location filename="../qml/PinPad.qml" line="+201"/>
         <source>PINs don&apos;t match</source>
         <translation>PIN&apos;ler eşleşmiyor</translation>
     </message>
@@ -3308,15 +3308,15 @@ Bu geri alınamaz.</translation>
         <translation>Giriş yapılamadı (%1).</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+78"/>
         <location line="+6"/>
-        <location line="+19"/>
+        <location line="+43"/>
         <source>Enter PIN for %1</source>
         <translation>%1 için PIN girin</translation>
     </message>
     <message>
-        <location line="-24"/>
-        <location line="+25"/>
+        <location line="-48"/>
+        <location line="+49"/>
         <source>Confirm PIN</source>
         <translation>PIN&apos;i onaylayın</translation>
     </message>
@@ -3344,17 +3344,17 @@ Bu geri alınamaz.</translation>
 <context>
     <name>PlayerChip</name>
     <message>
-        <location filename="../qml/PlayerChip.qml" line="+34"/>
+        <location filename="../qml/PlayerChip.qml" line="+38"/>
         <source>Guest %1</source>
         <translation>Misafir %1</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>%1, player %2</source>
         <translation>%1, %2. oyuncu</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-1"/>
         <source>%1, player %2, held</source>
         <translation>%1, %2. oyuncu, bekleniyor</translation>
     </message>
@@ -3907,12 +3907,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-156"/>
-        <location line="+464"/>
+        <location line="+465"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-350"/>
+        <location line="-351"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
@@ -3989,7 +3989,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+284"/>
+        <location line="+285"/>
         <location line="+1"/>
         <source>%1, %2</source>
         <translation>%1, %2</translation>
@@ -4005,7 +4005,7 @@ Bu geri alınamaz.</translation>
         <translation>Devam et: %1, %2</translation>
     </message>
     <message>
-        <location line="-419"/>
+        <location line="-420"/>
         <source>Just started</source>
         <translation>Yeni başladı</translation>
     </message>
@@ -4020,7 +4020,7 @@ Bu geri alınamaz.</translation>
         <translation>Duraklatıldı</translation>
     </message>
     <message>
-        <location line="+419"/>
+        <location line="+420"/>
         <source>Volume, muted</source>
         <translation>Ses, sessiz</translation>
     </message>
@@ -4030,7 +4030,7 @@ Bu geri alınamaz.</translation>
         <translation>Ses %1</translation>
     </message>
     <message>
-        <location line="-594"/>
+        <location line="-595"/>
         <source>Muted</source>
         <translation>Sessiz</translation>
     </message>
@@ -4517,7 +4517,7 @@ Bu geri alınamaz.</translation>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+371"/>
+        <location line="+374"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -4624,7 +4624,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1811"/>
+        <location line="-1814"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -4655,7 +4655,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1536"/>
+        <location line="+1539"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
@@ -6156,44 +6156,34 @@ Bu geri alınamaz.</translation>
 <context>
     <name>WhosPlaying</name>
     <message>
-        <location filename="../qml/WhosPlaying.qml" line="+81"/>
+        <location filename="../qml/WhosPlaying.qml" line="+85"/>
         <location line="+1"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
         <location line="-1"/>
-        <location line="+533"/>
+        <location line="+613"/>
         <source>Not now</source>
         <translation>Şimdi değil</translation>
     </message>
     <message>
-        <location line="-532"/>
+        <location line="-612"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+23"/>
-        <source>Needs a PIN: coming soon</source>
-        <translation>PIN gerekiyor: yakında</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Picking it makes this controller player 1.</source>
-        <translation>Seçersen bu kumanda 1. oyuncu olur.</translation>
-    </message>
-    <message>
-        <location line="+5"/>
+        <location line="+30"/>
         <source>another controller</source>
         <translation>başka bir kumanda</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+5"/>
         <source>Now on %2. Picking it moves %1 here.</source>
         <translation>Şu an %2 üzerinde. Seçersen %1 buraya geçer.</translation>
     </message>
     <message>
-        <location line="+168"/>
+        <location line="+237"/>
         <source>%1 could not join</source>
         <translation>%1 katılamadı</translation>
     </message>
@@ -6203,7 +6193,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene.</translation>
     </message>
     <message>
-        <location line="+194"/>
+        <location line="+202"/>
         <source>Paused · %1</source>
         <translation>Duraklatıldı · %1</translation>
     </message>
@@ -6223,7 +6213,7 @@ Bu geri alınamaz.</translation>
         <translation>Profiller</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+36"/>
         <source>Waiting for the profiles service…</source>
         <translation>Profil hizmeti bekleniyor…</translation>
     </message>
@@ -6233,12 +6223,22 @@ Bu geri alınamaz.</translation>
         <translation>Katıl mı, %1 profiline geç mi?</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+0"/>
+        <source>Move %1 to this controller?</source>
+        <translation>%1 bu kontrolcüye geçsin mi?</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>%2 stops playing as %1.</source>
+        <translation>%2 artık %1 olarak oynamaz.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Join: %1 plays alongside %2. Switch: %1 becomes player 1, and %2&apos;s games are paused and kept.</source>
         <translation>Katıl: %1, %2 ile birlikte oynar. Geç: %1 1. oyuncu olur; %2 profilinin oyunları duraklatılıp saklanır.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="+17"/>
         <source>Join</source>
         <translation>Katıl</translation>
     </message>
@@ -6246,6 +6246,16 @@ Bu geri alınamaz.</translation>
         <location line="+10"/>
         <source>Switch</source>
         <translation>Geç</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>Cancel</source>
+        <translation>İptal</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Move</source>
+        <translation>Geçir</translation>
     </message>
 </context>
 <context>

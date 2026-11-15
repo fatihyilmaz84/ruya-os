@@ -16,7 +16,12 @@ import RuyaShell
 //                      (the same service lockout as a sign-in) and answers verified(); a wrong PIN
 //                      shows the attempts message, a lockout dims the pad and counts down, as in
 //                      "verify" (RUY-499).
-// In the collect and admin modes Back on an empty pad also emits cancelled() (after closed()).
+//   "player"           verifyPlayer(profile, deviceId): checks a joining player's PIN with
+//                      Profiles.verifyPin (never a sign-in; the lockout is the profile's, shared with
+//                      sign-in) and answers verified(pin), for "Who's playing?" (RUY-628). Wrong PIN and
+//                      lockout as in "admin". With a deviceId the pad line (the pad's icon and name) sits
+//                      above the title; the other modes have none.
+// In the collect, admin and player modes Back on an empty pad also emits cancelled() (after closed()).
 FocusScope {
     id: pad
 
@@ -27,8 +32,11 @@ FocusScope {
     property bool busy: false
     property int lockSecs: 0
     property bool shown: false
-    property string mode: "verify"     // "verify" | "collect" | "collect-confirm" | "admin"
+    property string mode: "verify"     // "verify" | "collect" | "collect-confirm" | "admin" | "player"
     property string adminId: ""        // admin mode: whose PIN is asked
+    property string deviceId: ""       // player mode: the pad that asks ("" for no pad line)
+    // The pad's own scrim; off where the host already draws one (the "Who's playing?" prompt).
+    property bool scrimShown: true
     property string prompt: ""         // title in the collect modes
     property int stage: 0              // collect-confirm: 0 = first entry, 1 = confirmation
     property string firstEntry: ""
@@ -41,7 +49,15 @@ FocusScope {
     signal closed()
     signal collected(string pin)        // collect modes: the PIN the user entered (and confirmed)
     signal cancelled()                  // collect and admin modes: closed without a PIN
-    signal verified()                   // admin mode: the admin's PIN was right (the pad has closed)
+    // admin and player modes: the PIN was right (the pad has closed). `pin` is the player's PIN in
+    // player mode, for a caller that must sign the profile in (a Switch); "" in admin mode.
+    signal verified(string pin)
+
+    // Player mode: the pad line's pad.
+    readonly property var padRecord: deviceId !== "" ? Input.devices.find(d => d.id === deviceId) : undefined
+    readonly property bool padLineShown: mode === "player" && deviceId !== ""
+    // The modes whose title names a profile ("Enter PIN for %1").
+    readonly property bool namesProfile: mode === "verify" || mode === "player"
 
     // The screen saver starts (T-202): a PIN pad never stays up, half typed, behind it.
     Connections {
@@ -80,6 +96,22 @@ FocusScope {
         entered = ""
         message = ""
         lockSecs = 0
+        busy = false
+        shown = true
+        keys.currentIndex = 0
+        keys.forceActiveFocus()
+    }
+
+    function verifyPlayer(p, device) {
+        mode = "player"
+        if (p.id !== profile.id)
+            lockSecs = 0                // the countdown belongs to the profile that was locked
+        profile = p
+        deviceId = device ?? ""
+        stage = 0
+        firstEntry = ""
+        entered = ""
+        message = ""
         busy = false
         shown = true
         keys.currentIndex = 0
@@ -150,6 +182,9 @@ FocusScope {
         } else if (mode === "admin") {
             busy = true
             Profiles.verifyAdmin(adminId, entered)
+        } else if (mode === "player") {
+            busy = true
+            Profiles.verifyPin(profile.id, entered)
         } else if (mode === "collect") {
             Sfx.select()
             finishCollect()
@@ -212,8 +247,35 @@ FocusScope {
             if (status === "ok") {
                 Sfx.select()
                 pad.close()
-                pad.verified()
+                pad.verified("")
             } else if (status === "locked-out") {
+                pad.lockSecs = retryAfterSecs
+                pad.message = ""
+                Sfx.error()
+                pad.shakeDots()
+            } else {
+                pad.message = ProfileStatus.describe(status, attemptsLeft, retryAfterSecs)
+                Sfx.error()
+                pad.shakeDots()
+            }
+        }
+    }
+
+    Connections {
+        target: Profiles
+        function onPinVerified(id, status, attemptsLeft, retryAfterSecs) {
+            if (!pad.shown || pad.mode !== "player" || id !== pad.profile.id)
+                return
+            pad.busy = false
+            const pin = pad.entered
+            if (status === "ok") {
+                Sfx.select()
+                pad.close()             // it clears the PIN: only the caller's verified(pin) has it now
+                pad.verified(pin)
+                return
+            }
+            pad.entered = ""
+            if (status === "locked-out") {
                 pad.lockSecs = retryAfterSecs
                 pad.message = ""
                 Sfx.error()
@@ -234,7 +296,9 @@ FocusScope {
     }
 
     Rectangle {
+        objectName: "pinScrim"
         anchors.fill: parent
+        visible: pad.scrimShown
         color: Theme.scrim
     }
 
@@ -248,7 +312,7 @@ FocusScope {
         // name ("%1 için PIN girin"): `frameMetrics` measures the title around an empty name and
         // `nameMetrics` fits the name into what is left. The accessible name is the whole title.
         readonly property real titleCap: 3 * Theme.cardProfileWidth * pad.u
-        readonly property string fullTitle: pad.mode === "verify" ? qsTr("Enter PIN for %1").arg(pad.profile.name ?? "")
+        readonly property string fullTitle: pad.namesProfile ? qsTr("Enter PIN for %1").arg(pad.profile.name ?? "")
                                           : pad.stage === 1 ? qsTr("Confirm PIN") : pad.prompt
 
         TextMetrics {
@@ -264,6 +328,30 @@ FocusScope {
             text: pad.profile.name ?? ""
         }
 
+        // Player mode: the asking pad's icon and name above the title (04 "PIN pad", RUY-628).
+        Row {
+            objectName: "pinPadLine"
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: pad.padLineShown
+            spacing: Theme.spaceS * pad.u
+            Icon {
+                anchors.verticalCenter: parent.verticalCenter
+                u: pad.u
+                size: Theme.iconM
+                name: pad.padRecord ? DeviceIcons.iconFor("controller", pad.padRecord.family ?? "", pad.padRecord.model ?? "")
+                                    : "sports_esports"
+            }
+            Text {
+                objectName: "pinPadName"
+                anchors.verticalCenter: parent.verticalCenter
+                textFormat: Text.PlainText
+                text: pad.padRecord ? Notifications.named(DeviceIcons.padName(pad.padRecord.id, pad.padRecord.name ?? "",
+                                                                              pad.padRecord.family ?? "")) : ""
+                color: Theme.text
+                font.pixelSize: Theme.typeBody * pad.u
+            }
+        }
+
         Text {
             id: pinTitle
             objectName: "pinTitle"
@@ -273,7 +361,7 @@ FocusScope {
             textFormat: Text.PlainText
             Accessible.role: Accessible.StaticText
             Accessible.name: content.fullTitle
-            text: pad.mode === "verify" ? qsTr("Enter PIN for %1").arg(nameMetrics.elidedText)
+            text: pad.namesProfile ? qsTr("Enter PIN for %1").arg(nameMetrics.elidedText)
                 : pad.stage === 1 ? qsTr("Confirm PIN") : pad.prompt
             color: Theme.text
             font.pixelSize: Theme.typeTitle * pad.u
