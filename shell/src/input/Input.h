@@ -168,6 +168,13 @@ public:
     Q_INVOKABLE void assignProfile(const QString &profile, const QString &scope, const QString &scopeId,
                                    const QString &profileId);
     Q_INVOKABLE void getEffectiveProfile(const QString &profile, const QString &deviceId, const QString &appId);
+    // RUY-468: a console profile (deleted, or a temporary guest that went) loses its controller
+    // profiles; the answer is consoleProfileForgotten, a status other than "ok" is also logged
+    // (never retried: the next start's sweep does). Profiles calls both (06 §7 "Storage").
+    Q_INVOKABLE void forgetConsoleProfile(const QString &profile);
+    // The console profiles that have controller profiles stored; the answer is
+    // storedConsoleProfilesListed.
+    Q_INVOKABLE void storedConsoleProfiles();
     // Export: GetProfile, then Storage.saveReport of one file named exportFileName(profile) onto
     // the volume; the answer is exportFinished with GetProfile's status when that failed, else
     // SaveReport's ("ok", "read-only", "full", "unsupported", ...), "busy" while an export runs.
@@ -258,6 +265,10 @@ public:
     // While true SaveProfile calls wait (recorded, not carried out); false carries them out in order (RUY-595).
     Q_INVOKABLE void mockHoldSaves(bool hold);
     Q_INVOKABLE void mockSetProfileStatusOnce(const QString &method, const QString &status);
+    // The console profiles the mock holds controller profiles for (StoredConsoleProfiles), and one
+    // more as if it were left on disk (an orphan for the start sweep, RUY-468).
+    Q_INVOKABLE QStringList mockStoredConsoleProfiles() const;
+    Q_INVOKABLE void mockAddStoredConsoleProfile(const QString &profile);
 
 signals:
     void routeChanged();
@@ -301,6 +312,8 @@ signals:
                          const QString &profileId, const QString &status);
     void effectiveProfileFetched(const QString &profile, const QString &deviceId, const QString &appId,
                                  const QString &status, const QString &json, const QStringList &chain);
+    void consoleProfileForgotten(const QString &profile, const QString &status);
+    void storedConsoleProfilesListed(const QString &status, const QStringList &profiles);
     // The service's ProfilesChanged.
     void profilesChanged(const QString &profile);
     // fileName is the name the export used (also when it failed).

@@ -3,6 +3,7 @@
 #include <QHash>
 #include <QJsonObject>
 #include <QMap>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QVariantList>
@@ -32,6 +33,10 @@ public:
     // out-argument name. `changed` is set to the console profile whose profiles changed, else "".
     QVariantMap call(const QString &method, const QVariantMap &args, QString *changed);
     void reset();
+    // The console profiles with a directory in the service's store (RUY-468): one is made by the
+    // first write (a save, an assignment, a Confirm button) and goes with ForgetConsoleProfile.
+    QStringList stored() const;
+    void noteStored(const QString &console) { m_stored.insert(console); }
 
 private:
     struct Shelf
@@ -58,4 +63,5 @@ private:
     AppIdOk m_appIdOk;
     QMap<QString, QJsonObject> m_builtins;
     QHash<QString, Shelf> m_shelves;
+    QSet<QString> m_stored;
 };

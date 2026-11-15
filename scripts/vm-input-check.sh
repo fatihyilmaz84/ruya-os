@@ -8,7 +8,9 @@
 # 500 ms and the worst at most 1000 ms: the first run after heavy checks is slow (644 ms once; a lone re-run
 # gave 190-426 ms), and the 1000 ms ceiling still catches a real regression. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|close|fallback|confirm|hold|twopads|guide|owner|nodes|start|useractive|signals|players|seathold|coop|join]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|forget|shell|close|fallback|confirm|hold|twopads|guide|owner|nodes|start|useractive|signals|players|seathold|coop|join]
+# `profiles` ends with the RUY-468 step (`forget` runs it alone): see forget_check. Like `join`, it makes a profile as the
+# admin $me with PIN 1234.
 # `join` (RUY-628) with the shell running: busctl plays the calls of "Who's playing?" with a PIN, in the shell's order,
 # for a profile "Check Joiner" (PIN 1234, made as the admin $me with PIN 1234 and removed at the end) and the probe's
 # test pad: VerifyPin with a wrong PIN answers wrong-pin and ActiveProfile stays, the right PIN answers ok and
@@ -283,6 +285,62 @@ profiles_check() {
     out="$(busctl --system call "$svc" "$path" "$ifc" DeleteProfile ss "$me" vm-check-keep 2>&1)"
     case "$out" in *'"ok"'*) ok "DeleteProfile: ok" ;; *) bad "DeleteProfile: $out" ;; esac
     [ ! -e "$file" ] && ok "the file is gone" || bad "$file is still there"
+}
+
+# StoredConsoleProfiles' reply ('sas "ok" <n> "<id>" ...'): "ok", only profile ids, and <id> present or absent.
+stored_check() { # <reply> <id> <present|absent>
+    local ids n
+    case "$1" in 'sas "ok" '*) ;; *) bad "StoredConsoleProfiles: $1"; return ;; esac
+    n="$(echo "$1" | cut -d' ' -f3)"
+    ids="$(echo "$1" | cut -d' ' -f4- | grep -o '"[^"]*"' | tr -d '"')"
+    [ "$(echo "$ids" | grep -c .)" = "$n" ] || { bad "StoredConsoleProfiles: $n ids announced, not what it lists: $1"; return; }
+    if echo "$ids" | grep -qvE '^[A-Za-z0-9_-]{1,32}$'; then
+        bad "StoredConsoleProfiles lists a name that is no profile id: $1"
+    else
+        ok "StoredConsoleProfiles lists profile ids only ($n)"
+    fi
+    if echo "$ids" | grep -qx "$2"; then
+        [ "$3" = present ] && ok "StoredConsoleProfiles lists $2" || bad "StoredConsoleProfiles still lists $2"
+    else
+        [ "$3" = absent ] && ok "StoredConsoleProfiles no longer lists $2" || bad "StoredConsoleProfiles does not list $2: $1"
+    fi
+}
+
+# RUY-468 (06 section 7, "Storage"): a console profile's controller profiles go with it. busctl plays the shell:
+# a throwaway profile "Check Forget" (no PIN, made as the admin $me with PIN 1234) gets a directory through
+# SaveProfile, is deleted in Profiles1, and ForgetConsoleProfile removes the directory (a second call is "ok" too);
+# StoredConsoleProfiles lists ids only, with it before and without it after. ForgetConsoleProfile "../x" answers
+# "invalid" and leaves the state directory as it was (a sentinel $state/x/keep is made for it, removed at the end).
+forget_check() {
+    echo "--- a console profile's controller profiles go with it (RUY-468)"
+    local state root out gone dir before after
+    state="${INPUT_STATE_DIR:-/var/lib/ruya-input}"
+    root="$state/profiles"
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" CreateProfile sssss "$me" 1234 "Check Forget" standard "" 2>&1)"
+    gone=""; case "$out" in 'ssuu "ok" '*) gone="$(echo "$out" | cut -d'"' -f4)" ;; esac
+    [ -n "$gone" ] && ok "CreateProfile made $gone (Check Forget)" || { bad "CreateProfile Check Forget: $out"; return; }
+    dir="$root/$gone"
+    out="$(busctl --system call "$svc" "$path" "$ifc" SaveProfile ss "$gone" '{"schema_version":1,"id":"vm-check-forget","name":"VM check","scope":{"type":"global"}}' 2>&1)"
+    case "$out" in *'"ok" "vm-check-forget"'*) ok "SaveProfile for $gone: ok" ;; *) bad "SaveProfile for $gone: $out" ;; esac
+    [ -f "$dir/vm-check-forget.json" ] && ok "$dir holds the saved profile" || bad "$dir/vm-check-forget.json is not there"
+    stored_check "$(busctl --system call "$svc" "$path" "$ifc" StoredConsoleProfiles 2>&1)" "$gone" present
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" DeleteProfile sss "$me" 1234 "$gone" 2>&1)"
+    case "$out" in 'suu "ok"'*) ok "DeleteProfile $gone in Profiles1: ok" ;; *) bad "DeleteProfile $gone: $out" ;; esac
+    out="$(busctl --system call "$svc" "$path" "$ifc" ForgetConsoleProfile s "$gone" 2>&1)"
+    [ "$out" = 's "ok"' ] && ok "ForgetConsoleProfile $gone: ok" || bad "ForgetConsoleProfile $gone: $out"
+    [ ! -e "$dir" ] && ok "$dir is gone" || bad "$dir is still there"
+    out="$(busctl --system call "$svc" "$path" "$ifc" ForgetConsoleProfile s "$gone" 2>&1)"
+    [ "$out" = 's "ok"' ] && ok "a second ForgetConsoleProfile $gone: ok (nothing there)" || bad "a second ForgetConsoleProfile $gone: $out"
+    stored_check "$(busctl --system call "$svc" "$path" "$ifc" StoredConsoleProfiles 2>&1)" "$gone" absent
+    mkdir -p "$state/x"
+    echo keep > "$state/x/keep"
+    before="$(find "$state" -mindepth 1 | sort)"
+    out="$(busctl --system call "$svc" "$path" "$ifc" ForgetConsoleProfile s "../x" 2>&1)"
+    after="$(find "$state" -mindepth 1 | sort)"
+    [ "$out" = 's "invalid"' ] && ok "ForgetConsoleProfile ../x: invalid" || bad "ForgetConsoleProfile ../x: $out"
+    [ -f "$state/x/keep" ] && [ "$before" = "$after" ] && ok "ForgetConsoleProfile ../x: nothing in $state changed" \
+        || bad "ForgetConsoleProfile ../x changed $state: $(diff <(echo "$before") <(echo "$after") | head -5 | tr '\n' ' ')"
+    rm -rf "$state/x"
 }
 
 security_check() {
@@ -1055,6 +1113,13 @@ profiles)
     two_profiles
     [ -n "$me" ] && ok "profile $me" || { bad "need a profile"; exit 1; }
     profiles_check
+    forget_check
+    ;;
+forget)
+    # The RUY-468 step of `profiles` on its own (its host fixture in test-vm-checks.sh runs this).
+    two_profiles
+    [ -n "$me" ] && ok "profile $me" || { bad "need a profile"; exit 1; }
+    forget_check
     ;;
 security) security_check ;;
 fallback) fallback_check ;;

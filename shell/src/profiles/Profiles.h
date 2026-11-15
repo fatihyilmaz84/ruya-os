@@ -3,10 +3,14 @@
 #include "ProfilesBackend.h"
 
 #include <QObject>
+#include <QPointer>
 #include <QQmlEngine>
+#include <QSet>
 #include <QVariantList>
 
 #include <memory>
+
+class Input;
 
 // QML face of org.ruyaos.Profiles1. Backend: RUYA_SERVICES=mock|dbus; defaults to D-Bus on
 // Linux and the mock elsewhere (Windows development host).
@@ -75,7 +79,8 @@ public:
     // RUY-122). A no-op with the D-Bus backend.
     Q_INVOKABLE void mockSetAvailable(bool available);
     // Tests only (mock): the next `times` CreateGuest or RemoveGuest calls (`method` "createGuest" /
-    // "removeGuest") answer `status` and change nothing.
+    // "removeGuest") answer `status` and change nothing; "listGuests": the next `times` ListGuests
+    // fail (no guestsListed, as over D-Bus).
     Q_INVOKABLE void mockFailGuests(const QString &method, const QString &status, int times);
 
 signals:
@@ -99,9 +104,25 @@ signals:
     void guestRemoved(const QString &id, const QString &status);
 
 private:
+    // RUY-468 (06 §7 "Storage"): a console profile that goes takes its controller profiles in
+    // ruya-inputd with it: after DeleteProfile answers "ok", for every guest that leaves `guests`,
+    // and at start for every id Input1 still stores that is neither a profile nor a live guest, once
+    // both lists have answered "ok" (never on a partial view).
+    Input *input() const;
+    void forgetInputOf(const QString &id);
+    void sweepWhenListed();
+    void finishSweep(const QString &status, const QStringList &stored);
+    QSet<QString> listedIds() const;
+    enum class Sweep { Waiting, Asked, Done };
+
     std::unique_ptr<ProfilesBackend> m_backend;
     QVariantList m_profiles;
     QVariantList m_guests;
     QString m_active;
     bool m_available = false;
+    QPointer<QQmlEngine> m_engine;   // where the Input singleton is found (set by create())
+    bool m_profilesListed = false;   // ListProfiles answered "ok" once
+    bool m_guestsListed = false;     // ListGuests answered "ok" once
+    Sweep m_sweep = Sweep::Waiting;
+    QSet<QString> m_sweepKeep;       // every id listed since the sweep asked Input1
 };

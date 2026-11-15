@@ -26,6 +26,7 @@ use std::fs;
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
 
+use crate::accounts::valid_profile_id;
 use crate::engine::{Engine, Resolved, StickSettings};
 use crate::mapping::Confirm;
 use crate::profile::{self, Input, Mapping, Profile, Scope, Target};
@@ -53,6 +54,12 @@ pub trait ProfileStore: Send {
     fn write(&mut self, console: &str, name: &str, text: &str) -> io::Result<()>;
     /// Removes a file; a file that is not there is no error.
     fn remove(&mut self, console: &str, name: &str) -> io::Result<()>;
+    /// Removes the console profile's directory and everything in it (RUY-468); a directory that
+    /// is not there is no error. On an error, what could be removed is gone.
+    fn remove_all(&mut self, console: &str) -> io::Result<()>;
+    /// The console profiles that have a directory: names that are valid profile ids, sorted, at
+    /// most `MAX_ENTRIES`.
+    fn list_consoles(&mut self) -> io::Result<Vec<String>>;
 }
 
 /// `<root>/<console profile>/<file>`: the service's StateDirectory (`/var/lib/ruya-input/profiles`),
@@ -144,6 +151,77 @@ impl ProfileStore for DirStore {
             other => other,
         }
     }
+
+    fn remove_all(&mut self, console: &str) -> io::Result<()> {
+        let dir = self.root.join(console);
+        // Never follow a link: the console directory is looked at, not through.
+        let meta = match fs::symlink_metadata(&dir) {
+            Ok(m) => m,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(e),
+        };
+        if !meta.is_dir() {
+            // A link (or a stray file) in the console directory's place: unlinked, its target
+            // untouched.
+            return not_found_ok(fs::remove_file(&dir));
+        }
+        // Every entry is unlinked (a link inside too, never followed: a directory entry's type is
+        // its own); the first error is kept and the rest is still removed.
+        let mut first: Option<io::Error> = None;
+        for entry in fs::read_dir(&dir)? {
+            let removed = entry.and_then(|entry| {
+                if entry.file_type()?.is_dir() {
+                    // Nothing the service writes; std's removal does not follow links either.
+                    fs::remove_dir_all(entry.path())
+                } else {
+                    fs::remove_file(entry.path())
+                }
+            });
+            if let Err(e) = not_found_ok(removed) {
+                first.get_or_insert(e);
+            }
+        }
+        if let Err(e) = not_found_ok(fs::remove_dir(&dir)) {
+            first.get_or_insert(e);
+        }
+        first.map_or(Ok(()), Err)
+    }
+
+    fn list_consoles(&mut self) -> io::Result<Vec<String>> {
+        let entries = match fs::read_dir(&self.root) {
+            Ok(e) => e,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(e),
+        };
+        let mut out = Vec::new();
+        for entry in entries {
+            let entry = entry?;
+            let Ok(name) = entry.file_name().into_string() else {
+                continue;
+            };
+            if !valid_profile_id(&name) {
+                continue;
+            }
+            // A directory, or a link in its place (ForgetConsoleProfile unlinks it); never a file.
+            let kind = entry.file_type()?;
+            if kind.is_dir() || kind.is_symlink() {
+                out.push(name);
+                if out.len() >= MAX_ENTRIES {
+                    break;
+                }
+            }
+        }
+        out.sort();
+        Ok(out)
+    }
+}
+
+/// A file or directory that is already gone is removed.
+fn not_found_ok(result: io::Result<()>) -> io::Result<()> {
+    match result {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        other => other,
+    }
 }
 
 /// Files in memory: the default store of a `Router`, and the tests'.
@@ -179,6 +257,24 @@ impl ProfileStore for MemStore {
         }
         self.files.remove(&(console.to_owned(), name.to_owned()));
         Ok(())
+    }
+
+    fn remove_all(&mut self, console: &str) -> io::Result<()> {
+        if self.fail {
+            return Err(io::Error::other("store refuses writes"));
+        }
+        self.files.retain(|(c, _), _| c != console);
+        Ok(())
+    }
+
+    fn list_consoles(&mut self) -> io::Result<Vec<String>> {
+        let consoles: BTreeSet<&String> = self.files.keys().map(|(c, _)| c).collect();
+        Ok(consoles
+            .into_iter()
+            .filter(|c| valid_profile_id(c))
+            .take(MAX_ENTRIES)
+            .cloned()
+            .collect())
     }
 }
 
@@ -826,6 +922,37 @@ impl Book {
             shelf.profiles.remove(id);
         }
         Status::Ok
+    }
+
+    /// `ForgetConsoleProfile` (RUY-468): the console profile's directory goes, and what was read
+    /// of it; the next read finds an empty store. `console` need not be a profile account (it is
+    /// gone), only a valid id ("invalid", nothing touched). A failed removal still drops the shelf:
+    /// what could be removed is gone.
+    pub fn forget(&mut self, console: &str) -> Status {
+        if !valid_profile_id(console) {
+            return Status::Invalid;
+        }
+        let removed = self.store.remove_all(console);
+        self.shelves.remove(console);
+        match removed {
+            Ok(()) => Status::Ok,
+            Err(e) => {
+                self.journal.push(format!(
+                    "removing the controller profiles of {console} failed: {e}"
+                ));
+                Status::Failed
+            }
+        }
+    }
+
+    /// `StoredConsoleProfiles`: the console profiles with a directory.
+    pub fn stored_consoles(&mut self) -> Result<Vec<String>, Status> {
+        self.store.list_consoles().map_err(|e| {
+            self.journal.push(format!(
+                "listing the console profiles' directories failed: {e}"
+            ));
+            Status::Failed
+        })
     }
 
     /// `{"global": {"all": "<id>", "family:<f>": "<id>", "device:<id>": "<id>"}}`, written whole
@@ -1712,5 +1839,163 @@ mod tests {
         std::os::unix::fs::symlink(&outside, root.join("p1").join("linked.json")).unwrap();
         let mut b = Book::new(Box::new(DirStore::new(root)));
         assert_eq!(ids(&mut b), ["default", "nintendo"]);
+    }
+
+    // ---- forgetting a console profile (RUY-468) -----------------------------------------------
+
+    /// A directory store under a temp dir with p1 and p2 saved (p1 read once, so its shelf is
+    /// cached) and a file next to the root that no forget may touch.
+    fn forget_fixture() -> (tempfile::TempDir, PathBuf, Book) {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("profiles");
+        fs::write(dir.path().join("outside.txt"), "keep").unwrap();
+        let mut b = Book::new(Box::new(DirStore::new(root.clone())));
+        assert_eq!(b.save("p1", &profile("mine", "")).0, Status::Ok);
+        assert_eq!(b.assign("p1", "global", "", "nintendo"), Status::Ok);
+        assert_eq!(b.save("p2", &profile("theirs", "")).0, Status::Ok);
+        assert_eq!(ids(&mut b), ["default", "nintendo", "mine"]);
+        (dir, root, b)
+    }
+
+    #[test]
+    fn forget_removes_the_console_directory_and_what_was_read_of_it() {
+        let (dir, root, mut b) = forget_fixture();
+        assert_eq!(b.forget("p1"), Status::Ok);
+        assert!(
+            fs::symlink_metadata(root.join("p1")).is_err(),
+            "the directory and its files are gone"
+        );
+        assert_eq!(
+            ids(&mut b),
+            ["default", "nintendo"],
+            "the cached shelf is gone: the next list reads the empty store"
+        );
+        assert!(b.list("p1").unwrap().iter().all(|s| !s.assigned));
+        assert!(root.join("p2").join("theirs.json").is_file(), "p2 is kept");
+        assert!(dir.path().join("outside.txt").is_file());
+        // The list read p1 again: nothing was written, the directory is still not there.
+        assert!(fs::symlink_metadata(root.join("p1")).is_err());
+        assert_eq!(b.forget("p1"), Status::Ok, "a second forget is ok");
+        assert_eq!(b.forget("p9"), Status::Ok, "a missing directory is ok");
+        let mut empty = Book::new(Box::new(DirStore::new(dir.path().join("no-root"))));
+        assert_eq!(empty.forget("p1"), Status::Ok, "no root at all is ok");
+        assert_eq!(empty.stored_consoles(), Ok(vec![]));
+    }
+
+    #[test]
+    fn forget_drops_the_cached_shelf() {
+        let mut b = book();
+        assert_eq!(b.save("p1", &profile("mine", "")).0, Status::Ok);
+        assert_eq!(ids(&mut b), ["default", "nintendo", "mine"]);
+        assert_eq!(b.forget("p1"), Status::Ok);
+        assert_eq!(ids(&mut b), ["default", "nintendo"]);
+        // A store that fails still loses the shelf (what could be removed is gone) and says so.
+        let mut failing = Book::new(Box::new(MemStore::default()));
+        assert_eq!(failing.save("p1", &profile("mine", "")).0, Status::Ok);
+        assert_eq!(ids(&mut failing), ["default", "nintendo", "mine"]);
+        failing.store = Box::new(MemStore {
+            fail: true,
+            ..MemStore::default()
+        });
+        assert_eq!(failing.forget("p1"), Status::Failed);
+        assert_eq!(ids(&mut failing), ["default", "nintendo"]);
+        assert!(failing.take_journal()[0].contains("removing the controller profiles of p1"));
+    }
+
+    #[test]
+    fn forget_refuses_a_hostile_id_and_touches_nothing() {
+        let (dir, root, mut b) = forget_fixture();
+        let long = "a".repeat(33);
+        for id in [
+            "",
+            "..",
+            "../etc",
+            "a/b",
+            ".",
+            long.as_str(),
+            "p3\n",
+            "p1/..",
+        ] {
+            assert_eq!(b.forget(id), Status::Invalid, "{id:?}");
+        }
+        assert!(root.join("p1").join("mine.json").is_file());
+        assert!(root.join("p1").join(ASSIGNMENTS).is_file());
+        assert!(root.join("p2").join("theirs.json").is_file());
+        assert!(dir.path().join("outside.txt").is_file());
+        assert_eq!(
+            ids(&mut b),
+            ["default", "nintendo", "mine"],
+            "the shelf is kept"
+        );
+        assert_eq!(
+            b.forget(&"a".repeat(32)),
+            Status::Ok,
+            "32 characters is an id"
+        );
+    }
+
+    #[test]
+    fn stored_consoles_lists_directories_with_profile_ids_only() {
+        let (_dir, root, mut b) = forget_fixture();
+        fs::create_dir_all(root.join("bad name")).unwrap();
+        fs::create_dir_all(root.join(".hidden")).unwrap();
+        fs::write(root.join("p3"), "a file, not a directory").unwrap();
+        assert_eq!(
+            b.stored_consoles(),
+            Ok(vec!["p1".to_owned(), "p2".to_owned()])
+        );
+        for n in 0..300 {
+            fs::create_dir_all(root.join(format!("g{n:03}"))).unwrap();
+        }
+        assert_eq!(b.stored_consoles().unwrap().len(), MAX_ENTRIES);
+        let mut mem = book();
+        assert_eq!(mem.save("p1", &profile("mine", "")).0, Status::Ok);
+        assert_eq!(mem.stored_consoles(), Ok(vec!["p1".to_owned()]));
+        assert_eq!(mem.forget("p1"), Status::Ok);
+        assert_eq!(mem.stored_consoles(), Ok(vec![]));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn forget_unlinks_a_linked_console_directory_and_keeps_its_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("profiles");
+        fs::create_dir_all(&root).unwrap();
+        let target = dir.path().join("elsewhere");
+        fs::create_dir_all(&target).unwrap();
+        fs::write(target.join("mine.json"), profile("mine", "")).unwrap();
+        std::os::unix::fs::symlink(&target, root.join("p1")).unwrap();
+        let mut b = Book::new(Box::new(DirStore::new(root.clone())));
+        assert_eq!(b.stored_consoles(), Ok(vec!["p1".to_owned()]));
+        assert_eq!(b.forget("p1"), Status::Ok);
+        assert!(
+            fs::symlink_metadata(root.join("p1")).is_err(),
+            "the link is gone"
+        );
+        assert!(
+            target.join("mine.json").is_file(),
+            "its target is untouched"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn forget_unlinks_a_link_inside_and_keeps_its_target() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("profiles");
+        fs::create_dir_all(root.join("p1")).unwrap();
+        fs::write(root.join("p1").join("mine.json"), profile("mine", "")).unwrap();
+        let outside = dir.path().join("outside.json");
+        fs::write(&outside, profile("linked", "")).unwrap();
+        let outside_dir = dir.path().join("outside-dir");
+        fs::create_dir_all(&outside_dir).unwrap();
+        fs::write(outside_dir.join("keep.json"), "keep").unwrap();
+        std::os::unix::fs::symlink(&outside, root.join("p1").join("linked.json")).unwrap();
+        std::os::unix::fs::symlink(&outside_dir, root.join("p1").join("dir-link")).unwrap();
+        let mut b = Book::new(Box::new(DirStore::new(root.clone())));
+        assert_eq!(b.forget("p1"), Status::Ok);
+        assert!(fs::symlink_metadata(root.join("p1")).is_err());
+        assert_eq!(fs::read_to_string(&outside).unwrap(), profile("linked", ""));
+        assert!(outside_dir.join("keep.json").is_file());
     }
 }

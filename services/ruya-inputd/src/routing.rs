@@ -2021,6 +2021,35 @@ impl<B: Backend> Router<B> {
         status
     }
 
+    /// `Input1.ForgetConsoleProfile` (RUY-468): the console profile (deleted, or a guest that went)
+    /// loses its controller profiles. Not a profile account check: the account is gone by now; the
+    /// id rule alone keeps the removal inside the state directory. A pad still seated with it takes
+    /// `default`, as a profile without files does; one `ProfilesChanged` (also after a failure:
+    /// what was read of it is dropped either way).
+    pub fn forget_console_profile(&mut self, profile: &str) -> Status {
+        if !valid_profile_id(profile) {
+            return Status::Invalid;
+        }
+        let status = self.book.forget(profile);
+        self.drain_book();
+        if status == Status::Ok {
+            self.journal(format!("controller profiles of ruya-{profile} removed"));
+        }
+        self.profiles_changed(profile);
+        status
+    }
+
+    /// `Input1.StoredConsoleProfiles`: the console profiles with a directory of controller
+    /// profiles (the shell's start sweep, RUY-468).
+    pub fn stored_console_profiles(&mut self) -> (Status, Vec<String>) {
+        let out = self.book.stored_consoles();
+        self.drain_book();
+        match out {
+            Ok(list) => (Status::Ok, list),
+            Err(status) => (status, Vec::new()),
+        }
+    }
+
     /// `Input1.AssignProfile` (the global scope; platform and game are RUY-43).
     pub fn assign_profile(
         &mut self,
@@ -4992,6 +5021,90 @@ mod tests {
             writes(&r.backend_mut().take()),
             vec![(2, vec![(code::EV_KEY, code::BTN_SOUTH, 1)])]
         );
+    }
+
+    // RUY-468: a console profile that goes takes its controller profiles with it; a pad still
+    // seated with it emits as `default` at once, and one ProfilesChanged tells the shell.
+    #[test]
+    fn a_forgotten_console_profile_leaves_its_pads_on_default() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        sign_in(&mut r, a, "p1");
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(r.save_profile("p1", SWAP).0, Status::Ok);
+        assert_eq!(r.assign_profile("p1", "global", "", "swap"), Status::Ok);
+        r.input(a, &[press(PadButton::South)]);
+        r.backend_mut().take();
+        r.take_notices();
+        assert_eq!(
+            r.stored_console_profiles(),
+            (Status::Ok, vec!["p1".to_owned()])
+        );
+        // South is held as East: the virtual pad presses South and lets go of East (by code).
+        assert_eq!(r.forget_console_profile("p1"), Status::Ok);
+        assert_eq!(
+            writes(&r.backend_mut().take()),
+            vec![(
+                1,
+                vec![
+                    (code::EV_KEY, code::BTN_SOUTH, 1),
+                    (code::EV_KEY, code::BTN_EAST, 0)
+                ]
+            )]
+        );
+        assert_eq!(profiles_changed(&mut r), ["p1"], "one ProfilesChanged");
+        assert_eq!(r.stored_console_profiles(), (Status::Ok, vec![]));
+        let (_, list) = r.list_profiles("p1");
+        assert!(
+            list.iter().all(|s| s.id != "swap" && !s.assigned),
+            "{list:?}"
+        );
+        r.input(a, &[release(PadButton::South)]);
+        r.backend_mut().take();
+        r.input(a, &[press(PadButton::South)]);
+        assert_eq!(
+            writes(&r.backend_mut().take()),
+            vec![(1, vec![(code::EV_KEY, code::BTN_SOUTH, 1)])]
+        );
+        // Not a profile account (a guest that went): still forgotten, by the id rule alone.
+        assert_eq!(r.forget_console_profile("gone"), Status::Ok);
+        assert_eq!(profiles_changed(&mut r), ["gone"]);
+    }
+
+    #[test]
+    fn forget_refuses_a_hostile_id_without_a_signal() {
+        let mut r = router();
+        assert_eq!(r.save_profile("p1", SWAP).0, Status::Ok);
+        r.take_notices();
+        let long = "a".repeat(33);
+        for id in ["", "..", "../etc", "a/b", ".", long.as_str(), "p3\n"] {
+            assert_eq!(r.forget_console_profile(id), Status::Invalid, "{id:?}");
+        }
+        assert!(profiles_changed(&mut r).is_empty());
+        assert_eq!(
+            r.stored_console_profiles(),
+            (Status::Ok, vec!["p1".to_owned()])
+        );
+        // A store that fails: "failed", and the signal still goes (what was read is dropped).
+        let store = crate::book::MemStore {
+            fail: true,
+            ..Default::default()
+        };
+        r.set_book(Book::new(Box::new(store)));
+        assert_eq!(r.forget_console_profile("p1"), Status::Failed);
+        let notices = r.take_notices();
+        let signals: Vec<&Notice> = notices
+            .iter()
+            .filter(|n| matches!(n, Notice::ProfilesChanged { .. }))
+            .collect();
+        assert_eq!(
+            signals,
+            [&Notice::ProfilesChanged {
+                profile: "p1".into()
+            }]
+        );
+        assert!(notices.iter().any(|n| matches!(n, Notice::Journal(l)
+            if l.contains("removing the controller profiles of p1 failed"))));
     }
 
     #[test]

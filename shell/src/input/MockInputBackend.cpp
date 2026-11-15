@@ -512,9 +512,13 @@ void MockInputBackend::callProfile(quint64 token, const QString &method, const Q
                 pads.insert(device, mode);
             if (profile == m_profile && device == m_activeDevice && mode != before)
                 QTimer::singleShot(0, this, [this] { emit confirmButtonChanged(); });
+            m_profiles.noteStored(profile); // the settings file is in the console profile's directory
         }
     } else {
         reply = m_profiles.call(method, args, &changed);
+        // The settings file goes with the directory (RUY-468).
+        if (method == QLatin1String("ForgetConsoleProfile") && reply.value(QStringLiteral("status")) == QLatin1String("ok"))
+            m_confirm.remove(args.value(QStringLiteral("profile")).toString());
     }
     QTimer::singleShot(0, this, [this, token, method, args, reply, changed] {
         emit profileReply(token, method, args, reply);

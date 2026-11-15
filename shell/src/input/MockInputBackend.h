@@ -93,6 +93,10 @@ public:
         m_confirm.clear();
         m_confirmsDelayed = false;
     }
+    // Tests (RUY-468): the console profiles with controller profiles stored (what
+    // StoredConsoleProfiles answers), and one more as if it had been left on disk.
+    QStringList storedConsoles() const { return m_profiles.stored(); }
+    void addStoredConsole(const QString &profile) { m_profiles.noteStored(profile); }
     // While set, every call of `method` answers `status` (its other out-arguments empty) without
     // reaching the profiles: a refused or failed save for the pages' tests (RUY-465). "" clears it.
     void setProfileStatus(const QString &method, const QString &status)

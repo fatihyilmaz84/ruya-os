@@ -488,6 +488,16 @@ void Input::getEffectiveProfile(const QString &profile, const QString &deviceId,
                 Purpose::Plain);
 }
 
+void Input::forgetConsoleProfile(const QString &profile)
+{
+    callProfile(QStringLiteral("ForgetConsoleProfile"), {{QStringLiteral("profile"), profile}}, Purpose::Plain);
+}
+
+void Input::storedConsoleProfiles()
+{
+    callProfile(QStringLiteral("StoredConsoleProfiles"), {}, Purpose::Plain);
+}
+
 QString Input::exportFileName(const QString &profile) const
 {
     return QStringLiteral("RuyaOS-controls-%1-%2.json").arg(profile, QDate::currentDate().toString(Qt::ISODate));
@@ -656,6 +666,28 @@ void Input::onProfileReply(quint64 token, const QString &method, const QVariantM
         emit effectiveProfileFetched(profile, args.value(QStringLiteral("device_id")).toString(),
                                      args.value(QStringLiteral("app_id")).toString(), status,
                                      reply.value(QStringLiteral("json")).toString(), reply.value(QStringLiteral("chain")).toStringList());
+    else if (method == QLatin1String("ForgetConsoleProfile")) {
+        // Not retried and not shown: the next start's sweep forgets what is left (RUY-468).
+        if (status != QLatin1String("ok"))
+            qWarning("ruya-shell: Input1 ForgetConsoleProfile for %s answered %s", qPrintable(profile), qPrintable(status));
+        emit consoleProfileForgotten(profile, status);
+    } else if (method == QLatin1String("StoredConsoleProfiles")) {
+        if (status != QLatin1String("ok"))
+            qWarning("ruya-shell: Input1 StoredConsoleProfiles answered %s", qPrintable(status));
+        emit storedConsoleProfilesListed(status, reply.value(QStringLiteral("profiles")).toStringList());
+    }
+}
+
+QStringList Input::mockStoredConsoleProfiles() const
+{
+    auto *mock = qobject_cast<MockInputBackend *>(m_backend.get());
+    return mock ? mock->storedConsoles() : QStringList();
+}
+
+void Input::mockAddStoredConsoleProfile(const QString &profile)
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        mock->addStoredConsole(profile);
 }
 
 QVariantList Input::mockProfileCalls() const

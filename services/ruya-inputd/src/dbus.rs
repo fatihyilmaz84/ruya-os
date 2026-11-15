@@ -317,6 +317,20 @@ impl InputIface {
             .to_owned()
     }
 
+    /// The console profile's controller profiles go with it (RUY-468).
+    fn forget_console_profile(&self, profile: &str) -> String {
+        self.shared
+            .with(|r| r.forget_console_profile(profile))
+            .as_str()
+            .to_owned()
+    }
+
+    #[zbus(out_args("status", "profiles"))]
+    fn stored_console_profiles(&self) -> (String, Vec<String>) {
+        let (status, list) = self.shared.with(|r| r.stored_console_profiles());
+        (status.as_str().to_owned(), list)
+    }
+
     fn assign_profile(
         &self,
         profile: &str,
