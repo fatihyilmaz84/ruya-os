@@ -32,8 +32,10 @@ ProfilePaneBase {
     readonly property int adminCount: Profiles.profiles.filter(p => p.role === "admin").length
     // Your own profile is changed under My profile, so only another one is renamed or deleted here.
     readonly property bool other: selected !== undefined && selectedId !== Profiles.activeProfile
-    readonly property bool canRename: other && isAdmin && selected.role !== "guest"
-    readonly property bool canDelete: other && isAdmin && selected.role !== "guest"
+    // A kept guest-role profile is renamed and deleted like any other (03 §1); temporary guests
+    // are not in Profiles.profiles, so they never reach this pane.
+    readonly property bool canRename: other && isAdmin
+    readonly property bool canDelete: other && isAdmin
                                       && !(selected.role === "admin" && adminCount <= 1)
 
     function selectProfile(id) {

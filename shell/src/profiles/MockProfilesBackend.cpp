@@ -64,7 +64,7 @@ void MockProfilesBackend::seed()
         {{QStringLiteral("p1"), QStringLiteral("Player One"), QStringLiteral("#3a5bd9"), QStringLiteral("admin"), true},
          QStringLiteral("1234")},
         {{QStringLiteral("p2"), QStringLiteral("Ada"), QStringLiteral("#d9483a"), QStringLiteral("standard"), false}, {}},
-        {{QStringLiteral("p3"), QStringLiteral("Guest"), QStringLiteral("#5a6478"), QStringLiteral("guest"), false}, {}},
+        {{QStringLiteral("p3"), QStringLiteral("Sam"), QStringLiteral("#5a6478"), QStringLiteral("guest"), false}, {}},
     };
     m_nextId = 4;
 }

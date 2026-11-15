@@ -90,4 +90,4 @@ Areas: `shell`, `services`, `image`, `api`, `docs`, `scripts`, `ci`. Add the att
 - **Rendering.** Offscreen (tests, CI) is the software renderer, where `MultiEffect` draws nothing: assert properties (`visible`, `blurMax`, focus), never pixels. Only `shots` renders on the GPU.
 - **qmllint** needs the module response file and `--max-warnings 0`; `dev.ps1` does that.
 - **Line endings.** Files that reach the Linux image stay LF (`.gitattributes`). Shell scripts need the exec bit: `git update-index --chmod=+x <file>`.
-- **Mock services.** Off Linux the shell uses mocks. Mock profiles: Player One (admin, PIN 1234), Ada (no PIN), Guest.
+- **Mock services.** Off Linux the shell uses mocks. Mock profiles: Player One (admin, PIN 1234), Ada (no PIN), Sam (guest role).
