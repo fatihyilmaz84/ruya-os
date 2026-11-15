@@ -335,7 +335,7 @@ def pad_rows(names, timeout=10):
     at the end otherwise, so the caller reports it."""
     def own():
         return [d for d in (devices() or []) if d.get("name") in names]
-    return wait_for(lambda: own() if len(own()) >= len(names) else None, timeout) or own()
+    return wait_for(lambda: own() if {d["name"] for d in own()} >= set(names) else None, timeout) or own()
 
 
 def acl_users(node):

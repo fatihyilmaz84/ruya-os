@@ -979,11 +979,14 @@ performance_check() {
     v="$(perf_get "$second" ram_used value)"
     # Doubles may come as 1.39e+09: whole bytes through awk.
     if near "$(awk -v v="$v" 'BEGIN { printf "%.0f", v }')" "$((total - avail))" 5; then ok "ram_used ($v) is within 5 % of MemTotal - MemAvailable"; else bad "ram_used $v vs $((total - avail))"; fi
-    # RUY-719: the service answers a call within MIN_WINDOW (250 ms) of its last reading with that reading. Both of
-    # its readings lie inside [t0, t1] taken around the pair, so a pair with t1 - t0 < 250 ms MUST match. A slower
-    # pair (a loaded VM: busctl starts a process per call) proves nothing and is tried again (3 pairs).
+    # RUY-719: the service's window runs from its last FRESH reading (a cached answer does not renew it): a call
+    # within MIN_WINDOW (250 ms) of that reading gets it again. So sleep 0.3 first: call a then takes a fresh
+    # reading, and call b, if it follows a within 250 ms, MUST get a's answer. Both lie inside [t0, t1] taken
+    # around the pair, so t1 - t0 < 250 ms means they must match. A slower pair (a loaded VM: busctl starts a
+    # process per call) proves nothing and is tried again (3 pairs).
     local t0 t1 gap gaps="" fit=0
     for _ in 1 2 3; do
+        sleep 0.3
         t0="$(date +%s%N)"; a="$(perf_call)"; b="$(perf_call)"; t1="$(date +%s%N)"
         gap=$(( (t1 - t0) / 1000000 ))
         if [ "$gap" -lt 250 ]; then
@@ -992,7 +995,6 @@ performance_check() {
             break
         fi
         gaps="$gaps $gap ms"
-        sleep 0.3
     done
     [ "$fit" = 1 ] || echo "UNVERIFIED: no pair of GetPerformance calls fit inside 250 ms (took:$gaps): the cache window was not tested"
     sensor=0

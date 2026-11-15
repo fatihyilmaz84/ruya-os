@@ -397,5 +397,9 @@ check("pad_rows waits until both own pads are listed, ignoring other devices",
 rows = run_pad_rows(lambda n: [{"name": "Pad", "id": "a"}])
 check("pad_rows returns what is listed when the second pad never comes (the caller reports it)",
       [d["name"] for d in rows] == ["Pad"], rows)
+rows = run_pad_rows(lambda n: [{"name": "Pad", "id": "a"}, {"name": "Pad", "id": "a2"}]
+                    + ([{"name": "Pad B", "id": "b"}] if n > 40 else []))
+check("pad_rows does not take a duplicate-named pad for the missing second pad",
+      "Pad B" in [d["name"] for d in rows], rows)
 
 sys.exit(1 if fails else 0)
