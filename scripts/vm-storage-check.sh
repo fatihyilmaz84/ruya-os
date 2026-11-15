@@ -252,7 +252,7 @@ scan() {
     deep="$mp/deep/1/2/3/4/5/6/7/8/9/10"
     mkdir -p "$deep"; echo x > "$deep/f.bin"
     sync
-    r="$(busctl --system call "$svc" "$path" "$st" ScanVolume s "$id")"
+    r="$(busctl --system call "$svc" "$path" "$st" ScanVolume sb "$id" false)"
     [ "$r" = 's "ok"' ] && ok "ScanVolume answers ok" || bad "ScanVolume answered $r"
     n=0; while [ "$(scan_get "$id" state)" != done ] && [ "$n" -lt 30 ]; do sleep 1; n=$((n + 1)); done
     [ "$(scan_get "$id" state)" = done ] && ok "the scan is done after ~$n s" || { bad "scan state '$(scan_get "$id" state)'"; scan_of "$id"; return; }
@@ -274,10 +274,17 @@ scan() {
     sleep 1
     [ "$(grep -ic "member=VolumeScanChanged" "$log")" -ge 1 ] && ok "VolumeScanChanged was sent" || bad "no VolumeScanChanged"
     # A fresh result is kept: the same call answers ok at once, the numbers are the same.
-    r="$(busctl --system call "$svc" "$path" "$st" ScanVolume s "$id")"
+    r="$(busctl --system call "$svc" "$path" "$st" ScanVolume sb "$id" false)"
     [ "$r" = 's "ok"' ] && [ "$(scan_get "$id" used)" = "$used" ] && ok "a second call answers from the cache" || bad "second ScanVolume answered $r"
+    # A plain cancel keeps a finished result; force walks the volume again in one call (RUY-651).
+    busctl --system call "$svc" "$path" "$st" CancelScan s "$id" >/dev/null 2>&1
+    [ "$(scan_get "$id" state)" = done ] && [ "$(scan_get "$id" used)" = "$used" ] && ok "CancelScan keeps a finished result" || bad "CancelScan changed the result: '$(scan_get "$id" state)'"
+    r="$(busctl --system call "$svc" "$path" "$st" ScanVolume sb "$id" true)"
+    [ "$r" = 's "ok"' ] && ok "ScanVolume force answers ok" || bad "ScanVolume force answered $r"
+    n=0; while [ "$(scan_get "$id" state)" != done ] && [ "$n" -lt 30 ]; do sleep 1; n=$((n + 1)); done
+    [ "$(scan_get "$id" state)" = done ] && [ "$(scan_get "$id" used)" = "$used" ] && ok "the forced scan is done again with the same numbers" || bad "forced scan state '$(scan_get "$id" state)'"
     for a in "" "/org/freedesktop/UDisks2/block_devices/nope"; do
-        r="$(busctl --system call "$svc" "$path" "$st" ScanVolume s "$a")"
+        r="$(busctl --system call "$svc" "$path" "$st" ScanVolume sb "$a" false)"
         want='s "unknown-volume"'; [ -z "$a" ] && want='s "invalid"'
         [ "$r" = "$want" ] && ok "ScanVolume '$a' answers $want" || bad "ScanVolume '$a' answered $r"
     done

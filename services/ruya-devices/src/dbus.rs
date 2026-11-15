@@ -1483,9 +1483,10 @@ impl StorageIface {
     async fn scan_volume(
         &self,
         id: &str,
+        force: bool,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> String {
-        match self.scans.request(&self.storage.list(), id) {
+        match self.scans.request(&self.storage.list(), id, force) {
             Ok(Begin::Nothing) => drive_scan::Status::Ok,
             Ok(Begin::Run(job)) => {
                 emitter

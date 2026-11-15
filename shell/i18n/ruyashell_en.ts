@@ -4941,8 +4941,8 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+27"/>
-        <source>Rescan</source>
-        <translation>Rescan</translation>
+        <source>Rescan %1</source>
+        <translation>Rescan %1</translation>
     </message>
     <message>
         <location line="+181"/>

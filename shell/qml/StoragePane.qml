@@ -155,7 +155,7 @@ SettingsPane {
                        shown: true, removable: v.removable, mounted: v.mounted })
             if (usable) {
                 out.push(...scanRows(v.id))
-                out.push({ rowKey: "rescan:" + v.id, entryKind: "rescan", sub: "", volId: v.id, name: qsTr("Rescan"),
+                out.push({ rowKey: "rescan:" + v.id, entryKind: "rescan", sub: "", volId: v.id, name: qsTr("Rescan %1").arg(v.label),
                            valueText: "", shown: true, removable: v.removable, mounted: v.mounted })
             }
             out.push({ rowKey: "eject:" + v.id, entryKind: "eject", sub: "", volId: v.id, name: qsTr("Eject %1").arg(v.label),
@@ -256,15 +256,19 @@ SettingsPane {
     }
 
     // The Rescan row: writes that change no property of the volume leave a finished result looking
-    // fresh to the service, so CancelScan forgets it (the service) and the next scan walks again.
-    // Nothing while that drive is being scanned already.
-    function rescan(id) {
+    // fresh to the service, so one call (ScanVolume with force) drops it and walks again. Nothing
+    // while that drive is being scanned already (Accept does nothing, the hint says so).
+    function rescanBlocked(id) {
         const e = Storage.scans[id]
-        if (id === ejectingId || scanPending === id || (e && e.state === "running"))
+        return id === ejectingId || scanPending === id || (e !== undefined && e.state === "running")
+    }
+
+    function rescan(id) {
+        if (rescanBlocked(id))
             return
-        Storage.cancelScan(id)
-        scanPending = id
-        Storage.scan(id)
+        if (scanPending === "")         // another drive's first reply is still awaited: leave it
+            scanPending = id
+        Storage.rescan(id)
     }
 
     // A refused scan ("busy": another client scans) is asked again after a growing wait, so the
@@ -466,6 +470,8 @@ SettingsPane {
                       : "storageScan_" + volId + "_" + sub
             visible: shown
             kind: entryKind === "eject" || entryKind === "rescan" ? "action" : entryKind === "scan" ? "info" : "item"
+            // A Rescan row while its drive scans does nothing on Accept: Back only.
+            hintKind: entryKind === "scan" || (entryKind === "rescan" && pane.rescanBlocked(volId)) ? "info" : "item"
             u: pane.u
             // What was found on a drive sits a step in from the drive's own row.
             x: entryKind === "scan" ? Theme.spaceL * pane.u : 0

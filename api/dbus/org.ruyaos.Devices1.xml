@@ -794,6 +794,11 @@
       then answers "ok" without a new walk; a call for the volume that is being scanned also
       answers "ok". A cancelled or failed result is not fresh: the next call walks again.
 
+      force=true (the shell's Rescan row: writes that change no property of the volume leave a
+      "done" result looking fresh) also drops a done result and walks again, in this one call. A
+      scan that is running is left alone; a call that answers "busy" drops nothing. force=false is
+      the behaviour above.
+
       The scan reads names and sizes only (readdir and lstat; the service has no way to open a
       file on the volume), never follows a symlink, never enters another mount and never runs
       anything. Bounds: 6 directory levels below the mount point, 200000 entries, 10 s of wall
@@ -809,6 +814,7 @@
     -->
     <method name="ScanVolume">
       <arg name="id" type="s" direction="in"/>
+      <arg name="force" type="b" direction="in"/>
       <arg name="status" type="s" direction="out"/>
     </method>
 
@@ -836,10 +842,9 @@
 
     <!--
       Stops the scan of this volume within one directory (or within 64 entries of a very large
-      one); it then ends as "cancelled". A result that is not running (done, cancelled or failed)
-      is forgotten instead, so the next ScanVolume walks again (the shell's Rescan row: writes
-      that change no property of the volume leave a "done" result looking fresh). Eject cancels
-      it too and waits (at most 2 s) until the walk has let go of the volume before unmounting,
+      one); it then ends as "cancelled". A result that is not running is left as it is (a plain
+      cancel, e.g. the pane closing, never throws a fresh result away; ScanVolume with force walks
+      again). Eject cancels it too and waits (at most 2 s) until the walk has let go of the volume before unmounting,
       since a directory held open would make the unmount answer "busy".
     -->
     <method name="CancelScan">

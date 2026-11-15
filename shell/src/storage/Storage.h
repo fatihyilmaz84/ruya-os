@@ -70,6 +70,8 @@ public:
     // Starts (or joins, or reads from the cache) the scan of a mounted removable volume; the
     // answer is the volume's entry in `scans`. One scan runs at a time ("busy" status otherwise).
     Q_INVOKABLE void scan(const QString &id);
+    // The Rescan row: ScanVolume with force, one call (a finished result is dropped and walked again).
+    Q_INVOKABLE void rescan(const QString &id);
     // Stops the scan of a volume; its entry then says "cancelled".
     Q_INVOKABLE void cancelScan(const QString &id);
     // The regular files at the top of a mounted removable volume whose name ends in `suffix`
@@ -119,6 +121,7 @@ public:
     // asks for a volume's scan state and the snapshot arrives after `ms` (counted in mockPendingReplies).
     Q_INVOKABLE void mockHoldScan(bool hold);
     Q_INVOKABLE QStringList mockScanCalls() const;
+    Q_INVOKABLE QStringList mockRescanCalls() const;   // the ids of the forced scan calls (rescan()), also in mockScanCalls
     Q_INVOKABLE QStringList mockCancelCalls() const;
     Q_INVOKABLE void mockSetScanPartial(bool partial);
     Q_INVOKABLE void mockSetScanFailed(bool failed);   // later scans end "failed" (the drive cannot be read)
