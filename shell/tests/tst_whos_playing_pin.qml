@@ -567,12 +567,13 @@ Item {
             tryVerify(() => find("whosPlayingDetail").text === "Bu kumanda artık Player One olarak oynamıyor.", 2000,
                       "the open prompt follows the language")
             compare(cardList().currentIndex, 1, "the model did not reset")
+            keyClick(Qt.Key_Right)                                  // p3, the guest-role profile (RUY-680)
             keyClick(Qt.Key_Right)
-            tryVerify(() => cardList().currentIndex === 2, 2000)
+            tryVerify(() => cardList().currentIndex === 3, 2000)
             tryVerify(() => findChild(cardList().currentItem, "profileCardName").text === "Misafir", 2000)
             DeviceSettings.language = "en"
             tryVerify(() => findChild(cardList().currentItem, "profileCardName").text === "Guest", 2000)
-            compare(cardList().currentIndex, 2)
+            compare(cardList().currentIndex, 3)
         }
 
         // The shots (RUY-664): the detail line before Accept, en and tr, on Ada's card with Player One's pad asking.

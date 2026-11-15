@@ -118,10 +118,22 @@ Item {
 
         function guestIds() { return Profiles.guests.map(g => g.id) }
 
-        // Player Two (Ada) joins on the Pro Controller: every profile has a pad.
+        // Ada joins on the Pro Controller and the kept guest-role profile (RUY-680) on the DualSense: every
+        // profile has a pad (the test then asks with a fourth pad).
         function everyProfilePlays() {
             Input.joinPlayer(host.pro, "p2")
             tryVerify(() => Input.players.length === 2, 2000)
+            Input.joinPlayer(host.dualSense, "p3")
+            tryVerify(() => Input.players.length === 3, 2000)
+        }
+
+        // Every profile plays, then a fourth pad asks (the DualSense seats the guest-role profile).
+        function askWithFourthPad() {
+            everyProfilePlays()
+            const fourth = "usb-0001-0002-fourthpad"
+            Input.mockAddDevice({ id: fourth, name: "Fourth pad", family: "generic", connection: "usb" })
+            tryVerify(() => Input.devices.length === 4, 2000)
+            askWith(fourth)
         }
 
         function openHub() {
@@ -135,16 +147,17 @@ Item {
             signIn()
             askWith(host.dualSense)
             const list = find("whosPlayingCards")
-            compare(list.count, 3, "Player One, Ada, Guest")
-            compare(prompt().cards.length, 2)
-            list.currentIndex = 2
+            compare(list.count, 4, "Player One, Ada, the guest-role profile, Guest")
+            compare(prompt().cards.length, 3)
+            list.currentIndex = prompt().guestIndex
             const card = list.currentItem
             compare(card.width, Theme.cardProfileWidth * prompt().u)
             compare(card.height, Theme.cardProfileHeight * prompt().u)
             compare(findChild(card, "profileCardName").text, "Guest")
             verify(!findChild(card, "profileCardPlayer").visible, "no badge")
-            compare(list.itemAtIndex(1).x < card.x, true, "after Ada")
+            compare(list.itemAtIndex(2).x < card.x, true, "after the profiles")
             compare(list.itemAtIndex(1).modelData.name, "Ada")
+            compare(list.itemAtIndex(2).modelData.id, "p3")
             compare(card.isGuest, true)
             verify(!list.itemAtIndex(1).isGuest)
         }
@@ -153,7 +166,7 @@ Item {
             signIn()
             askWith(host.dualSense)
             const list = find("whosPlayingCards")
-            list.currentIndex = 2
+            list.currentIndex = prompt().guestIndex
             list.forceActiveFocus()
             compare(find("whosPlayingDetail").text, "Joins as a guest. Nothing is kept after it leaves.")
             // Guest plays: the next one is Guest 2.
@@ -165,7 +178,7 @@ Item {
             tryVerify(() => prompt().shown && prompt().pad === host.dualSense, 2000, "Guide asks again")
             const again = find("whosPlayingCards")
             tryVerify(() => again.activeFocus, 2000)
-            again.currentIndex = 2
+            again.currentIndex = prompt().guestIndex
             compare(find("whosPlayingDetail").text, "Joins as Guest 2. Nothing is kept after it leaves.")
             // Turkish: the prompt opens again with the language already set.
             keyClick(Qt.Key_Escape)
@@ -175,17 +188,16 @@ Item {
             tryVerify(() => prompt().shown && prompt().pad === host.dualSense, 2000)
             const tr = find("whosPlayingCards")
             tryVerify(() => tr.activeFocus, 2000)
-            tr.currentIndex = 2
+            tr.currentIndex = prompt().guestIndex
             tryVerify(() => find("whosPlayingDetail").text === "Misafir 2 olarak katılır. Ayrılınca hiçbir şey saklanmaz.", 2000)
             tryVerify(() => findChild(tr.currentItem, "profileCardName").text === "Misafir", 2000)
         }
 
         function test_with_no_free_profile_the_guest_card_has_the_focus() {
             signIn()
-            everyProfilePlays()
-            askWith(host.dualSense)
+            askWithFourthPad()
             const list = find("whosPlayingCards")
-            tryVerify(() => list.activeFocus && list.currentIndex === 2, 2000, "Guest, not Not now")
+            tryVerify(() => list.activeFocus && list.currentIndex === prompt().guestIndex, 2000, "Guest, not Not now")
             compare(find("whosPlayingDetail").text, "Joins as a guest. Nothing is kept after it leaves.")
             const first = list.itemAtIndex(0)
             compare(findChild(first, "profileCardPlayer").text, "Player 1")
@@ -204,7 +216,7 @@ Item {
             signIn()
             askWith(host.dualSense)
             const list = find("whosPlayingCards")
-            list.currentIndex = 2
+            list.currentIndex = prompt().guestIndex
             keyClick(Qt.Key_Return)
             tryVerify(() => !prompt().shown, 2000, "it closes")
             compare(host.order, ["create ok", "join ok"], "CreateGuest, then JoinPlayer")
@@ -224,7 +236,7 @@ Item {
             seatGuest(host.pro)
             askWith(host.dualSense)
             const list = find("whosPlayingCards")
-            list.currentIndex = 2
+            list.currentIndex = prompt().guestIndex
             keyClick(Qt.Key_Return)
             tryVerify(() => !prompt().shown, 2000)
             compare(Profiles.guests.map(g => g.number).sort(), [1, 2])
@@ -239,7 +251,7 @@ Item {
             tryCompare(createdSpy, "count", 3)
             askWith(host.dualSense)
             const list = find("whosPlayingCards")
-            list.currentIndex = 2
+            list.currentIndex = prompt().guestIndex
             list.forceActiveFocus()
             compare(find("whosPlayingDetail").text, "Three guests are already playing. One must leave first.")
             const joins = joinSpy.count
@@ -250,14 +262,14 @@ Item {
             compare(Notifications.model.count, 0, "no toast")
             compare(joinSpy.count, joins, "no join")
             verify(prompt().shown, "the prompt stays")
-            verify(list.activeFocus && list.currentIndex === 2, "the focus stays on Guest")
+            verify(list.activeFocus && list.currentIndex === prompt().guestIndex, "the focus stays on Guest")
         }
 
         function test_a_refused_create_shows_the_toast_and_keeps_the_focus() {
             signIn()
             askWith(host.dualSense)
             const list = find("whosPlayingCards")
-            list.currentIndex = 2
+            list.currentIndex = prompt().guestIndex
             list.forceActiveFocus()
             Profiles.mockFailGuests("createGuest", "failed", 1)
             keyClick(Qt.Key_Return)
@@ -266,7 +278,7 @@ Item {
             compare(Notifications.model.get(0).detail, "Try again.")
             verify(prompt().shown, "the prompt stays")
             compare(Profiles.guests.length, 0)
-            tryVerify(() => list.activeFocus && list.currentIndex === 2, 2000, "the focus stays on Guest")
+            tryVerify(() => list.activeFocus && list.currentIndex === prompt().guestIndex, 2000, "the focus stays on Guest")
         }
 
         function test_two_guests_ending_together_are_both_removed() {
@@ -339,7 +351,7 @@ Item {
             signIn()
             askWith(host.dualSense)
             const list = find("whosPlayingCards")
-            list.currentIndex = 2
+            list.currentIndex = prompt().guestIndex
             Input.mockFailJoin("full")
             keyClick(Qt.Key_Return)
             tryCompare(Notifications.model, "count", 1)
@@ -348,7 +360,7 @@ Item {
             tryCompare(removedSpy, "count", 1)
             compare(removedSpy.signalArguments[0][1], "ok")
             verify(prompt().shown)
-            tryVerify(() => list.activeFocus && list.currentIndex === 2, 2000, "the focus stays on Guest")
+            tryVerify(() => list.activeFocus && list.currentIndex === prompt().guestIndex, 2000, "the focus stays on Guest")
             compare(Input.players.length, 1)
         }
 
@@ -388,7 +400,7 @@ Item {
             signIn()
             askWith(host.dualSense)
             Input.mockPlayersDelayMs(3500)
-            find("whosPlayingCards").currentIndex = 2
+            find("whosPlayingCards").currentIndex = prompt().guestIndex
             keyClick(Qt.Key_Return)
             tryCompare(joinSpy, "count", 1)
             compare(joinSpy.signalArguments[0][2], "ok")
@@ -483,7 +495,7 @@ Item {
                     const tag = "whos-guest-" + lang + "-" + size[2]
                     // Guest focused, none playing.
                     askWith(host.dualSense)
-                    find("whosPlayingCards").currentIndex = 2
+                    find("whosPlayingCards").currentIndex = prompt().guestIndex
                     wait(500)
                     grabImage(tc.shell).save(shotsDir + "/" + tag + "-none.png")
                     keyClick(Qt.Key_Escape)
@@ -492,7 +504,7 @@ Item {
                     seatGuest(host.pro)
                     Input.mockPadButton(host.dualSense, "guide")       // Not now keeps its presses quiet
                     tryVerify(() => prompt().shown && prompt().pad === host.dualSense, 2000)
-                    find("whosPlayingCards").currentIndex = 2
+                    find("whosPlayingCards").currentIndex = prompt().guestIndex
                     wait(500)
                     grabImage(tc.shell).save(shotsDir + "/" + tag + "-guest2.png")
                     keyClick(Qt.Key_Escape)
@@ -508,9 +520,8 @@ Item {
                     init()
                     DeviceSettings.language = lang
                     signIn(size[0], size[1])
-                    everyProfilePlays()
-                    askWith(host.dualSense)
-                    tryVerify(() => find("whosPlayingCards").currentIndex === 2, 2000)
+                    askWithFourthPad()
+                    tryVerify(() => find("whosPlayingCards").currentIndex === prompt().guestIndex, 2000)
                     wait(500)
                     grabImage(tc.shell).save(shotsDir + "/" + tag + "-empty.png")
                     // Three guests play already.

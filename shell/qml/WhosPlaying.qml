@@ -11,7 +11,7 @@ import RuyaShell
 // (Input.setNavigator), the keyboard too; the Shell pauses a game behind it as the Hub does
 // (HubPause.overlayOpen) and routes Input "overlay".
 //
-// Step "pick": the console's profiles (no guest-role ones) as cards; Accept on a free profile opens step
+// Step "pick": the console's kept profiles (any role) as cards; Accept on a free profile opens step
 // "confirm" (Join or Switch), on a profile that plays now with a pad step "move" (RUY-628), on one that
 // plays with no pad (player 1 after a keyboard sign-in or a hold that ran out) the PIN or the join at once.
 // Step "pin": PinPad's player mode (Profiles.verifyPin, never a sign-in) for a profile with a PIN, typed
@@ -70,7 +70,9 @@ FocusScope {
     // `target`: the item that had the focus before (null when none).
     signal closed(Item target)
 
-    readonly property var cards: Profiles.profiles.filter(p => p.role !== "guest")
+    // Every kept profile is a card, whatever its role (RUY-680: a guest-role profile is a person on this
+    // console); only temporary guests (RUY-125, Profiles.guests, never in `profiles`) are the Guest card's.
+    readonly property var cards: Profiles.profiles.filter(p => !Profiles.guests.some(g => g.id === p.id))
     // The Guest card ends the row (RUY-631); its name is the card's own qsTr, so a language change never
     // replaces the model (that would reset the current index, RUY-664). A seated pad never asks (mayAsk),
     // so it is never offered a guest again; the one exception, a seated pad's Guide while seat 1 has no
