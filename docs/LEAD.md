@@ -8,6 +8,7 @@ RuyaOS is built by two kinds of AI session under the owner:
 | **Lead** | Sonnet high for the loop, Opus for architecture-level planning ("Lead efficiency") | "Run a lead session following docs/LEAD.md." | Direction, quality, planning, architecture, hard tasks, and keeping this system working |
 | **Builder** | by the ticket's `complexity:` label (Sonnet; Opus for complex and hard) | The lead dispatches the `ruya-builder` agent (`.claude/agents/`) into a worktree; or the owner: "Do the next task from docs/STATUS.md, following CLAUDE.md." | One task, exactly as specified, ending in a HANDOFF |
 | **Reviewer** | Opus | The lead dispatches the `ruya-reviewer` agent on a builder's branch | A verdict (APPROVE or CHANGES_REQUESTED) before the branch is merged; never edits |
+| **Architect** | Opus | The lead dispatches the `ruya-architect` agent (step 5b) | A periodic, read-only audit of the system's structure; Accepted technical ADRs, owner questions, tickets and checks to automate, which the lead commits and files |
 | **UX / design reviewers** | Sonnet | The lead dispatches `ruya-ux-reviewer` and `ruya-design-reviewer` on UI diffs only, in parallel with the reviewer | Read-only findings: dead ends and spec violations (blocking), spec gaps, notes; capped (4b) |
 | **API reviewer / devdocs auditor** | Sonnet | The lead dispatches `ruya-api-reviewer` on diffs that touch a public API or format, and `ruya-devdocs-auditor` before a release (ADR-022) | Read-only findings: least privilege, abuse cases, per-profile privacy, docs/sample/mock coverage (blocking vs notes); the auditor follows `docs/developers` as a newcomer and reports gaps as Inbox lines; capped (4b) |
 
@@ -95,9 +96,12 @@ Keep going while ready tasks remain and the owner hasn't said stop.
   4. A design that needs a new token or component brings its 04 update in the same ticket (§8).
   Rows, panes and fixes that follow an existing pattern need no canvas. A design never decides an owner-level item: it proposes it, and the owner decides.
 - **Compare progress with the roadmap** (`docs/specs/00-overview.md` §6). Is the current phase converging on its exit criteria, or drifting (lots of mock-only UI, little real integration)? Rebalance the board if so.
-- **Technical decisions inside accepted ADRs:** decide, record them in the spec or in a new ADR marked *Accepted (lead, date)*, and move on.
+- **Technical decisions inside accepted ADRs:** decide what a ticket needs now, record it in the spec or in a new ADR marked *Accepted (lead, date)*, and move on; structural questions (several services or phases, a contract shape that will outlive the first release) go to the architect (5b).
 - **Owner-level questions:** `create` a ticket labelled `owner-decision`. Give the options, a recommendation, and what is blocked until then. Ask the owner directly in your final reply.
 - **Keep the specs coherent:** they describe what is built and the target, and say clearly which is which.
+
+### 5b. Architect audit (owner, 2026-11-16)
+The lead triggers it; the owner asks the lead for one. **When:** every 3-4 lead sessions (`LEAD-NOTES.md` records the last one), before a phase ends or a release, and when a ticket needs a structural decision (5). **How:** dispatch `ruya-architect` (Opus, read-only, <= 400k tokens / 30 min) in the background with the range since the last audit and up to three focus questions, or "general audit"; it may run beside builder lanes (it edits nothing), but not in a session past 50 % context. **Act on its report:** commit each `Accepted (architect, date)` ADR to `00-overview.md` verbatim in a `docs:` commit, or reject it in one line in `LEAD-NOTES.md`; file its tickets (`inbox` unless you plan them at once) and its checks to automate (a check before a rule, 6b); turn each owner question into an `owner-decision` ticket and ask the owner in the final reply. The architect decides structure; the lead keeps the board and may not quietly overrule an Accepted (architect) ADR: disagreement goes to the owner.
 
 ### 6. Lead-only work (optional, one task)
 If time remains, take **one** `owner:lead` ticket and do it with the full builder workflow (claim, build, verify, document, commit). Typical lead tasks:
@@ -146,6 +150,7 @@ A lead session that runs too long loses detail (auto-compact starts at 97 % of t
 | A builder, one task | **300k tokens** in a round without a HANDOFF | The lead looks at what it is doing (a stall, a loop, a task too large) and splits, narrows or takes it over. |
 | A task over two rounds | **500k tokens** in total | Stop it, write what is done as a ticket comment and split the rest (or do it as lead work). |
 | A UX or design reviewer | **150k tokens or 10 min** | It stops and reports what it has. Two of them run per UI diff, in parallel with `ruya-reviewer`; skip them when the 5-hour window is at 80 %. |
+| The architect | **400k tokens or 30 min** | It stops and reports what it has; no audit while the 5-hour window is at 80 % or the weekly at 70 %. |
 
 Reference figures from the 2026-11-05/06 sessions (one builder round): T-189 160k, T-191 235k + round 2 (small), T-195 290k, T-196 220k + 280k, T-200 335k, T-162 (lead, with VM debugging) several hundred thousand. A lead session of about 25 merges and a lot of planning reached 87 % of 1M.
 
@@ -165,7 +170,7 @@ Every turn re-reads the whole context, and the owner-facing relay session reads 
 |---|---|
 | Reorder, write, split, rescope or drop tickets; push `main` after a passing secret scan; file and comment on issues in `EnigmaNL/PaperPlane` | Force-push, push other branches or tags, or publish anything else (releases, images) without the owner's request |
 | Edit any code, test, spec or instruction file (`CLAUDE.md`s, `PLANNING.md`, this file) | Make owner-level decisions (legal, licence, product scope, spending, publishing) |
-| Accept technical ADRs inside the accepted architecture | Change an *Accepted* owner ADR without asking |
+| Accept technical ADRs inside the accepted architecture (structural ones are the architect's, 5b); commit the architect's | Change an *Accepted* owner ADR without asking, or overrule an *Accepted (architect)* ADR without the owner |
 | Reopen a builder's task, or revert a commit with a reason | Weaken the security invariants or any test gate |
 | Install packages inside the WSL distribution | Install system software on Windows or change system settings |
 

@@ -15,6 +15,8 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 2. **Image 0.0.88** once there is more on main: owes RUY-616's `vm-security-check.sh` (busrecv) and `vm-security-check.sh signals`, plus RUY-716's profiles check if merged (RUY-390 comments).
 3. **Builder lanes (Ready):** RUY-549 (needs WSL: dispatch only when no chain runs; the owner's new scope is in its last comment), then co-op tickets per lead-23's plan: write RUY-633, 686, 687 (canvas first); tuning RUY-530/531/528/526; game page RUY-523/524/532-534. Triage the new inbox tickets (720-728).
 4. Owner report RUY-718 (notification bell hard to reach): canvas before a builder ticket.
+5. **Architect audit (LEAD.md 5b, new in lead-25): none run yet.** The first one is a general audit at the next natural stop; focus questions: mock-only drift (RUY-730 was found by the owner, not by us), and a check that refuses a "built" spec claim whose contract is in `NOT_SERVED`.
+6. **RUY-730** (ruya-notifications service, Ready, reviewed, not dispatched on the owner's word): the owner's empty notification centre on the Dell.
 
 ## Concerns (ranked)
 1. The wake flow is still unproven on hardware (RUY-707) (the Dell has it since 0.0.87).
