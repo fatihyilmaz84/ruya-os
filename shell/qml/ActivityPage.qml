@@ -221,7 +221,7 @@ Page {
                 kind: "page"
                 u: page.u
                 iconName: "sports_esports"
-                iconSource: page.iconOf(modelData.appId)
+                iconSource: page ? page.iconOf(modelData.appId) : ""   // a Library reset re-evaluates this during teardown
                 label: page.nameOf(modelData.appId)
                 value: qsTr("%1, last played %2").arg(DurationText.plain(modelData.seconds)).arg(page.lastPlayedText(modelData.last))
                 onActivated: page.openRequested("activityGame", ({ appId: modelData.appId }))
