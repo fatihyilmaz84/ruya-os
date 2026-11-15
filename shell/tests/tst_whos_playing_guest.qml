@@ -458,6 +458,12 @@ Item {
                     tryVerify(() => find("whosPlayingCards").currentIndex === 2, 2000)
                     wait(500)
                     grabImage(tc.shell).save(shotsDir + "/" + tag + "-empty.png")
+                    // Three guests play already.
+                    for (let i = 0; i < 3; ++i)
+                        Profiles.createGuest()
+                    tryVerify(() => Profiles.guests.length === 3, 2000)
+                    wait(500)
+                    grabImage(tc.shell).save(shotsDir + "/" + tag + "-full.png")
                     tc.shell.destroy()
                     wait(50)
                 }
