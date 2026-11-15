@@ -96,7 +96,11 @@ foreach ($c in $Checks) {
     $path = Join-Path $PSScriptRoot $script
     if (-not (Test-Path $path)) { $lines.Add("SKIPPED $name : $script does not exist"); continue }
     $isSh = $script.EndsWith(".sh")
-    if ($isSh -and $rest.Count -ge 1 -and -not (Select-String -Path $path -Quiet -Pattern ("(^\s*|\bin\s+)([\w-]+\|)*" + [regex]::Escape($rest[0]) + "(\|[\w-]+)*\)"))) {   # also `case "$mode" in a|b) ;;` on one line (lead-20)
+    # A mode is a `case` label (`a|b)`, also `case "$mode" in a|b) ;;` on one line, lead-20) or an
+    # `if [ "${1:-}" = mode ]` test (vm-boot-check.sh watchdog was SKIPPED for that, lead-23).
+    $m = [regex]::Escape($rest[0])
+    $modePattern = "(^\s*|\bin\s+)([\w-]+\|)*" + $m + "(\|[\w-]+)*\)" + "|\`$\{?1[^\s\]]*\s*==?\s*`"?" + $m + "`"?\s*\]"
+    if ($isSh -and $rest.Count -ge 1 -and -not (Select-String -Path $path -Quiet -Pattern $modePattern)) {
         $lines.Add("SKIPPED $name : mode '$($rest[0])' not in $script"); continue
     }
     $ts = Get-Date
