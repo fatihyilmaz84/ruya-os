@@ -33,7 +33,9 @@
 //! - The caller that set the route leaving the bus means `locked`.
 //! - A virtual pad shows what the profile that applies to its pad makes of the physical pad
 //!   (`engine`, 06 §7): the console profile's global profile when its `match` fits, else the
-//!   built-in default. A change to the owner's profiles applies at once, to pads already made.
+//!   built-in default. The pad of seat n uses the seated player's own profiles (RUY-643; a guest
+//!   has none: the defaults). A change to a seated player's profiles applies at once, to that
+//!   player's pads only.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
@@ -911,7 +913,8 @@ impl<B: Backend> Router<B> {
         };
         let pad_id = pad.info.id.clone();
         let family = pad.info.family.clone();
-        let engine = self.book.engine_for(&owner.profile, &family, &pad_id);
+        // The seated player's own controller profiles (RUY-643); a guest has none: the defaults.
+        let engine = self.book.engine_for(&player, &family, &pad_id);
         self.drain_book();
         match self.backend.create_virtual(key, &spec) {
             Ok(created) => {
@@ -1118,7 +1121,9 @@ impl<B: Backend> Router<B> {
         let family = pad.info.family.clone();
         let held = pad.state.clone();
         if let Some(owner) = self.owner.clone() {
-            v.engine = self.book.engine_for(&owner.profile, &family, &pad_id);
+            // The seat's player, else the route owner (RUY-643).
+            let who = self.seat_number(key).map_or(owner.profile, |(_, p)| p);
+            v.engine = self.book.engine_for(&who, &family, &pad_id);
             self.drain_book();
         }
         v.mask_held(&held);
@@ -1779,7 +1784,7 @@ impl<B: Backend> Router<B> {
         self.notices.push(Notice::ProfilesChanged {
             profile: profile.to_owned(),
         });
-        if self.owner.as_ref().map(|o| o.profile.as_str()) != Some(profile) {
+        if self.owner.is_none() {
             return;
         }
         let app = self.route == Route::App;
@@ -1790,6 +1795,10 @@ impl<B: Backend> Router<B> {
                 continue;
             };
             if pad.virt.is_none() {
+                continue;
+            }
+            // Only the seats of this profile are rebuilt (RUY-643).
+            if self.seat_number(key).map(|(_, p)| p).as_deref() != Some(profile) {
                 continue;
             }
             let (family, id) = (pad.info.family.clone(), pad.info.id.clone());
@@ -4927,13 +4936,14 @@ mod tests {
         let family = r#"{"schema_version":1,"id":"fam","name":"Fam","scope":{"type":"global"},
             "match":{"family":"nintendo"},"mappings":[{"from":"south","to":{"type":"button","code":"l1"}}]}"#;
         assert_eq!(r.save_profile("p1", &own).0, Status::Ok);
-        assert_eq!(r.save_profile("p1", family).0, Status::Ok);
+        // Pad b is player 2's (RUY-643): its family's profile is player 2's.
+        assert_eq!(r.save_profile("p2", family).0, Status::Ok);
         assert_eq!(
             r.assign_profile("p1", "global", "device:a", "own"),
             Status::Ok
         );
         assert_eq!(
-            r.assign_profile("p1", "global", "family:nintendo", "fam"),
+            r.assign_profile("p2", "global", "family:nintendo", "fam"),
             Status::Ok
         );
         r.backend_mut().take();
@@ -4955,12 +4965,12 @@ mod tests {
             ["own".to_owned(), "default".to_owned()]
         );
         assert_eq!(
-            r.effective_profile("p1", "b", "").2,
+            r.effective_profile("p2", "b", "").2,
             ["fam".to_owned(), "default".to_owned()]
         );
         // Emptying the family's slot: B gets the default, A keeps its own.
         assert_eq!(
-            r.assign_profile("p1", "global", "family:nintendo", ""),
+            r.assign_profile("p2", "global", "family:nintendo", ""),
             Status::Ok
         );
         assert_eq!(
@@ -5673,6 +5683,73 @@ mod tests {
         r.tick(t + Duration::from_secs(61));
         assert_eq!(seats_of(&r)[1], seat(2, "p2", "d"));
         assert!(destroyed(&r.backend_mut().take()).is_empty());
+    }
+
+    /// What pad `key` sends for a press of South: the button code of its virtual pad.
+    fn south_code(r: &mut Router<Fake>, key: PadKey) -> (u64, u16) {
+        r.backend_mut().take();
+        r.input(key, &[press(PadButton::South)]);
+        let w = writes(&r.backend_mut().take());
+        r.input(key, &[release(PadButton::South)]);
+        r.backend_mut().take();
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert_eq!(w[0].1.len(), 1, "{w:?}");
+        (w[0].0, w[0].1[0].1)
+    }
+
+    #[test]
+    fn seat_2_uses_player_2s_own_profile_and_a_guest_seat_the_defaults() {
+        let (mut r, a, b, c) = three_players();
+        let (v1, v2, v3) = (
+            virtual_id(&r, a).unwrap(),
+            virtual_id(&r, b).unwrap(),
+            virtual_id(&r, c).unwrap(),
+        );
+        // Player 2 swaps A and B in their own profile; player 1 and p3 (no profile files: the
+        // defaults, as a guest) keep the standard layout.
+        assert_eq!(r.save_profile("p2", SWAP).0, Status::Ok);
+        assert_eq!(r.assign_profile("p2", "global", "", "swap"), Status::Ok);
+        assert_eq!(south_code(&mut r, b), (v2, code::BTN_EAST));
+        assert_eq!(south_code(&mut r, a), (v1, code::BTN_SOUTH));
+        assert_eq!(south_code(&mut r, c), (v3, code::BTN_SOUTH));
+        // Player 1's own change leaves seat 2 alone.
+        r.save_profile("p1", SWAP);
+        r.assign_profile("p1", "global", "", "swap");
+        assert_eq!(south_code(&mut r, a), (v1, code::BTN_EAST));
+        assert_eq!(south_code(&mut r, b), (v2, code::BTN_EAST));
+    }
+
+    #[test]
+    fn seat_2_pad_is_made_with_player_2s_profile() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        sign_in(&mut r, a, "p1");
+        assert_eq!(r.save_profile("p2", SWAP).0, Status::Ok);
+        assert_eq!(r.assign_profile("p2", "global", "", "swap"), Status::Ok);
+        assert_eq!(join(&mut r, b, "p2"), 2);
+        app(&mut r, "i1", STK, "p1");
+        settle(&mut r);
+        let (v1, v2) = (virtual_id(&r, a).unwrap(), virtual_id(&r, b).unwrap());
+        assert_eq!(south_code(&mut r, b), (v2, code::BTN_EAST));
+        assert_eq!(south_code(&mut r, a), (v1, code::BTN_SOUTH));
+    }
+
+    #[test]
+    fn seat_2_keeps_its_profile_after_a_hold_and_a_move() {
+        let (mut r, _a, b, _c) = three_players();
+        assert_eq!(r.save_profile("p2", SWAP).0, Status::Ok);
+        assert_eq!(r.assign_profile("p2", "global", "", "swap"), Status::Ok);
+        let vb = virtual_id(&r, b).unwrap();
+        r.remove_pad_at(b, t0());
+        // The same pad back within the hold: rebound, still player 2's mapping.
+        let b2 = r.add_pad(pad("b"), t0());
+        assert_eq!(virtual_id(&r, b2), Some(vb));
+        assert_eq!(south_code(&mut r, b2), (vb, code::BTN_EAST));
+        // A move to another pad keeps it too.
+        let d = r.add_pad(pad("d"), t0());
+        assert_eq!(join(&mut r, d, "p2"), 2);
+        assert_eq!(south_code(&mut r, d), (vb, code::BTN_EAST));
     }
 
     #[test]
