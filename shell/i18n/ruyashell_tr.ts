@@ -6316,7 +6316,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ZoneChooser</name>
     <message>
-        <location filename="../qml/ZoneChooser.qml" line="+102"/>
+        <location filename="../qml/ZoneChooser.qml" line="+108"/>
         <source>Africa</source>
         <translation>Afrika</translation>
     </message>
@@ -6417,6 +6417,11 @@ Bu geri alınamaz.</translation>
         <location line="+0"/>
         <source>Cancel</source>
         <translation>İptal</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Clear</source>
+        <translation>Temizle</translation>
     </message>
     <message>
         <location line="+52"/>

@@ -6336,7 +6336,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ZoneChooser</name>
     <message>
-        <location filename="../qml/ZoneChooser.qml" line="+102"/>
+        <location filename="../qml/ZoneChooser.qml" line="+108"/>
         <source>Africa</source>
         <translation>Africa</translation>
     </message>
@@ -6437,6 +6437,11 @@ This can&apos;t be undone.</translation>
         <location line="+0"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Clear</source>
+        <translation>Clear</translation>
     </message>
     <message>
         <location line="+52"/>
