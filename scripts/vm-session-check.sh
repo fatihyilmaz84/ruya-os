@@ -76,15 +76,19 @@ as_shell() { runuser -u ruya-shell -- "$@"; }
 # RUY-679: remove the test apps, loudly. Only the ids that are installed (a missing one is not a
 # failure), and the output stays visible: a failed uninstall is a FAIL line and returns 1, so the
 # caller does not delete the remote and orphan what is still installed (a remote-less runtime breaks
-# the next check). Never reuse $rt for something else: an uninstall of "1794744702" fails the same way.
+# the next check). A garbage id ("1794744702" once) looks "not installed", so before returning 0 it
+# also fails when anything installed still comes from $remote.
 # --- drop_test_apps begin (test-vm-checks.sh sources these lines)
 drop_test_apps() {
-    local ids="" id
+    local ids="" id left
     for id in "$@"; do flatpak info --system "$id" >/dev/null 2>&1 && ids="$ids $id"; done
-    [ -z "$ids" ] && return 0
-    # shellcheck disable=SC2086
-    flatpak uninstall --system -y $ids && return 0
-    bad "flatpak uninstall$ids failed: the test remote stays so that nothing is left without one"
+    if [ -n "$ids" ]; then
+        # shellcheck disable=SC2086
+        flatpak uninstall --system -y $ids || { bad "flatpak uninstall$ids failed: the test remote stays so that nothing is left without one"; return 1; }
+    fi
+    left="$(flatpak list --system --columns=application,origin 2>/dev/null | awk -v r="$remote" '$2 == r { print $1 }' | tr '\n' ' ')"
+    [ -z "$left" ] && return 0
+    bad "still installed from $remote: $left(not in the list given to drop_test_apps: $*); the remote stays"
     return 1
 }
 # --- drop_test_apps end

@@ -238,7 +238,8 @@ class RecBus:
 
     def call(self, svc, path, ifc, member, args_=None, *rest):
         calls.append((member, list(args_ or [])))
-        return "ok"
+        # the service refuses a slot the profile's match does not name (here: an empty slot)
+        return "invalid" if member == "AssignProfile" and args_[2] == "" and args_[3] else "ok"
 
     def close(self):
         self.closed = True
@@ -256,10 +257,17 @@ class StubPad:
 
 
 class StubGame:
-    hello = "NO stub"
+    """A game on a virtual pad: pad1 gets East (A's device profile); pad2 gets LB (B's family profile)
+    until the family slot of args.other is emptied, then South again."""
 
-    def __init__(self, *a):
-        pass
+    def __init__(self, user, node):
+        self.node = node
+        self.hello = "OPEN ok"
+
+    def events_until(self, want, timeout_ms=2000):
+        emptied = ("p2", "global", "family:nintendo", "") in [tuple(c[1]) for c in calls if c[0] == "AssignProfile"]
+        code = probe.BTN_EAST if self.node.endswith("pad1") else (probe.BTN_SOUTH if emptied else probe.BTN_TL)
+        return [(probe.EV_KEY, code, 1), (probe.EV_KEY, code, 0)]
 
     def close(self):
         pass
@@ -274,7 +282,7 @@ probe.devices = lambda: [{"id": "dev-a", "name": probe.NAME, "family": "xbox"},
 before_slots = {"p1": {"device:dev-a": "old-a"}, "p2": {"family:nintendo": "old-fam"}}
 probe.assigned_slots = lambda owner: before_slots[owner]
 probe.wait_for = lambda fn, timeout, step=0.02: fn()
-probe.node_by = lambda attr, value: (True,)
+probe.node_by = lambda attr, value: (value,)
 probe.Game = StubGame
 probe.join_by_name = lambda bus, name, profile, timeout=5: ("ok", 2)
 real_sleep = probe.time.sleep
@@ -298,6 +306,10 @@ check("twoprofiles gives each owner back what it held, and deletes the saved pro
       ("p1", "global", "device:dev-a", "old-a") in assigns and ("p2", "global", "family:nintendo", "old-fam") in assigns
       and ("DeleteProfile", ["p2", "vm-check-family"]) in calls and ("DeleteProfile", ["p1", "vm-check-own"]) in calls,
       (assigns, calls))
-check("twoprofiles reports the failure of the stub game", "FAIL:" in out.getvalue(), out.getvalue())
+check("twoprofiles runs through: every step passes, none fails", "FAIL:" not in out.getvalue()
+      and out.getvalue().count("PASS:") >= 6, out.getvalue())
+empties = [i for i, c in enumerate(calls) if c[0] == "AssignProfile" and tuple(c[1]) == ("p2", "global", "family:nintendo", "")]
+check("twoprofiles empties the family's slot under the other player's book, before the restore",
+      len(empties) >= 1, calls)
 
 sys.exit(1 if fails else 0)

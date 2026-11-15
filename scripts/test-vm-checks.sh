@@ -523,6 +523,8 @@ case "$1" in
     info) case " $DROP_INSTALLED " in *" $3 "*) exit 0;; *) exit 1;; esac;;
     uninstall) echo "error: uninstall output"; exit "${DROP_RC:-0}";;
     remote-delete) exit 0;;
+    list) printf '%s
+' "$DROP_LIST" | grep -v '^$'; exit 0;;
 esac
 exit 0
 SHIMEOF
@@ -543,6 +545,13 @@ out="$(DROP_INSTALLED="org.a org.rt" DROP_RC=0 rundrop 'drop_test_apps org.a org
 expect_contains "a good uninstall removes the installed ids" "$out" "flatpak uninstall --system -y org.a org.rt"
 expect_contains "a good uninstall is followed by the remote-delete" "$out" "flatpak remote-delete --system --force r"
 expect_lacks "a good uninstall is not a FAIL" "$out" "FAIL"
+# The 0.0.84 orphan: a garbage id ("1794744702") is "not installed" for flatpak info, but the runtime from
+# the remote is still there: the function must fail and the remote must stay.
+out="$(DROP_INSTALLED="" DROP_LIST="org.rt r" rundrop 'remote=r; drop_test_apps 1794744702 && flatpak remote-delete --system --force r; echo "rc=$?"')"
+expect_contains "a garbage id with the runtime still installed is a FAIL line" "$out" "FAIL: still installed from r: org.rt"
+expect_lacks "a garbage id does not let the remote be deleted" "$out" "flatpak remote-delete"
+out="$(DROP_INSTALLED="" DROP_LIST="org.other flathub" rundrop 'remote=r; drop_test_apps 1794744702; echo "rc=$?"')"
+expect_contains "an app of another remote is not ours" "$out" "rc=0"
 out="$(DROP_INSTALLED="" rundrop 'drop_test_apps org.a; echo "rc=$?"')"
 expect_contains "nothing installed: nothing to do, success" "$out" "rc=0"
 expect_lacks "nothing installed: no uninstall call" "$out" "flatpak uninstall"

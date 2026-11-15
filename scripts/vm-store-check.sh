@@ -114,10 +114,15 @@ check)
     out="$(as_shell busctl --system call "$svc" "$path" "$ifc" AddRemote ss x "file://$work/test.flatpakrepo")"
     echo "as ruya-shell: $out"
     active="$(busctl --system get-property org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ActiveProfile 2>/dev/null | sed -n 's/^s "\(.*\)"$/\1/p')"
+    plist="$(busctl --system call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ListProfiles 2>/dev/null)"
+    role=""
+    [ -n "$active" ] && role="$(echo "$plist" | grep -o "\"$active\" \"[^\"]*\" \"[^\"]*\" \"[a-z]*\"" | grep -o '"[a-z]*"$' | tr -d '"')"
+    echo "active profile: '$active', role: '$role'"
     case "$out" in
-        's "forbidden"') [ -z "$active" ] && ok "AddRemote by the shell with nobody signed in is forbidden" || bad "AddRemote by the shell was forbidden although $active is signed in (admin?): $out";;
-        's "ok"') if [ -n "$active" ]; then ok "AddRemote by the shell is allowed: the active profile $active is an admin"; flatpak remote-delete --system --force x >/dev/null 2>&1
-                  else bad "AddRemote by the shell was accepted with nobody signed in"; fi;;
+        's "forbidden"') [ -z "$active" ] || [ "$role" != admin ] && ok "AddRemote by the shell is forbidden (active '${active:-none}', role '${role:-none}')" || bad "AddRemote by the shell was forbidden although the admin $active is signed in: $out";;
+        's "ok"') if [ "$role" = admin ]; then ok "AddRemote by the shell is allowed: the active profile $active is an admin"
+                  else bad "AddRemote by the shell was accepted (active '${active:-none}', role '${role:-none}')"; fi
+                  flatpak remote-delete --system --force x >/dev/null 2>&1;;
         *) bad "AddRemote by ruya-shell: $out";;
     esac
     out="$(busctl --system call "$svc" "$path" "$ifc" AddRemote ss "$remote" "file://$work/test.flatpakrepo")"
@@ -163,8 +168,14 @@ check)
     # RUY-156: the test app asks for API level 99 (x-ruya-min-api-level), far above the console's.
     echo "$got" | grep -q '"compatible" b false' && ok "GetApp reports compatible=false for a minimum of 99" || bad "GetApp compatible: $got"
     # Only the test app's own record: the list holds every app of the remotes (Flathub has thousands).
-    rec="$(echo "$list" | sed "s/.*\"id\" s \"$app\"//; s/\"id\" s \".*//")"
-    echo "$rec" | grep -q '"compatible" b false' && ok "Search carries compatible=false for $app" || bad "Search compatible of $app: $rec"
+    # (the dicts are sorted by key, so "compatible" precedes "id": read the JSON, pick the record by its id)
+    rec="$(as_shell busctl --system --json=short call "$svc" "$path" "$ifc" Search sa{sv} "" 0 | python3 -c '
+import json, sys
+for r in json.load(sys.stdin)["data"][0]:
+    if r.get("id", {}).get("data") == sys.argv[1]:
+        print("compatible=%s" % str(r.get("compatible", {}).get("data")).lower())
+' "$app")"
+    [ "$rec" = "compatible=false" ] && ok "Search carries compatible=false for $app" || bad "Search compatible of $app: '$rec'"
     case "$(busctl --system call "$svc" "$path" "$ifc" GetApp s org.nope.Missing)" in 'sa{sv} "unknown-app"'*) ok "GetApp of an unknown id";; *) bad "GetApp unknown";; esac
 
     echo "--- Install"
