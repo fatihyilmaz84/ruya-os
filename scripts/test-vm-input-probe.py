@@ -212,6 +212,7 @@ probe.monitor_bodies(monitored.splitlines(True), "ForeignInput", seen)
 check("monitor_bodies reads each ForeignInput's strings and skips other members",
       seen == [("usb-1234-5679-0123456789ab", "press"), ("usb-1234-5679-0123456789ab", "player-guide")], seen)
 
+real_bus_class = probe.Bus
 bus = fake_bus([message(4, "TestInput"), message(4, "NameOwnerChanged"), message(2, reply_to=2), message(4, "UserActive")])
 probe.Bus = lambda: bus
 args = types.SimpleNamespace(seconds=1)
@@ -225,6 +226,15 @@ check("listen sorts Input1's signals from the bus's own and drops a method reply
       got == ["heard TestInput", "bus NameOwnerChanged", "heard UserActive"], got)
 check("listen matches Input1's signals and NameOwnerChanged",
       len(bus.matches) == 2 and "sender='org.ruyaos.Input1'" in bus.matches[0] and "NameOwnerChanged" in bus.matches[1], bus.matches)
+# RUY-616: NameAcquired and NameLost reach the client itself whatever the policy says, so they prove nothing
+probe.Bus = real_bus_class
+bus = fake_bus([message(4, "NameAcquired"), message(4, "NameLost"), message(4, "NameOwnerChanged")])
+probe.Bus = lambda: bus
+out = io.StringIO()
+with contextlib.redirect_stdout(out):
+    probe.cmd_listen(args)
+check("listen counts only NameOwnerChanged as the bus's own broadcast, not NameAcquired or NameLost",
+      out.getvalue().split() == ["ready", "bus", "NameOwnerChanged", "done"], out.getvalue().split())
 
 # RUY-679 (stale since RUY-643): cmd_twoprofiles saves, assigns and gives back the family's profile
 # in pad B's player's book (args.other), the device profile in pad A's (args.profile). A fake bus

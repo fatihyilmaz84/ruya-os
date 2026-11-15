@@ -15,11 +15,21 @@
 #      context has `deny receive_sender="<name>" receive_type="signal"` and BOTH `user="root"` and `user="ruya-shell"`
 #      have `allow receive_sender="<name>" receive_type="signal"` (the receive rules always name receive_type=signal:
 #      a rule without it would also drop a method reply, which ADR-029's ruya-link calls need).
+#      The default deny is only that when it carries no other receive_* attribute and no eavesdrop (receive_member,
+#      receive_interface, receive_path, receive_error, receive_requested_reply narrow it: `receive_member="Nothing"`
+#      would close nothing), and root and ruya-shell have no receive deny at all (RUY-616).
 param([string]$Root, [switch]$SelfTest)
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path -Parent $PSScriptRoot
 if (-not $Root) { $Root = $Repo }
 $ownerOnlyUsers = @("ruya-library", "ruya-input")
+
+# The attributes that narrow a receive rule in dbus-daemon(1): with one of them the rule matches only some signals.
+function Get-RecvNarrowing($Rule) {
+    foreach ($a in $Rule.Attributes) {
+        if (($a.Name -like "receive_*" -and $a.Name -notin @("receive_sender", "receive_type")) -or $a.Name -eq "eavesdrop") { $a.Name }
+    }
+}
 
 function Test-BusPolicyFile([string]$Path) {
     $errs = New-Object System.Collections.Generic.List[string]
@@ -46,7 +56,9 @@ function Test-BusPolicyFile([string]$Path) {
                 elseif ($r.LocalName -eq "deny" -and $r.HasAttribute("send_destination")) { [void]$deniedNames.Add($r.GetAttribute("send_destination")) }
                 elseif ($r.LocalName -eq "deny" -and $r.HasAttribute("own")) { [void]$deniedOwn.Add($r.GetAttribute("own")) }
                 elseif ($r.LocalName -eq "deny" -and $r.HasAttribute("receive_sender")) {
-                    if ($r.GetAttribute("receive_type") -eq "signal") { [void]$deniedRecv.Add($r.GetAttribute("receive_sender")) }
+                    $narrow = @(Get-RecvNarrowing $r)
+                    if ($narrow.Count -gt 0) { $errs.Add("a narrowed receive deny does not close the default: it also names $($narrow -join ', ') ($($r.OuterXml))") }
+                    elseif ($r.GetAttribute("receive_type") -eq "signal") { [void]$deniedRecv.Add($r.GetAttribute("receive_sender")) }
                     else { $errs.Add("a receive deny must name receive_type=signal ($($r.OuterXml))") }
                 }
             }
@@ -57,6 +69,9 @@ function Test-BusPolicyFile([string]$Path) {
             continue
         }
         foreach ($r in $rules) {
+            if ($r.LocalName -eq "deny" -and $user -in @("root", "ruya-shell") -and (@($r.Attributes | Where-Object { $_.Name -like "receive_*" }).Count -gt 0)) {
+                $errs.Add("a receive deny in the $user policy would cut it off from the service's signals ($($r.OuterXml))")
+            }
             if ($r.LocalName -ne "allow") { continue }
             foreach ($a in "own", "send_destination") { if ($r.HasAttribute($a)) { [void]$allowedNames.Add($r.GetAttribute($a)) } }
             if ($r.HasAttribute("receive_sender") -and $user -in @("root", "ruya-shell")) {
@@ -123,6 +138,13 @@ if ($SelfTest) {
         @{ Name = "no receive allow for root"; From = '<allow own="org.x.A1"/><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/>'; To = '<allow own="org.x.A1"/><allow send_destination="org.x.A1"/>'; Expect = 1 },
         @{ Name = "a receive allow without receive_type"; From = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/>'; To = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1"/>'; Expect = 1 },
         @{ Name = "ruya-link receiving the service's signals"; From = '<allow send_destination="org.x.A1" send_member="Ping"/>'; To = '<allow send_destination="org.x.A1" send_member="Ping"/><allow receive_sender="org.x.A1" receive_type="signal"/>'; Expect = 1 },
+        @{ Name = "a default receive deny narrowed by receive_member"; From = '<deny receive_sender="org.x.A1" receive_type="signal"/>'; To = '<deny receive_sender="org.x.A1" receive_type="signal" receive_member="Nothing"/>'; Expect = 1 },
+        @{ Name = "a default receive deny narrowed by receive_interface"; From = '<deny receive_sender="org.x.A1" receive_type="signal"/>'; To = '<deny receive_sender="org.x.A1" receive_type="signal" receive_interface="org.x.Nothing"/>'; Expect = 1 },
+        @{ Name = "a default receive deny narrowed by receive_path"; From = '<deny receive_sender="org.x.A1" receive_type="signal"/>'; To = '<deny receive_sender="org.x.A1" receive_type="signal" receive_path="/nothing"/>'; Expect = 1 },
+        @{ Name = "a default receive deny narrowed by receive_requested_reply"; From = '<deny receive_sender="org.x.A1" receive_type="signal"/>'; To = '<deny receive_sender="org.x.A1" receive_type="signal" receive_requested_reply="true"/>'; Expect = 1 },
+        @{ Name = "a default receive deny with eavesdrop"; From = '<deny receive_sender="org.x.A1" receive_type="signal"/>'; To = '<deny receive_sender="org.x.A1" receive_type="signal" eavesdrop="true"/>'; Expect = 1 },
+        @{ Name = "a receive deny in the root policy"; From = '<policy user="root"><allow own="org.x.A1"/>'; To = '<policy user="root"><deny receive_sender="org.x.A1" receive_type="signal"/><allow own="org.x.A1"/>'; Expect = 1 },
+        @{ Name = "a receive deny in the ruya-shell policy"; From = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/>'; To = '<policy user="ruya-shell"><deny receive_sender="org.x.A1" receive_type="signal"/><allow send_destination="org.x.A1"/>'; Expect = 1 },
         @{ Name = "an allow for another user"; From = '<policy user="ruya-shell">'; To = '<policy user="nobody">'; Expect = 1 },
         @{ Name = "a group policy"; From = '<policy user="ruya-shell">'; To = '<policy group="wheel">'; Expect = 1 },
         @{ Name = "ruya-link allowing a whole destination"; From = ' send_member="Ping"'; To = ""; Expect = 1 },
