@@ -295,7 +295,11 @@ fi
 exec /usr/bin/flatpak "$@"
 SHIMEOF
     chmod 755 "$shim/flatpak"
-    printf '[Service]\nEnvironment=PATH=%s:/usr/local/bin:/usr/bin:/usr/sbin\n' "$shim" > "$dropin"
+    # ProtectSystem=strict makes /run read-only for the service: the marker needs a ReadWritePaths.
+    printf '[Service]\nEnvironment=PATH=%s:/usr/local/bin:/usr/bin:/usr/sbin\nReadWritePaths=%s\n' "$shim" "$shim" > "$dropin"
+    # A FAIL or Ctrl-C must not leave the service with the blocking PATH.
+    unhold() { [ -e "$dropin" ] || return 0; rm -f "$dropin"; rm -rf "$shim"; systemctl daemon-reload; systemctl restart ruya-store; }
+    trap unhold EXIT
     systemctl daemon-reload && systemctl restart ruya-store
     n=0
     until as_shell busctl --system call "$svc" "$path" "$ifc" Search sa{sv} "TestApp" 0 | grep -q "$app" || [ "$n" -ge 120 ]; do sleep 1; n=$((n + 1)); done
@@ -326,10 +330,7 @@ SHIMEOF
     n=0
     until [ -e "$shim/started" ] || [ "$n" -ge 100 ]; do sleep 0.2; n=$((n + 1)); done
     [ -e "$shim/started" ] && ok "the install is held in flatpak (the restart lands mid-install)" || bad "the install never reached flatpak"
-    rm -f "$dropin"; rmdir "$(dirname "$dropin")" 2>/dev/null
-    systemctl daemon-reload
-    systemctl restart ruya-store
-    rm -rf "$shim"
+    unhold; rmdir "$(dirname "$dropin")" 2>/dev/null
     n=0
     until grep -a -q "store-probe: jobFinished $app failed" "$work/probe2.log" || [ "$n" -ge 40 ]; do sleep 1; n=$((n + 1)); done
     grep -a -q "store-probe: jobFinished $app failed" "$work/probe2.log" && ok "the shell ended the cut-short install as failed" || bad "the shell never ended the job of the old service"

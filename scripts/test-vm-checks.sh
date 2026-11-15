@@ -589,6 +589,11 @@ for c in 'vm-session-check.sh'; do
 done
 # vm-store-check.sh holds the install in a flatpak shim; no timing-dependent SIGSTOP.
 grep -q 'zz-hold-install.conf' "$here/vm-store-check.sh" && ! grep -q 'pkill -STOP' "$here/vm-store-check.sh"     && pass "vm-store-check.sh holds the install with a shim, not a race against SIGSTOP (RUY-708)" || fail "vm-store-check.sh: the install is not held deterministically"
+# ProtectSystem=strict: the drop-in must grant the shim's marker directory; an EXIT trap undoes the hold.
+grep -q 'ReadWritePaths=%s.*"\$shim" "\$shim"' "$here/vm-store-check.sh" \
+    && pass "vm-store-check.sh: the drop-in grants write access to the marker's directory (RUY-708)" || fail "vm-store-check.sh: the shim cannot write its marker under ProtectSystem=strict"
+grep -q 'trap unhold EXIT' "$here/vm-store-check.sh" \
+    && pass "vm-store-check.sh: an EXIT trap removes the hold (RUY-708)" || fail "vm-store-check.sh: a FAIL leaves the blocking PATH"
 
 # --- vm-profiles-check.sh guests (RUY-125): each assertion can fail ---------------------------------
 # A fake Profiles1 (busctl --json=short) and getent over one JSON state file; FAKE_BUG breaks one rule.
