@@ -4321,7 +4321,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="+105"/>
         <source>Enter a name first.</source>
         <translation>Enter a name first.</translation>
     </message>
@@ -4364,19 +4364,19 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+17"/>
-        <location line="+63"/>
+        <location line="+64"/>
         <location line="+84"/>
         <source>Press A to continue</source>
         <translation>Press A to continue</translation>
     </message>
     <message>
-        <location line="-316"/>
-        <location line="+219"/>
+        <location line="-317"/>
+        <location line="+220"/>
         <source>Network</source>
         <translation>Network</translation>
     </message>
     <message>
-        <location line="-355"/>
+        <location line="-375"/>
         <source>Try again</source>
         <translation>Try again</translation>
     </message>
@@ -4388,7 +4388,7 @@ This can&apos;t be undone.</translation>
         <translation>Skip</translation>
     </message>
     <message>
-        <location line="+126"/>
+        <location line="+145"/>
         <location line="+86"/>
         <source>Connect a controller</source>
         <translation>Connect a controller</translation>
@@ -4409,7 +4409,12 @@ This can&apos;t be undone.</translation>
         <translation>Choose your region, then your city, so the clock is right. You can change this later in Settings.</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+13"/>
+        <source>Search for a city</source>
+        <translation>Search for a city</translation>
+    </message>
+    <message>
+        <location line="+24"/>
         <source>Network setup comes later. A wired connection works without any setup.</source>
         <translation>Network setup comes later. A wired connection works without any setup.</translation>
     </message>
@@ -4449,8 +4454,13 @@ This can&apos;t be undone.</translation>
         <translation>Creating…</translation>
     </message>
     <message>
-        <location line="-276"/>
-        <location line="+303"/>
+        <location line="+49"/>
+        <source>Could not set the time zone. You can change it later in Settings &gt; System.</source>
+        <translation>Could not set the time zone. You can change it later in Settings &gt; System.</translation>
+    </message>
+    <message>
+        <location line="-326"/>
+        <location line="+304"/>
         <source>You&apos;re all set</source>
         <translation>You&apos;re all set</translation>
     </message>
@@ -6326,7 +6336,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ZoneChooser</name>
     <message>
-        <location filename="../qml/ZoneChooser.qml" line="+46"/>
+        <location filename="../qml/ZoneChooser.qml" line="+108"/>
         <source>Africa</source>
         <translation>Africa</translation>
     </message>
@@ -6381,27 +6391,37 @@ This can&apos;t be undone.</translation>
         <translation>Other</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+148"/>
+        <source>Search</source>
+        <translation>Search</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No match</source>
+        <translation>No match</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Loading time zones…</source>
         <translation>Loading time zones…</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+22"/>
         <source>%1, current</source>
         <translation>%1, current</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+37"/>
         <source>Current</source>
         <translation>Current</translation>
     </message>
     <message>
-        <location line="+33"/>
+        <location line="+34"/>
         <source>Region</source>
         <translation>Region</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+29"/>
         <source>City</source>
         <translation>City</translation>
     </message>
@@ -6419,9 +6439,19 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
+        <location line="+0"/>
+        <source>Clear</source>
+        <translation>Clear</translation>
+    </message>
+    <message>
         <location line="+52"/>
         <source>Time zone</source>
         <translation>Time zone</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Search for a city</source>
+        <translation>Search for a city</translation>
     </message>
 </context>
 </TS>

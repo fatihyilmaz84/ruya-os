@@ -87,6 +87,8 @@ FocusScope {
         step = 0
         adminName = ""
         zoneChoice = ""
+        zoneFailed = false
+        zoneAsked = false
         message = ""
         busy = false
         created = false
@@ -129,9 +131,26 @@ FocusScope {
         }
     }
 
+    // The service refused or failed to set the chosen zone: the Done step says so (T-295). The answer
+    // comes long before Done (network and admin come between), so it is kept here.
+    property bool zoneFailed: false
+    property bool zoneAsked: false
+
+    Connections {
+        target: TimeZone
+        function onSetTimezoneFinished(name, status) {
+            if (!setup.zoneAsked || name !== setup.zoneChoice)
+                return                  // no ask of ours, or a late answer for an earlier pick
+            setup.zoneAsked = false
+            setup.zoneFailed = status !== "ok"
+        }
+    }
+
     function chooseZone(zone) {
         zoneChoice = zone
-        TimeZone.setTimezone(zone)      // the answer needs no waiting for: Settings can change it later
+        zoneFailed = false
+        zoneAsked = true
+        TimeZone.setTimezone(zone)      // nothing waits for the answer: Settings can change it later
         next()
     }
 
@@ -407,9 +426,10 @@ FocusScope {
             prefix: "setupZone"
             anchors.horizontalCenter: parent.horizontalCenter
             u: setup.u
-            visibleRows: 4
+            visibleRows: 3          // the Search row takes the fourth: content stays above the hint bar (04 Layout)
             onChosen: zone => setup.chooseZone(zone)
             onCancelled: setup.back()
+            onSearchRequested: text => zoneEntry.open(qsTr("Search for a city"), text, {})
         }
     }
 
@@ -522,6 +542,17 @@ FocusScope {
             font.pixelSize: Theme.typeBody * setup.u
         }
         Pill { anchors.horizontalCenter: parent.horizontalCenter; label: qsTr("Press A to continue") }
+        Text {
+            objectName: "setupZoneFailed"
+            visible: setup.zoneFailed
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.Wrap
+            textFormat: Text.PlainText
+            text: qsTr("Could not set the time zone. You can change it later in Settings > System.")
+            color: Theme.errorText
+            font.pixelSize: Theme.typeCaption * setup.u
+        }
     }
 
     // Full-screen layer for the keyboard and the PIN pad.
@@ -541,6 +572,15 @@ FocusScope {
                 setup.message = ""
                 createRow.forceActiveFocus()
             }
+        }
+
+        TextEntry {
+            id: zoneEntry
+            objectName: "setupZoneEntry"
+            width: parent.width
+            height: parent.height
+            u: setup.u
+            onAccepted: text => zoneChooser.applyFilter(text)
         }
 
         PinPad {

@@ -475,6 +475,90 @@ Item {
             compare(TimeZone.timezone, "UTC", "the service refused; Settings can set it later")
         }
 
+        // ---- T-295: say it when the zone could not be set; type to find a city ----
+
+        // From the time zone step: choose the first city of the region, then the network step, then the
+        // account; ends on the Done step.
+        function chooseZoneAndFinishTheWizard() {
+            goToStep(2)
+            tryVerify(() => find("setupZoneRegions").activeFocus, 2000)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("setupZoneCities").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryCompare(setup(), "step", 3)
+            goToStep(4)
+            setup().adminName = "Owner"
+            find("setupCreateRow").forceActiveFocus()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("setupPinPad").shown, 2000)
+            enterPin("2468")
+            enterPin("2468")
+            tryCompare(setup(), "step", 5)
+        }
+
+        function test_zone_refused_shows_message() {
+            TimeZone.mockFailNext()
+            startShell()
+            chooseZoneAndFinishTheWizard()
+            compare(TimeZone.mockSetCalls(), 1)
+            const message = find("setupZoneFailed")
+            tryVerify(() => message.visible, 2000, "the Done step says the zone was not set")
+            compare(message.text, "Could not set the time zone. You can change it later in Settings > System.")
+            compare(message.color, Theme.errorText)
+            keyClick(Qt.Key_Return)                           // nothing is blocked: Accept finishes
+            tryVerify(() => !setup().visible, 3000, "Accept on Done finishes the wizard")
+        }
+
+        function test_a_late_answer_for_an_earlier_pick_does_not_decide_the_caption() {
+            startShell()
+            setup().zoneChoice = "Asia/Tokyo"
+            setup().zoneAsked = true
+            TimeZone.mockFailNext()
+            TimeZone.setTimezone("Europe/London")             // refused, but not the zone chosen
+            TimeZone.setTimezone("Asia/Tokyo")                // the answer that counts: ok
+            tryCompare(TimeZone, "timezone", "Asia/Tokyo")
+            tryCompare(setup(), "zoneAsked", false)
+            compare(setup().zoneFailed, false, "the stale refusal was ignored")
+        }
+
+        function test_zone_ok_shows_no_message() {
+            startShell()
+            chooseZoneAndFinishTheWizard()
+            compare(TimeZone.timezone, "Europe/London")
+            compare(find("setupZoneFailed").visible, false)
+        }
+
+        function test_a_skipped_zone_shows_no_message() {
+            startShell()
+            goToStep(4)
+            setup().adminName = "Owner"
+            find("setupCreateRow").forceActiveFocus()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("setupPinPad").shown, 2000)
+            enterPin("2468")
+            enterPin("2468")
+            tryCompare(setup(), "step", 5)
+            compare(find("setupZoneFailed").visible, false)
+        }
+
+        function test_the_wizard_chooser_filters_with_its_own_keyboard() {
+            startShell()
+            goToStep(2)
+            tryVerify(() => find("setupZoneRegions").activeFocus, 2000)
+            pressUntil(Qt.Key_Up, () => find("setupZoneSearch").activeFocus, "Up reaches Search")
+            keyClick(Qt.Key_Return)
+            const entry = find("setupZoneEntry")
+            tryVerify(() => entry.shown, 2000, "the keyboard opens in the wizard's layer")
+            entry.text = "tokyo"
+            entry.finish()
+            tryVerify(() => chooser().filter === "tokyo")
+            tryVerify(() => find("setupZoneCities").activeFocus, 2000, "focus lands on the first result")
+            compare(chooser().selectedZone, "Asia/Tokyo")
+            keyClick(Qt.Key_Return)
+            tryCompare(TimeZone, "timezone", "Asia/Tokyo")
+            tryCompare(setup(), "step", 3)
+        }
+
         // ---- T-203: pairing a controller with no keyboard ----
 
         function pairingVisible() { return find("setupPairing").visible }
@@ -629,12 +713,40 @@ Item {
             tryVerify(() => find("setupZoneCities").activeFocus)
             wait(300)
             grabImage(tc.shell).save(shotsDir + "/15-setup-timezone-city.png")
+            // T-295: mid-search ("ist"), English then Turkish.
+            keyClick(Qt.Key_Escape)
+            pressUntil(Qt.Key_Up, () => find("setupZoneSearch").activeFocus, "Up reaches Search")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("setupZoneEntry").shown, 2000)
+            find("setupZoneEntry").text = "ist"
+            find("setupZoneEntry").finish()
+            tryVerify(() => find("setupZoneCities").activeFocus, 2000)
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/15b-setup-timezone-search.png")
+            DeviceSettings.language = "tr"
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/15c-setup-timezone-search-tr.png")
+            DeviceSettings.language = "en"
             keyClick(Qt.Key_Menu)
             tryCompare(setup(), "step", 3)
             goToStep(4)
             setup().adminName = "Owner"
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/12-setup-admin.png")
+            // T-295: the Done step when the zone could not be set.
+            find("setupCreateRow").forceActiveFocus()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("setupPinPad").shown, 2000)
+            enterPin("2468")
+            enterPin("2468")
+            tryCompare(setup(), "step", 5)
+            setup().zoneFailed = true
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/15d-setup-done-zone-failed.png")
+            DeviceSettings.language = "tr"
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/15e-setup-done-zone-failed-tr.png")
+            DeviceSettings.language = "en"
         }
     }
 }

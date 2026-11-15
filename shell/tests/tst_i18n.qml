@@ -138,6 +138,10 @@ Item {
             tryCompare(find("setupZoneTitle"), "text", "Neredesiniz?")
             tryVerify(() => find("setupZoneRegion_Europe"), 2000, "the regions are listed")
             tryCompare(find("setupZoneRegion_Europe"), "label", "Avrupa")
+            // T-295: the search row, its empty result and the Done step's message are Turkish too.
+            tryCompare(find("setupZoneSearch"), "label", "Ara")
+            tryCompare(find("setupZoneNoMatch"), "text", "Eşleşme yok")
+            tryCompare(find("setupZoneFailed"), "text", "Saat dilimi ayarlanamadı. Daha sonra Ayarlar > Sistem'den değiştirebilirsiniz.")
             keyClick(Qt.Key_Menu)                      // Start: skip -> network
             tryCompare(setup, "step", 3)
             tryCompare(find("setupNetworkTitle"), "text", "Ağ")
