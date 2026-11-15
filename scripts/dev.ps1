@@ -775,6 +775,43 @@ Checked 2026-11-06.
     }
 }
 
+# RUY-625: scripts\api-changelog.ps1 diffs the public elements of two sets of api/dbus files.
+function Test-ApiChangelog {
+    Step "API changelog self-check"
+    $script = Join-Path $PSScriptRoot "api-changelog.ps1"
+    $fx = Join-Path ([IO.Path]::GetTempPath()) ("ruya-apichg-" + [guid]::NewGuid().ToString("N"))
+    $mk = {
+        param($name, $body)
+        $d = Join-Path $fx $name
+        New-Item -ItemType Directory -Force $d | Out-Null
+        [IO.File]::WriteAllText((Join-Path $d "t.xml"), "<node><interface name=`"org.ruyaos.T1`">$body</interface></node>`n")
+        return $d
+    }
+    $ann = { param($s, $n) "<annotation name=`"org.ruyaos.Stability`" value=`"$s`"/><annotation name=`"org.ruyaos.Since`" value=`"$n`"/>" }
+    $oldBody = "<method name=`"Keep`">" + (& $ann "experimental" 1) + "</method><method name=`"Bump`">" + (& $ann "experimental" 1) + "</method><method name=`"Old`">" + (& $ann "stable" 1) + "</method><method name=`"Gone`">" + (& $ann "stable" 1) + "</method><method name=`"Private`"/>"
+    $newBody = "<method name=`"Keep`">" + (& $ann "experimental" 1) + "</method><method name=`"Bump`">" + (& $ann "experimental" 2) + "</method><method name=`"Old`">" + (& $ann "deprecated" 1) + "</method><signal name=`"Fresh`">" + (& $ann "experimental" 2) + "</signal><method name=`"Private`"/><method name=`"Private2`"/>"
+    $oldDir = & $mk "old" $oldBody
+    $newDir = & $mk "new" $newBody
+    $out = & $script -OldApiDir $oldDir -NewApiDir $newDir *>&1 | Out-String
+    $ok = $out.Contains("org.ruyaos.T1.Fresh") -and $out.Contains("### Added") -and
+          $out.Contains("org.ruyaos.T1.Bump") -and $out.Contains("### Changed") -and $out.Contains("since 1 -> 2") -and
+          $out.Contains("### Deprecated") -and $out.Contains("org.ruyaos.T1.Old") -and
+          $out.Contains("org.ruyaos.T1.Gone") -and $out.Contains("### Removed") -and
+          $out.Contains("## API level 2") -and
+          -not $out.Contains("T1.Keep") -and -not $out.Contains("Private")
+    if (-not $ok) { Write-Host $out }
+    Record "API changelog self-check (added, changed, deprecated and removed elements are listed by level; private and unchanged are not)" $ok
+    $same = & $script -OldApiDir $oldDir -NewApiDir $oldDir *>&1 | Out-String
+    $okSame = $same.Trim() -eq "no public API changes"
+    if (-not $okSame) { Write-Host $same }
+    Record "API changelog self-check (identical sets print 'no public API changes')" $okSame
+    Remove-Item -Recurse -Force $fx
+
+    # Refs: the same script reads two git refs (this repo's HEAD against itself: nothing changed).
+    $head = & $script HEAD HEAD *>&1 | Out-String
+    Record "API changelog self-check (the same ref twice prints 'no public API changes')" ($head.Trim() -eq "no public API changes")
+}
+
 # The rules live in scripts\lint-tests.ps1 (shared with CI).
 function Test-QmlTests {
     Step "test lint (no key presses in unbounded loops)"
@@ -915,7 +952,7 @@ function Do-Shell {
 # developer guide lint: docs\developers; spec lint: 04-design-system.md). A check that starts
 # reading docs\ belongs here too: push-main.ps1 and the reviewer's round 2 run only this group
 # when nothing but docs\*.md changed since a green `test`.
-function Do-Docs { Test-Text; Test-DevDocs; Test-SpecComponents }
+function Do-Docs { Test-Text; Test-DevDocs; Test-ApiChangelog; Test-SpecComponents }
 
 # HEAD and whether the working tree is clean (no tracked change, no untracked file that is not ignored).
 function Get-TreeState {
@@ -982,7 +1019,7 @@ switch ($Command) {
         # A stale marker must never outlive a run that did not finish green.
         Remove-Item $GreenMarker -ErrorAction SilentlyContinue
         $treeBefore = Get-TreeState
-        Test-Text; Test-Boot; Test-BusPolicies; Test-DevDocs; Test-VmChecks; Do-Rust; Do-Shell
+        Test-Text; Test-Boot; Test-BusPolicies; Test-DevDocs; Test-ApiChangelog; Test-VmChecks; Do-Rust; Do-Shell
         if ($script:Failures.Count -eq 0) { Write-GreenMarker $treeBefore (Get-TreeState) }
     }
     "shots" {

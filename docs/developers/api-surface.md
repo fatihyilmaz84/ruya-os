@@ -86,7 +86,7 @@ No code, so no bus permission, and the safest way to extend the console. The for
 
 - **API level.** One integer, `RUYA_API_LEVEL`, in `/usr/lib/os-release` (and `/etc/os-release`). It rises when a public element is added or changed. An app reads it at run time (or asks `Platform1`) to use a newer feature when present.
 - **Minimum level in metadata.** An app declares the lowest level it needs in its AppStream file (`x-ruya-min-api-level`, built in the Store: [AppStream metadata](appstream-metadata.md) has the other `x-ruya-*` keys). The Store hides an app whose minimum is above the console's level and says why on its page; an installed app that no longer fits is flagged, not removed. The console's level starts at `0` ("experimental, no promise"); `ruya-store` reads it from os-release.
-- **Changelog from the XML.** A script diffs the public elements of two versions of `api/dbus/*.xml` and lists added, changed and deprecated elements by level; the release notes embed it (T-351).
+- **Changelog from the XML.** `scripts/api-changelog.ps1 <old-ref> <new-ref>` diffs the public elements of two versions of `api/dbus/*.xml` and lists added, changed, deprecated and removed elements by level (from the `apis.json` that `lint-dev-docs.ps1` writes; it does not see a changed argument list); the release notes embed it (T-351).
 - **Deprecation.** After the first release: additions are allowed within a level; a change or removal needs `deprecated` for at least two levels first, a line in the changelog and a developer-guide note. Before it, everything is *experimental* and changes freely, but a change is still written to the changelog.
 
 ## What is public today
