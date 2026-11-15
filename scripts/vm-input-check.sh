@@ -73,7 +73,8 @@
 # neither gives a BTN_MODE on either virtual pad the profile user reads.
 # `nodes` (RUY-446) checks the virtual pad node (phys ruya-input/pad<n>) the way 06 section 3 rule 3 says: ruya-input's,
 # user rw and nothing for group and other (getfacl; stat's group bits show the ACL mask), no uaccess tag, no ACL entry for
-# ruya-shell, the profile user's entry; a ruya-input/kbm* node keeps uaccess. Run it alone, not inside `check`.
+# ruya-shell, the profile user's entry; a ruya-input/kbm* node keeps uaccess. Run it alone, not inside `check`, with the
+# shell running (RUY-581: the step fails without it).
 # `start` (RUY-583) checks the chain inputd -> evdev -> xkb -> Qt for Start: with the shell running at Home, a uinput pad taps
 # BTN_START; the shell must log "ruya-shell: options menu open (<card|pill|row>)" exactly once (the second tap closes the
 # menu and logs nothing), and `vm-inject-key.py menu` (KEY_COMPOSE) must open it too. Needs Home with a focused card (a
@@ -1030,7 +1031,12 @@ nodes)
     dir="$(mktemp -d /var/tmp/ruya-input-check.XXXXXX)"
     chmod 0755 "$dir"
     install -m 0644 "$probe" "$dir/vm-input-probe.py"
-    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe nodes --user "ruya-$me"
+    # The shell stays UP (RUY-581): with it stopped, logind has no session to give an ACL entry and
+    # "no ruya-shell entry" could not fail. The probe itself fails when the shell is not running.
+    systemctl is-active ruya-inputd >/dev/null || { bad "ruya-inputd is not active"; exit 1; }
+    out="$(cd "$dir" && python3 "$dir/vm-input-probe.py" nodes --user "ruya-$me" --profile "$me" 2>&1)" && rc=0 || rc=$?
+    [ -n "$out" ] && echo "$out"
+    if [ "$rc" -ne 0 ] || printf '%s\n' "$out" | grep -qE '^(FAIL:|Traceback )'; then fail=1; fi
     rm -rf "$dir"
     ;;
 hold)

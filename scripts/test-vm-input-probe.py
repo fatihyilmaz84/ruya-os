@@ -312,4 +312,62 @@ empties = [i for i, c in enumerate(calls) if c[0] == "AssignProfile" and tuple(c
 check("twoprofiles empties the family's slot under the other player's book, before the restore",
       len(empties) >= 1, calls)
 
+# RUY-581: cmd_nodes runs with the shell up, so "no ruya-shell ACL entry" can fail. Canned getfacl /
+# pgrep / udevadm output goes through the probe's own parsing; the stubs replace only the bus and pads.
+class NodesProc:
+    def __init__(self, shell_up, named, kbm_tag_after):
+        self.shell_up, self.named, self.kbm_tag_after = shell_up, named, kbm_tag_after
+        self.kbm_calls = 0
+
+    def run(self, cmd, **kw):
+        out, rc = "", 0
+        if cmd[0] == "pgrep":
+            rc = 0 if self.shell_up else 1
+        elif cmd[0] == "getfacl":
+            out = "\n".join(["# file: n", "# owner: ruya-input", "# group: input", "user::rw-"]
+                            + ["user:%s:rw-" % u for u in self.named]
+                            + ["group::---", "mask::rw-", "other::---", ""])
+        elif cmd[0] == "udevadm":
+            if cmd[-1].endswith("event9"):
+                self.kbm_calls += 1
+                out = "CURRENT_TAGS=:uaccess:\n" if self.kbm_calls >= self.kbm_tag_after else "CURRENT_TAGS=:seat:\n"
+            else:
+                out = "CURRENT_TAGS=:seat:\n"
+        return types.SimpleNamespace(stdout=out, returncode=rc)
+
+
+def run_nodes(shell_up=True, named=("u",), kbm_tag_after=1):
+    proc = NodesProc(shell_up, list(named), kbm_tag_after)
+    saved = {n: getattr(probe, n) for n in ("subprocess", "FakePad", "Bus", "devices", "node_by", "join_by_name", "time")}
+    probe.subprocess = types.SimpleNamespace(run=proc.run)
+    probe.FakePad = StubPad
+    probe.Bus = RecBus
+    probe.devices = lambda: [{"name": probe.NAME}]
+    probe.node_by = lambda key, val: ("/dev/input/" + ("event9" if "kbm" in val else "event8"), None)
+    probe.join_by_name = lambda bus, name, profile: ("ok", 1)
+    sleeps = []
+    clock = [0.0]      # a fake clock: sleep() advances it, so a bounded wait ends at once
+    probe.time = types.SimpleNamespace(monotonic=lambda: clock[0],
+                                       sleep=lambda t: (sleeps.append(t), clock.__setitem__(0, clock[0] + t)))
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            n = probe.cmd_nodes(types.SimpleNamespace(profile="p1", user="u"))
+    finally:
+        for k, v in saved.items():
+            setattr(probe, k, v)
+    return n, buf.getvalue(), sleeps
+
+
+n, text, _ = run_nodes()
+check("nodes passes on a node with only the profile user's entry, shell up", n == 0 and "FAIL:" not in text, text)
+n, text, _ = run_nodes(named=("u", "ruya-shell"))
+check("nodes FAILS when the node has a ruya-shell ACL entry", n >= 1 and "has an ACL entry for ruya-shell" in text, text)
+n, text, _ = run_nodes(shell_up=False)
+check("nodes FAILS when the shell is not running (the check would be vacuous)",
+      n == 1 and "the shell is not running" in text and "PASS:" not in text, text)
+n, text, sleeps = run_nodes(kbm_tag_after=3)
+check("nodes waits for the kbm stand-in's uaccess tag, no fixed 0.5 s sleep",
+      n == 0 and 0.5 not in sleeps and "keeps the uaccess tag" in text, (n, text, sleeps))
+
 sys.exit(1 if fails else 0)
