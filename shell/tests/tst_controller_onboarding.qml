@@ -800,6 +800,29 @@ Item {
             compare(saves().length, 0)
         }
 
+        // A second Switch Pro paired while one is connected: Input1 has not listed it yet.
+        function test_an_old_bluetooth_pad_of_the_same_name_is_not_the_pad_being_tried() {
+            signedIn()
+            Input.mockAddDevice({ id: "bluetooth-057e-2009-111111111111", name: "Ruya Pad", family: "nintendo",
+                                  model: "switch_pro", connection: "bluetooth" })     // listed before, same name
+            tryVerify(() => Input.devices.length === 5)
+            const second = "bluetooth-057e-2009-0a0b0c0d0e0f"
+            Bluetooth.mockPairingScript("wait")
+            Bluetooth.mockSetFamily("bt-pad-new", "nintendo")
+            onb.open()
+            Bluetooth.mockReveal("bt-pad-new")
+            tryVerify(() => find("onbRow_bt-pad-new") !== null, 2000)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryCompare(find("onbRow_bt-pad-new"), "phase", "done")
+            keyClick(Qt.Key_Return)
+            tryCompare(onb, "stage", "try")
+            compare(onb.tryPadId, "", "the pad listed before is not this one")
+            Input.mockAddDevice({ id: second, name: "Ruya Pad", family: "nintendo", model: "switch_pro",
+                                  connection: "bluetooth" })
+            tryCompare(onb, "tryPadId", second)
+        }
+
         function test_the_games_step_in_turkish() {
             signedIn()
             tryPadAndStart("Pro Controller", "nintendo")

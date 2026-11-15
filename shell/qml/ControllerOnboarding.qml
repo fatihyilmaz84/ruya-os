@@ -31,7 +31,6 @@ FocusScope {
     property string tryFamily: ""                  // its family, connection and raw name (for the games step)
     property string tryTransport: ""
     property string tryRawName: ""
-    property string tryAddress: ""                 // a Bluetooth pad's address, 12 hex digits
     property bool tryPadGone: false               // the tried pad left Input1: never look for another
     property var padsAtOpen: []                    // Input1 ids listed when the screen opened
     property string tryPadId: ""                   // its Input1 id, once Input1 lists it; kept for the games step
@@ -173,7 +172,7 @@ FocusScope {
     function activateRow(r) {
         if (r.phase === "done") {
             const d = Bluetooth.devices.find(x => x.id === r.devId)
-            startTry(r.name, r.family, "bluetooth", d ? d.name : r.name, r.devId)
+            startTry(r.name, r.family, "bluetooth", d ? d.name : r.name)
             test.forceActiveFocus()
         } else if (r.phase !== "pairing") {
             Sfx.select()
@@ -181,8 +180,7 @@ FocusScope {
         }
     }
 
-    function startTry(name, family, transport, rawName, devId) {
-        tryAddress = transport === "bluetooth" ? String(devId ?? "").toLowerCase().replace(/[^0-9a-f]/g, "") : ""
+    function startTry(name, family, transport, rawName) {
         tryName = name
         tryFamily = family
         tryTransport = transport
@@ -221,22 +219,19 @@ FocusScope {
         }
     }
 
-    // The Input1 id of the pad being tried, else "". Only Nintendo pads get the games step. A
-    // Bluetooth pad's address, when Input1's id ends with it, decides. Otherwise only a pad that is
-    // new since the screen opened qualifies (a pad that was already listed is another pad); an old
-    // one is taken only when its name is the tried pad's, and where several qualify the name decides.
+    // The Input1 id of the pad being tried, else "". Only Nintendo pads get the games step. A pad
+    // that is new since the screen opened qualifies (the name decides where several do); a pad that
+    // was already listed is taken only over USB and only when its name is the tried pad's.
     function triedPadId() {
         if (tryFamily !== "nintendo")
             return ""
         const plain = n => DeviceIcons.plain(n).toLowerCase()
         const list = Input.devices.filter(d => d.family === "nintendo" && d.connection === tryTransport)
-        const byAddress = tryAddress.length === 12 ? list.filter(d => String(d.id).toLowerCase().endsWith(tryAddress)) : []
-        if (byAddress.length === 1)
-            return byAddress[0].id
         const isNew = d => !padsAtOpen.includes(d.id)
         const sameName = d => plain(d.name) === plain(tryRawName)
         const fresh = list.filter(isNew)
-        const pool = fresh.length > 0 ? fresh : list
+        // Over Bluetooth the tried pad was paired in this screen, so a pad listed before is another one.
+        const pool = fresh.length > 0 || tryTransport === "bluetooth" ? fresh : list
         const named = pool.filter(sameName)
         if (named.length === 1)
             return named[0].id
