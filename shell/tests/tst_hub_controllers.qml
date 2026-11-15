@@ -266,6 +266,23 @@ Item {
             keyClick(Qt.Key_Escape)
         }
 
+        // RUY-710: "generic" is no family to tie a battery to, like "": a wired generic pad does not
+        // take a lone unaddressed generic battery.
+        function test_a_wired_generic_pad_does_not_take_a_lone_generic_battery() {
+            noPads()
+            plugIn("usb-g", "Generic USB Pad", "generic")
+            Batteries.mockSet("up-g", 50, "discharging", "controller", "Some Receiver", "generic")
+            tryVerify(() => Batteries.devices.some(b => b.id === "up-g"))
+            const pads = ControllerPads.hubPads()
+            compare(pads.length, 1)
+            compare(pads[0].percent, -1, "no guess between generic pads")
+            // A family the table knows still ties (the rule's other side).
+            plugIn("usb-x", "Xbox Wired", "xbox")
+            Batteries.mockSet("up-x", 70, "discharging", "controller", "Xbox Wired", "xbox")
+            tryVerify(() => Batteries.devices.some(b => b.id === "up-x"))
+            compare(ControllerPads.hubPads().find(p => p.id === "usb-x").percent, 70)
+        }
+
         // The mock's default state is one pad and one row (the battery and the paired device share an address).
         function test_the_default_mock_state_shows_one_row_per_pad() {
             start()

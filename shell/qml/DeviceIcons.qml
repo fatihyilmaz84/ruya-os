@@ -175,13 +175,13 @@ QtObject {
     function kindText(kind, family, model) {
         switch (kind) {
         case "controller":
+            if (String(model ?? "").startsWith("8bitdo_"))
+                return qsTr("8BitDo controller")
             switch (family) {
             case "playstation": return qsTr("PlayStation controller")
             case "xbox": return qsTr("Xbox controller")
             case "nintendo": return qsTr("Nintendo controller")
             }
-            if (String(model ?? "").startsWith("8bitdo_"))
-                return qsTr("8BitDo controller")
             return qsTr("Controller")
         case "headset": return qsTr("Headset")
         case "speaker": return qsTr("Speaker")

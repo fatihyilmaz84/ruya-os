@@ -9,7 +9,6 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use crate::families::family_of;
 use crate::pairing::clean_name;
 
 /// The longest pad name or id the service reports, in characters.
@@ -42,6 +41,8 @@ pub struct InputDevice {
     /// `capabilities/key`: the supported key codes as hex words, most significant first, each
     /// word the size of the kernel's `long` (64 bits on x86_64).
     pub keys: String,
+    /// The kernel driver of the input device's parent (`xpad`, `playstation`, ...), "" when unknown.
+    pub driver: String,
 }
 
 /// Bit `n` of a sysfs capability bitmap.
@@ -131,14 +132,8 @@ pub fn gamepad_of(device: &InputDevice) -> Option<Gamepad> {
         name
     };
     // The vendor id a pad reports is the USB-IF one over USB and over Bluetooth alike.
-    let family = if device.vendor != 0 {
-        family_of(
-            &format!("usb:v{:04X}p{:04X}d0000", device.vendor, device.product),
-            &name,
-        )
-    } else {
-        family_of("", &name)
-    };
+    // The kernel driver counts as in Input1 (`xpad` makes an 8BitDo in X-input mode an Xbox pad).
+    let family = ruya_pads::family_of(device.vendor, device.product, &device.driver, &name);
     let id = [
         clean_name(&device.uniq, MAX_NAME_CHARS),
         clean_name(&device.phys, MAX_NAME_CHARS),
@@ -226,6 +221,12 @@ impl InputSource for SysfsInput {
                     bustype: number("bustype"),
                     vendor: number("vendor"),
                     product: number("product"),
+                    // inputN/device is the parent (a USB interface, a HID device); its driver link
+                    // names the kernel driver, as ruya-inputd reads it.
+                    driver: std::fs::read_link(dir.join("device").join("driver"))
+                        .ok()
+                        .and_then(|l| l.file_name().map(|n| n.to_string_lossy().into_owned()))
+                        .unwrap_or_default(),
                 })
             })
             .collect()
@@ -430,7 +431,32 @@ mod tests {
             bustype,
             vendor,
             product: 0x0ce6,
+            driver: String::new(),
         }
+    }
+
+    #[test]
+    fn the_kernel_driver_counts_like_in_input1() {
+        // An 8BitDo pad in X-input mode is driven by xpad: xbox, as Input1 tells it.
+        let mut device = pad("8BitDo Pro 2", "usb-1", "", 3, 0x2dc8);
+        assert_eq!(gamepad_of(&device).expect("a pad").family, "generic");
+        device.driver = "xpad".to_owned();
+        let p = gamepad_of(&device).expect("a pad");
+        assert_eq!((p.family, p.model), ("xbox", "8bitdo_pro2"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn sysfs_reads_the_parents_driver() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let node = dir.path().join("input5");
+        std::fs::create_dir_all(node.join("capabilities")).expect("dirs");
+        std::fs::create_dir_all(node.join("device")).expect("parent");
+        std::fs::write(node.join("name"), "8BitDo Pro 2\n").expect("name");
+        std::os::unix::fs::symlink("../../../bus/usb/drivers/xpad", node.join("device/driver"))
+            .expect("link");
+        let devices = SysfsInput::at(dir.path()).devices();
+        assert_eq!(devices[0].driver, "xpad");
     }
 
     #[test]

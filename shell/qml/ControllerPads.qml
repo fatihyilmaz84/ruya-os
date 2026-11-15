@@ -46,14 +46,15 @@ QtObject {
             pads.push({ id: id,
                         name: paired ? DeviceIcons.shownName(Bluetooth.devices, paired) : DeviceIcons.plain(g.name),
                         rawName: g.name,
-                        family: g.family !== "" ? g.family : (paired ? paired.family : ""),
+                        family: g.family !== "" && g.family !== "generic" ? g.family
+                                : (paired && paired.family ? paired.family : g.family),
                         model: (g.model ?? "") !== "" ? g.model : (paired ? (paired.model ?? "") : ""),
                         transport: g.transport,
                         percent: battery ? battery.percent : (paired && paired.battery >= 0 ? paired.battery : -1),
                         state: battery ? battery.state : "" })
         }
         for (const p of pads) {
-            if (p.transport === "bluetooth" || p.percent >= 0 || p.family === "")
+            if (p.transport === "bluetooth" || p.percent >= 0 || p.family === "" || p.family === "generic")
                 continue
             const alike = pads.filter(q => q.transport !== "bluetooth" && q.percent < 0 && q.family === p.family)
             const spare = batteries.filter(b => !used[b.id] && String(b.address ?? "") === "" && b.family === p.family)
