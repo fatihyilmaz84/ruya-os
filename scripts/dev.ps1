@@ -983,6 +983,17 @@ function Test-SpecComponents {
     Record "spec lint self-check (rejects an unlisted component)" $rejected
 }
 
+# RUY-660: the self-checks of the scripts themselves need no build, so `docs` runs them too (revert-check
+# -Mode docs relies on it). Once per process: `test` (via Do-Shell) and `docs` each run them once.
+function Test-ScriptSelfChecks {
+    if ($script:ScriptChecksDone) { return }
+    $script:ScriptChecksDone = $true
+    Step "Shard runner self-check (T-463)"
+    Test-QmlShardRunner
+    Step "Revert check self-check (RUY-654)"
+    Test-RevertCheckPiping
+}
+
 function Do-Shell {
     Do-Build
     Test-Tokens
@@ -1003,10 +1014,7 @@ function Do-Shell {
     # the window is never shown, so the probe must report "no frames" even though offscreen draws.
     Step "Display probe self-check (no frames -> asleep)"
     Record "display probe self-check (a window that presents no frames is reported)" ((Test-DisplayPresentsFrames -NoFrames -Offscreen) -eq 3)
-    Step "Shard runner self-check (T-463)"
-    Test-QmlShardRunner
-    Step "Revert check self-check (RUY-654)"
-    Test-RevertCheckPiping
+    Test-ScriptSelfChecks
     Step "Qt Quick tests (offscreen)"
     Run-QmlTests $null
 }
@@ -1015,7 +1023,7 @@ function Do-Shell {
 # developer guide lint: docs\developers; spec lint: 04-design-system.md). A check that starts
 # reading docs\ belongs here too: push-main.ps1 and the reviewer's round 2 run only this group
 # when nothing but docs\*.md changed since a green `test`.
-function Do-Docs { Test-Text; Test-DevDocs; Test-ApiChangelog; Test-SpecComponents }
+function Do-Docs { Test-Text; Test-DevDocs; Test-ApiChangelog; Test-SpecComponents; Test-ScriptSelfChecks }
 
 # HEAD and whether the working tree is clean (no tracked change, no untracked file that is not ignored).
 function Get-TreeState {
