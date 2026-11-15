@@ -300,6 +300,11 @@ Item {
         }
 
         function test_activity_chart_says_left_right() {
+            // Some play to show: with an empty ledger the chart row is hidden and has no focus to give (RUY-48).
+            const now = Date.now() / 1000
+            Usage.mockSetData("p2", [{ appId: "org.example.Racer", start: now - 3600, seconds: 1800, reason: "quit",
+                                       day: new Date((now - 3600) * 1000).toISOString().slice(0, 10) }],
+                              new Date().toISOString().slice(0, 10))
             signInAsAda()
             tc.shell.openPage("activity")
             tryCompare(tc.shell, "currentPage", "activity")
