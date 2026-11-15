@@ -742,7 +742,8 @@ Item {
 
         function test_a_pad_opens_on_its_owner() {
             signIn()
-            compare(Input.devices.find(d => d.id === host.xbox).owner, "p1", "the sign-in taught the Xbox pad")
+            // The owner arrives with the next device record (asynchronous in the mock as over D-Bus): wait for it.
+            tryVerify(() => Input.devices.find(d => d.id === host.xbox).owner === "p1", 2000, "the sign-in taught the Xbox pad")
             // A third profile, so the owner is not also "the first profile without a pad" (Ada).
             const before = Profiles.profiles.length
             Profiles.createProfile("p1", "1234", "Cem", "standard", "")
