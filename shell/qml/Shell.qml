@@ -239,7 +239,11 @@ FocusScope {
     function inhibitorHolds(inhibitor) {
         if (!inhibitor.surface || !appOpen || systemPanel.open)           // the Hub over the app: not in front
             return false
+        // The window's own surface first; else a surface of the same Wayland client (a video app draws in
+        // a wl_subsurface and the inhibitor sits on that one, RUY-578). A client-less surface never matches.
+        const client = inhibitor.surface.client
         const record = apps.find(r => r.item.surface === inhibitor.surface)
+                       ?? (client ? apps.find(r => r.item.surface && r.item.surface.client === client) : undefined)
         if (!record || record.item !== focusedApp || !appShownTo(record.profile))
             return false
         const run = instanceOfWindow(record)

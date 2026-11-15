@@ -22,9 +22,12 @@ Item {
         Item {
             objectName: "standInApp"
             property string appId: "org.example.Racer"
-            property var surface: ({ name: "surface" })
+            property var surface: ({ name: "surface", client: racerClient })
         }
     }
+
+    QtObject { id: racerClient; objectName: "racerClient" }
+    QtObject { id: otherClient; objectName: "otherClient" }
 
     SignalSpy { id: launchedSpy; target: Session; signalName: "launchFinished" }
 
@@ -90,7 +93,7 @@ Item {
         function test_another_window_in_front_releases() {
             const first = playWithInhibitor()
             tryVerify(() => held())
-            const second = createTemporaryObject(appComponent, host, { surface: ({ name: "second" }) })
+            const second = createTemporaryObject(appComponent, host, { surface: ({ name: "second", client: otherClient }) })
             tc.shell.addApp(second, "p2")
             tryCompare(tc.shell, "focusedApp", second)
             tryVerify(() => !held(), 2000, "another window took the front: released")
@@ -161,6 +164,40 @@ Item {
             wait(50)
             compare(IdleInhibit.reasons.indexOf("wayland:5"), -1)
             compare(IdleInhibit.reasons.indexOf("wayland:6"), -1)
+        }
+
+        function test_a_subsurface_inhibitor_of_the_front_app_holds() {
+            const app = playWithInhibitor()
+            tc.shell.removeInhibitor(1)
+            tryVerify(() => !held())
+            tc.shell.addInhibitor(1, ({ name: "video subsurface", client: app.surface.client }))
+            tryVerify(() => held(), 2000, "a surface of the front app's client: held")
+            tc.shell.appsBehindHome = true
+            tryVerify(() => !held(), 2000, "behind Home: released")
+            tc.shell.appsBehindHome = false
+            tryVerify(() => held(), 2000, "back in front: held")
+            keyClick(Qt.Key_HomePage)
+            tryVerify(() => findChild(tc.shell, "systemPanel").open)
+            tryVerify(() => !held(), 2000, "Hub open: released")
+        }
+
+        function test_a_subsurface_inhibitor_of_a_frozen_app_does_not_hold() {
+            const app = playWithInhibitor()
+            tc.shell.removeInhibitor(1)
+            tc.shell.addInhibitor(1, ({ name: "video subsurface", client: app.surface.client }))
+            tryVerify(() => held())
+            Session.mockFailThaw(true)
+            Session.freeze(Session.running[0].instance)
+            tryVerify(() => Session.running[0].frozen === true)
+            tryVerify(() => !held(), 2000, "frozen: released")
+        }
+
+        function test_another_clients_inhibitor_does_not_hold() {
+            playWithInhibitor()
+            tc.shell.addInhibitor(7, ({ name: "foreign", client: otherClient }))
+            wait(50)
+            compare(IdleInhibit.reasons.indexOf("wayland:7"), -1)
+            verify(held(), "the app's own inhibitor still holds")
         }
 
         function test_destroyed_releases_once() {
