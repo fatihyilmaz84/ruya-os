@@ -29,7 +29,7 @@ class Batteries : public QObject
     // ("dualsense", ...) or "" (RUY-491). address: the Bluetooth address (the id in
     // Bluetooth.devices) of a device UPower ties to one, else ""; DeviceIcons.batteryName names the battery after
     // the paired device with it. family: a controller's ("playstation" | "xbox" |
-    // "nintendo" | "8bitdo" or ""), the same word Bluetooth.devices has for the same pad. kind "controller" | "headset" | "speaker" | "mouse"
+    // "nintendo" | "generic" or ""), the same word Bluetooth.devices has for the same pad. kind "controller" | "headset" | "speaker" | "mouse"
     // | "keyboard" | "other"; state "charging" | "discharging" | "full" | "unknown"; low: the device
     // is discharging at or under LowBatteryPercent.
     Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)

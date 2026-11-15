@@ -143,7 +143,7 @@ Page {
             spacing: Theme.spaceXs * page.u
             Repeater {
                 model: [
-                    DeviceIcons.kindText("controller", page.pad.family),
+                    DeviceIcons.kindText("controller", page.pad.family, page.pad.model ?? ""),
                     ControllerPads.connectionText(page.pad.connection),
                     ControllerPads.batteryText(page.pad.percent, page.pad.state),
                     ControllerPads.playerText(page.pad.slot)

@@ -250,10 +250,92 @@ pub fn model_of(vendor: u16, product: u16, name: &str) -> &'static str {
     by_name(&lower, false, vendor).unwrap_or("")
 }
 
+/// The family values (06 §4.1 "Family"): a behaviour class, not a make. 8BitDo is a model.
+pub const XBOX: &str = "xbox";
+pub const PLAYSTATION: &str = "playstation";
+pub const NINTENDO_FAMILY: &str = "nintendo";
+pub const GENERIC: &str = "generic";
+
+/// (lower-case fragment of the name, family), asked only when no vendor id is known. The first
+/// match wins, so the generic fragment is last: Sony's pads call themselves "Wireless Controller",
+/// which is also the end of "Xbox Wireless Controller".
+const FAMILY_NAMES: &[(&str, &str)] = &[
+    ("dualsense", PLAYSTATION),
+    ("dualshock", PLAYSTATION),
+    ("playstation", PLAYSTATION),
+    ("xbox", XBOX),
+    ("pro controller", NINTENDO_FAMILY),
+    ("joy-con", NINTENDO_FAMILY),
+    ("nintendo", NINTENDO_FAMILY),
+    ("wireless controller", PLAYSTATION),
+];
+
+/// The one family table (RUY-692): "xbox" | "playstation" | "nintendo" | "generic". First match
+/// wins: the vendor id (`045e`, `054c`, `057e`), then the kernel driver (`xpad`, `playstation` or
+/// `sony`, `nintendo`), then, only when `vendor` is 0 (no ids known), the name; else "generic".
+/// A pad of another maker is never guessed from its name ("Xbox compatible" is not an Xbox).
+/// 8BitDo has no family of its own: X-input reports Microsoft's id, Switch mode Nintendo's, D-input
+/// `2dc8` is generic. `product` is for per-id exceptions later; there are none today.
+pub fn family_of(vendor: u16, product: u16, driver: &str, name: &str) -> &'static str {
+    let _ = product;
+    match vendor {
+        MICROSOFT => return XBOX,
+        SONY => return PLAYSTATION,
+        NINTENDO => return NINTENDO_FAMILY,
+        _ => {}
+    }
+    match driver {
+        "xpad" => return XBOX,
+        "playstation" | "sony" => return PLAYSTATION,
+        "nintendo" => return NINTENDO_FAMILY,
+        _ => {}
+    }
+    if vendor == 0 {
+        let lower = name.to_lowercase();
+        if let Some((_, family)) = FAMILY_NAMES
+            .iter()
+            .find(|(fragment, _)| lower.contains(fragment))
+        {
+            return family;
+        }
+    }
+    GENERIC
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::BTreeSet;
+
+    #[test]
+    fn the_family_table_rows() {
+        // (vendor, product, driver, name, family)
+        let table = [
+            (0x045e, 0, "xpad", "8BitDo Pro 2", "xbox"),
+            (0x057e, 0, "nintendo", "Pro Controller", "nintendo"),
+            (0x054c, 0, "", "Wireless Controller", "playstation"),
+            (0x2dc8, 0, "hid-generic", "8BitDo Pro 2", "generic"),
+            (0x2dc8, 0, "", "8BitDo Pro 2", "generic"),
+            (0x2dc8, 0, "xpad", "", "xbox"),
+            (0x2dc8, 0, "playstation", "", "playstation"),
+            (0x2dc8, 0, "sony", "", "playstation"),
+            (0x2dc8, 0, "nintendo", "", "nintendo"),
+            (0, 0, "", "DualSense Wireless Controller", "playstation"),
+            (0, 0, "", "Wireless Controller", "playstation"),
+            (0, 0, "", "Xbox Wireless Controller", "xbox"),
+            (0, 0, "", "Pro Controller", "nintendo"),
+            (0, 0, "", "8BitDo Pro 2", "generic"),
+            (0x1234, 0, "", "Xbox compatible", "generic"),
+            (0, 0, "", "", "generic"),
+        ];
+        for (vendor, product, driver, name, want) in table {
+            assert_eq!(
+                family_of(vendor, product, driver, name),
+                want,
+                "{vendor:04x} {driver:?} {name:?}"
+            );
+        }
+    }
     use std::fs;
     use std::path::PathBuf;
 

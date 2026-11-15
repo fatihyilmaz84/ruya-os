@@ -139,7 +139,8 @@ QtObject {
         const paired = Bluetooth.devices.find(d => d.id.toLowerCase() === wanted)
         if (paired)
             return shownName(Bluetooth.devices, paired)
-        if (family !== "")
+        // "generic" says nothing of the maker: the pad's own name does.
+        if (family !== "" && family !== "generic")
             return kindText("controller", family)
         return plain(name)
     }
@@ -169,15 +170,18 @@ QtObject {
     }
 
     // The kind in words, for a screen reader and for text ("PlayStation controller", "Headset").
-    function kindText(kind, family) {
+    // `model` is the controller model (Devices1 `model`): 8BitDo is a model, not a family (RUY-692),
+    // so a pad whose model starts with "8bitdo_" reads "8BitDo controller" in whatever family its mode gives.
+    function kindText(kind, family, model) {
         switch (kind) {
         case "controller":
             switch (family) {
             case "playstation": return qsTr("PlayStation controller")
             case "xbox": return qsTr("Xbox controller")
             case "nintendo": return qsTr("Nintendo controller")
-            case "8bitdo": return qsTr("8BitDo controller")
             }
+            if (String(model ?? "").startsWith("8bitdo_"))
+                return qsTr("8BitDo controller")
             return qsTr("Controller")
         case "headset": return qsTr("Headset")
         case "speaker": return qsTr("Speaker")

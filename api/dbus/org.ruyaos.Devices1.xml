@@ -407,14 +407,16 @@
                        the device list, and Pair refuses such a device unless it is told the user
                        said yes (keyboard_confirmed, RUY-422). Told by the remote device, so a hint,
                        not a defence. Clients treat a missing key as false
-        family     s   the controller family, for kind "controller" only: "playstation" | "xbox" |
-                       "nintendo" | "8bitdo", or "" when it cannot be told (every other kind, an unknown maker, a
-                       third-party pad). From the Modalias BlueZ reports (the vendor id of the device's
-                       Device ID record: Sony, Microsoft, Nintendo), by the device's own name
-                       (device_name, else the Alias) only when the device has no usable Modalias; the
-                       table is in the service (families.rs). Shells show a
-                       family's picture when they have one and the generic controller otherwise, and
-                       treat a family they do not know as ""
+        family     s   the controller family (a behaviour class, RUY-692), for kind "controller" only:
+                       "playstation" | "xbox" | "nintendo" | "generic"; "" for every other kind. 8BitDo
+                       is a model, not a family (told by `model`): its family follows its mode (X-input
+                       is "xbox", Switch mode "nintendo", D-input "generic"). From the Modalias BlueZ
+                       reports (the vendor id of the device's Device ID record: Sony, Microsoft,
+                       Nintendo; any other maker is "generic"), by the device's own name (device_name,
+                       else the Alias) only when the device has no usable Modalias; one table, the
+                       same as Input1's (ruya_pads::family_of). Shells show a family's picture when
+                       they have one and the generic controller otherwise, and treat a family they
+                       do not know as "generic"
         model      s   the controller model, for kind "controller" only: the file stem of a silhouette
                        in shell/art/pads/ ("dualsense", "wiiu_pro", "xbox_series", ...), or "" when the
                        table does not know the pad (every other kind, an unknown pad). From the USB ids
@@ -610,7 +612,7 @@
       order; empty when there is none, or before the first read. The keys are those of GamepadConnected:
         id         s   stable per pad (the Bluetooth address when it has one, else the USB port, else the name)
         name       s   made fit to show, plain text only
-        family     s   "playstation" | "xbox" | "nintendo" | "8bitdo" | ""
+        family     s   "playstation" | "xbox" | "nintendo" | "generic" (controllers; as in ListDevices)
         model      s   the controller model as in ListDevices, from the pad's USB ids and name; "" when unknown
         transport  s   "usb" | "bluetooth" | "other"
       A pad's battery is not here: Batteries.ListBatteries has it (the pad's `address` is its Bluetooth
@@ -632,8 +634,8 @@
         name       s   the input device's name, as the kernel reports it ("Wireless Controller"), made
                        fit to show: control and Unicode format characters dropped, at most 64
                        characters. It is still text a device chose: draw it as plain text
-        family     s   as in ListDevices: "playstation" | "xbox" | "nintendo" | "8bitdo" | "", from the
-                       USB vendor id the device reports (the same table, families.rs)
+        family     s   as in ListDevices: "playstation" | "xbox" | "nintendo" | "generic", from the
+                       USB vendor id the device reports (the same table, ruya_pads::family_of; 8BitDo is a model)
         transport  s   "usb" | "bluetooth" | "other"
         model      s   (the fifth argument) the controller model as in ListGamepads, "" when unknown
       The shell debounces a cable that flaps; nothing here says whether the pad is "in use".
@@ -883,12 +885,11 @@
         kind     s   "controller" | "headset" | "speaker" | "mouse" | "keyboard" | "other"
         percent  u   0-100
         state    s   "charging" | "discharging" | "full" | "unknown"
-        family   s   for kind "controller": "playstation" | "xbox" | "nintendo" | "8bitdo" | "" (as in
-                     Bluetooth.ListDevices; "" for every other kind and for a pad whose maker cannot be
-                     told). The Bluetooth device with the same address (UPower's Serial or NativePath
+        family   s   for kind "controller": "playstation" | "xbox" | "nintendo" | "generic" (as in
+                     Bluetooth.ListDevices; "" for every other kind). The Bluetooth device with the same address (UPower's Serial or NativePath
                      holds it for a BlueZ-fed pad) decides, so the two lists agree; a wired or dongle
-                     pad is guessed from UPower's vendor and model through the same table (families.rs).
-                     Clients treat a missing key or a family they do not know as ""
+                     pad is guessed from UPower's vendor and model through the same table (ruya_pads::family_of).
+                     Clients treat a missing key or a family they do not know as "generic" for a controller
         model    s   for kind "controller": the controller model as in Bluetooth.ListDevices ("dualsense",
                      ...), "" when unknown and for every other kind. The Bluetooth device with the same
                      address decides, as for `family`; a wired or dongle pad is guessed from UPower's

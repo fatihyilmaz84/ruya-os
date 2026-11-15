@@ -529,7 +529,7 @@ impl Scanner {
             capabilities: caps::describe(caps::model(hw.vendor, hw.product), &probed),
             id: identity::stable_id(&hw, &self.salt),
             name: name.clone(),
-            family: identity::family(&hw).to_owned(),
+            family: identity::family(&hw, &name).to_owned(),
             connection: identity::connection(&hw).to_owned(),
             model: identity::model(&hw, &name).to_owned(),
             layout: identity::layout(&hw).to_owned(),

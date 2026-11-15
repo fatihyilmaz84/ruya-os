@@ -405,7 +405,7 @@ SettingsPane {
             value: pane.deviceValue(pane.busyId === devId, paired, bonded, connected, battery, deviceKind, trusted)
             // The screen reader says the name, what it is, then the state: "DualSense, PlayStation
             // controller, Connected".
-            accessibleValue: DeviceIcons.kindText(deviceKind, family) + ", " + value
+            accessibleValue: DeviceIcons.kindText(deviceKind, family, silhouette) + ", " + value
             onActivated: pane.activate(devId, paired, connected)
         }
     }

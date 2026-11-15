@@ -171,7 +171,7 @@ SettingsPane {
             value: player
             // "DualSense Wireless Controller, PlayStation controller, Player 1, Bluetooth · Battery 62 %"
             // (SettingControl appends the detail).
-            accessibleValue: DeviceIcons.kindText("controller", family) + (player !== "" ? ", " + player : "")
+            accessibleValue: DeviceIcons.kindText("controller", family, silhouette) + (player !== "" ? ", " + player : "")
             onActivated: pane.controllerRequested(padId)
         }
     }

@@ -15,7 +15,7 @@ struct BtDevice
     QString kind = QStringLiteral("other");
     // The device announces a keyboard class (RUY-411): pairing it needs a second confirmation.
     bool keyboard = false;
-    // "playstation" | "xbox" | "nintendo" | "8bitdo" for a controller the service can place, else ""
+    // "playstation" | "xbox" | "nintendo" | "generic" for a controller the service can place, else ""
     QString family;
     // The controller model whose silhouette is drawn ("dualsense", "wiiu_pro", ...; the file stem in
     // shell/art/pads), "" when the service does not know the pad (RUY-491)
@@ -34,7 +34,7 @@ struct BtGamepad
 {
     QString id;        // stable per pad: the Bluetooth address when it has one, else the USB port, else the name
     QString name;
-    QString family;    // "playstation" | "xbox" | "nintendo" | "8bitdo" | ""
+    QString family;    // "playstation" | "xbox" | "nintendo" | "generic" | ""
     QString transport; // "usb" | "bluetooth" | "other"
     QString model;     // the controller model as in BtDevice, "" when unknown (RUY-491)
 };
@@ -80,7 +80,7 @@ signals:
     // Reported together with stateChanged.
     void adaptersChanged(const QString &primaryOff, const QString &inUse);
     // A game controller appeared or went away, over USB or Bluetooth (T-260). id is stable per pad;
-    // family: "playstation" | "xbox" | "nintendo" | "8bitdo" | ""; transport: "usb" | "bluetooth" | "other";
+    // family: "playstation" | "xbox" | "nintendo" | "generic" | ""; transport: "usb" | "bluetooth" | "other";
     // model: the controller model, "" when unknown (RUY-491).
     void gamepadConnected(const QString &id, const QString &name, const QString &family, const QString &transport,
                           const QString &model);
