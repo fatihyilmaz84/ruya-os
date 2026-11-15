@@ -4924,8 +4924,8 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+27"/>
-        <source>Rescan</source>
-        <translation>Yeniden tara</translation>
+        <source>Rescan %1</source>
+        <translation>%1 yeniden tara</translation>
     </message>
     <message>
         <location line="+181"/>

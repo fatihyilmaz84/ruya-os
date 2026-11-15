@@ -159,7 +159,12 @@ QVariantList Storage::fingerprintOf(const QString &id) const
 
 void Storage::scan(const QString &id)
 {
-    m_backend->scanVolume(id);
+    m_backend->scanVolume(id, false);
+}
+
+void Storage::rescan(const QString &id)
+{
+    m_backend->scanVolume(id, true);
 }
 
 void Storage::cancelScan(const QString &id)
@@ -380,6 +385,12 @@ QStringList Storage::mockScanCalls() const
 {
     auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get());
     return mock ? mock->scanCalls() : QStringList();
+}
+
+QStringList Storage::mockRescanCalls() const
+{
+    auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get());
+    return mock ? mock->rescanCalls() : QStringList();
 }
 
 QStringList Storage::mockCancelCalls() const

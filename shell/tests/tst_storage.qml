@@ -723,7 +723,7 @@ Item {
             compare(Storage.mockScanCalls().length, 1)
             const rescan = find("storageRescan_vol-stick")
             verify(rescan !== null, "a Rescan row")
-            compare(rescan.label, "Rescan")
+            compare(rescan.label, "Rescan Ruya Stick")
             compare(rescan.kind, "action")
             verify(rescan.y > find("storageScan_vol-stick_other").y, "under the results")
             verify(rescan.y < find("storageEject_vol-stick").y, "above Eject")
@@ -744,6 +744,61 @@ Item {
             verify(rescan.activeFocus, "focus stays on the row when the results are back")
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("categoryList").activeFocus, 2000, "Back leaves")
+        }
+
+        // RUY-651: Rescan is one forced call (no CancelScan), each row names its drive, a plain
+        // cancel keeps a fresh result, and the hint bar offers Back only while that drive scans.
+        function test_rescan_is_one_call_and_names_its_drive() {
+            Storage.mockPlug(["vol-stick", "vol-card"])
+            tryVerify(() => volume("vol-card") !== undefined)
+            openStoragePane()
+            tryVerify(() => scanState("vol-stick") === "done" && scanState("vol-card") === "done", 3000)
+            compare(find("storageRescan_vol-stick").label, "Rescan Ruya Stick")
+            compare(find("storageRescan_vol-card").label, "Rescan Camera Card")
+            compare(find("storageEject_vol-card").label, "Eject Camera Card")
+            const before = Storage.mockScanCalls().length
+            goTo("storageRescan_vol-card")
+            compare(shownHints(), "accept Select|back Back", "a finished drive can be rescanned")
+            Storage.mockHoldScan(true)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => scanState("vol-card") === "running", 3000)
+            compare(Storage.mockRescanCalls().join(), "vol-card", "one forced call")
+            compare(Storage.mockScanCalls().length, before + 1)
+            compare(Storage.mockCancelCalls().length, 0, "no CancelScan before it")
+            compare(scanState("vol-stick"), "done", "the other drive's result is untouched")
+            verify(find("storageRescan_vol-card").activeFocus, "focus stays on the row")
+            compare(shownHints(), "back Back", "no Accept hint while that drive scans")
+            goTo("storageRescan_vol-stick")
+            compare(shownHints(), "accept Select|back Back", "the other drive's row still offers it")
+            Storage.mockHoldScan(false)
+            tryVerify(() => scanState("vol-card") === "done", 3000)
+            goTo("storageRescan_vol-card")
+            compare(shownHints(), "accept Select|back Back", "back once the scan is done")
+        }
+
+        function test_rescan_of_one_drive_leaves_another_pending_scan_alone() {
+            Storage.mockPlug(["vol-stick", "vol-card"])
+            tryVerify(() => volume("vol-card") !== undefined)
+            openStoragePane()
+            tryVerify(() => scanState("vol-stick") === "done" && scanState("vol-card") === "done", 3000)
+            const pane = find("paneStorage")
+            pane.scanPending = "vol-other"                // another drive's first reply is awaited
+            pane.rescan("vol-card")
+            compare(pane.scanPending, "vol-other", "not overwritten")
+            compare(Storage.mockRescanCalls().join(), "vol-card", "the call still went out")
+            pane.scanPending = ""
+        }
+
+        // A plain cancel (the pane closing) keeps a fresh result: coming back does not walk again.
+        function test_a_plain_cancel_keeps_a_fresh_result() {
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            openStoragePane()
+            tryVerify(() => scanState("vol-stick") === "done", 3000)
+            Storage.cancelScan("vol-stick")
+            wait(100)
+            compare(scanState("vol-stick"), "done")
+            compare(Storage.scans["vol-stick"].categories.length > 0, true, "the numbers are still there")
         }
 
         // Another client scans: the pane asks again after 1.5, 3, 6, then 10 s, not every 1.5 s.

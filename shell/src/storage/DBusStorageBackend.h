@@ -20,7 +20,7 @@ public:
     void eject(const QString &id) override;
     void saveReport(const QString &id, const QMap<QString, QString> &files) override;
     void refreshUsage() override;
-    void scanVolume(const QString &id) override;
+    void scanVolume(const QString &id, bool force) override;
     void cancelScan(const QString &id) override;
     void listFiles(const QString &id, const QString &suffix) override;
     void readFile(const QString &id, const QString &name, quint32 maxBytes) override;

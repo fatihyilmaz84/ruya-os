@@ -72,7 +72,7 @@ public:
     // Starts a scan of a mounted removable volume and reports its state (scanListed) once the service
     // has taken it; a refusal ("unknown-volume", "unsupported", "busy", ...) is scanStatus. The
     // end of the scan is announced by the service and reported with scanListed again.
-    virtual void scanVolume(const QString &id) = 0;
+    virtual void scanVolume(const QString &id, bool force) = 0; // force: drop a finished result, walk again
     virtual void cancelScan(const QString &id) = 0;
     // Storage.ListFiles (RUY-42): the regular files at the top of a mounted removable volume whose
     // name ends in `suffix` (".json"), newest first; reports filesListed.

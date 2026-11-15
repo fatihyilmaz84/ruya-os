@@ -145,10 +145,10 @@ void DBusStorageBackend::refreshUsage()
     });
 }
 
-void DBusStorageBackend::scanVolume(const QString &id)
+void DBusStorageBackend::scanVolume(const QString &id, bool force)
 {
     auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ScanVolume"));
-    msg << id;
+    msg << id << force;
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, id](QDBusPendingCallWatcher *w) {
         w->deleteLater();

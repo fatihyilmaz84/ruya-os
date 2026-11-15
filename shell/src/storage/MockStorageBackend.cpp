@@ -309,6 +309,7 @@ void MockStorageBackend::initState()
     m_scanFailed = false;
     m_scanCalls.clear();
     m_cancelCalls.clear();
+    m_rescanCalls.clear();
     m_plugTimer.stop();
     m_usage = usageOf(464 * GB, 450 * GB, 6 * GB + GB / 2, -1);
     auto entry = [](const char *id, const char *drive, const char *label, const char *fs, qint64 size, qint64 free,
@@ -364,9 +365,11 @@ void MockStorageBackend::publish(int delayMs)
     });
 }
 
-void MockStorageBackend::scanVolume(const QString &id)
+void MockStorageBackend::scanVolume(const QString &id, bool force)
 {
     m_scanCalls.append(id);
+    if (force)
+        m_rescanCalls.append(id);
     const int at = indexOf(id);
     QString status = QStringLiteral("ok");
     if (id.isEmpty()) {
@@ -383,8 +386,9 @@ void MockStorageBackend::scanVolume(const QString &id)
         return;
     }
     const QString state = m_scans.value(id).state;
-    // A fresh result (or the scan that already runs) is not walked again; a cancelled one is.
-    if (state != QLatin1String("running") && state != QLatin1String("done")) {
+    // A fresh result (or the scan that already runs) is not walked again, unless forced; a
+    // cancelled one is. A refused call (busy, above) dropped nothing.
+    if (state != QLatin1String("running") && (state != QLatin1String("done") || force)) {
         VolumeScan running;
         running.state = QStringLiteral("running");
         m_scans.insert(id, running);
@@ -398,10 +402,8 @@ void MockStorageBackend::scanVolume(const QString &id)
 void MockStorageBackend::cancelScan(const QString &id)
 {
     m_cancelCalls.append(id);
-    if (m_scans.value(id).state != QLatin1String("running")) {
-        m_scans.remove(id); // like the service: a finished result is forgotten (the Rescan row)
-        return;
-    }
+    if (m_scans.value(id).state != QLatin1String("running"))
+        return; // like the service: only a running scan is cancelled; a finished result stays
     VolumeScan cancelled;
     cancelled.state = QStringLiteral("cancelled");
     cancelled.partial = true;

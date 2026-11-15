@@ -34,7 +34,7 @@ public:
     void eject(const QString &id) override;
     void saveReport(const QString &id, const QMap<QString, QString> &files) override;
     void refreshUsage() override;
-    void scanVolume(const QString &id) override;
+    void scanVolume(const QString &id, bool force) override;
     void cancelScan(const QString &id) override;
     void listFiles(const QString &id, const QString &suffix) override;
     void readFile(const QString &id, const QString &name, quint32 maxBytes) override;
@@ -51,6 +51,7 @@ public:
     void holdScan(bool hold);
     void scanElsewhere(const QString &id) { m_scanning = id; }
     QStringList scanCalls() const { return m_scanCalls; }     // the ids of scanVolume() calls, in order
+    QStringList rescanCalls() const { return m_rescanCalls; } // the ids of the forced scanVolume() calls
     QStringList cancelCalls() const { return m_cancelCalls; } // the ids of cancelScan() calls, in order
     void setScanPartial(bool partial) { m_scanPartial = partial; }
     void setScanFailed(bool failed) { m_scanFailed = failed; } // later scans end "failed" (an unreadable drive)
@@ -131,4 +132,5 @@ private:
     bool m_scanFailed = false;
     QStringList m_scanCalls;
     QStringList m_cancelCalls;
+    QStringList m_rescanCalls;
 };

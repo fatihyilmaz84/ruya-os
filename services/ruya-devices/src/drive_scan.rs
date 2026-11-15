@@ -912,8 +912,10 @@ impl<S: ScanSource, C: Clock> Scans<S, C> {
         });
     }
 
-    /// Decides what `ScanVolume` does. Cheap: no walking here.
-    pub fn request(&self, volumes: &[Volume], id: &str) -> Result<Begin, Status> {
+    /// Decides what `ScanVolume` does. Cheap: no walking here. `force` (RUY-651, the Rescan row)
+    /// drops a finished, failed or cancelled result and walks again; a running scan is left alone.
+    /// Nothing is dropped when another volume's scan makes the answer "busy".
+    pub fn request(&self, volumes: &[Volume], id: &str, force: bool) -> Result<Begin, Status> {
         if id.is_empty() {
             return Err(Status::Invalid);
         }
@@ -926,17 +928,20 @@ impl<S: ScanSource, C: Clock> Scans<S, C> {
         }
         let mut inner = self.lock();
         Self::sync(&mut inner, volumes);
-        match inner.entries.get(id).map(|e| e.state) {
-            Some(State::Running | State::Done) => return Ok(Begin::Nothing),
-            // Not a fresh result: walk again.
-            Some(_) => {
-                inner.entries.remove(id);
-            }
-            None => {}
+        let state = inner.entries.get(id).map(|e| e.state);
+        match state {
+            Some(State::Running) => return Ok(Begin::Nothing),
+            Some(State::Done) if !force => return Ok(Begin::Nothing),
+            _ => {}
         }
         if inner.running.is_some() {
+            if state.is_some() && !force {
+                inner.entries.remove(id);
+            }
             return Err(Status::Busy);
         }
+        // A cancelled or failed result (or any, when forced): walk again.
+        inner.entries.remove(id);
         inner.next_token += 1;
         let token = inner.next_token;
         inner.running = Some(id.to_owned());
@@ -1027,21 +1032,14 @@ impl<S: ScanSource, C: Clock> Scans<S, C> {
         }
     }
 
-    /// `CancelScan`: the walk stops within one directory. A result that is not running is
-    /// forgotten (the shell's Rescan row: writes that change no property of the volume do not
-    /// invalidate a "done" result, so the next `ScanVolume` must walk again).
+    /// `CancelScan`: the walk stops within one directory. A result that is not running stays as
+    /// it is (a finished one is still fresh; the Rescan row asks with `force` instead).
     pub fn cancel(&self, id: &str) {
-        let mut inner = self.lock();
-        match inner.entries.get(id).map(|e| e.state) {
-            Some(State::Running) => {
-                if let Some(e) = inner.entries.get(id) {
-                    e.cancel.store(true, Ordering::Relaxed);
-                }
+        let inner = self.lock();
+        if let Some(e) = inner.entries.get(id) {
+            if e.state == State::Running {
+                e.cancel.store(true, Ordering::Relaxed);
             }
-            Some(_) => {
-                inner.entries.remove(id);
-            }
-            None => {}
         }
     }
 
@@ -1492,7 +1490,7 @@ mod tests {
     }
 
     fn started(scans: &Scans<FakeTree, Arc<FakeClock>>, volumes: &[Volume], id: &str) -> Job {
-        match scans.request(volumes, id) {
+        match scans.request(volumes, id, false) {
             Ok(Begin::Run(job)) => job,
             other => panic!("expected a job, got {other:?}"),
         }
@@ -1520,10 +1518,10 @@ mod tests {
         unmounted.mounted = false;
         unmounted.mount_point.clear();
         let vols = [volume("v1"), internal, unmounted];
-        assert_eq!(s.request(&vols, ""), Err(Status::Invalid));
-        assert_eq!(s.request(&vols, "nope"), Err(Status::UnknownVolume));
-        assert_eq!(s.request(&vols, "i"), Err(Status::Unsupported));
-        assert_eq!(s.request(&vols, "u"), Err(Status::Unsupported));
+        assert_eq!(s.request(&vols, "", false), Err(Status::Invalid));
+        assert_eq!(s.request(&vols, "nope", false), Err(Status::UnknownVolume));
+        assert_eq!(s.request(&vols, "i", false), Err(Status::Unsupported));
+        assert_eq!(s.request(&vols, "u", false), Err(Status::Unsupported));
     }
 
     #[test]
@@ -1531,11 +1529,11 @@ mod tests {
         let s = scans(FakeTree::new("/m"));
         let vols = [volume("v1"), volume("v2")];
         let job = started(&s, &vols, "v1");
-        assert_eq!(s.request(&vols, "v2"), Err(Status::Busy));
+        assert_eq!(s.request(&vols, "v2", false), Err(Status::Busy));
         // The same volume again is the scan that already runs.
-        assert_eq!(s.request(&vols, "v1"), Ok(Begin::Nothing));
+        assert_eq!(s.request(&vols, "v1", false), Ok(Begin::Nothing));
         assert!(s.run(&job));
-        assert!(matches!(s.request(&vols, "v2"), Ok(Begin::Run(_))));
+        assert!(matches!(s.request(&vols, "v2", false), Ok(Begin::Run(_))));
     }
 
     #[test]
@@ -1547,7 +1545,7 @@ mod tests {
         s.run(&job);
         // Fresh: no new walk.
         let lists = s.source.lists().len();
-        assert_eq!(s.request(&vols, "v1"), Ok(Begin::Nothing));
+        assert_eq!(s.request(&vols, "v1", false), Ok(Begin::Nothing));
         assert_eq!(s.source.lists().len(), lists);
         assert_eq!(s.get(&vols, "v1").state, State::Done);
         // VolumesChanged with the same volume keeps it; a changed one drops it.
@@ -1560,7 +1558,7 @@ mod tests {
         assert_eq!(s.get(&vols, "v1").state, State::Done);
         // Unplugged.
         assert_eq!(s.get(&[], "v1").state, State::Idle);
-        assert_eq!(s.request(&[], "v1"), Err(Status::UnknownVolume));
+        assert_eq!(s.request(&[], "v1", false), Err(Status::UnknownVolume));
     }
 
     #[test]
@@ -1575,21 +1573,53 @@ mod tests {
         let got = s.get(&vols, "v1");
         assert_eq!(got.state, State::Cancelled);
         assert!(got.scan.partial);
-        assert!(matches!(s.request(&vols, "v1"), Ok(Begin::Run(_))));
+        assert!(matches!(s.request(&vols, "v1", false), Ok(Begin::Run(_))));
     }
 
     #[test]
-    fn cancel_forgets_a_finished_result_so_the_next_call_walks_again() {
-        // The Rescan row (RUY-25): a finished result is dropped by CancelScan.
+    fn cancel_leaves_a_finished_result_alone() {
+        // RUY-651: a plain cancel (the pane closing) never throws a fresh result away.
         let vols = [volume("v1")];
         let s = scans(FakeTree::new("/m"));
         let job = started(&s, &vols, "v1");
         s.run(&job);
-        assert_eq!(s.get(&vols, "v1").state, State::Done);
-        assert!(matches!(s.request(&vols, "v1"), Ok(Begin::Nothing)));
         s.cancel("v1");
-        assert_eq!(s.get(&vols, "v1").state, State::Idle);
-        assert!(matches!(s.request(&vols, "v1"), Ok(Begin::Run(_))));
+        assert_eq!(s.get(&vols, "v1").state, State::Done);
+        assert!(matches!(s.request(&vols, "v1", false), Ok(Begin::Nothing)));
+    }
+
+    #[test]
+    fn a_forced_request_walks_a_finished_volume_again() {
+        // The Rescan row (RUY-651): one call, no CancelScan before it.
+        let vols = [volume("v1"), volume("v2")];
+        let s = scans(FakeTree::new("/m"));
+        let job = started(&s, &vols, "v1");
+        s.run(&job);
+        assert!(
+            matches!(s.request(&vols, "v1", false), Ok(Begin::Nothing)),
+            "cached"
+        );
+        assert!(
+            matches!(s.request(&vols, "v1", true), Ok(Begin::Run(_))),
+            "forced: walks"
+        );
+        assert_eq!(s.get(&vols, "v1").state, State::Running);
+        // A running scan is left alone, forced or not.
+        assert!(matches!(s.request(&vols, "v1", true), Ok(Begin::Nothing)));
+        // Another volume's forced request is busy and drops nothing of its own.
+        assert_eq!(s.request(&vols, "v2", true), Err(Status::Busy));
+    }
+
+    #[test]
+    fn a_forced_busy_request_keeps_the_fresh_result() {
+        let vols = [volume("v1"), volume("v2")];
+        let s = scans(FakeTree::new("/m"));
+        let job = started(&s, &vols, "v1");
+        s.run(&job);
+        let job2 = started(&s, &vols, "v2");
+        assert_eq!(s.request(&vols, "v1", true), Err(Status::Busy));
+        assert_eq!(s.get(&vols, "v1").state, State::Done, "still there");
+        s.run(&job2);
     }
 
     #[test]
@@ -1624,7 +1654,7 @@ mod tests {
         assert!(!s.run(&job), "a stale walk reports no change");
         assert_eq!(s.get(&vols, "v1").state, State::Idle);
         // And the scanner is free again.
-        assert!(matches!(s.request(&vols, "v1"), Ok(Begin::Run(_))));
+        assert!(matches!(s.request(&vols, "v1", false), Ok(Begin::Run(_))));
     }
 
     #[test]
@@ -1634,7 +1664,7 @@ mod tests {
         let job = started(&s, &vols, "v1");
         assert!(s.run(&job));
         assert_eq!(s.get(&vols, "v1").state, State::Failed);
-        assert!(matches!(s.request(&vols, "v1"), Ok(Begin::Run(_))));
+        assert!(matches!(s.request(&vols, "v1", false), Ok(Begin::Run(_))));
     }
 
     struct Panics;
@@ -1663,12 +1693,12 @@ mod tests {
     fn a_panicking_source_does_not_leave_the_scanner_stuck() {
         let s = Scans::new(Panics, FakeClock::default());
         let vols = [volume("v1"), volume("v2")];
-        let Ok(Begin::Run(job)) = s.request(&vols, "v1") else {
+        let Ok(Begin::Run(job)) = s.request(&vols, "v1", false) else {
             panic!("expected a job");
         };
         assert!(s.run(&job));
         assert_eq!(s.get(&vols, "v1").state, State::Failed);
-        assert!(matches!(s.request(&vols, "v2"), Ok(Begin::Run(_))));
+        assert!(matches!(s.request(&vols, "v2", false), Ok(Begin::Run(_))));
     }
 
     #[test]
@@ -1814,7 +1844,7 @@ mod tests {
         use std::sync::atomic::AtomicUsize;
         let scans = Arc::new(Scans::new(Blocking::new(), FakeClock::default()));
         let vols = [volume("v1")];
-        let Ok(Begin::Run(job)) = scans.request(&vols, "v1") else {
+        let Ok(Begin::Run(job)) = scans.request(&vols, "v1", false) else {
             panic!("expected a job");
         };
         let walker = {
@@ -1851,7 +1881,7 @@ mod tests {
     fn eject_gives_up_waiting_after_the_bound() {
         let scans = Arc::new(Scans::new(Blocking::new(), FakeClock::default()));
         let vols = [volume("v1")];
-        let Ok(Begin::Run(job)) = scans.request(&vols, "v1") else {
+        let Ok(Begin::Run(job)) = scans.request(&vols, "v1", false) else {
             panic!("expected a job");
         };
         let walker = {
