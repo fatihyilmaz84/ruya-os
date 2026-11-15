@@ -15,10 +15,22 @@ QtObject {
 
     // The adapter as a person knows it: the service says "usb" or "built-in" when the two differ, else "hciN" (04 section 6).
     function adapterWords(token, subject) {
-        if (token === "usb")
-            return subject ? qsTr("The USB adapter") : qsTr("the USB adapter")
-        if (token === "built-in")
-            return subject ? qsTr("The built-in adapter") : qsTr("the built-in adapter")
+        if (token === "usb") {
+            if (subject) {
+                //: Starts the toast "%1 is off. Bluetooth uses %2.": the USB adapter is the SUBJECT, the one that is off (capital T).
+                return qsTr("The USB adapter")
+            }
+            //: Ends the toast "%1 is off. Bluetooth uses %2.": the USB adapter is the OBJECT, the one in use (lower-case t).
+            return qsTr("the USB adapter")
+        }
+        if (token === "built-in") {
+            if (subject) {
+                //: Starts the toast "%1 is off. Bluetooth uses %2.": the built-in adapter is the SUBJECT, the one that is off (capital T).
+                return qsTr("The built-in adapter")
+            }
+            //: Ends the toast "%1 is off. Bluetooth uses %2.": the built-in adapter is the OBJECT, the one in use (lower-case t).
+            return qsTr("the built-in adapter")
+        }
         return token
     }
 

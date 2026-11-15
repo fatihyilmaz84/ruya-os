@@ -9,6 +9,7 @@
 //! those three options already make sure nothing on it runs, gets privileges or acts as a device.
 //! A filesystem we do not know is listed but never mounted.
 
+use crate::log;
 use std::collections::HashSet;
 use std::sync::{Mutex, MutexGuard};
 
@@ -266,7 +267,7 @@ impl<U: Udisks> Storage<U> {
         for id in &to_mount {
             match self.udisks.mount(id, MOUNT_OPTIONS) {
                 Ok(()) => mounted_any = true,
-                Err(err) => eprintln!("ruya-devices: mounting {id} failed: {err}"),
+                Err(err) => log::warn(&format!("mounting {id} failed: {err}")),
             }
         }
         if mounted_any {
@@ -334,13 +335,13 @@ impl<U: Udisks> Storage<U> {
                     // Back to how it was: what we unmounted comes back.
                     for id in done {
                         if let Err(e) = self.udisks.mount(id, MOUNT_OPTIONS) {
-                            eprintln!("ruya-devices: mounting {id} again failed: {e}");
+                            log::warn(&format!("mounting {id} again failed: {e}"));
                         }
                     }
                     return match err {
                         UnmountError::Busy => Status::Busy,
                         UnmountError::Failed(why) => {
-                            eprintln!("ruya-devices: unmounting {} failed: {why}", r.id);
+                            log::warn(&format!("unmounting {} failed: {why}", r.id));
                             Status::Failed
                         }
                     };
@@ -350,7 +351,7 @@ impl<U: Udisks> Storage<U> {
         match self.udisks.power_off(id) {
             Ok(()) => Status::Ok,
             Err(err) => {
-                eprintln!("ruya-devices: powering {id} off failed: {err}");
+                log::warn(&format!("powering {id} off failed: {err}"));
                 Status::Failed
             }
         }

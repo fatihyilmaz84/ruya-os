@@ -5,6 +5,7 @@
 //! the shared one-second cap of `debounce.rs`), and the restart back-off. The child process
 //! itself is Linux-only.
 
+use crate::log;
 use std::collections::HashSet;
 use std::future::Future;
 use std::time::{Duration, Instant};
@@ -187,7 +188,9 @@ pub async fn follow<S, C, R, RFut, Sl, SlFut, N>(
             Err(why) => why,
         };
         let delay = backoff.next_delay();
-        eprintln!("ruya-devices: PipeWire events ended ({why}); trying again in {delay:?}");
+        log::info(&format!(
+            "PipeWire events ended ({why}); trying again in {delay:?}"
+        ));
         sleep(delay).await;
     }
 }

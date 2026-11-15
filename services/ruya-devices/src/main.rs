@@ -2,6 +2,7 @@
 //! user unit of `ruya-shell` (ADR-010). With `--session` (development) it serves on the session
 //! bus over a fake PipeWire, NetworkManager, BlueZ, udisks2, UPower, sensors and timedated.
 
+use ruya_devices::log;
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -54,7 +55,7 @@ fn main() {
         return park_audio(&args[at + 1..]);
     }
     if let Err(err) = run() {
-        eprintln!("ruya-devices: fatal: {err}");
+        log::info(&format!("fatal: {err}"));
         std::process::exit(1);
     }
 }
@@ -309,11 +310,11 @@ fn display_guard(args: &[String]) {
         .and_then(|at| args.get(at + 1))
         .map(PathBuf::from);
     let Some(dir) = display_dir(false, given) else {
-        return eprintln!("ruya-devices: --display-guard: no state directory (HOME is not set)");
+        return log::warn("--display-guard: no state directory (HOME is not set)");
     };
     match display::guard(&dir, drm_source(false).as_ref()) {
-        Ok(outcome) => eprintln!("ruya-devices: display guard: {outcome:?}"),
-        Err(err) => eprintln!("ruya-devices: display guard failed: {err}"),
+        Ok(outcome) => log::info(&format!("display guard: {outcome:?}")),
+        Err(err) => log::warn(&format!("display guard failed: {err}")),
     }
 }
 
@@ -325,7 +326,7 @@ fn park_audio(args: &[String]) {
     let req = match ruya_devices::park::parse_args(args) {
         Ok(req) => req,
         Err(err) => {
-            eprintln!("ruya-devices: --park-audio: {err}");
+            log::warn(&format!("--park-audio: {err}"));
             std::process::exit(2);
         }
     };
@@ -333,16 +334,16 @@ fn park_audio(args: &[String]) {
     match ruya_devices::park::apply(&req) {
         Ok(line) => println!("{line}"),
         Err(err) => {
-            eprintln!("ruya-devices: park-audio {}: {err}", req.user);
+            log::warn(&format!("park-audio {}: {err}", req.user));
             std::process::exit(1);
         }
     }
     #[cfg(not(target_os = "linux"))]
     {
-        eprintln!(
-            "ruya-devices: --park-audio {}: PipeWire is Linux-only",
+        log::warn(&format!(
+            "--park-audio {}: PipeWire is Linux-only",
             req.user
-        );
+        ));
         std::process::exit(1);
     }
 }
@@ -368,7 +369,7 @@ fn display_list(dir: Option<PathBuf>) {
             }
         }
         Err(err) => {
-            eprintln!("ruya-devices: {err}");
+            log::warn(&err.to_string());
             std::process::exit(1);
         }
     }
@@ -452,21 +453,21 @@ fn run() -> Result<(), Box<dyn Error>> {
     // The first read only takes over the state; a failure here (PipeWire not up yet) is retried
     // by the watcher, so it must not stop the service.
     if let Err(err) = audio.refresh() {
-        eprintln!("ruya-devices: PipeWire not readable yet: {err}");
+        log::warn(&format!("PipeWire not readable yet: {err}"));
     }
     let audio = Arc::new(Mutex::new(audio));
 
     let net = Arc::new(Network::new(network_manager(session)?));
     // Same rule as for PipeWire: NetworkManager not up yet is retried by its signals.
     if let Err(err) = net.refresh() {
-        eprintln!("ruya-devices: NetworkManager not readable yet: {err}");
+        log::warn(&format!("NetworkManager not readable yet: {err}"));
     }
 
     // UPower missing is an empty list (the client says so), and UPower not up yet is retried by
     // its signals, like the others.
     let batteries: SharedBatteries = Arc::new(Batteries::new(upower(session)?));
     if let Err(err) = batteries.refresh() {
-        eprintln!("ruya-devices: UPower not readable yet: {err}");
+        log::warn(&format!("UPower not readable yet: {err}"));
     }
 
     // No adapter (or no BlueZ) is "unavailable" and an empty list; BlueZ not up yet is retried
@@ -477,7 +478,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let handler: Arc<dyn AgentHandler> = bluetooth.clone();
     let _ = agent.set(handler);
     if let Err(err) = bluetooth.refresh() {
-        eprintln!("ruya-devices: BlueZ not readable yet: {}", err.0);
+        log::warn(&format!("BlueZ not readable yet: {}", err.0));
     }
     // The batteries' first families, now that Bluetooth is known (nobody listens yet).
     batteries.recheck(&bluetooth.list());
@@ -490,7 +491,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     // that are already plugged in (without announcing them as added).
     let storage: SharedStorage = Arc::new(Storage::new(udisks(session)?));
     if let Err(err) = storage.refresh() {
-        eprintln!("ruya-devices: udisks2 not readable yet: {err}");
+        log::warn(&format!("udisks2 not readable yet: {err}"));
     }
 
     // Directory sizes are measured off the executor, cached, and re-measured when the Store says
@@ -509,13 +510,13 @@ fn run() -> Result<(), Box<dyn Error>> {
         ThermalConfig::load(&[PathBuf::from(SYSTEM_CONFIG), PathBuf::from(LOCAL_CONFIG)]),
     ));
     if let Err(err) = monitor.poll() {
-        eprintln!("ruya-devices: sensors not readable yet: {err}");
+        log::warn(&format!("sensors not readable yet: {err}"));
     }
 
     // timedated not up yet is retried by its signals; its zone is read once now.
     let time: SharedTime = Arc::new(Time::new(timedate(session)?));
     if let Err(err) = time.refresh() {
-        eprintln!("ruya-devices: timedated not readable yet: {err}");
+        log::warn(&format!("timedated not readable yet: {err}"));
     }
 
     // The outputs are read from the kernel at every call; the choice is a file in the state dir.

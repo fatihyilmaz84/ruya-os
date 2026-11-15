@@ -23,6 +23,7 @@
 //! [`Scans`] is the state around it: one scan at a time, the result cached per volume until the
 //! volume changes or leaves, run on the blocking pool by the D-Bus adapter.
 
+use crate::log;
 use std::collections::{HashMap, HashSet};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -345,7 +346,9 @@ pub fn scan_with<S: ScanSource, C: Clock>(
                 if !logged {
                     logged = true;
                     let leaf = dir.rel.last().map(|n| printable(n)).unwrap_or_default();
-                    eprintln!("ruya-devices: drive scan: cannot read a directory ({leaf}): {err}");
+                    log::warn(&format!(
+                        "drive scan: cannot read a directory ({leaf}): {err}"
+                    ));
                 }
                 continue;
             }
@@ -999,12 +1002,12 @@ impl<S: ScanSource, C: Clock> Scans<S, C> {
                 entry.scan = scan;
             }
             Ok(Err(err)) => {
-                eprintln!("ruya-devices: drive scan failed: {err}");
+                log::warn(&format!("drive scan failed: {err}"));
                 entry.state = State::Failed;
                 entry.scan = Scan::default();
             }
             Err(_) => {
-                eprintln!("ruya-devices: drive scan failed unexpectedly");
+                log::warn("drive scan failed unexpectedly");
                 entry.state = State::Failed;
                 entry.scan = Scan::default();
             }

@@ -37,9 +37,8 @@ class Bluetooth : public QObject
     // does not flash a "no controller" hint at start-up; inputKnown says the service answered.
     Q_PROPERTY(bool inputPresent READ inputPresent NOTIFY controllerStateChanged)
     Q_PROPERTY(bool inputKnown READ inputKnown NOTIFY controllerStateChanged)
-    // The primary adapter while it is off and another adapter is on, else "": "usb" | "built-in" | "hciN" (the last when both
-    // are alike); a scan or a pairing
-    // then answers "unavailable" although `powered` is true (RUY-21).
+    // The primary adapter while it is off and another adapter is on, else "": "usb" | "built-in" | "hciN" (the last when
+    // both are alike); a scan or a pairing then answers "unavailable" although `powered` is true (RUY-21).
     Q_PROPERTY(QString primaryAdapterOff READ primaryAdapterOff NOTIFY adaptersChanged)
     Q_PROPERTY(QString adapterInUse READ adapterInUse NOTIFY adaptersChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)

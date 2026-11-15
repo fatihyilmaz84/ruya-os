@@ -296,7 +296,7 @@ impl AudioIface {
     async fn set_master_volume(&mut self, value: u32) {
         let status = with_audio(&self.audio, move |audio| audio.set_volume(value)).await;
         if status != crate::Status::Ok {
-            eprintln!("ruya-devices: setting the volume failed");
+            log::warn("setting the volume failed");
         }
     }
 
@@ -314,7 +314,7 @@ impl AudioIface {
     async fn set_muted(&mut self, value: bool) {
         let status = with_audio(&self.audio, move |audio| audio.set_muted(value)).await;
         if status != crate::Status::Ok {
-            eprintln!("ruya-devices: setting mute failed");
+            log::warn("setting mute failed");
         }
     }
 
@@ -329,7 +329,7 @@ impl AudioIface {
         if status == crate::Status::Ok {
             Ok(())
         } else {
-            eprintln!("ruya-devices: setting the microphone mute failed");
+            log::warn("setting the microphone mute failed");
             Err(zbus::fdo::Error::Failed(
                 "no microphone, or PipeWire refused".to_owned(),
             ))
@@ -379,11 +379,11 @@ async fn refresh_audio(connection: &Connection, audio: &Shared) {
     match result {
         Ok(changes) if changes.any() => {
             if let Err(err) = announce(connection, &changes).await {
-                eprintln!("ruya-devices: emitting signals failed: {err}");
+                log::warn(&format!("emitting signals failed: {err}"));
             }
         }
         Ok(_) => {}
-        Err(err) => eprintln!("ruya-devices: reading PipeWire failed: {err}"),
+        Err(err) => log::warn(&format!("reading PipeWire failed: {err}")),
     }
 }
 
@@ -469,7 +469,7 @@ impl NetworkIface {
         }
         .await;
         if let Err(err) = result {
-            eprintln!("ruya-devices: emitting network signals failed: {err}");
+            log::warn(&format!("emitting network signals failed: {err}"));
         }
     }
 
@@ -478,7 +478,7 @@ impl NetworkIface {
         let net = self.net.clone();
         match unblock(move || net.refresh()).await {
             Ok(changes) => self.emit(emitter, &changes).await,
-            Err(err) => eprintln!("ruya-devices: reading NetworkManager failed: {err}"),
+            Err(err) => log::warn(&format!("reading NetworkManager failed: {err}")),
         }
     }
 }
@@ -532,7 +532,7 @@ impl NetworkIface {
                 Ok(())
             }
             Err(err) => {
-                eprintln!("ruya-devices: switching the Wi-Fi radio failed: {err}");
+                log::warn(&format!("switching the Wi-Fi radio failed: {err}"));
                 Err(zbus::fdo::Error::Failed(
                     "no Wi-Fi adapter, or NetworkManager refused".to_owned(),
                 ))
@@ -600,9 +600,9 @@ pub async fn watch_network(connection: Connection, net: SharedNet) {
     let mut stream = match rule {
         Ok(rule) => match MessageStream::for_match_rule(rule, &connection, None).await {
             Ok(stream) => stream,
-            Err(err) => return eprintln!("ruya-devices: cannot follow NetworkManager: {err}"),
+            Err(err) => return log::warn(&format!("cannot follow NetworkManager: {err}")),
         },
-        Err(err) => return eprintln!("ruya-devices: cannot follow NetworkManager: {err}"),
+        Err(err) => return log::warn(&format!("cannot follow NetworkManager: {err}")),
     };
     while stream.next().await.is_some() {
         debounce::settle(&mut stream, debounce::QUIET, debounce::MAX_WAIT, None).await;
@@ -610,11 +610,11 @@ pub async fn watch_network(connection: Connection, net: SharedNet) {
         match unblock(move || net.refresh()).await {
             Ok(changes) if changes.any() => {
                 if let Err(err) = announce_network(&connection, &changes).await {
-                    eprintln!("ruya-devices: emitting network signals failed: {err}");
+                    log::warn(&format!("emitting network signals failed: {err}"));
                 }
             }
             Ok(_) => {}
-            Err(err) => eprintln!("ruya-devices: reading NetworkManager failed: {err}"),
+            Err(err) => log::warn(&format!("reading NetworkManager failed: {err}")),
         }
     }
 }
@@ -707,7 +707,7 @@ pub async fn watch_batteries(
         .and_then(|b| b.arg(0, UPOWER))
         .map(|b| b.build());
     let (Ok(signals), Ok(owner)) = (signals, owner) else {
-        return eprintln!("ruya-devices: cannot follow UPower");
+        return log::warn("cannot follow UPower");
     };
     let (signals, owner) = match (
         MessageStream::for_match_rule(signals, &connection, None).await,
@@ -715,7 +715,7 @@ pub async fn watch_batteries(
     ) {
         (Ok(a), Ok(b)) => (a, b),
         (Err(err), _) | (_, Err(err)) => {
-            return eprintln!("ruya-devices: cannot follow UPower: {err}");
+            return log::warn(&format!("cannot follow UPower: {err}"));
         }
     };
     let mut stream = futures_lite::stream::or(signals, owner);
@@ -725,11 +725,11 @@ pub async fn watch_batteries(
         match unblock(move || batteries_due(&batteries, &bluetooth)).await {
             Ok(true) => {
                 if let Err(err) = announce_batteries(&connection).await {
-                    eprintln!("ruya-devices: emitting battery signals failed: {err}");
+                    log::warn(&format!("emitting battery signals failed: {err}"));
                 }
             }
             Ok(false) => {}
-            Err(err) => eprintln!("ruya-devices: reading UPower failed: {err}"),
+            Err(err) => log::warn(&format!("reading UPower failed: {err}")),
         }
     }
 }
@@ -1177,7 +1177,7 @@ pub async fn watch_bluetooth(connection: Connection, bt: SharedBluetooth) {
     ) {
         (Ok(a), Ok(b)) => (a, b),
         (Err(err), _) | (_, Err(err)) => {
-            return eprintln!("ruya-devices: cannot follow BlueZ: {err}");
+            return log::warn(&format!("cannot follow BlueZ: {err}"));
         }
     };
     let mut stream = futures_lite::stream::or(signals, owner);
@@ -1295,7 +1295,7 @@ pub async fn watch_input(connection: Connection, input: SharedInput) {
         {
             Ok(iface) => iface,
             Err(err) => {
-                eprintln!("ruya-devices: the input changes cannot be announced: {err}");
+                log::warn(&format!("the input changes cannot be announced: {err}"));
                 continue;
             }
         };
@@ -1304,7 +1304,7 @@ pub async fn watch_input(connection: Connection, input: SharedInput) {
         if changed {
             let this = iface.get().await;
             if let Err(err) = this.input_present_changed(emitter).await {
-                eprintln!("ruya-devices: emitting InputPresent failed: {err}");
+                log::warn(&format!("emitting InputPresent failed: {err}"));
             }
         }
         for event in &pads {
@@ -1333,7 +1333,7 @@ pub async fn watch_input(connection: Connection, input: SharedInput) {
                 }
             };
             if let Err(err) = sent {
-                eprintln!("ruya-devices: emitting a gamepad change failed: {err}");
+                log::warn(&format!("emitting a gamepad change failed: {err}"));
             }
         }
     }
@@ -1402,12 +1402,12 @@ impl StorageIface {
     async fn emit(emitter: &SignalEmitter<'_>, changes: &storage::Changes) {
         for id in &changes.added {
             if let Err(err) = Self::volume_added(emitter, id.clone()).await {
-                eprintln!("ruya-devices: emitting VolumeAdded failed: {err}");
+                log::warn(&format!("emitting VolumeAdded failed: {err}"));
             }
         }
         if changes.changed {
             if let Err(err) = Self::volumes_changed(emitter).await {
-                eprintln!("ruya-devices: emitting VolumesChanged failed: {err}");
+                log::warn(&format!("emitting VolumesChanged failed: {err}"));
             }
         }
     }
@@ -1527,7 +1527,7 @@ impl StorageIface {
         let storage = self.storage.clone();
         match unblock(move || storage.refresh()).await {
             Ok(changes) => Self::emit(&emitter, &changes).await,
-            Err(err) => eprintln!("ruya-devices: reading udisks2 failed: {err}"),
+            Err(err) => log::warn(&format!("reading udisks2 failed: {err}")),
         }
         status.as_str().to_owned()
     }
@@ -1648,10 +1648,10 @@ async fn run_scan(connection: Connection, scans: SharedScans, job: Job) {
     {
         Ok(iface) => {
             if let Err(err) = StorageIface::volume_scan_changed(iface.signal_emitter(), id).await {
-                eprintln!("ruya-devices: emitting VolumeScanChanged failed: {err}");
+                log::warn(&format!("emitting VolumeScanChanged failed: {err}"));
             }
         }
-        Err(err) => eprintln!("ruya-devices: emitting VolumeScanChanged failed: {err}"),
+        Err(err) => log::warn(&format!("emitting VolumeScanChanged failed: {err}")),
     }
 }
 
@@ -1672,10 +1672,10 @@ pub async fn refresh_usage(connection: Connection, usage: SharedUsage) {
                     if let Err(err) =
                         StorageIface::system_usage_changed(iface.signal_emitter()).await
                     {
-                        eprintln!("ruya-devices: emitting SystemUsageChanged failed: {err}");
+                        log::warn(&format!("emitting SystemUsageChanged failed: {err}"));
                     }
                 }
-                Err(err) => eprintln!("ruya-devices: emitting SystemUsageChanged failed: {err}"),
+                Err(err) => log::warn(&format!("emitting SystemUsageChanged failed: {err}")),
             }
         }
         if result == Refresh::Skipped || !usage.needs_refresh() {
@@ -1695,11 +1695,11 @@ pub async fn watch_installed(connection: Connection, usage: SharedUsage) {
         .and_then(|b| b.member("InstalledChanged"))
         .map(|b| b.build());
     let Ok(rule) = rule else {
-        return eprintln!("ruya-devices: cannot follow the Store");
+        return log::warn("cannot follow the Store");
     };
     let mut stream = match MessageStream::for_match_rule(rule, &connection, None).await {
         Ok(stream) => stream,
-        Err(err) => return eprintln!("ruya-devices: cannot follow the Store: {err}"),
+        Err(err) => return log::warn(&format!("cannot follow the Store: {err}")),
     };
     refresh_usage(connection.clone(), usage.clone()).await;
     while stream.next().await.is_some() {
@@ -1727,7 +1727,7 @@ pub async fn watch_storage(connection: Connection, storage: SharedStorage) {
         .and_then(|b| b.arg(0, UDISKS))
         .map(|b| b.build());
     let (Ok(signals), Ok(owner)) = (signals, owner) else {
-        return eprintln!("ruya-devices: cannot follow udisks2");
+        return log::warn("cannot follow udisks2");
     };
     let (signals, owner) = match (
         MessageStream::for_match_rule(signals, &connection, None).await,
@@ -1735,7 +1735,7 @@ pub async fn watch_storage(connection: Connection, storage: SharedStorage) {
     ) {
         (Ok(a), Ok(b)) => (a, b),
         (Err(err), _) | (_, Err(err)) => {
-            return eprintln!("ruya-devices: cannot follow udisks2: {err}");
+            return log::warn(&format!("cannot follow udisks2: {err}"));
         }
     };
     let mut stream = futures_lite::stream::or(signals, owner);
@@ -1745,11 +1745,11 @@ pub async fn watch_storage(connection: Connection, storage: SharedStorage) {
         match unblock(move || storage.refresh()).await {
             Ok(changes) if changes.any() => {
                 if let Err(err) = announce_storage(&connection, &changes).await {
-                    eprintln!("ruya-devices: emitting storage signals failed: {err}");
+                    log::warn(&format!("emitting storage signals failed: {err}"));
                 }
             }
             Ok(_) => {}
-            Err(err) => eprintln!("ruya-devices: reading udisks2 failed: {err}"),
+            Err(err) => log::warn(&format!("reading udisks2 failed: {err}")),
         }
     }
 }
@@ -1829,10 +1829,10 @@ pub async fn watch_thermal(connection: Connection, monitor: SharedThermal) {
         match unblock(move || polling.poll()).await {
             Ok(update) => {
                 if let Err(err) = announce_thermal(&connection, &update).await {
-                    eprintln!("ruya-devices: emitting thermal signals failed: {err}");
+                    log::warn(&format!("emitting thermal signals failed: {err}"));
                 }
             }
-            Err(err) => eprintln!("ruya-devices: reading the sensors failed: {err}"),
+            Err(err) => log::warn(&format!("reading the sensors failed: {err}")),
         }
         async_io::Timer::after(monitor.interval()).await;
     }
@@ -1925,7 +1925,7 @@ impl TimeIface {
         }
         .await;
         if let Err(err) = result {
-            eprintln!("ruya-devices: emitting time signals failed: {err}");
+            log::warn(&format!("emitting time signals failed: {err}"));
         }
     }
 }
@@ -1974,7 +1974,7 @@ impl TimeIface {
         match unblock(move || time.list()).await {
             Ok(list) => list,
             Err(err) => {
-                eprintln!("ruya-devices: reading the time zones failed: {err}");
+                log::warn(&format!("reading the time zones failed: {err}"));
                 Vec::new()
             }
         }
@@ -2021,7 +2021,7 @@ pub async fn watch_time(connection: Connection, time: SharedTime) {
         .and_then(|b| b.arg(0, TIMEDATE))
         .map(|b| b.build());
     let (Ok(signals), Ok(owner)) = (signals, owner) else {
-        return eprintln!("ruya-devices: cannot follow timedated");
+        return log::warn("cannot follow timedated");
     };
     let (signals, owner) = match (
         MessageStream::for_match_rule(signals, &connection, None).await,
@@ -2029,7 +2029,7 @@ pub async fn watch_time(connection: Connection, time: SharedTime) {
     ) {
         (Ok(a), Ok(b)) => (a, b),
         (Err(err), _) | (_, Err(err)) => {
-            return eprintln!("ruya-devices: cannot follow timedated: {err}");
+            return log::warn(&format!("cannot follow timedated: {err}"));
         }
     };
     let mut stream = futures_lite::stream::or(signals, owner);
@@ -2038,7 +2038,7 @@ pub async fn watch_time(connection: Connection, time: SharedTime) {
         let refreshing = time.clone();
         match unblock(move || refreshing.refresh()).await {
             Ok(changes) => announce_time(&connection, &changes).await,
-            Err(err) => eprintln!("ruya-devices: reading timedated failed: {err}"),
+            Err(err) => log::warn(&format!("reading timedated failed: {err}")),
         }
     }
 }
@@ -2140,7 +2140,7 @@ impl DisplayIface {
         match unblock(move || display.list()).await {
             Ok(views) => views.iter().map(output_row).collect(),
             Err(err) => {
-                eprintln!("ruya-devices: reading the outputs failed: {err}");
+                log::warn(&format!("reading the outputs failed: {err}"));
                 Vec::new()
             }
         }
@@ -2192,7 +2192,7 @@ impl DisplayIface {
         let (status, changed) = unblock(move || display.set_ui_scale(percent)).await;
         if changed {
             if let Err(err) = self.ui_scale_changed(&emitter).await {
-                eprintln!("ruya-devices: emitting UiScale failed: {err}");
+                log::warn(&format!("emitting UiScale failed: {err}"));
             }
         }
         status.as_str().to_owned()
@@ -2204,7 +2204,7 @@ impl DisplayIface {
         let (status, ui_changed) = unblock(move || display.reset()).await;
         if ui_changed {
             if let Err(err) = self.ui_scale_changed(&emitter).await {
-                eprintln!("ruya-devices: emitting UiScale failed: {err}");
+                log::warn(&format!("emitting UiScale failed: {err}"));
             }
         }
         status.as_str().to_owned()
@@ -2250,7 +2250,7 @@ impl DisplayIface {
         match done {
             Ok(()) => "ok".to_owned(),
             Err(err) => {
-                eprintln!("ruya-devices: setting the brightness failed: {err}");
+                log::warn(&format!("setting the brightness failed: {err}"));
                 "failed".to_owned()
             }
         }
@@ -2364,10 +2364,10 @@ pub async fn refresh_system(connection: Connection, system: SharedSystem) {
     {
         Ok(iface) => {
             if let Err(err) = SystemIface::system_info_changed(iface.signal_emitter()).await {
-                eprintln!("ruya-devices: emitting SystemInfoChanged failed: {err}");
+                log::warn(&format!("emitting SystemInfoChanged failed: {err}"));
             }
         }
-        Err(err) => eprintln!("ruya-devices: emitting SystemInfoChanged failed: {err}"),
+        Err(err) => log::warn(&format!("emitting SystemInfoChanged failed: {err}")),
     }
 }
 

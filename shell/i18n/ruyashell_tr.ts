@@ -830,7 +830,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>BluetoothText</name>
     <message>
-        <location filename="../qml/BluetoothText.qml" line="+41"/>
+        <location filename="../qml/BluetoothText.qml" line="+53"/>
         <source>Pairing failed. Put the controller in pairing mode again.</source>
         <translation>Eşleştirme başarısız. Kontrolcüyü yeniden eşleştirme kipine alın.</translation>
     </message>
@@ -855,27 +855,31 @@ Bu geri alınamaz.</translation>
         <translation>Bluetooth kapalı.</translation>
     </message>
     <message>
-        <location line="-15"/>
+        <location line="-25"/>
         <source>The USB adapter</source>
+        <extracomment>Starts the toast &quot;%1 is off. Bluetooth uses %2.&quot;: the USB adapter is the SUBJECT, the one that is off (capital T).</extracomment>
         <translation>USB adaptörü</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+3"/>
         <source>the USB adapter</source>
+        <extracomment>Ends the toast &quot;%1 is off. Bluetooth uses %2.&quot;: the USB adapter is the OBJECT, the one in use (lower-case t).</extracomment>
         <translation>USB adaptörünü</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+5"/>
         <source>The built-in adapter</source>
+        <extracomment>Starts the toast &quot;%1 is off. Bluetooth uses %2.&quot;: the built-in adapter is the SUBJECT, the one that is off (capital T).</extracomment>
         <translation>Yerleşik adaptör</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+3"/>
         <source>the built-in adapter</source>
+        <extracomment>Ends the toast &quot;%1 is off. Bluetooth uses %2.&quot;: the built-in adapter is the OBJECT, the one in use (lower-case t).</extracomment>
         <translation>yerleşik adaptörü</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+12"/>
         <source>%1 is off. Bluetooth uses %2.</source>
         <extracomment>A toast. %1: the adapter that is off (&quot;The USB adapter&quot;, or a name such as &quot;hci1&quot;), %2: the one in use (&quot;the built-in adapter&quot; or &quot;hci0&quot;). Names such as hci0 stay as they are.</extracomment>
         <translation>%1 kapalı. Bluetooth %2 kullanıyor.</translation>
@@ -3340,7 +3344,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>PlayerChip</name>
     <message>
-        <location filename="../qml/PlayerChip.qml" line="34"/>
+        <location filename="../qml/PlayerChip.qml" line="+34"/>
         <source>Guest %1</source>
         <translation>Misafir %1</translation>
     </message>
@@ -3893,12 +3897,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-156"/>
-        <location line="+412"/>
+        <location line="+464"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-298"/>
+        <location line="-350"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
@@ -3975,7 +3979,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+231"/>
+        <location line="+284"/>
         <location line="+1"/>
         <source>%1, %2</source>
         <translation>%1, %2</translation>
@@ -3991,7 +3995,7 @@ Bu geri alınamaz.</translation>
         <translation>Devam et: %1, %2</translation>
     </message>
     <message>
-        <location line="-366"/>
+        <location line="-419"/>
         <source>Just started</source>
         <translation>Yeni başladı</translation>
     </message>
@@ -4006,7 +4010,7 @@ Bu geri alınamaz.</translation>
         <translation>Duraklatıldı</translation>
     </message>
     <message>
-        <location line="+366"/>
+        <location line="+419"/>
         <source>Volume, muted</source>
         <translation>Ses, sessiz</translation>
     </message>
@@ -4016,7 +4020,7 @@ Bu geri alınamaz.</translation>
         <translation>Ses %1</translation>
     </message>
     <message>
-        <location line="-541"/>
+        <location line="-594"/>
         <source>Muted</source>
         <translation>Sessiz</translation>
     </message>
@@ -4488,7 +4492,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kapanmadı. Çalışmaya devam ederse konsolu yeniden başlatın.</translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+93"/>
         <source>%1 has no window yet.</source>
         <translation>%1 henüz bir pencere açmadı.</translation>
     </message>
@@ -4503,7 +4507,7 @@ Bu geri alınamaz.</translation>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+358"/>
+        <location line="+371"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -4610,7 +4614,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1716"/>
+        <location line="-1748"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -4641,7 +4645,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1441"/>
+        <location line="+1473"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
@@ -4847,7 +4851,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+323"/>
+        <location filename="../qml/StoragePane.qml" line="+327"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 hâlâ kullanımda. Kullanan uygulamayı kapatıp tekrar deneyin.</translation>
     </message>
@@ -4872,13 +4876,13 @@ Bu geri alınamaz.</translation>
         <translation>Desteklenmiyor</translation>
     </message>
     <message>
-        <location line="-280"/>
-        <location line="+281"/>
+        <location line="-284"/>
+        <location line="+285"/>
         <source>%1 free of %2</source>
         <translation>%2 içinde %1 boş</translation>
     </message>
     <message>
-        <location line="-232"/>
+        <location line="-236"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
@@ -4928,7 +4932,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 yeniden tara</translation>
     </message>
     <message>
-        <location line="+181"/>
+        <location line="+185"/>
         <source>Read-only</source>
         <translation>Salt okunur</translation>
     </message>
@@ -4958,13 +4962,13 @@ Bu geri alınamaz.</translation>
         <translation>Sistem</translation>
     </message>
     <message>
-        <location line="-298"/>
-        <location line="+298"/>
+        <location line="-302"/>
+        <location line="+302"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="-309"/>
+        <location line="-313"/>
         <source>Plug it in again</source>
         <translation>Yeniden takın</translation>
     </message>
@@ -4979,12 +4983,12 @@ Bu geri alınamaz.</translation>
         <translation>Burada bir şey bulunamadı</translation>
     </message>
     <message>
-        <location line="+302"/>
+        <location line="+306"/>
         <source>Drives</source>
         <translation>Sürücüler</translation>
     </message>
     <message>
-        <location line="-286"/>
+        <location line="-290"/>
         <source>Eject %1</source>
         <translation>%1 sürücüsünü çıkar</translation>
     </message>

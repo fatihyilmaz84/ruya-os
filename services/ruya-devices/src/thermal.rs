@@ -15,6 +15,7 @@
 //! hwmon `name`, label and the device the hwmon belongs to, never by `hwmonN`, which renumbers
 //! between boots.
 
+use crate::log;
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::fs;
@@ -189,13 +190,13 @@ impl Config {
                 Ok(text) => text,
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
                 Err(err) => {
-                    eprintln!("ruya-devices: cannot read {}: {err}", path.display());
+                    log::warn(&format!("cannot read {}: {err}", path.display()));
                     continue;
                 }
             };
             match config.with_file(&text) {
                 Ok(next) => config = next,
-                Err(err) => eprintln!("ruya-devices: ignoring {}: {err}", path.display()),
+                Err(err) => log::warn(&format!("ignoring {}: {err}", path.display())),
             }
         }
         config
