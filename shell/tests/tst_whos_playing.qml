@@ -732,6 +732,54 @@ Item {
             tryVerify(() => find("homeDetails").activeFocus, 2000, "and it navigates")
         }
 
+        // ---- a pad remembers its player (RUY-124) ----------------------------------------------------------
+
+        // `who` plays on the DualSense, so the pad learns it as its owner (the seat may be given up again).
+        function rememberOnDualSense(who) {
+            Input.joinPlayer(host.dualSense, who)
+            tryVerify(() => Input.devices.find(d => d.id === host.dualSense).owner === who, 2000, "the DualSense remembers " + who)
+        }
+
+        function test_a_pad_opens_on_its_owner() {
+            signIn()
+            compare(Input.devices.find(d => d.id === host.xbox).owner, "p1", "the sign-in taught the Xbox pad")
+            rememberOnDualSense("p2")
+            Input.leavePlayer(2)
+            tryVerify(() => Input.players.length === 1, 2000, "Ada left; the DualSense keeps her as its owner")
+            askWith(host.dualSense)
+            tryVerify(() => find("whosPlayingCards").activeFocus, 2000)
+            compare(find("whosPlayingCards").currentIndex, 1, "Ada's card")
+            compare(prompt().step, "pick", "focus only: nothing joined by itself")
+            compare(joinSpy.count, 1, "only the test's own join")
+        }
+
+        function test_an_owner_who_plays_elsewhere_is_focused_and_accept_means_move_and_the_pin_is_asked() {
+            signIn()
+            rememberOnDualSense("p1")
+            Input.joinPlayer(host.xbox, "p1")                       // player 1 plays on the Xbox pad again
+            tryVerify(() => Input.players[0].device_id === host.xbox, 2000)
+            askWith(host.dualSense)
+            const list = find("whosPlayingCards")
+            tryVerify(() => list.activeFocus, 2000)
+            compare(list.currentIndex, 0, "Player One, though Ada is the first profile without a pad")
+            verify(find("whosPlayingDetail").text.endsWith(". Picking it moves Player One here."), find("whosPlayingDetail").text)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => prompt().step === "move", 2000, "Accept means Move")
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => prompt().step === "pin", 2000, "Player One has a PIN: it is asked")
+        }
+
+        function test_an_owner_that_is_no_card_falls_back_to_the_first_profile_without_a_pad() {
+            signIn()
+            rememberOnDualSense("p9")                               // deleted, or the guest-role profile: no card
+            Input.leavePlayer(2)
+            tryVerify(() => Input.players.length === 1, 2000)
+            askWith(host.dualSense)
+            tryVerify(() => find("whosPlayingCards").activeFocus, 2000)
+            compare(find("whosPlayingCards").currentIndex, 1, "Ada, the first profile without a pad")
+        }
+
         // ---- geometry at 1080p (u = 1) ------------------------------------------------------------------------
 
         function test_geometry() {

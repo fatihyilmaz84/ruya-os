@@ -7,6 +7,7 @@
 use ruya_inputd::accounts::FixedAccounts;
 use ruya_inputd::book::{Book, DirStore};
 use ruya_inputd::dbus::{serve, DynBackend, Shared};
+use ruya_inputd::owners::Owners;
 use ruya_inputd::routing::{NullBackend, Router};
 
 fn main() {
@@ -37,6 +38,7 @@ fn main() {
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::env::temp_dir().join("ruya-inputd-session"));
     router.set_book(Book::new(Box::new(DirStore::new(state.join("profiles")))));
+    router.set_owners(Owners::load(state.clone()));
     let (shared, notices) = Shared::new(router);
     if let Err(err) = futures_lite::future::block_on(serve(false, shared, notices)) {
         eprintln!("ruya-inputd: fatal: {err}");

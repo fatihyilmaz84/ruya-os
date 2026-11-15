@@ -5,6 +5,10 @@
 /// Looks a profile id up. `None` when it is not a profile account.
 pub trait Accounts: Send {
     fn profile_uid(&self, profile: &str) -> Option<u32>;
+    /// Whether `profile` is a temporary guest account (RUY-125): never remembered as a pad's owner.
+    fn is_guest(&self, _profile: &str) -> bool {
+        false
+    }
 }
 
 /// A profile id as `ruya-profiles` makes them ("p3"): short, `[A-Za-z0-9_-]`.
@@ -57,6 +61,21 @@ pub fn profile_uid_in_passwd(passwd: &str, id: &str) -> Option<u32> {
     })
 }
 
+/// The passwd comment of a temporary guest account (RUY-125), `ruya-profiles`.
+const GUEST_COMMENT: &str = "RuyaOS profile (guest)";
+
+/// Whether profile `id` is a temporary guest in `/etc/passwd` text (a profile account, by the comment).
+pub fn profile_is_guest_in_passwd(passwd: &str, id: &str) -> bool {
+    if profile_uid_in_passwd(passwd, id).is_none() {
+        return false;
+    }
+    let user = format!("ruya-{id}");
+    passwd.lines().any(|line| {
+        let fields: Vec<&str> = line.split(':').collect();
+        fields.len() >= 7 && fields[0] == user && fields[4] == GUEST_COMMENT
+    })
+}
+
 /// Reads `/etc/passwd` at every lookup (a profile created a second ago counts).
 pub struct PasswdAccounts;
 
@@ -64,6 +83,11 @@ impl Accounts for PasswdAccounts {
     fn profile_uid(&self, profile: &str) -> Option<u32> {
         let passwd = std::fs::read_to_string("/etc/passwd").ok()?;
         profile_uid_in_passwd(&passwd, profile)
+    }
+
+    fn is_guest(&self, profile: &str) -> bool {
+        std::fs::read_to_string("/etc/passwd")
+            .is_ok_and(|p| profile_is_guest_in_passwd(&p, profile))
     }
 }
 
@@ -102,6 +126,16 @@ ruya-p3:x:500:500:RuyaOS profile:/var/home/ruya-p3:/usr/sbin/nologin\n";
         assert_eq!(profile_uid_in_passwd(PASSWD, "p9"), None);
         assert_eq!(profile_uid_in_passwd(PASSWD, "p1:x"), None);
         assert_eq!(profile_uid_in_passwd(PASSWD, ""), None);
+    }
+
+    #[test]
+    fn a_guest_is_found_by_its_passwd_comment() {
+        let passwd = format!(
+            "{PASSWD}ruya-g1:x:1005:1005:RuyaOS profile (guest):/var/home/ruya-g1:/usr/sbin/nologin\n"
+        );
+        assert!(profile_is_guest_in_passwd(&passwd, "g1"));
+        assert!(!profile_is_guest_in_passwd(&passwd, "p1"));
+        assert!(!profile_is_guest_in_passwd(&passwd, "nobody"));
     }
 
     #[test]

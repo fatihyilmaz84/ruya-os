@@ -81,6 +81,7 @@ QVariantMap pad(const QString &id, const QString &name, const QString &family, c
         {QStringLiteral("charging"), charging},
         {QStringLiteral("slot"), 0u},
         {QStringLiteral("profile"), QString()},
+        {QStringLiteral("owner"), QString()},
         {QStringLiteral("routed"), false},
         {QStringLiteral("capabilities"), capabilities},
     };
@@ -149,6 +150,7 @@ void MockInputBackend::resetDevices()
     m_stickDown.clear();
     m_navigator.clear();
     m_foreignPress.clear();
+    m_owners.clear();
     setDefaultDevices();
     QTimer::singleShot(0, this, [this] { emit devicesChanged(); });
 }
@@ -369,6 +371,8 @@ void MockInputBackend::setRoute(const QString &route, const QString &instance, c
             if (!profile.isEmpty()) {
                 m_seats = QList<Seat>(4);
                 m_seats[0] = {profile, m_padSinceChange};
+                if (!m_padSinceChange.isEmpty())
+                    m_owners.insert(m_padSinceChange, profile);   // the pad's owner is learned (RUY-124)
             }
             m_padSinceChange.clear();
             m_navigator.clear();
@@ -560,11 +564,14 @@ bool MockInputBackend::applySeatsToDevices()
         const int at = seatOfDevice(record.value(QStringLiteral("id")).toString());
         const uint slot = at >= 0 ? uint(at + 1) : 0u;
         const QString profile = at >= 0 ? m_seats.at(at).profile : QString();
+        const QString owner = m_owners.value(record.value(QStringLiteral("id")).toString());
         if (record.value(QStringLiteral("slot")).toUInt() == slot
-            && record.value(QStringLiteral("profile")).toString() == profile)
+            && record.value(QStringLiteral("profile")).toString() == profile
+            && record.value(QStringLiteral("owner")).toString() == owner)
             continue;
         record.insert(QStringLiteral("slot"), slot);
         record.insert(QStringLiteral("profile"), profile);
+        record.insert(QStringLiteral("owner"), owner);
         d = record;
         changed = true;
     }
@@ -606,6 +613,7 @@ void MockInputBackend::joinPlayer(const QString &deviceId, const QString &profil
         const int at = seatOfDevice(deviceId);
         if (at >= 0 && m_seats.at(at).profile == profile) {
             slot = uint(at + 1);                         // (e) the same again: nothing changes
+            m_owners.insert(deviceId, profile);
         } else {
             QList<Seat> next = m_seats;
             if (at == 0)
@@ -633,6 +641,7 @@ void MockInputBackend::joinPlayer(const QString &deviceId, const QString &profil
             } else {
                 const QVariantList before = playerList();
                 m_seats = next;
+                m_owners.insert(deviceId, profile);   // the last profile seated on the pad (RUY-124)
                 slot = uint(mine + 1);
                 seatsChanged(before);
             }

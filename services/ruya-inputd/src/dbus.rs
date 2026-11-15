@@ -123,6 +123,7 @@ fn record(d: &DeviceRecord) -> Dict {
         ("charging", Value::from(d.charging)),
         ("slot", Value::from(d.slot)),
         ("profile", Value::from(d.profile.clone())),
+        ("owner", Value::from(d.owner.clone())),
         ("routed", Value::from(d.routed)),
     ];
     entries
@@ -581,6 +582,7 @@ mod tests {
             charging: false,
             slot: 0,
             profile: String::new(),
+            owner: String::new(),
             routed: false,
         };
         let dict = record(&d);
@@ -590,7 +592,7 @@ mod tests {
         };
         assert_eq!(text("family"), "playstation");
         assert_eq!(text("model"), "dualsense");
-        assert_eq!(dict.len(), 12, "the contract's keys, no more");
+        assert_eq!(dict.len(), 13, "the contract's keys, no more");
     }
 
     #[test]

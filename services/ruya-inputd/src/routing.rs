@@ -47,6 +47,7 @@ use crate::book::{Book, SaveAnswer, Summary};
 use crate::caps::Capability;
 use crate::engine::Engine;
 use crate::mapping::{Axis, Button, Confirm, KeyBoard, KeyEvent, Mapper, NavKey};
+use crate::owners::Owners;
 use crate::pad::{
     diff, OutEvent, PadAxis, PadButton, PadInput, PadState, Rumble, TestEvent, ALL_AXES,
     PAD_PHYS_PREFIX, STICK_MAX, STICK_MIN, TRIGGER_MAX,
@@ -171,6 +172,8 @@ pub struct DeviceRecord {
     pub charging: bool,
     pub slot: u32,
     pub profile: String,
+    /// The profile that last played on this pad ("" when none, or its account is gone; RUY-124).
+    pub owner: String,
     pub routed: bool,
 }
 
@@ -513,6 +516,8 @@ pub struct Router<B: Backend> {
     /// `SetNavigator` (RUY-38): the stable id of the only pad that navigates, and the bus name
     /// that set it (it is cleared when that name leaves the bus).
     navigator: Option<(String, String)>,
+    /// The last non-guest profile seated on each pad (RUY-124).
+    owners: Owners,
 }
 
 /// An unseated pad's `ForeignInput` "press" is sent at most once per pad in this time (06 §11.3).
@@ -548,6 +553,7 @@ impl<B: Backend> Router<B> {
             holds: BTreeMap::new(),
             seat_hold: SEAT_HOLD,
             navigator: None,
+            owners: Owners::in_memory(),
         }
     }
 
@@ -564,6 +570,12 @@ impl<B: Backend> Router<B> {
 
     pub fn set_book(&mut self, book: Book) {
         self.book = book;
+    }
+
+    /// Where the pads' owners are kept (in memory until this is called).
+    pub fn set_owners(&mut self, owners: Owners) {
+        self.owners = owners;
+        self.drain_owners();
     }
 
     pub fn backend(&self) -> &B {
@@ -621,6 +633,7 @@ impl<B: Backend> Router<B> {
             charging: false,
             slot,
             profile,
+            owner: self.owner_of(&pad.info.id),
             routed: pad.virt.as_ref().is_some_and(|v| v.ready),
         }
     }
@@ -1493,6 +1506,7 @@ impl<B: Backend> Router<B> {
             let pad = self.pad_since_change.take().unwrap_or_default();
             let before = self.seats.clone();
             self.seats.sign_in(profile, &pad);
+            self.remember_owner(&pad, profile);
             self.drop_holds();
             self.seats_changed(&before);
             self.clear_navigator("the profile changed");
@@ -1589,6 +1603,7 @@ impl<B: Backend> Router<B> {
         match self.seats.join(device_id, profile) {
             Joined::Full => (Status::Full, 0),
             Joined::Seated { slot, changed } => {
+                self.remember_owner(device_id, profile);
                 if changed {
                     self.seats_changed(&before);
                     self.sync_virtuals(now);
@@ -1769,6 +1784,42 @@ impl<B: Backend> Router<B> {
 
     fn drain_book(&mut self) {
         for line in self.book.take_journal() {
+            self.journal(line);
+        }
+    }
+
+    /// The pad's recorded owner, "" when none or when it is no longer a (non-guest) profile account.
+    fn owner_of(&self, pad: &str) -> String {
+        self.owners
+            .get(pad)
+            .filter(|who| self.accounts.profile_uid(who).is_some() && !self.accounts.is_guest(who))
+            .unwrap_or_default()
+            .to_owned()
+    }
+
+    /// `profile` played on `pad` (a sign-in or a JoinPlayer): the pad's owner, unless it is a
+    /// temporary guest or the player has no pad (RUY-124).
+    fn remember_owner(&mut self, pad: &str, profile: &str) {
+        if pad.is_empty() || profile.is_empty() || self.accounts.is_guest(profile) {
+            return;
+        }
+        let accounts = &self.accounts;
+        let live = |who: &str| accounts.profile_uid(who).is_some();
+        let changed = self.owners.record(pad, profile, &live);
+        self.drain_owners();
+        if changed {
+            let marked: Vec<PadKey> = self
+                .pads
+                .iter()
+                .filter(|(_, p)| p.info.id == pad)
+                .map(|(&k, _)| k)
+                .collect();
+            self.dirty.extend(marked);
+        }
+    }
+
+    fn drain_owners(&mut self) {
+        for line in self.owners.take_journal() {
             self.journal(line);
         }
     }
@@ -6025,5 +6076,125 @@ mod tests {
         settle(&mut r);
         assert_eq!(phys_of(&r, a).as_deref(), Some("ruya-input/pad1"));
         assert_eq!(phys_of(&r, b), None);
+    }
+
+    // ---- a pad remembers its player (RUY-124) -------------------------------------------------
+
+    /// Accounts that change under the test: the profiles that still exist, and the guests.
+    struct Live {
+        profiles: std::sync::Arc<std::sync::Mutex<Vec<&'static str>>>,
+        guests: Vec<&'static str>,
+    }
+
+    impl Accounts for Live {
+        fn profile_uid(&self, profile: &str) -> Option<u32> {
+            self.profiles
+                .lock()
+                .expect("lock")
+                .iter()
+                .position(|p| *p == profile)
+                .map(|i| 1001 + i as u32)
+        }
+        fn is_guest(&self, profile: &str) -> bool {
+            self.guests.contains(&profile)
+        }
+    }
+
+    type Profiles = std::sync::Arc<std::sync::Mutex<Vec<&'static str>>>;
+
+    fn owner_router(guests: Vec<&'static str>) -> (Router<Fake>, Profiles) {
+        let profiles: Profiles =
+            std::sync::Arc::new(std::sync::Mutex::new(vec!["p1", "p2", "p3", "g1"]));
+        let r = Router::new(
+            Fake::default(),
+            Box::new(Live {
+                profiles: profiles.clone(),
+                guests,
+            }),
+        );
+        (r, profiles)
+    }
+
+    fn owner_of(r: &Router<Fake>, key: PadKey) -> String {
+        r.devices()
+            .into_iter()
+            .find(|d| d.id == r.pads[&key].info.id)
+            .expect("record")
+            .owner
+    }
+
+    #[test]
+    fn a_pad_sign_in_and_a_join_record_the_pads_owner() {
+        let (mut r, _) = owner_router(vec![]);
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        assert_eq!(owner_of(&r, a), "");
+        sign_in(&mut r, a, "p1");
+        assert_eq!(owner_of(&r, a), "p1", "the sign-in");
+        assert_eq!(owner_of(&r, b), "");
+        assert_eq!(join(&mut r, b, "p2"), 2);
+        assert_eq!(owner_of(&r, b), "p2", "the join");
+        // The record is announced as it changes.
+        assert!(r
+            .take_notices()
+            .iter()
+            .any(|n| matches!(n, Notice::DeviceChanged(d) if d.id == "b" && d.owner == "p2")));
+        // The last one wins, and a keyboard sign-in (no pad) records nothing.
+        assert_eq!(join(&mut r, b, "p3"), 2);
+        assert_eq!(owner_of(&r, b), "p3");
+        r.set_route("locked", "", "", "", SHELL, t0());
+        r.set_route("shell", "", "", "p2", SHELL, t0());
+        assert_eq!(owner_of(&r, a), "p1");
+        assert_eq!(owner_of(&r, b), "p3");
+    }
+
+    #[test]
+    fn a_guest_is_never_a_pads_owner() {
+        let (mut r, _) = owner_router(vec!["g1"]);
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        sign_in(&mut r, a, "p1");
+        assert_eq!(join(&mut r, b, "g1"), 2);
+        assert_eq!(r.owners.get("b"), None, "not recorded");
+        assert_eq!(owner_of(&r, b), "");
+        // A guest signing in on a pad is not recorded either, and the earlier owner stays.
+        let before = r.owners.get("a").map(str::to_owned);
+        tap(&mut r, a);
+        r.set_route("shell", "", "", "g1", SHELL, t0());
+        assert_eq!(r.owners.get("a").map(str::to_owned), before);
+    }
+
+    #[test]
+    fn an_owner_whose_account_is_gone_reads_empty_and_is_dropped_at_the_next_write() {
+        let (mut r, profiles) = owner_router(vec![]);
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        sign_in(&mut r, a, "p1");
+        assert_eq!(join(&mut r, b, "p2"), 2);
+        profiles.lock().expect("lock").retain(|p| *p != "p2");
+        assert_eq!(owner_of(&r, b), "", "p2 was deleted");
+        assert_eq!(
+            r.owners.get("b"),
+            Some("p2"),
+            "still in the list until a write"
+        );
+        assert_eq!(join(&mut r, a, "p3"), 3);
+        assert_eq!(r.owners.get("b"), None, "dropped by that write");
+        assert_eq!(owner_of(&r, a), "p3");
+    }
+
+    #[test]
+    fn the_owners_survive_a_restart_of_the_service() {
+        let dir = tempfile::tempdir().expect("dir");
+        let (mut r, _) = owner_router(vec![]);
+        r.set_owners(Owners::load(dir.path().to_path_buf()));
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        sign_in(&mut r, a, "p1");
+        assert_eq!(join(&mut r, b, "p2"), 2);
+        let (mut again, _) = owner_router(vec![]);
+        again.set_owners(Owners::load(dir.path().to_path_buf()));
+        let b2 = again.add_pad(pad("b"), t0());
+        assert_eq!(owner_of(&again, b2), "p2");
     }
 }

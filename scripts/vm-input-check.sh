@@ -928,6 +928,9 @@ players)
     chmod 0755 "$dir"
     install -m 0644 "$probe" "$dir/vm-input-probe.py"
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe players --user "ruya-$me" --other "$player2"
+    # RUY-124: the owners file the probe's restart read back is private to ruya-input.
+    st="$(stat -c '%a %U' /var/lib/ruya-input/owners.json 2>&1)"
+    [ "$st" = "600 ruya-input" ] && ok "owners.json is 0600 ruya-input" || bad "owners.json: $st (want 600 ruya-input)"
     rm -rf "$dir"
     out="$(busctl --system call "$psvc" "$ppath" "$psvc" DeleteProfile sss "$me" 1234 "$player2")"
     case "$out" in 'suu "ok"'*) ok "DeleteProfile $player2: the check's profile is removed" ;; *) bad "DeleteProfile $player2: $out" ;; esac

@@ -11,7 +11,8 @@
   GetEffectiveProfile, ProfilesChanged) since RUY-42 (T-369), SetConfirmButton, ConfirmButton and
   ActiveInputChanged since RUY-40 (per controller, with GetConfirmButtons, since RUY-603), and the
   players (JoinPlayer, LeavePlayer, ListPlayers, PlayersChanged; the device record's slot and
-  profile) since RUY-121 (ADR-017 seats; the seat gate is on since RUY-122, see Players), and who
+  profile) since RUY-121 (ADR-017 seats; the seat gate is on since RUY-122, see Players), the
+  device record's owner since RUY-124, and who
   drives the UI (ForeignInput, SetNavigator; 06 §11.3) since RUY-38; every other member below is
   still DRAFT and not served (platform and game assignments T-370 / RUY-43, OwnershipMode T-371).
   The design is docs/specs/06-input.md. Each task may change what it builds here (contracts are
@@ -68,6 +69,13 @@
                     not seated (RUY-121). DeviceChanged is sent when it changes.
     profile     s   the profile seated on the pad, "" when it is not seated (RUY-121; also every
                     pad while nobody is signed in). DeviceChanged is sent when it changes.
+    owner       s   the profile that last played on this pad: the last non-guest profile seated on its
+                    stable id, by a sign-in with that pad or a JoinPlayer (RUY-124; ADR-017 am. 1), "" when
+                    none is recorded, or when the profile is no longer a profile account (a deleted
+                    profile; ids are never reused). A temporary guest is never recorded. Kept across
+                    restarts in the state directory (owners.json, at most 64 pads, the oldest dropped).
+                    It only tells the shell where to start the focus of "Who's playing?"; nothing signs
+                    in by it. DeviceChanged is sent when it changes. (A missing key is "".)
     routed      b   the pad has a virtual pad for that profile and its node's ACL is set (after
                     udev's last event on it): an app of the profile can open it now
 

@@ -66,6 +66,7 @@ QVariantMap recordOf(const QVariantMap &d)
         {QStringLiteral("charging"), d.value(QStringLiteral("charging")).toBool()},
         {QStringLiteral("slot"), d.value(QStringLiteral("slot")).toUInt()},
         {QStringLiteral("profile"), d.value(QStringLiteral("profile")).toString()},
+        {QStringLiteral("owner"), d.value(QStringLiteral("owner")).toString()},  // an older service tells none
         {QStringLiteral("routed"), d.value(QStringLiteral("routed")).toBool()},
     };
 }
