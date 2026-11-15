@@ -442,8 +442,8 @@ Item {
             tryVerify(() => Input.players.length === 2, 2000, "Ada is player 2 on the Pro Controller")
             askWith(host.dualSense)
             const list = find("whosPlayingCards")
-            compare(prompt().cards.map(p => p.id), ["p1", "p2"], "no guest-role profile")
-            tryVerify(() => list.activeFocus && list.currentIndex === 2, 2000, "every profile has a pad: the Guest card (RUY-631)")
+            compare(prompt().cards.map(p => p.id), ["p1", "p2", "p3"], "every kept profile, the guest-role p3 too (RUY-680)")
+            tryVerify(() => list.activeFocus && list.currentIndex === 2, 2000, "the first profile without a pad: p3, the guest-role one")
             keyClick(Qt.Key_Down)
             verify(find("whosPlayingNotNow").activeFocus, "Down to Not now")
             compare(find("whosPlayingDetail").text, "")
@@ -457,9 +457,12 @@ Item {
             compare(list.currentIndex, 1)
             verify(detail.text.endsWith(". Picking it moves Ada here."), detail.text)
             keyClick(Qt.Key_Right)
-            compare(list.currentIndex, 2, "the Guest card")
+            compare(list.currentIndex, 2, "the guest-role profile")
             keyClick(Qt.Key_Right)
-            compare(list.currentIndex, 2, "the last card stays")
+            compare(list.currentIndex, 3, "the Guest card")
+            keyClick(Qt.Key_Right)
+            compare(list.currentIndex, 3, "the last card stays")
+            keyClick(Qt.Key_Left)
             keyClick(Qt.Key_Left)
             keyClick(Qt.Key_Down)
             verify(find("whosPlayingNotNow").activeFocus, "Down to Not now")
@@ -554,6 +557,31 @@ Item {
             tryVerify(() => find("homePlay").activeFocus, 2000)
             tryVerify(() => Input.mockNavigator() === "", 2000)
             compare(Notifications.model.count, 0, "no joined toast")
+        }
+
+        // RUY-680: a kept profile with role "guest" (mock p3) is a person on this console: a card, and Join seats it.
+        function test_a_guest_role_profile_is_a_card() {
+            signIn()
+            askWith(host.dualSense)
+            compare(prompt().cards.map(p => p.id), ["p1", "p2", "p3"])
+            const list = find("whosPlayingCards")
+            list.currentIndex = 2
+            keyClick(Qt.Key_Return)                                 // no PIN: Join or Switch
+            tryVerify(() => find("whosPlayingJoin").activeFocus, 2000)
+            keyClick(Qt.Key_Return)
+            tryCompare(joinSpy, "count", 1)
+            compare(joinSpy.signalArguments[0][0], host.dualSense)
+            compare(joinSpy.signalArguments[0][1], "p3")
+            tryVerify(() => !prompt().shown, 2000, "closed on ok")
+        }
+
+        function test_a_temporary_guest_is_not_a_card_of_its_own() {
+            signIn()
+            Profiles.createGuest()
+            tryVerify(() => Profiles.guests.length === 1, 2000)
+            askWith(host.dualSense)
+            compare(prompt().cards.map(p => p.id), ["p1", "p2", "p3"], "the temporary guest is the Guest card's")
+            compare(prompt().entries.length, 4)
         }
 
         function test_switch_locks_signs_in_and_then_joins() {
@@ -780,7 +808,7 @@ Item {
 
         function test_an_owner_that_is_no_card_falls_back_to_the_first_profile_without_a_pad() {
             signIn()
-            rememberOnDualSense("p9")                               // deleted, or the guest-role profile: no card
+            rememberOnDualSense("p9")                               // deleted: no card
             Input.leavePlayer(2)
             tryVerify(() => Input.players.length === 1, 2000)
             askWith(host.dualSense)
