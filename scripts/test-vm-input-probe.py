@@ -370,4 +370,32 @@ n, text, sleeps = run_nodes(kbm_tag_after=3)
 check("nodes waits for the kbm stand-in's uaccess tag, no fixed 0.5 s sleep",
       n == 0 and 0.5 not in sleeps and "keeps the uaccess tag" in text, (n, text, sleeps))
 
+# --- pad_rows (RUY-719): wait for every one of the check's own pads, not the first listed -----------------------
+def run_pad_rows(listing_by_call):
+    """listing_by_call(n) is ListDevices' rows at the n-th call; returns pad_rows' answer."""
+    saved = {k: getattr(probe, k) for k in ("devices", "time")}
+    calls = [0]
+    clock = [0.0]
+
+    def fake_devices():
+        calls[0] += 1
+        return listing_by_call(calls[0])
+    probe.devices = fake_devices
+    probe.time = types.SimpleNamespace(monotonic=lambda: clock[0],
+                                       sleep=lambda t: clock.__setitem__(0, clock[0] + t))
+    try:
+        return probe.pad_rows(["Pad", "Pad B"])
+    finally:
+        for k, v in saved.items():
+            setattr(probe, k, v)
+
+
+rows = run_pad_rows(lambda n: [{"name": "Pad", "id": "a"}] + ([{"name": "Pad B", "id": "b"}] if n > 40 else [])
+                    + [{"name": "Other", "id": "z"}])
+check("pad_rows waits until both own pads are listed, ignoring other devices",
+      sorted(d["name"] for d in rows) == ["Pad", "Pad B"], rows)
+rows = run_pad_rows(lambda n: [{"name": "Pad", "id": "a"}])
+check("pad_rows returns what is listed when the second pad never comes (the caller reports it)",
+      [d["name"] for d in rows] == ["Pad"], rows)
+
 sys.exit(1 if fails else 0)
