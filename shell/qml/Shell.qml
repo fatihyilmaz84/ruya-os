@@ -1987,6 +1987,7 @@ FocusScope {
         optionsPage = page ?? null
         optionsOn = true                    // the anchor keeps its look before the menu takes the focus
         Sfx.select()
+        optionsMenu.overArt = surface === "hero" || surface === "recent" || surface === "games"
         optionsMenu.open(anchor, kind, optionTitle(surface, id), optionRows(surface, id), optionNote(surface, id))
         return true
     }
