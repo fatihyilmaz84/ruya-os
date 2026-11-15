@@ -11,12 +11,12 @@
   GetEffectiveProfile, ProfilesChanged) since RUY-42 (T-369), SetConfirmButton, ConfirmButton and
   ActiveInputChanged since RUY-40 (per controller, with GetConfirmButtons, since RUY-603), and the
   players (JoinPlayer, LeavePlayer, ListPlayers, PlayersChanged; the device record's slot and
-  profile) since RUY-121 (ADR-017 seats; the seat gate is off until RUY-122, see Players); every other
-  member below is still
-  DRAFT and not served (ForeignInput RUY-38, platform and game assignments T-370 / RUY-43,
-  OwnershipMode T-371). The design is docs/specs/06-input.md. Each task may change what it builds
-  here (contracts are drafts until the first release, root CLAUDE.md); RUY-403's served-vs-XML
-  test must check only the built members.
+  profile) since RUY-121 (ADR-017 seats; the seat gate is off until RUY-122, see Players), and who
+  drives the UI (ForeignInput, SetNavigator; 06 §11.3) since RUY-38; every other member below is
+  still DRAFT and not served (platform and game assignments T-370 / RUY-43, OwnershipMode T-371).
+  The design is docs/specs/06-input.md. Each task may change what it builds here (contracts are
+  drafts until the first release, root CLAUDE.md); RUY-403's served-vs-XML test must check only
+  the built members.
 
   Served by ruya-inputd (system user ruya-input, not root: 06 §3) on the system bus at
   /org/ruyaos/Input1. Bus policy: ruya-input owns the name; only ruya-shell and root may call.
@@ -41,7 +41,8 @@
                        or "locked", saving over or deleting a built-in profile, saving a profile of scope
                        "builtin", a cycle in `inherits`, a chain of more than 8 `inherits` links,
                        more than 64 stored profiles of one console profile, JoinPlayer or LeavePlayer
-                       with nobody signed in, LeavePlayer of seat 1)
+                       with nobody signed in, LeavePlayer of seat 1, SetNavigator with nobody
+                       signed in)
     "busy"             a button test already runs for that device
     "full"             JoinPlayer: every seat (4) is taken (RUY-121)
     "failed"           internal error (also: the profiles could not be read or written)
@@ -246,8 +247,8 @@
          route's caller leaving the bus) empties every seat and seats the new profile, if any, in
          seat 1: a joined player stays for the session. A pad holds at most one profile, and a
          profile at most one pad. Only seated pads get a virtual pad, and pad n is seat n (phys
-         ruya-input/pad<n>); an unseated pad's input reaches no app (navigation and Guide are not
-         changed by seats yet: RUY-38). A seated pad that disconnects holds its seat for 60 s
+         ruya-input/pad<n>); an unseated pad's input reaches no app; who navigates the shell follows
+         the seats (UI ownership below, RUY-38). A seated pad that disconnects holds its seat for 60 s
          (RUY-627, seat 1 too): the record keeps its device_id with held true, and its virtual pad
          stays (one neutral frame, then nothing; its rumble is dropped). The same stable id back
          within the hold, or the one like pad (a serial-less USB pad of the same vid:pid as exactly
@@ -260,7 +261,12 @@
          SEAT_GATE): meanwhile an unseated connected pad still gets a virtual pad in "app" (and what
          "overlay" keeps), numbered after the seats (ruya-input/pad5 and up, the lowest free number,
          in connect order), so pad1..pad4 stay the seats' and a join renumbers no other live pad.
-         Seats, ListPlayers and every member here work the same either way.
+         Also while the gate is off (RUY-38 round 2, the interim fallback): when seat 1 has no pad
+         and is not held (a keyboard sign-in, or its pad's hold ran out) and no navigator is set, the
+         first unseated pad that presses a button becomes seat 1's pad (PlayersChanged, its virtual
+         pad is pad1) and navigates from that press on; with the gate on (RUY-122) only JoinPlayer
+         (the prompt's Move) seats player 1 on a pad. Seats, ListPlayers and every member here work
+         the same either way otherwise.
          A restarted service knows no seats: the shell joins the players it last knew again on the
          name's new owner (seat 1's pad as the route's profile, then the others by slot), each once
          the service lists its pad (a held seat's player only when its pad is back).
@@ -320,16 +326,50 @@
       <arg name="players" type="aa{sv}"/>
     </signal>
 
-    <!-- UI ownership and the active input (T-397..T-399, 06 §11; RUY-38). A foreign pad's press while a
-         profile is signed in: `kind` is "press" (first press per pad and session, for the toast),
-         "guide" (switch / Who's playing) or "takeover" (every owner pad is gone). -->
+    <!-- UI ownership and the active input (06 §11.3 and §11.4, ADR-017 points 2 and 9; RUY-38).
+         Who navigates the shell (the navigation keys on "RuyaOS Navigation", Guide as KEY_HOMEPAGE
+         included; the keyboard always does, the service does not see it):
+           - nobody signed in (route "locked", or "shell" with profile ""): every pad, and Guide from
+             any pad is KEY_HOMEPAGE (the picker, its PIN pad, first boot);
+           - signed in, no navigator: only seat 1's pad (Players). Seats 2-4 give the shell nothing
+             (under "app" their input goes to their virtual pad); an unseated pad gives the shell
+             nothing either (and no app, once the seat gate is on). With seat 1 held or without a
+             pad no pad navigates;
+           - a navigator set (SetNavigator): only that pad, every key including Guide; seat 1's pad
+             gives nothing, Guide included. The other pads behave as above, ForeignInput included.
+         Under "app" a pad that navigates gives the shell its Guide only, as before. Keys held by a
+         pad that stops navigating (the navigator set or cleared, a move of player 1) are released,
+         so no key sticks. UserActive does not depend on this.
+
+         ForeignInput(device_id, kind): a pad that does not navigate now asked for something while a
+         profile is signed in. kind:
+           "press"         an unseated pad pressed a button other than Guide (never an axis, stick
+                           drift or a release), at most once per pad per second;
+           "guide"         an unseated pad pressed Guide;
+           "player-guide"  a seated pad of seat 2-4 pressed Guide.
+         Seat 1's pad sends none (also not while a navigator is set). Never sent while nobody is
+         signed in (every pad navigates then). -->
     <signal name="ForeignInput">
       <arg name="device_id" type="s"/>
       <arg name="kind" type="s"/>
     </signal>
-    <!-- The device of the last press (owner pads once T-264 has them: today every pad, 06 §11.4);
-         family as in the device record. Sent when the device differs from the last announced one,
-         not on every press. The keyboard is the shell's own knowledge, not reported here. -->
+    <!-- SetNavigator(device_id): while it is set, only the connected pad device_id navigates the
+         shell (above): the pad of "Who's playing?" (RUY-122) drives the prompt. "" clears it. The
+         service announces that pad as the active input at the call (ActiveInputChanged, and
+         ConfirmButton follows it), so the hint bar shows its glyphs and its own Confirm choice.
+         It is cleared by "", by that pad's removal, by any change of the route's profile and when
+         the caller that set it leaves the bus (as the route is). A restarted service has none: the
+         shell sets it again on the name's new owner, as it joins the players again.
+         Status: "ok" ("" is always "ok"), "not-allowed" (nobody signed in), "unknown-device" (no
+         connected pad with that id). Journal: "navigator <id>", "navigator cleared (<why>)". -->
+    <method name="SetNavigator">
+      <arg name="device_id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+    <!-- The device of the last press among the pads that navigate now (above; 06 §11.4), or the
+         navigator at SetNavigator; family as in the device record. Sent when the device differs
+         from the last announced one (at SetNavigator always), not on every press. The keyboard is
+         the shell's own knowledge, not reported here. -->
     <signal name="ActiveInputChanged">
       <arg name="device_id" type="s"/>
       <arg name="family" type="s"/>

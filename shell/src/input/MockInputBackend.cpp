@@ -147,6 +147,9 @@ void MockInputBackend::resetDevices()
     m_tests.clear();
     m_stickNavigates = false;
     m_stickDown.clear();
+    m_navigator.clear();
+    m_foreignPress.clear();
+    m_seatGate = false;
     setDefaultDevices();
     QTimer::singleShot(0, this, [this] { emit devicesChanged(); });
 }
@@ -278,6 +281,8 @@ void MockInputBackend::removeDevice(const QString &id)
     }
     if (m_padSinceChange == id)
         m_padSinceChange.clear();
+    if (m_navigator == id)
+        m_navigator.clear();
     endTest(id, QStringLiteral("gone"));
     QTimer::singleShot(0, this, [this] { emit devicesChanged(); });
 }
@@ -367,6 +372,7 @@ void MockInputBackend::setRoute(const QString &route, const QString &instance, c
                 m_seats[0] = {profile, m_padSinceChange};
             }
             m_padSinceChange.clear();
+            m_navigator.clear();
             seatsChanged(before);
         }
         if (route == QLatin1String("app") || route == QLatin1String("locked")) {      // like inputd (RUY-611)
@@ -434,6 +440,8 @@ void MockInputBackend::restart()
     // Nor does it know the seats; a process that is gone sends no PlayersChanged.
     m_seats.clear();
     m_padSinceChange.clear();
+    m_navigator.clear();
+    m_foreignPress.clear();
     applySeatsToDevices();
     setServiceOwned(true);
     QTimer::singleShot(0, this, [this] { emit serviceAppeared(); });
@@ -659,4 +667,108 @@ void MockInputBackend::refreshPlayers()
     const bool ok = !m_fail;
     const QVariantList list = ok ? playerList() : QVariantList();
     QTimer::singleShot(0, this, [this, request, ok, list] { deliverPlayers(request, ok, list); });
+}
+
+// routing.rs `navigates` (06 §11.3, RUY-38).
+bool MockInputBackend::navigates(const QString &deviceId) const
+{
+    if (m_seats.isEmpty())
+        return true;
+    if (!m_navigator.isEmpty())
+        return deviceId == m_navigator;
+    const Seat &first = m_seats.at(0);
+    return !first.device.isEmpty() && first.device == deviceId && first.heldUntil == 0;
+}
+
+void MockInputBackend::setNavigator(const QString &deviceId)
+{
+    const auto record = std::find_if(m_devices.cbegin(), m_devices.cend(), [&deviceId](const QVariant &d) {
+        return d.toMap().value(QStringLiteral("id")).toString() == deviceId;
+    });
+    QString status = QStringLiteral("ok");
+    if (m_fail)
+        status = QStringLiteral("failed");
+    else if (deviceId.isEmpty())
+        m_navigator.clear();
+    else if (m_seats.isEmpty())
+        status = QStringLiteral("not-allowed");
+    else if (record == m_devices.cend())
+        status = QStringLiteral("unknown-device");
+    else {
+        // The service announces the navigator as the active input at the call (its glyphs, its
+        // Confirm choice), before it answers.
+        m_navigator = deviceId;
+        const QString family = record->toMap().value(QStringLiteral("family")).toString();
+        const QString before = confirmButtonOf(m_profile, m_activeDevice);
+        m_activeDevice = deviceId;
+        const bool modeChanged = confirmButtonOf(m_profile, deviceId) != before;
+        QTimer::singleShot(0, this, [this, deviceId, family, modeChanged] {
+            emit activeInputChanged(deviceId, family);
+            if (modeChanged)
+                emit confirmButtonChanged();
+        });
+    }
+    QTimer::singleShot(0, this, [this, deviceId, status] { emit navigatorFinished(deviceId, status); });
+}
+
+int MockInputBackend::padButton(const QString &deviceId, const QString &button)
+{
+    const auto record = std::find_if(m_devices.cbegin(), m_devices.cend(), [&deviceId](const QVariant &d) {
+        return d.toMap().value(QStringLiteral("id")).toString() == deviceId;
+    });
+    if (record == m_devices.cend() || m_fail || !serviceOwned())
+        return 0;
+    const bool guide = button == QLatin1String("guide");
+    // routing.rs claim_padless_seat1: with the gate off, a padless seat 1 that is not held is taken
+    // by the first unseated pad that presses (until RUY-122's prompt).
+    if (!m_seatGate && m_navigator.isEmpty() && !m_seats.isEmpty() && m_seats.at(0).device.isEmpty()
+        && seatOfDevice(deviceId) < 0) {
+        const QVariantList before = playerList();
+        m_seats[0].device = deviceId;
+        seatsChanged(before);
+    }
+    if (!navigates(deviceId)) {
+        // Seat 1's pad (a navigator is set) asks for nothing; seats 2-4 ask with their Guide only; an
+        // unseated pad's Guide is "guide", its other buttons "press" at most once a second.
+        const int seat = seatOfDevice(deviceId);
+        QString kind;
+        if (seat > 0 && guide) {
+            kind = QStringLiteral("player-guide");
+        } else if (seat < 0 && guide) {
+            kind = QStringLiteral("guide");
+        } else if (seat < 0) {
+            const qint64 now = m_clock.elapsed();
+            const auto last = m_foreignPress.constFind(deviceId);
+            if (last == m_foreignPress.cend() || now - last.value() >= 1000) {
+                m_foreignPress.insert(deviceId, now);
+                kind = QStringLiteral("press");
+            }
+        }
+        if (!kind.isEmpty())
+            QTimer::singleShot(0, this, [this, deviceId, kind] { emit foreignInput(deviceId, kind); });
+        return 0;
+    }
+    const QString family = record->toMap().value(QStringLiteral("family")).toString();
+    if (deviceId != m_activeDevice)
+        sendActiveInput(deviceId, family);
+    else
+        m_padSinceChange = deviceId;
+    // Under "app" a pad that navigates gives the shell its Guide only.
+    if (m_route == QLatin1String("app") && !guide)
+        return 0;
+    // mapping.rs nav_key: the confirming button by the pad's Confirm choice and family (06 §11.2).
+    const QString mode = confirmButtonOf(m_profile, deviceId);
+    const bool eastConfirms = mode == QLatin1String("east")
+                              || (mode == QLatin1String("family") && family == QLatin1String("nintendo"));
+    if (button == QLatin1String("south"))
+        return eastConfirms ? Qt::Key_Escape : Qt::Key_Return;
+    if (button == QLatin1String("east"))
+        return eastConfirms ? Qt::Key_Return : Qt::Key_Escape;
+    static const QHash<QString, int> keys = {
+        {QStringLiteral("start"), Qt::Key_Menu},        {QStringLiteral("guide"), Qt::Key_HomePage},
+        {QStringLiteral("dpad_up"), Qt::Key_Up},        {QStringLiteral("dpad_down"), Qt::Key_Down},
+        {QStringLiteral("dpad_left"), Qt::Key_Left},    {QStringLiteral("dpad_right"), Qt::Key_Right},
+        {QStringLiteral("l1"), Qt::Key_PageUp},         {QStringLiteral("r1"), Qt::Key_PageDown},
+    };
+    return keys.value(button, 0);
 }

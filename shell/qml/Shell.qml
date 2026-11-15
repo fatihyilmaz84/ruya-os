@@ -1138,6 +1138,25 @@ FocusScope {
         return free.length === 1 ? free[0].instance : ""
     }
 
+    // Player 1's controller is gone (its seat is held for 60 s, RUY-627): over a game the Hub opens,
+    // which pauses it as every Hub does (06 §11.3, RUY-38). The keyboard navigates it meanwhile; the
+    // pad that comes back within the hold drives it again, and Accept on the game card resumes. Over
+    // Home or a page nothing opens. Only the start of the hold counts (Input.players: `held`).
+    property bool player1Held: false
+    Connections {
+        target: Input
+        function onPlayersChanged() {
+            const first = Input.players.find(p => p.slot === 1)
+            const held = first !== undefined && first.held === true
+            if (held && !root.player1Held && root.signedIn && root.appOpen && root.focusedApp !== null
+                    && !systemPanel.open) {
+                console.info("ruya-shell: player 1's controller is gone: the Hub opens over the game")
+                systemPanel.open = true
+            }
+            root.player1Held = held
+        }
+    }
+
     // Opening the Hub over an app freezes it, returning to it thaws it (T-457, 02 §1.6).
     HubPause {
         id: hubPause

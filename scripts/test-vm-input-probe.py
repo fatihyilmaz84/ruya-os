@@ -182,6 +182,35 @@ check("udev_removes ignores another device with a longer name and other actions"
       probe.udev_removes(monitor, "input2") == [] and probe.udev_removes("", "input23") == [],
       probe.udev_removes(monitor, "input2"))
 
+# RUY-38 (owner, guide): the ForeignInput bodies read from `busctl monitor` text.
+monitored = """Monitoring bus message stream.
+‣ Type=signal  Endian=l  Flags=1  Version=1 Cookie=41  Timestamp="Sun 2026-11-15 10:00:00.000000 UTC"
+  Sender=:1.3  Path=/org/ruyaos/Input1  Interface=org.ruyaos.Input1  Member=ForeignInput
+  UniqueName=:1.3
+  MESSAGE "ss" {
+          STRING "usb-1234-5679-0123456789ab";
+          STRING "press";
+  };
+
+‣ Type=signal  Endian=l  Flags=1  Version=1 Cookie=42
+  Sender=:1.3  Path=/org/ruyaos/Input1  Interface=org.ruyaos.Input1  Member=ActiveInputChanged
+  MESSAGE "ss" {
+          STRING "usb-1234-5678-0123456789ab";
+          STRING "xbox";
+  };
+
+‣ Type=signal  Endian=l  Flags=1  Version=1 Cookie=43
+  Sender=:1.3  Path=/org/ruyaos/Input1  Interface=org.ruyaos.Input1  Member=ForeignInput
+  MESSAGE "ss" {
+          STRING "usb-1234-5679-0123456789ab";
+          STRING "player-guide";
+  };
+"""
+seen = []
+probe.monitor_bodies(monitored.splitlines(True), "ForeignInput", seen)
+check("monitor_bodies reads each ForeignInput's strings and skips other members",
+      seen == [("usb-1234-5679-0123456789ab", "press"), ("usb-1234-5679-0123456789ab", "player-guide")], seen)
+
 bus = fake_bus([message(4, "TestInput"), message(4, "NameOwnerChanged"), message(2, reply_to=2), message(4, "UserActive")])
 probe.Bus = lambda: bus
 args = types.SimpleNamespace(seconds=1)

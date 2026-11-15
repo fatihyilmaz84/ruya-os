@@ -10,8 +10,8 @@
 // Transport behind the Input QML singleton (RUY-409): org.ruyaos.Input1 of ruya-inputd over D-Bus,
 // or an in-memory mock: the routing (SetRoute, 06 §5.1-5.2, RUY-409), the devices, their
 // capabilities and the button test (RUY-39 / T-368), the controller profiles (RUY-42 / T-369), the
-// players' seats (RUY-121, ADR-017); UI ownership and ownership modes follow with their tasks
-// (RUY-38, T-371).
+// players' seats (RUY-121, ADR-017), who drives the UI (SetNavigator, ForeignInput: RUY-38, 06
+// §11.3); ownership modes follow with their task (T-371).
 class InputBackend : public QObject
 {
     Q_OBJECT
@@ -52,6 +52,9 @@ public:
     // Input1.ListPlayers; the answer arrives as playersListed (the newest outcome only: a
     // PlayersChanged that arrived meanwhile wins over an older answer).
     virtual void refreshPlayers() = 0;
+    // Input1.SetNavigator(device_id) (RUY-38): only that pad navigates the shell until "" clears it;
+    // the answer arrives as navigatorFinished ("failed" when the call itself failed).
+    virtual void setNavigator(const QString &deviceId) = 0;
 
 signals:
     // The newest SetRoute's answer: a status string of api/dbus/org.ruyaos.Input1.xml, or "failed"
@@ -95,6 +98,11 @@ signals:
     // ListPlayers answered (ok) or failed, or PlayersChanged carried the list (ok): player records as
     // maps with the XML's keys (slot, profile, device_id, held, held_secs), by slot.
     void playersListed(bool ok, const QVariantList &players);
+    // SetNavigator answered: a status of the XML ("ok", "not-allowed", "unknown-device") or "failed".
+    void navigatorFinished(const QString &deviceId, const QString &status);
+    // ForeignInput(device_id, kind): a pad that does not navigate asked for something while a
+    // profile is signed in: "press", "guide" or "player-guide" (06 §11.3).
+    void foreignInput(const QString &deviceId, const QString &kind);
 
 protected:
     void setServiceOwned(bool owned)

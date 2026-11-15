@@ -50,6 +50,7 @@ Item {
     }
 
     SignalSpy { id: launchedSpy; target: Session; signalName: "launchFinished" }
+    SignalSpy { id: foreignSpy; target: Input; signalName: "foreignInput" }
 
     TestCase {
         id: tc
@@ -153,6 +154,14 @@ Item {
             tryCompare(find("systemPanel"), "panelId", "controllers")
             tryCompare(find("systemPanel"), "swap", 1)
             verify(find("systemActions").activeFocus)
+        }
+
+        // Every ForeignInput heard since the spy was cleared, as "<device> <kind>" (RUY-38).
+        function foreignSeen() {
+            const out = []
+            for (let i = 0; i < foreignSpy.count; ++i)
+                out.push(foreignSpy.signalArguments[i][0] + " " + foreignSpy.signalArguments[i][1])
+            return out
         }
 
         function rowName(key) { return find("quickMenuItem_" + key).Accessible.name }
@@ -409,29 +418,63 @@ Item {
 
         // ---- Guide from any pad (RUY-11) ---------------------------------------------------------------------------------
 
-        // RUY-11: a Guide from any pad is the shell's key (ruya-inputd sends KEY_HOMEPAGE for every pad).
-        // The game on screen never sees it, short or long. Two pads are connected: the shell does not
-        // care which one was pressed.
-        function test_guide_from_two_pads_opens_the_hub_and_power_and_never_reaches_the_game() {
-            start()
-            Bluetooth.mockTwoPads()
-            plugIn("usb-1", "Xbox Controller", "xbox")
-            tryVerify(() => Bluetooth.gamepads.length >= 2)
-            keyClick(Qt.Key_Return)
+        // RUY-11, changed by RUY-38 (06 §11.3): before a sign-in a Guide from any pad is the shell's key
+        // (ruya-inputd sends KEY_HOMEPAGE for every pad: the mock announces the pad as the active input
+        // and asks nothing); after it only player 1's pad (the one that signed in) opens the Hub. Another
+        // pad's Guide is a ForeignInput, "guide" while it is unseated and "player-guide" once it is player
+        // 2, and opens nothing. The game on screen never sees a Guide, short or long. Pads are driven
+        // through Input.mockPadButton (the service's rule); the long press is the keyboard's (it always
+        // navigates).
+        function test_guide_from_any_pad_before_a_sign_in_and_only_player_1s_after_it() {
+            const xbox = "usb-045e-0b12-8e01c2d4a9f3"
+            const dualSense = "bluetooth-054c-0ce6-3f2a9c41d0b7"
+            foreignSpy.clear()
+            Input.mockResetDevices()
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            tc.shell = createTemporaryObject(shellComponent, host)
+            verify(tc.shell)
+            tc.shell.forceActiveFocus()
+            tryVerify(() => Profiles.profiles.length === 3)
+            tryVerify(() => find("profileList").activeFocus, 2000, "picker has focus on start")
+            tryVerify(() => Input.devices.length === 3, 2000)
+            for (const pad of [dualSense, xbox]) {
+                Input.mockPadButton(pad, "guide")
+                tryCompare(Input, "activeDevice", pad, 2000, "before a sign-in the pad's Guide reaches the shell")
+            }
+            verify(find("profileList").activeFocus, "Guide does nothing on the picker")
+            // The Xbox pad signs Ada in (Right, Accept): it is player 1.
+            for (let i = 0; i < 3; ++i)
+                Input.mockPadButton(xbox, "dpad_left")
+            Input.mockPadButton(xbox, "dpad_right")
+            Input.mockPadButton(xbox, "south")
+            tryCompare(Profiles, "activeProfile", "p2")
+            tryVerify(() => Input.players.length === 1 && Input.players[0].device_id === xbox, 2000)
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
+            compare(foreignSeen(), [], "nobody asked before the sign-in")
+            Input.mockPadButton(xbox, "south")
             tryCompare(launchedSpy, "count", 1)
             tryVerify(() => Session.running.length === 1)
             const app = createTemporaryObject(countingAppComponent, host)
             verify(app)
             tc.shell.addApp(app, "p2")
             tryVerify(() => app.activeFocus, 2000, "the app takes the focus")
-            for (let round = 0; round < 2; ++round) {   // once per pad; the shell cannot tell the pads apart
-                keyClick(Qt.Key_HomePage)             // short: opens the Hub
-                tryVerify(() => find("systemActions").activeFocus, 2000, "the Hub opens")
-                compare(find("systemPanel").powerMode, false)
-                keyClick(Qt.Key_HomePage)             // short again: closes it
-                tryVerify(() => app.activeFocus, 2000, "the game has the focus again")
-                verify(!find("systemPanel").open)
-            }
+            Input.mockPadButton(xbox, "guide")             // short: opens the Hub
+            tryVerify(() => find("systemActions").activeFocus, 2000, "player 1's Guide opens the Hub")
+            compare(find("systemPanel").powerMode, false)
+            Input.mockPadButton(xbox, "guide")             // short again: closes it
+            tryVerify(() => app.activeFocus && !find("systemPanel").open, 2000, "the game has the focus again")
+            Input.mockPadButton(dualSense, "guide")
+            tryCompare(foreignSpy, "count", 1, 2000)
+            compare(foreignSeen(), [dualSense + " guide"], "an unseated pad's Guide asks")
+            verify(!find("systemPanel").open, "and opens no Hub")
+            verify(app.activeFocus)
+            Input.joinPlayer(dualSense, "p1")
+            tryVerify(() => Input.players.length === 2, 2000, "the DualSense is player 2")
+            Input.mockPadButton(dualSense, "guide")
+            tryCompare(foreignSpy, "count", 2, 2000)
+            compare(foreignSeen()[1], dualSense + " player-guide", "player 2's Guide asks for the players' Hub")
+            verify(!find("systemPanel").open, "which does not exist yet")
             keyPress(Qt.Key_HomePage)                 // long: the power choices
             tryVerify(() => find("systemActions").activeFocus, 2000, "the Hub opens on press")
             tryCompare(find("systemPanel"), "powerMode", true, Theme.guideHoldMs + 2000)
