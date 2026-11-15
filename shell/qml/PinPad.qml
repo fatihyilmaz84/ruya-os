@@ -471,7 +471,7 @@ FocusScope {
                         width: keys.key * 0.88      // a caption is fitted, not elided (04 PIN pad)
                         horizontalAlignment: Text.AlignHCenter
                         fontSizeMode: Text.Fit
-                        minimumPixelSize: Theme.typeBody * pad.u
+                        minimumPixelSize: Theme.typeCaption * pad.u   // "Tamam" at typeBody is 107 u wide on the console
                         color: Theme.text
                         font.pixelSize: (keyCell.isAction ? Theme.typeHeadline : Theme.typeTitle) * pad.u
                         font.weight: Theme.weightDemiBold
