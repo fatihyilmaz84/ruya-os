@@ -32,7 +32,6 @@
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Read;
 use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -45,6 +44,7 @@ use zbus::connection::Builder;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 use zbus::{Connection, MatchRule, MessageStream};
 
+use crate::bounded::{run_bounded, run_bounded_status};
 use crate::follow::{
     bridge_args, existence, parse_signal, Backoff, Follower, ManagerLink, Probe, Wake,
     BRIDGE_PROGRAM,
@@ -141,52 +141,6 @@ fn watch_scopes(gate: Gate) {
 /// How long one `systemctl` of `Stop`, the kill or a sweep may take: a manager that does not
 /// answer must not hold up the scope watcher (every profile's runs) or a `Stop` for long.
 const SYSTEMCTL_LIMIT: Duration = Duration::from_secs(5);
-
-/// Runs `args` with its stdout captured, for at most `limit` (then it is killed). The output on
-/// success; `None` (logged) on a failure or a timeout. Only for short answers (a unit list).
-fn run_bounded(args: &[String], limit: Duration) -> Option<String> {
-    let what = args.join(" ");
-    let mut child = match Command::new(&args[0])
-        .args(&args[1..])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-    {
-        Ok(child) => child,
-        Err(err) => {
-            eprintln!("ruya-session: {what}: {err}");
-            return None;
-        }
-    };
-    let deadline = Instant::now() + limit;
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => {
-                let mut out = String::new();
-                if let Some(mut stdout) = child.stdout.take() {
-                    let _ = stdout.read_to_string(&mut out);
-                }
-                if status.success() {
-                    return Some(out);
-                }
-                eprintln!("ruya-session: {what} failed: {status}");
-                return None;
-            }
-            Ok(None) if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                eprintln!("ruya-session: {what}: no answer in {} s", limit.as_secs());
-                return None;
-            }
-            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
-            Err(err) => {
-                eprintln!("ruya-session: {what}: {err}");
-                return None;
-            }
-        }
-    }
-}
 
 /// The scopes of `app_id` loaded in `user`'s manager (any state), by exact name: the glob
 /// listing filtered by `app_scopes`, so a sibling app whose id starts with `<app_id>-` is never
@@ -1062,13 +1016,15 @@ fn lookup_uid(name: &str) -> Result<Option<u32>, i32> {
 /// Does the system manager run `user@<uid>.service`, the user's manager? `None` when
 /// `systemctl` could not be run or said something else.
 fn manager_running(uid: u32) -> Option<bool> {
-    let out = Command::new("systemctl")
-        .args(["is-active", &format!("user@{uid}.service")])
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    match String::from_utf8_lossy(&out.stdout).trim() {
+    // `is-active` exits non-zero for "inactive", so the status is not checked, only the answer.
+    // A timeout is `None`: the unit is kept (`follow::existence`), never ended on a guess.
+    let args = [
+        "systemctl".to_owned(),
+        "is-active".to_owned(),
+        format!("user@{uid}.service"),
+    ];
+    let (_, out) = run_bounded_status(&args, SYSTEMCTL_LIMIT)?;
+    match out.trim() {
         "active" | "reloading" => Some(true),
         "inactive" | "failed" => Some(false),
         _ => None,

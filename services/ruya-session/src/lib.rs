@@ -7,6 +7,7 @@
 //! sits behind `Spawner` (`spawner.rs`) and `ProfileDirectory` (`directory.rs`); `dbus.rs` is the
 //! thin adapter.
 
+pub mod bounded;
 pub mod dbus;
 pub mod directory;
 pub mod follow;
