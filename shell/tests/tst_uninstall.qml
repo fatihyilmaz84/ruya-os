@@ -384,7 +384,7 @@ Item {
             keyClick(Qt.Key_Return)
             tryVerify(() => pad().shown, 2000)
             compare(findChild(pad(), "pinTitle").text, "Enter an admin's PIN")
-            compare(hintVerbs(), "back Cancel")
+            compare(hintVerbs(), "accept Select|back Back")
             keyClick(Qt.Key_Escape)                      // Back on the empty pad
             tryVerify(() => !pad().shown && !confirm().shown, 2000, "Back cancels everything")
             tryVerify(() => find("recentRow").activeFocus, 2000)

@@ -7,7 +7,7 @@ FocusScope {
     id: picker
 
     property real u: 1
-    readonly property Item pinPadItem: pinPad     // the shell reads where focus is (hint bar)
+    readonly property PinPad pinPadItem: pinPad     // the shell reads where focus is (hint bar)
 
     function choose(profile) {
         Sfx.select()

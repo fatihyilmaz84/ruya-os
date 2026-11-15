@@ -2597,7 +2597,7 @@ FocusScope {
         return [{ action: "accept", text: qsTr("Select") },
                 { actions: ["tabPrev", "tabNext"], text: qsTr("Sections") }]
     }
-    readonly property Item pinPadInPicker: picker.pinPadItem
+    readonly property PinPad pinPadInPicker: picker.pinPadItem
 
     HintBar {
         id: hintBar
