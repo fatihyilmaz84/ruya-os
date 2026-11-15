@@ -343,6 +343,21 @@ function Test-RevertCheckPiping {
             if (-not $good) { $ok = $false; Write-Host "    piped=$piped caught=$($case.Caught): exit $code, output:`n$text" -ForegroundColor Yellow }
         }
     }
+    # RUY-657: -Mode docs / vmchecks take the verdict from the child's failure ("FAILED: ..." from the stand-in).
+    $docsRunner = { if ((Get-Content -Raw -LiteralPath $target) -match 'value=bad') { "    FAILED: fixture lint"; "FAILED: fixture lint" } else { "ALL GREEN (docs)" } }.GetNewClosure()
+    foreach ($mode in @("docs", "vmchecks")) {
+        foreach ($case in @(@{ New = "value=bad"; Caught = $true }, @{ New = "value=good"; Caught = $false })) {
+            foreach ($piped in @($false, $true)) {
+                if ($piped) { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Mode $mode -Runner $docsRunner *>&1 | Select-Object -Last 3 | Out-String -Stream) }
+                else { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Mode $mode -Runner $docsRunner *>&1 | Out-String -Stream) }
+                $code = $LASTEXITCODE
+                $text = $lines -join "`n"
+                $said = if ($case.Caught) { $text -match '(?m)^CAUGHT' } else { $text -match 'NOT CAUGHT' }
+                $good = ($code -eq $(if ($case.Caught) { 0 } else { 1 })) -and $said -and ((Get-Content -Raw -LiteralPath $target) -eq "value=good`n")
+                if (-not $good) { $ok = $false; Write-Host "    mode=$mode piped=$piped caught=$($case.Caught): exit $code, output:`n$text" -ForegroundColor Yellow }
+            }
+        }
+    }
     Remove-Item -Recurse -Force $fx -ErrorAction SilentlyContinue
     Record "revert-check self-check (CAUGHT / NOT CAUGHT is the same plain and piped through Select-Object -Last 3)" $ok
 }

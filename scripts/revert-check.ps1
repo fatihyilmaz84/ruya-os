@@ -11,6 +11,10 @@
 #   .\scripts\revert-check.ps1 -File shell\src\usage\Usage.cpp -Old 'if (profile != activeProfile())' -New 'if (false)'
 # -Test tst_usage[,tst_x]: step 2 runs only those test files (`dev.ps1 qml`) instead of `dev.ps1 shell`,
 # much faster; name the file that holds the new test, since nothing else runs.
+# -Mode docs: step 2 is `dev.ps1 docs` (text and dev-docs lints, api-changelog, script self-checks), for a mutation of
+# a lint or a scripts\*.ps1 file; -Mode vmchecks: step 2 is `bash scripts/test-vm-checks.sh`, for a scripts\vm-*.sh
+# mutation. Neither builds or rebuilds anything; the verdict is the child's exit code (nonzero = CAUGHT).
+#   .\scripts\revert-check.ps1 -Mode docs -File scripts\lint-dev-docs.ps1 -Old '<a rule>' -New '<nothing>'
 # A -File under services\<crate>\ is Rust: step 2 is `cargo test -p <crate> -- <-Test name filters>`, e.g.
 #   .\scripts\revert-check.ps1 -File services\ruya-session\src\spawner.rs -Old '...' -New '...' -Test scope_names
 param(
@@ -18,6 +22,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Old,
     [Parameter(Mandatory = $true)][string]$New,
     [string[]]$Test = @(),
+    [ValidateSet("default", "docs", "vmchecks")][string]$Mode = "default",
     # Self-check only (dev.ps1): a script block that stands in for the build and test run and returns its
     # console text, with "FAIL!  : name" lines for failed tests. Nothing is rebuilt afterwards.
     [scriptblock]$Runner,
@@ -44,7 +49,8 @@ $badName = $false
 # and reads cargo's "test <name> ... FAILED" lines; nothing needs rebuilding afterwards.
 $rel = [IO.Path]::GetFullPath($Path).Substring([IO.Path]::GetFullPath($Repo).TrimEnd('\').Length).TrimStart('\')
 $crate = if ($rel -match '^services\\([^\\]+)\\') { $Matches[1] } else { $null }
-$rust = [bool]$crate
+$cmdMode = $Mode -ne "default"
+$rust = [bool]$crate -and -not $cmdMode
 try {
     $mutated = $text.Substring(0, $at) + $New + $text.Substring($at + $Old.Length)
     [IO.File]::WriteAllText($Path, $mutated, (New-Object Text.UTF8Encoding($false)))
@@ -58,6 +64,18 @@ try {
         Write-Host "== mutated ${File}; running the stand-in runner =="
         $out = (& $Runner *>&1 | Out-String -Width 4096)
         $logs = $qmlLogs
+        # A stand-in for docs / vmchecks mode reports failure the way dev.ps1 does ("FAILED: ...").
+        if ($cmdMode) { $childExit = if ($out -match '(?m)^\s*FAILED:') { 1 } else { 0 } }
+    } elseif ($Mode -eq "docs") {
+        Write-Host "== mutated ${File}; dev.ps1 docs =="
+        $out = & (Join-Path $PSScriptRoot "dev.ps1") docs *>&1 | Out-String -Width 4096
+        $childExit = $LASTEXITCODE
+        $logs = @()
+    } elseif ($Mode -eq "vmchecks") {
+        Write-Host "== mutated ${File}; bash scripts/test-vm-checks.sh =="
+        Push-Location $Repo
+        try { $out = & bash scripts/test-vm-checks.sh *>&1 | Out-String -Width 4096; $childExit = $LASTEXITCODE } finally { Pop-Location }
+        $logs = @()
     } elseif ($rust) {
         Write-Host "== mutated ${File}; cargo test -p $crate $($Test -join ' ') =="
         Push-Location (Join-Path $Repo "services")
@@ -95,11 +113,12 @@ try {
         }
     }
     $failed = @($failed | Sort-Object -Unique)
+    if ($cmdMode -and $childExit -ne 0) { $failed = @("($Mode mode: exit code $childExit)") }
     # `dev.ps1 qml` exits 1 when a test file failed: a failure whose log line was lost is still a failure.
     if ($failed.Count -eq 0 -and $childExit -eq 1 -and $out -match 'PARTIAL' -and $out -notmatch 'FAILED: cmake|no such test file') { $failed = @("(dev.ps1 qml exit code 1)") }
     ($out -split "`n") | Where-Object { $_ -match 'FAIL|no such test file|PARTIAL|ok: cmake|could not compile' } | ForEach-Object { Write-Host "    $($_.TrimEnd())" }
-    $buildBroke = ($out -match 'FAILED: cmake') -or ($rust -and $out -match 'could not compile')
-    if (-not $rust) { $badName = ($out -match 'no such test file') }
+    $buildBroke = (-not $cmdMode) -and (($out -match 'FAILED: cmake') -or ($rust -and $out -match 'could not compile'))
+    if (-not $rust -and -not $cmdMode) { $badName = ($out -match 'no such test file') }
     if ($badName) {
         if (-not $rust) { Write-Host "a -Test name is not a file in shell\tests: nothing was tested" }
     } elseif ($buildBroke) {
@@ -115,6 +134,8 @@ try {
     [IO.File]::WriteAllBytes($Path, $bytes)
     (Get-Item -LiteralPath $Path).LastWriteTime = Get-Date
     if ($Runner) {
+        Write-Host "== restored ${File} =="
+    } elseif ($cmdMode) {
         Write-Host "== restored ${File} =="
     } elseif ($rust) {
         Write-Host "== restored ${File} (cargo rebuilds it on the next run) =="
