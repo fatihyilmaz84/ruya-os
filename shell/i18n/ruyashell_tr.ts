@@ -1174,7 +1174,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerOnboarding</name>
     <message>
-        <location filename="../qml/ControllerOnboarding.qml" line="+44"/>
+        <location filename="../qml/ControllerOnboarding.qml" line="+50"/>
         <source>Continue</source>
         <translation>Devam</translation>
     </message>
@@ -1190,20 +1190,20 @@ Bu geri alınamaz.</translation>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+212"/>
-        <location line="+71"/>
+        <location line="+252"/>
+        <location line="+76"/>
         <source>Buttons in games</source>
         <translation>Oyunlarda düğmeler</translation>
     </message>
     <message>
-        <location line="-70"/>
-        <location line="+71"/>
+        <location line="-75"/>
+        <location line="+76"/>
         <source>Try your controller</source>
         <translation>Kontrolcünüzü deneyin</translation>
     </message>
     <message>
-        <location line="-71"/>
-        <location line="+71"/>
+        <location line="-76"/>
+        <location line="+76"/>
         <source>Pair a controller</source>
         <translation>Kontrolcü eşleştir</translation>
     </message>
@@ -1367,7 +1367,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+51"/>
+        <location filename="../qml/ControllerPage.qml" line="+55"/>
         <source>Works</source>
         <translation>Çalışıyor</translation>
     </message>
@@ -1504,36 +1504,39 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+17"/>
+        <location line="+45"/>
         <source>Not available</source>
         <translation>Kullanılamıyor</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-44"/>
+        <location line="+45"/>
         <source>%1: %2.</source>
         <translation>%1: %2.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="-34"/>
         <source>On this controller: %1 confirms, %2 goes back.</source>
         <translation>Bu kontrolcüde: %1 onaylar, %2 geri gider.</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>On this controller:</source>
-        <translation>Bu kontrolcüde:</translation>
+        <location line="+17"/>
+        <location line="+15"/>
+        <source>Button layout in games</source>
+        <translation>Oyunlarda düğme düzeni</translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>confirms,</source>
-        <translation>onaylar,</translation>
+        <location line="-13"/>
+        <source>By position</source>
+        <translation>Konuma göre</translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>goes back.</source>
-        <translation>geri gider.</translation>
+        <location line="+1"/>
+        <source>Nintendo labels</source>
+        <translation>Nintendo etiketleri</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+36"/>
         <source>What it can do</source>
         <translation>Neler yapabilir</translation>
     </message>
@@ -1546,7 +1549,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerPairHint</name>
     <message>
-        <location filename="../qml/ControllerPairHint.qml" line="+36"/>
+        <location filename="../qml/ControllerPairHint.qml" line="+37"/>
         <source>Hold PS and Create (Share on a DualShock 4) until the light bar flashes.</source>
         <translation>Işık çubuğu yanıp sönene kadar PS ve Create düğmelerini (DualShock 4&apos;te Share) basılı tutun.</translation>
     </message>
@@ -1576,12 +1579,12 @@ Bu geri alınamaz.</translation>
         <translation>Kablosuz alıcılı Xbox 360 kontrolcüsü: önce alıcıdaki, sonra kontrolcüdeki eşleştirme düğmesine basın.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
         <source>Other controller</source>
         <translation>Diğer kontrolcü</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+23"/>
         <source>Controller connected.</source>
         <translation>Kontrolcü bağlandı.</translation>
     </message>
@@ -1767,13 +1770,13 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+5"/>
-        <source>Standard</source>
-        <translation>Standart</translation>
+        <source>By position</source>
+        <translation>Konuma göre</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Nintendo</source>
-        <translation>Nintendo</translation>
+        <source>Nintendo labels</source>
+        <translation>Nintendo etiketleri</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1782,12 +1785,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+43"/>
+        <location line="+57"/>
         <source>Default</source>
         <translation>Varsayılan</translation>
     </message>
     <message>
-        <location line="-21"/>
+        <location line="-35"/>
         <source>Applies to</source>
         <translation>Uygulandığı kontrolcüler</translation>
     </message>
@@ -1797,7 +1800,7 @@ Bu geri alınamaz.</translation>
         <translation>Düğme düzeni</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+24"/>
         <source>Remap buttons</source>
         <translation>Düğmeleri yeniden ata</translation>
     </message>
@@ -1863,7 +1866,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 (%2)</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+48"/>
         <source>PlayStation controller</source>
         <translation>PlayStation kontrolcüsü</translation>
     </message>
@@ -1878,12 +1881,12 @@ Bu geri alınamaz.</translation>
         <translation>Nintendo kontrolcüsü</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+3"/>
         <source>8BitDo controller</source>
         <translation>8BitDo kontrolcüsü</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Controller</source>
         <translation>Kontrolcü</translation>
     </message>
@@ -2150,7 +2153,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+437"/>
+        <location filename="../qml/GameControls.qml" line="+482"/>
         <location line="+182"/>
         <source>Could not save to the USB drive</source>
         <translation>USB belleğe kaydedilemedi</translation>
@@ -2175,7 +2178,17 @@ Bu geri alınamaz.</translation>
         <translation>%1 için değişiklik kaydedilemedi</translation>
     </message>
     <message>
-        <location line="+174"/>
+        <location line="-254"/>
+        <source>Games see %1 as A and %2 as B, unlike menus.</source>
+        <translation>Oyunlar %1 düğmesini A, %2 düğmesini B olarak görür; menülerden farklı.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Games see %1 as A and %2 as B.</source>
+        <translation>Oyunlar %1 düğmesini A, %2 düğmesini B olarak görür.</translation>
+    </message>
+    <message>
+        <location line="+428"/>
         <source>Saved to the USB drive</source>
         <translation>USB belleğe kaydedildi</translation>
     </message>
@@ -2557,7 +2570,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ManageProfilesPane</name>
     <message>
-        <location filename="../qml/ManageProfilesPane.qml" line="+41"/>
+        <location filename="../qml/ManageProfilesPane.qml" line="+43"/>
         <source>Your own profile is under My profile.</source>
         <translation>Kendi profiliniz Profilim bölümünde.</translation>
     </message>
@@ -3149,7 +3162,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>OptionsMenu</name>
     <message>
-        <location filename="../qml/OptionsMenu.qml" line="+46"/>
+        <location filename="../qml/OptionsMenu.qml" line="+48"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -3165,7 +3178,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 seçenekleri</translation>
     </message>
     <message>
-        <location line="+208"/>
+        <location line="+219"/>
         <source>No options for this yet.</source>
         <translation>Bunun için henüz seçenek yok.</translation>
     </message>
@@ -3793,7 +3806,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Profiles</name>
     <message>
-        <location filename="../src/profiles/Profiles.cpp" line="+103"/>
+        <location filename="../src/profiles/Profiles.cpp" line="+186"/>
         <source>Guest</source>
         <translation>Misafir</translation>
     </message>
@@ -4524,7 +4537,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+693"/>
+        <location filename="../qml/Shell.qml" line="+699"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -4687,7 +4700,7 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza seçenekleri şu anda kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+90"/>
+        <location line="+91"/>
         <source>Could not uninstall %1. Try again.</source>
         <translation>%1 kaldırılamadı. Yeniden deneyin.</translation>
     </message>
@@ -4697,7 +4710,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kaldırıldı.</translation>
     </message>
     <message>
-        <location line="+528"/>
+        <location line="+529"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -4719,7 +4732,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1839"/>
+        <location line="-1841"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -4750,7 +4763,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1587"/>
+        <location line="+1589"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>

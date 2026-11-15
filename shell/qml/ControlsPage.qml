@@ -6,7 +6,7 @@ import RuyaShell
 // signed-in console profile's controllers. Opened with params { id } from a controller page (that
 // pad is the one shown), or {} from Settings > Controllers (the first connected pad). Left, not
 // focusable: ControlsIntro. Right, a pane: Applies to (All controllers / <Family> controllers / This
-// <pad>), Button layout (Standard / Nintendo), Remap buttons (opens RemapPage; "%n changed" or
+// <pad>), Button layout (By position / Nintendo labels, with the games note: GlyphNote), Remap buttons (opens RemapPage; "%n changed" or
 // "Default"), Left stick and Right stick (open StickPage; "Default" or "Changed"), Export to USB
 // drive (the drive's label) and Import from USB drive (ControlsImportPicker), or "Plug in a USB
 // drive first." without a drive, and Reset to default (a dialog). Every change saves at once
@@ -44,8 +44,8 @@ Page {
         return out
     }
 
-    readonly property var layoutOptions: [{ value: "standard", label: qsTr("Standard") },
-                                          { value: "nintendo", label: qsTr("Nintendo") }]
+    readonly property var layoutOptions: [{ value: "standard", label: qsTr("By position") },
+                                          { value: "nintendo", label: qsTr("Nintendo labels") }]
 
     function stickValue(side) {
         return GameControls.stickChanged(side) ? qsTr("Changed") : qsTr("Default")
@@ -85,6 +85,20 @@ Page {
             onEdited: v => GameControls.setLayout(v)
         }
         Binding { target: layoutRow; property: "value"; value: GameControls.layout }
+        // What games see of this pad's buttons (06 §7), as on its controller page.
+        GlyphNote {
+            id: gamesNote
+            objectName: "gamesNote"
+            readonly property var buttons: GameControls.gamesButtons()
+            visible: buttons !== null
+            u: page.u
+            text: GameControls.gamesNoteText(buttons ? buttons.unlike : false)
+            family: page.family
+            firstPosition: buttons ? buttons.a : ""
+            secondPosition: buttons ? buttons.b : ""
+            firstName: "gamesNoteA"
+            secondName: "gamesNoteB"
+        }
 
         SettingRow {
             objectName: "rowRemap"

@@ -1178,7 +1178,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerOnboarding</name>
     <message>
-        <location filename="../qml/ControllerOnboarding.qml" line="+44"/>
+        <location filename="../qml/ControllerOnboarding.qml" line="+50"/>
         <source>Continue</source>
         <translation>Continue</translation>
     </message>
@@ -1194,20 +1194,20 @@ This can&apos;t be undone.</translation>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+212"/>
-        <location line="+71"/>
+        <location line="+252"/>
+        <location line="+76"/>
         <source>Buttons in games</source>
         <translation>Buttons in games</translation>
     </message>
     <message>
-        <location line="-70"/>
-        <location line="+71"/>
+        <location line="-75"/>
+        <location line="+76"/>
         <source>Try your controller</source>
         <translation>Try your controller</translation>
     </message>
     <message>
-        <location line="-71"/>
-        <location line="+71"/>
+        <location line="-76"/>
+        <location line="+76"/>
         <source>Pair a controller</source>
         <translation>Pair a controller</translation>
     </message>
@@ -1371,7 +1371,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+51"/>
+        <location filename="../qml/ControllerPage.qml" line="+55"/>
         <source>Works</source>
         <translation>Works</translation>
     </message>
@@ -1508,36 +1508,39 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+17"/>
+        <location line="+45"/>
         <source>Not available</source>
         <translation>Not available</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-44"/>
+        <location line="+45"/>
         <source>%1: %2.</source>
         <translation>%1: %2.</translation>
     </message>
     <message>
-        <location line="+16"/>
+        <location line="-34"/>
         <source>On this controller: %1 confirms, %2 goes back.</source>
         <translation>On this controller: %1 confirms, %2 goes back.</translation>
     </message>
     <message>
-        <location line="+10"/>
-        <source>On this controller:</source>
-        <translation>On this controller:</translation>
+        <location line="+17"/>
+        <location line="+15"/>
+        <source>Button layout in games</source>
+        <translation>Button layout in games</translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>confirms,</source>
-        <translation>confirms,</translation>
+        <location line="-13"/>
+        <source>By position</source>
+        <translation>By position</translation>
     </message>
     <message>
-        <location line="+14"/>
-        <source>goes back.</source>
-        <translation>goes back.</translation>
+        <location line="+1"/>
+        <source>Nintendo labels</source>
+        <translation>Nintendo labels</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+36"/>
         <source>What it can do</source>
         <translation>What it can do</translation>
     </message>
@@ -1550,7 +1553,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerPairHint</name>
     <message>
-        <location filename="../qml/ControllerPairHint.qml" line="+36"/>
+        <location filename="../qml/ControllerPairHint.qml" line="+37"/>
         <source>Hold PS and Create (Share on a DualShock 4) until the light bar flashes.</source>
         <translation>Hold PS and Create (Share on a DualShock 4) until the light bar flashes.</translation>
     </message>
@@ -1580,12 +1583,12 @@ This can&apos;t be undone.</translation>
         <translation>Xbox 360 pad with a wireless receiver: press the sync button on the receiver, then on the controller.</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="+4"/>
         <source>Other controller</source>
         <translation>Other controller</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+23"/>
         <source>Controller connected.</source>
         <translation>Controller connected.</translation>
     </message>
@@ -1771,13 +1774,13 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+5"/>
-        <source>Standard</source>
-        <translation>Standard</translation>
+        <source>By position</source>
+        <translation>By position</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Nintendo</source>
-        <translation>Nintendo</translation>
+        <source>Nintendo labels</source>
+        <translation>Nintendo labels</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -1786,12 +1789,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+43"/>
+        <location line="+57"/>
         <source>Default</source>
         <translation>Default</translation>
     </message>
     <message>
-        <location line="-21"/>
+        <location line="-35"/>
         <source>Applies to</source>
         <translation>Applies to</translation>
     </message>
@@ -1801,7 +1804,7 @@ This can&apos;t be undone.</translation>
         <translation>Button layout</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+24"/>
         <source>Remap buttons</source>
         <translation>Remap buttons</translation>
     </message>
@@ -1868,7 +1871,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 (%2)</translation>
     </message>
     <message>
-        <location line="+45"/>
+        <location line="+48"/>
         <source>PlayStation controller</source>
         <translation>PlayStation controller</translation>
     </message>
@@ -1883,12 +1886,12 @@ This can&apos;t be undone.</translation>
         <translation>Nintendo controller</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+3"/>
         <source>8BitDo controller</source>
         <translation>8BitDo controller</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+1"/>
         <source>Controller</source>
         <translation>Controller</translation>
     </message>
@@ -2155,7 +2158,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+437"/>
+        <location filename="../qml/GameControls.qml" line="+482"/>
         <location line="+182"/>
         <source>Could not save to the USB drive</source>
         <translation>Could not save to the USB drive</translation>
@@ -2180,7 +2183,17 @@ This can&apos;t be undone.</translation>
         <translation>Could not save the change for %1</translation>
     </message>
     <message>
-        <location line="+174"/>
+        <location line="-254"/>
+        <source>Games see %1 as A and %2 as B, unlike menus.</source>
+        <translation>Games see %1 as A and %2 as B, unlike menus.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Games see %1 as A and %2 as B.</source>
+        <translation>Games see %1 as A and %2 as B.</translation>
+    </message>
+    <message>
+        <location line="+428"/>
         <source>Saved to the USB drive</source>
         <translation>Saved to the USB drive</translation>
     </message>
@@ -2562,7 +2575,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ManageProfilesPane</name>
     <message>
-        <location filename="../qml/ManageProfilesPane.qml" line="+41"/>
+        <location filename="../qml/ManageProfilesPane.qml" line="+43"/>
         <source>Your own profile is under My profile.</source>
         <translation>Your own profile is under My profile.</translation>
     </message>
@@ -3160,7 +3173,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>OptionsMenu</name>
     <message>
-        <location filename="../qml/OptionsMenu.qml" line="+46"/>
+        <location filename="../qml/OptionsMenu.qml" line="+48"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -3176,7 +3189,7 @@ This can&apos;t be undone.</translation>
         <translation>Options for %1</translation>
     </message>
     <message>
-        <location line="+208"/>
+        <location line="+219"/>
         <source>No options for this yet.</source>
         <translation>No options for this yet.</translation>
     </message>
@@ -3809,7 +3822,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Profiles</name>
     <message>
-        <location filename="../src/profiles/Profiles.cpp" line="+103"/>
+        <location filename="../src/profiles/Profiles.cpp" line="+186"/>
         <source>Guest</source>
         <translation>Guest</translation>
     </message>
@@ -4541,7 +4554,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+693"/>
+        <location filename="../qml/Shell.qml" line="+699"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -4704,7 +4717,7 @@ This can&apos;t be undone.</translation>
         <translation>Store options are unavailable right now.</translation>
     </message>
     <message>
-        <location line="+90"/>
+        <location line="+91"/>
         <source>Could not uninstall %1. Try again.</source>
         <translation>Could not uninstall %1. Try again.</translation>
     </message>
@@ -4714,7 +4727,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 was uninstalled.</translation>
     </message>
     <message>
-        <location line="+528"/>
+        <location line="+529"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -4736,7 +4749,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1839"/>
+        <location line="-1841"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -4767,7 +4780,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1587"/>
+        <location line="+1589"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>

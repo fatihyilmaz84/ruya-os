@@ -236,7 +236,7 @@ Item {
             compare(find("controlsGlyph").name, DeviceIcons.iconFor("controller", "playstation"), "the first pad: the DualSense")
             compare(find("rowAppliesTo").currentLabel, "All controllers")
             compare(find("rowAppliesTo").options.map(o => o.label), ["All controllers", "PlayStation controllers", "This DualSense"])
-            compare(find("rowLayout").currentLabel, "Standard")
+            compare(find("rowLayout").currentLabel, "By position")
             compare(find("rowRemap").value, "Default")
             compare(find("rowLeftStick").value, "Default")
             compare(find("rowRightStick").value, "Default")
@@ -260,7 +260,7 @@ Item {
             openControls()
             focusRow("controlsBody", "rowLayout")
             keyClick(Qt.Key_Right)
-            compare(find("rowLayout").currentLabel, "Nintendo", "shown at once")
+            compare(find("rowLayout").currentLabel, "Nintendo labels", "shown at once")
             tryVerify(() => calls("AssignProfile").length === 1, 2000, "saved and assigned")
             compare(calls("ValidateProfile").length, 1, "validated first")
             const saved = lastSaved()
@@ -275,7 +275,7 @@ Item {
             verify(find("rowLayout").activeFocus, "the row keeps the focus")
             compare(find("rowRemap").value, "Default", "a layout is not a remap")
             keyClick(Qt.Key_Return)                      // Accept is Next
-            compare(find("rowLayout").currentLabel, "Standard")
+            compare(find("rowLayout").currentLabel, "By position")
             tryVerify(() => calls("SaveProfile").length === 2, 2000)
             verify(lastSaved().inherits === undefined, "Standard inherits the default")
             tryVerify(() => !GameControls.changed, 2000)
@@ -645,7 +645,7 @@ Item {
             tryVerify(() => !GameControls.changed, 2000, "the DualSense is back to the default")
             compare(chainOf(ds), [dsOwn, "default"])
             compare(chainOf(xbox), ["controls-all", "nintendo", "default"], "all controllers' profile stays")
-            compare(find("rowLayout").currentLabel, "Standard")
+            compare(find("rowLayout").currentLabel, "By position")
         }
 
         // Reset when what applies is an all-controllers profile the page did not put there (an
@@ -655,7 +655,7 @@ Item {
             Input.mockClearProfileCalls()
             openControls()
             compare(find("rowAppliesTo").currentLabel, "All controllers")
-            compare(find("rowLayout").currentLabel, "Nintendo")
+            compare(find("rowLayout").currentLabel, "Nintendo labels")
             confirmReset()
             tryVerify(() => calls("AssignProfile").length === 1, 2000)
             compare(calls("DeleteProfile").length, 0, "the import stays")
@@ -667,6 +667,71 @@ Item {
             tryVerify(() => !GameControls.changed, 2000)
             tryCompare(find("rowAppliesTo"), "currentLabel", "This DualSense")
             compare(chainOf(pro), ["imported", "nintendo", "default"], "the Pro Controller keeps the import")
+        }
+
+        // ---- Button layout in games on the controller page (RUY-500) ----------------------------------------------
+
+        // The Pro Controller's page, the focus on its Button layout in games row.
+        function openProLayout() {
+            tc.shell.openPage("controller", { id: pro })
+            tryCompare(tc.shell, "currentPage", "controller")
+            tryVerify(() => find("rowButtonTest") !== null && find("rowButtonTest").activeFocus, 2000)
+            const row = findChild(find("page_controller"), "rowGamesLayout")
+            for (let i = 0; i < 4 && !row.activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(row.activeFocus, "on Button layout in games")
+            tryCompare(GameControls, "loadState", "ok")
+            return row
+        }
+
+        // Item 5 (RUY-506): a layout chosen on the pad's page goes to the pad's own profile, never to
+        // All controllers by default; and Controls in games shows the same value and the same note.
+        function test_the_layout_of_the_controller_page_is_stored_for_that_pad() {
+            const proOwn = "controls-device-" + pro
+            const row = openProLayout()
+            keyClick(Qt.Key_Right)
+            compare(row.currentLabel, "Nintendo labels")
+            tryVerify(() => calls("AssignProfile").length === 1, 2000, "saved and assigned")
+            const saved = lastSaved()
+            compare(saved.id, proOwn, "the Pro Controller's own profile")
+            compare(saved.match, { device: pro })
+            compare(saved.inherits, "nintendo")
+            compare(calls("AssignProfile")[0].args.scope_id, "device:" + pro)
+            compare(savesOf("controls-all").length, 0, "never All controllers")
+            tryVerify(() => GameControls.changed, 2000)
+            tc.shell.openPage("controller", { id: xbox })
+            tryCompare(tc.shell, "currentPage", "controller")
+            tryCompare(GameControls, "padId", xbox)
+            tryCompare(GameControls, "layout", "standard")
+            compare(findChild(find("page_controller"), "rowGamesLayout").currentLabel, "By position", "an Xbox pad is untouched")
+            tc.shell.openPage("controller", { id: pro })
+            tryCompare(GameControls, "padId", pro)
+            tc.shell.openPage("controls", { id: pro })
+            tryCompare(tc.shell, "currentPage", "controls")
+            tryVerify(() => find("rowLayout") !== null && find("rowLayout").currentLabel === "Nintendo labels", 2000)
+            compare(find("gamesNote").sentence, "Games see A as A and B as B.", "the same note on Controls in games")
+        }
+
+        function test_applies_to_all_sends_the_layout_to_all_controllers() {
+            tc.shell.openPage("controls", { id: pro })
+            tryCompare(tc.shell, "currentPage", "controls")
+            tryVerify(() => find("rowAppliesTo") !== null && find("rowAppliesTo").activeFocus, 2000)
+            tryCompare(GameControls, "loadState", "ok")
+            GameControls.setAppliesTo("device:" + pro)
+            tryVerify(() => !GameControls.busy && GameControls.appliesTo === "device", 3000)
+            GameControls.setAppliesTo("all")
+            tryVerify(() => !GameControls.busy && GameControls.appliesTo === "all", 3000)
+            tryCompare(find("rowAppliesTo"), "currentLabel", "All controllers")
+            Input.mockClearProfileCalls()
+            tc.shell.openPage("controller", { id: pro })
+            tryCompare(tc.shell, "currentPage", "controller")
+            const row = findChild(find("page_controller"), "rowGamesLayout")
+            for (let i = 0; i < 4 && !row.activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            tryCompare(GameControls, "appliesTo", "all")
+            keyClick(Qt.Key_Right)
+            tryVerify(() => calls("SaveProfile").length === 1, 2000)
+            compare(lastSaved().id, "controls-all", "Applies to = All: the change goes to All controllers")
         }
 
         // ---- remap -----------------------------------------------------------------------------------------------
@@ -1015,7 +1080,7 @@ Item {
             tryVerify(() => hasToast("Controls imported / my-controls.json"), 2000, toastTexts().join("; "))
             tryVerify(() => !picker.shown, 2000, "the sheet closes")
             tryVerify(() => find("rowImport").activeFocus, 2000, "back on the Import row")
-            tryCompare(find("rowLayout"), "currentLabel", "Nintendo")
+            tryCompare(find("rowLayout"), "currentLabel", "Nintendo labels")
             tryVerify(() => GameControls.changed)
         }
 
@@ -1116,7 +1181,7 @@ Item {
             tryVerify(() => calls("DeleteProfile").length === 1, 2000)
             compare(calls("DeleteProfile")[0].args, { profile: "p2", profile_id: dsOwn }, "the pad's own profile (RUY-545)")
             tryVerify(() => !GameControls.changed, 2000)
-            compare(find("rowLayout").currentLabel, "Standard")
+            compare(find("rowLayout").currentLabel, "By position")
             tryVerify(() => find("rowReset").activeFocus, 2000, "the focus returns to Reset")
         }
 

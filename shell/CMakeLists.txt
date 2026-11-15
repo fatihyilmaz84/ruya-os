@@ -272,6 +272,7 @@ qt_add_qml_module(ruyashell
         qml/controls/ToggleRow.qml
         qml/controls/ChoiceRow.qml
         qml/controls/SliderRow.qml
+        qml/controls/GlyphNote.qml
         qml/controls/GroupLabel.qml
         qml/controls/SettingNote.qml
         qml/controls/ThemeRow.qml
