@@ -49,6 +49,7 @@ public:
     // Tests only.
     // While held a scan stays "running" (a walk takes seconds); releasing finishes the running one.
     void holdScan(bool hold);
+    void scanElsewhere(const QString &id) { m_scanning = id; }
     QStringList scanCalls() const { return m_scanCalls; }     // the ids of scanVolume() calls, in order
     QStringList cancelCalls() const { return m_cancelCalls; } // the ids of cancelScan() calls, in order
     void setScanPartial(bool partial) { m_scanPartial = partial; }

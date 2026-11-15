@@ -406,6 +406,12 @@ void Storage::mockRefreshScanDelayed(const QString &id, int ms)
         mock->refreshScanDelayed(id, ms);
 }
 
+void Storage::mockScanElsewhere(const QString &id)
+{
+    if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))
+        mock->scanElsewhere(id);
+}
+
 void Storage::mockSetLabel(const QString &id, const QString &label)
 {
     if (auto *mock = qobject_cast<MockStorageBackend *>(m_backend.get()))

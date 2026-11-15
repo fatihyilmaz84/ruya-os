@@ -1027,13 +1027,21 @@ impl<S: ScanSource, C: Clock> Scans<S, C> {
         }
     }
 
-    /// `CancelScan`: the walk stops within one directory. Nothing happens if this volume is not
-    /// being scanned.
+    /// `CancelScan`: the walk stops within one directory. A result that is not running is
+    /// forgotten (the shell's Rescan row: writes that change no property of the volume do not
+    /// invalidate a "done" result, so the next `ScanVolume` must walk again).
     pub fn cancel(&self, id: &str) {
-        if let Some(e) = self.lock().entries.get(id) {
-            if e.state == State::Running {
-                e.cancel.store(true, Ordering::Relaxed);
+        let mut inner = self.lock();
+        match inner.entries.get(id).map(|e| e.state) {
+            Some(State::Running) => {
+                if let Some(e) = inner.entries.get(id) {
+                    e.cancel.store(true, Ordering::Relaxed);
+                }
             }
+            Some(_) => {
+                inner.entries.remove(id);
+            }
+            None => {}
         }
     }
 
@@ -1568,12 +1576,41 @@ mod tests {
         assert_eq!(got.state, State::Cancelled);
         assert!(got.scan.partial);
         assert!(matches!(s.request(&vols, "v1"), Ok(Begin::Run(_))));
-        // Cancelling something that is not running changes nothing.
+    }
+
+    #[test]
+    fn cancel_forgets_a_finished_result_so_the_next_call_walks_again() {
+        // The Rescan row (RUY-25): a finished result is dropped by CancelScan.
+        let vols = [volume("v1")];
         let s = scans(FakeTree::new("/m"));
         let job = started(&s, &vols, "v1");
         s.run(&job);
-        s.cancel("v1");
         assert_eq!(s.get(&vols, "v1").state, State::Done);
+        assert!(matches!(s.request(&vols, "v1"), Ok(Begin::Nothing)));
+        s.cancel("v1");
+        assert_eq!(s.get(&vols, "v1").state, State::Idle);
+        assert!(matches!(s.request(&vols, "v1"), Ok(Begin::Run(_))));
+    }
+
+    #[test]
+    fn fs_source_list_caps_and_stops_on_a_real_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        for i in 0..200 {
+            std::fs::write(dir.path().join(format!("f{i}")), b"x").unwrap();
+        }
+        let path = dir.path().to_str().unwrap();
+        // The cap: 200 names on disk, at most 50 returned.
+        let capped = FsSource.list(path, 50, &|| false).unwrap();
+        assert!(capped.truncated);
+        assert_eq!(capped.names.len(), 50);
+        // Within the bound the directory is complete.
+        let whole = FsSource.list(path, 1000, &|| false).unwrap();
+        assert!(!whole.truncated);
+        assert_eq!(whole.names.len(), 200);
+        // Stop: asked every CHECK_EVERY entries, ends the listing early.
+        let stopped = FsSource.list(path, 1000, &|| true).unwrap();
+        assert!(stopped.truncated);
+        assert_eq!(stopped.names.len(), CHECK_EVERY - 1);
     }
 
     #[test]

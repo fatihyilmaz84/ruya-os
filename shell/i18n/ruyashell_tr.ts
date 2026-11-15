@@ -4847,7 +4847,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+297"/>
+        <location filename="../qml/StoragePane.qml" line="+323"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 hâlâ kullanımda. Kullanan uygulamayı kapatıp tekrar deneyin.</translation>
     </message>
@@ -4872,13 +4872,13 @@ Bu geri alınamaz.</translation>
         <translation>Desteklenmiyor</translation>
     </message>
     <message>
-        <location line="-257"/>
-        <location line="+258"/>
+        <location line="-280"/>
+        <location line="+281"/>
         <source>%1 free of %2</source>
         <translation>%2 içinde %1 boş</translation>
     </message>
     <message>
-        <location line="-209"/>
+        <location line="-232"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
@@ -4923,12 +4923,17 @@ Bu geri alınamaz.</translation>
         <translation>Bu sürücü okunamadı</translation>
     </message>
     <message>
-        <location line="+185"/>
+        <location line="+27"/>
+        <source>Rescan</source>
+        <translation>Yeniden tara</translation>
+    </message>
+    <message>
+        <location line="+181"/>
         <source>Read-only</source>
         <translation>Salt okunur</translation>
     </message>
     <message>
-        <location line="+60"/>
+        <location line="+66"/>
         <source>This console</source>
         <translation>Bu konsol</translation>
     </message>
@@ -4953,13 +4958,13 @@ Bu geri alınamaz.</translation>
         <translation>Sistem</translation>
     </message>
     <message>
-        <location line="-269"/>
-        <location line="+269"/>
+        <location line="-298"/>
+        <location line="+298"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="-280"/>
+        <location line="-309"/>
         <source>Plug it in again</source>
         <translation>Yeniden takın</translation>
     </message>
@@ -4974,12 +4979,12 @@ Bu geri alınamaz.</translation>
         <translation>Burada bir şey bulunamadı</translation>
     </message>
     <message>
-        <location line="+273"/>
+        <location line="+302"/>
         <source>Drives</source>
         <translation>Sürücüler</translation>
     </message>
     <message>
-        <location line="-260"/>
+        <location line="-286"/>
         <source>Eject %1</source>
         <translation>%1 sürücüsünü çıkar</translation>
     </message>

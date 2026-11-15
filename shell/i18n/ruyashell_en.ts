@@ -4864,7 +4864,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+297"/>
+        <location filename="../qml/StoragePane.qml" line="+323"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 is still in use. Close what uses it and try again.</translation>
     </message>
@@ -4889,13 +4889,13 @@ This can&apos;t be undone.</translation>
         <translation>Not supported</translation>
     </message>
     <message>
-        <location line="-257"/>
-        <location line="+258"/>
+        <location line="-280"/>
+        <location line="+281"/>
         <source>%1 free of %2</source>
         <translation>%1 free of %2</translation>
     </message>
     <message>
-        <location line="-209"/>
+        <location line="-232"/>
         <source>Games</source>
         <translation>Games</translation>
     </message>
@@ -4940,12 +4940,17 @@ This can&apos;t be undone.</translation>
         <translation>Could not read this drive</translation>
     </message>
     <message>
-        <location line="+185"/>
+        <location line="+27"/>
+        <source>Rescan</source>
+        <translation>Rescan</translation>
+    </message>
+    <message>
+        <location line="+181"/>
         <source>Read-only</source>
         <translation>Read-only</translation>
     </message>
     <message>
-        <location line="+60"/>
+        <location line="+66"/>
         <source>This console</source>
         <translation>This console</translation>
     </message>
@@ -4970,13 +4975,13 @@ This can&apos;t be undone.</translation>
         <translation>System</translation>
     </message>
     <message>
-        <location line="-269"/>
-        <location line="+269"/>
+        <location line="-298"/>
+        <location line="+298"/>
         <source>Other</source>
         <translation>Other</translation>
     </message>
     <message>
-        <location line="-280"/>
+        <location line="-309"/>
         <source>Plug it in again</source>
         <translation>Plug it in again</translation>
     </message>
@@ -4991,12 +4996,12 @@ This can&apos;t be undone.</translation>
         <translation>Nothing found here</translation>
     </message>
     <message>
-        <location line="+273"/>
+        <location line="+302"/>
         <source>Drives</source>
         <translation>Drives</translation>
     </message>
     <message>
-        <location line="-260"/>
+        <location line="-286"/>
         <source>Eject %1</source>
         <translation>Eject %1</translation>
     </message>

@@ -123,6 +123,8 @@ public:
     Q_INVOKABLE void mockSetScanPartial(bool partial);
     Q_INVOKABLE void mockSetScanFailed(bool failed);   // later scans end "failed" (the drive cannot be read)
     Q_INVOKABLE void mockRefreshScanDelayed(const QString &id, int ms);
+    // Another client scans volume `id` ("" ends it): scan() of any other volume answers "busy".
+    Q_INVOKABLE void mockScanElsewhere(const QString &id);
     // Files on a mock volume (RUY-42; reset by mockReset): put one at the top of it (`modified` in
     // seconds since 1970; what saveReport() wrote is there too), make later readFile() calls answer
     // `status` ("" = as the service would), and the "<id>/<name>" of every readFile() call.
