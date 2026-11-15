@@ -1111,11 +1111,17 @@ impl<B: Backend> Router<B> {
         }
         self.journal(format!("virtual pad {} bound to {pad_id}", v.phys));
         let ready = v.ready;
+        let sysname = v.sysname.clone();
         if let Some(pad) = self.pads.get_mut(&key) {
             pad.virt = Some(v);
         }
         if ready {
             self.changed(key);
+            // A udev event on the node while it was parked was not answered: its one-entry ACL is
+            // asserted again (a pad not ready yet still waits for its udev event or fallback).
+            if let Some(node) = self.backend.node_of(&sysname) {
+                self.assert_acl(key, &node, "rebind");
+            }
         }
     }
 
@@ -4923,6 +4929,54 @@ mod tests {
         assert!(journal(&mut r).contains(&format!(
             "player 2 (ruya-p2) is back on {X2}, a like pad of {X1}"
         )));
+    }
+
+    #[test]
+    fn a_like_pad_never_takes_the_held_seat_of_a_pad_with_a_serial() {
+        // Player 2's USB pad has a serial (its id is the pad's, not the socket's) and drops; a
+        // serial-less pad of the same model plugged in is someone else's.
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let x = r.add_pad(
+            PadInfo {
+                port_bound: false,
+                ..usb_pad(X1)
+            },
+            t0(),
+        );
+        sign_in(&mut r, a, "p1");
+        assert_eq!(join(&mut r, x, "p2"), 2);
+        app(&mut r, "i1", STK, "p1");
+        settle(&mut r);
+        let t = t0();
+        r.remove_pad_at(x, t);
+        let y = r.add_pad(usb_pad(X2), t);
+        assert_eq!(seats_of(&r), vec![seat(1, "p1", "a"), seat(2, "p2", X1)]);
+        assert_eq!(held_of(&r), vec![(1, false), (2, true)]);
+        assert_eq!(phys_of(&r, y), None);
+    }
+
+    #[test]
+    fn the_rebind_asserts_the_virtual_pads_acl_again() {
+        let (mut r, _a, b, _c) = three_players();
+        // pad2's own udev fallback runs: it is ready, with its one-entry ACL.
+        r.tick(Instant::now() + Duration::from_secs(10));
+        let sysname = r.pads[&b]
+            .virt
+            .as_ref()
+            .map(|v| v.sysname.clone())
+            .expect("pad2");
+        let node = format!("/dev/input/event-{sysname}");
+        assert!(r.pads[&b].virt.as_ref().is_some_and(|v| v.ready));
+        let t = t0();
+        r.remove_pad_at(b, t);
+        // A udev change while the seat is held wipes the ACL (logind's uaccess); nobody answers it.
+        r.backend_mut().acls.insert(node.clone(), Vec::new());
+        r.backend_mut().take();
+        r.add_pad(pad("b"), t);
+        let calls = r.backend_mut().take();
+        assert!(calls.contains(&Call::WriteAcl(node.clone())), "{calls:?}");
+        assert!(acl::is_only_user(&r.backend().acls[&node], P1_UID));
     }
 
     #[test]
