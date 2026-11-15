@@ -85,6 +85,14 @@ if [ "${#to_remove[@]}" -eq 0 ]; then
 fi
 echo "slim: removing ${#to_remove[@]} requested packages"
 
+# Fedora protects sudo in dnf itself (/etc/dnf/protected.d/sudo.conf and dnf5's
+# libdnf.conf.d/protect-sudo.conf), so dnf refuses RUY-18's removal of sudo outright. Drop only
+# that protection, and only when sudo is on the list; this script's own `protected` list still
+# guards everything else (0.0.84 failed here: "would result in removing ... protected packages: sudo").
+if printf '%s\n' "${to_remove[@]}" | grep -qx sudo; then
+    rm -f /etc/dnf/protected.d/sudo.conf /usr/share/dnf5/libdnf.conf.d/protect-sudo.conf
+fi
+
 # 1 + 2: the dry run.
 plan="$(mktemp)"
 trap 'rm -f "$plan"' EXIT
