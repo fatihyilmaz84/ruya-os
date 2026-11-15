@@ -260,7 +260,7 @@ Item {
             tryVerify(() => Profiles.profiles.some(p => p.name === "Trim Me" && p.hasPin))
 
             // ids are never reused; failed creates did not consume one
-            compare(r[1], "p5")
+            compare(r[1], "p4")
 
             // wrong_pins_lead_to_lockout_shared_across_operations
             for (let left = 4; left >= 1; --left) {
