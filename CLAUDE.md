@@ -19,7 +19,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 ## Session workflow (do every step, in order)
 
 0. **Which session?** Lead: `docs/LEAD.md`. Planning: `docs/tasks/PLANNING.md`. A dispatched builder is the `ruya-builder` agent in its own worktree (`.claude/agents/ruya-builder.md`). A builder session the **owner starts directly** works in the main checkout with the builder token. Builders don't create tickets; follow-ups go to the lead (the HANDOFF's `inbox`), who files them.
-1. **Orient** (direct sessions). Paper Plane `next` (the best Ready ticket whose blockers are done; `owner:lead` tickets stay in Backlog, so a builder never gets them). **One ticket per session**, unless it says it is small enough to pair.
+1. **Orient** (direct sessions). Paper Plane `next` (the best Ready ticket whose blockers are done; the `owner:lead` label is lead-only in Paper Plane, so a builder never gets those). **One ticket per session**, unless it says it is small enough to pair.
    - `git status` shows changes you didn't make? Another session may be running: stop and tell the user.
    - Nothing Ready? Stop and say the backlog needs a planning session. Don't invent work.
 2. **Read before coding.** The whole ticket (`get`: description and latest comments), every spec section it links, the `CLAUDE.md` of each area you touch, and the existing code you will change.

@@ -67,9 +67,9 @@ Every builder session pays to read these files again on every turn, so they have
 How-tos and catalogues belong in a reference file that a task links (`shell/PATTERNS.md`, `docs/dev-setup.md`), rules belong in `CLAUDE.md`, and a rule that a script can enforce belongs in a script (`scripts/lint-*.ps1`), not in prose. When you add a rule, delete or merge one.
 
 ### 4. Plan
-Run the planner procedure in [`docs/tasks/PLANNING.md`](tasks/PLANNING.md): turn the `inbox` tickets into Ready tickets (or close them), keep 8–12 Ready tickets, order them (`sort_order`, via REST `PATCH`: `PLANNING.md` step 5). The lead is the default planner. A builder-run planning session is acceptable for routine refills, but the lead re-checks its tasks at the next review.
+Run the planner procedure in [`docs/tasks/PLANNING.md`](tasks/PLANNING.md): turn the `inbox` tickets into Ready tickets (or close them), keep 8–12 Ready tickets, order them (`update sort_order=`: `PLANNING.md` step 5). The lead is the default planner. A builder-run planning session is acceptable for routine refills, but the lead re-checks its tasks at the next review.
 
-Lead tickets carry the label `owner:lead` and stay in Backlog, so a builder's `next` never offers them.
+Lead tickets carry the label `owner:lead`, which Paper Plane limits to the lead role (label rule `only for roles`, since lead-25): a ready lead ticket sits in Ready, and a builder's `next` never offers it and `claim` refuses it. The 8–12 Ready target counts builder tickets (`list state=Ready label=owner:builder`).
 
 ### 4b. Build loop: dispatch, review, merge (owner, 2026-11-04)
 Keep going while ready tasks remain and the owner hasn't said stop.
@@ -171,4 +171,4 @@ Every turn re-reads the whole context, and the owner-facing relay session reads 
 
 ## Task ownership marker
 
-Tickets carry the label `owner:builder` or `owner:lead`. Lead tickets stay in Backlog (Paper Plane has no per-role filter), so `next` never offers them to a builder; a lead finds them with `list label=owner:lead`.
+Tickets carry the label `owner:builder` or `owner:lead`. The `owner:lead` label is lead-only (step 4), so a lead's own `next` ranks its ready lead tickets with the rest; `list label=owner:lead` finds them all.
