@@ -13,6 +13,7 @@
 #include <QKeyEvent>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTimer>
 
 #include <algorithm>
 #include <utility>
@@ -160,6 +161,24 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
     connect(m_backend.get(), &InputBackend::testEnded, this, &Input::testEnded);
     connect(m_backend.get(), &InputBackend::profileReply, this, &Input::onProfileReply);
     connect(m_backend.get(), &InputBackend::profilesChanged, this, &Input::profilesChanged);
+    m_replayTimer.setSingleShot(true);
+    connect(&m_replayTimer, &QTimer::timeout, this, [this] {
+        // The hold ran out: the players whose pad is still not listed are dropped, the ones behind
+        // them (listed) join now.
+        QSet<QString> listed;
+        for (const QVariant &d : std::as_const(m_devices))
+            listed.insert(d.toMap().value(QStringLiteral("id")).toString());
+        for (auto it = m_replayQueue.begin(); it != m_replayQueue.end();) {
+            if (listed.contains(it->device)) {
+                ++it;
+                continue;
+            }
+            qInfo("ruya-shell: Input1 replay: player %u's pad %s did not come back within the hold; dropped",
+                  it->slot, qPrintable(it->device));
+            it = m_replayQueue.erase(it);
+        }
+        continueReplay();
+    });
     m_backend->refreshDevices();
     m_backend->refreshPlayers();
     m_backend->readConfirmButton();
@@ -173,6 +192,7 @@ Input::~Input() = default;
 void Input::replayPlayers()
 {
     m_replayQueue.clear();
+    m_replayTimer.stop();
     m_replayProfile = m_profile;
     m_replayNavigator = m_profile.isEmpty() ? QString() : m_navigator;
     if (m_profile.isEmpty())
@@ -191,6 +211,9 @@ void Input::replayPlayers()
             continue;
         m_replayQueue.append({device, profile, slot});
     }
+    // A player whose pad is not listed within the hold would have expired as a held seat (RUY-644).
+    if (!m_replayQueue.isEmpty())
+        m_replayTimer.start(m_replayHoldMs);
 }
 
 // A restarted service lists its pads only after its first scan, which may come after the shell's
@@ -202,6 +225,7 @@ void Input::continueReplay()
         return;
     if (m_profile != m_replayProfile) {
         m_replayQueue.clear();
+        m_replayTimer.stop();
         m_replayNavigator.clear();
         return;
     }
@@ -215,9 +239,13 @@ void Input::continueReplay()
         m_replayNavigator.clear();
     else if (listed.contains(m_replayNavigator))
         navigator = std::exchange(m_replayNavigator, QString());
+    // In slot order, and not past a pad that is still away: a later seat must not take a lower
+    // number than it had (RUY-644; JoinPlayer gives the lowest free seat).
     QList<Replay> waiting;
+    bool blocked = false;
     for (const Replay &r : std::as_const(m_replayQueue)) {
-        if (!listed.contains(r.device)) {
+        if (blocked || !listed.contains(r.device)) {
+            blocked = true;
             waiting.append(r);
             continue;
         }
@@ -226,6 +254,8 @@ void Input::continueReplay()
         m_backend->joinPlayer(r.device, r.profile);
     }
     m_replayQueue = waiting;
+    if (m_replayQueue.isEmpty())
+        m_replayTimer.stop();
     if (!navigator.isEmpty()) {
         qInfo("ruya-shell: Input1 has a new owner: %s drives the UI again", qPrintable(navigator));
         ++m_navigatorReplays;
@@ -295,6 +325,12 @@ void Input::mockSeatHoldMs(int ms)
 {
     if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
         mock->setSeatHoldMs(ms);
+    m_replayHoldMs = ms;
+}
+
+int Input::mockReplayPending() const
+{
+    return int(m_replayQueue.size());
 }
 
 // What the rows show: the service's choices with every change still on its way on top, so a read

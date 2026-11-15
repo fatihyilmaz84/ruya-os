@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QSet>
+#include <QTimer>
 #include <QQmlEngine>
 #include <QVariantList>
 #include <QVariantMap>
@@ -211,7 +212,9 @@ public:
     Q_INVOKABLE QVariantList mockPlayers() const;
     Q_INVOKABLE void mockFailJoin(const QString &status);
     // How long the mock service holds a removed seated pad's seat (RUY-627; 60000 ms by default).
+    // Also the replay deadline (RUY-644); mockReplayPending is the players still queued to join again.
     Q_INVOKABLE void mockSeatHoldMs(int ms);
+    Q_INVOKABLE int mockReplayPending() const;
     // Every SetRoute that reached the mock service: [{ route, instance, appId, profile }].
     Q_INVOKABLE QVariantList mockCalls() const;
     Q_INVOKABLE void mockClearCalls();
@@ -351,6 +354,8 @@ private:
     QVariantList m_players;
     QHash<QString, int> m_replays;   // "device|profile" -> JoinPlayer calls of the replay not answered
     QList<Replay> m_replayQueue;     // players to join again once their pad is listed, by slot
+    QTimer m_replayTimer;            // drops the players whose pad is not back within the hold
+    int m_replayHoldMs = 60000;      // the service's SEAT_HOLD
     QString m_replayProfile;         // the profile the queue was made for
     QString m_replayNavigator;       // the navigator to set again once its pad is listed
     int m_navigatorReplays = 0;      // SetNavigator calls of the replay not answered

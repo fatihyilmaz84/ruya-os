@@ -223,6 +223,43 @@ Item {
             compare(joinSpy.count, joins, "the shell's replay is not announced as a join")
         }
 
+        // RUY-644: seat 2's pad is away at the restart; seat 3 waits for it and keeps its number.
+        function test_a_later_seat_keeps_its_number_while_an_earlier_pad_is_away() {
+            signInWith(host.dualSense, "p1")
+            compare(join(host.xbox, "p2"), ["ok", 2])
+            compare(join(host.pro, "p3"), ["ok", 3])
+            Input.mockRemoveDevice(host.xbox)
+            tryVerify(() => heldOf(Input.players) === "1:false 2:true 3:false", 2000, JSON.stringify(Input.players))
+            Input.mockRestart()
+            tryVerify(() => seats(Input.mockPlayers()) === "1:p1:" + host.dualSense, 2000,
+                      "seat 1 is back: " + seats(Input.mockPlayers()))
+            tryVerify(() => Input.mockReplayPending() === 2, 2000, "two queued")
+            wait(200)
+            compare(seats(Input.mockPlayers()), "1:p1:" + host.dualSense, "seat 3 does not take seat 2")
+            Input.mockAddDevice({ id: host.xbox, family: "xbox" })
+            const all = "1:p1:" + host.dualSense + " 2:p2:" + host.xbox + " 3:p3:" + host.pro
+            tryVerify(() => seats(Input.mockPlayers()) === all, 2000, seats(Input.mockPlayers()))
+            tryVerify(() => seats(Input.players) === all, 2000, seats(Input.players))
+            compare(Input.mockReplayPending(), 0)
+        }
+
+        // RUY-644: a pad that never returns is dropped after the hold; the seats behind it join then.
+        function test_a_replayed_player_whose_pad_never_returns_is_dropped() {
+            signInWith(host.dualSense, "p1")
+            compare(join(host.xbox, "p2"), ["ok", 2])
+            compare(join(host.pro, "p3"), ["ok", 3])
+            Input.mockRemoveDevice(host.xbox)
+            tryVerify(() => heldOf(Input.players) === "1:false 2:true 3:false", 2000, JSON.stringify(Input.players))
+            Input.mockSeatHoldMs(400)
+            Input.mockRestart()
+            tryVerify(() => seats(Input.mockPlayers()) === "1:p1:" + host.dualSense, 2000,
+                      "seat 1 is back: " + seats(Input.mockPlayers()))
+            // After the hold seat 2's player is dropped and seat 3's pad joins, as the lowest free seat.
+            tryVerify(() => seats(Input.mockPlayers()) === "1:p1:" + host.dualSense + " 2:p3:" + host.pro, 3000,
+                      seats(Input.mockPlayers()))
+            compare(Input.mockReplayPending(), 0, "the queue is empty")
+        }
+
         function test_the_list_is_asked_again_when_the_name_gets_a_new_owner() {
             signInWith(host.dualSense, "p1")
             // While the name has no owner its PlayersChanged is not heard.
