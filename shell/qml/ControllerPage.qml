@@ -8,7 +8,9 @@ import RuyaShell
 // the player (when the record has one). Right, a pane: "Button test" (focus first), "Controls in games"
 // (value "Default" / "Changed"; opens ControlsPage for this pad), "Confirm in menus" (RUY-603: this pad's
 // "As on the controller" / "Bottom" / "Right" for the signed-in profile, with a note naming the buttons
-// that confirm and go back on it; dimmed "Not available" without Input1), then the group
+// that confirm and go back on it; dimmed "Not available" without Input1), "Button layout in games"
+// (RUY-500: By position / Nintendo labels for this pad's own profile, with a note naming the buttons
+// games see as A and B; dimmed "Not available" when the profiles can't be read), then the group
 // "What it can do" with one read-only row per capability the model has (Input1.GetCapabilities, in
 // descriptor order; buttons, sticks and the D-pad are one row, the battery is in the left column),
 // each saying "Works", "Not passed to games", "Not available now" or "Not supported yet" (06 §4.3).
@@ -24,6 +26,8 @@ Page {
     onCurrentChanged: if (current) pad = current
     // This pad's Confirm button for the signed-in profile (RUY-603): "family" | "south" | "east".
     readonly property string confirmMode: String(Input.confirmButtons[padId] ?? "family")
+    // Button layout in games is editable while GameControls can read the profiles (RUY-500).
+    readonly property bool layoutAvailable: Input.confirmButtonsAvailable && GameControls.loadState !== "failed"
     glyphFamily: pad.family ?? ""
     glyphConfirmMode: confirmMode
     Component.onCompleted: {
@@ -31,7 +35,7 @@ Page {
             pad = current
         Input.requestCapabilities(padId)
         Input.refreshConfirmButtons()
-        GameControls.refresh()
+        GameControls.show(padId)
     }
 
     title: pad.name
@@ -221,62 +225,64 @@ Page {
             onActivated: Notifications.show(qsTr("%1: %2.").arg(label).arg(value), "info")
         }
 
-        // The note under the row: which buttons confirm and go back on this pad, after its setting.
-        Item {
+        // The note under the row: which buttons confirm and go back on this pad, after its setting
+        // (RUY-41: the family's printed labels; Accept is the right button on a Nintendo pad as it is,
+        // and with "Right" on every pad), whatever pad pressed last.
+        GlyphNote {
             id: confirmNote
             objectName: "confirmNote"
             visible: confirmRow.visible
-            width: parent ? parent.width : 0
-            height: visible ? noteRow.height : 0
+            u: page.u
+            text: qsTr("On this controller: %1 confirms, %2 goes back.")
+            family: page.pad.family
+            confirmMode: page.confirmMode
+            firstAction: "accept"
+            secondAction: "back"
+            firstName: "confirmNoteAccept"
+            secondName: "confirmNoteBack"
+        }
 
-            // This pad's own glyphs after its own Confirm choice (RUY-41: the family's printed labels;
-            // Accept is the right button on a Nintendo pad as it is, and with "Right" on every pad),
-            // whatever pad pressed last.
-            readonly property string acceptLabel: Glyphs.glyphFor("accept", page.pad.family, page.confirmMode).name
-            readonly property string backLabel: Glyphs.glyphFor("back", page.pad.family, page.confirmMode).name
-            readonly property string sentence: qsTr("On this controller: %1 confirms, %2 goes back.").arg(acceptLabel).arg(backLabel)
+        // Button layout in games (RUY-500, 06 §7, §11.2): this pad's own profile through GameControls,
+        // as Controls in games edits it (Left/Right save at once, a refusal puts it back and toasts);
+        // dimmed "Not available" when the profiles can't be read.
+        ChoiceRow {
+            id: gamesLayoutRow
+            objectName: "rowGamesLayout"
+            visible: page.layoutAvailable
+            u: page.u
+            label: qsTr("Button layout in games")
+            options: [
+                { value: "standard", label: qsTr("By position") },
+                { value: "nintendo", label: qsTr("Nintendo labels") },
+            ]
+            onEdited: v => GameControls.setLayout(v)
+            accessibleValue: currentLabel + (gamesNote.visible ? ". " + gamesNote.sentence : "")
+        }
+        Binding { target: gamesLayoutRow; property: "value"; value: GameControls.layout }
+        SettingRow {
+            objectName: "rowGamesLayoutUnavailable"
+            kind: "item"
+            visible: !page.layoutAvailable
+            dimmed: true
+            u: page.u
+            label: qsTr("Button layout in games")
+            value: qsTr("Not available")
+            onActivated: Notifications.show(qsTr("%1: %2.").arg(label).arg(value), "info")
+        }
 
-            Row {
-                id: noteRow
-                objectName: "confirmNoteRow"
-                spacing: Theme.spaceXs * page.u
-                leftPadding: Theme.spaceL * page.u
-                y: -4 * page.u                 // 4 u closer to its row than the row gap (04 §5)
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("On this controller:")
-                    color: Theme.text
-                    font.pixelSize: Theme.typeCaption * page.u
-                }
-                ButtonGlyph {
-                    objectName: "confirmNoteAccept"
-                    anchors.verticalCenter: parent.verticalCenter
-                    u: page.u
-                    action: "accept"
-                    family: page.pad.family
-                    confirmMode: page.confirmMode
-                }
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("confirms,")
-                    color: Theme.text
-                    font.pixelSize: Theme.typeCaption * page.u
-                }
-                ButtonGlyph {
-                    objectName: "confirmNoteBack"
-                    anchors.verticalCenter: parent.verticalCenter
-                    u: page.u
-                    action: "back"
-                    family: page.pad.family
-                    confirmMode: page.confirmMode
-                }
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: qsTr("goes back.")
-                    color: Theme.text
-                    font.pixelSize: Theme.typeCaption * page.u
-                }
-            }
+        // What games see of this pad's buttons (06 §7); hidden when a button is remapped away.
+        GlyphNote {
+            id: gamesNote
+            objectName: "gamesNote"
+            readonly property var buttons: GameControls.gamesButtons()
+            visible: gamesLayoutRow.visible && buttons !== null
+            u: page.u
+            text: GameControls.gamesNoteText(buttons ? buttons.unlike : false)
+            family: page.pad.family
+            firstPosition: buttons ? buttons.a : ""
+            secondPosition: buttons ? buttons.b : ""
+            firstName: "gamesNoteA"
+            secondName: "gamesNoteB"
         }
 
         GroupLabel {

@@ -207,6 +207,33 @@ QtObject {
     function isChanged(source) {
         return targetOf(source) !== presetTarget(source)
     }
+    // What games see of the shown pad's face buttons (RUY-500, 06 §7): the pad's buttons ("south" |
+    // "east", the position, printed by its family) that reach the virtual pad's south (A) and east (B)
+    // after the layout and the profile's remaps, and whether the one that confirms in menus on this pad
+    // (its family and Confirm choice) is not the one games see as A. Null when a button of the pair
+    // does not reach A or B (remapped away), or without a pad.
+    function gamesButtons() {
+        if (!pad)
+            return null
+        let a = ""
+        let b = ""
+        for (const s of ["south", "east"]) {
+            const t = targetOf(s)
+            if (t === "south" && a === "")
+                a = s
+            else if (t === "east" && b === "")
+                b = s
+        }
+        if (a === "" || b === "")
+            return null
+        const accept = Glyphs.acceptPosition(pad.family, String(Input.confirmButtons[pad.id] ?? "family"))
+        return { a: a, b: b, family: pad.family, unlike: accept !== a }
+    }
+    // The note's sentence: %1 is the pad's button games see as A, %2 as B.
+    function gamesNoteText(unlike) {
+        return unlike ? qsTr("Games see %1 as A and %2 as B, unlike menus.") : qsTr("Games see %1 as A and %2 as B.")
+    }
+
     readonly property int remapCount: {
         let n = 0
         for (const s of sources) {

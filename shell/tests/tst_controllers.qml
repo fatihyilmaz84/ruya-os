@@ -154,7 +154,9 @@ Item {
             verify(findChild(find("page_controller"), "rowConfirmButton").activeFocus,
                    "Confirm in menus follows Controls in games (RUY-603)")
             keyClick(Qt.Key_Down)
-            verify(find("cap_buttons").activeFocus, "Down from Confirm in menus skips the heading")
+            verify(findChild(find("page_controller"), "rowGamesLayout").activeFocus, "Button layout in games follows it (RUY-500)")
+            keyClick(Qt.Key_Down)
+            verify(find("cap_buttons").activeFocus, "Down from Button layout in games skips the heading")
             compare(find("page_controller").hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "back Back")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "settings")
@@ -341,6 +343,9 @@ Item {
             compare(find("page_controller").hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "accept Open|back Back")
             keyClick(Qt.Key_Down)
             verify(findChild(find("page_controller"), "rowConfirmButton").activeFocus, "Confirm in menus after it (RUY-603)")
+            compare(find("page_controller").hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "left_right Change|accept Next|back Back")
+            keyClick(Qt.Key_Down)
+            verify(findChild(find("page_controller"), "rowGamesLayout").activeFocus, "Button layout in games after Confirm in menus (RUY-500)")
             compare(find("page_controller").hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "left_right Change|accept Next|back Back")
             keyClick(Qt.Key_Down)
             verify(find("cap_buttons").activeFocus, "the capability rows take the focus, for scrolling")
@@ -743,6 +748,116 @@ Item {
             tryVerify(() => confirmRow().visible, 2000)
         }
 
+        // ---- Button layout in games, per controller (RUY-500) ---------------------------------------------------------
+
+        function layoutRow() { return pageFind("rowGamesLayout") }
+
+        // The controller page of `id`, the focus on its Button layout in games row.
+        function openLayout(id) {
+            openConfirm(id)
+            keyClick(Qt.Key_Down)
+            verify(layoutRow().activeFocus, "on the Button layout in games row")
+            tryCompare(GameControls, "loadState", "ok")
+            return layoutRow()
+        }
+
+        function test_the_games_note_of_a_nintendo_pad_follows_the_layout() {
+            const row = openLayout(pro)
+            compare(row.currentLabel, "By position")
+            compare(row.label, "Button layout in games")
+            compare(pageFind("confirmNoteAccept").shown, "A", "menus: the right button, printed A")
+            compare(pageFind("confirmNoteBack").shown, "B")
+            compare(pageFind("gamesNoteA").shown, "B", "games: the bottom button, printed B, is A")
+            compare(pageFind("gamesNoteB").shown, "A")
+            compare(pageFind("gamesNote").sentence, "Games see B as A and A as B, unlike menus.")
+            verify(row.Accessible.name.endsWith("By position. Games see B as A and A as B, unlike menus."), row.Accessible.name)
+            keyClick(Qt.Key_Right)
+            compare(row.currentLabel, "Nintendo labels")
+            compare(GameControls.layout, "nintendo")
+            compare(pageFind("gamesNoteA").shown, "A")
+            compare(pageFind("gamesNoteB").shown, "B")
+            compare(pageFind("gamesNote").sentence, "Games see A as A and B as B.")
+            verify(row.Accessible.name.endsWith("Nintendo labels. Games see A as A and B as B."), row.Accessible.name)
+            verify(row.activeFocus, "the row keeps the focus")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "settings")
+        }
+
+        function test_the_games_note_of_other_pads() {
+            openLayout(xbox)
+            compare(pageFind("gamesNoteA").shown, "A")
+            compare(pageFind("gamesNoteB").shown, "B")
+            compare(pageFind("gamesNote").sentence, "Games see A as A and B as B.", "Xbox, by position: same as menus")
+            closeController(xbox)
+            reopenConfirm(ds)
+            keyClick(Qt.Key_Left)                        // Confirm in menus: Right
+            tryCompare(pageFind("confirmNoteAccept"), "shape", "circle")
+            keyClick(Qt.Key_Down)
+            tryCompare(GameControls, "loadState", "ok")
+            compare(pageFind("gamesNoteA").shape, "cross")
+            compare(pageFind("gamesNoteB").shape, "circle")
+            compare(pageFind("gamesNote").sentence, "Games see Cross as A and Circle as B, unlike menus.")
+            // Nintendo labels swap them: Circle is A, and Right confirms: as menus.
+            keyClick(Qt.Key_Right)
+            compare(pageFind("gamesNoteA").shape, "circle")
+            compare(pageFind("gamesNote").sentence, "Games see Circle as A and Cross as B.")
+        }
+
+        function test_a_remapped_away_button_hides_the_games_note() {
+            openLayout(ds)
+            verify(pageFind("gamesNote").visible)
+            verify(GameControls.setTarget("south", "none"))
+            verify(!pageFind("gamesNote").visible, "south gives nothing")
+            verify(GameControls.setTarget("east", "none"))
+            verify(!pageFind("gamesNote").visible, "south and east give nothing")
+            verify(layoutRow().visible, "the row stays")
+            verify(!layoutRow().Accessible.name.includes("Games see"), layoutRow().Accessible.name)
+        }
+
+        function test_a_swapped_remap_is_followed() {
+            openLayout(ds)
+            verify(GameControls.setTarget("south", "east"))
+            verify(GameControls.setTarget("east", "south"))
+            compare(pageFind("gamesNoteA").shape, "circle", "Circle now reaches A")
+            compare(pageFind("gamesNoteB").shape, "cross")
+        }
+
+        function test_a_refused_layout_goes_back_and_toasts() {
+            const row = openLayout(pro)
+            Input.mockSetProfileStatus("ValidateProfile", "invalid")
+            keyClick(Qt.Key_Right)
+            tryVerify(() => toastTexts().includes("Could not save the change / Try again."), 2000, toastTexts().join(" | "))
+            tryCompare(row, "currentLabel", "By position")
+            compare(GameControls.layout, "standard")
+            verify(row.activeFocus, "focus stays on the row")
+            Input.mockSetProfileStatus("ValidateProfile", "ok")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "settings")
+        }
+
+        function test_the_unreadable_profiles_dim_the_layout_row() {
+            openController(ds)
+            verify(layoutRow().visible)
+            Input.mockFail(true)
+            Input.mockRestart()
+            tryVerify(() => pageFind("rowGamesLayoutUnavailable").visible, 2000)
+            verify(!layoutRow().visible)
+            verify(!pageFind("gamesNote").visible, "no note without the row")
+            const dimmed = pageFind("rowGamesLayoutUnavailable")
+            compare(dimmed.label, "Button layout in games")
+            compare(dimmed.value, "Not available")
+            verify(dimmed.dimmed)
+            for (let i = 0; i < 4 && !dimmed.activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(dimmed.activeFocus, "the dimmed row takes the focus")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => toastTexts().some(t => t === "Button layout in games: Not available. / "), 2000, toastTexts().join(" | "))
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "settings")
+            Input.mockFail(false)
+            Input.mockRestart()
+        }
+
         // ---- screenshots --------------------------------------------------------------------------------------------
 
         function settle() {
@@ -828,6 +943,45 @@ Item {
             DeviceSettings.language = "tr"
             shots(shotsDir + "/", "tr")
         }
+
+        // RUY-500: the controller page with Button layout in games and its note: the Wii U Pro and the
+        // DualSense, default and with the focus on the row, and the row unavailable.
+        function gamesLayoutShots(dir, lang, w, h) {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            const tag = lang + (h === 720 ? "-720p" : "")
+            host.width = w
+            host.height = h
+            DeviceSettings.language = lang
+            openConfirm(pro)
+            settle()
+            grabImage(tc.shell).save(dir + "50-games-layout-wiiu-default-" + tag + ".png")
+            keyClick(Qt.Key_Down)
+            verify(layoutRow().activeFocus)
+            settle()
+            grabImage(tc.shell).save(dir + "50-games-layout-wiiu-focus-" + tag + ".png")
+            keyClick(Qt.Key_Right)
+            settle()
+            grabImage(tc.shell).save(dir + "50-games-layout-wiiu-nintendo-" + tag + ".png")
+            closeController(pro)
+            reopenConfirm(ds)
+            keyClick(Qt.Key_Left)                        // Confirm in menus: Right
+            keyClick(Qt.Key_Down)
+            verify(layoutRow().activeFocus)
+            settle()
+            grabImage(tc.shell).save(dir + "50-games-layout-dualsense-focus-" + tag + ".png")
+            Input.mockFail(true)
+            Input.mockRestart()
+            tryVerify(() => pageFind("rowGamesLayoutUnavailable").visible, 2000)
+            settle()
+            grabImage(tc.shell).save(dir + "50-games-layout-unavailable-" + tag + ".png")
+            Input.mockFail(false)
+            Input.mockRestart()
+        }
+        function test_zz_screenshots_games_layout() { gamesLayoutShots(shotsDir + "/", "en", 1920, 1080) }
+        function test_zz_screenshots_games_layout_tr() { gamesLayoutShots(shotsDir + "/", "tr", 1920, 1080) }
+        function test_zz_screenshots_games_layout_720p() { gamesLayoutShots(shotsDir + "/", "en", 1280, 720) }
+        function test_zz_screenshots_games_layout_720p_tr() { gamesLayoutShots(shotsDir + "/", "tr", 1280, 720) }
 
         // The Button test of one pad with a few inputs pressed, for the layout shots (RUY-486).
         function layoutShot(dir, device, name, inputs) {
