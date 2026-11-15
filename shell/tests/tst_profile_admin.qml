@@ -1091,7 +1091,7 @@ Item {
 
         // RUY-715: Manage profiles with another profile's row focused (its chevron says A opens something),
         // and that profile's page, English and Turkish, at 1080p and 720p.
-        function profilePageShots(lang, w, h) {
+        function profilePageShots(dir, lang, w, h) {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             Notifications.pending = []
@@ -1107,22 +1107,22 @@ Item {
                 openProfilesPane()
                 goToRow("profileRow_p2")
                 wait(600)
-                grabImage(tc.shell).save(shotsDir + "/26-profile-list-" + tag + ".png")
+                grabImage(tc.shell).save(dir + "26-profile-list-" + tag + ".png")
                 keyClick(Qt.Key_Return)
                 tryCompare(tc.shell, "currentPage", "managedProfile")
                 tryVerify(() => find("rowRename").activeFocus, 2000)
                 wait(600)
-                grabImage(tc.shell).save(shotsDir + "/26-profile-page-" + tag + ".png")
+                grabImage(tc.shell).save(dir + "26-profile-page-" + tag + ".png")
             } finally {
                 DeviceSettings.language = "en"
                 host.width = 1280
                 host.height = 720
             }
         }
-        function test_zz_screenshots_profile_page_en_1080() { profilePageShots("en", 1920, 1080) }
-        function test_zz_screenshots_profile_page_tr_1080() { profilePageShots("tr", 1920, 1080) }
-        function test_zz_screenshots_profile_page_en_720() { profilePageShots("en", 1280, 720) }
-        function test_zz_screenshots_profile_page_tr_720() { profilePageShots("tr", 1280, 720) }
+        function test_zz_screenshots_profile_page_en_1080() { profilePageShots(shotsDir + "/", "en", 1920, 1080) }
+        function test_zz_screenshots_profile_page_tr_1080() { profilePageShots(shotsDir + "/", "tr", 1920, 1080) }
+        function test_zz_screenshots_profile_page_en_720() { profilePageShots(shotsDir + "/", "en", 1280, 720) }
+        function test_zz_screenshots_profile_page_tr_720() { profilePageShots(shotsDir + "/", "tr", 1280, 720) }
 
         // RUY-685: Manage profiles with the kept guest-role profile selected, English and Turkish.
         function test_zz_screenshots_guest_role() {
