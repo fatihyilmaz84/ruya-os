@@ -37,8 +37,9 @@ public:
     bool isAvailable() const { return m_available; }
     bool isMock() const { return m_backend->isMock(); }
 
-    // A profile's name by id; empty for an unknown id and for a temporary guest (their "Guest n" is
-    // drawn by the QML, which translates it; RUY-631).
+    // A profile's name by id; for a temporary guest "Guest" (number 1) or "Guest n", translated
+    // (RUY-631; a binding on the name itself, like PlayerChip's, uses qsTr to follow a language
+    // change); empty for an unknown id.
     Q_INVOKABLE QString nameOf(const QString &id) const;
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void switchTo(const QString &id, const QString &pin = {});
@@ -73,6 +74,9 @@ public:
     // The service is (not) there, as availableChanged says it (the "Who's playing?" waiting text,
     // RUY-122). A no-op with the D-Bus backend.
     Q_INVOKABLE void mockSetAvailable(bool available);
+    // Tests only (mock): the next `times` CreateGuest or RemoveGuest calls (`method` "createGuest" /
+    // "removeGuest") answer `status` and change nothing.
+    Q_INVOKABLE void mockFailGuests(const QString &method, const QString &status, int times);
 
 signals:
     void profilesChanged();

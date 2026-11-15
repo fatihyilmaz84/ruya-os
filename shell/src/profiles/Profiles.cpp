@@ -95,6 +95,14 @@ QString Profiles::nameOf(const QString &id) const
         if (p.value(QStringLiteral("id")).toString() == id)
             return p.value(QStringLiteral("name")).toString();
     }
+    // A temporary guest (RUY-631): "Guest" for number 1, "Guest n" for the others.
+    for (const QVariant &v : m_guests) {
+        const QVariantMap g = v.toMap();
+        if (g.value(QStringLiteral("id")).toString() == id) {
+            const int number = g.value(QStringLiteral("number")).toInt();
+            return number <= 1 ? tr("Guest") : tr("Guest %1").arg(number);
+        }
+    }
     return {};
 }
 
@@ -176,6 +184,12 @@ void Profiles::mockSetAvailable(bool available)
         return;
     m_available = available;
     emit availableChanged();
+}
+
+void Profiles::mockFailGuests(const QString &method, const QString &status, int times)
+{
+    if (auto *mock = qobject_cast<MockProfilesBackend *>(m_backend.get()))
+        mock->failGuestCalls(method, status, times);
 }
 
 int Profiles::mockPendingReplies() const

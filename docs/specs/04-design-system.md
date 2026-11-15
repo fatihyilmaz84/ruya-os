@@ -297,7 +297,7 @@ Add `add e145` (Material Symbols Rounded, the pinned upstream font) to `shell/fo
 
 **Also rows the tickets add (not 04 proposals)**
 - "Who's playing prompt" (`WhosPlaying.qml`, RUY-122, *built: the row is in the table above*; Move is RUY-628): its row lists the step layouts (Pick: pad line → `spaceM` → title `typeDisplay` Light → `spaceXxl` → cards `spaceXl` apart → `spaceL` → detail line 36 u → `spaceL` → Not now; Join or Switch / Move: the Dialog card with padding 48/60 u, max width 1300 u, avatar 120 u).
-- "Guest card" and "Add profile card" as variants of the Profile card row (RUY-631, RUY-630).
+- "Guest card" (RUY-631, built: `ProfileCard` with `modelData.kind === "guest"`: the avatar circle on `glass` with a 1 px `glassBorder` (the focus ring replaces it when focused), the initial of the translated word at `typeHero` Light, no badge; a lead reading, the board names no colour) and "Add profile card" (RUY-630) as variants of the Profile card row.
 - Canvas boards that are now stale: "RuyaOS Controller Ownership" (https://claude.ai/artifact/VWCR9PAMvizUMN4iXSaJ1Y): the foreign-pad toast, "Switch to <profile>?" and "Use this controller for <profile>?" are superseded by the prompt; tell the owner.
 
 ## 6. Writing

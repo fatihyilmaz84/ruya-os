@@ -136,6 +136,7 @@ void MockProfilesBackend::publishList()
 
 void MockProfilesBackend::resetForTests(bool empty)
 {
+    m_guestFailTimes = 0;
     if (empty) {
         m_entries.clear();
         m_nextId = 1;
@@ -376,6 +377,21 @@ void MockProfilesBackend::verifyPin(const QString &id, const QString &pin)
     reply(auth.status, auth.attemptsLeft, auth.retryAfterSecs);
 }
 
+void MockProfilesBackend::failGuestCalls(const QString &method, const QString &status, int times)
+{
+    m_guestFailMethod = method;
+    m_guestFailStatus = status;
+    m_guestFailTimes = times;
+}
+
+bool MockProfilesBackend::guestCallFails(const QString &method)
+{
+    if (m_guestFailTimes <= 0 || m_guestFailMethod != method)
+        return false;
+    --m_guestFailTimes;
+    return true;
+}
+
 void MockProfilesBackend::createGuest()
 {
     auto reply = [this](const QString &status, const QString &id = {}, int number = 0) {
@@ -385,6 +401,8 @@ void MockProfilesBackend::createGuest()
             emit guestCreated(status, id, number);
         });
     };
+    if (guestCallFails(QStringLiteral("createGuest")))
+        return reply(m_guestFailStatus);
     if (m_active.isEmpty() || m_guests.size() >= MaxGuests)
         return reply(QStringLiteral("not-allowed"));
     int number = 1;
@@ -407,6 +425,8 @@ void MockProfilesBackend::removeGuest(const QString &id)
             emit guestRemoved(id, status);
         });
     };
+    if (guestCallFails(QStringLiteral("removeGuest")))
+        return reply(m_guestFailStatus);
     if (!isGuest(id))
         return reply(QStringLiteral("unknown-profile")); // a kept profile is never removed here
     m_guests.removeIf([&](const GuestInfo &g) { return g.id == id; });
