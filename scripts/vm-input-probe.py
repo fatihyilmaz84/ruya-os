@@ -1066,8 +1066,8 @@ def cmd_twopads(args):
                 bad(f"SetRoute app: {status}")
                 return fails
             v1 = wait_for(lambda: node_by("phys", "ruya-input/pad1")[0], 3)
-            # pad2 is made only once pad1's ACL is set or its 2 s udev fallback ran (RUY-541),
-            # seen by the service's 0.5 s tick: up to about 2.5 s after pad1, so wait 6 s.
+            # pad2 is made with pad1 (RUY-681); its ACL waits until pad1's is set or its 2 s udev
+            # fallback ran (RUY-541), seen by the service's 0.5 s tick, so wait up to 6 s.
             v2 = wait_for(lambda: node_by("phys", "ruya-input/pad2")[0], 6)
             if not v1 or not v2:
                 bad(f"both virtual pads should exist (pad1 {v1}, pad2 {v2})")
@@ -1886,8 +1886,8 @@ def cmd_seathold(args):
     B has ruya-input/pad2. B's uinput device is destroyed: ListPlayers has seat 2 held, with B's id, and pad2 stays.
     B is made again with the same phys (its stable id, as a Bluetooth pad's address would be) within the hold:
     seat 2 is B's again (held false), pad2 has the same sysname, and `udevadm monitor` saw no `remove` of it (the
-    game would have seen its pad go). B is destroyed again and the hold runs out (6 s): seat 2 is gone, and so is
-    pad2."""
+    game would have seen its pad go). B is destroyed again and the hold runs out (6 s): seat 2 is gone, pad2 stays (the
+    same sysname, RUY-681) until the route leaves the game, and is gone then."""
     fails = 0
 
     def ok(msg):
@@ -1965,15 +1965,130 @@ def cmd_seathold(args):
         ok(f"udevadm monitor saw no remove of pad2 ({sys2})") if not removes \
             else bad(f"pad2 was removed and made again: {removes}")
         pad_b.close()
-        gone = wait_for(lambda: player_row(players(), 2) is None and not node_by("phys", "ruya-input/pad2")[0], 8)
-        ok("B gone again for 6 s: seat 2 is free and pad2 is gone") if gone \
-            else bad(f"after the hold: ListPlayers {players()}, pad2 {node_by('phys', 'ruya-input/pad2')}")
+        freed = wait_for(lambda: player_row(players(), 2) is None, 8)
+        ok("B gone again for 6 s: seat 2 is free, pad2 stays quiet (RUY-681)") \
+            if freed and node_by("phys", "ruya-input/pad2")[1] == sys2 \
+            else bad(f"after the hold: ListPlayers {players()}, pad2 {node_by('phys', 'ruya-input/pad2')} (was {sys2})")
         seat1 = player_row(players(), 1)
         ok("seat 1 stays A's") if seat1 and seat1.get("device_id") == a_id and not seat1.get("held") \
             else bad(f"seat 1: {seat1}")
+        status = bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+        ok("the game's route ends: pad2 is gone") \
+            if status == "ok" and wait_for(lambda: not node_by("phys", "ruya-input/pad2")[0], 3) \
+            else bad(f"after SetRoute shell ({status}): pad2 {node_by('phys', 'ruya-input/pad2')}")
     finally:
         if monitor:
             monitor.kill()
+        if bus:
+            bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+            bus.close()
+        for p in (pad_a, pad_b):
+            try:
+                p.close()
+            except OSError:
+                pass
+
+
+def cmd_coop(args):
+    """RUY-681: split-screen co-op under one game, under RUYA_SEAT_HOLD_SECS=5 (vm-input-check.sh coop sets it). Pad A
+    signs the profile in (seat 1), pad B joins as the second profile (seat 2); in the route `app` both virtual pads
+    exist. A test client (Game, as the profile user) opens pad2 and hears B's press, not A's. B's device is destroyed
+    for 7 s, past the hold: seat 2 ends, pad2 stays (the same sysname) and the client's descriptor still reads. B
+    made again and joined as player 2 is pad2 again, and the open descriptor hears it. The game ends (route `shell`):
+    pad2 is gone and the descriptor reads ENODEV."""
+    fails = 0
+
+    def ok(msg):
+        print(f"PASS: {msg}", flush=True)
+
+    def bad(msg):
+        nonlocal fails
+        fails += 1
+        print(f"FAIL: {msg}", flush=True)
+
+    names = [NAME, NAME + " B"]
+    b_phys = "vm-check/coop-b"
+    pad_a = FakePad(phys="vm-check/pad0", name=names[0])
+    pad_b = FakePad(0x1234, 0x5679, b_phys, names[1])
+    bus = None
+    game = None
+    try:
+        rows = wait_for(lambda: [d for d in (devices() or []) if d.get("name") in names], 5) or []
+        if len(rows) != 2:
+            bad(f"ListDevices does not list the two pads: {rows}")
+            return fails
+        b_id = {d["name"]: d["id"] for d in rows}[names[1]]
+        bus = Bus()
+        for route in (["locked", "", "", ""], None, ["shell", "", "", args.profile]):
+            if route is None:
+                pad_a.emit(EV_KEY, BTN_SOUTH, 1)
+                pad_a.emit(EV_KEY, BTN_SOUTH, 0)
+                time.sleep(0.3)
+                continue
+            status = bus.call(SVC, PATH, IFC, "SetRoute", route)
+            if status != "ok":
+                bad(f"SetRoute {route[0]}: {status}")
+                return fails
+        status, slot = join_player(bus, b_id, args.other)
+        if (status, slot) != ("ok", 2):
+            bad(f"JoinPlayer(B, {args.other}) answered {status} {slot}")
+            return fails
+        ok(f"B ({b_id}) is seat 2 ({args.other})")
+        status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-coop", "org.ruyaos.VmCheck", args.profile])
+        if status != "ok":
+            bad(f"SetRoute app: {status}")
+            return fails
+        both = wait_for(lambda: node_by("phys", "ruya-input/pad1")[0] and node_by("phys", "ruya-input/pad2")[0], 6)
+        node2, sys2 = node_by("phys", "ruya-input/pad2")
+        if not both or not node2:
+            bad(f"pad1 {node_by('phys', 'ruya-input/pad1')} and pad2 {node_by('phys', 'ruya-input/pad2')} should exist")
+            return fails
+        ok(f"in the route app pad1 and pad2 exist (pad2 {sys2}, {node2})")
+        wait_for(lambda: all(d.get("routed") for d in (devices() or []) if d.get("name") in names), 3)
+        game = Game(args.user, node2)
+        if not game.hello.startswith("OPEN ok"):
+            bad(f"{args.user} cannot open pad2: {game.hello}")
+            return fails
+        pad_b.emit(EV_KEY, BTN_SOUTH, 1)
+        pad_b.emit(EV_KEY, BTN_SOUTH, 0)
+        got = game.events_until(lambda ev: (EV_KEY, BTN_SOUTH, 0) in ev)
+        ok("B's press reaches pad2") if isinstance(got, list) and (EV_KEY, BTN_SOUTH, 1) in got \
+            else bad(f"pad2 did not get B's press: {got}")
+        pad_a.emit(EV_KEY, BTN_EAST, 1)
+        pad_a.emit(EV_KEY, BTN_EAST, 0)
+        got = game.events(300)
+        ok("A's press does not reach pad2") if got == [] else bad(f"pad2 heard A: {got}")
+        pad_b.close()
+        time.sleep(7)
+        ok("B gone for 7 s: seat 2 has ended") if player_row(players(), 2) is None \
+            else bad(f"seat 2 should have ended after the 5 s hold: {players()}")
+        ok(f"pad2 is still there, the same device ({sys2})") if node_by("phys", "ruya-input/pad2")[1] == sys2 \
+            else bad(f"pad2 is {node_by('phys', 'ruya-input/pad2')} after the hold, before {sys2}")
+        got = game.events(200)
+        ok("the game's descriptor on pad2 still reads (no ENODEV)") if isinstance(got, list) \
+            else bad(f"the game's descriptor on pad2: {got}")
+        pad_b = FakePad(0x1234, 0x5679, b_phys, names[1])
+        joined = join_by_name(bus, names[1], args.other)
+        if joined == ("ok", 2):
+            ok("B back joins as player 2 again")
+        else:
+            bad(f"JoinPlayer of B back as {args.other}: {joined}")
+        time.sleep(0.5)
+        ok(f"pad2 is the same device again ({sys2})") if node_by("phys", "ruya-input/pad2")[1] == sys2 \
+            else bad(f"pad2 is {node_by('phys', 'ruya-input/pad2')} after B came back, before {sys2}")
+        pad_b.emit(EV_KEY, BTN_SOUTH, 1)
+        pad_b.emit(EV_KEY, BTN_SOUTH, 0)
+        got = game.events_until(lambda ev: (EV_KEY, BTN_SOUTH, 0) in ev)
+        ok("B's press reaches the game's open pad2 again") if isinstance(got, list) and (EV_KEY, BTN_SOUTH, 1) in got \
+            else bad(f"the open pad2 did not get B's press after the rejoin: {got}")
+        status = bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+        gone = wait_for(lambda: not node_by("phys", "ruya-input/pad2")[0], 3)
+        got = game.events(200)
+        ok("the game ends: pad2 is gone and its descriptor reads ENODEV") if status == "ok" and gone and got == "ERR ENODEV" \
+            else bad(f"after the game: SetRoute {status}, pad2 {node_by('phys', 'ruya-input/pad2')}, read {got}")
+    finally:
+        if game:
+            game.close()
         if bus:
             bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
             bus.close()
@@ -2023,6 +2138,10 @@ def main():
     sh.add_argument("--user", required=True)
     sh.add_argument("--profile", required=True)
     sh.add_argument("--other", required=True, help="the profile that joins as player 2")
+    co = sub.add_parser("coop")
+    co.add_argument("--user", required=True)
+    co.add_argument("--profile", required=True)
+    co.add_argument("--other", required=True, help="the profile that joins as player 2")
     ua = sub.add_parser("useractive")
     ua.add_argument("--profile", required=True)
     ls = sub.add_parser("listen")
@@ -2064,6 +2183,8 @@ def main():
         sys.exit(1 if cmd_players(args) else 0)
     if args.cmd == "seathold":
         sys.exit(1 if cmd_seathold(args) else 0)
+    if args.cmd == "coop":
+        sys.exit(1 if cmd_coop(args) else 0)
     if args.cmd == "nodes":
         sys.exit(1 if cmd_nodes(args) else 0)
     if args.cmd == "hold":

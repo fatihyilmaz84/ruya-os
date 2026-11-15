@@ -8,7 +8,7 @@
 # 500 ms and the worst at most 1000 ms: the first run after heavy checks is slow (644 ms once; a lone re-run
 # gave 190-426 ms), and the 1000 ms ceiling still catches a real regression. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|close|fallback|confirm|hold|twopads|guide|owner|nodes|start|useractive|signals|players|seathold|join]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|close|fallback|confirm|hold|twopads|guide|owner|nodes|start|useractive|signals|players|seathold|coop|join]
 # `join` (RUY-628) with the shell running: busctl plays the calls of "Who's playing?" with a PIN, in the shell's order,
 # for a profile "Check Joiner" (PIN 1234, made as the admin $me with PIN 1234 and removed at the end) and the probe's
 # test pad: VerifyPin with a wrong PIN answers wrong-pin and ActiveProfile stays, the right PIN answers ok and
@@ -26,7 +26,13 @@
 # after a FAIL) and a second profile "Check Player" is made and removed. Uinput pad B is seat 2 in `app` (ruya-input/pad2);
 # B's device is destroyed and made again with the same phys (its stable id) within the hold: ListPlayers (JSON) has seat 2
 # held, then held false with B's id, pad2 keeps its sysname, and `udevadm monitor` saw no remove of it; B destroyed again,
-# after 6 s seat 2 is gone and so is pad2.
+# after 6 s seat 2 is gone but pad2 stays, the same device (RUY-681), until the probe's route leaves the game.
+# `coop` (RUY-681, split-screen co-op) with the same drop-in, profile and stopped shell as `seathold`: pad A signs the
+# profile in, pad B joins as player 2, and in the route `app` both virtual pads exist; a test client opens pad2 as the
+# profile user and hears B's BTN_SOUTH (and not A's button). B is destroyed for 7 s (past the 5 s hold): seat 2 ends,
+# pad2 is still there with the same sysname and the client's descriptor still reads (no ENODEV); B back and joined
+# again as player 2 is pad2 again (the same sysname, and the client's open descriptor hears it). When the client's game
+# ends (the probe routes `shell`), pad2 is gone and the descriptor reads ENODEV.
 # `players` (RUY-121) with the shell stopped like `twopads`: three uinput pads; a second profile "Check Player" is made with
 # CreateProfile (as the admin $me, PIN 1234) and removed at the end. Pad A presses, then the probe routes the profile: ListPlayers
 # (busctl --json=short) has seat 1 = A; JoinPlayer(B, the second profile) answers ok 2; in the route app ruya-input/pad1 is A and
@@ -55,7 +61,8 @@
 # `twopads` (RUY-540) checks the numbering of the virtual pads with two uinput pads: the pad that signed the profile in is
 # ruya-input/pad1, created first (the lower event node, SDL index 0), whichever of the two it is; the profile user opens
 # pad1 and hears that pad's button and not the idle pad's. It routes by its own bus connection and ends on `shell`.
-# The journal must show, on each entry to `app`, pad2 made only after pad1 was ready (RUY-541: a one-pad game gets pad1).
+# The journal must show, on each entry to `app`, pad2 ready only after pad1 was ready (RUY-541: a one-pad game gets pad1;
+# since RUY-681 both are made at once and only pad2's ACL waits).
 # Then (RUY-545, probe `twoprofiles`) two slots assigned over Input1, the device's of one pad and the Nintendo family's
 # for a pad with Nintendo's vendor id: each virtual pad emits its own pad's profile, and emptying the family's slot
 # changes only that pad; a slot the profile's match does not name is refused. Afterwards each slot it used gets back the
@@ -894,22 +901,22 @@ twopads)
     two_profiles
     [ -n "$me" ] && ok "profile $me" || { bad "need a profile"; exit 1; }
     [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
-    dir="$(mktemp -d /var/tmp/ruya-input-check.XXXXXX)"
+    dir="$(mktemp -d "${CHECK_TMP:-/var/tmp}/ruya-input-check.XXXXXX")"
     chmod 0755 "$dir"
     install -m 0644 "$probe" "$dir/vm-input-probe.py"
     # With the compositor and the shell stopped (RUY-573): the shell's own SetRoute calls (its start,
     # a South press signing a no-PIN profile in) land between the probe's and fail it at random.
     since="$(date '+%Y-%m-%d %H:%M:%S')"
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe twopads --user "ruya-$me" --other "$other"
-    # RUY-541: on each entry to `app` pad2 is made only after pad1 is ready (its ACL set), so a game that
-    # opens the first pad it can open gets pad1. "<entries> <pad2 made before pad1 was ready>".
+    # RUY-541: on each entry to `app` pad2 is ready (its ACL set) only after pad1 is, so a game that opens the
+    # first pad it can open gets pad1; since RUY-681 both are made at once. "<entries> <pad2 ready before pad1>".
     order="$(journalctl -u ruya-inputd --since "$since" --no-pager -o cat \
         | grep -E 'virtual pad ruya-input/pad[12] (created|ready) ' \
-        | awk '/pad1 created/ {r = 0} /pad1 ready/ {r = 1} /pad2 created/ {n++; if (!r) early++} END {print n + 0, early + 0}')"
+        | awk '/pad1 created/ {r = 0} /pad1 ready/ {r = 1} /pad2 ready/ {n++; if (!r) early++} END {print n + 0, early + 0}')"
     case "$order" in
-        "0 "*) bad "journal: no pad2 was made during twopads" ;;
-        *" 0") ok "journal: pad2 was made after pad1 was ready, ${order%% *} times" ;;
-        *) bad "journal: pad2 was made before pad1 was ready (entries, early: $order)" ;;
+        "0 "*) bad "journal: pad2 was never ready during twopads" ;;
+        *" 0") ok "journal: pad2 was ready after pad1 was ready, ${order%% *} times" ;;
+        *) bad "journal: pad2 was ready before pad1 was ready (entries, early: $order)" ;;
     esac
     echo "--- a profile per pad (RUY-545)"
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe twoprofiles --user "ruya-$me" --other "$other"
@@ -935,12 +942,17 @@ players)
     out="$(busctl --system call "$psvc" "$ppath" "$psvc" DeleteProfile sss "$me" 1234 "$player2")"
     case "$out" in 'suu "ok"'*) ok "DeleteProfile $player2: the check's profile is removed" ;; *) bad "DeleteProfile $player2: $out" ;; esac
     ;;
-seathold)
-    # RUY-627: the seat hold under RUYA_SEAT_HOLD_SECS=5, with a profile made for player 2 (removed at the end).
+seathold|coop)
+    # RUY-627: the seat hold under RUYA_SEAT_HOLD_SECS=5, with a profile made for player 2 (removed at the end);
+    # RUY-681 (`coop`): two players under one game, player 2's pad gone past the hold, same drop-in and profile.
     [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
     two_profiles
     [ -n "$me" ] && ok "profile $me signs in" || { bad "need a profile"; exit 1; }
-    echo "--- a seat is held while its pad is gone (RUY-627): RUYA_SEAT_HOLD_SECS=5, a second profile for player 2"
+    if [ "$1" = coop ]; then
+        echo "--- split-screen co-op (RUY-681): player 2's pad reaches pad2, which outlives the hold until the game ends"
+    else
+        echo "--- a seat is held while its pad is gone (RUY-627): RUYA_SEAT_HOLD_SECS=5, a second profile for player 2"
+    fi
     out="$(busctl --system call "$psvc" "$ppath" "$psvc" CreateProfile sssss "$me" 1234 "Check Player" standard "")"
     player2=""; case "$out" in 'ssuu "ok" '*) player2="$(echo "$out" | cut -d'"' -f4)" ;; esac
     [ -n "$player2" ] && ok "CreateProfile made $player2 (Check Player)" || { bad "CreateProfile Check Player: $out"; echo "SOME CHECKS FAILED"; exit 1; }
@@ -957,7 +969,7 @@ seathold)
     dir="$(mktemp -d "${CHECK_TMP:-/var/tmp}/ruya-input-check.XXXXXX")"
     chmod 0755 "$dir"
     install -m 0644 "$probe" "$dir/vm-input-probe.py"
-    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe seathold --user "ruya-$me" --other "$player2"
+    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe "$1" --user "ruya-$me" --other "$player2"
     rm -rf "$dir"
     rm -f "$dropin/50-ruya-check-seat-hold.conf"
     systemctl daemon-reload

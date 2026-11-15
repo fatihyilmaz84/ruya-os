@@ -20,6 +20,8 @@
 #                          reply and ListPlayers parsing (test-vm-input-probe.py); the `seathold` mode (RUY-627): the
 #                          RUYA_SEAT_HOLD_SECS drop-in is there for the probe and gone afterwards (also after a FAIL), a
 #                          missing journal line fails; the probe's udevadm-monitor and ListPlayers helpers; the
+#                          `coop` mode (RUY-681): seathold's set-up for the probe's coop command; the `twopads`
+#                          journal order (RUY-541, RUY-681): pad2 ready before pad1, or never, FAILs; the
 #                          `join` mode (RUY-628): VerifyPin wrong then right before JoinPlayer, a wrong PIN that
 #                          answers ok, a VerifyPin that signs in, a refused join and a missing seat each FAIL
 #   - vm-boot-check.sh     the `watchdog` mode (RUY-483): the unit's three settings, a restart or trip before the
@@ -720,10 +722,10 @@ cat > "$sh_dir/bin/journalctl" <<'SHIMEOF'
 exit 0
 SHIMEOF
 chmod +x "$sh_dir/bin"/*
-runseathold() { # <dir>
+runseathold() { # <dir> [mode: seathold | coop]
     : > "$tmp/seathold.log"
     FAKE_LOG="$tmp/seathold.log" FAKE_DROPIN="$sh_dir/dropin" SEATHOLD_DROPIN_DIR="$sh_dir/dropin" CHECK_TMP="$pl/tmp" \
-        PATH="$sh_dir/bin:$PATH" bash "$1/vm-input-check.sh" seathold 2>&1
+        PATH="$sh_dir/bin:$PATH" bash "$1/vm-input-check.sh" "${2:-seathold}" 2>&1
 }
 out="$(runseathold "$pl/alone")"; rc=$?
 expect_contains "seathold without the probe: FAIL" "$out" "vm-input-probe.py is missing: copy it next to this script"
@@ -747,6 +749,68 @@ expect_contains "seathold: a FAIL of the probe fails the check" "$out" "SOME CHE
 [ "$rc" = 1 ] && pass "seathold: a FAIL of the probe: exit 1" || fail "seathold: a FAIL of the probe: exit $rc"
 [ -e "$sh_dir/dropin/50-ruya-check-seat-hold.conf" ] && fail "seathold: the drop-in is left after a FAIL" || pass "seathold: the drop-in is removed after a FAIL too"
 expect_contains "seathold: the profile is removed after a FAIL too" "$(cat "$tmp/seathold.log")" "DeleteProfile sss p1 1234 p7"
+# --- vm-input-check.sh coop (RUY-681): seathold's set-up (drop-in, profile, stopped shell), its own probe command -----
+echo "vm-input-check.sh coop: RUYA_SEAT_HOLD_SECS=5 and the second profile for the probe's coop, removed again"
+out="$(runseathold "$pl/with" coop)"; rc=$?
+log="$(cat "$tmp/seathold.log")"
+expect_contains "coop: says what it checks" "$out" "--- split-screen co-op (RUY-681)"
+expect_contains "coop: the restart runs with the drop-in" "$log" "systemctl restart ruya-inputd [[Service] Environment=RUYA_SEAT_HOLD_SECS=5 ]"
+expect_contains "coop: the probe runs coop with the second profile" "$log" "probe coop --user ruya-p1 --other p7 --profile p1"
+expect_lacks "coop: the probe does not run seathold" "$log" "probe seathold"
+expect_contains "coop: the service is restarted without the drop-in" "$log" "systemctl restart ruya-inputd []"
+[ -e "$sh_dir/dropin/50-ruya-check-seat-hold.conf" ] && fail "coop: the drop-in is left behind" || pass "coop: the drop-in is removed"
+expect_contains "coop: the second profile is removed" "$log" "DeleteProfile sss p1 1234 p7"
+expect_contains "coop: all good passes" "$out" "ALL CHECKS PASSED"
+[ "$rc" = 0 ] && pass "coop: exit 0" || fail "coop: exit $rc"
+out="$(FAKE_PROBE_FAIL=1 runseathold "$pl/with" coop)"; rc=$?
+expect_contains "coop: a FAIL of the probe fails the check" "$out" "SOME CHECKS FAILED"
+[ "$rc" = 1 ] && pass "coop: a FAIL of the probe: exit 1" || fail "coop: a FAIL of the probe: exit $rc"
+[ -e "$sh_dir/dropin/50-ruya-check-seat-hold.conf" ] && fail "coop: the drop-in is left after a FAIL" || pass "coop: the drop-in is removed after a FAIL too"
+# --- vm-input-check.sh twopads (RUY-541, RUY-681): on every entry to `app` pad2 is ready only after pad1 ----------
+echo "vm-input-check.sh twopads: the journal's pad1/pad2 order (made at once since RUY-681, pad2 ready after pad1)"
+tp="$tmp/twopads"; mkdir -p "$tp/bin"
+cp "$pl/bin/busctl" "$pl/bin/pgrep" "$pl/bin/systemctl" "$tp/bin/"
+cat > "$tp/bin/journalctl" <<'SHIMEOF'
+#!/bin/sh
+cat "$FAKE_JOURNAL"
+SHIMEOF
+chmod +x "$tp/bin"/*
+runtwopads() { # <journal lines>
+    printf '%s\n' "$1" > "$tmp/twopads.journal"
+    : > "$tmp/twopads.log"
+    FAKE_LOG="$tmp/twopads.log" FAKE_JOURNAL="$tmp/twopads.journal" CHECK_TMP="$pl/tmp" PATH="$tp/bin:$PATH" \
+        bash "$pl/with/vm-input-check.sh" twopads 2>&1
+}
+c1='ruya-inputd: virtual pad ruya-input/pad1 created for ruya-p1 (vm-check-pad0)'
+c2='ruya-inputd: virtual pad ruya-input/pad2 created for ruya-p1 (vm-check-pad1)'
+r1='ruya-inputd: virtual pad ruya-input/pad1 ready for ruya-p1 (/dev/input/event20, udev add)'
+r2='ruya-inputd: virtual pad ruya-input/pad2 ready for ruya-p1 (/dev/input/event21, udev add)'
+out="$(runtwopads "$c1
+$c2
+$r1
+$r2
+$c1
+$c2
+$r1
+$r2")"; rc=$?
+expect_contains "twopads: both made at once, pad2 ready after pad1: PASS" "$out" "PASS: journal: pad2 was ready after pad1 was ready, 2 times"
+expect_contains "twopads: the probe runs twopads" "$(cat "$tmp/twopads.log")" "probe twopads --user ruya-p1"
+[ "$rc" = 0 ] && pass "twopads: exit 0" || fail "twopads: exit $rc"
+out="$(runtwopads "$c1
+$c2
+$r1
+$r2
+$c1
+$c2
+$r2
+$r1")"; rc=$?
+expect_contains "twopads: pad2 ready before pad1 on the second entry: FAIL" "$out" "FAIL: journal: pad2 was ready before pad1 was ready (entries, early: 2 1)"
+[ "$rc" = 1 ] && pass "twopads: pad2 ready first: exit 1" || fail "twopads: pad2 ready first: exit $rc"
+out="$(runtwopads "$c1
+$c2
+$r1")"; rc=$?
+expect_contains "twopads: pad2 never ready: FAIL" "$out" "FAIL: journal: pad2 was never ready during twopads"
+[ "$rc" = 1 ] && pass "twopads: pad2 never ready: exit 1" || fail "twopads: pad2 never ready: exit $rc"
 # --- vm-input-check.sh join (RUY-628): VerifyPin wrong then right, ActiveProfile stays, JoinPlayer, ListPlayers -------
 echo "vm-input-check.sh join: the PIN is checked without a sign-in, then the pad joins and ListPlayers has the seat"
 jn="$tmp/join"; mkdir -p "$jn/bin" "$jn/state"
