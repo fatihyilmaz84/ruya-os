@@ -277,11 +277,23 @@ Item {
             verify(Audio.mockPlug("long-device"))
             tryCompare(Audio, "defaultSink", "long-device")
             tryVerify(() => findChild(row, "hubValueText").text === Audio.outputs.find(o => o.id === "long-device").name)
-            verify(findChild(row, "hubValueText").truncated, "the long name elides")
-            verify(!findLabel(row).truncated, "and the label does not")
+            const value = findChild(row, "hubValueText")
+            const rowValue = findChild(row, "hubRowValue")
+            const label = findLabel(row)
+            // Wait for the layout: the Row is as wide as its three parts and the circles sit at its ends.
+            tryVerify(() => rowValue.width === left.width + value.width + right.width + 2 * rowValue.spacing && value.truncated, 2000, "the row has laid out")
+            verify(!label.truncated, "the label does not elide")
+            compare(label.width, label.implicitWidth)
+            const u = find("systemPanel").u
+            verify(label.mapToItem(row, label.width, 0).x + Theme.spaceM * u <= left.mapToItem(row, 0, 0).x,
+                   "the value and its circles stay clear of the label")
             keyClick(Qt.Key_Right)
             tryVerify(() => Audio.defaultSink !== "long-device", 2000)
             verify(find("systemActions").activeFocus && focusedKey() === "audio:output", "Right steps and the focus stays")
+            const after = Audio.defaultSink
+            keyClick(Qt.Key_Left)
+            tryVerify(() => Audio.defaultSink !== after, 2000)
+            verify(find("systemActions").activeFocus && focusedKey() === "audio:output", "Left steps and the focus stays")
         }
 
         function findText(item, ch) {
