@@ -158,6 +158,7 @@ FocusScope {
         if (!bridging)
             return
         bridging = false
+        aboutToClose()                  // a lost-pad Hub held back for the prompt opens now (RUY-122 review)
         const target = returnTo
         returnTo = null
         closed(target)
