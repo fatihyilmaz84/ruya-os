@@ -2536,12 +2536,13 @@ FocusScope {
         u: root.u
     }
 
-    // Toasts sit above pages and below the modals (picker, overlay); the volume OSD is above all.
+    // Toasts sit above pages and above every modal and sheet (highest today: thermal, z 26), so an answer to a
+    // modal's action is never dimmed; they never take focus. Below the volume OSD (30), the mode confirm and the saver.
     ToastLayer {
         id: toasts
         objectName: "toastLayer"
         anchors.fill: parent
-        z: whosPlaying.visible ? 22 : 10       // above "Who's playing?" (its error toast), wherever it sits
+        z: 29
         u: root.u
         marginX: root.marginX
         marginY: root.marginY
