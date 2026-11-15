@@ -28,9 +28,7 @@ use crate::mapping::{KeyEvent, NavKey};
 use crate::nodes::{Ignored, Node};
 use crate::notify::{watchdog_interval, Notifier};
 use crate::pad::{code, Normalizer, OutEvent, PadLayout, Range, Rumble, OWN_PHYS_PREFIX};
-use crate::routing::{
-    Backend, Created, PadInfo, PadKey, Router, VirtualId, VirtualSpec, SEAT_GATE,
-};
+use crate::routing::{Backend, Created, PadInfo, PadKey, Router, VirtualId, VirtualSpec};
 use crate::udev::{database_properties, parse_monitor_message};
 use sys::UinputPad;
 
@@ -665,7 +663,7 @@ pub fn run() -> io::Result<()> {
         ff: ff_tx,
     };
     let backend: DynBackend = Box::new(backend);
-    let mut router = Router::new(backend, Box::new(PasswdAccounts), SEAT_GATE);
+    let mut router = Router::new(backend, Box::new(PasswdAccounts));
     // Controller profiles (06 section 7): <state>/profiles/<console profile>/<id>.json.
     router.set_book(Book::new(Box::new(DirStore::new(
         state_dir().join("profiles"),

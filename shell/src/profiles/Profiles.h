@@ -70,6 +70,9 @@ public:
     // still due. No-ops with the D-Bus backend.
     Q_INVOKABLE void mockRefreshDelayed(int ms);
     Q_INVOKABLE int mockPendingReplies() const;
+    // The service is (not) there, as availableChanged says it (the "Who's playing?" waiting text,
+    // RUY-122). A no-op with the D-Bus backend.
+    Q_INVOKABLE void mockSetAvailable(bool available);
 
 signals:
     void profilesChanged();

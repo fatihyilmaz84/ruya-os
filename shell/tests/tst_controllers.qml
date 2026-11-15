@@ -836,6 +836,10 @@ Item {
             if (device.id !== ds && device.id !== xbox && device.id !== pro) {
                 Input.mockAddDevice(device)
                 tryVerify(() => Input.devices.length === 4)
+                // A pad with no player that connects asks "Who's playing?" (RUY-122): Not now, then the test.
+                tryVerify(() => find("whosPlaying").shown, 2000)
+                keyClick(Qt.Key_Escape)
+                tryVerify(() => !find("whosPlaying").shown, 2000)
             }
             openTest(device.id)
             for (const i of inputs) {

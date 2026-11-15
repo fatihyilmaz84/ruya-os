@@ -149,7 +149,6 @@ void MockInputBackend::resetDevices()
     m_stickDown.clear();
     m_navigator.clear();
     m_foreignPress.clear();
-    m_seatGate = false;
     setDefaultDevices();
     QTimer::singleShot(0, this, [this] { emit devicesChanged(); });
 }
@@ -719,14 +718,6 @@ int MockInputBackend::padButton(const QString &deviceId, const QString &button)
     if (record == m_devices.cend() || m_fail || !serviceOwned())
         return 0;
     const bool guide = button == QLatin1String("guide");
-    // routing.rs claim_padless_seat1: with the gate off, a padless seat 1 that is not held is taken
-    // by the first unseated pad that presses (until RUY-122's prompt).
-    if (!m_seatGate && m_navigator.isEmpty() && !m_seats.isEmpty() && m_seats.at(0).device.isEmpty()
-        && seatOfDevice(deviceId) < 0) {
-        const QVariantList before = playerList();
-        m_seats[0].device = deviceId;
-        seatsChanged(before);
-    }
     if (!navigates(deviceId)) {
         // Seat 1's pad (a navigator is set) asks for nothing; seats 2-4 ask with their Guide only; an
         // unseated pad's Guide is "guide", its other buttons "press" at most once a second.

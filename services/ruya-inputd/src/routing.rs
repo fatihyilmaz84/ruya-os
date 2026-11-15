@@ -387,18 +387,6 @@ impl Pad {
     }
 }
 
-/// The number of an unseated pad's virtual pad while the seat gate is off (RUY-121 round 2): the
-/// lowest one after the seats that no live virtual pad has, so a later join renumbers nobody.
-fn unseated_number(pads: &BTreeMap<PadKey, Pad>) -> u32 {
-    (SEATS + 1..)
-        .find(|n| {
-            !pads
-                .values()
-                .any(|p| p.virt.as_ref().is_some_and(|v| v.n == *n))
-        })
-        .unwrap_or(SEATS + 1)
-}
-
 /// An axis this far from neutral when the route enters `app` counts as held.
 fn axis_held(axis: PadAxis, value: i32) -> bool {
     let full = match axis {
@@ -515,9 +503,6 @@ pub struct Router<B: Backend> {
     activity: ActivityGate,
     /// Pads whose virtual pad waits for pad1 to be ready (RUY-541), in the order they are made.
     waiting: Vec<PadKey>,
-    /// Only seated pads get a virtual pad (true), or every connected pad does, the unseated ones
-    /// numbered after the seats (false: `SEAT_GATE`, until RUY-122's prompt calls JoinPlayer).
-    seat_gate: bool,
     /// The held seats' leftovers, by the gone pad's stable id: an entry exactly while
     /// `seats.is_held` says so (RUY-627).
     holds: BTreeMap<String, Parked>,
@@ -531,16 +516,11 @@ pub struct Router<B: Backend> {
 /// An unseated pad's `ForeignInput` "press" is sent at most once per pad in this time (06 §11.3).
 pub const FOREIGN_PRESS_GAP: Duration = Duration::from_secs(1);
 
-/// The production value of `Router::new`'s `seat_gate`: off until "Who's playing?" (RUY-122) can
-/// seat a second pad, so local co-op keeps every pad meanwhile (lead decision, RUY-121 round 2).
-pub const SEAT_GATE: bool = false;
-
 impl<B: Backend> Router<B> {
-    /// Starts in `shell` with no profile: navigation keys, no virtual pad (as before Input1).
-    /// `seat_gate`: whether an unseated pad is kept from the app (`SEAT_GATE` in production).
-    pub fn new(backend: B, accounts: Box<dyn Accounts>, seat_gate: bool) -> Self {
+    /// Starts in `shell` with no profile: navigation keys, no virtual pad (as before Input1). Only
+    /// a seated pad ever gets a virtual pad (the seat gate, on since "Who's playing?", RUY-122).
+    pub fn new(backend: B, accounts: Box<dyn Accounts>) -> Self {
         Router {
-            seat_gate,
             backend,
             accounts,
             route: Route::Shell,
@@ -809,12 +789,6 @@ impl<B: Backend> Router<B> {
         let Some(pad_id) = self.pads.get(&key).map(|p| p.info.id.clone()) else {
             return;
         };
-        if inputs
-            .iter()
-            .any(|i| matches!(i, PadInput::Button(_, true)))
-        {
-            self.claim_padless_seat1(&pad_id, now);
-        }
         let signed_in = self.seats.active();
         let seat = self.seats.seat_of(&pad_id).map(|(n, _)| n);
         // The Confirm button of the pad the event came from (RUY-603).
@@ -927,15 +901,10 @@ impl<B: Backend> Router<B> {
         let Some(pad) = self.pads.get(&key) else {
             return;
         };
-        // The number is the pad's seat: pad1 is player 1 (RUY-121). An unseated pad gets none, or,
-        // with the seat gate off (until RUY-122), the lowest free number after the seats.
-        let seat = self.seat_number(key);
-        let n = match &seat {
-            Some((n, _)) => *n,
-            None if !self.seat_gate => unseated_number(&self.pads),
-            None => return,
+        // The number is the pad's seat: pad1 is player 1 (RUY-121). An unseated pad gets none.
+        let Some((n, player)) = self.seat_number(key) else {
+            return;
         };
-        let player = seat.map(|(_, p)| p).unwrap_or_default();
         let spec = VirtualSpec {
             phys: format!("{PAD_PHYS_PREFIX}{n}"),
             rumble: pad.info.rumble,
@@ -1032,12 +1001,7 @@ impl<B: Backend> Router<B> {
             .collect();
         let mut keys: Vec<(u32, PadKey)> = missing
             .into_iter()
-            .filter_map(|k| match self.seat_number(k) {
-                Some((n, _)) => Some((n, k)),
-                // Gate off: the unseated pads follow the seated ones, in connect (key) order.
-                None if !self.seat_gate => Some((SEATS + 1, k)),
-                None => None,
-            })
+            .filter_map(|k| self.seat_number(k).map(|(n, _)| (n, k)))
             .collect();
         keys.sort_unstable();
         self.waiting.extend(keys.into_iter().map(|(_, k)| k));
@@ -1069,7 +1033,6 @@ impl<B: Backend> Router<B> {
     /// `sync_virtuals` with virtual pads that have lost their pad already (`spare`, each with the
     /// key of the pad it had, its rumble effects there dropped).
     fn sync_virtuals_with(&mut self, now: Instant, mut spare: Vec<(PadKey, Virtual)>) {
-        let gate = self.seat_gate;
         // Holds that ended without their pad (a move, a leave, the deadline): spare too.
         let ended: Vec<String> = self
             .holds
@@ -1090,17 +1053,16 @@ impl<B: Backend> Router<B> {
             keys.iter().map(|&k| (k, self.seat_number(k))).collect();
         for &key in &keys {
             let seat = &seats[&key];
-            if seat.is_none() && gate {
+            if seat.is_none() {
                 self.waiting.retain(|&k| k != key);
             }
             let Some(pad) = self.pads.get_mut(&key) else {
                 continue;
             };
-            // Stale: another seat or player; unseated, with the gate on or after it had a seat's
-            // number (gate off it is made again after the seats). Nobody else is renumbered.
+            // Stale: another seat or player, or unseated. Nobody else is renumbered.
             let stale = pad.virt.as_ref().is_some_and(|v| match seat {
                 Some((n, p)) => (v.n, v.player.as_str()) != (*n, p.as_str()),
-                None => gate || v.n <= SEATS,
+                None => true,
             });
             if !stale {
                 continue;
@@ -1651,33 +1613,6 @@ impl<B: Backend> Router<B> {
     }
 
     // ---- who drives the UI (ADR-017 points 2 and 9, 06 §11.3; RUY-38) -----------------------
-
-    /// The interim fallback while the seat gate is off (until RUY-122's prompt, lead decision, RUY-38
-    /// round 2): with a profile signed in, no navigator, and seat 1 without a pad and not held (a
-    /// keyboard sign-in, or its pad's hold ran out), the first unseated pad that presses a button
-    /// becomes seat 1's pad, as the pad that signs in does, and navigates from that press on. Without
-    /// it a console with no keyboard could not be driven, and a game the lost-pad Hub froze could not
-    /// be resumed. A held seat 1 waits for its pad. With the gate on the prompt's Move is the path.
-    fn claim_padless_seat1(&mut self, pad_id: &str, now: Instant) {
-        if self.seat_gate
-            || self.navigator.is_some()
-            || !self.seats.active()
-            || self.seats.player1_device().is_some()
-            || self.seats.seat_of(pad_id).is_some()
-        {
-            return;
-        }
-        let profile = self.profile.clone();
-        let before = self.seats.clone();
-        if let Joined::Seated { changed: true, .. } = self.seats.join(pad_id, &profile) {
-            self.journal(format!(
-                "player 1 (ruya-{profile}) has no pad: {pad_id} pressed and is player 1 (seat gate off)"
-            ));
-            self.seats_changed(&before);
-            self.sync_virtuals(now);
-            self.sync_navigation();
-        }
-    }
 
     /// Whether the pad with the stable id `id` navigates the shell now: every pad while nobody is
     /// signed in; else only the navigator if one is set, or else only seat 1's pad (none while its
@@ -2337,11 +2272,6 @@ mod tests {
     const SHELL: &str = ":1.5";
 
     fn router() -> Router<Fake> {
-        gated(true)
-    }
-
-    /// A router with the seat gate on (the rule of RUY-121) or off (`SEAT_GATE` until RUY-122).
-    fn gated(seat_gate: bool) -> Router<Fake> {
         Router::new(
             Fake::default(),
             Box::new(FixedAccounts(vec![
@@ -2351,7 +2281,6 @@ mod tests {
                 ("p4".into(), 1004),
                 ("p5".into(), 1005),
             ])),
-            seat_gate,
         )
     }
 
@@ -2635,11 +2564,11 @@ mod tests {
 
     /// RUY-11, changed by RUY-38 (06 §11.3): before a sign-in any pad's Guide is the shell's;
     /// after it only player 1's, a seated player's Guide is `player-guide` and an unseated pad's
-    /// `guide`. No virtual pad ever sees Guide. The gate is off (production), so every pad has
-    /// a virtual pad in the app and each one's "no BTN_MODE" is checked against its BTN_SOUTH.
+    /// `guide`. No virtual pad ever sees Guide: each seated one's "no BTN_MODE" is checked against
+    /// its BTN_SOUTH; the unseated pad has none (the seat gate, RUY-122), so its game sees nothing.
     #[test]
     fn guide_reaches_the_shell_from_any_pad_before_a_sign_in_and_from_player_1_after_it() {
-        let mut r = gated(false);
+        let mut r = router();
         let a = r.add_pad(pad("a"), t0());
         let b = r.add_pad(pad("b"), t0());
         let c = r.add_pad(pad("c"), t0());
@@ -2658,13 +2587,13 @@ mod tests {
         assert_eq!(join(&mut r, b, "p2"), 2);
         app(&mut r, "i1", STK, "p1");
         settle(&mut r);
-        assert_eq!(phys_of(&r, c).as_deref(), Some("ruya-input/pad5"));
+        assert_eq!(phys_of(&r, c), None, "the unseated c has no virtual pad");
         r.backend_mut().take();
         r.take_notices();
-        for (pad_key, id, shell, kind) in [
-            (a, "a", true, None),
-            (b, "b", false, Some("player-guide")),
-            (c, "c", false, Some("guide")),
+        for (pad_key, id, shell, kind, game) in [
+            (a, "a", true, None, true),
+            (b, "b", false, Some("player-guide"), true),
+            (c, "c", false, Some("guide"), false),
         ] {
             r.input(pad_key, &[press(PadButton::South), press(PadButton::Guide)]);
             let calls = r.backend_mut().take();
@@ -2675,10 +2604,11 @@ mod tests {
             };
             assert_eq!(nav(&calls), want, "{id}");
             let sent = writes(&calls);
-            assert!(
+            assert_eq!(
                 sent.iter()
                     .any(|(_, e)| e.iter().any(|e| e.1 == code::BTN_SOUTH)),
-                "{id}: the game gets the pad: {sent:?}"
+                game,
+                "{id}: the game gets the pad (seated pads only): {sent:?}"
             );
             for (_, events) in sent {
                 assert!(!events.iter().any(|e| e.1 == code::BTN_MODE), "{events:?}");
@@ -2973,13 +2903,13 @@ mod tests {
         assert!(journal(&mut r).contains(&"navigator a".to_owned()));
     }
 
-    /// RUY-38 round 2, the interim fallback while the seat gate is off (until RUY-122): seat 1 lost
-    /// its pad for good (the hold ran out), so the first unseated pad that presses a button is player
-    /// 1 and navigates from that press: it closes the lost-pad Hub, and its virtual pad is pad1.
-    /// While the hold runs nothing changes; a stick takes nothing.
+    /// RUY-122 (the gate on, RUY-38's interim fallback gone): seat 1 lost its pad for good (the
+    /// hold ran out), and an unseated pad's press only asks (`ForeignInput` "press": the shell opens
+    /// "Who's playing?"). Its "Join as player 1" (`JoinPlayer` with player 1's profile) makes it seat
+    /// 1's pad: it navigates from then on, and back in the app its virtual pad is pad1.
     #[test]
-    fn gate_off_a_pad_takes_seat_1_once_its_hold_ran_out() {
-        let mut r = gated(false);
+    fn after_the_hold_a_pad_asks_and_its_join_as_player_1_takes_seat_1() {
+        let mut r = router();
         let a = r.add_pad(pad("a"), t0());
         let b = r.add_pad(pad("b"), t0());
         sign_in(&mut r, a, "p1");
@@ -2989,53 +2919,52 @@ mod tests {
         r.remove_pad_at(a, t);
         // The Hub opened over the game (the shell's lost-pad pause): the route is overlay.
         r.set_route("overlay", "i1", STK, "p1", SHELL, t);
-        r.backend_mut().take();
-        r.input_at(b, &[press(PadButton::South), release(PadButton::South)], t);
-        assert!(
-            nav(&r.backend_mut().take()).is_empty(),
-            "seat 1 is held: b waits"
-        );
-        assert_eq!(r.players()[0].device_id, "a");
         r.tick(t + SEAT_HOLD + Duration::from_secs(1));
         assert_eq!(r.players()[0].device_id, "", "the hold ran out");
-        r.input_at(b, &[PadInput::Axis(PadAxis::LeftX, STICK_MAX)], t);
-        r.input_at(b, &[PadInput::Axis(PadAxis::LeftX, 0)], t);
-        assert_eq!(r.players()[0].device_id, "", "a stick takes nothing");
         r.backend_mut().take();
         r.take_notices();
-        r.input_at(b, &[press(PadButton::South)], t);
-        assert_eq!(r.players()[0].device_id, "b", "b is player 1");
+        let later = t + SEAT_HOLD + Duration::from_secs(2);
+        r.input_at(
+            b,
+            &[press(PadButton::South), release(PadButton::South)],
+            later,
+        );
+        assert_eq!(r.players()[0].device_id, "", "a press takes no seat");
+        assert!(nav(&r.backend_mut().take()).is_empty(), "nor navigates");
+        assert_eq!(foreign(&r.take_notices()), vec![("b".to_owned(), "press")]);
+        assert_eq!(join(&mut r, b, "p1"), 1, "Join as player 1");
+        assert_eq!(seats_of(&r), vec![seat(1, "p1", "b")]);
+        r.backend_mut().take();
+        r.input_at(b, &[press(PadButton::South)], later);
         assert_eq!(
             nav(&r.backend_mut().take()),
             vec![(NavKey::Accept, true)],
-            "its press navigates"
+            "b navigates"
         );
-        let notices = r.take_notices();
-        assert!(foreign(&notices).is_empty(), "and asks nothing");
-        assert_eq!(players_signals(&notices), vec![vec![seat(1, "p1", "b")]]);
-        // Accept closed the Hub: back in the app b's virtual pad is pad1.
+        assert!(foreign(&r.take_notices()).is_empty(), "and asks nothing");
         app(&mut r, "i1", STK, "p1");
         settle(&mut r);
         assert_eq!(phys_of(&r, b).as_deref(), Some("ruya-input/pad1"));
     }
 
     #[test]
-    fn gate_off_a_pad_takes_seat_1_after_a_keyboard_sign_in() {
-        let mut r = gated(false);
+    fn after_a_keyboard_sign_in_join_as_player_1_gives_seat_1_a_pad() {
+        let mut r = router();
         let b = r.add_pad(pad("b"), t0());
         signed_in(&mut r, "p1");
         assert_eq!(r.players()[0].device_id, "");
+        assert_eq!(join(&mut r, b, "p1"), 1);
+        assert_eq!(r.players()[0].device_id, "b");
         r.backend_mut().take();
         r.input_at(b, &[press(PadButton::DpadDown)], t0());
-        assert_eq!(r.players()[0].device_id, "b");
         assert_eq!(nav(&r.backend_mut().take()), vec![(NavKey::Down, true)]);
     }
 
-    /// The fallback takes only an unseated pad: a player in seat 2 who presses while seat 1 has no
-    /// pad keeps their seat (a join as player 1 would empty seat 2 by rule (c)).
+    /// A player in seat 2 who presses while seat 1 has no pad keeps their seat and asks nothing but
+    /// with Guide (`player-guide`).
     #[test]
-    fn gate_off_a_seated_players_press_does_not_take_a_padless_seat_1() {
-        let mut r = gated(false);
+    fn a_seated_players_press_does_not_take_a_padless_seat_1() {
+        let mut r = router();
         let b = r.add_pad(pad("b"), t0());
         signed_in(&mut r, "p1");
         assert_eq!(join(&mut r, b, "p2"), 2);
@@ -3054,6 +2983,10 @@ mod tests {
         assert!(nav(&r.backend_mut().take()).is_empty(), "no navigation key");
         let notices = r.take_notices();
         assert!(players_signals(&notices).is_empty(), "no PlayersChanged");
+        assert!(
+            foreign(&notices).is_empty(),
+            "a seated pad's press asks nothing"
+        );
         r.input_at(b, &[press(PadButton::Guide)], t0());
         assert_eq!(
             foreign(&r.take_notices()),
@@ -3061,7 +2994,8 @@ mod tests {
         );
     }
 
-    /// With the gate on (RUY-122) the prompt's Move is the path: a press takes no seat.
+    /// The seat gate (RUY-122): a press takes no seat; the prompt's Join as player 1 (or, with
+    /// RUY-628, its Move) is the path.
     #[test]
     fn gate_on_no_pad_takes_a_padless_seat_1() {
         // A keyboard sign-in.
@@ -5872,22 +5806,11 @@ mod tests {
         assert_eq!(held_of(&r), vec![(1, false), (2, false)]);
         let calls = r.backend_mut().take();
         assert!(created(&calls).is_empty() && destroyed(&calls).is_empty());
-        // With the gate off the other twin is an unseated pad after the seats.
-        let mut r = gated(false);
-        let a = r.add_pad(pad("a"), t0());
-        let b1 = r.add_pad(pad("b"), t0());
-        let b2 = r.add_pad(pad("b"), t0());
-        sign_in(&mut r, a, "p1");
-        join(&mut r, b1, "p2");
-        app(&mut r, "i1", STK, "p1");
-        settle(&mut r);
-        assert_eq!(phys_of(&r, b1).as_deref(), Some("ruya-input/pad2"));
-        assert_eq!(phys_of(&r, b2).as_deref(), Some("ruya-input/pad5"));
     }
 
     #[test]
-    fn with_the_seat_gate_off_a_held_seat_keeps_its_number_from_unseated_pads() {
-        let mut r = gated(false);
+    fn a_pad_that_connects_during_a_hold_gets_no_virtual_pad() {
+        let mut r = router();
         let a = r.add_pad(pad("a"), t0());
         let b = r.add_pad(pad("b"), t0());
         sign_in(&mut r, a, "p1");
@@ -5896,14 +5819,14 @@ mod tests {
         settle(&mut r);
         let t = t0();
         r.remove_pad_at(b, t);
-        // An unseated pad that connects during the hold is pad5, not the held pad2.
-        let c = r.add_pad(pad("c"), t);
-        assert_eq!(phys_of(&r, c).as_deref(), Some("ruya-input/pad5"));
-        // An unseated pad that vanishes loses its virtual pad at once: it holds no seat.
-        let vc = virtual_id(&r, c).expect("pad5");
+        // An unseated pad that connects during the hold gets nothing, not the held pad2.
         r.backend_mut().take();
+        let c = r.add_pad(pad("c"), t);
+        assert_eq!(phys_of(&r, c), None);
+        assert!(created(&r.backend_mut().take()).is_empty());
+        // It holds no seat when it vanishes; the held pad back takes its pad2 again.
         r.remove_pad_at(c, t);
-        assert_eq!(destroyed(&r.backend_mut().take()), vec![vc]);
+        assert_eq!(held_of(&r), vec![(1, false), (2, true)]);
         let b2 = r.add_pad(pad("b"), t);
         assert_eq!(phys_of(&r, b2).as_deref(), Some("ruya-input/pad2"));
     }
@@ -5951,18 +5874,18 @@ mod tests {
         assert_eq!(player(&mut r), vec!["player 1 left"]);
     }
 
-    // ---- the seat gate off (SEAT_GATE until RUY-122; RUY-121 round 2) ----------------------
+    // ---- the seat gate (on since RUY-122; RUY-121 round 2 ran with it off) ------------------
 
     fn virtual_id(r: &Router<Fake>, key: PadKey) -> Option<VirtualId> {
         r.pads[&key].virt.as_ref().map(|v| v.id)
     }
 
     #[test]
-    fn with_the_seat_gate_off_an_unseated_pad_still_gets_a_virtual_pad_after_the_seats() {
-        let mut r = gated(false);
+    fn an_unseated_pad_reaches_no_app() {
+        let mut r = router();
         let a = r.add_pad(pad("a"), t0());
         let b = r.add_pad(pad("b"), t0());
-        // b signs in, so the seated b is pad1 and the unseated a follows it, after the seats.
+        // b signs in, so the seated b is pad1; the unseated a gets no virtual pad.
         sign_in(&mut r, b, "p1");
         app(&mut r, "i1", STK, "p1");
         settle(&mut r);
@@ -5975,64 +5898,55 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(
-            creations,
-            vec![
-                (b, "ruya-input/pad1".to_owned()),
-                (a, "ruya-input/pad5".to_owned())
-            ]
-        );
-        // The seats are the same as with the gate on: a is not a player.
+        assert_eq!(creations, vec![(b, "ruya-input/pad1".to_owned())]);
         assert_eq!(seats_of(&r), vec![seat(1, "p1", "b")]);
         let rec = r.devices().into_iter().find(|d| d.id == "a").expect("a");
         assert_eq!((rec.slot, rec.profile.as_str()), (0, ""));
-        // Its input reaches its own virtual pad.
+        // Its input reaches no virtual pad.
         r.input(a, &[press(PadButton::South)]);
-        assert_eq!(
-            writes(&r.backend_mut().take()),
-            vec![(2, vec![(code::EV_KEY, code::BTN_SOUTH, 1)])]
-        );
-        // A pad connected while the app is in front gets the next free number at once.
+        assert!(writes(&r.backend_mut().take()).is_empty());
+        // Neither does a pad connected while the app is in front.
         let c = r.add_pad(pad("c"), t0());
-        assert_eq!(phys_of(&r, c).as_deref(), Some("ruya-input/pad6"));
+        assert_eq!(phys_of(&r, c), None);
     }
 
     #[test]
-    fn with_the_seat_gate_off_a_join_renumbers_nobody_alive() {
-        let mut r = gated(false);
+    fn a_join_gives_a_seat_its_pad_and_a_leave_takes_it() {
+        let mut r = router();
         let a = r.add_pad(pad("a"), t0());
         let b = r.add_pad(pad("b"), t0());
         let c = r.add_pad(pad("c"), t0());
         sign_in(&mut r, a, "p1");
         app(&mut r, "i1", STK, "p1");
         settle(&mut r);
-        assert_eq!(phys_of(&r, b).as_deref(), Some("ruya-input/pad5"));
-        assert_eq!(phys_of(&r, c).as_deref(), Some("ruya-input/pad6"));
-        let (va, vb) = (virtual_id(&r, a), virtual_id(&r, b));
+        assert_eq!((phys_of(&r, b), phys_of(&r, c)), (None, None));
+        let va = virtual_id(&r, a);
         r.backend_mut().take();
-        // c joins: it becomes pad2 (its own pad is replaced); a and b keep their devices.
+        // c joins: it becomes pad2; a keeps its device, b still has none.
         assert_eq!(join(&mut r, c, "p2"), 2);
         assert_eq!(phys_of(&r, c).as_deref(), Some("ruya-input/pad2"));
-        assert_eq!((virtual_id(&r, a), virtual_id(&r, b)), (va, vb));
-        assert_eq!(destroyed(&r.backend_mut().take()).len(), 1, "only c's pad6");
-        // c leaves: pad2 goes and c is an unseated pad again, after the seats; b is untouched.
+        assert_eq!((virtual_id(&r, a), phys_of(&r, b)), (va, None));
+        assert!(destroyed(&r.backend_mut().take()).is_empty());
+        // c leaves: pad2 goes and c has none again; a is untouched.
+        let vc = virtual_id(&r, c).expect("pad2");
         assert_eq!(r.leave_player(2, t0()), Status::Ok);
-        assert_eq!(phys_of(&r, c).as_deref(), Some("ruya-input/pad6"));
-        assert_eq!((virtual_id(&r, a), virtual_id(&r, b)), (va, vb));
+        assert_eq!(destroyed(&r.backend_mut().take()), vec![vc]);
+        assert_eq!(phys_of(&r, c), None);
+        assert_eq!(virtual_id(&r, a), va);
         assert_eq!(seats_of(&r), vec![seat(1, "p1", "a")]);
     }
 
     #[test]
-    fn the_image_runs_with_the_seat_gate_off_until_ruy_122() {
-        // Lead decision (RUY-121 round 2): with the production value an unseated pad still reaches
-        // the game, so local co-op keeps every pad until the prompt (RUY-122) can seat one.
-        let mut r = gated(SEAT_GATE);
+    fn the_image_runs_with_the_seat_gate_on() {
+        // RUY-122: "Who's playing?" seats a new pad, so the production router (the only one) keeps
+        // an unseated pad from the game; local co-op is a join through the prompt.
+        let mut r = router();
         let a = r.add_pad(pad("a"), t0());
         let b = r.add_pad(pad("b"), t0());
         sign_in(&mut r, a, "p1");
         app(&mut r, "i1", STK, "p1");
         settle(&mut r);
         assert_eq!(phys_of(&r, a).as_deref(), Some("ruya-input/pad1"));
-        assert_eq!(phys_of(&r, b).as_deref(), Some("ruya-input/pad5"));
+        assert_eq!(phys_of(&r, b), None);
     }
 }

@@ -62,9 +62,6 @@ public:
     // shell nothing: then a ForeignInput may follow, as the service sends it.
     int padButton(const QString &deviceId, const QString &button);
     QString navigator() const { return m_navigator; }
-    // Tests: the service's seat gate (routing.rs SEAT_GATE, off until RUY-122). Off, a padless seat 1
-    // that is not held is taken by the first unseated pad that presses (the interim fallback).
-    void setSeatGate(bool on) { m_seatGate = on; }
     // Tests: the seats the mock service holds now (player records, by slot).
     QVariantList players() const { return playerList(); }
     // Tests: every later JoinPlayer answers `status` and changes nothing ("" clears it).
@@ -205,7 +202,6 @@ private:
     QList<Seat> m_seats;           // 4 while a profile is signed in (index 0 is seat 1), else none
     QString m_padSinceChange;      // the pad of the last press since the profile last changed
     QString m_navigator;           // SetNavigator's pad ("" = none)
-    bool m_seatGate = false;       // SEAT_GATE: off until RUY-122
     QHash<QString, qint64> m_foreignPress;   // device id -> m_clock time of its last ForeignInput "press"
     QString m_failJoin;
     int m_seatHoldMs = 60000;
