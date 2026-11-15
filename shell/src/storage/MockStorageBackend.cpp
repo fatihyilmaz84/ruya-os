@@ -402,13 +402,15 @@ void MockStorageBackend::scanVolume(const QString &id, bool force)
 void MockStorageBackend::cancelScan(const QString &id)
 {
     m_cancelCalls.append(id);
-    if (m_scans.value(id).state != QLatin1String("running"))
-        return; // like the service: only a running scan is cancelled; a finished result stays
-    VolumeScan cancelled;
-    cancelled.state = QStringLiteral("cancelled");
-    cancelled.partial = true;
-    m_scans.insert(id, cancelled);
-    m_scanning.clear();
+    // Like the service: only a running scan is cancelled; a finished result stays. Either way the
+    // current state is published, as the client would re-read it, so a test sees a result lost here.
+    if (m_scans.value(id).state == QLatin1String("running")) {
+        VolumeScan cancelled;
+        cancelled.state = QStringLiteral("cancelled");
+        cancelled.partial = true;
+        m_scans.insert(id, cancelled);
+        m_scanning.clear();
+    }
     publishScan(id);
 }
 

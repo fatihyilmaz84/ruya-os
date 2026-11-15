@@ -844,8 +844,9 @@
       Stops the scan of this volume within one directory (or within 64 entries of a very large
       one); it then ends as "cancelled". A result that is not running is left as it is (a plain
       cancel, e.g. the pane closing, never throws a fresh result away; ScanVolume with force walks
-      again). Eject cancels it too and waits (at most 2 s) until the walk has let go of the volume before unmounting,
-      since a directory held open would make the unmount answer "busy".
+      again). Eject cancels it too and waits (at most 2 s) until the walk has let go of the
+      volume before unmounting, since a directory held open would make the unmount answer
+      "busy".
     -->
     <method name="CancelScan">
       <arg name="id" type="s" direction="in"/>
