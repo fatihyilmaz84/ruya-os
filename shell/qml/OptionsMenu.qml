@@ -39,7 +39,9 @@ FocusScope {
     // Where the sheet is (its place, without the slide-in): tests read these.
     property real placedX: 0
     property real placedY: 0
-    property string placedSide: "right"        // "right" | "left" of the anchor, or "edge"
+    property string placedSide: "right"        // "above" | "below" a pill, "right" | "left" of the anchor, or "edge"
+    // Over card art or captions (Home, Games) the sheet is opaque `panel`; elsewhere `glassOpaque` (04 §5).
+    property bool overArt: false
 
     // The hint bar (Shell.modalHintsOf): Select only when there is a row to select.
     readonly property var modalHints: rows.length > 0
@@ -107,8 +109,10 @@ FocusScope {
         returnTo = Window.activeFocusItem
         place()
         shown = true
-        const side = placedSide === "edge" ? Theme.pageSlide * u : (placedSide === "right" ? -1 : 1) * Theme.spaceM * u
-        slide = side
+        const side = placedSide === "edge" ? Theme.pageSlide * u : (placedSide === "right" || placedSide === "above" ? -1 : 1) * Theme.spaceM * u
+        slideVertical = placedSide === "above" || placedSide === "below"
+        // Above: rises into place (starts lower); below: sinks into place (starts higher).
+        slide = slideVertical ? -side : side
         opacity = 0
         openAnim.start()
         menu.forceActiveFocus()
@@ -197,14 +201,22 @@ FocusScope {
             const r = anchorRect()
             const grow = kind === "card" ? (Theme.focusScale - 1) / 2 : 0      // 4 % of the width (1.08 scale)
             const gap = (Theme.focusRingOffset + Theme.focusRingWidth + Theme.spaceM) * u
-            if (r.right + grow * r.w + gap + w <= rightEdge) {
+            if (kind === "pill" && r.top - gap - h >= marginY) {
+                side = "above"
+                x = Math.max(marginX, Math.min(r.left, rightEdge - w))
+                y = r.top - gap - h
+            } else if (kind === "pill" && r.bottom + gap + h <= bottomLimit) {
+                side = "below"
+                x = Math.max(marginX, Math.min(r.left, rightEdge - w))
+                y = r.bottom + gap
+            } else if (r.right + grow * r.w + gap + w <= rightEdge) {
                 side = "right"
                 x = r.right + grow * r.w + gap
             } else if (r.left - grow * r.w - gap - w >= marginX) {
                 side = "left"
                 x = r.left - grow * r.w - gap - w
             }
-            if (side !== "edge")
+            if (side === "right" || side === "left")
                 y = Math.max(marginY, Math.min(r.top - grow * r.h, bottomLimit - h))
         }
         if (side === "edge")
@@ -226,6 +238,7 @@ FocusScope {
 
     // ---- motion ----
     property real slide: 0
+    property bool slideVertical: false
     ParallelAnimation {
         id: openAnim
         NumberAnimation { target: menu; property: "opacity"; from: 0; to: 1; duration: Theme.overlayMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap }
@@ -254,12 +267,12 @@ FocusScope {
     Rectangle {
         id: sheet
         objectName: "optionsSheet"
-        x: menu.placedX + menu.slide
-        y: menu.placedY
+        x: menu.placedX + (menu.slideVertical ? 0 : menu.slide)
+        y: menu.placedY + (menu.slideVertical ? menu.slide : 0)
         width: menu.sheetWidth
         height: menu.sheetHeight
         radius: Theme.radiusL * menu.u
-        color: Theme.glassOpaque
+        color: menu.overArt ? Theme.panel : Theme.glassOpaque
 
         GlassLayers {
             objectName: "optionsLayers"

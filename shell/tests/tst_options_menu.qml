@@ -222,13 +222,58 @@ Item {
             compare(menu.placedY, 54)
         }
 
-        // A pill does not scale: no 4 % term; the menu is placed from the pill's right edge.
-        function test_beside_a_hero_pill() {
+        // RUY-694: a pill's menu opens above it, left-aligned to the pill (a pill does not scale: no 4 % term).
+        function test_above_a_hero_pill() {
             const menu = menuOf(1)
-            menu.open(anchorAt(96, 500, 220, 84), "pill", "Turbo Racer", rowsOf(3, false), "")
+            menu.open(anchorAt(96, 700, 220, 84), "pill", "Turbo Racer", rowsOf(3, false), "")
+            const gap = Theme.focusRingOffset + Theme.focusRingWidth + Theme.spaceM
+            compare(menu.placedSide, "above")
+            compare(menu.placedX, 96, "the pill's left edge")
+            compare(menu.placedY + sheetOf(menu).height + gap, 700, "its bottom a gap above the pill")
+        }
+
+        function test_a_pill_in_the_right_half_is_clamped_to_the_safe_area() {
+            const menu = menuOf(1)
+            menu.open(anchorAt(1800, 700, 220, 84), "pill", "Turbo Racer", rowsOf(3, false), "")
+            compare(menu.placedSide, "above")
+            compare(menu.placedX, 1920 - 96 - 560, "clamped to the right safe-area edge")
+        }
+
+        function test_below_a_pill_when_there_is_no_room_above() {
+            const menu = menuOf(1)
+            menu.open(anchorAt(96, 200, 220, 84), "pill", "Turbo Racer", rowsOf(3, false), "")
+            const gap = Theme.focusRingOffset + Theme.focusRingWidth + Theme.spaceM
+            compare(menu.placedSide, "below")
+            compare(menu.placedX, 96)
+            compare(menu.placedY, 200 + 84 + gap)
+        }
+
+        function test_beside_a_pill_when_neither_above_nor_below_fits() {
+            const menu = menuOf(1)
+            menu.open(anchorAt(96, 400, 220, 84), "pill", "Turbo Racer", rowsOf(8, true), "")
             compare(menu.placedSide, "right")
             compare(menu.placedX, 96 + 220 + Theme.focusRingOffset + Theme.focusRingWidth + Theme.spaceM)
-            compare(menu.placedY, 500, "the pill's own top")
+            const bottomLimit = 1080 - 54 - (Theme.glyphSize + Theme.spaceM)
+            compare(menu.placedY, Math.max(54, Math.min(400, bottomLimit - sheetOf(menu).height)), "the pill's top, kept above the hint bar band")
+        }
+
+        function test_above_and_below_slide_vertically() {
+            const menu = menuOf(1)
+            menu.open(anchorAt(96, 700, 220, 84), "pill", "Turbo Racer", rowsOf(3, false), "")
+            verify(menu.slideVertical)
+            menu.close()
+            menu.open(anchorAt(96, 300, 220, 84), "card", "Turbo Racer", rowsOf(3, false), "")
+            verify(!menu.slideVertical, "a card keeps the horizontal slide")
+        }
+
+        function test_the_fill_is_panel_over_art_and_glass_opaque_elsewhere() {
+            const menu = menuOf(1)
+            menu.open(anchorAt(96, 700, 220, 84), "pill", "Turbo Racer", rowsOf(3, false), "")
+            compare(sheetOf(menu).color, Theme.glassOpaque, "the default")
+            menu.close()
+            menu.overArt = true
+            menu.open(anchorAt(96, 700, 220, 84), "pill", "Turbo Racer", rowsOf(3, false), "")
+            compare(sheetOf(menu).color, Theme.panel)
         }
 
         // A large UI size: neither side has room, so the sheet sits on the right safe-area edge, centred.
