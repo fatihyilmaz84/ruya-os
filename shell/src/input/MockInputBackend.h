@@ -91,6 +91,8 @@ public:
         m_forcedOnce.clear();
         m_holdSaves = false;
         m_held.clear();
+        m_holdGets = false;
+        m_heldGets.clear();
         m_holdStored = false;
         m_heldStored.clear();
         m_confirm.clear();
@@ -114,6 +116,8 @@ public:
     // While on, SaveProfile calls are recorded but not carried out nor answered until the hold ends;
     // then they run in order (RUY-595: a save still in flight).
     void holdSaves(bool hold);
+    // The same for GetProfile (RUY-714: the window before the shown pad's profile has arrived).
+    void holdGets(bool hold);
     // The same for StoredConsoleProfiles (RUY-468): the start sweep waits for its answer, which is
     // read when the hold ends (the lists the shell receives meanwhile are the race it guards).
     void holdStored(bool hold);
@@ -195,9 +199,11 @@ private:
     int m_padGeneration = 0;
     bool m_fail = false;
     bool m_holdSaves = false;
+    bool m_holdGets = false;
     bool m_replaying = false;
     struct HeldCall { quint64 token; QVariantMap args; };
     QList<HeldCall> m_held;
+    QList<HeldCall> m_heldGets;
     bool m_holdStored = false;
     QList<quint64> m_heldStored;   // StoredConsoleProfiles tokens not answered yet
     bool m_listFail = false;

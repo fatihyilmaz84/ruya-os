@@ -720,6 +720,12 @@ void Input::mockHoldSaves(bool hold)
         mock->holdSaves(hold);
 }
 
+void Input::mockHoldGets(bool hold)
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        mock->holdGets(hold);
+}
+
 void Input::mockHoldStoredConsoleProfiles(bool hold)
 {
     if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))

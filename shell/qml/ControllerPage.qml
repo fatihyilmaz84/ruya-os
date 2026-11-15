@@ -27,7 +27,8 @@ Page {
     // This pad's Confirm button for the signed-in profile (RUY-603): "family" | "south" | "east".
     readonly property string confirmMode: String(Input.confirmButtons[padId] ?? "family")
     // Button layout in games is editable while GameControls can read the profiles (RUY-500).
-    readonly property bool layoutAvailable: Input.confirmButtonsAvailable && GameControls.loadState !== "failed"
+    readonly property bool layoutAvailable: Input.confirmButtonsAvailable && GameControls.loadState === "ok"
+                                                 && GameControls.pad !== null && GameControls.pad.id === page.padId
     glyphFamily: pad.family ?? ""
     glyphConfirmMode: confirmMode
     Component.onCompleted: {

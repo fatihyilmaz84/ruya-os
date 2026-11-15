@@ -267,6 +267,8 @@ public:
     Q_INVOKABLE void mockSetProfileStatus(const QString &method, const QString &status);
     // While true SaveProfile calls wait (recorded, not carried out); false carries them out in order (RUY-595).
     Q_INVOKABLE void mockHoldSaves(bool hold);
+    // The same for GetProfile (RUY-714): the answer waits until false.
+    Q_INVOKABLE void mockHoldGets(bool hold);
     Q_INVOKABLE void mockSetProfileStatusOnce(const QString &method, const QString &status);
     // The console profiles the mock holds controller profiles for (StoredConsoleProfiles), and one
     // more as if it were left on disk (an orphan for the start sweep, RUY-468).
