@@ -244,8 +244,8 @@ FocusScope {
         // window of a two-window client that is in front, not the client's first. A client-less surface never matches.
         const client = inhibitor.surface.client
         const record = apps.find(r => r.item.surface === inhibitor.surface)
-                       ?? (client && focusedApp && focusedApp.surface && focusedApp.surface.client === client
-                           ? recordOf(focusedApp) : undefined)
+                       ?? (client ? apps.find(r => r.item === focusedApp && r.item.surface
+                                                       && r.item.surface.client === client) : undefined)
         if (!record || record.item !== focusedApp || !appShownTo(record.profile))
             return false
         const run = instanceOfWindow(record)
