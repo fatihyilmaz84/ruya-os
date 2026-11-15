@@ -93,6 +93,8 @@ Item {
         }
 
         // RUY-662: a longer translation shrinks to stay inside the key (Turkish "Tamam" on the OK key).
+        // The floor is typeCaption: on Linux (the console) Inter SemiBold "Tamam" is 107.4 px at typeBody,
+        // wider than the 105.6 px box, so a typeBody floor overflowed there (Windows' metrics hid it).
         function test_captions_fit_the_key() {
             DeviceSettings.language = "tr"
             tc.pad.open({ id: "p1", name: "Player One" })
@@ -105,7 +107,7 @@ Item {
                 verify(label.text === (idx === 9 ? "Sil" : "Tamam"), "translated: " + label.text)
                 verify(label.paintedWidth <= 0.88 * keys.key + 0.5, label.text + " fits: " + label.paintedWidth)
                 verify(label.fontSizeMode === Text.Fit, "fitted")
-                verify(label.minimumPixelSize >= Theme.typeBody * tc.pad.u - 0.5, "not below typeBody: " + label.minimumPixelSize)
+                fuzzyCompare(label.minimumPixelSize, Theme.typeCaption * tc.pad.u, 0.5, "the floor is typeCaption")
             }
             DeviceSettings.language = "en"
         }

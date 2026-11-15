@@ -517,6 +517,12 @@ Item {
             return Usage.history.filter(h => h.kind === "session").map(h => "activitySession_" + h.appId + "_" + h.start)
         }
 
+        // The Activity page is gone or hidden (its fade-out ended): only then does it stop watching.
+        function activityHidden() {
+            const body = find("activityBody")
+            return !body || !body.visible
+        }
+
         function test_no_refresh_while_hidden() {
             Usage.mockSetData("p2", sessions(), today)
             startShell()
@@ -535,6 +541,9 @@ Item {
             tryVerify(() => Usage.mockReadCount() > shown, 2000, "with the page on screen the heartbeat reads")
             keyClick(Qt.Key_Escape)
             tryVerify(() => tc.shell.currentPage !== "activity")
+            // currentPage changes at once, but the page stays visible (and watching) while it fades out;
+            // it stops reading only when it is hidden. On Linux the fade had not ended here (RUY-683).
+            tryVerify(() => activityHidden(), 2000, "the page has faded out")
             tryVerify(() => Usage.mockPendingReplies() === 0)
             const left = Usage.mockReadCount()
             Usage.mockTouch("p2")
