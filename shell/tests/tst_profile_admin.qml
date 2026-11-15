@@ -241,8 +241,9 @@ Item {
             compare(create("p1", "9999", "X", "standard", "")[0], "wrong-pin")
             compare(create("p2", "", "X", "standard", "")[0], "not-allowed", "a standard profile is not an admin")
             compare(create("nobody", "", "X", "standard", "")[0], "not-allowed")
-            compare(create("p1", "1234", "Guest", "guest", "")[0], "ok")
-            compare(create("p1", "1234", "G2", "guest", "1111")[0], "invalid", "guests never have a PIN")
+            // RUY-716: no new kept guests, whatever the PIN
+            compare(create("p1", "1234", "Guest", "guest", "")[0], "not-allowed")
+            compare(create("p1", "1234", "G2", "guest", "1111")[0], "not-allowed")
             compare(create("p1", "1234", "  ", "standard", "")[0], "invalid", "blank name")
             compare(create("p1", "1234", "X", "superuser", "")[0], "invalid", "unknown role")
 
@@ -1070,7 +1071,7 @@ Item {
             openProfilesPane()
             openAddForm()
             find("paneProfiles").newName = "Kid"
-            goToRow("rowNewRole")
+            goToRow("rowNewPin")
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/10-settings-profiles.png")
         }

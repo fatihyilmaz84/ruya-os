@@ -307,6 +307,11 @@ impl<A: Accounts> ProfileService<A> {
         let Some(role) = Role::parse(role) else {
             return (Outcome::of(Status::Invalid), None);
         };
+        // RUY-716: no new kept guests; temporary guests come from "Who's playing?". Guest-role
+        // profiles stored before this still load, rename and delete.
+        if role == Role::Guest {
+            return (Outcome::of(Status::NotAllowed), None);
+        }
         let name = name.trim();
         if name.is_empty()
             || name.chars().count() > MAX_NAME_CHARS
@@ -314,10 +319,10 @@ impl<A: Accounts> ProfileService<A> {
         {
             return (Outcome::of(Status::Invalid), None);
         }
-        // Admins must have a PIN; guests never have one; others may.
+        // Admins must have a PIN; others may.
         let pin_ok = match role {
             Role::Admin => pin::is_valid(new_pin),
-            Role::Guest => new_pin.is_empty(),
+            Role::Guest => false,
             Role::Standard => new_pin.is_empty() || pin::is_valid(new_pin),
         };
         if !pin_ok {
@@ -623,13 +628,13 @@ mod tests {
             svc.create_profile("p1", "1234", "Guest", "guest", "", now)
                 .0
                 .status,
-            Status::Ok
+            Status::NotAllowed
         );
         assert_eq!(
             svc.create_profile("p1", "1234", "G2", "guest", "1111", now)
                 .0
                 .status,
-            Status::Invalid
+            Status::NotAllowed
         );
         assert_eq!(
             svc.create_profile("p1", "1234", "  ", "standard", "", now)
@@ -643,6 +648,41 @@ mod tests {
                 .status,
             Status::Invalid
         );
+    }
+
+    #[test]
+    fn stored_guest_role_profile_still_loads_renames_and_deletes() {
+        // RUY-716: CreateProfile refuses guests, but one stored earlier keeps working.
+        let Fixture { mut svc, now, .. } = fixture();
+        svc.store.insert(Profile {
+            id: String::new(),
+            name: "Old guest".to_owned(),
+            avatar: "#5a6478".to_owned(),
+            role: Role::Guest,
+            pin_hash: None,
+        });
+        svc.store.save().unwrap();
+        let id = svc
+            .profiles()
+            .iter()
+            .find(|p| p.role == Role::Guest)
+            .unwrap()
+            .id
+            .clone();
+        assert_eq!(svc.switch_to(&id, "", now).status, Status::Ok);
+        assert_eq!(
+            svc.rename_profile("p1", "1234", &id, "Visitor", now).status,
+            Status::Ok
+        );
+        assert_eq!(
+            svc.profiles().iter().find(|p| p.id == id).unwrap().name,
+            "Visitor"
+        );
+        assert_eq!(
+            svc.delete_profile("p1", "1234", &id, now).status,
+            Status::Ok
+        );
+        assert!(svc.profiles().iter().all(|p| p.id != id));
     }
 
     #[test]

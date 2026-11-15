@@ -246,6 +246,7 @@ Shell icons come from Google's **Material Symbols Rounded** (Apache-2.0), bundle
    - Each guest is a **temporary profile user**, wiped when that guest leaves (its seat ends) or the session ends.
    - Lead decision (2026-11-14): its uid comes from a range that is never handed out twice.
    - A guest can still sign in alone from the picker (unchanged).
+   - No new kept guests (owner 2026-11-15, RUY-716): `CreateProfile` refuses role `guest`; guest-role profiles stored earlier keep working and can be renamed and deleted.
 8. **Add profile** stays in the prompt, behind an admin's PIN (owner 2026-11-14).
 9. **A seat outlives a lost pad for 60 s** (owner 2026-11-13 for player 1, 2026-11-14 for every player).
    - The same pad coming back within the minute is the same player, with the same pad number.

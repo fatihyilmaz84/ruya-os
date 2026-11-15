@@ -512,15 +512,12 @@ Item {
             checkFocused("add form name")
             compare(focused().Accessible.name, "Name, Not set")
             keyClick(Qt.Key_Down)
-            tryVerify(() => find("rowNewRole").activeFocus)
-            checkFocused("add form role")
-            keyClick(Qt.Key_Down)
+            verify(find("rowNewRole") === null, "RUY-716: the add form has no role choice")
             tryVerify(() => find("rowNewPin").activeFocus)
             checkFocused("add form PIN toggle")
             keyClick(Qt.Key_Down)
             tryVerify(() => find("rowCreate").activeFocus)
             checkFocused("add form create")
-            verify(seen.indexOf("rowNewRole: Role, Standard") >= 0, "the role row names its value: " + seen)
             verify(seen.indexOf("rowCreate: Create profile") >= 0, "Create is named: " + seen)
 
             // The name keyboard.

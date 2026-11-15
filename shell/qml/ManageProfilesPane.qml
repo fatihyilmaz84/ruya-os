@@ -199,23 +199,8 @@ ProfilePaneBase {
             pane.nameEntry.open(qsTr("Profile name"), pane.newName, { maxLength: 32, layout: "text" })
         }
     }
-    ChoiceRow {
-        id: roleRow
-        objectName: "rowNewRole"
-        u: pane.u
-        visible: pane.isAdmin && pane.adding
-        label: qsTr("Role")
-        options: [
-            { value: "standard", label: qsTr("Standard") },
-            { value: "guest", label: qsTr("Guest") },
-        ]
-        value: pane.newRole
-        onEdited: v => {
-            pane.newRole = v
-            if (v === "guest")
-                pane.newUsePin = false     // guests never have a PIN
-        }
-    }
+    // RUY-716: no role choice any more. Kept guests are gone (temporary guests come from "Who's
+    // playing?"), so a profile made here is Standard; admins come from first setup.
     ToggleRow {
         id: pinRow
         objectName: "rowNewPin"
