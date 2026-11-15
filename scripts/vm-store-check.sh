@@ -84,6 +84,9 @@ security)
     echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
     ;;
 clean)
+    # RUY-708: a check that died while the install was held leaves the drop-in and the shim.
+    rm -rf /run/ruya-store-shim /run/systemd/system/ruya-store.service.d/zz-hold-install.conf
+    systemctl daemon-reload
     flatpak uninstall --system -y "$app" "$rt" >/dev/null 2>&1
     flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
     rm -rf "$work"
@@ -276,6 +279,26 @@ for r in json.load(sys.stdin)["data"][0]:
     grep -a "installed=1" "$work/probe.log" | head -1 | grep -q "$app(installed)" && ok "and its catalogue flag changed" || bad "catalogue flag did not change"
     grep -a "installed=" "$work/probe.log" | tail -1 | grep -q "installed=0" && ok "the shell saw it uninstalled again" || bad "the shell still shows it installed"
     echo "--- the service restarts during an install (T-171): the shell ends the job as failed"
+    # RUY-708: hold the install deterministically. The local install ends in under 100 ms, faster than
+    # a restart can be planned, so the service gets a PATH whose `flatpak install` waits (a shim that
+    # touches "started" and then waits for "release", which never comes) while every other flatpak
+    # call passes through. The restart below always lands mid-install and takes the shim with it.
+    shim=/run/ruya-store-shim
+    dropin=/run/systemd/system/ruya-store.service.d/zz-hold-install.conf
+    rm -rf "$shim"; mkdir -p "$shim" "$(dirname "$dropin")"
+    cat > "$shim/flatpak" <<'SHIMEOF'
+#!/bin/sh
+if [ "$1" = install ]; then
+    : > /run/ruya-store-shim/started
+    while [ ! -e /run/ruya-store-shim/release ]; do sleep 0.2; done
+fi
+exec /usr/bin/flatpak "$@"
+SHIMEOF
+    chmod 755 "$shim/flatpak"
+    printf '[Service]\nEnvironment=PATH=%s:/usr/local/bin:/usr/bin:/usr/sbin\n' "$shim" > "$dropin"
+    systemctl daemon-reload && systemctl restart ruya-store
+    n=0
+    until as_shell busctl --system call "$svc" "$path" "$ifc" Search sa{sv} "TestApp" 0 | grep -q "$app" || [ "$n" -ge 120 ]; do sleep 1; n=$((n + 1)); done
     # A fresh probe: the first one has used up its timeout by now.
     pkill -f "probe[.]qml" 2>/dev/null
     : > "$work/probe2.log"; chmod 666 "$work/probe2.log"
@@ -298,10 +321,15 @@ for r in json.load(sys.stdin)["data"][0]:
     else
         bad "the job never reached the shell's Store.jobs"; grep -a "store-probe" "$work/probe2.log" | tail -5
     fi
-    # The local install ends in under 100 ms: freeze the pull so that the restart cuts it short
-    # (systemd sends SIGCONT after SIGTERM, the frozen flatpak then dies with the service).
-    pkill -STOP -P "$(systemctl show -p MainPID --value ruya-store)" flatpak
+    # The held install (the shim above) is cut short by the restart; the drop-in goes first, so the
+    # restarted service has its normal PATH.
+    n=0
+    until [ -e "$shim/started" ] || [ "$n" -ge 100 ]; do sleep 0.2; n=$((n + 1)); done
+    [ -e "$shim/started" ] && ok "the install is held in flatpak (the restart lands mid-install)" || bad "the install never reached flatpak"
+    rm -f "$dropin"; rmdir "$(dirname "$dropin")" 2>/dev/null
+    systemctl daemon-reload
     systemctl restart ruya-store
+    rm -rf "$shim"
     n=0
     until grep -a -q "store-probe: jobFinished $app failed" "$work/probe2.log" || [ "$n" -ge 40 ]; do sleep 1; n=$((n + 1)); done
     grep -a -q "store-probe: jobFinished $app failed" "$work/probe2.log" && ok "the shell ended the cut-short install as failed" || bad "the shell never ended the job of the old service"

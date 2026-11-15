@@ -517,6 +517,7 @@ expect_contains "closed stdout: the linger is still taken back" "$out" "loginctl
 # $rt made the uninstall fail silently, and the remote-delete then orphaned the runtime).
 dropsrc="$tmp/drop.sh"
 { sed -n '/^# --- drop_test_apps begin/,/^# --- drop_test_apps end/p' "$here/vm-session-check.sh"
+  sed -n '/^# --- wait_fstate begin/,/^# --- wait_fstate end/p' "$here/vm-session-check.sh"
   sed -n '/^# --- refused_client_ends begin/,/^# --- refused_client_ends end/p' "$here/vm-session-check.sh"; } > "$dropsrc"
 [ -s "$dropsrc" ] && pass "vm-session-check.sh has the drop_test_apps and refused_client_ends blocks" || fail "no drop_test_apps block"
 mkdir -p "$tmp/drop-bin"
@@ -572,6 +573,22 @@ expect_contains "refused client: the frozen unit passes" "$out" "PASS: the clien
 expect_contains "refused client: the frozen unit returns 0" "$out" "rc=0"
 out="$(DROP_JOURNAL="$tmp/drop.journal" rundrop 'refused_client_ends ruya-app-2 0 "the client"; echo "rc=$?"')"
 expect_contains "refused client: another unit's frozen line does not count" "$out" "FAIL: the client neither ended nor was frozen"
+
+# --- vm-session-check.sh check: the sweep's FreezerState wait (RUY-708) ----------------------------
+# The first read caught the unit mid-thaw; the FAIL then printed `running`. wait_fstate waits, and
+# prints the value it tested.
+out="$(rundrop 'n=0; fstate() { n=$((n + 1)); [ "$n" -ge 2 ] && echo running || echo thawing; }; wait_fstate u unit running 5; echo "rc=$?"')"
+expect_contains "wait_fstate: thawing, then running passes" "$out" "PASS: unit is running"
+expect_contains "wait_fstate: thawing, then running returns 0" "$out" "rc=0"
+out="$(rundrop 'fstate() { echo frozen; }; wait_fstate u unit running 1; echo "rc=$?"')"
+expect_contains "wait_fstate: a stuck frozen unit fails, naming the value tested" "$out" "FAIL: unit: FreezerState frozen, not running"
+expect_contains "wait_fstate: a stuck frozen unit returns 1" "$out" "rc=1"
+# restart/check clean up the display check's app too: it needs the runtime they remove.
+for c in 'vm-session-check.sh'; do
+    [ "$(grep -c 'drop_test_apps "$wclient" "$sleeper" "$crasher" "$rt"' "$here/$c")" -ge 4 ]         && pass "$c: every full cleanup also removes the display check's app (RUY-708)" || fail "$c: a cleanup leaves $wclient, which keeps the runtime installed"
+done
+# vm-store-check.sh holds the install in a flatpak shim; no timing-dependent SIGSTOP.
+grep -q 'zz-hold-install.conf' "$here/vm-store-check.sh" && ! grep -q 'pkill -STOP' "$here/vm-store-check.sh"     && pass "vm-store-check.sh holds the install with a shim, not a race against SIGSTOP (RUY-708)" || fail "vm-store-check.sh: the install is not held deterministically"
 
 # --- vm-profiles-check.sh guests (RUY-125): each assertion can fail ---------------------------------
 # A fake Profiles1 (busctl --json=short) and getent over one JSON state file; FAKE_BUG breaks one rule.
