@@ -217,7 +217,7 @@ Item {
             verify(pad)
             pad.collect("New PIN", false)
             tryVerify(() => pad.activeFocus, 2000, "the pad takes focus")
-            compare(tc.shown(), "back Cancel")
+            compare(tc.shown(), "accept Select|back Back")
             verify(!find("hintBar").activeFocus)
             pad.destroy()
         }
@@ -322,7 +322,9 @@ Item {
             keyClick(Qt.Key_Return)
             tryVerify(() => find("pinPad").shown, 2000, "the picker's PIN pad opens")
             tryVerify(() => find("pinKeys").activeFocus, 2000)
-            compare(tc.shown(), "back Cancel")
+            compare(tc.shown(), "accept Select|back Back")
+            keyClick(Qt.Key_1)
+            compare(tc.shown(), "accept Select|back Delete", "a digit typed: Back deletes it")
             verify(!find("hintBar").activeFocus)
         }
 

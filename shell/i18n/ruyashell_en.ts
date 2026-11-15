@@ -3312,7 +3312,22 @@ This can&apos;t be undone.</translation>
 <context>
     <name>PinPad</name>
     <message>
-        <location filename="../qml/PinPad.qml" line="+201"/>
+        <location filename="../qml/PinPad.qml" line="+50"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Delete</source>
+        <translation>Delete</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+154"/>
         <source>PINs don&apos;t match</source>
         <translation>PINs don&apos;t match</translation>
     </message>
@@ -4679,12 +4694,11 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="-220"/>
-        <location line="+23"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1860"/>
+        <location line="-1837"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -6219,7 +6233,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>WhosPlaying</name>
     <message>
-        <location filename="../qml/WhosPlaying.qml" line="+145"/>
+        <location filename="../qml/WhosPlaying.qml" line="+146"/>
         <location line="+215"/>
         <source>Guest</source>
         <translation>Guest</translation>

@@ -72,7 +72,7 @@ FocusScope {
             return pairHint.timedOut ? [{ action: "accept", text: qsTr("Try again") }, { action: "back", text: qsTr("Skip") }]
                                      : [{ action: "back", text: qsTr("Skip") }]
         if (pad.shown)
-            return [{ action: "back", text: qsTr("Cancel") }]
+            return pad.modalHints
         const a = { action: "accept", text: step === stepAdmin || step === stepZone ? qsTr("Select") : qsTr("Next") }
         if (step === 0 || step === stepDone || busy)
             return step === 0 || step === stepDone ? [a] : []

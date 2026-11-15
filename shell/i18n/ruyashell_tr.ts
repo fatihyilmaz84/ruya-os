@@ -3301,7 +3301,22 @@ Bu geri alınamaz.</translation>
 <context>
     <name>PinPad</name>
     <message>
-        <location filename="../qml/PinPad.qml" line="+201"/>
+        <location filename="../qml/PinPad.qml" line="+50"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Delete</source>
+        <translation>Sil</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+154"/>
         <source>PINs don&apos;t match</source>
         <translation>PIN&apos;ler eşleşmiyor</translation>
     </message>
@@ -4662,12 +4677,11 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-220"/>
-        <location line="+23"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1860"/>
+        <location line="-1837"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -6199,7 +6213,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>WhosPlaying</name>
     <message>
-        <location filename="../qml/WhosPlaying.qml" line="+145"/>
+        <location filename="../qml/WhosPlaying.qml" line="+146"/>
         <location line="+215"/>
         <source>Guest</source>
         <translation>Misafir</translation>

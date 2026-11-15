@@ -107,7 +107,8 @@ FocusScope {
     property string guestSession: ""
 
     // What the hint bar says (Shell.hintList).
-    readonly property var modalHints: step === "pick"
+    readonly property var modalHints: step === "pin" ? pinPad.modalHints
+        : step === "pick"
         ? [{ action: "accept", text: qsTr("Select") }, { action: "back", text: qsTr("Not now") }]
         : [{ action: "accept", text: qsTr("Select") }, { action: "back", text: qsTr("Back") }]
 
