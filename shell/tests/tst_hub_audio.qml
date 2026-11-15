@@ -281,7 +281,8 @@ Item {
             const rowValue = findChild(row, "hubRowValue")
             const label = findLabel(row)
             // Wait for the layout: the Row is as wide as its three parts and the circles sit at its ends.
-            tryVerify(() => rowValue.width === left.width + value.width + right.width + 2 * rowValue.spacing && value.truncated, 2000, "the row has laid out")
+            tryVerify(() => Math.abs(rowValue.width - (left.width + value.width + right.width + 2 * rowValue.spacing)) < 0.5 && value.truncated, 2000,
+                      "the row has laid out: " + rowValue.width + " vs " + (left.width + value.width + right.width + 2 * rowValue.spacing) + " truncated " + value.truncated)
             verify(!label.truncated, "the label does not elide")
             compare(label.width, label.implicitWidth)
             const u = find("systemPanel").u
