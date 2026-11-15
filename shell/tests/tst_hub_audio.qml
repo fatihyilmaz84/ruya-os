@@ -260,6 +260,60 @@ Item {
             tryCompare(Audio, "defaultSink", "hdmi-0")
         }
 
+        // RUY-693: a choice row with a neighbour draws Settings' round arrow circles, not text; a long name elides, not the label.
+        function test_the_output_row_draws_round_arrows_and_a_long_name_elides_the_value() {
+            start()
+            openAudio()
+            goTo("audio:output")
+            const row = find("quickMenuItem_audio:output")
+            const left = findChild(row, "hubArrowLeft")
+            const right = findChild(row, "hubArrowRight")
+            verify(left && right && left.visible && right.visible, "two or more outputs: both arrows")
+            compare(left.width, 48 * find("systemPanel").u)
+            compare(right.width, left.width)
+            compare(left.color, Theme.selectedFill)
+            compare(right.color, Theme.selectedFill)
+            verify(!findText(row, "‹") && !findText(row, "›"), "no text arrows")
+            verify(Audio.mockPlug("long-device"))
+            tryCompare(Audio, "defaultSink", "long-device")
+            tryVerify(() => findChild(row, "hubValueText").text === Audio.outputs.find(o => o.id === "long-device").name)
+            verify(findChild(row, "hubValueText").truncated, "the long name elides")
+            verify(!findLabel(row).truncated, "and the label does not")
+            keyClick(Qt.Key_Right)
+            tryVerify(() => Audio.defaultSink !== "long-device", 2000)
+            verify(find("systemActions").activeFocus && focusedKey() === "audio:output", "Right steps and the focus stays")
+        }
+
+        function findText(item, ch) {
+            for (const c of item.children) {
+                if (c.visible && typeof c.text === "string" && c.text === ch)
+                    return c
+                const d = findText(c, ch)
+                if (d)
+                    return d
+            }
+            return null
+        }
+
+        function findLabel(item) {
+            for (const c of item.children) {
+                if (c.text === "Output" && typeof c.truncated === "boolean")
+                    return c
+                const d = findLabel(c)
+                if (d)
+                    return d
+            }
+            return null
+        }
+
+        function test_one_microphone_has_no_arrows() {
+            start()
+            openAudio()
+            goTo("audio:mic")
+            const row = find("quickMenuItem_audio:mic")
+            verify(!findChild(row, "hubArrowLeft").visible && !findChild(row, "hubArrowRight").visible)
+        }
+
         function test_a_plugged_headset_is_offered_and_chosen_from_the_row() {
             start()
             openAudio()
@@ -519,6 +573,44 @@ Item {
             tryCompare(Audio, "inputMuted", true)
             wait(500)
             grabImage(tc.shell).save(shotsDir + "/hub-audio-4-mic-muted.png")
+        }
+
+        // RUY-693: the Output choice row with Settings' round arrows, focused and not, over a game.
+        function test_zz_screenshots_hub_arrows() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            const variants = [["dreamglass", 1280, 720, "720p"], ["daylight", 1280, 720, "daylight-720p"],
+                              ["dreamglass", 1920, 1080, "1080p"], ["daylight", 1920, 1080, "daylight-1080p"]]
+            for (const v of variants) {
+                DeviceSettings.theme = v[0]
+                host.width = v[1]
+                host.height = v[2]
+                for (const lang of ["en", "tr"]) {
+                    DeviceSettings.language = lang
+                    const tag = v[3] + "-" + lang
+                    Session.mockReset()
+                    launchedSpy.clear()
+                    start()
+                    playRacer()
+                    openHub()
+                    goTo("panel:audio")
+                    keyClick(Qt.Key_Return)
+                    tryCompare(find("systemPanel"), "panelId", "audio")
+                    tryCompare(find("systemPanel"), "swap", 1)
+                    goTo("audio:output")
+                    wait(500)
+                    grabImage(tc.shell).save(shotsDir + "/hub-arrows-focused-" + tag + ".png")
+                    goTo("audio:mute")
+                    wait(300)
+                    grabImage(tc.shell).save(shotsDir + "/hub-arrows-unfocused-" + tag + ".png")
+                    tc.shell.destroy()
+                    wait(100)
+                }
+            }
+            DeviceSettings.theme = "dreamglass"
+            DeviceSettings.language = "en"
+            host.width = 1280
+            host.height = 720
         }
     }
 }

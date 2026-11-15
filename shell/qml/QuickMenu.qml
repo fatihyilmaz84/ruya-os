@@ -1184,31 +1184,41 @@ Item {
                                 anchors { right: parent.right; rightMargin: Theme.spaceL * menu.u; verticalCenter: parent.verticalCenter }
                                 spacing: Theme.spaceXs * menu.u
                                 readonly property bool arrows: action.isChoice && action.row.choices().length > 1
-                                // What the label leaves, less a little slack (the two arrows differ in width by a pixel): a device's name
+                                readonly property real circle: 48 * menu.u      // token-ok: ChoiceRow.circle, one arrow look
+                                // What the label leaves, less a little slack (rounding): a device's name
                                 // elides before the label does.
                                 readonly property real room: action.width - 2 * Theme.spaceL * menu.u - Theme.spaceM * menu.u - Theme.spaceXs * menu.u - itemLabel.implicitWidth
-                                Text {
+                                Rectangle {
                                     id: leftArrow
+                                    objectName: "hubArrowLeft"
                                     visible: panelValue.arrows
-                                    text: "‹"
-                                    color: Theme.text
-                                    font.pixelSize: Theme.typeBody * menu.u
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: panelValue.circle
+                                    height: width
+                                    radius: width / 2
+                                    color: Theme.selectedFill
+                                    Icon { anchors.centerIn: parent; u: menu.u; name: "chevron_left"; color: Theme.text }
                                 }
                                 Text {
                                     id: valueName
                                     objectName: "hubValueText"
-                                    width: Math.min(implicitWidth, panelValue.room - (panelValue.arrows ? 2 * (leftArrow.implicitWidth + panelValue.spacing) : 0))
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: Math.min(implicitWidth, panelValue.room - (panelValue.arrows ? 2 * (panelValue.circle + panelValue.spacing) : 0))
                                     textFormat: Text.PlainText      // a device's name comes from outside
                                     text: action.rowText
                                     color: Theme.text
                                     font.pixelSize: Theme.typeBody * menu.u
                                     elide: Text.ElideRight
                                 }
-                                Text {
+                                Rectangle {
+                                    objectName: "hubArrowRight"
                                     visible: panelValue.arrows
-                                    text: "›"
-                                    color: Theme.text
-                                    font.pixelSize: Theme.typeBody * menu.u
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: panelValue.circle
+                                    height: width
+                                    radius: width / 2
+                                    color: Theme.selectedFill
+                                    Icon { anchors.centerIn: parent; u: menu.u; name: "chevron_right"; color: Theme.text }
                                 }
                             }
                             // A notification (an item row, RUY-414): the kind's 48 u badge, the title and under it the age and
