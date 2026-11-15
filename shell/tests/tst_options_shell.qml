@@ -226,6 +226,8 @@ Item {
             verify(details.activeFocus)
             keyClick(Qt.Key_Menu)
             verify(menu().shown)
+            compare(menu().placedSide, "above")
+            compare(menu().placedX, details.mapToItem(menu(), 0, 0).x, "left-aligned to Details")
             verify(details.anchored)
             const face = findChild(details, "buttonFace")
             compare(face.color, Theme.focusFill, "the pill keeps its focused fill")
@@ -233,6 +235,24 @@ Item {
             compare(face.border.width, Theme.hairlineAt(tc.shell.u))
             keyClick(Qt.Key_Escape)
             verify(details.activeFocus)
+        }
+
+        // RUY-694: only Home and Games are over art; the Store and a Settings row keep glassOpaque.
+        function test_the_fill_follows_the_surface() {
+            start()
+            const id = Library.items[0].id
+            const anchor = find("homePlay")
+            verify(tc.shell.openOptions("store", id, anchor, "card", null))
+            compare(findChild(menu(), "optionsSheet").color, Theme.glassOpaque, "Store")
+            keyClick(Qt.Key_Escape)
+            verify(!menu().shown)
+            verify(tc.shell.openOptions("settings", id, anchor, "row", null))
+            compare(findChild(menu(), "optionsSheet").color, Theme.glassOpaque, "Settings row")
+            keyClick(Qt.Key_Escape)
+            verify(!menu().shown)
+            verify(tc.shell.openOptions("hero", id, anchor, "pill", null))
+            compare(findChild(menu(), "optionsSheet").color, Theme.panel, "Home's hero again")
+            keyClick(Qt.Key_Escape)
         }
 
         function test_menu_opens_on_a_games_card() {
@@ -724,7 +744,7 @@ Item {
             for (const lang of ["en", "tr"]) {
                 DeviceSettings.language = lang
                 start()
-                // beside the hero's Play pill
+                // above the hero's Play pill
                 keyClick(Qt.Key_Menu)
                 tryVerify(() => menu().opacity >= 1, 2000)
                 settle()
@@ -750,6 +770,50 @@ Item {
                 tc.shell.destroy()
                 wait(100)
             }
+        }
+
+        // RUY-694: the opaque fill and the above placement in the light theme and at 1080p (04 section 8).
+        function test_zz_screenshots_variants() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            const variants = [["daylight", 1280, 720, "daylight-720p"], ["dreamglass", 1920, 1080, "1080p"], ["daylight", 1920, 1080, "daylight-1080p"]]
+            for (const v of variants) {
+                DeviceSettings.theme = v[0]
+                host.width = v[1]
+                host.height = v[2]
+                for (const lang of ["en", "tr"]) {
+                    DeviceSettings.language = lang
+                    const tag = v[3] + "-" + lang
+                    start()
+                    keyClick(Qt.Key_Menu)                   // the hero's Play pill: above
+                    tryVerify(() => menu().opacity >= 1, 2000)
+                    compare(menu().placedSide, "above")
+                    settle()
+                    grabImage(tc.shell).save(shotsDir + "/" + "63-options-hero-" + tag + ".png")
+                    keyClick(Qt.Key_Escape)
+                    toRecent()
+                    keyClick(Qt.Key_Menu)                   // a Recent card
+                    tryVerify(() => menu().opacity >= 1, 2000)
+                    settle()
+                    grabImage(tc.shell).save(shotsDir + "/" + "70-options-recent-" + tag + ".png")
+                    keyClick(Qt.Key_Escape)
+                    tc.shell.destroy()
+                    wait(100)
+                    start()
+                    openGames()
+                    keyClick(Qt.Key_Menu)                   // a Games card
+                    tryVerify(() => menu().opacity >= 1, 2000)
+                    settle()
+                    grabImage(tc.shell).save(shotsDir + "/" + "60-options-games-card-" + tag + ".png")
+                    keyClick(Qt.Key_Escape)
+                    tc.shell.destroy()
+                    wait(100)
+                }
+            }
+            DeviceSettings.theme = "dreamglass"
+            DeviceSettings.language = "en"
+            host.width = 1280
+            host.height = 720
         }
 
         function test_zz_screenshots_running() {

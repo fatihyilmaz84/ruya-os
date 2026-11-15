@@ -253,6 +253,8 @@ Item {
             menu.open(anchorAt(96, 400, 220, 84), "pill", "Turbo Racer", rowsOf(8, true), "")
             compare(menu.placedSide, "right")
             compare(menu.placedX, 96 + 220 + Theme.focusRingOffset + Theme.focusRingWidth + Theme.spaceM)
+            const bottomLimit = 1080 - 54 - (Theme.glyphSize + Theme.spaceM)
+            compare(menu.placedY, Math.max(54, Math.min(400, bottomLimit - sheetOf(menu).height)), "the pill's top, kept above the hint bar band")
         }
 
         function test_above_and_below_slide_vertically() {
