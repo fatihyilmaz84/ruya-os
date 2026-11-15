@@ -715,6 +715,62 @@ Item {
             tryVerify(() => scanState("vol-stick") === "done", 3000)
         }
 
+        // The Rescan row walks a finished drive again (a write that changed no property of the volume).
+        function test_rescan_row_rescans() {
+            Storage.mockPlugStick()
+            tryVerify(() => volume("vol-stick") !== undefined)
+            openStoragePane()
+            tryVerify(() => scanState("vol-stick") === "done", 3000)
+            compare(Storage.mockScanCalls().length, 1)
+            const rescan = find("storageRescan_vol-stick")
+            verify(rescan !== null, "a Rescan row")
+            compare(rescan.label, "Rescan")
+            compare(rescan.kind, "action")
+            verify(rescan.y > find("storageScan_vol-stick_other").y, "under the results")
+            verify(rescan.y < find("storageEject_vol-stick").y, "above Eject")
+            goTo("storageRescan_vol-stick")
+            Storage.mockHoldScan(true)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => Storage.mockScanCalls().length === 2, 3000, "asked again")
+            tryVerify(() => scanState("vol-stick") === "running", 3000)
+            tryVerify(() => find("storageScan_vol-stick_wait") !== null, 3000, "Scanning... again")
+            verify(find("storageRescan_vol-stick") === rescan, "the row was not recreated")
+            verify(rescan.activeFocus, "focus stays on the row")
+            keyClick(Qt.Key_Return)                      // while it scans: nothing more is asked
+            wait(100)
+            compare(Storage.mockScanCalls().length, 2)
+            Storage.mockHoldScan(false)
+            tryVerify(() => scanState("vol-stick") === "done", 3000)
+            tryVerify(() => find("storageScan_vol-stick_cat:games") !== null, 3000)
+            verify(rescan.activeFocus, "focus stays on the row when the results are back")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000, "Back leaves")
+        }
+
+        // Another client scans: the pane asks again after 1.5, 3, 6, then 10 s, not every 1.5 s.
+        function test_busy_retry_backs_off() {
+            Storage.mockPlug(["vol-stick", "vol-card"])
+            tryVerify(() => volume("vol-card") !== undefined)
+            openStoragePane()
+            tryVerify(() => scanState("vol-stick") === "done" && scanState("vol-card") === "done", 3000)
+            const pane = find("paneStorage")
+            compare(pane.busyDelays.join(), "1500,3000,6000,10000", "the real steps")
+            pane.busyDelays = [150, 300, 600, 1200]          // the same shape, quick
+            Storage.mockScanElsewhere("vol-card")        // another client scans; the Rescan is refused
+            goTo("storageRescan_vol-stick")
+            keyClick(Qt.Key_Return)
+            tryCompare(pane, "busyRetryInterval", 150)
+            tryCompare(pane, "busyRetryInterval", 300, 3000)
+            tryCompare(pane, "busyRetryInterval", 600, 3000)
+            tryCompare(pane, "busyRetryInterval", 1200, 3000)
+            const calls = Storage.mockScanCalls().length
+            tryVerify(() => Storage.mockScanCalls().length >= calls + 2, 6000, "still asked")
+            compare(pane.busyRetryInterval, 1200, "capped")
+            Storage.mockScanElsewhere("")                // the other client is done
+            tryVerify(() => scanState("vol-stick") === "done", 3000)
+            compare(pane.busyStep, 0, "a scan that goes through starts the steps over")
+        }
+
         function test_zz_screenshots_scan() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
@@ -834,7 +890,7 @@ Item {
                 grabImage(tc.shell).save(shotsDir + "/27-settings-storage-scan-scanning" + (lang === "tr" ? "-tr" : "") + ".png")
                 Storage.mockHoldScan(false)
                 tryVerify(() => find("storageScan_vol-card_none") !== null, 3000)
-                goTo("storageScan_vol-card_none")
+                goTo("storageRescan_vol-card")        // the Rescan row under the one line
                 wait(800)
                 grabImage(tc.shell).save(shotsDir + "/27-settings-storage-scan-empty" + (lang === "tr" ? "-tr" : "") + ".png")
                 // An unreadable drive: scanned again after the volume changes.

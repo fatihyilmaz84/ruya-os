@@ -16,7 +16,10 @@ import RuyaShell
 // category (Games, Backups, ...) with its size, "Other" for the rest, or the one line "Nothing
 // from RuyaOS on this drive"; a partial result reads "at least". The scan (Storage.scan) starts
 // when the pane is shown, one drive at a time (the focused drive first), and is cancelled when the
-// pane hides or the drive is ejected. Rows are updated in place, so focus stays on its row.
+// pane hides or the drive is ejected. A "Rescan" row under the results walks the drive again (what
+// was written since changed no property the service watches). A scan refused as busy (another
+// client scans) is asked again after 1.5, 3, 6, then every 10 s. Rows are updated in place, so
+// focus stays on its row.
 //
 // The service only reads names and sizes: nothing on a volume is opened or run from here.
 // Everything goes through the Storage singleton (org.ruyaos.Devices1.Storage); sizes come from
@@ -150,8 +153,11 @@ SettingsPane {
             out.push({ rowKey: "vol:" + v.id, entryKind: "volume", sub: "", volId: v.id, name: v.label,
                        valueText: volumeValue(v.filesystem, v.mounted, v.readOnly, v.freeBytes, v.sizeBytes),
                        shown: true, removable: v.removable, mounted: v.mounted })
-            if (usable)
+            if (usable) {
                 out.push(...scanRows(v.id))
+                out.push({ rowKey: "rescan:" + v.id, entryKind: "rescan", sub: "", volId: v.id, name: qsTr("Rescan"),
+                           valueText: "", shown: true, removable: v.removable, mounted: v.mounted })
+            }
             out.push({ rowKey: "eject:" + v.id, entryKind: "eject", sub: "", volId: v.id, name: qsTr("Eject %1").arg(v.label),
                        valueText: "", shown: usable, removable: v.removable, mounted: v.mounted })
         }
@@ -249,11 +255,30 @@ SettingsPane {
         }
     }
 
-    // A refused scan ("busy": another one runs) is asked again in a moment.
+    // The Rescan row: writes that change no property of the volume leave a finished result looking
+    // fresh to the service, so CancelScan forgets it (the service) and the next scan walks again.
+    // Nothing while that drive is being scanned already.
+    function rescan(id) {
+        const e = Storage.scans[id]
+        if (id === ejectingId || scanPending === id || (e && e.state === "running"))
+            return
+        Storage.cancelScan(id)
+        scanPending = id
+        Storage.scan(id)
+    }
+
+    // A refused scan ("busy": another client scans) is asked again after a growing wait, so the
+    // service is not asked every 1.5 s for as long as the other scan lasts (1.5, 3, 6, then 10 s).
+    property var busyDelays: [1500, 3000, 6000, 10000]
+    property int busyStep: 0
+    readonly property int busyRetryInterval: busyRetry.interval
     Timer {
         id: busyRetry
-        interval: 1500
-        onTriggered: pane.pumpScan(true)
+        interval: pane.busyDelays[0]
+        onTriggered: {
+            pane.busyStep++
+            pane.pumpScan(true)
+        }
     }
 
     // Free space changes without a signal: read the numbers whenever this pane is shown (each time
@@ -264,6 +289,7 @@ SettingsPane {
             pumpScan(false)
         } else {
             busyRetry.stop()
+            busyStep = 0
             stopScans()
         }
     }
@@ -361,8 +387,14 @@ SettingsPane {
             if (pane.scanPending !== "" && Storage.scans[pane.scanPending] !== undefined)
                 pane.scanPending = ""
             pane.syncRows()
-            if (Object.values(Storage.scans).some(e => e.status === "busy"))
-                busyRetry.restart()
+            if (Object.values(Storage.scans).some(e => e.status === "busy")) {
+                if (!busyRetry.running) {
+                    busyRetry.interval = pane.busyDelays[Math.min(pane.busyStep, pane.busyDelays.length - 1)]
+                    busyRetry.start()
+                }
+            } else {
+                pane.busyStep = 0
+            }
             pane.pumpScan(false)
         }
     }
@@ -420,7 +452,7 @@ SettingsPane {
         model: rowModel
         SettingRow {
             required property string rowKey
-            required property string entryKind         // "volume" | "scan" | "eject"
+            required property string entryKind         // "volume" | "scan" | "rescan" | "eject"
             required property string sub           // a scan row: "wait", "cat:games", "other", ...
             required property string volId
             required property string name
@@ -430,9 +462,10 @@ SettingsPane {
             required property bool mounted
             objectName: entryKind === "volume" ? "storageVol_" + volId
                       : entryKind === "eject" ? "storageEject_" + volId
+                      : entryKind === "rescan" ? "storageRescan_" + volId
                       : "storageScan_" + volId + "_" + sub
             visible: shown
-            kind: entryKind === "eject" ? "action" : entryKind === "scan" ? "info" : "item"
+            kind: entryKind === "eject" || entryKind === "rescan" ? "action" : entryKind === "scan" ? "info" : "item"
             u: pane.u
             // What was found on a drive sits a step in from the drive's own row.
             x: entryKind === "scan" ? Theme.spaceL * pane.u : 0
@@ -444,6 +477,8 @@ SettingsPane {
                     pane.activate(volId, removable, mounted)
                 else if (entryKind === "eject")
                     pane.ejectVolume(volId)
+                else if (entryKind === "rescan")
+                    pane.rescan(volId)
             }
         }
     }

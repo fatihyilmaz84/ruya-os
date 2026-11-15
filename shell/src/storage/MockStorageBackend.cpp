@@ -398,8 +398,10 @@ void MockStorageBackend::scanVolume(const QString &id)
 void MockStorageBackend::cancelScan(const QString &id)
 {
     m_cancelCalls.append(id);
-    if (m_scans.value(id).state != QLatin1String("running"))
+    if (m_scans.value(id).state != QLatin1String("running")) {
+        m_scans.remove(id); // like the service: a finished result is forgotten (the Rescan row)
         return;
+    }
     VolumeScan cancelled;
     cancelled.state = QStringLiteral("cancelled");
     cancelled.partial = true;

@@ -821,7 +821,9 @@
 
     <!--
       Stops the scan of this volume within one directory (or within 64 entries of a very large
-      one); it then ends as "cancelled". Does nothing when no scan of it is running. Eject cancels
+      one); it then ends as "cancelled". A result that is not running (done, cancelled or failed)
+      is forgotten instead, so the next ScanVolume walks again (the shell's Rescan row: writes
+      that change no property of the volume leave a "done" result looking fresh). Eject cancels
       it too and waits (at most 2 s) until the walk has let go of the volume before unmounting,
       since a directory held open would make the unmount answer "busy".
     -->
