@@ -13,6 +13,10 @@ import RuyaShell
 //    reason and A to try again). The list keeps its focus while devices come and go.
 //  - Stage "try": ButtonTest. Entered with A on a connected pad, or by itself when a pad is
 //    plugged in over USB while the screen is open. Start continues, B closes.
+//  - Stage "games" (RUY-503): after "try", once, when the tried pad is a Nintendo one whose
+//    layout in games is still Standard (GameControls, for that pad's own profile): "Buttons in
+//    games", By position / Nintendo labels. A sets the layout and closes when the save is done;
+//    a refused save keeps the screen open on its row (GameControls toasts it); B closes.
 // Controllers that were already paired when the screen opened are not listed (they are in the
 // paired list of the pane).
 FocusScope {
@@ -20,9 +24,14 @@ FocusScope {
 
     property real u: 1
     property bool shown: false
-    property string stage: "pair"                 // "pair" | "try"
+    property string stage: "pair"                 // "pair" | "try" | "games"
     property string family: "playstation"         // whose steps show
     property string tryName: ""                    // the pad on the try screen
+    property string tryFamily: ""                  // its family, connection and raw name (for the games step)
+    property string tryTransport: ""
+    property string tryRawName: ""
+    property bool choosing: false                  // the games step waits for its save
+    property string chosen: ""                     // the layout being saved
     property Item returnTo: null
 
     readonly property int maxRows: 4
@@ -64,6 +73,7 @@ FocusScope {
         if (!shown)
             return
         shown = false
+        choosing = false
         const target = returnTo
         returnTo = null
         if (target && target.visible && target.enabled)
@@ -156,13 +166,65 @@ FocusScope {
 
     function activateRow(r) {
         if (r.phase === "done") {
-            tryName = r.name
-            stage = "try"
+            const d = Bluetooth.devices.find(x => x.id === r.devId)
+            startTry(r.name, r.family, "bluetooth", d ? d.name : r.name)
             test.forceActiveFocus()
         } else if (r.phase !== "pairing") {
             Sfx.select()
             startPair(r.devId)
         }
+    }
+
+    function startTry(name, family, transport, rawName) {
+        tryName = name
+        tryFamily = family
+        tryTransport = transport
+        tryRawName = rawName
+        stage = "try"
+        // The layout of a Nintendo pad is read while it is being tried, so Start knows it.
+        const id = triedPadId()
+        if (id !== "" && GameControls.owner !== "")
+            GameControls.show(id)
+    }
+
+    // The Input1 id of the pad being tried: the Nintendo pad of that connection (the one with its
+    // name when there are several), else "". Only Nintendo pads get the games step.
+    function triedPadId() {
+        if (tryFamily !== "nintendo")
+            return ""
+        const plain = n => DeviceIcons.plain(n).toLowerCase()
+        let list = Input.devices.filter(d => d.family === "nintendo" && d.connection === tryTransport)
+        if (list.length > 1)
+            list = list.filter(d => plain(d.name) === plain(tryRawName))
+        return list.length === 1 ? list[0].id : ""
+    }
+
+    // Start on the try stage: the games step for a Nintendo pad that still has the Standard layout
+    // and whose profile can be saved; otherwise the screen closes.
+    function continueFromTry() {
+        const id = triedPadId()
+        if (id !== "" && GameControls.owner !== "" && GameControls.padId === id
+                && GameControls.loadState === "ok" && GameControls.layout === "standard") {
+            stage = "games"
+            positionRow.forceActiveFocus()
+        } else {
+            onb.close()
+        }
+    }
+
+    // A on a layout of the games step: the current one changes nothing; otherwise it is saved and
+    // the screen closes when the save has ended (a refusal keeps it open, GameControls toasts).
+    function chooseLayout(value) {
+        if (choosing)
+            return
+        Sfx.select()
+        if (value === GameControls.layout) {
+            onb.close()
+            return
+        }
+        choosing = true
+        chosen = value
+        GameControls.setLayout(value)
     }
 
     function moveChips(delta) {
@@ -192,7 +254,8 @@ FocusScope {
     Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
 
     Accessible.role: Accessible.Dialog
-    Accessible.name: stage === "try" ? qsTr("Try your controller") : qsTr("Pair a controller")
+    Accessible.name: stage === "games" ? qsTr("Buttons in games")
+                     : stage === "try" ? qsTr("Try your controller") : qsTr("Pair a controller")
 
     Connections {
         target: Bluetooth
@@ -214,9 +277,25 @@ FocusScope {
             // Not while a row is still pairing: its result would be lost behind the try screen.
             const pairing = Object.values(onb.phases).some(p => p.phase === "pairing")
             if (onb.shown && onb.stage === "pair" && transport === "usb" && !pairing) {
-                onb.tryName = DeviceIcons.padName(id, name, family)
-                onb.stage = "try"
+                onb.startTry(DeviceIcons.padName(id, name, family), family, transport, name)
                 test.forceActiveFocus()
+            }
+        }
+    }
+
+    Connections {
+        target: GameControls
+        function onSaved(tag) {
+            if (onb.choosing && tag === "layout") {
+                onb.choosing = false
+                onb.close()
+            }
+        }
+        function onFailed(tag) {
+            if (onb.choosing && tag === "layout") {
+                onb.choosing = false
+                const row = onb.chosen === "nintendo" ? nintendoRow : positionRow
+                row.forceActiveFocus()
             }
         }
     }
@@ -246,7 +325,8 @@ FocusScope {
             objectName: "onboardingTitle"
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
-            text: onb.stage === "try" ? qsTr("Try your controller") : qsTr("Pair a controller")
+            text: onb.stage === "games" ? qsTr("Buttons in games")
+                  : onb.stage === "try" ? qsTr("Try your controller") : qsTr("Pair a controller")
             color: Theme.text
             font.pixelSize: Theme.typeTitle * onb.u
             font.weight: Theme.weightDemiBold
@@ -439,6 +519,63 @@ FocusScope {
             }
         }
 
+        // ---- stage "games" (RUY-503) ----
+        Column {
+            objectName: "onboardingGames"
+            width: parent.width
+            visible: onb.stage === "games"
+            spacing: Theme.spaceM * onb.u
+
+            Text {
+                objectName: "onboardingGamesBody"
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: Math.min(parent.width, 1100 * onb.u)
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                text: qsTr("Menus confirm with A on this controller. Games can see the buttons by their letters, or by position like an Xbox controller.")
+                color: Theme.text
+                font.pixelSize: Theme.typeBody * onb.u
+            }
+
+            Column {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: 900 * onb.u
+                spacing: Theme.spaceS * onb.u
+
+                SettingRow {
+                    id: positionRow
+                    objectName: "gamesRowPosition"
+                    kind: "item"
+                    u: onb.u
+                    width: parent.width
+                    label: qsTr("By position")
+                    detail: qsTr("The bottom button is A in games, as on Xbox.")
+                    value: GameControls.layout === "standard" ? qsTr("Current", "the button layout in use") : ""
+                    onActivated: onb.chooseLayout("standard")
+                }
+                SettingRow {
+                    id: nintendoRow
+                    objectName: "gamesRowNintendo"
+                    kind: "item"
+                    u: onb.u
+                    width: parent.width
+                    label: qsTr("Nintendo labels")
+                    detail: qsTr("Games see each button by the letter on it.")
+                    value: GameControls.layout === "nintendo" ? qsTr("Current", "the button layout in use") : ""
+                    onActivated: onb.chooseLayout("nintendo")
+                }
+            }
+
+            Text {
+                objectName: "onboardingGamesNote"
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                text: qsTr("You can change this later in Settings > Controllers.")
+                color: Theme.text
+                font.pixelSize: Theme.typeCaption * onb.u
+            }
+        }
+
         // ---- stage "try" ----
         Column {
             objectName: "onboardingTry"
@@ -463,7 +600,7 @@ FocusScope {
                 anchors.horizontalCenter: parent.horizontalCenter
                 u: onb.u
                 padName: onb.tryName
-                onContinued: { Sfx.select(); onb.close() }
+                onContinued: { Sfx.select(); onb.continueFromTry() }
                 onClosed: { Sfx.back(); onb.close() }
             }
         }
@@ -474,7 +611,7 @@ FocusScope {
         switch (f) {
         case "playstation": return qsTr("PlayStation")
         case "xbox": return qsTr("Xbox")
-        case "nintendo": return qsTr("Switch")
+        case "nintendo": return qsTr("Nintendo")
         case "8bitdo": return qsTr("8BitDo")
         }
         return qsTr("Other")
@@ -486,6 +623,21 @@ FocusScope {
         event.accepted = true
         if (onb.stage === "try" || event.isAutoRepeat)
             return
+        if (onb.stage === "games") {
+            if (onb.choosing)
+                return
+            if (BackKey.isBackOrBackspace(event.key)) {
+                Sfx.back()
+                onb.close()
+            } else if (event.key === Qt.Key_Up && nintendoRow.activeFocus) {
+                Sfx.navigate()
+                positionRow.forceActiveFocus()
+            } else if (event.key === Qt.Key_Down && positionRow.activeFocus) {
+                Sfx.navigate()
+                nintendoRow.forceActiveFocus()
+            }
+            return
+        }
         const focused = Window.activeFocusItem
         const key = event.key
         const rowAt = (() => {

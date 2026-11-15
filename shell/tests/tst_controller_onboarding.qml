@@ -559,6 +559,206 @@ Item {
             verify(chip("playstation").activeFocus)
         }
 
+        // ---- RUY-503: "Buttons in games", after trying a Nintendo pad ----
+
+        readonly property string procon: "usb-057e-2009-a1b2c3d4e5f6"
+
+        function signedIn() {
+            Profiles.switchTo("p2", "")
+            tryCompare(Profiles, "activeProfile", "p2")
+            Input.mockResetProfiles()
+            Input.mockClearProfileCalls()
+            Input.mockResetDevices()
+            Input.mockAddDevice({ id: procon, name: "Pro Controller", family: "nintendo", model: "switch_pro",
+                                  connection: "usb" })
+            tryVerify(() => Input.devices.length === 4)
+        }
+
+        // Tries a USB pad of `family` with the onboarding screen open and presses Start.
+        function tryPadAndStart(name, family, layout) {
+            onb.open()
+            usb(true, "usb-try", name, family)
+            tryCompare(onb, "stage", "try")
+            tryVerify(() => find("onboardingButtonTest").activeFocus, 2000)
+            if (family === "nintendo" && Profiles.activeProfile !== "") {
+                tryCompare(GameControls, "padId", procon)
+                tryCompare(GameControls, "loadState", "ok")
+                tryCompare(GameControls, "layout", layout ?? "standard")     // the answer to this pad's list
+            }
+            keyClick(Qt.Key_Menu)
+        }
+
+        function saves() {
+            return Input.mockProfileCalls().filter(c => c.method === "SaveProfile").map(c => JSON.parse(c.args.json))
+        }
+
+        function test_start_after_a_nintendo_pad_with_the_standard_layout_asks_how_games_see_its_buttons() {
+            signedIn()
+            tryPadAndStart("Pro Controller", "nintendo")
+            tryCompare(onb, "stage", "games")
+            compare(find("onboardingTitle").text, "Buttons in games")
+            compare(find("onboardingGamesBody").text, "Menus confirm with A on this controller. Games can see the buttons by their letters, or by position like an Xbox controller.")
+            compare(find("gamesRowPosition").label, "By position")
+            compare(find("gamesRowPosition").detail, "The bottom button is A in games, as on Xbox.")
+            compare(find("gamesRowPosition").value, "Current")
+            compare(find("gamesRowNintendo").label, "Nintendo labels")
+            compare(find("gamesRowNintendo").detail, "Games see each button by the letter on it.")
+            compare(find("gamesRowNintendo").value, "")
+            compare(find("onboardingGamesNote").text, "You can change this later in Settings > Controllers.")
+            verify(find("gamesRowPosition").activeFocus, "focus starts on the Current row")
+            keyClick(Qt.Key_Up)
+            verify(find("gamesRowPosition").activeFocus, "Up stops at the first row")
+            keyClick(Qt.Key_Down)
+            verify(find("gamesRowNintendo").activeFocus)
+            keyClick(Qt.Key_Down)
+            verify(find("gamesRowNintendo").activeFocus, "Down stops at the last row")
+            compare(onb.modalHints.map(h => h.action + " " + h.text), ["accept Select", "back Close"])
+            verify(onb.shown)
+            compare(saves().length, 0, "asking changes nothing")
+        }
+
+        function test_other_pads_and_the_nintendo_layout_close_at_start_as_before() {
+            signedIn()
+            tryPadAndStart("Xbox Wireless Controller", "xbox")
+            tryVerify(() => !onb.shown, 2000, "an Xbox pad is not asked")
+            GameControls.show(procon)
+            tryCompare(GameControls, "loadState", "ok")
+            GameControls.setLayout("nintendo")
+            tryVerify(() => !GameControls.busy, 3000)
+            tryCompare(GameControls, "layout", "nintendo")
+            tryPadAndStart("Pro Controller", "nintendo", "nintendo")
+            tryVerify(() => !onb.shown, 2000, "a pad that already has the Nintendo layout is not asked")
+        }
+
+        function test_a_signed_out_screen_does_not_ask() {
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            Input.mockResetDevices()
+            Input.mockAddDevice({ id: procon, name: "Pro Controller", family: "nintendo", model: "switch_pro",
+                                  connection: "usb" })
+            tryVerify(() => Input.devices.length === 4)
+            tryPadAndStart("Pro Controller", "nintendo")
+            tryVerify(() => !onb.shown, 2000)
+        }
+
+        function test_A_on_nintendo_labels_saves_the_pads_own_profile_and_closes() {
+            signedIn()
+            opener.forceActiveFocus()
+            tryPadAndStart("Pro Controller", "nintendo")
+            tryCompare(onb, "stage", "games")
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !onb.shown, 3000)
+            tryVerify(() => opener.activeFocus, 2000, "focus returns where it was")
+            const s = saves()
+            compare(s.length, 1)
+            compare(s[0].inherits, "nintendo")
+            compare(s[0].id, "controls-device-" + procon, "the tried pad's own profile, never a family or all controllers")
+        }
+
+        function test_A_on_the_current_layout_closes_without_a_call() {
+            signedIn()
+            tryPadAndStart("Pro Controller", "nintendo")
+            tryCompare(onb, "stage", "games")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !onb.shown, 2000)
+            compare(saves().length, 0)
+            compare(GameControls.layout, "standard")
+        }
+
+        function test_B_on_the_games_step_closes_and_changes_nothing() {
+            signedIn()
+            opener.forceActiveFocus()
+            tryPadAndStart("Pro Controller", "nintendo")
+            tryCompare(onb, "stage", "games")
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !onb.shown, 2000)
+            tryVerify(() => opener.activeFocus, 2000)
+            compare(saves().length, 0)
+            compare(GameControls.layout, "standard")
+        }
+
+        function test_a_refused_save_keeps_the_games_step_open_on_its_row() {
+            signedIn()
+            tryPadAndStart("Pro Controller", "nintendo")
+            tryCompare(onb, "stage", "games")
+            keyClick(Qt.Key_Down)
+            Input.mockSetProfileStatusOnce("ValidateProfile", "invalid")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => toastTexts().indexOf("Could not save the change | Try again.") >= 0, 3000, toastTexts().join("; "))
+            verify(onb.shown, "the screen stays open")
+            compare(onb.stage, "games")
+            tryVerify(() => find("gamesRowNintendo").activeFocus, 2000, "on the row that was chosen")
+            compare(find("gamesRowPosition").value, "Current", "nothing changed")
+            keyClick(Qt.Key_Return)                                         // a second try saves
+            tryVerify(() => !onb.shown, 3000)
+        }
+
+        function test_the_games_step_in_turkish() {
+            signedIn()
+            tryPadAndStart("Pro Controller", "nintendo")
+            tryCompare(onb, "stage", "games")
+            DeviceSettings.language = "tr"
+            compare(find("onboardingTitle").text, "Oyunlarda düğmeler")
+            compare(find("gamesRowPosition").label, "Konuma göre")
+            compare(find("gamesRowPosition").value, "Şu anki")
+            compare(find("gamesRowNintendo").label, "Nintendo etiketleri")
+            compare(find("gamesRowNintendo").detail, "Oyunlar her düğmeyi üzerindeki harfle görür.")
+            compare(find("onboardingGamesNote").text, "Bunu sonra Ayarlar > Kontrolcüler’den değiştirebilirsin.")
+            onb.close()
+        }
+
+        function test_the_nintendo_chip_and_its_steps() {
+            onb.open()
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Right)
+            verify(chip("nintendo").activeFocus)
+            compare(find("onbChip_nintendo").Accessible.name, "Nintendo controller")
+            compare(find("onboardingSteps").text, "Switch Pro Controller or Joy-Con: hold the small sync button until the lights run back and forth. Wii U Pro Controller: press the sync button on the back.")
+            DeviceSettings.language = "tr"
+            compare(find("onboardingSteps").text, "Switch Pro Controller ya da Joy-Con: ışıklar ileri geri yanana kadar küçük eşleme düğmesini basılı tut. Wii U Pro Controller: arkadaki eşleme düğmesine bas.")
+            onb.close()
+        }
+
+        function test_zz_games_step_screenshots() {
+            if (!shotsDir)
+                skip("set RUY_SHOTS_DIR to save screenshots")
+            signedIn()
+            tryPadAndStart("Pro Controller", "nintendo")
+            tryCompare(onb, "stage", "games")
+            wait(600)
+            grabImage(host)
+            wait(600)
+            grabImage(host).save(shotsDir + "/RUY503-games-step-720.png")
+            DeviceSettings.language = "tr"
+            wait(600)
+            grabImage(host).save(shotsDir + "/RUY503-games-step-tr-720.png")
+            DeviceSettings.language = "en"
+            keyClick(Qt.Key_Down)
+            Input.mockSetProfileStatusOnce("ValidateProfile", "invalid")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => toastTexts().length > 0, 3000)
+            wait(600)
+            grabImage(host).save(shotsDir + "/RUY503-games-step-error-720.png")
+            onb.u = 1
+            host.width = 1920
+            host.height = 1080
+            wait(600)
+            grabImage(host).save(shotsDir + "/RUY503-games-step-error.png")
+            DeviceSettings.language = "tr"
+            wait(600)
+            grabImage(host).save(shotsDir + "/RUY503-games-step-error-tr.png")
+            DeviceSettings.language = "en"
+            keyClick(Qt.Key_Up)
+            wait(600)
+            grabImage(host).save(shotsDir + "/RUY503-games-step.png")
+            onb.u = 720 / 1080
+            host.width = 1280
+            host.height = 720
+            onb.close()
+        }
+
         // Turkish: the steps, the chips' names and the toasts follow the language live.
         function test_turkish() {
             DeviceSettings.language = "tr"
