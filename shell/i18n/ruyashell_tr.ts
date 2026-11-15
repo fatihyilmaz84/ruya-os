@@ -4304,7 +4304,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+86"/>
+        <location line="+105"/>
         <source>Enter a name first.</source>
         <translation>Önce bir ad girin.</translation>
     </message>
@@ -4347,19 +4347,19 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+17"/>
-        <location line="+63"/>
+        <location line="+64"/>
         <location line="+84"/>
         <source>Press A to continue</source>
         <translation>Devam etmek için A&apos;ya basın</translation>
     </message>
     <message>
-        <location line="-316"/>
-        <location line="+219"/>
+        <location line="-317"/>
+        <location line="+220"/>
         <source>Network</source>
         <translation>Ağ</translation>
     </message>
     <message>
-        <location line="-355"/>
+        <location line="-375"/>
         <source>Try again</source>
         <translation>Yeniden dene</translation>
     </message>
@@ -4371,7 +4371,7 @@ Bu geri alınamaz.</translation>
         <translation>Atla</translation>
     </message>
     <message>
-        <location line="+126"/>
+        <location line="+145"/>
         <location line="+86"/>
         <source>Connect a controller</source>
         <translation>Bir kontrolcü bağlayın</translation>
@@ -4392,7 +4392,12 @@ Bu geri alınamaz.</translation>
         <translation>Saatin doğru olması için önce bölgenizi, sonra şehrinizi seçin. Bunu daha sonra Ayarlar&apos;dan değiştirebilirsiniz.</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+13"/>
+        <source>Search for a city</source>
+        <translation>Şehir ara</translation>
+    </message>
+    <message>
+        <location line="+24"/>
         <source>Network setup comes later. A wired connection works without any setup.</source>
         <translation>Ağ kurulumu daha sonra gelecek. Kablolu bağlantı herhangi bir kurulum olmadan çalışır.</translation>
     </message>
@@ -4432,8 +4437,13 @@ Bu geri alınamaz.</translation>
         <translation>Oluşturuluyor…</translation>
     </message>
     <message>
-        <location line="-276"/>
-        <location line="+303"/>
+        <location line="+49"/>
+        <source>Could not set the time zone. You can change it later in Settings &gt; System.</source>
+        <translation>Saat dilimi ayarlanamadı. Daha sonra Ayarlar &gt; Sistem&apos;den değiştirebilirsiniz.</translation>
+    </message>
+    <message>
+        <location line="-326"/>
+        <location line="+304"/>
         <source>You&apos;re all set</source>
         <translation>Her şey hazır</translation>
     </message>
@@ -6306,7 +6316,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ZoneChooser</name>
     <message>
-        <location filename="../qml/ZoneChooser.qml" line="+46"/>
+        <location filename="../qml/ZoneChooser.qml" line="+102"/>
         <source>Africa</source>
         <translation>Afrika</translation>
     </message>
@@ -6361,27 +6371,37 @@ Bu geri alınamaz.</translation>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+148"/>
+        <source>Search</source>
+        <translation>Ara</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No match</source>
+        <translation>Eşleşme yok</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Loading time zones…</source>
         <translation>Saat dilimleri yükleniyor…</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+22"/>
         <source>%1, current</source>
         <translation>%1, geçerli</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+37"/>
         <source>Current</source>
         <translation>Geçerli</translation>
     </message>
     <message>
-        <location line="+33"/>
+        <location line="+34"/>
         <source>Region</source>
         <translation>Bölge</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+29"/>
         <source>City</source>
         <translation>Şehir</translation>
     </message>
@@ -6402,6 +6422,11 @@ Bu geri alınamaz.</translation>
         <location line="+52"/>
         <source>Time zone</source>
         <translation>Saat dilimi</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Search for a city</source>
+        <translation>Şehir ara</translation>
     </message>
 </context>
 </TS>

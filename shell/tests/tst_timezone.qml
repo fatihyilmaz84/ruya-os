@@ -350,6 +350,131 @@ Item {
             tryVerify(() => find("rowTimezone").activeFocus, 2000, "focus is back on the row")
         }
 
+        // ---- T-295: type to filter ----
+
+        function openPicker() {
+            openSystemPane("p1", "1234")
+            goToRow("rowTimezone")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("zonePicker").shown, 2000, "the picker opens")
+            tryVerify(() => find("zoneRegions").activeFocus, 2000, "the regions have focus")
+        }
+
+        // Search row -> the keyboard -> `text` -> Done, as a player does it.
+        function searchFor(text) {
+            find("zoneSearch").forceActiveFocus()
+            keyClick(Qt.Key_Return)
+            const entry = find("zoneSearchEntry")
+            tryVerify(() => entry.shown, 2000, "the keyboard opens")
+            entry.text = text
+            entry.finish()
+            tryVerify(() => !entry.shown, 2000)
+        }
+
+        function test_filter_finds_istanbul() {
+            openPicker()
+            searchFor("ist")
+            const chooser = find("zoneChooser")
+            compare(chooser.filter, "ist")
+            verify(chooser.results.some(r => r.zone === "Europe/Istanbul"), "ist lists Istanbul")
+            verify(find("zoneCity_Europe/Istanbul"), "and its row exists")
+            compare(find("zoneSearch").value, "ist", "the row shows the query")
+            verify(!find("zoneRegions").visible, "one flat list replaces the two")
+            tryVerify(() => find("zoneCities").activeFocus, 2000, "focus lands on the first result")
+            compare(chooser.selectedZone, chooser.results[0].zone)
+            compare(findChild(find("zoneCity_Europe/Istanbul"), "zoneDetail").text, "Europe", "the region is shown beside it")
+        }
+
+        function test_accept_on_a_result_chooses_it() {
+            openPicker()
+            searchFor("istanbul")
+            tryVerify(() => find("zoneCities").activeFocus, 2000)
+            compare(find("zoneChooser").selectedZone, "Europe/Istanbul")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !find("zonePicker").shown, 2000, "the picker closes")
+            tryCompare(TimeZone, "timezone", "Europe/Istanbul")
+            tryVerify(() => find("rowTimezone").activeFocus, 2000, "focus is back on the row")
+        }
+
+        function test_filter_ignores_case_and_diacritics() {
+            openPicker()
+            const chooser = find("zoneChooser")
+            // The zone list has no Izmir; these are the same cases: capital dotted I, dotless i, an umlaut, "_" as a space.
+            const cases = [["İSTANBUL", "Europe/Istanbul"], ["ıstanbul", "Europe/Istanbul"], ["ZÜRICH", "Europe/Zurich"],
+                           ["zurich", "Europe/Zurich"], ["sao paulo", "America/Sao_Paulo"], ["SAO_PAULO", "America/Sao_Paulo"]]
+            for (const c of cases) {
+                searchFor(c[0])
+                verify(chooser.results.some(r => r.zone === c[1]), c[0] + " finds " + c[1])
+                keyClick(Qt.Key_Escape)                     // Back clears the filter
+                tryCompare(chooser, "filter", "")
+            }
+            compare(chooser.normalize("Zürich"), "zurich")
+            compare(chooser.normalize("İzmir"), "izmir")
+            compare(chooser.normalize("Buenos_Aires"), "buenos aires")
+        }
+
+        function test_the_region_name_matches_too() {
+            openPicker()
+            searchFor("pacific")
+            verify(find("zoneChooser").results.some(r => r.zone === "Pacific/Honolulu"))
+        }
+
+        function test_no_match_row() {
+            openPicker()
+            compare(find("zoneNoMatch").visible, false)
+            searchFor("qqqq")
+            compare(find("zoneChooser").results.length, 0)
+            tryVerify(() => find("zoneNoMatch").visible, 2000, "No match is shown")
+            compare(find("zoneNoMatch").text, "No match")
+            tryVerify(() => find("zoneSearch").activeFocus, 2000, "focus stays on Search")
+            keyClick(Qt.Key_Down)
+            verify(find("zoneSearch").activeFocus, "there is nothing to go down to")
+            keyClick(Qt.Key_Escape)
+            tryCompare(find("zoneChooser"), "filter", "")
+            compare(find("zoneNoMatch").visible, false)
+            verify(find("zonePicker").shown, "Back cleared the filter, it did not leave")
+        }
+
+        function test_back_clears_filter_then_leaves() {
+            openPicker()
+            searchFor("ist")
+            tryVerify(() => find("zoneCities").activeFocus, 2000)
+            keyClick(Qt.Key_Escape)                         // from a result: clears, focus on Search
+            tryCompare(find("zoneChooser"), "filter", "")
+            tryVerify(() => find("zoneSearch").activeFocus, 2000, "focus is back on Search")
+            verify(find("zonePicker").shown, "still open")
+            verify(find("zoneRegions").visible, "the two lists are back")
+            keyClick(Qt.Key_Escape)                         // Back on Search with no filter: leaves
+            tryVerify(() => !find("zonePicker").shown, 2000)
+            tryVerify(() => find("rowTimezone").activeFocus, 2000, "focus is back on the row")
+            compare(TimeZone.mockSetCalls(), 0)
+        }
+
+        function test_back_on_search_with_a_filter_clears_it_and_cancelling_the_keyboard_leaves_it() {
+            openPicker()
+            searchFor("ist")
+            find("zoneSearch").forceActiveFocus()
+            keyClick(Qt.Key_Escape)
+            tryCompare(find("zoneChooser"), "filter", "")
+            verify(find("zoneSearch").activeFocus)
+            find("zoneSearch").forceActiveFocus()
+            keyClick(Qt.Key_Return)                         // open the keyboard ...
+            tryVerify(() => find("zoneSearchEntry").shown, 2000)
+            keyClick(Qt.Key_Escape)                         // ... and Back with no text cancels it
+            tryVerify(() => !find("zoneSearchEntry").shown, 2000)
+            verify(find("zonePicker").shown, "the picker stays")
+            tryVerify(() => find("zoneSearch").activeFocus, 2000, "focus returns to Search")
+        }
+
+        function test_up_from_the_first_row_reaches_search_and_down_leaves_it() {
+            openPicker()
+            const chooser = find("zoneChooser")
+            pressUntil(Qt.Key_Up, () => find("zoneSearch").activeFocus, "Up reaches Search")
+            compare(chooser.region, "Africa", "after the first region")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("zoneRegions").activeFocus, 2000, "Down leaves Search for the regions")
+        }
+
         function test_a_clock_that_is_not_set_says_so() {
             openSystemPane("p2", "")
             compare(find("timeNtpNote").visible, false, "synchronised: no note")

@@ -82,6 +82,16 @@ FocusScope {
                 picker.close()
             }
             onCancelled: picker.close()
+            onSearchRequested: text => searchEntry.open(qsTr("Search for a city"), text, {})
         }
+    }
+
+    // The keyboard is full-screen, so the picker (which fills the overlay) hosts it, not the chooser.
+    TextEntry {
+        id: searchEntry
+        objectName: "zoneSearchEntry"
+        anchors.fill: parent
+        u: picker.u
+        onAccepted: text => chooser.applyFilter(text)
     }
 }
