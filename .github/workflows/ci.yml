@@ -62,7 +62,7 @@ jobs:
       - name: Test lint
         run: pwsh -NoProfile -File scripts/lint-tests.ps1
       - name: Developer guide lint
-        run: pwsh -NoProfile -File scripts/lint-dev-docs.ps1
+        run: pwsh -NoProfile -File scripts/lint-dev-docs.ps1 -Samples
       - name: VM check lint
         run: pwsh -NoProfile -File scripts/lint-vm-checks.ps1
 

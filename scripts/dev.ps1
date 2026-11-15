@@ -731,6 +731,27 @@ Checked 2026-11-06.
         @{ name = "an AppStream example that drops a required attribute"; a = $chapter + "`nThe file (``samples/s/data/x.metainfo.xml``):`n`n${fence}xml`n<component type=`"desktop-application`"><id>a</id><name>Name</name><releases><release version=`"1`"/></releases></component>`n${fence}`n"; other = $other;
            files = @{ "samples/s/data/x.metainfo.xml" = "<component type=`"desktop-application`"><id>b</id><name>Name</name><releases><release version=`"1`" date=`"2026-11-06`"/></releases></component>`n" }; expect = 1; text = "/component/releases/release[date,version]" }
     )
+    # RUY-155: public API elements (org.ruyaos.Stability on a method, signal or property).
+    $xmlHead = "<node><interface name=`"org.ruyaos.T1`">"
+    $xmlTail = "</interface></node>`n"
+    $pub = { param($ann) $xmlHead + "<method name=`"Do`">$ann</method><method name=`"Hidden`"/>" + $xmlTail }
+    $stabOk = "<annotation name=`"org.ruyaos.Stability`" value=`"experimental`"/>"
+    $sinceOk = "<annotation name=`"org.ruyaos.Since`" value=`"1`"/>"
+    $spanDo = "`nUse ``org.ruyaos.T1.Do`` to do it.`n"
+    $cases += @(
+        @{ name = "a tagged and documented API element"; a = $chapter + $spanDo; other = $other;
+           files = @{ "api/dbus/t1.xml" = (& $pub ($stabOk + $sinceOk)) }; expect = 0; text = "" },
+        @{ name = "a tagged API element no chapter documents"; a = $chapter; other = $other;
+           files = @{ "api/dbus/t1.xml" = (& $pub ($stabOk + $sinceOk)) }; expect = 1; text = "org.ruyaos.T1.Do is public but no chapter" },
+        @{ name = "a bad Stability value"; a = $chapter + $spanDo; other = $other;
+           files = @{ "api/dbus/t1.xml" = (& $pub ("<annotation name=`"org.ruyaos.Stability`" value=`"beta`"/>" + $sinceOk)) }; expect = 1; text = "org.ruyaos.T1.Do has org.ruyaos.Stability 'beta'" },
+        @{ name = "a tagged element without Since"; a = $chapter + $spanDo; other = $other;
+           files = @{ "api/dbus/t1.xml" = (& $pub $stabOk) }; expect = 1; text = "org.ruyaos.T1.Do has no integer org.ruyaos.Since" },
+        @{ name = "a Since that is not an integer"; a = $chapter + $spanDo; other = $other;
+           files = @{ "api/dbus/t1.xml" = (& $pub ($stabOk + "<annotation name=`"org.ruyaos.Since`" value=`"one`"/>")) }; expect = 1; text = "org.ruyaos.T1.Do has no integer org.ruyaos.Since" },
+        @{ name = "an untagged element and an interface-level tag (private)"; a = $chapter; other = $other;
+           files = @{ "api/dbus/t1.xml" = ($xmlHead + $stabOk + "<method name=`"Do`"/>" + $xmlTail) }; expect = 0; text = "" }
+    )
     foreach ($c in $cases) {
         $fx = Join-Path ([IO.Path]::GetTempPath()) ("ruya-devdocs-fx-" + [guid]::NewGuid().ToString("N"))
         New-Item -ItemType Directory -Path $fx | Out-Null

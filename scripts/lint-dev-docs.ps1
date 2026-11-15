@@ -9,16 +9,34 @@
 #     before the fence) by a `samples/.../*.metainfo.xml` path in backticks is compared with that
 #     file (T-297): the same elements at the same places, with the same attribute names, and the
 #     same value of `id`, `type` and `key`; text, other values and the order do not matter;
-#   - every chapter ends with a "## Sources" section that names a date (YYYY-MM-DD).
+#   - every chapter ends with a "## Sources" section that names a date (YYYY-MM-DD);
+#   - public API elements (RUY-155, ADR-022): in <Repo>/api/dbus/*.xml a method, signal or property
+#     with an org.ruyaos.Stability annotation is public (a tag on the interface is ignored; an
+#     untagged element is private). Stability must be experimental, stable or deprecated;
+#     org.ruyaos.Since must be an integer; and "<Interface>.<Member>" must appear in a code span
+#     in a chapter other than api-surface.md;
+#   - samples (-Samples only): `make -C samples/<name> test` for every sample with a Makefile; a
+#     failing test or a missing make is a finding. Without -Samples the lint prints
+#     "samples not built (use -Samples)" and stays green.
+#
+# This is the one parser of the Stability/Since annotations. It writes the public elements to
+# apis.json (default <Repo>/output/apis.json, git-ignored; change with -ApisJson), for the API
+# changelog, the mock, `ruya sdk` and the catalogue to read. Shape, a JSON array (empty: []):
+#   [{ "interface": "org.ruyaos.X1", "member": "Name", "kind": "method|signal|property",
+#      "stability": "experimental|stable|deprecated", "since": 1, "file": "api/dbus/<file>.xml" }]
+# Only elements without a finding are listed.
 #
 # Used by dev.ps1 (test) and by the CI workflow. Works on Windows PowerShell 5.1 and on pwsh.
 # Exit code 0 = clean, 1 = findings.
 #
 #   .\scripts\lint-dev-docs.ps1                  # the real folder
 #   .\scripts\lint-dev-docs.ps1 -Dir <folder>    # another folder (dev.ps1's self-check uses fixtures)
+#   .\scripts\lint-dev-docs.ps1 -Samples         # also build and test the samples (CI, Linux)
 param(
     [string]$Dir = "",
-    [string]$Repo = ""
+    [string]$Repo = "",
+    [string]$ApisJson = "",
+    [switch]$Samples
 )
 $ErrorActionPreference = "Stop"
 if (-not $Repo) { $Repo = Split-Path -Parent $PSScriptRoot }
@@ -257,6 +275,75 @@ foreach ($f in $files) {
     $m = [regex]::Match($parsed[$f.Name].text, '(?ms)^##\s+Sources\s*$(.*)\z')
     if (-not $m.Success) { Fail $f.Name "has no '## Sources' section at the end"; continue }
     if ($m.Groups[1].Value -notmatch '20\d\d-\d\d-\d\d') { Fail $f.Name "its '## Sources' section names no date (YYYY-MM-DD)" }
+}
+
+# --- public API elements (RUY-155) -----------------------------------------------------------
+# The one parser of org.ruyaos.Stability / org.ruyaos.Since: it writes $ApisJson.
+$apis = New-Object System.Collections.Generic.List[object]
+$xmlDir = Join-Path (Join-Path $Repo "api") "dbus"
+$chapterSpans = New-Object System.Collections.Generic.List[string]
+foreach ($f in $files) {
+    if ($f.Name -eq "api-surface.md") { continue }
+    foreach ($l in $parsed[$f.Name].prose) {
+        foreach ($m in [regex]::Matches($l, '`([^`]+)`')) { $chapterSpans.Add($m.Groups[1].Value) }
+    }
+}
+if (Test-Path $xmlDir) {
+    foreach ($x in (Get-ChildItem $xmlDir -Filter "*.xml" | Sort-Object Name)) {
+        $rel = "api/dbus/$($x.Name)"
+        $d = New-Object System.Xml.XmlDocument
+        $d.XmlResolver = $null   # the introspection DOCTYPE points at freedesktop.org: never fetch it
+        # Comments are dropped first: two shipped files have a "--" inside a comment (strictly not
+        # well-formed, but libdbus and Qt read them), and a comment can carry no annotation.
+        $xmlText = [regex]::Replace([IO.File]::ReadAllText($x.FullName, $Utf8), '(?s)<!--.*?-->', '')
+        try { $d.LoadXml($xmlText) }
+        catch { Fail $rel "is not well-formed xml: $($_.Exception.Message)"; continue }
+        foreach ($iface in $d.SelectNodes("//interface")) {
+            $iname = $iface.GetAttribute("name")
+            foreach ($el in $iface.ChildNodes) {
+                if ($el.NodeType -ne [System.Xml.XmlNodeType]::Element) { continue }
+                if ($el.LocalName -notin @("method", "signal", "property")) { continue }
+                $stab = $null; $since = $null
+                foreach ($an in $el.ChildNodes) {
+                    if ($an.NodeType -ne [System.Xml.XmlNodeType]::Element -or $an.LocalName -ne "annotation") { continue }
+                    if ($an.GetAttribute("name") -eq "org.ruyaos.Stability") { $stab = $an.GetAttribute("value") }
+                    if ($an.GetAttribute("name") -eq "org.ruyaos.Since") { $since = $an.GetAttribute("value") }
+                }
+                if ($null -eq $stab) { continue }   # untagged: private
+                $full = "$iname.$($el.GetAttribute('name'))"
+                $bad = $false
+                if ($stab -notin @("experimental", "stable", "deprecated")) {
+                    Fail $rel "$full has org.ruyaos.Stability '$stab' (use experimental, stable or deprecated)"; $bad = $true
+                }
+                if ($null -eq $since -or $since -notmatch '^\d+$') {
+                    Fail $rel "$full has no integer org.ruyaos.Since"; $bad = $true
+                }
+                if ($bad) { continue }
+                $apis.Add([ordered]@{ interface = $iname; member = $el.GetAttribute("name"); kind = $el.LocalName; stability = $stab; since = [int]$since; file = $rel })
+                $hit = $false
+                foreach ($s in $chapterSpans) { if ($s.Contains($full)) { $hit = $true; break } }
+                if (-not $hit) { Fail $rel "$full is public but no chapter of docs/developers/ (other than api-surface.md) names it in a code span" }
+            }
+        }
+    }
+}
+if (-not $ApisJson) { $ApisJson = Join-Path (Join-Path $Repo "output") "apis.json" }
+New-Item -ItemType Directory -Force (Split-Path -Parent $ApisJson) | Out-Null
+$json = if ($apis.Count -eq 0) { "[]" } else { ConvertTo-Json -InputObject @($apis.ToArray()) -Depth 4 }
+[IO.File]::WriteAllText($ApisJson, $json + "`n", $Utf8)
+
+# --- samples (RUY-155) -----------------------------------------------------------------------
+if ($Samples) {
+    $make = Get-Command make -ErrorAction SilentlyContinue | Select-Object -First 1
+    foreach ($s in (Get-ChildItem (Join-Path $Repo "samples") -Directory -ErrorAction SilentlyContinue | Sort-Object Name)) {
+        if (-not (Test-Path (Join-Path $s.FullName "Makefile"))) { continue }
+        $where = "samples/$($s.Name)"
+        if (-not $make) { Fail $where "has a Makefile and make was not found"; continue }
+        $r = Run-Native $make.Source @("-C", $s.FullName, "test")
+        if ($r.code -ne 0) { Fail $where "make test failed: $(($r.out -split "`n" | Select-Object -Last 3) -join ' | ')" }
+    }
+} else {
+    Write-Host "samples not built (use -Samples)"
 }
 
 Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
