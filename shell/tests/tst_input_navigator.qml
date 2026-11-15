@@ -281,6 +281,70 @@ Item {
             tryVerify(() => run.app.activeFocus && !find("systemPanel").open, 2000, "Back resumes the game")
         }
 
+        // ---- the interim fallback while the seat gate is off (until RUY-122) ------------------------------
+
+        // A keyboard sign-in: Ada (p2) from the picker, seat 1 has no pad.
+        function signInWithKeyboard() {
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            tc.shell = createTemporaryObject(shellComponent, host)
+            verify(tc.shell)
+            tc.shell.forceActiveFocus()
+            tryVerify(() => Profiles.profiles.length === 3)
+            tryVerify(() => find("profileList").activeFocus, 2000, "the picker has the focus")
+            tryVerify(() => Input.devices.length === 3, 2000)
+            for (let i = 0; i < 3; ++i)
+                keyClick(Qt.Key_Left)
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryCompare(Profiles, "activeProfile", "p2")
+            tryVerify(() => Input.players.length === 1 && Input.players[0].device_id === "", 2000, "seat 1 has no pad")
+            tryVerify(() => find("homePlay").activeFocus, 2000)
+            foreignSpy.clear()
+        }
+
+        // Gate off: player 1's pad does not come back within the hold, so the Hub it opened would freeze
+        // the game for good without a keyboard: the first pad that presses is player 1 and resumes it.
+        function test_gate_off_after_the_hold_another_pad_takes_seat_1_and_resumes_the_game() {
+            signInWithXbox()
+            const run = playRacer()
+            Input.mockSeatHoldMs(300)
+            Input.mockRemoveDevice(host.xbox)
+            tryVerify(() => find("systemActions").activeFocus, 2000, "the Hub opens")
+            tryVerify(() => recordOf(run.instance).frozen === true, 2000)
+            Input.mockPadButton(host.dualSense, "south")
+            wait(50)
+            verify(find("systemPanel").open, "while the hold runs nothing changes")
+            tryVerify(() => Input.players.length === 1 && Input.players[0].device_id === "", 3000, "the hold ran out")
+            Input.mockPadButton(host.dualSense, "south")
+            tryVerify(() => run.app.activeFocus && !find("systemPanel").open, 2000, "the DualSense resumes the game")
+            tryVerify(() => Session.mockCalls().length === 2, 2000)
+            compare(Session.mockCalls(), ["freeze " + run.instance, "thaw " + run.instance])
+            tryVerify(() => Input.players[0].device_id === host.dualSense, 2000, "the DualSense is player 1")
+        }
+
+        function test_gate_off_a_keyboard_sign_in_then_a_pad_press_takes_seat_1() {
+            signInWithKeyboard()
+            Input.mockPadButton(host.dualSense, "dpad_right")
+            tryVerify(() => find("homeDetails").activeFocus, 2000, "its first press navigates")
+            tryVerify(() => Input.players[0].device_id === host.dualSense, 2000, "it is player 1")
+            compare(foreignOf(host.dualSense), [])
+            Input.mockPadButton(host.xbox, "dpad_left")
+            wait(50)
+            verify(find("homeDetails").activeFocus, "the next pad is not player 1")
+        }
+
+        // Gate on (RUY-122): the prompt's Move is the path; a press takes no seat.
+        function test_gate_on_no_pad_takes_a_padless_seat_1() {
+            Input.mockSeatGate(true)
+            signInWithKeyboard()
+            Input.mockPadButton(host.dualSense, "dpad_right")
+            tryVerify(() => foreignOf(host.dualSense).length === 1, 2000)
+            compare(foreignOf(host.dualSense), ["press"])
+            verify(find("homePlay").activeFocus, "nothing moved")
+            compare(Input.players[0].device_id, "")
+        }
+
         function test_over_home_a_lost_pad_opens_nothing() {
             signInWithXbox()
             Input.mockRemoveDevice(host.xbox)

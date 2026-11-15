@@ -206,6 +206,8 @@ public:
     Q_INVOKABLE void mockPadButton(const QString &deviceId, const QString &button);
     // The pad the mock service holds as the navigator ("" for none).
     Q_INVOKABLE QString mockNavigator() const;
+    // The mock service's seat gate (off by default, as in production until RUY-122).
+    Q_INVOKABLE void mockSeatGate(bool on);
     // The seats the mock service holds now (player records), and a status every later JoinPlayer
     // answers without changing anything ("" clears it).
     Q_INVOKABLE QVariantList mockPlayers() const;

@@ -13,9 +13,10 @@
   players (JoinPlayer, LeavePlayer, ListPlayers, PlayersChanged; the device record's slot and
   profile) since RUY-121 (ADR-017 seats; the seat gate is off until RUY-122, see Players), and who
   drives the UI (ForeignInput, SetNavigator; 06 §11.3) since RUY-38; every other member below is
-  still DRAFT and not served (platform and game assignments T-370 / RUY-43, OwnershipMode T-371). The design is docs/specs/06-input.md. Each task may change what it builds
-  here (contracts are drafts until the first release, root CLAUDE.md); RUY-403's served-vs-XML
-  test must check only the built members.
+  still DRAFT and not served (platform and game assignments T-370 / RUY-43, OwnershipMode T-371).
+  The design is docs/specs/06-input.md. Each task may change what it builds here (contracts are
+  drafts until the first release, root CLAUDE.md); RUY-403's served-vs-XML test must check only
+  the built members.
 
   Served by ruya-inputd (system user ruya-input, not root: 06 §3) on the system bus at
   /org/ruyaos/Input1. Bus policy: ruya-input owns the name; only ruya-shell and root may call.
@@ -260,7 +261,12 @@
          SEAT_GATE): meanwhile an unseated connected pad still gets a virtual pad in "app" (and what
          "overlay" keeps), numbered after the seats (ruya-input/pad5 and up, the lowest free number,
          in connect order), so pad1..pad4 stay the seats' and a join renumbers no other live pad.
-         Seats, ListPlayers and every member here work the same either way.
+         Also while the gate is off (RUY-38 round 2, the interim fallback): when seat 1 has no pad
+         and is not held (a keyboard sign-in, or its pad's hold ran out) and no navigator is set, the
+         first unseated pad that presses a button becomes seat 1's pad (PlayersChanged, its virtual
+         pad is pad1) and navigates from that press on; with the gate on (RUY-122) only JoinPlayer
+         (the prompt's Move) seats player 1 on a pad. Seats, ListPlayers and every member here work
+         the same either way otherwise.
          A restarted service knows no seats: the shell joins the players it last knew again on the
          name's new owner (seat 1's pad as the route's profile, then the others by slot), each once
          the service lists its pad (a held seat's player only when its pad is back).

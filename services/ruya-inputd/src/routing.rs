@@ -809,6 +809,12 @@ impl<B: Backend> Router<B> {
         let Some(pad_id) = self.pads.get(&key).map(|p| p.info.id.clone()) else {
             return;
         };
+        if inputs
+            .iter()
+            .any(|i| matches!(i, PadInput::Button(_, true)))
+        {
+            self.claim_padless_seat1(&pad_id, now);
+        }
         let signed_in = self.seats.active();
         let seat = self.seats.seat_of(&pad_id).map(|(n, _)| n);
         // The Confirm button of the pad the event came from (RUY-603).
@@ -1645,6 +1651,33 @@ impl<B: Backend> Router<B> {
     }
 
     // ---- who drives the UI (ADR-017 points 2 and 9, 06 §11.3; RUY-38) -----------------------
+
+    /// The interim fallback while the seat gate is off (until RUY-122's prompt, lead decision, RUY-38
+    /// round 2): with a profile signed in, no navigator, and seat 1 without a pad and not held (a
+    /// keyboard sign-in, or its pad's hold ran out), the first unseated pad that presses a button
+    /// becomes seat 1's pad, as the pad that signs in does, and navigates from that press on. Without
+    /// it a console with no keyboard could not be driven, and a game the lost-pad Hub froze could not
+    /// be resumed. A held seat 1 waits for its pad. With the gate on the prompt's Move is the path.
+    fn claim_padless_seat1(&mut self, pad_id: &str, now: Instant) {
+        if self.seat_gate
+            || self.navigator.is_some()
+            || !self.seats.active()
+            || self.seats.player1_device().is_some()
+            || self.seats.seat_of(pad_id).is_some()
+        {
+            return;
+        }
+        let profile = self.profile.clone();
+        let before = self.seats.clone();
+        if let Joined::Seated { changed: true, .. } = self.seats.join(pad_id, &profile) {
+            self.journal(format!(
+                "player 1 (ruya-{profile}) has no pad: {pad_id} pressed and is player 1 (seat gate off)"
+            ));
+            self.seats_changed(&before);
+            self.sync_virtuals(now);
+            self.sync_navigation();
+        }
+    }
 
     /// Whether the pad with the stable id `id` navigates the shell now: every pad while nobody is
     /// signed in; else only the navigator if one is set, or else only seat 1's pad (none while its
@@ -2938,6 +2971,91 @@ mod tests {
         assert_eq!(r.set_navigator("Bad Id", SHELL), Status::UnknownDevice);
         assert_eq!(r.set_navigator("a", SHELL), Status::Ok);
         assert!(journal(&mut r).contains(&"navigator a".to_owned()));
+    }
+
+    /// RUY-38 round 2, the interim fallback while the seat gate is off (until RUY-122): seat 1 lost
+    /// its pad for good (the hold ran out), so the first unseated pad that presses a button is player
+    /// 1 and navigates from that press: it closes the lost-pad Hub, and its virtual pad is pad1.
+    /// While the hold runs nothing changes; a stick takes nothing.
+    #[test]
+    fn gate_off_a_pad_takes_seat_1_once_its_hold_ran_out() {
+        let mut r = gated(false);
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        sign_in(&mut r, a, "p1");
+        app(&mut r, "i1", STK, "p1");
+        settle(&mut r);
+        let t = t0();
+        r.remove_pad_at(a, t);
+        // The Hub opened over the game (the shell's lost-pad pause): the route is overlay.
+        r.set_route("overlay", "i1", STK, "p1", SHELL, t);
+        r.backend_mut().take();
+        r.input_at(b, &[press(PadButton::South), release(PadButton::South)], t);
+        assert!(
+            nav(&r.backend_mut().take()).is_empty(),
+            "seat 1 is held: b waits"
+        );
+        assert_eq!(r.players()[0].device_id, "a");
+        r.tick(t + SEAT_HOLD + Duration::from_secs(1));
+        assert_eq!(r.players()[0].device_id, "", "the hold ran out");
+        r.input_at(b, &[PadInput::Axis(PadAxis::LeftX, STICK_MAX)], t);
+        r.input_at(b, &[PadInput::Axis(PadAxis::LeftX, 0)], t);
+        assert_eq!(r.players()[0].device_id, "", "a stick takes nothing");
+        r.backend_mut().take();
+        r.take_notices();
+        r.input_at(b, &[press(PadButton::South)], t);
+        assert_eq!(r.players()[0].device_id, "b", "b is player 1");
+        assert_eq!(
+            nav(&r.backend_mut().take()),
+            vec![(NavKey::Accept, true)],
+            "its press navigates"
+        );
+        let notices = r.take_notices();
+        assert!(foreign(&notices).is_empty(), "and asks nothing");
+        assert_eq!(players_signals(&notices), vec![vec![seat(1, "p1", "b")]]);
+        // Accept closed the Hub: back in the app b's virtual pad is pad1.
+        app(&mut r, "i1", STK, "p1");
+        settle(&mut r);
+        assert_eq!(phys_of(&r, b).as_deref(), Some("ruya-input/pad1"));
+    }
+
+    #[test]
+    fn gate_off_a_pad_takes_seat_1_after_a_keyboard_sign_in() {
+        let mut r = gated(false);
+        let b = r.add_pad(pad("b"), t0());
+        signed_in(&mut r, "p1");
+        assert_eq!(r.players()[0].device_id, "");
+        r.backend_mut().take();
+        r.input_at(b, &[press(PadButton::DpadDown)], t0());
+        assert_eq!(r.players()[0].device_id, "b");
+        assert_eq!(nav(&r.backend_mut().take()), vec![(NavKey::Down, true)]);
+    }
+
+    /// With the gate on (RUY-122) the prompt's Move is the path: a press takes no seat.
+    #[test]
+    fn gate_on_no_pad_takes_a_padless_seat_1() {
+        // A keyboard sign-in.
+        let mut r = router();
+        let b = r.add_pad(pad("b"), t0());
+        signed_in(&mut r, "p1");
+        r.backend_mut().take();
+        r.input_at(b, &[press(PadButton::DpadDown)], t0());
+        assert_eq!(r.players()[0].device_id, "");
+        assert!(nav(&r.backend_mut().take()).is_empty());
+        assert_eq!(foreign(&r.take_notices()), vec![("b".to_owned(), "press")]);
+        // A hold that ran out.
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        sign_in(&mut r, a, "p1");
+        let t = t0();
+        r.remove_pad_at(a, t);
+        r.tick(t + SEAT_HOLD + Duration::from_secs(1));
+        assert_eq!(r.players()[0].device_id, "");
+        r.backend_mut().take();
+        r.input_at(b, &[press(PadButton::South)], t);
+        assert_eq!(r.players()[0].device_id, "");
+        assert!(nav(&r.backend_mut().take()).is_empty());
     }
 
     #[test]
