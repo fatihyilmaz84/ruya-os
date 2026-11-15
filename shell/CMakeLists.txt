@@ -48,6 +48,7 @@ qt_add_qml_module(ruyashell
         src/system/MockSystemDetailsBackend.h src/system/MockSystemDetailsBackend.cpp
         src/system/DBusSystemDetailsBackend.h src/system/DBusSystemDetailsBackend.cpp
         src/system/SystemDetails.h src/system/SystemDetails.cpp
+        src/system/SystemdWatchdog.h src/system/SystemdWatchdog.cpp
         src/audio/AudioBackend.h
         src/audio/MockAudioBackend.h src/audio/MockAudioBackend.cpp
         src/audio/DBusAudioBackend.h src/audio/DBusAudioBackend.cpp
@@ -368,6 +369,7 @@ endif()
 qt_add_executable(ruya-shell src/main.cpp)
 target_link_libraries(ruya-shell PRIVATE Qt6::Gui Qt6::Quick ruyashellplugin)
 target_include_directories(ruya-shell PRIVATE src/sound)   # --check-sound-theme (T-227) uses the checker without the UI
+target_include_directories(ruya-shell PRIVATE src/system)  # the systemd watchdog (RUY-483), started from main.cpp
 
 # A module of its own, outside RuyaShell, so qmllint, lupdate and the tests (Windows) never see it.
 if(RUYA_COMPOSITOR)

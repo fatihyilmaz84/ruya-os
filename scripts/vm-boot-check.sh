@@ -4,10 +4,81 @@
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-boot-check.sh
 # What it cannot see is the screen: that is scripts/vm-boot-shots.ps1 (shots during boot) and
 # dev-setup.md, "Boot experience". It prints the splash-to-shell timeline of this boot.
+#   bash /root/vm-boot-check.sh watchdog   the shell's systemd watchdog (RUY-483): WatchdogSec=30s,
+#                                          no trip and no automatic restart since boot, and a SIGSTOPped
+#                                          shell restarted within 45 s. It restarts the shell (running
+#                                          games end): run it once per boot, before checks that end the
+#                                          shell themselves (a mode change counts in NRestarts).
 set -u
 fail=0
 ok() { echo "PASS: $*"; }
 bad() { echo "FAIL: $*"; fail=1; }
+
+# --- watchdog mode (RUY-483) ---
+# Host tests (test-vm-checks.sh) put fakes in front of PATH and WATCHDOG_KILL in place of kill.
+watchdog_check() {
+    local unit='ruya-compositor@tty1.service' kill_cmd="${WATCHDOG_KILL:-kill}" limit=45
+    local start_line='ruya-shell: systemd watchdog every 15000 ms'
+    show() { systemctl show -p "$1" --value "$unit"; }
+    local wd na ta pid0 n0 t0 pid1 n1 waited
+    wd="$(show WatchdogUSec)"; na="$(show NotifyAccess)"; ta="$(show TimeoutAbortUSec)"
+    [ "$wd" = 30s ] && ok "$unit has WatchdogSec=30s" || bad "$unit: WatchdogUSec is '$wd', not 30s"
+    [ "$na" = main ] && ok "$unit has NotifyAccess=main" || bad "$unit: NotifyAccess is '$na', not main"
+    [ "$ta" = 10s ] && ok "$unit has TimeoutAbortSec=10s" || bad "$unit: TimeoutAbortUSec is '$ta', not 10s (a stopped shell waits for the 90 s stop timeout)"
+    if ! systemctl is-active "$unit" >/dev/null; then
+        bad "$unit is not active"; return
+    fi
+    pid0="$(show MainPID)"; n0="$(show NRestarts)"
+    [ "$n0" = 0 ] && ok "no automatic restart of the shell since boot (NRestarts 0)" || bad "NRestarts is $n0 before the test (a crash, a watchdog trip, or a check that ended the shell ran before this one)"
+    if journalctl -b -q --no-pager -u "$unit" | grep -q 'Watchdog timeout'; then
+        bad "the watchdog already tripped in this boot: $(journalctl -b -q --no-pager -u "$unit" | grep 'Watchdog timeout' | head -1)"
+    else
+        ok "no watchdog timeout in this boot so far"
+    fi
+    journalctl -b -q --no-pager _PID="$pid0" | grep -qF "$start_line" && ok "the shell (pid $pid0) logged '$start_line'" || bad "no '$start_line' from the shell (pid $pid0)"
+
+    # A stopped process cannot take systemd's SIGABRT: the restart is the SIGKILL after TimeoutAbortSec
+    # (no coredump; a real wedge leaves one). The last ping is at most 15 s old when the shell stops, so
+    # the trip comes 15-30 s after the stop, the SIGKILL 10 s later and the new start 1 s after that.
+    # If the shell is not restarted, the EXIT trap lets it run again (it then takes the pending SIGABRT).
+    t0="$(date +%s)"
+    trap "'$kill_cmd' -CONT $pid0 2>/dev/null" EXIT # expanded now: the function's locals are gone at exit
+    "$kill_cmd" -STOP "$pid0" || { bad "kill -STOP $pid0 failed"; return; }
+    echo "    stopped the shell (pid $pid0); waiting up to $limit s for systemd to restart it"
+    waited=0; pid1="$pid0"
+    while [ "$waited" -lt "$limit" ]; do
+        sleep 1; waited=$((waited + 1))
+        pid1="$(show MainPID)"
+        if [ -n "$pid1" ] && [ "$pid1" != 0 ] && [ "$pid1" != "$pid0" ] && systemctl is-active "$unit" >/dev/null; then
+            break
+        fi
+    done
+    if [ "$pid1" = "$pid0" ] || [ -z "$pid1" ] || [ "$pid1" = 0 ]; then
+        bad "the stopped shell was not restarted within $limit s (MainPID '$pid1')"; return
+    fi
+    trap - EXIT
+    ok "the stopped shell was restarted after about $waited s (new MainPID $pid1)"
+    n1="$(show NRestarts)"
+    [ "$n1" = "$((n0 + 1))" ] && ok "NRestarts went from $n0 to $n1" || bad "NRestarts went from $n0 to $n1, not $((n0 + 1))"
+    if journalctl -b -q --no-pager -u "$unit" --since "@$t0" | grep -q 'Watchdog timeout'; then
+        ok "systemd logged the watchdog timeout: $(journalctl -b -q --no-pager -u "$unit" --since "@$t0" | grep 'Watchdog timeout' | head -1)"
+    else
+        bad "no 'Watchdog timeout' line from systemd since the stop (restarted for another reason?)"
+    fi
+    # The new shell loads its QML first (seconds on the VM's software renderer).
+    waited=0
+    until journalctl -b -q --no-pager _PID="$pid1" | grep -qF "$start_line"; do
+        [ "$waited" -ge 30 ] && break
+        sleep 1; waited=$((waited + 1))
+    done
+    journalctl -b -q --no-pager _PID="$pid1" | grep -qF "$start_line" && ok "the new shell (pid $pid1) logged '$start_line' again" || bad "the new shell (pid $pid1) did not log '$start_line' within 30 s"
+    echo "note: the stopped shell left no coredump (SIGKILL); after a real wedge, 'coredumpctl info ruya-shell' has one"
+}
+if [ "${1:-}" = watchdog ]; then
+    watchdog_check
+    [ "$fail" = 0 ] && echo "ALL CHECKS PASSED" || echo "SOME CHECKS FAILED"
+    exit $fail
+fi
 
 cmd="$(cat /proc/cmdline)"
 for a in quiet splash loglevel=0 vt.global_cursor_default=0 systemd.show_status=false rd.plymouth=1 plymouth.ignore-serial-consoles; do

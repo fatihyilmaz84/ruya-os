@@ -6,6 +6,7 @@
 #   - the Plymouth theme "ruyaos": .plymouth file, script, every image the script loads;
 #   - the GRUB policy for new disks (bootupd static config) and for old ones (custom.cfg + its sync);
 #   - the compositor starts after Plymouth has quit, before the shutdown splash, and plymouth-quit retains the splash;
+#   - the compositor has its watchdog (WatchdogSec=30s, NotifyAccess=main, TimeoutAbortSec=10s, Type=simple; RUY-483);
 #   - the image build installs the script plugin, selects the theme and does not slim it away.
 #
 # Used by dev.ps1 (test) and by the CI workflow. Windows PowerShell 5.1 and pwsh. Exit code 0 = clean.
@@ -75,6 +76,12 @@ $comp = Text "image/rootfs/usr/lib/systemd/system/ruya-compositor@.service"
 if ($comp -notmatch '(?m)^After=.*plymouth-quit-wait\.service') { Fail "ruya-compositor@.service: must start after plymouth-quit-wait (eglfs only gets the display, DRM master, when Plymouth has exited)" }
 if ($comp -match '(?m)^ExecStartPre=.*plymouth deactivate') { Fail "ruya-compositor@.service: 'plymouth deactivate' does not release the display for an unprivileged compositor (T-269); do not use it" }
 if ($comp -notmatch '(?m)^Before=.*plymouth-reboot\.service.*') { Fail "ruya-compositor@.service: must be ordered before plymouth-reboot/poweroff (the shutdown splash)" }
+# The shell's watchdog (RUY-483, 01 section 2): 30 s, pings from the main process only, and a short abort
+# timeout so a shell that cannot take the SIGABRT (a stopped one) is killed in 10 s, not in 90.
+if ($comp -notmatch '(?m)^WatchdogSec=30s\s*$') { Fail "ruya-compositor@.service: must have WatchdogSec=30s (the shell pings every WATCHDOG_USEC / 2; RUY-483)" }
+if ($comp -notmatch '(?m)^NotifyAccess=main\s*$') { Fail "ruya-compositor@.service: must have NotifyAccess=main (without it systemd ignores the shell's WATCHDOG=1)" }
+if ($comp -notmatch '(?m)^TimeoutAbortSec=10s\s*$') { Fail "ruya-compositor@.service: must have TimeoutAbortSec=10s (a wedged shell is killed 10 s after the SIGABRT, not after the 90 s stop timeout)" }
+if ($comp -notmatch '(?m)^Type=simple\s*$') { Fail "ruya-compositor@.service: must stay Type=simple (the shell sends no READY=1)" }
 $quit = Text "image/rootfs/usr/lib/systemd/system/plymouth-quit.service.d/10-ruyaos.conf"
 if ($quit -notmatch '(?m)^ExecStart=-/usr/bin/plymouth quit --retain-splash\s*$') { Fail "plymouth-quit.service.d/10-ruyaos.conf: must quit with --retain-splash" }
 

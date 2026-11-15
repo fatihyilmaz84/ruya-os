@@ -134,6 +134,8 @@ Some toolkits turn `SIGTERM` into their own quit event (SDL does, as `SDL_EVENT_
 
 What we know about SIGTERM and the Flatpak sandbox: sending `SIGTERM` to **all** processes of a running sandbox at once (what stopping the scope does) was tried three times in a Fedora 44 WSL distribution with Flatpak 1.18.4, and the sample saved each time. The same stop through `ruya-session` and systemd is checked by `scripts/vm-sample-check.sh` (a lead run on the VM; not yet run when this was written). Sending `SIGTERM` only to the `flatpak run` command is **not** a stop: the sandbox kept running in our test.
 
+**If the console's shell restarts.** The shell is your game's Wayland compositor. When it crashes, or hangs for 30 seconds and the console restarts it (its watchdog, RUY-483; built, not yet checked on a booted console), your game's Wayland connection is closed without a `SIGTERM` first: a broken connection, not a stop. What your toolkit does then is its own (most exit with an error; not checked on the console). Save at safe points (step 6 of [What to do](#what-to-do)); a game that exits then is reported like any other that ended.
+
 ## Suspend, profile switch and sleep
 
 - **Suspend/resume:** the console does not stop apps when it goes to sleep, so you resume where you were. Do not rely on wall-clock time being continuous across a resume (clamp your frame time, as the sample does). Suspending with the shell on the real display is **not working yet** (T-166).

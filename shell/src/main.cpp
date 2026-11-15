@@ -1,4 +1,5 @@
 #include "SoundThemeCheck.h"
+#include "SystemdWatchdog.h"
 
 #include <QCommandLineParser>
 #include <QCoreApplication>
@@ -8,6 +9,7 @@
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QtQml/qqmlextensionplugin.h>
 
 #include <cstdio>
@@ -149,6 +151,13 @@ int main(int argc, char *argv[])
         engine.loadFromModule("RuyaShell", "Main");
 #endif
     }
+
+    // The systemd watchdog (RUY-483): WATCHDOG=1 from this, the GUI thread, so a wedged event loop
+    // is restarted. It starts once app.exec() runs, with one ping at once: the first QML load above
+    // (seconds on the VM's software renderer) counts against the whole WatchdogSec. Without
+    // WATCHDOG_USEC (run by hand, the mock, Windows) it does nothing.
+    SystemdWatchdog watchdog;
+    QTimer::singleShot(0, &watchdog, [&watchdog] { watchdog.start(); });
 
     QObject *root = engine.rootObjects().value(0);
     if (!root)
