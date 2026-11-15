@@ -38,7 +38,8 @@
 #             within 60 s although the inhibiting client still runs; when the key client ends, the
 #             inhibiting app is in front again and "+wayland:N" must come back. Before that, with the screen
 #             still on (with vm-inject-key.py next to this script), Guide opens the Hub: "-wayland:N", and
-#             Guide again: "+wayland:N". The profile is signed in from the guest (Profiles1.SwitchTo).
+#             Guide again: "+wayland:N". Last (RUY-578) the client runs with --subsurface (the inhibitor on a
+#             child wl_subsurface): "+wayland:N" in front, "-wayland:N" with the Hub open. The profile is signed in from the guest (Profiles1.SwitchTo).
 #   padactive RUY-588: a game played with a pad and no Wayland idle inhibitor holds the console awake. Needs
 #             scripts/vm-input-probe.py next to this script. Both the compositor unit and ruya-inputd get
 #             RUYA_IDLE_DIVISOR=60 (saver at ~10 s, the 30 s UserActive gap becomes 0.5 s); a profile is signed
@@ -352,6 +353,27 @@ inhibit_check() {
     pkill -f '[v]m-key-client.qml'
     pkill -f '[v]m-idle-inhibit-client.py'
     echo "$(inhibit_log "$start")"
+    # RUY-578: the inhibitor on a child wl_subsurface holds for its client's front app (a video app).
+    sleep 2
+    sstart="$(date +%s)"
+    run python3 /var/tmp/vm-idle-inhibit-client.py --subsurface >/var/tmp/vm-idle-inhibit-sub.log 2>&1 &
+    sline="$(wait_log "$sstart" 'idle inhibit \+wayland:[0-9]+' 20)" && ok "a subsurface inhibitor of the front app holds: $sline" || bad "no '+wayland:N' for the subsurface inhibitor (see /var/tmp/vm-idle-inhibit-sub.log)"
+    sn="$(echo "$sline" | sed -n 's/.*wayland:\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+    if [ -n "$sn" ] && [ -f "$here/vm-inject-key.py" ]; then
+        if journalctl -b -q -o cat | grep -E 'display (off|on)' | tail -n 1 | grep -q 'display off'; then
+            woke="$(date +%s)"
+            python3 "$here/vm-inject-key.py" menu >/dev/null 2>&1
+            wait_log "$woke" 'display on' 10 >/dev/null || echo "note: no 'display on' after the wake key"
+            sleep 2
+        fi
+        shub="$(date +%s)"
+        python3 "$here/vm-inject-key.py" guide >/dev/null 2>&1
+        wait_log "$shub" "idle inhibit -wayland:$sn" 20 >/dev/null && ok "the Hub over the app: subsurface -wayland:$sn" || bad "no '-wayland:$sn' with the Hub open (subsurface)"
+        python3 "$here/vm-inject-key.py" guide >/dev/null 2>&1
+    elif [ -n "$sn" ]; then
+        echo "UNVERIFIED: vm-inject-key.py is not next to this script: the subsurface Hub step was not run"
+    fi
+    pkill -f '[v]m-idle-inhibit-client.py'
     if [ "$added" = 1 ]; then
         rm -f "$dropin/zz-idle-divisor.conf"
         rmdir "$dropin" 2>/dev/null

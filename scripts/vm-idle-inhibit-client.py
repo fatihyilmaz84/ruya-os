@@ -7,7 +7,7 @@ one small xdg toplevel (a shm buffer) and creates an idle inhibitor on its surfa
 does on its first window. It then idles and answers pings until it is killed.
 
   runuser -u ruya-shell -- env XDG_RUNTIME_DIR=/run/user/$(id -u ruya-shell) WAYLAND_DISPLAY=ruya-0 \
-      python3 /var/tmp/vm-idle-inhibit-client.py [--app-id ID]
+      python3 /var/tmp/vm-idle-inhibit-client.py [--app-id ID] [--subsurface]
 
 Prints "inhibitor created" once the inhibitor exists. A test tool only; never shipped in the image.
 """
@@ -79,6 +79,8 @@ class Wire:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--app-id", default="org.ruyaos.IdleInhibitClient")
+    ap.add_argument("--subsurface", action="store_true",
+                    help="create the inhibitor on a child wl_subsurface instead of the toplevel's surface")
     args = ap.parse_args()
     path = os.path.join(os.environ["XDG_RUNTIME_DIR"], os.environ.get("WAYLAND_DISPLAY", "ruya-0"))
     w = Wire(path)
@@ -149,8 +151,22 @@ def main():
     w.send(surface, 1, struct.pack("Iii", buf, 0, 0))                      # attach
     w.send(surface, 6)                                                     # commit
 
+    target = surface
+    if args.subsurface:
+        # A video app draws in a wl_subsurface and its inhibitor sits there, not on the toplevel (RUY-578).
+        subcompositor = bind("wl_subcompositor", 1)
+        child = w.new_id()
+        w.send(compositor, 0, struct.pack("I", child))                     # create_surface
+        sub = w.new_id()
+        w.send(subcompositor, 1, struct.pack("III", sub, child, surface))  # get_subsurface(id, surface, parent)
+        cbuf = w.new_id()
+        w.send(pool, 0, struct.pack("IiiiiI", cbuf, 0, width, height, stride, 1))
+        w.send(child, 1, struct.pack("Iii", cbuf, 0, 0))                   # attach
+        w.send(child, 6)                                                   # commit (applies with the parent's)
+        w.send(surface, 6)                                                 # commit the parent
+        target = child
     inhibitor = w.new_id()
-    w.send(manager, 1, struct.pack("II", inhibitor, surface))              # create_inhibitor
+    w.send(manager, 1, struct.pack("II", inhibitor, target))               # create_inhibitor
     w.roundtrip()
     print("inhibitor created", flush=True)
     while True:
