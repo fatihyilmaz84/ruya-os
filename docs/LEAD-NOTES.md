@@ -1,49 +1,43 @@
 # Lead notes (handoff between lead sessions)
 
-The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand off at 50-60 % context; no no-op turns; up to four lanes; builders run nothing in WSL since lead-20**). **Rewrite this file at the end of every lead session**; keep it under about 6 KB. Paper Plane is the source of truth (http://192.168.178.164:8687, project `RUY`); `docs/STATUS*.md` and `docs/tasks/T-*.md` are a frozen archive. **Goals are formations** (`formation` lists them; `PLANNING.md` step 4). This file is the lead's session record.
+The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand off at 50-60 % context; no no-op turns; up to four lanes; builders run nothing in WSL since lead-20**). **Rewrite this file at the end of every lead session**; keep it under about 6 KB. Paper Plane is the source of truth (http://192.168.178.164:8687, project `RUY`, server 0.15.1 since 2026-11-15); `docs/STATUS*.md` and `docs/tasks/T-*.md` are a frozen archive. **Goals are formations** (`formation` lists them). This file is the lead's session record.
 
-## State after lead-21 (Opus, 2026-11-14/15; ran overnight)
+## State after lead-22 (Opus, 2026-11-15)
 
-- **Review range:** 00bbe87..HEAD. Paper Plane `changes`: read the latest 200 (the cursor moved far past 2638).
-- **Merged and Done (38):** 156, 404, 621, 414, 125, 402, 121, 18, 21, 629, 627 (+642), 641, 25, 637, 653, 636, 640, 38, 651, 654, 652, 648, 655, 155, 625, 467, 656, 649, 122, 657, 643, 659, 660, 658, 628, 644, 631; plus 448 (co-op re-plan) and 120. Lead fix `7b7dc5f2` (StorePage: Back from a search focused stale rows over D-Bus; found by CI's Linux job).
-- **Co-op is end to end on the host:** seats, 60 s hold, only player 1 navigates, chips, "Who's playing?" with the **seat gate on** (unjoined pads reach no game), Move + PIN with the new pad, Guest. Left: RUY-124 (in flight), 630 (Add profile: needs a board), 664 (guest follow-ups), 662 (PinPad polish).
-- **Pushed:** origin at 17a8a2b2 (GitHub CI green, incl. RUY-155's first `-Samples`); main is ahead by RUY-631 and these notes: push with `push-main.ps1`.
+- **Review range:** ab995891..HEAD. Paper Plane `changes`: read the latest 200.
+- **Merged and Done (13):** 124, 405, 49, 483, 664, 674, 48, 662, 638, 511, 679, 680; 650 cancelled (not reproducible). Lead fixes: slim removes sudo despite dnf's protection (`ad806ac5`, the 0.0.84 build failed on it), vm-queue summary keeps every FAIL (`7abef208`), a QML race in tst_whos_playing (`6d857db4`), the obsolete "Cancel" translation (`f2bc4d60`), shell/CLAUDE.md pruned to 8 KB.
+- **Inbox triaged:** all 87 tickets (27 Ready, 33 Backlog, 17 lead decisions recorded as comments, 10 cancelled/merged). The lead decisions still need their builder tickets written: 468, 470, 476, 482, 487, 498, 500, 506, 508, 516, 519, 543, 613, 635, 639 (`list q=` "Lead decision (lead-22").
+- **Image 0.0.84** (from ad806ac5: RUY-18 hardening, RUY-124/405 not in it): VM queue 30 checks; every failure was a check bug (fixed in RUY-679). **The Dell runs 0.0.84** (rollback 0.0.83; only bootloader-update.service failed, RUY-447). RUY-646 measured (exposure lower, LLMNR off, no sudo).
+- **Paper Plane usage:** plugin `paperplane@paperplane` 0.15.1 installed (user scope); RuyaOS `settings.local.json` holds only `env` (URL + the hooks token), its old hooks removed; backups in `~/.claude/`. The `claude.exe` in `~/.local/bin` (Oct 2025) crashes on `OTEL_METRICS_EXPORTER=none` (issue EnigmaNL/PaperPlane#13): use the desktop's `%APPDATA%\Claude\claude-code\<ver>\...\claude.exe`.
 
-## First thing next session: images (the Dell is back on, owner 2026-11-15)
-**Nothing merged in lead-21 has run on Linux hardware or in a VM.** Build 0.0.84 from main (`image-chain.sh 0.0.84 oci`), then the VM queue: the default list plus every check queued on **RUY-390** (players, seathold, owner, guide, join, shell, confirm, twopads, close, useractive, signals; profiles create+guests; store; session check/restart/display; devices bluetooth). **RUY-18 changes the image** (sudo gone, units hardened, LLMNR off, deny own): watch the compositor boot and the first-boot Flathub remote; then `vm-security-check.sh measure` (RUY-646). Only after the queue passes: `dell-update.sh 0.0.84`, and try co-op on the Dell with two pads (the seat gate changes what every game sees: the owner already saw SuperTuxKart take both pads on 0.0.83). RUY-645 (session `display`) needs the VM commands in its ticket.
-
-## In flight at handoff
-- **RUY-124** (a controller remembers its player): a ruya-builder (Sonnet) is running in worktree `D:\dev\RuyaOS-worktrees\RUY-124`, branch `t/RUY-124-remembered-owner`. Its HANDOFF reaches lead-21 only: check the ticket (In Review + Outcome comment) and the branch's last commit, then send it to `ruya-reviewer` (+ UX if the focus order reads oddly).
-- Locked folders to delete by hand: `D:\dev\RuyaOS-worktrees\RUY-403`, `525`, `547`, `590`, `622`, `156`, `636`, `659`. Stale worktree `RUY-549b` (RUY-549 needs WSL).
-
-## Next (after the images)
-RUY-664, 662, 638 (notifications), 661 (callLater-focus audit), 663 (dev.ps1 lock), 650 (HubControllers shot). Re-plan: 12 (compositor, VM), 26 (stale), 407 (needs a board shared with the game page), 630 (Add profile board). Inbox to plan: about 25 tickets filed tonight (labels `inbox`).
+## First thing next session
+1. **RUY-681 (high, owner report: STK split-screen, the second pad "not recognized")** is in round 2 (an ACL-order race in the udev fallback, a 06 sentence, doc wording; round 1 approved the rest, no cross-profile leak): an Opus ruya-builder in `D:\dev\RuyaOS-worktrees\RUY-681`, branch `t/RUY-681-coop-pads`. Check the ticket (In Review + Outcome) and the branch; review with ruya-reviewer (Opus). Its scope 1 says whether ruya-inputd forwards seat 2 under `app`; scope 2 keeps every seat's virtual pad from launch to the game's end. Then image + Dell with the owner's two pads.
+2. **Next image (0.0.85) and VM queue:** run `vm-boot-check.sh watchdog` FIRST in its boot (RUY-483), then the RUY-679 order (`session check`, `store`, `input twopads`, `session display`), then `input players` (RUY-124 owner), `profiles guests` (RUY-664), and RUY-681's `input coop`. Then `dell-update.sh`, `dell-hub-check.sh` (RUY-405), and STK co-op with the owner.
+3. RUY-685 (high): Manage profiles blocks rename/delete of a guest-role profile (the owner's tyx).
 
 ## Owner decisions open
-- **RUY-632:** Guide on player 2-4's pad (recommend: nothing now); "Use this controller" in the Hub (recommend: no, the prompt's Move is the path).
-- Lead items that may become owner questions: RUY-639 (notification policy), 647 (release support access without sudo), 633 (per-player attribution, strictest age limit).
+- RUY-632 (Guide on players 2-4; "Use this controller"), RUY-633 (age limit of all seated players: refuse the join?), RUY-673 (DualShock 3 over Bluetooth: a Dell spike first).
 
 ## Concerns (ranked)
-1. 38 merges unproven on Linux; RUY-18 and the seat gate are the riskiest.
-2. `dev.ps1 shots` is unreliable while several builders run (lost window activation).
-3. Co-op tickets ran large: 121 529k, 627 ~750k, 38 ~460k, 122 ~485k, 628 ~590k tokens (Opus).
+1. Co-op on real hardware is still unproven (RUY-681); the owner found it on the Dell, not us.
+2. Four lanes of `shots` collide (activation losses, 12-min mutex waits; RUY-682). RUY-511's `shots <file>` filter and retry are merged: use the filter.
+3. merge-gate's RED summary hides the failing step (a translation lint showed as nothing): run `dev.ps1 test *> file` and grep its last lines (UTF-16: `iconv -f UTF-16`).
 
-## Process changes in lead-21
-- Pre-build reviews by read-only Explore agents (<= 40 lines back); the lead writes the ruling (caught stale 407, 26, 12).
-- Big re-plans: an Opus planner drafts into the scratchpad; a script applies them over `POST /api/tools/update`.
-- Design/UX reviewers get the ticket text as a file (no Paper Plane tools).
-- **Builders stop processes by PID only** (ruya-builder.md).
-- revert-check: verdict from exit codes and this run's logs (654, 659), `-Mode docs|vmchecks` (657), script self-checks in `dev.ps1 docs` (660).
-- A Linux-only CI failure is diagnosed by an agent allowed to run the CI image in WSL (found a real bug in 20 min).
-- Paper Plane: issues #10 (blocks=[] doesn't clear) and #9 (a same-state move drops evidence) commented.
+## Process changes in lead-22
+- Inbox triage by one Opus planner into a JSON plan, applied by a script over `POST /api/tools/update` (scratchpad `apply_plan.py`); lead decisions recorded as comments, not tickets.
+- VM failures go to a debug agent allowed to boot the VM / SSH the Dell (found 4 check bugs and 2 owner bugs in about 20 min each).
+- vm-queue.ps1: the summary keeps every FAIL line (a 30-check queue hid 16 results).
+- Merges wait while `image-chain.sh` reads `shell/` or `services/` (it builds from the checkout): grep `COPY shell|COPY services` in build.log before merging such a branch; never run a gate during `make-disk`.
+- Remove a worktree only after its gate (it holds the builder's green marker).
+- Paper Plane: issue #13 filed.
 
 ## Host facts learned
-- Git Bash rewrites `/mnt/c/...` for `wsl`: prefix `MSYS_NO_PATHCONV=1`. `pkill -f image-chain.sh` inside `wsl bash -lc` kills that bash too.
-- merge-gate's RED summary greps "FAIL" only: if it shows none, rerun `dev.ps1 test` with full output.
+- dnf protects sudo itself (`/etc/dnf/protected.d/sudo.conf`, dnf5 `protect-sudo.conf`).
+- Git Bash rewrites `/mnt/c/...` for `wsl`: prefix `MSYS_NO_PATHCONV=1`.
 
 ## Quality signals (one row per lead session)
 
 | Date | Range reviewed | Tasks | Findings (fixed / filed) | `dev.ps1 test` | VM |
 |---|---|---|---|---|---|
-| 2026-11-14 (lead-20) | a1f1299..00bbe87 | 11 merged | round 2 for 41; 4 VM-check bugs fixed; 624 found in the VM; 12 inbox filed | 1680 QML + 144 skips | 0.0.81, 0.0.82 queues; 0.0.82 on the Dell |
-| 2026-11-15 (lead-21) | 00bbe87..HEAD | 38 merged + 448 re-plan | rounds 2-3 for 404, 621, 121, 21, 627, 38, 122, 637, 654, 628, 631; lead fixes in 404, 402, 18, 629, 649, 122, StorePage; 1 VM check bug and 1 test race fixed; ~45 tickets filed | 1832 QML + 149 skips; GitHub CI green | 0.0.83 queue (624 proven; 645 open); Dell on 0.0.83 |
+| 2026-11-15 (lead-21) | 00bbe87..ab99589 | 38 merged + 448 re-plan | rounds 2-3 for 11 tickets; ~45 filed | 1832 QML + 149 skips | 0.0.83 queue; Dell on 0.0.83 |
+| 2026-11-15 (lead-22) | ab99589..HEAD | 12 merged, 87 inbox triaged | rounds 2 for 405, 49, 48, 662, 511, 679; lead fixes in 124, 48, 49, 638, 662; 1 image bug, 4 VM-check bugs, 2 owner bugs filed and 1 fixed (680); ~20 filed | 1884 QML + 152 skips | 0.0.84 built (after a slim fix); queue failures all check bugs (patched checks passed in the VM, RUY-679); Dell on 0.0.84 |
