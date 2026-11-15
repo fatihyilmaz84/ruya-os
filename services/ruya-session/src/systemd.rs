@@ -1032,16 +1032,19 @@ fn manager_running(uid: u32) -> Option<bool> {
 }
 
 /// `systemctl is-active` of the unit in the user's manager (only asked when that runs).
+/// A timeout is `None`: the caller keeps what it knew and asks again on its next pass.
 fn unit_state(user: &str, unit: &str) -> Option<String> {
-    let out = Command::new("systemctl")
-        .args(["--user", "--no-pager"])
-        .arg(format!("--machine={user}@.host"))
-        .args(["is-active", unit])
-        .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    Some(String::from_utf8_lossy(&out.stdout).trim().to_owned())
+    let args = [
+        "systemctl".to_owned(),
+        "--user".to_owned(),
+        "--no-pager".to_owned(),
+        format!("--machine={user}@.host"),
+        "is-active".to_owned(),
+        unit.to_owned(),
+    ];
+    // `is-active` exits non-zero for an inactive unit; the word on stdout is the answer.
+    let (_, out) = run_bounded_status(&args, SYSTEMCTL_LIMIT)?;
+    Some(out.trim().to_owned())
 }
 
 /// One app's `systemd-run --wait`, on its own thread.
@@ -1131,27 +1134,16 @@ impl Job {
     }
 }
 
-/// Runs a helper to its end with stdout on /dev/null and stderr in the journal; a failure is
-/// logged and returned as `false`.
-fn run_quiet(program: &str, args: &[&str]) -> bool {
-    match Command::new(program)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::inherit())
-        .status()
-    {
-        Ok(status) if status.success() => true,
-        Ok(status) => {
-            eprintln!("ruya-session: {program} {}: {status}", args.join(" "));
-            false
-        }
-        Err(err) => {
-            eprintln!("ruya-session: {program} {}: {err}", args.join(" "));
-            false
-        }
-    }
+/// Runs a helper to its end, at most `limit` (then it is killed), stderr in the journal; a
+/// failure or a timeout is logged and returned as `false`.
+fn run_quiet(args: &[&str], limit: Duration) -> bool {
+    let args: Vec<String> = args.iter().map(|a| (*a).to_owned()).collect();
+    run_bounded(&args, limit).is_some()
 }
+
+/// Longest `ensure_manager` waits for one helper: `systemctl start user@N.service` may take up to
+/// the 45 s start timeout.
+const MANAGER_LIMIT: Duration = Duration::from_secs(50);
 
 /// Keeps the profile user's manager alive without a login session, and has it running when this
 /// returns. Idempotent and cheap; a failure is logged and the launch goes on.
@@ -1161,19 +1153,20 @@ fn run_quiet(program: &str, args: &[&str]) -> bool {
 /// own for the same manager; the two starts then wait for each other until the 45 s start
 /// timeout. `systemctl start` joins the start that is under way and returns once it is done.
 fn ensure_manager(user: &str) {
-    run_quiet("loginctl", &["enable-linger", user]);
-    let uid = Command::new("id")
-        .args(["-u", user])
-        .stdin(Stdio::null())
-        .stderr(Stdio::inherit())
-        .output()
-        .ok()
-        .and_then(|out| String::from_utf8(out.stdout).ok())
-        .map(|s| s.trim().to_owned())
-        .filter(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit()));
+    // A timeout is a logged failure and the launch goes on (the unit then fails or starts later).
+    run_quiet(&["loginctl", "enable-linger", user], MANAGER_LIMIT);
+    let uid = run_bounded(
+        &["id".to_owned(), "-u".to_owned(), user.to_owned()],
+        SYSTEMCTL_LIMIT,
+    )
+    .map(|s| s.trim().to_owned())
+    .filter(|s| !s.is_empty() && s.chars().all(|c| c.is_ascii_digit()));
     match uid {
         Some(uid) => {
-            run_quiet("systemctl", &["start", &format!("user@{uid}.service")]);
+            run_quiet(
+                &["systemctl", "start", &format!("user@{uid}.service")],
+                MANAGER_LIMIT,
+            );
         }
         None => eprintln!("ruya-session: no uid for {user}"),
     }
