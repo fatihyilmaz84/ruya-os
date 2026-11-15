@@ -11,12 +11,15 @@ import RuyaShell
 // (Input.setNavigator), the keyboard too; the Shell pauses a game behind it as the Hub does
 // (HubPause.overlayOpen) and routes Input "overlay".
 //
-// Step "pick": the console's profiles (no guest-role ones) as cards; Accept on a free profile without a
-// PIN opens step "confirm" (Join or Switch). A PIN profile or one that plays now (Move) does nothing
-// until RUY-628. Until then, player 1's own profile while seat 1 has no pad (a keyboard sign-in, a hold
-// that ran out: the seat gate leaves no other way back) joins the pad at once as player 1.
-// Join: Input.joinPlayer(pad, id), closed on "ok". Switch: Profiles.lock(), switchTo(id, ""), then
-// joinPlayer(pad, id) once the new profile's seats exist. A refused join is a toast and step 2 again.
+// Step "pick": the console's profiles (no guest-role ones) as cards; Accept on a free profile opens step
+// "confirm" (Join or Switch), on a profile that plays now with a pad step "move" (RUY-628), on one that
+// plays with no pad (player 1 after a keyboard sign-in or a hold that ran out) the PIN or the join at once.
+// Step "pin": PinPad's player mode (Profiles.verifyPin, never a sign-in) for a profile with a PIN, typed
+// with the asking pad; Back on an empty pad returns to the step before.
+// Join and Move: Input.joinPlayer(pad, id), closed on "ok". Switch: Profiles.lock(), switchTo(id, pin),
+// then joinPlayer(pad, id) once the new profile's seats exist. A refused join is a toast and the step
+// before again. While seat 1 has no pad a seated pad's Guide ("player-guide") asks too, so a console
+// with only seated pads left gets player 1 back without a keyboard (lead, RUY-628).
 // Not now keeps the pad quiet: over a game until that game exits, over Home until the pad disconnects
 // or the profile changes.
 FocusScope {
@@ -37,13 +40,16 @@ FocusScope {
     property Item blurSource: null
 
     property bool shown: false
-    property string step: "pick"         // "pick" | "confirm"
+    property string step: "pick"         // "pick" | "confirm" | "move" | "pin"
     property string pad: ""              // the asking pad (stable id)
     property var queue: []               // pads waiting to ask, in arrival order
     // Not now (pad id -> { instance } over a game, { profile } over Home).
     property var quiet: ({})
-    property var chosen: null            // the profile record of step "confirm"
-    // A JoinPlayer on its way from here: { pad, id, from: "pick" | "confirm" | "switch" }.
+    property var chosen: null            // the profile record of steps "confirm", "move" and "pin"
+    // What the PIN step leads to and where its Back returns: "join" | "switch" (step "confirm"), "move",
+    // "pick" (a profile that plays with no pad).
+    property string pinFor: ""
+    // A JoinPlayer on its way from here: { pad, id, from: "pick" | "confirm" | "move" | "switch" }.
     property var joining: null
     // A Switch between its Lock and the join: { pad, id, name, signedIn }.
     property var switching: null
@@ -56,8 +62,6 @@ FocusScope {
     property bool bridging: false
     // It pauses a game behind it (the Shell's HubPause and InputRoute): open, or between two prompts.
     readonly property bool pausing: shown || bridging
-    // The card where Accept was refused for now (a PIN or a profile that plays: RUY-628), -1 for none.
-    property int noticeIndex: -1
     // A Switch whose seat never came (the service did not answer) gives up after this (tests shorten it).
     property int switchTimeoutMs: 10000
 
@@ -89,28 +93,32 @@ FocusScope {
     function seatOf(profileId) {
         return Input.players.find(s => s.profile === profileId)
     }
-    // Player 1's profile while seat 1 has no pad (not held): picking it gives seat 1 this pad.
+    // Player 1's profile while seat 1 has no pad (not held): picking it gives seat 1 this pad, no Move.
     function padlessPlayer1(profileId) {
         const s = seatOf(profileId)
         return s !== undefined && s.slot === 1 && (s.device_id ?? "") === "" && s.held !== true
     }
+    // Seat 1 is signed in and has no pad (a keyboard sign-in, a hold that ran out).
+    readonly property bool seat1Padless: player1 !== undefined && (player1.device_id ?? "") === "" && player1.held !== true
     function hasPad(profileId) {
         const s = seatOf(profileId)
         return s !== undefined && !padlessPlayer1(profileId)
     }
-    function detailFor(record, index) {
-        if (!record)
+    // The profile sits on the asking pad itself (a seated pad that asked with its Guide).
+    function onThisPad(profileId) {
+        const s = seatOf(profileId)
+        return s !== undefined && pad !== "" && (s.device_id ?? "") === pad
+    }
+    // The name of the pad a playing profile is on now ("another controller" for a held seat's gone pad).
+    function seatPadName(profileId) {
+        const s = seatOf(profileId)
+        const d = s ? Input.devices.find(x => x.id === s.device_id) : undefined
+        return Notifications.named(d ? DeviceIcons.padName(d.id, d.name ?? "", d.family ?? "") : qsTr("another controller"))
+    }
+    function detailFor(record) {
+        if (!record || !hasPad(record.id) || onThisPad(record.id))
             return ""
-        if (index === noticeIndex && record.hasPin && seatOf(record.id) === undefined)
-            return qsTr("Needs a PIN: coming soon")
-        if (padlessPlayer1(record.id))
-            return qsTr("Picking it makes this controller player 1.")
-        const s = seatOf(record.id)
-        if (!s || (s.device_id ?? "") === "")
-            return ""
-        const d = Input.devices.find(x => x.id === s.device_id)
-        const name = d ? DeviceIcons.padName(d.id, d.name ?? "", d.family ?? "") : qsTr("another controller")
-        return fill(qsTr("Now on %2. Picking it moves %1 here."), record.name, Notifications.named(name))
+        return fill(qsTr("Now on %2. Picking it moves %1 here."), record.name, seatPadName(record.id))
     }
 
     function inside(item) {
@@ -126,6 +134,10 @@ FocusScope {
     function seated(id) {
         return Input.players.some(s => (s.device_id ?? "") === id)
     }
+    // A pad that may ask now: an unseated one, or while seat 1 has no pad a seat 2-4 pad (its Guide).
+    function mayAsk(id) {
+        return !seated(id) || (seat1Padless && Input.players.some(s => s.slot > 1 && (s.device_id ?? "") === id))
+    }
 
     // A pad asks (reason "connect", "press" or "guide").
     function ask(id, reason) {
@@ -133,7 +145,7 @@ FocusScope {
             return
         if (reason === "press" && quiet[id] !== undefined)
             return
-        if ((shown && pad === id) || queue.includes(id) || seated(id))
+        if ((shown && pad === id) || queue.includes(id) || !mayAsk(id) || (seated(id) && reason !== "player-guide"))
             return
         queue = queue.concat([id])
         Qt.callLater(prompt.tryOpen)
@@ -144,7 +156,7 @@ FocusScope {
             while (queue.length > 0) {
                 const id = queue[0]
                 queue = queue.slice(1)
-                if (connected(id) && !seated(id)) {
+                if (connected(id) && mayAsk(id)) {
                     open(id)
                     return
                 }
@@ -169,10 +181,10 @@ FocusScope {
             const f = Window.activeFocusItem
             returnTo = f && !inside(f) ? f : null
         }
-        noticeIndex = -1
         pad = id
         step = "pick"
         chosen = null
+        pinFor = ""
         joining = null
         downKey = 0
         shown = true
@@ -204,14 +216,16 @@ FocusScope {
             quiet = next
         }
         // Another pad waits and may ask now: keep the pause and the focus for it.
-        bridging = allowed && !blocked && switching === null && queue.some(i => i !== pad && connected(i) && !seated(i))
+        bridging = allowed && !blocked && switching === null && queue.some(i => i !== pad && connected(i) && mayAsk(i))
         if (!bridging)
             aboutToClose()
         shown = false
+        if (pinPad.shown)
+            pinPad.close()              // a half-typed PIN never outlives the prompt
         step = "pick"
         chosen = null
+        pinFor = ""
         joining = null
-        noticeIndex = -1
         const was = pad
         pad = ""
         if (was !== "" && Input.navigator === was)
@@ -233,22 +247,84 @@ FocusScope {
         if (joining !== null || index < 0 || index >= cards.length)
             return
         const record = cards[index]
-        if (padlessPlayer1(record.id)) {
-            Sfx.select()
-            join(record.id, "pick")
-            return
-        }
-        // Move (a profile that plays now) and the PIN are RUY-628: a cue for now, and for a PIN card its
-        // detail line says so.
-        if (seatOf(record.id) !== undefined || record.hasPin) {
-            Sfx.back()
-            noticeIndex = index
-            return
-        }
         Sfx.select()
         chosen = record
-        step = "confirm"
-        joinButton.forceActiveFocus()
+        if (onThisPad(record.id)) {
+            join(record.id, "pick")     // it plays on this pad already: the service changes nothing, it closes
+        } else if (hasPad(record.id)) {
+            step = "move"
+            moveCancelButton.forceActiveFocus()
+        } else if (seatOf(record.id) !== undefined) {
+            // It plays with no pad (player 1 after a keyboard sign-in or its hold): no Move to confirm.
+            if (record.hasPin)
+                askPin("pick")
+            else
+                join(record.id, "pick")
+        } else {
+            step = "confirm"
+            joinButton.forceActiveFocus()
+        }
+    }
+
+    function askPin(forWhat) {
+        pinFor = forWhat
+        step = "pin"
+        pinPad.verifyPlayer(chosen, pad)
+    }
+
+    // Join, Move or Switch on the chosen profile, through its PIN when it has one.
+    function proceed(forWhat) {
+        if (!chosen || joining !== null)
+            return
+        Sfx.select()
+        if (chosen.hasPin)
+            askPin(forWhat)
+        else if (forWhat === "switch")
+            switchTo("")
+        else
+            join(chosen.id, forWhat === "move" ? "move" : "confirm")
+    }
+
+    // The PIN was right: the step it came from again (shown while the join is on its way; a refused one
+    // puts the focus on its first button), then the action. On Move the focus waits on Move, not Cancel,
+    // and Accept and Back do nothing until the join answers. The PIN goes only to a Switch's switchTo.
+    function pinVerified(pin) {
+        if (!shown || step !== "pin" || !chosen)
+            return
+        const forWhat = pinFor
+        pinFor = ""
+        if (forWhat === "switch") {
+            step = "confirm"
+            switchTo(pin)
+        } else if (forWhat === "move") {
+            step = "move"
+            moveButton.forceActiveFocus()
+            join(chosen.id, "move")
+        } else if (forWhat === "join") {
+            step = "confirm"
+            joinButton.forceActiveFocus()
+            join(chosen.id, "confirm")
+        } else {
+            backToCard()
+            join(chosen.id, "pick")
+        }
+    }
+
+    // Back on an empty PIN pad: the step before, on its first button (or the card).
+    function pinCancelled() {
+        if (!shown || step !== "pin")
+            return
+        const forWhat = pinFor
+        pinFor = ""
+        if (forWhat === "move") {
+            step = "move"
+            moveCancelButton.forceActiveFocus()
+        } else if (forWhat === "join" || forWhat === "switch") {
+            step = "confirm"
+            joinButton.forceActiveFocus()
+        } else {
+            backToCard()
+        }
     }
 
     function join(id, from) {
@@ -256,14 +332,15 @@ FocusScope {
         Input.joinPlayer(pad, id)
     }
 
-    function switchTo() {
+    // `pin`: the profile's PIN, right (checked by the PIN step) or "" for none; it is not kept.
+    function switchTo(pin) {
         if (!chosen || joining !== null)
             return
         switching = { pad: pad, id: chosen.id, name: chosen.name, signedIn: false }
         switchGuard.restart()
         close(false)
         Profiles.lock()
-        Profiles.switchTo(switching.id, "")
+        Profiles.switchTo(switching.id, pin)
     }
 
     // The new profile is signed in and its seats exist: the pad becomes its player 1.
@@ -283,11 +360,17 @@ FocusScope {
                            qsTr("Try again."))
     }
 
+    // Back (or Cancel) on Join or Switch and on Move: step 1 on that card.
     function backFromConfirm() {
         Sfx.back()
+        backToCard()
+        chosen = null
+    }
+
+    // Step "pick" on the chosen profile's card.
+    function backToCard() {
         const i = chosen ? cards.findIndex(p => p.id === chosen.id) : -1
         step = "pick"
-        chosen = null
         if (i >= 0)
             cardList.currentIndex = i
         cardList.forceActiveFocus()
@@ -342,7 +425,7 @@ FocusScope {
             }
         }
         function onForeignInput(deviceId, kind) {
-            if (kind === "press" || kind === "guide")
+            if (kind === "press" || kind === "guide" || kind === "player-guide")
                 prompt.ask(deviceId, kind)
         }
         function onPlayersChanged() { prompt.joinAfterSwitch() }
@@ -361,6 +444,8 @@ FocusScope {
                 return
             if (j.from === "confirm")
                 joinButton.forceActiveFocus()
+            else if (j.from === "move")
+                moveCancelButton.forceActiveFocus()
             else
                 cardList.forceActiveFocus()
         }
@@ -550,7 +635,6 @@ FocusScope {
                 Accessible.role: Accessible.List
                 Accessible.name: currentItem ? currentItem.Accessible.name : qsTr("Profiles")
                 model: prompt.cards
-                onCurrentIndexChanged: prompt.noticeIndex = -1
 
                 delegate: ProfileCard {
                     u: prompt.u
@@ -601,7 +685,7 @@ FocusScope {
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight
             textFormat: Text.PlainText
-            text: cardList.activeFocus && Profiles.available ? prompt.detailFor(prompt.cards[cardList.currentIndex], cardList.currentIndex) : ""
+            text: cardList.activeFocus && Profiles.available ? prompt.detailFor(prompt.cards[cardList.currentIndex]) : ""
             color: Theme.text
             font.pixelSize: Theme.typeBody * prompt.u
         }
@@ -623,11 +707,11 @@ FocusScope {
         }
     }
 
-    // ---- step "confirm": Join or Switch (the Dialog card of PowerConfirm) ------------------------
+    // ---- steps "confirm" (Join or Switch) and "move": the Dialog card of PowerConfirm --------------
     Rectangle {
         objectName: "whosPlayingConfirmPanel"
         anchors.centerIn: parent
-        visible: prompt.step === "confirm"
+        visible: prompt.step === "confirm" || prompt.step === "move"
         width: confirmColumn.width + 2 * 60 * prompt.u
         height: confirmColumn.height + 2 * Theme.spaceXl * prompt.u
         radius: Theme.radiusL * prompt.u
@@ -668,7 +752,8 @@ FocusScope {
                 width: Math.min(implicitWidth, confirmColumn.maxWidth)
                 elide: Text.ElideRight
                 textFormat: Text.PlainText
-                text: qsTr("Join in or switch to %1?").arg(prompt.chosen ? Notifications.named(prompt.chosen.name) : "")
+                text: (prompt.step === "move" ? qsTr("Move %1 to this controller?") : qsTr("Join in or switch to %1?"))
+                    .arg(prompt.chosen ? Notifications.named(prompt.chosen.name) : "")
                 color: Theme.text
                 font.pixelSize: Theme.typeTitle * prompt.u
                 font.weight: Theme.weightDemiBold
@@ -680,14 +765,19 @@ FocusScope {
                 wrapMode: Text.Wrap
                 horizontalAlignment: Text.AlignHCenter
                 textFormat: Text.PlainText
-                text: prompt.fill(qsTr("Join: %1 plays alongside %2. Switch: %1 becomes player 1, and %2's games are paused and kept."),
-                                  prompt.chosen ? Notifications.named(prompt.chosen.name) : "",
-                                  Notifications.named(prompt.player1Name))
+                text: prompt.step === "move"
+                      ? prompt.fill(qsTr("%2 stops playing as %1."),
+                                    prompt.chosen ? Notifications.named(prompt.chosen.name) : "",
+                                    prompt.chosen ? prompt.seatPadName(prompt.chosen.id) : "")
+                      : prompt.fill(qsTr("Join: %1 plays alongside %2. Switch: %1 becomes player 1, and %2's games are paused and kept."),
+                                    prompt.chosen ? Notifications.named(prompt.chosen.name) : "",
+                                    Notifications.named(prompt.player1Name))
                 color: Theme.textDim
                 font.pixelSize: Theme.typeBody * prompt.u
             }
             Row {
                 anchors.horizontalCenter: parent.horizontalCenter
+                visible: prompt.step === "confirm"
                 spacing: Theme.spaceM * prompt.u
 
                 PrimaryButton {
@@ -711,7 +801,45 @@ FocusScope {
                     Keys.onLeftPressed: { Sfx.navigate(); joinButton.forceActiveFocus() }
                 }
             }
+            // Move: Cancel first (focused), then Move.
+            Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: prompt.step === "move"
+                spacing: Theme.spaceM * prompt.u
+
+                SecondaryButton {
+                    id: moveCancelButton
+                    objectName: "whosPlayingMoveCancel"
+                    u: prompt.u
+                    height: Theme.buttonHeight * prompt.u
+                    width: Math.max(300 * prompt.u, implicitWidth)
+                    text: qsTr("Cancel")
+                    acceptOnRelease: true
+                    Keys.onRightPressed: { Sfx.navigate(); moveButton.forceActiveFocus() }
+                }
+                PrimaryButton {
+                    id: moveButton
+                    objectName: "whosPlayingMove"
+                    u: prompt.u
+                    height: Theme.buttonHeight * prompt.u
+                    width: Math.max(300 * prompt.u, implicitWidth)
+                    text: qsTr("Move")
+                    acceptOnRelease: true
+                    Keys.onLeftPressed: { Sfx.navigate(); moveCancelButton.forceActiveFocus() }
+                }
+            }
         }
+    }
+
+    // ---- step "pin": PinPad's player mode, on the prompt's scrim ----------------------------------
+    PinPad {
+        id: pinPad
+        objectName: "whosPlayingPin"
+        anchors.fill: parent
+        u: prompt.u
+        scrimShown: false               // the prompt's blurred frame and scrim are its backdrop
+        onVerified: pin => prompt.pinVerified(pin)
+        onCancelled: prompt.pinCancelled()
     }
 
     // Accept on what has the focus (on the key's release, below).
@@ -722,13 +850,13 @@ FocusScope {
             Sfx.select()
             close(true)
         } else if (joinButton.activeFocus) {
-            if (chosen && joining === null) {
-                Sfx.select()
-                join(chosen.id, "confirm")
-            }
+            proceed("join")
         } else if (switchButton.activeFocus) {
-            Sfx.select()
-            switchTo()
+            proceed("switch")
+        } else if (moveCancelButton.activeFocus) {
+            backFromConfirm()
+        } else if (moveButton.activeFocus) {
+            proceed("move")
         }
     }
 
@@ -738,7 +866,8 @@ FocusScope {
     // Modal: every key is taken, its release too. Accept, Back and Guide act on the release, so the
     // release of the key that closes the prompt never reaches the game it gives the focus back to, and
     // a release whose press came before the prompt opened does nothing. Back is Not now on step 1 and
-    // back to the card on step 2; Guide closes like Not now (as it closes the Hub).
+    // back to the card on Join or Switch and on Move (Cancel); Guide closes like Not now (as it closes
+    // the Hub), except on the PIN step.
     Keys.onPressed: event => {
         event.accepted = true
         if (!event.isAutoRepeat)
@@ -749,15 +878,19 @@ FocusScope {
         if (event.isAutoRepeat || event.key !== downKey)
             return
         downKey = 0
+        if (joining !== null && event.key !== Qt.Key_HomePage)
+            return                      // a join is on its way: Accept and Back wait for its answer
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
             activate()
         } else if (BackKey.isBackOrBackspace(event.key)) {
-            if (step === "confirm")
+            if (step === "confirm" || step === "move")
                 backFromConfirm()
-            else
+            else if (step === "pick")
                 notNow()
-        } else if (event.key === Qt.Key_HomePage) {
+        } else if (event.key === Qt.Key_HomePage && step !== "pin") {
             notNow()
         }
+        // Step "pin": the PIN pad takes every press (Back deletes a digit, else returns to the step before),
+        // so no release there matches a press seen here.
     }
 }

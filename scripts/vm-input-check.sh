@@ -8,7 +8,13 @@
 # 500 ms and the worst at most 1000 ms: the first run after heavy checks is slow (644 ms once; a lone re-run
 # gave 190-426 ms), and the 1000 ms ceiling still catches a real regression. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|close|fallback|confirm|hold|twopads|guide|owner|nodes|start|useractive|signals|players|seathold]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|close|fallback|confirm|hold|twopads|guide|owner|nodes|start|useractive|signals|players|seathold|join]
+# `join` (RUY-628) with the shell running: busctl plays the calls of "Who's playing?" with a PIN, in the shell's order,
+# for a profile "Check Joiner" (PIN 1234, made as the admin $me with PIN 1234 and removed at the end) and the probe's
+# test pad: VerifyPin with a wrong PIN answers wrong-pin and ActiveProfile stays, the right PIN answers ok and
+# ActiveProfile still stays; JoinPlayer(pad, joiner) answers ok with a seat of 2-4, ListPlayers (busctl --json=short)
+# has that seat, LeavePlayer gives it back. The shell's own D-Bus path (Profiles.verifyPin, Input.joinPlayer) is
+# unverified by this mode.
 # `owner` (RUY-38, 06 section 11.3) with the shell stopped like `twopads`: two uinput pads; while the route is locked both
 # navigate; B presses, then A, and the probe signs the profile in, so A is player 1. Then B's BTN_SOUTH gives no key on
 # RuyaOS Navigation and `busctl monitor` sees ForeignInput(B, "press"), B's Guide gives no KEY_HOMEPAGE and a
@@ -800,6 +806,79 @@ start_steps() {
     [ "$n" = 1 ] && ok "KEY_COMPOSE from a keyboard opens it too" || bad "KEY_COMPOSE: $n 'options menu open' lines, expected 1"
 }
 
+# The stable id of the probe's test pad ("Ruya VM Check Pad") in ListDevices, "" when it is not listed (5 s).
+test_pad_id() {
+    local id="" n=0
+    until [ -n "$id" ] || [ "$n" -ge 50 ]; do
+        id="$(busctl --system --json=short call "$svc" "$path" "$ifc" ListDevices 2>/dev/null | python3 -c '
+import json, sys
+try:
+    rows = json.load(sys.stdin)["data"][0]
+except (ValueError, KeyError, IndexError):
+    rows = []
+print(next((r["id"]["data"] for r in rows if r.get("name", {}).get("data") == "Ruya VM Check Pad"), ""))')"
+        [ -n "$id" ] || { sleep 0.1; n=$((n + 1)); }
+    done
+    echo "$id"
+}
+
+# RUY-628: "Who's playing?" with a PIN, as the shell calls it (its own D-Bus path stays unverified: the shell over
+# D-Bus only through the VM over SSH). A profile "Check Joiner" (PIN 1234) is made and removed at the end. A test pad
+# connects; Profiles1.VerifyPin with a wrong PIN answers wrong-pin and ActiveProfile stays, the right one answers ok
+# and ActiveProfile still stays; then Input1.JoinPlayer(pad, joiner) answers ok with a seat of 2-4, and ListPlayers in
+# JSON has that seat with the joiner on the pad. LeavePlayer gives the seat back.
+join_check() {
+    local out joiner="" pad="" padpid="" padlog slot before
+    pgrep -u ruya-shell -x ruya-shell >/dev/null || { bad "the shell is not running (JoinPlayer needs a signed-in route)"; return; }
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; return; }
+    [ "$(active_profile)" = "$me" ] || { sign_in_me && ok "$me signed in"; } || return
+    wait_route shell 10 || { bad "signed in: the route reads '$(route_now)', not shell"; return; }
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" CreateProfile sssss "$me" 1234 "Check Joiner" standard 1234)"
+    case "$out" in 'ssuu "ok" '*) joiner="$(echo "$out" | cut -d'"' -f4)" ;; esac
+    [ -n "$joiner" ] && ok "CreateProfile made $joiner (Check Joiner, PIN 1234)" || { bad "CreateProfile Check Joiner: $out"; return; }
+    padlog="${CHECK_TMP:-/var/tmp}/ruya-input-join-pad.log"
+    python3 "$probe" pad 120 > "$padlog" 2>&1 &
+    padpid=$!
+    local n=0; until grep -q "^pad " "$padlog" || [ "$n" -ge 50 ]; do sleep 0.1; n=$((n + 1)); done
+    if grep -q "^pad ready" "$padlog"; then
+        pad="$(test_pad_id)"
+        [ -n "$pad" ] && ok "a test pad is connected ($pad)" || bad "the test pad is not in ListDevices"
+    else
+        bad "no test pad: $(cat "$padlog")"
+    fi
+    if [ -n "$pad" ]; then
+        before="$(active_profile)"
+        out="$(busctl --system call "$psvc" "$ppath" "$psvc" VerifyPin ss "$joiner" 0000)"
+        case "$out" in 'suu "wrong-pin" '*) ok "VerifyPin with a wrong PIN: $out" ;; *) bad "VerifyPin $joiner 0000: $out, not wrong-pin" ;; esac
+        [ "$(active_profile)" = "$before" ] && ok "a wrong PIN changes no ActiveProfile ($before)" \
+            || bad "after a wrong VerifyPin ActiveProfile reads '$(active_profile)', not '$before'"
+        out="$(busctl --system call "$psvc" "$ppath" "$psvc" VerifyPin ss "$joiner" 1234)"
+        case "$out" in 'suu "ok" '*) ok "VerifyPin with the right PIN: ok" ;; *) bad "VerifyPin $joiner 1234: $out, not ok" ;; esac
+        [ "$(active_profile)" = "$before" ] && ok "the right PIN signs nobody in: ActiveProfile stays $before" \
+            || bad "after VerifyPin ActiveProfile reads '$(active_profile)', not '$before'"
+        out="$(busctl --system call "$svc" "$path" "$ifc" JoinPlayer ss "$pad" "$joiner")"
+        slot=""; case "$out" in 'su "ok" '[234]) slot="${out##* }" ;; esac
+        [ -n "$slot" ] && ok "JoinPlayer: $joiner is player $slot on the test pad" || bad "JoinPlayer $pad $joiner: $out"
+        if [ -n "$slot" ]; then
+            out="$(busctl --system --json=short call "$svc" "$path" "$ifc" ListPlayers 2>/dev/null | python3 -c '
+import json, sys
+try:
+    rows = json.load(sys.stdin)["data"][0]
+except (ValueError, KeyError, IndexError):
+    rows = []
+want = (int(sys.argv[1]), sys.argv[2], sys.argv[3])
+seats = [(r.get("slot", {}).get("data"), r.get("profile", {}).get("data"), r.get("device_id", {}).get("data")) for r in rows]
+print("yes" if want in seats else "no %s" % seats)' "$slot" "$joiner" "$pad")"
+            [ "$out" = yes ] && ok "ListPlayers (JSON): seat $slot is $joiner on the test pad" || bad "ListPlayers has no seat $slot for $joiner on $pad: $out"
+            out="$(busctl --system call "$svc" "$path" "$ifc" LeavePlayer u "$slot")"
+            case "$out" in 's "ok"') ok "LeavePlayer $slot: the seat is given back" ;; *) bad "LeavePlayer $slot: $out" ;; esac
+        fi
+    fi
+    [ -n "$padpid" ] && kill "$padpid" 2>/dev/null
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" DeleteProfile sss "$me" 1234 "$joiner")"
+    case "$out" in 'suu "ok"'*) ok "DeleteProfile $joiner: the check's profile is removed" ;; *) bad "DeleteProfile $joiner: $out" ;; esac
+}
+
 case "${1:-check}" in
 start)
     two_profiles
@@ -973,6 +1052,12 @@ close)
     two_profiles
     [ -n "$me" ] && ok "profile $me signs in" || { bad "need a profile"; exit 1; }
     close_check
+    ;;
+join)
+    two_profiles
+    [ -n "$me" ] && ok "profile $me signs in" || { bad "need a profile"; exit 1; }
+    echo "--- a joining player's PIN (VerifyPin, nobody signs in) and the seat (JoinPlayer, ListPlayers) (RUY-628)"
+    join_check
     ;;
 esac
 [ "$fail" = 0 ] && echo "ALL CHECKS PASSED" || echo "SOME CHECKS FAILED"

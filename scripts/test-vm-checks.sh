@@ -19,7 +19,9 @@
 #                          second profile, which is removed afterwards (also after a FAIL); the probe's JoinPlayer
 #                          reply and ListPlayers parsing (test-vm-input-probe.py); the `seathold` mode (RUY-627): the
 #                          RUYA_SEAT_HOLD_SECS drop-in is there for the probe and gone afterwards (also after a FAIL), a
-#                          missing journal line fails; the probe's udevadm-monitor and ListPlayers helpers
+#                          missing journal line fails; the probe's udevadm-monitor and ListPlayers helpers; the
+#                          `join` mode (RUY-628): VerifyPin wrong then right before JoinPlayer, a wrong PIN that
+#                          answers ok, a VerifyPin that signs in, a refused join and a missing seat each FAIL
 # Needs bash and python3 (python on Windows). Exit 0 = all pass.
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -733,6 +735,79 @@ expect_contains "seathold: a FAIL of the probe fails the check" "$out" "SOME CHE
 [ "$rc" = 1 ] && pass "seathold: a FAIL of the probe: exit 1" || fail "seathold: a FAIL of the probe: exit $rc"
 [ -e "$sh_dir/dropin/50-ruya-check-seat-hold.conf" ] && fail "seathold: the drop-in is left after a FAIL" || pass "seathold: the drop-in is removed after a FAIL too"
 expect_contains "seathold: the profile is removed after a FAIL too" "$(cat "$tmp/seathold.log")" "DeleteProfile sss p1 1234 p7"
+# --- vm-input-check.sh join (RUY-628): VerifyPin wrong then right, ActiveProfile stays, JoinPlayer, ListPlayers -------
+echo "vm-input-check.sh join: the PIN is checked without a sign-in, then the pad joins and ListPlayers has the seat"
+jn="$tmp/join"; mkdir -p "$jn/bin" "$jn/state"
+# busctl as Profiles1 and Input1 with the test pad; FAKE_BUG breaks one answer: wrong-ok (a wrong PIN answers ok),
+# signs-in (VerifyPin changes ActiveProfile), join-refused, no-seat (ListPlayers lacks the joiner's seat).
+cat > "$jn/bin/busctl" <<'SHIMEOF'
+#!/bin/sh
+echo "busctl $*" >> "$FAKE_LOG"
+pad='usb-1234-5678-0a0b0c0d0e0f'
+case "$*" in
+*ListProfiles*) echo 'aa{sv} 1 2 "id" s "p1" "name" s "Check Admin"' ;;
+*ActiveProfile*)
+    if [ "${FAKE_BUG:-}" = signs-in ] && [ -e "$FAKE_STATE/verified" ]; then echo 's "p7"'; else echo 's "p1"'; fi ;;
+*Route*) echo 's "shell"' ;;
+*CreateProfile*) echo 'ssuu "ok" "p7" 0 0' ;;
+*DeleteProfile*) echo 'suu "ok" 0 0' ;;
+*ListDevices*) echo '{"type":"aa{sv}","data":[[{"id":{"type":"s","data":"'"$pad"'"},"name":{"type":"s","data":"Ruya VM Check Pad"}}]]}' ;;
+*"VerifyPin ss p7 0000"*)
+    touch "$FAKE_STATE/verified"
+    if [ "${FAKE_BUG:-}" = wrong-ok ]; then echo 'suu "ok" 0 0'; else echo 'suu "wrong-pin" 4 0'; fi ;;
+*"VerifyPin ss p7 1234"*) touch "$FAKE_STATE/verified"; echo 'suu "ok" 0 0' ;;
+*JoinPlayer*) if [ "${FAKE_BUG:-}" = join-refused ]; then echo 'su "full" 0'; else echo 'su "ok" 2'; fi ;;
+*ListPlayers*)
+    if [ "${FAKE_BUG:-}" = no-seat ]; then
+        echo '{"type":"aa{sv}","data":[[{"slot":{"type":"u","data":1},"profile":{"type":"s","data":"p1"},"device_id":{"type":"s","data":""}}]]}'
+    else
+        echo '{"type":"aa{sv}","data":[[{"slot":{"type":"u","data":1},"profile":{"type":"s","data":"p1"},"device_id":{"type":"s","data":""}},{"slot":{"type":"u","data":2},"profile":{"type":"s","data":"p7"},"device_id":{"type":"s","data":"'"$pad"'"}}]]}'
+    fi ;;
+*LeavePlayer*) echo 's "ok"' ;;
+*) echo '' ;;
+esac
+exit 0
+SHIMEOF
+# pgrep: the shell runs. sleep: a short one (the stand-in pad starts in the background).
+printf '#!/bin/sh\nexit 0\n' > "$jn/bin/pgrep"
+printf '#!/bin/sh\nexec %s 0.05\n' "$(command -v sleep)" > "$jn/bin/sleep"
+chmod +x "$jn/bin"/*
+mkdir -p "$jn/with"
+cp "$here/vm-input-check.sh" "$jn/with/"
+# A stand-in probe: `pad` says the pad is ready.
+cat > "$jn/with/vm-input-probe.py" <<'SHIMEOF'
+import sys
+print("pad ready /dev/input/event9" if sys.argv[1:2] == ["pad"] else "PASS: stand-in probe", flush=True)
+SHIMEOF
+runjoin() { # <dir>
+    : > "$tmp/join.log"
+    rm -f "$jn/state/verified"
+    FAKE_LOG="$tmp/join.log" FAKE_STATE="$jn/state" CHECK_TMP="$jn/state" PATH="$jn/bin:$PATH" bash "$1/vm-input-check.sh" join 2>&1
+}
+out="$(runjoin "$pl/alone")"; rc=$?
+expect_contains "join without the probe: FAIL" "$out" "vm-input-probe.py is missing: copy it next to this script"
+[ "$rc" = 1 ] && pass "join without the probe: exit 1" || fail "join without the probe: exit $rc"
+out="$(runjoin "$jn/with")"; rc=$?
+log="$(cat "$tmp/join.log")"
+expect_contains "join: the joiner is made with a PIN" "$log" "CreateProfile sssss p1 1234 Check Joiner standard 1234"
+expect_contains "join: the pad joins as the joiner" "$log" "JoinPlayer ss usb-1234-5678-0a0b0c0d0e0f p7"
+expect_contains "join: the seat is given back" "$log" "LeavePlayer u 2"
+expect_contains "join: the joiner is removed" "$log" "DeleteProfile sss p1 1234 p7"
+expect_contains "join: ListPlayers has the seat" "$out" "PASS: ListPlayers (JSON): seat 2 is p7 on the test pad"
+expect_contains "join: all good passes" "$out" "ALL CHECKS PASSED"
+[ "$rc" = 0 ] && pass "join: exit 0" || fail "join: exit $rc"
+# The order the shell uses: the wrong PIN, the right PIN, then the join.
+order="$(grep -oE 'VerifyPin ss p7 [0-9]+|JoinPlayer' "$tmp/join.log" | tr '\n' ',')"
+[ "$order" = "VerifyPin ss p7 0000,VerifyPin ss p7 1234,JoinPlayer," ] && pass "join: VerifyPin wrong, right, then JoinPlayer" \
+    || fail "join: the calls ran as $order"
+for case in "wrong-ok|FAIL: VerifyPin p7 0000" "signs-in|FAIL: after a wrong VerifyPin ActiveProfile reads 'p7'" \
+            "join-refused|FAIL: JoinPlayer usb-1234-5678-0a0b0c0d0e0f p7: su \"full\" 0" "no-seat|FAIL: ListPlayers has no seat 2 for p7"; do
+    bug="${case%%|*}"; needle="${case#*|}"
+    out="$(FAKE_BUG="$bug" runjoin "$jn/with")"; rc=$?
+    expect_contains "join, bug $bug: caught" "$out" "$needle"
+    [ "$rc" = 1 ] && pass "join, bug $bug: exit 1" || fail "join, bug $bug: exit $rc"
+    expect_contains "join, bug $bug: the joiner is removed after a FAIL too" "$(cat "$tmp/join.log")" "DeleteProfile sss p1 1234 p7"
+done
 
 # --- vm-devices-check.sh bluetooth, two adapters (RUY-648): both adapters on, the two properties read "" ---------
 echo "vm-devices-check.sh: bluetooth_two_adapters_check, PrimaryAdapterOff and AdapterInUse"
