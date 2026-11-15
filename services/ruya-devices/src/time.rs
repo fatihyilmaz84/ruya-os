@@ -3,6 +3,7 @@
 //! valid, and when `TimezoneChanged` is due. Pure and tested on any host; the timedated side is
 //! `timedate.rs`.
 
+use crate::log;
 use std::sync::{Mutex, MutexGuard};
 
 /// The zone reported when timedated has none (no `/etc/localtime`).
@@ -179,7 +180,7 @@ impl<T: Timedate> Time<T> {
             Ok(zones) if zones.iter().any(|z| z == name) => {}
             Ok(_) => return (Status::Invalid, nothing),
             Err(err) => {
-                eprintln!("ruya-devices: reading the time zones failed: {err}");
+                log::warn(&format!("reading the time zones failed: {err}"));
                 return (Status::Failed, nothing);
             }
         }
@@ -187,13 +188,13 @@ impl<T: Timedate> Time<T> {
             return (Status::Ok, nothing);
         }
         if let Err(err) = self.timedate.set_timezone(name) {
-            eprintln!("ruya-devices: setting the time zone failed: {err}");
+            log::warn(&format!("setting the time zone failed: {err}"));
             return (Status::Failed, nothing);
         }
         match self.refresh() {
             Ok(changes) => (Status::Ok, changes),
             Err(err) => {
-                eprintln!("ruya-devices: reading the time zone failed: {err}");
+                log::warn(&format!("reading the time zone failed: {err}"));
                 // The call went through; take it over so the answer matches what happened.
                 self.state().zone = name.to_owned();
                 (

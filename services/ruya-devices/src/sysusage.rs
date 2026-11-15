@@ -20,6 +20,7 @@
 //! file once (a Flatpak deployment is hard links into the OSTree repository), never follows a
 //! symlink and never crosses into another mount.
 
+use crate::log;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -250,12 +251,14 @@ impl<S: SystemSource, C: Clock> SystemUsage<S, C> {
     fn walk(&self, path: &str) -> Option<u64> {
         match self.source.tree(path) {
             Ok(size) if size.partial => {
-                eprintln!("ruya-devices: {path} is not fully readable: its size is unknown");
+                log::warn(&format!(
+                    "{path} is not fully readable: its size is unknown"
+                ));
                 None
             }
             Ok(size) => Some(size.bytes),
             Err(err) => {
-                eprintln!("ruya-devices: measuring {path} failed: {err}");
+                log::warn(&format!("measuring {path} failed: {err}"));
                 None
             }
         }

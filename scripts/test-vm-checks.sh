@@ -734,6 +734,37 @@ expect_contains "seathold: a FAIL of the probe fails the check" "$out" "SOME CHE
 [ -e "$sh_dir/dropin/50-ruya-check-seat-hold.conf" ] && fail "seathold: the drop-in is left after a FAIL" || pass "seathold: the drop-in is removed after a FAIL too"
 expect_contains "seathold: the profile is removed after a FAIL too" "$(cat "$tmp/seathold.log")" "DeleteProfile sss p1 1234 p7"
 
+# --- vm-devices-check.sh bluetooth, two adapters (RUY-648): both adapters on, the two properties read "" ---------
+echo "vm-devices-check.sh: bluetooth_two_adapters_check, PrimaryAdapterOff and AdapterInUse"
+cat > "$tmp/bt2.canned" <<'BTEOF'
+START {"type":"u","data":["ok"]}
+STOP {"type":"s","data":["ok"]}
+LIST {"type":"aa{sv}","data":[[{"id":{"type":"s","data":"AA:00:00:00:00:01"},"adapter":{"type":"s","data":"hci0"}},{"id":{"type":"s","data":"AA:00:00:00:00:11"},"adapter":{"type":"s","data":"hci1"}}]]}
+CONNECT {"type":"s","data":["ok"]}
+FORGET {"type":"s","data":["ok"]}
+LIST2 {"type":"aa{sv}","data":[[{"id":{"type":"s","data":"AA:00:00:00:00:01"},"adapter":{"type":"s","data":"hci0"}}]]}
+OFF {"type":"s","data":"@OFF@"}
+INUSE {"type":"s","data":"@INUSE@"}
+BTEOF
+btrun() { # <PrimaryAdapterOff> <AdapterInUse>: the check on a canned run of the two-adapter fake
+    (
+        export VM_CHECK_LIB_ONLY=1
+        # shellcheck disable=SC1090
+        . "$here/vm-devices-check.sh"
+        as_shell() {
+            case "$*" in *"status org.ruyaos.Devices1") return 1;; esac   # the name is free; the long call mentions it mid-text
+            sed -e "s/@OFF@/$BT_OFF/" -e "s/@INUSE@/$BT_INUSE/" "$tmp/bt2.canned"
+        }
+        BT_OFF="$1" BT_INUSE="$2" bluetooth_two_adapters_check
+    ) 2>&1
+}
+out="$(btrun "" "")"
+expect_contains "both adapters on, both properties empty: PASS" "$out" "PrimaryAdapterOff and AdapterInUse are empty with both adapters on"
+out="$(btrun "usb" "")"
+expect_contains "PrimaryAdapterOff set with both adapters on: FAIL" "$out" "should be empty with both adapters on, not 'usb' / ''"
+out="$(btrun "" "hci0")"
+expect_contains "AdapterInUse set with both adapters on: FAIL" "$out" "not '' / 'hci0'"
+
 echo
 if [ "$fails" = 0 ]; then echo "vm-check tests: all passed"; else echo "vm-check tests: $fails failed"; fi
 exit $(( fails > 0 ))

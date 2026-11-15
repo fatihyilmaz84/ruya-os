@@ -320,6 +320,8 @@ bluetooth_two_adapters_check() {
         echo "CONNECT $(call Connect s AA:00:00:00:00:11)"
         echo "FORGET $(call Forget s AA:00:00:00:00:11)"
         echo "LIST2 $(call ListDevices)"
+        echo "OFF $(busctl --user --json=short get-property org.ruyaos.Devices1 /org/ruyaos/Devices1 '"$bt_user"' PrimaryAdapterOff)"
+        echo "INUSE $(busctl --user --json=short get-property org.ruyaos.Devices1 /org/ruyaos/Devices1 '"$bt_user"' AdapterInUse)"
         kill "$pid" 2>/dev/null
         wait "$pid" 2>/dev/null
     ' 2>&1)"
@@ -351,12 +353,14 @@ elif rows.get("FORGET") != ["ok"]:
     print("wrong: Forget of the pad on hci1 answered %r" % (rows.get("FORGET"),))
 elif "AA:00:00:00:00:11" in second or "AA:00:00:00:00:01" not in second:
     print("wrong: Forget should remove only the pad of hci1")
+elif rows.get("OFF") != "" or rows.get("INUSE") != "":
+    print("wrong: PrimaryAdapterOff / AdapterInUse should be empty with both adapters on, not %r / %r" % (rows.get("OFF"), rows.get("INUSE")))
 else:
     print("VERDICT ok")
 ' 2>&1)"
     echo "$verdict"
     case "$verdict" in
-    *"VERDICT ok"*) ok "a pad on hci1 is listed with adapter hci1; Connect and Forget of it answer ok";;
+    *"VERDICT ok"*) ok "a pad on hci1 is listed with adapter hci1; Connect and Forget of it answer ok; PrimaryAdapterOff and AdapterInUse are empty with both adapters on";;
     *) bad "ListDevices/Connect/Forget of the two-adapter fake: $verdict $out";;
     esac
     missing=

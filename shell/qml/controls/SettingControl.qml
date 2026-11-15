@@ -199,6 +199,7 @@ FocusScope {
 
     // Not a TailText: its `implicitWidth` is the elided width, but `labelWanted` (SettingRow's room for the value,
     // RUY-609) needs the label's whole width. The same cut at the end of the name, tail kept (TailText's rule).
+    // So on a row with a tail `labelWanted` is also the width the label is cut to, not only what it asks for.
     TextMetrics {
         id: labelMetrics
         font: labelText.font

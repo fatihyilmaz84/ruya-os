@@ -16,6 +16,7 @@
 //!
 //! Pure over the files in the state directory and a `DrmSource`; tested on any host.
 
+use crate::log;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -560,7 +561,7 @@ pub fn guard_at(dir: &Path, drm: &dyn DrmSource, now: u64) -> io::Result<GuardOu
     };
     // Every start counts towards the unit's start limit, whatever follows.
     if let Err(err) = files.record_start(now) {
-        eprintln!("ruya-devices: recording the start failed: {err}");
+        log::warn(&format!("recording the start failed: {err}"));
     }
     let pending = match files.pending() {
         Ok(p) => p,
@@ -609,7 +610,7 @@ fn write_default_config(files: &Files, stored: &Stored, drm: &dyn DrmSource) {
     match drm.outputs() {
         Ok(outputs) if !outputs.is_empty() => {
             if let Err(err) = files.write_kms(config_choice(stored, &outputs).as_ref()) {
-                eprintln!("ruya-devices: writing the KMS config failed: {err}");
+                log::warn(&format!("writing the KMS config failed: {err}"));
             }
         }
         _ => {}
@@ -677,7 +678,7 @@ impl<D: DrmSource> Display<D> {
         let views = match self.list() {
             Ok(v) => v,
             Err(err) => {
-                eprintln!("ruya-devices: reading the outputs failed: {err}");
+                log::warn(&format!("reading the outputs failed: {err}"));
                 return Status::Failed;
             }
         };
@@ -715,7 +716,7 @@ impl<D: DrmSource> Display<D> {
             return Status::Failed;
         }
         if let Err(err) = self.files.write_kms(Some(&candidate)) {
-            eprintln!("ruya-devices: writing the KMS config failed: {err}");
+            log::warn(&format!("writing the KMS config failed: {err}"));
             let _ = self.files.clear_pending();
             return Status::Failed;
         }
@@ -763,7 +764,7 @@ impl<D: DrmSource> Display<D> {
             .files
             .write_kms(config_choice(&stored, &outputs).as_ref())
         {
-            eprintln!("ruya-devices: writing the KMS config failed: {err}");
+            log::warn(&format!("writing the KMS config failed: {err}"));
             return Status::Failed;
         }
         Status::Ok
@@ -796,7 +797,7 @@ impl<D: DrmSource> Display<D> {
         }
         if !outputs.is_empty() {
             if let Err(err) = self.files.write_kms(default.as_ref()) {
-                eprintln!("ruya-devices: writing the KMS config failed: {err}");
+                log::warn(&format!("writing the KMS config failed: {err}"));
                 return (Status::Failed, ui_changed);
             }
         }

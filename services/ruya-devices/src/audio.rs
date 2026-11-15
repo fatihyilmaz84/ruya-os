@@ -323,10 +323,10 @@ impl<P: PipeWire> Audio<P> {
         }
         // A marker that can't be written still holds for this run (first_start_done).
         if let Err(err) = std::fs::write(marker, "the first-start volume was handled\n") {
-            eprintln!(
-                "ruya-devices: cannot write {}: {err} (the first-start volume may be set again after a restart)",
+            crate::log::warn(&format!(
+                "cannot write {}: {err} (the first-start volume may be set again after a restart)",
                 marker.display()
-            );
+            ));
         }
     }
 

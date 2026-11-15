@@ -834,7 +834,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>BluetoothText</name>
     <message>
-        <location filename="../qml/BluetoothText.qml" line="+41"/>
+        <location filename="../qml/BluetoothText.qml" line="+53"/>
         <source>Pairing failed. Put the controller in pairing mode again.</source>
         <translation>Pairing failed. Put the controller in pairing mode again.</translation>
     </message>
@@ -859,27 +859,31 @@ This can&apos;t be undone.</translation>
         <translation>Bluetooth is off.</translation>
     </message>
     <message>
-        <location line="-15"/>
+        <location line="-25"/>
         <source>The USB adapter</source>
+        <extracomment>Starts the toast &quot;%1 is off. Bluetooth uses %2.&quot;: the USB adapter is the SUBJECT, the one that is off (capital T).</extracomment>
         <translation>The USB adapter</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+3"/>
         <source>the USB adapter</source>
+        <extracomment>Ends the toast &quot;%1 is off. Bluetooth uses %2.&quot;: the USB adapter is the OBJECT, the one in use (lower-case t).</extracomment>
         <translation>the USB adapter</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+5"/>
         <source>The built-in adapter</source>
+        <extracomment>Starts the toast &quot;%1 is off. Bluetooth uses %2.&quot;: the built-in adapter is the SUBJECT, the one that is off (capital T).</extracomment>
         <translation>The built-in adapter</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+3"/>
         <source>the built-in adapter</source>
+        <extracomment>Ends the toast &quot;%1 is off. Bluetooth uses %2.&quot;: the built-in adapter is the OBJECT, the one in use (lower-case t).</extracomment>
         <translation>the built-in adapter</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+12"/>
         <source>%1 is off. Bluetooth uses %2.</source>
         <extracomment>A toast. %1: the adapter that is off (&quot;The USB adapter&quot;, or a name such as &quot;hci1&quot;), %2: the one in use (&quot;the built-in adapter&quot; or &quot;hci0&quot;). Names such as hci0 stay as they are.</extracomment>
         <translation>%1 is off. Bluetooth uses %2.</translation>
@@ -3352,7 +3356,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>PlayerChip</name>
     <message>
-        <location filename="../qml/PlayerChip.qml" line="34"/>
+        <location filename="../qml/PlayerChip.qml" line="+34"/>
         <source>Guest %1</source>
         <translation>Guest %1</translation>
     </message>
@@ -3910,12 +3914,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="-156"/>
-        <location line="+412"/>
+        <location line="+464"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-298"/>
+        <location line="-350"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
@@ -3992,7 +3996,7 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+231"/>
+        <location line="+284"/>
         <location line="+1"/>
         <source>%1, %2</source>
         <translation>%1, %2</translation>
@@ -4008,7 +4012,7 @@ This can&apos;t be undone.</translation>
         <translation>Resume %1, %2</translation>
     </message>
     <message>
-        <location line="-366"/>
+        <location line="-419"/>
         <source>Just started</source>
         <translation>Just started</translation>
     </message>
@@ -4023,7 +4027,7 @@ This can&apos;t be undone.</translation>
         <translation>Paused</translation>
     </message>
     <message>
-        <location line="+366"/>
+        <location line="+419"/>
         <source>Volume, muted</source>
         <translation>Volume, muted</translation>
     </message>
@@ -4033,7 +4037,7 @@ This can&apos;t be undone.</translation>
         <translation>Volume %1</translation>
     </message>
     <message>
-        <location line="-541"/>
+        <location line="-594"/>
         <source>Muted</source>
         <translation>Muted</translation>
     </message>
@@ -4505,7 +4509,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 did not close. Restart the console if it keeps running.</translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+93"/>
         <source>%1 has no window yet.</source>
         <translation>%1 has no window yet.</translation>
     </message>
@@ -4520,7 +4524,7 @@ This can&apos;t be undone.</translation>
         <translation>Wallpaper could not be loaded</translation>
     </message>
     <message>
-        <location line="+358"/>
+        <location line="+371"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
@@ -4627,7 +4631,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1716"/>
+        <location line="-1748"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -4658,7 +4662,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1441"/>
+        <location line="+1473"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
@@ -4864,7 +4868,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+323"/>
+        <location filename="../qml/StoragePane.qml" line="+327"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 is still in use. Close what uses it and try again.</translation>
     </message>
@@ -4889,13 +4893,13 @@ This can&apos;t be undone.</translation>
         <translation>Not supported</translation>
     </message>
     <message>
-        <location line="-280"/>
-        <location line="+281"/>
+        <location line="-284"/>
+        <location line="+285"/>
         <source>%1 free of %2</source>
         <translation>%1 free of %2</translation>
     </message>
     <message>
-        <location line="-232"/>
+        <location line="-236"/>
         <source>Games</source>
         <translation>Games</translation>
     </message>
@@ -4945,7 +4949,7 @@ This can&apos;t be undone.</translation>
         <translation>Rescan %1</translation>
     </message>
     <message>
-        <location line="+181"/>
+        <location line="+185"/>
         <source>Read-only</source>
         <translation>Read-only</translation>
     </message>
@@ -4975,13 +4979,13 @@ This can&apos;t be undone.</translation>
         <translation>System</translation>
     </message>
     <message>
-        <location line="-298"/>
-        <location line="+298"/>
+        <location line="-302"/>
+        <location line="+302"/>
         <source>Other</source>
         <translation>Other</translation>
     </message>
     <message>
-        <location line="-309"/>
+        <location line="-313"/>
         <source>Plug it in again</source>
         <translation>Plug it in again</translation>
     </message>
@@ -4996,12 +5000,12 @@ This can&apos;t be undone.</translation>
         <translation>Nothing found here</translation>
     </message>
     <message>
-        <location line="+302"/>
+        <location line="+306"/>
         <source>Drives</source>
         <translation>Drives</translation>
     </message>
     <message>
-        <location line="-286"/>
+        <location line="-290"/>
         <source>Eject %1</source>
         <translation>Eject %1</translation>
     </message>

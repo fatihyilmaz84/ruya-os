@@ -384,7 +384,7 @@ pub fn apply(req: &Request) -> Result<String, String> {
     let mut failed = 0;
     for args in commands(&steps) {
         if let Err(err) = run(&args) {
-            eprintln!("ruya-devices: park-audio: {err}");
+            crate::log::warn(&format!("park-audio: {err}"));
             failed += 1;
         }
     }
