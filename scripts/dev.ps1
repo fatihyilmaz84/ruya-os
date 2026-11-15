@@ -173,9 +173,10 @@ function Do-Rust {
 
 # "Name::test_x" for every test function in shell\tests that saves a screenshot
 # (`shotsDir + "/...`; Name = the file's TestCase name), so `shots` runs only those.
-function Get-ScreenshotFunctions {
+function Get-ScreenshotFunctions([string]$Dir = (Join-Path $Repo "shell\tests"), [string[]]$Only = @()) {
     $fns = @()
-    foreach ($file in Get-ChildItem (Join-Path $Repo "shell\tests") -Filter *.qml) {
+    foreach ($file in Get-ChildItem $Dir -Filter *.qml) {
+        if ($Only.Count -gt 0 -and $Only -notcontains $file.BaseName) { continue }
         $case = $null; $fn = $null
         foreach ($line in Get-Content -LiteralPath $file.FullName -Encoding UTF8) {
             if (-not $case -and $line -match '^\s+name:\s*"(\w+)"') { $case = $Matches[1] }
@@ -184,6 +185,53 @@ function Get-ScreenshotFunctions {
         }
     }
     return $fns
+}
+
+# RUY-511: `shots tst_a tst_b.qml,tst_c` -> the file base names that exist in <Dir>; the rest is Unknown.
+function Resolve-ShotsFilter([string[]]$Names, [string]$Dir) {
+    $files = @(); $unknown = @()
+    foreach ($n in $Names) {
+        $base = [IO.Path]::GetFileNameWithoutExtension("$n".Trim())
+        if ($base -and (Test-Path -LiteralPath (Join-Path $Dir "$base.qml"))) { if ($files -notcontains $base) { $files += $base } }
+        else { $unknown += "$n" }
+    }
+    return [pscustomobject]@{ Files = $files; Unknown = $unknown }
+}
+
+# RUY-511: the functions to re-run once: only those whose own FAIL line carries the lost-activation text
+# (tst_main.cpp's qFail). The QWARN line of other functions, or any other failure, never selects one.
+function Get-LostActivationFailures([string[]]$LogLines) {
+    $fns = @()
+    foreach ($line in $LogLines) {
+        if ($line -match '^FAIL!\s*:\s*(?:\w+::)*(\w+::\w+)\(.*TEST WINDOW LOST ACTIVATION' -and $fns -notcontains $Matches[1]) { $fns += $Matches[1] }
+    }
+    return $fns
+}
+
+function Test-ShotsFilterAndRetry {
+    $dir = Join-Path $Repo "output\shots-filter-fixture"
+    Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force $dir | Out-Null
+    foreach ($x in @("a", "b")) {
+        [IO.File]::WriteAllText((Join-Path $dir "tst_$x.qml"), "TestCase {`n    name: `"T$x`"`n    function test_$x() {`n        grab(shotsDir + `"/$x.png`")`n    }`n}`n")
+    }
+    $one = Resolve-ShotsFilter @("tst_a") $dir
+    $ext = Resolve-ShotsFilter @("tst_a.qml") $dir
+    $many = Resolve-ShotsFilter @("tst_a", "tst_b.qml") $dir
+    $unk = Resolve-ShotsFilter @("tst_a", "tst_zz") $dir
+    $fnA = @(Get-ScreenshotFunctions $dir @("tst_a"))
+    $fnAll = @(Get-ScreenshotFunctions $dir)
+    $ok = ($one.Files -join ",") -eq "tst_a" -and $one.Unknown.Count -eq 0 -and
+        ($ext.Files -join ",") -eq "tst_a" -and ($many.Files -join ",") -eq "tst_a,tst_b" -and
+        ($unk.Unknown -join ",") -eq "tst_zz" -and
+        ($fnA -join ",") -eq "Ta::test_a" -and $fnAll.Count -eq 2
+    Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
+    Record "shots filter self-check (with and without .qml, several names, an unknown name; only the named file's functions)" $ok
+    $lost = @("QWARN  : ruyashell::WindowLostFixture::test_the_window_loses_activation_mid_test() ruya-shell test: TEST WINDOW LOST ACTIVATION (the desktop took focus); a focus failure", "FAIL!  : ruyashell::WindowLostFixture::test_the_window_loses_activation_mid_test() TEST WINDOW LOST ACTIVATION: the desktop took focus", "   Loc: [x.cpp(49)]", "Totals: 1 passed, 1 failed")
+    $plain = @("QWARN  : ruyashell::WindowLostFixture::test_the_window_loses_activation_mid_test() ruya-shell test: TEST WINDOW LOST ACTIVATION (the desktop took focus); a focus failure", "FAIL!  : ruyashell::Ty::test_plain() Compared values are not the same", "Totals: 1 passed, 1 failed")
+    $selLost = @(Get-LostActivationFailures $lost)
+    $selPlain = @(Get-LostActivationFailures $plain)
+    Record "shots retry selection self-check (a lost-activation failure is selected; an ordinary failure, even beside a lost-activation warning, is not)" ($selLost.Count -eq 1 -and $selLost[0] -eq "WindowLostFixture::test_the_window_loses_activation_mid_test" -and $selPlain.Count -eq 0)
 }
 
 # T-463: the offscreen Qt Quick tests, one process per test file (the runner takes one -input), $Shards of
@@ -377,7 +425,7 @@ function Test-RevertCheckPiping {
 }
 
 # -InputFile: one test file (the `qml` fast mode), through the runner's -input, offscreen, with its own log.
-function Run-QmlTests([string]$ShotsDir, [string]$InputFile) {
+function Run-QmlTests([string]$ShotsDir, [string]$InputFile, [string[]]$ShotFiles = @()) {
     if (-not $ShotsDir -and -not $InputFile) { Run-QmlShards; return }
     # Per checkout: worktree lanes run `test` at the same time (a shared %TEMP% log collided, 2026-11-04).
     $log = Join-Path $ShellBuild "ruya-qmltest.txt"
@@ -395,7 +443,8 @@ function Run-QmlTests([string]$ShotsDir, [string]$InputFile) {
         # A locked session (LogonUI running) renders nothing and stalls timers: stop at once.
         if (Test-SessionLocked) { Stop-SessionLocked; return }
         # Behaviour is gated offscreen by `test`; here only the screenshot functions run.
-        $only = Get-ScreenshotFunctions
+        $only = @(Get-ScreenshotFunctions -Only $ShotFiles)
+        if ($ShotFiles.Count -gt 0) { $label = "Qt Quick tests with screenshots ($($ShotFiles -join ', ') only)" }
         New-Item -ItemType Directory -Force $ShotsDir | Out-Null
         $env:RUYA_SHOTS_DIR = $ShotsDir
         # The threaded render loop stalls animations and layout in these test windows on the dev
@@ -410,10 +459,36 @@ function Run-QmlTests([string]$ShotsDir, [string]$InputFile) {
     # -o <file>,txt: the runner's stdout is unreliable under PowerShell.
     & (Join-Path $ShellBuild "Release\tst_ruyashell.exe") -o "$log,txt" @only | Out-Null
     $code = $LASTEXITCODE
+    Get-Content $log | Where-Object { $_ -match '^(FAIL|XPASS|SKIP|Totals)|failure location|QWARN|QCRITICAL' } | ForEach-Object { Write-Host "    $_" }
+    # RUY-511: a screenshot function that failed with TEST WINDOW LOST ACTIVATION runs once more, alone (the
+    # caller still holds the shots mutex). Any other failure is never retried and keeps the run red.
+    $retryNote = $null
+    if ($ShotsDir -and $code -ne 0) {
+        $logLines = @(Get-Content $log)
+        $lostFns = @(Get-LostActivationFailures $logLines)
+        $otherFails = @($logLines | Where-Object { $_ -match '^(FAIL!|XPASS)' -and $_ -notmatch '^FAIL!.*TEST WINDOW LOST ACTIVATION' })
+        if ($lostFns.Count -gt 0 -and -not (Test-SessionLocked)) {
+            $notes = @(); $allPassed = $true
+            foreach ($fn in $lostFns) {
+                $retryLog = Join-Path $ShellBuild "ruya-qmltest-retry.txt"
+                & (Join-Path $ShellBuild "Release\tst_ruyashell.exe") -o "$retryLog,txt" $fn | Out-Null
+                $passed = ($LASTEXITCODE -eq 0)
+                if (-not $passed) {
+                    $allPassed = $false
+                    $keepR = Join-Path $Repo "output\shots-logs"
+                    New-Item -ItemType Directory -Force $keepR | Out-Null
+                    Copy-Item -LiteralPath $retryLog -Destination (Join-Path $keepR ("ruya-qmltest-{0}-retry.txt" -f (Get-Date -Format "yyyyMMdd-HHmmss"))) -ErrorAction SilentlyContinue
+                }
+                $notes += "$fn ($(if ($passed) { 'passed' } else { 'failed again' }))"
+            }
+            $retryNote = "retried after lost activation: " + ($notes -join "; ")
+            if ($allPassed -and $otherFails.Count -eq 0 -and @($logLines | Where-Object { $_ -match '^Totals' }).Count -gt 0) { $code = 0 }
+        }
+    }
     Remove-Item Env:\RUYA_SHOTS_DIR -ErrorAction SilentlyContinue
     Remove-Item Env:\QSG_RENDER_LOOP -ErrorAction SilentlyContinue
     Remove-Item Env:\QT_QPA_PLATFORM -ErrorAction SilentlyContinue
-    Get-Content $log | Where-Object { $_ -match '^(FAIL|XPASS|SKIP|Totals)|failure location|QWARN|QCRITICAL' } | ForEach-Object { Write-Host "    $_" }
+    if ($retryNote) { Write-Host "    $retryNote" }
     # A red `shots` run keeps its full log (build-win is rebuilt and overwritten): one file per run,
     # the last 5 kept (T-429).
     if ($ShotsDir -and $code -ne 0 -and (Test-Path $log)) {
@@ -995,6 +1070,8 @@ function Test-ScriptSelfChecks {
     Test-QmlShardRunner
     Step "Revert check self-check (RUY-654)"
     Test-RevertCheckPiping
+    Step "Shots filter and retry self-check (RUY-511)"
+    Test-ShotsFilterAndRetry
 }
 
 function Do-Shell {
@@ -1063,9 +1140,27 @@ function Resolve-QmlTestFiles([string[]]$Names) {
 
 $PartialBanner = "PARTIAL: dev.ps1 qml ran only the named test files (no lints, no Rust, no other tests). NOT a substitute for dev.ps1 test."
 $TestNames = @($Tests | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() })
-if ($TestNames.Count -gt 0 -and $Command -ne "qml") {
-    Write-Host "Only 'qml' takes test file names: .\scripts\dev.ps1 qml tst_themes" -ForegroundColor Red
+if ($TestNames.Count -gt 0 -and $Command -ne "qml" -and $Command -ne "shots") {
+    Write-Host "Only 'qml' and 'shots' take test file names: .\scripts\dev.ps1 qml tst_themes" -ForegroundColor Red
     exit 2
+}
+# RUY-511: `shots tst_x` runs only those files' screenshot functions; an unknown name stops at once.
+$ShotFiles = @()
+if ($Command -eq "shots" -and $TestNames.Count -gt 0) {
+    $testDir = Join-Path $Repo "shell\tests"
+    $sel = Resolve-ShotsFilter $TestNames $testDir
+    if ($sel.Unknown.Count -gt 0) {
+        Write-Host "No such test file: $($sel.Unknown -join ', '). Test files:" -ForegroundColor Red
+        Write-Host ("    " + ((Get-ChildItem $testDir -Filter tst_*.qml | ForEach-Object { $_.BaseName }) -join ", "))
+        exit 2
+    }
+    foreach ($b in $sel.Files) {
+        if (@(Get-ScreenshotFunctions $testDir @($b)).Count -eq 0) {
+            Write-Host "$b has no screenshot function (none saves to shotsDir)." -ForegroundColor Red
+            exit 2
+        }
+    }
+    $ShotFiles = @($sel.Files)
 }
 
 switch ($Command) {
@@ -1119,9 +1214,10 @@ switch ($Command) {
                     elseif ($probe -ne 0) { Record "shots (the display probe failed: exit $probe)" $false }
                     else {
                         # Start empty: a screenshot no test writes any more must not be reviewed as current.
-                        Remove-Item (Join-Path $Repo "output\shell-shots\*.png") -ErrorAction SilentlyContinue
+                        # A filtered run keeps the others' PNGs: only the ones its functions write are replaced.
+                        if ($ShotFiles.Count -eq 0) { Remove-Item (Join-Path $Repo "output\shell-shots\*.png") -ErrorAction SilentlyContinue }
                         Step "Qt Quick tests with screenshots"
-                        Run-QmlTests (Join-Path $Repo "output\shell-shots")
+                        Run-QmlTests (Join-Path $Repo "output\shell-shots") $null $ShotFiles
                         Save-ReviewCopies (Join-Path $Repo "output\shell-shots")
                         Write-Host "    screenshots: $(Join-Path $Repo 'output\shell-shots') (half size for review: review\)"
                     }
