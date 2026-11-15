@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "SettingsNav.js" as SettingsNav
 
 // The console's temperatures (Thermal, org.ruyaos.Devices1.Thermal) against the mock backend: what
 // the shell does at each level (ThermalPolicy: warm changes nothing, hot drops the effects quality
@@ -26,7 +27,6 @@ Item {
         when: windowShown
 
         property Shell shell: null
-        readonly property int systemIndex: 10
 
         function find(name) { return findChild(tc.shell, name) }
 
@@ -88,9 +88,7 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus, 2000, "category list has focus")
-            for (let i = 0; i < 20 && list.currentIndex < systemIndex; ++i)
-                keyClick(Qt.Key_Down)
-            compare(list.currentIndex, systemIndex)
+            SettingsNav.select(tc, "system")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("paneSystem").activeFocus, 2000, "System pane has focus")
         }
@@ -332,8 +330,7 @@ Item {
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList").activeFocus, 2000)
-            for (let i = 0; i < 20 && find("categoryList").currentIndex < systemIndex; ++i)
-                keyClick(Qt.Key_Down)
+            SettingsNav.select(tc, "system")
             const mark = find("categoryHeatMark_system")
             compare(mark.visible, false, "normal shows nothing")
             setCpu(82, "warm")

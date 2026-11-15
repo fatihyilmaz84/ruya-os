@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "SettingsNav.js" as SettingsNav
 
 // Settings page and the reusable controls. Driven with controller keys only (arrows,
 // Return = Accept, Escape = Back). Signs in as "Ada" (p2, no PIN) and opens the Settings
@@ -156,40 +157,28 @@ Item {
             tryVerify(() => find("categoryList") !== null && find("categoryList").activeFocus, 2000, "category list has focus")
         }
 
-        function selectCategory(index) {
-            const list = find("categoryList")
-            for (let i = 0; i < 20 && list.currentIndex < index; ++i)
-                keyClick(Qt.Key_Down)
-            for (let i = 0; i < 20 && list.currentIndex > index; ++i)
-                keyClick(Qt.Key_Up)
-            compare(list.currentIndex, index)
-        }
-
-        readonly property int displayIndex: 4
-        readonly property int storageIndex: 7
-        readonly property int accessibilityIndex: 8
-        readonly property int aboutIndex: 11
+        function selectCategory(key) { SettingsNav.select(tc, key) }
 
         function test_two_pane_navigation() {
             openSettings()
             const list = find("categoryList")
-            compare(list.currentIndex, 0)
+            compare(list.currentItem.objectName, "category_myprofile")
             verify(find("paneMyProfile").visible, "My profile has a pane (T-105, T-315)")
             verify(!find("paneComingSoon").visible)
             keyClick(Qt.Key_Down)                        // Network has a pane (T-129)
-            compare(list.currentIndex, 1)
+            compare(list.currentItem.objectName, "category_network")
             verify(find("paneNetwork").visible)
             verify(!find("paneComingSoon").visible)
             verify(!find("paneMyProfile").visible)
             keyClick(Qt.Key_Down)                        // Bluetooth has a pane (T-136)
-            compare(list.currentIndex, 2)
+            compare(list.currentItem.objectName, "category_bluetooth")
             verify(find("paneBluetooth").visible)
             verify(!find("paneComingSoon").visible)
             verify(!find("paneNetwork").visible)
             keyClick(Qt.Key_Up)
             keyClick(Qt.Key_Up)
 
-            selectCategory(tc.displayIndex)
+            selectCategory("display")
             verify(find("paneDisplay").visible)
             verify(!find("paneComingSoon").visible)
             compare(find("paneAbout"), null, "About is not built before it is selected (T-349)")
@@ -200,7 +189,7 @@ Item {
 
             keyClick(Qt.Key_Escape)                      // Back returns to the list (Left would cycle the ChoiceRow)
             tryVerify(() => list.activeFocus)
-            compare(list.currentIndex, tc.displayIndex)
+            compare(list.currentItem.objectName, "category_display")
             compare(tc.shell.currentPage, "settings")
 
             keyClick(Qt.Key_Return)                      // Accept also enters
@@ -209,19 +198,19 @@ Item {
             tryVerify(() => list.activeFocus)
             compare(tc.shell.currentPage, "settings")
 
-            selectCategory(tc.storageIndex)              // Storage has a pane (T-137)
+            selectCategory("storage")              // Storage has a pane (T-137)
             verify(find("paneStorage").visible)
             verify(!find("paneComingSoon").visible)
 
-            selectCategory(tc.accessibilityIndex)        // Accessibility: nothing to enter yet
+            selectCategory("accessibility")        // Accessibility: nothing to enter yet
             verify(find("paneComingSoon").visible)
             keyClick(Qt.Key_Right)
             verify(list.activeFocus, "Right on an empty category stays on the list")
 
-            selectCategory(tc.aboutIndex)
+            selectCategory("about")
             verify(find("paneAbout").visible)
             keyClick(Qt.Key_Down)                        // clamps at the last category
-            compare(list.currentIndex, tc.aboutIndex)
+            compare(list.currentItem.objectName, "category_about")
 
             keyClick(Qt.Key_Escape)                      // Back on the list closes the page
             tryCompare(tc.shell, "currentPage", "")
@@ -233,12 +222,12 @@ Item {
         function test_backspace_is_back() {
             openSettings()
             const list = find("categoryList")
-            selectCategory(tc.displayIndex)
+            selectCategory("display")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus, 2000, "first row takes focus")
             keyClick(Qt.Key_Backspace)                   // pane -> list
             tryVerify(() => list.activeFocus)
-            compare(list.currentIndex, tc.displayIndex)
+            compare(list.currentItem.objectName, "category_display")
             compare(tc.shell.currentPage, "settings")
 
             keyClick(Qt.Key_Backspace)                   // list -> Home
@@ -249,7 +238,7 @@ Item {
 
         function test_pane_rows_navigate_and_clamp() {
             openSettings()
-            selectCategory(tc.displayIndex)
+            selectCategory("display")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus)
             keyClick(Qt.Key_Up)                          // clamped at the first row
@@ -305,7 +294,7 @@ Item {
                 tryCompare(Bluetooth, "discovering", true)
                 tryCompare(Bluetooth, "discovering", false, 3000)
             }
-            selectCategory(2)                            // Bluetooth & controllers
+            selectCategory("bluetooth")                            // Bluetooth & controllers
             keyClick(Qt.Key_Right)
             const pane = find("paneBluetooth")
             tryVerify(() => pane.activeFocus && pane.laidOutRows().length > 12, 2000, "the pane is filled")
@@ -348,7 +337,7 @@ Item {
                 tryCompare(Bluetooth, "discovering", true)
                 tryCompare(Bluetooth, "discovering", false, 3000)
             }
-            selectCategory(2)                            // Bluetooth & controllers
+            selectCategory("bluetooth")                            // Bluetooth & controllers
             keyClick(Qt.Key_Right)
             const pane = find("paneBluetooth")
             tryVerify(() => pane.activeFocus && pane.laidOutRows().length > 12, 2000, "the pane is filled")
@@ -427,7 +416,7 @@ Item {
             verify(Display.mockUseScenario("none"))
             tryCompare(Display, "available", false)
             openSettings()
-            selectCategory(tc.displayIndex)
+            selectCategory("display")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus)
             const pane = find("paneDisplay")
@@ -589,7 +578,7 @@ Item {
         // The same in the real pane: Bluetooth discovery lists devices below the focused row.
         function test_bluetooth_discovery_keeps_the_focused_row_and_the_row_below_whole() {
             openSettings()
-            selectCategory(2)
+            selectCategory("bluetooth")
             keyClick(Qt.Key_Right)
             const pane = find("paneBluetooth")
             tryVerify(() => pane.activeFocus, 2000)
@@ -617,8 +606,8 @@ Item {
         // squeezed to four rows: Down and Tab keep the focused row whole with its neighbour in view.
         function test_longer_panes_keep_the_look_ahead_with_down_and_tab() {
             openSettings()
-            for (const [index, name] of [[tc.displayIndex, "paneDisplay"], [10, "paneSystem"]]) {
-                selectCategory(index)
+            for (const [key, name] of [["display", "paneDisplay"], ["system", "paneSystem"]]) {
+                selectCategory(key)
                 keyClick(Qt.Key_Right)
                 const pane = find(name)
                 tryVerify(() => pane.activeFocus && pane.focusableRows().length > 0, 2000, name + " has focus")
@@ -689,7 +678,7 @@ Item {
 
         function test_pane_remembers_last_row() {
             openSettings()
-            selectCategory(tc.displayIndex)
+            selectCategory("display")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus)
             keyClick(Qt.Key_Down)
@@ -1111,7 +1100,7 @@ Item {
         // Shown in the real bar: Settings > Display opens on its Quality choice row.
         function test_hint_bar_shows_the_row_kind() {
             openSettings()
-            selectCategory(tc.displayIndex)
+            selectCategory("display")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus)
             const bar = find("hintBar")
@@ -1137,7 +1126,7 @@ Item {
 
         function test_choice_row_keeps_focus() {
             openSettings()
-            selectCategory(tc.displayIndex)
+            selectCategory("display")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus)
             const list = find("categoryList")
@@ -1155,7 +1144,7 @@ Item {
 
         function test_display_settings_apply_live() {
             openSettings()
-            selectCategory(tc.displayIndex)
+            selectCategory("display")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus)
 
@@ -1196,7 +1185,7 @@ Item {
 
         function test_rows_follow_external_changes() {
             openSettings()
-            selectCategory(tc.displayIndex)
+            selectCategory("display")
             DeviceSettings.effectsQuality = "balanced"
             DeviceSettings.reducedMotion = true
             DeviceSettings.overscan = 0.03
@@ -1220,7 +1209,7 @@ Item {
                         openSettings()
                     const list = find("categoryList")
                     list.forceActiveFocus()
-                    selectCategory(tc.aboutIndex)
+                    selectCategory("about")
                     tryVerify(() => list.currentItem && list.currentItem.focused, 2000, "About focused " + what)
                     const bar = find("hintBar")
                     verify(bar.visible, "bar shown " + what)
@@ -1240,7 +1229,7 @@ Item {
                     const stride = list.stride
                     const rows = (list.height + list.spacing) / stride
                     verify(Math.abs(rows - Math.round(rows)) < 0.01, "whole rows, " + what + ": " + rows)
-                    selectCategory(0)
+                    selectCategory("myprofile")
                     tryVerify(() => list.currentItem.mapToItem(tc.shell, 0, 0).y >= list.mapToItem(tc.shell, 0, 0).y - 0.5)
                 }
             }
@@ -1248,7 +1237,7 @@ Item {
 
         function test_about_shows_version() {
             openSettings()
-            selectCategory(tc.aboutIndex)
+            selectCategory("about")
             verify(find("paneAbout").visible)
             compare(find("aboutVersion").value, "test-1.2.3")
             compare(find("aboutQt").value, SystemInfo.qtVersion)
@@ -1275,7 +1264,7 @@ Item {
 
         function test_guide_overlay_over_settings_pane() {
             openSettings()
-            selectCategory(tc.displayIndex)
+            selectCategory("display")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus)
             keyClick(Qt.Key_HomePage)                    // the pane leaves Guide alone
@@ -1288,7 +1277,7 @@ Item {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             openSettings()
-            selectCategory(tc.displayIndex)
+            selectCategory("display")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus)
             keyClick(Qt.Key_Down)
@@ -1297,7 +1286,7 @@ Item {
 
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("categoryList").activeFocus)
-            selectCategory(tc.aboutIndex)
+            selectCategory("about")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("aboutVersion").activeFocus)
             wait(600)
@@ -1341,7 +1330,7 @@ Item {
                 }
                 wait(1200)                               // the theme has blended
                 openSettings()
-                selectCategory(tc.displayIndex)
+                selectCategory("display")
                 keyClick(Qt.Key_Right)
                 tryVerify(() => find("rowQuality").activeFocus)
                 wait(600)

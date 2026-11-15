@@ -79,7 +79,7 @@ Item {
             const list = find("categoryList")
             const glide = find("categoryGlide")
             tryVerify(() => glide.active)
-            compare(list.currentIndex, 0)
+            compare(list.currentItem.objectName, "category_myprofile")
             compare(glide.activeFocus, false, "the highlight never has focus")
             for (let i = 0; i < 9; ++i) {
                 const row = list.currentItem
@@ -114,7 +114,7 @@ Item {
             const glide = find("categoryGlide")
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Down)
-            compare(list.currentIndex, 2)
+            compare(list.currentItem.objectName, "category_bluetooth")
             tryVerify(() => glide.active)
             keyClick(Qt.Key_Right)                         // into the Bluetooth pane
             tryCompare(list, "activeFocus", false)
@@ -124,7 +124,7 @@ Item {
             keyClick(Qt.Key_Left)
             tryVerify(() => list.activeFocus)
             tryVerify(() => glide.active)
-            compare(list.currentIndex, 2)
+            compare(list.currentItem.objectName, "category_bluetooth")
             tryCompare(glide, "y", glide.targetY)
         }
 

@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "SettingsNav.js" as SettingsNav
 
 // The hint bar (T-158): what the buttons do on the screen on top, never focusable, clear of the
 // Recent row and inside the safe area, hidden while an app is focused. Signs in as "Ada" (p2).
@@ -131,9 +132,7 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList").activeFocus, 2000)
             compare(tc.shown(), "accept Select|back Back")
-            for (let i = 0; i < 11; ++i)
-                keyClick(Qt.Key_Down)
-            tryCompare(find("categoryList"), "currentIndex", 11)
+            SettingsNav.select(tc, "about")
             compare(tc.shown(), "accept Select|back Back", "the category list still enters About")
             keyClick(Qt.Key_Return)
             tryVerify(() => find("paneAbout").activeFocus, 2000, "About took focus")
@@ -177,8 +176,7 @@ Item {
             compare(find("paneAbout"), null, "About is built when it is first selected (T-349)")
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("categoryList").activeFocus, 2000)
-            for (let i = 0; i < 11; ++i)
-                keyClick(Qt.Key_Down)
+            SettingsNav.select(tc, "about")
             keyClick(Qt.Key_Return)
             tryVerify(() => find("paneAbout").activeFocus, 2000)
             compare(shownOf(find("paneAbout")), "back Back")
@@ -293,9 +291,7 @@ Item {
             tc.shell.openPage("settings")
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList").activeFocus, 2000)
-            for (let i = 0; i < 9; ++i)
-                keyClick(Qt.Key_Down)
-            tryVerify(() => find("category_power"))
+            SettingsNav.select(tc, "power")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowScreenSaver").activeFocus, 2000, "the first row has focus")
             compare(tc.shown(), "left_right Change|accept Next|back Back")

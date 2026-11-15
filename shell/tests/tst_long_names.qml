@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "SettingsNav.js" as SettingsNav
 
 // T-312: a name from outside (a profile's, here) is one line, capped to its container's width and
 // elided at the end, wherever it is drawn: the profile cards, the status cluster and the PIN pad
@@ -170,8 +171,7 @@ Item {
             keyClick(Qt.Key_Return)                      // Settings
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList") !== null && find("categoryList").activeFocus, 2000, "category list has focus")
-            for (let i = 0; i < 4; ++i)
-                keyClick(Qt.Key_Down)                    // Display & motion
+            SettingsNav.select(tc, "display")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus, 2000, "first row takes focus")
         }

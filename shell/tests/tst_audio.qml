@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "SettingsNav.js" as SettingsNav
 
 // Audio: the output policy (hot-plug), Settings -> Audio, the channel volumes and the volume
 // keys. Driven with controller/media keys only, against the mock backend. Signs in as "Ada"
@@ -72,9 +73,7 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus, 2000, "category list has focus")
-            for (let i = 0; i < 20 && list.currentIndex < 5; ++i)     // Audio
-                keyClick(Qt.Key_Down)
-            compare(list.currentIndex, 5)
+            SettingsNav.select(tc, "audio")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("paneAudio").visible)
             tryVerify(() => find("sink_hdmi-0").activeFocus, 2000, "the first output takes focus")

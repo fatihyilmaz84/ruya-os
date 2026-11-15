@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "SettingsNav.js" as SettingsNav
 
 // Wallpapers (T-208): the setting and the backdrop it drives, the picker (controller keys only),
 // the copy from a USB drive (mock stick with a real folder of made-up pictures), Delete, the
@@ -90,9 +91,7 @@ Item {
             keyClick(Qt.Key_Return)                      // Settings
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList") !== null && find("categoryList").activeFocus, 2000, "category list has focus")
-            for (let i = 0; i < 4; ++i)
-                keyClick(Qt.Key_Down)                    // Display & motion
-            compare(find("categoryList").currentIndex, 4)
+            SettingsNav.select(tc, "display")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus, 2000, "first row takes focus")
         }

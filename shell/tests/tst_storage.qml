@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "SettingsNav.js" as SettingsNav
 
 // Settings -> Storage against the mock backend: the console's own storage ("This console", T-196:
 // numbers, rows updated in place, the low-space bar, a late reply), the size formatter, every status string of the
@@ -85,9 +86,7 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus, 2000, "category list has focus")
-            for (let i = 0; i < 7; ++i)
-                keyClick(Qt.Key_Down)                    // ... Storage (after Notifications, RUY-414)
-            compare(list.currentIndex, 7)
+            SettingsNav.select(tc, "storage")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("paneStorage").visible)
             tryVerify(() => find("storageInternal").activeFocus, 2000, "the first row (This console) takes focus")
@@ -340,7 +339,7 @@ Item {
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("categoryList").activeFocus, 2000, "Back returns to the category list")
             tryCompare(tc.shell, "currentPage", "settings")
-            compare(find("categoryList").currentIndex, 7)
+            compare(find("categoryList").currentItem.objectName, "category_storage")
         }
 
         function test_unplugged_drive_while_focused() {

@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "SettingsNav.js" as SettingsNav
 
 // Settings -> About -> System information (T-226) against the mock backends: the sections and rows
 // (three machines), a value that cannot be read is absent and never 0, the live values update in
@@ -24,7 +25,6 @@ Item {
         when: windowShown
 
         property Shell shell: null
-        readonly property int aboutIndex: 11
         readonly property string txtName: "RuyaOS-system-report.txt"
         readonly property string jsonName: "RuyaOS-system-report.json"
 
@@ -80,9 +80,7 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus, 2000, "category list has focus")
-            for (let i = 0; i < 20 && list.currentIndex < aboutIndex; ++i)
-                keyClick(Qt.Key_Down)
-            compare(list.currentIndex, aboutIndex)
+            SettingsNav.select(tc, "about")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("paneAbout").activeFocus, 2000, "About pane has focus")
             goTo("aboutSystemInfo")
