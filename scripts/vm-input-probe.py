@@ -329,6 +329,15 @@ def wait_for(fn, timeout, step=0.02):
     return fn()
 
 
+def pad_rows(names, timeout=10):
+    """ListDevices rows of the check's own pads (by name), waiting until every one of them is listed (RUY-719: a
+    wait that returns at the first non-empty list saw one pad of two under the queue's load). Whatever is listed
+    at the end otherwise, so the caller reports it."""
+    def own():
+        return [d for d in (devices() or []) if d.get("name") in names]
+    return wait_for(lambda: own() if {d["name"] for d in own()} >= set(names) else None, timeout) or own()
+
+
 def acl_users(node):
     out = subprocess.run(["getfacl", "-p", node], capture_output=True, text=True).stdout
     named = [l.split(":")[1] for l in out.splitlines() if l.startswith("user:") and l.split(":")[1]]
@@ -1557,7 +1566,7 @@ def cmd_players(args):
     bus = None
     games = []
     try:
-        rows = wait_for(lambda: [d for d in (devices() or []) if d.get("name") in names], 5) or []
+        rows = pad_rows(names)
         if len(rows) != 3:
             bad(f"ListDevices does not list the three pads: {rows}")
             return fails
@@ -1923,7 +1932,7 @@ def cmd_seathold(args):
     bus = None
     monitor = None
     try:
-        rows = wait_for(lambda: [d for d in (devices() or []) if d.get("name") in names], 5) or []
+        rows = pad_rows(names)
         if len(rows) != 2:
             bad(f"ListDevices does not list the two pads: {rows}")
             return fails
@@ -2032,7 +2041,7 @@ def cmd_coop(args):
     bus = None
     game = None
     try:
-        rows = wait_for(lambda: [d for d in (devices() or []) if d.get("name") in names], 5) or []
+        rows = pad_rows(names)
         if len(rows) != 2:
             bad(f"ListDevices does not list the two pads: {rows}")
             return fails
