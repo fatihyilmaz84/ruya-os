@@ -7,7 +7,10 @@
 # that run proves this code: only `dev.ps1 docs` runs, and the marker is copied to main's output\
 # so push-main.ps1 can use it too. Otherwise (no marker, older than 24 h, code on main moved, or a
 # fix committed after the green run) the full `dev.ps1 test` runs, as before. Exit 0 = green.
-param([Parameter(Mandatory = $true)][string]$Worktree)
+# Without -Worktree (several branches merged, or the worktree already removed) it runs the full test.
+# Not Mandatory: a mandatory parameter left out under `powershell -NonInteractive` printed nothing
+# and exited 0 without testing anything (lead-23).
+param([string]$Worktree = "")
 
 $ErrorActionPreference = "Continue"
 $Repo = Split-Path -Parent $PSScriptRoot
@@ -23,8 +26,13 @@ if ("$(& $git rev-parse --abbrev-ref HEAD)".Trim() -ne "main") { Say "FAIL: not 
 if (& $git status --porcelain) { Say "FAIL: the working tree is not clean"; exit 1 }
 $head = "$(& $git rev-parse HEAD)".Trim()
 
-$proof = Read-GreenMarker -Marker (Join-Path $Worktree "output\last-green-test.txt") -Head $head -Git $git
-Say "builder's run: $($proof.Why)"
+if ($Worktree) {
+    $proof = Read-GreenMarker -Marker (Join-Path $Worktree "output\last-green-test.txt") -Head $head -Git $git
+    Say "builder's run: $($proof.Why)"
+} else {
+    $proof = $null
+    Say "no -Worktree given: running the full dev.ps1 test"
+}
 if ($proof.Mode -and $proof.Commit) {
     & $git merge-base --is-ancestor $proof.Commit $head
     if ($LASTEXITCODE -ne 0) { $proof = $null; Say "its commit is not merged into main: the proof does not apply" }
