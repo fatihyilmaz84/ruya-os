@@ -62,6 +62,10 @@ Item {
         }
     }
 
+    // A Wayland surface and the shell's window as the probe sees them (tst_hub_performance.qml).
+    Component { id: surfaceComponent; QtObject { signal redraw() } }
+    Component { id: windowComponent; QtObject { signal frameSwapped() } }
+
     SignalSpy { id: launchedSpy; target: Session; signalName: "launchFinished" }
     SignalSpy { id: freezeSpy; target: Session; signalName: "freezeFinished" }
     SignalSpy { id: frozenSpy; target: Session; signalName: "frozenChanged" }
@@ -106,6 +110,8 @@ Item {
         }
 
         function cleanup() {
+            Performance.frameSource = null
+            Performance.frameWindow = null
             DeviceSettings.pauseGamesInHub = true
             Session.mockFailFreeze(false)
             Session.mockFailThaw(false)
@@ -198,6 +204,139 @@ Item {
             keyClick(Qt.Key_Escape)                          // closed before the slide ended
             tryVerify(() => !find("systemPanel").open)
             compare(probe.pendingKey, "", "an open that did not settle is not measured")
+        }
+
+        // ---- the Resume probe and the shell-own frame count (RUY-405) ---------------------------------
+
+        // Stands the surface and the window in for the compositor's (Compositor.qml sets the same two).
+        function fakeFrames() {
+            const surface = createTemporaryObject(surfaceComponent, host)
+            const win = createTemporaryObject(windowComponent, host)
+            Performance.frameWindow = win
+            Performance.frameSource = surface
+            return { surface: surface, win: win }
+        }
+
+        // Presents frames of the game (a commit, then a presented frame) until the probe has written
+        // `lines` lines.
+        function presentUntil(frames, probe, lines) {
+            tryVerify(() => {
+                frames.surface.redraw()
+                frames.win.frameSwapped()
+                return probe.lineCount >= lines
+            }, 3000, "the Resume line is written")
+        }
+
+        // One line per Resume, with the times in numbers and the Thaw's status; frames after it add none.
+        function test_a_resume_writes_one_line_with_its_times() {
+            start()
+            const run = playRacer()
+            const frames = fakeFrames()
+            const probe = find("hubProbe")
+            openHubAndPause(run.instance)
+            const lines = probe.lineCount
+            compare(probe.pending, false, "nothing is measured while the Hub is open")
+            keyClick(Qt.Key_Return)                          // Resume
+            presentUntil(frames, probe, lines + 1)
+            verify(/^hub-resume thawReply=\d+ firstFrame=\d+ status=ok$/.test(probe.lastLine), probe.lastLine)
+            compare(probe.pending, false)
+            for (let i = 0; i < 5; ++i) {
+                frames.surface.redraw()
+                frames.win.frameSwapped()
+            }
+            wait(50)
+            compare(probe.lineCount, lines + 1, "one line per Resume")
+            // B resumes too: a second line
+            openHub()
+            tryVerify(() => recordOf(run.instance).frozen === true, 2000, "the game is frozen again")
+            keyClick(Qt.Key_Escape)
+            presentUntil(frames, probe, lines + 2)
+            verify(probe.lastLine.indexOf("hub-resume ") === 0, probe.lastLine)
+        }
+
+        function test_a_failed_thaw_writes_its_status_and_no_first_frame() {
+            start()
+            const run = playRacer()
+            fakeFrames()
+            const probe = find("hubProbe")
+            openHubAndPause(run.instance)
+            Session.mockFailThaw(true)
+            const lines = probe.lineCount
+            keyClick(Qt.Key_Return)
+            tryCompare(probe, "lineCount", lines + 1, 3000, "the line is written at the answer")
+            verify(/^hub-resume thawReply=\d+ status=failed$/.test(probe.lastLine), probe.lastLine)
+        }
+
+        function test_no_frame_after_the_thaw_writes_a_timeout() {
+            start()
+            const run = playRacer()
+            fakeFrames()                                     // a display that presents nothing
+            const probe = find("hubProbe")
+            probe.timeoutMs = 100
+            openHubAndPause(run.instance)
+            const lines = probe.lineCount
+            keyClick(Qt.Key_Return)
+            tryCompare(probe, "lineCount", lines + 1, 3000, "the timeout writes the line")
+            verify(/^hub-resume thawReply=\d+ firstFrame=timeout status=ok$/.test(probe.lastLine), probe.lastLine)
+        }
+
+        function test_home_and_whos_playing_write_no_resume_line() {
+            start()
+            const run = playRacer()
+            const frames = fakeFrames()
+            const probe = find("hubProbe")
+            const lines = probe.lineCount
+            openHubAndPause(run.instance)                    // Home leaves the game frozen: no Thaw to time
+            goTo("home")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !tc.shell.appOpen, 2000, "Home is in front")
+            compare(probe.pending, false)
+            keyClick(Qt.Key_Return)                          // the Running card resumes: not the Hub's close
+            tryVerify(() => run.app.activeFocus, 2000, "the card resumes the game")
+            tryVerify(() => recordOf(run.instance).frozen === false)
+            compare(probe.pending, false, "a card's Resume is not timed")
+            // "Who's playing?" over the game freezes it and thaws it on close: not timed either
+            const who = find("whosPlaying")
+            who.shown = true
+            tryVerify(() => recordOf(run.instance).frozen === true, 2000, "the prompt pauses the game")
+            who.shown = false
+            tryVerify(() => recordOf(run.instance).frozen === false, 2000, "closing it thaws the game")
+            compare(probe.pending, false)
+            for (let i = 0; i < 3; ++i) {
+                frames.surface.redraw()
+                frames.win.frameSwapped()
+            }
+            wait(50)
+            compare(probe.lineCount, lines, "no line for either")
+        }
+
+        // The shell-own frame count: a presented frame with no commit of the game since the one before.
+        function test_the_shell_counts_only_its_own_frames_and_only_with_the_perf_log() {
+            start()
+            const frames = fakeFrames()
+            const probe = find("hubProbe")
+            compare(probe.countFrames, false, "RUYA_PERF_LOG is not set in the tests")
+            compare(probe.counting, false, "no counter runs without it")
+            for (let i = 0; i < 4; ++i)
+                frames.win.frameSwapped()
+            compare(probe.ownFrames, 0, "nothing is counted")
+            probe.countFrames = true                         // what RUYA_PERF_LOG=1 does
+            verify(probe.counting)
+            frames.win.frameSwapped()                        // nothing of the game: the shell drew by itself
+            frames.win.frameSwapped()
+            compare(probe.ownFrames, 2)
+            frames.surface.redraw()                          // the game's frame: not the shell's own
+            frames.win.frameSwapped()
+            compare(probe.ownFrames, 2, "a frame that presents the game's buffer does not count")
+            frames.win.frameSwapped()
+            compare(probe.ownFrames, 3)
+            probe.countFrames = false
+            verify(!probe.counting)
+            frames.win.frameSwapped()
+            compare(probe.ownFrames, 3, "switched off: not counted")
+            probe.countFrames = true
+            Performance.frameSource = null                   // no game in front: Home draws, not counted
+            verify(!probe.counting)
         }
 
         function test_opening_the_hub_freezes_the_game_and_resume_thaws_it() {

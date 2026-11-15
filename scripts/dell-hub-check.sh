@@ -3,23 +3,32 @@
 # or WSL on the host:
 #   [RUYA_PIN=<digits>] scripts/dell-hub-check.sh [host]
 # Needs the key ~/.ssh/ruyaos_dev and a shell image with the "page-open hub" journal line (T-455) and,
-# for step 4, RUYA_PERF_LOG (also T-455). The Dell is a test machine (CLAUDE.md): the script signs in
+# for steps 1 and 4, RUYA_PERF_LOG (T-455) and the "hub-resume" and "perf-own" lines (RUY-405). The Dell is a test machine (CLAUDE.md): the script signs in
 # a profile if none is (a profile with no PIN, or RUYA_PIN for the first one), stops every running app,
 # starts SuperTuxKart as the active profile and leaves it running. Keys are typed through a throw-away
 # uinput keyboard (as dell-glass-check.sh). "Render" is the shell's drm fdinfo over 10 s (1000 ms in
 # 10 s is 10 % of the GPU); CPU is the shell's utime+stime over 10 s (100 ticks is one core).
 #   1. Hidden: SuperTuxKart in front, the Hub closed, 10 s. The shell draws the game's frames and
 #      nothing of its own, so this is the cost of showing a game at 60 FPS. PASS: GPU under 20 % and
-#      CPU under 20 % of a core (a guard rail set from the first measurement, 11 % and 11 %; the Hub
-#      adds no frames of its own while hidden, which no number here can show on its own).
+#      CPU under 20 % of a core (a guard rail set from the first measurement, 11 % and 11 %). Also the
+#      shell's own frames (RUY-405): with RUYA_PERF_LOG the shell logs "perf-own frames=<n> window=1s"
+#      once a second, the presented frames that follow no commit of the game's surface (a frame that
+#      only presents the game's buffer follows a commit and is not counted). PASS: 0 in the 10 s, a
+#      hidden Hub over a game draws nothing by itself. The script restarts the shell once at the start
+#      for the RUYA_PERF_LOG drop-in (below), so every step runs with the log on.
 #   2. Open time: Guide, 2 s, Back, 2 s, ten times. The shell writes "page-open hub create= firstSwap=
 #      afterAnim=" (ms from the Guide key reaching the shell: firstSwap is the first frame presented
 #      after it, afterAnim the end of the slide). PASS: median firstSwap under 100 ms (budget).
+#   2b. Resume: Guide, 2 s, Accept on the game card (Resume has the focus), 2 s, ten times. The shell
+#      writes "hub-resume thawReply=<ms> firstFrame=<ms> status=<s>" (ms from the Hub's close: the
+#      Thaw's answer, and the game's next presented frame). Reports the median and the worst firstFrame
+#      and thawReply with no PASS line: no budget is written in ADR-033 or 02 section 1.6 yet. FAIL only
+#      when fewer than 5 lines come, or a line has a status other than ok or firstFrame=timeout.
 #   3. Open and still: Guide, 6 s, then 10 s, with the game frozen (the default, T-457). PASS: under
 #      300 ms render in 10 s (3 %): an open Hub over a frozen game draws nothing once its slide ended.
-#   4. FPS (skipped with RUYA_HUB_NOFPS=1): the shell is restarted with RUYA_PERF_LOG=1 (a volatile
-#      systemd drop-in in /run) and the setting hub/pauseGames=false (shell.conf is backed up and put
-#      back), SuperTuxKart is started again, the compositor's frame meter (T-451) logs "perf-frames"
+#   4. FPS (skipped with RUYA_HUB_NOFPS=1): the shell is restarted with the setting hub/pauseGames=false
+#      (shell.conf is backed up and put back; RUYA_PERF_LOG=1 is on since the start, a volatile systemd
+#      drop-in in /run), SuperTuxKart is started again, the compositor's frame meter (T-451) logs "perf-frames"
 #      four times a second. The game's FPS with the Hub closed (10 s) against with it open (10 s, the
 #      game is not frozen). PASS: the drop is under 10 % (budget). The shell is restarted again at the
 #      end to take the drop-in and the setting back, and the profile is signed in again.
@@ -41,7 +50,7 @@ BUDGET_FPS_DROP=10        # percent
 
 r 'mkdir -p /var/tmp/dell-hub && cat > /var/tmp/dell-hub/keys.py' <<'EOF'
 import fcntl, os, struct, sys, time
-KEYS = {"esc": 1, "guide": 172}
+KEYS = {"esc": 1, "guide": 172, "ret": 28}
 def emit(fd, t, c, v):
     os.write(fd, struct.pack("llHHi", 0, 0, t, c, v))
 fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
@@ -113,9 +122,38 @@ stk() {   # stop every app, start SuperTuxKart as the profile, let it reach its 
 }
 frozen() { r "$BUS --json=short call org.ruyaos.Session1 /org/ruyaos/Session1 org.ruyaos.Session1 ListRunning" | grep -o '"frozen":{"type":"b","data":true}' | wc -l; }
 
+conf=/var/lib/ruya-shell/.config/ruyaos/shell.conf
+D=/run/systemd/system/ruya-compositor@tty1.service.d
+# Put shell.conf and the drop-in back however the script ends (exit 2 in stk(), a lost ssh, Ctrl-C).
+restore() {
+    trap - EXIT INT TERM
+    r "systemctl stop ruya-compositor@tty1; [ -f /var/tmp/dell-hub/shell.conf.bak ] && cp -p /var/tmp/dell-hub/shell.conf.bak $conf; rm -f $D/hub-check.conf; rmdir $D 2>/dev/null; systemctl daemon-reload; systemctl start ruya-compositor@tty1; rm -rf /var/tmp/dell-hub"
+}
+trap restore EXIT
+trap 'exit 130' INT TERM
+# RUYA_PERF_LOG=1 from the start (a volatile drop-in): the shell-own frame count of step 1 needs it, and
+# step 4's frame meter too.
+r "cp -p $conf /var/tmp/dell-hub/shell.conf.bak; mkdir -p $D; printf '[Service]\nEnvironment=RUYA_PERF_LOG=1\n' > $D/hub-check.conf; systemctl daemon-reload; systemctl restart ruya-compositor@tty1"
+sleep 12
+[ -n "$(active)" ] || signin || { echo "DELL HUB CHECK NOT RUN: could not sign in after the restart"; exit 2; }
+profile="$(active)"
+
 echo "== 1. Hidden, SuperTuxKart in front"
 stk
+ta=$(now)
 set -- $(cost)
+tb=$(now)
+own=$(r "journalctl -b -o cat --since @$ta --until @$tb --no-pager | grep -a 'perf-own' | sed -n 's/.*frames=\([0-9]*\).*/\1/p' | awk '{s+=\$1; n++} END{print s+0, n+0}'")
+set -- $own $@
+ownframes=$1; ownn=$2; shift 2
+echo "Hub hidden: the shell drew $ownframes frames of its own in 10 s ($ownn perf-own lines)"
+if [ "$ownn" -lt 5 ]; then
+    bad "too few perf-own lines ($ownn) to count the shell's own frames (an image without RUY-405, or no game in front)"
+elif [ "$ownframes" -eq 0 ]; then
+    ok "a hidden Hub draws no frame of its own (0 shell-own frames in 10 s)"
+else
+    bad "the shell drew $ownframes frames of its own in 10 s with the Hub hidden"
+fi
 echo "Hub hidden: render $1 ms in 10 s ($(( $1 / 100 )) % of the GPU), shell CPU $2 ticks in 10 s ($(( $2 / 10 )) % of a core)"
 if [ "$(( $1 / 100 ))" -lt "$BUDGET_HIDDEN_PCT" ] && [ "$(( $2 / 10 ))" -lt "$BUDGET_HIDDEN_PCT" ]; then
     ok "showing a game costs the shell $(( $1 / 100 )) % GPU and $(( $2 / 10 )) % of a core (budget $BUDGET_HIDDEN_PCT %)"
@@ -139,6 +177,27 @@ else
     [ "$med" -lt "$BUDGET_OPEN_MS" ] && ok "the Hub's first frame comes in $med ms (median; budget $BUDGET_OPEN_MS)" || bad "the Hub's first frame takes $med ms (median; budget $BUDGET_OPEN_MS)"
 fi
 
+echo "== 2b. Resume (ten times: Guide, Accept on Resume)"
+t0=$(now)
+keys guide w2 ret w2 guide w2 ret w2 guide w2 ret w2 guide w2 ret w2 guide w2 ret w2 guide w2 ret w2 guide w2 ret w2 guide w2 ret w2 guide w2 ret w2 guide w2 ret w2
+lines=$(r "journalctl -b -o cat --since @$t0 --no-pager | grep -a 'hub-resume '")
+n=$(echo "$lines" | grep -c 'hub-resume ')
+echo "$lines" | sed 's/^ruya-shell: /  /' | head -12
+if [ "$n" -lt 5 ]; then
+    bad "the shell wrote $n Resume lines for 10 Resumes (an image without RUY-405, or the Hub did not open or Resume was not focused)"
+elif echo "$lines" | grep -qv 'status=ok'; then
+    bad "a Resume had a Thaw status other than ok"
+else
+    stat() {   # median and worst of a field over the lines that carry a number
+        echo "$lines" | sed -n "s/.* $1=\([0-9]*\).*/\1/p" | sort -n | awk '{a[NR]=$1} END{if (NR) print a[int((NR+1)/2)], a[NR], NR; else print "- - 0"}'
+    }
+    set -- $(stat firstFrame); fmed=$1; fworst=$2; fn=$3
+    set -- $(stat thawReply); rmed=$1; rworst=$2
+    echo "Resume ($n of 10): game's next frame median $fmed ms, worst $fworst ms ($fn with a frame); Thaw answered median $rmed ms, worst $rworst ms"
+    echo "$lines" | grep -q 'firstFrame=timeout' && echo "note: $(echo "$lines" | grep -c 'firstFrame=timeout') Resumes saw no frame within 2 s"
+    echo "Resume time: no budget is set (ADR-033, 02 1.6), reported without a PASS"
+fi
+
 echo "== 3. Open and still, the game frozen"
 keys guide w8
 echo "frozen games while open: $(frozen)"
@@ -149,16 +208,6 @@ keys esc w2
 
 if [ -z "${RUYA_HUB_NOFPS:-}" ]; then
     echo "== 4. The game's FPS with the Hub closed and open"
-    conf=/var/lib/ruya-shell/.config/ruyaos/shell.conf
-    D=/run/systemd/system/ruya-compositor@tty1.service.d
-    # Put shell.conf and the drop-in back however the script ends (exit 2 in stk(), a lost ssh, Ctrl-C).
-    restore() {
-        trap - EXIT INT TERM
-        r "systemctl stop ruya-compositor@tty1; [ -f /var/tmp/dell-hub/shell.conf.bak ] && cp -p /var/tmp/dell-hub/shell.conf.bak $conf; rm -f $D/hub-check.conf; rmdir $D 2>/dev/null; systemctl daemon-reload; systemctl start ruya-compositor@tty1; rm -rf /var/tmp/dell-hub"
-    }
-    trap restore EXIT
-    trap 'exit 130' INT TERM
-    r "cp -p $conf /var/tmp/dell-hub/shell.conf.bak; mkdir -p $D; printf '[Service]\nEnvironment=RUYA_PERF_LOG=1\n' > $D/hub-check.conf; systemctl daemon-reload"
     # pauseGames=false while the shell is stopped (a running shell would not read it, and a settings write would undo it)
     r "systemctl stop ruya-compositor@tty1; grep -q '^\[hub\]' $conf && sed -i 's/^pauseGames=.*/pauseGames=false/' $conf || printf '\n[hub]\npauseGames=false\n' >> $conf; grep -q '^pauseGames=false' $conf || sed -i '/^\[hub\]/a pauseGames=false' $conf; systemctl start ruya-compositor@tty1"
     sleep 12
@@ -185,11 +234,10 @@ if [ -z "${RUYA_HUB_NOFPS:-}" ]; then
         drop=$(awk -v b="$before" -v d="$during" 'BEGIN{ if (b <= 0) print 100; else printf "%d", (b - d) * 100 / b }')
         [ "$drop" -lt "$BUDGET_FPS_DROP" ] && ok "the game's FPS drops $drop % with the Hub open (budget $BUDGET_FPS_DROP %)" || bad "the game's FPS drops $drop % with the Hub open (budget $BUDGET_FPS_DROP %)"
     fi
-    restore
-    sleep 12
-    [ -n "$(active)" ] || signin || echo "note: could not sign in again"
 fi
-
-r 'rm -rf /var/tmp/dell-hub'
+# The shell is restarted once more to take the drop-in (and the setting) back.
+restore
+sleep 12
+[ -n "$(active)" ] || signin || echo "note: could not sign in again"
 echo "note: SuperTuxKart is still running as $profile"
 [ "$fails" -eq 0 ] && echo "DELL HUB CHECK PASS" || { echo "DELL HUB CHECK FAIL ($fails)"; exit 1; }

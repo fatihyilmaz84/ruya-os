@@ -1176,6 +1176,52 @@ FocusScope {
         front: root.appOpen && root.quickMenuApp ? root.quickMenuApp.instance : ""
         pauseOn: DeviceSettings.pauseGamesInHub
         profile: root.signedIn ? Profiles.activeProfile : ""
+        // Only the Hub's close is timed, not "Who's playing?" (RUY-405).
+        onResuming: instance => {
+            if (root.lastPausingOverlay === "hub")
+                hubProbe.begin(instance)
+        }
+    }
+
+    // Which overlay opened last: a Resume is timed only when the Hub (not "Who's playing?") closes. It
+    // is forgotten once the close has been handled, so a later Resume (Home's Running card) is not timed.
+    property string lastPausingOverlay: ""
+    function forgetPausingOverlay() {
+        if (!systemPanel.open && !whosPlaying.pausing)
+            Qt.callLater(() => { if (!systemPanel.open && !whosPlaying.pausing) root.lastPausingOverlay = "" })
+    }
+    Connections {
+        target: systemPanel
+        function onOpenChanged() {
+            if (systemPanel.open)
+                root.lastPausingOverlay = "hub"
+            else
+                root.forgetPausingOverlay()
+        }
+    }
+    Connections {
+        target: whosPlaying
+        function onPausingChanged() {
+            if (whosPlaying.pausing)
+                root.lastPausingOverlay = "who"
+            else
+                root.forgetPausingOverlay()
+        }
+    }
+    // The time from the Hub's Resume to the game's next presented frame, and the frames the shell
+    // draws on its own (only with RUYA_PERF_LOG): scripts/dell-hub-check.sh. The window and the
+    // front surface are the ones Compositor.qml gives the frame meter.
+    HubProbe {
+        id: hubProbe
+        objectName: "hubProbe"
+        window: Performance.frameWindow
+        surface: Performance.frameSource
+    }
+    Connections {
+        target: Session
+        function onThawFinished(instance, status) {
+            hubProbe.thawAnswered(instance, status)
+        }
     }
 
     function switchToApp(appId) {
