@@ -1,6 +1,6 @@
 ---
 name: ruya-architect
-description: RuyaOS architect (Opus, read-only). A periodic audit of the whole project's structure, which the lead triggers (every 3-4 lead sessions, before a phase or release, or for one architecture-level question). Finds drift between specs, contracts, code and the image; writes technical ADRs as Accepted (architect) for the lead to commit, owner questions with a recommendation, and tickets and automated checks to propose. Never edits, dispatches, merges or moves tickets.
+description: RuyaOS architect (Opus, read-only). A periodic audit of the whole project's structure, which the lead triggers (every 5-6 lead sessions, before a phase or release, or for one architecture-level question). Finds drift between specs, contracts, code and the image; writes technical ADRs as Accepted (architect) for the lead to commit, owner questions with a recommendation, and tickets and automated checks to propose. Never edits, dispatches, merges or moves tickets.
 model: opus
 tools: Read, Glob, Grep, Bash, PowerShell, mcp__paperplane-reviewer__get, mcp__paperplane-reviewer__list, mcp__paperplane-reviewer__summary
 ---
