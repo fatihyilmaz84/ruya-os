@@ -62,7 +62,10 @@ try {
     if (-not $rust) { $qmlLogs | ForEach-Object { Remove-Item -LiteralPath $_ -ErrorAction SilentlyContinue } }
     if ($Runner) {
         Write-Host "== mutated ${File}; running the stand-in runner =="
+        # A stand-in reports its own exit code by setting $global:LASTEXITCODE (like a child dev.ps1 would).
+        $global:LASTEXITCODE = 0
         $out = (& $Runner *>&1 | Out-String -Width 4096)
+        $childExit = $global:LASTEXITCODE
         $logs = $qmlLogs
         # A stand-in for docs / vmchecks mode reports failure the way dev.ps1 does ("FAILED: ...").
         if ($cmdMode) { $childExit = if ($out -match '(?m)^\s*FAILED:') { 1 } else { 0 } }
@@ -93,6 +96,7 @@ try {
     } else {
         Write-Host "== mutated ${File}; building and testing (dev.ps1 shell) =="
         $out = & (Join-Path $PSScriptRoot "dev.ps1") shell *>&1 | Out-String -Width 4096
+        $childExit = $LASTEXITCODE
         $logs = @(Join-Path $Repo "shell\build-win\ruya-qmltest.txt")
     }
     $failed = @()
@@ -114,8 +118,10 @@ try {
     }
     $failed = @($failed | Sort-Object -Unique)
     if ($cmdMode -and $childExit -ne 0) { $failed = @("($Mode mode: exit code $childExit)") }
-    # `dev.ps1 qml` exits 1 when a test file failed: a failure whose log line was lost is still a failure.
-    if ($failed.Count -eq 0 -and $childExit -eq 1 -and $out -match 'PARTIAL' -and $out -notmatch 'FAILED: cmake|no such test file') { $failed = @("(dev.ps1 qml exit code 1)") }
+    # The child dev.ps1 exits non-zero when anything failed, also a Record-style self-check that leaves no
+    # test log line (RUY-659): a failure whose log line was lost is still a failure. A build break or a bad
+    # -Test name is judged below, before the failures.
+    if (-not $cmdMode -and -not $rust -and $failed.Count -eq 0 -and $null -ne $childExit -and $childExit -ne 0) { $failed = @("(dev.ps1 exit code $childExit)") }
     ($out -split "`n") | Where-Object { $_ -match 'FAIL|no such test file|PARTIAL|ok: cmake|could not compile' } | ForEach-Object { Write-Host "    $($_.TrimEnd())" }
     $buildBroke = (-not $cmdMode) -and (($out -match 'FAILED: cmake') -or ($rust -and $out -match 'could not compile'))
     if (-not $rust -and -not $cmdMode) { $badName = ($out -match 'no such test file') }

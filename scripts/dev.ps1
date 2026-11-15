@@ -343,6 +343,20 @@ function Test-RevertCheckPiping {
             if (-not $good) { $ok = $false; Write-Host "    piped=$piped caught=$($case.Caught): exit $code, output:`n$text" -ForegroundColor Yellow }
         }
     }
+    # RUY-659: default mode also takes the child's exit code: a stand-in that exits non-zero with no failing
+    # log line is CAUGHT (a Record-style self-check failure), one that exits 0 with none is NOT CAUGHT.
+    $exitRunner = { if ((Get-Content -Raw -LiteralPath $target) -match 'value=bad') { $global:LASTEXITCODE = 3; "FAILED: fixture self-check" } else { $global:LASTEXITCODE = 0; "ALL GREEN" } }.GetNewClosure()
+    foreach ($case in @(@{ New = "value=bad"; Caught = $true }, @{ New = "value=good"; Caught = $false })) {
+        foreach ($piped in @($false, $true)) {
+            if ($piped) { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Runner $exitRunner -Test tst_fixture -LogDir $fx *>&1 | Select-Object -Last 3 | Out-String -Stream) }
+            else { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Runner $exitRunner -Test tst_fixture -LogDir $fx *>&1 | Out-String -Stream) }
+            $code = $LASTEXITCODE
+            $text = $lines -join "`n"
+            $said = if ($case.Caught) { $text -match '(?m)^CAUGHT' } else { $text -match 'NOT CAUGHT' }
+            $good = ($code -eq $(if ($case.Caught) { 0 } else { 1 })) -and $said -and ((Get-Content -Raw -LiteralPath $target) -eq "value=good`n")
+            if (-not $good) { $ok = $false; Write-Host "    exit-code piped=$piped caught=$($case.Caught): exit $code, output:`n$text" -ForegroundColor Yellow }
+        }
+    }
     # RUY-657: -Mode docs / vmchecks take the verdict from the child's failure ("FAILED: ..." from the stand-in).
     $docsRunner = { if ((Get-Content -Raw -LiteralPath $target) -match 'value=bad') { "    FAILED: fixture lint"; "FAILED: fixture lint" } else { "ALL GREEN (docs)" } }.GetNewClosure()
     foreach ($mode in @("docs", "vmchecks")) {
