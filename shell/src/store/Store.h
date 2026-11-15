@@ -119,6 +119,8 @@ public:
     // `count` more apps in the mock's catalogue (a real remote's size), announced as changed; mockReset
     // takes them away again (T-377).
     Q_INVOKABLE void mockAddApps(int count);
+    // The mock console's API level (0 until mockReset); org.example.Future needs 1 (RUY-636).
+    Q_INVOKABLE void mockSetApiLevel(int level);
     // Every later search answers after ms, until mockReset (T-377: the Store page before the
     // service's answer to its filter).
     Q_INVOKABLE void mockSearchReplyDelay(int ms);

@@ -90,7 +90,8 @@ Item {
             openStore()
             // Hidden by default: the three apps without controller support.
             compare(Store.controllerFilter, "gamepad")
-            tryCompare(Store.results, "length", 9)
+            // (Next Gen Studio has controller support and counts here, RUY-636.)
+            tryCompare(Store.results, "length", 10)
             // Browser belongs to "Apps & media", below the fold: its cards wait for the row to show
             // (T-377), so the row's ids say whether it is listed.
             const apps = find("storeRow_apps")
@@ -570,6 +571,32 @@ Item {
             tryVerify(() => Store.results.some(a => a.id === id), 2000, "the search itself finds it")
             compare(Store.rowIds(false).all.indexOf(id), -1, "the results grid does not list it")
             compare(find("appCard_" + id), null)
+        }
+
+        // RUY-636: the mock models the level: raised to the app's minimum, it is listed and installable.
+        function test_raising_the_level_lists_the_app_and_enables_install() {
+            const id = "org.example.Future"
+            compare(Store.app(id).compatible, false)
+            openStore()
+            compare(find("storeRow_featured").ids.indexOf(id), -1, "hidden at level 0")
+            Store.mockSetApiLevel(1)
+            tryVerify(() => Store.app(id).compatible === true, 2000)
+            tryVerify(() => find("storeRow_featured").ids.indexOf(id) >= 0, 2000, "listed in Featured")
+            tryVerify(() => find("storeRow_games").ids.indexOf(id) >= 0, 2000, "listed in Games")
+            tc.shell.openPage("appDetail", { appId: id })
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryCompare(find("page_appDetail"), "detailsReady", true)
+            compare(find("detailCompat").visible, false)
+            compare(find("detailPrimary").active, true, "Install is on")
+        }
+
+        function test_installed_incompatible_app_stays_in_the_installed_row() {
+            const id = "org.example.Future"
+            Store.install(id)
+            tryVerify(() => Store.app(id).installed === true, 10000)
+            openStore()
+            tryVerify(() => find("storeRow_installed").ids.indexOf(id) >= 0, 2000, "still in Installed")
+            compare(find("storeRow_featured").ids.indexOf(id), -1, "but not in Featured")
         }
 
         function test_incompatible_app_page_cannot_install() {

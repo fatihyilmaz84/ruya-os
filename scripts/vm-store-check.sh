@@ -253,6 +253,8 @@ check)
     n=0
     until grep -a -q "store-probe: jobsChanged {\"$app\"" "$work/probe2.log" || [ "$n" -ge 120 ]; do sleep 0.2; n=$((n + 1)); done
     grep -a -q "store-probe: install requested $app" "$work/probe2.log" && ok "the shell's Store requested the install" || bad "the probe never requested the install"
+    # RUY-156: the shell's Store, over D-Bus, sees the test app (minimum level 99) as incompatible.
+    grep -a -q "store-probe: compatible $app false" "$work/probe2.log" && ok "the shell's Store reads compatible=false over D-Bus" || bad "the shell's Store did not read compatible=false"
     if grep -a -q "store-probe: jobsChanged {\"$app\"" "$work/probe2.log"; then
         ok "the job is in the shell's Store.jobs"
     else

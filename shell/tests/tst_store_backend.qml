@@ -86,7 +86,7 @@ Item {
         function test_controller_filter() {
             compare(Store.controllerFilter, "any")
             Store.controllerFilter = "gamepad"
-            tryVerify(() => Store.results.length === 9 && Store.results.every(a => a.controller !== "none"))
+            tryVerify(() => Store.results.length === 10 && Store.results.every(a => a.controller !== "none"))
             compare(Store.catalogue.length, 13, "the catalogue stays whole")
             Store.search("editor")
             tryVerify(() => Store.results.length === 0)

@@ -30,6 +30,7 @@ struct AppInfo
     bool installed = false;
     bool updateAvailable = false;
     bool compatible = true; // false: needs a newer API level than this console has (hidden from lists)
+    int minApiLevel = 0; // mock only: what the app asks for; compatible is computed from it
 
     // The record as QML sees it (camelCase keys).
     QVariantMap toVariant() const
