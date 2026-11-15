@@ -1691,7 +1691,7 @@ FocusScope {
         objectName: "profilePicker"
         anchors.fill: parent
         u: root.u
-        z: 20                              // modal: above the toasts
+        z: 20                              // modal layer; toasts draw above it (z 29, RUY-691)
         readonly property bool shown: !root.signedIn && !root.setupActive
         opacity: shown ? 1 : 0
         visible: shown || opacity > 0      // visible at once, so focus can be given in the same step
