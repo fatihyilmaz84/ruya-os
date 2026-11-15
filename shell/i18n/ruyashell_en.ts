@@ -2635,22 +2635,7 @@ This can&apos;t be undone.</translation>
         <translation>Profile name</translation>
     </message>
     <message>
-        <location line="+8"/>
-        <source>Role</source>
-        <translation>Role</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Standard</source>
-        <translation>Standard</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Guest</source>
-        <translation>Guest</translation>
-    </message>
-    <message>
-        <location line="+14"/>
+        <location line="+25"/>
         <source>Protect with a PIN</source>
         <translation>Protect with a PIN</translation>
     </message>
