@@ -2,9 +2,10 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import RuyaShell
 
-// What the two profile panes share (T-315): Settings -> My profile (MyProfilePane) and
-// Settings -> Manage profiles (ManageProfilesPane). It holds the signed-in profile
-// (`me`, `isAdmin`), the full-screen PIN pad, name keyboard and delete confirmation those panes
+// What the profile panes share (T-315): Settings -> My profile (MyProfilePane), Settings -> Manage
+// profiles (ManageProfilesPane) and a managed profile's page (ManagedProfilePage, RUY-715). It
+// holds the signed-in profile (`me`, `isAdmin`), the full-screen PIN pad, name keyboard and
+// delete confirmation those panes
 // open, the rename/delete flow behind them, the one-line result message, and how focus returns
 // to the row a modal came from. The panes only declare their rows (and a Text for `message`
 // as their last child); each reacts to manageFlow.finished.
@@ -74,6 +75,13 @@ SettingsPane {
         report("", false)
         beginModal()
         flow.startRename(Profiles.activeProfile, me.hasPin ?? false, id, name)
+    }
+
+    // The deletion of another profile (an admin's, from its page in ManagedProfilePage).
+    function startDelete(id, name) {
+        report("", false)
+        beginModal()
+        flow.startDelete(Profiles.activeProfile, me.hasPin ?? false, id, name)
     }
 
     // Each modal sits in a Loader on the overlay, which sizes it (T-349, shell/PATTERNS.md).

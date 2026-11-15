@@ -2570,12 +2570,12 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ManageProfilesPane</name>
     <message>
-        <location filename="../qml/ManageProfilesPane.qml" line="+43"/>
+        <location filename="../qml/ManageProfilesPane.qml" line="+162"/>
         <source>Your own profile is under My profile.</source>
         <translation>Kendi profiliniz Profilim bölümünde.</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="-64"/>
         <source>Enter a name first.</source>
         <translation>Önce bir ad girin.</translation>
     </message>
@@ -2590,27 +2590,12 @@ Bu geri alınamaz.</translation>
         <translation>“%1” profili oluşturuldu</translation>
     </message>
     <message>
-        <location line="+16"/>
-        <source>Profile renamed.</source>
-        <translation>Profil yeniden adlandırıldı.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Profile renamed</source>
-        <translation>Profil yeniden adlandırıldı</translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="-56"/>
         <source>Profile “%1” deleted.</source>
         <translation>“%1” profili silindi.</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Profile “%1” deleted</source>
-        <translation>“%1” profili silindi</translation>
-    </message>
-    <message>
-        <location line="+25"/>
+        <location line="+86"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
@@ -2618,16 +2603,6 @@ Bu geri alınamaz.</translation>
         <location line="+1"/>
         <source>You</source>
         <translation>Siz</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Rename %1</source>
-        <translation>%1 profilini yeniden adlandır</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Delete %1</source>
-        <translation>%1 profilini sil</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -2678,6 +2653,39 @@ Bu geri alınamaz.</translation>
         <location line="+11"/>
         <source>Create profile</source>
         <translation>Profil oluştur</translation>
+    </message>
+</context>
+<context>
+    <name>ManagedProfilePage</name>
+    <message>
+        <location filename="../qml/ManagedProfilePage.qml" line="+82"/>
+        <source>Profile renamed.</source>
+        <translation>Profil yeniden adlandırıldı.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Profile renamed</source>
+        <translation>Profil yeniden adlandırıldı</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Profile “%1” deleted</source>
+        <translation>“%1” profili silindi</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Rename %1</source>
+        <translation>%1 profilini yeniden adlandır</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Delete %1</source>
+        <translation>%1 profilini sil</translation>
     </message>
 </context>
 <context>
@@ -3720,7 +3728,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ProfilePaneBase</name>
     <message>
-        <location filename="../qml/ProfilePaneBase.qml" line="+39"/>
+        <location filename="../qml/ProfilePaneBase.qml" line="+40"/>
         <source>Admin</source>
         <translation>Yönetici</translation>
     </message>
@@ -4268,7 +4276,7 @@ Bu geri alınamaz.</translation>
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+13"/>
-        <location line="+122"/>
+        <location line="+123"/>
         <source>Settings</source>
         <translation>Ayarlar</translation>
     </message>
@@ -4348,7 +4356,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+305"/>
+        <location line="+306"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -4621,7 +4629,7 @@ Bu geri alınamaz.</translation>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
     <message>
-        <location line="+62"/>
+        <location line="+63"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
@@ -4710,7 +4718,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kaldırıldı.</translation>
     </message>
     <message>
-        <location line="+529"/>
+        <location line="+530"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -4732,7 +4740,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1843"/>
+        <location line="-1845"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -4763,7 +4771,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1591"/>
+        <location line="+1593"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>

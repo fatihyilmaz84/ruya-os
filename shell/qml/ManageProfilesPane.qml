@@ -2,17 +2,21 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import RuyaShell
 
-// Settings -> Manage profiles (T-315, admins only): who exists, Rename / Delete another
-// profile, Add profile. Everything goes through org.ruyaos.Profiles1 (Profiles.createProfile /
-// renameProfile / deleteProfile). Your own name and PIN are in MyProfilePane.qml; the shared
-// parts (PIN pad, rename/delete flow, focus return) in ProfilePaneBase.qml.
+// Settings -> Manage profiles (T-315, admins only): who exists, a page for each other profile with
+// Rename / Delete (RUY-715), Add profile. Everything goes through org.ruyaos.Profiles1
+// (Profiles.createProfile / renameProfile / deleteProfile). Your own name and PIN are in
+// MyProfilePane.qml; the shared parts (PIN pad, rename/delete flow, focus return) in ProfilePaneBase.qml.
+//
+// Accept on another profile's row (a page row) opens its page, ManagedProfilePage (profileRequested);
+// Back there returns to this row. Accept on your own row opens nothing: it says it is under My profile.
+// A profile deleted on its page is gone from the list: the focus goes to the row at its place.
 //
 // Adding: "Add profile" opens an inline form (name via the on-screen keyboard, role, PIN
 // yes/no); "Create profile" then collects the new PIN twice (standard profiles with a PIN),
 // the admin's own PIN, and calls createProfile. See ProfileAddFlow.qml.
 //
 // Where later work lands: a profile's role (T-211) and parental controls (T-212) are set with
-// further rows beside Rename / Delete, shown for the selected profile.
+// further rows on the profile's page, beside Rename / Delete.
 ProfilePaneBase {
     id: pane
 
@@ -23,60 +27,63 @@ ProfilePaneBase {
     property string newRole: "standard"
     property bool newUsePin: false
 
-    // The profile whose actions (Rename, Delete) are showing, and what to focus once the
-    // list has caught up with a finished rename/delete.
-    property string selectedId: ""
-    property var pendingFocus: null
-    property int deletedIndex: 0       // list position of the profile being deleted
-    readonly property var selected: Profiles.profiles.find(p => p.id === selectedId)
-    readonly property int adminCount: Profiles.profiles.filter(p => p.role === "admin").length
-    // Your own profile is changed under My profile, so only another one is renamed or deleted here.
-    readonly property bool other: selected !== undefined && selectedId !== Profiles.activeProfile
-    // A kept guest-role profile is renamed and deleted like any other (03 §1); temporary guests
-    // are not in Profiles.profiles, so they never reach this pane.
-    readonly property bool canRename: other && isAdmin
-    readonly property bool canDelete: other && isAdmin
-                                      && !(selected.role === "admin" && adminCount <= 1)
+    // A profile row was accepted: the Settings page opens that profile's page (ManagedProfilePage).
+    signal profileRequested(string id)
 
-    function selectProfile(id) {
-        selectedId = id
-        report(id === Profiles.activeProfile ? qsTr("Your own profile is under My profile.") : "", false)
-        Qt.callLater(() => {
-            const next = canRename ? renameRow : canDelete ? deleteRow : null
-            if (next)
-                next.forceActiveFocus()
-            ensureFocusedVisible()
-        })
-    }
+    // The profile whose page was opened last: kept up to date while it exists, so that when it is gone
+    // (deleted on its page) the focus lands on the row now at its place.
+    property string openedId: ""
+    property string openedName: ""
+    property int openedIndex: 0
+    // The profile's page is open over Settings (until this pane has the focus again).
+    property bool covered: false
+    onActiveFocusChanged: if (activeFocus) covered = false
 
-    function startDelete() {
+    function openProfile(profile) {
         report("", false)
-        deletedIndex = Profiles.profiles.findIndex(p => p.id === selectedId)
-        beginModal()
-        manageFlow.startDelete(Profiles.activeProfile, me.hasPin ?? false, selectedId, selected.name)
+        covered = true
+        openedId = profile.id
+        openedName = profile.name
+        openedIndex = Profiles.profiles.findIndex(p => p.id === profile.id)
+        profileRequested(profile.id)
     }
 
-    // Applies pendingFocus once the profile list shows the outcome (the reply and the new
-    // list may arrive in either order).
+    // A profile's row, also while Settings is covered by a page (then the rows read as hidden and disabled,
+    // so focusableRows() has none).
+    function rowFor(id) {
+        for (let i = 0; i < rows.length; ++i) {
+            if (rows[i].objectName === "profileRow_" + id)
+                return rows[i]
+        }
+        return null
+    }
+
+    // The opened profile is gone: say so, and focus the row at its place (the one before it at the end of
+    // the list, Add profile when none is left). The pane is covered by the page while this runs, or has
+    // just got the focus back: only its own focus item moves while covered (T-356).
     function runPendingFocus() {
-        const want = pendingFocus
-        if (!want)
+        if (openedId === "")
             return
         const list = Profiles.profiles
-        const rows = focusableRows()
-        let target = null
-        if (want.kind === "rename") {
-            if (list.find(p => p.id === want.id)?.name !== want.name)
-                return
-            target = rows.find(r => r.objectName === "profileRow_" + want.id)
-        } else {
-            if (list.some(p => p.id === want.id))
-                return
-            const next = list[Math.min(want.index, list.length - 1)]
-            target = rows.find(r => r.objectName === "profileRow_" + next?.id)
+        const at = list.findIndex(p => p.id === openedId)
+        if (at >= 0) {
+            openedIndex = at
+            openedName = list[at].name
+            // The list is rebuilt on every change (a rename): the page below keeps its focus on the
+            // new row of the profile, not on one that is gone.
+            const row = covered ? rowFor(openedId) : null
+            if (row)
+                row.focus = true
+            return
         }
-        pendingFocus = null;
-        (target ?? addRow).forceActiveFocus()
+        const next = list[Math.min(openedIndex, list.length - 1)]
+        const target = (next ? rowFor(next.id) : null) ?? addRow
+        report(qsTr("Profile “%1” deleted.").arg(openedName), false)
+        openedId = ""
+        if (pane.activeFocus)
+            target.forceActiveFocus()
+        else
+            target.focus = true
         ensureFocusedVisible()
     }
 
@@ -137,29 +144,6 @@ ProfilePaneBase {
         }
     }
 
-    Connections {
-        target: pane.manageFlow
-        function onFinished(kind, id, status, attemptsLeft, retryAfterSecs) {
-            if (status === "ok") {
-                if (kind === "rename") {
-                    pane.pendingFocus = { kind: "rename", id: id, name: pane.manageFlow.newName.trim() }
-                    pane.report(qsTr("Profile renamed."), false)
-                    Notifications.show(qsTr("Profile renamed"), "success")
-                } else {
-                    pane.pendingFocus = { kind: "delete", id: id, index: pane.deletedIndex }
-                    pane.selectedId = ""
-                    pane.report(qsTr("Profile “%1” deleted.").arg(pane.manageFlow.targetName), false)
-                    Notifications.show(qsTr("Profile “%1” deleted").arg(pane.manageFlow.targetName), "success")
-                }
-                Qt.callLater(pane.runPendingFocus)
-            } else {
-                Sfx.back()
-                pane.report(pane.describe(status, attemptsLeft, retryAfterSecs), true)
-                pane.restoreFocus()
-            }
-        }
-    }
-
     // The profiles that exist.
     Repeater {
         model: Profiles.profiles
@@ -168,34 +152,21 @@ ProfilePaneBase {
             id: profileRow
             required property var modelData
             objectName: "profileRow_" + modelData.id
-            kind: "item"
+            // Another profile opens its page; your own is under My profile (so this row opens nothing).
+            kind: modelData.id === Profiles.activeProfile ? "item" : "page"
             u: pane.u
             swatch: modelData.avatar
             label: modelData.name
-            onActivated: pane.selectProfile(modelData.id)
+            onActivated: {
+                if (modelData.id === Profiles.activeProfile)
+                    pane.report(qsTr("Your own profile is under My profile."), false)
+                else
+                    pane.openProfile(modelData)
+            }
             value: pane.roleText(modelData.role)
                    + (modelData.hasPin ? " · " + qsTr("PIN") : "")
                    + (modelData.id === Profiles.activeProfile ? " · " + qsTr("You") : "")
         }
-    }
-
-    SettingRow {
-        id: renameRow
-        objectName: "rowRename"
-        kind: "action"
-        u: pane.u
-        visible: pane.canRename
-        label: qsTr("Rename %1").arg(pane.selected?.name ?? "")
-        onActivated: pane.startRename(pane.selectedId, pane.selected.name)
-    }
-    SettingRow {
-        id: deleteRow
-        objectName: "rowDelete"
-        kind: "action"
-        u: pane.u
-        visible: pane.canDelete
-        label: qsTr("Delete %1").arg(pane.selected?.name ?? "")
-        onActivated: pane.startDelete()
     }
 
     SettingRow {

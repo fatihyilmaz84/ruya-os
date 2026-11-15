@@ -33,7 +33,8 @@ Page {
     // (gone now) leave its pane: focus goes to the category list, which shows My profile.
     function refreshCategories() {
         const key = current.key
-        const hadPaneFocus = currentPane !== null && currentPane.activeFocus
+        // `focus`, not `activeFocus`: also while a page opened from the pane covers Settings (RUY-715).
+        const hadPaneFocus = currentPane !== null && currentPane.focus
         refreshing = true
         categories = buildCategories(showManage)
         categoryList.currentIndex = Math.max(0, categories.findIndex(c => c.key === key))
@@ -240,6 +241,7 @@ Page {
                     u: page.u
                     overlay: page.overlay
                     onExitRequested: page.leavePane()
+                    onProfileRequested: id => page.openRequested("managedProfile", ({ id: id }))
                 }
             }
         }
