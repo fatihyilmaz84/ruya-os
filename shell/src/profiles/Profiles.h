@@ -37,6 +37,9 @@ public:
     bool isAvailable() const { return m_available; }
     bool isMock() const { return m_backend->isMock(); }
 
+    // A profile's name by id; empty for an unknown id and for a temporary guest (their "Guest n" is
+    // drawn by the QML, which translates it; RUY-631).
+    Q_INVOKABLE QString nameOf(const QString &id) const;
     Q_INVOKABLE void refresh();
     Q_INVOKABLE void switchTo(const QString &id, const QString &pin = {});
     Q_INVOKABLE void lock();

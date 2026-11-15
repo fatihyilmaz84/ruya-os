@@ -806,6 +806,58 @@ Item {
                     }
                 }
 
+                // The players row (RUY-629, 04 §5 "Quick menu"): while two or more play, each a chip with its
+                // number and the name beside it; wraps to a second line `spaceS` below when they do not fit.
+                // Never focusable, no focus stop.
+                Item {
+                    id: playersRow
+                    objectName: "hubPlayers"
+                    readonly property var seated: Input.players.slice().sort((a, b) => a.slot - b.slot)
+                    visible: seated.length >= 2
+                    width: parent.width
+                    // The Flow's gap is `spaceM` both ways: its items are `spaceM - spaceS` short, so the lines are
+                    // `spaceS` apart, and the row gives that back below.
+                    readonly property real lineTrim: (Theme.spaceM - Theme.spaceS) * menu.u
+                    height: visible ? flow.childrenRect.height + lineTrim : 0
+                    Flow {
+                        id: flow
+                        width: parent.width
+                        spacing: Theme.spaceM * menu.u
+                        Repeater {
+                            model: playersRow.seated
+                            Item {
+                                id: entry
+                                required property var modelData
+                                objectName: "hubPlayer_" + modelData.slot
+                                width: entryChip.width + Theme.spaceS * menu.u + entryName.width
+                                height: entryChip.height - playersRow.lineTrim
+                                Accessible.role: Accessible.StaticText
+                                Accessible.name: entryChip.Accessible.name
+                                PlayerChip {
+                                    id: entryChip
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    u: menu.u
+                                    profileId: entry.modelData.profile
+                                    slot: entry.modelData.slot
+                                    showNumber: true
+                                }
+                                Text {
+                                    id: entryName
+                                    objectName: "hubPlayerName"
+                                    x: entryChip.width + Theme.spaceS * menu.u
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    textFormat: Text.PlainText
+                                    text: entryChip.displayName
+                                    width: Math.min(implicitWidth, 110 * menu.u)
+                                    elide: Text.ElideRight
+                                    color: Theme.text
+                                    font.pixelSize: Theme.typeCaption * menu.u
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // A panel's title row (T-450; the power choices' too): not focusable, under the status row.
                 Item {
                     id: panelTitleText
@@ -835,6 +887,7 @@ Item {
                     width: parent.width
                     // The room under the status row and the title (gaps of the column).
                     readonly property real room: panel.room - 2 * panel.pad - status.height
+                                                 - (playersRow.visible ? playersRow.height + Theme.spaceM * menu.u : 0)
                                                  - (panelTitleText.visible ? panelTitleText.height + Theme.spaceM * menu.u : 0) - Theme.spaceM * menu.u
                     height: Math.min(actions.contentHeight, room)
                     // Changing from the Hub to a panel and back: the rows fade in and slide by `pageSlide`

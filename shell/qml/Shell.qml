@@ -1394,8 +1394,15 @@ FocusScope {
         }
         readonly property real nameFull: profileName.implicitWidth
         readonly property real nameMin: Math.min(nameFull, probeName.implicitWidth)
-        // Avatar, its gap to the name, the clock and the gap between profile and clock.
+        // The seated players in seat order (Input.players, RUY-121); player 1's chip stands for the active
+        // profile, the other players follow the name, at most three (four seats). RUY-629.
+        readonly property var seated: Input.players.slice().sort((a, b) => a.slot - b.slot)
+        readonly property var otherPlayers: seated.filter(p => p.slot !== 1).slice(0, 3)
+        readonly property bool manyPlayers: seated.length >= 2
+        // Avatar, its gap to the name, the clock and the gap between profile and clock, and each further
+        // player's chip with its gap (the battery chips give way first).
         readonly property real fixedWidth: (Theme.statusAvatarSize + Theme.spaceS + Theme.spaceM) * root.u + clock.implicitWidth
+                                           + otherPlayers.length * (Theme.statusAvatarSize + Theme.spaceS) * root.u
         // How many chips fit, and whether the "N more" chip has to drop its words to fit (T-301).
         readonly property var fit: fitChips()
         readonly property int chipCount: fit.chips
@@ -1548,18 +1555,13 @@ FocusScope {
             Row {
                 spacing: Theme.spaceS * root.u
                 anchors.verticalCenter: parent.verticalCenter
-                Rectangle {
-                    width: Theme.statusAvatarSize * root.u
-                    height: width
-                    radius: width / 2
-                    color: Profiles.active.avatar ?? Theme.glass
-                    Text {
-                        anchors.centerIn: parent
-                        textFormat: Text.PlainText
-                        text: (Profiles.active.name ?? "?").charAt(0).toUpperCase()
-                        color: Theme.text
-                        font.pixelSize: Theme.typeCaption * root.u
-                    }
+                PlayerChip {
+                    objectName: "playerChip_1"
+                    anchors.verticalCenter: parent.verticalCenter
+                    u: root.u
+                    profileId: Profiles.activeProfile
+                    slot: 1
+                    showNumber: statusGlass.manyPlayers
                 }
                 Text {
                     id: profileName
@@ -1571,6 +1573,17 @@ FocusScope {
                     elide: Text.ElideRight
                     color: Theme.text
                     font.pixelSize: Theme.typeBody * root.u
+                }
+                Repeater {
+                    model: statusGlass.otherPlayers
+                    PlayerChip {
+                        required property var modelData
+                        objectName: "playerChip_" + modelData.slot
+                        u: root.u
+                        profileId: modelData.profile
+                        slot: modelData.slot
+                        showNumber: statusGlass.manyPlayers
+                    }
                 }
             }
             Text {
