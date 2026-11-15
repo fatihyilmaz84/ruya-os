@@ -54,6 +54,7 @@ guests)
     admin="${ADMIN_ID:-p1}"
     admin_pin="${ADMIN_PIN:-1234}"
     homes="${RUYA_HOME_ROOT:-/var/home}"
+    etc="${RUYA_ETC_ROOT:-/etc}"
     fails=0
     pass() { echo "PASS: $*"; }
     fail() { echo "FAIL: $*"; fails=$((fails + 1)); }
@@ -119,6 +120,12 @@ except Exception: print("?")' | tr -d '\r'
         if [ -n "$uid" ] && [ "$gid" = "$uid" ]; then pass "ruya-$id: gid $gid equals its uid"; else fail "ruya-$id: gid '$gid' is not its uid '$uid'"; fi
         if [ -n "$uid" ] && [ "$uid" -gt "$max" ]; then max="$uid"; fi
         if [ -d "$homes/ruya-$id" ]; then pass "$homes/ruya-$id exists"; else fail "no $homes/ruya-$id"; fi
+        # RUY-652: useradd -K SUB_UID_COUNT=0 -K SUB_GID_COUNT=0 leaves no subordinate id range
+        if grep -qs "^ruya-$id:" "$etc/subuid" "$etc/subgid"; then
+            fail "ruya-$id has a line in $etc/subuid or $etc/subgid"
+        else
+            pass "ruya-$id: no $etc/subuid or $etc/subgid line"
+        fi
     done
 
     listed=" $(call ListProfiles | first_fields | tr '\n' ' ') "

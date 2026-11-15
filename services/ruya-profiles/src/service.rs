@@ -530,6 +530,12 @@ pub fn lock_line() -> &'static str {
     "ruya-profiles: Lock -> ok"
 }
 
+/// Whether `CreateGuest` changed the guest list the shell shows: on `ok`, and also when a failed
+/// `useradd` and its failed cleanup left the half-made guest recorded and listed.
+pub fn create_guest_changed(status: Status, before: &[String], after: &[String]) -> bool {
+    status == Status::Ok || before != after
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1282,8 +1288,14 @@ mod tests {
         // useradd fails and the cleanup fails too: as after a crash, only the record is left.
         *accounts.fail_create.lock().unwrap() = true;
         *accounts.fail_remove_guest.lock().unwrap() = true;
+        let before: Vec<String> = svc.guests().iter().map(|g| g.id.clone()).collect();
         assert_eq!(svc.create_guest(), GuestOutcome::of(Status::Failed));
         assert_eq!(*accounts.recorded_at_create.lock().unwrap(), [true]);
+        // RUY-652: the guest stays listed, so the D-Bus adapter must signal the change.
+        let after: Vec<String> = svc.guests().iter().map(|g| g.id.clone()).collect();
+        assert_eq!(after.len(), 1, "the half-made guest is listed");
+        assert!(create_guest_changed(Status::Failed, &before, &after));
+        assert!(!create_guest_changed(Status::Failed, &before, &before));
         drop(svc);
         let store = Store::open(dir.path().join("profiles.toml")).unwrap();
         assert_eq!(store.guests().len(), 1, "the record survived the failure");
