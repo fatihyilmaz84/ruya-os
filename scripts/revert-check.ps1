@@ -20,7 +20,8 @@ param(
     [string[]]$Test = @(),
     # Self-check only (dev.ps1): a script block that stands in for the build and test run and returns its
     # console text, with "FAIL!  : name" lines for failed tests. Nothing is rebuilt afterwards.
-    [scriptblock]$Runner
+    [scriptblock]$Runner,
+    [string]$LogDir   # self-check only: where the ruya-qmltest-<name>.txt logs live (default shell\build-win)
 )
 # The verdict is the exit code of this script (0 CAUGHT, 1 NOT CAUGHT, 2 unusable) and the CAUGHT / NOT CAUGHT
 # line; both come from the test logs and the child's own exit code read inside this script, never from console
@@ -48,10 +49,15 @@ try {
     $mutated = $text.Substring(0, $at) + $New + $text.Substring($at + $Old.Length)
     [IO.File]::WriteAllText($Path, $mutated, (New-Object Text.UTF8Encoding($false)))
     $childExit = $null
+    # Only the logs of the -Test names, and only ones this run wrote: the old ones are deleted first (a stale
+    # failing log from an earlier run made a test that cannot fail look caught).
+    if (-not $LogDir) { $LogDir = Join-Path $Repo "shell\build-win" }
+    $qmlLogs = @($Test | ForEach-Object { Join-Path $LogDir ("ruya-qmltest-" + [IO.Path]::GetFileNameWithoutExtension($_) + ".txt") })
+    if (-not $rust) { $qmlLogs | ForEach-Object { Remove-Item -LiteralPath $_ -ErrorAction SilentlyContinue } }
     if ($Runner) {
         Write-Host "== mutated ${File}; running the stand-in runner =="
         $out = (& $Runner *>&1 | Out-String -Width 4096)
-        $logs = @()
+        $logs = $qmlLogs
     } elseif ($rust) {
         Write-Host "== mutated ${File}; cargo test -p $crate $($Test -join ' ') =="
         Push-Location (Join-Path $Repo "services")
@@ -65,7 +71,7 @@ try {
         # *>&1: dev.ps1 reports with Write-Host (the information stream), which 2>&1 does not capture.
         $out = & (Join-Path $PSScriptRoot "dev.ps1") qml @Test *>&1 | Out-String -Width 4096
         $childExit = $LASTEXITCODE
-        $logs = @(Get-ChildItem (Join-Path $Repo "shell\build-win") -Filter "ruya-qmltest-*.txt" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+        $logs = $qmlLogs
     } else {
         Write-Host "== mutated ${File}; building and testing (dev.ps1 shell) =="
         $out = & (Join-Path $PSScriptRoot "dev.ps1") shell *>&1 | Out-String -Width 4096

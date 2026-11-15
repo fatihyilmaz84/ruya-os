@@ -329,10 +329,13 @@ function Test-RevertCheckPiping {
     $runner = { if ((Get-Content -Raw -LiteralPath $target) -match 'value=bad') { "FAIL!  : tst_fixture::test_value()"; "Totals: 0 passed, 1 failed" } else { "Totals: 1 passed, 0 failed" } }.GetNewClosure()
     $script = Join-Path $PSScriptRoot "revert-check.ps1"
     $ok = $true
-    foreach ($case in @(@{ New = "value=bad"; Caught = $true }, @{ New = "value=good"; Caught = $false })) {
+    $staleLog = Join-Path $fx "ruya-qmltest-tst_fixture.txt"
+    # The third case: a failing log left by an earlier run must not make a no-op mutation look caught.
+    foreach ($case in @(@{ New = "value=bad"; Caught = $true }, @{ New = "value=good"; Caught = $false }, @{ New = "value=good"; Caught = $false; Stale = $true })) {
         foreach ($piped in @($false, $true)) {
-            if ($piped) { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Runner $runner *>&1 | Select-Object -Last 3 | Out-String -Stream) }
-            else { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Runner $runner *>&1 | Out-String -Stream) }
+            if ($case.Stale) { Set-Content -LiteralPath $staleLog -Value "FAIL!  : tst_fixture::test_old()" }
+            if ($piped) { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Runner $runner -Test tst_fixture -LogDir $fx *>&1 | Select-Object -Last 3 | Out-String -Stream) }
+            else { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Runner $runner -Test tst_fixture -LogDir $fx *>&1 | Out-String -Stream) }
             $code = $LASTEXITCODE
             $text = $lines -join "`n"
             $said = if ($case.Caught) { $text -match '(?m)^CAUGHT' } else { $text -match 'NOT CAUGHT' }
