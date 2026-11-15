@@ -37,6 +37,10 @@ QtObject {
     // Profiles.activeProfile: only its apps can be thawed (Session1 refuses the others).
     property string profile: ""
 
+    // The Hub closed over a game this object froze and its Thaw goes out (Resume, B, Guide; the sweep's
+    // Thaws are not this): the shell times it (HubProbe, RUY-405).
+    signal resuming(string instance)
+
     property var asked: []
     property var thawing: []
     // The Freezes on their way (the Hub's and the belt's, below); an instance leaves it with the answer.
@@ -56,8 +60,10 @@ QtObject {
 
     // Thaws `instance` if it was frozen here.
     function release(instance) {
-        if (instance !== "" && asked.includes(instance))
+        if (instance !== "" && asked.includes(instance)) {
+            resuming(instance)
             thaw(instance)
+        }
     }
 
     // The app in front, with the Hub closed, runs: thaw it if it was frozen here.

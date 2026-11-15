@@ -119,7 +119,7 @@ qt_add_qml_module(ruyashell
         src/input/MockInputBackend.h src/input/MockInputBackend.cpp
         src/input/DBusInputBackend.h src/input/DBusInputBackend.cpp
         src/input/Input.h src/input/Input.cpp
-        src/probe/PageProbe.h src/probe/PageProbe.cpp
+        src/probe/PageProbe.h src/probe/PageProbe.cpp src/probe/HubProbe.h src/probe/HubProbe.cpp
         src/wallpaper/Wallpapers.h src/wallpaper/Wallpapers.cpp
         src/art/ArtPalette.h src/art/ArtPalette.cpp src/art/MockArt.h
         src/sound/SoundThemeCheck.h src/sound/SoundThemeCheck.cpp
