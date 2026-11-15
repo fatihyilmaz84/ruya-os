@@ -678,6 +678,7 @@ mod tests {
             svc.profiles().iter().find(|p| p.id == id).unwrap().name,
             "Visitor"
         );
+        assert_eq!(svc.switch_to("p1", "1234", now).status, Status::Ok);
         assert_eq!(
             svc.delete_profile("p1", "1234", &id, now).status,
             Status::Ok
