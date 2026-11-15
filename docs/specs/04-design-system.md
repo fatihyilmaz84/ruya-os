@@ -312,6 +312,7 @@ Add `add e145` (Material Symbols Rounded, the pinned upstream font) to `shell/fo
 - Hardware identifiers (hci0, a MAC address, a device node) appear in copy only when the user has to tell two things apart and the system has no friendlier name. They are not translated; the sentence around them is. A MAC tail is the one allowed form (§5, Names from outside). Two Bluetooth adapters are "the USB adapter" and "the built-in adapter" when they differ in that.
 - Buttons and actions are verbs ("Restart", "Add profile"); a confirm repeats the verb of the question ("Restart now?" → Restart / Cancel).
 - Errors say what happened and what the user can do, in at most two short sentences ("Wrong PIN. 2 tries left."). No "please", no codes, no blame.
+- Hint bar `B` names what B does now: Back leaves a step or page, Cancel abandons a dialog whose buttons say Cancel, Delete removes the last typed character (PIN pad while digits are typed). Not now is used on the Who's playing pick step.
 - A row value carries no parenthesis; an explanation of a value goes in the note under the row (§5).
 - Row labels stay under about 28 characters in English so the Turkish fits. A row label may carry one short parenthesised state after a name ("Switch to X (no window yet)", T-467): the name is capped at 30 characters (`Notifications.named`) and, on the narrow quick menu, the label elides the name, never the state.
 - An information toast states the fact in one sentence ("X has no window yet.") and needs no next step; an error toast follows the rule above.

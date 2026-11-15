@@ -242,6 +242,10 @@ Item {
             compare(joinSpy.count, 0, "no join before the PIN")
             compare(pinChild("pinTitle").text, "Enter PIN for Player One")
             compare(tc.shell.hintList.map(h => h.text), ["Select", "Back"])
+            keyClick(Qt.Key_3)
+            compare(tc.shell.hintList.map(h => h.text), ["Select", "Delete"], "a digit typed: Back deletes it")
+            keyClick(Qt.Key_Backspace)
+            compare(tc.shell.hintList.map(h => h.text), ["Select", "Back"])
             compare(Input.mockNavigator(), host.dualSense, "the asking pad still navigates")
             padTypes(host.dualSense, "9999")                        // wrong
             tryVerify(() => pinChild("pinMessage").text === "Wrong PIN. 4 attempts left.", 2000)

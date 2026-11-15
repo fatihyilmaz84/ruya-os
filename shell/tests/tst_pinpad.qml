@@ -104,7 +104,8 @@ Item {
                 const label = cell.children[0].children[0]
                 verify(label.text === (idx === 9 ? "Sil" : "Tamam"), "translated: " + label.text)
                 verify(label.paintedWidth <= 0.88 * keys.key + 0.5, label.text + " fits: " + label.paintedWidth)
-                verify(label.font.pixelSize >= Theme.typeBody * tc.pad.u - 0.5, "not below typeBody: " + label.font.pixelSize)
+                verify(label.fontSizeMode === Text.Fit, "fitted")
+                verify(label.minimumPixelSize >= Theme.typeBody * tc.pad.u - 0.5, "not below typeBody: " + label.minimumPixelSize)
             }
             DeviceSettings.language = "en"
         }
