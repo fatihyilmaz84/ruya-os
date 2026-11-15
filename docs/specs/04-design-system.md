@@ -169,7 +169,7 @@ The gliding highlight (§3.8) is a fill under the ring, never a replacement for 
 
 Each entry: file, status, and the rules a change must keep. A new component gets a row here before it is built (§8).
 
-**Captions.** A refusal caption under a primary Pill uses `Theme.errorText` at `typeCaption`, centred, `spaceM` below the Pill, one line, and never blocks the Pill.
+**Captions.** A refusal caption under a primary Pill uses `Theme.errorText` at `typeCaption`, centred, `spaceM` below the Pill; it wraps (never elides) and never blocks the Pill.
 
 **Names from outside** (profile, device, drive, Wi-Fi) are one line, capped to their container's width and elided at the end; the full name is in the accessible name. Built (T-312) for the profile card (the card's width), the status cluster (the name stops growing at 220 px x `u`; `nameFull` still feeds the narrow-screen rule) and the PIN pad title (three card widths; the name inside it is cut, not the end of the sentence); the rows of the lists already elide. A device name that carries the end of its address (`DeviceIcons.shownName`, T-334/T-359) is cut before the tail, never after it: "Wireless Controll... (00:05)". A Settings row does the same through `SettingControl.labelTail` (RUY-21: the Bluetooth pane's device, Pair again, Rename and Forget rows). The keyboard title (`TextEntry.title`) and the "Found nearby" rows follow the same one-line, elide-at-the-end rule.
 
