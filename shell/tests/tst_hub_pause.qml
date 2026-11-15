@@ -64,7 +64,7 @@ Item {
 
     // A Wayland surface and the shell's window as the probe sees them (tst_hub_performance.qml).
     Component { id: surfaceComponent; QtObject { signal redraw() } }
-    Component { id: windowComponent; QtObject { signal frameSwapped() } }
+    Component { id: windowComponent; QtObject { signal afterSynchronizing(); signal frameSwapped() } }
 
     SignalSpy { id: launchedSpy; target: Session; signalName: "launchFinished" }
     SignalSpy { id: freezeSpy; target: Session; signalName: "freezeFinished" }
@@ -217,12 +217,20 @@ Item {
             return { surface: surface, win: win }
         }
 
+        // One frame: its sync (the scene graph takes the game's buffer) then its swap; a commit comes before
+        // the sync.
+        function present(frames, commit) {
+            if (commit)
+                frames.surface.redraw()
+            frames.win.afterSynchronizing()
+            frames.win.frameSwapped()
+        }
+
         // Presents frames of the game (a commit, then a presented frame) until the probe has written
         // `lines` lines.
         function presentUntil(frames, probe, lines) {
             tryVerify(() => {
-                frames.surface.redraw()
-                frames.win.frameSwapped()
+                present(frames, true)
                 return probe.lineCount >= lines
             }, 3000, "the Resume line is written")
         }
@@ -240,10 +248,8 @@ Item {
             presentUntil(frames, probe, lines + 1)
             verify(/^hub-resume thawReply=\d+ firstFrame=\d+ status=ok$/.test(probe.lastLine), probe.lastLine)
             compare(probe.pending, false)
-            for (let i = 0; i < 5; ++i) {
-                frames.surface.redraw()
-                frames.win.frameSwapped()
-            }
+            for (let i = 0; i < 5; ++i)
+                present(frames, true)
             wait(50)
             compare(probe.lineCount, lines + 1, "one line per Resume")
             // B resumes too: a second line
@@ -252,6 +258,29 @@ Item {
             keyClick(Qt.Key_Escape)
             presentUntil(frames, probe, lines + 2)
             verify(probe.lastLine.indexOf("hub-resume ") === 0, probe.lastLine)
+        }
+
+        // The first frame is the first one that takes a commit made after the Thaw's answer.
+        function test_the_first_frame_needs_a_commit_after_the_thaw_reply() {
+            start()
+            const run = playRacer()
+            const frames = fakeFrames()
+            const probe = find("hubProbe")
+            openHubAndPause(run.instance)
+            present(frames, true)                            // a commit from before the Resume
+            const lines = probe.lineCount
+            keyClick(Qt.Key_Return)
+            tryVerify(() => recordOf(run.instance).frozen === false, 2000, "the Thaw was answered")
+            wait(50)
+            verify(probe.pending, "still waiting for the game's frame")
+            for (let i = 0; i < 4; ++i)
+                present(frames, false)                       // the shell draws, the game has not committed
+            wait(50)
+            compare(probe.lineCount, lines, "frames without a new commit are not the game's")
+            verify(probe.pending)
+            present(frames, true)
+            tryCompare(probe, "lineCount", lines + 1, 3000, "the game's next frame ends it")
+            verify(/^hub-resume thawReply=\d+ firstFrame=\d+ status=ok$/.test(probe.lastLine), probe.lastLine)
         }
 
         function test_a_failed_thaw_writes_its_status_and_no_first_frame() {
@@ -302,10 +331,8 @@ Item {
             who.shown = false
             tryVerify(() => recordOf(run.instance).frozen === false, 2000, "closing it thaws the game")
             compare(probe.pending, false)
-            for (let i = 0; i < 3; ++i) {
-                frames.surface.redraw()
-                frames.win.frameSwapped()
-            }
+            for (let i = 0; i < 3; ++i)
+                present(frames, true)
             wait(50)
             compare(probe.lineCount, lines, "no line for either")
         }
@@ -322,17 +349,24 @@ Item {
             compare(probe.ownFrames, 0, "nothing is counted")
             probe.countFrames = true                         // what RUYA_PERF_LOG=1 does
             verify(probe.counting)
-            frames.win.frameSwapped()                        // nothing of the game: the shell drew by itself
-            frames.win.frameSwapped()
+            present(frames, false)                           // nothing of the game: the shell drew by itself
+            present(frames, false)
             compare(probe.ownFrames, 2)
-            frames.surface.redraw()                          // the game's frame: not the shell's own
-            frames.win.frameSwapped()
+            present(frames, true)                            // the game's frame: not the shell's own
             compare(probe.ownFrames, 2, "a frame that presents the game's buffer does not count")
-            frames.win.frameSwapped()
+            present(frames, false)
             compare(probe.ownFrames, 3)
+            // The threaded render loop: a commit lands between a frame's sync and its swap and shows on the
+            // next frame, which must not count as the shell's own.
+            frames.surface.redraw()
+            frames.win.afterSynchronizing()                  // frame N takes the commit before
+            frames.surface.redraw()                          // the next one arrives mid-frame
+            frames.win.frameSwapped()
+            present(frames, false)                           // frame N+1 shows it
+            compare(probe.ownFrames, 3, "a commit between sync and swap shows on the next frame")
             probe.countFrames = false
             verify(!probe.counting)
-            frames.win.frameSwapped()
+            present(frames, false)
             compare(probe.ownFrames, 3, "switched off: not counted")
             probe.countFrames = true
             Performance.frameSource = null                   // no game in front: Home draws, not counted

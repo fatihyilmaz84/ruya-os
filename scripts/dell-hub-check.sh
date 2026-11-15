@@ -23,7 +23,7 @@
 #      writes "hub-resume thawReply=<ms> firstFrame=<ms> status=<s>" (ms from the Hub's close: the
 #      Thaw's answer, and the game's next presented frame). Reports the median and the worst firstFrame
 #      and thawReply with no PASS line: no budget is written in ADR-033 or 02 section 1.6 yet. FAIL only
-#      when fewer than 5 lines come, or a line has a status other than ok or firstFrame=timeout.
+#      when fewer than 5 lines come, or a line has a status other than ok (a firstFrame=timeout is noted).
 #   3. Open and still: Guide, 6 s, then 10 s, with the game frozen (the default, T-457). PASS: under
 #      300 ms render in 10 s (3 %): an open Hub over a frozen game draws nothing once its slide ended.
 #   4. FPS (skipped with RUYA_HUB_NOFPS=1): the shell is restarted with the setting hub/pauseGames=false
@@ -32,6 +32,8 @@
 #      four times a second. The game's FPS with the Hub closed (10 s) against with it open (10 s, the
 #      game is not frozen). PASS: the drop is under 10 % (budget). The shell is restarted again at the
 #      end to take the drop-in and the setting back, and the profile is signed in again.
+# The shell restarts once more at the end (restore): it copies the shell.conf backup back and removes the
+# drop-in whether or not step 4 ran (RUYA_HUB_NOFPS=1 too), and the profile is signed in again.
 # Exit 0 PASS, 1 a FAIL, 2 NOT RUN.
 set -u
 HOST="${1:-192.168.178.109}"
@@ -188,11 +190,11 @@ if [ "$n" -lt 5 ]; then
 elif echo "$lines" | grep -qv 'status=ok'; then
     bad "a Resume had a Thaw status other than ok"
 else
-    stat() {   # median and worst of a field over the lines that carry a number
-        echo "$lines" | sed -n "s/.* $1=\([0-9]*\).*/\1/p" | sort -n | awk '{a[NR]=$1} END{if (NR) print a[int((NR+1)/2)], a[NR], NR; else print "- - 0"}'
+    resume_stat() {   # median and worst of a field over the lines that carry a number
+        echo "$lines" | sed -n "s/.* $1=\([0-9][0-9]*\).*/\1/p" | sort -n | awk '{a[NR]=$1} END{if (NR) print a[int((NR+1)/2)], a[NR], NR; else print "- - 0"}'
     }
-    set -- $(stat firstFrame); fmed=$1; fworst=$2; fn=$3
-    set -- $(stat thawReply); rmed=$1; rworst=$2
+    set -- $(resume_stat firstFrame); fmed=$1; fworst=$2; fn=$3
+    set -- $(resume_stat thawReply); rmed=$1; rworst=$2
     echo "Resume ($n of 10): game's next frame median $fmed ms, worst $fworst ms ($fn with a frame); Thaw answered median $rmed ms, worst $rworst ms"
     echo "$lines" | grep -q 'firstFrame=timeout' && echo "note: $(echo "$lines" | grep -c 'firstFrame=timeout') Resumes saw no frame within 2 s"
     echo "Resume time: no budget is set (ADR-033, 02 1.6), reported without a PASS"

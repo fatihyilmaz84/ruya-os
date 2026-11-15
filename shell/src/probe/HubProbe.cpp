@@ -72,7 +72,7 @@ void HubProbe::setTimeoutMs(int ms)
 
 void HubProbe::disconnectAll()
 {
-    for (QMetaObject::Connection *c : {&m_ownCommit, &m_ownSwap, &m_resumeCommit, &m_resumeSwap}) {
+    for (QMetaObject::Connection *c : {&m_ownCommit, &m_ownSync, &m_ownSwap, &m_resumeCommit, &m_resumeSync, &m_resumeSwap}) {
         QObject::disconnect(*c);
         *c = QMetaObject::Connection();
     }
@@ -84,20 +84,27 @@ void HubProbe::reconnect()
 {
     disconnectAll();
     const QMetaMethod commit = signalOf(m_surface, "redraw()");
+    const QMetaMethod sync = signalOf(m_window, "afterSynchronizing()");
     const QMetaMethod swap = signalOf(m_window, "frameSwapped()");
     const QMetaObject *meta = metaObject();
     auto slot = [meta](const char *sig) { return meta->method(meta->indexOfSlot(sig)); };
-    const bool counting = m_countFrames && commit.isValid() && swap.isValid();
+    const bool framed = commit.isValid() && sync.isValid() && swap.isValid();
+    const bool counting = m_countFrames && framed;
     if (counting) {
         m_commitSeen.store(false);
+        m_frameHadCommit.store(false);
         m_ownCommit = connect(m_surface, commit, this, slot("onOwnCommit()"), Qt::DirectConnection);
+        m_ownSync = connect(m_window, sync, this, slot("onOwnSync()"), Qt::DirectConnection);
         m_ownSwap = connect(m_window, swap, this, slot("onOwnSwap()"), Qt::DirectConnection);
     }
     if (m_pending) {
-        if (commit.isValid())
-            m_resumeCommit = connect(m_surface, commit, this, slot("onResumeCommit()"));
-        if (swap.isValid())
-            m_resumeSwap = connect(m_window, swap, this, slot("onResumeSwap()"), Qt::QueuedConnection);
+        if (framed) {
+            m_resumeCommitSeen.store(false);
+            m_resumeFrameHadCommit.store(false);
+            m_resumeCommit = connect(m_surface, commit, this, slot("onResumeCommit()"), Qt::DirectConnection);
+            m_resumeSync = connect(m_window, sync, this, slot("onResumeSync()"), Qt::DirectConnection);
+            m_resumeSwap = connect(m_window, swap, this, slot("onResumeSwap()"), Qt::DirectConnection);
+        }
     }
     if (counting != m_counting) {
         m_counting = counting;
@@ -116,10 +123,16 @@ void HubProbe::onOwnCommit()
     m_commitSeen.store(true);
 }
 
-// A presented frame after a commit shows the game's buffer; one without is the shell's own.
+// The frame takes the game's buffer at its sync: it shows a new game frame when a commit came since the
+// sync before. One that took none is the shell's own (counted at its swap).
+void HubProbe::onOwnSync()
+{
+    m_frameHadCommit.store(m_commitSeen.exchange(false));
+}
+
 void HubProbe::onOwnSwap()
 {
-    if (!m_commitSeen.exchange(false))
+    if (!m_frameHadCommit.exchange(false))
         m_own.fetch_add(1);
 }
 
@@ -138,7 +151,8 @@ void HubProbe::begin(const QString &instance)
     m_reply = -1;
     m_status.clear();
     m_armed = false;
-    m_committed = false;
+    m_resumeCommitSeen.store(false);
+    m_resumeFrameHadCommit.store(false);
     m_clock.restart();
     m_timeout.start();
     reconnect();
@@ -170,15 +184,29 @@ void HubProbe::cancel()
     emit stateChanged();
 }
 
+// Only commits after the Thaw reply count (m_armed is set on the GUI thread, where the surface signals).
 void HubProbe::onResumeCommit()
 {
     if (m_armed)
-        m_committed = true;
+        m_resumeCommitSeen.store(true);
 }
 
+void HubProbe::onResumeSync()
+{
+    m_resumeFrameHadCommit.store(m_resumeCommitSeen.exchange(false));
+}
+
+// The first frame that took such a commit at its sync is the game's next presented frame; the render
+// thread hands it to the GUI thread.
 void HubProbe::onResumeSwap()
 {
-    if (m_pending && m_armed && m_committed)
+    if (m_resumeFrameHadCommit.exchange(false))
+        QMetaObject::invokeMethod(this, "onResumeFrame", Qt::QueuedConnection);
+}
+
+void HubProbe::onResumeFrame()
+{
+    if (m_pending && m_armed)
         finish(QString::number(now()));
 }
 

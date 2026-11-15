@@ -10,7 +10,8 @@
 #include <atomic>
 
 // What the Ruya Hub costs over a game (RUY-405, 02 section 1.6, ADR-033), measured by the shell for
-// scripts/dell-hub-check.sh. The window is the shell's window (anything with a `frameSwapped()` signal)
+// scripts/dell-hub-check.sh. The window is the shell's window (anything with `afterSynchronizing()` and
+// `frameSwapped()` signals)
 // and the surface the one of the app in front (anything with `redraw()`, one per commit); both are
 // found by signal name, like FrameMeter, so a test stands in for them with a QtObject.
 //
@@ -84,9 +85,12 @@ signals:
 
 private slots:
     void onOwnCommit();
+    void onOwnSync();
     void onOwnSwap();
     void onResumeCommit();
+    void onResumeSync();
     void onResumeSwap();
+    void onResumeFrame();
 
 private:
     void reconnect();
@@ -101,13 +105,18 @@ private:
     QMetaObject::Connection m_windowGone;
     QMetaObject::Connection m_surfaceGone;
     QMetaObject::Connection m_ownCommit;
+    QMetaObject::Connection m_ownSync;
     QMetaObject::Connection m_ownSwap;
     QMetaObject::Connection m_resumeCommit;
+    QMetaObject::Connection m_resumeSync;
     QMetaObject::Connection m_resumeSwap;
 
     bool m_countFrames = false;
     bool m_counting = false;
-    std::atomic<bool> m_commitSeen{false};   // the game committed since the last presented frame
+    // A frame is judged at its sync point (afterSynchronizing: the scene graph takes the surface's buffer
+    // there), not at its swap: a commit that lands between the two shows on the next frame.
+    std::atomic<bool> m_commitSeen{false};   // the game committed since the last frame's sync
+    std::atomic<bool> m_frameHadCommit{false};   // the frame being rendered took a commit at its sync
     std::atomic<int> m_own{0};
     int m_ownLogged = 0;
     QTimer m_logTimer;
@@ -119,7 +128,8 @@ private:
     qint64 m_reply = -1;        // ms of the Thaw reply, -1 none yet, -2 none within the timeout
     QString m_status;
     bool m_armed = false;       // the Thaw was answered "ok": waiting for a commit, then a frame
-    bool m_committed = false;   // ... and the commit came
+    std::atomic<bool> m_resumeCommitSeen{false};   // armed: the game committed since the last sync
+    std::atomic<bool> m_resumeFrameHadCommit{false};
     QString m_lastLine;
     int m_lineCount = 0;
 };
