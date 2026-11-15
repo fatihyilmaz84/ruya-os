@@ -4,7 +4,7 @@
 # A check is "<script> [mode]". *.sh scripts run in the guest over SSH (all vm-* helper files are
 # copied to /root first); vm-reboot-check.ps1 and vm-storage-check.ps1 run on the host against the
 # VM. A check whose script or mode does not exist is SKIPPED (the reason is in the summary).
-# Output: output\vm-queue\<script>-<mode>.log (full), output\vm-queue\summary.txt (at most 15 lines).
+# Output: output\vm-queue\<script>-<mode>.log (full), output\vm-queue\summary.txt (at most 16 lines: every FAIL or SKIPPED line, passes counted when there are many).
 # Exits 0 when nothing FAILED. Run it only when no other QEMU is running; never builds an image.
 param(
     [string[]]$Checks = @(
@@ -122,7 +122,18 @@ foreach ($c in $Checks) {
 # ---- finish
 Stop-Vm
 $tot = [int]((Get-Date) - $t0).TotalMinutes
-if ($lines.Count -gt 14) { $lines = [System.Collections.Generic.List[string]]($lines | Select-Object -First 14) }
+$all = $lines.Count
+if ($all -gt 14) {
+    # Too many for 15 lines: keep every FAIL and SKIPPED line and count the passes, so a long queue
+    # never hides a result (lead-22: a 30-check queue showed only its first 13).
+    $notPass = @($lines | Where-Object { $_ -notmatch '^PASS ' })
+    $passCount = $all - $notPass.Count
+    $kept = @($notPass | Select-Object -First 13)
+    $lines = [System.Collections.Generic.List[string]]::new()
+    $lines.Add("PASS $passCount of $all (each in its log)")
+    foreach ($l in $kept) { $lines.Add($l) }
+    if ($notPass.Count -gt 13) { $lines.Add("... and $($notPass.Count - 13) more FAIL/SKIPPED lines: see the logs") }
+}
 $lines.Add("QUEUE $(if ($failed) { 'FAILED' } else { 'OK' }) in $tot min; logs: output\vm-queue")
 Write-Summary
 exit $(if ($failed) { 1 } else { 0 })
