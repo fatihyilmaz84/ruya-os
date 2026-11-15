@@ -752,6 +752,11 @@ Checked 2026-11-06.
         @{ name = "an untagged element and an interface-level tag (private)"; a = $chapter; other = $other;
            files = @{ "api/dbus/t1.xml" = ($xmlHead + $stabOk + "<method name=`"Do`"/>" + $xmlTail) }; expect = 0; text = "" }
     )
+    # RUY-467: an api/dbus file must be well-formed; "--" inside a comment is not.
+    $cases += @(
+        @{ name = "an api/dbus file with -- inside a comment"; a = $chapter; other = $other;
+           files = @{ "api/dbus/t2.xml" = ($xmlHead + "<!-- runs ruya-devices --display-guard -->" + $xmlTail) }; expect = 1; text = "api/dbus/t2.xml: is not well-formed xml (line 1)" }
+    )
     foreach ($c in $cases) {
         $fx = Join-Path ([IO.Path]::GetTempPath()) ("ruya-devdocs-fx-" + [guid]::NewGuid().ToString("N"))
         New-Item -ItemType Directory -Path $fx | Out-Null
