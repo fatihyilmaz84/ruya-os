@@ -134,9 +134,13 @@ Item {
                 checkCluster(size, "five devices", ["WH-1000XM4", "Ruya Keyboard"])
                 // The "N more" chip carries words since T-301, so it is wider than the old "+N" and two chips
                 // (not three) fit beside it for a short name at every size.
+                // RUY-658: the budget re-picks the chips when the clock text or the layout changes; wait on the
+                // settled chip count and "N more" instead of reading them once (the count flaked under load at 4K).
+                tryVerify(() => chipIds().length === 2 && find("batteryMore").count === 3, 5000,
+                          "two chips and an \"N more\" chip for 'Ada' at " + size[1] + "p")
                 compare(chipIds().length, 2, "two chips and an \"N more\" chip for 'Ada' at " + size[1] + "p")
                 compare(find("batteryMore").count, 3)
-                compare(findChild(find("batteryMore"), "batteryMoreLabel").text, "3 more", "with its words")
+                tryCompare(findChild(find("batteryMore"), "batteryMoreLabel"), "text", "3 more", 2000, "with its words")
                 tc.shell.destroy()
                 wait(50)
             }
