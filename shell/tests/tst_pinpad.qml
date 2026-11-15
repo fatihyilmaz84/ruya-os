@@ -85,5 +85,61 @@ Item {
             tc.pad.open({ id: "p1", name: "Player One" })
             verifyNoPadLine("verify after player")
         }
+
+        function keyItem(index) {
+            const keys = findChild(tc.pad, "pinKeys")
+            keys.positionViewAtIndex(index, GridView.Contain)
+            return keys.itemAtIndex(index)
+        }
+
+        // RUY-662: a longer translation shrinks to stay inside the key (Turkish "Tamam" on the OK key).
+        function test_captions_fit_the_key() {
+            DeviceSettings.language = "tr"
+            tc.pad.open({ id: "p1", name: "Player One" })
+            tryVerify(() => tc.pad.visible, 1000)
+            const keys = findChild(tc.pad, "pinKeys")
+            for (const idx of [9, 11]) {                  // Del, OK
+                const cell = keyItem(idx)
+                verify(cell, "key " + idx)
+                const label = cell.children[0].children[0]
+                verify(label.text === (idx === 9 ? "Sil" : "Tamam"), "translated: " + label.text)
+                verify(label.paintedWidth <= 0.88 * keys.key + 0.5, label.text + " fits: " + label.paintedWidth)
+                verify(label.font.pixelSize >= Theme.typeBody * tc.pad.u - 0.5, "not below typeBody: " + label.font.pixelSize)
+            }
+            DeviceSettings.language = "en"
+        }
+
+        // RUY-662: the wrong-PIN line keeps its height, so the keys do not jump when it appears.
+        function test_wrong_pin_line_is_reserved() {
+            tc.pad.open({ id: "p1", name: "Player One" })
+            tryVerify(() => tc.pad.visible, 1000)
+            const keys = findChild(tc.pad, "pinKeys")
+            const msg = findChild(tc.pad, "pinMessage")
+            const y0 = keys.mapToItem(tc.pad, 0, 0).y
+            compare(msg.text, "")
+            tc.pad.message = "Wrong PIN. 2 attempts left."
+            tryVerify(() => msg.text !== "")
+            compare(keys.mapToItem(tc.pad, 0, 0).y, y0, "the keypad did not move")
+            tc.pad.message = ""
+            compare(keys.mapToItem(tc.pad, 0, 0).y, y0)
+            verify(msg.height >= 36 * tc.pad.u - 0.5, "the line is 36 u while empty")
+        }
+
+        // RUY-662: Back deletes a digit while some are typed, and leaves when there are none.
+        function test_back_hint_follows_the_digits() {
+            tc.pad.open({ id: "p1", name: "Player One" })
+            tryVerify(() => tc.pad.visible, 1000)
+            compare(tc.pad.modalHints.map(h => h.text), ["Select", "Back"])
+            keyClick(Qt.Key_1)
+            compare(tc.pad.modalHints[1].text, "Delete")
+            compare(tc.pad.modalHints[1].action, "back")
+            keyClick(Qt.Key_Backspace)
+            compare(tc.pad.modalHints[1].text, "Back")
+            DeviceSettings.language = "tr"
+            compare(tc.pad.modalHints[1].text, "Geri")
+            keyClick(Qt.Key_1)
+            compare(tc.pad.modalHints[1].text, "Sil")
+            DeviceSettings.language = "en"
+        }
     }
 }

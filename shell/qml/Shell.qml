@@ -2577,7 +2577,7 @@ FocusScope {
         if (hasAncestor(activeItem, modalLayer))
             return modalHintsOf(activeItem)
         if (hasAncestor(activeItem, pinPadInPicker))
-            return [{ action: "back", text: qsTr("Cancel") }]
+            return pinPadInPicker.modalHints
         if (!signedIn)
             return setupActive ? setup.hints : [{ action: "accept", text: qsTr("Select") }]
         if (pageOpen) {     // slots and pageStack are updated one after the other

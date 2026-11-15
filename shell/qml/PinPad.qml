@@ -46,6 +46,10 @@ FocusScope {
     // Locked out by the service (verify mode): the keys look disabled and take no input.
     readonly property bool locked: lockSecs > 0
 
+    // What the hint bar says (Shell.hintList, WhosPlaying): Back deletes a digit, or leaves on an empty pad.
+    readonly property var modalHints: [{ action: "accept", text: qsTr("Select") },
+                                       { action: "back", text: entered.length > 0 ? qsTr("Delete") : qsTr("Back") }]
+
     signal closed()
     signal collected(string pin)        // collect modes: the PIN the user entered (and confirmed)
     signal cancelled()                  // collect and admin modes: closed without a PIN
@@ -457,6 +461,10 @@ FocusScope {
                     Text {
                         anchors.centerIn: parent
                         text: keyCell.caption
+                        width: keys.key * 0.88      // a caption is fitted, not elided (04 PIN pad)
+                        horizontalAlignment: Text.AlignHCenter
+                        fontSizeMode: Text.Fit
+                        minimumPixelSize: Theme.typeBody * pad.u
                         color: Theme.text
                         font.pixelSize: (keyCell.isAction ? Theme.typeHeadline : Theme.typeTitle) * pad.u
                         font.weight: Theme.weightDemiBold
