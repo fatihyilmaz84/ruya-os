@@ -497,6 +497,20 @@ Item {
             tryVerify(() => findChild(find("onbRow_bt-flaky"), "onbRowGlyph").name === "pad_wiiu_pro", 2000, "the model")
         }
 
+        // RUY-710: 8BitDo is a model, not a family: the chip follows the model in whatever mode.
+        function test_a_connected_8bitdo_pad_selects_the_8bitdo_chip_by_its_model() {
+            for (const family of ["xbox", "nintendo", "generic"]) {
+                onb.open()
+                compare(onb.family, "playstation")
+                Bluetooth.mockGamepad(true, "usb-8bd-" + family, "8BitDo Pro 2", family, "usb", "8bitdo_pro2")
+                tryCompare(onb, "family", "8bitdo", 2000, family)
+                onb.close()
+                Bluetooth.mockGamepad(false, "usb-8bd-" + family, "8BitDo Pro 2", family, "usb", "8bitdo_pro2")
+            }
+            compare(onb.chipOf("xbox", ""), "xbox", "a pad without the model keeps its family")
+            compare(onb.chipOf("generic", ""), "", "generic is the Other chip")
+        }
+
         function test_a_controller_the_service_paired_itself_is_listed_as_done() {
             Bluetooth.mockPairingScript("success")
             onb.open()

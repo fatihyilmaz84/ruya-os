@@ -135,8 +135,9 @@ Item {
             compare(DeviceIcons.kindText("controller", "generic", "8bitdo_pro2"), "8BitDo controller")
             compare(DeviceIcons.kindText("controller", "generic", ""), "Controller")
             compare(DeviceIcons.kindText("controller", "generic"), "Controller", "a missing model is none")
-            compare(DeviceIcons.kindText("controller", "xbox", "8bitdo_pro2"), "Xbox controller", "X-input mode is an Xbox family")
-            compare(DeviceIcons.kindText("controller", "nintendo", "8bitdo_sn30pro"), "Nintendo controller")
+            compare(DeviceIcons.kindText("controller", "xbox", "8bitdo_pro2"), "8BitDo controller", "X-input mode: the name follows the model (RUY-710)")
+            compare(DeviceIcons.kindText("controller", "nintendo", "8bitdo_sn30pro"), "8BitDo controller", "Switch mode")
+            compare(DeviceIcons.kindText("controller", "xbox", "xbox_360"), "Xbox controller")
             compare(DeviceIcons.kindText("headset", "generic", "8bitdo_pro2"), "Headset", "a model only matters for a controller")
         }
 

@@ -88,6 +88,13 @@ FocusScope {
         closed()
     }
 
+    // The pairing chip of a connected pad: 8BitDo by its model (whatever family its mode gives), else its family.
+    function chipOf(padFamily, padModel) {
+        if (String(padModel ?? "").startsWith("8bitdo_"))
+            return "8bitdo"
+        return chipFamilies.includes(padFamily) ? padFamily : ""
+    }
+
     function chipFor(f) {
         return chips.itemAt(chipFamilies.indexOf(f))
     }
@@ -319,10 +326,11 @@ FocusScope {
             onb.sync()
         }
         // A pad plugged in over USB while we wait: nothing to pair, go and try it.
-        function onGamepadConnected(id, name, family, transport) {
+        function onGamepadConnected(id, name, family, transport, model) {
             // Not while a row is still pairing: its result would be lost behind the try screen.
             const pairing = Object.values(onb.phases).some(p => p.phase === "pairing")
             if (onb.shown && onb.stage === "pair" && transport === "usb" && !pairing) {
+                onb.family = onb.chipOf(family, model)
                 onb.startTry(DeviceIcons.padName(id, name, family), family, transport, name)
                 test.forceActiveFocus()
             }
