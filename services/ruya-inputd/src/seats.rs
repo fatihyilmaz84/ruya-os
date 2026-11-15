@@ -8,8 +8,9 @@
 //! - A pad holds at most one profile and a profile at most one pad.
 //! - `join(d, p)`: (a) `p` is player 1: `d` becomes seat 1's pad; (b) `p` sits in seat n >= 2: it
 //!   moves to `d` and keeps n; (c) `d` sits as another profile: that profile leaves first (seat 1
-//!   keeps its profile without a pad); (d) else the lowest free seat of 2-4, or `Full` with nothing
-//!   changed; (e) the same `d` and `p` again change nothing.
+//!   keeps its profile without a pad); (d) else the lowest free seat of 2-4 (`join_in_order`: the
+//!   first free one of an order the router gives, RUY-681), or `Full` with nothing changed; (e) the
+//!   same `d` and `p` again change nothing.
 //! - A seated pad that is gone holds its seat (RUY-627): the seat keeps its pad's id, `held` until a
 //!   deadline. The same id back resumes it (`resume`), a like pad takes it over (`take_over`), a
 //!   join that moves the profile ends it, and at the deadline (`expire`) the seat is freed (2-4) or
@@ -131,6 +132,12 @@ impl Seats {
     /// `JoinPlayer` once its arguments are checked: `device` is a connected pad, `profile` a
     /// profile account, and someone is signed in. Rules (a) to (e) of the module.
     pub fn join(&mut self, device: &str, profile: &str) -> Joined {
+        self.join_in_order(device, profile, &[])
+    }
+
+    /// `join` whose rule (d) takes the first free seat of `order` (seats 2..=SEATS; others are
+    /// ignored), then the lowest free one.
+    pub fn join_in_order(&mut self, device: &str, profile: &str, order: &[u32]) -> Joined {
         if !self.active() || device.is_empty() {
             return Joined::Full;
         }
@@ -164,9 +171,15 @@ impl Seats {
                 }
                 i
             }
-            // (d) the lowest free seat of 2..=SEATS.
+            // (d) the first free seat of the order, else the lowest free seat of 2..=SEATS.
             None => {
-                let Some(i) = (1..next.seats.len()).find(|&i| next.seats[i].is_none()) else {
+                let free = |i: usize| i >= 1 && next.seats.get(i).is_some_and(Option::is_none);
+                let Some(i) = order
+                    .iter()
+                    .map(|&n| (n as usize).wrapping_sub(1))
+                    .find(|&i| free(i))
+                    .or_else(|| (1..next.seats.len()).find(|&i| free(i)))
+                else {
                     return Joined::Full;
                 };
                 next.seats[i] = Some(Seat {
@@ -428,6 +441,20 @@ mod tests {
         assert_eq!(s, before);
         // A pad seated as another profile frees that seat first, so it is not full.
         assert_eq!(s.join("d", "p5"), seated(4));
+    }
+
+    #[test]
+    fn join_in_order_takes_the_first_free_seat_of_the_order_then_the_lowest() {
+        let mut s = Seats::default();
+        s.sign_in("p1", "a");
+        s.join("b", "p2");
+        // Seat 2 is taken, 1 and 5 are no seats to join: the order's 4 it is.
+        assert_eq!(s.join_in_order("c", "p3", &[0, 1, 2, 5, 4, 3]), seated(4));
+        // An order with no free seat in it falls back to the lowest free seat.
+        assert_eq!(s.join_in_order("d", "p4", &[2, 4]), seated(3));
+        assert_eq!(s.join_in_order("e", "p5", &[2]), Joined::Full);
+        // Rules (a) and (b) come first: a seated profile keeps its seat whatever the order.
+        assert_eq!(s.join_in_order("f", "p2", &[3]), seated(2));
     }
 
     #[test]

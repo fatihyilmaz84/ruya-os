@@ -214,11 +214,14 @@
          its Thaw; a button held at that "app" is masked until it is let go). Anything else
          destroys them ("locked", "shell", another instance or profile, "overlay" with ""), so
          an app's open descriptor reads ENODEV and a pad never outlives its profile. Only a seated
-         pad has a virtual pad, and its number is its seat (phys ruya-input/pad<slot>; Players
+         pad has a virtual pad (besides the quiet ones of seats that lost their pad, RUY-681,
+         Players), and its number is its seat (phys ruya-input/pad<slot>; Players
          below, RUY-121; the seat gate, on since RUY-122: an unseated pad has none),
-         and it stays through its seat's 60 s hold when its pad disconnects (RUY-627). On "app" for a new owner pad1 (seat 1's pad, the profile's active
-         controller) is made first and the other seated pads only once pad1's ACL is set (or its
-         2 s udev fallback passed), so a game that opens the first pad it is offered gets pad1.
+         and it stays through its seat's 60 s hold when its pad disconnects (RUY-627), and quiet after
+         it until the owner ends (RUY-681, Players). On "app" for a new owner every seated pad's
+         virtual pad is made at once, pad1 (seat 1's pad, the profile's active controller) first;
+         the others' ACLs are set only once pad1's is (or its 2 s udev fallback passed), so a game
+         that opens the first pad it is offered gets pad1 (RUY-541, RUY-681).
          A profile change (sign-in, switch, lock) seats the new profile in seat 1 and empties the
          others (Players). When the caller that set the route leaves the bus, the route
          becomes "locked". At start the route is "shell" with no profile. -->
@@ -262,9 +265,14 @@
          within the hold, or the one like pad (a serial-less USB pad of the same vid:pid as exactly
          one held seat's pad, which then takes the new id; 06 §4.1), is the seat's pad again, held
          false, and its virtual pad is bound to it: no virtual device is made or destroyed, so the
-         app sees no pad go or come. When the hold runs out seat n >= 2 is freed and its virtual pad
-         destroyed; seat 1 keeps its profile with device_id "" and pad1 is destroyed. A held seat
-         keeps its number (unseated pads never take 1-4).
+         app sees no pad go or come. When the hold runs out seat n >= 2 is freed and seat 1 keeps its
+         profile with device_id ""; their virtual pads stay, quiet, until the owner ends (RUY-681):
+         a virtual pad keeps its number for the owner's whole life, and the next pad seated in that
+         number (the same player or another) is bound to it. The quiet phase has no event and no
+         flag: the pad is only silent (no input; the app's rumble uploads are kept, its plays are
+         dropped). Pad n is a seat, not a person. Only LeavePlayer of that number, a
+         profile change or the end of the owner (SetRoute) destroys it. A held seat keeps its number
+         (unseated pads never take 1-4).
          The seat gate is on since RUY-122 (the shell's "Who's playing?" calls JoinPlayer): an
          unseated connected pad never gets a virtual pad. Only JoinPlayer seats a pad: also seat 1's,
          when seat 1 has no pad (a keyboard sign-in, or its pad's hold ran out); a press takes no
@@ -286,18 +294,22 @@
              the old pad is unseated.
            - the pad already sits as another profile: that profile leaves its seat first (seat 1
              keeps its profile and has no pad then).
-           - otherwise the profile takes the lowest free seat of 2-4.
+           - otherwise the profile takes a free seat of 2-4: the one whose quiet virtual pad was
+             this profile's under the current owner, else the lowest one with no virtual pad, else
+             the lowest (its quiet pad is bound to the new pad; RUY-681).
            - the same pad and profile again: "ok" with its seat, nothing changes, no signal.
            A move binds the seat's virtual pad to the new pad (RUY-627: the same device, no virtual
            pad made or destroyed; a pad that joins under "overlay" without one gets it when the app
-           is in front again); a move of a held seat ends its hold. Leaving destroys it. Live
-           virtual pads are never renumbered.
+           is in front again); a move of a held seat ends its hold. A pad seated as another profile
+           in the same number keeps its virtual pad (RUY-681). Leaving destroys it. Live virtual pads
+           are never renumbered.
            Status (checked in this order): "invalid" (not a device id: [a-z0-9:-], 1..64),
            "not-allowed" (nobody is signed in: route "locked", or "shell" with profile ""),
            "unknown-profile" (not a profile account, the SetRoute rule), "unknown-device" (no
            connected pad with that id), "full" (no free seat; nothing changes), "ok". slot: the seat
            taken (1..4), 0 unless "ok".
-         LeavePlayer(slot): empties seat `slot` (its pad is unseated, its virtual pad destroyed).
+         LeavePlayer(slot): empties seat `slot` (its pad is unseated, its virtual pad destroyed;
+           a quiet virtual pad of that number is destroyed too, also when the seat is already empty).
            Status: "invalid" (0 or more than 4), "not-allowed" (nobody signed in, or seat 1), "ok"
            (also for a seat that is already empty: nothing changes, no signal).
          ListPlayers: the seated players, by slot. PlayersChanged carries the whole list, once per
