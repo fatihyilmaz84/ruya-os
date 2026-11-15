@@ -23,6 +23,10 @@ const QList<InputProfileMethod> &methods()
         {QStringLiteral("GetEffectiveProfile"),
          {QStringLiteral("profile"), QStringLiteral("device_id"), QStringLiteral("app_id")},
          {QStringLiteral("status"), QStringLiteral("json"), QStringLiteral("chain")}},
+        // A console profile that goes takes its controller profiles with it, and the start sweep's
+        // list of the console profiles that have any (RUY-468).
+        {QStringLiteral("ForgetConsoleProfile"), {QStringLiteral("profile")}, {QStringLiteral("status")}},
+        {QStringLiteral("StoredConsoleProfiles"), {}, {QStringLiteral("status"), QStringLiteral("profiles")}},
         // Not a profile member, but a call of the same shape (strings in, a status out); the Confirm
         // in menus row of a controller page (RUY-40, per controller since RUY-603).
         {QStringLiteral("SetConfirmButton"),

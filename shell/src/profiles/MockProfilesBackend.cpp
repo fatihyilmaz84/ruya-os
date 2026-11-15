@@ -99,7 +99,10 @@ void MockProfilesBackend::refreshAfter(int ms)
         emit availabilityChanged(true);
         emit listed(list);
         emit activeChanged(m_active);
-        publishGuests();
+        if (guestCallFails(QStringLiteral("listGuests")))
+            acceptGuests(beginGuestsRequest()); // a failed ListGuests: an outcome, no list (as over D-Bus)
+        else
+            publishGuests();
     });
 }
 

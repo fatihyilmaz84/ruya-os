@@ -91,7 +91,7 @@ Item {
             const methods = Input.profileMethods()
             compare(methods.map(m => m.name),
                     ["ListProfiles", "GetProfile", "SaveProfile", "ValidateProfile", "DeleteProfile", "AssignProfile",
-                     "GetEffectiveProfile", "SetConfirmButton"])
+                     "GetEffectiveProfile", "ForgetConsoleProfile", "StoredConsoleProfiles", "SetConfirmButton"])
             for (const m of methods) {
                 const body = new RegExp('<method name="' + m.name + '">([\\s\\S]*?)</method>').exec(xml)
                 verify(body, m.name + " is in the XML")
@@ -111,6 +111,9 @@ Item {
             verify(/<signal name="ActiveInputChanged">\s*<arg name="device_id" type="s"\/>\s*<arg name="family" type="s"\/>/.test(xml),
                    "ActiveInputChanged(device_id, family)")
             verify(/<signal name="ProfilesChanged">\s*<arg name="profile" type="s"\/>/.test(xml), "ProfilesChanged(profile)")
+            // The client passes StoredConsoleProfiles' ids on as a string list (RUY-468).
+            verify(/<method name="StoredConsoleProfiles">\s*<arg name="status" type="s" direction="out"\/>\s*<arg name="profiles" type="as" direction="out"\/>\s*<\/method>/.test(xml),
+                   "StoredConsoleProfiles() -> (status, profiles as)")
         }
 
         // Each facade call reaches the service with its arguments under the XML's names.
@@ -122,10 +125,12 @@ Item {
             Input.deleteProfile("p2", "mine")
             Input.assignProfile("p2", "global", "", "nintendo")
             Input.getEffectiveProfile("p2", "dev-dualsense", "org.example.Racer")
+            Input.forgetConsoleProfile("p9")
+            Input.storedConsoleProfiles()
             const calls = Input.mockProfileCalls()
             compare(calls.map(c => c.method),
                     ["ListProfiles", "GetProfile", "SaveProfile", "ValidateProfile", "DeleteProfile", "AssignProfile",
-                     "GetEffectiveProfile"])
+                     "GetEffectiveProfile", "ForgetConsoleProfile", "StoredConsoleProfiles"])
             compare(calls[0].args, { profile: "p2" })
             compare(calls[1].args, { profile: "p2", profile_id: "nintendo" })
             compare(calls[2].args, { profile: "p2", json: "{}" })
@@ -133,6 +138,8 @@ Item {
             compare(calls[4].args, { profile: "p2", profile_id: "mine" })
             compare(calls[5].args, { profile: "p2", scope: "global", scope_id: "", profile_id: "nintendo" })
             compare(calls[6].args, { profile: "p2", device_id: "dev-dualsense", app_id: "org.example.Racer" })
+            compare(calls[7].args, { profile: "p9" })
+            compare(calls[8].args, {})
             const table = Input.profileMethods()
             for (let i = 0; i < calls.length; ++i)
                 compare(Object.keys(calls[i].args).sort(), table[i].in.slice().sort(), calls[i].method + ": the table's names")
@@ -254,6 +261,9 @@ Item {
         function test_the_status_strings() {
             Input.listProfiles("../etc")
             compare(answer(listedSpy)[1], "unknown-profile")
+            // A trailing line feed is no console profile id, as for the service (RUY-468).
+            Input.listProfiles("p2\n")
+            compare(answer(listedSpy, 2)[1], "unknown-profile")
             let a = save('{"schema_version":1,"id":"x","name":"","scope":{"type":"global"},"script":1}')
             compare(a[1], "invalid")
             verify(a[3].some(e => e.indexOf("/name: ") === 0), a[3])
@@ -288,7 +298,7 @@ Item {
             compare(changedSpy.count, 0, "nothing changed")
             Input.mockFail(true)
             Input.listProfiles(tc.me)
-            compare(answer(listedSpy, 2)[1], "failed")
+            compare(answer(listedSpy, 3)[1], "failed")
             Input.saveProfile(tc.me, profile("x"))
             compare(answer(savedSpy, 5)[1], "failed")
         }

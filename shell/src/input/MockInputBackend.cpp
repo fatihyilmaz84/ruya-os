@@ -399,12 +399,12 @@ namespace {
 // and a stable device id (profile.rs valid_device).
 bool consoleIdOk(const QString &profile)
 {
-    static const QRegularExpression re(QStringLiteral("^[A-Za-z0-9_-]{1,32}$"));
+    static const QRegularExpression re(QRegularExpression::anchoredPattern(QStringLiteral("[A-Za-z0-9_-]{1,32}")));
     return re.match(profile).hasMatch();
 }
 bool deviceIdOk(const QString &device)
 {
-    static const QRegularExpression re(QStringLiteral("^[a-z0-9:-]{1,64}$"));
+    static const QRegularExpression re(QRegularExpression::anchoredPattern(QStringLiteral("[a-z0-9:-]{1,64}")));
     return re.match(device).hasMatch();
 }
 } // namespace
@@ -471,12 +471,29 @@ void MockInputBackend::holdSaves(bool hold)
     m_replaying = false;
 }
 
+void MockInputBackend::holdStored(bool hold)
+{
+    m_holdStored = hold;
+    if (hold)
+        return;
+    const QList<quint64> held = m_heldStored;
+    m_heldStored.clear();
+    m_replaying = true;
+    for (quint64 token : held)
+        callProfile(token, QStringLiteral("StoredConsoleProfiles"), {});
+    m_replaying = false;
+}
+
 void MockInputBackend::callProfile(quint64 token, const QString &method, const QVariantMap &args)
 {
     if (!m_replaying)
         m_profileCalls.append(QVariantMap{{QStringLiteral("method"), method}, {QStringLiteral("args"), args}});
     if (m_holdSaves && method == QLatin1String("SaveProfile")) {
         m_held.append({token, args});
+        return;
+    }
+    if (m_holdStored && method == QLatin1String("StoredConsoleProfiles")) {
+        m_heldStored.append(token);
         return;
     }
     QVariantMap reply;
@@ -512,9 +529,13 @@ void MockInputBackend::callProfile(quint64 token, const QString &method, const Q
                 pads.insert(device, mode);
             if (profile == m_profile && device == m_activeDevice && mode != before)
                 QTimer::singleShot(0, this, [this] { emit confirmButtonChanged(); });
+            m_profiles.noteStored(profile); // the settings file is in the console profile's directory
         }
     } else {
         reply = m_profiles.call(method, args, &changed);
+        // The settings file goes with the directory (RUY-468).
+        if (method == QLatin1String("ForgetConsoleProfile") && reply.value(QStringLiteral("status")) == QLatin1String("ok"))
+            m_confirm.remove(args.value(QStringLiteral("profile")).toString());
     }
     QTimer::singleShot(0, this, [this, token, method, args, reply, changed] {
         emit profileReply(token, method, args, reply);

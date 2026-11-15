@@ -41,7 +41,8 @@ public:
     // Tests: back to the seeded profiles, or to an empty store (first boot); clears
     // lockouts and the active profile.
     void resetForTests(bool empty);
-    // Tests: the next `times` calls of "createGuest" or "removeGuest" answer `status` and change nothing.
+    // Tests: the next `times` calls of "createGuest" or "removeGuest" answer `status` and change nothing;
+    // "listGuests": the next `times` guest lists of a refresh fail (no guestsListed; RUY-468).
     void failGuestCalls(const QString &method, const QString &status, int times);
 
 private:

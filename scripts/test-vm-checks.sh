@@ -23,7 +23,9 @@
 #                          `coop` mode (RUY-681): seathold's set-up for the probe's coop command; the `twopads`
 #                          journal order (RUY-541, RUY-681): pad2 ready before pad1, or never, FAILs; the
 #                          `join` mode (RUY-628): VerifyPin wrong then right before JoinPlayer, a wrong PIN that
-#                          answers ok, a VerifyPin that signs in, a refused join and a missing seat each FAIL
+#                          answers ok, a VerifyPin that signs in, a refused join and a missing seat each FAIL; the
+#                          `forget` step of `profiles` (RUY-468): a directory left after ForgetConsoleProfile, a
+#                          hostile id that is followed, a listed non-id and a stale listed id each FAIL
 #   - vm-boot-check.sh     the `watchdog` mode (RUY-483): the unit's three settings, a restart or trip before the
 #                          test, a missing start line, no restart, a second restart and a restart without systemd's
 #                          trip line each FAIL; a shell that stays stopped is continued at exit
@@ -767,6 +769,68 @@ out="$(FAKE_PROBE_FAIL=1 runplayers "$pl/with")"; rc=$?
 expect_contains "players: a FAIL of the probe fails the check" "$out" "SOME CHECKS FAILED"
 [ "$rc" = 1 ] && pass "players: a FAIL of the probe: exit 1" || fail "players: a FAIL of the probe: exit $rc"
 expect_contains "players: the profile is removed after a FAIL too" "$(cat "$tmp/players.log")" "DeleteProfile sss p1 1234 p7"
+# --- vm-input-check.sh forget (RUY-468, the last step of `profiles`): each assertion can fail -----------------------
+echo "vm-input-check.sh forget: the directory goes, ../x is invalid and changes nothing, StoredConsoleProfiles ids only"
+fg="$tmp/forget"; mkdir -p "$fg/bin"
+# busctl as Profiles1 and Input1 over a state directory: SaveProfile makes <state>/profiles/<id>/, ForgetConsoleProfile
+# removes it for a valid id ("invalid" otherwise), StoredConsoleProfiles lists the directories. FAKE_BUG breaks one:
+# keep (Forget leaves the directory), follow (an id with "/" or "." is removed too), list_name (a name that is no id is
+# listed), list_stale (the forgotten id is still listed).
+cat > "$fg/bin/busctl" <<'SHIMEOF'
+#!/bin/bash
+echo "busctl $*" >> "$FAKE_LOG"
+root="$FAKE_STATE/profiles"
+case "$6" in
+ListProfiles) echo 'aa{sv} 1 2 "id" s "p1" "name" s "Check Admin"' ;;
+CreateProfile) echo 'ssuu "ok" "p7" 0 0' ;;
+DeleteProfile) echo 'suu "ok" 0 0' ;;
+SaveProfile) mkdir -p "$root/$8" && echo "$9" > "$root/$8/vm-check-forget.json" && echo 'sas "ok" "vm-check-forget" 0' ;;
+StoredConsoleProfiles)
+    ids="$(ls "$root" 2>/dev/null)"
+    [ "${FAKE_BUG:-}" = list_name ] && ids="$(printf '%s\nbad name' "$ids")"
+    [ "${FAKE_BUG:-}" = list_stale ] && ids="$(printf '%s\np7' "$ids")"
+    ids="$(printf '%s\n' "$ids" | grep . | sort -u)"
+    printf 'sas "ok" %s' "$(printf '%s\n' "$ids" | grep -c .)"
+    printf '%s\n' "$ids" | grep . | while read -r id; do printf ' "%s"' "$id"; done
+    echo ;;
+ForgetConsoleProfile)
+    case "$8" in
+    ""|*[!A-Za-z0-9_-]*)
+        if [ "${FAKE_BUG:-}" = follow ]; then rm -rf "${root:?}/$8"; echo 's "ok"'; else echo 's "invalid"'; fi ;;
+    *) [ "${FAKE_BUG:-}" = keep ] || rm -rf "${root:?}/$8"; echo 's "ok"' ;;
+    esac ;;
+*) echo '' ;;
+esac
+exit 0
+SHIMEOF
+chmod +x "$fg/bin/busctl"
+runforget() {
+    rm -rf "$fg/state"; mkdir -p "$fg/state/profiles/p1"
+    : > "$tmp/forget.log"
+    FAKE_LOG="$tmp/forget.log" FAKE_STATE="$fg/state" INPUT_STATE_DIR="$fg/state" PATH="$fg/bin:$PATH" \
+        bash "$here/vm-input-check.sh" forget 2>&1
+}
+out="$(runforget)"; rc=$?
+expect_contains "forget: says what it checks" "$out" "--- a console profile's controller profiles go with it (RUY-468)"
+expect_contains "forget: the saved profile's directory is there first" "$out" "PASS: StoredConsoleProfiles lists p7"
+expect_contains "forget: the directory is gone" "$out" "/profiles/p7 is gone"
+expect_contains "forget: ../x is invalid" "$out" "PASS: ForgetConsoleProfile ../x: invalid"
+expect_contains "forget: the profile is made as the admin" "$(cat "$tmp/forget.log")" 'CreateProfile sssss p1 1234 Check Forget standard'
+expect_contains "forget: all good passes" "$out" "ALL CHECKS PASSED"
+[ "$rc" = 0 ] && pass "forget: exit 0" || fail "forget: exit $rc"
+[ -e "$fg/state/x" ] && fail "forget: the sentinel is left behind" || pass "forget: the sentinel is removed"
+[ -d "$fg/state/profiles/p1" ] && pass "forget: another profile's directory stays" || fail "forget: p1's directory went"
+for case in "keep|/profiles/p7 is still there" \
+    "follow|FAIL: ForgetConsoleProfile ../x: s \"ok\"" \
+    "list_name|FAIL: StoredConsoleProfiles lists a name that is no profile id" \
+    "list_stale|FAIL: StoredConsoleProfiles still lists p7"; do
+    bug="${case%%|*}"; needle="${case#*|}"
+    out="$(FAKE_BUG="$bug" runforget)"; rc=$?
+    expect_contains "forget, bug $bug: caught" "$out" "$needle"
+    [ "$rc" = 1 ] && pass "forget, bug $bug: exit 1" || fail "forget, bug $bug: exit $rc"
+done
+out="$(FAKE_BUG=follow runforget)"
+expect_contains "forget, bug follow: the change in the state directory is named" "$out" "FAIL: ForgetConsoleProfile ../x changed"
 # --- vm-input-check.sh seathold (RUY-627): the drop-in, the restarts, the profile, the probe ------------------
 echo "vm-input-check.sh seathold: RUYA_SEAT_HOLD_SECS=5 as a drop-in, removed again, the probe gets the profiles"
 sh_dir="$tmp/seathold"; mkdir -p "$sh_dir/bin" "$sh_dir/dropin"

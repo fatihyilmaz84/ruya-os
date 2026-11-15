@@ -8,7 +8,8 @@
   RouteChanged since RUY-3 (T-367), UserActive since RUY-588, GetCapabilities and the button test (StartTest, StopTest,
   TestInput, TestEnded) since RUY-39 (T-368), and the controller profile members (ListProfiles,
   GetProfile, SaveProfile, ValidateProfile, DeleteProfile, AssignProfile for the global scope,
-  GetEffectiveProfile, ProfilesChanged) since RUY-42 (T-369), SetConfirmButton, ConfirmButton and
+  GetEffectiveProfile, ProfilesChanged) since RUY-42 (T-369), ForgetConsoleProfile and
+  StoredConsoleProfiles since RUY-468, SetConfirmButton, ConfirmButton and
   ActiveInputChanged since RUY-40 (per controller, with GetConfirmButtons, since RUY-603), and the
   players (JoinPlayer, LeavePlayer, ListPlayers, PlayersChanged; the device record's slot and
   profile) since RUY-121 (ADR-017 seats; the seat gate is on since RUY-122, see Players), the
@@ -504,6 +505,31 @@
     <signal name="ProfilesChanged">
       <arg name="profile" type="s"/>
     </signal>
+    <!-- A console profile's controller profiles go with it (RUY-468, 06 §7 "Storage"): the shell
+         calls ForgetConsoleProfile after Profiles1.DeleteProfile answers "ok", for every guest id
+         that leaves Profiles1.ListGuests (RemoveGuest, the wipe at Lock, Switch and start), and
+         at its start for every id StoredConsoleProfiles lists that is neither a profile nor a live
+         guest (only when both lists answered "ok"). Shell and root only, like every Input1
+         member. `profile` need not be a profile account (it is called after the account is gone),
+         only a valid profile id: non-empty, at most 32 characters, each of [A-Za-z0-9_-] (never
+         "..", "/" or "."). The service removes <StateDirectory>/profiles/<profile> and the files
+         in it without following a link (a link is unlinked, its target untouched), drops what it
+         had read of it, and the pads seated with that profile take "default". Status: "ok" (also
+         when nothing was there), "invalid" (not a valid id; nothing touched), "failed" (an I/O
+         error; part of it may be left, the shell's next start sweeps it). "ok" and "failed" send one
+         ProfilesChanged. -->
+    <method name="ForgetConsoleProfile">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+    <!-- Read-only: the console profiles that have a directory of controller profiles, the names
+         under <StateDirectory>/profiles that are valid profile ids (a directory, or a link there
+         that ForgetConsoleProfile unlinks), sorted, at most 256. Status: "ok", "failed" (not
+         read; profiles empty). -->
+    <method name="StoredConsoleProfiles">
+      <arg name="status" type="s" direction="out"/>
+      <arg name="profiles" type="as" direction="out"/>
+    </method>
 
     <!-- Ownership modes (T-371), per app; applied at the next launch. -->
     <method name="GetOwnershipMode">

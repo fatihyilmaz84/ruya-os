@@ -12,6 +12,7 @@ namespace {
 constexpr int MaxBytes = 64 * 1024;
 constexpr int MaxLevels = 8;
 constexpr int MaxProfiles = 64;
+constexpr int MaxStoredConsoles = 256; // StoredConsoleProfiles' cap (book.rs MAX_ENTRIES)
 const QString DefaultId = QStringLiteral("default");
 const QString NintendoId = QStringLiteral("nintendo");
 
@@ -60,7 +61,9 @@ const QStringList &padButtons()
 
 bool matches(const QString &pattern, const QString &s)
 {
-    return QRegularExpression(pattern).match(s).hasMatch();
+    // Anchored at the very end: a bare `$` would also match before a final newline (an id "p3"
+    // followed by a line feed).
+    return QRegularExpression(QRegularExpression::anchoredPattern(pattern)).match(s).hasMatch();
 }
 
 bool validId(const QString &s)
@@ -383,6 +386,14 @@ MockInputProfiles::MockInputProfiles(FamilyOf familyOf, AppIdOk appIdOk)
 void MockInputProfiles::reset()
 {
     m_shelves.clear();
+    m_stored.clear();
+}
+
+QStringList MockInputProfiles::stored() const
+{
+    QStringList ids(m_stored.cbegin(), m_stored.cend());
+    ids.sort();
+    return ids;
 }
 
 QStringList MockInputProfiles::validate(const QString &text, QJsonObject *out)
@@ -629,8 +640,21 @@ QVariantMap MockInputProfiles::call(const QString &method, const QVariantMap &ar
         const QStringList errors = validate(args.value(QStringLiteral("json")).toString(), nullptr);
         return answer(errors.isEmpty() ? QStringLiteral("ok") : QStringLiteral("invalid"), {{QStringLiteral("errors"), errors}});
     }
+    if (method == QLatin1String("StoredConsoleProfiles")) {
+        return answer(QStringLiteral("ok"), {{QStringLiteral("profiles"), stored().mid(0, MaxStoredConsoles)}});
+    }
+    if (method == QLatin1String("ForgetConsoleProfile")) {
+        // Only the id rule (accounts.rs valid_profile_id): the account is gone by now (RUY-468).
+        static const QRegularExpression id(QRegularExpression::anchoredPattern(QStringLiteral("[A-Za-z0-9_-]{1,32}")));
+        if (!id.match(console).hasMatch())
+            return answer(QStringLiteral("invalid"));
+        m_shelves.remove(console);
+        m_stored.remove(console);
+        *changed = console;
+        return answer(QStringLiteral("ok"));
+    }
     // The console profile: the form of ruya-profiles' ids (the service also wants the account).
-    static const QRegularExpression consoleId(QStringLiteral("^[A-Za-z0-9_-]{1,32}$"));
+    static const QRegularExpression consoleId(QRegularExpression::anchoredPattern(QStringLiteral("[A-Za-z0-9_-]{1,32}")));
     if (!consoleId.match(console).hasMatch()) {
         QVariantMap empty;
         if (method == QLatin1String("ListProfiles"))
@@ -697,6 +721,7 @@ QVariantMap MockInputProfiles::call(const QString &method, const QVariantMap &ar
                 ++it;
         }
         *changed = console;
+        m_stored.insert(console);
         return answer(QStringLiteral("ok"), {{QStringLiteral("profile_id"), id}, {QStringLiteral("errors"), QStringList()}});
     }
     if (method == QLatin1String("DeleteProfile")) {
@@ -743,6 +768,7 @@ QVariantMap MockInputProfiles::call(const QString &method, const QVariantMap &ar
             shelf.global.remove(slot);
         }
         *changed = console;
+        m_stored.insert(console); // the assignments file
         return answer(QStringLiteral("ok"));
     }
     if (method == QLatin1String("GetEffectiveProfile")) {

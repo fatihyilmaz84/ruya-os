@@ -90,9 +90,15 @@ public:
         m_forcedOnce.clear();
         m_holdSaves = false;
         m_held.clear();
+        m_holdStored = false;
+        m_heldStored.clear();
         m_confirm.clear();
         m_confirmsDelayed = false;
     }
+    // Tests (RUY-468): the console profiles with controller profiles stored (what
+    // StoredConsoleProfiles answers), and one more as if it had been left on disk.
+    QStringList storedConsoles() const { return m_profiles.stored(); }
+    void addStoredConsole(const QString &profile) { m_profiles.noteStored(profile); }
     // While set, every call of `method` answers `status` (its other out-arguments empty) without
     // reaching the profiles: a refused or failed save for the pages' tests (RUY-465). "" clears it.
     void setProfileStatus(const QString &method, const QString &status)
@@ -107,6 +113,9 @@ public:
     // While on, SaveProfile calls are recorded but not carried out nor answered until the hold ends;
     // then they run in order (RUY-595: a save still in flight).
     void holdSaves(bool hold);
+    // The same for StoredConsoleProfiles (RUY-468): the start sweep waits for its answer, which is
+    // read when the hold ends (the lists the shell receives meanwhile are the race it guards).
+    void holdStored(bool hold);
 
     // Like setProfileStatus, but only the next call of `method` is answered so (RUY-571).
     void setProfileStatusOnce(const QString &method, const QString &status)
@@ -188,6 +197,8 @@ private:
     bool m_replaying = false;
     struct HeldCall { quint64 token; QVariantMap args; };
     QList<HeldCall> m_held;
+    bool m_holdStored = false;
+    QList<quint64> m_heldStored;   // StoredConsoleProfiles tokens not answered yet
     bool m_listFail = false;
     QVariantList m_devices;
     QSet<QString> m_tests;
