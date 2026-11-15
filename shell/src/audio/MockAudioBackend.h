@@ -36,7 +36,7 @@ public:
     bool plugInput(const QString &id);
     void unplugInput(const QString &id);
 
-    // Tests only: "usb-headset" ("USB headset") and "bt-headphones" ("BT headphones").
+    // Tests only: "usb-headset" ("USB headset") "bt-headphones" ("BT headphones") and "long-device" (a 75-character name).
     // Returns false for an unknown id; plugging a connected device in again does nothing.
     bool plug(const QString &id);
     void unplug(const QString &id);

@@ -24,6 +24,10 @@ bool pluggable(const QString &id, SinkInfo *out)
         *out = {id, QStringLiteral("BT headphones"), QStringLiteral("bluetooth"), false};
         return true;
     }
+    if (id == QLatin1String("long-device")) {
+        *out = {id, QStringLiteral("Studio Reference Monitor Pro Wireless Surround Soundbar (Living room, 5.1)"), QStringLiteral("usb"), false};
+        return true;
+    }
     return false;
 }
 bool pluggableInput(const QString &id, InputInfo *out)
