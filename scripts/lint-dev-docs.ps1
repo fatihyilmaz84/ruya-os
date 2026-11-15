@@ -293,11 +293,12 @@ if (Test-Path $xmlDir) {
         $rel = "api/dbus/$($x.Name)"
         $d = New-Object System.Xml.XmlDocument
         $d.XmlResolver = $null   # the introspection DOCTYPE points at freedesktop.org: never fetch it
-        # Comments are dropped first: two shipped files have a "--" inside a comment (strictly not
-        # well-formed, but libdbus and Qt read them), and a comment can carry no annotation.
-        $xmlText = [regex]::Replace([IO.File]::ReadAllText($x.FullName, $Utf8), '(?s)<!--.*?-->', '')
+        $xmlText = [IO.File]::ReadAllText($x.FullName, $Utf8)
         try { $d.LoadXml($xmlText) }
-        catch { Fail $rel "is not well-formed xml: $($_.Exception.Message)"; continue }
+        catch {
+            $ln = if ($_.Exception.InnerException -and $null -ne $_.Exception.InnerException.LineNumber) { $_.Exception.InnerException.LineNumber } else { 0 }
+            Fail $rel "is not well-formed xml (line $ln): $($_.Exception.Message)"; continue
+        }
         foreach ($iface in $d.SelectNodes("//interface")) {
             $iname = $iface.GetAttribute("name")
             foreach ($el in $iface.ChildNodes) {

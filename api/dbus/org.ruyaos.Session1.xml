@@ -119,7 +119,7 @@
     </method>
 
     <!-- Freezes a running app of the signed-in profile (T-457, the Ruya Hub pauses the game): the
-         cgroup freezer (`systemctl --user freeze`) of the app's unit and of every active Flatpak
+         cgroup freezer (the user-level freeze of `systemctl`) of the app's unit and of every active Flatpak
          scope of the app, named exactly (never a sibling app whose id starts with this one's). Its
          processes stop where they are (no CPU; their sound streams run dry and, T-466, are parked on a
          null sink so the sound card can suspend, unless another app of the profile still runs); the

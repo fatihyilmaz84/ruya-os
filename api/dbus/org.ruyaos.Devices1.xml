@@ -1030,7 +1030,7 @@
         2. The shell, back on the new mode, finds GetPending non-empty and asks "Keep this
            resolution?" with a 15 s countdown. Keep stores the mode; Revert (Back, or the countdown
            running out) restores the stored one, and the shell restarts again.
-        3. Every compositor start runs `ruya-devices --display-guard` first. The first start with a
+        3. Every compositor start runs `ruya-devices` with its display-guard option first. The first start with a
            marker counts it; a second start with the marker still there means nobody confirmed (the
            shell crashed, or the screen stayed black and the console was power-cycled): the choice
            is dropped, the TV's preferred mode comes back, and TakeFallbackNotice answers true once.
