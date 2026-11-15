@@ -269,6 +269,9 @@ public:
     // more as if it were left on disk (an orphan for the start sweep, RUY-468).
     Q_INVOKABLE QStringList mockStoredConsoleProfiles() const;
     Q_INVOKABLE void mockAddStoredConsoleProfile(const QString &profile);
+    // While true StoredConsoleProfiles calls wait (recorded, not answered); false answers them with
+    // what is stored then (the start sweep's race, RUY-468).
+    Q_INVOKABLE void mockHoldStoredConsoleProfiles(bool hold);
 
 signals:
     void routeChanged();

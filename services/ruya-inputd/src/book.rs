@@ -55,7 +55,7 @@ pub trait ProfileStore: Send {
     /// Removes a file; a file that is not there is no error.
     fn remove(&mut self, console: &str, name: &str) -> io::Result<()>;
     /// Removes the console profile's directory and everything in it (RUY-468); a directory that
-    /// is not there is no error. On an error, what could be removed is gone.
+    /// is not there is no error. On an error, part of it may be left (the next sweep tries again).
     fn remove_all(&mut self, console: &str) -> io::Result<()>;
     /// The console profiles that have a directory: names that are valid profile ids, sorted, at
     /// most `MAX_ENTRIES`.
@@ -165,26 +165,10 @@ impl ProfileStore for DirStore {
             // untouched.
             return not_found_ok(fs::remove_file(&dir));
         }
-        // Every entry is unlinked (a link inside too, never followed: a directory entry's type is
-        // its own); the first error is kept and the rest is still removed.
-        let mut first: Option<io::Error> = None;
-        for entry in fs::read_dir(&dir)? {
-            let removed = entry.and_then(|entry| {
-                if entry.file_type()?.is_dir() {
-                    // Nothing the service writes; std's removal does not follow links either.
-                    fs::remove_dir_all(entry.path())
-                } else {
-                    fs::remove_file(entry.path())
-                }
-            });
-            if let Err(e) = not_found_ok(removed) {
-                first.get_or_insert(e);
-            }
-        }
-        if let Err(e) = not_found_ok(fs::remove_dir(&dir)) {
-            first.get_or_insert(e);
-        }
-        first.map_or(Ok(()), Err)
+        // A real directory: std's removal works relative to open directory handles (openat and
+        // unlinkat with O_NOFOLLOW on Unix since the CVE-2022-21658 fix), so a link inside, or one
+        // swapped in while it runs, is unlinked and never followed.
+        not_found_ok(fs::remove_dir_all(&dir))
     }
 
     fn list_consoles(&mut self) -> io::Result<Vec<String>> {
@@ -194,8 +178,8 @@ impl ProfileStore for DirStore {
             Err(e) => return Err(e),
         };
         let mut out = Vec::new();
-        for entry in entries {
-            let entry = entry?;
+        // An entry that cannot be read is skipped, not the whole list.
+        for entry in entries.flatten() {
             let Ok(name) = entry.file_name().into_string() else {
                 continue;
             };
@@ -203,15 +187,16 @@ impl ProfileStore for DirStore {
                 continue;
             }
             // A directory, or a link in its place (ForgetConsoleProfile unlinks it); never a file.
-            let kind = entry.file_type()?;
-            if kind.is_dir() || kind.is_symlink() {
+            if entry
+                .file_type()
+                .is_ok_and(|kind| kind.is_dir() || kind.is_symlink())
+            {
                 out.push(name);
-                if out.len() >= MAX_ENTRIES {
-                    break;
-                }
             }
         }
+        // The first MAX_ENTRIES by name, not by readdir order.
         out.sort();
+        out.truncate(MAX_ENTRIES);
         Ok(out)
     }
 }
@@ -927,7 +912,7 @@ impl Book {
     /// `ForgetConsoleProfile` (RUY-468): the console profile's directory goes, and what was read
     /// of it; the next read finds an empty store. `console` need not be a profile account (it is
     /// gone), only a valid id ("invalid", nothing touched). A failed removal still drops the shelf:
-    /// what could be removed is gone.
+    /// part of the directory may be gone.
     pub fn forget(&mut self, console: &str) -> Status {
         if !valid_profile_id(console) {
             return Status::Invalid;
@@ -1889,7 +1874,7 @@ mod tests {
         assert_eq!(ids(&mut b), ["default", "nintendo", "mine"]);
         assert_eq!(b.forget("p1"), Status::Ok);
         assert_eq!(ids(&mut b), ["default", "nintendo"]);
-        // A store that fails still loses the shelf (what could be removed is gone) and says so.
+        // A store that fails still loses the shelf (part of the directory may be gone) and says so.
         let mut failing = Book::new(Box::new(MemStore::default()));
         assert_eq!(failing.save("p1", &profile("mine", "")).0, Status::Ok);
         assert_eq!(ids(&mut failing), ["default", "nintendo", "mine"]);
@@ -1947,7 +1932,10 @@ mod tests {
         for n in 0..300 {
             fs::create_dir_all(root.join(format!("g{n:03}"))).unwrap();
         }
-        assert_eq!(b.stored_consoles().unwrap().len(), MAX_ENTRIES);
+        let capped = b.stored_consoles().unwrap();
+        assert_eq!(capped.len(), MAX_ENTRIES);
+        // The first 256 by name, whatever the directory's order.
+        assert_eq!((capped[0].as_str(), capped[255].as_str()), ("g000", "g255"));
         let mut mem = book();
         assert_eq!(mem.save("p1", &profile("mine", "")).0, Status::Ok);
         assert_eq!(mem.stored_consoles(), Ok(vec!["p1".to_owned()]));

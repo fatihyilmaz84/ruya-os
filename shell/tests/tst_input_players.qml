@@ -120,6 +120,9 @@ Item {
             compare(join("usb-0000-0000-ffffffffffff", "p5"), ["unknown-device", 0])
             compare(join("Not An Id", "p5"), ["invalid", 0])
             compare(join(host.dualSense, "../p1"), ["unknown-profile", 0])
+            // A trailing line feed is no id (RUY-468: the mock's checks are anchored, as the service's are).
+            compare(join(host.dualSense, "p2\n"), ["unknown-profile", 0])
+            compare(join(host.xbox + "\n", "p2"), ["invalid", 0])
             // The same pad and profile again: ok, nothing changes.
             compare(join(host.xbox, "p2"), ["ok", 2])
             compare(leave(1), "not-allowed")

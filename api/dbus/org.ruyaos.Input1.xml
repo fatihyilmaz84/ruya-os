@@ -516,7 +516,8 @@
          in it without following a link (a link is unlinked, its target untouched), drops what it
          had read of it, and the pads seated with that profile take "default". Status: "ok" (also
          when nothing was there), "invalid" (not a valid id; nothing touched), "failed" (an I/O
-         error; what could be removed is gone). "ok" and "failed" send one ProfilesChanged. -->
+         error; part of it may be left, the shell's next start sweeps it). "ok" and "failed" send one
+         ProfilesChanged. -->
     <method name="ForgetConsoleProfile">
       <arg name="profile" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>

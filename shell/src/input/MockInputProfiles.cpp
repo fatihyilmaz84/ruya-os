@@ -61,7 +61,9 @@ const QStringList &padButtons()
 
 bool matches(const QString &pattern, const QString &s)
 {
-    return QRegularExpression(pattern).match(s).hasMatch();
+    // Anchored at the very end: a bare `$` would also match before a final newline (an id "p3"
+    // followed by a line feed).
+    return QRegularExpression(QRegularExpression::anchoredPattern(pattern)).match(s).hasMatch();
 }
 
 bool validId(const QString &s)
@@ -652,7 +654,7 @@ QVariantMap MockInputProfiles::call(const QString &method, const QVariantMap &ar
         return answer(QStringLiteral("ok"));
     }
     // The console profile: the form of ruya-profiles' ids (the service also wants the account).
-    static const QRegularExpression consoleId(QStringLiteral("^[A-Za-z0-9_-]{1,32}$"));
+    static const QRegularExpression consoleId(QRegularExpression::anchoredPattern(QStringLiteral("[A-Za-z0-9_-]{1,32}")));
     if (!consoleId.match(console).hasMatch()) {
         QVariantMap empty;
         if (method == QLatin1String("ListProfiles"))

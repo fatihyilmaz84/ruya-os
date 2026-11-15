@@ -261,6 +261,9 @@ Item {
         function test_the_status_strings() {
             Input.listProfiles("../etc")
             compare(answer(listedSpy)[1], "unknown-profile")
+            // A trailing line feed is no console profile id, as for the service (RUY-468).
+            Input.listProfiles("p2\n")
+            compare(answer(listedSpy, 2)[1], "unknown-profile")
             let a = save('{"schema_version":1,"id":"x","name":"","scope":{"type":"global"},"script":1}')
             compare(a[1], "invalid")
             verify(a[3].some(e => e.indexOf("/name: ") === 0), a[3])
@@ -295,7 +298,7 @@ Item {
             compare(changedSpy.count, 0, "nothing changed")
             Input.mockFail(true)
             Input.listProfiles(tc.me)
-            compare(answer(listedSpy, 2)[1], "failed")
+            compare(answer(listedSpy, 3)[1], "failed")
             Input.saveProfile(tc.me, profile("x"))
             compare(answer(savedSpy, 5)[1], "failed")
         }
