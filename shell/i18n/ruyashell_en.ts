@@ -2575,12 +2575,12 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ManageProfilesPane</name>
     <message>
-        <location filename="../qml/ManageProfilesPane.qml" line="+43"/>
+        <location filename="../qml/ManageProfilesPane.qml" line="+162"/>
         <source>Your own profile is under My profile.</source>
         <translation>Your own profile is under My profile.</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="-64"/>
         <source>Enter a name first.</source>
         <translation>Enter a name first.</translation>
     </message>
@@ -2595,27 +2595,12 @@ This can&apos;t be undone.</translation>
         <translation>Profile “%1” created</translation>
     </message>
     <message>
-        <location line="+16"/>
-        <source>Profile renamed.</source>
-        <translation>Profile renamed.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Profile renamed</source>
-        <translation>Profile renamed</translation>
-    </message>
-    <message>
-        <location line="+4"/>
+        <location line="-56"/>
         <source>Profile “%1” deleted.</source>
         <translation>Profile “%1” deleted.</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Profile “%1” deleted</source>
-        <translation>Profile “%1” deleted</translation>
-    </message>
-    <message>
-        <location line="+25"/>
+        <location line="+86"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
@@ -2623,16 +2608,6 @@ This can&apos;t be undone.</translation>
         <location line="+1"/>
         <source>You</source>
         <translation>You</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Rename %1</source>
-        <translation>Rename %1</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Delete %1</source>
-        <translation>Delete %1</translation>
     </message>
     <message>
         <location line="+10"/>
@@ -2683,6 +2658,39 @@ This can&apos;t be undone.</translation>
         <location line="+11"/>
         <source>Create profile</source>
         <translation>Create profile</translation>
+    </message>
+</context>
+<context>
+    <name>ManagedProfilePage</name>
+    <message>
+        <location filename="../qml/ManagedProfilePage.qml" line="+82"/>
+        <source>Profile renamed.</source>
+        <translation>Profile renamed.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Profile renamed</source>
+        <translation>Profile renamed</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Profile “%1” deleted</source>
+        <translation>Profile “%1” deleted</translation>
+    </message>
+    <message>
+        <location line="+18"/>
+        <source>PIN</source>
+        <translation>PIN</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Rename %1</source>
+        <translation>Rename %1</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Delete %1</source>
+        <translation>Delete %1</translation>
     </message>
 </context>
 <context>
@@ -3735,7 +3743,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ProfilePaneBase</name>
     <message>
-        <location filename="../qml/ProfilePaneBase.qml" line="+39"/>
+        <location filename="../qml/ProfilePaneBase.qml" line="+40"/>
         <source>Admin</source>
         <translation>Admin</translation>
     </message>
@@ -4285,7 +4293,7 @@ This can&apos;t be undone.</translation>
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+13"/>
-        <location line="+122"/>
+        <location line="+123"/>
         <source>Settings</source>
         <translation>Settings</translation>
     </message>
@@ -4365,7 +4373,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+305"/>
+        <location line="+306"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -4638,7 +4646,7 @@ This can&apos;t be undone.</translation>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
     <message>
-        <location line="+62"/>
+        <location line="+63"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Wallpaper could not be loaded</translation>
     </message>
@@ -4727,7 +4735,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 was uninstalled.</translation>
     </message>
     <message>
-        <location line="+529"/>
+        <location line="+530"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -4749,7 +4757,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1843"/>
+        <location line="-1845"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -4780,7 +4788,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1591"/>
+        <location line="+1593"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>

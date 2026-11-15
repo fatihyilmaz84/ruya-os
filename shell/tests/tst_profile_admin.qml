@@ -211,9 +211,9 @@ Item {
             compare(find("rowNewName").kind, "page")
             compare(find("rowCreate").kind, "action")
             compare(find("rowCreate").primary, true, "Create profile is the main verb: primaryFill")
-            compare(find("rowRename").kind, "action")
-            compare(find("rowDelete").kind, "action")
-            compare(find("profileRow_p1").kind, "item")
+            compare(find("profileRow_p1").kind, "item", "your own row opens nothing")
+            compare(find("profileRow_p2").kind, "page", "another profile's row opens its page")
+            verify(find("rowRename") === null && find("rowDelete") === null, "Rename and Delete are not on the list")
         }
 
         function nameRowValue() { return findChild(find("rowNewName"), "value").text }
@@ -589,32 +589,141 @@ Item {
             keyClick(Qt.Key_Return)
         }
 
+        // A on another profile's row: its page opens with Rename focused (RUY-715). Its modals have
+        // their own names ("managedProfile...").
+        function openProfilePage(id) {
+            selectRow(id)
+            tryCompare(tc.shell, "currentPage", "managedProfile")
+            tryVerify(() => find("rowRename").activeFocus, 2000, "Rename is focused first")
+            tc.padName = "managedProfilePinPad"
+        }
+
+        // Back from the profile page: Manage profiles, focus on that profile's row.
+        function backToRow(id) {
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("profileRow_" + id) !== null && find("profileRow_" + id).activeFocus, 2000,
+                      "focus is back on the profile's row: " + (Window.activeFocusItem ? Window.activeFocusItem.objectName : "none"))
+        }
+
         function openConfirmFor(id, exists) {
             if (!exists)
                 create("p1", "1234", "Kid", "standard", "")
             tryVerify(() => find("profileRow_" + id) !== null)
-            selectRow(id)
-            tryVerify(() => find("rowDelete").visible && find("rowRename").activeFocus, 2000, "actions open on Rename")
+            openProfilePage(id)
+            tryVerify(() => find("rowDelete").visible, 2000)
             keyClick(Qt.Key_Down)
             tryVerify(() => find("rowDelete").activeFocus)
             keyClick(Qt.Key_Return)
-            tryVerify(() => find("profilesDeleteConfirm").shown)
+            tryVerify(() => find("managedProfileDeleteConfirm").shown)
+        }
+
+        function focusName() { return Window.activeFocusItem ? Window.activeFocusItem.objectName : "none" }
+
+        // RUY-715: A on another profile opens its page: the profile as a fact, then Rename and Delete,
+        // focused in that order; Back returns to the profile's row.
+        function test_profile_page_opens_with_rename_then_delete() {
+            startShell()
+            signIn("p1", "1234")
+            openProfilesPane()
+            openProfilePage("p2")
+            compare(findChild(find("rowManagedWho"), "label").text, "Ada", "the page names the profile")
+            compare(findChild(find("rowManagedWho"), "value").text, "Standard")
+            compare(find("page_managedProfile").title, "Ada")
+            compare(find("rowRename").kind, "action")
+            compare(find("rowDelete").kind, "action")
+            compare(findChild(find("rowRename"), "label").text, "Rename Ada")
+            compare(findChild(find("rowDelete"), "label").text, "Delete Ada")
+            verify(find("rowRename").activeFocus)
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("rowDelete").activeFocus, 2000, "Delete follows Rename")
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("rowRename").activeFocus)
+            backToRow("p2")
+            verify(find("paneProfiles").activeFocus, "the list has the focus again")
+            tryVerify(() => find("rowRename") === null, 3000, "the page is gone")
+        }
+
+        // Left leaves the page too, and a profile opened again shows its own name.
+        function test_profile_page_left_leaves_and_each_profile_has_its_own() {
+            startShell()
+            signIn("p1", "1234")
+            openProfilesPane()
+            openProfilePage("p2")
+            keyClick(Qt.Key_Left)
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("profileRow_p2").activeFocus, 2000)
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("profileRow_p3").activeFocus)
+            tryVerify(() => find("rowRename") === null, 3000, "the first page is gone")
+            openProfilePage("p3")
+            compare(findChild(find("rowManagedWho"), "label").text, "Sam")
+            compare(findChild(find("rowManagedWho"), "value").text, "Guest")
+        }
+
+        // Your own profile opens nothing from the list (it says where it is), and a page forced open
+        // for it (a deep link) offers neither Rename nor Delete.
+        function test_own_profile_row_opens_nothing_and_its_page_offers_nothing() {
+            startShell()
+            signIn("p1", "1234")
+            openProfilesPane()
+            selectRow("p1")
+            compare(tc.shell.currentPage, "settings", "no page opened")
+            verify(find("rowRename") === null)
+            tryVerify(() => find("profilesMessage").text.indexOf("My profile") >= 0, 2000, "the pane says where")
+            tryVerify(() => find("profileRow_p1").activeFocus, 2000, "focus stays on the row")
+            tc.shell.openPage("managedProfile", { id: "p1" })
+            tryCompare(tc.shell, "currentPage", "managedProfile")
+            verify(!find("rowRename").visible, "your own profile is not renamed here")
+            verify(!find("rowDelete").visible, "nor deleted")
+        }
+
+        // The signed-in profile stops being an admin while a profile page is open: the page closes.
+        function test_profile_page_closes_when_the_admin_changes() {
+            startShell()
+            signIn("p1", "1234")
+            openProfilesPane()
+            openProfilePage("p3")
+            Profiles.switchTo("p2", "")
+            tryCompare(Profiles, "activeProfile", "p2")
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("page_managedProfile") === null, 3000, "the page is gone")
+            tryVerify(() => find("category_profiles") === null, 2000, "and so is Manage profiles")
+            tryVerify(() => find("categoryList").activeFocus, 2000, "focus lands on the category list: " + focusName())
+        }
+
+        // The profile is deleted behind the page's back: the page closes and the focus lands on the next row.
+        function test_profile_page_closes_when_its_profile_is_removed() {
+            startShell()
+            signIn("p1", "1234")
+            openProfilesPane()
+            openProfilePage("p2")
+            compare(remove("p1", "1234", "p2")[1], "ok")
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("profileRow_p2") === null)
+            tryVerify(() => find("profileRow_p3") !== null && find("profileRow_p3").activeFocus, 2000,
+                      "focus goes to the next row: " + focusName())
         }
 
         function test_rename_other() {
             startShell()
             signIn("p1", "1234")
             openProfilesPane()
-            selectRow("p2")
-            tryVerify(() => find("rowRename").activeFocus, 2000, "Rename is focused")
+            openProfilePage("p2")
             keyClick(Qt.Key_Return)
-            tryVerify(() => find("profilesRenameEntry").shown)
-            compare(find("profilesRenameEntry").text, "Ada", "pre-filled with the current name")
-            typeName("m", "profilesRenameEntry")
-            tryVerify(() => find("profilesPinPad").shown, 2000, "the admin PIN is asked")
+            tryVerify(() => find("managedProfileRenameEntry").shown)
+            compare(find("managedProfileRenameEntry").text, "Ada", "pre-filled with the current name")
+            typeName("m", "managedProfileRenameEntry")
+            tryVerify(() => find("managedProfilePinPad").shown, 2000, "the admin PIN is asked")
             enterPin("1234")
             tryVerify(() => Profiles.profiles[1].name === "Adam", 3000)
-            tryVerify(() => find("profileRow_p2") !== null && find("profileRow_p2").activeFocus, 2000, "focus stays on the row")
+            tryVerify(() => find("rowRename").activeFocus, 2000, "the page stays, focus back on Rename: " + focusName())
+            compare(tc.shell.currentPage, "managedProfile")
+            compare(findChild(find("rowManagedWho"), "label").text, "Adam", "the page shows the new name")
+            compare(find("page_managedProfile").title, "Adam")
+            compare(findChild(find("rowRename"), "label").text, "Rename Adam")
+            tryVerify(() => find("managedProfileMessage").text === "Profile renamed.")
+            backToRow("p2")
             compare(findChild(find("profileRow_p2"), "label").text, "Adam")
         }
 
@@ -637,12 +746,13 @@ Item {
             signIn("p1", "1234")
             openProfilesPane()
             openConfirmFor("p4")
-            verify(findChild(find("profilesDeleteConfirm"), "powerCancel").activeFocus, "Cancel is focused first")
+            verify(findChild(find("managedProfileDeleteConfirm"), "powerCancel").activeFocus, "Cancel is focused first")
             keyClick(Qt.Key_Return)
-            tryVerify(() => !find("profilesDeleteConfirm").shown)
+            tryVerify(() => !find("managedProfileDeleteConfirm").shown)
             compare(Profiles.profiles.length, 4)
             compare(deleteSpy.count, 0)
             tryVerify(() => find("rowDelete").activeFocus, 2000, "focus is back on Delete")
+            compare(tc.shell.currentPage, "managedProfile", "the page stays")
         }
 
         function test_delete_confirm() {
@@ -651,12 +761,14 @@ Item {
             openProfilesPane()
             openConfirmFor("p4")
             keyClick(Qt.Key_Right)
-            verify(findChild(find("profilesDeleteConfirm"), "powerConfirm").activeFocus)
+            verify(findChild(find("managedProfileDeleteConfirm"), "powerConfirm").activeFocus)
             keyClick(Qt.Key_Return)
-            tryVerify(() => find("profilesPinPad").shown)
+            tryVerify(() => find("managedProfilePinPad").shown)
             enterPin("1234")
             tryVerify(() => Profiles.profiles.length === 3, 3000)
+            tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("profileRow_p4") === null)
+            tryVerify(() => find("profilesMessage").text.indexOf("deleted") >= 0, 2000, "the list says it")
             tryVerify(() => find("profileRow_p3") !== null && find("profileRow_p3").activeFocus, 2000,
                       "focus goes to the previous row at the end of the list: "
                       + (Window.activeFocusItem ? Window.activeFocusItem.objectName : "none"))
@@ -667,13 +779,14 @@ Item {
             signIn("p1", "1234")
             openProfilesPane()
             selectRow("p1")                               // the active profile: renamed and PIN'd under My profile
-            verify(!find("rowRename").visible, "your own profile is not renamed here")
-            verify(!find("rowDelete").visible)
+            compare(tc.shell.currentPage, "settings", "your own profile opens no page")
+            verify(find("rowRename") === null && find("rowDelete") === null)
             verify(find("profilesMessage").text.indexOf("My profile") >= 0, "and the pane says where")
             tryVerify(() => find("profileRow_p1").activeFocus, 2000, "focus stays on the row")
             keyClick(Qt.Key_Down)
             tryVerify(() => find("profileRow_p2").activeFocus)
             keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "managedProfile")
             tryVerify(() => find("rowDelete").visible)
         }
 
@@ -683,29 +796,27 @@ Item {
             signIn("p1", "1234")
             openProfilesPane()
             compare(Profiles.profiles.find(p => p.id === "p3").role, "guest")
-            selectRow("p3")
+            openProfilePage("p3")
             tryVerify(() => find("rowRename").visible && find("rowDelete").visible, 2000, "both rows are offered")
-            tryVerify(() => find("rowRename").activeFocus, 2000, "Rename is focused")
             verify(find("rowRename").enabled && find("rowDelete").enabled)
             keyClick(Qt.Key_Return)
-            tryVerify(() => find("profilesRenameEntry").shown)
-            compare(find("profilesRenameEntry").text, "Sam", "pre-filled with the current name")
-            typeName("x", "profilesRenameEntry")
-            tryVerify(() => find("profilesPinPad").shown, 2000, "the admin PIN is asked")
+            tryVerify(() => find("managedProfileRenameEntry").shown)
+            compare(find("managedProfileRenameEntry").text, "Sam", "pre-filled with the current name")
+            typeName("x", "managedProfileRenameEntry")
+            tryVerify(() => find("managedProfilePinPad").shown, 2000, "the admin PIN is asked")
             enterPin("1234")
             tryVerify(() => Profiles.profiles.find(p => p.id === "p3").name === "Samx", 3000)
-            tryVerify(() => find("profileRow_p3") !== null && find("profileRow_p3").activeFocus, 2000, "focus stays on the row")
-            keyClick(Qt.Key_Return)
-            tryVerify(() => find("rowDelete").visible)
+            tryVerify(() => find("rowRename").activeFocus, 2000, "focus is back on Rename")
             keyClick(Qt.Key_Down)
             tryVerify(() => find("rowDelete").activeFocus)
             keyClick(Qt.Key_Return)
-            tryVerify(() => find("profilesDeleteConfirm").shown)
+            tryVerify(() => find("managedProfileDeleteConfirm").shown)
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
-            tryVerify(() => find("profilesPinPad").shown)
+            tryVerify(() => find("managedProfilePinPad").shown)
             enterPin("1234")
             tryVerify(() => Profiles.profiles.find(p => p.id === "p3") === undefined, 3000)
+            tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("profileRow_p3") === null)
         }
 
@@ -716,10 +827,12 @@ Item {
             openConfirmFor("p4")
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
-            tryVerify(() => find("profilesPinPad").shown)
+            tryVerify(() => find("managedProfilePinPad").shown)
             enterPin("0000")
-            tryVerify(() => find("profilesMessage").text.indexOf("4 attempt") >= 0, 3000)
+            tryVerify(() => find("managedProfileMessage").text.indexOf("4 attempt") >= 0, 3000)
             compare(Profiles.profiles.length, 4, "nothing was deleted")
+            compare(tc.shell.currentPage, "managedProfile", "the page stays")
+            tryVerify(() => find("rowDelete").activeFocus, 2000, "focus is back on Delete: " + focusName())
         }
 
         // ---- My profile and Manage profiles (T-315) ----
@@ -882,26 +995,27 @@ Item {
             compare(create("p1", "1234", "Admin2", "admin", "4321")[0], "ok")
             tryVerify(() => Profiles.profiles.length === 4)
             openProfilesPane()
-            selectRow("p4")
-            tryVerify(() => find("rowRename").activeFocus, 2000, "actions open on Rename")
+            openProfilePage("p4")
             verify(find("rowDelete").visible, "a second admin can be deleted while another admin exists")
             keyClick(Qt.Key_Down)
             tryVerify(() => find("rowDelete").activeFocus)
             keyClick(Qt.Key_Return)
-            tryVerify(() => find("profilesDeleteConfirm").shown)
+            tryVerify(() => find("managedProfileDeleteConfirm").shown)
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
-            tryVerify(() => find("profilesPinPad").shown)
+            tryVerify(() => find("managedProfilePinPad").shown)
             enterPin("1234")
             tryVerify(() => Profiles.profiles.length === 3, 3000, "the second admin was deleted")
+            tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("profileRow_p4") === null)
-            // The one admin left is the signed-in one: selecting oneself offers no Delete.
+            // The one admin left is the signed-in one: selecting oneself opens no page, so no Delete.
             tryVerify(() => find("profileRow_p3").activeFocus, 2000)
             keyClick(Qt.Key_Up)
             keyClick(Qt.Key_Up)
             tryVerify(() => find("profileRow_p1").activeFocus)
             keyClick(Qt.Key_Return)
-            verify(!find("rowDelete").visible)
+            compare(tc.shell.currentPage, "settings")
+            verify(find("rowDelete") === null)
         }
 
         function test_back_leaves_each_pane_to_the_category_list() {
@@ -975,6 +1089,41 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/24-profile-delete-confirm.png")
         }
 
+        // RUY-715: Manage profiles with another profile's row focused (its chevron says A opens something),
+        // and that profile's page, English and Turkish, at 1080p and 720p.
+        function profilePageShots(lang, w, h) {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Notifications.pending = []
+            while (Notifications.model.count > 0)
+                Notifications.dismiss(Notifications.model.get(0).toastId)
+            const tag = lang + "-" + h + "p"
+            host.width = w
+            host.height = h
+            DeviceSettings.language = lang
+            try {
+                startShell()
+                signIn("p1", "1234")
+                openProfilesPane()
+                goToRow("profileRow_p2")
+                wait(600)
+                grabImage(tc.shell).save(shotsDir + "/26-profile-list-" + tag + ".png")
+                keyClick(Qt.Key_Return)
+                tryCompare(tc.shell, "currentPage", "managedProfile")
+                tryVerify(() => find("rowRename").activeFocus, 2000)
+                wait(600)
+                grabImage(tc.shell).save(shotsDir + "/26-profile-page-" + tag + ".png")
+            } finally {
+                DeviceSettings.language = "en"
+                host.width = 1280
+                host.height = 720
+            }
+        }
+        function test_zz_screenshots_profile_page_en_1080() { profilePageShots("en", 1920, 1080) }
+        function test_zz_screenshots_profile_page_tr_1080() { profilePageShots("tr", 1920, 1080) }
+        function test_zz_screenshots_profile_page_en_720() { profilePageShots("en", 1280, 720) }
+        function test_zz_screenshots_profile_page_tr_720() { profilePageShots("tr", 1280, 720) }
+
         // RUY-685: Manage profiles with the kept guest-role profile selected, English and Turkish.
         function test_zz_screenshots_guest_role() {
             if (!shotsDir)
@@ -985,8 +1134,7 @@ Item {
             startShell()
             signIn("p1", "1234")
             openProfilesPane()
-            selectRow("p3")
-            tryVerify(() => find("rowRename").activeFocus, 2000)
+            openProfilePage("p3")
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/25-profile-guest-role-en.png")
             DeviceSettings.language = "tr"

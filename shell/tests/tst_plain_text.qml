@@ -169,7 +169,7 @@ Item {
             expectPlain(find("paneMyProfile"), tc.hostileProfile, 2, "Settings -> My profile")
         }
 
-        // Manage profiles (an admin's): the list and the Rename / Delete rows of the selected profile.
+        // Manage profiles (an admin's): the list, and the Rename / Delete rows on the profile's page (RUY-715).
         function test_profile_name_in_the_manage_profiles_pane() {
             renameBoth()
             Profiles.switchTo("p1", "1234")
@@ -181,9 +181,11 @@ Item {
             tryVerify(() => find("paneProfiles").activeFocus, 2000)
             keyClick(Qt.Key_Down)
             tryVerify(() => find("profileRow_p2").activeFocus, 2000, "Ada's row has focus")
-            keyClick(Qt.Key_Return)                      // select: Rename and Delete name the profile
+            expectPlain(find("paneProfiles"), tc.hostileProfile, 1, "Settings -> Manage profiles")
+            keyClick(Qt.Key_Return)                      // open the page: the fact, Rename and Delete name the profile
+            tryCompare(tc.shell, "currentPage", "managedProfile")
             tryVerify(() => find("rowDelete").visible, 2000)
-            expectPlain(find("paneProfiles"), tc.hostileProfile, 4, "Settings -> Manage profiles")
+            expectPlain(find("page_managedProfile"), tc.hostileProfile, 3, "a managed profile's page")
         }
 
         function test_profile_name_on_the_picker_and_the_pin_pad() {

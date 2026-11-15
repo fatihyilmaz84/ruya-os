@@ -244,6 +244,7 @@ qt_add_qml_module(ruyashell
         qml/ProfilePaneBase.qml
         qml/MyProfilePane.qml
         qml/ManageProfilesPane.qml
+        qml/ManagedProfilePage.qml
         qml/ProfileAddFlow.qml
         qml/ProfileManageFlow.qml
         qml/ChangePinFlow.qml

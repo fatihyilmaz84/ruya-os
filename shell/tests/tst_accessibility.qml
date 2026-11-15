@@ -491,8 +491,8 @@ Item {
         }
 
         // A PIN pad opened by the Profiles pane: walk its keys, then Back closes it.
-        function walkProfilesPad(where) {
-            const pad = find("profilesPinPad")
+        function walkProfilesPad(where, padName) {
+            const pad = find(padName ?? "profilesPinPad")
             tryVerify(() => pad.shown, 2000, where + ": the PIN pad opens")
             tryVerify(() => findChild(pad, "pinKeys").activeFocus, 2000, where + ": the keypad has focus")
             walk(Qt.Key_Right, 3, where + " pin row")
@@ -544,7 +544,8 @@ Item {
             compare(Profiles.profiles.length, 3, "nothing was created")
         }
 
-        // Settings -> Profiles as an admin: select a profile, Rename (keyboard) and Delete (confirmation, PIN pad).
+        // Settings -> Profiles as an admin: open a profile's page (RUY-715), Rename (keyboard) and Delete
+        // (confirmation, PIN pad).
         function test_profiles_manage_flow() {
             signInAsAdmin()
             openProfilesPane()
@@ -555,8 +556,10 @@ Item {
             tryVerify(() => row.activeFocus, 2000, "the Ada row has focus")
             checkFocused("profile row")
             compare(focused().Accessible.name.indexOf("Ada"), 0, "the row starts with the profile name")
-            keyClick(Qt.Key_Return)                      // select: Rename and Delete appear
+            keyClick(Qt.Key_Return)                      // open the profile's page: Rename and Delete
+            tryCompare(tc.shell, "currentPage", "managedProfile")
             tryVerify(() => find("rowRename").activeFocus, 2000, "Rename takes focus")
+            checkFocused("managed profile rename")
             checkFocused("manage rename")
             compare(focused().Accessible.name, "Rename Ada")
             keyClick(Qt.Key_Down)
@@ -567,7 +570,7 @@ Item {
             // Rename: the keyboard.
             keyClick(Qt.Key_Up)
             keyClick(Qt.Key_Return)
-            const entry = find("profilesRenameEntry")
+            const entry = find("managedProfileRenameEntry")
             tryVerify(() => entry.shown && entry.activeFocus, 2000, "the rename keyboard opens")
             verifyNamesChange(namesAlong(Qt.Key_Right, 4, "rename keyboard"), "rename keyboard")
             // Back deletes a letter of "Ada" first and cancels once the field is empty.
@@ -579,7 +582,7 @@ Item {
             keyClick(Qt.Key_Down)
             tryVerify(() => find("rowDelete").activeFocus)
             keyClick(Qt.Key_Return)
-            const confirm = find("profilesDeleteConfirm")
+            const confirm = find("managedProfileDeleteConfirm")
             tryVerify(() => confirm.shown, 2000, "the delete confirmation opens")
             const cancel = findChild(confirm, "powerCancel")
             tryVerify(() => cancel.activeFocus, 2000, "Cancel has focus")
@@ -592,7 +595,7 @@ Item {
             compare(focused().Accessible.name, "Delete Ada")
             compare(findChild(confirm, "powerConfirmLabel").text, "Delete Ada", "the visible label is the name (T-194)")
             keyClick(Qt.Key_Return)
-            walkProfilesPad("delete profile")
+            walkProfilesPad("delete profile", "managedProfilePinPad")
             tryVerify(() => find("rowDelete").activeFocus, 2000, "focus returns to Delete")
             checkFocused("manage delete after the pad")
             compare(Profiles.profiles.length, 3, "nothing was deleted")
