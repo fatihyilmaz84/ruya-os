@@ -318,6 +318,35 @@ function Test-QmlShardRunner {
     Remove-Item -Recurse -Force $fx -ErrorAction SilentlyContinue
 }
 
+# RUY-654: revert-check.ps1 gives the same verdict (exit code and CAUGHT line) whether its output is piped
+# through Select-Object -Last 3 or not, on a stand-in runner: a mutation the "test" notices is CAUGHT, one
+# that changes nothing is NOT CAUGHT.
+function Test-RevertCheckPiping {
+    $fx = Join-Path ([IO.Path]::GetTempPath()) ("ruya-revert-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $fx | Out-Null
+    $target = Join-Path $fx "target.txt"
+    [IO.File]::WriteAllText($target, "value=good`n")
+    $runner = { if ((Get-Content -Raw -LiteralPath $target) -match 'value=bad') { "FAIL!  : tst_fixture::test_value()"; "Totals: 0 passed, 1 failed" } else { "Totals: 1 passed, 0 failed" } }.GetNewClosure()
+    $script = Join-Path $PSScriptRoot "revert-check.ps1"
+    $ok = $true
+    $staleLog = Join-Path $fx "ruya-qmltest-tst_fixture.txt"
+    # The third case: a failing log left by an earlier run must not make a no-op mutation look caught.
+    foreach ($case in @(@{ New = "value=bad"; Caught = $true }, @{ New = "value=good"; Caught = $false }, @{ New = "value=good"; Caught = $false; Stale = $true })) {
+        foreach ($piped in @($false, $true)) {
+            if ($case.Stale) { Set-Content -LiteralPath $staleLog -Value "FAIL!  : tst_fixture::test_old()" }
+            if ($piped) { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Runner $runner -Test tst_fixture -LogDir $fx *>&1 | Select-Object -Last 3 | Out-String -Stream) }
+            else { $lines = @(& $script -File $target -Old "value=good" -New $case.New -Runner $runner -Test tst_fixture -LogDir $fx *>&1 | Out-String -Stream) }
+            $code = $LASTEXITCODE
+            $text = $lines -join "`n"
+            $said = if ($case.Caught) { $text -match '(?m)^CAUGHT' } else { $text -match 'NOT CAUGHT' }
+            $good = ($code -eq $(if ($case.Caught) { 0 } else { 1 })) -and $said -and ((Get-Content -Raw -LiteralPath $target) -eq "value=good`n")
+            if (-not $good) { $ok = $false; Write-Host "    piped=$piped caught=$($case.Caught): exit $code, output:`n$text" -ForegroundColor Yellow }
+        }
+    }
+    Remove-Item -Recurse -Force $fx -ErrorAction SilentlyContinue
+    Record "revert-check self-check (CAUGHT / NOT CAUGHT is the same plain and piped through Select-Object -Last 3)" $ok
+}
+
 # -InputFile: one test file (the `qml` fast mode), through the runner's -input, offscreen, with its own log.
 function Run-QmlTests([string]$ShotsDir, [string]$InputFile) {
     if (-not $ShotsDir -and -not $InputFile) { Run-QmlShards; return }
@@ -855,6 +884,8 @@ function Do-Shell {
     Record "display probe self-check (a window that presents no frames is reported)" ((Test-DisplayPresentsFrames -NoFrames -Offscreen) -eq 3)
     Step "Shard runner self-check (T-463)"
     Test-QmlShardRunner
+    Step "Revert check self-check (RUY-654)"
+    Test-RevertCheckPiping
     Step "Qt Quick tests (offscreen)"
     Run-QmlTests $null
 }
