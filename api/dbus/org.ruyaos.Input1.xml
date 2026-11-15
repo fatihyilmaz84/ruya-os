@@ -214,7 +214,8 @@
          its Thaw; a button held at that "app" is masked until it is let go). Anything else
          destroys them ("locked", "shell", another instance or profile, "overlay" with ""), so
          an app's open descriptor reads ENODEV and a pad never outlives its profile. Only a seated
-         pad has a virtual pad, and its number is its seat (phys ruya-input/pad<slot>; Players
+         pad has a virtual pad (besides the quiet ones of seats that lost their pad, RUY-681,
+         Players), and its number is its seat (phys ruya-input/pad<slot>; Players
          below, RUY-121; the seat gate, on since RUY-122: an unseated pad has none),
          and it stays through its seat's 60 s hold when its pad disconnects (RUY-627), and quiet after
          it until the owner ends (RUY-681, Players). On "app" for a new owner every seated pad's
@@ -267,7 +268,9 @@
          app sees no pad go or come. When the hold runs out seat n >= 2 is freed and seat 1 keeps its
          profile with device_id ""; their virtual pads stay, quiet, until the owner ends (RUY-681):
          a virtual pad keeps its number for the owner's whole life, and the next pad seated in that
-         number (the same player or another) is bound to it. Only LeavePlayer of that number, a
+         number (the same player or another) is bound to it. The quiet phase has no event and no
+         flag: the pad is only silent (no input; the app's rumble uploads are kept, its plays are
+         dropped). Pad n is a seat, not a person. Only LeavePlayer of that number, a
          profile change or the end of the owner (SetRoute) destroys it. A held seat keeps its number
          (unseated pads never take 1-4).
          The seat gate is on since RUY-122 (the shell's "Who's playing?" calls JoinPlayer): an

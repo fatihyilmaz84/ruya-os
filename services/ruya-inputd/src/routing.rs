@@ -1453,7 +1453,7 @@ impl<B: Backend> Router<B> {
     pub fn tick(&mut self, now: Instant) {
         self.tick_tests(now);
         self.expire_holds(now);
-        let due: Vec<(PadKey, String)> = self
+        let mut due: Vec<(u32, PadKey, String)> = self
             .pads
             .iter_mut()
             .filter_map(|(&k, p)| {
@@ -1462,10 +1462,13 @@ impl<B: Backend> Router<B> {
                     return None;
                 }
                 v.fallback_tried = true;
-                Some((k, v.sysname.clone()))
+                Some((v.n, k, v.sysname.clone()))
             })
             .collect();
-        for (key, sysname) in due {
+        // By number: pads made together come due together, and pad1's ACL must be set first
+        // (RUY-541), whatever the pads' keys.
+        due.sort_unstable();
+        for (_, key, sysname) in due {
             match self.backend.node_of(&sysname) {
                 Some(node) => self.assert_acl(key, &node, "no udev event in 2 s"),
                 None => self.journal(format!("virtual pad {sysname} has no event node")),
@@ -3777,6 +3780,37 @@ mod tests {
         assert_eq!(
             order(&r.backend_mut().take()),
             vec!["acl /dev/input/event22", "acl /dev/input/event23"]
+        );
+    }
+
+    #[test]
+    fn fallbacks_due_together_set_pad1s_acl_first_whatever_the_keys() {
+        // a has the lower key but joins as player 2; b signs in, so pad1 is on the higher key.
+        let mut r = router();
+        let start = t0();
+        let a = r.add_pad(pad("a"), start);
+        let b = r.add_pad(pad("b"), start);
+        sign_in(&mut r, b, "p1");
+        join(&mut r, a, "p2");
+        assert_eq!(
+            r.set_route("app", "i1", STK, "p1", SHELL, start),
+            Status::Ok
+        );
+        assert_eq!(
+            order(&r.backend_mut().take()),
+            vec![
+                format!("create {b} ruya-input/pad1"),
+                format!("create {a} ruya-input/pad2")
+            ]
+        );
+        // No udev event at all: both fallbacks come due on one tick, pad1's ACL first.
+        r.tick(start + UDEV_FALLBACK);
+        assert_eq!(
+            order(&r.backend_mut().take()),
+            vec![
+                "acl /dev/input/event-input101",
+                "acl /dev/input/event-input102"
+            ]
         );
     }
 

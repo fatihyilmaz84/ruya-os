@@ -1987,6 +1987,7 @@ def cmd_seathold(args):
                 p.close()
             except OSError:
                 pass
+    return fails
 
 
 def cmd_coop(args):
