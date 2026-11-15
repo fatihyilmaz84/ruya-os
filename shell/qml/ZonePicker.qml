@@ -14,7 +14,7 @@ FocusScope {
     property Item returnTo: null
 
     // What the buttons do while it is open (Shell.modalHintsOf, the hint bar).
-    readonly property var modalHints: [{ action: "accept", text: qsTr("Select") }, { action: "back", text: qsTr("Cancel") }]
+    readonly property var modalHints: [{ action: "accept", text: qsTr("Select") }, { action: "back", text: chooser.filtering ? qsTr("Clear") : qsTr("Cancel") }]
 
     signal closed()
     // The owner chose a zone; the request is on its way.

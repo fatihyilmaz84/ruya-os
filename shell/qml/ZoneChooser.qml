@@ -411,7 +411,7 @@ FocusScope {
             required property var modelData
             objectName: chooser.prefix + "City_" + modelData.zone
             label: modelData.city
-            detail: chooser.filtering ? modelData.region : ""
+            detail: chooser.filtering ? (modelData.region ?? "") : ""
             // The chosen city only shows as selected while the cities have the focus: from the
             // regions it is a preview.
             selected: ListView.isCurrentItem && cityList.activeFocus

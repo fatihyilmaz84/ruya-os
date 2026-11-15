@@ -413,6 +413,17 @@ Item {
             compare(chooser.normalize("Buenos_Aires"), "buenos aires")
         }
 
+        function test_the_hint_says_clear_while_a_filter_is_set() {
+            openPicker()
+            compare(hintsShown(), "accept Select|back Cancel")
+            searchFor("ist")
+            tryVerify(() => find("zoneCities").activeFocus, 2000)
+            compare(hintsShown(), "accept Select|back Clear", "B clears the filter")
+            keyClick(Qt.Key_Escape)
+            tryCompare(find("zoneChooser"), "filter", "")
+            compare(hintsShown(), "accept Select|back Cancel")
+        }
+
         function test_the_region_name_matches_too() {
             openPicker()
             searchFor("pacific")

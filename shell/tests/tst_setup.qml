@@ -509,6 +509,18 @@ Item {
             tryVerify(() => !setup().visible, 3000, "Accept on Done finishes the wizard")
         }
 
+        function test_a_late_answer_for_an_earlier_pick_does_not_decide_the_caption() {
+            startShell()
+            setup().zoneChoice = "Asia/Tokyo"
+            setup().zoneAsked = true
+            TimeZone.mockFailNext()
+            TimeZone.setTimezone("Europe/London")             // refused, but not the zone chosen
+            TimeZone.setTimezone("Asia/Tokyo")                // the answer that counts: ok
+            tryCompare(TimeZone, "timezone", "Asia/Tokyo")
+            tryCompare(setup(), "zoneAsked", false)
+            compare(setup().zoneFailed, false, "the stale refusal was ignored")
+        }
+
         function test_zone_ok_shows_no_message() {
             startShell()
             chooseZoneAndFinishTheWizard()
