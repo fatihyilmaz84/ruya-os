@@ -165,9 +165,17 @@ Item {
             tryVerify(() => again.activeFocus, 2000)
             again.currentIndex = 2
             compare(find("whosPlayingDetail").text, "Joins as Guest 2. Nothing is kept after it leaves.")
+            // Turkish: the prompt opens again with the language already set.
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !prompt().shown, 2000)
             DeviceSettings.language = "tr"
-            compare(find("whosPlayingDetail").text, "Misafir 2 olarak katılır. Ayrılınca hiçbir şey saklanmaz.")
-            tryVerify(() => findChild(again.currentItem, "profileCardName").text === "Misafir", 2000)
+            Input.mockPadButton(host.dualSense, "guide")
+            tryVerify(() => prompt().shown && prompt().pad === host.dualSense, 2000)
+            const tr = find("whosPlayingCards")
+            tryVerify(() => tr.activeFocus, 2000)
+            tr.currentIndex = 2
+            tryVerify(() => find("whosPlayingDetail").text === "Misafir 2 olarak katılır. Ayrılınca hiçbir şey saklanmaz.", 2000)
+            tryVerify(() => findChild(tr.currentItem, "profileCardName").text === "Misafir", 2000)
         }
 
         function test_with_no_free_profile_the_guest_card_has_the_focus() {
