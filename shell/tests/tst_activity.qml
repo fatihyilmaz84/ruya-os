@@ -551,9 +551,11 @@ Item {
             for (let i = 0; i < 200 && !(find(last) && find(last).activeFocus); ++i)
                 keyClick(Qt.Key_Down)
             verify(find(last).activeFocus, "reached the end of the first page: " + describeFocus())
+            const lastRowObject = find(last)
             tryVerify(() => Usage.mockLastLimit() === 120, 2000, "the end asks for 120")
             tryVerify(() => sessionRowNames().length === 120)
             verify(find(last).activeFocus, "focus stays on the row it was on")
+            verify(find(last) === lastRowObject, "the page was appended: the old row is the same delegate, not rebuilt")
             keyClick(Qt.Key_Down)
             verify(find(sessionRowNames()[60]).activeFocus, "and the player goes on down the longer list")
             // On to the end of all 200.
@@ -579,6 +581,43 @@ Item {
             wait(100)
             compare(Usage.mockReadCount(), reads, "no request at the end once more is false")
             verify(!find("activityCapped").visible, "200 sessions are all there is")
+        }
+
+        // Up then Down on the last row while the read is pending must not ask for a second page.
+        function test_two_load_more_calls_in_a_row_ask_for_one_page() {
+            openActivity(many(200))
+            tryCompare(Usage, "more", true)
+            Usage.mockRefreshDelayed(200)
+            Usage.loadMore()
+            Usage.loadMore()
+            Usage.loadMore()
+            compare(Usage.mockLastLimit(), 120, "one page, not 180 or 240")
+            tryVerify(() => Usage.mockPendingReplies() === 0, 3000)
+            compare(sessionRowNames().length, 120)
+            Usage.mockRefreshDelayed(0)
+            Usage.loadMore()                           // after the reply the next page is allowed
+            compare(Usage.mockLastLimit(), 180)
+        }
+
+        // The cap caption shows only when the history holds the most the service lists.
+        function test_cap_caption_only_at_the_cap() {
+            openActivity(many(1001))
+            verify(!Usage.capped)
+            verify(!find("activityCapped").visible)
+            for (let i = 0; i < 30 && Usage.more; ++i) {
+                Usage.loadMore()
+                tryVerify(() => Usage.mockPendingReplies() === 0, 3000)
+            }
+            compare(Usage.mockLastLimit(), 1000)
+            tryCompare(Usage, "capped", true)
+            verify(!Usage.more)
+            tryVerify(() => find("activityCapped").visible)
+            compare(find("activityCapped").text, "Showing your last 1000 sessions.")
+            compare(find("activityCapped").color, Theme.text, "text colour, not textDim (04 §5, §3.1)")
+            Usage.mockSetData("p2", many(30), today)
+            Usage.refresh()
+            tryCompare(Usage, "capped", false)
+            verify(!find("activityCapped").visible)
         }
 
         function test_clear_reachable_in_one_step() {
@@ -1132,6 +1171,26 @@ Item {
             tryVerify(() => find("activityRetry").activeFocus)
             settle()
             grabImage(tc.shell).save(shotsDir + "/90-activity-error-en.png")
+        }
+
+        // RUY-48: the history at the cap, with its caption.
+        function test_zz_screenshots_capped() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            DeviceSettings.reducedMotion = true
+            openActivity(many(1001))
+            for (let i = 0; i < 30 && Usage.more; ++i) {
+                Usage.loadMore()
+                tryVerify(() => Usage.mockPendingReplies() === 0, 3000)
+            }
+            tryCompare(Usage, "capped", true)
+            const names = sessionRowNames()
+            tryVerify(() => find(names[names.length - 1]) !== null, 5000)
+            find(names[names.length - 1]).forceActiveFocus()
+            find("activityBody").ensureFocusedVisible()
+            tryVerify(() => find("activityCapped").visible)
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/90-activity-capped-en.png")
         }
 
         function test_zz_screenshots_empty() {

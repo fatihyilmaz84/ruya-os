@@ -21,7 +21,7 @@ FocusScope {
     // The icon a kind brings when the row sets none (the message row's `info`, RUY-512).
     property string defaultIconName
     readonly property string shownIconName: iconName !== "" ? iconName : defaultIconName
-    readonly property bool hasIcon: shownIconName !== "" && !hasSwatch
+    readonly property bool hasIcon: (shownIconName !== "" || iconSource !== "") && !hasSwatch
     // A picture in the icon slot (RUY-48: a game's own icon on the Activity page): a path or URL. While
     // it loads, and when it fails, the glyph of `iconName` shows (set one as the fallback).
     property string iconSource

@@ -72,6 +72,7 @@ void Usage::forget()
     m_history.clear();
     m_highlights = UsageStats::highlights({}, {});
     m_pages = 1;
+    m_pageRequested = false;
     m_more = false;
     m_capped = false;
     emit dataChanged();
@@ -100,14 +101,22 @@ void Usage::setWatching(QObject *page, bool on)
     if (m_watchers.contains(page))
         return;
     m_watchers.insert(page);
-    connect(page, &QObject::destroyed, this, [this](QObject *gone) { m_watchers.remove(gone); });
+    if (!m_known.contains(page)) {                 // connect once, not on every show
+        m_known.insert(page);
+        connect(page, &QObject::destroyed, this, [this](QObject *gone) {
+            m_watchers.remove(gone);
+            m_known.remove(gone);
+        });
+    }
     refresh();
 }
 
 void Usage::loadMore()
 {
-    if (!m_more)
+    // One page at a time: a second call before the reply would skip a page (RUY-48).
+    if (!m_more || m_pageRequested)
         return;
+    m_pageRequested = true;
     ++m_pages;
     refresh();
 }
@@ -117,6 +126,7 @@ void Usage::onLoaded(const QString &profile, const UsageSnapshot &snapshot)
     // A reply for a profile that is no longer active is dropped: its data must not show.
     if (profile != activeProfile())
         return;
+    m_pageRequested = false;
     const bool wasReady = m_ready;
     const QString oldStatus = m_status;
     m_status = snapshot.status;

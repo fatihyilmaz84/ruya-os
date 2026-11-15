@@ -335,15 +335,12 @@ Page {
                 }
             }
         }
-        Text {
+        SettingNote {
             objectName: "activityCapped"
-            width: parent ? parent.width : 0
-            visible: page.showData && Usage.capped
+            u: page.u
             topPadding: Theme.spaceS * page.u
+            visible: page.showData && Usage.capped
             text: qsTr("Showing your last 1000 sessions.")
-            color: Theme.textDim
-            font.pixelSize: Theme.typeCaption * page.u
-            font.weight: Theme.weightRegular
         }
     }
 

@@ -122,4 +122,6 @@ private:
     bool m_more = false;
     bool m_capped = false;
     QSet<QObject *> m_watchers;
+    QSet<QObject *> m_known;      // pages `destroyed` is connected for
+    bool m_pageRequested = false; // loadMore() waits for its reply
 };
