@@ -192,6 +192,19 @@ Item {
             tryVerify(() => !held(), 2000, "frozen: released")
         }
 
+        function test_a_subsurface_inhibitor_of_the_newer_window_of_one_client_holds() {
+            const first = playWithInhibitor()
+            tc.shell.removeInhibitor(1)
+            const second = createTemporaryObject(appComponent, host, { surface: ({ name: "second", client: first.surface.client }) })
+            tc.shell.addApp(second, "p2")
+            tryCompare(tc.shell, "focusedApp", second)
+            tc.shell.addInhibitor(1, ({ name: "video subsurface", client: first.surface.client }))
+            tryVerify(() => held(), 2000, "the client's newer window is in front: held")
+            tc.shell.focusApp(first)
+            tryCompare(tc.shell, "focusedApp", first)
+            tryVerify(() => held(), 2000, "the client's other window in front: still held")
+        }
+
         function test_another_clients_inhibitor_does_not_hold() {
             playWithInhibitor()
             tc.shell.addInhibitor(7, ({ name: "foreign", client: otherClient }))

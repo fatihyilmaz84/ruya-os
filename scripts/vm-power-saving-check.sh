@@ -370,6 +370,8 @@ inhibit_check() {
         python3 "$here/vm-inject-key.py" guide >/dev/null 2>&1
         wait_log "$shub" "idle inhibit -wayland:$sn" 20 >/dev/null && ok "the Hub over the app: subsurface -wayland:$sn" || bad "no '-wayland:$sn' with the Hub open (subsurface)"
         python3 "$here/vm-inject-key.py" guide >/dev/null 2>&1
+    elif [ -n "$sn" ]; then
+        echo "UNVERIFIED: vm-inject-key.py is not next to this script: the subsurface Hub step was not run"
     fi
     pkill -f '[v]m-idle-inhibit-client.py'
     if [ "$added" = 1 ]; then
