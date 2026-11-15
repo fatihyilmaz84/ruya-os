@@ -795,9 +795,11 @@ Item {
             tryVerify(() => volume("vol-stick") !== undefined)
             openStoragePane()
             tryVerify(() => scanState("vol-stick") === "done", 3000)
+            const calls = Storage.mockScanCalls().length
             Storage.cancelScan("vol-stick")
-            wait(100)
+            wait(100)                           // the mock publishes the state after a cancel
             compare(scanState("vol-stick"), "done")
+            compare(Storage.mockScanCalls().length, calls, "no new walk: the pane saw no lost result")
             compare(Storage.scans["vol-stick"].categories.length > 0, true, "the numbers are still there")
         }
 
