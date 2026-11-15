@@ -86,17 +86,19 @@ DBusUsageBackend::DBusUsageBackend(QObject *parent)
 {
     connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] {
         if (!m_lastProfile.isEmpty())
-            refresh(m_lastProfile);
+            refresh(m_lastProfile, m_lastLimit);
     });
     m_bus.connect(Service, Path, Interface, QStringLiteral("UsageChanged"), this, SIGNAL(usageChanged(QString)));
 }
 
-void DBusUsageBackend::refresh(const QString &profile)
+void DBusUsageBackend::refresh(const QString &profile, int limit)
 {
     m_lastProfile = profile;
+    m_lastLimit = limit;
     const quint64 request = beginRefresh();
     auto pending = QSharedPointer<Pending>::create();
-    auto finish = [this, request, profile, pending](const QString &failure) {
+    pending->snapshot.limit = limit;
+    auto finish = [this, request, profile, pending, limit](const QString &failure) {
         if (!failure.isEmpty() && !pending->failed) {
             pending->failed = true;
             pending->failure = failure;
@@ -104,7 +106,7 @@ void DBusUsageBackend::refresh(const QString &profile)
         if (--pending->waiting > 0)
             return;
         if (pending->failed)
-            pending->snapshot = UsageSnapshot{pending->failure, {}, {}, {}};
+            pending->snapshot = UsageSnapshot{pending->failure, {}, {}, {}, limit};
         deliver(request, profile, pending->snapshot);
     };
 
@@ -132,7 +134,7 @@ void DBusUsageBackend::refresh(const QString &profile)
     });
 
     auto list = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListSessions"));
-    list << profile << qint64(0) << uint(60);
+    list << profile << qint64(0) << uint(limit);
     auto *lw = new QDBusPendingCallWatcher(m_bus.asyncCall(list), this);
     connect(lw, &QDBusPendingCallWatcher::finished, this, [pending, finish](QDBusPendingCallWatcher *w) {
         w->deleteLater();

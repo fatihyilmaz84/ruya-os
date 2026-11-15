@@ -22,6 +22,10 @@ FocusScope {
     property string defaultIconName
     readonly property string shownIconName: iconName !== "" ? iconName : defaultIconName
     readonly property bool hasIcon: shownIconName !== "" && !hasSwatch
+    // A picture in the icon slot (RUY-48: a game's own icon on the Activity page): a path or URL. While
+    // it loads, and when it fails, the glyph of `iconName` shows (set one as the fallback).
+    property string iconSource
+    readonly property bool hasPicture: iconSource !== "" && iconPicture.status === Image.Ready
     // Optional controller button in the icon slot (RUY-465, 04 §5): a `ButtonGlyph` at `glyphSize`
     // (the size of `iconM`) for a row about one button (Remap buttons): the glyph of that button
     // position on a pad of `glyphFamily` (RUY-41). The button's name is the label, so the glyph is
@@ -94,6 +98,9 @@ FocusScope {
 
     // The pane navigates over children that set this.
     readonly property bool focusable: true
+    // A row the pane's arrows pass over (RUY-48: the stat rows of a game page, which only inform).
+    // Off by default: 04 §5 keeps facts focusable so a list scrolls and reads in whole rows.
+    property bool skipFocus: false
 
     width: parent ? parent.width : 900 * u
     height: Theme.rowHeight * u
@@ -167,9 +174,23 @@ FocusScope {
         color: control.swatch
     }
 
+    Image {
+        id: iconPicture
+        objectName: "rowPicture"
+        visible: control.hasPicture
+        anchors { left: parent.left; leftMargin: Theme.spaceL * control.u; verticalCenter: parent.verticalCenter }
+        width: Theme.iconM * control.u
+        height: width
+        source: control.iconSource
+        sourceSize: Qt.size(width * 2, height * 2)
+        fillMode: Image.PreserveAspectFit
+        asynchronous: true
+        opacity: control.dimmed ? Theme.disabledOpacity : 1
+    }
+
     Icon {
         objectName: "rowIcon"
-        visible: control.hasIcon
+        visible: control.hasIcon && !control.hasPicture
         anchors {
             left: control.centered ? undefined : parent.left
             leftMargin: Theme.spaceL * control.u

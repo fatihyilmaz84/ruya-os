@@ -57,7 +57,7 @@
 <context>
     <name>ActivityGamePage</name>
     <message>
-        <location filename="../qml/ActivityGamePage.qml" line="+65"/>
+        <location filename="../qml/ActivityGamePage.qml" line="+60"/>
         <location line="+1"/>
         <source>Back</source>
         <translation>Geri</translation>
@@ -78,32 +78,32 @@
         <translation>Bunu henüz oynamadınız. Oynadığınızda harcadığınız süre burada görünür.</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+12"/>
         <source>Time played</source>
         <translation>Oynama süresi</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Times played</source>
         <translation>Oynama sayısı</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>First played</source>
         <translation>İlk oynama</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Last played</source>
         <translation>Son oynama</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Longest session</source>
         <translation>En uzun oturum</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Average session</source>
         <translation>Ortalama oturum</translation>
     </message>
@@ -116,7 +116,7 @@
 <context>
     <name>ActivityPage</name>
     <message>
-        <location filename="../qml/ActivityPage.qml" line="+19"/>
+        <location filename="../qml/ActivityPage.qml" line="+22"/>
         <source>Activity</source>
         <translation>Etkinlik</translation>
     </message>
@@ -151,7 +151,7 @@
         <translation>Önceki haftadan %1 az.</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+17"/>
         <source>today</source>
         <translation>bugün</translation>
     </message>
@@ -161,7 +161,7 @@
         <translation>dün</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+59"/>
         <source>Your activity was cleared.</source>
         <translation>Etkinliğiniz temizlendi.</translation>
     </message>
@@ -171,7 +171,7 @@
         <translation>Etkinliğiniz temizlenemedi.</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+29"/>
         <location line="+1"/>
         <source>Back</source>
         <translation>Geri</translation>
@@ -197,12 +197,12 @@
         <translation>Etkinliğiniz okunamadı.</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Nothing here yet. When you play something, the time you spend shows up on this page. Only you can see it.</source>
-        <translation>Burada henüz bir şey yok. Bir şey oynadığınızda harcadığınız süre bu sayfada görünür. Yalnızca siz görebilirsiniz.</translation>
+        <location line="+175"/>
+        <source>Showing your last 1000 sessions.</source>
+        <translation>Son 1000 oturumunuz gösteriliyor.</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="-154"/>
         <source>This week</source>
         <translation>Bu hafta</translation>
     </message>
@@ -212,7 +212,7 @@
         <translation>En çok oynanan, son 30 gün</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+16"/>
         <source>%1, last played %2</source>
         <translation>%1, son oynama: %2</translation>
     </message>
@@ -228,13 +228,13 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+47"/>
-        <location line="+18"/>
+        <location line="+62"/>
+        <location line="+19"/>
         <source>%1, %2</source>
         <translation>%1, %2</translation>
     </message>
     <message numerus="yes">
-        <location line="-56"/>
+        <location line="-72"/>
         <source>You have played %n day(s) in a row.</source>
         <translation>
             <numerusform>Üst üste %n gündür oynuyorsunuz.</numerusform>
@@ -253,18 +253,28 @@
         <translation>Geçmiş</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+51"/>
         <source>%1, playing now</source>
         <translation>%1, şimdi oynanıyor</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="-40"/>
         <location line="+4"/>
         <source>Clear my activity</source>
         <translation>Etkinliğimi temizle</translation>
     </message>
     <message>
-        <location line="-2"/>
+        <location line="-122"/>
+        <source>Nothing here yet. Once you play, this page lists your games and how long you played. It stays on this console, and Clear my activity deletes it.</source>
+        <translation>Burada henüz bir şey yok. Oynadığınızda bu sayfada oyunlarınız ve ne kadar oynadığınız listelenir. Yalnızca bu konsolda kalır; Etkinliğimi temizle onu siler.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Try again</source>
+        <translation>Yeniden dene</translation>
+    </message>
+    <message>
+        <location line="+109"/>
         <source>Clear your activity?</source>
         <translation>Etkinliğiniz temizlensin mi?</translation>
     </message>
@@ -4143,7 +4153,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SettingControl</name>
     <message>
-        <location filename="../qml/controls/SettingControl.qml" line="+78"/>
+        <location filename="../qml/controls/SettingControl.qml" line="+82"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>

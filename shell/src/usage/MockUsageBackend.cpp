@@ -24,11 +24,14 @@ void MockUsageBackend::reset()
     m_failRefresh.clear();
     m_presence.clear();
     m_presenceCount = 0;
+    m_reads = 0;
+    m_lastLimit = 0;
 }
 
-UsageSnapshot MockUsageBackend::snapshotOf(const QString &profile) const
+UsageSnapshot MockUsageBackend::snapshotOf(const QString &profile, int limit) const
 {
     UsageSnapshot snap;
+    snap.limit = limit;
     snap.today = m_today;
     QMap<QPair<QString, QString>, QVariantMap> rows;
     // Newest first, like ListSessions.
@@ -60,7 +63,9 @@ UsageSnapshot MockUsageBackend::snapshotOf(const QString &profile) const
         row[QStringLiteral("longest")] = qMax(row.value(QStringLiteral("longest")).toInt(), secs);
         row[QStringLiteral("first")] = qMin(row.value(QStringLiteral("first")).toLongLong(), start);
         row[QStringLiteral("last")] = qMax(row.value(QStringLiteral("last")).toLongLong(), end);
-        snap.sessions.append(QVariantMap{
+        // The day rows count every session (GetTotals); the list is the newest `limit` (ListSessions).
+        if (snap.sessions.size() < limit)
+            snap.sessions.append(QVariantMap{
             {QStringLiteral("appId"), app},
             {QStringLiteral("appVersion"), QStringLiteral("1.0")},
             {QStringLiteral("start"), start},
@@ -76,13 +81,15 @@ UsageSnapshot MockUsageBackend::snapshotOf(const QString &profile) const
     return snap;
 }
 
-void MockUsageBackend::refresh(const QString &profile)
+void MockUsageBackend::refresh(const QString &profile, int limit)
 {
+    ++m_reads;
+    m_lastLimit = limit;
     // Built when asked, delivered after the delay: a late reply carries the data of its time.
     const quint64 request = beginRefresh();
-    UsageSnapshot snap = snapshotOf(profile);
+    UsageSnapshot snap = snapshotOf(profile, limit);
     if (!m_failRefresh.isEmpty()) {
-        snap = UsageSnapshot{m_failRefresh, {}, {}, {}};
+        snap = UsageSnapshot{m_failRefresh, {}, {}, {}, limit};
         m_failRefresh.clear();
     }
     ++m_pending;

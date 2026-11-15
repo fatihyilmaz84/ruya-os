@@ -47,14 +47,9 @@ Page {
         return base
     }
 
-    onVisibleChanged: {
-        if (visible)
-            Usage.refresh()
-    }
-    Component.onCompleted: {
-        if (visible)
-            Usage.refresh()
-    }
+    // The ledger is read when this page appears and kept fresh only while it is on screen (RUY-48).
+    onVisibleChanged: Usage.setWatching(page, visible)
+    Component.onCompleted: Usage.setWatching(page, visible)
 
     SettingsPane {
         id: body
@@ -80,6 +75,7 @@ Page {
         SettingRow {
             objectName: "gameTotal"
             kind: "info"
+            skipFocus: true      // the strip is the one stop here (RUY-48); 04 §5 otherwise keeps facts focusable
             u: page.u
             visible: Usage.ready && page.played
             label: qsTr("Time played")
@@ -88,6 +84,7 @@ Page {
         SettingRow {
             objectName: "gameSessions"
             kind: "info"
+            skipFocus: true      // the strip is the one stop here (RUY-48); 04 §5 otherwise keeps facts focusable
             u: page.u
             visible: Usage.ready && page.played
             label: qsTr("Times played")
@@ -96,6 +93,7 @@ Page {
         SettingRow {
             objectName: "gameFirst"
             kind: "info"
+            skipFocus: true      // the strip is the one stop here (RUY-48); 04 §5 otherwise keeps facts focusable
             u: page.u
             visible: Usage.ready && page.played
             label: qsTr("First played")
@@ -104,6 +102,7 @@ Page {
         SettingRow {
             objectName: "gameLast"
             kind: "info"
+            skipFocus: true      // the strip is the one stop here (RUY-48); 04 §5 otherwise keeps facts focusable
             u: page.u
             visible: Usage.ready && page.played
             label: qsTr("Last played")
@@ -112,6 +111,7 @@ Page {
         SettingRow {
             objectName: "gameLongest"
             kind: "info"
+            skipFocus: true      // the strip is the one stop here (RUY-48); 04 §5 otherwise keeps facts focusable
             u: page.u
             visible: Usage.ready && page.played
             label: qsTr("Longest session")
@@ -120,6 +120,7 @@ Page {
         SettingRow {
             objectName: "gameAverage"
             kind: "info"
+            skipFocus: true      // the strip is the one stop here (RUY-48); 04 §5 otherwise keeps facts focusable
             u: page.u
             visible: Usage.ready && page.played
             label: qsTr("Average session")

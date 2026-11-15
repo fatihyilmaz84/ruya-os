@@ -57,7 +57,7 @@
 <context>
     <name>ActivityGamePage</name>
     <message>
-        <location filename="../qml/ActivityGamePage.qml" line="+65"/>
+        <location filename="../qml/ActivityGamePage.qml" line="+60"/>
         <location line="+1"/>
         <source>Back</source>
         <translation>Back</translation>
@@ -78,32 +78,32 @@
         <translation>You have not played this yet. When you do, the time you spend shows up here.</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="+12"/>
         <source>Time played</source>
         <translation>Time played</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Times played</source>
         <translation>Times played</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>First played</source>
         <translation>First played</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Last played</source>
         <translation>Last played</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Longest session</source>
         <translation>Longest session</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>Average session</source>
         <translation>Average session</translation>
     </message>
@@ -116,7 +116,7 @@
 <context>
     <name>ActivityPage</name>
     <message>
-        <location filename="../qml/ActivityPage.qml" line="+19"/>
+        <location filename="../qml/ActivityPage.qml" line="+22"/>
         <source>Activity</source>
         <translation>Activity</translation>
     </message>
@@ -151,7 +151,7 @@
         <translation>%1 less than the week before.</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+17"/>
         <source>today</source>
         <translation>today</translation>
     </message>
@@ -161,7 +161,7 @@
         <translation>yesterday</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+59"/>
         <source>Your activity was cleared.</source>
         <translation>Your activity was cleared.</translation>
     </message>
@@ -171,7 +171,7 @@
         <translation>Your activity could not be cleared.</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+29"/>
         <location line="+1"/>
         <source>Back</source>
         <translation>Back</translation>
@@ -197,12 +197,12 @@
         <translation>Your activity could not be read.</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Nothing here yet. When you play something, the time you spend shows up on this page. Only you can see it.</source>
-        <translation>Nothing here yet. When you play something, the time you spend shows up on this page. Only you can see it.</translation>
+        <location line="+175"/>
+        <source>Showing your last 1000 sessions.</source>
+        <translation>Showing your last 1000 sessions.</translation>
     </message>
     <message>
-        <location line="+11"/>
+        <location line="-154"/>
         <source>This week</source>
         <translation>This week</translation>
     </message>
@@ -212,7 +212,7 @@
         <translation>Most played, last 30 days</translation>
     </message>
     <message>
-        <location line="+15"/>
+        <location line="+16"/>
         <source>%1, last played %2</source>
         <translation>%1, last played %2</translation>
     </message>
@@ -228,13 +228,13 @@
     </message>
     <message>
         <location line="+1"/>
-        <location line="+47"/>
-        <location line="+18"/>
+        <location line="+62"/>
+        <location line="+19"/>
         <source>%1, %2</source>
         <translation>%1, %2</translation>
     </message>
     <message numerus="yes">
-        <location line="-56"/>
+        <location line="-72"/>
         <source>You have played %n day(s) in a row.</source>
         <translation>
             <numerusform>You have played %n day in a row.</numerusform>
@@ -255,18 +255,28 @@
         <translation>History</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+51"/>
         <source>%1, playing now</source>
         <translation>%1, playing now</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="-40"/>
         <location line="+4"/>
         <source>Clear my activity</source>
         <translation>Clear my activity</translation>
     </message>
     <message>
-        <location line="-2"/>
+        <location line="-122"/>
+        <source>Nothing here yet. Once you play, this page lists your games and how long you played. It stays on this console, and Clear my activity deletes it.</source>
+        <translation>Nothing here yet. Once you play, this page lists your games and how long you played. It stays on this console, and Clear my activity deletes it.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Try again</source>
+        <translation>Try again</translation>
+    </message>
+    <message>
+        <location line="+109"/>
         <source>Clear your activity?</source>
         <translation>Clear your activity?</translation>
     </message>
@@ -4160,7 +4170,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>SettingControl</name>
     <message>
-        <location filename="../qml/controls/SettingControl.qml" line="+78"/>
+        <location filename="../qml/controls/SettingControl.qml" line="+82"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>

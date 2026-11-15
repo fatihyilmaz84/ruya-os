@@ -17,7 +17,7 @@ public:
     explicit DBusUsageBackend(QObject *parent = nullptr);
 
     bool isMock() const override { return false; }
-    void refresh(const QString &profile) override;
+    void refresh(const QString &profile, int limit) override;
     void clearHistory(const QString &profile) override;
     void reportPresence(const QString &profile, const QString &instance, const QString &attention) override;
 
@@ -26,4 +26,5 @@ private:
     QDBusServiceWatcher m_watcher;
     bool m_presenceWarned = false;
     QString m_lastProfile;
+    int m_lastLimit = 60;
 };

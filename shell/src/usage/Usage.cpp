@@ -18,7 +18,8 @@ Usage::Usage(std::unique_ptr<UsageBackend> backend, QObject *parent)
             refresh();
     });
     connect(m_backend.get(), &UsageBackend::usageChanged, this, [this](const QString &profile) {
-        if (!profile.isEmpty() && profile == activeProfile())
+        // Not while no Activity page is shown: the page reads the ledger when it opens (RUY-48).
+        if (!profile.isEmpty() && profile == activeProfile() && !m_watchers.isEmpty())
             refresh();
     });
 }
@@ -45,7 +46,8 @@ Usage *Usage::create(QQmlEngine *qmlEngine, QJSEngine *)
     if (auto *profiles = qmlEngine ? qmlEngine->singletonInstance<Profiles *>("RuyaShell", "Profiles") : nullptr) {
         connect(profiles, &Profiles::activeProfileChanged, usage, [usage] {
             usage->forget();
-            usage->refresh();
+            if (!usage->m_watchers.isEmpty())
+                usage->refresh();
         });
     }
     return usage;
@@ -69,6 +71,9 @@ void Usage::forget()
     m_top.clear();
     m_history.clear();
     m_highlights = UsageStats::highlights({}, {});
+    m_pages = 1;
+    m_more = false;
+    m_capped = false;
     emit dataChanged();
     if (wasReady)
         emit readyChanged();
@@ -81,7 +86,30 @@ void Usage::refresh()
         forget();
         return;
     }
-    m_backend->refresh(profile);
+    m_backend->refresh(profile, qMin(m_pages * kPageSize, kMaxSessions));
+}
+
+void Usage::setWatching(QObject *page, bool on)
+{
+    if (!page)
+        return;
+    if (!on) {
+        m_watchers.remove(page);
+        return;
+    }
+    if (m_watchers.contains(page))
+        return;
+    m_watchers.insert(page);
+    connect(page, &QObject::destroyed, this, [this](QObject *gone) { m_watchers.remove(gone); });
+    refresh();
+}
+
+void Usage::loadMore()
+{
+    if (!m_more)
+        return;
+    ++m_pages;
+    refresh();
 }
 
 void Usage::onLoaded(const QString &profile, const UsageSnapshot &snapshot)
@@ -94,14 +122,21 @@ void Usage::onLoaded(const QString &profile, const UsageSnapshot &snapshot)
     m_status = snapshot.status;
     m_ready = snapshot.status == QLatin1String("ok");
     if (m_ready) {
-        const bool same = m_today == snapshot.today && m_rows == snapshot.rows && m_sessions == snapshot.sessions;
+        // Fewer sessions than asked for: that was all of them. Asking for the most the service lists: the rest is out of reach.
+        const bool full = snapshot.sessions.size() >= snapshot.limit;
+        const bool more = full && snapshot.limit < kMaxSessions;
+        const bool capped = full && snapshot.limit >= kMaxSessions;
+        const bool same = m_today == snapshot.today && m_rows == snapshot.rows && m_sessions == snapshot.sessions
+                          && m_more == more && m_capped == capped;
         if (!same) {
+            m_more = more;
+            m_capped = capped;
             m_today = snapshot.today;
             m_rows = snapshot.rows;
             m_sessions = snapshot.sessions;
             m_week = UsageStats::week(m_rows, m_today);
             m_top = UsageStats::top(m_rows, m_today);
-            m_history = UsageStats::history(m_sessions);
+            m_history = UsageStats::history(m_sessions, kMaxSessions);
             m_highlights = UsageStats::highlights(m_rows, m_today);
             emit dataChanged();
         }
@@ -191,6 +226,18 @@ QVariantMap Usage::mockLastPresence() const
 {
     auto *mock = qobject_cast<MockUsageBackend *>(m_backend.get());
     return mock ? mock->lastPresence() : QVariantMap();
+}
+
+int Usage::mockReadCount() const
+{
+    auto *mock = qobject_cast<MockUsageBackend *>(m_backend.get());
+    return mock ? mock->readCount() : 0;
+}
+
+int Usage::mockLastLimit() const
+{
+    auto *mock = qobject_cast<MockUsageBackend *>(m_backend.get());
+    return mock ? mock->lastLimit() : 0;
 }
 
 int Usage::mockPresenceCount() const

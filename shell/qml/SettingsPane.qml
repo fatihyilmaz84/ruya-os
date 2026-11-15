@@ -270,7 +270,7 @@ FocusScope {
         const found = []
         for (let i = 0; i < column.children.length; ++i) {
             const row = column.children[i] as SettingControl
-            if (row && row.visible && row.enabled)
+            if (row && row.visible && row.enabled && !row.skipFocus)
                 found.push(row)
         }
         return found
