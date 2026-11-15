@@ -924,15 +924,15 @@ out="$(FAKE_EARLY_TRIP=1 runwd)"
 expect_contains "watchdog: a trip before the test: FAIL" "$out" "FAIL: the watchdog already tripped in this boot"
 out="$(FAKE_NO_START1=1 runwd)"
 expect_contains "watchdog: no start line from the boot's shell: FAIL" "$out" "FAIL: no 'ruya-shell: systemd watchdog every 15000 ms' from the shell (pid 1001)"
-out="$(FAKE_NO_RESTART=1 runwd)"; rc=$?
-expect_contains "watchdog: not restarted: FAIL" "$out" "FAIL: the stopped shell was not restarted within 45 s"
+out="$(RUYA_WD_RESTART_S=1 FAKE_NO_RESTART=1 runwd)"; rc=$?
+expect_contains "watchdog: not restarted: FAIL" "$out" "FAIL: the stopped shell was not restarted within 1 s"
 [ "$rc" = 1 ] && pass "watchdog: not restarted: exit 1" || fail "watchdog: not restarted: exit $rc"
 expect_contains "watchdog: a shell left stopped is continued at exit" "$(cat "$wdd/state/log")" "kill -CONT 1001"
 out="$(FAKE_EXTRA_RESTART=1 runwd)"
 expect_contains "watchdog: two restarts for one stop: FAIL" "$out" "FAIL: NRestarts went from 0 to 2, not 1"
 out="$(FAKE_OTHER_RESTART=1 runwd)"
 expect_contains "watchdog: a restart without the trip line: FAIL" "$out" "FAIL: no 'Watchdog timeout' line from systemd since the stop"
-out="$(FAKE_NO_START2=1 runwd)"
+out="$(RUYA_WD_START_S=1 FAKE_NO_START2=1 runwd)"
 expect_contains "watchdog: no start line from the new shell: FAIL" "$out" "FAIL: the new shell (pid 2002) did not log"
 
 echo
