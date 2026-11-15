@@ -80,7 +80,7 @@ pub struct Gamepad {
     /// Stable per pad and port: the Bluetooth address, else the USB port, else the name.
     pub id: String,
     pub name: String,
-    /// "playstation" | "xbox" | "nintendo" | "8bitdo" | "" (`families.rs`).
+    /// "playstation" | "xbox" | "nintendo" | "generic" | "" (`ruya_pads::family_of`).
     pub family: &'static str,
     /// The model of the silhouette (`ruya_pads::model_of`), "" when the table does not know it.
     pub model: &'static str,
@@ -458,12 +458,12 @@ mod tests {
         assert_eq!((bt.family, bt.transport), ("xbox", "bluetooth"));
         assert_eq!(bt.id, "e4:17:d8:00:00:01", "the address wins over the port");
         let eightbit = gamepad_of(&pad("8BitDo Pro 2", "", "", 3, 0x2dc8)).expect("a pad");
-        assert_eq!(eightbit.family, "8bitdo");
+        assert_eq!(eightbit.family, "generic");
         assert_eq!(eightbit.model, "8bitdo_pro2", "told by its name");
         assert_eq!(eightbit.id, "8BitDo Pro 2", "no port, no address: the name");
         // An unknown vendor is no family whatever it calls itself; no vendor at all is guessed.
         let clone = gamepad_of(&pad("Xbox clone", "p", "", 3, 0x1234)).expect("pad");
-        assert_eq!(clone.family, "");
+        assert_eq!(clone.family, "generic");
         assert_eq!(clone.model, "", "no maker, no model");
         // An Xbox pad whose product id the table does not know keeps the family's picture.
         assert_eq!((bt.family, bt.model), ("xbox", ""));
@@ -536,7 +536,7 @@ mod tests {
         };
         let p = gamepad_of(&other).expect("a pad");
         assert_eq!(p.name, "Xbox 360 Wireless Receiver");
-        assert_eq!(p.family, "");
+        assert_eq!(p.family, "generic");
         let sibling = pad360("usb-1/input0", 0x0b13);
         assert!(!is_behind_xbox360_receiver(&sibling));
         assert_eq!(

@@ -136,11 +136,9 @@ pub fn family_of_battery(
             return d.family;
         }
     }
-    let by_model = family_of("", model);
-    if by_model.is_empty() {
-        family_of("", &format!("{vendor} {model}"))
-    } else {
-        by_model
+    match family_of("", model) {
+        ruya_pads::GENERIC => family_of("", &format!("{vendor} {model}")),
+        found => found,
     }
 }
 
@@ -396,7 +394,7 @@ mod tests {
                 kind: "controller",
                 percent: 40,
                 state: ChargeState::Discharging,
-                family: "",
+                family: "generic",
                 pad_model: "",
                 address: String::new(),
                 vendor: String::new(),
@@ -557,9 +555,9 @@ mod tests {
         assert_eq!(family("DualSense Wireless Controller", ""), "playstation");
         assert_eq!(family("Xbox Wireless Controller", "Microsoft"), "xbox");
         assert_eq!(family("Pro Controller", ""), "nintendo");
-        assert_eq!(family("SN30 Pro", "8BitDo"), "8bitdo");
-        assert_eq!(family("Ruya Pad", "Ruya"), "");
-        assert_eq!(family("", ""), "");
+        assert_eq!(family("SN30 Pro", "8BitDo"), "generic");
+        assert_eq!(family("Ruya Pad", "Ruya"), "generic");
+        assert_eq!(family("", ""), "generic");
     }
 
     fn shown(b: &Batteries<FakeUPower>) -> Vec<(String, &'static str)> {
@@ -592,7 +590,7 @@ mod tests {
         let b = Batteries::new(FakeUPower::new(vec![dualsense_upower("e4:17:d8:12:34:56")]));
         // UPower first: Bluetooth knows no such pad yet.
         assert_eq!(b.refresh_with(&[]), Ok(true));
-        assert_eq!(shown(&b)[0].1, "");
+        assert_eq!(shown(&b)[0].1, "generic");
         assert!(!b.recheck(&[]), "nothing new: no signal");
         // Then the pad bonds: same UPower list, a family now.
         let pads = [bt(
@@ -607,7 +605,7 @@ mod tests {
         assert_eq!(b.refresh_with(&pads), Ok(false), "UPower said nothing new");
         // The pad is forgotten: it falls back to what the model says (nothing here).
         assert!(b.recheck(&[]));
-        assert_eq!(shown(&b)[0].1, "");
+        assert_eq!(shown(&b)[0].1, "generic");
     }
 
     #[test]
@@ -659,7 +657,11 @@ mod tests {
             let battery = &b.list_with(&pads)[0];
             assert_eq!(battery.address, want, "{serial:?} {native:?}");
             // The chip, Settings and the picker agree: the same family as ListDevices says.
-            let family = if want.is_empty() { "" } else { "playstation" };
+            let family = if want.is_empty() {
+                "generic"
+            } else {
+                "playstation"
+            };
             assert_eq!(battery.family, family, "{serial:?} {native:?}");
         }
     }

@@ -29,7 +29,8 @@ Item {
     property bool onPurpose: false
 
     // How to put a controller of each family into pairing mode. The order is the order shown; the
-    // last entry (family "") is every other pad. Titles come from DeviceIcons.kindText. The 8BitDo
+    // last entry (family "") is every other pad. Titles come from DeviceIcons.kindText. The "8bitdo"
+    // entry names how to pair, not the pad's family (8BitDo is a model; its family follows its mode). The 8BitDo
     // keys are from the pads' manuals (X-input and Switch mode), not tried here (T-261 checks them).
     readonly property var familySteps: [
         { family: "playstation",
@@ -49,7 +50,11 @@ Item {
     readonly property string receiverSteps: qsTr("Xbox 360 pad with a wireless receiver: press the sync button on the receiver, then on the controller.")
 
     function titleFor(family) {
-        return family === "" ? qsTr("Other controller") : DeviceIcons.kindText("controller", family)
+        if (family === "")
+            return qsTr("Other controller")
+        // The "8bitdo" chip is a way to pair, not a family (RUY-692): its title is the 8BitDo words.
+        return family === "8bitdo" ? DeviceIcons.kindText("controller", "generic", "8bitdo_")
+                                   : DeviceIcons.kindText("controller", family, "")
     }
     function stepsFor(family) {
         const entry = familySteps.find(e => e.family === family)

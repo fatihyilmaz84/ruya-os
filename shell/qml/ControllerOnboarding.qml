@@ -39,6 +39,8 @@ FocusScope {
     property Item returnTo: null
 
     readonly property int maxRows: 4
+    // The "8bitdo" chip names how to pair (its steps), not the pad's family: a connected 8BitDo pad is
+    // xbox, nintendo or generic by its mode, and its model says 8BitDo (RUY-692).
     readonly property var chipFamilies: ["playstation", "xbox", "nintendo", "8bitdo", ""]
     readonly property bool windowOpen: hint.armed
     readonly property ControllerPairHint pairHint: hint
@@ -531,7 +533,7 @@ FocusScope {
                             return qsTr("A: pair")
                         }
                         Accessible.role: Accessible.Button
-                        Accessible.name: name + tail + ", " + DeviceIcons.kindText("controller", family) + ", " + stateText
+                        Accessible.name: name + tail + ", " + DeviceIcons.kindText("controller", family, silhouette) + ", " + stateText
                         Accessible.focusable: true
                         Icon {
                             id: rowGlyph

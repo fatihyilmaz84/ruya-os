@@ -123,11 +123,21 @@ Item {
             compare(DeviceIcons.iconFor("controller", "playstation", ""), "pad_dualsense")
             compare(DeviceIcons.iconFor("controller", "playstation", "no_such_model"), "pad_dualsense", "an unknown model: the family's")
             compare(DeviceIcons.iconFor("controller", "", "no_such_model"), "sports_esports", "an unknown model and no family")
-            compare(DeviceIcons.iconFor("controller", "8bitdo", ""), "sports_esports", "8BitDo has no family silhouette")
-            compare(DeviceIcons.iconFor("controller", "8bitdo", "8bitdo_pro2"), "pad_8bitdo_pro2")
+            compare(DeviceIcons.iconFor("controller", "generic", ""), "sports_esports", "8BitDo has no family silhouette")
+            compare(DeviceIcons.iconFor("controller", "generic", "8bitdo_pro2"), "pad_8bitdo_pro2")
             compare(DeviceIcons.iconFor("controller", "", undefined), "sports_esports", "a missing model is none")
             compare(DeviceIcons.iconFor("headset", "playstation", "dualsense"), "headphones", "a model only matters for a controller")
             compare(DeviceIcons.iconFor("keyboard", "", "keyboard"), "keyboard")
+        }
+
+        // RUY-692: 8BitDo is a model, not a family: the words follow the model, whatever family the mode gives.
+        function test_kind_text_of_a_controller_follows_its_family_and_its_model() {
+            compare(DeviceIcons.kindText("controller", "generic", "8bitdo_pro2"), "8BitDo controller")
+            compare(DeviceIcons.kindText("controller", "generic", ""), "Controller")
+            compare(DeviceIcons.kindText("controller", "generic"), "Controller", "a missing model is none")
+            compare(DeviceIcons.kindText("controller", "xbox", "8bitdo_pro2"), "Xbox controller", "X-input mode is an Xbox family")
+            compare(DeviceIcons.kindText("controller", "nintendo", "8bitdo_sn30pro"), "Nintendo controller")
+            compare(DeviceIcons.kindText("headset", "generic", "8bitdo_pro2"), "Headset", "a model only matters for a controller")
         }
 
         function test_every_model_there_is_a_silhouette_for_is_in_the_icon_table() {

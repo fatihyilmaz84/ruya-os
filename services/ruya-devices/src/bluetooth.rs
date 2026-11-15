@@ -400,7 +400,7 @@ pub struct Device {
     pub kind: &'static str,
     /// The device announces a keyboard class (RUY-411): the shell asks a second time before pairing.
     pub keyboard: bool,
-    /// "playstation" | "xbox" | "nintendo" | "" (`family_for`).
+    /// "playstation" | "xbox" | "nintendo" | "generic" (controllers), "" otherwise (`family_for`).
     pub family: &'static str,
     /// The controller model whose silhouette the shell draws (`model_for`), "" when unknown.
     pub model: &'static str,
@@ -2574,10 +2574,10 @@ mod tests {
         assert_eq!(
             pairs,
             [
-                ("AA:BB:CC:00:00:04", "controller", "8bitdo"),
+                ("AA:BB:CC:00:00:04", "controller", "generic"),
                 ("AA:BB:CC:00:00:07", "keyboard", ""),
                 ("AA:BB:CC:00:00:03", "controller", "nintendo"),
-                ("AA:BB:CC:00:00:05", "controller", ""),
+                ("AA:BB:CC:00:00:05", "controller", "generic"),
                 ("AA:BB:CC:00:00:06", "headset", ""),
                 ("AA:BB:CC:00:00:01", "controller", "playstation"),
                 ("AA:BB:CC:00:00:08", "phone", ""),
@@ -2708,13 +2708,34 @@ mod tests {
     }
 
     #[test]
+    fn an_8bitdo_pad_is_generic_with_its_own_model_and_a_sony_company_id_is_playstation() {
+        let mut dinput = raw_dev("AA:BB:CC:00:00:01", "8BitDo Pro 2", "input-gaming", true);
+        dinput.name = "8BitDo Pro 2".to_owned();
+        let d = &list_of(&[dinput.clone()])[0];
+        assert_eq!((d.family, d.model), ("generic", "8bitdo_pro2"));
+        let usb = with_modalias(dinput, "usb:v2DC8p6003d0100");
+        let d = &list_of(&[usb])[0];
+        assert_eq!((d.family, d.model), ("generic", "8bitdo_pro2"));
+        let sony = with_modalias(
+            raw_dev(
+                "AA:BB:CC:00:00:02",
+                "Wireless Controller",
+                "input-gaming",
+                true,
+            ),
+            "bluetooth:v012Dp0CE6d0100",
+        );
+        assert_eq!(list_of(&[sony])[0].family, "playstation");
+    }
+
+    #[test]
     fn a_renamed_dualsense_without_a_modalias_still_gets_playstation() {
         let mut pad = raw_dev("AA:BB:CC:00:00:01", "Living room pad", "input-gaming", true);
         pad.name = "DualSense Wireless Controller".to_owned();
         assert_eq!(list_of(&[pad.clone()])[0].family, "playstation");
         // Only the alias to go on: no family (this is what a rename used to cause).
         pad.name = String::new();
-        assert_eq!(list_of(&[pad])[0].family, "");
+        assert_eq!(list_of(&[pad])[0].family, "generic");
     }
 
     #[test]

@@ -25,7 +25,7 @@ class Bluetooth : public QObject
     // name: the alias; deviceName: the model it advertises ("" when unknown); bonded: false for a device
     // paired without its keys kept (a missing key from an older service reads as true);
     // kind: "controller" | "headset" | "speaker" | "keyboard" | "mouse" | "phone" | "other";
-    // family: "playstation" | "xbox" | "nintendo" | "8bitdo" for a controller, else ""
+    // family: "playstation" | "xbox" | "nintendo" | "generic" for a controller, else ""
     Q_PROPERTY(QVariantList devices READ devices NOTIFY devicesChanged)
     // The game controllers present now, USB or Bluetooth (Devices1.Bluetooth.ListGamepads, T-453):
     // [{ id, name, family, transport }]; transport: "usb" | "bluetooth" | "other"; id: the Bluetooth address
@@ -141,7 +141,7 @@ signals:
     // A device that is not a controller tried to pair while the window was open.
     void controllerRejected();
     // A game controller appeared or went away (USB or Bluetooth, T-260). family: "playstation" | "xbox" |
-    // "nintendo" | "8bitdo" | ""; transport: "usb" | "bluetooth" | "other"; id is stable per pad; model: the
+    // "nintendo" | "generic" | ""; transport: "usb" | "bluetooth" | "other"; id is stable per pad; model: the
     // controller model whose silhouette is drawn ("dualsense", ...), "" when the service does not know it.
     void gamepadConnected(const QString &id, const QString &name, const QString &family, const QString &transport,
                           const QString &model);

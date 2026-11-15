@@ -92,21 +92,10 @@ pub fn connection(hw: &Hardware) -> &'static str {
     }
 }
 
-/// "xbox" | "playstation" | "nintendo" | "generic": by vendor id first, then by the kernel
-/// driver (06-input.md §4.1).
-pub fn family(hw: &Hardware) -> &'static str {
-    match hw.vendor {
-        0x045e => return "xbox",
-        0x054c => return "playstation",
-        0x057e => return "nintendo",
-        _ => {}
-    }
-    match hw.driver.as_str() {
-        "xpad" => "xbox",
-        "playstation" | "sony" => "playstation",
-        "nintendo" => "nintendo",
-        _ => "generic",
-    }
+/// "xbox" | "playstation" | "nintendo" | "generic": the one table, `ruya_pads::family_of`
+/// (vendor id, then kernel driver, then the name when no id is known; 06-input.md §4.1).
+pub fn family(hw: &Hardware, name: &str) -> &'static str {
+    ruya_pads::family_of(hw.vendor, hw.product, &hw.driver, name)
 }
 
 /// The model of the pad whose silhouette the shell draws (`ruya_pads::model_of`, the table that
@@ -216,16 +205,25 @@ mod tests {
     }
 
     #[test]
-    fn family_by_vendor_then_driver() {
-        assert_eq!(family(&dualsense_bt()), "playstation");
+    fn family_is_the_shared_table() {
+        // The table's rows are tested in ruya-pads; here only that identity asks it.
+        assert_eq!(family(&dualsense_bt(), ""), "playstation");
         let mut hw = Hardware {
             vendor: 0x2dc8,
+            product: 0x6001,
             driver: "xpad".into(),
             ..Hardware::default()
         };
-        assert_eq!(family(&hw), "xbox");
-        hw.driver = "hid-generic".into();
-        assert_eq!(family(&hw), "generic");
+        for driver in ["xpad", "hid-generic", ""] {
+            hw.driver = driver.into();
+            assert_eq!(
+                family(&hw, "8BitDo Pro 2"),
+                ruya_pads::family_of(0x2dc8, 0x6001, driver, "8BitDo Pro 2")
+            );
+        }
+        assert_eq!(family(&hw, "8BitDo Pro 2"), "generic");
+        hw.driver = "xpad".into();
+        assert_eq!(family(&hw, "8BitDo Pro 2"), "xbox");
     }
 
     #[test]
@@ -236,7 +234,7 @@ mod tests {
             product: 0x0330,
             ..Hardware::default()
         };
-        assert_eq!(family(&hw), "nintendo");
+        assert_eq!(family(&hw, ""), "nintendo");
         assert_eq!(layout(&hw), "nintendo-wiiu");
         hw.product = 0x2009;
         assert_eq!(layout(&hw), "", "the Switch Pro takes the family's default");
