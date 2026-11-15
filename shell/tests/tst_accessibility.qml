@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "SettingsNav.js" as SettingsNav
 
 // Every item that can hold focus has an accessible name (04 section 7), so the Orca spike starts
 // from a clean base. Each test walks a focus chain with controller keys only and checks the
@@ -473,9 +474,9 @@ Item {
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList") && find("categoryList").activeFocus, 2000)
-            compare(find("categoryList").currentIndex, 0, "My profile is the first category")
+            compare(find("categoryList").currentItem.objectName, "category_myprofile", "My profile is the first category")
             keyClick(Qt.Key_Down)                        // Manage profiles (an admin has it second)
-            compare(find("categoryList").currentIndex, 1, "Manage profiles is the second category")
+            compare(find("categoryList").currentItem.objectName, "category_profiles", "Manage profiles is the second category")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("paneProfiles").activeFocus, 2000, "the pane has focus")
             tryVerify(() => find("paneProfiles").focusableRows().some(r => r.activeFocus), 2000)

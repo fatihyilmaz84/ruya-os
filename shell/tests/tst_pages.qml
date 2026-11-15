@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "SettingsNav.js" as SettingsNav
 
 // Page navigation: the section nav opens pages, Back returns to the same pill, the Guide overlay works
 // over pages. Driven with controller keys only (arrows, Return = Accept, Escape = Back,
@@ -179,9 +180,7 @@ Item {
         function test_nested_page_keeps_state() {
             openSection("settings")
             tryVerify(() => find("categoryList").activeFocus)
-            for (let i = 0; i < 11; ++i)
-                keyClick(Qt.Key_Down)
-            compare(find("categoryList").currentIndex, 11)
+            SettingsNav.select(tc, "about")
             keyClick(Qt.Key_Right)                      // into the About pane
             tryVerify(() => find("aboutVersion").activeFocus, 2000, "first About row has focus")
             keyClick(Qt.Key_Down)
@@ -193,7 +192,7 @@ Item {
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "settings")
             compare(find("page_settings"), settings)
-            compare(find("categoryList").currentIndex, 11)
+            compare(find("categoryList").currentItem.objectName, "category_about")
             tryVerify(() => find("aboutQt").activeFocus, 2000, "same row has focus again")
         }
 
@@ -217,8 +216,7 @@ Item {
         function test_backspace_walks_the_stack() {
             openSection("settings")
             tryVerify(() => find("categoryList").activeFocus)
-            for (let i = 0; i < 11; ++i)
-                keyClick(Qt.Key_Down)
+            SettingsNav.select(tc, "about")
             keyClick(Qt.Key_Right)                      // into the About pane
             tryVerify(() => find("aboutVersion").activeFocus, 2000, "first About row has focus")
             openDetail({})
@@ -312,16 +310,16 @@ Item {
             tryVerify(() => find("categoryList").activeFocus)
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Down)
-            compare(find("categoryList").currentIndex, 2)
+            compare(find("categoryList").currentItem.objectName, "category_bluetooth")
             keyClick(Qt.Key_Up)
             keyClick(Qt.Key_Up)
-            compare(find("categoryList").currentIndex, 0)
+            compare(find("categoryList").currentItem.objectName, "category_myprofile")
             verify(find("categoryList").activeFocus, "Up inside the list stays in the page")
             keyClick(Qt.Key_Up)
             tryVerify(() => find("sectionNav").activeFocus)
             keyClick(Qt.Key_Down)
             tryVerify(() => find("categoryList").activeFocus, 2000)
-            compare(find("categoryList").currentIndex, 0)
+            compare(find("categoryList").currentItem.objectName, "category_myprofile")
         }
 
         function test_bumpers_switch_sections_on_a_page() {

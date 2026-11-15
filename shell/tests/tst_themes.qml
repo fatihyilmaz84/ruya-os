@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "SettingsNav.js" as SettingsNav
 
 // Colour themes (04 §3.1, T-209): the sets, switching at run time with a cross-fade, what a theme
 // must not change, and the Theme row of Settings -> Display & motion. The contrast gate is in
@@ -382,9 +383,7 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList") !== null && find("categoryList").activeFocus, 2000, "category list has focus")
             const list = find("categoryList")
-            for (let i = 0; i < 20 && list.currentIndex < 4; ++i)
-                keyClick(Qt.Key_Down)
-            compare(list.currentIndex, 4, "Display & motion")
+            SettingsNav.select(tc, "display")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus)
             for (let i = 0; i < 3; ++i)

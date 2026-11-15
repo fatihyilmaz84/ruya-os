@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "SettingsNav.js" as SettingsNav
 
 // The screen's resolution, refresh rate and UI size (T-198, org.ruyaos.Devices1.Display): the mock
 // follows the contract, Settings -> Display & motion has Resolution, Refresh rate and UI size rows,
@@ -101,9 +102,7 @@ Item {
             keyClick(Qt.Key_Return)                      // Settings
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList") !== null && find("categoryList").activeFocus, 2000, "category list has focus")
-            for (let i = 0; i < 4; ++i)
-                keyClick(Qt.Key_Down)
-            compare(find("categoryList").currentIndex, 4)
+            SettingsNav.select(tc, "display")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowQuality").activeFocus)
         }
@@ -662,7 +661,7 @@ Item {
             chooseSize(1920, 1080)
             tryCompare(Display, "confirming", true)
             tryCompare(tc.shell, "currentPage", "settings")
-            tryCompare(find("categoryList"), "currentIndex", 4)
+            tryVerify(() => find("categoryList").currentItem.objectName === "category_display")
             tryCompare(find("modeConfirm"), "shown", true)
             tryVerify(() => find("modeRevert").activeFocus, 2000, "focus lands on Revert")
             answerKeep()

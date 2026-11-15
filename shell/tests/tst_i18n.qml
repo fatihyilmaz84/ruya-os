@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "SettingsNav.js" as SettingsNav
 
 // Translations (T-109): switching DeviceSettings.language installs the translator and
 // re-translates the live UI. Own file: it changes the language, and each file gets a fresh
@@ -252,9 +253,7 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus)
-            for (let i = 0; i < 20 && list.currentIndex < 4; ++i)   // Ekran ve hareket
-                keyClick(Qt.Key_Down)
-            compare(list.currentIndex, 4)
+            SettingsNav.select(tc, "display")          // Ekran ve hareket
             keyClick(Qt.Key_Return)
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/16-settings-tr.png")

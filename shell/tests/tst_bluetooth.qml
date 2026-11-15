@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "SettingsNav.js" as SettingsNav
 
 // Settings -> Bluetooth & controllers against the mock backend: power, scanning (a controller
 // needs two scans), pairing by keys, a failed pairing, connect/disconnect, forgetting, the
@@ -79,8 +80,7 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             const list = find("categoryList")
             tryVerify(() => list.activeFocus, 2000, "category list has focus")
-            keyClick(Qt.Key_Down)                        // Network
-            keyClick(Qt.Key_Down)                        // Bluetooth & controllers
+            SettingsNav.select(tc, "bluetooth")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("paneBluetooth").visible)
             tryVerify(() => find("rowBtPower").activeFocus, 2000, "the power switch takes focus")
@@ -984,7 +984,7 @@ Item {
             // The pane goes away under the open screen without B (another category is selected from
             // code, as a stray event could): the screen and the window must go with it. The pane is
             // only hidden, not destroyed, so nothing else would close them.
-            find("categoryList").currentIndex = 1
+            find("categoryList").currentIndex = find("page_settings").categories.findIndex(c => c.key === "network")
             tryVerify(() => !find("paneBluetooth").visible, 3000, "the pane is hidden")
             tryVerify(() => !find("controllerOnboarding").shown, 2000, "the screen closed with it")
             tryCompare(Bluetooth, "controllerPairing", "idle")

@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import RuyaShell
+import "SettingsNav.js" as SettingsNav
 
 // Power saving (T-202): the idle clock, the screen saver, the dark screen, sleep, the inhibitors,
 // the idle-controller report and Settings -> Power saving. The clock is a fake one (IdleClock.now),
@@ -575,9 +576,7 @@ Item {
             tc.shell.openPage("settings")
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList").activeFocus)
-            for (let i = 0; i < 9; ++i)
-                keyClick(Qt.Key_Down)
-            compare(find("categoryList").currentIndex, 9)
+            SettingsNav.select(tc, "power")
             tryVerify(() => find("category_power"))
             keyClick(Qt.Key_Right)
             tryVerify(() => find("rowScreenSaver").activeFocus, 2000, "the first row has focus")

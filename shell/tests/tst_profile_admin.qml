@@ -97,7 +97,7 @@ Item {
             keyClick(Qt.Key_Return)                      // Settings
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList") !== null && find("categoryList").activeFocus)
-            compare(find("categoryList").currentIndex, 0) // My profile
+            compare(find("categoryList").currentItem.objectName, "category_myprofile") // My profile
         }
 
         function enterPane(name) {
@@ -110,7 +110,7 @@ Item {
         function openProfilesPane() {
             openSettingsList()
             keyClick(Qt.Key_Down)
-            compare(find("categoryList").currentIndex, 1)
+            compare(find("categoryList").currentItem.objectName, "category_profiles")
             verify(find("paneProfiles").visible)
             tc.padName = "profilesPinPad"
             enterPane("paneProfiles")
@@ -767,7 +767,7 @@ Item {
             compare(list.currentIndex, list.count - 1)
             for (let i = list.count - 1; i > 0; --i)
                 keyClick(Qt.Key_Up)
-            compare(list.currentIndex, 0)
+            compare(list.currentItem.objectName, "category_myprofile")
             keyClick(Qt.Key_Right)
             compare(find("paneProfiles"), null)
             tryVerify(() => find("paneMyProfile").activeFocus, 2000, "Right enters My profile")
@@ -779,7 +779,7 @@ Item {
             tc.shell.openPage("settings", { category: "profiles" })
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList").activeFocus, 2000)
-            compare(find("categoryList").currentIndex, 0)
+            compare(find("categoryList").currentItem.objectName, "category_myprofile")
             verify(find("paneMyProfile").visible)
         }
 
@@ -789,7 +789,7 @@ Item {
             tc.shell.openPage("settings", { category: "profiles" })
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList").activeFocus, 2000)
-            compare(find("categoryList").currentIndex, 1)
+            compare(find("categoryList").currentItem.objectName, "category_profiles")
             verify(find("paneProfiles").visible)
         }
 
@@ -806,7 +806,7 @@ Item {
             tryVerify(() => find("categoryList").activeFocus, 2000, "focus lands on the category list")
             verify(!find("paneProfiles").activeFocus)
             verify(!find("paneProfiles").visible)
-            compare(find("categoryList").currentIndex, 0, "My profile is selected")
+            compare(find("categoryList").currentItem.objectName, "category_myprofile", "My profile is selected")
             verify(find("paneMyProfile").visible)
             keyClick(Qt.Key_Right)
             tryVerify(() => find("paneMyProfile").activeFocus, 2000, "and it can be entered")
@@ -825,7 +825,7 @@ Item {
             tryCompare(Profiles, "activeProfile", "p2")
             tryVerify(() => find("category_profiles") === null, 2000)
             compare(find("categoryList").currentItem.objectName, "category_network")
-            compare(find("categoryList").currentIndex, 1)
+            compare(find("categoryList").currentIndex, find("page_settings").categories.findIndex(c => c.key === "network"))
             verify(find("paneNetwork").visible)
         }
 
@@ -885,12 +885,12 @@ Item {
             openMyProfilePane()
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("categoryList").activeFocus, 2000, "My profile -> list")
-            compare(find("categoryList").currentIndex, 0)
+            compare(find("categoryList").currentItem.objectName, "category_myprofile")
             keyClick(Qt.Key_Down)
             enterPane("paneProfiles")
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("categoryList").activeFocus, 2000, "Manage profiles -> list")
-            compare(find("categoryList").currentIndex, 1)
+            compare(find("categoryList").currentItem.objectName, "category_profiles")
             compare(tc.shell.currentPage, "settings")
         }
 
