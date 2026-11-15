@@ -695,6 +695,66 @@ Item {
             tryVerify(() => !onb.shown, 3000)
         }
 
+        // The reviewer's case: the pad leaves while the step is open; nothing is saved for another pad.
+        function test_a_pad_that_leaves_while_the_step_is_open_saves_nothing() {
+            signedIn()
+            tryPadAndStart("Pro Controller", "nintendo")
+            tryCompare(onb, "stage", "games")
+            Input.mockRemoveDevice(procon)
+            tryVerify(() => !onb.shown, 2000, "the step closes when its pad leaves")
+            compare(saves().length, 0)
+        }
+
+        function test_a_save_never_goes_to_a_pad_other_than_the_tried_one() {
+            signedIn()
+            tryPadAndStart("Pro Controller", "nintendo")
+            tryCompare(onb, "stage", "games")
+            GameControls.show("usb-045e-0b12-8e01c2d4a9f3")     // the shown pad is another one now
+            tryCompare(GameControls, "padId", "usb-045e-0b12-8e01c2d4a9f3")
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !onb.shown, 2000)
+            compare(saves().length, 0)
+        }
+
+        // The step only writes the tried pad's own device slot, never the shared profile.
+        function test_a_pad_on_the_all_controllers_profile_gets_its_own_copy() {
+            signedIn()
+            Input.saveProfile("p2", JSON.stringify({ schema_version: 1, id: "controls-all", name: "All",
+                                                      scope: { type: "global" },
+                                                      settings: { left_stick: { inner_deadzone: 0.12 } } }))
+            Input.assignProfile("p2", "global", "", "controls-all")
+            tryVerify(() => Input.mockProfileCalls().filter(c => c.method === "AssignProfile").length === 1)
+            Input.mockClearProfileCalls()
+            tryPadAndStart("Pro Controller", "nintendo")
+            tryCompare(onb, "stage", "games")
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !onb.shown, 3000)
+            const s = saves()
+            compare(s.length, 1)
+            compare(s[0].id, "controls-device-" + procon)
+            compare(s[0].inherits, "nintendo")
+            compare(s.filter(p => p.id === "controls-all").length, 0, "the shared profile is not rewritten")
+        }
+
+        function test_a_pad_that_Input1_lists_late_is_still_asked() {
+            signedIn()
+            Input.mockRemoveDevice(procon)
+            tryVerify(() => Input.devices.length === 3)
+            onb.open()
+            usb(true, "usb-try", "Pro Controller", "nintendo")
+            tryCompare(onb, "stage", "try")
+            compare(onb.tryPadId, "")
+            Input.mockAddDevice({ id: procon, name: "Pro Controller", family: "nintendo", model: "switch_pro",
+                                  connection: "usb" })
+            tryCompare(onb, "tryPadId", procon)
+            tryCompare(GameControls, "loadState", "ok")
+            tryCompare(GameControls, "layout", "standard")
+            keyClick(Qt.Key_Menu)
+            tryCompare(onb, "stage", "games")
+        }
+
         function test_the_games_step_in_turkish() {
             signedIn()
             tryPadAndStart("Pro Controller", "nintendo")
@@ -723,7 +783,7 @@ Item {
 
         function test_zz_games_step_screenshots() {
             if (!shotsDir)
-                skip("set RUY_SHOTS_DIR to save screenshots")
+                skip("set RUYA_SHOTS_DIR to save screenshots")
             signedIn()
             tryPadAndStart("Pro Controller", "nintendo")
             tryCompare(onb, "stage", "games")

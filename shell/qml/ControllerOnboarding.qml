@@ -15,7 +15,8 @@ import RuyaShell
 //    plugged in over USB while the screen is open. Start continues, B closes.
 //  - Stage "games" (RUY-503): after "try", once, when the tried pad is a Nintendo one whose
 //    layout in games is still Standard (GameControls, for that pad's own profile): "Buttons in
-//    games", By position / Nintendo labels. A sets the layout and closes when the save is done;
+//    games", By position / Nintendo labels. A sets the layout in that pad's own device slot
+//    (GameControls.setOwnLayout: a shared profile is copied, never changed) and closes when the save is done;
 //    a refused save keeps the screen open on its row (GameControls toasts it); B closes.
 // Controllers that were already paired when the screen opened are not listed (they are in the
 // paired list of the pane).
@@ -30,6 +31,7 @@ FocusScope {
     property string tryFamily: ""                  // its family, connection and raw name (for the games step)
     property string tryTransport: ""
     property string tryRawName: ""
+    property string tryPadId: ""                   // its Input1 id, once Input1 lists it; kept for the games step
     property bool choosing: false                  // the games step waits for its save
     property string chosen: ""                     // the layout being saved
     property Item returnTo: null
@@ -180,11 +182,36 @@ FocusScope {
         tryFamily = family
         tryTransport = transport
         tryRawName = rawName
+        tryPadId = ""
         stage = "try"
-        // The layout of a Nintendo pad is read while it is being tried, so Start knows it.
+        resolveTried()
+    }
+
+    // The tried pad's Input1 id is resolved once and kept (GamepadConnected can arrive before
+    // Input1 lists the pad, so it is tried again whenever the list changes). The layout of a
+    // Nintendo pad is read while it is being tried, so Start knows it.
+    function resolveTried() {
+        if (tryPadId !== "")
+            return
         const id = triedPadId()
-        if (id !== "" && GameControls.owner !== "")
+        if (id === "")
+            return
+        tryPadId = id
+        if (GameControls.owner !== "")
             GameControls.show(id)
+    }
+
+    // The tried pad left Input1: nothing is saved for it any more.
+    function checkTriedPad() {
+        if (!shown || (stage !== "try" && stage !== "games"))
+            return
+        if (tryPadId === "") {
+            resolveTried()
+        } else if (!Input.devices.some(d => d.id === tryPadId)) {
+            tryPadId = ""
+            if (stage === "games")
+                onb.close()
+        }
     }
 
     // The Input1 id of the pad being tried: the Nintendo pad of that connection (the one with its
@@ -202,7 +229,7 @@ FocusScope {
     // Start on the try stage: the games step for a Nintendo pad that still has the Standard layout
     // and whose profile can be saved; otherwise the screen closes.
     function continueFromTry() {
-        const id = triedPadId()
+        const id = tryPadId
         if (id !== "" && GameControls.owner !== "" && GameControls.padId === id
                 && GameControls.loadState === "ok" && GameControls.layout === "standard") {
             stage = "games"
@@ -218,13 +245,18 @@ FocusScope {
         if (choosing)
             return
         Sfx.select()
+        // Never another pad's profile (GameControls.padFor falls back to the first pad).
+        if (tryPadId === "" || !GameControls.pad || GameControls.pad.id !== tryPadId) {
+            onb.close()
+            return
+        }
         if (value === GameControls.layout) {
             onb.close()
             return
         }
         choosing = true
         chosen = value
-        GameControls.setLayout(value)
+        GameControls.setOwnLayout(value)
     }
 
     function moveChips(delta) {
@@ -281,6 +313,11 @@ FocusScope {
                 test.forceActiveFocus()
             }
         }
+    }
+
+    Connections {
+        target: Input
+        function onDevicesChanged() { onb.checkTriedPad() }
     }
 
     Connections {

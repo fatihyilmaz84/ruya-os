@@ -281,6 +281,24 @@ QtObject {
         change(d, "layout", false)
     }
 
+    // The layout in the pad's own device slot only (RUY-503, the pairing step): a profile of
+    // all controllers or of a family is copied for this pad and never changed. False without a pad.
+    function setOwnLayout(value) {
+        if (!pad)
+            return false
+        const d = current()
+        if (!(d.id !== "" && slotOf(d.match) === "device:" + pad.id)) {
+            d.id = deviceProfileId(pad.id)
+            d.match = { device: pad.id }
+        }
+        if (value === "nintendo")
+            d.inherits = "nintendo"
+        else
+            delete d.inherits
+        change(d, "layout", false)
+        return true
+    }
+
     // "all" | "family:<family>" | "device:<stable id>" (Applies to's values).
     readonly property string appliesValue: appliesTo === "device" ? "device:" + matchDevice
                                            : appliesTo === "family" ? "family:" + matchFamily : "all"
