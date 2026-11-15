@@ -214,6 +214,8 @@ public:
     // How long the mock service holds a removed seated pad's seat (RUY-627; 60000 ms by default).
     // Also the replay deadline (RUY-644); mockReplayPending is the players still queued to join again.
     Q_INVOKABLE void mockSeatHoldMs(int ms);
+    // PlayersChanged reaches the shell after `ms` (a slow bus; 0 by default; RUY-664).
+    Q_INVOKABLE void mockPlayersDelayMs(int ms);
     Q_INVOKABLE int mockReplayPending() const;
     // Every SetRoute that reached the mock service: [{ route, instance, appId, profile }].
     Q_INVOKABLE QVariantList mockCalls() const;

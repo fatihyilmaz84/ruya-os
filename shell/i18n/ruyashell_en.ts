@@ -2454,7 +2454,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>HubPause</name>
     <message>
-        <location filename="../qml/HubPause.qml" line="+126"/>
+        <location filename="../qml/HubPause.qml" line="+132"/>
         <source>Could not resume the game. Open Ruya Hub and choose Resume.</source>
         <translation>Could not resume the game. Open Ruya Hub and choose Resume.</translation>
     </message>
@@ -3603,7 +3603,12 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ProfileCard</name>
     <message>
-        <location filename="../qml/ProfileCard.qml" line="+16"/>
+        <location filename="../qml/ProfileCard.qml" line="+15"/>
+        <source>Guest</source>
+        <translation>Guest</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>%1, PIN protected</source>
         <translation>%1, PIN protected</translation>
     </message>
@@ -4547,7 +4552,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 did not close. Restart the console if it keeps running.</translation>
     </message>
     <message>
-        <location line="+105"/>
+        <location line="+151"/>
         <source>%1 has no window yet.</source>
         <translation>%1 has no window yet.</translation>
     </message>
@@ -4669,7 +4674,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1814"/>
+        <location line="-1860"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -4700,7 +4705,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1539"/>
+        <location line="+1585"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
@@ -6204,26 +6209,25 @@ This can&apos;t be undone.</translation>
 <context>
     <name>WhosPlaying</name>
     <message>
-        <location filename="../qml/WhosPlaying.qml" line="+76"/>
-        <location line="+61"/>
-        <location line="+201"/>
+        <location filename="../qml/WhosPlaying.qml" line="+145"/>
+        <location line="+215"/>
         <source>Guest</source>
         <translation>Guest</translation>
     </message>
     <message>
-        <location line="-235"/>
+        <location line="-249"/>
         <location line="+1"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
         <location line="-1"/>
-        <location line="+771"/>
+        <location line="+808"/>
         <source>Not now</source>
         <translation>Not now</translation>
     </message>
     <message>
-        <location line="-770"/>
+        <location line="-807"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -6253,12 +6257,17 @@ This can&apos;t be undone.</translation>
         <translation>Joins as Guest %1. Nothing is kept after it leaves.</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+12"/>
+        <source>This controller stops playing as %1.</source>
+        <translation>This controller stops playing as %1.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Now on %2. Picking it moves %1 here.</source>
         <translation>Now on %2. Picking it moves %1 here.</translation>
     </message>
     <message>
-        <location line="+357"/>
+        <location line="+374"/>
         <source>%1 could not join</source>
         <translation>%1 could not join</translation>
     </message>
@@ -6268,7 +6277,7 @@ This can&apos;t be undone.</translation>
         <translation>Try again.</translation>
     </message>
     <message>
-        <location line="+219"/>
+        <location line="+231"/>
         <source>Paused · %1</source>
         <translation>Paused · %1</translation>
     </message>

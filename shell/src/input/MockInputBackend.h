@@ -68,6 +68,8 @@ public:
     void setFailJoin(const QString &status) { m_failJoin = status; }
     // Tests: how long a seat waits for its removed pad (60000 ms, the service's SEAT_HOLD).
     void setSeatHoldMs(int ms) { m_seatHoldMs = ms; }
+    // Tests: PlayersChanged reaches the shell this long after the seats changed (a slow bus; RUY-664).
+    void setPlayersDelayMs(int ms) { m_playersDelayMs = ms; }
     // Tests: the press of a pad is announced (ActiveInputChanged); the property follows that pad.
     void sendActiveInput(const QString &deviceId, const QString &family);
     // Tests: the mode stored for a controller of a console profile ("family" when none).
@@ -206,6 +208,7 @@ private:
     QHash<QString, qint64> m_foreignPress;   // device id -> m_clock time of its last ForeignInput "press"
     QString m_failJoin;
     int m_seatHoldMs = 60000;
+    int m_playersDelayMs = 0;
     QElapsedTimer m_clock;         // the time base of the holds
     QTimer m_holdTimer;            // fires when the next hold ends
 };

@@ -522,7 +522,7 @@ Item {
             tryVerify(() => Input.mockNavigator() === host.dualSense, 2000)
             tryVerify(() => cardList().activeFocus, 2000)
             compare(cardList().currentIndex, 1, "Ada, player 1 without a pad, first")
-            compare(find("whosPlayingDetail").text, "")
+            compare(find("whosPlayingDetail").text, "This controller stops playing as Player One.", "RUY-664: said before Accept")
             keyClick(Qt.Key_Left)
             compare(find("whosPlayingDetail").text, "", "Player One plays on this pad: nothing to move")
             keyClick(Qt.Key_Right)
@@ -544,6 +544,51 @@ Item {
             wait(50)
             verify(!prompt().shown, "player 2's Guide opens nothing")
             verify(find("homePlay").activeFocus)
+        }
+
+        // RUY-664: a seated pad that picks the padless player 1 is told, before Accept, that it stops playing
+        // as its own profile; only that card says it, and the line follows the language while the prompt is open.
+        function test_the_pad_that_gives_up_its_seat_is_told_before_accept() {
+            signInAdaWithKeyboard()
+            Input.joinPlayer(host.dualSense, "p1")
+            tryVerify(() => Input.players.length === 2, 2000, "the DualSense is player 2 (Player One)")
+            Input.mockPadButton(host.dualSense, "guide")
+            tryVerify(() => prompt().shown && prompt().pad === host.dualSense, 2000)
+            tryVerify(() => cardList().activeFocus && cardList().currentIndex === 1, 2000, "Ada, player 1 without a pad")
+            compare(find("whosPlayingDetail").text, "This controller stops playing as Player One.")
+            keyClick(Qt.Key_Left)
+            compare(find("whosPlayingDetail").text, "", "Player One's own card says nothing")
+            keyClick(Qt.Key_Right)
+            DeviceSettings.language = "tr"
+            tryVerify(() => find("whosPlayingDetail").text === "Bu kumanda artık Player One olarak oynamıyor.", 2000,
+                      "the open prompt follows the language")
+            compare(cardList().currentIndex, 1, "the model did not reset")
+            keyClick(Qt.Key_Right)
+            tryVerify(() => cardList().currentIndex === 2, 2000)
+            tryVerify(() => findChild(cardList().currentItem, "profileCardName").text === "Misafir", 2000)
+            DeviceSettings.language = "en"
+            tryVerify(() => findChild(cardList().currentItem, "profileCardName").text === "Guest", 2000)
+            compare(cardList().currentIndex, 2)
+        }
+
+        // The shots (RUY-664): the detail line before Accept, en and tr, on Ada's card with Player One's pad asking.
+        function test_zz_screenshots() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            for (const lang of ["en", "tr"]) {
+                init()
+                DeviceSettings.language = lang
+                signInAdaWithKeyboard()
+                Input.joinPlayer(host.dualSense, "p1")
+                tryVerify(() => Input.players.length === 2, 2000)
+                Input.mockPadButton(host.dualSense, "guide")
+                tryVerify(() => prompt().shown && prompt().pad === host.dualSense, 2000)
+                tryVerify(() => cardList().activeFocus && cardList().currentIndex === 1, 2000)
+                wait(500)
+                grabImage(tc.shell).save(shotsDir + "/whos-stops-" + lang + ".png")
+                tc.shell.destroy()
+                wait(50)
+            }
         }
 
         // ---- geometry at 1080p (u = 1) ------------------------------------------------------------------------

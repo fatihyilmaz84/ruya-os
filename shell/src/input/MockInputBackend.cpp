@@ -585,7 +585,7 @@ void MockInputBackend::seatsChanged(const QVariantList &before)
     const QVariantList now = playerList();
     // A signal from a service whose name has no owner is not heard.
     if (now != before && serviceOwned())
-        QTimer::singleShot(0, this, [this, now] { deliverPlayersSignal(now); });
+        QTimer::singleShot(m_playersDelayMs, this, [this, now] { deliverPlayersSignal(now); });
 }
 
 // The service's rules (routing.rs join_player, seats.rs): the checks in the XML's order, then

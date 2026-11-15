@@ -321,6 +321,12 @@ void Input::mockFailJoin(const QString &status)
         mock->setFailJoin(status);
 }
 
+void Input::mockPlayersDelayMs(int ms)
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        mock->setPlayersDelayMs(ms);
+}
+
 void Input::mockSeatHoldMs(int ms)
 {
     if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))

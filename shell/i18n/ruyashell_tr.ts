@@ -2449,7 +2449,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>HubPause</name>
     <message>
-        <location filename="../qml/HubPause.qml" line="+126"/>
+        <location filename="../qml/HubPause.qml" line="+132"/>
         <source>Could not resume the game. Open Ruya Hub and choose Resume.</source>
         <translation>Oyun sürdürülemedi. Ruya Hub&apos;ı açıp Devam et&apos;i seçin.</translation>
     </message>
@@ -3588,7 +3588,12 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ProfileCard</name>
     <message>
-        <location filename="../qml/ProfileCard.qml" line="+16"/>
+        <location filename="../qml/ProfileCard.qml" line="+15"/>
+        <source>Guest</source>
+        <translation>Misafir</translation>
+    </message>
+    <message>
+        <location line="+4"/>
         <source>%1, PIN protected</source>
         <translation>%1, PIN korumalı</translation>
     </message>
@@ -4530,7 +4535,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kapanmadı. Çalışmaya devam ederse konsolu yeniden başlatın.</translation>
     </message>
     <message>
-        <location line="+105"/>
+        <location line="+151"/>
         <source>%1 has no window yet.</source>
         <translation>%1 henüz bir pencere açmadı.</translation>
     </message>
@@ -4652,7 +4657,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1814"/>
+        <location line="-1860"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -4683,7 +4688,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1539"/>
+        <location line="+1585"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
@@ -6184,26 +6189,25 @@ Bu geri alınamaz.</translation>
 <context>
     <name>WhosPlaying</name>
     <message>
-        <location filename="../qml/WhosPlaying.qml" line="+76"/>
-        <location line="+61"/>
-        <location line="+201"/>
+        <location filename="../qml/WhosPlaying.qml" line="+145"/>
+        <location line="+215"/>
         <source>Guest</source>
         <translation>Misafir</translation>
     </message>
     <message>
-        <location line="-235"/>
+        <location line="-249"/>
         <location line="+1"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
         <location line="-1"/>
-        <location line="+771"/>
+        <location line="+808"/>
         <source>Not now</source>
         <translation>Şimdi değil</translation>
     </message>
     <message>
-        <location line="-770"/>
+        <location line="-807"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -6233,12 +6237,17 @@ Bu geri alınamaz.</translation>
         <translation>Misafir %1 olarak katılır. Ayrılınca hiçbir şey saklanmaz.</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+12"/>
+        <source>This controller stops playing as %1.</source>
+        <translation>Bu kumanda artık %1 olarak oynamıyor.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Now on %2. Picking it moves %1 here.</source>
         <translation>Şu an %2 üzerinde. Seçersen %1 buraya geçer.</translation>
     </message>
     <message>
-        <location line="+357"/>
+        <location line="+374"/>
         <source>%1 could not join</source>
         <translation>%1 katılamadı</translation>
     </message>
@@ -6248,7 +6257,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene.</translation>
     </message>
     <message>
-        <location line="+219"/>
+        <location line="+231"/>
         <source>Paused · %1</source>
         <translation>Duraklatıldı · %1</translation>
     </message>
