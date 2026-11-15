@@ -7,17 +7,17 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 - **Review range:** f5e0726b..HEAD (every branch merged had a recorded APPROVE; lead commit a01dc799: 04's rows-only sub-page text). Paper Plane `changes` cursor 4049.
 - **Merged and Done (5):** 616, 719, 714, 715, 716. Rounds 2 for 719 (the 250 ms window starts at the last *fresh* reading; my pre-build review had it wrong) and 714 (a refused layout save locked the pairing screen). One full merge gate for 719+714+715: 1977 passed, 0 failed, 166 skips (282 s).
 - **RUY-716 merged and Done too** (round 1; the Add profile role row is gone: it offered Standard and Guest only). Its `vm-profiles-check.sh create` line only echoes (RUY-728).
-- **Image 0.0.87** (f5e0726b = 500, 704, 707, 708, 710): chain OK (build 34, disk 35, oci 16 min). **VM queue: 28 of 28 PASS in 14 min** (lead-23's order, RUY-719's fixed checks; logs `output/vm-queue-087a/`). **Dell not updated:** at 22:36 SSH timed out (ping half answered; asleep or off). It still runs 0.0.86; `ruyaos-0.0.87.oci` is on F:.
+- **Image 0.0.87** (f5e0726b = 500, 704, 707, 708, 710): chain OK (build 34, disk 35, oci 16 min). **VM queue: 28 of 28 PASS in 14 min** (lead-23's order, RUY-719's fixed checks; logs `output/vm-queue-087a/`). **The Dell runs 0.0.87** (rollback 0.0.86; updated at 23:34 after the owner switched it on: at 22:36 it was off). Failed: only bootloader-update (RUY-447); shell GPU 9 % at the picker; bluetoothd idle.
 - **Pushed:** a01dc799 at 23:19 (Linux CI job warm, 7 min, PASSED); the RUY-716 merge and this handoff with the closing push. GitHub CI was in progress at the handoff: check `gh run list -L 3`.
 
 ## First thing next session
-1. **Dell:** `bash scripts/dell-update.sh 0.0.87` (Git Bash), then the owner tries the wake flow (RUY-707) with a Bluetooth pad (keyboard and power-button wake; look for the late-wake journal line) and the new profile page (RUY-715).
+1. **Dell (on 0.0.87):** the owner tries the wake flow (RUY-707) with a Bluetooth pad (keyboard and power-button wake; look for the late-wake journal line) and the new profile page (RUY-715).
 2. **Image 0.0.88** once there is more on main: owes RUY-616's `vm-security-check.sh` (busrecv) and `vm-security-check.sh signals`, plus RUY-716's profiles check if merged (RUY-390 comments).
 3. **Builder lanes (Ready):** RUY-549 (needs WSL: dispatch only when no chain runs; the owner's new scope is in its last comment), then co-op tickets per lead-23's plan: write RUY-633, 686, 687 (canvas first); tuning RUY-530/531/528/526; game page RUY-523/524/532-534. Triage the new inbox tickets (720-728).
 4. Owner report RUY-718 (notification bell hard to reach): canvas before a builder ticket.
 
 ## Concerns (ranked)
-1. The wake flow is still unproven on hardware (RUY-707), and the Dell missed 0.0.87.
+1. The wake flow is still unproven on hardware (RUY-707) (the Dell has it since 0.0.87).
 2. Nine stuck `python3 -` processes (from agent Git Bash heredocs) burned ~9 cores since 14 Nov; the auto-mode classifier refused the lead's Stop-Process, so the owner was asked (RUY-727).
 3. Co-op on real hardware still not tried by the owner (RUY-681).
 
@@ -31,4 +31,4 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 | Date | Range reviewed | Tasks | Findings (fixed / filed) | `dev.ps1 test` | VM |
 |---|---|---|---|---|---|
 | 2026-11-15 (lead-23) | 2e79297..f5e0726 | 15 merged, 11 tickets planned | rounds 2 for 8 tickets; 2 lead script bugs fixed; ~20 filed | 1955 QML + 157 skips | 0.0.86 queue clean; Dell on 0.0.86 |
-| 2026-11-15 (lead-24) | f5e0726..HEAD | 5 merged, 10 filed (720-728; 729 a duplicate) | rounds 2 for 2 (a wrong lead rule, a pairing-screen lock); 1 spec gap closed; 9 filed | 1977 QML + 166 skips | 0.0.87 queue 28/28; Dell unreachable |
+| 2026-11-15 (lead-24) | f5e0726..HEAD | 5 merged, 10 filed (720-728; 729 a duplicate) | rounds 2 for 2 (a wrong lead rule, a pairing-screen lock); 1 spec gap closed; 9 filed | 1977 QML + 166 skips | 0.0.87 queue 28/28; Dell on 0.0.87 |
