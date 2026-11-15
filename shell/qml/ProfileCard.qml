@@ -6,6 +6,7 @@ Item {
     required property int index
     required property var modelData
     property real u: 1
+    property int playerSlot: 0
 
     readonly property bool focused: ListView.isCurrentItem && ListView.view.activeFocus
 
@@ -41,6 +42,7 @@ Item {
     // A name from outside: one line, no wider than the card, cut with an ellipsis (the full name is in
     // the accessible name above, T-312).
     Text {
+        id: cardName
         objectName: "profileCardName"
         anchors { horizontalCenter: parent.horizontalCenter; top: avatar.bottom; topMargin: Theme.spaceM * card.u }
         width: card.width
@@ -51,6 +53,16 @@ Item {
         color: Theme.text
         font.pixelSize: Theme.typeHeadline * card.u
         font.weight: card.focused ? Theme.weightDemiBold : Theme.weightRegular   // de-emphasis by weight, not by a dimmer colour
+    }
+
+    // "Who's playing?" (RUY-122, 04 proposal 4): the seat of a profile that plays now, `spaceXs` under
+    // its name. 0 (the picker): none.
+    Badge {
+        objectName: "profileCardPlayer"
+        visible: card.playerSlot > 0
+        anchors { horizontalCenter: parent.horizontalCenter; top: cardName.bottom; topMargin: Theme.spaceXs * card.u }
+        u: card.u
+        text: qsTr("Player %1").arg(card.playerSlot)
     }
 
     Badge {

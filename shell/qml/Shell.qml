@@ -321,7 +321,7 @@ FocusScope {
         appsBehindHome = false
         item.z = ++appRaise             // the newest on top: "Switch to" and Resume bring one to the front
         focusedApp = item
-        if (!systemPanel.open)          // the overlay keeps the focus until it closes
+        if (!systemPanel.open && !whosPlaying.shown)   // the overlay (or "Who's playing?") keeps the focus until it closes
             focusCurrent()
     }
 
@@ -341,7 +341,7 @@ FocusScope {
         if (!focusedApp || wasFront)
             focusedApp = appsBehindHome ? null : fallbackFront()
         // An app that was behind Home going away leaves the focus where the user put it.
-        if (!systemPanel.open && (wasFront || focusedApp !== null))
+        if (!systemPanel.open && !whosPlaying.shown && (wasFront || focusedApp !== null))
             focusCurrent()              // the next app, else the page or Home
     }
 
@@ -555,7 +555,7 @@ FocusScope {
         instance: root.quickMenuApp ? root.quickMenuApp.instance : ""
         appId: root.quickMenuApp ? root.quickMenuApp.appId : ""
         frozen: root.quickMenuApp ? root.quickMenuApp.frozen : false
-        overlay: systemPanel.open || modeConfirm.shown || IdleClock.covered
+        overlay: systemPanel.open || whosPlaying.shown || modeConfirm.shown || IdleClock.covered
         heldInstance: root.heldGame ? root.heldGame.instance : ""
         heldAppId: root.heldGame ? root.heldGame.appId : ""
     }
@@ -608,10 +608,10 @@ FocusScope {
     // While anything in the modal layer shows (a PIN pad, the keyboard, a dialog, between two steps
     // of a flow), the focus is that modal's business: the net stays out. It never acts on keys.
     property int focusRepairs: 0            // how often refocusIfLost() acted (tests: a page's own focus never needs it)
-    function modalShown() {
+    function modalShown(except) {
         for (let i = 0; i < modalLayer.children.length; ++i) {
             const c = modalLayer.children[i]
-            if (!c.visible)
+            if (!c.visible || c === except)
                 continue
             // A pane's lazily built modal sits here in a Loader that is "visible" even when it
             // holds nothing (T-349): only what it has loaded counts.
@@ -1157,10 +1157,11 @@ FocusScope {
         }
     }
 
-    // Opening the Hub over an app freezes it, returning to it thaws it (T-457, 02 §1.6).
+    // Opening the Hub (or "Who's playing?", RUY-122) over an app freezes it, returning to it thaws it
+    // (T-457, 02 §1.6, §1.9).
     HubPause {
         id: hubPause
-        hubOpen: systemPanel.open
+        overlayOpen: systemPanel.open || whosPlaying.shown
         front: root.appOpen && root.quickMenuApp ? root.quickMenuApp.instance : ""
         pauseOn: DeviceSettings.pauseGamesInHub
         profile: root.signedIn ? Profiles.activeProfile : ""
@@ -1182,11 +1183,11 @@ FocusScope {
         property: "appInFront"
         value: root.appOpen || root.launching || root.closingScreen
     }
-    // The Hub over the app: its answers are not held back by "Don't interrupt games".
+    // The Hub (or "Who's playing?") over the app: its answers are not held back by "Don't interrupt games".
     Binding {
         target: Notifications
         property: "overlayOpen"
-        value: systemPanel.open
+        value: systemPanel.open || whosPlaying.shown
     }
     // The notification centre is the signed-in profile's (RUY-413).
     Binding {
@@ -2322,7 +2323,8 @@ FocusScope {
         id: modalLayer
         objectName: "modalLayer"
         anchors.fill: parent
-        z: notificationSheet.visible && systemPanel.open ? 21 : 15
+        // Raised above the Hub (z 20) while the notification sheet or "Who's playing?" shows over it.
+        z: (notificationSheet.visible || whosPlaying.visible) && systemPanel.open ? 21 : 15
         glassSource: l0          // the layer the glass sheets of the picker modals blur
     }
 
@@ -2397,6 +2399,40 @@ FocusScope {
         onClosed: Qt.callLater(root.rescueFocus)      // its return target may be gone
     }
 
+    // "Who's playing?" for a new controller (RUY-122, 02 §1.9): it opens on a pad with no player (one that
+    // connects, presses or presses Guide) while a profile is signed in, and waits for the screen saver
+    // and any other modal. A game behind it is paused (HubPause) and its route is "overlay". It closes
+    // back to the Hub when the Hub is open, else to whatever is on top (the game resumes by itself).
+    WhosPlaying {
+        id: whosPlaying
+        objectName: "whosPlaying"
+        parent: modalLayer
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+        u: root.u
+        marginX: root.marginX
+        marginY: root.marginY
+        allowed: root.signedIn && !root.setupActive
+        blocked: IdleClock.covered || modeConfirm.shown || powerConfirm.shown || root.launching || root.closingScreen
+                 || root.modalShown(whosPlaying)
+        overGame: root.appOpen && root.focusedApp !== null
+        gameName: root.quickMenuApp ? root.quickMenuApp.title : ""
+        gameInstance: root.quickMenuApp ? root.quickMenuApp.instance : ""
+        blurSource: overGame ? appLayer : l0
+        // The focus goes back where it was (a Hub row, a page's row, Home's tile) if that can still take it;
+        // with an app in front and the Hub closed it is the app's.
+        onClosed: target => {
+            if (!systemPanel.open && root.focusedApp)
+                root.focusCurrent()
+            else if (target && target.visible && target.enabled)
+                target.forceActiveFocus()
+            else if (systemPanel.open)
+                systemPanel.actions.forceActiveFocus()
+            else
+                root.focusCurrent()
+        }
+    }
+
     // "Keep this resolution?" (T-198): above the hint bar and every other modal.
     ModeConfirm {
         id: modeConfirm
@@ -2420,7 +2456,7 @@ FocusScope {
         id: toasts
         objectName: "toastLayer"
         anchors.fill: parent
-        z: 10
+        z: whosPlaying.visible ? 22 : 10       // above "Who's playing?" (its error toast), wherever it sits
         u: root.u
         marginX: root.marginX
         marginY: root.marginY
@@ -2449,6 +2485,8 @@ FocusScope {
     readonly property var hintList: {
         if (modeConfirm.shown)
             return modeConfirm.modalHints
+        if (whosPlaying.shown)              // over the Hub and over a game too (RUY-122)
+            return whosPlaying.modalHints
         if (notificationSheet.shown)        // the sheet over the Hub says its own buttons (RUY-414)
             return notificationSheet.modalHints
         if (systemPanel.open)

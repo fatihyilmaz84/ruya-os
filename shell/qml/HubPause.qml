@@ -1,7 +1,8 @@
 import QtQuick
 import RuyaShell
 
-// The Ruya Hub pauses the game (T-457, 02 §1.6, ADR-033 point 3). When the Hub opens over an app it
+// The Ruya Hub pauses the game (T-457, 02 §1.6, ADR-033 point 3), and so does "Who's playing?" (RUY-122,
+// 02 §1.9): `overlayOpen` is either of them, and the rest reads "the Hub" for both. When the Hub opens over an app it
 // asks Session1 to freeze that app; whenever the Hub is closed and an app this object froze is the
 // one in front again, it thaws it. So Resume, B and Guide thaw the app they return to, Home leaves it
 // frozen behind Home (ADR-019) until its Running card brings it back, and "Switch to" brings the
@@ -27,8 +28,8 @@ import RuyaShell
 QtObject {
     id: pause
 
-    // The Hub (QuickMenu) is open.
-    property bool hubOpen: false
+    // A pausing overlay is open: the Hub (QuickMenu) or "Who's playing?" (RUY-122). Both pause alike.
+    property bool overlayOpen: false
     // The Session1 instance of the app in front ("" when none is: Home, a page, nobody signed in).
     property string front: ""
     // DeviceSettings.pauseGamesInHub.
@@ -61,7 +62,7 @@ QtObject {
 
     // The app in front, with the Hub closed, runs: thaw it if it was frozen here.
     function sync() {
-        if (!hubOpen && front !== "")
+        if (!overlayOpen && front !== "")
             release(front)
     }
 
@@ -91,8 +92,8 @@ QtObject {
         }
     }
 
-    onHubOpenChanged: {
-        if (hubOpen) {
+    onOverlayOpenChanged: {
+        if (overlayOpen) {
             if (pauseOn && front !== "" && !asked.includes(front)) {
                 asked = asked.concat([front])
                 freezing = freezing.concat([front])

@@ -7,7 +7,7 @@
 use ruya_inputd::accounts::FixedAccounts;
 use ruya_inputd::book::{Book, DirStore};
 use ruya_inputd::dbus::{serve, DynBackend, Shared};
-use ruya_inputd::routing::{NullBackend, Router, SEAT_GATE};
+use ruya_inputd::routing::{NullBackend, Router};
 
 fn main() {
     let session = std::env::args().any(|a| a == "--session");
@@ -32,7 +32,7 @@ fn main() {
         ("p3".into(), 1003),
     ]);
     let backend: DynBackend = Box::new(NullBackend);
-    let mut router = Router::new(backend, Box::new(accounts), SEAT_GATE);
+    let mut router = Router::new(backend, Box::new(accounts));
     let state = std::env::var_os("STATE_DIRECTORY")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::env::temp_dir().join("ruya-inputd-session"));

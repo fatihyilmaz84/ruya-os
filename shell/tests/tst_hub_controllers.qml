@@ -468,7 +468,10 @@ Item {
             tryCompare(foreignSpy, "count", 1, 2000)
             compare(foreignSeen(), [dualSense + " guide"], "an unseated pad's Guide asks")
             verify(!find("systemPanel").open, "and opens no Hub")
-            verify(app.activeFocus)
+            // It opens "Who's playing?" over the game instead (RUY-122); Back is Not now.
+            tryVerify(() => find("whosPlaying").shown, 2000, "the prompt opens")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("whosPlaying").shown && app.activeFocus, 2000, "back in the game")
             Input.joinPlayer(dualSense, "p1")
             tryVerify(() => Input.players.length === 2, 2000, "the DualSense is player 2")
             Input.mockPadButton(dualSense, "guide")

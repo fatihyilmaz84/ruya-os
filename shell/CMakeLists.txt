@@ -168,6 +168,7 @@ qt_add_qml_module(ruyashell
         qml/WallpaperLayer.qml
         qml/WallpaperPicker.qml
         qml/ProfilePicker.qml
+        qml/WhosPlaying.qml
         qml/ControllerPairHint.qml
         qml/ControllerOnboarding.qml
         qml/ControllerToasts.qml

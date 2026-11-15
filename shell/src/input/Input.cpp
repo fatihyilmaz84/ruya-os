@@ -247,12 +247,6 @@ void Input::setNavigator(const QString &deviceId)
     m_backend->setNavigator(deviceId);
 }
 
-void Input::mockSeatGate(bool on)
-{
-    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
-        mock->setSeatGate(on);
-}
-
 QString Input::mockNavigator() const
 {
     auto *mock = qobject_cast<MockInputBackend *>(m_backend.get());

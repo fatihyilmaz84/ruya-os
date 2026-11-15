@@ -170,6 +170,14 @@ void Profiles::mockRefreshDelayed(int ms)
         mock->refreshDelayed(ms);
 }
 
+void Profiles::mockSetAvailable(bool available)
+{
+    if (!qobject_cast<MockProfilesBackend *>(m_backend.get()) || available == m_available)
+        return;
+    m_available = available;
+    emit availableChanged();
+}
+
 int Profiles::mockPendingReplies() const
 {
     auto *mock = qobject_cast<MockProfilesBackend *>(m_backend.get());

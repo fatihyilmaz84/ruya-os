@@ -24,8 +24,8 @@
 # `players` (RUY-121) with the shell stopped like `twopads`: three uinput pads; a second profile "Check Player" is made with
 # CreateProfile (as the admin $me, PIN 1234) and removed at the end. Pad A presses, then the probe routes the profile: ListPlayers
 # (busctl --json=short) has seat 1 = A; JoinPlayer(B, the second profile) answers ok 2; in the route app ruya-input/pad1 is A and
-# pad2 is B (read as the profile user), the unseated third pad has no seat's number but, with the seat gate off (the image until
-# RUY-122), a pad after the seats (pad5) that only its button reaches; LeavePlayer(2) removes pad2 and pad1 stays. Since RUY-121 only a
+# pad2 is B (read as the profile user), the unseated third pad has no virtual pad (the seat gate, on since RUY-122: no pad3,
+# no pad5) and its button reaches neither; LeavePlayer(2) removes pad2, pad1 stays, B gets none. Since RUY-121 only a
 # seated pad gets a virtual pad: the other modes seat their pads (JoinPlayer, or a press before the sign-in), and `twopads`,
 # `guide` and the probe's `twoprofiles` seat the second pad as the other profile.
 # `useractive` (RUY-588) with the shell stopped like `twopads`: a uinput pad's press in route `app` makes ruya-inputd emit Input1.UserActive
@@ -450,8 +450,8 @@ shell_check() {
     kill -9 "$(systemctl show -p MainPID --value ruya-inputd)"
     wait_route app 10 && ok "after kill -9 the shell routed app again" || bad "after kill -9 the route reads '$(route_now)'"
     # A new process knows no seats (RUY-121): the shell joins the players it knew again (Input replays them on the
-    # new owner), so the test pad is player 1 and pad1 again. With the seat gate off (until RUY-122) an unseated pad
-    # would get a virtual pad too (pad5), so this waits for pad1 and for seat 1 on the test pad, not for any pad.
+    # new owner), so the test pad is player 1 and pad1 again. This waits for pad1 and for seat 1 on the test pad, not
+    # for any pad (with the seat gate off before RUY-122 an unseated pad had a pad5 too).
     wait_pad1 5 && ok "... and the app has pad1 again" || bad "no ruya-input/pad1 after the restart: the shell did not join its players again"
     busctl --system call "$svc" "$path" "$ifc" ListPlayers | grep -q "\"$test_pad\"" \
         && ok "ListPlayers: the shell seated the test pad again ($test_pad)" \

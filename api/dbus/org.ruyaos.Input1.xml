@@ -11,7 +11,7 @@
   GetEffectiveProfile, ProfilesChanged) since RUY-42 (T-369), SetConfirmButton, ConfirmButton and
   ActiveInputChanged since RUY-40 (per controller, with GetConfirmButtons, since RUY-603), and the
   players (JoinPlayer, LeavePlayer, ListPlayers, PlayersChanged; the device record's slot and
-  profile) since RUY-121 (ADR-017 seats; the seat gate is off until RUY-122, see Players), and who
+  profile) since RUY-121 (ADR-017 seats; the seat gate is on since RUY-122, see Players), and who
   drives the UI (ForeignInput, SetNavigator; 06 §11.3) since RUY-38; every other member below is
   still DRAFT and not served (platform and game assignments T-370 / RUY-43, OwnershipMode T-371).
   The design is docs/specs/06-input.md. Each task may change what it builds here (contracts are
@@ -207,7 +207,7 @@
          destroys them ("locked", "shell", another instance or profile, "overlay" with ""), so
          an app's open descriptor reads ENODEV and a pad never outlives its profile. Only a seated
          pad has a virtual pad, and its number is its seat (phys ruya-input/pad<slot>; Players
-         below, RUY-121; until RUY-122 the seat gate is off and unseated pads follow as pad5 and up),
+         below, RUY-121; the seat gate, on since RUY-122: an unseated pad has none),
          and it stays through its seat's 60 s hold when its pad disconnects (RUY-627). On "app" for a new owner pad1 (seat 1's pad, the profile's active
          controller) is made first and the other seated pads only once pad1's ACL is set (or its
          2 s udev fallback passed), so a game that opens the first pad it is offered gets pad1.
@@ -257,16 +257,11 @@
          app sees no pad go or come. When the hold runs out seat n >= 2 is freed and its virtual pad
          destroyed; seat 1 keeps its profile with device_id "" and pad1 is destroyed. A held seat
          keeps its number (unseated pads never take 1-4).
-         The seat gate is OFF until RUY-122 (the prompt that calls JoinPlayer; ruya-inputd's
-         SEAT_GATE): meanwhile an unseated connected pad still gets a virtual pad in "app" (and what
-         "overlay" keeps), numbered after the seats (ruya-input/pad5 and up, the lowest free number,
-         in connect order), so pad1..pad4 stay the seats' and a join renumbers no other live pad.
-         Also while the gate is off (RUY-38 round 2, the interim fallback): when seat 1 has no pad
-         and is not held (a keyboard sign-in, or its pad's hold ran out) and no navigator is set, the
-         first unseated pad that presses a button becomes seat 1's pad (PlayersChanged, its virtual
-         pad is pad1) and navigates from that press on; with the gate on (RUY-122) only JoinPlayer
-         (the prompt's Move) seats player 1 on a pad. Seats, ListPlayers and every member here work
-         the same either way otherwise.
+         The seat gate is on since RUY-122 (the shell's "Who's playing?" calls JoinPlayer): an
+         unseated connected pad never gets a virtual pad. Only JoinPlayer seats a pad: also seat 1's,
+         when seat 1 has no pad (a keyboard sign-in, or its pad's hold ran out); a press takes no
+         seat (RUY-38's interim fallback, while the gate was off, is gone), it is a ForeignInput
+         "press", and the shell's prompt then offers player 1's profile (JoinPlayer as player 1).
          A restarted service knows no seats: the shell joins the players it last knew again on the
          name's new owner (seat 1's pad as the route's profile, then the others by slot), each once
          the service lists its pad (a held seat's player only when its pad is back).
@@ -333,7 +328,7 @@
              any pad is KEY_HOMEPAGE (the picker, its PIN pad, first boot);
            - signed in, no navigator: only seat 1's pad (Players). Seats 2-4 give the shell nothing
              (under "app" their input goes to their virtual pad); an unseated pad gives the shell
-             nothing either (and no app, once the seat gate is on). With seat 1 held or without a
+             nothing either (and no app: the seat gate). With seat 1 held or without a
              pad no pad navigates;
            - a navigator set (SetNavigator): only that pad, every key including Guide; seat 1's pad
              gives nothing, Guide included. The other pads behave as above, ForeignInput included.

@@ -8,8 +8,10 @@ import RuyaShell
 // is a ForeignInput and moves nothing; Input.setNavigator gives one pad the UI (the pad of "Who's
 // playing?", RUY-122) and player 1's pad does nothing meanwhile, Guide included. Player 1's pad lost
 // over a game (its seat held, RUY-627) opens the Hub, which pauses the game; the pad back drives it
-// and Accept on the game card resumes. Over Home nothing opens. Pads are driven with
-// Input.mockPadButton (the service's keys on "RuyaOS Navigation"), the keyboard with keyClick.
+// and Accept on the game card resumes. Over Home nothing opens. Since RUY-122 (the seat gate on) an
+// unseated pad's press opens "Who's playing?" (tst_whos_playing.qml has the prompt itself), and a seat 1
+// without a pad gets one only through it. Pads are driven with Input.mockPadButton (the service's keys
+// on "RuyaOS Navigation"), the keyboard with keyClick.
 Item {
     id: host
     width: 1280
@@ -127,19 +129,28 @@ Item {
 
         // ---- who navigates -----------------------------------------------------------------------------------
 
+        // The prompt the press opens (RUY-122) is closed with the keyboard's Back (Not now): the focus is Home's again.
+        function notNow() {
+            tryVerify(() => find("whosPlaying").shown, 2000, "Who's playing? is open")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("whosPlaying").shown, 2000, "Not now closed it")
+        }
+
         function test_after_the_sign_in_another_pad_asks_and_moves_nothing() {
             signInWithXbox()
             const play = find("homePlay")
             Input.mockPadButton(host.dualSense, "dpad_right")
             tryVerify(() => foreignOf(host.dualSense).length === 1, 2000, "the DualSense asked")
             compare(foreignOf(host.dualSense), ["press"])
-            verify(play.activeFocus, "nothing moved")
-            verify(!find("homeDetails").activeFocus)
+            verify(!find("homeDetails").activeFocus, "nothing moved on Home")
+            notNow()
+            verify(play.activeFocus, "the focus is back where it was")
             Input.mockPadButton(host.dualSense, "south")        // within a second: not asked again
             Input.mockPadButton(host.dualSense, "guide")
             tryVerify(() => foreignOf(host.dualSense).length === 2, 2000)
             compare(foreignOf(host.dualSense), ["press", "guide"])
             verify(!find("systemPanel").open, "its Guide opens no Hub")
+            notNow()                                              // its Guide opens the prompt instead
             verify(play.activeFocus)
             // Player 1's pad navigates and asks nothing.
             Input.mockPadButton(host.xbox, "dpad_right")
@@ -178,8 +189,9 @@ Item {
             Input.mockPadButton(host.xbox, "dpad_right")
             tryVerify(() => find("homeDetails").activeFocus, 2000, "player 1 navigates again")
             Input.mockPadButton(host.dualSense, "dpad_left")
-            wait(50)
-            verify(find("homeDetails").activeFocus, "the DualSense does not")
+            tryVerify(() => find("whosPlaying").shown, 2000, "the DualSense does not: it asks (RUY-122)")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("homeDetails").activeFocus, 2000, "Not now: the focus is where it was")
             Input.mockPadButton(host.xbox, "dpad_left")
             tryVerify(() => play.activeFocus, 2000)
         }
@@ -259,8 +271,11 @@ Item {
             keyClick(Qt.Key_Up)
             verify(find("quickMenuItem_resume").focused)
             Input.mockPadButton(host.dualSense, "south")
-            wait(50)
-            verify(find("systemPanel").open, "an unseated pad does not resume")
+            tryVerify(() => find("whosPlaying").shown, 2000, "an unseated pad does not resume: it asks")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("whosPlaying").shown && find("quickMenuItem_resume").focused, 2000,
+                      "Not now: back to the Hub's game card")
+            verify(find("systemPanel").open)
             // The pad is back within the hold: it drives the Hub, Accept on the game card resumes.
             Input.mockAddDevice(record)
             tryVerify(() => Input.players.length === 1 && Input.players[0].held === false, 2000, "the seat is the pad's again")
@@ -281,7 +296,7 @@ Item {
             tryVerify(() => run.app.activeFocus && !find("systemPanel").open, 2000, "Back resumes the game")
         }
 
-        // ---- the interim fallback while the seat gate is off (until RUY-122) ------------------------------
+        // ---- no padless console with the seat gate on (RUY-122; RUY-38's gate-off fallback is gone) --------
 
         // A keyboard sign-in: Ada (p2) from the picker, seat 1 has no pad.
         function signInWithKeyboard() {
@@ -303,39 +318,54 @@ Item {
             foreignSpy.clear()
         }
 
-        // Gate off: player 1's pad does not come back within the hold, so the Hub it opened would freeze
-        // the game for good without a keyboard: the first pad that presses is player 1 and resumes it.
-        function test_gate_off_after_the_hold_another_pad_takes_seat_1_and_resumes_the_game() {
+        // Player 1's pad does not come back within the hold, so the Hub it opened would freeze the game for
+        // good without a keyboard: another pad's press opens the prompt over the Hub, its Join as player 1
+        // makes it player 1 (the prompt closes back to the Hub), and its Accept on the game card resumes.
+        function test_after_the_hold_another_pad_joins_as_player_1_and_resumes_the_game() {
             signInWithXbox()
             const run = playRacer()
             Input.mockSeatHoldMs(300)
             Input.mockRemoveDevice(host.xbox)
             tryVerify(() => find("systemActions").activeFocus, 2000, "the Hub opens")
             tryVerify(() => recordOf(run.instance).frozen === true, 2000)
-            Input.mockPadButton(host.dualSense, "south")
-            wait(50)
-            verify(find("systemPanel").open, "while the hold runs nothing changes")
             tryVerify(() => Input.players.length === 1 && Input.players[0].device_id === "", 3000, "the hold ran out")
+            Input.mockPadButton(host.dualSense, "south")
+            tryVerify(() => find("whosPlaying").shown && find("whosPlayingCards").activeFocus, 2000,
+                      "the DualSense asks: the prompt opens over the Hub")
+            compare(Input.players[0].device_id, "", "a press takes no seat")
+            compare(find("whosPlayingCards").currentIndex, 0, "Player One, the first profile without a pad")
+            Input.mockPadButton(host.dualSense, "dpad_right")     // the navigator moves to Ada, player 1 without a pad
+            tryCompare(find("whosPlayingCards"), "currentIndex", 1, 2000)
+            Input.mockPadButton(host.dualSense, "south")          // Join as player 1
+            tryVerify(() => Input.players[0].device_id === host.dualSense, 2000, "the DualSense is player 1")
+            tryVerify(() => !find("whosPlaying").shown && find("quickMenuItem_resume").focused, 2000, "back to the Hub")
             Input.mockPadButton(host.dualSense, "south")
             tryVerify(() => run.app.activeFocus && !find("systemPanel").open, 2000, "the DualSense resumes the game")
             tryVerify(() => Session.mockCalls().length === 2, 2000)
             compare(Session.mockCalls(), ["freeze " + run.instance, "thaw " + run.instance])
-            tryVerify(() => Input.players[0].device_id === host.dualSense, 2000, "the DualSense is player 1")
         }
 
-        function test_gate_off_a_keyboard_sign_in_then_a_pad_press_takes_seat_1() {
+        function test_a_keyboard_sign_in_then_a_pad_joins_as_player_1() {
             signInWithKeyboard()
             Input.mockPadButton(host.dualSense, "dpad_right")
-            tryVerify(() => find("homeDetails").activeFocus, 2000, "its first press navigates")
+            tryVerify(() => find("whosPlaying").shown, 2000, "its press opens the prompt")
+            compare(Input.players[0].device_id, "", "and takes no seat")
+            verify(!find("homeDetails").activeFocus, "it moved nothing on Home")
+            Input.mockPadButton(host.dualSense, "dpad_right")     // from Player One to Ada, player 1 without a pad
+            tryCompare(find("whosPlayingCards"), "currentIndex", 1, 2000)
+            Input.mockPadButton(host.dualSense, "south")          // Join as player 1
             tryVerify(() => Input.players[0].device_id === host.dualSense, 2000, "it is player 1")
-            compare(foreignOf(host.dualSense), [])
+            tryVerify(() => !find("whosPlaying").shown && find("homePlay").activeFocus, 2000)
+            Input.mockPadButton(host.dualSense, "dpad_right")
+            tryVerify(() => find("homeDetails").activeFocus, 2000, "it navigates")
             Input.mockPadButton(host.xbox, "dpad_left")
-            wait(50)
-            verify(find("homeDetails").activeFocus, "the next pad is not player 1")
+            tryVerify(() => find("whosPlaying").shown, 2000, "the next pad asks")
+            verify(!find("homePlay").activeFocus, "and is not player 1")
+            compare(Input.players[0].device_id, host.dualSense)
         }
 
-        // Only an unseated pad takes the padless seat 1: player 2 keeps their seat.
-        function test_gate_off_a_seated_players_press_does_not_take_seat_1() {
+        // A seated player's press asks nothing and takes no seat: player 2 keeps their seat.
+        function test_a_seated_players_press_does_not_take_seat_1() {
             signInWithKeyboard()
             Input.joinPlayer(host.dualSense, "p1")
             tryVerify(() => Input.players.length === 2, 2000, "the DualSense is player 2")
@@ -344,17 +374,17 @@ Item {
             tryVerify(() => foreignOf(host.dualSense).length === 1, 2000)
             compare(foreignOf(host.dualSense), ["player-guide"])
             verify(find("homePlay").activeFocus, "nothing moved")
+            verify(!find("whosPlaying").shown, "and nothing asks")
             compare(Input.players.map(p => p.slot + ":" + p.device_id).join(" "), "1: 2:" + host.dualSense)
         }
 
-        // Gate on (RUY-122): the prompt's Move is the path; a press takes no seat.
-        function test_gate_on_no_pad_takes_a_padless_seat_1() {
-            Input.mockSeatGate(true)
+        // The gate on: an unseated pad's press takes no seat; it is a ForeignInput "press".
+        function test_no_pad_takes_a_padless_seat_1() {
             signInWithKeyboard()
             Input.mockPadButton(host.dualSense, "dpad_right")
             tryVerify(() => foreignOf(host.dualSense).length === 1, 2000)
             compare(foreignOf(host.dualSense), ["press"])
-            verify(find("homePlay").activeFocus, "nothing moved")
+            verify(!find("homeDetails").activeFocus, "nothing moved")
             compare(Input.players[0].device_id, "")
         }
 

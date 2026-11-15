@@ -1519,10 +1519,9 @@ def cmd_players(args):
     """RUY-121: the players' seats. Pad A presses while nobody is signed in and the profile signs in: ListPlayers
     (busctl --json=short) has seat 1 = A. JoinPlayer(B, the second profile) answers "ok" 2. In the route `app`
     ruya-input/pad1 is A and pad2 is B (each pad's button reaches its own virtual pad, read as the profile user). A
-    third pad, C, that never joined is no player and has no seat's number (no pad3); with the seat gate off
-    (SEAT_GATE, the image until RUY-122) it still gets a virtual pad after the seats, ruya-input/pad5, which only its
-    button reaches (with the gate on it would get none: this check changes with RUY-122). LeavePlayer(2): pad2 is
-    gone (ENODEV), pad1 stays, and B, unseated now, gets a pad after the seats (pad6)."""
+    third pad, C, that never joined is no player and, with the seat gate on (RUY-122), has no virtual pad at all
+    (no pad3, no pad5): its button reaches neither player's pad. LeavePlayer(2): pad2 is gone (ENODEV), pad1 stays,
+    and B, unseated now, gets none either (no pad6)."""
     fails = 0
 
     def ok(msg):
@@ -1582,19 +1581,18 @@ def cmd_players(args):
         if not v1 or not v2:
             bad(f"pad1 and pad2 should exist (pad1 {v1}, pad2 {v2})")
             return fails
+        # The seat gate (RUY-122): the unseated C gets no virtual pad. Wait as long as a pad5 took before.
         v5 = wait_for(lambda: node_by("phys", "ruya-input/pad5")[0], 3)
         v3 = node_by("phys", "ruya-input/pad3")[0]
         ok("the unseated pad C has no seat's number (no ruya-input/pad3)") if not v3 \
             else bad(f"a pad3 exists, but only two players joined: {v3}")
-        ok(f"seat gate off (until RUY-122): the unseated pad C still has a pad after the seats, ruya-input/pad5 ({v5})") \
-            if v5 else bad("seat gate off: the unseated pad C has no ruya-input/pad5")
-        if not v5:
-            return fails
-        wait_for(lambda: all(d.get("routed") for d in (devices() or []) if d["id"] in (a_id, b_id, c_id)), 3)
-        game1, game2, game5 = Game(args.user, v1), Game(args.user, v2), Game(args.user, v5)
-        games += [game1, game2, game5]
-        if not all(g.hello.startswith("OPEN ok") for g in (game1, game2, game5)):
-            bad(f"{args.user} cannot open pad1, pad2 and pad5: {game1.hello} / {game2.hello} / {game5.hello}")
+        ok("seat gate on: the unseated pad C has no virtual pad (no ruya-input/pad5)") if not v5 \
+            else bad(f"seat gate on, but the unseated pad C has a virtual pad: ruya-input/pad5 ({v5})")
+        wait_for(lambda: all(d.get("routed") for d in (devices() or []) if d["id"] in (a_id, b_id)), 3)
+        game1, game2 = Game(args.user, v1), Game(args.user, v2)
+        games += [game1, game2]
+        if not all(g.hello.startswith("OPEN ok") for g in (game1, game2)):
+            bad(f"{args.user} cannot open pad1 and pad2: {game1.hello} / {game2.hello}")
             return fails
         for who, pad, mine, other in (("A", pad_a, game1, game2), ("B", pad_b, game2, game1)):
             pad.emit(EV_KEY, BTN_EAST, 1)
@@ -1607,11 +1605,9 @@ def cmd_players(args):
                 else bad(f"pad {who}: pad{n} read {got}, the other read {heard}")
         pad_c.emit(EV_KEY, BTN_EAST, 1)
         pad_c.emit(EV_KEY, BTN_EAST, 0)
-        got = game5.events_until(lambda ev: len(ev) >= 2)
         heard = (game1.events(200), game2.events(200))
-        ok("pad C's button reaches pad5 only, not a player's pad") \
-            if isinstance(got, list) and (EV_KEY, BTN_EAST, 1) in got and heard == ([], []) \
-            else bad(f"pad C: pad5 read {got}, pad1 and pad2 read {heard}")
+        ok("pad C's button reaches no player's pad") if heard == ([], []) \
+            else bad(f"pad C: pad1 and pad2 read {heard}")
         status = bus.call(SVC, PATH, IFC, "LeavePlayer", [2])
         ok("LeavePlayer(2) answers ok") if status == "ok" else bad(f"LeavePlayer(2) answered {status}")
         ok("pad2 is gone") if wait_for(lambda: not node_by("phys", "ruya-input/pad2")[0], 2) \
@@ -1620,10 +1616,9 @@ def cmd_players(args):
         ok("the game's descriptor of pad2 reads ENODEV") if got == "ERR ENODEV" else bad(f"pad2 read {got} after the leave")
         ok("pad1 stays, the same node") if node_by("phys", "ruya-input/pad1")[0] == v1 \
             else bad(f"pad1 is {node_by('phys', 'ruya-input/pad1')[0]}, before {v1}")
-        ok("pad5 (C) stays, the same node") if node_by("phys", "ruya-input/pad5")[0] == v5 \
-            else bad(f"pad5 is {node_by('phys', 'ruya-input/pad5')[0]}, before {v5}")
-        ok("seat gate off: B, unseated now, has a pad after the seats (pad6)") \
-            if wait_for(lambda: node_by("phys", "ruya-input/pad6")[0], 3) else bad("B has no ruya-input/pad6 after the leave")
+        later = [n for n in ("pad5", "pad6") if wait_for(lambda n=n: node_by("phys", "ruya-input/" + n)[0], 1)]
+        ok("seat gate on: B, unseated now, and C have no virtual pad (no pad5, no pad6)") if not later \
+            else bad(f"seat gate on, but unseated pads have virtual pads: {later}")
         seated = players()
         want = [(1, args.profile, a_id)]
         ok("ListPlayers: only seat 1 is left") if seats_of(seated) == want else bad(f"ListPlayers after the leave: {seated}")
