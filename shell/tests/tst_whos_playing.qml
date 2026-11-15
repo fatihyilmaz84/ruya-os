@@ -743,12 +743,20 @@ Item {
         function test_a_pad_opens_on_its_owner() {
             signIn()
             compare(Input.devices.find(d => d.id === host.xbox).owner, "p1", "the sign-in taught the Xbox pad")
-            rememberOnDualSense("p2")
+            // A third profile, so the owner is not also "the first profile without a pad" (Ada).
+            const before = Profiles.profiles.length
+            Profiles.createProfile("p1", "1234", "Cem", "standard", "")
+            tryVerify(() => Profiles.profiles.length === before + 1, 2000, "Cem was created")
+            const cem = Profiles.profiles.find(p => p.name === "Cem").id
+            rememberOnDualSense(cem)
             Input.leavePlayer(2)
-            tryVerify(() => Input.players.length === 1, 2000, "Ada left; the DualSense keeps her as its owner")
+            tryVerify(() => Input.players.length === 1, 2000, "Cem left; the DualSense keeps Cem as its owner")
             askWith(host.dualSense)
-            tryVerify(() => find("whosPlayingCards").activeFocus, 2000)
-            compare(find("whosPlayingCards").currentIndex, 1, "Ada's card")
+            const list = find("whosPlayingCards")
+            tryVerify(() => list.activeFocus, 2000)
+            const cemIndex = prompt().cards.findIndex(p => p.id === cem)
+            verify(cemIndex > prompt().cards.findIndex(p => p.id === "p2"), "Cem comes after Ada, the first without a pad")
+            compare(list.currentIndex, cemIndex, "the owner's card, not Ada's")
             compare(prompt().step, "pick", "focus only: nothing joined by itself")
             compare(joinSpy.count, 1, "only the test's own join")
         }
