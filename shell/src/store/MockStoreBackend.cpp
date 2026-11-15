@@ -64,8 +64,13 @@ void MockStoreBackend::initState()
         app("org.example.Future", "Next Gen Studio", "Needs a newer RuyaOS than this mock console has.", "Example Games",
             "official", "none", "all", {"audio"}, 30),
     };
-    // The mock console is at API level 0; this app asks for more, so the service would say compatible=false.
-    m_apps[indexOf(QStringLiteral("org.example.Future"))].compatible = false;
+    // The mock console is at API level 0 (like RUYA_API_LEVEL); this app asks for more, so the service
+    // would say compatible=false. It has controller support, so the Store rows would list it if they could.
+    m_level = 0;
+    AppInfo &future = m_apps[indexOf(QStringLiteral("org.example.Future"))];
+    future.controller = QStringLiteral("full");
+    future.minApiLevel = 1;
+    applyLevel();
     // Installed from the start; Open Chess has an update that adds a permission, Text Editor one that adds none.
     for (const char *id : {"org.example.Puzzle", "org.example.Chess", "org.example.Editor"})
         m_apps[indexOf(QString::fromLatin1(id))].installed = true;
@@ -73,6 +78,20 @@ void MockStoreBackend::initState()
     chess.updateAvailable = true;
     chess.newPermissions = {QStringLiteral("all-devices")};
     m_apps[indexOf(QStringLiteral("org.example.Editor"))].updateAvailable = true; // adds nothing
+}
+
+void MockStoreBackend::applyLevel()
+{
+    for (AppInfo &a : m_apps)
+        a.compatible = a.minApiLevel <= m_level;
+}
+
+void MockStoreBackend::setApiLevel(int level)
+{
+    m_level = level;
+    applyLevel();
+    emit installedChanged();
+    emit catalogChanged();
 }
 
 void MockStoreBackend::setArtDir(const QString &dir)

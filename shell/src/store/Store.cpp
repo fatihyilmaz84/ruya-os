@@ -405,6 +405,12 @@ void Store::mockAddApps(int count)
         mock->addApps(count);
 }
 
+void Store::mockSetApiLevel(int level)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->setApiLevel(level);
+}
+
 void Store::mockSearchReplyDelay(int ms)
 {
     if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))

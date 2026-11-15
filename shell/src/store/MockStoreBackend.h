@@ -75,6 +75,9 @@ public:
     // Tests only: `count` more community apps (org.example.Many0...), one in five with full controller
     // support and one in five partial, the size of a real remote's catalogue; then CatalogChanged (T-377).
     void addApps(int count);
+    // Tests only: the console's API level (0 at start and after reset, like RUYA_API_LEVEL). An app is
+    // compatible when its minimum level is at or below it. Then InstalledChanged and CatalogChanged (RUY-636).
+    void setApiLevel(int level);
 
 private:
     struct Job
@@ -86,6 +89,7 @@ private:
     };
 
     void initState();
+    void applyLevel();
     int indexOf(const QString &id) const;
     void startJob(const QString &id, Job::Kind kind);
     void step();
@@ -110,4 +114,5 @@ private:
     int m_searchCount = 0;
     int m_searchReplyMs = 0;
     bool m_paused = false;
+    int m_level = 0;
 };

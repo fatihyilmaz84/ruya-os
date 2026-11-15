@@ -18,6 +18,8 @@ QtObject {
         if (!Store.catalogue.some(a => a.id === installApp))
             return;
         installRequested = true;
+        // RUY-156: the shell's Store reads compatible=false over D-Bus (the test app asks for level 99).
+        console.warn("store-probe: compatible " + installApp + " " + (Store.app(installApp).compatible === false ? "false" : "true"));
         console.warn("store-probe: install requested " + installApp);
         Store.install(installApp);
     }
