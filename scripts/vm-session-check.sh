@@ -108,6 +108,21 @@ freeze_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Freeze s "$1"
 thaw_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Thaw s "$1"; }
 # The cgroup freezer state of unit $2 in user $1's manager: running | freezing | frozen | thawing.
 fstate() { systemctl --user -M "$1@.host" show -p FreezerState --value "$2" </dev/null 2>&1 | cat; }
+# RUY-708: wait_fstate <user> <unit> <state> <seconds>: waits until the unit's FreezerState is the state
+# (a thaw takes a moment: 'thawing' first), then PASS/FAIL with the value it tested last, read once.
+# --- wait_fstate begin (test-vm-checks.sh sources these lines)
+wait_fstate() {
+    local n=0 got
+    while :; do
+        got="$(fstate "$1" "$2")"
+        [ "$got" = "$3" ] && { ok "$2 is $3 (after $n s)"; return 0; }
+        [ "$n" -ge "$4" ] && break
+        sleep 1; n=$((n + 1))
+    done
+    bad "$2: FreezerState $got, not $3, after $n s"
+    return 1
+}
+# --- wait_fstate end
 # The app's loaded, active Flatpak scopes in user $1's manager (exact names).
 app_scope_names() {
     systemctl --user -M "$1@.host" list-units --plain --no-legend "app-flatpak-$sleeper_glob-*.scope" </dev/null 2>&1 | cat \
@@ -521,7 +536,7 @@ restart)
     echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
     ls -Zd /var/lib/ruya-session /var/lib/ruya-session/usage 2>&1
     kill "$mon" 2>/dev/null
-    drop_test_apps "$sleeper" "$crasher" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    drop_test_apps "$wclient" "$sleeper" "$crasher" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
     rm -rf "$work"
     journalctl -u ruya-session -b --no-pager -p warning | tail -5
     ;;
@@ -811,7 +826,7 @@ check)
     case "$(freeze_app "$inst")" in 's "ok"') ok "Freeze behind the shell's back answered ok";; *) bad "Freeze (sweep)";; esac
     wait_sig "\"member\":\"FrozenChanged\".*$inst.*false" 15 && ok "the shell's sweep thawed it (FrozenChanged(false), no Thaw from the check)" || bad "the shell's sweep did not thaw a game it had not frozen"
     for u in "$inst" $scopes; do
-        [ "$(fstate "$user" "$u")" = running ] && ok "$u runs again after the sweep" || bad "$u: FreezerState $(fstate "$user" "$u") after the sweep"
+        wait_fstate "$user" "$u" running 10
     done
     # The rest of Freeze/Thaw and the Stop of a frozen app run without the shell, whose sweep would
     # otherwise thaw every Freeze below; it starts again after the Stop section.
@@ -1138,7 +1153,7 @@ check)
     fi
     kill "$mon" 2>/dev/null
     pkill -f "probe[.]qml" 2>/dev/null
-    drop_test_apps "$sleeper" "$crasher" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    drop_test_apps "$wclient" "$sleeper" "$crasher" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
     echo "--- journal of the service (warnings)"
     journalctl -u ruya-session -b --no-pager -p warning | tail -5
     ;;
