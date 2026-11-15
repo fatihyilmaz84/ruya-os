@@ -73,6 +73,25 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 as_shell() { runuser -u ruya-shell -- "$@"; }
+# RUY-679: remove the test apps, loudly. Only the ids that are installed (a missing one is not a
+# failure), and the output stays visible: a failed uninstall is a FAIL line and returns 1, so the
+# caller does not delete the remote and orphan what is still installed (a remote-less runtime breaks
+# the next check). A garbage id ("1794744702" once) looks "not installed", so before returning 0 it
+# also fails when anything installed still comes from $remote.
+# --- drop_test_apps begin (test-vm-checks.sh sources these lines)
+drop_test_apps() {
+    local ids="" id left
+    for id in "$@"; do flatpak info --system "$id" >/dev/null 2>&1 && ids="$ids $id"; done
+    if [ -n "$ids" ]; then
+        # shellcheck disable=SC2086
+        flatpak uninstall --system -y $ids || { bad "flatpak uninstall$ids failed: the test remote stays so that nothing is left without one"; return 1; }
+    fi
+    left="$(flatpak list --system --columns=application,origin 2>/dev/null | awk -v r="$remote" '$2 == r { print $1 }' | tr '\n' ' ')"
+    [ -z "$left" ] && return 0
+    bad "still installed from $remote: $left(not in the list given to drop_test_apps: $*); the remote stays"
+    return 1
+}
+# --- drop_test_apps end
 # extra_scope <user> <unit> <seconds>: a `sleep <seconds>` in a scope of that user's manager, in the
 # background (T-435: a second app-flatpak-<app>-<n>.scope, as the Flatpak portal makes for an
 # Electron app's zygote). `systemd-run --scope` does not work with --machine, so it runs as the user.
@@ -293,6 +312,23 @@ wait_sig() {
     wait_report bad "${3:-signal: $1}" "$n" "$2"
     return 1
 }
+# RUY-679: a client of a profile that is not signed in meets two defences: ruya-session freezes its
+# unit ("froze <unit>: its profile is not signed in"), and the compositor refuses its connection about
+# 20 ms later. A frozen client never sees the broken connection, so it does not exit. Either ends the
+# wait with a PASS: AppExited, or the unit frozen with that journal line. Args: unit, since (epoch), label.
+# --- refused_client_ends begin (test-vm-checks.sh sources these lines)
+refused_client_ends() {
+    local n=0
+    while [ "$n" -lt "${REFUSED_WAIT:-30}" ]; do
+        grep -E -q "\"member\":\"AppExited\".*$wclient" "$work/signals.log" && { ok "$3 ended (AppExited)"; return 0; }
+        journalctl -u ruya-session -b --no-pager -o cat --since "@$2" 2>/dev/null | grep -a -q "froze $1: its profile is not signed in" \
+            && { ok "$3 is frozen by ruya-session (its profile is not signed in), so it never saw the refusal"; return 0; }
+        sleep 1; n=$((n + 1))
+    done
+    bad "$3 neither ended nor was frozen within 30 s"
+    return 1
+}
+# --- refused_client_ends end
 # Waits until `$1` (a command line) has no process of the profile user ($user, else ruya-p1) any more, up to 15 s.
 gone() {
     n=0
@@ -485,8 +521,7 @@ restart)
     echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
     ls -Zd /var/lib/ruya-session /var/lib/ruya-session/usage 2>&1
     kill "$mon" 2>/dev/null
-    flatpak uninstall --system -y "$sleeper" "$crasher" "$rt" >/dev/null 2>&1
-    flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    drop_test_apps "$sleeper" "$crasher" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
     rm -rf "$work"
     journalctl -u ruya-session -b --no-pager -p warning | tail -5
     ;;
@@ -536,7 +571,7 @@ display)
     out="$(probe_connect "$user" "/run/user/$uid/ruya-0")"; case "$out" in PermissionError*) ok "$user cannot reach the shell's own socket ruya-0";; *) bad "$user -> ruya-0: $out";; esac
 
     echo "--- the Wayland test app"
-    flatpak uninstall --system -y "$wclient" "$sleeper" "$crasher" "$rt" >/dev/null 2>&1
+    drop_test_apps "$wclient" "$sleeper" "$crasher" "$rt"
     build_repo && ok "repository built" || { bad "cannot build the test repository"; exit 1; }
     flatpak remote-add --system --if-not-exists --no-gpg-verify "$remote" "file://$work/repo" || { bad "remote-add"; exit 1; }
     flatpak install --system -y --noninteractive "$remote" "$rt" "$wclient" >/dev/null 2>&1 \
@@ -556,7 +591,8 @@ display)
     wait_shell "refused (surface|window) of uid $muid .*nobody-signed-in" "$t0" 40 && ok "the compositor refused it (nobody signed in)" || bad "no refusal while nobody is signed in"
     shell_log_since "$t0" | grep -a "ruya-compositor: refused" | head -2
     shell_log_since "$t0" | grep -a -q "ruya-compositor: app .* uid $muid " && bad "a window of $user was shown while nobody was signed in" || ok "no window was shown"
-    wait_sig "\"member\":\"AppExited\".*$wclient" 30 && ok "the refused client ended (AppExited)" || { bad "the refused client is still running"; stop_app "$inst0" >/dev/null; }
+    refused_client_ends "$inst0" "$t0" "the refused client"
+    stop_app "$inst0" >/dev/null 2>&1
     journalctl -b _UID="$muid" --since "@$t0" --no-pager -o cat | grep -a "test-wayland-client:" | head -1
 
     echo "--- $me signed in: its window is in the app layer"
@@ -633,7 +669,8 @@ for n in nodes:
     [ -n "$inst2" ] && ok "Launch as $other: $inst2" || bad "Launch as $other: $out"
     wait_shell "refused (surface|window) of uid $ouid .*other-user" "$t4" 60 && ok "the compositor refused $ouser's client (not the signed-in profile)" || bad "no refusal for $ouser"
     shell_log_since "$t4" | grep -a -q "ruya-compositor: app .* uid $ouid " && bad "a window of $ouser was shown" || ok "no window of $ouser was shown"
-    wait_sig "\"member\":\"AppExited\".*$wclient" 30 && ok "the refused client ended (AppExited)" || { bad "$ouser's client still runs"; stop_app "$inst2" >/dev/null; }
+    refused_client_ends "$inst2" "$t4" "$ouser's client"
+    stop_app "$inst2" >/dev/null 2>&1
     kill "$mon" 2>/dev/null
     echo "The window of $user stays open: take the VM screenshot now (vm-screenshot.ps1 profile-app), then run '$0 display-clean'."
     ;;
@@ -647,14 +684,11 @@ display-clean)
         sleep 3
         [ -e "/run/ruya-wayland/ruya-$other" ] && bad "the socket of the deleted profile is still there" || ok "the deleted profile's socket is gone"
     fi
-    flatpak uninstall --system -y "$wclient" "$rt" >/dev/null 2>&1
-    flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    drop_test_apps "$wclient" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
     rm -rf "$work" /root/vm-display-instance /root/vm-display-other
     ;;
 clean)
-    flatpak uninstall --system -y "$wclient" >/dev/null 2>&1
-    flatpak uninstall --system -y "$sleeper" "$crasher" "$rt" >/dev/null 2>&1
-    flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    drop_test_apps "$wclient" "$sleeper" "$crasher" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
     rm -rf "$work"
     ;;
 check)
@@ -864,8 +898,8 @@ check)
     if systemctl list-units --type=swap --state=active --plain --no-legend </dev/null 2>/dev/null | grep -q '[.]swap'; then
         case "$line" in *"memory reclaim done"*) ok "the frozen app's memory was reclaimed (swap active)";; *) bad "no 'memory reclaim done' for $inst within 50 s: $line";; esac
         # The line is logged when the reclaim ends, so its time is at least the reclaim's start.
-        rt="$(journalctl -u ruya-session -b --no-pager -o short-unix --since "@$tfrozen" 2>/dev/null | grep -a "$inst: memory reclaim" | head -1 | cut -d. -f1)"
-        [ -n "$rt" ] && [ "$(( rt - tfrozen ))" -ge 30 ] && ok "not before RECLAIM_AFTER: $(( rt - tfrozen )) s after the Freeze" || bad "the reclaim came ${rt:+$(( rt - tfrozen )) s }after the Freeze (expected at least 30 s)"
+        t_reclaim="$(journalctl -u ruya-session -b --no-pager -o short-unix --since "@$tfrozen" 2>/dev/null | grep -a "$inst: memory reclaim" | head -1 | cut -d. -f1)"
+        [ -n "$t_reclaim" ] && [ "$(( t_reclaim - tfrozen ))" -ge 30 ] && ok "not before RECLAIM_AFTER: $(( t_reclaim - tfrozen )) s after the Freeze" || bad "the reclaim came ${t_reclaim:+$(( t_reclaim - tfrozen )) s }after the Freeze (expected at least 30 s)"
         if [ "$audio" = 1 ] && [ -n "$anon0" ]; then
             anon1="$(anon_of "$tpid")"
             [ -n "$anon1" ] && [ "$anon1" -lt "$anon0" ] && ok "the frozen sound client's anon memory dropped: $anon0 -> $anon1 bytes" \
@@ -1104,8 +1138,7 @@ check)
     fi
     kill "$mon" 2>/dev/null
     pkill -f "probe[.]qml" 2>/dev/null
-    flatpak uninstall --system -y "$sleeper" "$crasher" "$rt" >/dev/null 2>&1
-    flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    drop_test_apps "$sleeper" "$crasher" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
     echo "--- journal of the service (warnings)"
     journalctl -u ruya-session -b --no-pager -p warning | tail -5
     ;;

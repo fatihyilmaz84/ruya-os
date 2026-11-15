@@ -4,8 +4,9 @@
 # install / uninstall over the system bus. Copy and run:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-store-check.sh root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-store-check.sh [check|security|clean]
-# Boot the VM without a saved profile (plain smoke-test.ps1 -Keep): the "AddRemote by the shell is
-# forbidden" check assumes no admin profile is active.
+# Works with or without a saved profile: "AddRemote by the shell" is forbidden when no admin profile
+# is active, and allowed (then undone) when one is (the service asks Profiles1 for the active one).
+# RUY-679: it removes a leftover test runtime of another check (vm-session-check) first.
 set -u
 svc=org.ruyaos.Store1
 path=/org/ruyaos/Store1
@@ -49,6 +50,11 @@ build_repo() {
   <custom><value key="x-ruya-min-api-level">99</value></custom>
 </component>
 EOF
+    # build-update-repo reads the catalogue from files/share/app-info (flatpak-builder composes it;
+    # the image has no appstreamcli-compose): write the composed form of the metainfo by hand.
+    mkdir -p "$work/app/files/share/app-info/xmls"
+    { echo '<?xml version="1.0" encoding="UTF-8"?>'; echo '<components version="0.16" origin="flatpak">'
+      sed 1d "$work/app/files/share/metainfo/$app.metainfo.xml"; echo '</components>'; }         | gzip -9n > "$work/app/files/share/app-info/xmls/$app.xml.gz"
     sign="--gpg-sign=$key --gpg-homedir=$work/gpg"
     flatpak build-export --runtime $sign "$work/repo" "$work/rt" stable || return 1
     flatpak build-finish --command=hello --share=network --socket=pulseaudio "$work/app" || return 1
@@ -88,6 +94,14 @@ check)
     systemctl status ruya-store --no-pager | head -8
     busctl --system status "$svc" | grep -E '^(UID|Comm)='
 
+    # RUY-679: another check (vm-session-check) may have left its apps and the same test runtime
+    # installed, maybe without their remote; the install of $app would resolve to that orphan.
+    left="$(flatpak list --system --columns=application | grep -E '^org[.]ruyaos[.](Test|TestRuntime$)' | grep -vx "$app" | tr '\n' ' ')"
+    if [ -n "$left" ]; then
+        echo "removing leftovers of other checks: $left"
+        # shellcheck disable=SC2086
+        flatpak uninstall --system -y --noninteractive --force-remove $left && ok "leftovers removed" || bad "could not remove the leftovers: $left"
+    fi
     echo "--- build a signed test repository"
     build_repo && ok "repository built" || { bad "cannot build the test repository"; exit 1; }
 
@@ -99,7 +113,18 @@ check)
     echo "--- AddRemote"
     out="$(as_shell busctl --system call "$svc" "$path" "$ifc" AddRemote ss x "file://$work/test.flatpakrepo")"
     echo "as ruya-shell: $out"
-    case "$out" in 's "forbidden"') ok "AddRemote by a non-admin is forbidden";; *) bad "AddRemote by ruya-shell: $out";; esac
+    active="$(busctl --system get-property org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ActiveProfile 2>/dev/null | sed -n 's/^s "\(.*\)"$/\1/p')"
+    plist="$(busctl --system call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ListProfiles 2>/dev/null)"
+    role=""
+    [ -n "$active" ] && role="$(echo "$plist" | grep -o "\"$active\" \"[^\"]*\" \"[^\"]*\" \"[a-z]*\"" | grep -o '"[a-z]*"$' | tr -d '"')"
+    echo "active profile: '$active', role: '$role'"
+    case "$out" in
+        's "forbidden"') [ -z "$active" ] || [ "$role" != admin ] && ok "AddRemote by the shell is forbidden (active '${active:-none}', role '${role:-none}')" || bad "AddRemote by the shell was forbidden although the admin $active is signed in: $out";;
+        's "ok"') if [ "$role" = admin ]; then ok "AddRemote by the shell is allowed: the active profile $active is an admin"
+                  else bad "AddRemote by the shell was accepted (active '${active:-none}', role '${role:-none}')"; fi
+                  flatpak remote-delete --system --force x >/dev/null 2>&1;;
+        *) bad "AddRemote by ruya-shell: $out";;
+    esac
     out="$(busctl --system call "$svc" "$path" "$ifc" AddRemote ss "$remote" "file://$work/test.flatpakrepo")"
     echo "as root: $out"
     case "$out" in 's "ok"') ok "AddRemote of a signed repository by root";; *) bad "AddRemote by root: $out";; esac
@@ -119,6 +144,11 @@ check)
     n=0
     until as_shell busctl --system call "$svc" "$path" "$ifc" Search sa{sv} "TestApp" 0 | grep -q "$app" || [ "$n" -ge 90 ]; do sleep 1; n=$((n + 1)); done
     echo "the new source's apps were in the catalogue after about $n s"
+    # remote-ls lists the app first; its AppStream record (name, min API level) lands with the
+    # background refresh of the catalogue a little later.
+    n=0
+    until busctl --system call "$svc" "$path" "$ifc" GetApp s "$app" | grep -q '"name" s "Test App"' || [ "$n" -ge 90 ]; do sleep 1; n=$((n + 1)); done
+    echo "the test app's AppStream record was read after about $n s"
     list="$(as_shell busctl --system call "$svc" "$path" "$ifc" Search sa{sv} "" 0)"
     echo "$list" | head -c 1500; echo
     echo "$list" | grep -q "$app" && ok "Search lists the test app" || bad "test app not in the catalogue"
@@ -137,7 +167,15 @@ check)
     echo "$got" | grep -q '"new_permissions" as 0' && ok "GetApp reports an empty new_permissions" || bad "GetApp new_permissions: $got"
     # RUY-156: the test app asks for API level 99 (x-ruya-min-api-level), far above the console's.
     echo "$got" | grep -q '"compatible" b false' && ok "GetApp reports compatible=false for a minimum of 99" || bad "GetApp compatible: $got"
-    echo "$list" | grep -q '"compatible" b false' && ok "Search carries compatible=false" || bad "Search compatible: $list"
+    # Only the test app's own record: the list holds every app of the remotes (Flathub has thousands).
+    # (the dicts are sorted by key, so "compatible" precedes "id": read the JSON, pick the record by its id)
+    rec="$(as_shell busctl --system --json=short call "$svc" "$path" "$ifc" Search sa{sv} "" 0 | python3 -c '
+import json, sys
+for r in json.load(sys.stdin)["data"][0]:
+    if r.get("id", {}).get("data") == sys.argv[1]:
+        print("compatible=%s" % str(r.get("compatible", {}).get("data")).lower())
+' "$app")"
+    [ "$rec" = "compatible=false" ] && ok "Search carries compatible=false for $app" || bad "Search compatible of $app: '$rec'"
     case "$(busctl --system call "$svc" "$path" "$ifc" GetApp s org.nope.Missing)" in 'sa{sv} "unknown-app"'*) ok "GetApp of an unknown id";; *) bad "GetApp unknown";; esac
 
     echo "--- Install"
@@ -260,6 +298,9 @@ check)
     else
         bad "the job never reached the shell's Store.jobs"; grep -a "store-probe" "$work/probe2.log" | tail -5
     fi
+    # The local install ends in under 100 ms: freeze the pull so that the restart cuts it short
+    # (systemd sends SIGCONT after SIGTERM, the frozen flatpak then dies with the service).
+    pkill -STOP -P "$(systemctl show -p MainPID --value ruya-store)" flatpak
     systemctl restart ruya-store
     n=0
     until grep -a -q "store-probe: jobFinished $app failed" "$work/probe2.log" || [ "$n" -ge 40 ]; do sleep 1; n=$((n + 1)); done

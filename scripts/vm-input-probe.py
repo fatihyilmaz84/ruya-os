@@ -1410,9 +1410,9 @@ def cmd_twoprofiles(args):
     pad_a, pad_b = pads
     bus = None
     games = []
-    slots = []      # the slots this check assigned; the cleanup gives each back what it held before
-    before = {}
-    saved = []
+    slots = []      # (owner, slot) this check assigned; the cleanup gives each back what it held before
+    before = {}     # owner -> its slots before the check
+    saved = []      # (owner, profile id)
     try:
         rows = wait_for(lambda: (lambda r: r if len(r) == 2 else None)(
             [d for d in (devices() or []) if d.get("name") in names]), 5)
@@ -1424,32 +1424,36 @@ def cmd_twoprofiles(args):
         if b_row.get("family") != "nintendo":
             bad(f"the pad with vendor 0x057e has family '{b_row.get('family')}'")
             return fails
-        before = assigned_slots(args.profile)
-        if before is None:
-            bad("ListProfiles cannot be read: the slots could not be restored afterwards")
-            return fails
+        # RUY-643: a seat uses its own player's profiles. Pad A is seat 1 (args.profile), pad B joins
+        # as args.other, so the family's profile is saved and assigned in args.other's book.
+        for owner in (args.profile, args.other):
+            before[owner] = assigned_slots(owner)
+            if before[owner] is None:
+                bad(f"ListProfiles of {owner} cannot be read: the slots could not be restored afterwards")
+                return fails
         bus = Bus()
 
         def south_as(pid, code, match):
             return json.dumps({"schema_version": 1, "id": pid, "name": "VM check " + pid, "scope": {"type": "global"},
                                "match": match, "mappings": [{"from": "south", "to": {"type": "button", "code": code}}]})
 
-        for text, pid in ((south_as("vm-check-own", "east", {"device": a_id}), "vm-check-own"),
-                          (south_as("vm-check-family", "l1", {"family": "nintendo"}), "vm-check-family")):
-            status = bus.call(SVC, PATH, IFC, "SaveProfile", [args.profile, text])
+        for owner, text, pid in ((args.profile, south_as("vm-check-own", "east", {"device": a_id}), "vm-check-own"),
+                                 (args.other, south_as("vm-check-family", "l1", {"family": "nintendo"}), "vm-check-family")):
+            status = bus.call(SVC, PATH, IFC, "SaveProfile", [owner, text])
             if status != "ok":
-                bad(f"SaveProfile {pid}: {status}")
+                bad(f"SaveProfile {owner} {pid}: {status}")
                 return fails
-            saved.append(pid)
+            saved.append((owner, pid))
         status = bus.call(SVC, PATH, IFC, "AssignProfile", [args.profile, "global", "", "vm-check-own"])
         ok("AssignProfile of a device's profile to all controllers' slot: invalid") if status == "invalid" \
             else bad(f"AssignProfile to the wrong slot answered {status}")
-        for slot, pid in ((f"device:{a_id}", "vm-check-own"), ("family:nintendo", "vm-check-family")):
-            status = bus.call(SVC, PATH, IFC, "AssignProfile", [args.profile, "global", slot, pid])
+        for owner, slot, pid in ((args.profile, f"device:{a_id}", "vm-check-own"),
+                                 (args.other, "family:nintendo", "vm-check-family")):
+            status = bus.call(SVC, PATH, IFC, "AssignProfile", [owner, "global", slot, pid])
             if status != "ok":
-                bad(f"AssignProfile {slot} {pid}: {status}")
+                bad(f"AssignProfile {owner} {slot} {pid}: {status}")
                 return fails
-            slots.append(slot)
+            slots.append((owner, slot))
         ok(f"two slots assigned: device:{a_id}, family:nintendo")
         # Pad A signs the profile in, so it is ruya-input/pad1 (RUY-540); pad B joins as the other profile
         # (RUY-121: only a seated pad gets a virtual pad), so it is pad2.
@@ -1496,7 +1500,7 @@ def cmd_twoprofiles(args):
 
         tap(pad_a, game_a, BTN_EAST, "pad A's South reaches its virtual pad as East (its device's profile)")
         tap(pad_b, game_b, BTN_TL, "pad B's South reaches its virtual pad as LB (its family's profile)")
-        status = bus.call(SVC, PATH, IFC, "AssignProfile", [args.profile, "global", "family:nintendo", ""])
+        status = bus.call(SVC, PATH, IFC, "AssignProfile", [args.other, "global", "family:nintendo", ""])
         ok("the family's slot emptied") if status == "ok" else bad(f"emptying the family's slot answered {status}")
         tap(pad_b, game_b, BTN_SOUTH, "pad B's South is South again")
         tap(pad_a, game_a, BTN_EAST, "pad A keeps its own profile")
@@ -1504,10 +1508,10 @@ def cmd_twoprofiles(args):
         for g in games:
             g.close()
         if bus:
-            for slot in slots:
-                bus.call(SVC, PATH, IFC, "AssignProfile", [args.profile, "global", slot, before.get(slot, "")])
-            for pid in saved:
-                bus.call(SVC, PATH, IFC, "DeleteProfile", [args.profile, pid])
+            for owner, slot in slots:
+                bus.call(SVC, PATH, IFC, "AssignProfile", [owner, "global", slot, (before.get(owner) or {}).get(slot, "")])
+            for owner, pid in saved:
+                bus.call(SVC, PATH, IFC, "DeleteProfile", [owner, pid])
             bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
             bus.close()
         for p in pads:
