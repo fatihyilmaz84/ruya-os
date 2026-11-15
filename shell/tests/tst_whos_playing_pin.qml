@@ -29,6 +29,8 @@ Item {
 
     // The order of a Switch: the Lock and the sign-in (activeProfile) and then the join.
     property var order: []
+    // Which Move button had the focus when the last JoinPlayer answered.
+    property string focusAtJoin: ""
     Connections {
         target: Profiles
         function onActiveProfileChanged() { host.order = host.order.concat(["active " + Profiles.activeProfile]) }
@@ -37,6 +39,12 @@ Item {
         target: Input
         function onJoinFinished(deviceId, profile, status, slot) {
             host.order = host.order.concat(["join " + deviceId + " " + profile + " " + status])
+            // Connected before any Shell exists, so this runs before the prompt reacts to the answer.
+            if (!tc.shell)
+                return
+            const move = tc.findChild(tc.shell, "whosPlayingMove")
+            const cancel = tc.findChild(tc.shell, "whosPlayingMoveCancel")
+            host.focusAtJoin = move && move.activeFocus ? "move" : cancel && cancel.activeFocus ? "cancel" : "other"
         }
     }
 
@@ -423,6 +431,62 @@ Item {
             Input.mockFailJoin("")
         }
 
+        // While the join after a right PIN is on its way the focus waits on Move (not Cancel), and Accept and
+        // Back do nothing (lead, round 2).
+        function test_while_the_join_runs_accept_and_back_do_nothing() {
+            signIn()
+            askWith(host.dualSense)
+            keyClick(Qt.Key_Left)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("whosPlayingMoveCancel").activeFocus, 2000)
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => pinShown(), 2000)
+            host.focusAtJoin = ""
+            padTypes(host.dualSense, "1234")
+            tryCompare(joinSpy, "count", 1)
+            compare(host.focusAtJoin, "move", "the focus was on Move when the join answered (seen before the prompt reacts)")
+            tryVerify(() => !prompt().shown, 2000)
+            // A join on its way, held here: Accept on Cancel and Back change nothing.
+            askWith(host.pro)
+            keyClick(Qt.Key_Left)
+            keyClick(Qt.Key_Return)                                 // Player One plays on the DualSense now: Move
+            tryVerify(() => find("whosPlayingMoveCancel").activeFocus, 2000)
+            prompt().joining = { pad: host.pro, id: "p1", from: "move" }
+            keyClick(Qt.Key_Return)
+            keyClick(Qt.Key_Escape)
+            compare(prompt().step, "move", "Accept on Cancel and Back wait for the join")
+            verify(find("whosPlayingMoveCancel").activeFocus)
+            prompt().joining = null
+            keyClick(Qt.Key_Return)
+            tryVerify(() => cardList().activeFocus, 2000, "with no join on its way Cancel works again")
+        }
+
+        // The prompt closes during the PIN step (the asking pad disconnects): the PIN pad closes with it and
+        // drops the half-typed PIN, and the next pad's prompt opens on Pick, not on the PIN pad (lead, round 2).
+        function test_a_prompt_that_closes_on_the_pin_step_drops_the_pin() {
+            signIn()
+            askWith(host.dualSense)
+            keyClick(Qt.Key_Left)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("whosPlayingMoveCancel").activeFocus, 2000)
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => pinShown(), 2000)
+            keyClick(Qt.Key_1)
+            keyClick(Qt.Key_2)
+            compare(pin().entered, "12")
+            Input.mockRemoveDevice(host.dualSense)
+            tryVerify(() => !prompt().shown, 2000, "the asking pad went: closed as Not now")
+            verify(!pin().shown, "the PIN pad closed with it")
+            compare(pin().entered, "", "and the half-typed PIN is gone")
+            askWith(host.pro)
+            compare(prompt().step, "pick")
+            verify(!pin().shown, "the next prompt opens on Pick")
+            tryVerify(() => cardList().activeFocus || find("whosPlayingNotNow").activeFocus, 2000)
+            verify(!pinChild("pinKeys").activeFocus)
+        }
+
         // VerifyPin answers something else than ok, wrong-pin or locked-out (the profile went): the PIN pad's
         // failure message, and Back leaves.
         function test_a_failed_verify_shows_the_message_and_back_leaves() {
@@ -509,8 +573,9 @@ Item {
             tryVerify(() => line.visible, 1000, "the pad line in player mode")
             compare(pinChild("pinPadName").text, padNameOf(host.dualSense))
             compare(pinChild("pinPadName").font.pixelSize, Theme.typeBody * u)
-            fuzzyCompare(title.mapToItem(tc.shell, 0, 0).y - line.mapToItem(tc.shell, 0, line.height).y, Theme.spaceM * u, 0.5,
-                         "the pad line spaceM above the title")
+            // The column lays the line out on its next polish after the line shows.
+            tryVerify(() => Math.abs(title.mapToItem(tc.shell, 0, 0).y - line.mapToItem(tc.shell, 0, line.height).y - Theme.spaceM * u) < 0.5,
+                      1000, "the pad line spaceM above the title")
             verify(!pinChild("pinScrim").visible, "on the prompt's scrim, not a second one")
             verify(find("whosPlayingScrim").visible)
             verify(!find("whosPlayingConfirmPanel").visible && !find("whosPlayingPick").visible, "only the PIN pad")

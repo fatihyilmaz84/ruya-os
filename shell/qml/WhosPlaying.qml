@@ -285,8 +285,9 @@ FocusScope {
             join(chosen.id, forWhat === "move" ? "move" : "confirm")
     }
 
-    // The PIN was right: the step it came from again (shown while the join is on its way, and where a
-    // refused one leaves the focus), then the action. The PIN goes only to a Switch's switchTo.
+    // The PIN was right: the step it came from again (shown while the join is on its way; a refused one
+    // puts the focus on its first button), then the action. On Move the focus waits on Move, not Cancel,
+    // and Accept and Back do nothing until the join answers. The PIN goes only to a Switch's switchTo.
     function pinVerified(pin) {
         if (!shown || step !== "pin" || !chosen)
             return
@@ -297,7 +298,7 @@ FocusScope {
             switchTo(pin)
         } else if (forWhat === "move") {
             step = "move"
-            moveCancelButton.forceActiveFocus()
+            moveButton.forceActiveFocus()
             join(chosen.id, "move")
         } else if (forWhat === "join") {
             step = "confirm"
@@ -877,6 +878,8 @@ FocusScope {
         if (event.isAutoRepeat || event.key !== downKey)
             return
         downKey = 0
+        if (joining !== null && event.key !== Qt.Key_HomePage)
+            return                      // a join is on its way: Accept and Back wait for its answer
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
             activate()
         } else if (BackKey.isBackOrBackspace(event.key)) {

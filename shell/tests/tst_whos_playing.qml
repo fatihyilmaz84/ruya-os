@@ -794,6 +794,9 @@ Item {
                     tryVerify(() => find("whosPlayingCards").activeFocus, 2000)
                     while (Notifications.model.count > 0)
                         Notifications.dismiss(Notifications.model.get(0).toastId)
+                    // The join's toast has left the screen (its remove transition too) before the Move shot.
+                    tryVerify(() => find("toastList").contentItem.children.every(c => !c.visible || c.opacity === 0), 3000,
+                              "no toast on screen")
                     // Move (RUY-628): Player One plays on the Xbox pad; then the PIN with the pad line, a wrong PIN.
                     keyClick(Qt.Key_Left)
                     keyClick(Qt.Key_Return)
