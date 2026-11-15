@@ -87,6 +87,11 @@ pub fn useradd_args(profile_id: &str, kind: AccountKind) -> Vec<String> {
                 args.push("-K".into());
                 args.push(format!("{key}={uid}"));
             }
+            // A temporary user gets no /etc/subuid and /etc/subgid range.
+            for key in ["SUB_UID_COUNT", "SUB_GID_COUNT"] {
+                args.push("-K".into());
+                args.push(format!("{key}=0"));
+            }
         }
     }
     args.push(user);

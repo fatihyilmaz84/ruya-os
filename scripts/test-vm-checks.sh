@@ -542,7 +542,8 @@ if tool == "getent":
     name = key[5:] if key.startswith("ruya-") else ""
     if db == "passwd" and name in st["users"]:
         uid = st["users"][name]
-        print("ruya-%s:x:%d:%d:RuyaOS profile (guest):/var/home/ruya-%s:/usr/sbin/nologin" % (name, uid, uid, name))
+        gid = uid + 1 if bug == "gid" else uid
+        print("ruya-%s:x:%d:%d:RuyaOS profile (guest):/var/home/ruya-%s:/usr/sbin/nologin" % (name, uid, gid, name))
         sys.exit(0)
     sys.exit(2)
 
@@ -618,7 +619,7 @@ for case in \
     "keep_user|FAIL: RemoveGuest left the user" \
     "no_wipe|FAIL: Lock left the guests" \
     "verify_switches|FAIL: VerifyPin changed ActiveProfile" \
-    "reuse|is not greater than"; do
+    "gid|is not its uid"     "reuse|is not greater than"; do
     bug="${case%%|*}"; needle="${case#*|}"
     out="$(FAKE_BUG="$bug" runprof)"; rc=$?
     expect_contains "guests, bug $bug: caught" "$out" "$needle"

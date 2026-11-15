@@ -8,7 +8,7 @@
 # files useradd rewrote (T-126: the unit's UMask must not leak into them).
 # guests (RUY-125, after create): temporary guests with PASS/FAIL lines and exit 1 on a failure:
 # three CreateGuest are ok and a fourth not-allowed, each user has a uid in 50000-59999 and the
-# comment "RuyaOS profile (guest)", ListProfiles never lists one, VerifyPin with a wrong PIN leaves
+# comment "RuyaOS profile (guest)" and gid == uid, ListProfiles never lists one, VerifyPin with a wrong PIN leaves
 # ActiveProfile alone, RemoveGuest leaves no user and no home and the next guest's uid is greater,
 # Lock wipes every guest. Host fixtures: scripts/test-vm-checks.sh.
 set -u
@@ -81,6 +81,10 @@ except Exception: print("?")' | tr -d '\r'
         getent passwd "ruya-$1" | tr -d '\r' |
             awk -F: -v home="/var/home/ruya-$1" '$5 == "RuyaOS profile (guest)" && $6 == home { print $3 }'
     }
+    # guest_gid <id>: the gid in the passwd line of the guest user ruya-<id>
+    guest_gid() {
+        getent passwd "ruya-$1" | awk -F: '{ print $4 }' | tr -d "[:cntrl:]"
+    }
     gone() { # <id> <step>: no user and no home left
         if getent passwd "ruya-$1" >/dev/null; then fail "$2 left the user ruya-$1"; return; fi
         if [ -e "$homes/ruya-$1" ]; then fail "$2 left $homes/ruya-$1"; return; fi
@@ -111,6 +115,8 @@ except Exception: print("?")' | tr -d '\r'
         else
             fail "ruya-$id is no guest user in 50000-59999: $(getent passwd "ruya-$id" || echo 'no such user')"
         fi
+        gid="$(guest_gid "$id")"
+        if [ -n "$uid" ] && [ "$gid" = "$uid" ]; then pass "ruya-$id: gid $gid equals its uid"; else fail "ruya-$id: gid '$gid' is not its uid '$uid'"; fi
         if [ -n "$uid" ] && [ "$uid" -gt "$max" ]; then max="$uid"; fi
         if [ -d "$homes/ruya-$id" ]; then pass "$homes/ruya-$id exists"; else fail "no $homes/ruya-$id"; fi
     done
