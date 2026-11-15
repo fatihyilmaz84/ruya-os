@@ -61,12 +61,12 @@ Item {
         id: dot
         objectName: "playerDot"
         visible: chip.showNumber
-        width: 28 * chip.u
+        width: 28 * chip.u // token-ok: component-local, 04 §5
         height: width
         radius: width / 2
         // Its right and bottom edges are 6 u outside the circle's.
-        x: circle.width - width + 6 * chip.u
-        y: circle.height - height + 6 * chip.u
+        x: circle.width - width + 6 * chip.u // token-ok: component-local, 04 §5
+        y: circle.height - height + 6 * chip.u // token-ok: component-local, 04 §5
         color: Theme.primaryFill
         Text {
             objectName: "playerDigit"

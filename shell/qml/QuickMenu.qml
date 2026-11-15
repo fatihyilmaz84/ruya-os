@@ -818,7 +818,7 @@ Item {
                     // The Flow's gap is `spaceM` both ways: its items are `spaceM - spaceS` short, so the lines are
                     // `spaceS` apart, and the row gives that back below.
                     readonly property real lineTrim: (Theme.spaceM - Theme.spaceS) * menu.u
-                    height: visible ? flow.childrenRect.height + lineTrim : 0
+                    height: visible ? flow.implicitHeight + lineTrim : 0
                     Flow {
                         id: flow
                         width: parent.width
@@ -848,7 +848,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                     textFormat: Text.PlainText
                                     text: entryChip.displayName
-                                    width: Math.min(implicitWidth, 110 * menu.u)
+                                    width: Math.min(implicitWidth, 110 * menu.u) // token-ok: component-local, 04 §5
                                     elide: Text.ElideRight
                                     color: Theme.text
                                     font.pixelSize: Theme.typeCaption * menu.u
