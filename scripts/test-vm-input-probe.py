@@ -8,6 +8,7 @@ scripts/test-vm-checks.sh. Prints "    ok   ..." and "    FAIL ..." lines like t
 import contextlib
 import importlib.util
 import io
+import json
 import os
 import socket
 import struct
@@ -224,5 +225,79 @@ check("listen sorts Input1's signals from the bus's own and drops a method reply
       got == ["heard TestInput", "bus NameOwnerChanged", "heard UserActive"], got)
 check("listen matches Input1's signals and NameOwnerChanged",
       len(bus.matches) == 2 and "sender='org.ruyaos.Input1'" in bus.matches[0] and "NameOwnerChanged" in bus.matches[1], bus.matches)
+
+# RUY-679 (stale since RUY-643): cmd_twoprofiles saves, assigns and gives back the family's profile
+# in pad B's player's book (args.other), the device profile in pad A's (args.profile). A fake bus
+# records the calls; the run stops at the games (the hello of the fake game fails) and runs its cleanup.
+calls = []
+
+
+class RecBus:
+    def __init__(self):
+        self.closed = False
+
+    def call(self, svc, path, ifc, member, args_=None, *rest):
+        calls.append((member, list(args_ or [])))
+        return "ok"
+
+    def close(self):
+        self.closed = True
+
+
+class StubPad:
+    def __init__(self, *a, **k):
+        pass
+
+    def emit(self, *a):
+        pass
+
+    def close(self):
+        pass
+
+
+class StubGame:
+    hello = "NO stub"
+
+    def __init__(self, *a):
+        pass
+
+    def close(self):
+        pass
+
+
+saved_probe = {n: getattr(probe, n) for n in ("Bus", "FakePad", "devices", "assigned_slots", "wait_for",
+                                              "node_by", "Game", "join_by_name")}
+probe.Bus = RecBus
+probe.FakePad = StubPad
+probe.devices = lambda: [{"id": "dev-a", "name": probe.NAME, "family": "xbox"},
+                         {"id": "dev-b", "name": probe.NAME + " N", "family": "nintendo", "routed": True}]
+before_slots = {"p1": {"device:dev-a": "old-a"}, "p2": {"family:nintendo": "old-fam"}}
+probe.assigned_slots = lambda owner: before_slots[owner]
+probe.wait_for = lambda fn, timeout, step=0.02: fn()
+probe.node_by = lambda attr, value: (True,)
+probe.Game = StubGame
+probe.join_by_name = lambda bus, name, profile, timeout=5: ("ok", 2)
+real_sleep = probe.time.sleep
+probe.time.sleep = lambda s: None
+out = io.StringIO()
+try:
+    with contextlib.redirect_stdout(out):
+        probe.cmd_twoprofiles(types.SimpleNamespace(profile="p1", other="p2", user="u"))
+finally:
+    probe.time.sleep = real_sleep
+    for n, v in saved_probe.items():
+        setattr(probe, n, v)
+saves = [(c[1][0], json.loads(c[1][1])["id"]) for c in calls if c[0] == "SaveProfile"]
+check("twoprofiles saves the device profile for pad A's player and the family profile for pad B's",
+      saves == [("p1", "vm-check-own"), ("p2", "vm-check-family")], saves)
+assigns = [tuple(c[1]) for c in calls if c[0] == "AssignProfile"]
+check("twoprofiles assigns the family slot in the other player's book",
+      ("p2", "global", "family:nintendo", "vm-check-family") in assigns
+      and ("p1", "global", "device:dev-a", "vm-check-own") in assigns, assigns)
+check("twoprofiles gives each owner back what it held, and deletes the saved profiles per owner",
+      ("p1", "global", "device:dev-a", "old-a") in assigns and ("p2", "global", "family:nintendo", "old-fam") in assigns
+      and ("DeleteProfile", ["p2", "vm-check-family"]) in calls and ("DeleteProfile", ["p1", "vm-check-own"]) in calls,
+      (assigns, calls))
+check("twoprofiles reports the failure of the stub game", "FAIL:" in out.getvalue(), out.getvalue())
 
 sys.exit(1 if fails else 0)

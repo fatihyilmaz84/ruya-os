@@ -174,7 +174,15 @@ pub fn classify_error(stderr: &str) -> FlatpakError {
     {
         FlatpakError::MissingRuntime
     } else {
-        FlatpakError::Other(stderr.trim().lines().last().unwrap_or("").to_owned())
+        // The last line that says something (a terminal's output can end in blank lines); never an
+        // empty reason, which the journal shows as `failed: ` (RUY-679: `Remote "x" not found`).
+        let line = stderr
+            .lines()
+            .map(|l| l.trim_matches(|c: char| c.is_control() || c.is_whitespace()))
+            .rev()
+            .find(|l| !l.is_empty())
+            .unwrap_or("flatpak failed without saying why");
+        FlatpakError::Other(line.to_owned())
     }
 }
 
@@ -728,6 +736,23 @@ mod tests {
             panic!("not Other");
         };
         assert_eq!(line, "error: it broke");
+    }
+
+    #[test]
+    fn an_unmapped_error_always_has_a_readable_reason() {
+        // RUY-679: a missing remote has no mapping and must not end as reason="".
+        let FlatpakError::Other(line) =
+            classify_error("error: Remote \"ruyaos-session-test\" not found\n\n  \n")
+        else {
+            panic!("not Other");
+        };
+        assert_eq!(line, "error: Remote \"ruyaos-session-test\" not found");
+        for silent in ["", "\n\n", "  \r\n\x1b\n"] {
+            let FlatpakError::Other(line) = classify_error(silent) else {
+                panic!("not Other");
+            };
+            assert!(!line.is_empty(), "{silent:?} gave an empty reason");
+        }
     }
 
     #[test]

@@ -507,6 +507,59 @@ out="$(cat "$SESS_LOG")"
 expect_contains "closed stdout: the compositor is still started" "$out" "systemctl start ruya-compositor@tty1"
 expect_contains "closed stdout: the linger is still taken back" "$out" "loginctl disable-linger ruya-shell"
 
+# --- vm-session-check.sh: drop_test_apps (RUY-679) -------------------------------------------------
+# The cleanup removes what is installed with its output visible; a failed uninstall is a FAIL line and
+# returns 1, so `drop_test_apps ... && flatpak remote-delete` keeps the remote (RUY-679: a number in
+# $rt made the uninstall fail silently, and the remote-delete then orphaned the runtime).
+dropsrc="$tmp/drop.sh"
+{ sed -n '/^# --- drop_test_apps begin/,/^# --- drop_test_apps end/p' "$here/vm-session-check.sh"
+  sed -n '/^# --- refused_client_ends begin/,/^# --- refused_client_ends end/p' "$here/vm-session-check.sh"; } > "$dropsrc"
+[ -s "$dropsrc" ] && pass "vm-session-check.sh has the drop_test_apps and refused_client_ends blocks" || fail "no drop_test_apps block"
+mkdir -p "$tmp/drop-bin"
+cat > "$tmp/drop-bin/flatpak" <<'SHIMEOF'
+#!/bin/sh
+echo "flatpak $*" >> "$DROP_LOG"
+case "$1" in
+    info) case " $DROP_INSTALLED " in *" $3 "*) exit 0;; *) exit 1;; esac;;
+    uninstall) echo "error: uninstall output"; exit "${DROP_RC:-0}";;
+    remote-delete) exit 0;;
+esac
+exit 0
+SHIMEOF
+printf '#!/bin/sh\nexec grep -a "froze" "$DROP_JOURNAL" 2>/dev/null\n' > "$tmp/drop-bin/journalctl"
+chmod +x "$tmp/drop-bin/flatpak" "$tmp/drop-bin/journalctl"
+rundrop() { # <script text> (DROP_* env set by the caller): runs it with the blocks sourced; prints the output and the log
+    DROP_LOG="$tmp/drop.log"; : > "$DROP_LOG"
+    DROP_LOG="$DROP_LOG" PATH="$tmp/drop-bin:$PATH" bash -c "ok() { echo \"PASS: \$*\"; }; bad() { echo \"FAIL: \$*\"; }; wclient=org.ruyaos.TestWaylandClient; work='$tmp/drop-work'; REFUSED_WAIT=2; . '$dropsrc'; $1" 2>&1
+    cat "$DROP_LOG"
+}
+mkdir -p "$tmp/drop-work"
+out="$(DROP_INSTALLED="org.a org.rt" DROP_RC=1 rundrop 'drop_test_apps org.a org.b org.rt && flatpak remote-delete --system --force r; echo "rc=$?"')"
+expect_contains "a failed uninstall is a FAIL line" "$out" "FAIL: flatpak uninstall org.a org.rt failed"
+expect_contains "a failed uninstall shows flatpak's own output" "$out" "error: uninstall output"
+expect_lacks "a failed uninstall does not delete the remote" "$out" "flatpak remote-delete"
+expect_lacks "only installed ids are uninstalled" "$out" "uninstall --system -y org.a org.b"
+out="$(DROP_INSTALLED="org.a org.rt" DROP_RC=0 rundrop 'drop_test_apps org.a org.b org.rt && flatpak remote-delete --system --force r; echo "rc=$?"')"
+expect_contains "a good uninstall removes the installed ids" "$out" "flatpak uninstall --system -y org.a org.rt"
+expect_contains "a good uninstall is followed by the remote-delete" "$out" "flatpak remote-delete --system --force r"
+expect_lacks "a good uninstall is not a FAIL" "$out" "FAIL"
+out="$(DROP_INSTALLED="" rundrop 'drop_test_apps org.a; echo "rc=$?"')"
+expect_contains "nothing installed: nothing to do, success" "$out" "rc=0"
+expect_lacks "nothing installed: no uninstall call" "$out" "flatpak uninstall"
+
+# --- vm-session-check.sh display: the refused client (RUY-679) -------------------------------------
+# Passes on AppExited, or on the unit frozen with "its profile is not signed in"; fails on neither.
+echo '{"member":"AppExited","x":"org.ruyaos.TestWaylandClient"}' > "$tmp/drop-work/signals.log"
+out="$(DROP_JOURNAL=/dev/null rundrop 'refused_client_ends ruya-app-1 0 "the client"; echo "rc=$?"')"
+expect_contains "refused client: AppExited passes" "$out" "PASS: the client ended (AppExited)"
+: > "$tmp/drop-work/signals.log"
+echo "froze ruya-app-1: its profile is not signed in" > "$tmp/drop.journal"
+out="$(DROP_JOURNAL="$tmp/drop.journal" rundrop 'refused_client_ends ruya-app-1 0 "the client"; echo "rc=$?"')"
+expect_contains "refused client: the frozen unit passes" "$out" "PASS: the client is frozen by ruya-session"
+expect_contains "refused client: the frozen unit returns 0" "$out" "rc=0"
+out="$(DROP_JOURNAL="$tmp/drop.journal" rundrop 'refused_client_ends ruya-app-2 0 "the client"; echo "rc=$?"')"
+expect_contains "refused client: another unit's frozen line does not count" "$out" "FAIL: the client neither ended nor was frozen"
+
 # --- vm-profiles-check.sh guests (RUY-125): each assertion can fail ---------------------------------
 # A fake Profiles1 (busctl --json=short) and getent over one JSON state file; FAKE_BUG breaks one rule.
 # The paths go in as arguments (a Windows python reads converted arguments, not MSYS paths in env).
