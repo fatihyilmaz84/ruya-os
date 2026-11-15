@@ -200,6 +200,7 @@ private:
     bool m_confirmsDelayed = false;
     QString m_activeDevice;
     QList<Seat> m_seats;           // 4 while a profile is signed in (index 0 is seat 1), else none
+    QHash<QString, QString> m_owners;   // stable pad id -> the profile that last played on it (RUY-124)
     QString m_padSinceChange;      // the pad of the last press since the profile last changed
     QString m_navigator;           // SetNavigator's pad ("" = none)
     QHash<QString, qint64> m_foreignPress;   // device id -> m_clock time of its last ForeignInput "press"

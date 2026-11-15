@@ -27,6 +27,7 @@ use crate::identity::{self, Hardware};
 use crate::mapping::{KeyEvent, NavKey};
 use crate::nodes::{Ignored, Node};
 use crate::notify::{watchdog_interval, Notifier};
+use crate::owners::Owners;
 use crate::pad::{code, Normalizer, OutEvent, PadLayout, Range, Rumble, OWN_PHYS_PREFIX};
 use crate::routing::{Backend, Created, PadInfo, PadKey, Router, VirtualId, VirtualSpec};
 use crate::udev::{database_properties, parse_monitor_message};
@@ -668,6 +669,8 @@ pub fn run() -> io::Result<()> {
     router.set_book(Book::new(Box::new(DirStore::new(
         state_dir().join("profiles"),
     ))));
+    // The pads' owners (RUY-124): <state>/owners.json.
+    router.set_owners(Owners::load(state_dir()));
     // RUYA_IDLE_DIVISOR (a debug aid, as for the shell's idle times) shortens the UserActive gap too.
     if let Some(divisor) = std::env::var("RUYA_IDLE_DIVISOR")
         .ok()

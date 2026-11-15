@@ -1571,6 +1571,10 @@ def cmd_players(args):
         ok("the device records name the seats (A 1, B 2, C 0)") \
             if (slots.get(a_id), slots.get(b_id), slots.get(c_id)) == ((1, args.profile), (2, args.other), (0, "")) \
             else bad(f"device records' slot and profile: {slots}")
+        owners = {d["id"]: d.get("owner") for d in (devices() or [])}
+        ok("the device records name the owners (A the first profile, B the second; RUY-124)") \
+            if (owners.get(a_id), owners.get(b_id)) == (args.profile, args.other) \
+            else bad(f"device records' owner: {owners}")
         status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-players", "org.ruyaos.VmCheck", args.profile])
         if status != "ok":
             bad(f"SetRoute app: {status}")
@@ -1622,6 +1626,16 @@ def cmd_players(args):
         seated = players()
         want = [(1, args.profile, a_id)]
         ok("ListPlayers: only seat 1 is left") if seats_of(seated) == want else bad(f"ListPlayers after the leave: {seated}")
+        # RUY-124: the owners are kept in the state directory and survive a restart of the service. The route and
+        # the seats do not (RUY-121); the pads come back with their stable ids.
+        pid = subprocess.run(["systemctl", "show", "-p", "MainPID", "--value", "ruya-inputd"],
+                             capture_output=True, text=True).stdout.strip()
+        subprocess.run(["systemctl", "restart", "ruya-inputd"], check=False)
+        back = wait_for(lambda: {d["id"]: d.get("owner") for d in (devices() or []) if d["id"] in (a_id, b_id)}
+                        if len([d for d in (devices() or []) if d["id"] in (a_id, b_id)]) == 2 else None, 8)
+        ok(f"after restarting ruya-inputd (was pid {pid}) pad B still names {args.other} as its owner, A {args.profile}") \
+            if back == {a_id: args.profile, b_id: args.other} \
+            else bad(f"owners after the restart: {back}")
     finally:
         for g in games:
             try:

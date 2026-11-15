@@ -232,11 +232,15 @@ FocusScope {
         focusFirst()
     }
 
-    // The first profile without a pad, else Not now (also when the profiles are not there).
+    // Player 1 without a pad, else the asking pad's owner (the last profile that played on it, RUY-124;
+    // focus only: the PIN is asked as always, and a profile that plays on another pad still gets it,
+    // Accept then being Move), else the first profile without a pad, else the Guest card (Not now when
+    // the profiles are not there).
     function focusFirst() {
         // Seat 1 without a pad: player 1's card first (the one-press way back, lead RUY-122 round 2).
         const own = Profiles.available ? cards.findIndex(p => padlessPlayer1(p.id)) : -1
-        const i = own >= 0 ? own : Profiles.available ? cards.findIndex(p => !hasPad(p.id)) : -1
+        const owner = Profiles.available && padRecord && padRecord.owner ? cards.findIndex(p => p.id === padRecord.owner) : -1
+        const i = own >= 0 ? own : owner >= 0 ? owner : Profiles.available ? cards.findIndex(p => !hasPad(p.id)) : -1
         if (i >= 0) {
             cardList.currentIndex = i
             cardList.forceActiveFocus()

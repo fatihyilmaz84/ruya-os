@@ -14,6 +14,7 @@ pub mod identity;
 pub mod mapping;
 pub mod nodes;
 pub mod notify;
+pub mod owners;
 pub mod pad;
 pub mod profile;
 pub mod routing;

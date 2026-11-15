@@ -653,6 +653,11 @@ cat > "$pl/bin/systemctl" <<'SHIMEOF'
 #!/bin/sh
 exit 0
 SHIMEOF
+# stat: the owners file (RUY-124) is 0600 ruya-input unless FAKE_STAT says otherwise.
+cat > "$pl/bin/stat" <<'SHIMEOF'
+#!/bin/sh
+echo "${FAKE_STAT:-600 ruya-input}"
+SHIMEOF
 # pgrep: the shell is not running (stopped_shell_probe stops it).
 cat > "$pl/bin/pgrep" <<'SHIMEOF'
 #!/bin/sh
@@ -685,8 +690,12 @@ log="$(cat "$tmp/players.log")"
 expect_contains "players: the probe gets the second profile" "$log" "probe players --user ruya-p1 --other p7 --profile p1"
 expect_contains "players: the profile is made as the admin" "$log" 'CreateProfile sssss p1 1234 Check Player standard'
 expect_contains "players: the second profile is removed" "$log" "DeleteProfile sss p1 1234 p7"
+expect_contains "players: owners.json is checked 0600 ruya-input" "$out" "PASS: owners.json is 0600 ruya-input"
 expect_contains "players: all good passes" "$out" "ALL CHECKS PASSED"
 [ "$rc" = 0 ] && pass "players: exit 0" || fail "players: exit $rc"
+out="$(FAKE_STAT='644 root' runplayers "$pl/with")"; rc=$?
+expect_contains "players: a wrong owners.json mode fails" "$out" "FAIL: owners.json: 644 root (want 600 ruya-input)"
+[ "$rc" = 1 ] && pass "players: a wrong owners.json mode: exit 1" || fail "players: a wrong owners.json mode: exit $rc"
 out="$(FAKE_PROBE_FAIL=1 runplayers "$pl/with")"; rc=$?
 expect_contains "players: a FAIL of the probe fails the check" "$out" "SOME CHECKS FAILED"
 [ "$rc" = 1 ] && pass "players: a FAIL of the probe: exit 1" || fail "players: a FAIL of the probe: exit $rc"
