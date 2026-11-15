@@ -352,8 +352,10 @@ Item {
                 { key: "notifications:clear", label: qsTr("Clear all"), kind: "action", verb: qsTr("Clear all"),
                   activate: () => NotificationCentre.dismissAll() }
             ] : []),
-            { key: "notifications:all", label: qsTr("See all (%n)", "", all.length), kind: "action",
-              activate: () => menu.notificationsRequested() }
+            ...(all.length > 0 ? [
+                { key: "notifications:all", label: qsTr("See all (%n)", "", all.length), kind: "action",
+                  activate: () => menu.notificationsRequested() }
+            ] : [])
         ] }
     }
     // "2 min ago · Download finished": the age first, then the item's detail.
@@ -363,6 +365,10 @@ Item {
     }
     // A on an item: its first action (the shell runs it; an app's goes back to the app), else its app opens;
     // an item that does neither is cleared. The item goes with it (a pinned one stays until its source ends it).
+    // Does A do anything on this item? A pinned one with no action and no app does nothing (RUY-638).
+    function itemActs(it) {
+        return (it.actions ?? []).length > 0 || (it.appId ?? "") !== "" || !it.pinned
+    }
     function runItem(it) {
         const actions = it.actions ?? []
         if (actions.length > 0) {
@@ -509,6 +515,15 @@ Item {
         iconCol = Math.max(0, iconIds.indexOf(id))
         actions.currentIndex = Math.max(0, itemKeys.indexOf("panels"))
     }
+    // The focus on the row with this key of the open panel (the sheet over the Hub closed; the row's old
+    // delegate may be gone, so the key is looked up after the rows are rebuilt).
+    function focusRowKey(key) {
+        rebuild()
+        const at = itemKeys.indexOf(key)
+        if (at >= 0)
+            actions.currentIndex = at
+        actions.forceActiveFocus()
+    }
     // Back in a panel: the Quick Hub again, with the focus on the icon that was opened.
     function closePanel() {
         const id = panelId
@@ -619,6 +634,8 @@ Item {
         const row = rowOf(key)
         if (row && row.kind === "info")
             return                          // read-only: Accept does nothing
+        if (row && row.kind === "item" && !itemActs(row.item))
+            return                          // a pinned item with nothing to run: silent (RUY-638)
         Sfx.select()
         if (key === "resume") {
             menu.closeRequested()
@@ -1222,12 +1239,25 @@ Item {
                                     }
                                 }
                             }
+                            // A pinned item wears the pin, as in the centre sheet (RUY-638).
+                            Icon {
+                                id: hubItemPin
+                                objectName: "hubItemPin"
+                                visible: action.isItem && action.row.item.pinned === true
+                                anchors.verticalCenter: parent.verticalCenter
+                                x: action.width - width - Theme.spaceL * menu.u
+                                u: menu.u
+                                size: 32            // token-ok: as the sheet's pin
+                                name: "push_pin"
+                                filled: true
+                                color: Theme.toastWarning
+                            }
                             Column {
                                 id: itemTexts
                                 visible: action.isItem
                                 x: itemBadge.x + itemBadge.width + Theme.spaceS * menu.u
                                 anchors.verticalCenter: parent.verticalCenter
-                                width: action.width - x - Theme.spaceL * menu.u
+                                width: action.width - x - Theme.spaceL * menu.u - (hubItemPin.visible ? hubItemPin.width + Theme.spaceS * menu.u : 0)
                                 Text {
                                     objectName: "hubItemTitle"
                                     width: parent.width

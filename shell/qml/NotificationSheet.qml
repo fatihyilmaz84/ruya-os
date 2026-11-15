@@ -28,6 +28,8 @@ FocusScope {
     property real marginY: 0
     property bool shown: false
     property Item returnTo: null
+    // Opened from a Hub row: its key, not the Item (clearing items may rebuild the row, RUY-638).
+    property string returnKey: ""
 
     // The ids that were unread when the centre opened, and those that arrived while it was open.
     property var freshIds: []
@@ -44,6 +46,7 @@ FocusScope {
     property int pick: 0
 
     signal closed()
+    signal returnToKey(string key)
     // A picked action of an item (Shell.runNotificationAction decides what it does: an app's action goes
     // back to the app; the console's own run in the shell, a restart after a confirmation).
     signal actionRequested(var item, string action)
@@ -90,10 +93,11 @@ FocusScope {
         return Notifications.ageText(ms, nowMs)
     }
 
-    function open() {
+    function open(fromKey) {
         if (shown)
             return
-        returnTo = Window.activeFocusItem
+        returnKey = fromKey ?? ""
+        returnTo = returnKey !== "" ? null : Window.activeFocusItem
         nowMs = NotificationCentre.nowMs()
         freshIds = items.filter(i => i.unread).map(i => i.id)
         newCount = freshIds.length
@@ -109,8 +113,12 @@ FocusScope {
             return
         shown = false
         const target = returnTo
+        const key = returnKey
         returnTo = null
-        if (target && target.visible && target.enabled)
+        returnKey = ""
+        if (key !== "")
+            returnToKey(key)
+        else if (target && target.visible && target.enabled)
             target.forceActiveFocus()
         Sfx.close()
         closed()
