@@ -4,13 +4,17 @@ import RuyaShell
 // A player's round avatar with their seat number (04 §5 "Player chip", RUY-629): the status cluster
 // (player 1 and the others) and the Hub's players row. Never focusable. `profileId` is a profile or a
 // temporary guest; the name and colour follow Profiles. The number dot (28 u, `primaryFill`) overhangs
-// the circle by 6 u at the bottom right; it shows only while `showNumber` (two or more players).
+// the circle by 6 u at the bottom right; it shows only while `showNumber` (two or more players). A held
+// seat draws the avatar at half opacity and a `schedule` glyph in the dot instead of the digit.
 Item {
     id: chip
 
     property string profileId
     property int slot: 1
     property bool showNumber: false
+    // The player's pad is gone and the seat is held for it (RUY-627, `held` of Input.players): the avatar is
+    // dimmed and the dot shows a waiting glyph in place of the number.
+    property bool held: false
     property real u: 1
 
     readonly property var guest: {
@@ -39,7 +43,8 @@ Item {
     height: width
 
     Accessible.role: Accessible.StaticText
-    Accessible.name: qsTr("%1, player %2").arg(displayName).arg(slot)
+    Accessible.name: held ? qsTr("%1, player %2, held").arg(displayName).arg(slot)
+                          : qsTr("%1, player %2").arg(displayName).arg(slot)
 
     Rectangle {
         id: circle
@@ -47,8 +52,12 @@ Item {
         anchors.fill: parent
         radius: width / 2
         color: chip.tint
+        opacity: chip.held ? 0.5 : 1.0 // token-ok: component-local, 04 §5
         Text {
             anchors.centerIn: parent
+            // Clear of the number dot: up and left by its overhang while the dot shows.
+            anchors.horizontalCenterOffset: chip.showNumber ? -6 * chip.u : 0 // token-ok: component-local, 04 §5
+            anchors.verticalCenterOffset: chip.showNumber ? -6 * chip.u : 0 // token-ok: component-local, 04 §5
             textFormat: Text.PlainText
             text: (chip.displayName || "?").charAt(0).toUpperCase()
             color: Theme.text
@@ -68,9 +77,19 @@ Item {
         x: circle.width - width + 6 * chip.u // token-ok: component-local, 04 §5
         y: circle.height - height + 6 * chip.u // token-ok: component-local, 04 §5
         color: Theme.primaryFill
+        Icon {
+            objectName: "playerHeldGlyph"
+            anchors.centerIn: parent
+            visible: chip.held
+            u: chip.u
+            size: Theme.typeMicro
+            name: "schedule"
+            color: Theme.onPrimary
+        }
         Text {
             objectName: "playerDigit"
             anchors.centerIn: parent
+            visible: !chip.held
             text: chip.slot
             color: Theme.onPrimary
             font.pixelSize: Theme.typeMicro * chip.u

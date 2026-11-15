@@ -3353,6 +3353,11 @@ Bu geri alınamaz.</translation>
         <source>%1, player %2</source>
         <translation>%1, %2. oyuncu</translation>
     </message>
+    <message>
+        <location line="+1"/>
+        <source>%1, player %2, held</source>
+        <translation>%1, %2. oyuncu, bekleniyor</translation>
+    </message>
 </context>
 <context>
     <name>PowerConfirm</name>
