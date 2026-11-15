@@ -6195,25 +6195,25 @@ This can&apos;t be undone.</translation>
     <name>WhosPlaying</name>
     <message>
         <location filename="../qml/WhosPlaying.qml" line="+76"/>
-        <location line="+56"/>
-        <location line="+194"/>
+        <location line="+61"/>
+        <location line="+201"/>
         <source>Guest</source>
         <translation>Guest</translation>
     </message>
     <message>
-        <location line="-228"/>
+        <location line="-235"/>
         <location line="+1"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
         <location line="-1"/>
-        <location line="+722"/>
+        <location line="+771"/>
         <source>Not now</source>
         <translation>Not now</translation>
     </message>
     <message>
-        <location line="-721"/>
+        <location line="-770"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -6228,7 +6228,12 @@ This can&apos;t be undone.</translation>
         <translation>Guest %1</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+12"/>
+        <source>Three guests are already playing. One must leave first.</source>
+        <translation>Three guests are already playing. One must leave first.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Joins as a guest. Nothing is kept after it leaves.</source>
         <translation>Joins as a guest. Nothing is kept after it leaves.</translation>
     </message>
@@ -6243,7 +6248,7 @@ This can&apos;t be undone.</translation>
         <translation>Now on %2. Picking it moves %1 here.</translation>
     </message>
     <message>
-        <location line="+316"/>
+        <location line="+357"/>
         <source>%1 could not join</source>
         <translation>%1 could not join</translation>
     </message>
@@ -6253,7 +6258,7 @@ This can&apos;t be undone.</translation>
         <translation>Try again.</translation>
     </message>
     <message>
-        <location line="+213"/>
+        <location line="+219"/>
         <source>Paused · %1</source>
         <translation>Paused · %1</translation>
     </message>

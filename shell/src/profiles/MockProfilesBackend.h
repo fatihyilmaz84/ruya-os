@@ -41,6 +41,8 @@ public:
     // Tests: back to the seeded profiles, or to an empty store (first boot); clears
     // lockouts and the active profile.
     void resetForTests(bool empty);
+    // Tests: the next `times` calls of "createGuest" or "removeGuest" answer `status` and change nothing.
+    void failGuestCalls(const QString &method, const QString &status, int times);
 
 private:
     struct Entry
@@ -73,6 +75,10 @@ private:
     QList<Entry> m_entries;
     QList<GuestInfo> m_guests; // temporary guests, never in m_entries
     QString m_active;
+    QString m_guestFailMethod;
+    QString m_guestFailStatus;
+    int m_guestFailTimes = 0;
+    bool guestCallFails(const QString &method);
     int m_nextId = 1; // ids are never reused
     int m_pending = 0; // list replies not delivered yet
 };

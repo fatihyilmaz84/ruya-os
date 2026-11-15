@@ -6175,25 +6175,25 @@ Bu geri alınamaz.</translation>
     <name>WhosPlaying</name>
     <message>
         <location filename="../qml/WhosPlaying.qml" line="+76"/>
-        <location line="+56"/>
-        <location line="+194"/>
+        <location line="+61"/>
+        <location line="+201"/>
         <source>Guest</source>
         <translation>Misafir</translation>
     </message>
     <message>
-        <location line="-228"/>
+        <location line="-235"/>
         <location line="+1"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
         <location line="-1"/>
-        <location line="+722"/>
+        <location line="+771"/>
         <source>Not now</source>
         <translation>Şimdi değil</translation>
     </message>
     <message>
-        <location line="-721"/>
+        <location line="-770"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -6208,7 +6208,12 @@ Bu geri alınamaz.</translation>
         <translation>Misafir %1</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+12"/>
+        <source>Three guests are already playing. One must leave first.</source>
+        <translation>Üç misafir zaten oynuyor. Önce biri ayrılmalı.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Joins as a guest. Nothing is kept after it leaves.</source>
         <translation>Misafir olarak katılır. Ayrılınca hiçbir şey saklanmaz.</translation>
     </message>
@@ -6223,7 +6228,7 @@ Bu geri alınamaz.</translation>
         <translation>Şu an %2 üzerinde. Seçersen %1 buraya geçer.</translation>
     </message>
     <message>
-        <location line="+316"/>
+        <location line="+357"/>
         <source>%1 could not join</source>
         <translation>%1 katılamadı</translation>
     </message>
@@ -6233,7 +6238,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene.</translation>
     </message>
     <message>
-        <location line="+213"/>
+        <location line="+219"/>
         <source>Paused · %1</source>
         <translation>Duraklatıldı · %1</translation>
     </message>

@@ -186,6 +186,12 @@ void Profiles::mockSetAvailable(bool available)
     emit availableChanged();
 }
 
+void Profiles::mockFailGuests(const QString &method, const QString &status, int times)
+{
+    if (auto *mock = qobject_cast<MockProfilesBackend *>(m_backend.get()))
+        mock->failGuestCalls(method, status, times);
+}
+
 int Profiles::mockPendingReplies() const
 {
     auto *mock = qobject_cast<MockProfilesBackend *>(m_backend.get());

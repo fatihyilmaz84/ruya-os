@@ -74,6 +74,9 @@ public:
     // The service is (not) there, as availableChanged says it (the "Who's playing?" waiting text,
     // RUY-122). A no-op with the D-Bus backend.
     Q_INVOKABLE void mockSetAvailable(bool available);
+    // Tests only (mock): the next `times` CreateGuest or RemoveGuest calls (`method` "createGuest" /
+    // "removeGuest") answer `status` and change nothing.
+    Q_INVOKABLE void mockFailGuests(const QString &method, const QString &status, int times);
 
 signals:
     void profilesChanged();

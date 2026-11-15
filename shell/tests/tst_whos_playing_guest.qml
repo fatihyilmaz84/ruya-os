@@ -230,7 +230,7 @@ Item {
             compare(Profiles.nameOf(Profiles.guests.find(g => g.number === 1).id), "Guest")
         }
 
-        function test_the_fourth_guest_is_refused_with_the_toast() {
+        function test_three_guests_playing_say_so_and_accept_makes_no_call() {
             signIn()
             for (let i = 0; i < 3; ++i)
                 Profiles.createGuest()
@@ -239,16 +239,93 @@ Item {
             const list = find("whosPlayingCards")
             list.currentIndex = 2
             list.forceActiveFocus()
+            compare(find("whosPlayingDetail").text, "Three guests are already playing. One must leave first.")
             const joins = joinSpy.count
             keyClick(Qt.Key_Return)
-            tryCompare(Notifications.model, "count", 1)
-            const toast = Notifications.model.get(0)
-            compare(toast.text, "Guest could not join")
-            compare(toast.detail, "Try again.")
-            verify(prompt().shown, "the prompt stays")
+            wait(0)
+            wait(0)
+            compare(createdSpy.count, 3, "no CreateGuest call")
+            compare(Notifications.model.count, 0, "no toast")
             compare(joinSpy.count, joins, "no join")
-            compare(Profiles.guests.length, 3, "no fourth guest")
+            verify(prompt().shown, "the prompt stays")
+            verify(list.activeFocus && list.currentIndex === 2, "the focus stays on Guest")
+        }
+
+        function test_a_refused_create_shows_the_toast_and_keeps_the_focus() {
+            signIn()
+            askWith(host.dualSense)
+            const list = find("whosPlayingCards")
+            list.currentIndex = 2
+            list.forceActiveFocus()
+            Profiles.mockFailGuests("createGuest", "failed", 1)
+            keyClick(Qt.Key_Return)
+            tryCompare(Notifications.model, "count", 1)
+            compare(Notifications.model.get(0).text, "Guest could not join")
+            compare(Notifications.model.get(0).detail, "Try again.")
+            verify(prompt().shown, "the prompt stays")
+            compare(Profiles.guests.length, 0)
             tryVerify(() => list.activeFocus && list.currentIndex === 2, 2000, "the focus stays on Guest")
+        }
+
+        function test_two_guests_ending_together_are_both_removed() {
+            signIn()
+            seatGuest(host.pro)
+            seatGuest(host.dualSense)
+            compare(Profiles.guests.length, 2)
+            Input.leavePlayer(2)
+            Input.leavePlayer(3)
+            tryVerify(() => Profiles.guests.length === 0, 3000, "both are wiped")
+            compare(removedSpy.count, 2)
+        }
+
+        function test_a_refused_join_after_the_prompt_closed_still_removes_its_guest() {
+            signIn()
+            askWith(host.dualSense)
+            Input.mockFailJoin("full")
+            prompt().acceptGuest()
+            prompt().close(false)                   // the asking pad went before the answers came
+            tryCompare(Notifications.model, "count", 1)
+            tryVerify(() => Profiles.guests.length === 0, 3000, "the guest it made is removed")
+            compare(Input.players.length, 1)
+        }
+
+        function test_two_quick_guest_requests_leave_no_stray_guest() {
+            signIn()
+            askWith(host.dualSense)
+            prompt().acceptGuest()
+            prompt().acceptGuest()
+            tryCompare(createdSpy, "count", 2)
+            tryCompare(joinSpy, "count", 2)
+            tryVerify(() => Profiles.guests.length === 1, 3000, "the guest that lost the pad is wiped")
+            compare(Input.players.length, 2)
+            compare(Input.players[1].device_id, host.dualSense)
+            compare(Input.players[1].profile, guestIds()[0])
+        }
+
+        function test_a_failed_remove_is_retried_once_at_the_next_change() {
+            signIn()
+            seatGuest(host.pro)
+            Profiles.mockFailGuests("removeGuest", "failed", 1)
+            Input.leavePlayer(2)
+            tryCompare(removedSpy, "count", 1)
+            compare(removedSpy.signalArguments[0][1], "failed")
+            compare(Profiles.guests.length, 1, "still there")
+            Input.joinPlayer(host.pro, "p2")            // a change of the players
+            tryVerify(() => Profiles.guests.length === 0, 3000, "the retry")
+            compare(removedSpy.count, 2)
+        }
+
+        function test_unknown_profile_counts_as_done() {
+            signIn()
+            seatGuest(host.pro)
+            Profiles.mockFailGuests("removeGuest", "unknown-profile", 1)
+            Input.leavePlayer(2)
+            tryCompare(removedSpy, "count", 1)
+            Input.joinPlayer(host.pro, "p2")
+            tryVerify(() => Input.players.length === 2, 2000)
+            wait(0)
+            wait(0)
+            compare(removedSpy.count, 1, "not asked again")
         }
 
         function test_a_refused_join_removes_the_guest_it_made() {
