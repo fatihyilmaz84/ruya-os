@@ -11,12 +11,16 @@ use std::time::{Duration, Instant};
 pub(crate) fn run_bounded(args: &[String], limit: Duration) -> Option<String> {
     match run_bounded_status(args, limit)? {
         (true, out) => Some(out),
-        (false, _) => None,
+        (false, _) => {
+            eprintln!("ruya-session: {} failed", args.join(" "));
+            None
+        }
     }
 }
 
 /// Like `run_bounded`, but a child that exits non-zero still gives its output: `(success,
-/// stdout)`. `None` only when it could not be run or did not exit in time.
+/// stdout)`. `None` only when it could not be run or did not exit in time (both logged). A
+/// non-zero exit is not logged: the caller decides what it means.
 pub(crate) fn run_bounded_status(args: &[String], limit: Duration) -> Option<(bool, String)> {
     let what = args.join(" ");
     let mut child = match Command::new(&args[0])
@@ -47,15 +51,14 @@ pub(crate) fn run_bounded_status(args: &[String], limit: Duration) -> Option<(bo
         match child.try_wait() {
             Ok(Some(status)) => {
                 let out = collect(reader);
-                if !status.success() {
-                    eprintln!("ruya-session: {what} failed: {status}");
-                }
                 return Some((status.success(), out));
             }
             Ok(None) if Instant::now() >= deadline => {
                 let _ = child.kill();
                 let _ = child.wait();
-                let _ = collect(reader);
+                // The output is thrown away: the reader is detached, not joined (a grandchild
+                // holding the pipe open must not hold us up).
+                drop(reader);
                 eprintln!("ruya-session: {what}: no answer in {} s", limit.as_secs());
                 return None;
             }
@@ -64,7 +67,7 @@ pub(crate) fn run_bounded_status(args: &[String], limit: Duration) -> Option<(bo
                 eprintln!("ruya-session: {what}: {err}");
                 let _ = child.kill();
                 let _ = child.wait();
-                let _ = collect(reader);
+                drop(reader);
                 return None;
             }
         }
