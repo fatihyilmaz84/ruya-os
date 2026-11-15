@@ -380,6 +380,7 @@ Item {
         // A page's lazily built modal leaves the modal layer: the prompt is not blocked after it (round 2,
         // the reviewer's probe; `Shell.modalShown` skips a child that is gone).
         function test_it_opens_after_a_page_was_open() {
+            failOnWarning(/TypeError/)          // a null child of the modal layer once threw here (round 2)
             signIn()
             keyClick(Qt.Key_Up)
             tryVerify(() => find("sectionNav").activeFocus, 2000)
@@ -565,7 +566,9 @@ Item {
 
         // ---- a Switch that never gets its seat --------------------------------------------------------------
 
-        function test_a_switch_whose_pad_goes_gives_up_and_the_prompt_opens_again() {
+        // The asking pad goes during a Switch: the join cannot happen (refused, or given up before it), the toast
+        // says so, and nothing keeps the prompt shut afterwards.
+        function test_a_switch_whose_pad_goes_ends_cleanly_and_the_prompt_opens_again() {
             signIn()
             askWith(host.dualSense)
             keyClick(Qt.Key_Return)
@@ -581,6 +584,28 @@ Item {
             tryVerify(() => find("homePlay").activeFocus, 2000)
             tryVerify(() => Input.players.length === 1 && Input.players[0].profile === "p2", 2000)
             askWith(host.pro)                                       // nothing keeps it shut
+        }
+
+        // Another profile signs in before the Switch's seat came: the Switch gives up at once.
+        function test_a_switch_overtaken_by_another_profile_gives_up() {
+            signIn()
+            askWith(host.dualSense)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("whosPlayingJoin").activeFocus, 2000)
+            keyClick(Qt.Key_Right)
+            Input.mockFail(true)                                    // Ada's seat never comes
+            keyClick(Qt.Key_Return)
+            tryCompare(Profiles, "activeProfile", "p2")
+            verify(prompt().switching !== null, "the Switch waits for Ada's seat")
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            verify(prompt().switching !== null, "a Lock alone is no answer")
+            Profiles.switchTo("p1", "1234")
+            tryCompare(Profiles, "activeProfile", "p1")
+            tryVerify(() => prompt().switching === null, 1000, "gave up when Player One signed in")
+            tryVerify(() => Notifications.model.count === 1, 2000)
+            compare(Notifications.model.get(0).text, "Ada could not join")
+            Input.mockFail(false)
         }
 
         function test_a_switch_with_no_seat_gives_up_after_its_timeout() {
