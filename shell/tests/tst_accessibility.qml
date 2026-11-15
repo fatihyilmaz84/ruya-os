@@ -5,7 +5,7 @@ import "SettingsNav.js" as SettingsNav
 
 // Every item that can hold focus has an accessible name (04 section 7), so the Orca spike starts
 // from a clean base. Each test walks a focus chain with controller keys only and checks the
-// focused item after every step. Mock profiles: p1 "Player One" (PIN 1234), p2 "Ada", p3 "Guest".
+// focused item after every step. Mock profiles: p1 "Player One" (PIN 1234), p2 "Ada", p3 "Sam".
 Item {
     id: host
     width: 1280
@@ -117,7 +117,7 @@ Item {
             // A profile with a PIN says so; one without does not.
             verify(seen.indexOf(": Player One, PIN protected") >= 0, "Player One is PIN protected: " + seen)
             verify(seen.indexOf(": Ada") >= 0, "Ada has no PIN: " + seen)
-            verify(seen.indexOf(": Guest") >= 0, "Guest has no PIN: " + seen)
+            verify(seen.indexOf(": Sam") >= 0, "Sam has no PIN: " + seen)
             // The PIN pad of Player One.
             keyClick(Qt.Key_Return)
             tryVerify(() => find("pinPad").shown)

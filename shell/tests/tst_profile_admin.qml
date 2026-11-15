@@ -671,17 +671,42 @@ Item {
             verify(!find("rowDelete").visible)
             verify(find("profilesMessage").text.indexOf("My profile") >= 0, "and the pane says where")
             tryVerify(() => find("profileRow_p1").activeFocus, 2000, "focus stays on the row")
-            keyClick(Qt.Key_Down)                         // down the list to the Guest entry
-            tryVerify(() => find("profileRow_p2").activeFocus)
             keyClick(Qt.Key_Down)
-            tryVerify(() => find("profileRow_p3").activeFocus)
-            keyClick(Qt.Key_Return)
-            verify(!find("rowRename").visible)
-            verify(!find("rowDelete").visible)
-            keyClick(Qt.Key_Up)
             tryVerify(() => find("profileRow_p2").activeFocus)
             keyClick(Qt.Key_Return)
             tryVerify(() => find("rowDelete").visible)
+        }
+
+        // RUY-685: a kept guest-role profile (mock p3, "Sam") is renamed and deleted like any other.
+        function test_guest_role_profile_is_managed() {
+            startShell()
+            signIn("p1", "1234")
+            openProfilesPane()
+            compare(Profiles.profiles.find(p => p.id === "p3").role, "guest")
+            selectRow("p3")
+            tryVerify(() => find("rowRename").visible && find("rowDelete").visible, 2000, "both rows are offered")
+            tryVerify(() => find("rowRename").activeFocus, 2000, "Rename is focused")
+            verify(find("rowRename").enabled && find("rowDelete").enabled)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("profilesRenameEntry").shown)
+            compare(find("profilesRenameEntry").text, "Sam", "pre-filled with the current name")
+            typeName("x", "profilesRenameEntry")
+            tryVerify(() => find("profilesPinPad").shown, 2000, "the admin PIN is asked")
+            enterPin("1234")
+            tryVerify(() => Profiles.profiles.find(p => p.id === "p3").name === "Samx", 3000)
+            tryVerify(() => find("profileRow_p3") !== null && find("profileRow_p3").activeFocus, 2000, "focus stays on the row")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("rowDelete").visible)
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("rowDelete").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("profilesDeleteConfirm").shown)
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("profilesPinPad").shown)
+            enterPin("1234")
+            tryVerify(() => Profiles.profiles.find(p => p.id === "p3") === undefined, 3000)
+            tryVerify(() => find("profileRow_p3") === null)
         }
 
         function test_delete_wrong_pin() {
@@ -948,6 +973,26 @@ Item {
             openConfirmFor("p4")
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/24-profile-delete-confirm.png")
+        }
+
+        // RUY-685: Manage profiles with the kept guest-role profile selected, English and Turkish.
+        function test_zz_screenshots_guest_role() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Notifications.pending = []
+            while (Notifications.model.count > 0)
+                Notifications.dismiss(Notifications.model.get(0).toastId)
+            startShell()
+            signIn("p1", "1234")
+            openProfilesPane()
+            selectRow("p3")
+            tryVerify(() => find("rowRename").activeFocus, 2000)
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/25-profile-guest-role-en.png")
+            DeviceSettings.language = "tr"
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/25-profile-guest-role-tr.png")
+            DeviceSettings.language = "en"
         }
     }
 }

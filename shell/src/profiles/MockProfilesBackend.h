@@ -10,7 +10,7 @@
 // CreateProfile, PIN rules for SetPin, and one lockout counter shared by every PIN check
 // (5 free attempts, then 30 s doubling up to an hour). It is not the security
 // implementation. Seeded profiles: p1 "Player One" (admin, PIN 1234), p2 "Ada" (no PIN),
-// p3 "Guest". Temporary guests (RUY-125) follow the service too: only while a profile is signed
+// p3 "Sam" (role guest, no PIN). Temporary guests (RUY-125) follow the service too: only while a profile is signed
 // in, at most 3, numbered lowest free, never in the profile list, wiped on lock() and on a
 // switch to another profile. There are no Unix users, so no uids.
 class MockProfilesBackend final : public ProfilesBackend

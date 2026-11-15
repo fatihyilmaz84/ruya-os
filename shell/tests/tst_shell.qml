@@ -4,7 +4,7 @@ import RuyaShell
 
 // End-to-end focus and sign-in flows, driven only by the keys a controller produces
 // (arrows, Return = Accept, Escape = Back, HomePage = Guide) unless stated otherwise.
-// Mock profiles: p1 "Player One" (PIN 1234), p2 "Ada" (no PIN), p3 "Guest".
+// Mock profiles: p1 "Player One" (PIN 1234), p2 "Ada" (no PIN), p3 "Sam".
 Item {
     id: host
     width: 1280
