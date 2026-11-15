@@ -85,6 +85,17 @@ RestrictSUIDSGID=yes
 RestrictRealtime=yes
 Restart=always
 RestartSec=1
+# The watchdog (RUY-483): the shell sends WATCHDOG=1 every 15 s (half of WATCHDOG_USEC) from its GUI
+# thread (shell/src/system/SystemdWatchdog), so a GUI thread that stops (a wedged event loop) is
+# restarted instead of leaving the console dead. 30 s leaves room for a slow first QML load: the first
+# ping goes as soon as the event loop runs. Type=simple stays: there is no READY=1. NotifyAccess=main:
+# only the shell itself (the MainPID, also after PAMName= moved it into its session scope) may ping. On
+# a timeout systemd sends SIGABRT (a coredump: `coredumpctl info ruya-shell`), then SIGKILL after
+# TimeoutAbortSec: 10 s, because a process that cannot take the SIGABRT (a stopped one) would
+# otherwise wait for the default TimeoutStopSec (90 s). Running games lose their Wayland connection.
+WatchdogSec=30s
+NotifyAccess=main
+TimeoutAbortSec=10s
 
 [Install]
 # Both targets: an installer (Anaconda) leaves default.target at multi-user.target (T-178).

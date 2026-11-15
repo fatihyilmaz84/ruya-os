@@ -22,6 +22,9 @@
 #                          missing journal line fails; the probe's udevadm-monitor and ListPlayers helpers; the
 #                          `join` mode (RUY-628): VerifyPin wrong then right before JoinPlayer, a wrong PIN that
 #                          answers ok, a VerifyPin that signs in, a refused join and a missing seat each FAIL
+#   - vm-boot-check.sh     the `watchdog` mode (RUY-483): the unit's three settings, a restart or trip before the
+#                          test, a missing start line, no restart, a second restart and a restart without systemd's
+#                          trip line each FAIL; a shell that stays stopped is continued at exit
 # Needs bash and python3 (python on Windows). Exit 0 = all pass.
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -848,6 +851,89 @@ out="$(btrun "usb" "")"
 expect_contains "PrimaryAdapterOff set with both adapters on: FAIL" "$out" "should be empty with both adapters on, not 'usb' / ''"
 out="$(btrun "" "hci0")"
 expect_contains "AdapterInUse set with both adapters on: FAIL" "$out" "not '' / 'hci0'"
+
+# --- vm-boot-check.sh watchdog (RUY-483): the unit's settings, no early trip, the SIGSTOP restart ------------------
+echo "vm-boot-check.sh watchdog: WatchdogSec=30s, no trip since boot, a stopped shell is restarted by the watchdog"
+wdd="$tmp/watchdog"; mkdir -p "$wdd/bin" "$wdd/state"
+# systemctl: the unit's properties; MainPID and NRestarts from the state (1001 and FAKE_N0 until the kill).
+cat > "$wdd/bin/systemctl" <<'SHIMEOF'
+#!/bin/sh
+case "$1" in
+is-active) exit 0 ;;
+show)
+    case "$3" in
+    WatchdogUSec) echo "${FAKE_WDUSEC-30s}" ;;
+    NotifyAccess) echo "${FAKE_NOTIFY-main}" ;;
+    TimeoutAbortUSec) echo "${FAKE_ABORT-10s}" ;;
+    MainPID) cat "$FAKE_WD/pid" ;;
+    NRestarts) cat "$FAKE_WD/restarts" ;;
+    esac ;;
+esac
+exit 0
+SHIMEOF
+# The kill: logs its arguments; a -STOP is "restarted by the watchdog" (new MainPID, NRestarts + 1, the
+# trip line), unless FAKE_NO_RESTART; FAKE_OTHER_RESTART restarts without a trip line.
+cat > "$wdd/bin/fakekill" <<'SHIMEOF'
+#!/bin/sh
+echo "kill $*" >> "$FAKE_WD/log"
+if [ "$1" = -STOP ] && [ -z "${FAKE_NO_RESTART:-}" ]; then
+    echo 2002 > "$FAKE_WD/pid"
+    echo $(( $(cat "$FAKE_WD/restarts") + 1 + ${FAKE_EXTRA_RESTART:-0} )) > "$FAKE_WD/restarts"
+    [ -n "${FAKE_OTHER_RESTART:-}" ] || touch "$FAKE_WD/tripped"
+fi
+exit 0
+SHIMEOF
+# journalctl: each shell's start line by _PID (FAKE_NO_START1 / FAKE_NO_START2 drop one), systemd's trip
+# line by -u once tripped, or before the kill too with FAKE_EARLY_TRIP.
+cat > "$wdd/bin/journalctl" <<'SHIMEOF'
+#!/bin/sh
+case "$*" in
+*_PID=1001*) [ -n "${FAKE_NO_START1:-}" ] || echo "ruya-shell: systemd watchdog every 15000 ms" ;;
+*_PID=2002*) [ -n "${FAKE_NO_START2:-}" ] || echo "ruya-shell: systemd watchdog every 15000 ms" ;;
+*" -u "*)
+    if [ -e "$FAKE_WD/tripped" ] || [ -n "${FAKE_EARLY_TRIP:-}" ]; then
+        echo "systemd[1]: ruya-compositor@tty1.service: Watchdog timeout (limit 30s)!"
+    fi ;;
+esac
+exit 0
+SHIMEOF
+chmod +x "$wdd/bin"/*
+runwd() { # env assignments come from the caller's prefix
+    rm -f "$wdd/state/tripped"; : > "$wdd/state/log"
+    echo 1001 > "$wdd/state/pid"; echo "${FAKE_N0:-0}" > "$wdd/state/restarts"
+    FAKE_WD="$wdd/state" WATCHDOG_KILL="$wdd/bin/fakekill" PATH="$wdd/bin:$PATH" bash "$here/vm-boot-check.sh" watchdog 2>&1
+}
+out="$(runwd)"; rc=$?
+expect_contains "watchdog: all good passes" "$out" "ALL CHECKS PASSED"
+[ "$rc" = 0 ] && pass "watchdog: exit 0" || fail "watchdog: exit $rc"
+expect_contains "watchdog: the shell is stopped, not killed" "$(cat "$wdd/state/log")" "kill -STOP 1001"
+expect_contains "watchdog: the restart is seen" "$out" "PASS: the stopped shell was restarted after about 1 s (new MainPID 2002)"
+expect_contains "watchdog: the new shell's start line" "$out" "PASS: the new shell (pid 2002) logged"
+expect_lacks "watchdog: a restarted shell is not continued" "$(cat "$wdd/state/log")" "kill -CONT"
+expect_lacks "watchdog: the plain boot checks do not run" "$out" "kernel argument"
+out="$(FAKE_WDUSEC=0 runwd)"; rc=$?
+expect_contains "watchdog: no WatchdogSec: FAIL" "$out" "FAIL: ruya-compositor@tty1.service: WatchdogUSec is '0', not 30s"
+[ "$rc" = 1 ] && pass "watchdog: no WatchdogSec: exit 1" || fail "watchdog: no WatchdogSec: exit $rc"
+out="$(FAKE_NOTIFY=none runwd)"
+expect_contains "watchdog: NotifyAccess=none: FAIL" "$out" "FAIL: ruya-compositor@tty1.service: NotifyAccess is 'none', not main"
+out="$(FAKE_ABORT="1min 30s" runwd)"
+expect_contains "watchdog: the default abort timeout: FAIL" "$out" "FAIL: ruya-compositor@tty1.service: TimeoutAbortUSec is '1min 30s', not 10s"
+out="$(FAKE_N0=1 runwd)"
+expect_contains "watchdog: a restart before the test: FAIL" "$out" "FAIL: NRestarts is 1 before the test"
+out="$(FAKE_EARLY_TRIP=1 runwd)"
+expect_contains "watchdog: a trip before the test: FAIL" "$out" "FAIL: the watchdog already tripped in this boot"
+out="$(FAKE_NO_START1=1 runwd)"
+expect_contains "watchdog: no start line from the boot's shell: FAIL" "$out" "FAIL: no 'ruya-shell: systemd watchdog every 15000 ms' from the shell (pid 1001)"
+out="$(FAKE_NO_RESTART=1 runwd)"; rc=$?
+expect_contains "watchdog: not restarted: FAIL" "$out" "FAIL: the stopped shell was not restarted within 45 s"
+[ "$rc" = 1 ] && pass "watchdog: not restarted: exit 1" || fail "watchdog: not restarted: exit $rc"
+expect_contains "watchdog: a shell left stopped is continued at exit" "$(cat "$wdd/state/log")" "kill -CONT 1001"
+out="$(FAKE_EXTRA_RESTART=1 runwd)"
+expect_contains "watchdog: two restarts for one stop: FAIL" "$out" "FAIL: NRestarts went from 0 to 2, not 1"
+out="$(FAKE_OTHER_RESTART=1 runwd)"
+expect_contains "watchdog: a restart without the trip line: FAIL" "$out" "FAIL: no 'Watchdog timeout' line from systemd since the stop"
+out="$(FAKE_NO_START2=1 runwd)"
+expect_contains "watchdog: no start line from the new shell: FAIL" "$out" "FAIL: the new shell (pid 2002) did not log"
 
 echo
 if [ "$fails" = 0 ]; then echo "vm-check tests: all passed"; else echo "vm-check tests: $fails failed"; fi
