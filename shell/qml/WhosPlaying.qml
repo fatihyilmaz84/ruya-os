@@ -53,6 +53,9 @@ FocusScope {
     // while it fades out). `wakePending`: a resume asked for it while it could not open yet.
     property bool wakeMode: false
     property bool wakePending: false
+    // After a resume with seat 1's pad still listed, its removal may come late (a Bluetooth or 2.4 GHz pad
+    // drops over its own path, in no order with the resume): for this long a removal still opens wake mode.
+    property int wakeWatchMs: 10000
     property var queue: []               // pads waiting to ask, in arrival order
     // Not now (pad id -> { instance } over a game, { profile } over Home).
     property var quiet: ({})
@@ -254,20 +257,41 @@ FocusScope {
 
     // ---- wake mode (RUY-707) ----
     // Seat 1's pad is there (a USB pad stays connected through a sleep): a wake changes nothing then.
+    // A held seat 1 (RUY-627) has lost its pad, even while the device list still names it.
     function seat1PadConnected() {
         const id = player1 ? (player1.device_id ?? "") : ""
-        return id !== "" && connected(id)
+        return id !== "" && player1.held !== true && connected(id)
     }
     function wakeWanted() {
         return allowed && Profiles.activeProfile !== "" && !seat1PadConnected()
     }
     // A resume from sleep (the Shell routes IdleClock.resumed here): with a profile signed in and no
     // connected pad on seat 1 the prompt opens in wake mode, at once or as soon as nothing blocks it.
+    // With seat 1's pad still connected the wake watch runs (`wakeWatchMs`): a removal inside it is a wake.
     function wake() {
-        if (!wakeWanted() || (shown && wakeMode))
+        if (shown && wakeMode)
             return
+        if (!wakeWanted()) {
+            if (allowed && Profiles.activeProfile !== "")
+                wakeWatch.restart()
+            return
+        }
+        wakeWatch.stop()
         wakePending = true
         tryOpen()
+    }
+    // The watch runs and seat 1's pad has just gone (the device list, or the seat held): the wake after all.
+    // The Shell calls it first on a players change, so it opens before any lost-pad Hub.
+    function checkLateWake() {
+        if (!wakeWatch.running || !wakeWanted())
+            return
+        console.info("ruya-shell: seat 1's pad went just after the wake: Who's playing? opens in wake mode")
+        wake()
+    }
+    Timer {
+        id: wakeWatch
+        objectName: "whosPlayingWakeWatch"
+        interval: prompt.wakeWatchMs
     }
     // The wake step has no pad yet: a pad that connects or presses drives it, an unseated one or seat 1's
     // own pad rebinding into its held seat (RUY-627). A seat 2-4 pad keeps its seat and its normal prompt.
@@ -322,6 +346,8 @@ FocusScope {
         }
         openSeq += 1
         wakeMode = wake === true        // before the focus: the row (the model) is the wake row now
+        if (wakeMode)
+            wakeWatch.stop()
         if (wakeMode)
             console.info("ruya-shell: woke with no pad on seat 1: Who's playing? opens in wake mode")
         pad = id
@@ -744,12 +770,14 @@ FocusScope {
         } else if (shown && !wakeMode && !ids.includes(pad)) {
             close(true)                 // the asking pad is gone: as Not now
         }
+        checkLateWake()
     }
 
     onAllowedChanged: {
         if (!allowed) {
             queue = []
             wakePending = false
+            wakeWatch.stop()
             close(false)
         } else {
             Qt.callLater(prompt.tryOpen)
@@ -783,6 +811,7 @@ FocusScope {
             }
             prompt.joinAfterSwitch()
             prompt.sweepSoon()
+            // A late wake on a players change: the Shell calls checkLateWake() first, before its lost-pad Hub.
         }
         function onJoinFinished(deviceId, profile, status, slot) {
             if (status === "ok" && prompt.quiet[deviceId] !== undefined) {

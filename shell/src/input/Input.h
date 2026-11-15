@@ -223,6 +223,9 @@ public:
     Q_INVOKABLE void mockSeatHoldMs(int ms);
     // PlayersChanged reaches the shell after `ms` (a slow bus; 0 by default; RUY-664).
     Q_INVOKABLE void mockPlayersDelayMs(int ms);
+    // DevicesChanged after a pad's removal reaches the shell after `ms` (0 by default; RUY-707: the
+    // players' change may come first).
+    Q_INVOKABLE void mockRemovalDevicesDelayMs(int ms);
     Q_INVOKABLE int mockReplayPending() const;
     // Every SetRoute that reached the mock service: [{ route, instance, appId, profile }].
     Q_INVOKABLE QVariantList mockCalls() const;

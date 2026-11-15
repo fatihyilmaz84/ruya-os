@@ -327,6 +327,12 @@ void Input::mockPlayersDelayMs(int ms)
         mock->setPlayersDelayMs(ms);
 }
 
+void Input::mockRemovalDevicesDelayMs(int ms)
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        mock->setRemovalDevicesDelayMs(ms);
+}
+
 void Input::mockSeatHoldMs(int ms)
 {
     if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))

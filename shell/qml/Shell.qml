@@ -1163,6 +1163,8 @@ FocusScope {
     Connections {
         target: Input
         function onPlayersChanged() {
+            // Seat 1's pad lost just after a wake: the wake step opens first, so the Hub below waits for it.
+            whosPlaying.checkLateWake()
             const first = Input.players.find(p => p.slot === 1)
             const held = first !== undefined && first.held === true
             if (held && !root.player1Held && root.signedIn && root.appOpen && root.focusedApp !== null

@@ -34,3 +34,13 @@ double MonotonicClock::sleptMs() const
 #endif
     return slept + m_sleptOffsetMs;
 }
+
+bool MonotonicClock::sleptKnown() const
+{
+#ifdef Q_OS_LINUX
+    timespec boot {};
+    return clock_gettime(CLOCK_BOOTTIME, &boot) == 0;
+#else
+    return false;
+#endif
+}

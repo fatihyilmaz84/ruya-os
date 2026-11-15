@@ -261,7 +261,7 @@ Shell icons come from Google's **Material Symbols Rounded** (Apache-2.0), bundle
     - The signed-in profile comes first and has the focus ("Continue as <name>"); the other kept profiles stand beside it, and picking one is a **Switch** (its PIN when it has one).
     - Continuing needs **no PIN** (sleep does not lock the console; a lock on wake would be a separate privacy setting, an owner question). The pad that answers becomes player 1; with the keyboard alone the prompt just closes.
     - Back and Guide continue as the signed-in profile, so one press always restores what was there before the sleep. There is no "Not now" and no Guest card (lead ruling: a temporary guest can never be the active profile, point 7; guests join afterwards as usual).
-    - The keyboard drives it until a pad connects; that pad then drives the same step (no second prompt). With seat 1's pad still connected (USB) a wake changes nothing.
+    - The keyboard drives it until a pad connects; that pad then drives the same step (no second prompt). With seat 1's pad still connected a wake changes nothing (a pad whose drop reaches the shell just after the wake, within 10 s, still opens it).
 
 **Consequences.**
 - `Input1` gains seats (`JoinPlayer`, `LeavePlayer`, `ListPlayers`, `PlayersChanged`, `SetNavigator`, `ForeignInput`) in `ruya-inputd`, the one owner of the pads (ADR-024), and loses the draft `AssignPad`.

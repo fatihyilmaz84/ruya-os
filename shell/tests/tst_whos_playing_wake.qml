@@ -63,6 +63,7 @@ Item {
         property double slept: 0              // the fake "total ms suspended" (IdleClock.slept)
         property var defaultNow: null
         property var defaultSlept: null
+        property var defaultSleptKnown: null
 
         function find(name) { return findChild(tc.shell, name) }
         function prompt() { return find("whosPlaying") }
@@ -72,6 +73,7 @@ Item {
         function initTestCase() {
             tc.defaultNow = IdleClock.now
             tc.defaultSlept = IdleClock.slept
+            tc.defaultSleptKnown = IdleClock.sleptKnown
         }
 
         function init() {
@@ -92,6 +94,7 @@ Item {
             tc.slept = 0
             IdleClock.now = () => tc.t
             IdleClock.slept = () => tc.slept
+            IdleClock.sleptKnown = () => true       // as on Linux: only the jump of slept() is a sleep
             IdleClock.reset()
             launchedSpy.clear()
             joinSpy.clear()
@@ -102,10 +105,13 @@ Item {
         }
 
         function cleanup() {
+            Input.mockPlayersDelayMs(0)
+            Input.mockRemovalDevicesDelayMs(0)
             DeviceSettings.language = "en"
             DeviceSettings.saverMinutes = 10
             IdleClock.now = tc.defaultNow
             IdleClock.slept = tc.defaultSlept
+            IdleClock.sleptKnown = tc.defaultSleptKnown
             IdleClock.reset()
             Input.mockFailJoin("")
             Input.mockSeatHoldMs(60000)
@@ -281,6 +287,103 @@ Item {
             wait(Theme.pageMs + 50)
             verify(!prompt().shown, "the saver is not a sleep: nothing opens")
             verify(!prompt().wakePending)
+        }
+
+        // A gap between two looks at the clock with no jump of slept() is a stalled shell, not a sleep.
+        function test_a_clock_gap_without_a_sleep_opens_nothing() {
+            signInAdaWithKeyboard()
+            tc.t += 120000                                  // above gapMs; slept() did not move
+            IdleClock.evaluate()
+            wait(Theme.pageMs + 50)
+            verify(!prompt().shown, "a stall never opens the wake step")
+            verify(!prompt().wakePending)
+        }
+
+        // Where slept() cannot be told (not Linux), the gap is the only sign of a sleep.
+        function test_a_clock_gap_opens_wake_mode_where_sleep_cannot_be_told() {
+            signInAdaWithKeyboard()
+            IdleClock.sleptKnown = () => false
+            tc.t += 120000
+            IdleClock.evaluate()
+            tryVerify(() => wakeShown(), 2000, "the gap is the resume here")
+            compare(find("whosPlayingDetail").text, "Continue as Ada.")
+        }
+
+        // ---- a pad that goes just after the resume (its removal comes in no order with it) ---------------------
+
+        function test_seat_1_s_pad_going_inside_the_wake_watch_opens_wake_mode() {
+            signInAdaWithXbox()
+            resume()
+            wait(Theme.pageMs + 50)
+            verify(!prompt().shown, "the Xbox pad is still listed: nothing yet")
+            verify(find("whosPlayingWakeWatch").running, "the watch runs")
+            Input.mockRemoveDevice(host.xbox)
+            tryVerify(() => wakeShown(), 2000, "the late removal is the wake")
+            compare(cardList().currentIndex, 0)
+            compare(find("whosPlayingDetail").text, "Continue as Ada.")
+            verify(!find("whosPlayingWakeWatch").running, "the watch ends when the step opens")
+        }
+
+        function test_over_a_game_a_removal_inside_the_watch_opens_wake_mode_not_the_hub() {
+            signInAdaWithXbox()
+            const run = playRacer()
+            resume()
+            wait(Theme.pageMs + 50)
+            verify(!prompt().shown)
+            Input.mockRemoveDevice(host.xbox)
+            tryVerify(() => wakeShown(), 2000, "the wake step over the game")
+            tryVerify(() => recordOf(run.instance).frozen === true, 2000, "the game is paused")
+            verify(!find("systemPanel").open, "no lost-pad Hub under it")
+        }
+
+        // The device list says it first (the players' change is late): the list alone opens the wake step.
+        function test_a_removal_the_device_list_reports_first_opens_wake_mode() {
+            signInAdaWithXbox()
+            resume()
+            Input.mockPlayersDelayMs(1500)
+            Input.mockRemoveDevice(host.xbox)
+            tryVerify(() => wakeShown(), 1000, "opened from the device list")
+            verify(Input.players[0].held !== true, "before the players' change came")
+            tryVerify(() => Input.players[0].held === true, 3000, "the late change lands in this test")
+        }
+
+        // The players' change says it first (the device list is late): the Shell asks the prompt before it opens
+        // the lost-pad Hub, so the wake step comes and the Hub does not.
+        function test_a_removal_the_players_report_first_opens_wake_mode_not_the_hub() {
+            signInAdaWithXbox()
+            const run = playRacer()
+            resume()
+            Input.mockRemovalDevicesDelayMs(1500)
+            Input.mockRemoveDevice(host.xbox)
+            tryVerify(() => wakeShown(), 1000, "opened from the seat turning held")
+            verify(Input.devices.some(d => d.id === host.xbox), "before the device list changed")
+            verify(!find("systemPanel").open, "no lost-pad Hub")
+            tryVerify(() => recordOf(run.instance).frozen === true, 2000)
+            tryVerify(() => !Input.devices.some(d => d.id === host.xbox), 3000, "the late list lands in this test")
+        }
+
+        function test_a_removal_after_the_watch_opens_nothing_over_home() {
+            signInAdaWithXbox()
+            prompt().wakeWatchMs = 200
+            resume()
+            tryVerify(() => !find("whosPlayingWakeWatch").running, 2000, "the watch ran out")
+            Input.mockRemoveDevice(host.xbox)
+            tryVerify(() => Input.players[0].held === true, 2000)
+            wait(Theme.pageMs + 50)
+            verify(!prompt().shown, "a lost pad over Home, as before")
+            verify(find("homePlay").activeFocus)
+        }
+
+        function test_a_removal_after_the_watch_over_a_game_opens_the_lost_pad_hub() {
+            signInAdaWithXbox()
+            const run = playRacer()
+            prompt().wakeWatchMs = 200
+            resume()
+            tryVerify(() => !find("whosPlayingWakeWatch").running, 2000, "the watch ran out")
+            Input.mockRemoveDevice(host.xbox)
+            tryVerify(() => find("systemPanel").open, 2000, "the built lost-pad Hub")
+            verify(!prompt().shown, "no wake step")
+            tryVerify(() => recordOf(run.instance).frozen === true, 2000, "the Hub pauses the game")
         }
 
         function test_no_wake_on_the_picker() {
