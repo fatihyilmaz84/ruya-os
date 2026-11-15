@@ -3365,6 +3365,11 @@ This can&apos;t be undone.</translation>
         <source>%1, player %2</source>
         <translation>%1, player %2</translation>
     </message>
+    <message>
+        <location line="+1"/>
+        <source>%1, player %2, held</source>
+        <translation>%1, player %2, held</translation>
+    </message>
 </context>
 <context>
     <name>PowerConfirm</name>

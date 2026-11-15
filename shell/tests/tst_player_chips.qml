@@ -252,6 +252,78 @@ Item {
             tryVerify(() => !find("systemActions").activeFocus, 2000, "Back closes the Hub")
         }
 
+        // RUY-649: a seat held for a removed pad dims the chip, shows the waiting glyph for the number and
+        // reads ", held"; the pad back, and it is as before. Top bar and Hub row alike.
+        function test_a_held_seat_is_dimmed_with_a_glyph_and_read_as_held() {
+            openShell()
+            Input.mockSeatHoldMs(60000)
+            join(host.xbox, "p1")
+            openHub()
+            // The Repeaters rebuild their chips when the seats change: find them afresh each time.
+            const bar = () => find("playerChip_2")
+            const hub = () => findChild(find("hubPlayer_2"), "playerAvatar").parent
+            tryVerify(() => bar() !== null && find("hubPlayer_2") !== null, 2000)
+            compare(findChild(bar(), "playerAvatar").opacity, 1.0)
+            verify(!findChild(bar(), "playerHeldGlyph").visible)
+            Input.mockRemoveDevice(host.xbox)
+            tryVerify(() => bar() !== null && bar().held, 2000, "the top bar's chip is held")
+            compare(findChild(bar(), "playerAvatar").opacity, 0.5)
+            verify(findChild(bar(), "playerHeldGlyph").visible, "the glyph in the dot")
+            verify(!findChild(bar(), "playerDigit").visible, "in place of the number")
+            compare(bar().Accessible.name, "Player One, player 2, held")
+            tryVerify(() => hub().held, 2000, "and the Hub's")
+            compare(findChild(hub(), "playerAvatar").opacity, 0.5)
+            compare(hub().Accessible.name, "Player One, player 2, held")
+            // Player 1 is not held.
+            compare(find("playerChip_1").Accessible.name, "Ada, player 1")
+            verify(!find("playerChip_1").held)
+            Input.mockAddDevice({ id: host.xbox, family: "xbox" })
+            tryVerify(() => bar() !== null && !bar().held, 2000, "the pad is back")
+            compare(findChild(bar(), "playerAvatar").opacity, 1.0)
+            verify(findChild(bar(), "playerDigit").visible)
+            verify(!findChild(bar(), "playerHeldGlyph").visible)
+            compare(bar().Accessible.name, "Player One, player 2")
+            tryVerify(() => !hub().held, 2000)
+        }
+
+        function test_the_held_name_is_turkish() {
+            DeviceSettings.language = "tr"
+            openShell()
+            Input.mockSeatHoldMs(60000)
+            join(host.xbox, "p1")
+            tryVerify(() => find("playerChip_2") !== null, 2000)
+            Input.mockRemoveDevice(host.xbox)
+            tryVerify(() => find("playerChip_2") !== null && find("playerChip_2").held, 2000)
+            compare(find("playerChip_2").Accessible.name, "Player One, 2. oyuncu, bekleniyor")
+        }
+
+        // Chip 1 stands for seat 1's profile, not for whoever is signed in.
+        function test_chip_one_follows_seat_ones_profile() {
+            openShell()
+            compare(find("playerChip_1").profileId, "p2")
+            Input.setRoute("shell", "", "", "p1")
+            tryVerify(() => Input.players.length === 1 && Input.players[0].slot === 1 && Input.players[0].profile === "p1",
+                      2000, "p1 sits in seat 1: " + JSON.stringify(Input.players))
+            tryCompare(find("playerChip_1"), "profileId", "p1")
+            compare(find("playerChip_1").Accessible.name, "Player One, player 1")
+            compare(Profiles.activeProfile, "p2", "the signed-in profile is unchanged")
+        }
+
+        // The Hub row's name is read once: the entry is hidden from assistive tech, its chip carries it.
+        function test_the_hub_row_names_each_player_once() {
+            openShell()
+            join(host.xbox, "p1")
+            openHub()
+            tryVerify(() => find("hubPlayer_2") !== null, 2000)
+            for (const s of [1, 2]) {
+                const entry = find("hubPlayer_" + s)
+                verify(entry.Accessible.ignored, "the entry wrapper is ignored")
+                const chip = findChild(entry, "playerAvatar").parent
+                verify(!chip.Accessible.ignored, "the chip is read")
+                compare(chip.Accessible.name, s === 1 ? "Ada, player 1" : "Player One, player 2")
+            }
+        }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
@@ -266,6 +338,13 @@ Item {
                     const tag = "players-" + lang + "-" + size[2]
                     grabImage(tc.shell).save(shotsDir + "/" + tag + "-home2.png")
                     grabImage(find("statusGlass")).save(shotsDir + "/" + tag + "-home2-crop.png")
+                    Input.mockSeatHoldMs(60000)
+                    Input.mockRemoveDevice(host.xbox)
+                    tryVerify(() => find("playerChip_2") !== null && find("playerChip_2").held, 2000)
+                    wait(300)
+                    grabImage(find("statusGlass")).save(shotsDir + "/" + tag + "-held-crop.png")
+                    Input.mockAddDevice({ id: host.xbox, family: "xbox" })
+                    tryVerify(() => !find("playerChip_2").held, 2000)
                     rename("p1", "Alexandria Montgomery")
                     rename("p3", "Bartholomew Winchester")
                     join(host.pro, "p3")
@@ -274,6 +353,12 @@ Item {
                     tryVerify(() => find("hubPlayer_3") !== null, 2000)
                     wait(500)
                     grabImage(tc.shell).save(shotsDir + "/" + tag + "-hub3.png")
+                    Input.mockRemoveDevice(host.pro)
+                    tryVerify(() => find("hubPlayer_3") !== null && findChild(find("hubPlayer_3"), "playerAvatar").parent.held, 2000)
+                    wait(300)
+                    grabImage(tc.shell).save(shotsDir + "/" + tag + "-hub3-held.png")
+                    Input.mockAddDevice({ id: host.pro, family: "switch" })
+                    tryVerify(() => !findChild(find("hubPlayer_3"), "playerAvatar").parent.held, 2000)
                     join(host.extra, newGuest())
                     tryVerify(() => find("hubPlayer_4") !== null, 2000)
                     wait(500)

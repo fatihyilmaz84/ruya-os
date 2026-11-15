@@ -831,14 +831,15 @@ Item {
                                 objectName: "hubPlayer_" + modelData.slot
                                 width: entryChip.width + Theme.spaceS * menu.u + entryName.width
                                 height: entryChip.height - playersRow.lineTrim
-                                Accessible.role: Accessible.StaticText
-                                Accessible.name: entryChip.Accessible.name
+                                // The chip inside carries the name; this wrapper is not read a second time.
+                                Accessible.ignored: true
                                 PlayerChip {
                                     id: entryChip
                                     anchors.verticalCenter: parent.verticalCenter
                                     u: menu.u
                                     profileId: entry.modelData.profile
                                     slot: entry.modelData.slot
+                                    held: entry.modelData.held === true
                                     showNumber: true
                                 }
                                 Text {

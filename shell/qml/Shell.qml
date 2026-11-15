@@ -1416,6 +1416,7 @@ FocusScope {
         // The seated players in seat order (Input.players, RUY-121); player 1's chip stands for the active
         // profile, the other players follow the name, at most three (four seats). RUY-629.
         readonly property var seated: Input.players.slice().sort((a, b) => a.slot - b.slot)
+        readonly property var firstSeat: seated.find(p => p.slot === 1) ?? null
         readonly property var otherPlayers: seated.filter(p => p.slot !== 1).slice(0, 3)
         readonly property bool manyPlayers: seated.length >= 2
         // Avatar, its gap to the name, the clock and the gap between profile and clock, and each further
@@ -1578,8 +1579,9 @@ FocusScope {
                     objectName: "playerChip_1"
                     anchors.verticalCenter: parent.verticalCenter
                     u: root.u
-                    profileId: Profiles.activeProfile
+                    profileId: statusGlass.firstSeat ? statusGlass.firstSeat.profile : Profiles.activeProfile
                     slot: 1
+                    held: statusGlass.firstSeat ? statusGlass.firstSeat.held === true : false
                     showNumber: statusGlass.manyPlayers
                 }
                 Text {
@@ -1601,6 +1603,7 @@ FocusScope {
                         u: root.u
                         profileId: modelData.profile
                         slot: modelData.slot
+                        held: modelData.held === true
                         showNumber: statusGlass.manyPlayers
                     }
                 }
