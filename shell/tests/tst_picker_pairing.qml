@@ -115,7 +115,7 @@ Item {
             const expected = [
                 ["playstation", "PlayStation controller. Hold PS and Create"],
                 ["xbox", "Xbox controller. Press the pairing button on top until the Xbox logo flashes fast."],
-                ["nintendo", "Nintendo controller. Press the small sync button"],
+                ["nintendo", "Nintendo controller. Switch Pro Controller or Joy-Con: hold the small sync button"],
                 ["8bitdo", "8BitDo controller. Hold Start with X"],
                 ["other", "Other controller. Hold its pairing button"],
             ]

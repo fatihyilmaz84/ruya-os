@@ -1174,7 +1174,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerOnboarding</name>
     <message>
-        <location filename="../qml/ControllerOnboarding.qml" line="+35"/>
+        <location filename="../qml/ControllerOnboarding.qml" line="+44"/>
         <source>Continue</source>
         <translation>Devam</translation>
     </message>
@@ -1190,14 +1190,20 @@ Bu geri alınamaz.</translation>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+159"/>
-        <location line="+54"/>
+        <location line="+212"/>
+        <location line="+71"/>
+        <source>Buttons in games</source>
+        <translation>Oyunlarda düğmeler</translation>
+    </message>
+    <message>
+        <location line="-70"/>
+        <location line="+71"/>
         <source>Try your controller</source>
         <translation>Kontrolcünüzü deneyin</translation>
     </message>
     <message>
-        <location line="-54"/>
-        <location line="+54"/>
+        <location line="-71"/>
+        <location line="+71"/>
         <source>Pair a controller</source>
         <translation>Kontrolcü eşleştir</translation>
     </message>
@@ -1208,12 +1214,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+36"/>
-        <location line="+179"/>
+        <location line="+236"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="-130"/>
+        <location line="-187"/>
         <source>Press A to search again</source>
         <translation>Yeniden aramak için A&apos;ya basın</translation>
     </message>
@@ -1248,7 +1254,44 @@ Bu geri alınamaz.</translation>
         <translation>A: eşleştir</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+53"/>
+        <source>Menus confirm with A on this controller. Games can see the buttons by their letters, or by position like an Xbox controller.</source>
+        <translation>Menüler bu kontrolcüde A ile onaylar. Oyunlar düğmeleri üzerlerindeki harflere göre ya da bir Xbox kontrolcüsündeki gibi konumlarına göre görebilir.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>By position</source>
+        <translation>Konuma göre</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The bottom button is A in games, as on Xbox.</source>
+        <translation>Alttaki düğme oyunlarda A olur, Xbox’taki gibi.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+11"/>
+        <source>Current</source>
+        <comment>the button layout in use</comment>
+        <translation>Şu anki</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>Nintendo labels</source>
+        <translation>Nintendo etiketleri</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Games see each button by the letter on it.</source>
+        <translation>Oyunlar her düğmeyi üzerindeki harfle görür.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>You can change this later in Settings &gt; Controllers.</source>
+        <translation>Bunu sonra Ayarlar &gt; Kontrolcüler’den değiştirebilirsin.</translation>
+    </message>
+    <message>
+        <location line="+18"/>
         <source>%1 is connected. Press its buttons: they light up here.</source>
         <translation>%1 bağlı. Düğmelerine basın: burada yanarlar.</translation>
     </message>
@@ -1264,8 +1307,8 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Switch</source>
-        <translation>Switch</translation>
+        <source>Nintendo</source>
+        <translation>Nintendo</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1514,8 +1557,8 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <source>Press the small sync button on top until the lights run back and forth.</source>
-        <translation>Işıklar ileri geri kayana kadar üstteki küçük eşleştirme düğmesine basın.</translation>
+        <source>Switch Pro Controller or Joy-Con: hold the small sync button until the lights run back and forth. Wii U Pro Controller: press the sync button on the back.</source>
+        <translation>Switch Pro Controller ya da Joy-Con: ışıklar ileri geri yanana kadar küçük eşleme düğmesini basılı tut. Wii U Pro Controller: arkadaki eşleme düğmesine bas.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2888,18 +2931,18 @@ Bu geri alınamaz.</translation>
 <context>
     <name>NotificationSheet</name>
     <message>
-        <location filename="../qml/NotificationSheet.qml" line="+67"/>
+        <location filename="../qml/NotificationSheet.qml" line="+70"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+313"/>
+        <location line="+318"/>
         <source>Clear all</source>
         <translation>Tümünü temizle</translation>
     </message>
     <message>
-        <location line="-311"/>
+        <location line="-316"/>
         <source>Toggle</source>
         <translation>Aç/Kapat</translation>
     </message>
@@ -2924,7 +2967,7 @@ Bu geri alınamaz.</translation>
         <translation>Temizle</translation>
     </message>
     <message>
-        <location line="+272"/>
+        <location line="+277"/>
         <location line="+57"/>
         <source>Notifications</source>
         <translation>Bildirimler</translation>
@@ -2970,7 +3013,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Notifications</name>
     <message>
-        <location filename="../qml/Notifications.qml" line="+165"/>
+        <location filename="../qml/Notifications.qml" line="+174"/>
         <source>Just now</source>
         <translation>Şimdi</translation>
     </message>
@@ -3763,18 +3806,18 @@ Bu geri alınamaz.</translation>
 <context>
     <name>QuickMenu</name>
     <message>
-        <location filename="../qml/QuickMenu.qml" line="+448"/>
+        <location filename="../qml/QuickMenu.qml" line="+454"/>
         <source>Bluetooth</source>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="-164"/>
-        <location line="+245"/>
+        <location line="-170"/>
+        <location line="+260"/>
         <source>Mute</source>
         <translation>Sessiz</translation>
     </message>
     <message>
-        <location line="-244"/>
+        <location line="-259"/>
         <location line="+13"/>
         <location line="+21"/>
         <location line="+23"/>
@@ -3782,12 +3825,12 @@ Bu geri alınamaz.</translation>
         <translation>Kapalı</translation>
     </message>
     <message>
-        <location line="+455"/>
+        <location line="+472"/>
         <source>Not connected</source>
         <translation>Bağlı değil</translation>
     </message>
     <message>
-        <location line="-512"/>
+        <location line="-529"/>
         <location line="+13"/>
         <location line="+21"/>
         <location line="+23"/>
@@ -3860,15 +3903,15 @@ Bu geri alınamaz.</translation>
         <translation>Tümünü temizle</translation>
     </message>
     <message numerus="yes">
-        <location line="+3"/>
+        <location line="+4"/>
         <source>See all (%n)</source>
         <translation>
             <numerusform>Tümünü gör (%n)</numerusform>
         </translation>
     </message>
     <message>
-        <location line="+7"/>
-        <location line="+86"/>
+        <location line="+8"/>
+        <location line="+90"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
@@ -3888,7 +3931,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 sn</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+78"/>
         <location line="+23"/>
         <location line="+16"/>
         <source>Resume</source>
@@ -3944,23 +3987,23 @@ Bu geri alınamaz.</translation>
         <translation>Oyunu kapat</translation>
     </message>
     <message>
-        <location line="-149"/>
+        <location line="-158"/>
         <source>Volume</source>
         <translation>Ses</translation>
     </message>
     <message>
-        <location line="+150"/>
+        <location line="+159"/>
         <source>Switch profile</source>
         <translation>Profil değiştir</translation>
     </message>
     <message>
-        <location line="-156"/>
-        <location line="+465"/>
+        <location line="-165"/>
+        <location line="+476"/>
         <source>Power</source>
         <translation>Güç</translation>
     </message>
     <message>
-        <location line="-351"/>
+        <location line="-353"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
@@ -3986,7 +4029,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="-282"/>
+        <location line="-297"/>
         <source>Output</source>
         <translation>Çıkış</translation>
     </message>
@@ -4006,7 +4049,7 @@ Bu geri alınamaz.</translation>
         <translation>Performans göstergesi</translation>
     </message>
     <message>
-        <location line="+232"/>
+        <location line="+247"/>
         <source>Switch</source>
         <translation>Geç</translation>
     </message>
@@ -4031,7 +4074,7 @@ Bu geri alınamaz.</translation>
         <translation>Duraklatıldı · %1</translation>
     </message>
     <message>
-        <location line="+137"/>
+        <location line="+139"/>
         <source>%1, %2, microphone muted</source>
         <translation>%1, %2, mikrofon susturuldu</translation>
     </message>
@@ -4053,7 +4096,7 @@ Bu geri alınamaz.</translation>
         <translation>Devam et: %1, %2</translation>
     </message>
     <message>
-        <location line="-420"/>
+        <location line="-422"/>
         <source>Just started</source>
         <translation>Yeni başladı</translation>
     </message>
@@ -4068,7 +4111,7 @@ Bu geri alınamaz.</translation>
         <translation>Duraklatıldı</translation>
     </message>
     <message>
-        <location line="+420"/>
+        <location line="+422"/>
         <source>Volume, muted</source>
         <translation>Ses, sessiz</translation>
     </message>
@@ -4078,7 +4121,7 @@ Bu geri alınamaz.</translation>
         <translation>Ses %1</translation>
     </message>
     <message>
-        <location line="-595"/>
+        <location line="-606"/>
         <source>Muted</source>
         <translation>Sessiz</translation>
     </message>
@@ -4481,7 +4524,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+691"/>
+        <location filename="../qml/Shell.qml" line="+693"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -4654,7 +4697,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kaldırıldı.</translation>
     </message>
     <message>
-        <location line="+526"/>
+        <location line="+528"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -4676,7 +4719,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1837"/>
+        <location line="-1839"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -4707,7 +4750,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1585"/>
+        <location line="+1587"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
@@ -6207,7 +6250,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>WhosPlaying</name>
     <message>
-        <location filename="../qml/WhosPlaying.qml" line="+146"/>
+        <location filename="../qml/WhosPlaying.qml" line="+148"/>
         <location line="+215"/>
         <source>Guest</source>
         <translation>Misafir</translation>

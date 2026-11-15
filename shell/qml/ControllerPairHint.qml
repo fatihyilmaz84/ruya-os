@@ -37,7 +37,7 @@ Item {
         { family: "xbox",
           steps: qsTr("Press the pairing button on top until the Xbox logo flashes fast.") },
         { family: "nintendo",
-          steps: qsTr("Press the small sync button on top until the lights run back and forth.") },
+          steps: qsTr("Switch Pro Controller or Joy-Con: hold the small sync button until the lights run back and forth. Wii U Pro Controller: press the sync button on the back.") },
         { family: "8bitdo",
           steps: qsTr("Hold Start with X (X-input mode) or Y (Switch mode) to turn it on in Bluetooth mode, then hold the pair button until the light flashes fast.") },
         { family: "",

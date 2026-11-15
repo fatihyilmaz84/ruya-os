@@ -1178,7 +1178,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerOnboarding</name>
     <message>
-        <location filename="../qml/ControllerOnboarding.qml" line="+35"/>
+        <location filename="../qml/ControllerOnboarding.qml" line="+44"/>
         <source>Continue</source>
         <translation>Continue</translation>
     </message>
@@ -1194,14 +1194,20 @@ This can&apos;t be undone.</translation>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+159"/>
-        <location line="+54"/>
+        <location line="+212"/>
+        <location line="+71"/>
+        <source>Buttons in games</source>
+        <translation>Buttons in games</translation>
+    </message>
+    <message>
+        <location line="-70"/>
+        <location line="+71"/>
         <source>Try your controller</source>
         <translation>Try your controller</translation>
     </message>
     <message>
-        <location line="-54"/>
-        <location line="+54"/>
+        <location line="-71"/>
+        <location line="+71"/>
         <source>Pair a controller</source>
         <translation>Pair a controller</translation>
     </message>
@@ -1212,12 +1218,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+36"/>
-        <location line="+179"/>
+        <location line="+236"/>
         <source>Other</source>
         <translation>Other</translation>
     </message>
     <message>
-        <location line="-130"/>
+        <location line="-187"/>
         <source>Press A to search again</source>
         <translation>Press A to search again</translation>
     </message>
@@ -1252,7 +1258,44 @@ This can&apos;t be undone.</translation>
         <translation>A: pair</translation>
     </message>
     <message>
-        <location line="+52"/>
+        <location line="+53"/>
+        <source>Menus confirm with A on this controller. Games can see the buttons by their letters, or by position like an Xbox controller.</source>
+        <translation>Menus confirm with A on this controller. Games can see the buttons by their letters, or by position like an Xbox controller.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>By position</source>
+        <translation>By position</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The bottom button is A in games, as on Xbox.</source>
+        <translation>The bottom button is A in games, as on Xbox.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+11"/>
+        <source>Current</source>
+        <comment>the button layout in use</comment>
+        <translation>Current</translation>
+    </message>
+    <message>
+        <location line="-2"/>
+        <source>Nintendo labels</source>
+        <translation>Nintendo labels</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Games see each button by the letter on it.</source>
+        <translation>Games see each button by the letter on it.</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>You can change this later in Settings &gt; Controllers.</source>
+        <translation>You can change this later in Settings &gt; Controllers.</translation>
+    </message>
+    <message>
+        <location line="+18"/>
         <source>%1 is connected. Press its buttons: they light up here.</source>
         <translation>%1 is connected. Press its buttons: they light up here.</translation>
     </message>
@@ -1268,8 +1311,8 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Switch</source>
-        <translation>Switch</translation>
+        <source>Nintendo</source>
+        <translation>Nintendo</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -1518,8 +1561,8 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <source>Press the small sync button on top until the lights run back and forth.</source>
-        <translation>Press the small sync button on top until the lights run back and forth.</translation>
+        <source>Switch Pro Controller or Joy-Con: hold the small sync button until the lights run back and forth. Wii U Pro Controller: press the sync button on the back.</source>
+        <translation>Switch Pro Controller or Joy-Con: hold the small sync button until the lights run back and forth. Wii U Pro Controller: press the sync button on the back.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -2896,18 +2939,18 @@ This can&apos;t be undone.</translation>
 <context>
     <name>NotificationSheet</name>
     <message>
-        <location filename="../qml/NotificationSheet.qml" line="+67"/>
+        <location filename="../qml/NotificationSheet.qml" line="+70"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+313"/>
+        <location line="+318"/>
         <source>Clear all</source>
         <translation>Clear all</translation>
     </message>
     <message>
-        <location line="-311"/>
+        <location line="-316"/>
         <source>Toggle</source>
         <translation>Toggle</translation>
     </message>
@@ -2932,7 +2975,7 @@ This can&apos;t be undone.</translation>
         <translation>Clear</translation>
     </message>
     <message>
-        <location line="+272"/>
+        <location line="+277"/>
         <location line="+57"/>
         <source>Notifications</source>
         <translation>Notifications</translation>
@@ -2979,7 +3022,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Notifications</name>
     <message>
-        <location filename="../qml/Notifications.qml" line="+165"/>
+        <location filename="../qml/Notifications.qml" line="+174"/>
         <source>Just now</source>
         <translation>Just now</translation>
     </message>
@@ -3779,18 +3822,18 @@ This can&apos;t be undone.</translation>
 <context>
     <name>QuickMenu</name>
     <message>
-        <location filename="../qml/QuickMenu.qml" line="+448"/>
+        <location filename="../qml/QuickMenu.qml" line="+454"/>
         <source>Bluetooth</source>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="-164"/>
-        <location line="+245"/>
+        <location line="-170"/>
+        <location line="+260"/>
         <source>Mute</source>
         <translation>Mute</translation>
     </message>
     <message>
-        <location line="-244"/>
+        <location line="-259"/>
         <location line="+13"/>
         <location line="+21"/>
         <location line="+23"/>
@@ -3798,12 +3841,12 @@ This can&apos;t be undone.</translation>
         <translation>Off</translation>
     </message>
     <message>
-        <location line="+455"/>
+        <location line="+472"/>
         <source>Not connected</source>
         <translation>Not connected</translation>
     </message>
     <message>
-        <location line="-512"/>
+        <location line="-529"/>
         <location line="+13"/>
         <location line="+21"/>
         <location line="+23"/>
@@ -3876,7 +3919,7 @@ This can&apos;t be undone.</translation>
         <translation>Clear all</translation>
     </message>
     <message numerus="yes">
-        <location line="+3"/>
+        <location line="+4"/>
         <source>See all (%n)</source>
         <translation>
             <numerusform>See all (%n)</numerusform>
@@ -3884,8 +3927,8 @@ This can&apos;t be undone.</translation>
         </translation>
     </message>
     <message>
-        <location line="+7"/>
-        <location line="+86"/>
+        <location line="+8"/>
+        <location line="+90"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
@@ -3905,7 +3948,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 s</translation>
     </message>
     <message>
-        <location line="+69"/>
+        <location line="+78"/>
         <location line="+23"/>
         <location line="+16"/>
         <source>Resume</source>
@@ -3961,23 +4004,23 @@ This can&apos;t be undone.</translation>
         <translation>Close game</translation>
     </message>
     <message>
-        <location line="-149"/>
+        <location line="-158"/>
         <source>Volume</source>
         <translation>Volume</translation>
     </message>
     <message>
-        <location line="+150"/>
+        <location line="+159"/>
         <source>Switch profile</source>
         <translation>Switch profile</translation>
     </message>
     <message>
-        <location line="-156"/>
-        <location line="+465"/>
+        <location line="-165"/>
+        <location line="+476"/>
         <source>Power</source>
         <translation>Power</translation>
     </message>
     <message>
-        <location line="-351"/>
+        <location line="-353"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
@@ -4003,7 +4046,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="-282"/>
+        <location line="-297"/>
         <source>Output</source>
         <translation>Output</translation>
     </message>
@@ -4023,7 +4066,7 @@ This can&apos;t be undone.</translation>
         <translation>Performance overlay</translation>
     </message>
     <message>
-        <location line="+232"/>
+        <location line="+247"/>
         <source>Switch</source>
         <translation>Switch</translation>
     </message>
@@ -4048,7 +4091,7 @@ This can&apos;t be undone.</translation>
         <translation>Paused · %1</translation>
     </message>
     <message>
-        <location line="+137"/>
+        <location line="+139"/>
         <source>%1, %2, microphone muted</source>
         <translation>%1, %2, microphone muted</translation>
     </message>
@@ -4070,7 +4113,7 @@ This can&apos;t be undone.</translation>
         <translation>Resume %1, %2</translation>
     </message>
     <message>
-        <location line="-420"/>
+        <location line="-422"/>
         <source>Just started</source>
         <translation>Just started</translation>
     </message>
@@ -4085,7 +4128,7 @@ This can&apos;t be undone.</translation>
         <translation>Paused</translation>
     </message>
     <message>
-        <location line="+420"/>
+        <location line="+422"/>
         <source>Volume, muted</source>
         <translation>Volume, muted</translation>
     </message>
@@ -4095,7 +4138,7 @@ This can&apos;t be undone.</translation>
         <translation>Volume %1</translation>
     </message>
     <message>
-        <location line="-595"/>
+        <location line="-606"/>
         <source>Muted</source>
         <translation>Muted</translation>
     </message>
@@ -4498,7 +4541,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+691"/>
+        <location filename="../qml/Shell.qml" line="+693"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -4671,7 +4714,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 was uninstalled.</translation>
     </message>
     <message>
-        <location line="+526"/>
+        <location line="+528"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -4693,7 +4736,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1837"/>
+        <location line="-1839"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -4724,7 +4767,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1585"/>
+        <location line="+1587"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
@@ -6227,7 +6270,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>WhosPlaying</name>
     <message>
-        <location filename="../qml/WhosPlaying.qml" line="+146"/>
+        <location filename="../qml/WhosPlaying.qml" line="+148"/>
         <location line="+215"/>
         <source>Guest</source>
         <translation>Guest</translation>
