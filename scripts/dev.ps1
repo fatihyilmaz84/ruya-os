@@ -203,7 +203,7 @@ function Resolve-ShotsFilter([string[]]$Names, [string]$Dir) {
 function Get-LostActivationFailures([string[]]$LogLines) {
     $fns = @()
     foreach ($line in $LogLines) {
-        if ($line -match '^FAIL!\s*:\s*(\w+::\w+)\(.*TEST WINDOW LOST ACTIVATION' -and $fns -notcontains $Matches[1]) { $fns += $Matches[1] }
+        if ($line -match '^FAIL!\s*:\s*(?:\w+::)*(\w+::\w+)\(.*TEST WINDOW LOST ACTIVATION' -and $fns -notcontains $Matches[1]) { $fns += $Matches[1] }
     }
     return $fns
 }
@@ -227,11 +227,11 @@ function Test-ShotsFilterAndRetry {
         ($fnA -join ",") -eq "Ta::test_a" -and $fnAll.Count -eq 2
     Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
     Record "shots filter self-check (with and without .qml, several names, an unknown name; only the named file's functions)" $ok
-    $lost = @("QWARN  : ruya-shell test: TEST WINDOW LOST ACTIVATION (the desktop took focus); a focus failure", "FAIL!  : Tx::test_lost() TEST WINDOW LOST ACTIVATION: the desktop took focus", "   Loc: [x.cpp(49)]", "Totals: 1 passed, 1 failed")
-    $plain = @("QWARN  : ruya-shell test: TEST WINDOW LOST ACTIVATION (the desktop took focus); a focus failure", "FAIL!  : Ty::test_plain() Compared values are not the same", "Totals: 1 passed, 1 failed")
+    $lost = @("QWARN  : ruyashell::WindowLostFixture::test_the_window_loses_activation_mid_test() ruya-shell test: TEST WINDOW LOST ACTIVATION (the desktop took focus); a focus failure", "FAIL!  : ruyashell::WindowLostFixture::test_the_window_loses_activation_mid_test() TEST WINDOW LOST ACTIVATION: the desktop took focus", "   Loc: [x.cpp(49)]", "Totals: 1 passed, 1 failed")
+    $plain = @("QWARN  : ruyashell::WindowLostFixture::test_the_window_loses_activation_mid_test() ruya-shell test: TEST WINDOW LOST ACTIVATION (the desktop took focus); a focus failure", "FAIL!  : ruyashell::Ty::test_plain() Compared values are not the same", "Totals: 1 passed, 1 failed")
     $selLost = @(Get-LostActivationFailures $lost)
     $selPlain = @(Get-LostActivationFailures $plain)
-    Record "shots retry selection self-check (a lost-activation failure is selected; an ordinary failure, even beside a lost-activation warning, is not)" ($selLost.Count -eq 1 -and $selLost[0] -eq "Tx::test_lost" -and $selPlain.Count -eq 0)
+    Record "shots retry selection self-check (a lost-activation failure is selected; an ordinary failure, even beside a lost-activation warning, is not)" ($selLost.Count -eq 1 -and $selLost[0] -eq "WindowLostFixture::test_the_window_loses_activation_mid_test" -and $selPlain.Count -eq 0)
 }
 
 # T-463: the offscreen Qt Quick tests, one process per test file (the runner takes one -input), $Shards of
@@ -466,14 +466,19 @@ function Run-QmlTests([string]$ShotsDir, [string]$InputFile, [string[]]$ShotFile
     if ($ShotsDir -and $code -ne 0) {
         $logLines = @(Get-Content $log)
         $lostFns = @(Get-LostActivationFailures $logLines)
-        $otherFails = @($logLines | Where-Object { $_ -match '^FAIL!' -and $_ -notmatch 'TEST WINDOW LOST ACTIVATION' })
-        if ($lostFns.Count -gt 0) {
+        $otherFails = @($logLines | Where-Object { $_ -match '^(FAIL!|XPASS)' -and $_ -notmatch '^FAIL!.*TEST WINDOW LOST ACTIVATION' })
+        if ($lostFns.Count -gt 0 -and -not (Test-SessionLocked)) {
             $notes = @(); $allPassed = $true
             foreach ($fn in $lostFns) {
                 $retryLog = Join-Path $ShellBuild "ruya-qmltest-retry.txt"
                 & (Join-Path $ShellBuild "Release\tst_ruyashell.exe") -o "$retryLog,txt" $fn | Out-Null
                 $passed = ($LASTEXITCODE -eq 0)
-                if (-not $passed) { $allPassed = $false }
+                if (-not $passed) {
+                    $allPassed = $false
+                    $keepR = Join-Path $Repo "output\shots-logs"
+                    New-Item -ItemType Directory -Force $keepR | Out-Null
+                    Copy-Item -LiteralPath $retryLog -Destination (Join-Path $keepR ("ruya-qmltest-{0}-retry.txt" -f (Get-Date -Format "yyyyMMdd-HHmmss"))) -ErrorAction SilentlyContinue
+                }
                 $notes += "$fn ($(if ($passed) { 'passed' } else { 'failed again' }))"
             }
             $retryNote = "retried after lost activation: " + ($notes -join "; ")
