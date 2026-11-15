@@ -70,8 +70,17 @@ QtObject {
     }
     function readClock() {
         clockNow = TimeZone.formatClock(NotificationCentre.nowMs())
-        clockTimer.interval = TimeZone.msToNextTick(NotificationCentre.nowMs())
-        clockTimer.restart()
+        // The minute timer runs only while a schedule is on (RUY-638).
+        if (NotificationCentre.quietHours.enabled === true) {
+            clockTimer.interval = TimeZone.msToNextTick(NotificationCentre.nowMs())
+            clockTimer.restart()
+        } else {
+            clockTimer.stop()
+        }
+    }
+    readonly property Connections scheduleLink: Connections {
+        target: NotificationCentre
+        function onSettingsChanged() { notifications.readClock() }
     }
     // One single-shot timer for the schedule, armed for the next minute; it does not depend on the Hub
     // (the Hub's budgets: nothing polls while it is hidden).

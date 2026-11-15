@@ -256,7 +256,9 @@ Item {
             tryVerify(() => sheet().shown, 2000, "See all opens the centre")
             tryVerify(() => sheet().opacity >= 1, 2000)
             verify(menu().open, "the Hub stays open under the sheet")
-            verify(find("modalLayer").z > menu().z, "the sheet is above the Hub: " + find("modalLayer").z + " over " + menu().z)
+            compare(find("modalLayer").z, 15, "the modal layer is not raised (RUY-638)")
+            verify(sheet().z > menu().z, "the sheet is above the Hub: " + sheet().z + " over " + menu().z)
+            verify(sheet().parent !== find("modalLayer"), "the sheet is not in the modal layer")
             verify(Session.running[0].frozen === true, "the game stays frozen")
             tryVerify(() => find("centreList").activeFocus, 2000, "the sheet has the focus")
             compare(hintText(), "back Close", "the sheet says its own buttons (a pinned row without an action)")
@@ -297,31 +299,115 @@ Item {
             compare(tc.shell.focusRepairs, 0)
         }
 
-        function test_empty_panel_and_see_all_from_the_hub_without_a_game() {
+        function test_empty_panel_has_no_see_all() {
             start()
             openHub()
             verify(!find("hubIconDot_panel:notifications").visible, "nothing unread: no dot")
             openPanel()
-            compare(menu().itemKeys, ["notifications:quiet", "notifications:none", "notifications:all"])
-            // The key is in the model before its delegate exists: under load the row comes a frame later.
-            tryVerify(() => find("quickMenuItem_notifications:all") !== null, 2000, "the See all row exists")
-            compare(find("quickMenuItem_notifications:all").Accessible.name, "See all (0)")
+            compare(menu().itemKeys, ["notifications:quiet", "notifications:none"], "No notifications, and no See all (0)")
+            tryVerify(() => find("quickMenuItem_notifications:none") !== null, 2000)
+            compare(find("quickMenuItem_notifications:all"), null)
+            compare(focusedKey(), "notifications:quiet")
+            keyClick(Qt.Key_Down)
+            compare(focusedKey(), "notifications:none", "the reading can be reached")
+            keyClick(Qt.Key_Escape)
+            tryCompare(menu(), "panelId", "")
+        }
+
+        function test_back_from_the_sheet_returns_to_see_all() {
+            start()
+            post("One", tc.t0 - 60000)
+            post("Two", tc.t0)
+            dropToasts()
+            openHub()
+            openPanel()
             goTo("notifications:all")
             keyClick(Qt.Key_Return)
-            tryVerify(() => sheet().shown, 2000)
-            tryVerify(() => find("centreQuiet").activeFocus, 2000, "empty centre: Quiet mode")
+            tryVerify(() => sheet().shown && find("centreList").activeFocus, 2000)
+            // Clear the focused item in the sheet (Start): the Hub's rows are rebuilt under it.
+            keyClick(Qt.Key_Menu)
+            tryCompare(NotificationCentre, "count", 1)
             keyClick(Qt.Key_Escape)
-            tryVerify(() => !sheet().shown && find("systemActions").activeFocus, 2000)
-            compare(focusedKey(), "notifications:all")
+            tryVerify(() => !sheet().shown, 2000)
+            tryVerify(() => find("systemActions").activeFocus, 2000, "the Hub has the focus back")
+            compare(focusedKey(), "notifications:all", "Back lands on See all")
+            verify(find("quickMenuItem_notifications:all").focused)
+            // Clear the rest in the sheet: See all itself goes, the focus lands on a row that exists.
+            keyClick(Qt.Key_Return)
+            tryVerify(() => sheet().shown && find("centreList").activeFocus, 2000)
+            keyClick(Qt.Key_Menu)
+            tryCompare(NotificationCentre, "count", 0)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !sheet().shown, 2000)
+            tryVerify(() => find("systemActions").activeFocus, 2000)
+            verify(menu().itemKeys.indexOf(focusedKey() === "" ? "x" : menu().rowKeyOf(focusedKey())) >= 0, "the focus is on a row")
+            compare(menu().itemKeys.indexOf("notifications:all"), -1)
+            compare(tc.shell.focusRepairs, 0)
+        }
+
+        function test_a_on_a_pinned_item_with_nothing_to_run_is_silent() {
+            start()
+            Notifications.showSticky("update-restart", "Restarting soon", "warning", "", "To finish", "", "", { source: "updates", pinned: true })
+            tryCompare(NotificationCentre, "count", 1)
+            dropToasts()
+            openHub()
+            openPanel()
+            keyClick(Qt.Key_Down)
+            compare(focusedKey(), "notifications:n:" + NotificationCentre.items[0].id)
+            compare(hintText(), "back Back", "no A hint")
+            const selects = Sfx.selectCount
+            keyClick(Qt.Key_Return)
+            wait(100)
+            compare(Sfx.selectCount, selects, "no select cue")
+            compare(NotificationCentre.count, 1)
+            verify(menu().open)
+        }
+
+        function test_a_on_an_item_with_an_app_and_no_action_opens_the_app() {
+            start()
+            NotificationCentre.mockAppNotify({ appId: "org.example.Racer", title: "Race starts", kind: "info" })
+            tryCompare(NotificationCentre, "count", 1)
+            dropToasts()
+            openHub()
+            openPanel()
+            keyClick(Qt.Key_Down)
+            compare(hintText(), "accept Open, options Clear, back Back")
+            keyClick(Qt.Key_Return)
+            tryCompare(launchedSpy, "count", 1)
+            tryCompare(menu(), "open", false)
+            tryCompare(NotificationCentre, "count", 0)
+        }
+
+        function test_a_settings_action_from_the_hub_leaves_the_hub_for_settings() {
+            start()
+            post("Drive inserted", tc.t0, { source: "devices", actions: [{ id: "settings:storage", label: "Open Settings" }] }, "STICK")
+            dropToasts()
+            openHub()
+            openPanel()
+            keyClick(Qt.Key_Down)
+            compare(hintText(), "accept Open Settings, options Clear, back Back")
+            keyClick(Qt.Key_Return)
+            tryCompare(menu(), "open", false)
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryCompare(NotificationCentre, "count", 0)
+        }
+
+        function test_the_minute_timer_runs_only_with_quiet_hours_on() {
+            start()
+            compare(Notifications.clockTimer.running, false, "no schedule: no timer")
+            setQuietHours(true, "22:00", "07:00")
+            tryCompare(Notifications.clockTimer, "running", true)
+            setQuietHours(false, "22:00", "07:00")
+            tryCompare(Notifications.clockTimer, "running", false)
         }
 
         function test_an_item_arriving_while_the_panel_is_open() {
             start()
             openHub()
             openPanel()
-            compare(menu().itemKeys.length, 3)
+            compare(menu().itemKeys.length, 2)
             post("Late", tc.t0)
-            tryVerify(() => menu().itemKeys.length === 4, 2000, "the item replaced \"No notifications\" and Clear all came")
+            tryVerify(() => menu().itemKeys.length === 4, 2000, "the item replaced \"No notifications\"; Clear all and See all came")
             compare(focusedKey(), "notifications:quiet", "the focus stays where it was")
             compare(tc.shell.focusRepairs, 0)
         }
@@ -650,6 +736,16 @@ Item {
             keyClick(Qt.Key_Escape)
             keyClick(Qt.Key_Escape)
             tryCompare(menu(), "open", false)
+            // The empty panel: "No notifications", no See all (RUY-638).
+            NotificationCentre.dismissAll()
+            tryVerify(() => NotificationCentre.items.every(i => i.pinned), 2000)
+            Notifications.remove("update-restart")
+            tryCompare(NotificationCentre, "count", 0, 3000)
+            openHub()
+            openPanel()
+            wait(400)
+            waitForRendering(tc.shell)
+            grabImage(tc.shell).save(dir + "hub-notifications-5-empty" + suffix + ".png")
         }
 
         function test_zz_screenshots() {

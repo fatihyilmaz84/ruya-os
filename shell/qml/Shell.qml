@@ -609,6 +609,8 @@ FocusScope {
     // of a flow), the focus is that modal's business: the net stays out. It never acts on keys.
     property int focusRepairs: 0            // how often refocusIfLost() acted (tests: a page's own focus never needs it)
     function modalShown(except) {
+        if (notificationSheet.shown && notificationSheet !== except)
+            return true
         for (let i = 0; i < modalLayer.children.length; ++i) {
             const c = modalLayer.children[i]
             if (!c || !c.visible || c === except)
@@ -2384,7 +2386,7 @@ FocusScope {
         objectName: "modalLayer"
         anchors.fill: parent
         // Raised above the Hub (z 20) while the notification sheet or "Who's playing?" shows over it.
-        z: (notificationSheet.visible || whosPlaying.visible) && systemPanel.open ? 21 : 15
+        z: whosPlaying.visible && systemPanel.open ? 21 : 15
         glassSource: l0          // the layer the glass sheets of the picker modals blur
     }
 
@@ -2448,7 +2450,9 @@ FocusScope {
     NotificationSheet {
         id: notificationSheet
         objectName: "notificationSheet"
-        parent: modalLayer
+        parent: root
+        z: systemPanel.open ? 20.5 : 15       // over the Hub (z 20), under "Who's playing?" (21); the modal layer stays put
+        onReturnToKey: key => systemPanel.focusRowKey(key)
         width: parent ? parent.width : 0
         height: parent ? parent.height : 0
         u: root.u
@@ -2700,7 +2704,7 @@ FocusScope {
             Profiles.lock()                  // signedIn -> false; routeFocus() shows the picker
         }
         onSettingsRequested: category => root.openSettingsFromHub(category)
-        onNotificationsRequested: notificationSheet.open()
+        onNotificationsRequested: notificationSheet.open("notifications:all")
         onNotificationActionRequested: (item, action) => root.runNotificationAction(item, action)
         onNotificationOpenRequested: item => root.openNotificationSource(item)
         onPowerRequested: action => powerConfirm.open(action)    // focus returns here if cancelled
