@@ -3320,7 +3320,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not sign in (%1).</translation>
     </message>
     <message>
-        <location line="+78"/>
+        <location line="+80"/>
         <location line="+6"/>
         <location line="+43"/>
         <source>Enter PIN for %1</source>
@@ -3359,6 +3359,11 @@ This can&apos;t be undone.</translation>
         <location filename="../qml/PlayerChip.qml" line="+38"/>
         <source>Guest %1</source>
         <translation>Guest %1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Guest</source>
+        <translation>Guest</translation>
     </message>
     <message>
         <location line="+9"/>
@@ -3598,7 +3603,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ProfileCard</name>
     <message>
-        <location filename="../qml/ProfileCard.qml" line="+14"/>
+        <location filename="../qml/ProfileCard.qml" line="+16"/>
         <source>%1, PIN protected</source>
         <translation>%1, PIN protected</translation>
     </message>
@@ -3726,6 +3731,19 @@ This can&apos;t be undone.</translation>
         <location line="+2"/>
         <source>Something went wrong. Please try again.</source>
         <translation>Something went wrong. Please try again.</translation>
+    </message>
+</context>
+<context>
+    <name>Profiles</name>
+    <message>
+        <location filename="../src/profiles/Profiles.cpp" line="+103"/>
+        <source>Guest</source>
+        <translation>Guest</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Guest %1</source>
+        <translation>Guest %1</translation>
     </message>
 </context>
 <context>
@@ -5028,7 +5046,7 @@ This can&apos;t be undone.</translation>
         <translation>Store</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+31"/>
         <source>Featured</source>
         <translation>Featured</translation>
     </message>
@@ -5044,13 +5062,13 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+163"/>
+        <location line="+176"/>
         <location line="+70"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location line="-179"/>
+        <location line="-192"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -5065,7 +5083,7 @@ This can&apos;t be undone.</translation>
         <translation>Community</translation>
     </message>
     <message>
-        <location line="+108"/>
+        <location line="+121"/>
         <location line="+70"/>
         <source>Update available</source>
         <translation>Update available</translation>
@@ -6176,19 +6194,26 @@ This can&apos;t be undone.</translation>
 <context>
     <name>WhosPlaying</name>
     <message>
-        <location filename="../qml/WhosPlaying.qml" line="+85"/>
+        <location filename="../qml/WhosPlaying.qml" line="+76"/>
+        <location line="+56"/>
+        <location line="+194"/>
+        <source>Guest</source>
+        <translation>Guest</translation>
+    </message>
+    <message>
+        <location line="-228"/>
         <location line="+1"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
         <location line="-1"/>
-        <location line="+613"/>
+        <location line="+722"/>
         <source>Not now</source>
         <translation>Not now</translation>
     </message>
     <message>
-        <location line="-612"/>
+        <location line="-721"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -6198,12 +6223,27 @@ This can&apos;t be undone.</translation>
         <translation>another controller</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+3"/>
+        <source>Guest %1</source>
+        <translation>Guest %1</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Joins as a guest. Nothing is kept after it leaves.</source>
+        <translation>Joins as a guest. Nothing is kept after it leaves.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Joins as Guest %1. Nothing is kept after it leaves.</source>
+        <translation>Joins as Guest %1. Nothing is kept after it leaves.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Now on %2. Picking it moves %1 here.</source>
         <translation>Now on %2. Picking it moves %1 here.</translation>
     </message>
     <message>
-        <location line="+237"/>
+        <location line="+316"/>
         <source>%1 could not join</source>
         <translation>%1 could not join</translation>
     </message>
@@ -6213,7 +6253,7 @@ This can&apos;t be undone.</translation>
         <translation>Try again.</translation>
     </message>
     <message>
-        <location line="+202"/>
+        <location line="+213"/>
         <source>Paused · %1</source>
         <translation>Paused · %1</translation>
     </message>

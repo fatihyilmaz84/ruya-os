@@ -224,7 +224,7 @@ Item {
             compare(lines[1] - lines[0], (48 + Theme.spaceS) * u())
             const panel = find("guidePanel")
             verify(row.mapToItem(panel, 0, row.height).y <= panel.height, "inside the panel")
-            compare(findChild(find("hubPlayer_4"), "hubPlayerName").text, "Guest 1")
+            compare(findChild(find("hubPlayer_4"), "hubPlayerName").text, "Guest")
         }
 
         function test_the_hub_keeps_its_stops_focus_and_back() {

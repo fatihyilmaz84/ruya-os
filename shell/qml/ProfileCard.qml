@@ -8,6 +8,8 @@ Item {
     property real u: 1
     property int playerSlot: 0
 
+    // The Guest card of "Who's playing?" (RUY-631): `modelData.kind === "guest"`, a plain glass circle.
+    readonly property bool isGuest: (modelData.kind ?? "") === "guest"
     readonly property bool focused: ListView.isCurrentItem && ListView.view.activeFocus
 
     Accessible.role: Accessible.ListItem
@@ -25,9 +27,9 @@ Item {
         width: Theme.avatarSize * card.u
         height: width
         radius: width / 2
-        color: card.modelData.avatar
-        border.width: card.focused ? 6 * card.u : 0
-        border.color: Theme.focusRing
+        color: card.isGuest ? Theme.glass : card.modelData.avatar
+        border.width: card.focused ? 6 * card.u : card.isGuest ? 1 : 0 // token-ok: 1 px hairline, 04 §5
+        border.color: card.focused ? Theme.focusRing : Theme.glassBorder
 
         Text {
             anchors.centerIn: parent

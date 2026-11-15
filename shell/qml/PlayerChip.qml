@@ -35,7 +35,7 @@ Item {
         return null
     }
     readonly property string displayName: record ? record.name
-                                          : guest ? qsTr("Guest %1").arg(guest.number)
+                                          : guest ? (guest.number <= 1 ? qsTr("Guest") : qsTr("Guest %1").arg(guest.number))
                                           : Profiles.nameOf(chip.profileId)
     readonly property color tint: record ? record.avatar : guest ? guest.avatar : Theme.glass
 

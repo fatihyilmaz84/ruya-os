@@ -71,6 +71,11 @@ FocusScope {
     signal closed(Item target)
 
     readonly property var cards: Profiles.profiles.filter(p => p.role !== "guest")
+    // The Guest card ends the row (RUY-631). A seated pad never asks (mayAsk), so it is never offered a
+    // guest again; the one exception, a seated pad's Guide while seat 1 has no pad, may make another.
+    readonly property var entries: cards.concat([{ kind: "guest", id: "", name: qsTr("Guest"), avatar: "", hasPin: false }])
+    readonly property int guestIndex: cards.length
+
     readonly property var padRecord: Input.devices.find(d => d.id === prompt.pad)
     readonly property string padName: padRecord
         ? Notifications.named(DeviceIcons.padName(padRecord.id, padRecord.name ?? "", padRecord.family ?? ""))
@@ -79,6 +84,14 @@ FocusScope {
         ? DeviceIcons.iconFor("controller", padRecord.family ?? "", padRecord.model ?? "") : "sports_esports"
     readonly property var player1: Input.players.find(s => s.slot === 1)
     readonly property string player1Name: player1 ? Profiles.nameOf(player1.profile) : ""
+
+    // A guest being made for the Guest card (CreateGuest sent, no answer yet).
+    property bool guestPending: false
+    // Wipe on leave (RUY-631): the profile ids that had a seat at the last PlayersChanged; a guest that
+    // drops out of them is removed. `removing`: RemoveGuest calls out (id -> it is the retry).
+    property var seatedIds: []
+    property var retryIds: []
+    property var removing: ({})
 
     // What the hint bar says (Shell.hintList).
     readonly property var modalHints: step === "pick"
@@ -115,7 +128,26 @@ FocusScope {
         const d = s ? Input.devices.find(x => x.id === s.device_id) : undefined
         return Notifications.named(d ? DeviceIcons.padName(d.id, d.name ?? "", d.family ?? "") : qsTr("another controller"))
     }
+    function guestName(number) {
+        return number <= 1 ? qsTr("Guest") : qsTr("Guest %1").arg(number)
+    }
+    // The number the next guest gets: the lowest free one, as ruya-profiles numbers them.
+    function nextGuestNumber() {
+        const taken = Profiles.guests.map(g => g.number)
+        let n = 1
+        while (taken.includes(n))
+            ++n
+        return n
+    }
+    function guestDetail() {
+        const n = nextGuestNumber()
+        return n <= 1 || n > 3
+            ? qsTr("Joins as a guest. Nothing is kept after it leaves.")
+            : qsTr("Joins as Guest %1. Nothing is kept after it leaves.").arg(n)
+    }
     function detailFor(record) {
+        if (record && record.kind === "guest")
+            return guestDetail()
         if (!record || !hasPad(record.id) || onThisPad(record.id))
             return ""
         return fill(qsTr("Now on %2. Picking it moves %1 here."), record.name, seatPadName(record.id))
@@ -201,6 +233,9 @@ FocusScope {
         if (i >= 0) {
             cardList.currentIndex = i
             cardList.forceActiveFocus()
+        } else if (Profiles.available) {
+            cardList.currentIndex = guestIndex      // no profile is free: the Guest card (the empty board)
+            cardList.forceActiveFocus()
         } else {
             notNowButton.forceActiveFocus()
         }
@@ -244,8 +279,12 @@ FocusScope {
     }
 
     function acceptCard(index) {
-        if (joining !== null || index < 0 || index >= cards.length)
+        if (joining !== null || index < 0 || index >= entries.length)
             return
+        if (index === guestIndex) {
+            acceptGuest()
+            return
+        }
         const record = cards[index]
         Sfx.select()
         chosen = record
@@ -263,6 +302,77 @@ FocusScope {
         } else {
             step = "confirm"
             joinButton.forceActiveFocus()
+        }
+    }
+
+    // Accept on Guest: a temporary guest is made, then the pad joins it at once (no PIN, no step 2).
+    function acceptGuest() {
+        Sfx.select()
+        chosen = null
+        guestPending = true
+        joining = { pad: pad, id: "", from: "guest", number: 0 }
+        Profiles.createGuest()
+    }
+
+    function guestCreated(status, id, number) {
+        if (!guestPending)
+            return
+        guestPending = false
+        const j = joining
+        const mine = j !== null && j.from === "guest" && j.id === ""
+        if (status !== "ok") {
+            if (mine) {
+                joining = null
+                refused(qsTr("Guest"))
+                if (shown)
+                    cardList.forceActiveFocus()
+            }
+            return
+        }
+        if (!mine) {
+            Profiles.removeGuest(id)            // the prompt went before the guest came: nobody plays it
+            return
+        }
+        joining = { pad: j.pad, id: id, from: "guest", number: number }
+        Input.joinPlayer(j.pad, id)
+    }
+
+    // The seats changed: a temporary guest that had one and has none now is wiped (it left, its hold ran
+    // out, its pad picked another profile). A Lock or Switch wipes the guests in ruya-profiles, so by the
+    // time the deferred check runs the session or the list has changed and nothing is sent.
+    function trackSeats() {
+        const now = Input.players.map(s => s.profile)
+        const gone = seatedIds.filter(id => !now.includes(id))
+        const again = retryIds
+        retryIds = []
+        seatedIds = now
+        const session = Profiles.activeProfile
+        for (const id of gone)
+            Qt.callLater(prompt.wipeGuest, id, session, false)
+        for (const id of again)
+            Qt.callLater(prompt.wipeGuest, id, session, true)
+    }
+    function wipeGuest(id, session, isRetry) {
+        if (session === "" || Profiles.activeProfile !== session || removing[id] !== undefined)
+            return
+        if (!Profiles.guests.some(g => g.id === id) || Input.players.some(s => s.profile === id))
+            return
+        const next = Object.assign({}, removing)
+        next[id] = isRetry
+        removing = next
+        Profiles.removeGuest(id)
+    }
+    function guestRemoved(id, status) {
+        if (removing[id] === undefined)
+            return
+        const isRetry = removing[id]
+        const next = Object.assign({}, removing)
+        delete next[id]
+        removing = next
+        if (status !== "ok") {
+            console.warn("ruya-shell: RemoveGuest " + id + " failed: " + status + (isRetry ? " (retry)" : ""))
+            if (!isRetry)
+                retryIds = retryIds.concat([id])
         }
     }
 
@@ -411,6 +521,7 @@ FocusScope {
     }
     onBlockedChanged: if (!blocked) Qt.callLater(prompt.tryOpen)
     Component.onCompleted: {
+        seatedIds = Input.players.map(s => s.profile)
         knownPads = Input.devices.map(d => d.id)
         padsPrimed = Input.devicesState === "ok"
     }
@@ -428,7 +539,10 @@ FocusScope {
             if (kind === "press" || kind === "guide" || kind === "player-guide")
                 prompt.ask(deviceId, kind)
         }
-        function onPlayersChanged() { prompt.joinAfterSwitch() }
+        function onPlayersChanged() {
+            prompt.joinAfterSwitch()
+            prompt.trackSeats()
+        }
         function onJoinFinished(deviceId, profile, status, slot) {
             const j = prompt.joining
             if (!j || j.pad !== deviceId || j.id !== profile)
@@ -439,7 +553,12 @@ FocusScope {
                     prompt.close(false)
                 return
             }
-            prompt.refused(Profiles.nameOf(profile))
+            if (j.from === "guest") {
+                prompt.refused(prompt.guestName(j.number))
+                Profiles.removeGuest(profile)       // a guest made for a join that failed
+            } else {
+                prompt.refused(Profiles.nameOf(profile))
+            }
             if (!prompt.shown)
                 return
             if (j.from === "confirm")
@@ -465,6 +584,8 @@ FocusScope {
                 prompt.abandonSwitch()          // another profile signed in: this Switch has no seat to wait for
             prompt.joinAfterSwitch()
         }
+        function onGuestCreated(status, id, number) { prompt.guestCreated(status, id, number) }
+        function onGuestRemoved(id, status) { prompt.guestRemoved(id, status) }
         function onSwitchFinished(id, status) {
             const s = prompt.switching
             if (!s || s.id !== id || status === "ok")
@@ -634,12 +755,12 @@ FocusScope {
                 keyNavigationEnabled: true
                 Accessible.role: Accessible.List
                 Accessible.name: currentItem ? currentItem.Accessible.name : qsTr("Profiles")
-                model: prompt.cards
+                model: prompt.entries
 
                 delegate: ProfileCard {
                     u: prompt.u
                     playerSlot: {
-                        const s = prompt.seatOf(modelData.id)
+                        const s = modelData.id === "" ? undefined : prompt.seatOf(modelData.id)
                         return s ? s.slot : 0
                     }
                 }
@@ -685,7 +806,7 @@ FocusScope {
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight
             textFormat: Text.PlainText
-            text: cardList.activeFocus && Profiles.available ? prompt.detailFor(prompt.cards[cardList.currentIndex]) : ""
+            text: cardList.activeFocus && Profiles.available ? prompt.detailFor(prompt.entries[cardList.currentIndex]) : ""
             color: Theme.text
             font.pixelSize: Theme.typeBody * prompt.u
         }
