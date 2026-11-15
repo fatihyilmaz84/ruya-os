@@ -334,6 +334,19 @@ Item {
             verify(find("homeDetails").activeFocus, "the next pad is not player 1")
         }
 
+        // Only an unseated pad takes the padless seat 1: player 2 keeps their seat.
+        function test_gate_off_a_seated_players_press_does_not_take_seat_1() {
+            signInWithKeyboard()
+            Input.joinPlayer(host.dualSense, "p1")
+            tryVerify(() => Input.players.length === 2, 2000, "the DualSense is player 2")
+            Input.mockPadButton(host.dualSense, "south")
+            Input.mockPadButton(host.dualSense, "guide")
+            tryVerify(() => foreignOf(host.dualSense).length === 1, 2000)
+            compare(foreignOf(host.dualSense), ["player-guide"])
+            verify(find("homePlay").activeFocus, "nothing moved")
+            compare(Input.players.map(p => p.slot + ":" + p.device_id).join(" "), "1: 2:" + host.dualSense)
+        }
+
         // Gate on (RUY-122): the prompt's Move is the path; a press takes no seat.
         function test_gate_on_no_pad_takes_a_padless_seat_1() {
             Input.mockSeatGate(true)

@@ -3031,6 +3031,36 @@ mod tests {
         assert_eq!(nav(&r.backend_mut().take()), vec![(NavKey::Down, true)]);
     }
 
+    /// The fallback takes only an unseated pad: a player in seat 2 who presses while seat 1 has no
+    /// pad keeps their seat (a join as player 1 would empty seat 2 by rule (c)).
+    #[test]
+    fn gate_off_a_seated_players_press_does_not_take_a_padless_seat_1() {
+        let mut r = gated(false);
+        let b = r.add_pad(pad("b"), t0());
+        signed_in(&mut r, "p1");
+        assert_eq!(join(&mut r, b, "p2"), 2);
+        r.backend_mut().take();
+        r.take_notices();
+        r.input_at(
+            b,
+            &[press(PadButton::South), release(PadButton::South)],
+            t0(),
+        );
+        assert_eq!(
+            seats_of(&r),
+            vec![seat(1, "p1", ""), seat(2, "p2", "b")],
+            "seat 1 stays padless, b stays player 2"
+        );
+        assert!(nav(&r.backend_mut().take()).is_empty(), "no navigation key");
+        let notices = r.take_notices();
+        assert!(players_signals(&notices).is_empty(), "no PlayersChanged");
+        r.input_at(b, &[press(PadButton::Guide)], t0());
+        assert_eq!(
+            foreign(&r.take_notices()),
+            vec![("b".to_owned(), "player-guide")]
+        );
+    }
+
     /// With the gate on (RUY-122) the prompt's Move is the path: a press takes no seat.
     #[test]
     fn gate_on_no_pad_takes_a_padless_seat_1() {
