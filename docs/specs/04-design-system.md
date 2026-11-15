@@ -105,7 +105,7 @@ Shadows belong to depth (focused and raised elements, glass panels, modals) and 
 |---|---|---|---|
 | L0 | backdrop / app | Hero art (Home), the **wallpaper** when the focused item has no art (Home) and blurred on pages, else the tinted blobs (the default look; also blurred on pages, T-421), or **the running app** | One shared blur, never stacked; hidden while an app is in front (T-376): no glass samples it then |
 | L1 | 0 | Home shelf, pages, panes (glass) | |
-| L2 | 10 | Toasts | Never take focus |
+| L2 | 29 | Toasts (drawn above L3, RUY-691) | Never take focus; above every modal so an answer to a modal's action is never dimmed; below the volume OSD, the mode confirm and the screen saver |
 | L3 | 20 | A full-screen modal that blurs its backdrop (Who's playing?, the Hub once B-003 lands) shows the blurred L0 only, under `scrim`; L1 (shelf, tiles, top bar, status cluster) is hidden while it is up, never blurred a second time; over a running game the whole frozen frame is the L0 copy (RUY-122). Modals: picker, setup, PIN pad, keyboard, the quick menu (T-147: scrim + `glassOpaque` + `GlassLayers` on every tier; its translucent `glassStrong` sheet over a blurred app copy waits for B-003); the picker modals with a list or grid, wallpaper, time zone, resolution and refresh rate, sit on a glass sheet, `GlassSheet`, instead of `panel` | Accept every key |
 | L4 | 30 | Volume OSD | Never takes focus |
 | L5 | 40 | Mode confirm ("Keep this resolution?", T-198), above the Volume OSD and the hint bar | Accepts every key; the hint bar shows its own hints |

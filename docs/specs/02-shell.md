@@ -346,7 +346,7 @@ A controller's A and B arrive as `Return` and `Escape`, the same keys a keyboard
 - **Volume keys while muted** (T-114): Volume Up unmutes and raises; Volume Down stays muted and changes nothing (the OSD shows "Muted"); Mute toggles only the mute.
 - `VolumeOsd` (bottom centre) appears on `Audio.adjusted` and hides `Theme.osdMs` (1500 ms) after the last one. It shows the level and a "Muted" state.
 - Volume Up/Down/Mute are `Shortcut`s (application context) at the `Shell` root, so they work in every state, modals included, step by 5, and never move focus. Toasts and the OSD are display-only and never take focus.
-- Stacking: toasts (z 10) sit above pages and below the modals (profile picker, quick menu: z 20; the launch splash is z 6, above the app layer and below the toasts); the OSD is on top (z 30).
+- Stacking: toasts (z 29, one fixed value, RUY-691) sit above pages and above every modal and sheet (profile picker, quick menu: z 20; the highest modal is the thermal dialog, z 26), so an answer to a modal's action is never dimmed; toasts never take focus. The launch splash is z 6, below the toasts. The volume OSD (z 30), the mode confirm (z 40) and the screen saver (z 100) are above the toasts.
 
 ## 6. Asset pipeline
 - Per app, the art set (from AppStream/`x-ruya-*` keys, or our fallback generator) is icon (SVG or 256 px), tile (16:9), hero (16:9, ≥ 1920 px), logo (transparent), and an optional background.
