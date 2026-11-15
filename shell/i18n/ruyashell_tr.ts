@@ -2630,22 +2630,7 @@ Bu geri alınamaz.</translation>
         <translation>Profil adı</translation>
     </message>
     <message>
-        <location line="+8"/>
-        <source>Role</source>
-        <translation>Rol</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>Standard</source>
-        <translation>Standart</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Guest</source>
-        <translation>Misafir</translation>
-    </message>
-    <message>
-        <location line="+14"/>
+        <location line="+25"/>
         <source>Protect with a PIN</source>
         <translation>PIN ile koru</translation>
     </message>

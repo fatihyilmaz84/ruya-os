@@ -29,6 +29,8 @@ create)
     admin="$(busctl --system call "$svc" "$path" "$svc" ListProfiles | grep -o '"p[0-9]*"' | head -1 | tr -d '"')"
     echo "--- CreateProfile: standard profile, with the admin ($admin) PIN"
     busctl --system call "$svc" "$path" "$svc" CreateProfile sssss "$admin" 1234 "Check Kid" standard ""
+    echo "--- CreateProfile: role guest (RUY-716, no new kept guests): expect not-allowed, no user made"
+    busctl --system call "$svc" "$path" "$svc" CreateProfile sssss "$admin" 1234 "Check Guest" guest ""
     bash "$0" state
     echo "--- account files (expect 644 passwd/group, 0 shadow/gshadow)"
     stat -c '%a %U:%G %n' /etc/passwd /etc/group /etc/shadow /etc/gshadow

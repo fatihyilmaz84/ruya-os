@@ -99,6 +99,8 @@
       Create a profile. When no profiles exist (first boot) the admin arguments are ignored and
       role must be "admin". Otherwise admin_id/admin_pin must identify an admin.
       v1 passes admin credentials explicitly; polkit-based authorisation replaces this in Phase 2.
+      role "guest" is refused with "not-allowed" (RUY-716: no new kept guests; temporary guests
+      come from CreateGuest). Guest-role profiles stored earlier still load, rename and delete.
     -->
     <method name="CreateProfile">
       <arg name="admin_id" type="s" direction="in"/>

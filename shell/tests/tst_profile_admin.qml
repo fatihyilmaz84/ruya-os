@@ -241,8 +241,9 @@ Item {
             compare(create("p1", "9999", "X", "standard", "")[0], "wrong-pin")
             compare(create("p2", "", "X", "standard", "")[0], "not-allowed", "a standard profile is not an admin")
             compare(create("nobody", "", "X", "standard", "")[0], "not-allowed")
-            compare(create("p1", "1234", "Guest", "guest", "")[0], "ok")
-            compare(create("p1", "1234", "G2", "guest", "1111")[0], "invalid", "guests never have a PIN")
+            // RUY-716: no new kept guests, whatever the PIN
+            compare(create("p1", "1234", "Guest", "guest", "")[0], "not-allowed")
+            compare(create("p1", "1234", "G2", "guest", "1111")[0], "not-allowed")
             compare(create("p1", "1234", "  ", "standard", "")[0], "invalid", "blank name")
             compare(create("p1", "1234", "X", "superuser", "")[0], "invalid", "unknown role")
 
@@ -259,7 +260,7 @@ Item {
             tryVerify(() => Profiles.profiles.some(p => p.name === "Trim Me" && p.hasPin))
 
             // ids are never reused; failed creates did not consume one
-            compare(r[1], "p5")
+            compare(r[1], "p4")
 
             // wrong_pins_lead_to_lockout_shared_across_operations
             for (let left = 4; left >= 1; --left) {
@@ -1070,7 +1071,7 @@ Item {
             openProfilesPane()
             openAddForm()
             find("paneProfiles").newName = "Kid"
-            goToRow("rowNewRole")
+            goToRow("rowNewPin")
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/10-settings-profiles.png")
         }

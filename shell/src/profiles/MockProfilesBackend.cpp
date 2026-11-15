@@ -227,12 +227,13 @@ void MockProfilesBackend::createProfile(const QString &adminId, const QString &a
     const QString trimmed = name.trimmed();
     if (!isValidName(trimmed))
         return reply(QStringLiteral("invalid"));
-    // Admins must have a PIN; guests never have one; others may.
+    // RUY-716: no new kept guests (temporary guests come from "Who's playing?").
+    if (role == QLatin1String("guest"))
+        return reply(QStringLiteral("not-allowed"));
+    // Admins must have a PIN; others may.
     bool pinOk = false;
     if (role == QLatin1String("admin"))
         pinOk = isValidPin(pin);
-    else if (role == QLatin1String("guest"))
-        pinOk = pin.isEmpty();
     else
         pinOk = pin.isEmpty() || isValidPin(pin);
     if (!pinOk)
