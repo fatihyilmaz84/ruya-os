@@ -6,7 +6,7 @@ use zbus::interface;
 use zbus::object_server::SignalEmitter;
 
 use crate::accounts::Accounts;
-use crate::service::{lock_line, switch_line, verify_line, ProfileService};
+use crate::service::{create_guest_changed, lock_line, switch_line, verify_line, ProfileService};
 
 /// Chosen at runtime: real Unix users on the system bus, none in `--session` dev mode.
 pub type DynAccounts = Box<dyn Accounts + Send + Sync>;
@@ -103,8 +103,10 @@ impl ProfilesIface {
         &mut self,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) -> (String, String, u32) {
+        let before = self.guest_ids();
         let outcome = self.svc.create_guest();
-        if outcome.status == crate::Status::Ok {
+        // Also when useradd and its cleanup both failed: the half-made guest stays listed.
+        if create_guest_changed(outcome.status, &before, &self.guest_ids()) {
             let _ = Self::profiles_changed(&emitter).await;
         }
         (

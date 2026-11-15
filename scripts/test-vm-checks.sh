@@ -584,6 +584,11 @@ elif method == "CreateGuest":
         st["users"][gid] = uid
         os.makedirs(os.path.join(homes, "ruya-" + gid), exist_ok=True)
         st["guests"].append({"id": gid, "number": number})
+        if bug == "subuid":  # a guest that got a subordinate id range
+            etc = os.path.join(os.path.dirname(homes), "etc")
+            os.makedirs(etc, exist_ok=True)
+            with open(os.path.join(etc, "subuid"), "a") as f:
+                f.write("ruya-%s:100000:65536\n" % gid)
         reply("ssu", "ok", gid, number)
 elif method == "RemoveGuest":
     if any(g["id"] == rest[0] for g in st["guests"]):
@@ -608,7 +613,7 @@ done
 runprof() { # FAKE_BUG comes from the caller's prefix
     rm -rf "$tmp/prof"; mkdir -p "$tmp/prof/home"
     PROF_PY="$tmp/fake-profiles.py" PROF_STATE="$tmp/prof/state.json" PROF_HOMES="$tmp/prof/home" \
-        RUYA_HOME_ROOT="$tmp/prof/home" PATH="$tmp/prof-bin:$PATH" bash "$here/vm-profiles-check.sh" guests 2>&1
+        RUYA_HOME_ROOT="$tmp/prof/home" RUYA_ETC_ROOT="$tmp/prof/etc" PATH="$tmp/prof-bin:$PATH" bash "$here/vm-profiles-check.sh" guests 2>&1
 }
 out="$(runprof)"; rc=$?
 expect_contains "a good service passes" "$out" "ALL CHECKS PASSED"
@@ -621,7 +626,7 @@ for case in \
     "keep_user|FAIL: RemoveGuest left the user" \
     "no_wipe|FAIL: Lock left the guests" \
     "verify_switches|FAIL: VerifyPin changed ActiveProfile" \
-    "gid|is not its uid"     "reuse|is not greater than"; do
+    "gid|is not its uid"     "subuid|has a line in"     "reuse|is not greater than"; do
     bug="${case%%|*}"; needle="${case#*|}"
     out="$(FAKE_BUG="$bug" runprof)"; rc=$?
     expect_contains "guests, bug $bug: caught" "$out" "$needle"
