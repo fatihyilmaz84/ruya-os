@@ -303,6 +303,8 @@ Item {
             verify(!find("hubIconDot_panel:notifications").visible, "nothing unread: no dot")
             openPanel()
             compare(menu().itemKeys, ["notifications:quiet", "notifications:none", "notifications:all"])
+            // The key is in the model before its delegate exists: under load the row comes a frame later.
+            tryVerify(() => find("quickMenuItem_notifications:all") !== null, 2000, "the See all row exists")
             compare(find("quickMenuItem_notifications:all").Accessible.name, "See all (0)")
             goTo("notifications:all")
             keyClick(Qt.Key_Return)
