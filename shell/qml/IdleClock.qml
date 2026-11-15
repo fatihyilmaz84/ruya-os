@@ -92,6 +92,10 @@ QtObject {
     signal displayOffStarted()
     signal sleepRequested()
     signal woke()
+    // The machine was asleep and runs again (the resume below, whichever stage it slept in; also a
+    // sleep from the Guide menu, which leaves the stage "active" and so emits no `woke()`). Not the
+    // saver or the dark screen ending. The Shell opens "Who's playing?" in wake mode on it (RUY-707).
+    signal resumed()
     // Every input, for the receivers that act on it themselves (the update report, toasts, the
     // presence report); they no longer keep a clock of their own.
     signal inputNoted()
@@ -164,6 +168,7 @@ QtObject {
         lastSleptMs = sleptNow
         if (resumed || t - lastEvalMs > gapMs) {
             noteInput("resume")
+            clock.resumed()         // after the wake: the stage is "active" again, nothing covers the UI
             return
         }
         if (wakeGuard && t >= wakeGuardUntilMs)

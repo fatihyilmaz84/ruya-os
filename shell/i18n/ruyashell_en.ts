@@ -1178,7 +1178,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerOnboarding</name>
     <message>
-        <location filename="../qml/ControllerOnboarding.qml" line="+44"/>
+        <location filename="../qml/ControllerOnboarding.qml" line="+48"/>
         <source>Continue</source>
         <translation>Continue</translation>
     </message>
@@ -1194,20 +1194,20 @@ This can&apos;t be undone.</translation>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+212"/>
-        <location line="+71"/>
+        <location line="+252"/>
+        <location line="+76"/>
         <source>Buttons in games</source>
         <translation>Buttons in games</translation>
     </message>
     <message>
-        <location line="-70"/>
-        <location line="+71"/>
+        <location line="-75"/>
+        <location line="+76"/>
         <source>Try your controller</source>
         <translation>Try your controller</translation>
     </message>
     <message>
-        <location line="-71"/>
-        <location line="+71"/>
+        <location line="-76"/>
+        <location line="+76"/>
         <source>Pair a controller</source>
         <translation>Pair a controller</translation>
     </message>
@@ -2155,7 +2155,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+437"/>
+        <location filename="../qml/GameControls.qml" line="+455"/>
         <location line="+182"/>
         <source>Could not save to the USB drive</source>
         <translation>Could not save to the USB drive</translation>
@@ -2562,7 +2562,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ManageProfilesPane</name>
     <message>
-        <location filename="../qml/ManageProfilesPane.qml" line="+41"/>
+        <location filename="../qml/ManageProfilesPane.qml" line="+43"/>
         <source>Your own profile is under My profile.</source>
         <translation>Your own profile is under My profile.</translation>
     </message>
@@ -3160,7 +3160,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>OptionsMenu</name>
     <message>
-        <location filename="../qml/OptionsMenu.qml" line="+46"/>
+        <location filename="../qml/OptionsMenu.qml" line="+48"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -3176,7 +3176,7 @@ This can&apos;t be undone.</translation>
         <translation>Options for %1</translation>
     </message>
     <message>
-        <location line="+208"/>
+        <location line="+219"/>
         <source>No options for this yet.</source>
         <translation>No options for this yet.</translation>
     </message>
@@ -3809,7 +3809,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Profiles</name>
     <message>
-        <location filename="../src/profiles/Profiles.cpp" line="+103"/>
+        <location filename="../src/profiles/Profiles.cpp" line="+186"/>
         <source>Guest</source>
         <translation>Guest</translation>
     </message>
@@ -4541,7 +4541,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+693"/>
+        <location filename="../qml/Shell.qml" line="+701"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -4704,7 +4704,7 @@ This can&apos;t be undone.</translation>
         <translation>Store options are unavailable right now.</translation>
     </message>
     <message>
-        <location line="+90"/>
+        <location line="+91"/>
         <source>Could not uninstall %1. Try again.</source>
         <translation>Could not uninstall %1. Try again.</translation>
     </message>
@@ -4714,7 +4714,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 was uninstalled.</translation>
     </message>
     <message>
-        <location line="+528"/>
+        <location line="+529"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -4736,7 +4736,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1839"/>
+        <location line="-1841"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -4767,7 +4767,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1587"/>
+        <location line="+1589"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
@@ -6270,30 +6270,35 @@ This can&apos;t be undone.</translation>
 <context>
     <name>WhosPlaying</name>
     <message>
-        <location filename="../qml/WhosPlaying.qml" line="+148"/>
-        <location line="+215"/>
+        <location filename="../qml/WhosPlaying.qml" line="+172"/>
+        <location line="+325"/>
         <source>Guest</source>
         <translation>Guest</translation>
     </message>
     <message>
-        <location line="-249"/>
+        <location line="-361"/>
         <location line="+1"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
         <location line="-1"/>
-        <location line="+808"/>
+        <location line="+944"/>
         <source>Not now</source>
         <translation>Not now</translation>
     </message>
     <message>
-        <location line="-807"/>
+        <location line="-944"/>
+        <source>Continue</source>
+        <translation>Continue</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+32"/>
         <source>another controller</source>
         <translation>another controller</translation>
     </message>
@@ -6318,7 +6323,22 @@ This can&apos;t be undone.</translation>
         <translation>Joins as Guest %1. Nothing is kept after it leaves.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+14"/>
+        <source>Continue as %1.</source>
+        <translation>Continue as %1.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Switches to %1. %2&apos;s games are paused and kept.</source>
+        <translation>Switches to %1. %2&apos;s games are paused and kept.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Switches to %1.</source>
+        <translation>Switches to %1.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>This controller stops playing as %1.</source>
         <translation>This controller stops playing as %1.</translation>
     </message>
@@ -6328,7 +6348,7 @@ This can&apos;t be undone.</translation>
         <translation>Now on %2. Picking it moves %1 here.</translation>
     </message>
     <message>
-        <location line="+374"/>
+        <location line="+477"/>
         <source>%1 could not join</source>
         <translation>%1 could not join</translation>
     </message>
@@ -6338,12 +6358,17 @@ This can&apos;t be undone.</translation>
         <translation>Try again.</translation>
     </message>
     <message>
-        <location line="+231"/>
+        <location line="+241"/>
         <source>Paused · %1</source>
         <translation>Paused · %1</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+29"/>
+        <source>Turn on a controller to play</source>
+        <translation>Turn on a controller to play</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>%1 wants to play</source>
         <translation>%1 wants to play</translation>
     </message>
@@ -6358,12 +6383,12 @@ This can&apos;t be undone.</translation>
         <translation>Profiles</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+38"/>
         <source>Waiting for the profiles service…</source>
         <translation>Waiting for the profiles service…</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+85"/>
         <source>Join in or switch to %1?</source>
         <translation>Join in or switch to %1?</translation>
     </message>

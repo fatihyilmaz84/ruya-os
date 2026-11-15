@@ -519,6 +519,8 @@ FocusScope {
             toasts.noteInput()
             presence.check()
         }
+        // Woken from sleep: "Who's playing?" in wake mode when seat 1 has no connected pad (RUY-707).
+        function onResumed() { whosPlaying.wake() }
     }
     Binding {
         target: IdleClock

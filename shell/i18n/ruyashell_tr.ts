@@ -1174,7 +1174,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerOnboarding</name>
     <message>
-        <location filename="../qml/ControllerOnboarding.qml" line="+44"/>
+        <location filename="../qml/ControllerOnboarding.qml" line="+48"/>
         <source>Continue</source>
         <translation>Devam</translation>
     </message>
@@ -1190,20 +1190,20 @@ Bu geri alınamaz.</translation>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+212"/>
-        <location line="+71"/>
+        <location line="+252"/>
+        <location line="+76"/>
         <source>Buttons in games</source>
         <translation>Oyunlarda düğmeler</translation>
     </message>
     <message>
-        <location line="-70"/>
-        <location line="+71"/>
+        <location line="-75"/>
+        <location line="+76"/>
         <source>Try your controller</source>
         <translation>Kontrolcünüzü deneyin</translation>
     </message>
     <message>
-        <location line="-71"/>
-        <location line="+71"/>
+        <location line="-76"/>
+        <location line="+76"/>
         <source>Pair a controller</source>
         <translation>Kontrolcü eşleştir</translation>
     </message>
@@ -2150,7 +2150,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+437"/>
+        <location filename="../qml/GameControls.qml" line="+455"/>
         <location line="+182"/>
         <source>Could not save to the USB drive</source>
         <translation>USB belleğe kaydedilemedi</translation>
@@ -2557,7 +2557,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ManageProfilesPane</name>
     <message>
-        <location filename="../qml/ManageProfilesPane.qml" line="+41"/>
+        <location filename="../qml/ManageProfilesPane.qml" line="+43"/>
         <source>Your own profile is under My profile.</source>
         <translation>Kendi profiliniz Profilim bölümünde.</translation>
     </message>
@@ -3149,7 +3149,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>OptionsMenu</name>
     <message>
-        <location filename="../qml/OptionsMenu.qml" line="+46"/>
+        <location filename="../qml/OptionsMenu.qml" line="+48"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -3165,7 +3165,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 seçenekleri</translation>
     </message>
     <message>
-        <location line="+208"/>
+        <location line="+219"/>
         <source>No options for this yet.</source>
         <translation>Bunun için henüz seçenek yok.</translation>
     </message>
@@ -3793,7 +3793,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Profiles</name>
     <message>
-        <location filename="../src/profiles/Profiles.cpp" line="+103"/>
+        <location filename="../src/profiles/Profiles.cpp" line="+186"/>
         <source>Guest</source>
         <translation>Misafir</translation>
     </message>
@@ -4524,7 +4524,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+693"/>
+        <location filename="../qml/Shell.qml" line="+701"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -4687,7 +4687,7 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza seçenekleri şu anda kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+90"/>
+        <location line="+91"/>
         <source>Could not uninstall %1. Try again.</source>
         <translation>%1 kaldırılamadı. Yeniden deneyin.</translation>
     </message>
@@ -4697,7 +4697,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kaldırıldı.</translation>
     </message>
     <message>
-        <location line="+528"/>
+        <location line="+529"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -4719,7 +4719,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1839"/>
+        <location line="-1841"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -4750,7 +4750,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1587"/>
+        <location line="+1589"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
@@ -6250,30 +6250,35 @@ Bu geri alınamaz.</translation>
 <context>
     <name>WhosPlaying</name>
     <message>
-        <location filename="../qml/WhosPlaying.qml" line="+148"/>
-        <location line="+215"/>
+        <location filename="../qml/WhosPlaying.qml" line="+172"/>
+        <location line="+325"/>
         <source>Guest</source>
         <translation>Misafir</translation>
     </message>
     <message>
-        <location line="-249"/>
+        <location line="-361"/>
         <location line="+1"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
         <location line="-1"/>
-        <location line="+808"/>
+        <location line="+944"/>
         <source>Not now</source>
         <translation>Şimdi değil</translation>
     </message>
     <message>
-        <location line="-807"/>
+        <location line="-944"/>
+        <source>Continue</source>
+        <translation>Devam</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+32"/>
         <source>another controller</source>
         <translation>başka bir kumanda</translation>
     </message>
@@ -6298,7 +6303,22 @@ Bu geri alınamaz.</translation>
         <translation>Misafir %1 olarak katılır. Ayrılınca hiçbir şey saklanmaz.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+14"/>
+        <source>Continue as %1.</source>
+        <translation>%1 olarak devam et.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Switches to %1. %2&apos;s games are paused and kept.</source>
+        <translation>%1 profiline geçer. %2 profilinin oyunları duraklatılıp saklanır.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Switches to %1.</source>
+        <translation>%1 profiline geçer.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>This controller stops playing as %1.</source>
         <translation>Bu kumanda artık %1 olarak oynamıyor.</translation>
     </message>
@@ -6308,7 +6328,7 @@ Bu geri alınamaz.</translation>
         <translation>Şu an %2 üzerinde. Seçersen %1 buraya geçer.</translation>
     </message>
     <message>
-        <location line="+374"/>
+        <location line="+477"/>
         <source>%1 could not join</source>
         <translation>%1 katılamadı</translation>
     </message>
@@ -6318,12 +6338,17 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene.</translation>
     </message>
     <message>
-        <location line="+231"/>
+        <location line="+241"/>
         <source>Paused · %1</source>
         <translation>Duraklatıldı · %1</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+29"/>
+        <source>Turn on a controller to play</source>
+        <translation>Oynamak için bir kontrolcü aç</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>%1 wants to play</source>
         <translation>%1 oynamak istiyor</translation>
     </message>
@@ -6338,12 +6363,12 @@ Bu geri alınamaz.</translation>
         <translation>Profiller</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+38"/>
         <source>Waiting for the profiles service…</source>
         <translation>Profil hizmeti bekleniyor…</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+85"/>
         <source>Join in or switch to %1?</source>
         <translation>Katıl mı, %1 profiline geç mi?</translation>
     </message>

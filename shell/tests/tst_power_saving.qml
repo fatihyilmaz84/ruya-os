@@ -885,6 +885,11 @@ Item {
         }
 
         function test_a_resume_from_sleep_opens_the_gap_too() {
+            // Ada (signed in with the keyboard) plays on a connected pad: with seat 1 padless the resume would
+            // open "Who's playing?" in wake mode over the probe (RUY-707, tst_whos_playing_wake.qml).
+            Input.joinPlayer("usb-045e-0b12-8e01c2d4a9f3", "p2")
+            tryVerify(() => Input.players.length === 1 && Input.players[0].device_id === "usb-045e-0b12-8e01c2d4a9f3",
+                      2000, "seat 1 has the Xbox pad")
             probe.forceActiveFocus()
             minutes(60)
             compare(IdleClock.stage, "sleep")

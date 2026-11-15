@@ -215,7 +215,7 @@ Shell icons come from Google's **Material Symbols Rounded** (Apache-2.0), bundle
 
 **Consequences.** T-258 is parked by the owner (it keeps its text, options and criteria for the day the decision is reopened); the T-248 table loses its browser step; no browser engine in RuyaKit or the extension.
 
-### ADR-017 — Local players and the controller that drives the UI — *Accepted (owner, 2026-11-07; amended by the owner 2026-11-12, 2026-11-13 and 2026-11-14; this text folds the amendments in, RUY-448)*
+### ADR-017 — Local players and the controller that drives the UI — *Accepted (owner, 2026-11-07; amended by the owner 2026-11-12, 2026-11-13, 2026-11-14 and 2026-11-15; this text folds the amendments in, RUY-448, RUY-707)*
 
 **Question.** What happens when a second controller connects? Which pad drives the shell, how a pad belongs to a person, and how a second person (a profile or a guest) plays in the same session. The owner put it this way (2026-11-07): "when we add a second controller how do we use it; which controller is used by who; on PS it asks which user; what about guests". And on 2026-11-12: "we should ask for the user on connect. a profile should not have two controllers. for local coop, both users should be signed in". ADR-027's request (2026-11-09) also applies: "assign a controller to a user so the UI is not operated by two controllers at the same time, as on PlayStation 5".
 
@@ -257,13 +257,18 @@ Shell icons come from Google's **Material Symbols Rounded** (Apache-2.0), bundle
     - The other players get their achievements (T-246) and play time (T-247) **attributed**. Guests get no attribution.
     - The **strictest age limit** of everyone signed in applies at launch (T-211).
 12. **Shown on screen** (owner 2026-11-14): players appear in the top bar (avatars next to the profile) and in the Ruya Hub (a row of players). There is no "joined" toast.
+13. **Waking from sleep asks who plays** (owner 2026-11-15, amendment 7, RUY-707). After a wake from sleep (not the screen saver or the dark screen), when seat 1 has no connected pad, "Who's playing?" opens at once in a **wake mode**:
+    - The signed-in profile comes first and has the focus ("Continue as <name>"); the other kept profiles stand beside it, and picking one is a **Switch** (its PIN when it has one).
+    - Continuing needs **no PIN** (sleep does not lock the console; a lock on wake would be a separate privacy setting, an owner question). The pad that answers becomes player 1; with the keyboard alone the prompt just closes.
+    - Back and Guide continue as the signed-in profile, so one press always restores what was there before the sleep. There is no "Not now" and no Guest card (lead ruling: a temporary guest can never be the active profile, point 7; guests join afterwards as usual).
+    - The keyboard drives it until a pad connects; that pad then drives the same step (no second prompt). With seat 1's pad still connected (USB) a wake changes nothing.
 
 **Consequences.**
 - `Input1` gains seats (`JoinPlayer`, `LeavePlayer`, `ListPlayers`, `PlayersChanged`, `SetNavigator`, `ForeignInput`) in `ruya-inputd`, the one owner of the pads (ADR-024), and loses the draft `AssignPad`.
 - `Profiles1` gains `VerifyPin` and temporary guests.
 - The shell gets the "Who's playing?" prompt (design: canvas "RuyaOS Who's Playing", 2026-11-14), player chips and the Hub players row.
 - 06 §11.3 is the rule table.
-- Tickets: RUY-121, RUY-627, RUY-38, RUY-122, RUY-628, RUY-629, RUY-630, RUY-124, RUY-125, RUY-631 (formation RUY-553). RUY-123 (virtual pads per seat) is re-scoped by the lead.
+- Tickets: RUY-121, RUY-627, RUY-38, RUY-122, RUY-628, RUY-629, RUY-630, RUY-124, RUY-125, RUY-631, RUY-707 (formation RUY-553). RUY-123 (virtual pads per seat) is re-scoped by the lead.
 
 ### ADR-018 — Epic Games Store on RuyaOS — *Accepted (owner, 2026-11-12: option (a), "this will be an app that can be installed"); legal points open until a public release*
 **Question.** The owner asked for Epic Games Store integration the way Heroic does it. Heroic's Epic support is Legendary, an open-source (GPL-3.0) command-line client that uses Epic's unofficial web and launcher APIs; Epic offers no sanctioned third-party launcher API and may change or block it. Games run as Windows titles through Wine/Proton (no anti-cheat titles).
