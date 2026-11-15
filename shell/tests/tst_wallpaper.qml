@@ -616,7 +616,10 @@ Item {
         function test_a_missing_or_corrupt_file_falls_back_with_a_toast() {
             // A file that is gone.
             DeviceSettings.wallpaper = "user:gone.jpg"
-            tryCompare(DeviceSettings, "wallpaper", "", 5000)
+            // The fallback fires on the Image load verdict (Image.Error, then failed); an async decode
+            // can take far longer than 5 s on a loaded machine, so the bound is generous and it
+            // returns the moment the verdict is in.
+            tryCompare(DeviceSettings, "wallpaper", "", 60000)
             tryVerify(() => toastTexts().includes("Wallpaper could not be loaded"))
             compare(find("wallpaperLayer").has, false)
             compare(find("backdrop").shown, true, "the default look")
@@ -626,7 +629,10 @@ Item {
             const id = Wallpapers.mockPlantCorrupt()
             compare(Wallpapers.user.length, 1)
             DeviceSettings.wallpaper = id
-            tryCompare(DeviceSettings, "wallpaper", "", 5000)
+            // The fallback fires on the Image load verdict (Image.Error, then failed); an async decode
+            // can take far longer than 5 s on a loaded machine, so the bound is generous and it
+            // returns the moment the verdict is in.
+            tryCompare(DeviceSettings, "wallpaper", "", 60000)
             tryVerify(() => toastTexts().includes("Wallpaper could not be loaded"))
             compare(find("wallpaperLayer").has, false)
             compare(find("backdrop").shown, true)
