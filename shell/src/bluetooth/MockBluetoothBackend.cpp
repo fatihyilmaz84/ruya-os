@@ -52,7 +52,7 @@ void MockBluetoothBackend::setPowered(bool on)
 
 void MockBluetoothBackend::startScan()
 {
-    if (!m_powered) {
+    if (!m_powered || !m_primaryOff.isEmpty()) {
         answer(QStringLiteral("scan"), QString(), QStringLiteral("unavailable"));
         return;
     }
@@ -86,7 +86,7 @@ void MockBluetoothBackend::startControllerPairing(int seconds)
     Q_UNUSED(seconds)
     ++m_pairingStarts;
     QString status = QStringLiteral("ok");
-    if (!m_powered)
+    if (!m_powered || !m_primaryOff.isEmpty())
         status = QStringLiteral("unavailable");
     else if (m_pairing == QLatin1String("open"))
         status = QStringLiteral("busy");
@@ -128,6 +128,13 @@ void MockBluetoothBackend::finishPairing(const QString &outcome)
         }
         m_inputPresent = true;
     }
+    publish();
+}
+
+void MockBluetoothBackend::setPrimaryOff(const QString &off, const QString &inUse)
+{
+    m_primaryOff = off;
+    m_inUse = inUse;
     publish();
 }
 
@@ -441,6 +448,8 @@ void MockBluetoothBackend::initState()
     m_pairing = QStringLiteral("idle");
     m_pairingScript = QStringLiteral("wait");
     m_inputPresent = true;
+    m_primaryOff.clear();
+    m_inUse.clear();
     m_pairingStarts = 0;
     m_idleReports = 0;
     m_lastIdleSeconds = -1;
@@ -508,6 +517,8 @@ void MockBluetoothBackend::publish(int delayMs)
     const bool discovering = m_discovering;
     const QString pairing = m_pairing;
     const bool inputPresent = m_inputPresent;
+    const QString primaryOff = m_primaryOff;
+    const QString inUse = m_inUse;
     const QList<BtGamepad> pads = gamepadList();
     // Three requests, as on the bus: the state, the list and the pads.
     const quint64 stateRequest = beginStateRequest();
@@ -515,10 +526,10 @@ void MockBluetoothBackend::publish(int delayMs)
     const quint64 gamepadsRequest = beginGamepadsRequest();
     if (delayMs > 0)
         ++m_pending;
-    QTimer::singleShot(delayMs, this, [this, stateRequest, devicesRequest, gamepadsRequest, powered, discovering, pairing, inputPresent, list, pads, delayMs] {
+    QTimer::singleShot(delayMs, this, [this, stateRequest, devicesRequest, gamepadsRequest, powered, discovering, pairing, inputPresent, primaryOff, inUse, list, pads, delayMs] {
         if (delayMs > 0)
             --m_pending;
-        deliverState(stateRequest, powered, discovering, pairing, inputPresent);
+        deliverState(stateRequest, powered, discovering, pairing, inputPresent, primaryOff, inUse);
         deliverDevices(devicesRequest, list);
         deliverGamepads(gamepadsRequest, pads);
     });

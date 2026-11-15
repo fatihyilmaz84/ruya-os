@@ -696,7 +696,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>BluetoothPane</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+100"/>
+        <location filename="../qml/BluetoothPane.qml" line="+101"/>
         <source>Forget %1?</source>
         <translation>%1 unutulsun mu?</translation>
     </message>
@@ -706,12 +706,7 @@ Bu geri alınamaz.</translation>
         <translation>Kullanılması için yeniden eşleştirilmesi gerekir.</translation>
     </message>
     <message>
-        <location line="+140"/>
-        <source>Bluetooth is off.</source>
-        <translation>Bluetooth kapalı.</translation>
-    </message>
-    <message>
-        <location line="-72"/>
+        <location line="+68"/>
         <source>Pairing…</source>
         <translation>Eşleştiriliyor…</translation>
     </message>
@@ -736,22 +731,22 @@ Bu geri alınamaz.</translation>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
     <message>
-        <location line="+113"/>
+        <location line="+118"/>
         <source>Pair again %1</source>
         <translation>%1 cihazını yeniden eşleştir</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+2"/>
         <source>Put it in pairing mode first</source>
         <translation>Önce eşleştirme moduna alın</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="+19"/>
         <source>Rename %1</source>
         <translation>%1 adını değiştir</translation>
     </message>
     <message>
-        <location line="-263"/>
+        <location line="-271"/>
         <source>Paired</source>
         <translation>Eşleşti</translation>
     </message>
@@ -827,7 +822,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-196"/>
-        <location line="+351"/>
+        <location line="+362"/>
         <source>Forget %1</source>
         <translation>%1 cihazını unut</translation>
     </message>
@@ -835,7 +830,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>BluetoothText</name>
     <message>
-        <location filename="../qml/BluetoothText.qml" line="+20"/>
+        <location filename="../qml/BluetoothText.qml" line="+41"/>
         <source>Pairing failed. Put the controller in pairing mode again.</source>
         <translation>Eşleştirme başarısız. Kontrolcüyü yeniden eşleştirme kipine alın.</translation>
     </message>
@@ -855,12 +850,38 @@ Bu geri alınamaz.</translation>
         <translation>Cihaz yanıt vermedi.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-10"/>
         <source>Bluetooth is off.</source>
         <translation>Bluetooth kapalı.</translation>
     </message>
     <message>
+        <location line="-15"/>
+        <source>The USB adapter</source>
+        <translation>USB adaptörü</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>the USB adapter</source>
+        <translation>USB adaptörünü</translation>
+    </message>
+    <message>
         <location line="+2"/>
+        <source>The built-in adapter</source>
+        <translation>Yerleşik adaptör</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>the built-in adapter</source>
+        <translation>yerleşik adaptörü</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>%1 is off. Bluetooth uses %2.</source>
+        <extracomment>A toast. %1: the adapter that is off (&quot;The USB adapter&quot;, or a name such as &quot;hci1&quot;), %2: the one in use (&quot;the built-in adapter&quot; or &quot;hci0&quot;). Names such as hci0 stay as they are.</extracomment>
+        <translation>%1 kapalı. Bluetooth %2 kullanıyor.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
         <source>That keyboard was not confirmed.</source>
         <translation>Bu klavye onaylanmadı.</translation>
     </message>
@@ -1513,7 +1534,7 @@ Bu geri alınamaz.</translation>
         <translation>Eşleştirmeyi başlatmak için A&apos;ya basın.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+4"/>
         <source>Bluetooth is off or missing, so a controller cannot be paired here.</source>
         <translation>Bluetooth kapalı ya da yok, bu yüzden burada kontrolcü eşleştirilemiyor.</translation>
     </message>
@@ -1779,8 +1800,9 @@ Bu geri alınamaz.</translation>
 <context>
     <name>DeviceIcons</name>
     <message>
-        <location filename="../qml/DeviceIcons.qml" line="+129"/>
+        <location filename="../qml/DeviceIcons.qml" line="+131"/>
         <source>%1 (%2)</source>
+        <extracomment>A device name followed by the end of its address, e.g. &quot;Wireless Controller (00:05)&quot;. The name (%1) must stay first; it is replaced by nothing here, so only the &quot; (%2)&quot; part shows.</extracomment>
         <translation>%1 (%2)</translation>
     </message>
     <message>
@@ -2934,7 +2956,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Notifications</name>
     <message>
-        <location filename="../qml/Notifications.qml" line="+162"/>
+        <location filename="../qml/Notifications.qml" line="+165"/>
         <source>Just now</source>
         <translation>Şimdi</translation>
     </message>
@@ -4076,7 +4098,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SettingControl</name>
     <message>
-        <location filename="../qml/controls/SettingControl.qml" line="+75"/>
+        <location filename="../qml/controls/SettingControl.qml" line="+78"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -5906,7 +5928,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ToastLayer</name>
     <message>
-        <location filename="../qml/ToastLayer.qml" line="+27"/>
+        <location filename="../qml/ToastLayer.qml" line="+32"/>
         <source>%1: battery low (%2%)</source>
         <translation>%1: pil zayıf (%2%)</translation>
     </message>

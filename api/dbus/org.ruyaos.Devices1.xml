@@ -374,6 +374,21 @@
     </property>
 
     <!--
+      Why StartScan, Pair and StartControllerPairing answer "unavailable" while Powered is true
+      (RUY-21). PrimaryAdapterOff describes the primary adapter when it is off and another adapter
+      is on; AdapterInUse describes an adapter that is on then. Each is "usb" or "built-in" when
+      the two adapters differ in that (the words a person knows), else the adapter's name ("hci1",
+      "hci0"). Both are "" otherwise (all adapters on, all off, or no adapter), so a client says "Bluetooth is off"
+      only when Powered is false and names the adapter otherwise.
+    -->
+    <property name="PrimaryAdapterOff" type="s" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+    <property name="AdapterInUse" type="s" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!--
       Paired devices and those found by a scan, in a stable order (paired first). One
       dictionary per device:
         id         s   stable id, opaque to the shell (e.g. the BlueZ address)

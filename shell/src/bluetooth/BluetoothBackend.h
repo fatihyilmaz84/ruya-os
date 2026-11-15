@@ -76,6 +76,9 @@ signals:
     void controllerStateChanged(const QString &pairing, bool inputPresent);
     // The window refused a device that is not an input device.
     void controllerRejected();
+    // The primary adapter is off while another is on (PrimaryAdapterOff, AdapterInUse; "" and "" otherwise).
+    // Reported together with stateChanged.
+    void adaptersChanged(const QString &primaryOff, const QString &inUse);
     // A game controller appeared or went away, over USB or Bluetooth (T-260). id is stable per pad;
     // family: "playstation" | "xbox" | "nintendo" | "8bitdo" | ""; transport: "usb" | "bluetooth" | "other";
     // model: the controller model, "" when unknown (RUY-491).
@@ -99,11 +102,13 @@ protected:
     // if no newer one of the same kind has been reported already (the state and the device list
     // are two kinds). RequestSequence.h.
     quint64 beginStateRequest() { return m_stateSeq.begin(); }
-    void deliverState(quint64 request, bool powered, bool discovering, const QString &pairing, bool inputPresent)
+    void deliverState(quint64 request, bool powered, bool discovering, const QString &pairing, bool inputPresent,
+                      const QString &primaryOff = QString(), const QString &inUse = QString())
     {
         if (!m_stateSeq.accept(request))
             return;
         emit stateChanged(powered, discovering);
+        emit adaptersChanged(primaryOff, inUse);
         emit controllerStateChanged(pairing, inputPresent);
     }
     quint64 beginDevicesRequest() { return m_devicesSeq.begin(); }

@@ -126,6 +126,8 @@ QtObject {
         // The tail is put into the format apart from the name, so an alias that contains "%2" or "$&" comes out
         // as typed (QString.arg() would read it as the next placeholder).
         const address = addressTail(d.id)
+        //: A device name followed by the end of its address, e.g. "Wireless Controller (00:05)". The name (%1) must stay first; it is
+        //: replaced by nothing here, so only the " (%2)" part shows.
         return { name: name, tail: qsTr("%1 (%2)").replace("%1", () => "").replace("%2", () => address) }
     }
 

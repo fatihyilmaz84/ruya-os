@@ -24,7 +24,12 @@ Item {
     Connections {
         target: Bluetooth
         function onBatteryLow(id, name, percent, kind, family) {
-            Notifications.show(qsTr("%1: battery low (%2%)").arg(name).arg(percent), "warning", "",
+            // The alias the player knows (with the end of the address when two devices share it), not the
+            // name the service sent along.
+            const wanted = String(id).toLowerCase()
+            const paired = Bluetooth.devices.find(d => d.id.toLowerCase() === wanted)
+            const shown = paired ? DeviceIcons.shownName(Bluetooth.devices, paired) : DeviceIcons.plain(name)
+            Notifications.show(qsTr("%1: battery low (%2%)").arg(shown).arg(percent), "warning", "",
                                DeviceIcons.iconFor(kind, family), "", { source: "devices" })
         }
     }

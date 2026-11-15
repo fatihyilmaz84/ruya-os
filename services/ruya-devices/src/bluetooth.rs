@@ -481,6 +481,28 @@ pub trait Bluez: Send + Sync {
     fn set_alias(&self, adapter: &str, address: &str, alias: &str) -> Result<(), BtError>;
 }
 
+/// `(primary, other)` when the primary adapter is off and another one is on, else `None`. Each is
+/// `"usb"` or `"built-in"` when the two adapters differ in that, else the `hciN` name: a person
+/// on a sofa knows the dongle, not `hci1` (RUY-21).
+fn off_primary(adapters: &[AdapterInfo], primary: Option<&str>) -> Option<(String, String)> {
+    let primary = primary?;
+    let first = adapters.iter().find(|a| a.path == primary)?;
+    if first.state.powered {
+        return None;
+    }
+    let other = adapters
+        .iter()
+        .find(|a| a.path != primary && a.state.powered)?;
+    if first.usb != other.usb {
+        let kind = |usb: bool| if usb { "usb" } else { "built-in" };
+        return Some((kind(first.usb).to_owned(), kind(other.usb).to_owned()));
+    }
+    Some((
+        adapter_name(primary).to_owned(),
+        adapter_name(&other.path).to_owned(),
+    ))
+}
+
 /// What a refresh found different (so the signals are due).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Changes {
@@ -492,11 +514,18 @@ pub struct Changes {
     /// The window refused a device that is not an input device (the `ControllerPairingRejected`
     /// signal).
     pub rejected: bool,
+    /// `PrimaryAdapterOff` or `AdapterInUse` changed (RUY-21).
+    pub adapters: bool,
 }
 
 impl Changes {
     pub fn any(&self) -> bool {
-        self.devices || self.powered || self.discovering || self.pairing || self.rejected
+        self.devices
+            || self.powered
+            || self.discovering
+            || self.pairing
+            || self.rejected
+            || self.adapters
     }
 
     pub fn merge(self, other: Changes) -> Changes {
@@ -506,6 +535,7 @@ impl Changes {
             discovering: self.discovering || other.discovering,
             pairing: self.pairing || other.pairing,
             rejected: self.rejected || other.rejected,
+            adapters: self.adapters || other.adapters,
         }
     }
 }
@@ -642,6 +672,14 @@ impl<B: Bluez> Bluetooth<B> {
         Some((adapter_name(path).to_owned(), adapter.address.clone()))
     }
 
+    /// The primary adapter is off while another is on (RUY-21): the primary's name and the name
+    /// of an adapter that is on. `StartScan`, `Pair` and the pairing window answer `unavailable`
+    /// then, and the shell can say which adapter to switch on.
+    pub fn primary_off(&self) -> Option<(String, String)> {
+        let st = self.lock();
+        off_primary(&st.adapters, st.primary.as_deref())
+    }
+
     /// When the scan we started has to be ended, if one runs.
     pub fn scan_deadline(&self) -> Option<Instant> {
         self.lock().scan_until
@@ -757,18 +795,33 @@ impl<B: Bluez> Bluetooth<B> {
         let before = st.adapter.unwrap_or(off);
         let after = adapter.unwrap_or(off);
         let changes = Changes {
+            adapters: off_primary(&st.adapters, st.primary.as_deref())
+                != off_primary(&adapters, primary.as_deref()),
             devices: st.devices != devices,
             powered: before.powered != after.powered,
             discovering: (before.powered && before.discovering)
                 != (after.powered && after.discovering),
             ..Changes::default()
         };
+        st.pending.adapters |= changes.adapters;
         st.pending.devices |= changes.devices;
         st.pending.powered |= changes.powered;
         st.pending.discovering |= changes.discovering;
         st.adapter = adapter;
         st.adapters = adapters;
-        st.primary = primary;
+        let old_primary = std::mem::replace(&mut st.primary, primary.clone());
+        // A user scan runs on one adapter. When the primary moves elsewhere, it is stopped there
+        // (the window keeps its own scan) and goes on at the new primary while time is left.
+        let moved_scan = if st.window.is_none() && old_primary.is_some() && old_primary != primary {
+            match (st.scan_until, st.scan_adapter.clone()) {
+                (Some(until), Some(path)) if Some(&path) == old_primary.as_ref() => {
+                    Some((path, until))
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
         st.devices = devices;
         st.raw_devices = if on { raw_devices } else { Vec::new() };
         // The scan is over when BlueZ says so after having said it runs, or the adapter went
@@ -778,6 +831,9 @@ impl<B: Bluez> Bluetooth<B> {
             st.scan_until = None;
         }
         drop(st);
+        if let Some((old, until)) = moved_scan {
+            self.follow_primary_with_scan(&old, primary.as_deref(), until, on);
+        }
         for line in links.into_iter().chain(radio) {
             log::info(&line);
         }
@@ -932,6 +988,43 @@ impl<B: Bluez> Bluetooth<B> {
         st.scan_adapter = Some(path);
         st.scan_until = Some(now + SCAN_LIMIT);
         Status::Ok
+    }
+
+    /// The primary adapter changed while a user scan ran on `old`: stops it there and, with time
+    /// left and the radio on, starts it on the new primary under the same deadline.
+    fn follow_primary_with_scan(&self, old: &str, new: Option<&str>, until: Instant, on: bool) {
+        if let Err(e) = self.bluez.stop_discovery(old) {
+            log::info(&format!(
+                "ending the scan on {} failed: {}",
+                adapter_name(old),
+                e.0
+            ));
+        }
+        let mut st = self.lock();
+        match new {
+            Some(new) if on && Instant::now() < until => {
+                drop(st);
+                match self.bluez.start_discovery(new) {
+                    Ok(()) => {
+                        let mut st = self.lock();
+                        st.scan_adapter = Some(new.to_owned());
+                        // The read that saw the flip may have dropped the deadline (BlueZ had
+                        // said the old adapter was discovering): the moved scan keeps its own.
+                        st.scan_until = Some(until);
+                        log::info(&format!(
+                            "scan moved from {} to {}",
+                            adapter_name(old),
+                            adapter_name(new)
+                        ));
+                    }
+                    Err(e) => {
+                        self.lock().scan_until = None;
+                        log::info(&format!("scan on {} failed: {}", adapter_name(new), e.0));
+                    }
+                }
+            }
+            _ => st.scan_until = None,
+        }
     }
 
     pub fn stop_scan(&self) -> Status {
@@ -4416,6 +4509,61 @@ mod tests {
     }
 
     #[test]
+    fn the_primary_off_with_another_on_names_both_adapters() {
+        let bt = two();
+        assert_eq!(bt.primary_off(), None, "both are on");
+        let mut raw = bt.bluez.snapshot().expect("fake");
+        for a in raw.adapters.iter_mut().filter(|a| a.path == HCI1) {
+            a.state.powered = false;
+        }
+        bt.bluez.set_raw(raw.clone());
+        let changes = bt.refresh().expect("reads");
+        assert!(changes.adapters, "the property is announced");
+        assert_eq!(
+            bt.primary_off(),
+            Some(("usb".to_owned(), "built-in".to_owned())),
+            "hci1 is the USB one, hci0 the built-in one"
+        );
+        // Both USB: the adapters are told apart by their names.
+        let mut both = raw.clone();
+        for a in both.adapters.iter_mut() {
+            a.usb = true;
+        }
+        bt.bluez.set_raw(both);
+        bt.refresh().expect("reads");
+        assert_eq!(
+            bt.primary_off(),
+            Some(("hci1".to_owned(), "hci0".to_owned()))
+        );
+        bt.bluez.set_raw(raw.clone());
+        bt.refresh().expect("reads");
+        // Everything off is "Bluetooth is off", not a named adapter.
+        for a in raw.adapters.iter_mut() {
+            a.state.powered = false;
+        }
+        bt.bluez.set_raw(raw);
+        bt.refresh().expect("reads");
+        assert_eq!(bt.primary_off(), None);
+    }
+
+    #[test]
+    fn a_user_scan_leaves_the_old_primary_when_the_primary_flips() {
+        let bt = two();
+        assert_eq!(bt.start_scan(Instant::now()), Status::Ok);
+        bt.refresh().expect("reads"); // BlueZ says hci1 is discovering
+        assert!(bt.bluez.adapter_state(HCI1).expect("hci1").discovering);
+        flip_primary_to_hci0(&bt);
+        // Nobody called stop_scan: the flip alone ended it on hci1 and moved it to hci0.
+        assert!(!bt.bluez.adapter_state(HCI1).expect("hci1").discovering);
+        assert!(bt.bluez.adapter_state(HCI0).expect("hci0").discovering);
+        assert!(bt.scan_deadline().is_some(), "the deadline stays");
+        bt.refresh().expect("reads");
+        assert!(bt.scan_deadline().is_some(), "and survives the next read");
+        assert_eq!(bt.stop_scan(), Status::Ok);
+        assert!(!bt.bluez.adapter_state(HCI0).expect("hci0").discovering);
+    }
+
+    #[test]
     fn the_window_pairs_only_a_pad_under_its_own_adapter() {
         let bt = two();
         assert_eq!(
@@ -4515,8 +4663,8 @@ mod tests {
     #[test]
     fn the_window_scan_stops_on_its_own_adapter_after_a_primary_flip() {
         let bt = two();
-        // the user's scan runs on hci1, then hci0 becomes the primary adapter and the window
-        // opens there with a scan of its own
+        // the user's scan runs on hci1, then hci0 becomes the primary adapter: the scan moves
+        // there (RUY-21) and the window opens on it
         assert_eq!(bt.start_scan(Instant::now()), Status::Ok);
         assert!(bt.bluez.adapter_state(HCI1).expect("hci1").discovering);
         flip_primary_to_hci0(&bt);
@@ -4530,12 +4678,12 @@ mod tests {
         );
         assert_eq!(bt.stop_controller_pairing(true), Status::Ok);
         assert!(
-            !bt.bluez.adapter_state(HCI0).expect("hci0").discovering,
-            "the window's scan is stopped on hci0 although a scan of the user's runs"
+            bt.bluez.adapter_state(HCI0).expect("hci0").discovering,
+            "the user's scan, now on hci0, goes on after the window closes"
         );
         assert!(
-            bt.bluez.adapter_state(HCI1).expect("hci1").discovering,
-            "the user's scan on hci1 goes on"
+            !bt.bluez.adapter_state(HCI1).expect("hci1").discovering,
+            "nothing scans on the old primary"
         );
         assert!(bt.scan_deadline().is_some());
     }

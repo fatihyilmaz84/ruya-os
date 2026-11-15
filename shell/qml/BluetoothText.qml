@@ -13,6 +13,27 @@ import QtQuick
 QtObject {
     id: text
 
+    // The adapter as a person knows it: the service says "usb" or "built-in" when the two differ, else "hciN" (04 section 6).
+    function adapterWords(token, subject) {
+        if (token === "usb")
+            return subject ? qsTr("The USB adapter") : qsTr("the USB adapter")
+        if (token === "built-in")
+            return subject ? qsTr("The built-in adapter") : qsTr("the built-in adapter")
+        return token
+    }
+
+    // "unavailable" while Bluetooth is on: the console's main adapter is off and another one is on (RUY-21),
+    // so the adapter is named.
+    function unavailableText() {
+        if (Bluetooth.primaryAdapterOff !== "" && Bluetooth.adapterInUse !== "") {
+            const off = adapterWords(Bluetooth.primaryAdapterOff, true)
+            const inUse = adapterWords(Bluetooth.adapterInUse, false)
+            //: A toast. %1: the adapter that is off ("The USB adapter", or a name such as "hci1"), %2: the one in use ("the built-in adapter" or "hci0"). Names such as hci0 stay as they are.
+            return qsTr("%1 is off. Bluetooth uses %2.").arg(off).arg(inUse)
+        }
+        return qsTr("Bluetooth is off.")
+    }
+
     function statusText(op, status, subject) {
         const pad = subject === "controller"
         switch (status) {
@@ -22,7 +43,7 @@ QtObject {
         case "timeout":
             return pad ? qsTr("The controller did not answer.") : qsTr("The device did not answer.")
         case "unavailable":
-            return qsTr("Bluetooth is off.")
+            return unavailableText()
         case "not-confirmed":
             return qsTr("That keyboard was not confirmed.")
         case "unknown-device":
