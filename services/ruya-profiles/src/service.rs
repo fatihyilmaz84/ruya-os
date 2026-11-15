@@ -173,6 +173,8 @@ impl<A: Accounts> ProfileService<A> {
         let outcome = self.authenticate(id, given_pin, now);
         if outcome.status == Status::Ok {
             if self.active.as_deref() != Some(id) {
+                // A guest whose wipe fails stays recorded into the new session; the next Lock
+                // (or start-up) wipes it again.
                 self.wipe_guests();
             }
             self.active = Some(id.to_owned());
@@ -225,20 +227,10 @@ impl<A: Accounts> ProfileService<A> {
                 }
             }
         }
-        // The id and the uid are taken for good before the user exists.
+        // The id, the uid and the guest record are saved before the user exists: a crash between
+        // the two leaves a record the start-up wipe finds (a missing user counts as wiped).
         let id = self.store.reserve_id();
         self.store.set_next_guest_uid(uid + 1);
-        if let Err(err) = self.store.save() {
-            eprintln!("ruya-profiles: CreateGuest -> failed (store: {err})");
-            return GuestOutcome::of(Status::Failed);
-        }
-        if let Err(err) = self.accounts.create(&id, AccountKind::Guest { uid }) {
-            eprintln!("ruya-profiles: CreateGuest {id} uid {uid} -> failed ({err})");
-            if let Err(err) = self.accounts.remove_guest(&id, uid) {
-                eprintln!("ruya-profiles: removing the half-made guest {id}: {err}");
-            }
-            return GuestOutcome::of(Status::Failed);
-        }
         let colour = (self.store.profiles().len() + number as usize - 1) % AVATAR_COLOURS.len();
         self.store.insert_guest(Guest {
             id: id.clone(),
@@ -247,10 +239,18 @@ impl<A: Accounts> ProfileService<A> {
             uid,
         });
         if let Err(err) = self.store.save() {
-            eprintln!("ruya-profiles: CreateGuest {id} -> failed (store: {err})");
+            eprintln!("ruya-profiles: CreateGuest -> failed (store: {err})");
             self.store.remove_guest(&id);
-            if let Err(err) = self.accounts.remove_guest(&id, uid) {
-                eprintln!("ruya-profiles: removing the unsaved guest {id}: {err}");
+            return GuestOutcome::of(Status::Failed);
+        }
+        if let Err(err) = self.accounts.create(&id, AccountKind::Guest { uid }) {
+            eprintln!("ruya-profiles: CreateGuest {id} uid {uid} -> failed ({err})");
+            // Wipes the half-made user and the record; if that fails too the record stays and
+            // the next wipe tries again.
+            if self.remove_guest(&id) != Status::Ok {
+                eprintln!(
+                    "ruya-profiles: the half-made guest {id} stays recorded for the next wipe"
+                );
             }
             return GuestOutcome::of(Status::Failed);
         }
@@ -839,6 +839,10 @@ mod tests {
         fail: bool,
         fail_create: Shared<bool>,
         fail_remove_guest: Shared<bool>,
+        /// When set, every create reads this store file and notes whether it already lists the
+        /// new user's id as a guest.
+        probe: Shared<Option<std::path::PathBuf>>,
+        recorded_at_create: Shared<Vec<bool>>,
     }
 
     impl Recording {
@@ -861,6 +865,11 @@ mod tests {
                 .lock()
                 .unwrap()
                 .push(crate::accounts::useradd_args(profile_id, kind));
+            if let Some(path) = self.probe.lock().unwrap().clone() {
+                let store = Store::open(path).unwrap();
+                let listed = store.guests().iter().any(|g| g.id == profile_id);
+                self.recorded_at_create.lock().unwrap().push(listed);
+            }
             if *self.fail_create.lock().unwrap() {
                 return Err(std::io::Error::other("useradd failed"));
             }
@@ -1266,6 +1275,45 @@ mod tests {
     }
 
     #[test]
+    fn the_guest_record_is_saved_before_useradd_and_a_restart_wipes_a_half_made_user() {
+        let accounts = Recording::default();
+        let (dir, mut svc, _now) = signed_in(accounts.clone());
+        *accounts.probe.lock().unwrap() = Some(dir.path().join("profiles.toml"));
+        // useradd fails and the cleanup fails too: as after a crash, only the record is left.
+        *accounts.fail_create.lock().unwrap() = true;
+        *accounts.fail_remove_guest.lock().unwrap() = true;
+        assert_eq!(svc.create_guest(), GuestOutcome::of(Status::Failed));
+        assert_eq!(*accounts.recorded_at_create.lock().unwrap(), [true]);
+        drop(svc);
+        let store = Store::open(dir.path().join("profiles.toml")).unwrap();
+        assert_eq!(store.guests().len(), 1, "the record survived the failure");
+        *accounts.fail_create.lock().unwrap() = false;
+        *accounts.fail_remove_guest.lock().unwrap() = false;
+        let again = ProfileService::new(store, accounts.clone());
+        assert!(again.guests().is_empty());
+        assert_eq!(
+            *accounts.removed_guests.lock().unwrap(),
+            vec![("p3".to_owned(), 50000)],
+            "the start-up wipe removes the half-made user"
+        );
+    }
+
+    #[test]
+    fn a_wipe_that_failed_during_a_switch_is_retried_at_the_next_lock() {
+        let accounts = Recording::default();
+        let (_dir, mut svc, now) = signed_in(accounts.clone());
+        svc.create_guest();
+        *accounts.fail_remove_guest.lock().unwrap() = true;
+        assert_eq!(svc.switch_to("p2", "", now).status, Status::Ok);
+        assert_eq!(svc.guests().len(), 1, "the guest could not be wiped yet");
+        assert!(accounts.removed_guests.lock().unwrap().is_empty());
+        *accounts.fail_remove_guest.lock().unwrap() = false;
+        svc.lock();
+        assert!(svc.guests().is_empty());
+        assert_eq!(accounts.removed_guests.lock().unwrap().len(), 1);
+    }
+
+    #[test]
     fn the_guest_range_runs_out() {
         let accounts = Recording::default();
         let (dir, svc, now) = signed_in(accounts.clone());
@@ -1300,6 +1348,16 @@ mod tests {
         assert!(guest.contains("--uid 50000"), "{guest}");
         assert!(guest.contains("RuyaOS profile (guest)"), "{guest}");
         assert!(!guest.contains("UID_MAX"), "{guest}");
+        assert!(
+            guest.contains("-K SUB_UID_COUNT=0 -K SUB_GID_COUNT=0"),
+            "{guest}"
+        );
+        for args in [&created[0], &created[3]] {
+            assert!(
+                !args.join(" ").contains("SUB_"),
+                "profiles keep their subid range"
+            );
+        }
     }
 
     #[test]
