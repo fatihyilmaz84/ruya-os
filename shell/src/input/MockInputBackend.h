@@ -26,7 +26,11 @@
 // same id added again within the hold sits there again, and at its end the seat is freed (2-4) or
 // seat 1 keeps its profile without a pad. One PlayersChanged as a hold starts and one as it ends.
 // Like pads (another id) are the service's rule only. PlayersChanged is not heard while the name
-// has no owner.
+// has no owner. Who drives the UI (RUY-38, routing.rs `navigates`): every pad while nobody is
+// signed in, else only the navigator (SetNavigator) or seat 1's pad (not while its seat is held);
+// padButton plays a pad's press by that rule (its navigation key, or ForeignInput "press" at most
+// once a second, "guide", "player-guide"). The navigator goes with its pad, a profile change and a
+// restart (the caller leaving the bus is the service's rule only).
 class MockInputBackend final : public InputBackend
 {
     Q_OBJECT
@@ -51,6 +55,13 @@ public:
     void joinPlayer(const QString &deviceId, const QString &profile) override;
     void leavePlayer(uint slot) override;
     void refreshPlayers() override;
+    void setNavigator(const QString &deviceId) override;
+    // Tests: a pad's button is pressed and let go ("south", "east", "start", "guide", "dpad_up",
+    // "dpad_down", "dpad_left", "dpad_right", "l1", "r1"). The Qt key the service would send the
+    // shell on "RuyaOS Navigation" (after the pad's Confirm choice), or 0 when the rule gives the
+    // shell nothing: then a ForeignInput may follow, as the service sends it.
+    int padButton(const QString &deviceId, const QString &button);
+    QString navigator() const { return m_navigator; }
     // Tests: the seats the mock service holds now (player records, by slot).
     QVariantList players() const { return playerList(); }
     // Tests: every later JoinPlayer answers `status` and changes nothing ("" clears it).
@@ -159,6 +170,7 @@ private:
     void expireHolds();
     QVariantList playerList() const;
     int seatOfDevice(const QString &deviceId) const;
+    bool navigates(const QString &deviceId) const;
     // After the seats changed from `before`: the device records follow, PlayersChanged is sent.
     void seatsChanged(const QVariantList &before);
     bool applySeatsToDevices();
@@ -189,6 +201,8 @@ private:
     QString m_activeDevice;
     QList<Seat> m_seats;           // 4 while a profile is signed in (index 0 is seat 1), else none
     QString m_padSinceChange;      // the pad of the last press since the profile last changed
+    QString m_navigator;           // SetNavigator's pad ("" = none)
+    QHash<QString, qint64> m_foreignPress;   // device id -> m_clock time of its last ForeignInput "press"
     QString m_failJoin;
     int m_seatHoldMs = 60000;
     QElapsedTimer m_clock;         // the time base of the holds

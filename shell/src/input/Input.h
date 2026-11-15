@@ -81,6 +81,11 @@ class Input : public QObject
     // route's profile, then the others by slot; those answers are not joinFinished). The last good
     // list stays while a newer ListPlayers fails.
     Q_PROPERTY(QVariantList players READ players NOTIFY playersChanged)
+    // The pad the shell asked to drive the UI (setNavigator, RUY-38, 06 §11.3), "" for none. It
+    // goes with a refusal, the pad leaving the list and a change of the route's profile (the
+    // service clears its own then), and is set again when the name gets a new owner, after the
+    // players joined again (those answers are not navigatorFinished).
+    Q_PROPERTY(QString navigator READ navigator NOTIFY navigatorChanged)
 
 public:
     explicit Input(std::unique_ptr<InputBackend> backend, QObject *parent = nullptr);
@@ -133,6 +138,11 @@ public:
     Q_INVOKABLE void joinPlayer(const QString &deviceId, const QString &profile);
     // Input1.LeavePlayer(slot) for seats 2..4; the answer is leaveFinished.
     Q_INVOKABLE void leavePlayer(int slot);
+    QString navigator() const { return m_navigator; }
+    // Input1.SetNavigator(device_id) (RUY-38): while set only that pad navigates the shell, every key
+    // including Guide (the pad of "Who's playing?", RUY-122); "" clears it. The service announces the
+    // pad as the active input at once. The answer is navigatorFinished.
+    Q_INVOKABLE void setNavigator(const QString &deviceId);
 
     // Asks ListDevices again (Settings > Controllers' "Try again").
     Q_INVOKABLE void refreshDevices();
@@ -189,6 +199,13 @@ public:
     // While true the mock's GetConfirmButtons answers 300 ms late, with what it held when asked
     // (the late-reply test).
     Q_INVOKABLE void mockDelayConfirmButtons(bool delayed);
+    // The pad presses and lets go `button` ("south", "east", "start", "guide", "dpad_up",
+    // "dpad_down", "dpad_left", "dpad_right", "l1", "r1"): by the service's rule (06 §11.3) its
+    // navigation key reaches the focused window the way a key from "RuyaOS Navigation" does, or
+    // nothing does and the mock service may send ForeignInput.
+    Q_INVOKABLE void mockPadButton(const QString &deviceId, const QString &button);
+    // The pad the mock service holds as the navigator ("" for none).
+    Q_INVOKABLE QString mockNavigator() const;
     // The seats the mock service holds now (player records), and a status every later JoinPlayer
     // answers without changing anything ("" clears it).
     Q_INVOKABLE QVariantList mockPlayers() const;
@@ -253,6 +270,14 @@ signals:
     // the seat taken, 0 unless "ok".
     void joinFinished(const QString &deviceId, const QString &profile, const QString &status, int slot);
     void leaveFinished(int slot, const QString &status);
+    void navigatorChanged();
+    // SetNavigator answered: "ok", "not-allowed", "unknown-device", or "failed" when the call failed.
+    void navigatorFinished(const QString &deviceId, const QString &status);
+    // Input1.ForeignInput (RUY-38, 06 §11.3): a pad that does not navigate asked for something while
+    // a profile is signed in: "press" (an unseated pad's button, at most once a second), "guide" (its
+    // Guide), "player-guide" (the Guide of a player in seat 2-4: journaled, nothing shown until a
+    // players' Hub is designed).
+    void foreignInput(const QString &deviceId, const QString &kind);
     // Someone is playing with a pad in the app in front (Input1.UserActive, RUY-588): the shell's
     // own keys do not see that input. IdleClock counts it.
     void userActive();
@@ -327,6 +352,10 @@ private:
     QHash<QString, int> m_replays;   // "device|profile" -> JoinPlayer calls of the replay not answered
     QList<Replay> m_replayQueue;     // players to join again once their pad is listed, by slot
     QString m_replayProfile;         // the profile the queue was made for
+    QString m_replayNavigator;       // the navigator to set again once its pad is listed
+    int m_navigatorReplays = 0;      // SetNavigator calls of the replay not answered
+    QString m_navigator;
+    void setNavigatorShown(const QString &deviceId);
     QString m_devicesState = QStringLiteral("loading");
     QString m_confirm = QStringLiteral("family");
     bool m_confirmAvailable = false;

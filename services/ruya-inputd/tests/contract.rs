@@ -10,10 +10,10 @@ use ruya_inputd::accounts::FixedAccounts;
 use ruya_inputd::dbus::{DynBackend, InputIface, Shared};
 use ruya_inputd::routing::{NullBackend, Router, SEAT_GATE};
 
-/// Contract members of `Input1` with no implementation yet (the XML header: ForeignInput RUY-38,
-/// platform and game assignments T-370 / RUY-43, OwnershipMode T-371). The players (JoinPlayer,
-/// LeavePlayer, ListPlayers, PlayersChanged) are built since RUY-121.
-const NOT_BUILT: &[&str] = &["ForeignInput", "GetOwnershipMode", "SetOwnershipMode"];
+/// Contract members of `Input1` with no implementation yet (the XML header: platform and game
+/// assignments T-370 / RUY-43, OwnershipMode T-371). The players (JoinPlayer, LeavePlayer,
+/// ListPlayers, PlayersChanged) are built since RUY-121, ForeignInput and SetNavigator since RUY-38.
+const NOT_BUILT: &[&str] = &["GetOwnershipMode", "SetOwnershipMode"];
 
 #[test]
 fn input1_matches_the_contract() {

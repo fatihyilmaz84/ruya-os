@@ -7,12 +7,15 @@
 
 #include <QCoreApplication>
 #include <QDate>
+#include <QGuiApplication>
+#include <QWindow>
 #include <QInputDevice>
 #include <QKeyEvent>
 #include <QJsonDocument>
 #include <QJsonObject>
 
 #include <algorithm>
+#include <utility>
 
 namespace {
 // The import cap (06 §7): a profile file is at most 64 KiB, refused unread when larger.
@@ -82,8 +85,16 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
             m_devices = devices;
             emit devicesChanged();
         }
-        if (ok)
+        if (ok) {
+            // The navigator's pad is gone: so is the service's navigator. Not while a restarted service
+            // has yet to list it (the replay sets it again once it is listed, like the players).
+            if (!m_navigator.isEmpty() && m_replayNavigator != m_navigator
+                && std::none_of(m_devices.cbegin(), m_devices.cend(), [this](const QVariant &d) {
+                       return d.toMap().value(QStringLiteral("id")).toString() == m_navigator;
+                   }))
+                setNavigatorShown(QString());
             continueReplay();
+        }
         const QString state = ok ? QStringLiteral("ok") : QStringLiteral("failed");
         if (state != m_devicesState) {
             m_devicesState = state;
@@ -111,6 +122,33 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
                 }
                 emit joinFinished(deviceId, profile, status, int(slot));
             });
+    connect(m_backend.get(), &InputBackend::navigatorFinished, this,
+            [this](const QString &deviceId, const QString &status) {
+                if (status != QLatin1String("ok")) {
+                    qInfo("ruya-shell: Input1 SetNavigator %s answered %s", qPrintable(deviceId),
+                          qPrintable(status));
+                    if (deviceId == m_navigator)
+                        setNavigatorShown(QString());
+                }
+                // The shell's own replay after a restart is nobody's call: it is not announced.
+                if (m_navigatorReplays > 0) {
+                    --m_navigatorReplays;
+                    return;
+                }
+                emit navigatorFinished(deviceId, status);
+            });
+    connect(m_backend.get(), &InputBackend::foreignInput, this, [this](const QString &deviceId, const QString &kind) {
+        if (kind == QLatin1String("player-guide")) {
+            uint slot = 0;
+            for (const QVariant &p : std::as_const(m_players)) {
+                const QVariantMap player = p.toMap();
+                if (player.value(QStringLiteral("device_id")).toString() == deviceId)
+                    slot = player.value(QStringLiteral("slot")).toUInt();
+            }
+            qInfo("ruya-shell: player %u's Guide (no players' Hub yet)", slot);
+        }
+        emit foreignInput(deviceId, kind);
+    });
     connect(m_backend.get(), &InputBackend::leaveFinished, this, [this](uint slot, const QString &status) {
         if (status != QLatin1String("ok"))
             qInfo("ruya-shell: Input1 LeavePlayer %u answered %s", slot, qPrintable(status));
@@ -136,6 +174,7 @@ void Input::replayPlayers()
 {
     m_replayQueue.clear();
     m_replayProfile = m_profile;
+    m_replayNavigator = m_profile.isEmpty() ? QString() : m_navigator;
     if (m_profile.isEmpty())
         return;
     QList<QVariantMap> seats;
@@ -159,15 +198,23 @@ void Input::replayPlayers()
 // yet waits for the next list (every device signal asks for one). A profile change drops the rest.
 void Input::continueReplay()
 {
-    if (m_replayQueue.isEmpty())
+    if (m_replayQueue.isEmpty() && m_replayNavigator.isEmpty())
         return;
     if (m_profile != m_replayProfile) {
         m_replayQueue.clear();
+        m_replayNavigator.clear();
         return;
     }
     QSet<QString> listed;
     for (const QVariant &d : std::as_const(m_devices))
         listed.insert(d.toMap().value(QStringLiteral("id")).toString());
+    // The navigator too (RUY-38), after the players' joins sent in this turn, so the service has the
+    // seats first; a navigator the shell dropped or changed meanwhile is not set again.
+    QString navigator;
+    if (m_replayNavigator != m_navigator)
+        m_replayNavigator.clear();
+    else if (listed.contains(m_replayNavigator))
+        navigator = std::exchange(m_replayNavigator, QString());
     QList<Replay> waiting;
     for (const Replay &r : std::as_const(m_replayQueue)) {
         if (!listed.contains(r.device)) {
@@ -179,6 +226,47 @@ void Input::continueReplay()
         m_backend->joinPlayer(r.device, r.profile);
     }
     m_replayQueue = waiting;
+    if (!navigator.isEmpty()) {
+        qInfo("ruya-shell: Input1 has a new owner: %s drives the UI again", qPrintable(navigator));
+        ++m_navigatorReplays;
+        m_backend->setNavigator(navigator);
+    }
+}
+
+void Input::setNavigatorShown(const QString &deviceId)
+{
+    if (deviceId == m_navigator)
+        return;
+    m_navigator = deviceId;
+    emit navigatorChanged();
+}
+
+void Input::setNavigator(const QString &deviceId)
+{
+    setNavigatorShown(deviceId);
+    m_backend->setNavigator(deviceId);
+}
+
+QString Input::mockNavigator() const
+{
+    auto *mock = qobject_cast<MockInputBackend *>(m_backend.get());
+    return mock ? mock->navigator() : QString();
+}
+
+void Input::mockPadButton(const QString &deviceId, const QString &button)
+{
+    auto *mock = qobject_cast<MockInputBackend *>(m_backend.get());
+    const int key = mock ? mock->padButton(deviceId, button) : 0;
+    QWindow *window = QGuiApplication::focusWindow();
+    if (!key || !window)
+        return;
+    // As a key of the service's virtual keyboard: the source is told apart first (06 §11.4), then the
+    // focused item gets it.
+    noteKeyFrom(QStringLiteral("RuyaOS Navigation"), key);
+    QKeyEvent press(QEvent::KeyPress, key, Qt::NoModifier);
+    QKeyEvent release(QEvent::KeyRelease, key, Qt::NoModifier);
+    QCoreApplication::sendEvent(window, &press);
+    QCoreApplication::sendEvent(window, &release);
 }
 
 void Input::joinPlayer(const QString &deviceId, const QString &profile)
@@ -579,6 +667,8 @@ void Input::setRoute(const QString &route, const QString &instance, const QStrin
         m_profile = profile;
         emit routeChanged();
         if (profileChanged) {
+            // The service drops its navigator with the profile (RUY-38).
+            setNavigatorShown(QString());
             // Another profile's choices: the last one's are not shown while its own are on their way.
             m_confirmsStored.clear();
             m_confirmsWanted.clear();

@@ -26,10 +26,16 @@
       (root; RUY-446) the virtual pad nodes (phys ruya-input/pad<n>) are ruya-input's, user rw only, with no
       uaccess tag and no entry for ruya-shell, and the profile user's ACL entry; a node whose phys is
       ruya-input/kbm* keeps uaccess (vm-input-check.sh nodes runs it)
-  python3 vm-input-probe.py navpad [--settle S] [--lefts N] [--rights M] [--start K]
+  python3 vm-input-probe.py navpad [--settle S] [--lefts N] [--rights M] [--start K] [--join PROFILE]
       (root; RUY-410) a uinput pad that, S seconds after it is ready, taps the D-pad left N times and
       right M times, then A (the emergency reader's keys: Left, Right, Return); prints "pad ready <node>"
-      and then "sent"
+      and then "sent". --join (RUY-38: after a sign-in only player 1's pad navigates) first seats it as
+      PROFILE's player 1 with JoinPlayer and prints "joined <status> <slot>"
+  python3 vm-input-probe.py owner --profile p1
+      (root; RUY-38) who drives the shell: two pads; before the sign-in both navigate, after it (A signed in) B's
+      BTN_SOUTH gives no key on RuyaOS Navigation and ForeignInput(B, "press"), B's Guide ForeignInput(B, "guide"),
+      A's BTN_SOUTH KEY_ENTER; SetNavigator(B) flips who navigates (A's Guide included), SetNavigator("") flips it
+      back (vm-input-check.sh owner stops the compositor first)
   python3 vm-input-probe.py players --user ruya-p1 --profile p1 --other p2
       (root; RUY-121) the players' seats: three uinput pads, A signs p1 in (seat 1), JoinPlayer(B, p2) is seat 2;
       in the route app pad1 is A and pad2 is B, the unseated C has none; LeavePlayer(2) removes pad2 only
@@ -48,6 +54,7 @@ import glob
 import json
 import os
 import pwd
+import re
 import select
 import socket
 import struct
@@ -371,6 +378,32 @@ def join_player(bus, device_id, profile):
     return Bus.status_and_slot(bus.body)
 
 
+def monitor_bodies(lines, member, out):
+    """RUY-38: reads `busctl monitor` text; each message of `member` is appended to `out` as the tuple of its STRING
+    arguments, in order."""
+    current = None
+    for line in lines:
+        if f"Member={member}" in line or f"member={member}" in line:
+            current = []
+        elif current is not None:
+            m = re.search(r'STRING "(.*)";', line)
+            if m:
+                current.append(m.group(1))
+            elif line.strip() == "};":
+                out.append(tuple(current))
+                current = None
+
+
+def signal_bodies(member):
+    """A `busctl monitor` on Input1's signal `member`; `bodies()` gives the string arguments of each one seen so far."""
+    mon = subprocess.Popen(["busctl", "--system", "monitor", "--match",
+                            f"type='signal',interface='{IFC}',member='{member}'"],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    seen = []
+    threading.Thread(target=monitor_bodies, args=(mon.stdout, member, seen), daemon=True).start()
+    return mon, lambda: list(seen)
+
+
 def join_by_name(bus, name, profile, timeout=5):
     """join_player for the pad ListDevices calls `name`; ("no such pad", 0) when it is not listed."""
     row = wait_for(lambda: next((d for d in (devices() or []) if d.get("name") == name), None), timeout)
@@ -545,6 +578,14 @@ def cmd_navpad(args):
     try:
         node = wait_for(lambda: node_by("phys", PHYS)[0], 3)
         print(f"pad ready {node}" if node else "pad has no node", flush=True)
+        if args.join:
+            # RUY-38: after a sign-in only player 1's pad reaches the shell.
+            bus = Bus()
+            try:
+                status, slot = join_by_name(bus, NAME, args.join)
+            finally:
+                bus.close()
+            print(f"joined {status} {slot}", flush=True)
         time.sleep(args.settle)
 
         def tap(kind, code, value):
@@ -638,6 +679,10 @@ def cmd_confirm(args):
                 f"SetConfirmButton {dev['name']} {mode} answered {status}")
 
         def expect(which, dev, mode, east_key, south_key):
+            # RUY-38: after the sign-in only player 1's pad navigates, so the pad is player 1's first (a move).
+            joined = join_player(bus, dev["id"], args.profile)
+            if joined != ("ok", 1):
+                bad(f"JoinPlayer {dev['name']} as player 1: {joined}")
             for name, button, want in (("BTN_EAST", BTN_EAST, east_key), ("BTN_SOUTH", BTN_SOUTH, south_key)):
                 got = tap(which, button)
                 if got == [(want, 1), (want, 0)]:
@@ -714,6 +759,8 @@ def cmd_hold(args):
         bus = Bus()
         status = bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
         expect(status, "ok", "route shell for the profile")
+        # RUY-38: after the sign-in only player 1's pad navigates.
+        expect(join_player(bus, did, args.profile), ("ok", 1), "JoinPlayer: the pad is player 1")
         nav = Nav()
         nav.keys(0.3)
 
@@ -1058,9 +1105,11 @@ def cmd_twopads(args):
 
 
 def cmd_guide(args):
-    """RUY-11: two pads in route `app`; the Guide button of either one gives KEY_HOMEPAGE (press, a long
-    hold, release) on RuyaOS Navigation and never a BTN_MODE on the game's virtual pad. A BTN_SOUTH
-    pressed while Guide is held must reach one of the virtual pads (the positive control: a dead pad would read nothing)."""
+    """RUY-11, changed by RUY-38: before a sign-in the Guide button of either pad gives KEY_HOMEPAGE on RuyaOS
+    Navigation; in route `app` with pad 0 as player 1 and pad 1 as player 2 only pad 0's Guide does (press, a long
+    hold, release), pad 1's is a ForeignInput "player-guide", and neither ever gives a BTN_MODE on a game's virtual
+    pad. A BTN_SOUTH pressed while Guide is held must reach one of the virtual pads (the positive control: a dead pad
+    would read nothing)."""
     fails = 0
 
     def ok(msg):
@@ -1074,11 +1123,32 @@ def cmd_guide(args):
     pads = [FakePad(phys="vm-check/pad0", name=NAME), FakePad(0x1234, 0x5679, "vm-check/pad1", NAME + " 2")]
     bus = None
     game = None
+    mon = None
     try:
         if not wait_for(lambda: len([d for d in (devices() or []) if d.get("name") in (NAME, NAME + " 2")]) == 2, 5):
             bad("ListDevices does not list both pads")
             return fails
         bus = Bus()
+        nav = Nav()
+        if nav.fd is None:
+            bad("RuyaOS Navigation is not there")
+            return fails
+        mon, bodies = signal_bodies("ForeignInput")
+        # Before a sign-in every pad's Guide is the shell's (RUY-38: the picker, its PIN pad, first boot).
+        status = bus.call(SVC, PATH, IFC, "SetRoute", ["locked", "", "", ""])
+        if status != "ok":
+            bad(f"SetRoute locked: {status}")
+            return fails
+        nav.keys(0.3)
+        for i, pad in enumerate(pads):
+            pad.emit(EV_KEY, BTN_MODE, 1)
+            time.sleep(0.1)
+            pad.emit(EV_KEY, BTN_MODE, 0)
+            keys = nav.keys(0.4)
+            if keys == [(KEY_HOMEPAGE, 1), (KEY_HOMEPAGE, 0)]:
+                ok(f"before a sign-in pad {i}'s Guide gives KEY_HOMEPAGE down and up")
+            else:
+                bad(f"before a sign-in pad {i}'s Guide gave {keys}")
         status = bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-guide", "org.ruyaos.VmCheck", args.profile])
         if status != "ok":
             bad(f"SetRoute app: {status}")
@@ -1105,10 +1175,7 @@ def cmd_guide(args):
         if not wait_for(lambda: all(d.get("routed") for d in (devices() or []) if d.get("name") in (NAME, NAME + " 2")), 3):
             bad("the pads are not routed to the virtual pads")
             return fails
-        nav = Nav()
-        if nav.fd is None:
-            bad("RuyaOS Navigation is not there")
-            return fails
+        ids = {d.get("name"): d["id"] for d in (devices() or []) if d.get("name") in (NAME, NAME + " 2")}
         nav.keys(0.3)
         for i, pad in enumerate(pads):
             for g in games:
@@ -1120,10 +1187,18 @@ def cmd_guide(args):
             pad.emit(EV_KEY, BTN_SOUTH, 0)
             pad.emit(EV_KEY, BTN_MODE, 0)
             keys = nav.keys(0.4)
-            if (KEY_HOMEPAGE, 1) in keys and (KEY_HOMEPAGE, 0) in keys:
-                ok(f"pad {i}: Guide gives KEY_HOMEPAGE down and up on RuyaOS Navigation")
+            if i == 0 and (KEY_HOMEPAGE, 1) in keys and (KEY_HOMEPAGE, 0) in keys:
+                ok("pad 0 (player 1): Guide gives KEY_HOMEPAGE down and up on RuyaOS Navigation")
+            elif i == 1 and not keys:
+                ok("pad 1 (player 2): Guide gives nothing on RuyaOS Navigation")
             else:
                 bad(f"pad {i}: Guide gave {keys} on RuyaOS Navigation")
+            if i == 1:
+                pid = ids.get(NAME + " 2", "?")
+                if wait_for(lambda: (pid, "player-guide") in bodies(), 2):
+                    ok(f"pad 1 (player 2): its Guide is ForeignInput({pid}, player-guide)")
+                else:
+                    bad(f"pad 1 (player 2): no ForeignInput player-guide; seen {bodies()}")
             reads = [g.events(300) for g in games]
             if not any(isinstance(ev, list) and (EV_KEY, BTN_SOUTH, 1) in ev for ev in reads):
                 bad(f"pad {i}: BTN_SOUTH reached no virtual pad (dead pad?): {reads}")
@@ -1135,6 +1210,8 @@ def cmd_guide(args):
                 else:
                     bad(f"pad {i}: virtual pad {j + 1} read {ev}")
     finally:
+        if mon:
+            mon.terminate()
         for g in (game or []):
             g.close()
         if bus:
@@ -1142,6 +1219,92 @@ def cmd_guide(args):
             bus.close()
         for p in pads:
             p.close()
+    return fails
+
+
+def cmd_owner(args):
+    """RUY-38 (06 section 11.3): who drives the shell. Two pads, A and B. While the route is locked both navigate;
+    B presses, then A, and the probe signs the profile in (route shell on its own connection), so A is player 1.
+    Then B's BTN_SOUTH gives no key on RuyaOS Navigation and a ForeignInput(B, "press"), B's Guide no KEY_HOMEPAGE
+    and a ForeignInput(B, "guide"), A's BTN_SOUTH gives KEY_ENTER. SetNavigator(B): B's BTN_SOUTH gives KEY_ENTER,
+    A's BTN_SOUTH and Guide nothing. SetNavigator(""): A navigates again, B does not."""
+    fails = 0
+
+    def ok(msg):
+        print(f"PASS: {msg}", flush=True)
+
+    def bad(msg):
+        nonlocal fails
+        fails += 1
+        print(f"FAIL: {msg}", flush=True)
+
+    def expect(got, want, label):
+        ok(label) if got == want else bad(f"{label}: got {got}, wanted {want}")
+
+    a = FakePad(phys="vm-check/pad0", name=NAME)
+    b = FakePad(0x1234, 0x5679, "vm-check/pad1", NAME + " 2")
+    bus = None
+    mon = None
+    try:
+        def both():
+            by_name = {r.get("name"): r for r in (devices() or [])}
+            return by_name if NAME in by_name and NAME + " 2" in by_name else None
+
+        rows = wait_for(both, 5)
+        if not rows:
+            bad("ListDevices does not list both pads")
+            return fails
+        aid, bid = rows[NAME]["id"], rows[NAME + " 2"]["id"]
+        bus = Bus()
+        nav = Nav()
+        if nav.fd is None:
+            bad("RuyaOS Navigation is not there")
+            return fails
+        mon, bodies = signal_bodies("ForeignInput")
+        enter = [(KEY_ENTER, 1), (KEY_ENTER, 0)]
+        home = [(KEY_HOMEPAGE, 1), (KEY_HOMEPAGE, 0)]
+
+        def tap(pad, button):
+            pad.emit(EV_KEY, button, 1)
+            time.sleep(0.1)
+            pad.emit(EV_KEY, button, 0)
+            return nav.keys(0.4)
+
+        expect(bus.call(SVC, PATH, IFC, "SetRoute", ["locked", "", "", ""]), "ok", "route locked")
+        nav.keys(0.3)
+        expect(tap(b, BTN_SOUTH), enter, "before the sign-in B's BTN_SOUTH gives KEY_ENTER")
+        expect(tap(a, BTN_SOUTH), enter, "before the sign-in A's BTN_SOUTH gives KEY_ENTER")
+        expect(bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile]), "ok",
+               "route shell for the profile (A pressed last: player 1)")
+        seat1 = next((r for r in (players() or []) if r.get("slot") == 1), {})
+        expect(seat1.get("device_id"), aid, "ListPlayers: seat 1 is A")
+        expect(tap(b, BTN_SOUTH), [], "after the sign-in B's BTN_SOUTH gives no key")
+        expect(tap(a, BTN_SOUTH), enter, "A's BTN_SOUTH gives KEY_ENTER")
+        expect(tap(b, BTN_MODE), [], "B's Guide gives no KEY_HOMEPAGE")
+        expect(tap(a, BTN_MODE), home, "A's Guide gives KEY_HOMEPAGE")
+        if wait_for(lambda: (bid, "press") in bodies() and (bid, "guide") in bodies(), 2):
+            ok(f"busctl monitor saw ForeignInput({bid}, press) and ForeignInput({bid}, guide)")
+        else:
+            bad(f"ForeignInput of B: seen {bodies()}")
+        if any(body and body[0] == aid for body in bodies()):
+            bad(f"player 1's pad sent a ForeignInput: {bodies()}")
+        expect(bus.call(SVC, PATH, IFC, "SetNavigator", [bid]), "ok", "SetNavigator(B): ok")
+        expect(tap(b, BTN_SOUTH), enter, "the navigator B's BTN_SOUTH gives KEY_ENTER")
+        expect(tap(a, BTN_SOUTH), [], "A's BTN_SOUTH gives nothing while B navigates")
+        expect(tap(a, BTN_MODE), [], "A's Guide gives nothing while B navigates")
+        expect(bus.call(SVC, PATH, IFC, "SetNavigator", [""]), "ok", "SetNavigator(\"\"): ok")
+        expect(tap(a, BTN_SOUTH), enter, "A navigates again")
+        expect(tap(b, BTN_SOUTH), [], "B does not")
+        expect(bus.call(SVC, PATH, IFC, "SetNavigator", ["usb-0000-0000-gone"]), "unknown-device",
+               "SetNavigator of a pad that is not there: unknown-device")
+    finally:
+        if mon:
+            mon.terminate()
+        if bus:
+            bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+            bus.close()
+        a.close()
+        b.close()
     return fails
 
 
@@ -1870,6 +2033,9 @@ def main():
     n.add_argument("--lefts", type=int, default=0)
     n.add_argument("--rights", type=int, default=0)
     n.add_argument("--start", type=int, default=0, help="tap BTN_START this many times instead of BTN_SOUTH")
+    n.add_argument("--join", default="", help="seat the pad as this profile's player 1 first (RUY-38)")
+    ow = sub.add_parser("owner")
+    ow.add_argument("--profile", required=True)
     args = ap.parse_args()
     if args.cmd == "check":
         sys.exit(1 if cmd_check(args) else 0)
@@ -1893,6 +2059,8 @@ def main():
         sys.exit(1 if cmd_nodes(args) else 0)
     if args.cmd == "hold":
         sys.exit(1 if cmd_hold(args) else 0)
+    if args.cmd == "owner":
+        sys.exit(1 if cmd_owner(args) else 0)
     {"listen": cmd_listen, "game": cmd_game, "open": cmd_open, "restart": cmd_restart, "pad": cmd_pad, "navpad": cmd_navpad, "playing": cmd_playing}[args.cmd](args)
 
 

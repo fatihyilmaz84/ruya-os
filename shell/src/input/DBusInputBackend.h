@@ -30,6 +30,7 @@ public:
     void joinPlayer(const QString &deviceId, const QString &profile) override;
     void leavePlayer(uint slot) override;
     void refreshPlayers() override;
+    void setNavigator(const QString &deviceId) override;
 
 private slots:
     void onPropertiesChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated);
@@ -40,6 +41,7 @@ private slots:
     void onTestEnded(const QString &deviceId, const QString &reason);
     void onProfilesChanged(const QString &profile);
     void onPlayersChanged(const QDBusMessage &message);
+    void onForeignInput(const QString &deviceId, const QString &kind);
 
 private:
     QDBusConnection m_bus;

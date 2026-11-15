@@ -371,6 +371,33 @@ impl InputIface {
     #[zbus(signal)]
     async fn players_changed(emitter: &SignalEmitter<'_>, players: Vec<Dict>) -> zbus::Result<()>;
 
+    /// Only this pad navigates the shell until it is cleared (RUY-38, 06 §11.3).
+    async fn set_navigator(
+        &self,
+        device_id: &str,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+    ) -> String {
+        let caller = header.sender().map(|s| s.to_string()).unwrap_or_default();
+        let status = self.shared.with(|r| r.set_navigator(device_id, &caller));
+        // As for the route: a caller already gone takes its navigator with it.
+        if status == Status::Ok
+            && !device_id.is_empty()
+            && !caller_present(connection, &caller).await
+        {
+            self.shared.with(|r| r.caller_left(&caller, Instant::now()));
+        }
+        status.as_str().to_owned()
+    }
+
+    /// A pad that does not navigate pressed a button or Guide (RUY-38).
+    #[zbus(signal)]
+    async fn foreign_input(
+        emitter: &SignalEmitter<'_>,
+        device_id: &str,
+        kind: &str,
+    ) -> zbus::Result<()>;
+
     #[zbus(property)]
     fn route(&self) -> String {
         self.shared.with(|r| r.route().as_str().to_owned())
@@ -473,6 +500,9 @@ pub async fn announce(connection: Connection, notices: async_channel::Receiver<N
                 let now = Instant::now();
                 let list = players.iter().map(|p| player(p, now)).collect();
                 InputIface::players_changed(emitter, list).await
+            }
+            Notice::ForeignInput { device_id, kind } => {
+                InputIface::foreign_input(emitter, device_id, kind).await
             }
             Notice::Journal(_) => Ok(()),
         };

@@ -8,7 +8,13 @@
 # 500 ms and the worst at most 1000 ms: the first run after heavy checks is slow (644 ms once; a lone re-run
 # gave 190-426 ms), and the 1000 ms ceiling still catches a real regression. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|close|fallback|confirm|hold|twopads|guide|nodes|start|useractive|signals|players|seathold]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|shell|close|fallback|confirm|hold|twopads|guide|owner|nodes|start|useractive|signals|players|seathold]
+# `owner` (RUY-38, 06 section 11.3) with the shell stopped like `twopads`: two uinput pads; while the route is locked both
+# navigate; B presses, then A, and the probe signs the profile in, so A is player 1. Then B's BTN_SOUTH gives no key on
+# RuyaOS Navigation and `busctl monitor` sees ForeignInput(B, "press"), B's Guide gives no KEY_HOMEPAGE and a
+# ForeignInput(B, "guide"), A's BTN_SOUTH gives KEY_ENTER; SetNavigator(B) flips who navigates (A's Guide gives nothing),
+# SetNavigator("") flips it back. Since RUY-38 only player 1's pad navigates after a sign-in, so `confirm`, `hold` and
+# `start` seat the pad they press as player 1 (JoinPlayer) first.
 # `seathold` (RUY-627; `hold` is RUY-479's StartTest check) with the shell stopped like `players`: a runtime drop-in sets
 # RUYA_SEAT_HOLD_SECS=5 on ruya-inputd (journaled at start; the drop-in is removed and the service restarted at the end, also
 # after a FAIL) and a second profile "Check Player" is made and removed. Uinput pad B is seat 2 in `app` (ruya-input/pad2);
@@ -48,8 +54,10 @@
 # for a pad with Nintendo's vendor id: each virtual pad emits its own pad's profile, and emptying the family's slot
 # changes only that pad; a slot the profile's match does not name is refused. Afterwards each slot it used gets back the
 # profile it held before (ListProfiles read first) and its own profiles are deleted.
-# `guide` (RUY-11) with two uinput pads in route `app` (shell stopped like `twopads`): the Guide button of either pad, held
-# 0.6 s, gives KEY_HOMEPAGE down and up on RuyaOS Navigation and no BTN_MODE on either virtual pad the profile user reads.
+# `guide` (RUY-11, changed by RUY-38) with two uinput pads (shell stopped like `twopads`): before a sign-in (route locked)
+# either pad's Guide gives KEY_HOMEPAGE; in route `app` with pad 0 as player 1 and pad 1 as player 2, pad 0's Guide, held
+# 0.6 s, gives KEY_HOMEPAGE down and up on RuyaOS Navigation, pad 1's gives none and a ForeignInput "player-guide", and
+# neither gives a BTN_MODE on either virtual pad the profile user reads.
 # `nodes` (RUY-446) checks the virtual pad node (phys ruya-input/pad<n>) the way 06 section 3 rule 3 says: ruya-input's,
 # user rw and nothing for group and other (getfacl; stat's group bits show the ACL mask), no uaccess tag, no ACL entry for
 # ruya-shell, the profile user's entry; a ruya-input/kbm* node keeps uaccess. Run it alone, not inside `check`.
@@ -771,11 +779,12 @@ start_steps() {
     settle_route || return
     sleep 2
     since="$(date '+%Y-%m-%d %H:%M:%S')"
-    # Open with the pad's Start, close with its second Start.
-    python3 "$probe" navpad --settle 3 --start 2 > /var/tmp/ruya-input-start.log 2>&1 &
+    # Open with the pad's Start, close with its second Start. RUY-38: the pad is player 1's first (only its pad navigates).
+    python3 "$probe" navpad --settle 3 --start 2 --join "$me" > /var/tmp/ruya-input-start.log 2>&1 &
     padpid=$!
     wait "$padpid" 2>/dev/null
     grep -q "^pad ready" /var/tmp/ruya-input-start.log || { bad "no test pad: $(cat /var/tmp/ruya-input-start.log)"; return; }
+    grep -q "^joined ok 1" /var/tmp/ruya-input-start.log || { bad "the test pad is not player 1: $(cat /var/tmp/ruya-input-start.log)"; return; }
     sleep 1
     n="$(count_shell_log 'ruya-shell: options menu open (')"
     if [ "$n" = 1 ]; then
@@ -906,8 +915,19 @@ guide)
     dir="$(mktemp -d /var/tmp/ruya-input-check.XXXXXX)"
     chmod 0755 "$dir"
     install -m 0644 "$probe" "$dir/vm-input-probe.py"
-    echo "--- Guide never reaches a game (RUY-11)"
+    echo "--- Guide never reaches a game (RUY-11); after a sign-in only player 1's reaches the shell (RUY-38)"
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe guide --user "ruya-$me" --other "$other"
+    rm -rf "$dir"
+    ;;
+owner)
+    two_profiles
+    [ -n "$me" ] && ok "profile $me" || { bad "need a profile"; exit 1; }
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
+    dir="$(mktemp -d /var/tmp/ruya-input-check.XXXXXX)"
+    chmod 0755 "$dir"
+    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    echo "--- after a sign-in only player 1's pad navigates; another asks with ForeignInput; SetNavigator flips it (RUY-38)"
+    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe owner
     rm -rf "$dir"
     ;;
 nodes)

@@ -123,6 +123,8 @@ DBusInputBackend::DBusInputBackend(QObject *parent)
     m_bus.connect(Service, Path, Interface, QStringLiteral("UserActive"), this, SLOT(onUserActive()));
     m_bus.connect(Service, Path, Interface, QStringLiteral("PlayersChanged"), this,
                   SLOT(onPlayersChanged(QDBusMessage)));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("ForeignInput"), this,
+                  SLOT(onForeignInput(QString, QString)));
     // Who owns the name now, asked without blocking; a change that arrives first wins.
     if (auto *busInterface = m_bus.interface()) {
         auto *asked = new QDBusPendingCallWatcher(busInterface->asyncCall(QStringLiteral("NameHasOwner"), Service), this);
@@ -318,6 +320,29 @@ void DBusInputBackend::onActiveInputChanged(const QString &deviceId, const QStri
 void DBusInputBackend::onUserActive()
 {
     emit userActive();
+}
+
+void DBusInputBackend::onForeignInput(const QString &deviceId, const QString &kind)
+{
+    emit foreignInput(deviceId, kind);
+}
+
+// SetNavigator(device_id s) -> status s (RUY-38).
+void DBusInputBackend::setNavigator(const QString &deviceId)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("SetNavigator"));
+    msg << deviceId;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, deviceId](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString> reply = *w;
+        if (!reply.isValid()) {
+            qWarning("ruya-shell: Input1 SetNavigator failed: %s", qPrintable(reply.error().message()));
+            emit navigatorFinished(deviceId, QStringLiteral("failed"));
+            return;
+        }
+        emit navigatorFinished(deviceId, reply.argumentAt<0>());
+    });
 }
 
 void DBusInputBackend::onProfilesChanged(const QString &profile)
