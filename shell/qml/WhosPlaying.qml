@@ -71,9 +71,11 @@ FocusScope {
     signal closed(Item target)
 
     readonly property var cards: Profiles.profiles.filter(p => p.role !== "guest")
-    // The Guest card ends the row (RUY-631). A seated pad never asks (mayAsk), so it is never offered a
-    // guest again; the one exception, a seated pad's Guide while seat 1 has no pad, may make another.
-    readonly property var entries: cards.concat([{ kind: "guest", id: "", name: qsTr("Guest"), avatar: "", hasPin: false }])
+    // The Guest card ends the row (RUY-631); its name is the card's own qsTr, so a language change never
+    // replaces the model (that would reset the current index, RUY-664). A seated pad never asks (mayAsk),
+    // so it is never offered a guest again; the one exception, a seated pad's Guide while seat 1 has no
+    // pad, may make another.
+    readonly property var entries: cards.concat([{ kind: "guest", id: "", name: "", avatar: "", hasPin: false }])
     readonly property int guestIndex: cards.length
 
     readonly property var padRecord: Input.devices.find(d => d.id === prompt.pad)
@@ -85,17 +87,23 @@ FocusScope {
     readonly property var player1: Input.players.find(s => s.slot === 1)
     readonly property string player1Name: player1 ? Profiles.nameOf(player1.profile) : ""
 
-    // Temporary guests (RUY-631). `createPads`: the pads whose CreateGuest has no answer yet, in order.
-    // `guestJoins`: guest id -> { pad, number, seated } for a join of its own (it ends when the guest has
-    // its seat, or after `seatWaitMs`). `ownGuests`: guests this shell made or saw seated; the sweep removes
+    // Temporary guests (RUY-631). `createPads`: the requests ({ pad, seq }) whose CreateGuest has no answer
+    // yet, in order; `seq` is the prompt (`openSeq`) that asked. `guestJoins`: guest id -> { pad, number,
+    // answered } for a join of its own: it ends when the guest has its seat in the player list, or at the
+    // next change of the list after the join answered ok, or after `seatWaitMs`. `ownGuests`: guests this
+    // shell made or saw seated; the sweep removes
     // only these. `removing` / `removeTries`: RemoveGuest in flight, and how often it was sent per guest.
     property var createPads: []
     property var guestJoins: ({})
     property var ownGuests: ({})
     property var removing: ({})
     property var removeTries: ({})
-    // How long a guest whose join answered ok is kept while the player list has not shown its seat yet.
-    property int seatWaitMs: 3000
+    // The upper bound of the wait above, for a seat the player list never shows and a list that never
+    // changes (a lost PlayersChanged). A slow bus must not end it earlier (RUY-664: the old fixed 3 s
+    // removed a seated guest); a D-Bus call times out after 25 s, so nothing on a live bus takes longer.
+    property int seatWaitMs: 30000
+    // Counts the prompts that opened: a CreateGuest answer from an earlier one finds its prompt gone.
+    property int openSeq: 0
     property string guestSession: ""
 
     // What the hint bar says (Shell.hintList).
@@ -152,9 +160,17 @@ FocusScope {
             ? qsTr("Joins as a guest. Nothing is kept after it leaves.")
             : qsTr("Joins as Guest %1. Nothing is kept after it leaves.").arg(n)
     }
+    // The profile the asking pad plays now (a seated pad that asked with its Guide), or "".
+    function ownSeatProfile() {
+        const s = pad === "" ? undefined : Input.players.find(x => (x.device_id ?? "") === pad)
+        return s ? s.profile : ""
+    }
     function detailFor(record) {
         if (record && record.kind === "guest")
             return guestDetail()
+        // Picking the padless player 1 gives it this pad: the pad stops playing as its own profile (RUY-664).
+        if (record && padlessPlayer1(record.id) && ownSeatProfile() !== "")
+            return qsTr("This controller stops playing as %1.").arg(Notifications.named(Profiles.nameOf(ownSeatProfile())))
         if (!record || !hasPad(record.id) || onThisPad(record.id))
             return ""
         return fill(qsTr("Now on %2. Picking it moves %1 here."), record.name, seatPadName(record.id))
@@ -220,6 +236,7 @@ FocusScope {
             const f = Window.activeFocusItem
             returnTo = f && !inside(f) ? f : null
         }
+        openSeq += 1
         pad = id
         step = "pick"
         chosen = null
@@ -325,7 +342,7 @@ FocusScope {
         }
         Sfx.select()
         chosen = null
-        createPads = createPads.concat([pad])
+        createPads = createPads.concat([{ pad: pad, seq: openSeq }])
         joining = { pad: pad, id: "", from: "guest", number: 0 }
         Profiles.createGuest()
     }
@@ -333,7 +350,8 @@ FocusScope {
     function guestCreated(status, id, number) {
         if (createPads.length === 0)
             return                              // not made for the prompt
-        const p = createPads[0]
+        const p = createPads[0].pad
+        const seq = createPads[0].seq
         createPads = createPads.slice(1)
         const own = joining !== null && joining.from === "guest" && joining.id === "" && joining.pad === p
         if (status !== "ok") {
@@ -346,7 +364,13 @@ FocusScope {
             return
         }
         ownGuests[id] = true
-        guestJoins[id] = { pad: p, number: number, seated: false }
+        if (!shown || seq !== openSeq) {
+            // Not now or Guide came before the answer: nobody said yes to this guest, so it is not seated.
+            // It stays unseated and the sweep removes it (RUY-664).
+            sweepSoon()
+            return
+        }
+        guestJoins[id] = { pad: p, number: number, answered: false }
         if (own)
             joining = { pad: p, id: id, from: "guest", number: number }
         Input.joinPlayer(p, id)
@@ -359,8 +383,13 @@ FocusScope {
         if (joining !== null && joining.from === "guest" && joining.id === profile)
             joining = null
         if (status === "ok") {
-            gj.seated = true
-            seatWait.restart()
+            gj.answered = true
+            // Its seat may be in the list already (PlayersChanged came first); else the next change of the
+            // list ends the wait (onPlayersChanged), the seat showing up does (sweepGuests), or the bound.
+            if (Input.players.some(s => s.profile === profile))
+                delete guestJoins[profile]
+            else
+                seatWait.restart()
             if (shown && pad === gj.pad)
                 close(false)
         } else {
@@ -387,7 +416,7 @@ FocusScope {
         for (const id of seated) {
             if (listed.includes(id))
                 ownGuests[id] = true
-            if (guestJoins[id] !== undefined && guestJoins[id].seated)
+            if (guestJoins[id] !== undefined && guestJoins[id].answered)
                 delete guestJoins[id]           // its seat is in the player list: the join is over
         }
         for (const id in ownGuests) {
@@ -421,8 +450,8 @@ FocusScope {
         interval: prompt.seatWaitMs
         onTriggered: {
             for (const id in prompt.guestJoins) {
-                if (prompt.guestJoins[id].seated)
-                    delete prompt.guestJoins[id]    // the seat never showed: the sweep decides
+                if (prompt.guestJoins[id].answered)
+                    delete prompt.guestJoins[id]    // the upper bound: the sweep decides
             }
             prompt.sweepGuests()
         }
@@ -591,12 +620,24 @@ FocusScope {
                 prompt.ask(deviceId, kind)
         }
         function onPlayersChanged() {
+            // A join that answered ok waited for this change of the list; the sweep decides now (a guest
+            // seated in the list stays).
+            for (const id in prompt.guestJoins) {
+                if (prompt.guestJoins[id].answered)
+                    delete prompt.guestJoins[id]
+            }
             prompt.joinAfterSwitch()
             prompt.sweepSoon()
         }
         function onJoinFinished(deviceId, profile, status, slot) {
+            if (status === "ok" && prompt.quiet[deviceId] !== undefined) {
+                // A join that landed after Not now (it was on its way): the pad plays, so it is not quiet.
+                const next = Object.assign({}, prompt.quiet)
+                delete next[deviceId]
+                prompt.quiet = next
+            }
             const gj = prompt.guestJoins[profile]
-            if (gj !== undefined && gj.pad === deviceId && !gj.seated) {
+            if (gj !== undefined && gj.pad === deviceId && !gj.answered) {
                 prompt.guestJoinFinished(profile, status)
                 return
             }

@@ -56,6 +56,7 @@ Item {
             Input.mockFail(false)
             Input.mockFailJoin("")
             Input.mockSeatHoldMs(60000)
+            Input.mockPlayersDelayMs(0)
             Input.mockResetDevices()
             joinSpy.clear()
             createdSpy.clear()
@@ -71,6 +72,7 @@ Item {
             Profiles.mockSetAvailable(true)
             Input.mockFailJoin("")
             Input.mockSeatHoldMs(60000)
+            Input.mockPlayersDelayMs(0)
             Input.mockResetDevices()
         }
 
@@ -282,8 +284,13 @@ Item {
             signIn()
             askWith(host.dualSense)
             Input.mockFailJoin("full")
+            // The prompt closes right after the CreateGuest answer was handled (the join is sent, not answered).
+            const closer = () => prompt().close(false)
+            Profiles.guestCreated.connect(closer)
             prompt().acceptGuest()
-            prompt().close(false)                   // the asking pad went before the answers came
+            tryCompare(createdSpy, "count", 1)
+            Profiles.guestCreated.disconnect(closer)
+            verify(!prompt().shown)
             tryCompare(Notifications.model, "count", 1)
             tryVerify(() => Profiles.guests.length === 0, 3000, "the guest it made is removed")
             compare(Input.players.length, 1)
@@ -343,6 +350,54 @@ Item {
             verify(prompt().shown)
             tryVerify(() => list.activeFocus && list.currentIndex === 2, 2000, "the focus stays on Guest")
             compare(Input.players.length, 1)
+        }
+
+        // ---- RUY-664: the answer decides, not the prompt -----------------------------------------------
+
+        // Not now (or Guide) before the CreateGuest answer: nobody said yes to the guest, so no JoinPlayer.
+        function test_no_join_after_not_now() {
+            signIn()
+            askWith(host.dualSense)
+            prompt().acceptGuest()
+            prompt().notNow()                       // before the answer
+            tryCompare(createdSpy, "count", 1)
+            tryVerify(() => Profiles.guests.length === 0, 3000, "the sweep removes the unseated guest")
+            tryCompare(removedSpy, "count", 1)
+            wait(0)
+            wait(0)
+            compare(joinSpy.count, 0, "no JoinPlayer was sent")
+            compare(Input.players.length, 1, "nobody was seated")
+            verify(!prompt().shown)
+        }
+
+        // A join already on its way when Not now came lands: the pad plays, so it is no longer quiet.
+        function test_a_landed_join_counts() {
+            signIn()
+            askWith(host.dualSense)
+            prompt().join("p2", "pick")             // sent
+            prompt().notNow()                       // Guide in the real prompt: the pad is quiet
+            verify(prompt().quiet[host.dualSense] !== undefined, "quiet while the join is on its way")
+            tryCompare(joinSpy, "count", 1)
+            compare(joinSpy.signalArguments[0][2], "ok")
+            tryVerify(() => prompt().quiet[host.dualSense] === undefined, 2000, "the landed join drops the quiet entry")
+            compare(Input.players.find(s => s.device_id === host.dualSense).profile, "p2", "and the pad is seated")
+        }
+
+        // PlayersChanged reaching the shell after the old fixed 3 s: the seated guest is kept.
+        function test_a_late_seat_keeps_the_guest() {
+            signIn()
+            askWith(host.dualSense)
+            Input.mockPlayersDelayMs(3500)
+            find("whosPlayingCards").currentIndex = 2
+            keyClick(Qt.Key_Return)
+            tryCompare(joinSpy, "count", 1)
+            compare(joinSpy.signalArguments[0][2], "ok")
+            tryVerify(() => Input.players.length === 2, 8000, "the list arrives late")
+            wait(0)
+            wait(0)
+            compare(Profiles.guests.length, 1, "the guest was not swept while the list was late")
+            compare(removedSpy.count, 0, "no RemoveGuest")
+            compare(Input.players[1].profile, guestIds()[0])
         }
 
         // ---- names -------------------------------------------------------------------------------------

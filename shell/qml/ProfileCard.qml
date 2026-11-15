@@ -10,10 +10,13 @@ Item {
 
     // The Guest card of "Who's playing?" (RUY-631): `modelData.kind === "guest"`, a plain glass circle.
     readonly property bool isGuest: (modelData.kind ?? "") === "guest"
+    // The name shown. The Guest card's is translated here, not stored in the model, so a language change
+    // never replaces the model (which would reset the list's current index, RUY-664).
+    readonly property string shownName: isGuest ? qsTr("Guest") : modelData.name
     readonly property bool focused: ListView.isCurrentItem && ListView.view.activeFocus
 
     Accessible.role: Accessible.ListItem
-    Accessible.name: modelData.hasPin ? qsTr("%1, PIN protected").arg(modelData.name) : modelData.name
+    Accessible.name: modelData.hasPin ? qsTr("%1, PIN protected").arg(shownName) : shownName
     Accessible.selected: focused
 
     width: Theme.cardProfileWidth * u
@@ -34,7 +37,7 @@ Item {
         Text {
             anchors.centerIn: parent
             textFormat: Text.PlainText
-            text: card.modelData.name.charAt(0).toUpperCase()
+            text: card.shownName.charAt(0).toUpperCase()
             color: Theme.text
             font.pixelSize: Theme.typeHero * card.u
             font.weight: Theme.weightLight
@@ -51,7 +54,7 @@ Item {
         horizontalAlignment: Text.AlignHCenter
         elide: Text.ElideRight
         textFormat: Text.PlainText
-        text: card.modelData.name
+        text: card.shownName
         color: Theme.text
         font.pixelSize: Theme.typeHeadline * card.u
         font.weight: card.focused ? Theme.weightDemiBold : Theme.weightRegular   // de-emphasis by weight, not by a dimmer colour
