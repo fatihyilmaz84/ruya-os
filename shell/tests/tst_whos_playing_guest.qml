@@ -358,7 +358,8 @@ Item {
                     tryVerify(() => !prompt().shown, 2000)
                     // Guest focused as Guest 2 (Guest plays on the Pro Controller).
                     seatGuest(host.pro)
-                    askWith(host.dualSense)
+                    Input.mockPadButton(host.dualSense, "guide")       // Not now keeps its presses quiet
+                    tryVerify(() => prompt().shown && prompt().pad === host.dualSense, 2000)
                     find("whosPlayingCards").currentIndex = 2
                     wait(500)
                     grabImage(tc.shell).save(shotsDir + "/" + tag + "-guest2.png")
