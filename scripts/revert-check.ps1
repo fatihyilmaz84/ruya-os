@@ -17,8 +17,14 @@ param(
     [Parameter(Mandatory = $true)][string]$File,
     [Parameter(Mandatory = $true)][string]$Old,
     [Parameter(Mandatory = $true)][string]$New,
-    [string[]]$Test = @()
+    [string[]]$Test = @(),
+    # Self-check only (dev.ps1): a script block that stands in for the build and test run and returns its
+    # console text, with "FAIL!  : name" lines for failed tests. Nothing is rebuilt afterwards.
+    [scriptblock]$Runner
 )
+# The verdict is the exit code of this script (0 CAUGHT, 1 NOT CAUGHT, 2 unusable) and the CAUGHT / NOT CAUGHT
+# line; both come from the test logs and the child's own exit code read inside this script, never from console
+# text a caller's pipe (`| Select-Object -Last 3`) could cut (RUY-654).
 
 $Repo = Split-Path -Parent $PSScriptRoot
 $Path = if ([IO.Path]::IsPathRooted($File)) { $File } else { Join-Path $Repo $File }
@@ -41,7 +47,12 @@ $rust = [bool]$crate
 try {
     $mutated = $text.Substring(0, $at) + $New + $text.Substring($at + $Old.Length)
     [IO.File]::WriteAllText($Path, $mutated, (New-Object Text.UTF8Encoding($false)))
-    if ($rust) {
+    $childExit = $null
+    if ($Runner) {
+        Write-Host "== mutated ${File}; running the stand-in runner =="
+        $out = (& $Runner *>&1 | Out-String -Width 4096)
+        $logs = @()
+    } elseif ($rust) {
         Write-Host "== mutated ${File}; cargo test -p $crate $($Test -join ' ') =="
         Push-Location (Join-Path $Repo "services")
         try {
@@ -53,6 +64,7 @@ try {
         Write-Host "== mutated ${File}; building and testing only $($Test -join ', ') (dev.ps1 qml) =="
         # *>&1: dev.ps1 reports with Write-Host (the information stream), which 2>&1 does not capture.
         $out = & (Join-Path $PSScriptRoot "dev.ps1") qml @Test *>&1 | Out-String -Width 4096
+        $childExit = $LASTEXITCODE
         $logs = @(Get-ChildItem (Join-Path $Repo "shell\build-win") -Filter "ruya-qmltest-*.txt" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
     } else {
         Write-Host "== mutated ${File}; building and testing (dev.ps1 shell) =="
@@ -65,6 +77,9 @@ try {
             $failed += @(Select-String -LiteralPath $log -Pattern '^FAIL!\s*:\s*(\S+)' | ForEach-Object { $_.Matches[0].Groups[1].Value })
         }
     }
+    if ($Runner) {
+        $failed += @([regex]::Matches($out, '(?m)^FAIL!\s*:\s*(\S+)') | ForEach-Object { $_.Groups[1].Value })
+    }
     if ($rust) {
         # `cargo test -q` prints "<name> --- FAILED"; without -q it is "test <name> ... FAILED".
         $failed += @([regex]::Matches($out, '(?m)^\s*(?:test )?(\S+) (?:---|\.\.\.) FAILED') | ForEach-Object { $_.Groups[1].Value })
@@ -74,6 +89,8 @@ try {
         }
     }
     $failed = @($failed | Sort-Object -Unique)
+    # `dev.ps1 qml` exits 1 when a test file failed: a failure whose log line was lost is still a failure.
+    if ($failed.Count -eq 0 -and $childExit -eq 1 -and $out -match 'PARTIAL' -and $out -notmatch 'FAILED: cmake|no such test file') { $failed = @("(dev.ps1 qml exit code 1)") }
     ($out -split "`n") | Where-Object { $_ -match 'FAIL|no such test file|PARTIAL|ok: cmake|could not compile' } | ForEach-Object { Write-Host "    $($_.TrimEnd())" }
     $buildBroke = ($out -match 'FAILED: cmake') -or ($rust -and $out -match 'could not compile')
     if (-not $rust) { $badName = ($out -match 'no such test file') }
@@ -91,7 +108,9 @@ try {
 } finally {
     [IO.File]::WriteAllBytes($Path, $bytes)
     (Get-Item -LiteralPath $Path).LastWriteTime = Get-Date
-    if ($rust) {
+    if ($Runner) {
+        Write-Host "== restored ${File} =="
+    } elseif ($rust) {
         Write-Host "== restored ${File} (cargo rebuilds it on the next run) =="
     } else {
         Write-Host "== restored ${File}; rebuilding =="
