@@ -2454,7 +2454,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>HubPause</name>
     <message>
-        <location filename="../qml/HubPause.qml" line="+125"/>
+        <location filename="../qml/HubPause.qml" line="+126"/>
         <source>Could not resume the game. Open Ruya Hub and choose Resume.</source>
         <translation>Could not resume the game. Open Ruya Hub and choose Resume.</translation>
     </message>
@@ -3593,12 +3593,17 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ProfileCard</name>
     <message>
-        <location filename="../qml/ProfileCard.qml" line="+13"/>
+        <location filename="../qml/ProfileCard.qml" line="+14"/>
         <source>%1, PIN protected</source>
         <translation>%1, PIN protected</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+51"/>
+        <source>Player %1</source>
+        <translation>Player %1</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
@@ -4509,7 +4514,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 did not close. Restart the console if it keeps running.</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location line="+105"/>
         <source>%1 has no window yet.</source>
         <translation>%1 has no window yet.</translation>
     </message>
@@ -4608,7 +4613,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 was uninstalled.</translation>
     </message>
     <message>
-        <location line="+475"/>
+        <location line="+526"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -4625,13 +4630,13 @@ This can&apos;t be undone.</translation>
         <translation>The chosen sound theme can&apos;t be used. The standard one plays instead.</translation>
     </message>
     <message>
-        <location line="-218"/>
-        <location line="+21"/>
+        <location line="-220"/>
+        <location line="+23"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1748"/>
+        <location line="-1811"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -4662,7 +4667,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1473"/>
+        <location line="+1536"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
@@ -6161,6 +6166,101 @@ This can&apos;t be undone.</translation>
         <location line="+8"/>
         <source>Delete</source>
         <translation>Delete</translation>
+    </message>
+</context>
+<context>
+    <name>WhosPlaying</name>
+    <message>
+        <location filename="../qml/WhosPlaying.qml" line="+81"/>
+        <location line="+1"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <location line="+533"/>
+        <source>Not now</source>
+        <translation>Not now</translation>
+    </message>
+    <message>
+        <location line="-532"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Needs a PIN: coming soon</source>
+        <translation>Needs a PIN: coming soon</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Picking it makes this controller player 1.</source>
+        <translation>Picking it makes this controller player 1.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>another controller</source>
+        <translation>another controller</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Now on %2. Picking it moves %1 here.</source>
+        <translation>Now on %2. Picking it moves %1 here.</translation>
+    </message>
+    <message>
+        <location line="+168"/>
+        <source>%1 could not join</source>
+        <translation>%1 could not join</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Try again.</source>
+        <translation>Try again.</translation>
+    </message>
+    <message>
+        <location line="+194"/>
+        <source>Paused · %1</source>
+        <translation>Paused · %1</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>%1 wants to play</source>
+        <translation>%1 wants to play</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Who&apos;s playing?</source>
+        <translation>Who&apos;s playing?</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Profiles</source>
+        <translation>Profiles</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Waiting for the profiles service…</source>
+        <translation>Waiting for the profiles service…</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <source>Join in or switch to %1?</source>
+        <translation>Join in or switch to %1?</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Join: %1 plays alongside %2. Switch: %1 becomes player 1, and %2&apos;s games are paused and kept.</source>
+        <translation>Join: %1 plays alongside %2. Switch: %1 becomes player 1, and %2&apos;s games are paused and kept.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Join</source>
+        <translation>Join</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Switch</source>
+        <translation>Switch</translation>
     </message>
 </context>
 <context>

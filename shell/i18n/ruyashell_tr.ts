@@ -2449,7 +2449,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>HubPause</name>
     <message>
-        <location filename="../qml/HubPause.qml" line="+125"/>
+        <location filename="../qml/HubPause.qml" line="+126"/>
         <source>Could not resume the game. Open Ruya Hub and choose Resume.</source>
         <translation>Oyun sürdürülemedi. Ruya Hub&apos;ı açıp Devam et&apos;i seçin.</translation>
     </message>
@@ -3578,12 +3578,17 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ProfileCard</name>
     <message>
-        <location filename="../qml/ProfileCard.qml" line="+13"/>
+        <location filename="../qml/ProfileCard.qml" line="+14"/>
         <source>%1, PIN protected</source>
         <translation>%1, PIN korumalı</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+51"/>
+        <source>Player %1</source>
+        <translation>Oyuncu %1</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>PIN</source>
         <translation>PIN</translation>
     </message>
@@ -4492,7 +4497,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kapanmadı. Çalışmaya devam ederse konsolu yeniden başlatın.</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location line="+105"/>
         <source>%1 has no window yet.</source>
         <translation>%1 henüz bir pencere açmadı.</translation>
     </message>
@@ -4591,7 +4596,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kaldırıldı.</translation>
     </message>
     <message>
-        <location line="+475"/>
+        <location line="+526"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -4608,13 +4613,13 @@ Bu geri alınamaz.</translation>
         <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
     </message>
     <message>
-        <location line="-218"/>
-        <location line="+21"/>
+        <location line="-220"/>
+        <location line="+23"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1748"/>
+        <location line="-1811"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -4645,7 +4650,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1473"/>
+        <location line="+1536"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
@@ -6141,6 +6146,101 @@ Bu geri alınamaz.</translation>
         <location line="+8"/>
         <source>Delete</source>
         <translation>Sil</translation>
+    </message>
+</context>
+<context>
+    <name>WhosPlaying</name>
+    <message>
+        <location filename="../qml/WhosPlaying.qml" line="+81"/>
+        <location line="+1"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <location line="+533"/>
+        <source>Not now</source>
+        <translation>Şimdi değil</translation>
+    </message>
+    <message>
+        <location line="-532"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+23"/>
+        <source>Needs a PIN: coming soon</source>
+        <translation>PIN gerekiyor: yakında</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Picking it makes this controller player 1.</source>
+        <translation>Seçersen bu kumanda 1. oyuncu olur.</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>another controller</source>
+        <translation>başka bir kumanda</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Now on %2. Picking it moves %1 here.</source>
+        <translation>Şu an %2 üzerinde. Seçersen %1 buraya geçer.</translation>
+    </message>
+    <message>
+        <location line="+168"/>
+        <source>%1 could not join</source>
+        <translation>%1 katılamadı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Try again.</source>
+        <translation>Yeniden dene.</translation>
+    </message>
+    <message>
+        <location line="+194"/>
+        <source>Paused · %1</source>
+        <translation>Duraklatıldı · %1</translation>
+    </message>
+    <message>
+        <location line="+28"/>
+        <source>%1 wants to play</source>
+        <translation>%1 oynamak istiyor</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Who&apos;s playing?</source>
+        <translation>Kim oynuyor?</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Profiles</source>
+        <translation>Profiller</translation>
+    </message>
+    <message>
+        <location line="+37"/>
+        <source>Waiting for the profiles service…</source>
+        <translation>Profil hizmeti bekleniyor…</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <source>Join in or switch to %1?</source>
+        <translation>Katıl mı, %1 profiline geç mi?</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Join: %1 plays alongside %2. Switch: %1 becomes player 1, and %2&apos;s games are paused and kept.</source>
+        <translation>Katıl: %1, %2 ile birlikte oynar. Geç: %1 1. oyuncu olur; %2 profilinin oyunları duraklatılıp saklanır.</translation>
+    </message>
+    <message>
+        <location line="+16"/>
+        <source>Join</source>
+        <translation>Katıl</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Switch</source>
+        <translation>Geç</translation>
     </message>
 </context>
 <context>

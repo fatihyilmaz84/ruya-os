@@ -295,6 +295,104 @@ Item {
             compare(Session.mockCalls(), ["freeze " + run.instance], "the game stays paused under the Hub")
         }
 
+        // "Pause games when Ruya Hub opens" off: the game is not frozen, but the route still holds its pads
+        // (overlay with the instance), so it sees no input while the prompt is open.
+        function test_with_the_pause_off_the_game_runs_and_sees_no_input() {
+            DeviceSettings.pauseGamesInHub = false
+            signIn()
+            const run = playRacer()
+            askWith(host.dualSense)
+            tryVerify(() => Input.mockServiceRoute() === "overlay" && Input.mockServiceInstance() === run.instance, 2000,
+                      "the route is overlay with the instance")
+            wait(50)
+            compare(Session.mockCalls(), [], "no Freeze is asked")
+            verify(recordOf(run.instance).frozen !== true)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !prompt().shown && run.app.activeFocus, 2000)
+            tryVerify(() => Input.mockServiceRoute() === "app", 2000)
+            compare(Session.mockCalls(), [], "and no Thaw")
+            compare(run.app.keysSeen, 0)
+            DeviceSettings.pauseGamesInHub = true
+        }
+
+        // Two pads ask over a game: the game stays frozen from the first prompt to the end of the second.
+        function test_two_prompts_in_a_row_keep_the_game_frozen() {
+            signIn()
+            const run = playRacer()
+            askWith(host.dualSense)
+            pressUntilHeard(host.pro)
+            compare(prompt().queue, [host.pro])
+            tryVerify(() => Session.mockCalls().length === 1, 2000)
+            keyClick(Qt.Key_Escape)                                 // Not now for the DualSense
+            tryVerify(() => prompt().shown && prompt().pad === host.pro, 2000, "the Pro Controller asks next")
+            verify(!run.app.activeFocus)
+            tryVerify(() => find("whosPlayingCards").activeFocus, 2000)
+            compare(Input.mockServiceRoute(), "overlay")
+            wait(50)
+            compare(Session.mockCalls(), ["freeze " + run.instance], "no Thaw and no second Freeze between them")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !prompt().shown && run.app.activeFocus, 2000, "the game after the last one")
+            tryVerify(() => Session.mockCalls().length === 2, 2000)
+            compare(Session.mockCalls(), ["freeze " + run.instance, "thaw " + run.instance])
+            compare(run.app.keysSeen, 0)
+        }
+
+        // Player 1's pad goes while the prompt is open over the game (reviewer's probe, round 2): the Hub
+        // waits under nothing, the prompt keeps the focus, and its close opens the lost-pad Hub with the
+        // focus, the game still frozen; the keyboard's Back never reaches the game.
+        function test_a_lost_pad_hub_waits_for_the_prompt() {
+            signIn()
+            const run = playRacer()
+            askWith(host.dualSense)
+            tryVerify(() => find("whosPlayingCards").activeFocus, 2000)
+            Input.mockRemoveDevice(host.xbox)
+            tryVerify(() => Input.players.length === 1 && Input.players[0].held === true, 2000, "seat 1 is held")
+            wait(50)
+            verify(!find("systemPanel").open, "no Hub under the prompt")
+            verify(find("whosPlayingCards").activeFocus, "the prompt keeps the focus")
+            keyClick(Qt.Key_Escape)                                 // Not now
+            tryVerify(() => !prompt().shown && find("systemPanel").open && find("systemActions").activeFocus, 2000,
+                      "the lost-pad Hub opens with the focus")
+            verify(find("quickMenuItem_resume").focused)
+            wait(50)
+            compare(Session.mockCalls(), ["freeze " + run.instance], "frozen throughout, no Thaw")
+            compare(run.app.keysSeen, 0)
+            keyClick(Qt.Key_Escape)                                 // Back closes the Hub: the game again
+            tryVerify(() => run.app.activeFocus && !find("systemPanel").open, 2000)
+            verify(!prompt().shown)
+        }
+
+        // The pad comes back before the prompt closes: no Hub then.
+        function test_a_lost_pad_back_before_the_prompt_closes_opens_no_hub() {
+            signIn()
+            const run = playRacer()
+            const record = JSON.parse(JSON.stringify(Input.devices.find(d => d.id === host.xbox)))
+            askWith(host.dualSense)
+            Input.mockRemoveDevice(host.xbox)
+            tryVerify(() => Input.players.length === 1 && Input.players[0].held === true, 2000)
+            Input.mockAddDevice(record)
+            tryVerify(() => Input.players[0].held === false, 2000, "the seat is the pad's again")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !prompt().shown && run.app.activeFocus, 2000, "back in the game, no Hub")
+            verify(!find("systemPanel").open)
+        }
+
+        // A page's lazily built modal leaves the modal layer: the prompt is not blocked after it (round 2,
+        // the reviewer's probe; `Shell.modalShown` skips a child that is gone).
+        function test_it_opens_after_a_page_was_open() {
+            signIn()
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("sectionNav").activeFocus, 2000)
+            for (let i = 0; i < 4; ++i)
+                keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("page_settings") !== null && find("page_settings").activeFocus, 2000)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("sectionNav").activeFocus, 2000)
+            verify(!prompt().blocked)
+            askWith(host.dualSense)
+        }
+
         // ---- the queue and the navigator ----------------------------------------------------------------------
 
         function test_two_pads_queue_and_the_navigator_follows() {
@@ -404,6 +502,11 @@ Item {
             compare(prompt().step, "pick", "a PIN profile stays on Pick until RUY-628")
             verify(list.activeFocus)
             compare(joinSpy.count, 0)
+            compare(find("whosPlayingDetail").text, "Needs a PIN: coming soon", "the cue says why")
+            keyClick(Qt.Key_Right)
+            verify(find("whosPlayingDetail").text.endsWith("Picking it moves Ada here."), "Ada's own line: the notice went")
+            keyClick(Qt.Key_Left)
+            compare(find("whosPlayingDetail").text, "", "and does not come back by itself")
         }
 
         // ---- step "Join or Switch" ----------------------------------------------------------------------------
@@ -458,6 +561,43 @@ Item {
             tryVerify(() => Input.players.length === 1 && Input.players[0].profile === "p2"
                       && Input.players[0].device_id === host.dualSense, 2000, "the DualSense is the new player 1")
             tryVerify(() => find("homePlay").activeFocus, 2000)
+        }
+
+        // ---- a Switch that never gets its seat --------------------------------------------------------------
+
+        function test_a_switch_whose_pad_goes_gives_up_and_the_prompt_opens_again() {
+            signIn()
+            askWith(host.dualSense)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("whosPlayingJoin").activeFocus, 2000)
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)                                 // Switch
+            verify(prompt().switching !== null)
+            Input.mockRemoveDevice(host.dualSense)
+            tryVerify(() => prompt().switching === null, 2000, "the Switch gave up")
+            tryCompare(Profiles, "activeProfile", "p2")
+            tryVerify(() => Notifications.model.count === 1, 2000)
+            compare(Notifications.model.get(0).text, "Ada could not join")
+            tryVerify(() => find("homePlay").activeFocus, 2000)
+            tryVerify(() => Input.players.length === 1 && Input.players[0].profile === "p2", 2000)
+            askWith(host.pro)                                       // nothing keeps it shut
+        }
+
+        function test_a_switch_with_no_seat_gives_up_after_its_timeout() {
+            signIn()
+            prompt().switchTimeoutMs = 300
+            askWith(host.dualSense)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("whosPlayingJoin").activeFocus, 2000)
+            keyClick(Qt.Key_Right)
+            Input.mockFail(true)                                    // the service answers nothing useful
+            keyClick(Qt.Key_Return)
+            tryCompare(Profiles, "activeProfile", "p2")
+            tryVerify(() => prompt().switching === null, 3000, "the Switch gave up")
+            tryVerify(() => Notifications.model.count === 1, 2000)
+            compare(Notifications.model.get(0).text, "Ada could not join")
+            compare(joinSpy.count, 0)
+            Input.mockFail(false)
         }
 
         // ---- errors -------------------------------------------------------------------------------------------
@@ -545,12 +685,11 @@ Item {
             askWith(host.dualSense)
             const list = find("whosPlayingCards")
             tryVerify(() => list.activeFocus, 2000)
-            compare(list.currentIndex, 0, "Player One, the first profile without a pad")
-            compare(badgeOn(1).text, "Player 1")
-            list.currentIndex = 0
-            keyClick(Qt.Key_Right)                                  // Ada, player 1 without a pad
-            compare(list.currentIndex, 1)
+            compare(list.currentIndex, 1, "Ada, player 1 without a pad, has the focus first (one press back)")
             compare(find("whosPlayingDetail").text, "Picking it makes this controller player 1.")
+            compare(badgeOn(1).text, "Player 1")
+            list.currentIndex = 1
+            verify(list.activeFocus)
             keyClick(Qt.Key_Return)
             tryCompare(joinSpy, "count", 1)
             compare(joinSpy.signalArguments[0][1], "p2")

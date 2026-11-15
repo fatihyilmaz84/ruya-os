@@ -51,7 +51,18 @@ FocusScope {
     property bool padsPrimed: false
     // What had the focus when it opened (the Shell gives it back on close when it can still take it).
     property Item returnTo: null
+    // Between two asking pads: the prompt closed for one and opens for the next in the same turn, so the
+    // game stays frozen and the Shell moves no focus (RUY-122 round 2).
+    property bool bridging: false
+    // It pauses a game behind it (the Shell's HubPause and InputRoute): open, or between two prompts.
+    readonly property bool pausing: shown || bridging
+    // The card where Accept was refused for now (a PIN or a profile that plays: RUY-628), -1 for none.
+    property int noticeIndex: -1
+    // A Switch whose seat never came (the service did not answer) gives up after this (tests shorten it).
+    property int switchTimeoutMs: 10000
 
+    // Emitted before it hides for good (not between two prompts): the Shell may open the Hub then.
+    signal aboutToClose()
     // `target`: the item that had the focus before (null when none).
     signal closed(Item target)
 
@@ -87,9 +98,11 @@ FocusScope {
         const s = seatOf(profileId)
         return s !== undefined && !padlessPlayer1(profileId)
     }
-    function detailFor(record) {
+    function detailFor(record, index) {
         if (!record)
             return ""
+        if (index === noticeIndex && record.hasPin && seatOf(record.id) === undefined)
+            return qsTr("Needs a PIN: coming soon")
         if (padlessPlayer1(record.id))
             return qsTr("Picking it makes this controller player 1.")
         const s = seatOf(record.id)
@@ -127,34 +140,51 @@ FocusScope {
     }
 
     function tryOpen() {
-        if (shown || !allowed || blocked || switching !== null)
-            return
-        while (queue.length > 0) {
-            const id = queue[0]
-            queue = queue.slice(1)
-            if (connected(id) && !seated(id)) {
-                open(id)
-                return
+        if (!shown && allowed && !blocked && switching === null) {
+            while (queue.length > 0) {
+                const id = queue[0]
+                queue = queue.slice(1)
+                if (connected(id) && !seated(id)) {
+                    open(id)
+                    return
+                }
             }
         }
+        endBridge()
+    }
+
+    // A bridge that leads nowhere (the next pad went, a modal came): the prompt is closed for good now.
+    function endBridge() {
+        if (!bridging)
+            return
+        bridging = false
+        const target = returnTo
+        returnTo = null
+        closed(target)
     }
 
     function open(id) {
-        const f = Window.activeFocusItem
-        returnTo = f && !inside(f) ? f : null
+        if (!bridging) {
+            const f = Window.activeFocusItem
+            returnTo = f && !inside(f) ? f : null
+        }
+        noticeIndex = -1
         pad = id
         step = "pick"
         chosen = null
         joining = null
         downKey = 0
         shown = true
+        bridging = false                // after `shown`, so `pausing` never drops between two prompts
         Input.setNavigator(id)
         focusFirst()
     }
 
     // The first profile without a pad, else Not now (also when the profiles are not there).
     function focusFirst() {
-        const i = Profiles.available ? cards.findIndex(p => !hasPad(p.id)) : -1
+        // Seat 1 without a pad: player 1's card first (the one-press way back, lead RUY-122 round 2).
+        const own = Profiles.available ? cards.findIndex(p => padlessPlayer1(p.id)) : -1
+        const i = own >= 0 ? own : Profiles.available ? cards.findIndex(p => !hasPad(p.id)) : -1
         if (i >= 0) {
             cardList.currentIndex = i
             cardList.forceActiveFocus()
@@ -172,17 +202,24 @@ FocusScope {
             next[pad] = overGame ? { instance: gameInstance, profile: "" } : { instance: "", profile: Profiles.activeProfile }
             quiet = next
         }
+        // Another pad waits and may ask now: keep the pause and the focus for it.
+        bridging = allowed && !blocked && switching === null && queue.some(i => i !== pad && connected(i) && !seated(i))
+        if (!bridging)
+            aboutToClose()
         shown = false
         step = "pick"
         chosen = null
         joining = null
+        noticeIndex = -1
         const was = pad
         pad = ""
         if (was !== "" && Input.navigator === was)
             Input.setNavigator("")
-        const target = returnTo
-        returnTo = null
-        closed(target)
+        if (!bridging) {
+            const target = returnTo
+            returnTo = null
+            closed(target)
+        }
         Qt.callLater(prompt.tryOpen)
     }
 
@@ -200,9 +237,13 @@ FocusScope {
             join(record.id, "pick")
             return
         }
-        // Move (a profile that plays now) and the PIN are RUY-628: nothing yet.
-        if (seatOf(record.id) !== undefined || record.hasPin)
+        // Move (a profile that plays now) and the PIN are RUY-628: a cue for now, and for a PIN card its
+        // detail line says so.
+        if (seatOf(record.id) !== undefined || record.hasPin) {
+            Sfx.back()
+            noticeIndex = index
             return
+        }
         Sfx.select()
         chosen = record
         step = "confirm"
@@ -218,6 +259,7 @@ FocusScope {
         if (!chosen || joining !== null)
             return
         switching = { pad: pad, id: chosen.id, name: chosen.name, signedIn: false }
+        switchGuard.restart()
         close(false)
         Profiles.lock()
         Profiles.switchTo(switching.id, "")
@@ -229,6 +271,7 @@ FocusScope {
             return
         const s = switching
         switching = null
+        switchGuard.stop()
         joining = { pad: s.pad, id: s.id, from: "switch" }
         Input.joinPlayer(s.pad, s.id)
     }
@@ -268,6 +311,8 @@ FocusScope {
         }
         quiet = kept
         queue = queue.filter(i => ids.includes(i))
+        if (switching && !ids.includes(switching.pad))
+            abandonSwitch()                     // the pad that asked is gone: no seat will come
         if (shown && !ids.includes(pad))
             close(true)                 // the asking pad is gone: as Not now
     }
@@ -330,6 +375,8 @@ FocusScope {
             prompt.quiet = next
             if (prompt.switching && Profiles.activeProfile === prompt.switching.id)
                 prompt.switching = Object.assign({}, prompt.switching, { signedIn: true })
+            else if (prompt.switching && Profiles.activeProfile !== "")
+                prompt.abandonSwitch()          // another profile signed in: this Switch has no seat to wait for
             prompt.joinAfterSwitch()
         }
         function onSwitchFinished(id, status) {
@@ -337,9 +384,27 @@ FocusScope {
             if (!s || s.id !== id || status === "ok")
                 return
             prompt.switching = null      // the picker stays up
+            switchGuard.stop()
             prompt.refused(s.name)
         }
     }
+    // A Switch that never gets its seat (the service did not answer, the asking pad went, another profile
+    // signed in): it gives up, with the error toast, so it never keeps the prompt shut for the session.
+    function abandonSwitch() {
+        const s = switching
+        if (!s)
+            return
+        switching = null
+        switchGuard.stop()
+        refused(s.name)
+        Qt.callLater(prompt.tryOpen)
+    }
+    Timer {
+        id: switchGuard
+        interval: prompt.switchTimeoutMs
+        onTriggered: prompt.abandonSwitch()
+    }
+
     Connections {
         target: Session
         function onAppExited(instance) {
@@ -484,6 +549,7 @@ FocusScope {
                 Accessible.role: Accessible.List
                 Accessible.name: currentItem ? currentItem.Accessible.name : qsTr("Profiles")
                 model: prompt.cards
+                onCurrentIndexChanged: prompt.noticeIndex = -1
 
                 delegate: ProfileCard {
                     u: prompt.u
@@ -534,7 +600,7 @@ FocusScope {
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight
             textFormat: Text.PlainText
-            text: cardList.activeFocus && Profiles.available ? prompt.detailFor(prompt.cards[cardList.currentIndex]) : ""
+            text: cardList.activeFocus && Profiles.available ? prompt.detailFor(prompt.cards[cardList.currentIndex], cardList.currentIndex) : ""
             color: Theme.text
             font.pixelSize: Theme.typeBody * prompt.u
         }

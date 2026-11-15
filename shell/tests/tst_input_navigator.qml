@@ -333,9 +333,7 @@ Item {
             tryVerify(() => find("whosPlaying").shown && find("whosPlayingCards").activeFocus, 2000,
                       "the DualSense asks: the prompt opens over the Hub")
             compare(Input.players[0].device_id, "", "a press takes no seat")
-            compare(find("whosPlayingCards").currentIndex, 0, "Player One, the first profile without a pad")
-            Input.mockPadButton(host.dualSense, "dpad_right")     // the navigator moves to Ada, player 1 without a pad
-            tryCompare(find("whosPlayingCards"), "currentIndex", 1, 2000)
+            compare(find("whosPlayingCards").currentIndex, 1, "Ada, player 1 without a pad, first")
             Input.mockPadButton(host.dualSense, "south")          // Join as player 1
             tryVerify(() => Input.players[0].device_id === host.dualSense, 2000, "the DualSense is player 1")
             tryVerify(() => !find("whosPlaying").shown && find("quickMenuItem_resume").focused, 2000, "back to the Hub")
@@ -351,8 +349,7 @@ Item {
             tryVerify(() => find("whosPlaying").shown, 2000, "its press opens the prompt")
             compare(Input.players[0].device_id, "", "and takes no seat")
             verify(!find("homeDetails").activeFocus, "it moved nothing on Home")
-            Input.mockPadButton(host.dualSense, "dpad_right")     // from Player One to Ada, player 1 without a pad
-            tryCompare(find("whosPlayingCards"), "currentIndex", 1, 2000)
+            tryCompare(find("whosPlayingCards"), "currentIndex", 1, 2000, "Ada, player 1 without a pad, first")
             Input.mockPadButton(host.dualSense, "south")          // Join as player 1
             tryVerify(() => Input.players[0].device_id === host.dualSense, 2000, "it is player 1")
             tryVerify(() => !find("whosPlaying").shown && find("homePlay").activeFocus, 2000)
