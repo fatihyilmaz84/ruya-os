@@ -57,6 +57,11 @@ QtObject {
 
     // "loading" before the first answer, "ok", or "failed" (ListProfiles or GetProfile failed).
     property string loadState: "loading"
+    // The padKey whose GetProfile has answered (or needed none), null before any (RUY-714). While it
+    // differs from `padKey` the shown pad's own profile is not known, and `stored` is null only because
+    // it is on its way: an edit then would start from an empty document and drop what the profile has.
+    property var loadedKey: null
+    readonly property bool ready: loadState === "ok" && loadedKey === padKey
     // The last ListProfiles answer (Input1's summaries).
     property var profiles: []
     // The summary of what applies to the pad, or null when nothing is assigned that fits it.
@@ -107,6 +112,7 @@ QtObject {
         pendingImport = null
         importing = false       // the old owner's ImportFinished is ignored; its hold on the queue ends
         loadState = "loading"
+        loadedKey = null
         if (owner !== "")
             refresh()
     }
@@ -172,6 +178,7 @@ QtObject {
         stored = null
         if (phase === "" && queue.length === 0)
             doc = null
+        loadedKey = padKey
         loadState = "ok"
     }
 
@@ -300,6 +307,8 @@ QtObject {
     }
 
     function setLayout(value) {
+        if (!ready)
+            return
         const d = editable()
         if (value === "nintendo")
             d.inherits = "nintendo"
@@ -311,7 +320,7 @@ QtObject {
     // The layout in the pad's own device slot only (RUY-503, the pairing step): a profile of
     // all controllers or of a family is copied for this pad and never changed. False without a pad.
     function setOwnLayout(value) {
-        if (!pad)
+        if (!pad || !ready)
             return false
         const d = current()
         if (!(d.id !== "" && slotOf(d.match) === "device:" + pad.id)) {
@@ -334,7 +343,7 @@ QtObject {
     // never rewritten.
     function setAppliesTo(value) {
         const v = String(value)
-        if (v === appliesValue)
+        if (v === appliesValue || !ready)
             return
         const d = current()
         let slot = ""
@@ -366,7 +375,7 @@ QtObject {
     // The source now acts as `target`. False (and nothing saved) when it already does: pressing the
     // same button maps it to itself, which is no change.
     function setTarget(source, target) {
-        if (targetOf(source) === target)
+        if (!ready || targetOf(source) === target)
             return false
         const d = editable()
         d.mappings = (d.mappings ?? []).filter(m => m.from !== source)
@@ -379,6 +388,8 @@ QtObject {
     }
 
     function setStick(side, key, value, debounce) {
+        if (!ready)
+            return
         const d = editable()
         const name = side + "_stick"
         const settings = d.settings ?? {}
@@ -400,6 +411,8 @@ QtObject {
     }
 
     function resetStick(side) {
+        if (!ready)
+            return
         const d = editable()
         if (d.settings) {
             delete d.settings[side + "_stick"]
@@ -502,6 +515,8 @@ QtObject {
     // otherwise its own profile is saved with nothing in it (a copy for This <pad> when what applies
     // is not its own), so no other slot's pads are touched.
     function resetAll() {
+        if (!ready)
+            return
         queue = queue.filter(q => q.padKey !== padKey)
         if (queue.length === 0)
             debounceTimer.stop()
@@ -531,6 +546,8 @@ QtObject {
     // ---- export and import -----------------------------------------------------------------------
     // The profile goes to the volume as one file; one that is not stored yet is saved first.
     function exportTo(volumeId) {
+        if (!ready)
+            return
         exportVolume = volumeId
         if (!stored && phase === "" && queue.length === 0) {
             change(editable(), "export", false)
@@ -546,7 +563,7 @@ QtObject {
     }
 
     function importFrom(volumeId, fileName) {
-        if (importing)
+        if (importing || !ready)
             return
         importing = true
         // Into the slot this page edits (RUY-572): the pad's own profile, else a copy for This <pad>.
@@ -598,6 +615,7 @@ QtObject {
             // so another pad's save running does not hide this pad's profile).
             if ((games.phase === "" && games.queue.length === 0) || games.doc === null)
                 games.doc = parsed
+            games.loadedKey = games.padKey
             games.loadState = "ok"
         }
         function onProfileValidated(status, errors) {

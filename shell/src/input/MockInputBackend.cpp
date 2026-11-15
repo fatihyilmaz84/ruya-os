@@ -471,6 +471,19 @@ void MockInputBackend::holdSaves(bool hold)
     m_replaying = false;
 }
 
+void MockInputBackend::holdGets(bool hold)
+{
+    m_holdGets = hold;
+    if (hold)
+        return;
+    const QList<HeldCall> held = m_heldGets;
+    m_heldGets.clear();
+    m_replaying = true;
+    for (const HeldCall &h : held)
+        callProfile(h.token, QStringLiteral("GetProfile"), h.args);
+    m_replaying = false;
+}
+
 void MockInputBackend::holdStored(bool hold)
 {
     m_holdStored = hold;
@@ -490,6 +503,10 @@ void MockInputBackend::callProfile(quint64 token, const QString &method, const Q
         m_profileCalls.append(QVariantMap{{QStringLiteral("method"), method}, {QStringLiteral("args"), args}});
     if (m_holdSaves && method == QLatin1String("SaveProfile")) {
         m_held.append({token, args});
+        return;
+    }
+    if (m_holdGets && method == QLatin1String("GetProfile")) {
+        m_heldGets.append({token, args});
         return;
     }
     if (m_holdStored && method == QLatin1String("StoredConsoleProfiles")) {

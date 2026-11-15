@@ -61,6 +61,7 @@ Item {
         function cleanup() {
             clearToasts()
             Input.mockHoldSaves(false)
+            Input.mockHoldGets(false)
             Input.mockResetProfiles()
             DeviceSettings.language = "en"
         }
@@ -732,6 +733,87 @@ Item {
             keyClick(Qt.Key_Right)
             tryVerify(() => calls("SaveProfile").length === 1, 2000)
             compare(lastSaved().id, "controls-all", "Applies to = All: the change goes to All controllers")
+        }
+
+        // ---- the window before the shown pad's GetProfile has answered (RUY-714) --------------------------------
+
+        readonly property var inheritedRemap: [{ from: "west", to: { type: "button", code: "north" } }]
+
+        // An imported all-controllers profile holds a remap (an edit copies it for the pad); a pad's page is open (Xbox, loaded), then the answer of the
+        // next pad's GetProfile is held and its page opens.
+        function holdProsProfile() {
+            given("imported-all", { mappings: inheritedRemap }, "", pro)
+            tryVerify(() => Input.confirmButtonsAvailable, 2000)
+            GameControls.show(xbox)
+            tryCompare(GameControls, "padId", xbox)
+            tryVerify(() => GameControls.ready, 2000)
+            chainOf(xbox)                                // a round trip: the answers still on their way have arrived
+            Input.mockClearProfileCalls()
+            Input.mockHoldGets(true)
+            tc.shell.openPage("controller", { id: pro })
+            tryCompare(tc.shell, "currentPage", "controller")
+            tryCompare(GameControls, "padId", pro)
+            tryVerify(() => calls("GetProfile").length > 0, 2000, "its GetProfile is on its way")
+            verify(!GameControls.ready, "not ready before the answer")
+            compare(GameControls.stored, null)
+        }
+
+        function test_a_layout_edit_waits_for_the_pads_profile_and_keeps_the_inherited_remaps() {
+            holdProsProfile()
+            tryVerify(() => find("rowButtonTest").activeFocus, 2000)
+            const row = findChild(find("page_controller"), "rowGamesLayout")
+            for (let i = 0; i < 4 && !row.activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(row.activeFocus, "on Button layout in games")
+            keyClick(Qt.Key_Right)
+            wait(300)
+            compare(calls("SaveProfile").length, 0, "nothing is saved before the answer")
+            verify(!GameControls.busy)
+            Input.mockHoldGets(false)
+            tryVerify(() => GameControls.ready, 2000)
+            keyClick(Qt.Key_Left)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => calls("SaveProfile").length >= 1 && lastSaved().inherits === "nintendo", 2000, "the edit works after the answer")
+            compare(lastSaved().id, "controls-device-" + pro)
+            compare(lastSaved().inherits, "nintendo")
+            compare(lastSaved().mappings, inheritedRemap, "the inherited remaps are kept")
+        }
+
+        function test_an_edit_on_controls_in_games_waits_for_the_pads_profile() {
+            holdProsProfile()
+            tc.shell.openPage("controls", { id: pro })
+            tryCompare(tc.shell, "currentPage", "controls")
+            tryVerify(() => calls("GetProfile").length > 0, 2000)
+            verify(!GameControls.ready)
+            verify(!GameControls.setTarget("east", "south"), "a remap is not taken")
+            GameControls.setStick("left", "inner_deadzone", 0.2, false)
+            GameControls.setAppliesTo("device:" + pro)
+            GameControls.resetAll()
+            wait(300)
+            compare(calls("SaveProfile").length, 0, "nothing is saved before the answer")
+            compare(calls("DeleteProfile").length, 0)
+            Input.mockHoldGets(false)
+            tryVerify(() => GameControls.ready, 2000)
+            verify(GameControls.setTarget("east", "south"))
+            tryVerify(() => calls("SaveProfile").length === 1, 2000)
+            compare(lastSaved().id, "controls-device-" + pro)
+            compare(lastSaved().mappings.length, 2, "the inherited remap and the new one")
+        }
+
+        function test_the_layout_row_is_unavailable_while_another_pad_is_shown() {
+            tc.shell.openPage("controller", { id: pro })
+            tryCompare(tc.shell, "currentPage", "controller")
+            tryCompare(GameControls, "padId", pro)
+            tryVerify(() => GameControls.ready, 2000)
+            const page = find("page_controller")
+            tryVerify(() => Input.confirmButtonsAvailable, 2000)
+            verify(page.layoutAvailable)
+            GameControls.show(xbox)
+            tryCompare(GameControls, "padId", xbox)
+            verify(!page.layoutAvailable, "GameControls shows another pad")
+            verify(findChild(page, "rowGamesLayoutUnavailable").visible)
+            GameControls.show(pro)
+            tryVerify(() => page.layoutAvailable, 2000)
         }
 
         // ---- remap -----------------------------------------------------------------------------------------------
