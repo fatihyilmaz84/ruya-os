@@ -1319,9 +1319,16 @@ def udev_tags(node):
     return tags
 
 
+def shell_running():
+    """The shell (user ruya-shell) is up; the compositor and the shell are one process."""
+    return subprocess.run(["pgrep", "-u", "ruya-shell", "-x", "ruya-shell"], capture_output=True).returncode == 0
+
+
 def cmd_nodes(args):
     """RUY-446: a virtual pad node is ruya-input's with user rw and no group or other access, carries no
-    uaccess tag and no ACL entry for ruya-shell; a ruya-input/kbm* node keeps uaccess."""
+    uaccess tag and no ACL entry for ruya-shell; a ruya-input/kbm* node keeps uaccess. RUY-581: it runs
+    with the shell UP (the seat's active session is ruya-shell's, so logind would give it an entry on a
+    node that still carried uaccess); with the shell stopped "no ruya-shell entry" could not fail."""
     fails = 0
 
     def ok(msg):
@@ -1332,6 +1339,10 @@ def cmd_nodes(args):
         fails += 1
         print(f"FAIL: {msg}", flush=True)
 
+    if not shell_running():
+        bad("the shell is not running: the check of the ruya-shell ACL entry would pass on any node")
+        return fails
+    ok("the shell is running (the seat's session that logind would give an ACL entry)")
     pad = FakePad(phys="vm-check/pad0", name=NAME)
     kbm = None
     bus = None
@@ -1373,7 +1384,8 @@ def cmd_nodes(args):
         if not knode:
             bad("the ruya-input/kbm stand-in has no node")
         else:
-            time.sleep(0.5)
+            # The tag comes with the add event's rules run: wait for it (bounded), do not sleep.
+            wait_for(lambda: "uaccess" in udev_tags(knode), 3)
             ok(f"{knode} (ruya-input/kbm*) keeps the uaccess tag") if "uaccess" in udev_tags(knode) else bad(
                 f"{knode} (ruya-input/kbm*) lost the uaccess tag: {sorted(udev_tags(knode))}")
     finally:
