@@ -5,10 +5,9 @@
 # For each ref, api/dbus/*.xml is read with `git show <ref>:<path>` into a temp dir and
 # lint-dev-docs.ps1 (the one parser of org.ruyaos.Stability / Since, RUY-155) writes its apis.json.
 # The two lists are diffed and printed as Markdown, grouped by API level (org.ruyaos.Since of the
-# element): Added, Changed (stability, since or kind differs), Deprecated (became deprecated),
+# element): Added, Changed (stability, since, kind or signature differs), Deprecated (became deprecated),
 # Removed. Nothing differs: "no public API changes".
-# apis.json has no argument lists, so a changed argument list is not seen (a new method signature
-# with the same Since is not reported).
+# A changed argument list (apis.json "signature", RUY-656) is a Changed line with both signatures.
 #
 # -OldApiDir / -NewApiDir read the XML files from a folder instead of a ref (dev.ps1's self-check).
 # Works on Windows PowerShell 5.1 and on pwsh. Exit code 0, or 1 when a ref or the lint fails.
@@ -81,6 +80,7 @@ foreach ($k in ($newBy.Keys | Sort-Object)) {
     if ($n.kind -ne $o.kind) { $diff += "kind $($o.kind) -> $($n.kind)" }
     if ([int]$n.since -ne [int]$o.since) { $diff += "since $($o.since) -> $($n.since)" }
     if ($n.stability -ne $o.stability -and $n.stability -ne "deprecated") { $diff += "stability $($o.stability) -> $($n.stability)" }
+    if ("$($n.signature)" -ne "$($o.signature)") { $diff += "signature ``$($o.signature)`` -> ``$($n.signature)``" }
     if ($diff.Count -gt 0) {
         $rows.Add(@{ level = [int]$n.since; section = "Changed"; text = "``$k`` ($($diff -join ', '))" })
     }

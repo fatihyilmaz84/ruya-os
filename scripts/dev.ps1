@@ -757,6 +757,15 @@ Checked 2026-11-06.
         @{ name = "an api/dbus file with -- inside a comment"; a = $chapter; other = $other;
            files = @{ "api/dbus/t2.xml" = ($xmlHead + "<!-- runs ruya-devices --display-guard -->" + $xmlTail) }; expect = 1; text = "api/dbus/t2.xml: is not well-formed xml (line 1)" }
     )
+    # RUY-656: apis.json carries the normalised argument signature of each element.
+    $sigXml = $xmlHead + "<method name=`"Do`"><arg name=`"a`" type=`"s`" direction=`"in`"/><arg name=`"b`" type=`"i`"/><arg name=`"r`" type=`"b`" direction=`"out`"/>$stabOk$sinceOk</method>" +
+        "<signal name=`"Sig`"><arg name=`"x`" type=`"s`"/><arg name=`"y`" type=`"u`"/>$stabOk$sinceOk</signal>" +
+        "<property name=`"Prop`" type=`"as`" access=`"read`">$stabOk$sinceOk</property>" + $xmlTail
+    $cases += @(
+        @{ name = "apis.json carries method, signal and property signatures"; a = $chapter + "`n``org.ruyaos.T1.Do`` ``org.ruyaos.T1.Sig`` ``org.ruyaos.T1.Prop``.`n"; other = $other;
+           files = @{ "api/dbus/t1.xml" = $sigXml }; expect = 0; text = "";
+           sigs = @{ "Do" = "in:a:s,b:i;out:r:b"; "Sig" = "x:s,y:u"; "Prop" = "as:read" } }
+    )
     foreach ($c in $cases) {
         $fx = Join-Path ([IO.Path]::GetTempPath()) ("ruya-devdocs-fx-" + [guid]::NewGuid().ToString("N"))
         New-Item -ItemType Directory -Path $fx | Out-Null
@@ -773,8 +782,17 @@ Checked 2026-11-06.
         }
         $out = & $lint -Dir $fx -Repo $fx *>&1 | Out-String
         $code = $LASTEXITCODE
+        $sigOk = $true
+        if ($c.sigs) {
+            $list = New-Object System.Collections.Generic.List[object]
+            foreach ($x in (ConvertFrom-Json ([IO.File]::ReadAllText((Join-Path $fx "output\apis.json"))))) { $list.Add($x) }
+            foreach ($k in $c.sigs.Keys) {
+                $e = $list | Where-Object { $_.member -eq $k }
+                if (-not $e -or $e.signature -ne $c.sigs[$k]) { $sigOk = $false; Write-Host "    signature of $k is '$($e.signature)', expected '$($c.sigs[$k])'" }
+            }
+        }
         Remove-Item -Recurse -Force $fx
-        $ok = ($code -eq $c.expect) -and $out.Contains($c.text)
+        $ok = ($code -eq $c.expect) -and $out.Contains($c.text) -and $sigOk
         if (-not $ok) { Write-Host $out }
         Record "developer guide lint self-check ($($c.name): $(if ($c.expect -eq 0) { 'accepted' } else { 'rejected' }))" $ok
     }
@@ -810,6 +828,17 @@ function Test-ApiChangelog {
     $okSame = $same.Trim() -eq "no public API changes"
     if (-not $okSame) { Write-Host $same }
     Record "API changelog self-check (identical sets print 'no public API changes')" $okSame
+    # RUY-656: a changed argument type and a gained argument are reported with both signatures.
+    $m = { param($name, $args1) "<method name=`"$name`">$args1" + (& $ann "experimental" 1) + "</method>" }
+    $oldSig = & $mk "oldsig" ((& $m "Typed" "<arg name=`"a`" type=`"s`"/>") + (& $m "Gains" "<arg name=`"a`" type=`"s`"/>") + (& $m "Same" "<arg name=`"a`" type=`"s`"/>"))
+    $newSig = & $mk "newsig" ((& $m "Typed" "<arg name=`"a`" type=`"i`"/>") + (& $m "Gains" "<arg name=`"a`" type=`"s`"/><arg name=`"b`" type=`"s`"/>") + (& $m "Same" "<arg name=`"a`" type=`"s`"/>"))
+    $sgOut = & $script -OldApiDir $oldSig -NewApiDir $newSig *>&1 | Out-String
+    $okSig = $sgOut.Contains("### Changed") -and
+             $sgOut.Contains("org.ruyaos.T1.Typed") -and $sgOut.Contains("in:a:s;out:") -and $sgOut.Contains("in:a:i;out:") -and
+             $sgOut.Contains("org.ruyaos.T1.Gains") -and $sgOut.Contains("in:a:s,b:s;out:") -and
+             -not $sgOut.Contains("T1.Same")
+    if (-not $okSig) { Write-Host $sgOut }
+    Record "API changelog self-check (a changed argument type and a gained argument are Changed, with both signatures)" $okSig
     Remove-Item -Recurse -Force $fx
 
     # Refs: the same script reads two git refs (this repo's HEAD against itself: nothing changed).

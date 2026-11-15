@@ -23,7 +23,9 @@
 # apis.json (default <Repo>/output/apis.json, git-ignored; change with -ApisJson), for the API
 # changelog, the mock, `ruya sdk` and the catalogue to read. Shape, a JSON array (empty: []):
 #   [{ "interface": "org.ruyaos.X1", "member": "Name", "kind": "method|signal|property",
-#      "stability": "experimental|stable|deprecated", "since": 1, "file": "api/dbus/<file>.xml" }]
+#      "stability": "experimental|stable|deprecated", "since": 1, "signature": "...", "file": "api/dbus/<file>.xml" }]
+# signature (RUY-656), arguments in XML order as name:type: a method "in:a:s,b:i;out:r:b", a signal
+# "a:s,b:i", a property "type:access" ("s:read"). The API changelog reports a changed signature.
 # Only elements without a finding are listed.
 #
 # Used by dev.ps1 (test) and by the CI workflow. Works on Windows PowerShell 5.1 and on pwsh.
@@ -320,7 +322,22 @@ if (Test-Path $xmlDir) {
                     Fail $rel "$full has no integer org.ruyaos.Since"; $bad = $true
                 }
                 if ($bad) { continue }
-                $apis.Add([ordered]@{ interface = $iname; member = $el.GetAttribute("name"); kind = $el.LocalName; stability = $stab; since = [int]$since; file = $rel })
+                $sig = ""
+                if ($el.LocalName -eq "property") {
+                    $sig = "$($el.GetAttribute('type')):$($el.GetAttribute('access'))"
+                } else {
+                    $ins = New-Object System.Collections.Generic.List[string]
+                    $outs = New-Object System.Collections.Generic.List[string]
+                    foreach ($a in $el.ChildNodes) {
+                        if ($a.NodeType -ne [System.Xml.XmlNodeType]::Element -or $a.LocalName -ne "arg") { continue }
+                        $item = "$($a.GetAttribute('name')):$($a.GetAttribute('type'))"
+                        $dir = $a.GetAttribute("direction")
+                        if ($el.LocalName -eq "signal") { $outs.Add($item) }   # signal args are always out
+                        elseif ($dir -eq "out") { $outs.Add($item) } else { $ins.Add($item) }
+                    }
+                    $sig = if ($el.LocalName -eq "signal") { $outs -join "," } else { "in:" + ($ins -join ",") + ";out:" + ($outs -join ",") }
+                }
+                $apis.Add([ordered]@{ interface = $iname; member = $el.GetAttribute("name"); kind = $el.LocalName; stability = $stab; since = [int]$since; signature = $sig; file = $rel })
                 $hit = $false
                 foreach ($s in $chapterSpans) { if ($s.Contains($full)) { $hit = $true; break } }
                 if (-not $hit) { Fail $rel "$full is public but no chapter of docs/developers/ (other than api-surface.md) names it in a code span" }
