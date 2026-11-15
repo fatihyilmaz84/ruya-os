@@ -248,7 +248,9 @@ impl<A: Accounts> ProfileService<A> {
             // Wipes the half-made user and the record; if that fails too the record stays and
             // the next wipe tries again.
             if self.remove_guest(&id) != Status::Ok {
-                eprintln!("ruya-profiles: the half-made guest {id} stays recorded for the next wipe");
+                eprintln!(
+                    "ruya-profiles: the half-made guest {id} stays recorded for the next wipe"
+                );
             }
             return GuestOutcome::of(Status::Failed);
         }
@@ -1351,7 +1353,10 @@ mod tests {
             "{guest}"
         );
         for args in [&created[0], &created[3]] {
-            assert!(!args.join(" ").contains("SUB_"), "profiles keep their subid range");
+            assert!(
+                !args.join(" ").contains("SUB_"),
+                "profiles keep their subid range"
+            );
         }
     }
 
