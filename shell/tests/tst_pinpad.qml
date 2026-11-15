@@ -122,7 +122,12 @@ Item {
             compare(keys.mapToItem(tc.pad, 0, 0).y, y0, "the keypad did not move")
             tc.pad.message = ""
             compare(keys.mapToItem(tc.pad, 0, 0).y, y0)
-            verify(msg.height >= 36 * tc.pad.u - 0.5, "the line is 36 u while empty")
+            const line = findChild(tc.pad, "pinMessageLine")
+            const dots = findChild(tc.pad, "pinDots")
+            verify(line.height >= 36 * tc.pad.u - 0.5, "the line is 36 u while empty")
+            // The Column really leaves the room: the keys start a whole line below the dots (a bare Text
+            // left at y 0 by the Column took no room while empty).
+            verify(keys.y >= dots.y + dots.height + line.height, "the keys sit below the empty line: " + keys.y + " vs " + dots.y + "/" + line.height)
         }
 
         // RUY-662: Back deletes a digit while some are typed, and leaves when there are none.

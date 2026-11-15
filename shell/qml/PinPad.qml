@@ -400,14 +400,21 @@ FocusScope {
             }
         }
 
-        Text {
-            objectName: "pinMessage"
+        // Always reserved (RUY-662): the row is 36 u high, empty or not, so the keys never move when the
+        // message comes or goes. An empty row of width 0 was left out by the Column.
+        Item {
+            objectName: "pinMessageLine"
             anchors.horizontalCenter: parent.horizontalCenter
+            width: Math.max(1, pinMessage.implicitWidth)   // a Column leaves out a zero-width row
             height: 36 * pad.u
-            textFormat: Text.PlainText
-            text: pad.locked ? qsTr("Too many attempts. Try again in %1 s.").arg(pad.lockSecs) : pad.message
-            color: Theme.errorText
-            font.pixelSize: Theme.typeCaption * pad.u
+            Text {
+                id: pinMessage
+                objectName: "pinMessage"
+                textFormat: Text.PlainText
+                text: pad.locked ? qsTr("Too many attempts. Try again in %1 s.").arg(pad.lockSecs) : pad.message
+                color: Theme.errorText
+                font.pixelSize: Theme.typeCaption * pad.u
+            }
         }
 
         GridView {
