@@ -107,7 +107,10 @@ mod tests {
         std::env::set_var("RUYA_BOUNDED_PARENT", std::process::id().to_string());
         std::env::set_var("RUYA_BOUNDED_CHILD", mode);
         vec![
-            std::env::current_exe().unwrap().to_string_lossy().into_owned(),
+            std::env::current_exe()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned(),
             "--exact".into(),
             "bounded::tests::child_entry".into(),
             "--nocapture".into(),
