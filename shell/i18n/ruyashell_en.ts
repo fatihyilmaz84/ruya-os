@@ -57,7 +57,7 @@
 <context>
     <name>ActivityGamePage</name>
     <message>
-        <location filename="../qml/ActivityGamePage.qml" line="+60"/>
+        <location filename="../qml/ActivityGamePage.qml" line="+75"/>
         <location line="+1"/>
         <source>Back</source>
         <translation>Back</translation>
@@ -78,32 +78,32 @@
         <translation>You have not played this yet. When you do, the time you spend shows up here.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+11"/>
         <source>Time played</source>
         <translation>Time played</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>Times played</source>
         <translation>Times played</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>First played</source>
         <translation>First played</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>Last played</source>
         <translation>Last played</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>Longest session</source>
         <translation>Longest session</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>Average session</source>
         <translation>Average session</translation>
     </message>
@@ -3358,12 +3358,12 @@ This can&apos;t be undone.</translation>
         <translation>Confirm PIN</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+45"/>
         <source>Too many attempts. Try again in %1 s.</source>
         <translation>Too many attempts. Try again in %1 s.</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
         <source>Keypad</source>
         <translation>Keypad</translation>
     </message>
@@ -4330,12 +4330,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Setup</name>
     <message>
-        <location filename="../qml/Setup.qml" line="+75"/>
-        <source>Cancel</source>
-        <translation>Cancel</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location filename="../qml/Setup.qml" line="+76"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -6085,7 +6080,6 @@ This can&apos;t be undone.</translation>
     <name>UninstallConfirm</name>
     <message>
         <location filename="../qml/UninstallConfirm.qml" line="+34"/>
-        <location line="+1"/>
         <location line="+220"/>
         <source>Cancel</source>
         <translation>Cancel</translation>

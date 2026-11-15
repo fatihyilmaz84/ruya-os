@@ -57,7 +57,7 @@
 <context>
     <name>ActivityGamePage</name>
     <message>
-        <location filename="../qml/ActivityGamePage.qml" line="+60"/>
+        <location filename="../qml/ActivityGamePage.qml" line="+75"/>
         <location line="+1"/>
         <source>Back</source>
         <translation>Geri</translation>
@@ -78,32 +78,32 @@
         <translation>Bunu henüz oynamadınız. Oynadığınızda harcadığınız süre burada görünür.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+11"/>
         <source>Time played</source>
         <translation>Oynama süresi</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>Times played</source>
         <translation>Oynama sayısı</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>First played</source>
         <translation>İlk oynama</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>Last played</source>
         <translation>Son oynama</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>Longest session</source>
         <translation>En uzun oturum</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+8"/>
         <source>Average session</source>
         <translation>Ortalama oturum</translation>
     </message>
@@ -3346,12 +3346,12 @@ Bu geri alınamaz.</translation>
         <translation>PIN&apos;i onaylayın</translation>
     </message>
     <message>
-        <location line="+39"/>
+        <location line="+45"/>
         <source>Too many attempts. Try again in %1 s.</source>
         <translation>Çok fazla deneme. %1 sn sonra tekrar deneyin.</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
         <source>Keypad</source>
         <translation>Tuş takımı</translation>
     </message>
@@ -4313,12 +4313,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Setup</name>
     <message>
-        <location filename="../qml/Setup.qml" line="+75"/>
-        <source>Cancel</source>
-        <translation>İptal</translation>
-    </message>
-    <message>
-        <location line="+1"/>
+        <location filename="../qml/Setup.qml" line="+76"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -6065,7 +6060,6 @@ Bu geri alınamaz.</translation>
     <name>UninstallConfirm</name>
     <message>
         <location filename="../qml/UninstallConfirm.qml" line="+34"/>
-        <location line="+1"/>
         <location line="+220"/>
         <source>Cancel</source>
         <translation>İptal</translation>
