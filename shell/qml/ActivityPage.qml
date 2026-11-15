@@ -10,7 +10,10 @@ import "controls"
 //   Most played    the top five of the last 30 days (Accept opens the game's page)
 //   Highlights     modest: the longest session this month, days in a row, games not played lately
 //   History        newest first, grouped by day
-//   Clear my activity   (after a confirmation) deletes the ledger: the same call as T-220's.
+//   Clear my activity   (after a confirmation) deletes the ledger: the same call as T-220's. It is the
+//                       first row of History, so a long list does not bury it (RUY-48).
+// The ledger is read when the page appears and kept fresh only while an Activity page is on screen
+// (Usage.setWatching); History pages in: focus on its last row asks for 60 more sessions (Usage.loadMore).
 // The numbers come from the Usage singleton (computed from the service's day rows); the words are
 // DurationText's and this page's. No ranking, no goals, nothing to win.
 Page {
@@ -48,6 +51,16 @@ Page {
                         : qsTr("%1 less than the week before.").arg(DurationText.plain(-diff))
     }
 
+    // The game's own icon (the Library's art.icon, else the Store's), or "" for the generic glyph.
+    function iconOf(appId) {
+        const item = Library.items.find(i => Library.sessionAppId(i.id) === appId)
+        const own = item && item.art ? (item.art.icon ?? "") : ""
+        const app = own === "" ? Store.catalogue.find(a => a.id === appId) : null
+        const path = own !== "" ? own : app ? (app.icon ?? "") : ""
+        // A path (Linux "/..." or a Windows drive "C:/...") becomes a file URL; a URL stays as it is.
+        return path.startsWith("/") ? "file://" + path : /^[A-Za-z]:\//.test(path) ? "file:///" + path : path
+    }
+
     function lastPlayedText(unix) {
         const iso = TimeZone.formatIsoDate(unix * 1000)
         const ago = Usage.daysAgo(iso)
@@ -60,24 +73,44 @@ Page {
     ListModel { id: historyModel }
     property string historySignature: ""
 
+    function rowOf(item) {
+        return {
+            kind: item.kind,
+            day: item.day ?? "",
+            appId: item.appId ?? "",
+            start: item.start ?? 0,
+            seconds: item.seconds ?? 0,
+            reason: item.reason ?? "",
+            running: item.open ?? false
+        }
+    }
+
+    // A page appended to the list (the old rows are its start) keeps the rows it has, so the focus
+    // stays on the row the player was on; any other change rebuilds the list.
     function syncHistory() {
         const list = Usage.history
         const signature = JSON.stringify(list)
         if (signature === historySignature)
             return
         historySignature = signature
-        historyModel.clear()
-        for (const item of list) {
-            historyModel.append({
-                kind: item.kind,
-                day: item.day ?? "",
-                appId: item.appId ?? "",
-                start: item.start ?? 0,
-                seconds: item.seconds ?? 0,
-                reason: item.reason ?? "",
-                running: item.open ?? false
-            })
+        let grows = list.length >= historyModel.count
+        for (let i = 0; grows && i < historyModel.count; ++i) {
+            const old = historyModel.get(i)
+            const item = list[i]
+            // A day heading may gain seconds when the page continues its day; a session may not change.
+            grows = old.kind === item.kind && (item.kind === "day" ? old.day === item.day
+                                                : old.appId === item.appId && old.start === item.start && old.running === (item.open ?? false))
         }
+        if (!grows) {
+            historyModel.clear()
+        } else {
+            for (let i = 0; i < historyModel.count; ++i) {
+                if (list[i].kind === "day" && historyModel.get(i).seconds !== list[i].seconds)
+                    historyModel.setProperty(i, "seconds", list[i].seconds)
+            }
+        }
+        for (let i = historyModel.count; i < list.length; ++i)
+            historyModel.append(rowOf(list[i]))
     }
 
     function dataChanged() {
@@ -98,14 +131,21 @@ Page {
         }
     }
 
-    onVisibleChanged: {
-        if (visible)
-            Usage.refresh()
+    // A read that fails leaves nothing to browse: Try again takes the focus (the data rows are hidden).
+    readonly property bool failed: !Usage.ready && Usage.status !== ""
+    onFailedChanged: {
+        if (!failed)
+            return
+        if (body.activeFocus)
+            retryRow.forceActiveFocus()
+        else
+            retryRow.focus = true
     }
+
+    onVisibleChanged: Usage.setWatching(page, visible)
     Component.onCompleted: {
         syncHistory()
-        if (visible)
-            Usage.refresh()
+        Usage.setWatching(page, visible)
     }
 
     SettingsPane {
@@ -126,10 +166,19 @@ Page {
             visible: !page.showData
             text: !Usage.ready && Usage.status === "" ? qsTr("Loading…")
                 : !Usage.ready ? qsTr("Your activity could not be read.")
-                : qsTr("Nothing here yet. When you play something, the time you spend shows up on this page. Only you can see it.")
+                : qsTr("Nothing here yet. Once you play, this page lists your games and how long you played. It stays on this console, and Clear my activity deletes it.")
             color: Theme.text
             font.pixelSize: Theme.typeBody * page.u
             wrapMode: Text.Wrap
+        }
+        SettingRow {
+            id: retryRow
+            objectName: "activityRetry"
+            kind: "action"
+            u: page.u
+            visible: page.failed
+            label: qsTr("Try again")
+            onActivated: Usage.refresh()
         }
 
         Text {
@@ -172,6 +221,7 @@ Page {
                 kind: "page"
                 u: page.u
                 iconName: "sports_esports"
+                iconSource: page.iconOf(modelData.appId)
                 label: page.nameOf(modelData.appId)
                 value: qsTr("%1, last played %2").arg(DurationText.plain(modelData.seconds)).arg(page.lastPlayedText(modelData.last))
                 onActivated: page.openRequested("activityGame", ({ appId: modelData.appId }))
@@ -228,6 +278,21 @@ Page {
             font.pixelSize: Theme.typeBody * page.u
             font.weight: Theme.weightDemiBold
         }
+        SettingRow {
+            id: clearRow
+            objectName: "activityClear"
+            kind: "action"
+            u: page.u
+            visible: page.showData
+            label: qsTr("Clear my activity")
+            onActivated: {
+                clearConfirm.customTitle = qsTr("Clear your activity?")
+                clearConfirm.detail = qsTr("Deletes the list of what you played.\nYour games and saves stay.\nThis can't be undone.")
+                clearConfirm.customConfirmName = qsTr("Clear my activity")
+                clearConfirm.open("custom")
+            }
+        }
+
         Repeater {
             model: page.showData ? historyModel : null
             delegate: DelegateChooser {
@@ -254,6 +319,7 @@ Page {
                         required property double start
                         required property int seconds
                         required property bool running
+                        required property int index
                         objectName: "activitySession_" + appId + "_" + start
                         kind: "page"
                         u: page.u
@@ -261,24 +327,20 @@ Page {
                         value: running ? qsTr("%1, playing now").arg(TimeZone.formatClock(start * 1000))
                                        : qsTr("%1, %2").arg(TimeZone.formatClock(start * 1000)).arg(DurationText.plain(seconds))
                         onActivated: page.openRequested("activityGame", ({ appId: appId }))
+                        // The last row of the list: its focus asks for the next 60 sessions. The row keeps the
+                        // focus (syncHistory appends), so the player goes on down the longer list.
+                        readonly property bool lastRow: index === historyModel.count - 1
+                        onActiveFocusChanged: if (activeFocus && lastRow && Usage.more) Usage.loadMore()
                     }
                 }
             }
         }
-
-        SettingRow {
-            id: clearRow
-            objectName: "activityClear"
-            kind: "action"
+        SettingNote {
+            objectName: "activityCapped"
             u: page.u
-            visible: page.showData
-            label: qsTr("Clear my activity")
-            onActivated: {
-                clearConfirm.customTitle = qsTr("Clear your activity?")
-                clearConfirm.detail = qsTr("Deletes the list of what you played.\nYour games and saves stay.\nThis can't be undone.")
-                clearConfirm.customConfirmName = qsTr("Clear my activity")
-                clearConfirm.open("custom")
-            }
+            topPadding: Theme.spaceS * page.u
+            visible: page.showData && Usage.capped
+            text: qsTr("Showing your last 1000 sessions.")
         }
     }
 

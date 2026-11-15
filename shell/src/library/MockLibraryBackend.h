@@ -19,7 +19,7 @@ public:
     void rescan() override;
 
     // Tests only. scenario: "", "empty", "unplayed" or "art:<dir>" (the default items, each with
-    // art.tile = a picture of <dir>, see mockArtPath).
+    // art.tile and art.icon = a picture of <dir>, see mockArtPath).
     void reset(const QString &scenario);
     // Tests only: drops the item and announces the change (Library1's ItemsChanged after an app went).
     void removeItem(const QString &id);

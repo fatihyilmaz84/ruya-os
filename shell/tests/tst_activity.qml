@@ -81,7 +81,9 @@ Item {
 
         function cleanup() {
             Store.mockPauseJobs(false)                   // a job started by a test (an update of Chess) ends
+            Usage.setWatching(tc, false)
             Store.mockReset()
+            Library.resetMockForTests("")
             Usage.mockRefreshDelayed(0)
             DeviceSettings.language = "en"
             DeviceSettings.reducedMotion = false
@@ -332,12 +334,9 @@ Item {
             compare(valueOf("gameLast"), "Today")
             verify(find("gameStrip").visible)
             verify(findChild(find("gameHeadStrip"), "groupLabelText"), "Last 30 days is a GroupLabel")
-            verify(find("gameTotal").activeFocus, "the first row has focus")
-            compare(barHints(), "back Back", "a fact row only reads")
+            tryVerify(() => find("gameStrip").activeFocus, 2000, "the strip is the first stop (RUY-48)")
             for (const n of ["gameTotal", "gameSessions", "gameFirst", "gameLast", "gameLongest", "gameAverage"])
                 compare(find(n).kind, "info", n)
-            find("gameStrip").forceActiveFocus()
-            tryVerify(() => find("gameStrip").activeFocus)
             compare(barHints(), "left_right Browse|back Back", "the 30-day strip is read with Left and Right (T-285)")
             const strip = findChild(find("gameStrip"), "chart")
             compare(strip.values.length, 30)
@@ -411,6 +410,48 @@ Item {
             tryVerify(() => tc.shell.currentPage !== "activity")
         }
 
+        // RUY-48: a failed read offers Try again, which has the focus and reads again.
+        function test_retry_after_failed_read() {
+            Usage.mockSetData("p2", sessions(), today)
+            startShell()
+            signInAda()
+            Usage.mockFailNextRefresh("failed")
+            tc.shell.openPage("activity", {})
+            tryCompare(tc.shell, "currentPage", "activity")
+            tryCompare(Usage, "status", "failed")
+            compare(find("activityMessage").text, "Your activity could not be read.")
+            verify(find("activityRetry").visible)
+            compare(labelOf("activityRetry"), "Try again")
+            tryVerify(() => find("activityRetry").activeFocus, 2000, describeFocus())
+            const reads = Usage.mockReadCount()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => Usage.mockReadCount() > reads, 2000, "Try again reads the ledger")
+            tryCompare(Usage, "ready", true)
+            verify(find("activityWeek").visible)
+            verify(!find("activityRetry").visible)
+            tryVerify(() => find("activityBody").focusableRows().some(r => r.activeFocus), 2000, "focus moved to a data row: " + describeFocus())
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => tc.shell.currentPage !== "activity")
+        }
+
+        // RUY-48: Try again and the new empty-state copy are translated.
+        function test_retry_and_the_new_copy_are_in_turkish() {
+            DeviceSettings.language = "tr"
+            Usage.mockSetData("p2", [], today)
+            startShell()
+            signInAda()
+            tc.shell.openPage("activity", {})
+            tryCompare(tc.shell, "currentPage", "activity")
+            tryCompare(Usage, "ready", true)
+            const empty = find("activityMessage").text
+            verify(empty.indexOf("Nothing here yet") < 0 && empty.indexOf("Once you play") < 0, empty)
+            verify(empty.indexOf("Etkinliğimi temizle") >= 0, "names where to clear it: " + empty)
+            Usage.mockFailNextRefresh("failed")
+            Usage.refresh()
+            tryCompare(Usage, "status", "failed")
+            compare(labelOf("activityRetry"), "Yeniden dene")
+        }
+
         function test_clear_my_activity_asks_first_and_clears_only_this_profile() {
             Usage.mockSetData("p1", [mk(racer, 0, 10, 0, 900)], today)
             openActivity(sessions())
@@ -457,6 +498,179 @@ Item {
             compare(clearSpy.signalArguments[0][0], "failed")
             verify(!Usage.empty, "the data is still there")
             verify(find("activityClear").visible)
+        }
+
+        // ---- RUY-48: paging, refresh while hidden, Clear in one step, the game page, icons ----
+
+        // n sessions, newest first, 6 h apart, from 2026-11-07 12:00 UTC.
+        function many(n) {
+            const out = []
+            for (let i = 0; i < n; ++i) {
+                const t = Date.UTC(2026, 10, 7, 12) / 1000 - i * 21600
+                out.push({ appId: [racer, puzzle, quest][i % 3], start: t, seconds: 600, reason: "quit",
+                           day: new Date(t * 1000).toISOString().slice(0, 10) })
+            }
+            return out
+        }
+
+        function sessionRowNames() {
+            return Usage.history.filter(h => h.kind === "session").map(h => "activitySession_" + h.appId + "_" + h.start)
+        }
+
+        function test_no_refresh_while_hidden() {
+            Usage.mockSetData("p2", sessions(), today)
+            startShell()
+            signInAda()
+            tryVerify(() => Usage.mockPendingReplies() === 0)
+            const idle = Usage.mockReadCount()
+            Usage.mockTouch("p2")                       // the 30 s heartbeat of a running game
+            wait(100)
+            compare(Usage.mockReadCount(), idle, "no Activity page on screen: no read")
+            tc.shell.openPage("activity", {})
+            tryCompare(tc.shell, "currentPage", "activity")
+            tryCompare(Usage, "ready", true)
+            tryVerify(() => Usage.mockReadCount() > idle, 2000, "opening reads once")
+            const shown = Usage.mockReadCount()
+            Usage.mockTouch("p2")
+            tryVerify(() => Usage.mockReadCount() > shown, 2000, "with the page on screen the heartbeat reads")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => tc.shell.currentPage !== "activity")
+            tryVerify(() => Usage.mockPendingReplies() === 0)
+            const left = Usage.mockReadCount()
+            Usage.mockTouch("p2")
+            wait(100)
+            compare(Usage.mockReadCount(), left, "page closed: no read again")
+        }
+
+        function test_next_page_on_end() {
+            openActivity(many(200))
+            tryCompare(Usage, "more", true)
+            compare(Usage.mockLastLimit(), 60)
+            compare(sessionRowNames().length, 60)
+            const last = sessionRowNames()[59]
+            for (let i = 0; i < 200 && !(find(last) && find(last).activeFocus); ++i)
+                keyClick(Qt.Key_Down)
+            verify(find(last).activeFocus, "reached the end of the first page: " + describeFocus())
+            const lastRowObject = find(last)
+            tryVerify(() => Usage.mockLastLimit() === 120, 2000, "the end asks for 120")
+            tryVerify(() => sessionRowNames().length === 120)
+            verify(find(last).activeFocus, "focus stays on the row it was on")
+            verify(find(last) === lastRowObject, "the page was appended: the old row is the same delegate, not rebuilt")
+            keyClick(Qt.Key_Down)
+            verify(find(sessionRowNames()[60]).activeFocus, "and the player goes on down the longer list")
+            // On to the end of all 200.
+            for (let i = 0; i < 400 && Usage.more; ++i) {
+                const names = sessionRowNames()
+                const row = find(names[names.length - 1])
+                if (row && row.activeFocus)
+                    wait(20)
+                else
+                    keyClick(Qt.Key_Down)
+            }
+            tryVerify(() => sessionRowNames().length === 200, 2000)
+            verify(!Usage.more)
+            compare(Usage.mockLastLimit(), 240)
+            const names = sessionRowNames()
+            for (let i = 0; i < 400 && !find(names[199]).activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(find(names[199]).activeFocus)
+            const reads = Usage.mockReadCount()
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Up)
+            keyClick(Qt.Key_Down)
+            wait(100)
+            compare(Usage.mockReadCount(), reads, "no request at the end once more is false")
+            verify(!find("activityCapped").visible, "200 sessions are all there is")
+        }
+
+        // Up then Down on the last row while the read is pending must not ask for a second page.
+        function test_two_load_more_calls_in_a_row_ask_for_one_page() {
+            openActivity(many(200))
+            tryCompare(Usage, "more", true)
+            Usage.mockRefreshDelayed(200)
+            Usage.loadMore()
+            Usage.loadMore()
+            Usage.loadMore()
+            compare(Usage.mockLastLimit(), 120, "one page, not 180 or 240")
+            tryVerify(() => Usage.mockPendingReplies() === 0, 3000)
+            compare(sessionRowNames().length, 120)
+            Usage.mockRefreshDelayed(0)
+            Usage.loadMore()                           // after the reply the next page is allowed
+            compare(Usage.mockLastLimit(), 180)
+        }
+
+        // The cap caption shows only when the history holds the most the service lists.
+        function test_cap_caption_only_at_the_cap() {
+            openActivity(many(1001))
+            verify(!Usage.capped)
+            verify(!find("activityCapped").visible)
+            for (let i = 0; i < 30 && Usage.more; ++i) {
+                Usage.loadMore()
+                tryVerify(() => Usage.mockPendingReplies() === 0, 3000)
+            }
+            compare(Usage.mockLastLimit(), 1000)
+            tryCompare(Usage, "capped", true)
+            verify(!Usage.more)
+            tryVerify(() => find("activityCapped").visible)
+            compare(find("activityCapped").text, "Showing your last 1000 sessions.")
+            compare(find("activityCapped").color, Theme.text, "text colour, not textDim (04 §5, §3.1)")
+            Usage.mockSetData("p2", many(30), today)
+            Usage.refresh()
+            tryCompare(Usage, "capped", false)
+            verify(!find("activityCapped").visible)
+        }
+
+        function test_clear_reachable_in_one_step() {
+            openActivity(sessions())
+            const first = sessionRowNames()[0]
+            for (let i = 0; i < 60 && !find(first).activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(find(first).activeFocus)
+            keyClick(Qt.Key_Up)
+            verify(find("activityClear").activeFocus, "Clear my activity is the row above the list: " + describeFocus())
+            verify(find("activityClear").y < find(first).y)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("activityClearConfirm").shown)
+            verify(confirmButton("powerCancel").activeFocus, "the confirm stays, Cancel first")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("activityClearConfirm").shown)
+            tryVerify(() => find("activityClear").activeFocus, 2000, "back on the row: " + describeFocus())
+            compare(tc.shell.currentPage, "activity")
+        }
+
+        function test_game_page_focus_starts_on_strip() {
+            openActivity(sessions())
+            const first = sessionRowNames()[0]
+            for (let i = 0; i < 60 && !find(first).activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "activityGame")
+            tryVerify(() => find("gameStrip") && find("gameStrip").visible)
+            tryVerify(() => find("gameStrip").activeFocus, 2000, "the strip is first: " + describeFocus())
+            for (const n of ["gameTotal", "gameSessions", "gameFirst", "gameLast", "gameLongest", "gameAverage"])
+                verify(find(n).visible && !find(n).activeFocus, n + " is not where the focus starts")
+            keyClick(Qt.Key_Down)
+            verify(find("gameStrip").activeFocus, "Down finds nothing below the strip")
+            keyClick(Qt.Key_Up)
+            verify(find("gameAverage").activeFocus, "the facts are still reachable with Up: " + describeFocus())
+            keyClick(Qt.Key_Down)
+            verify(find("gameStrip").activeFocus)
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "activity")
+            tryVerify(() => find(first).activeFocus, 2000, "Back returns to the history row it came from: " + describeFocus())
+        }
+
+        function test_most_played_icon() {
+            Library.resetMockForTests("art:" + artFixtures)
+            openActivity(sessions())
+            const racerRow = find("activityTop_0")
+            tryVerify(() => findChild(racerRow, "rowPicture").visible, 5000, "the Library's art.icon of the game")
+            verify(!findChild(racerRow, "rowIcon").visible, "the glyph gives way to the picture")
+            const quest = find("activityTop_1")
+            compare(labelOf("activityTop_1"), "Quest")
+            verify(!findChild(quest, "rowPicture").visible, "no icon known")
+            verify(findChild(quest, "rowIcon").visible, "the generic icon")
+            compare(findChild(quest, "rowIcon").name, "sports_esports")
         }
 
         // ---- the app page ----
@@ -595,10 +809,9 @@ Item {
             tryCompare(tc.shell, "currentPage", "activity")
             tryCompare(Usage, "status", "failed")
             verify(!find("activityWeek").visible)
-            tryVerify(() => tc.shell.Window.window.activeFocusItem === find("activityBody"), 2000,
-                      "the pane, not a hidden row: " + describeFocus())
+            tryVerify(() => find("activityRetry").activeFocus, 2000, "Try again, not a hidden row: " + describeFocus())
             keyClick(Qt.Key_Down)
-            verify(find("activityBody").activeFocus, describeFocus())
+            verify(find("activityRetry").activeFocus, describeFocus())
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "")
             tryVerify(() => find("homePlay").activeFocus, 2000, "back on Home")
@@ -756,6 +969,7 @@ Item {
             Usage.mockSetData("p1", [mk(chess, 0, 9, 0, 600)], today)
             Profiles.switchTo("p2", "")
             tryCompare(Profiles, "activeProfile", "p2")
+            Usage.setWatching(tc, true)                 // a page on screen: only then is the ledger read on a switch (RUY-48)
             Usage.mockRefreshDelayed(100)
             Usage.refresh()
             Usage.mockRefreshDelayed(800)
@@ -791,7 +1005,7 @@ Item {
             Profiles.switchTo("p2", "")
             tryCompare(Profiles, "activeProfile", "p2")
             Usage.mockSetData("p2", [mk(racer, 0, 9, 0, 600)], today)
-            Usage.refresh()
+            Usage.setWatching(tc, true)                         // a page on screen: UsageChanged reads only then (RUY-48)
             tryVerify(() => Usage.week.total === 600)
             Usage.mockSetData("p2", [mk(racer, 0, 9, 0, 1200)], today)
             Usage.mockTouch("p1")                               // someone else's: ignored
@@ -927,6 +1141,56 @@ Item {
             settle()
             grabImage(tc.shell).save(shotsDir + "/90-activity-game-tr.png")
             DeviceSettings.language = "en"
+        }
+
+        // RUY-48: a long history (200 sessions, the end of its first page), the error state, the game page.
+        function test_zz_screenshots_long_and_error() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            DeviceSettings.reducedMotion = true
+            Library.resetMockForTests("art:" + artFixtures)
+            openActivity(many(200))
+            tryVerify(() => findChild(find("activityTop_0"), "rowPicture").visible, 5000)
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/90-activity-icons-en.png")
+            goToRow("activityClear")
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/90-activity-clear-first-en.png")
+            const last = sessionRowNames()[59]
+            for (let i = 0; i < 200 && !(find(last) && find(last).activeFocus); ++i)
+                keyClick(Qt.Key_Down)
+            tryVerify(() => sessionRowNames().length === 120)
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/90-activity-long-history-en.png")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => tc.shell.currentPage !== "activity")
+            Usage.mockFailNextRefresh("failed")
+            tc.shell.openPage("activity", {})
+            tryCompare(tc.shell, "currentPage", "activity")
+            tryCompare(Usage, "status", "failed")
+            tryVerify(() => find("activityRetry").activeFocus)
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/90-activity-error-en.png")
+        }
+
+        // RUY-48: the history at the cap, with its caption.
+        function test_zz_screenshots_capped() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            DeviceSettings.reducedMotion = true
+            openActivity(many(1001))
+            for (let i = 0; i < 30 && Usage.more; ++i) {
+                Usage.loadMore()
+                tryVerify(() => Usage.mockPendingReplies() === 0, 3000)
+            }
+            tryCompare(Usage, "capped", true)
+            const names = sessionRowNames()
+            tryVerify(() => find(names[names.length - 1]) !== null, 5000)
+            find(names[names.length - 1]).forceActiveFocus()
+            find("activityBody").ensureFocusedVisible()
+            tryVerify(() => find("activityCapped").visible)
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/90-activity-capped-en.png")
         }
 
         function test_zz_screenshots_empty() {

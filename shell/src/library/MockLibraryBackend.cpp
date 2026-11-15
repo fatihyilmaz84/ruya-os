@@ -61,8 +61,10 @@ void MockLibraryBackend::reset(const QString &scenario)
             m_items.append(item("flatpak:org.example.Unlisted", "app", "Unlisted App", 1762000000));
         if (withArt) {
             const QString dir = scenario.mid(4);
-            for (int i = 0; i < m_items.size(); ++i)
+            for (int i = 0; i < m_items.size(); ++i) {
                 m_items[i].art.insert(QStringLiteral("tile"), mockArtPath(dir, i));
+                m_items[i].art.insert(QStringLiteral("icon"), mockArtPath(dir, i));
+            }
         }
         // "unplayed": all installed, nothing started yet (a fresh image, Home's fallback row).
         if (scenario == QLatin1String("unplayed")) {

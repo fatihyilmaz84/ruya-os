@@ -16,6 +16,7 @@ struct UsageSnapshot
     QString today; // "YYYY-MM-DD" in the device time zone
     QVariantList rows;
     QVariantList sessions;
+    int limit = 60; // how many sessions were asked for (RUY-48): fewer back means that was all of them
 };
 
 // Transport behind the Usage QML singleton (T-247): the ledger of ruya-session over D-Bus, or an
@@ -28,8 +29,8 @@ public:
     using QObject::QObject;
 
     virtual bool isMock() const = 0;
-    // Reads the ledger of `profile` (the active profile only).
-    virtual void refresh(const QString &profile) = 0;
+    // Reads the ledger of `profile` (the active profile only), the newest `limit` sessions of it.
+    virtual void refresh(const QString &profile, int limit) = 0;
     // Deletes the profile's history (its own, the active one).
     virtual void clearHistory(const QString &profile) = 0;
     // The shell tells who is in front: attention is "active" | "idle" | "locked" | "suspended".

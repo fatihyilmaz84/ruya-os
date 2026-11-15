@@ -7,6 +7,8 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include <QSet>
+
 #include <memory>
 
 // QML face of the play ledger (T-247, org.ruyaos.Session1): what the active profile played, for
@@ -34,6 +36,10 @@ class Usage : public QObject
     Q_PROPERTY(QVariantList top READ top NOTIFY dataChanged)
     Q_PROPERTY(QVariantList history READ history NOTIFY dataChanged)
     Q_PROPERTY(QVariantMap highlights READ highlights NOTIFY dataChanged)
+    // The history list ends before the ledger's oldest session: loadMore() reads the next page.
+    Q_PROPERTY(bool more READ hasMore NOTIFY dataChanged)
+    // The history holds the most the service lists (kMaxSessions): older sessions exist but cannot be shown.
+    Q_PROPERTY(bool capped READ isCapped NOTIFY dataChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
 
 public:
@@ -51,9 +57,20 @@ public:
     QVariantList history() const { return m_history; }
     QVariantMap highlights() const { return m_highlights; }
     bool isMock() const { return m_backend->isMock(); }
+    bool hasMore() const { return m_more; }
+    bool isCapped() const { return m_capped; }
 
-    // Reads the active profile's ledger again (the pages call it when they open).
+    // The service lists at most this many sessions (MAX_LIST in ruya-session); the history pages in 60 at a time.
+    static constexpr int kPageSize = 60;
+    static constexpr int kMaxSessions = 1000;
+
+    // Reads the active profile's ledger again.
     Q_INVOKABLE void refresh();
+    // An Activity page tells whether it is on screen (RUY-48). The ledger is read again when one
+    // appears, and on UsageChanged (every 30 s while a game runs) only while at least one is shown.
+    Q_INVOKABLE void setWatching(QObject *page, bool on);
+    // The history asks for its next page (60 more sessions); a no-op when `more` is false.
+    Q_INVOKABLE void loadMore();
     // One app's numbers: { total, sessions, first, last, longest, average, strip, playedDays }.
     Q_INVOKABLE QVariantMap game(const QString &appId) const;
     // Deletes the active profile's history; the answer comes as clearFinished.
@@ -74,6 +91,8 @@ public:
     Q_INVOKABLE void mockFailNextRefresh(const QString &status); // the next read answers with this status
     Q_INVOKABLE void mockTouch(const QString &profile); // UsageChanged
     Q_INVOKABLE int mockPendingReplies() const;
+    Q_INVOKABLE int mockReadCount() const;  // reads started since mockReset
+    Q_INVOKABLE int mockLastLimit() const;  // the session limit of the last one
     Q_INVOKABLE QVariantMap mockLastPresence() const;
     Q_INVOKABLE int mockPresenceCount() const;
 
@@ -99,4 +118,10 @@ private:
     QVariantList m_top;
     QVariantList m_history;
     QVariantMap m_highlights;
+    int m_pages = 1;      // pages of the history asked for
+    bool m_more = false;
+    bool m_capped = false;
+    QSet<QObject *> m_watchers;
+    QSet<QObject *> m_known;      // pages `destroyed` is connected for
+    bool m_pageRequested = false; // loadMore() waits for its reply
 };

@@ -47,13 +47,23 @@ Page {
         return base
     }
 
-    onVisibleChanged: {
-        if (visible)
-            Usage.refresh()
-    }
-    Component.onCompleted: {
-        if (visible)
-            Usage.refresh()
+    // The ledger is read when this page appears and kept fresh only while it is on screen (RUY-48).
+    onVisibleChanged: Usage.setWatching(page, visible)
+    Component.onCompleted: Usage.setWatching(page, visible)
+
+    // The strip, not the first fact, has the focus when the page opens (RUY-48). The facts stay focusable:
+    // they scroll out of view when the strip is in view, and Up is the way back to them. Placed once, so a
+    // later read of the ledger does not take the focus from the row the player moved to.
+    property bool stripPlaced: false
+    function placeStrip() {
+        if (stripPlaced || !strip.visible)
+            return
+        stripPlaced = true
+        if (body.activeFocus)
+            strip.forceActiveFocus()
+        else
+            strip.focus = true                     // a covered page: only its own focus item moves (T-356)
+        body.ensureFocusedVisible()
     }
 
     SettingsPane {
@@ -140,6 +150,8 @@ Page {
             valueTexts: (page.game.strip ?? []).map((s, i) =>
                 Qt.locale().toString(page.stripDate(i), "ddd d MMM") + ", " + DurationText.plain(s))
             highlightIndex: 29
+            onVisibleChanged: if (visible) Qt.callLater(page.placeStrip)
+            Component.onCompleted: if (visible) Qt.callLater(page.placeStrip)
         }
     }
 }

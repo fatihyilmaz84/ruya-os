@@ -19,7 +19,7 @@ public:
     explicit MockUsageBackend(QObject *parent = nullptr);
 
     bool isMock() const override { return true; }
-    void refresh(const QString &profile) override;
+    void refresh(const QString &profile, int limit) override;
     void clearHistory(const QString &profile) override;
     void reportPresence(const QString &profile, const QString &instance, const QString &attention) override;
 
@@ -31,17 +31,21 @@ public:
     void failNextRefresh(const QString &status) { m_failRefresh = status; }
     void touch(const QString &profile) { emit usageChanged(profile); }
     int pendingReplies() const { return m_pending; }
+    int readCount() const { return m_reads; }
+    int lastLimit() const { return m_lastLimit; }
     QVariantMap lastPresence() const { return m_presence; }
     int presenceCount() const { return m_presenceCount; }
     void reset();
 
 private:
-    UsageSnapshot snapshotOf(const QString &profile) const;
+    UsageSnapshot snapshotOf(const QString &profile, int limit) const;
 
     QHash<QString, QVariantList> m_data;
     QString m_today;
     int m_delayMs = 0;
     int m_pending = 0;
+    int m_reads = 0;     // refresh() calls since reset (tests)
+    int m_lastLimit = 0; // the session limit of the last one
     QString m_failClear;
     QString m_failRefresh;
     QVariantMap m_presence;
