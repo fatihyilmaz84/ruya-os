@@ -9,6 +9,8 @@
 #                                          shell restarted within 45 s. It restarts the shell (running
 #                                          games end): run it once per boot, before checks that end the
 #                                          shell themselves (a mode change counts in NRestarts).
+#                                          Env: RUYA_WD_RESTART_S (default 45) and RUYA_WD_START_S (default 30) set the two waits;
+#                                          only test-vm-checks.sh changes them, to run its fakes fast.
 set -u
 fail=0
 ok() { echo "PASS: $*"; }
@@ -17,7 +19,7 @@ bad() { echo "FAIL: $*"; fail=1; }
 # --- watchdog mode (RUY-483) ---
 # Host tests (test-vm-checks.sh) put fakes in front of PATH and WATCHDOG_KILL in place of kill.
 watchdog_check() {
-    local unit='ruya-compositor@tty1.service' kill_cmd="${WATCHDOG_KILL:-kill}" limit=45
+    local unit='ruya-compositor@tty1.service' kill_cmd="${WATCHDOG_KILL:-kill}" limit="${RUYA_WD_RESTART_S:-45}" start_limit="${RUYA_WD_START_S:-30}"
     local start_line='ruya-shell: systemd watchdog every 15000 ms'
     show() { systemctl show -p "$1" --value "$unit"; }
     local wd na ta pid0 n0 t0 pid1 n1 waited
@@ -68,10 +70,10 @@ watchdog_check() {
     # The new shell loads its QML first (seconds on the VM's software renderer).
     waited=0
     until journalctl -b -q --no-pager _PID="$pid1" | grep -qF "$start_line"; do
-        [ "$waited" -ge 30 ] && break
+        [ "$waited" -ge "$start_limit" ] && break
         sleep 1; waited=$((waited + 1))
     done
-    journalctl -b -q --no-pager _PID="$pid1" | grep -qF "$start_line" && ok "the new shell (pid $pid1) logged '$start_line' again" || bad "the new shell (pid $pid1) did not log '$start_line' within 30 s"
+    journalctl -b -q --no-pager _PID="$pid1" | grep -qF "$start_line" && ok "the new shell (pid $pid1) logged '$start_line' again" || bad "the new shell (pid $pid1) did not log '$start_line' within $start_limit s"
     echo "note: the stopped shell left no coredump (SIGKILL); after a real wedge, 'coredumpctl info ruya-shell' has one"
 }
 if [ "${1:-}" = watchdog ]; then
