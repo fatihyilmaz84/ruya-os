@@ -98,9 +98,6 @@ FocusScope {
 
     // The pane navigates over children that set this.
     readonly property bool focusable: true
-    // A row the pane's arrows pass over (RUY-48: the stat rows of a game page, which only inform).
-    // Off by default: 04 §5 keeps facts focusable so a list scrolls and reads in whole rows.
-    property bool skipFocus: false
 
     width: parent ? parent.width : 900 * u
     height: Theme.rowHeight * u
