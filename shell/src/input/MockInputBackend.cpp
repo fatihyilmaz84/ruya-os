@@ -110,6 +110,35 @@ MockInputBackend::MockInputBackend(QObject *parent)
           validAppId)
 {
     setDefaultDevices();
+    m_clock.start();
+    m_holdTimer.setSingleShot(true);
+    connect(&m_holdTimer, &QTimer::timeout, this, &MockInputBackend::expireHolds);
+}
+
+// The service's expire_holds (RUY-627): seats 2-4 are freed, seat 1 keeps its profile without a pad.
+void MockInputBackend::expireHolds()
+{
+    const qint64 now = m_clock.elapsed();
+    const QVariantList before = playerList();
+    qint64 next = 0;
+    for (int i = 0; i < m_seats.size(); ++i) {
+        Seat &s = m_seats[i];
+        if (s.heldUntil == 0)
+            continue;
+        if (s.heldUntil > now) {
+            next = next == 0 ? s.heldUntil : std::min(next, s.heldUntil);
+            continue;
+        }
+        if (i == 0) {
+            s.device.clear();
+            s.heldUntil = 0;
+        } else {
+            s = {};
+        }
+    }
+    seatsChanged(before);
+    if (next > 0)
+        m_holdTimer.start(int(std::max<qint64>(0, next - now)));
 }
 
 void MockInputBackend::resetDevices()
@@ -225,21 +254,27 @@ void MockInputBackend::addDevice(const QVariantMap &device)
     }
     if (!replaced)
         m_devices.append(d);
+    // RUY-627: the pad is back within its seat's hold, and sits there again.
+    const int at = seatOfDevice(id);
+    if (at >= 0 && m_seats.at(at).heldUntil != 0) {
+        const QVariantList before = playerList();
+        m_seats[at].heldUntil = 0;
+        seatsChanged(before);
+    }
     QTimer::singleShot(0, this, [this] { emit devicesChanged(); });
 }
 
 void MockInputBackend::removeDevice(const QString &id)
 {
     m_devices.removeIf([&id](const QVariant &d) { return d.toMap().value(QStringLiteral("id")).toString() == id; });
-    // A seated pad frees its seat (2-4) or leaves seat 1 without a pad (RUY-121).
+    // A seated pad holds its seat (RUY-627, seat 1 too); expireHolds ends the hold.
     const int at = seatOfDevice(id);
-    if (at >= 0) {
+    if (at >= 0 && m_seats.at(at).heldUntil == 0) {
         const QVariantList before = playerList();
-        if (at == 0)
-            m_seats[0].device.clear();
-        else
-            m_seats[at] = {};
+        m_seats[at].heldUntil = m_clock.elapsed() + m_seatHoldMs;
         seatsChanged(before);
+        if (!m_holdTimer.isActive() || m_holdTimer.remainingTime() > m_seatHoldMs)
+            m_holdTimer.start(m_seatHoldMs);
     }
     if (m_padSinceChange == id)
         m_padSinceChange.clear();
@@ -480,15 +515,19 @@ void MockInputBackend::callProfile(quint64 token, const QString &method, const Q
 QVariantList MockInputBackend::playerList() const
 {
     QVariantList out;
+    const qint64 now = m_clock.elapsed();
     for (int i = 0; i < m_seats.size(); ++i) {
-        if (m_seats.at(i).profile.isEmpty())
+        const Seat &s = m_seats.at(i);
+        if (s.profile.isEmpty())
             continue;
+        // held_secs: the whole seconds left, rounded up (seats.rs Player::held_secs).
+        const qint64 left = s.heldUntil == 0 ? 0 : std::max<qint64>(0, s.heldUntil - now);
         out.append(QVariantMap{
             {QStringLiteral("slot"), uint(i + 1)},
-            {QStringLiteral("profile"), m_seats.at(i).profile},
-            {QStringLiteral("device_id"), m_seats.at(i).device},
-            {QStringLiteral("held"), false},
-            {QStringLiteral("held_secs"), 0u},
+            {QStringLiteral("profile"), s.profile},
+            {QStringLiteral("device_id"), s.device},
+            {QStringLiteral("held"), s.heldUntil != 0},
+            {QStringLiteral("held_secs"), uint((left + 999) / 1000)},
         });
     }
     return out;
@@ -573,13 +612,14 @@ void MockInputBackend::joinPlayer(const QString &deviceId, const QString &profil
             }
             if (mine >= 0) {
                 next[mine].device = deviceId;            // (a), (b): the seat moves to the pad
+                next[mine].heldUntil = 0;                // and a hold of it ends (RUY-627)
             } else {
                 for (int i = 1; i < next.size() && mine < 0; ++i) {
                     if (next.at(i).profile.isEmpty())
                         mine = i;                        // (d) the lowest free seat of 2-4
                 }
                 if (mine >= 0)
-                    next[mine] = {profile, deviceId};
+                    next[mine] = {profile, deviceId, 0};
             }
             if (mine < 0) {
                 status = QStringLiteral("full");

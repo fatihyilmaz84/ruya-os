@@ -3,8 +3,10 @@
 #include "InputBackend.h"
 #include "MockInputProfiles.h"
 
+#include <QElapsedTimer>
 #include <QHash>
 #include <QSet>
+#include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -19,8 +21,12 @@
 // per device, ended by StopTest, a route other than "shell" or the pad going.
 // Players (RUY-121): the service's seats and statuses (routing.rs, seats.rs): a profile change seats
 // the new profile in seat 1 on the pad of the last sendActiveInput since the change before ("" for
-// none), Join/Leave follow rules (a) to (e), a removed pad frees its seat, and the device records'
-// slot and profile follow. PlayersChanged is not heard while the name has no owner.
+// none), Join/Leave follow rules (a) to (e), and the device records' slot and profile follow. A
+// removed seated pad holds its seat (RUY-627: held, held_secs; 60 s, setSeatHoldMs for tests): the
+// same id added again within the hold sits there again, and at its end the seat is freed (2-4) or
+// seat 1 keeps its profile without a pad. One PlayersChanged as a hold starts and one as it ends.
+// Like pads (another id) are the service's rule only. PlayersChanged is not heard while the name
+// has no owner.
 class MockInputBackend final : public InputBackend
 {
     Q_OBJECT
@@ -49,6 +55,8 @@ public:
     QVariantList players() const { return playerList(); }
     // Tests: every later JoinPlayer answers `status` and changes nothing ("" clears it).
     void setFailJoin(const QString &status) { m_failJoin = status; }
+    // Tests: how long a seat waits for its removed pad (60000 ms, the service's SEAT_HOLD).
+    void setSeatHoldMs(int ms) { m_seatHoldMs = ms; }
     // Tests: the press of a pad is announced (ActiveInputChanged); the property follows that pad.
     void sendActiveInput(const QString &deviceId, const QString &family);
     // Tests: the mode stored for a controller of a console profile ("family" when none).
@@ -139,12 +147,16 @@ public:
 
 private:
     void setDefaultDevices();
-    // A seat: a profile on a pad ("" = none); an empty profile is an empty seat.
+    // A seat: a profile on a pad ("" = none); an empty profile is an empty seat. heldUntil: the
+    // m_clock time (ms) its hold of a removed pad ends, 0 when it is not held.
     struct Seat
     {
         QString profile;
         QString device;
+        qint64 heldUntil = 0;
     };
+    // The holds that ran out are ended, and the timer is set for the next one.
+    void expireHolds();
     QVariantList playerList() const;
     int seatOfDevice(const QString &deviceId) const;
     // After the seats changed from `before`: the device records follow, PlayersChanged is sent.
@@ -178,4 +190,7 @@ private:
     QList<Seat> m_seats;           // 4 while a profile is signed in (index 0 is seat 1), else none
     QString m_padSinceChange;      // the pad of the last press since the profile last changed
     QString m_failJoin;
+    int m_seatHoldMs = 60000;
+    QElapsedTimer m_clock;         // the time base of the holds
+    QTimer m_holdTimer;            // fires when the next hold ends
 };

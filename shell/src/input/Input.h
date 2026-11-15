@@ -193,6 +193,8 @@ public:
     // answers without changing anything ("" clears it).
     Q_INVOKABLE QVariantList mockPlayers() const;
     Q_INVOKABLE void mockFailJoin(const QString &status);
+    // How long the mock service holds a removed seated pad's seat (RUY-627; 60000 ms by default).
+    Q_INVOKABLE void mockSeatHoldMs(int ms);
     // Every SetRoute that reached the mock service: [{ route, instance, appId, profile }].
     Q_INVOKABLE QVariantList mockCalls() const;
     Q_INVOKABLE void mockClearCalls();

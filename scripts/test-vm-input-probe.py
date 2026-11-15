@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Host test of scripts/vm-input-probe.py's signal listener (RUY-594) and of its players helpers (RUY-121:
-JoinPlayer's (su) reply, a u argument, ListPlayers' busctl JSON): Bus reads a signal's member from the
+JoinPlayer's (su) reply, a u argument, ListPlayers' busctl JSON) and its seathold helpers (RUY-627: a seat's
+row, the removes in udevadm monitor's output): Bus reads a signal's member from the
 header, and `listen` prints "heard <member>" for Input1's signals and "bus <member>" for the bus's own, and
 nothing for a method reply. The VM check (vm-input-check.sh signals) relies on that split. Run by
 scripts/test-vm-checks.sh. Prints "    ok   ..." and "    FAIL ..." lines like that script; exit 1 on a failure."""
@@ -161,6 +162,25 @@ check("seats_of sorts the players by slot",
       probe.seats_of(rows))
 check("rows_of of something else is None", probe.rows_of("Call failed: no such method") is None
       and probe.rows_of('{"data": []}') is None)
+# RUY-627 (seathold): the seat 2 row, and the udevadm monitor removes of pad2's input device.
+check("player_row finds a seat and None for an empty one",
+      probe.player_row(rows, 2)["profile"] == "p7" and probe.player_row(rows, 3) is None
+      and probe.player_row(None, 1) is None)
+monitor = """monitor will print the received events for:
+KERNEL - the kernel uevent
+
+KERNEL[812.120] add      /devices/virtual/input/input230 (input)
+KERNEL[812.130] remove   /devices/virtual/input/input23/event17 (input)
+UDEV  [812.140] remove   /devices/virtual/input/input23 (input)
+KERNEL[812.150] remove   /devices/virtual/input/input230/event18 (input)
+KERNEL[812.160] change   /devices/virtual/input/input23/event17 (input)
+"""
+removes = probe.udev_removes(monitor, "input23")
+check("udev_removes finds KERNEL and UDEV removes of the device and its node",
+      len(removes) == 2 and removes[0].startswith("KERNEL[812.130]") and removes[1].startswith("UDEV"), removes)
+check("udev_removes ignores another device with a longer name and other actions",
+      probe.udev_removes(monitor, "input2") == [] and probe.udev_removes("", "input23") == [],
+      probe.udev_removes(monitor, "input2"))
 
 bus = fake_bus([message(4, "TestInput"), message(4, "NameOwnerChanged"), message(2, reply_to=2), message(4, "UserActive")])
 probe.Bus = lambda: bus

@@ -131,15 +131,15 @@ fn record(d: &DeviceRecord) -> Dict {
         .collect()
 }
 
-/// A player record of `ListPlayers` and `PlayersChanged` (the keys of the XML; `held` and
-/// `held_secs` are RUY-627's, false and 0 until then).
-fn player(p: &Player) -> Dict {
+/// A player record of `ListPlayers` and `PlayersChanged` (the keys of the XML); `held_secs` is
+/// what the hold has left at `now` (RUY-627).
+fn player(p: &Player, now: Instant) -> Dict {
     let entries = vec![
         ("slot", Value::from(p.slot)),
         ("profile", Value::from(p.profile.clone())),
         ("device_id", Value::from(p.device_id.clone())),
-        ("held", Value::from(false)),
-        ("held_secs", Value::from(0u32)),
+        ("held", Value::from(p.held_until.is_some())),
+        ("held_secs", Value::from(p.held_secs(now))),
     ];
     entries
         .into_iter()
@@ -362,8 +362,10 @@ impl InputIface {
     }
 
     fn list_players(&self) -> Vec<Dict> {
-        self.shared
-            .with(|r| r.players().iter().map(player).collect())
+        self.shared.with(|r| {
+            let now = Instant::now();
+            r.players().iter().map(|p| player(p, now)).collect()
+        })
     }
 
     #[zbus(signal)]
@@ -468,7 +470,9 @@ pub async fn announce(connection: Connection, notices: async_channel::Receiver<N
             }
             Notice::UserActive => InputIface::user_active(emitter).await,
             Notice::PlayersChanged(players) => {
-                InputIface::players_changed(emitter, players.iter().map(player).collect()).await
+                let now = Instant::now();
+                let list = players.iter().map(|p| player(p, now)).collect();
+                InputIface::players_changed(emitter, list).await
             }
             Notice::Journal(_) => Ok(()),
         };
@@ -561,14 +565,22 @@ mod tests {
 
     #[test]
     fn a_player_record_has_the_contract_keys() {
-        let dict = player(&Player {
+        let now = Instant::now();
+        let mut p = Player {
             slot: 2,
             profile: "p2".into(),
             device_id: "usb-045e-028e-0123456789ab".into(),
-        });
+            held_until: None,
+        };
+        let dict = player(&p, now);
         assert_eq!(dict.get("slot").map(|v| &**v), Some(&Value::U32(2)));
         assert_eq!(dict.get("held").map(|v| &**v), Some(&Value::Bool(false)));
         assert_eq!(dict.get("held_secs").map(|v| &**v), Some(&Value::U32(0)));
+        // A held seat (RUY-627): held, and the seconds left, rounded up.
+        p.held_until = Some(now + std::time::Duration::from_millis(41_500));
+        let held = player(&p, now);
+        assert_eq!(held.get("held").map(|v| &**v), Some(&Value::Bool(true)));
+        assert_eq!(held.get("held_secs").map(|v| &**v), Some(&Value::U32(42)));
         match dict.get("device_id").map(|v| &**v) {
             Some(Value::Str(s)) => assert_eq!(s.as_str(), "usb-045e-028e-0123456789ab"),
             other => panic!("device_id: {other:?}"),
