@@ -13,7 +13,9 @@
 #   x11       (RUY-436, ADR-034) no abstract @/tmp/.X11-unix listener; every X* socket is 0700 and owned by a profile
 #             user (ruya-p<N>); every running Xwayland has -auth and -nolisten local and runs in a baseline domain
 #   busrecv   (RUY-594) every /usr/share/dbus-1/system.d/org.ruyaos.*.conf denies receiving the service's signals in the
-#             default context and allows them to root and ruya-shell only (the policy as installed; `signals` proves the bus keeps it)
+#             default context (a deny narrowed by receive_member/_interface/_path/_error/_requested_reply or eavesdrop closes nothing: RUY-616)
+#             and allows them to root and ruya-shell only, with no receive deny in their policies (the policy as installed;
+#             `signals` proves the bus keeps it)
 # `signals` (RUY-594; not part of `check`: it stops the compositor for about 25 s and needs a pad-capable VM) runs
 # `vm-input-check.sh signals` from this directory (copy it and vm-input-probe.py next to this script): plain bus clients as root
 # and ruya-shell hear Input1's TestInput and UserActive while a pad is pressed; as nobody, a profile user, ruya-link and
@@ -349,14 +351,19 @@ for fname in bus_files:
                         names.add(rule.get(a))
             if sender is None:
                 continue
+            narrowed = sorted(a for a in rule.attrib if (a.startswith("receive_") and a not in ("receive_sender", "receive_type")) or a == "eavesdrop")
             if rtype != "signal":
                 bad("busrecv: %s: a receive rule for %s without receive_type=signal (%s)" % (fname, sender, rule.tag))
+            elif rule.tag == "deny" and ctx == "default" and narrowed:
+                bad("busrecv: %s: a narrowed receive deny does not close the default for %s (it also names %s)" % (fname, sender, ", ".join(narrowed)))
             elif rule.tag == "deny" and ctx == "default":
                 recv_deny.add(sender)
             elif rule.tag == "allow" and user in ("root", "ruya-shell"):
                 recv_allow.setdefault(sender, set()).add(user)
             else:
-                bad("busrecv: %s: unexpected receive rule %s for %s in policy %s" % (fname, rule.tag, sender, user or ctx))
+                bad("busrecv: %s: unexpected receive rule %s for %s in policy %s%s" % (
+                    fname, rule.tag, sender, user or ctx,
+                    " (it would cut the shell or root off from the service's signals)" if rule.tag == "deny" and user in ("root", "ruya-shell") else ""))
     if not names:
         bad("busrecv: %s names no bus name" % fname)
     for n in sorted(names):

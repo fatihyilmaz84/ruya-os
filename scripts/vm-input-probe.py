@@ -864,13 +864,15 @@ def cmd_useractive(args):
     return fails
 
 
-BUS_NAMES = ("NameOwnerChanged", "NameAcquired", "NameLost")
+BUS_LIVENESS = "NameOwnerChanged"           # the one bus signal that is a broadcast, so proof the listener hears broadcasts
+BUS_UNICAST = ("NameAcquired", "NameLost")  # sent to the client itself whatever the policy says: proof of nothing (RUY-616)
 
 
 def cmd_listen(args):
     """RUY-594: a plain bus client (what any app's user could run) that matches Input1's signals and the bus's
     NameOwnerChanged. Prints `ready`, then `heard <member>` for each Input1 signal it receives and `bus <member>`
-    for the bus's own (the control: this client does get broadcasts), `done` after --seconds."""
+    for the bus's own NameOwnerChanged (the control: this client does get broadcasts). The bus's NameAcquired and
+    NameLost go to this client alone whatever the policy says, so they are dropped, not counted (RUY-616). `done` after --seconds."""
     bus = Bus()
     for rule in (f"type='signal',sender='{SVC}'", "type='signal',sender='org.freedesktop.DBus',member='NameOwnerChanged'"):
         bus.call("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus", "AddMatch", [rule])
@@ -882,8 +884,8 @@ def cmd_listen(args):
             kind, _reply, _body = bus._message()
         except (socket.timeout, TimeoutError):
             break
-        if kind == 4 and bus.member:
-            print(("bus " if bus.member in BUS_NAMES else "heard ") + bus.member, flush=True)
+        if kind == 4 and bus.member and bus.member not in BUS_UNICAST:
+            print(("bus " if bus.member == BUS_LIVENESS else "heard ") + bus.member, flush=True)
     print("done", flush=True)
 
 
@@ -979,7 +981,7 @@ def cmd_signals(args):
             f"{u} did not receive {', '.join(missing)} (heard: {', '.join(members) or 'nothing'})")
     for u in outsiders:
         members = sorted({l[6:] for l in heard[u] if l.startswith("heard ")})
-        control = sum(1 for l in heard[u] if l.startswith("bus "))
+        control = sum(1 for l in heard[u] if l == "bus " + BUS_LIVENESS)
         ok(f"{u} receives no Input1 signal") if not members else bad(f"{u} received Input1's {', '.join(members)}")
         ok(f"{u}'s listener was alive (it heard the bus's own {control} NameOwnerChanged)") if control else bad(
             f"{u}'s listener heard nothing at all: its silence proves nothing")

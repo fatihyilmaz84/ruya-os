@@ -342,6 +342,21 @@ expect_contains "a receive allow for another user: FAIL" "$out" "FAIL: busrecv: 
 mutate_bus notype org.ruyaos.Update1.conf 's| receive_type="signal"||'
 out="$(BUS="$sec/bus/notype" runsec)"
 expect_contains "a receive rule without receive_type: FAIL" "$out" "FAIL: busrecv: org.ruyaos.Update1.conf: a receive rule for org.ruyaos.Update1 without receive_type=signal"
+# RUY-616: a narrowed default deny closes nothing; a receive deny for root or ruya-shell cuts them off
+for attr in 'receive_member="Nothing"' 'receive_interface="org.x.Nothing"' 'receive_path="/nothing"' 'receive_error="org.x.Nothing"' 'receive_requested_reply="true"' 'eavesdrop="true"'; do
+    name="narrow_${attr%%=*}"
+    mutate_bus "$name" org.ruyaos.Library1.conf "s|<deny receive_sender=\"org.ruyaos.Library1\" receive_type=\"signal\"|& $attr|"
+    out="$(BUS="$sec/bus/$name" runsec)"; rc=$?
+    expect_contains "a default receive deny narrowed by ${attr%%=*}: FAIL" "$out" "FAIL: busrecv: org.ruyaos.Library1.conf: a narrowed receive deny does not close the default for org.ruyaos.Library1 (it also names ${attr%%=*})"
+    expect_contains "... and the default is then missing (${attr%%=*})" "$out" "FAIL: busrecv: org.ruyaos.Library1.conf: no default-context deny receive_sender for org.ruyaos.Library1"
+    [ "$rc" = 1 ] && pass "narrowed by ${attr%%=*}: exit 1" || fail "narrowed by ${attr%%=*}: exit $rc"
+done
+mutate_bus rootdeny org.ruyaos.Session1.conf 's|\(<policy user="root">\)|\1<deny receive_sender="org.ruyaos.Session1" receive_type="signal"/>|'
+out="$(BUS="$sec/bus/rootdeny" runsec)"
+expect_contains "a receive deny in the root policy: FAIL" "$out" "FAIL: busrecv: org.ruyaos.Session1.conf: unexpected receive rule deny for org.ruyaos.Session1 in policy root (it would cut the shell or root off"
+mutate_bus shelldeny org.ruyaos.Store1.conf 's|\(<policy user="ruya-shell">\)|\1<deny receive_sender="org.ruyaos.Store1" receive_type="signal"/>|'
+out="$(BUS="$sec/bus/shelldeny" runsec)"
+expect_contains "a receive deny in the ruya-shell policy: FAIL" "$out" "FAIL: busrecv: org.ruyaos.Store1.conf: unexpected receive rule deny for org.ruyaos.Store1 in policy ruya-shell (it would cut the shell or root off"
 mkdir -p "$sec/bus/empty"
 out="$(BUS="$sec/bus/empty" runsec)"
 expect_contains "no policy files: FAIL, not a skip" "$out" "FAIL: busrecv: no org.ruyaos.*.conf to check"
