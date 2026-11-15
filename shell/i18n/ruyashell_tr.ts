@@ -1190,20 +1190,20 @@ Bu geri alınamaz.</translation>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+252"/>
-        <location line="+76"/>
+        <location line="+259"/>
+        <location line="+77"/>
         <source>Buttons in games</source>
         <translation>Oyunlarda düğmeler</translation>
     </message>
     <message>
-        <location line="-75"/>
-        <location line="+76"/>
+        <location line="-76"/>
+        <location line="+77"/>
         <source>Try your controller</source>
         <translation>Kontrolcünüzü deneyin</translation>
     </message>
     <message>
-        <location line="-76"/>
-        <location line="+76"/>
+        <location line="-77"/>
+        <location line="+77"/>
         <source>Pair a controller</source>
         <translation>Kontrolcü eşleştir</translation>
     </message>
@@ -1354,7 +1354,7 @@ Bu geri alınamaz.</translation>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="+71"/>
+        <location line="+72"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
@@ -1866,7 +1866,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 (%2)</translation>
     </message>
     <message>
-        <location line="+48"/>
+        <location line="+50"/>
         <source>PlayStation controller</source>
         <translation>PlayStation kontrolcüsü</translation>
     </message>
@@ -1881,12 +1881,12 @@ Bu geri alınamaz.</translation>
         <translation>Nintendo kontrolcüsü</translation>
     </message>
     <message>
-        <location line="+3"/>
+        <location line="-4"/>
         <source>8BitDo controller</source>
         <translation>8BitDo kontrolcüsü</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="+6"/>
         <source>Controller</source>
         <translation>Kontrolcü</translation>
     </message>
@@ -4537,7 +4537,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+699"/>
+        <location filename="../qml/Shell.qml" line="+701"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -4611,7 +4611,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kapanmadı. Çalışmaya devam ederse konsolu yeniden başlatın.</translation>
     </message>
     <message>
-        <location line="+151"/>
+        <location line="+153"/>
         <source>%1 has no window yet.</source>
         <translation>%1 henüz bir pencere açmadı.</translation>
     </message>
@@ -4732,7 +4732,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1841"/>
+        <location line="-1843"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -4763,7 +4763,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1589"/>
+        <location line="+1591"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
@@ -6263,30 +6263,35 @@ Bu geri alınamaz.</translation>
 <context>
     <name>WhosPlaying</name>
     <message>
-        <location filename="../qml/WhosPlaying.qml" line="+148"/>
-        <location line="+215"/>
+        <location filename="../qml/WhosPlaying.qml" line="+175"/>
+        <location line="+348"/>
         <source>Guest</source>
         <translation>Misafir</translation>
     </message>
     <message>
-        <location line="-249"/>
+        <location line="-384"/>
         <location line="+1"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
         <location line="-1"/>
-        <location line="+808"/>
+        <location line="+970"/>
         <source>Not now</source>
         <translation>Şimdi değil</translation>
     </message>
     <message>
-        <location line="-807"/>
+        <location line="-969"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="-1"/>
+        <source>Continue</source>
+        <translation>Devam</translation>
+    </message>
+    <message>
+        <location line="+33"/>
         <source>another controller</source>
         <translation>başka bir kumanda</translation>
     </message>
@@ -6311,7 +6316,7 @@ Bu geri alınamaz.</translation>
         <translation>Misafir %1 olarak katılır. Ayrılınca hiçbir şey saklanmaz.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+27"/>
         <source>This controller stops playing as %1.</source>
         <translation>Bu kumanda artık %1 olarak oynamıyor.</translation>
     </message>
@@ -6321,7 +6326,22 @@ Bu geri alınamaz.</translation>
         <translation>Şu an %2 üzerinde. Seçersen %1 buraya geçer.</translation>
     </message>
     <message>
-        <location line="+374"/>
+        <location line="-16"/>
+        <source>Continue as %1.</source>
+        <translation>%1 olarak devam et.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Switches to %1. %2&apos;s games are paused and kept.</source>
+        <translation>%1 profiline geçer. %2 profilinin oyunları duraklatılıp saklanır.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Switches to %1.</source>
+        <translation>%1 profiline geçer.</translation>
+    </message>
+    <message>
+        <location line="+512"/>
         <source>%1 could not join</source>
         <translation>%1 katılamadı</translation>
     </message>
@@ -6331,12 +6351,12 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene.</translation>
     </message>
     <message>
-        <location line="+231"/>
+        <location line="+244"/>
         <source>Paused · %1</source>
         <translation>Duraklatıldı · %1</translation>
     </message>
     <message>
-        <location line="+28"/>
+        <location line="+30"/>
         <source>%1 wants to play</source>
         <translation>%1 oynamak istiyor</translation>
     </message>
@@ -6351,12 +6371,17 @@ Bu geri alınamaz.</translation>
         <translation>Profiller</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+38"/>
         <source>Waiting for the profiles service…</source>
         <translation>Profil hizmeti bekleniyor…</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="-85"/>
+        <source>Turn on a controller to play</source>
+        <translation>Oynamak için bir kontrolcü aç</translation>
+    </message>
+    <message>
+        <location line="+170"/>
         <source>Join in or switch to %1?</source>
         <translation>Katıl mı, %1 profiline geç mi?</translation>
     </message>

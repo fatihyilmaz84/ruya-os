@@ -22,6 +22,13 @@ import RuyaShell
 // with only seated pads left gets player 1 back without a keyboard (lead, RUY-628).
 // Not now keeps the pad quiet: over a game until that game exits, over Home until the pad disconnects
 // or the profile changes.
+//
+// Wake mode (RUY-707, ADR-017 amendment 7): a resume from sleep (`wake()`, from IdleClock.resumed) while
+// seat 1 has no connected pad opens step "pick" with no asking pad: the signed-in profile's card first
+// and focused ("Continue as <name>."), the other kept profiles after it (Accept = Switch, through its
+// PIN), no Guest card and no Not now. Accept on the signed-in card, Back and Guide continue (no PIN):
+// with a pad it joins as player 1, with the keyboard alone the prompt just closes. The keyboard drives
+// it; the first pad that connects (or presses) takes it over as the navigator, the focus staying put.
 FocusScope {
     id: prompt
 
@@ -41,7 +48,14 @@ FocusScope {
 
     property bool shown: false
     property string step: "pick"         // "pick" | "confirm" | "move" | "pin"
-    property string pad: ""              // the asking pad (stable id)
+    property string pad: ""              // the asking pad (stable id; "" in wake mode until a pad takes over)
+    // Wake mode (RUY-707): opened by a resume, kept until the next open (so the row does not change
+    // while it fades out). `wakePending`: a resume asked for it while it could not open yet.
+    property bool wakeMode: false
+    property bool wakePending: false
+    // After a resume with seat 1's pad still listed, its removal may come late (a Bluetooth or 2.4 GHz pad
+    // drops over its own path, in no order with the resume): for this long a removal still opens wake mode.
+    property int wakeWatchMs: 10000
     property var queue: []               // pads waiting to ask, in arrival order
     // Not now (pad id -> { instance } over a game, { profile } over Home).
     property var quiet: ({})
@@ -72,13 +86,22 @@ FocusScope {
 
     // Every kept profile is a card, whatever its role (RUY-680: a guest-role profile is a person on this
     // console); only temporary guests (RUY-125, Profiles.guests, never in `profiles`) are the Guest card's.
-    readonly property var cards: Profiles.profiles.filter(p => !Profiles.guests.some(g => g.id === p.id))
+    // In wake mode the signed-in profile's card comes first, the others keep the picker's order.
+    readonly property var cards: {
+        const kept = Profiles.profiles.filter(p => !Profiles.guests.some(g => g.id === p.id))
+        if (!wakeMode)
+            return kept
+        const active = Profiles.activeProfile
+        return kept.filter(p => p.id === active).concat(kept.filter(p => p.id !== active))
+    }
     // The Guest card ends the row (RUY-631); its name is the card's own qsTr, so a language change never
     // replaces the model (that would reset the current index, RUY-664). A seated pad never asks (mayAsk),
     // so it is never offered a guest again; the one exception, a seated pad's Guide while seat 1 has no
-    // pad, may make another.
-    readonly property var entries: cards.concat([{ kind: "guest", id: "", name: "", avatar: "", hasPin: false }])
-    readonly property int guestIndex: cards.length
+    // pad, may make another. Wake mode has no Guest card (lead ruling, RUY-707: a temporary guest can never
+    // be the active profile, so it cannot answer who takes over; guests join afterwards as usual).
+    readonly property var entries: wakeMode ? cards
+        : cards.concat([{ kind: "guest", id: "", name: "", avatar: "", hasPin: false }])
+    readonly property int guestIndex: wakeMode ? -1 : cards.length
 
     readonly property var padRecord: Input.devices.find(d => d.id === prompt.pad)
     readonly property string padName: padRecord
@@ -109,10 +132,14 @@ FocusScope {
     property string guestSession: ""
 
     // What the hint bar says (Shell.hintList).
-    readonly property var modalHints: step === "pin" ? pinPad.modalHints
-        : step === "pick"
-        ? [{ action: "accept", text: qsTr("Select") }, { action: "back", text: qsTr("Not now") }]
-        : [{ action: "accept", text: qsTr("Select") }, { action: "back", text: qsTr("Back") }]
+    // In wake mode Back continues; with no pad yet the keyboard's key caps (Enter, Esc) are drawn.
+    readonly property var modalHints: {
+        const hints = step === "pin" ? pinPad.modalHints
+            : step === "pick"
+            ? [{ action: "accept", text: qsTr("Select") }, { action: "back", text: wakeMode ? qsTr("Continue") : qsTr("Not now") }]
+            : [{ action: "accept", text: qsTr("Select") }, { action: "back", text: qsTr("Back") }]
+        return wakeMode && pad === "" ? hints.map(h => Object.assign({ family: "keyboard" }, h)) : hints
+    }
 
     // "%1 ... %2" filled in one pass, so a name with "%2" in it stays a name.
     function fill(template, one, two) {
@@ -168,7 +195,22 @@ FocusScope {
         const s = pad === "" ? undefined : Input.players.find(x => (x.device_id ?? "") === pad)
         return s ? s.profile : ""
     }
+    // A game or app of the signed-in profile runs (a wake Switch pauses and keeps it).
+    readonly property bool signedInRunning: Session.running.some(r => r.profile === Profiles.activeProfile
+                                                                       && r.state !== "stopping")
+    // Wake mode: Continue on the signed-in card, a Switch on the others.
+    function wakeDetailFor(record) {
+        const name = Notifications.named(record.name)
+        if (record.id === Profiles.activeProfile)
+            return qsTr("Continue as %1.").arg(name)
+        return signedInRunning
+            ? fill(qsTr("Switches to %1. %2's games are paused and kept."), name,
+                   Notifications.named(Profiles.nameOf(Profiles.activeProfile)))
+            : qsTr("Switches to %1.").arg(name)
+    }
     function detailFor(record) {
+        if (record && wakeMode && record.kind !== "guest")
+            return wakeDetailFor(record)
         if (record && record.kind === "guest")
             return guestDetail()
         // Picking the padless player 1 gives it this pad: the pad stops playing as its own profile (RUY-664).
@@ -203,14 +245,76 @@ FocusScope {
             return
         if (reason === "press" && quiet[id] !== undefined)
             return
+        if (mayTakeOver(id)) {
+            takeOver(id)                // the wake step with no pad yet: this pad drives it, no second prompt
+            return
+        }
         if ((shown && pad === id) || queue.includes(id) || !mayAsk(id) || (seated(id) && reason !== "player-guide"))
             return
         queue = queue.concat([id])
         Qt.callLater(prompt.tryOpen)
     }
 
+    // ---- wake mode (RUY-707) ----
+    // Seat 1's pad is there (a USB pad stays connected through a sleep): a wake changes nothing then.
+    // A held seat 1 (RUY-627) has lost its pad, even while the device list still names it.
+    function seat1PadConnected() {
+        const id = player1 ? (player1.device_id ?? "") : ""
+        return id !== "" && player1.held !== true && connected(id)
+    }
+    function wakeWanted() {
+        return allowed && Profiles.activeProfile !== "" && !seat1PadConnected()
+    }
+    // A resume from sleep (the Shell routes IdleClock.resumed here): with a profile signed in and no
+    // connected pad on seat 1 the prompt opens in wake mode, at once or as soon as nothing blocks it.
+    // With seat 1's pad still connected the wake watch runs (`wakeWatchMs`): a removal inside it is a wake.
+    function wake() {
+        if (shown && wakeMode)
+            return
+        if (!wakeWanted()) {
+            if (allowed && Profiles.activeProfile !== "")
+                wakeWatch.restart()
+            return
+        }
+        wakeWatch.stop()
+        wakePending = true
+        tryOpen()
+    }
+    // The watch runs and seat 1's pad has just gone (the device list, or the seat held): the wake after all.
+    // The Shell calls it first on a players change, so it opens before any lost-pad Hub.
+    function checkLateWake() {
+        if (!wakeWatch.running || !wakeWanted())
+            return
+        console.info("ruya-shell: seat 1's pad went just after the wake: Who's playing? opens in wake mode")
+        wake()
+    }
+    Timer {
+        id: wakeWatch
+        objectName: "whosPlayingWakeWatch"
+        interval: prompt.wakeWatchMs
+    }
+    // The wake step has no pad yet: a pad that connects or presses drives it, an unseated one or seat 1's
+    // own pad rebinding into its held seat (RUY-627). A seat 2-4 pad keeps its seat and its normal prompt.
+    function mayTakeOver(id) {
+        return shown && wakeMode && pad === "" && id !== ""
+               && (!seated(id) || (player1 !== undefined && (player1.device_id ?? "") === id))
+    }
+    function takeOver(id) {
+        pad = id
+        Input.setNavigator(id)
+        if (step === "pin")
+            pinPad.deviceId = id        // the PIN step's pad line names it too
+    }
+
     function tryOpen() {
         if (!shown && allowed && !blocked && switching === null) {
+            if (wakePending) {
+                wakePending = false
+                if (wakeWanted()) {
+                    open("", true)
+                    return
+                }
+            }
             while (queue.length > 0) {
                 const id = queue[0]
                 queue = queue.slice(1)
@@ -234,12 +338,18 @@ FocusScope {
         closed(target)
     }
 
-    function open(id) {
+    // `wake`: wake mode, with no asking pad (`id` "").
+    function open(id, wake) {
         if (!bridging) {
             const f = Window.activeFocusItem
             returnTo = f && !inside(f) ? f : null
         }
         openSeq += 1
+        wakeMode = wake === true        // before the focus: the row (the model) is the wake row now
+        if (wakeMode)
+            wakeWatch.stop()
+        if (wakeMode)
+            console.info("ruya-shell: woke with no pad on seat 1: Who's playing? opens in wake mode")
         pad = id
         step = "pick"
         chosen = null
@@ -248,7 +358,8 @@ FocusScope {
         downKey = 0
         shown = true
         bridging = false                // after `shown`, so `pausing` never drops between two prompts
-        Input.setNavigator(id)
+        if (id !== "")
+            Input.setNavigator(id)
         focusFirst()
     }
 
@@ -257,6 +368,16 @@ FocusScope {
     // Accept then being Move), else the first profile without a pad, else the Guest card (Not now when
     // the profiles are not there).
     function focusFirst() {
+        // Wake mode: the signed-in profile's card, always (ahead of the owner rule; it is the first card).
+        if (wakeMode) {
+            if (Profiles.available && cards.length > 0) {
+                cardList.currentIndex = 0
+                cardList.forceActiveFocus()
+            } else {
+                prompt.forceActiveFocus()   // no cards to focus: Back and Guide still continue
+            }
+            return
+        }
         // Seat 1 without a pad: player 1's card first (the one-press way back, lead RUY-122 round 2).
         const own = Profiles.available ? cards.findIndex(p => padlessPlayer1(p.id)) : -1
         const owner = Profiles.available && padRecord && padRecord.owner ? cards.findIndex(p => p.id === padRecord.owner) : -1
@@ -281,8 +402,9 @@ FocusScope {
             next[pad] = overGame ? { instance: gameInstance, profile: "" } : { instance: "", profile: Profiles.activeProfile }
             quiet = next
         }
-        // Another pad waits and may ask now: keep the pause and the focus for it.
-        bridging = allowed && !blocked && switching === null && queue.some(i => i !== pad && connected(i) && mayAsk(i))
+        // Another pad waits and may ask now (or a wake does): keep the pause and the focus for it.
+        bridging = allowed && !blocked && switching === null
+                   && ((wakePending && wakeWanted()) || queue.some(i => i !== pad && connected(i) && mayAsk(i)))
         if (!bridging)
             aboutToClose()
         shown = false
@@ -309,9 +431,47 @@ FocusScope {
         close(true)
     }
 
+    // Wake mode: Continue as the signed-in profile, no PIN (sleep does not lock the console, lead ruling
+    // RUY-707). With a pad it joins as player 1 (closed on "ok"); with the keyboard alone it just closes and
+    // seat 1 stays as it was.
+    function continueAsSignedIn() {
+        if (joining !== null)
+            return
+        if (pad === "" || !connected(pad)) {
+            close(false)
+            return
+        }
+        chosen = cards.find(p => p.id === Profiles.activeProfile) ?? null
+        join(Profiles.activeProfile, "pick")
+    }
+    // Wake mode: Back and Guide on any card continue (the one-press way back to the game or Home).
+    function wakeBack() {
+        if (joining !== null)
+            return
+        Sfx.back()
+        continueAsSignedIn()
+    }
+    // Wake mode: Accept on another profile is a Switch, through its PIN when it has one (no Join or Switch).
+    function acceptWakeCard(record) {
+        Sfx.select()
+        if (record.id === Profiles.activeProfile) {
+            continueAsSignedIn()
+            return
+        }
+        chosen = record
+        if (record.hasPin)
+            askPin("switch")
+        else
+            switchTo("")
+    }
+
     function acceptCard(index) {
         if (joining !== null || index < 0 || index >= entries.length)
             return
+        if (wakeMode) {
+            acceptWakeCard(cards[index])
+            return
+        }
         if (index === guestIndex) {
             acceptGuest()
             return
@@ -513,6 +673,9 @@ FocusScope {
         if (forWhat === "move") {
             step = "move"
             moveCancelButton.forceActiveFocus()
+        } else if (forWhat === "switch" && wakeMode) {
+            backToCard()                // the wake step on that card
+            chosen = null
         } else if (forWhat === "join" || forWhat === "switch") {
             step = "confirm"
             joinButton.forceActiveFocus()
@@ -539,6 +702,11 @@ FocusScope {
 
     // The new profile is signed in and its seats exist: the pad becomes its player 1.
     function joinAfterSwitch() {
+        if (switching && switching.signedIn && switching.pad === "") {
+            switching = null            // a wake Switch with the keyboard: nobody to seat, it ends here
+            switchGuard.stop()
+            return
+        }
         if (!switching || !switching.signedIn || !player1 || player1.profile !== switching.id)
             return
         const s = switching
@@ -575,7 +743,7 @@ FocusScope {
         const ids = Input.devices.map(d => d.id)
         if (padsPrimed && allowed) {
             for (const d of Input.devices) {
-                if (!knownPads.includes(d.id) && (d.slot ?? 0) === 0)
+                if (!knownPads.includes(d.id) && ((d.slot ?? 0) === 0 || mayTakeOver(d.id)))
                     ask(d.id, "connect")
             }
         }
@@ -589,15 +757,27 @@ FocusScope {
         }
         quiet = kept
         queue = queue.filter(i => ids.includes(i))
-        if (switching && !ids.includes(switching.pad))
+        if (switching && switching.pad !== "" && !ids.includes(switching.pad))
             abandonSwitch()                     // the pad that asked is gone: no seat will come
-        if (shown && !ids.includes(pad))
+        if (shown && wakeMode && pad !== "" && !ids.includes(pad)) {
+            // The wake step's pad is gone: the keyboard drives it again (it stays open).
+            const was = pad
+            pad = ""
+            if (Input.navigator === was)
+                Input.setNavigator("")
+            if (step === "pin")
+                pinPad.deviceId = ""
+        } else if (shown && !wakeMode && !ids.includes(pad)) {
             close(true)                 // the asking pad is gone: as Not now
+        }
+        checkLateWake()
     }
 
     onAllowedChanged: {
         if (!allowed) {
             queue = []
+            wakePending = false
+            wakeWatch.stop()
             close(false)
         } else {
             Qt.callLater(prompt.tryOpen)
@@ -631,6 +811,7 @@ FocusScope {
             }
             prompt.joinAfterSwitch()
             prompt.sweepSoon()
+            // A late wake on a players change: the Shell calls checkLateWake() first, before its lost-pad Hub.
         }
         function onJoinFinished(deviceId, profile, status, slot) {
             if (status === "ok" && prompt.quiet[deviceId] !== undefined) {
@@ -810,7 +991,9 @@ FocusScope {
             font.pixelSize: Theme.typeBody * line.u
         }
     }
-    readonly property string padLineText: qsTr("%1 wants to play").arg(padName)
+    // Wake mode with no pad yet: the generic pad icon (padIcon) and the call to turn one on.
+    readonly property string padLineText: wakeMode && pad === "" ? qsTr("Turn on a controller to play")
+                                                                 : qsTr("%1 wants to play").arg(padName)
 
     // ---- step "pick" ----------------------------------------------------------------------------
     Column {
@@ -880,8 +1063,10 @@ FocusScope {
                             incrementCurrentIndex()
                         }
                     } else if (event.key === Qt.Key_Down) {
-                        Sfx.navigate()
-                        notNowButton.forceActiveFocus()
+                        if (!prompt.wakeMode) {             // wake mode has no button under the cards
+                            Sfx.navigate()
+                            notNowButton.forceActiveFocus()
+                        }
                     } else {
                         event.accepted = false      // Accept, Back and the rest: the prompt's own handler
                     }
@@ -912,10 +1097,12 @@ FocusScope {
             color: Theme.text
             font.pixelSize: Theme.typeBody * prompt.u
         }
-        Item { width: 1; height: Theme.spaceL * prompt.u }
+        // Wake mode ends the column at the detail line (no Not now, so it is 120 u shorter and re-centres).
+        Item { width: 1; height: Theme.spaceL * prompt.u; visible: !prompt.wakeMode }
         SecondaryButton {
             id: notNowButton
             objectName: "whosPlayingNotNow"
+            visible: !prompt.wakeMode
             anchors.horizontalCenter: parent.horizontalCenter
             u: prompt.u
             width: Math.max(300 * prompt.u, implicitWidth)
@@ -1080,6 +1267,9 @@ FocusScope {
             backFromConfirm()
         } else if (moveButton.activeFocus) {
             proceed("move")
+        } else if (wakeMode && step === "pick" && prompt.activeFocus) {
+            Sfx.select()
+            continueAsSignedIn()        // no cards to focus (the profiles are not there): continue
         }
     }
 
@@ -1090,7 +1280,8 @@ FocusScope {
     // release of the key that closes the prompt never reaches the game it gives the focus back to, and
     // a release whose press came before the prompt opened does nothing. Back is Not now on step 1 and
     // back to the card on Join or Switch and on Move (Cancel); Guide closes like Not now (as it closes
-    // the Hub), except on the PIN step.
+    // the Hub), except on the PIN step. In wake mode Back and Guide on step 1 continue as the signed-in
+    // profile instead (RUY-707).
     Keys.onPressed: event => {
         event.accepted = true
         if (!event.isAutoRepeat)
@@ -1108,10 +1299,15 @@ FocusScope {
         } else if (BackKey.isBackOrBackspace(event.key)) {
             if (step === "confirm" || step === "move")
                 backFromConfirm()
+            else if (step === "pick" && wakeMode)
+                wakeBack()              // continue as the signed-in profile, from any card
             else if (step === "pick")
                 notNow()
         } else if (event.key === Qt.Key_HomePage && step !== "pin") {
-            notNow()
+            if (wakeMode)
+                wakeBack()
+            else
+                notNow()
         }
         // Step "pin": the PIN pad takes every press (Back deletes a digit, else returns to the step before),
         // so no release there matches a press seen here.

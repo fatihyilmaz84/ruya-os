@@ -34,6 +34,9 @@ QtObject {
     property var now: () => MonotonicClock.ms()
     // Total ms the machine has been suspended since boot (a resume makes it jump). Replaced in tests.
     property var slept: () => MonotonicClock.sleptMs()
+    // Whether `slept()` can be told here (Linux): then only its jump is a sleep for `resumed()`, and a
+    // gap without it (a stalled shell) is not. Replaced in tests.
+    property var sleptKnown: () => MonotonicClock.sleptKnown()
     // The time of day in ms since the epoch, for the screen saver's clock only. Replaced in tests.
     property var wallNow: () => Date.now()
     // Where the saver's two journal lines go (RUY-563); tests replace it to read them.
@@ -92,6 +95,12 @@ QtObject {
     signal displayOffStarted()
     signal sleepRequested()
     signal woke()
+    // The machine was asleep and runs again (the resume below, whichever stage it slept in; also a
+    // sleep from the Guide menu, which leaves the stage "active" and so emits no `woke()`). Only a real
+    // sleep: the jump of `slept()`; a clock gap alone counts only where `slept()` cannot be told, so a
+    // stalled shell never opens a modal over a game (lead, RUY-707 round 2). Not the saver or the dark
+    // screen ending. The Shell opens "Who's playing?" in wake mode on it (RUY-707).
+    signal resumed()
     // Every input, for the receivers that act on it themselves (the update report, toasts, the
     // presence report); they no longer keep a clock of their own.
     signal inputNoted()
@@ -164,6 +173,9 @@ QtObject {
         lastSleptMs = sleptNow
         if (resumed || t - lastEvalMs > gapMs) {
             noteInput("resume")
+            // After the wake: the stage is "active" again, nothing covers the UI.
+            if (resumed || !sleptKnown())
+                clock.resumed()
             return
         }
         if (wakeGuard && t >= wakeGuardUntilMs)

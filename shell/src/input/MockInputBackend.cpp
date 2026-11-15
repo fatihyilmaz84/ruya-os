@@ -285,7 +285,7 @@ void MockInputBackend::removeDevice(const QString &id)
     if (m_navigator == id)
         m_navigator.clear();
     endTest(id, QStringLiteral("gone"));
-    QTimer::singleShot(0, this, [this] { emit devicesChanged(); });
+    QTimer::singleShot(m_removalDevicesDelayMs, this, [this] { emit devicesChanged(); });
 }
 
 void MockInputBackend::sendTestInput(const QString &id, const QString &input, int value, const QString &source)

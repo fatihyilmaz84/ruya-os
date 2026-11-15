@@ -24,6 +24,9 @@ public:
     Q_INVOKABLE double ms() const;
     // Total milliseconds this machine has been suspended since boot (0 where it cannot be told).
     Q_INVOKABLE double sleptMs() const;
+    // Whether `sleptMs` can be told on this machine (CLOCK_BOOTTIME readable, Linux): only then is a
+    // jump of it the one sign of a sleep (RUY-707); elsewhere IdleClock falls back to a clock gap.
+    Q_INVOKABLE bool sleptKnown() const;
 
     // Tests only: move both readings forward as if time had passed / the machine had slept.
     Q_INVOKABLE void mockAdvance(double ms) { m_offsetMs += ms; }
