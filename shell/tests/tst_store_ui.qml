@@ -533,10 +533,14 @@ Item {
             tryVerify(() => find("storeResults").model.length === 1)
             tryVerify(() => find("storeResults").activeFocus, 2000)
             verify(!find("storeRows").visible)
+            // Over D-Bus the empty search's answer always comes after a callLater: make the mock as late,
+            // so focus can't land on the search's stale rows (lead-21, a Linux-only failure).
+            Store.mockSearchReplyDelay(200)
             keyClick(Qt.Key_Escape)
             compare(tc.shell.currentPage, "store")
             tryVerify(() => find("storeRows").visible)
             tryVerify(() => find("storeCards_featured").activeFocus, 2000)
+            Store.mockSearchReplyDelay(0)
         }
 
         // T-291: no content rating is "Not rated", not "All ages".

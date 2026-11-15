@@ -15,6 +15,8 @@ Page {
     // Row keys never change with the language; titles are bindings (PATTERNS.md).
     readonly property var rowKeys: ["featured", "games", "apps", "installed"]
     property bool searching: false
+    // Back from a search: the first row takes focus when the empty search's answer arrives.
+    property bool focusOnRows: false
     property string query: ""
     property var resultIds: []
     // The ids of each row (rowKeys) and of the search grid ("all"), from Store.rowIds (rebuildRows).
@@ -105,15 +107,20 @@ Page {
     }
 
     function beginSearch(text) {
+        page.focusOnRows = false
         page.query = text
         page.searching = text.length > 0
         Store.search(text)
         Qt.callLater(page.focusContent)
     }
 
+    // The rows come back with the empty search's answer, which is asynchronous (always later than a
+    // callLater over D-Bus): the first row takes focus when that answer arrives (onSearchFinished). The
+    // callLater stays as the fallback for a reply that never comes (no failure signal exists).
     function endSearch() {
         page.searching = false
         page.query = ""
+        page.focusOnRows = true
         Store.search("")
         Qt.callLater(page.focusContent)
     }
@@ -185,6 +192,14 @@ Page {
     Connections {
         target: Store
         function onResultsChanged() { page.rebuildRows(); Qt.callLater(page.settleFocus) }
+        // After Back from a search: the rows are rebuilt (resultsChanged comes first), so focus the first
+        // one now rather than on a guessed callLater order (lead-21: Linux CI lost it to another callLater).
+        function onSearchFinished(query) {
+            if (page.focusOnRows && query === "" && !page.searching) {
+                page.focusOnRows = false
+                page.focusContent()
+            }
+        }
         function onInstalledChanged() { page.rebuildRows(); Qt.callLater(page.settleFocus) }
         function onCatalogueChanged() { page.catalogueRevision += 1 }
     }
