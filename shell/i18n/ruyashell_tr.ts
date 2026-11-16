@@ -291,7 +291,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+191"/>
+        <location filename="../qml/AppDetailPage.qml" line="+196"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -519,12 +519,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-7"/>
-        <location line="+321"/>
+        <location line="+327"/>
         <source>Steam</source>
         <translation>Steam</translation>
     </message>
     <message>
-        <location line="-320"/>
+        <location line="-326"/>
         <source>Steam app ID</source>
         <translation>Steam uygulama kimliği</translation>
     </message>
@@ -594,7 +594,7 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+587"/>
+        <location line="+605"/>
         <source>No special permissions.</source>
         <translation>Özel bir izni yok.</translation>
     </message>
@@ -634,7 +634,7 @@ Bu geri alınamaz.</translation>
         <translation>Kaldırmak için önce oyunu kapatın.</translation>
     </message>
     <message>
-        <location line="-863"/>
+        <location line="-881"/>
         <source>Install</source>
         <translation>Kur</translation>
     </message>
@@ -645,7 +645,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelle</translation>
     </message>
     <message>
-        <location line="+625"/>
+        <location line="+631"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Bu konsoldakinden daha yeni bir RuyaOS gerekiyor. Yüklü kalır.</translation>
     </message>
@@ -660,7 +660,7 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza ayrıntıları şu anda kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+59"/>
         <location line="+9"/>
         <source>This app can</source>
         <translation>Bu uygulama şunları yapabilir</translation>
@@ -671,12 +671,12 @@ Bu geri alınamaz.</translation>
         <translation>Yüksek risk</translation>
     </message>
     <message>
-        <location line="-104"/>
+        <location line="-116"/>
         <source>The update adds: %1</source>
         <translation>Güncelleme şunları ekliyor: %1</translation>
     </message>
     <message>
-        <location line="-653"/>
+        <location line="-659"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Aç</translation>
@@ -714,7 +714,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+376"/>
+        <location line="+382"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -4638,6 +4638,49 @@ Bu geri alınamaz.</translation>
         <location filename="../qml/ScreenSaver.qml" line="+56"/>
         <source>Screen saver</source>
         <translation>Ekran koruyucu</translation>
+    </message>
+</context>
+<context>
+    <name>ScreenshotRow</name>
+    <message>
+        <location filename="../qml/ScreenshotRow.qml" line="+27"/>
+        <source>View</source>
+        <translation>Görüntüle</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <location line="+28"/>
+        <source>Screenshots</source>
+        <translation>Ekran görüntüleri</translation>
+    </message>
+</context>
+<context>
+    <name>ScreenshotViewer</name>
+    <message>
+        <location filename="../qml/ScreenshotViewer.qml" line="+26"/>
+        <source>Browse</source>
+        <translation>Gözat</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Close</source>
+        <translation>Kapat</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <location line="+124"/>
+        <source>%1 of %2</source>
+        <translation>%1 / %2</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <source>Couldn&apos;t load this picture.</source>
+        <translation>Bu resim yüklenemedi.</translation>
     </message>
 </context>
 <context>

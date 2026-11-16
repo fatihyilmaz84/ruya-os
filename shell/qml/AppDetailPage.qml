@@ -84,6 +84,11 @@ Page {
         && !isSteam && activityKey !== "" && (installed || (Usage.ready && (ledger.total ?? 0) > 0))
     readonly property bool activityStop: activityShown && Usage.ready && (ledger.total ?? 0) > 0
     onVisibleChanged: Usage.setWatching(page, visible)
+    // Screenshots (RUY-533): the record's pictures, or four placeholders while GetApp is pending.
+    readonly property var screenshots: app.screenshots ?? []
+    readonly property bool screenshotsLoading: !detailsReady && !detailsFailed
+    readonly property bool screenshotsShown: hasRecord && !isSteam && (screenshots.length > 0 || screenshotsLoading)
+    readonly property bool screenshotsStop: screenshotsShown && screenshots.length > 0
     readonly property bool permsSectionShown: hasRecord && !isSteam && !detailsFailed
     readonly property bool permsListed: permsSectionShown && (app.permissions ?? []).length > 0
     readonly property bool manageShown: hasRecord && installed && !isSteam && !working
@@ -463,6 +468,8 @@ Page {
             rows.push(buttons)
         if (activityStop)
             rows.push([activitySection.block])
+        if (screenshotsStop)
+            rows.push([shotsSection.strip])
         if (permsListed)
             rows.push([permsBlock])
         for (let i = 0; i < factRepeater.count; i += 2)
@@ -488,7 +495,7 @@ Page {
         rows[0][0].focus = true
     }
 
-    readonly property string stopKey: primaryKind + "#" + secondaryKeys + "#" + factKeys + "#" + activityStop + "#" + permsListed + "#" + uninstallShown
+    readonly property string stopKey: primaryKind + "#" + secondaryKeys + "#" + factKeys + "#" + activityStop + "#" + screenshotsStop + "#" + permsListed + "#" + uninstallShown
     onStopKeyChanged: Qt.callLater(ensureFocus)
 
     function moveFocus(dx, dy) {
@@ -532,7 +539,7 @@ Page {
     readonly property real offset: scrollTo === header ? activityOverflow
         : Math.max(0, Math.min(scrollTo.y, column.height - viewHeight))
 
-    hints: activitySection.block.activeFocus ? activitySection.block.hints : onFactStop ? backOnlyHints : [
+    hints: activitySection.block.activeFocus ? activitySection.block.hints : shotsSection.strip.activeFocus ? shotsSection.hints : onFactStop ? backOnlyHints : [
         { action: "accept", text: qsTr("Select") },
         { action: "back", text: qsTr("Back") }
     ]
@@ -546,10 +553,11 @@ Page {
         wrapMode: Text.Wrap
     }
 
-    // The viewport clips the scrolled column, but a focus ring is drawn outside its item (focusRingOffset +
-    // focusRingWidth): the viewport reaches that far past the content's left and right edges, and the column
-    // is inset by as much, so a stop at x 96 (Play, Install) keeps its whole ring (owner, lead-27).
-    readonly property real ringBleed: (Theme.focusRingOffset + Theme.focusRingWidth) * u
+    // The viewport clips the scrolled column and spans the whole screen width: it reaches the safe-area margin
+    // past the content's left and right edges, and the column is inset by as much, so the content stays at
+    // x 96..1824 while focus rings and grown cards draw freely past it, and a row (Screenshots) can run to the
+    // screen's edge (owner, lead-27/28).
+    readonly property real sideBleed: marginX
     // Below, the viewport reaches the screen's bottom edge (under the hint bar's band), so scrolled content
     // runs into the Shell's hint shade and fades instead of ending in a hard line (owner, lead-27). The
     // scroll still uses the room above the hints: `viewHeight`.
@@ -569,8 +577,8 @@ Page {
         id: viewport
         objectName: "detailViewport"
         anchors.fill: parent
-        anchors.leftMargin: -page.ringBleed
-        anchors.rightMargin: -page.ringBleed
+        anchors.leftMargin: -page.sideBleed
+        anchors.rightMargin: -page.sideBleed
         anchors.bottomMargin: -page.underHints
         clip: true
 
@@ -586,8 +594,8 @@ Page {
         Column {
             id: column
             objectName: "detailColumn"
-            x: page.ringBleed
-            width: parent.width - 2 * page.ringBleed
+            x: page.sideBleed
+            width: parent.width - 2 * page.sideBleed
             y: -page.offset
             spacing: Theme.spaceXxl * page.u
             Behavior on y {
@@ -848,6 +856,19 @@ Page {
                 isApp: page.isApp
                 onOpenRequested: page.openRequested("activityGame", { appId: page.activityKey })
                 block.onActiveFocusChanged: if (block.activeFocus) page.stopFocused(header, false)
+            }
+
+            // ---- Screenshots ----
+            ScreenshotRow {
+                id: shotsSection
+                objectName: "detailScreenshotsSection"
+                visible: page.screenshotsShown
+                u: page.u
+                shots: page.screenshots
+                loading: page.screenshotsLoading
+                overlay: page.overlay
+                reach: page.sideBleed
+                strip.onActiveFocusChanged: if (strip.activeFocus) page.stopFocused(shotsSection, false)
             }
 
             // ---- This app can ----
