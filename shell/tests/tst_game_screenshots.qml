@@ -163,6 +163,30 @@ Item {
             tryVerify(() => inside(find("screenshotCard_0"), viewport), 2000, "card 1 inside the viewport")
         }
 
+        function test_the_first_card_stays_at_the_content_edge_and_the_row_runs_to_the_screen_edge() {
+            host.width = 1920
+            host.height = 1080
+            start()
+            openRow("org.example.Racer")
+            tryCompare(tc.shell, "u", 1)
+            tryVerify(() => tc.shell.slots[tc.shell.slots.length - 1].settled, 2000, "the page has finished sliding in")
+            toRow()
+            const column = find("detailColumn")
+            const first = find("screenshotCard_0")
+            tryVerify(() => Math.abs(first.parent.mapToItem(column, first.x, 0).x) < 0.5, 2000, "the first card is at the content's left edge")
+            compare(strip().scrollX, 0)
+            compare(Math.round(column.mapToItem(tc.shell, 0, 0).x), 96, "and the content starts at x 96")
+            // the fifth card starts inside the content and runs on past its right edge, to the screen's
+            const fifth = find("screenshotCard_4")
+            const content = column.width
+            const startX = fifth.parent.mapToItem(column, fifth.x, 0).x
+            verify(startX < content && startX + fifth.width > content, "the peek runs past the content's right edge")
+            const viewport = find("detailViewport")
+            fuzzyCompare(viewport.mapToItem(tc.shell, viewport.width, 0).x, tc.shell.width, 0.5, "the row's clip is the screen's edge")
+            keyClick(Qt.Key_Left)
+            compare(strip().scrollX, 0)
+        }
+
         function test_the_row_says_view_and_back_and_the_heading_is_scrolled_to() {
             host.width = 1920
             host.height = 1080

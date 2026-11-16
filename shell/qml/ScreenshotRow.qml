@@ -15,6 +15,8 @@ Column {
     property var shots: []
     property bool loading: false
     property Item overlay: null
+    // How far the row runs past the content's right edge: the page's side bleed, to the screen's edge (the peek).
+    property real reach: 0
     readonly property alias strip: strip
     readonly property alias viewerSlot: viewerSlot
     readonly property ScreenshotViewer viewer: viewerSlot.item as ScreenshotViewer
@@ -53,16 +55,18 @@ Column {
         property real scrollX: 0
         readonly property bool stop: root.count > 0
 
-        // What the focused card grows by (its scale; the ring's own width is the page's ringBleed): the page
-        // clips just outside the content edge, so the card is kept this far inside it.
+        // What the focused card grows by (its scale): it is kept this far inside the screen's edge on the right.
         readonly property real grow: (Theme.focusScale - 1) / 2 * root.cardWidth
+        readonly property real viewWidth: width + root.reach
 
+        // The first card stays at the content's left edge (x 96; its growth overhangs); later cards scroll
+        // just far enough to show the focused one whole, up to the screen's right edge.
         function reveal() {
             const left = currentIndex * root.step
             if (left - grow < scrollX)
-                scrollX = left - grow
-            else if (left + root.cardWidth + grow > scrollX + width)
-                scrollX = left + root.cardWidth + grow - width
+                scrollX = Math.max(0, left - grow)
+            else if (left + root.cardWidth + grow > scrollX + viewWidth)
+                scrollX = left + root.cardWidth + grow - viewWidth
         }
         onCurrentIndexChanged: reveal()
         onActiveFocusChanged: if (activeFocus) reveal()
