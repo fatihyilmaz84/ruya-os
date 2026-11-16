@@ -341,7 +341,7 @@ Item {
                 tc.shell.closePage()
                 tryCompare(tc.shell, "currentPage", "")
                 // loading: GetApp has not answered
-                tc.shell.openPage("appDetail", { appId: "org.example.Puzzle" })
+                tc.shell.openPage("appDetail", { appId: "org.example.Broken" })      // not installed: no activity block above the row
                 tryCompare(tc.shell, "currentPage", "appDetail")
                 tryCompare(page(), "detailsReady", true)
                 page().detailsReady = false
