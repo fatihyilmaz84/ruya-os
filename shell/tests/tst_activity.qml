@@ -684,7 +684,9 @@ Item {
 
         // ---- the app page ----
 
-        function test_the_app_page_has_a_your_activity_button() {
+        // RUY-524: the header's "Your activity" button is gone (RUY-532 brings the block); the ledger page opens over the
+        // game page from the Options menu's row, and Back lands on the page's focused button.
+        function test_the_activity_page_opens_over_the_app_page_and_back_returns_to_it() {
             Usage.mockSetData("p2", sessions(), today)
             startShell()
             signInAda()
@@ -692,15 +694,8 @@ Item {
             tc.shell.openPage("appDetail", { appId: chess })
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
-            verify(find("detailActivity").visible)
-            keyClick(Qt.Key_Down)
-            verify(find("detailUninstall").activeFocus)
-            keyClick(Qt.Key_Down)
-            verify(find("detailActivity").activeFocus)
-            keyClick(Qt.Key_Up)
-            verify(find("detailUninstall").activeFocus)
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Return)
+            compare(find("detailActivity"), null, "no Your activity button in the header")
+            tc.shell.openPage("activityGame", { appId: chess })
             tryCompare(tc.shell, "currentPage", "activityGame")
             compare(tc.shell.currentParams.appId, chess)
             tryCompare(Usage, "ready", true)
@@ -709,7 +704,7 @@ Item {
             compare(valueOf("gameLast"), "29 Aug 2026")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "appDetail")
-            tryVerify(() => find("detailActivity").activeFocus, 2000, "focus is back on the button")
+            tryVerify(() => find("detailPrimary").activeFocus, 2000, "focus is back on the button")
         }
 
         // The item with the active focus and its parents, for failure messages.
@@ -761,10 +756,7 @@ Item {
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryVerify(() => find("detailPrimary").activeFocus, 2000)
             verifyFocusOnTop("store", "the app page over the Store")
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
-            verify(find("detailActivity").activeFocus, describeFocus())
-            keyClick(Qt.Key_Return)
+            tc.shell.openPage("activityGame", { appId: puzzle })
             tryCompare(tc.shell, "currentPage", "activityGame")
             tryVerify(() => find("gameMessage").visible)
             verifyFocusOnTop("appDetail", "the activity page over the app page")
@@ -773,15 +765,15 @@ Item {
             verify(find("gameBody").activeFocus, describeFocus())
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "appDetail")
-            tryVerify(() => find("detailActivity").activeFocus, 2000, "focus is back on the button")
+            tryVerify(() => find("detailPrimary").activeFocus, 2000, "focus is back on the button")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "store")
             tryVerify(() => installed.activeFocus, 2000, "and on the card")
             compare(tc.shell.focusRepairs, 0, "the pages kept the focus themselves")
         }
 
-        // "Your activity" hides while the activity page covers the app page (an update started): Back
-        // lands on the primary button, not on the hidden one that had the focus.
+        // The Update button changes to the job's phase while the activity page covers the app page (an update
+        // started): Back lands on the primary button, which kept the focus.
         function test_back_to_the_app_page_skips_a_button_hidden_meanwhile() {
             Usage.mockSetData("p2", sessions(), today)
             startShell()
@@ -789,20 +781,18 @@ Item {
             tryVerify(() => Store.catalogue.length > 0)
             tc.shell.openPage("appDetail", { appId: chess })
             tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
-            verify(find("detailActivity").activeFocus)
-            keyClick(Qt.Key_Return)
+            compare(find("detailPrimary").text, "Update", "Open Chess is not in the Library: the update is the first button")
+            tc.shell.openPage("activityGame", { appId: chess })
             tryCompare(tc.shell, "currentPage", "activityGame")
             verifyFocusOnTop("appDetail", "the game page")
             Store.update(chess)
             tryVerify(() => Store.jobs[chess] !== undefined, 2000, "progress arrived")
             Store.mockPauseJobs(true)                    // the update stands still
-            tryVerify(() => !find("detailActivity").visible)
+            tryVerify(() => find("detailPrimary").dimmed)
             verify(find("gameBody").activeFocus, "the covered page leaves the focus alone: " + describeFocus())
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "appDetail")
-            verify(!find("detailActivity").visible)
+            compare(find("detailPrimary").dimmed, true)
             tryVerify(() => find("detailPrimary").activeFocus, 2000, "the primary button: " + describeFocus())
             compare(tc.shell.focusRepairs, 0)
         }
@@ -853,17 +843,14 @@ Item {
             tc.shell.openPage("appDetail", { appId: chess })
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
-            verify(find("detailActivity").activeFocus)
-            keyClick(Qt.Key_Return)
+            tc.shell.openPage("activityGame", { appId: chess })
             tryCompare(tc.shell, "currentPage", "activityGame")
             tryVerify(() => find("gameMessage").visible)
             tryVerify(() => find("gameBody").activeFocus, 2000, "the page owns the focus although it has no rows")
             verifyFocusOnTop("appDetail", "and keeps it once the app page has faded out")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "appDetail")
-            tryVerify(() => find("detailActivity").activeFocus, 2000, "focus is back on the button")
+            tryVerify(() => find("detailPrimary").activeFocus, 2000, "focus is back on the button")
             compare(tc.shell.focusRepairs, 0, "the pages kept the focus themselves")
         }
 
@@ -878,17 +865,15 @@ Item {
             tc.shell.openPage("appDetail", { appId: chess })
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Return)
+            tc.shell.openPage("activityGame", { appId: chess })
             tryCompare(tc.shell, "currentPage", "activityGame")
             tryVerify(() => find("gameBody").activeFocus, 2000, "the page owns the focus before the data arrives")
             verifyFocusOnTop("appDetail", "and once the app page has faded out")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "appDetail")
-            tryVerify(() => find("detailActivity").activeFocus, 2000, "focus is back on the button")
+            tryVerify(() => find("detailPrimary").activeFocus, 2000, "focus is back on the button")
             Usage.mockFailNextRefresh("failed")
-            keyClick(Qt.Key_Return)
+            tc.shell.openPage("activityGame", { appId: chess })
             tryCompare(tc.shell, "currentPage", "activityGame")
             tryVerify(() => find("gameBody").activeFocus, 2000, "and after a failed read")
             verifyFocusOnTop("appDetail", "and once the app page has faded out again")
@@ -1222,9 +1207,6 @@ Item {
             tc.shell.openPage("appDetail", { appId: chess })
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
-            keyClick(Qt.Key_Down)
-            keyClick(Qt.Key_Down)
-            verify(find("detailActivity").activeFocus)
             settle()
             grabImage(tc.shell).save(shotsDir + "/90-activity-app-page-en.png")
         }

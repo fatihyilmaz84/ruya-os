@@ -263,7 +263,7 @@ Item {
             keyClick(Qt.Key_Menu)
             verify(menu().shown)
             compare(menu().title, "Counter Strike")
-            compare(rowIds(), ["activity"], "a Steam game: no launch path, no Store record")
+            compare(rowIds(), ["details", "activity"], "a Steam game: no launch path, no Store record; its page is Details")
             compare(findChild(menu(), "optionsSheet").color, Theme.panel, "opaque over the Games art")
             const card = grid.currentItem
             verify(card.anchored)
@@ -495,7 +495,8 @@ Item {
             compare(menu().rows[0].label, "Close app")
         }
 
-        function test_guest_has_no_activity_and_a_steam_game_has_an_empty_menu() {
+        // RUY-524: Details is on every card, so a Guest's Steam game has a menu (no empty one on a card).
+        function test_guest_has_no_activity_and_a_steam_game_still_has_details() {
             start(2, "p3")
             verify(tc.shell.signedIn)
             toRecent()
@@ -504,24 +505,23 @@ Item {
             keyClick(Qt.Key_Escape)
             keyClick(Qt.Key_Right)                   // Counter Strike
             compare(find("recentRow").currentItem.itemId, "steam:730")
-            compare(hintVerbs(), "accept Select|tabPrev_tabNext Sections", "no Options hint for an empty menu")
+            compare(hintVerbs(), "accept Select|options Options|tabPrev_tabNext Sections", "a Guest's Steam card has Details: the Options hint")
             keyClick(Qt.Key_Menu)
-            verify(menu().shown, "the options button still opens the empty menu")
-            compare(rowIds(), [])
-            verify(findChild(menu(), "optionsEmpty").visible)
-            compare(hintVerbs(), "back Close")
+            verify(menu().shown)
+            compare(rowIds(), ["details"])
+            verify(!findChild(menu(), "optionsEmpty").visible, "no empty menu on a card")
             keyClick(Qt.Key_Escape)
             verify(find("recentRow").activeFocus)
         }
 
-        function test_a_steam_game_has_only_the_activity_row_for_a_profile() {
+        function test_a_steam_game_has_details_and_activity_for_a_profile() {
             start()
             toRecent()
             keyClick(Qt.Key_Right)
             compare(find("recentRow").currentItem.itemId, "steam:730")
             compare(hintVerbs(), "accept Select|options Options|tabPrev_tabNext Sections")
             keyClick(Qt.Key_Menu)
-            compare(rowIds(), ["activity"])
+            compare(rowIds(), ["details", "activity"])
         }
 
         function test_the_options_hint_on_home_and_games() {
@@ -540,23 +540,23 @@ Item {
             compare(hintVerbs(), "accept Select|back Back|options Options|tabPrev_tabNext Sections", "a Steam game's activity row is a menu")
         }
 
-        // An item with an empty menu loses only the Options hint: Sections stays on Games.
-        function test_games_hints_keep_sections_for_an_empty_menu() {
+        // RUY-524: a Guest's Steam card has Details, so it keeps the Options hint too (it was an empty menu).
+        function test_games_hints_keep_options_for_a_guests_steam_card() {
             start(2, "p3")
             openGames()
             compare(hintVerbs(), "accept Select|back Back|options Options|tabPrev_tabNext Sections")
-            keyClick(Qt.Key_Right)                   // Counter Strike: nothing for Guest
+            keyClick(Qt.Key_Right)                   // Counter Strike: only Details for Guest
             compare(find("gamesGrid").currentItem.itemId, "steam:730")
-            compare(hintVerbs(), "accept Select|back Back|tabPrev_tabNext Sections")
+            compare(hintVerbs(), "accept Select|back Back|options Options|tabPrev_tabNext Sections")
         }
 
-        function test_the_store_down_leaves_out_details_and_shows_the_note() {
+        function test_the_store_down_leaves_out_the_store_rows_and_shows_the_note() {
             start()
             toRecent()
             Store.mockServiceLost()
             tryVerify(() => !Store.available)
             keyClick(Qt.Key_Menu)
-            compare(rowIds(), ["play", "activity"])
+            compare(rowIds(), ["play", "details", "activity"], "RUY-524: Details is no Store row any more")
             const note = findChild(menu(), "optionsNote")
             verify(note.visible)
             compare(note.text, "Store options are unavailable right now.")
@@ -568,8 +568,9 @@ Item {
             verify(!note.visible)
         }
 
-        // A Flatpak app with a Session1 id that the Store does not know: Play and Your activity, no Details.
-        function test_no_store_record_leaves_out_details() {
+        // A Flatpak app with a Session1 id that the Store does not know: Play, Details (its page shows the Library's
+        // data, RUY-524) and Your activity, no Uninstall….
+        function test_no_store_record_still_has_details() {
             Library.resetMockForTests("unlisted")
             start(1, "p2", 11)
             toRecent()
@@ -580,7 +581,7 @@ Item {
             verify(Store.app("org.example.Unlisted").id === undefined, "the Store has no record")
             keyClick(Qt.Key_Menu)
             verify(menu().shown)
-            compare(rowIds(), ["play", "activity"])
+            compare(rowIds(), ["play", "details", "activity"])
             compare(findChild(menu(), "optionsNote").visible, false, "the Store answers: no note")
         }
 
@@ -646,7 +647,7 @@ Item {
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "appDetail")
-            compare(tc.shell.currentParams.appId, "org.example.Racer")
+            compare(tc.shell.currentParams.id, "flatpak:org.example.Racer", "a card opens its Library item")
         }
 
         function test_activity_row_opens_the_activity_page() {
@@ -868,7 +869,7 @@ Item {
                 DeviceSettings.language = lang
                 start(2, "p3")
                 toRecent()
-                keyClick(Qt.Key_Right)                      // Counter Strike: nothing for Guest
+                keyClick(Qt.Key_Right)                      // Counter Strike: only Details for Guest
                 keyClick(Qt.Key_Menu)
                 tryVerify(() => menu().opacity >= 1, 2000)
                 settle()

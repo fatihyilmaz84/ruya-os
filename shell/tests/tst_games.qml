@@ -149,7 +149,7 @@ Item {
             const shown = Notifications.shownCount
             keyClick(Qt.Key_Right)                           // Counter Strike (Turbo Racer is first)
             keyClick(Qt.Key_Return)
-            tryCompare(tc.shell, "currentPage", "details")
+            tryCompare(tc.shell, "currentPage", "appDetail")
             wait(50)
             compare(sessionSpy.count, 0)
             compare(launchSpy.count, 0)

@@ -223,7 +223,6 @@ qt_add_qml_module(ruyashell
         qml/BatteryChip.qml
         qml/BatteryMore.qml
         qml/BatteryListModal.qml
-        qml/LibraryDetailsPage.qml
         qml/SettingsPage.qml
         qml/PowerPage.qml
         qml/PowerConfirm.qml

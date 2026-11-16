@@ -172,7 +172,9 @@ Item {
             tryCompare(find("heroTitle"), "text", "Counter Strike")
             verify(!find("homePlay").visible, "no Play button")
             keyClick(Qt.Key_Return)                     // Accept on the card
-            tryCompare(tc.shell, "currentPage", "details")
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            compare(tc.shell.currentParams.id, "steam:730", "RUY-524: the game page of the item")
+            tryVerify(() => find("fact_source") && find("fact_source").activeFocus, 2000, "no buttons: the first fact has the focus")
             compare(launchSpy.count, 0, "nothing was launched")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "")
@@ -252,13 +254,16 @@ Item {
             compare(find("sectionNav").currentKey, "store", "back on the pill that opened it")
         }
 
-        function test_details_is_a_placeholder_page() {
+        // RUY-524 (and RUY-497): the hero's Details opens the game page of the hero's item.
+        function test_details_opens_the_game_page() {
             start("")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("homeDetails").activeFocus)
             keyClick(Qt.Key_Return)
-            tryCompare(tc.shell, "currentPage", "details")
-            tryVerify(() => find("pagePlaceholder") && find("pagePlaceholder").activeFocus, 2000)
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            compare(tc.shell.currentParams.id, "flatpak:org.example.Racer")
+            tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
+            compare(find("page_appDetail").title, "Turbo Racer")
             compare(launchSpy.count, 0)
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "")

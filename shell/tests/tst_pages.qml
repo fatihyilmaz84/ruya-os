@@ -409,8 +409,7 @@ Item {
         }
         function openForFocus(key, extra, bad) {
             const chess = "org.example.Chess"
-            const params = { appDetail: { appId: chess }, activityGame: { appId: chess },
-                             details: { id: Library.games[0].id } }
+            const params = { appDetail: { appId: chess }, activityGame: { appId: chess } }
             if (bad)
                 Usage.mockFailNextRefresh("failed")
             tc.shell.openPage(key, Object.assign({}, params[key] ?? {}, extra))

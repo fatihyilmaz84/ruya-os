@@ -293,17 +293,18 @@ This can&apos;t be undone.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+51"/>
+        <location filename="../qml/AppDetailPage.qml" line="+173"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
     <message>
         <location line="+0"/>
+        <location line="+94"/>
         <source>Developer</source>
         <translation>Developer</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-94"/>
         <source>Community</source>
         <translation>Community</translation>
     </message>
@@ -373,7 +374,87 @@ This can&apos;t be undone.</translation>
         <translation>Can control other programs on this device</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+8"/>
+        <source>Action</source>
+        <translation>Action</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Adventure</source>
+        <translation>Adventure</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Arcade</source>
+        <translation>Arcade</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Board</source>
+        <translation>Board</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Card</source>
+        <translation>Card</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Puzzle</source>
+        <translation>Puzzle</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Role-playing</source>
+        <translation>Role-playing</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Shooter</source>
+        <translation>Shooter</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Simulation</source>
+        <translation>Simulation</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Sports</source>
+        <translation>Sports</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Strategy</source>
+        <translation>Strategy</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Audio &amp; video</source>
+        <translation>Audio &amp; video</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Player</source>
+        <translation>Player</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Education</source>
+        <translation>Education</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Internet</source>
+        <translation>Internet</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Utilities</source>
+        <translation>Utilities</translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>Waiting…</source>
         <translation>Waiting…</translation>
     </message>
@@ -433,37 +514,140 @@ This can&apos;t be undone.</translation>
         <translation>Something went wrong. You can try again.</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+11"/>
+        <location line="+7"/>
+        <source>Source</source>
+        <translation>Source</translation>
+    </message>
+    <message>
+        <location line="-7"/>
+        <location line="+312"/>
+        <source>Steam</source>
+        <translation>Steam</translation>
+    </message>
+    <message>
+        <location line="-311"/>
+        <source>Steam app ID</source>
+        <translation>Steam app ID</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Last played</source>
+        <translation>Last played</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Flatpak</source>
+        <translation>Flatpak</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Version</source>
+        <translation>Version</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Updated</source>
+        <translation>Updated</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Size on disk</source>
+        <translation>Size on disk</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Download size</source>
+        <translation>Download size</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installed size</source>
+        <translation>Installed size</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Licence</source>
+        <translation>Licence</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Categories</source>
+        <translation>Categories</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Age rating</source>
+        <translation>Age rating</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Controller</source>
+        <translation>Controller</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>App ID</source>
+        <translation>App ID</translation>
+    </message>
+    <message>
+        <location line="+27"/>
         <source>Enter an admin&apos;s PIN</source>
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+178"/>
+        <location line="+573"/>
+        <source>No special permissions.</source>
+        <translation>No special permissions.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Loading…</source>
+        <translation>Loading…</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Information</source>
+        <translation>Information</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>Play time for Steam games is not counted yet.</source>
+        <translation>Play time for Steam games is not counted yet.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Manage</source>
+        <translation>Manage</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Uninstall…</source>
+        <translation>Uninstall…</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Close the app to uninstall it.</source>
+        <translation>Close the app to uninstall it.</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Close the game to uninstall it.</source>
+        <translation>Close the game to uninstall it.</translation>
+    </message>
+    <message>
+        <location line="-848"/>
         <source>Install</source>
         <translation>Install</translation>
     </message>
     <message>
         <location line="+1"/>
+        <location line="+23"/>
         <source>Update</source>
         <translation>Update</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Open</source>
-        <translation>Open</translation>
-    </message>
-    <message>
-        <location line="+10"/>
-        <source>Uninstall</source>
-        <translation>Uninstall</translation>
-    </message>
-    <message>
-        <location line="+12"/>
-        <source>Your activity</source>
-        <translation>Your activity</translation>
-    </message>
-    <message>
-        <location line="+85"/>
+        <location line="+620"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Needs a newer RuyaOS than this console has. It stays installed.</translation>
     </message>
@@ -473,22 +657,122 @@ This can&apos;t be undone.</translation>
         <translation>Needs a newer RuyaOS</translation>
     </message>
     <message>
-        <location line="+20"/>
+        <location line="+21"/>
+        <source>Store details are unavailable right now.</source>
+        <translation>Store details are unavailable right now.</translation>
+    </message>
+    <message>
+        <location line="+35"/>
+        <location line="+9"/>
         <source>This app can</source>
         <translation>This app can</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+36"/>
         <source>High risk</source>
         <translation>High risk</translation>
     </message>
     <message>
-        <location line="+17"/>
+        <location line="-94"/>
         <source>The update adds: %1</source>
         <translation>The update adds: %1</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="-649"/>
+        <source>Open</source>
+        <comment>Button: start an app (a game says Play)</comment>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Play</source>
+        <translation>Play</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Resume</source>
+        <translation>Resume</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+21"/>
+        <source>Close app</source>
+        <translation>Close app</translation>
+    </message>
+    <message>
+        <location line="-21"/>
+        <location line="+21"/>
+        <source>Close game</source>
+        <translation>Close game</translation>
+    </message>
+    <message>
+        <location line="-19"/>
+        <source>Closing…</source>
+        <translation>Closing…</translation>
+    </message>
+    <message>
+        <location line="+20"/>
+        <source>Try again</source>
+        <translation>Try again</translation>
+    </message>
+    <message>
+        <location line="+367"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <source>Running</source>
+        <translation>Running</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <location line="+152"/>
+        <source>Update ready</source>
+        <translation>Update ready</translation>
+    </message>
+    <message>
+        <location line="-141"/>
+        <source>Installed through Steam</source>
+        <translation>Installed through Steam</translation>
+    </message>
+    <message>
+        <location line="+94"/>
+        <source>Start this game from Steam for now.</source>
+        <translation>Start this game from Steam for now.</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>%1 % · It keeps going if you leave this page.</source>
+        <translation>%1 % · It keeps going if you leave this page.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Download %1 · %2 on disk</source>
+        <translation>Download %1 · %2 on disk</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Download %1</source>
+        <translation>Download %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 on disk</source>
+        <translation>%1 on disk</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Update ready: version %1</source>
+        <translation>Update ready: version %1</translation>
+    </message>
+    <message>
+        <location line="+21"/>
         <source>An admin&apos;s PIN is needed to update this app.</source>
         <translation>An admin&apos;s PIN is needed to update this app.</translation>
     </message>
@@ -2598,11 +2882,6 @@ This can&apos;t be undone.</translation>
 </context>
 <context>
     <name>LibraryDetailsPage</name>
-    <message>
-        <location filename="../qml/LibraryDetailsPage.qml" line="+8"/>
-        <source>Details</source>
-        <translation>Details</translation>
-    </message>
 </context>
 <context>
     <name>ManageProfilesPane</name>
@@ -4614,7 +4893,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+703"/>
+        <location filename="../qml/Shell.qml" line="+704"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -4708,7 +4987,7 @@ This can&apos;t be undone.</translation>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
     <message>
-        <location line="+63"/>
+        <location line="+62"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Wallpaper could not be loaded</translation>
     </message>
@@ -4719,12 +4998,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+25"/>
+        <location line="+26"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location line="-24"/>
+        <location line="-25"/>
         <source>Your library is empty</source>
         <translation>Your library is empty</translation>
     </message>
@@ -4734,30 +5013,37 @@ This can&apos;t be undone.</translation>
         <translation>Open Store</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
         <location line="+193"/>
         <source>Play</source>
         <translation>Play</translation>
     </message>
     <message>
-        <location line="-193"/>
-        <location line="+195"/>
+        <location line="-194"/>
+        <location line="+196"/>
         <source>Resume</source>
         <translation>Resume</translation>
     </message>
     <message>
-        <location line="-195"/>
+        <location line="-196"/>
         <source>Closing…</source>
         <translation>Closing…</translation>
     </message>
     <message>
-        <location line="+3"/>
-        <location line="+196"/>
+        <location line="+1"/>
+        <location line="+193"/>
+        <source>Open</source>
+        <comment>Button: start an app (a game says Play)</comment>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <location line="-190"/>
+        <location line="+195"/>
         <source>Details</source>
         <translation>Details</translation>
     </message>
     <message>
-        <location line="-177"/>
+        <location line="-176"/>
         <source>Recent</source>
         <translation>Recent</translation>
     </message>
@@ -4772,7 +5058,7 @@ This can&apos;t be undone.</translation>
         <translation>Close app</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+3"/>
         <source>Your activity</source>
         <translation>Your activity</translation>
     </message>
@@ -4797,7 +5083,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 was uninstalled.</translation>
     </message>
     <message>
-        <location line="+530"/>
+        <location line="+529"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -4819,7 +5105,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1886"/>
+        <location line="-1884"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -4850,7 +5136,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1634"/>
+        <location line="+1632"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
