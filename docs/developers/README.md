@@ -29,7 +29,7 @@ Everything here is open source (docs: CC-BY-4.0). Found something wrong or missi
 
 - **Format:** Flatpak only. The console installs apps system-wide; the **data is per profile** (each profile is a Unix user).
 - **Run:** the shell starts your app as the profile's user in its own systemd unit, full screen (the window and Play are not built yet: see above). The Guide button is the player's way back; your app does not draw a home button.
-- **Stop:** the console sends `SIGTERM`, waits **5 seconds**, then `SIGKILL`. Save and exit within that time.
+- **Stop:** Stop sends `SIGTERM`; the service sends `SIGKILL` after up to 30 s; the player can Force quit from 5 s on (a console choice that may change), so save and exit within 5 s.
 - **Pause:** when the player opens Ruya Hub (the Guide button) your game is **frozen**, not asked to pause, and can stay frozen behind Home for a long time. No event is promised: detect the gap from the clock, clamp your time step and re-check your network ([Full screen and lifecycle](fullscreen-and-lifecycle.md)).
 - **Input:** controllers first; keyboard and mouse work too. Do not assume a keyboard.
 - **Data:** `~/.var/app/<your-app-id>/` as seen by your app through the XDG variables (`$XDG_DATA_HOME`, `$XDG_CONFIG_HOME`, `$XDG_CACHE_HOME`). See [Saves and data](saves-and-data.md).

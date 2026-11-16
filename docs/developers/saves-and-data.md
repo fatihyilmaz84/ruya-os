@@ -1,6 +1,6 @@
 # Saves and data
 
-Where your game writes things, and what the console does with them. The short version: **use the XDG directories, save atomically, finish within five seconds of `SIGTERM`, keep rebuildable stuff out of the saves.** Games that do this get backup, restore, clean uninstall and safe updates for free. Games that do not are still handled safely (see "If your app does not follow this").
+Where your game writes things, and what the console does with them. The short version: **use the XDG directories, save atomically, save and exit within 5 s of `SIGTERM` (Stop sends `SIGTERM`; the service sends `SIGKILL` after up to 30 s; the player can Force quit from 5 s on, a console choice that may change), keep rebuildable stuff out of the saves.** Games that do this get backup, restore, clean uninstall and safe updates for free. Games that do not are still handled safely (see "If your app does not follow this").
 
 *Checked against the console as of 2026-11-06. Items marked **planned** are not built yet.*
 
@@ -153,15 +153,15 @@ int save_atomic(const char *path, const void *data, size_t len)
 
 The format the sample writes is a text file with a version line and a CRC-32 on the last line (`game.c`: `game_serialise`, `game_parse`, `game_load`), so a half-written or damaged file is recognised and the `.bak` is used.
 
-## Stopping: you have five seconds
+## Stopping: count on five seconds
 
 When the player chooses Close game in Ruya Hub, or the console has to stop it (time limits: planned, T-211), the console asks your app to stop:
 
 1. It sends `SIGTERM` to every process of your app (the unit and the sandbox's scope).
-2. It waits **5 seconds**.
+2. It waits up to **30 seconds** (RUY-736; it was 5 seconds). After **5 seconds** the closing screen offers the player **Force quit**, which sends `SIGKILL` at once.
 3. It sends `SIGKILL` (no chance to save).
 
-Handle `SIGTERM` like "quit now": write the pending save (atomically, as above), then exit. Most frameworks turn it into a normal quit event (`SDL_EVENT_QUIT`, `QCoreApplication::aboutToQuit`, Godot's `NOTIFICATION_WM_CLOSE_REQUEST` or `get_tree().quit()`); check that yours does. After a stop the console reports the app as having quit, whatever its exit status; only an app that is still running after the 5 seconds is reported as killed (and may lose an unfinished save). Exit status `0` is still the right thing to return.
+Handle `SIGTERM` like "quit now": write the pending save (atomically, as above), then exit. Most frameworks turn it into a normal quit event (`SDL_EVENT_QUIT`, `QCoreApplication::aboutToQuit`, Godot's `NOTIFICATION_WM_CLOSE_REQUEST` or `get_tree().quit()`); check that yours does. After a stop the console reports the app as having quit, whatever its exit status; only an app that is still running after the 30 seconds, or that the player force quits, is reported as killed (and may lose an unfinished save). Exit status `0` is still the right thing to return.
 
 Python:
 
@@ -207,7 +207,7 @@ find $XDG_DATA_HOME $XDG_CONFIG_HOME $XDG_CACHE_HOME -type f -mmin -5
 
 - [ ] Saves are under `$XDG_DATA_HOME` (not cache, not `/tmp`, not a host path).
 - [ ] Saves are written atomically and the previous slot is kept as `.bak`.
-- [ ] `SIGTERM` writes any pending save and exits (status `0`) well within 5 seconds.
+- [ ] `SIGTERM` writes any pending save and exits (status `0`) well within 5 seconds (the player can Force quit from 5 s on; the service's `SIGKILL` comes after up to 30 s).
 - [ ] Rebuildable data is in `$XDG_CACHE_HOME`.
 - [ ] No `--filesystem=home` or `--filesystem=host` in the Flatpak manifest.
 - [ ] You tested pulling the plug: kill the app with `SIGKILL` during a save (`flatpak kill <your-app-id>`, a hard kill) and check the next start loads the previous good save.

@@ -22,6 +22,11 @@ Session::Session(std::unique_ptr<SessionBackend> backend, QObject *parent)
                 emit launchFinished(appId, profile, status, instance);
             });
     connect(m_backend.get(), &SessionBackend::stopFinished, this, &Session::stopFinished);
+    connect(m_backend.get(), &SessionBackend::killFinished, this, [this](const QString &instance, const QString &status) {
+        if (status == QLatin1String("ok"))
+            m_backend->refresh();       // the record is "stopping" now
+        emit killFinished(instance, status);
+    });
     connect(m_backend.get(), &SessionBackend::freezeFinished, this, &Session::freezeFinished);
     connect(m_backend.get(), &SessionBackend::thawFinished, this, &Session::thawFinished);
     connect(m_backend.get(), &SessionBackend::instanceOfPidFinished, this, &Session::instanceOfPidFinished);
@@ -105,6 +110,11 @@ void Session::stop(const QString &instance)
     m_backend->stop(instance);
 }
 
+void Session::kill(const QString &instance)
+{
+    m_backend->kill(instance);
+}
+
 void Session::freeze(const QString &instance)
 {
     m_backend->freeze(instance);
@@ -136,6 +146,18 @@ void Session::mockStubbornStop(bool stubborn)
 {
     if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
         mock->setStubbornStop(stubborn);
+}
+
+void Session::mockIgnoreStop(bool ignore)
+{
+    if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
+        mock->setIgnoreStop(ignore);
+}
+
+void Session::mockKillAnswer(const QString &status)
+{
+    if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
+        mock->setKillAnswer(status);
 }
 
 int Session::mockPidOf(const QString &instance) const

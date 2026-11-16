@@ -43,6 +43,8 @@ public:
     virtual void refresh() = 0; // reports the running list
     virtual void launch(const QString &appId, const QString &profile) = 0;
     virtual void stop(const QString &instance) = 0;
+    // Force quit (RUY-736): SIGKILL to the whole run; AppExited "killed" follows.
+    virtual void kill(const QString &instance) = 0;
     // The Ruya Hub pauses the game (T-457): the cgroup freezer of the app's units.
     virtual void freeze(const QString &instance) = 0;
     virtual void thaw(const QString &instance) = 0;
@@ -54,6 +56,8 @@ signals:
     // status: see the XML; `instance` is set on "ok" only.
     void launchFinished(const QString &appId, const QString &profile, const QString &status, const QString &instance);
     void stopFinished(const QString &instance, const QString &status);
+    // status: "ok" | "unknown-instance" | "not-allowed" | "failed"
+    void killFinished(const QString &instance, const QString &status);
     // status: "ok" | "invalid" | "not-running" | "not-allowed" | "failed"
     void freezeFinished(const QString &instance, const QString &status);
     void thawFinished(const QString &instance, const QString &status);

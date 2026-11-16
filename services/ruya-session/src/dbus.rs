@@ -39,8 +39,9 @@ fn lock(shared: &Shared) -> MutexGuard<'_, Session<DynSpawner, ProfileSnapshot>>
     shared.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// How long a `Launch` waits for the old instance of the same app to end after a `Stop`: the
-/// grace time, the kill and a moment for the unit to go (T-340).
+/// How long a `Launch` waits for the old instance of the same app to end after a `Stop` (T-340):
+/// a game that quits, or one ended by `Kill`, and a moment for the unit to go. A stop that needs
+/// the 30 s backstop (RUY-736) outlasts it: the answer is then "already-running".
 pub const LAUNCH_WAIT: Duration = Duration::from_secs(8);
 
 /// Waits (without holding the lock) until no instance of `app_id` of `profile` is on its way out,
@@ -435,6 +436,18 @@ impl SessionIface {
         };
         emit_frozen(&emitter, changes).await;
         status.as_str().to_owned()
+    }
+
+    /// Force quit (RUY-736): the signed-in profile is asked of `Profiles1` (system mode), then the
+    /// core sends the kill. AppExited "killed" follows when the run has ended.
+    async fn kill(&self, instance: &str, #[zbus(connection)] connection: &Connection) -> String {
+        let Ok(active) = self.active(connection).await else {
+            return "failed".to_owned();
+        };
+        lock(&self.session)
+            .kill(instance, active.as_deref(), Instant::now)
+            .as_str()
+            .to_owned()
     }
 
     async fn freeze(
@@ -1004,8 +1017,9 @@ mod tests {
         t.join().unwrap_or_else(|_| panic!("ender"));
         assert_eq!(lock(&shared).launch(APP, "p1", 2).0, Status::Ok);
 
-        // The old unit never ends: the wait stops at its bound and the launch is not
-        // `already-running` but a plain failure, and it does not start a second unit.
+        // The old unit never ends: the wait stops at its bound and the launch answers
+        // `already-running` (the run is still there, waiting for the 30 s backstop, RUY-736), and
+        // it does not start a second unit.
         let (shared, _unit) = stopping_session();
         assert!(!futures_lite::future::block_on(wait_while_stopping(
             &shared,
@@ -1014,7 +1028,7 @@ mod tests {
             Duration::from_millis(120)
         )));
         let (status, instance) = lock(&shared).launch(APP, "p1", 2);
-        assert_eq!((status, instance.as_str()), (Status::Failed, ""));
+        assert_eq!((status, instance.as_str()), (Status::AlreadyRunning, ""));
     }
 
     // ---- The freeze of a profile that leaves (T-165) -----------------------------------------

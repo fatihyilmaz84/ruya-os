@@ -52,10 +52,10 @@ use crate::follow::{
 use crate::scope::{RunScopes, Sweep};
 use crate::spawner::{
     active_app_scopes, any_swap, app_scopes, cancel_reclaim_command, control_command,
-    control_groups_command, flatpak_app_installed, launch_command_in, list_scopes_command,
-    park_audio_command, parse_control_groups, parse_profile_users, parse_show, pulse_start_command,
-    reclaim_amount, reclaim_command, sweep_commands, unit_app_id, unit_name, LineTail, RunFollower,
-    RunningUnit, ShowUnit, SHOW_PROPERTIES, SWAP_COMMAND,
+    control_groups_command, flatpak_app_installed, kill_command, launch_command_in,
+    list_scopes_command, park_audio_command, parse_control_groups, parse_profile_users, parse_show,
+    pulse_start_command, reclaim_amount, reclaim_command, sweep_commands, unit_app_id, unit_name,
+    LineTail, RunFollower, RunningUnit, ShowUnit, KILL_VERB, SHOW_PROPERTIES, SWAP_COMMAND,
 };
 use crate::spawner::{
     AdoptLister, AudioJob, AudioQueue, DisplayMode, Listing, ReclaimLedger, Spawner, UnitEvent,
@@ -392,7 +392,9 @@ impl SystemdSpawner {
     /// it talks to the bus and must not hold up a D-Bus call. Its failure is logged; the run's end
     /// (or the kill after the grace time) is what the core acts on. The scopes are the app itself
     /// (every one of the app's, listed first and named exactly, `app_scopes_of`,
-    /// `control_command`, T-435); the unit is its `flatpak run` front end.
+    /// `control_command`, T-435); the unit is its `flatpak run` front end. The kill
+    /// (`KILL_VERB`) leaves out a unit that has ended already while a scope holds the run
+    /// (`kill_command`, RUY-736).
     fn systemctl(&self, unit: &str, verb: &'static [&'static str]) -> Result<(), String> {
         let (user, app_id) = self.owner_of(unit)?;
         // Checked here, so a bad name is the caller's error, not only a log line.
@@ -400,11 +402,21 @@ impl SystemdSpawner {
         let what = format!("systemctl {} {unit}", verb.join(" "));
         let failed = format!("cannot start a thread for {unit}");
         let unit = unit.to_owned();
+        let runs = Arc::clone(&self.gate.scopes);
         let spawned = std::thread::Builder::new()
             .name("systemctl".to_owned())
             .spawn(move || {
                 let scopes = app_scopes_of(&user, &app_id).unwrap_or_default();
-                match control_command(&user, verb, &unit, &app_id, &scopes) {
+                let command = if verb == KILL_VERB {
+                    let ended = runs
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .unit_ended(&unit);
+                    kill_command(&user, &unit, &app_id, &scopes, ended)
+                } else {
+                    control_command(&user, verb, &unit, &app_id, &scopes)
+                };
+                match command {
                     Ok(args) => {
                         run_bounded(&args, SYSTEMCTL_LIMIT);
                     }
@@ -523,7 +535,7 @@ impl Spawner for SystemdSpawner {
     }
 
     fn kill(&self, unit: &str) -> Result<(), String> {
-        self.systemctl(unit, &["kill", "--signal=SIGKILL", "--kill-whom=all"])
+        self.systemctl(unit, KILL_VERB)
     }
 
     fn freeze(&self, unit: &str) -> Result<(), String> {

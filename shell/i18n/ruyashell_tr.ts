@@ -2523,13 +2523,35 @@ Bu geri alınamaz.</translation>
 <context>
     <name>LaunchSplash</name>
     <message>
-        <location filename="../qml/LaunchSplash.qml" line="+30"/>
-        <location line="+166"/>
+        <location filename="../qml/LaunchSplash.qml" line="+41"/>
+        <location line="+204"/>
+        <source>Force quit</source>
+        <translation>Zorla kapat</translation>
+    </message>
+    <message>
+        <location line="-204"/>
+        <source>Wait at Home</source>
+        <translation>Ana ekranda bekle</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+195"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="-136"/>
+        <location line="-150"/>
+        <location line="+103"/>
+        <source>%1 is not responding</source>
+        <translation>%1 yanıt vermiyor</translation>
+    </message>
+    <message>
+        <location line="-102"/>
+        <source>Force quitting %1</source>
+        <translation>%1 zorla kapatılıyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Still starting %1</source>
         <translation>%1 hâlâ başlıyor</translation>
     </message>
@@ -2544,7 +2566,12 @@ Bu geri alınamaz.</translation>
         <translation>%1 kapanıyor</translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+102"/>
+        <source>Force quitting %1…</source>
+        <translation>%1 zorla kapatılıyor…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Closing %1…</source>
         <translation>%1 kapanıyor…</translation>
     </message>
@@ -2557,6 +2584,11 @@ Bu geri alınamaz.</translation>
         <location line="+0"/>
         <source>Starting…</source>
         <translation>Başlıyor…</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Force quit loses unsaved progress.</source>
+        <translation>Zorla kapatınca kaydedilmemiş ilerleme kaybolur.</translation>
     </message>
 </context>
 <context>
@@ -4565,7 +4597,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+701"/>
+        <location filename="../qml/Shell.qml" line="+703"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -4634,7 +4666,17 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama kapatılamadı.</translation>
     </message>
     <message>
-        <location line="+67"/>
+        <location line="+92"/>
+        <source>Could not force quit %1.</source>
+        <translation>%1 zorla kapatılamadı.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Could not force quit the game.</source>
+        <translation>Oyun zorla kapatılamadı.</translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <source>%1 did not close. Restart the console if it keeps running.</source>
         <translation>%1 kapanmadı. Çalışmaya devam ederse konsolu yeniden başlatın.</translation>
     </message>
@@ -4750,17 +4792,17 @@ Bu geri alınamaz.</translation>
         <translation>Seçenekler</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+187"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
     </message>
     <message>
-        <location line="-220"/>
+        <location line="-224"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1845"/>
+        <location line="-1886"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -4791,13 +4833,13 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1593"/>
+        <location line="+1634"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
     </message>
     <message>
-        <location line="+163"/>
+        <location line="+167"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>

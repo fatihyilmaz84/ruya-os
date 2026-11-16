@@ -9,6 +9,9 @@ import RuyaShell
 // that something is happening. It is modal: it takes the focus and every key except the Guide keys
 // (the shell decides those, `guideKey`). After the shell's 20 s without a window it says
 // "Still starting" and offers Close, which has the focus (A on it, or B anywhere).
+// Closing mode (T-458, RUY-736): after Close game. Nothing to press until the shell's `forceQuitAfterMs`
+// (5 s) without the game's end; then it is `stuck`: "<title> is not responding", "Force quit loses unsaved
+// progress.", and Force quit, which has the focus (A on it), or Wait at Home (B anywhere).
 // Reduced motion: `launchMs` is 0, so it appears and goes as a cut, and the dots stand still.
 FocusScope {
     id: splash
@@ -23,16 +26,28 @@ FocusScope {
     // Closing mode (T-458): Close game was chosen. The line says "Closing <title>…", the dots run, there
     // is nothing to press (Back does not leave it; the shell ends it when the game has ended).
     property bool closing: false
+    // Closing and the game has not ended in `forceQuitAfterMs` (RUY-736): it offers Force quit (A) and
+    // Wait at Home (B); the text is still, the dots stand still and hide (a screen that waits).
+    property bool stuck: false
+    // Force quit was asked and the end has not come yet (RUY-736): "Force quitting <title>…", nothing to press.
+    property bool killing: false
+    readonly property bool offersForceQuit: closing && stuck
     // Keys the shell keeps for itself (Guide): a function key -> bool.
     property var guideKey: function (key) { return false }
 
-    // What the hint bar says while the splash is up: nothing to press until it offers Close.
-    readonly property var hints: slow && !closing ? [{ action: "accept", text: qsTr("Close") }, { action: "back", text: qsTr("Close") }] : []
+    // What the hint bar says while the splash is up: nothing to press until it offers Close (a launch)
+    // or Force quit (closing).
+    readonly property var hints: offersForceQuit
+                                 ? [{ action: "accept", text: qsTr("Force quit") }, { action: "back", text: qsTr("Wait at Home") }]
+                                 : slow && !closing ? [{ action: "accept", text: qsTr("Close") }, { action: "back", text: qsTr("Close") }] : []
     // Any of its animations is running (tests: none under reduced motion).
     readonly property bool animating: dotsAnimation.running || zoomAnimation.running
                                       || fadeAnimation.running || blurAnimation.running
     readonly property real zoom: art.scale
     readonly property alias closeButton: closeButton
+    readonly property alias forceQuitButton: forceQuitButton
+    // The dots breathe while something is happening: not on a launch that is slow, not on a stuck close.
+    readonly property bool dotsShown: closing ? !stuck : !slow
 
     // Position of the lit dot, 0..3 round the three dots.
     property real phase: 0
@@ -44,9 +59,21 @@ FocusScope {
     }
 
     signal closeRequested()
+    signal forceQuitRequested()     // A on Force quit (RUY-736)
+    signal waitRequested()          // B while it offers Force quit: Home, the game still closing
 
     function focusClose() {
         closeButton.forceActiveFocus()
+    }
+    function focusForceQuit() {
+        forceQuitButton.forceActiveFocus()
+    }
+    // The screen itself takes the focus, no button (Force quit was asked: it hides, and a hidden item
+    // would keep the focus and its keys).
+    function holdFocus() {
+        forceQuitButton.focus = false
+        closeButton.focus = false
+        splash.forceActiveFocus()
     }
 
     opacity: shown ? 1 : 0
@@ -57,7 +84,9 @@ FocusScope {
     }
 
     Accessible.role: Accessible.Pane
-    Accessible.name: closing ? qsTr("Closing %1").arg(title) : slow ? qsTr("Still starting %1").arg(title) : qsTr("Starting %1").arg(title)
+    Accessible.name: offersForceQuit ? qsTr("%1 is not responding").arg(title)
+                     : closing && killing ? qsTr("Force quitting %1").arg(title)
+                     : closing ? qsTr("Closing %1").arg(title) : slow ? qsTr("Still starting %1").arg(title) : qsTr("Starting %1").arg(title)
 
     Rectangle {
         anchors.fill: parent
@@ -158,21 +187,33 @@ FocusScope {
             objectName: "launchStatus"
             width: parent.width
             textFormat: Text.PlainText
-            text: splash.closing ? qsTr("Closing %1…").arg(splash.title)
-                              : splash.slow ? qsTr("Still starting…") : (splash.started ? qsTr("Starting…") : "")
+            text: splash.offersForceQuit ? qsTr("%1 is not responding").arg(splash.title)
+                  : splash.closing && splash.killing ? qsTr("Force quitting %1…").arg(splash.title)
+                  : splash.closing ? qsTr("Closing %1…").arg(splash.title)
+                  : splash.slow ? qsTr("Still starting…") : (splash.started ? qsTr("Starting…") : "")
             visible: text.length > 0
             color: Theme.text
             font.pixelSize: Theme.typeBody * splash.u
             elide: Text.ElideRight
         }
+        Text {
+            objectName: "launchDetail"
+            width: parent.width
+            textFormat: Text.PlainText
+            text: qsTr("Force quit loses unsaved progress.")
+            visible: splash.offersForceQuit
+            color: Theme.textDim
+            font.pixelSize: Theme.typeBody * splash.u
+            wrapMode: Text.WordWrap
+        }
 
         // Three dots that breathe in turn; they stand still under reduced motion and once the splash
-        // says "Still starting" (nothing may animate for ever on a screen that waits).
+        // says "Still starting" or "is not responding" (nothing may animate for ever on a screen that waits).
         Row {
             id: dotRow
             objectName: "launchDots"
             spacing: Theme.spaceS * splash.u
-            visible: !splash.slow || splash.closing
+            visible: splash.dotsShown
             Repeater {
                 model: 3
                 Rectangle {
@@ -187,7 +228,7 @@ FocusScope {
             }
         }
 
-        Item { width: 1; height: Theme.spaceS * splash.u; visible: closeButton.visible }
+        Item { width: 1; height: Theme.spaceS * splash.u; visible: closeButton.visible || forceQuitButton.visible }
         SecondaryButton {
             id: closeButton
             objectName: "launchClose"
@@ -195,6 +236,14 @@ FocusScope {
             visible: splash.slow && !splash.closing
             text: qsTr("Close")
             onAccepted: splash.closeRequested()
+        }
+        SecondaryButton {
+            id: forceQuitButton
+            objectName: "launchForceQuit"
+            u: splash.u
+            visible: splash.offersForceQuit
+            text: qsTr("Force quit")
+            onAccepted: splash.forceQuitRequested()
         }
     }
 
@@ -206,7 +255,7 @@ FocusScope {
         to: 3
         duration: Theme.tintMs * 2
         loops: Animation.Infinite
-        running: !Theme.reducedMotion && splash.shown && (!splash.slow || splash.closing) && splash.visible
+        running: !Theme.reducedMotion && splash.shown && splash.dotsShown && splash.visible
     }
 
     Keys.onPressed: event => {
@@ -216,6 +265,8 @@ FocusScope {
         }
         if (splash.slow && !splash.closing && !event.isAutoRepeat && BackKey.isBackOrBackspace(event.key))
             splash.closeRequested()         // once it offers Close, Back closes too (the hint bar says so)
+        else if (splash.offersForceQuit && !event.isAutoRepeat && BackKey.isBackOrBackspace(event.key))
+            splash.waitRequested()          // B: Wait at Home (the hint bar says so)
         event.accepted = true               // locked: nothing reaches the shell underneath
     }
 }

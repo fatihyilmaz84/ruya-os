@@ -20,6 +20,7 @@ public:
     void refresh() override;
     void launch(const QString &appId, const QString &profile) override;
     void stop(const QString &instance) override;
+    void kill(const QString &instance) override;
     void freeze(const QString &instance) override;
     void thaw(const QString &instance) override;
     void instanceOfPid(int pid) override;

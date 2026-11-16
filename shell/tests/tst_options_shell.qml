@@ -459,6 +459,29 @@ Item {
             tryVerify(() => find("recentRow").activeFocus, 2000, "the focus is where Close left it: the card")
         }
 
+        // RUY-736: the Options menu's way in gets the same stuck state and Force quit as the Hub's.
+        function test_close_game_from_the_options_menu_offers_force_quit() {
+            start()
+            const racer = launchBare("org.example.Racer")
+            const app = addWindow({ pid: Session.mockPidOf(racer) })
+            tryVerify(() => app.activeFocus, 2000)
+            goHome(app)
+            tc.shell.forceQuitAfterMs = 300
+            Session.mockIgnoreStop(true)
+            keyClick(Qt.Key_Menu)
+            keyClick(Qt.Key_Down)
+            compare(menu().rows[menu().current].id, "close")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => tc.shell.closingScreen, 2000, "the closing screen is up")
+            tryVerify(() => find("launchForceQuit").activeFocus, 3000, "stuck: Force quit has the focus")
+            compare(find("launchStatus").text, "Turbo Racer is not responding")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => Session.mockCalls().includes("kill " + racer), 2000, "Session.kill was asked")
+            tryVerify(() => !tc.shell.closingScreen, 3000, "AppExited ends it")
+            tryVerify(() => find("recentRow").activeFocus, 2000, "the focus is where Close left it: the card")
+            tryVerify(() => Session.running.length === 0, 2000)
+        }
+
         function test_close_app_for_an_app() {
             start()
             const player = launchBare("org.example.Player")

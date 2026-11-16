@@ -69,7 +69,7 @@ Inside the sandbox `echo $XDG_DATA_HOME` shows your data directory and `find $XD
 
 Test these before you publish; each takes a minute. (The sample's `scripts/vm-sample-check.sh` does 1, 3 and 4 for you.)
 
-1. **Stop it as the console does.** Send `SIGTERM` to your game's own process, not to the `flatpak run` command: `kill -TERM $(pgrep -u ruya-p1 -x my-game)` (the process name is your binary's). Then look at the save. Or use `Session1.Stop`, which sends it to every process of the app and kills after 5 seconds. Your game must save, exit with status 0 and be gone well inside 5 seconds; `AppExited` must say `quit`, not `killed`. In our test, sending `SIGTERM` only to the `flatpak run` command did **not** stop the sandbox, so that is not a valid test.
+1. **Stop it as the console does.** Send `SIGTERM` to your game's own process, not to the `flatpak run` command: `kill -TERM $(pgrep -u ruya-p1 -x my-game)` (the process name is your binary's). Then look at the save. Or use `Session1.Stop`, which sends it to every process of the app. Stop sends `SIGTERM`; the service sends `SIGKILL` after up to 30 s; the player can Force quit from 5 s on (a console choice that may change), so save and exit within 5 s. Your game must save, exit with status 0 and be gone well inside 5 seconds; `AppExited` must say `quit`, not `killed` (a Stop alone gives `killed` only after the 30 s). In our test, sending `SIGTERM` only to the `flatpak run` command did **not** stop the sandbox, so that is not a valid test.
 2. **Pull the plug.** `flatpak kill <app-id>` ends the sandbox at once, with no signal your game can handle (a real power cut is the same, or worse). Do it while the game is saving: add a long pause between writing the temporary file and renaming it in a test build, or just hammer the save button and kill. Start again: the previous good save must load. For a whole-machine cut, `quit` in the QEMU monitor (`127.0.0.1:4444`) ends the VM without a shutdown.
 3. **Damage the newest save**: overwrite it with a few bytes and start the game; it must start from the `.bak`.
 4. **Quit and start again**: the progress is still there.
@@ -84,7 +84,7 @@ sleep 600   # ten minutes; also try 10 seconds
 busctl --system call org.ruyaos.Session1 /org/ruyaos/Session1 org.ruyaos.Session1 Thaw s ruya-app-ruya-p1-org.example.Game.service
 ```
 
-   Then check what [Full screen and lifecycle](fullscreen-and-lifecycle.md) asks: nothing teleports or fast-forwards, your pause menu or reconnect runs, the online session recovers, and `Stop` on a frozen game (the service thaws it first) still ends in a save and exit status 0 within 5 seconds.
+   Then check what [Full screen and lifecycle](fullscreen-and-lifecycle.md) asks: nothing teleports or fast-forwards, your pause menu or reconnect runs, the online session recovers, and `Stop` on a frozen game (the service thaws it first) still ends in a save and exit status 0 within 5 seconds (stop sends `SIGTERM`; the service sends `SIGKILL` after up to 30 s; the player can Force quit from 5 s on (a console choice that may change), so save and exit within 5 s).
 
 ## Headless testing
 
@@ -111,7 +111,7 @@ Engines have headless modes too (`--headless` in Godot). The sample game has `ma
 | No sound | Not built for profile games yet (B-007): [Audio and video](audio-and-video.md) |
 | Install fails with `missing-runtime` | The machine is offline or cannot reach Flathub; the runtime is fetched on install |
 | Install fails with `signature` | The remote is unsigned or its key is wrong; see [Publishing](publishing.md) |
-| `AppExited` says `killed` | The game ignored `SIGTERM` for 5 seconds (or something killed it); fix the save and exit path |
+| `AppExited` says `killed` | The game ignored `SIGTERM` for 30 seconds, the player chose Force quit (offered from 5 s on), or something else killed it; fix the save and exit path so it is done within 5 s |
 | Saves are gone after reinstalling | The data was deleted ("also delete my data" on uninstall), or the game wrote saves in the cache directory; [Saves and data](saves-and-data.md) |
 | A save is half written after a kill | The save is not atomic; [Saves and data](saves-and-data.md) |
 | `systemctl --user -M ...` hangs or says "Connection reset by peer" in a script | stderr must go to a pipe: `2>&1 | cat` |

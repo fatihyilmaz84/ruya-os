@@ -621,10 +621,41 @@ expect_contains "wait_fstate: thawing, then running returns 0" "$out" "rc=0"
 out="$(rundrop 'fstate() { echo frozen; }; wait_fstate u unit running 1; echo "rc=$?"')"
 expect_contains "wait_fstate: a stuck frozen unit fails, naming the value tested" "$out" "FAIL: unit: FreezerState frozen, not running"
 expect_contains "wait_fstate: a stuck frozen unit returns 1" "$out" "rc=1"
-# restart/check clean up the display check's app too: it needs the runtime they remove.
+# restart/check/kill clean up the display check's app too: it needs the runtime they remove. RUY-736:
+# and the stubborn app of `kill` (installed from the same remote).
 for c in 'vm-session-check.sh'; do
-    [ "$(grep -c 'drop_test_apps "$wclient" "$sleeper" "$crasher" "$rt"' "$here/$c")" -ge 4 ]         && pass "$c: every full cleanup also removes the display check's app (RUY-708)" || fail "$c: a cleanup leaves $wclient, which keeps the runtime installed"
+    [ "$(grep -c 'drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$rt"' "$here/$c")" -ge 5 ]         && pass "$c: every full cleanup also removes the display check's app and the stubborn app (RUY-708, RUY-736)" || fail "$c: a cleanup leaves $wclient or $stubborn, which keeps the runtime installed"
 done
+[ "$(grep -c 'drop_test_apps "$wclient" "$sleeper" "$crasher" "$rt"' "$here/vm-session-check.sh")" -eq 0 ] \
+    && pass "vm-session-check.sh: no cleanup without the stubborn app (RUY-736)" || fail "vm-session-check.sh: a cleanup leaves the stubborn app installed"
+
+# --- vm-session-check.sh kill: the timing windows (RUY-736) ---------------------------------------
+# Kill must end the app within 2 s, the backstop 29-33 s after the Stop; judge_secs is the verdict.
+judgesrc="$tmp/judge.sh"
+sed -n '/^# --- judge_secs begin/,/^# --- judge_secs end/p' "$here/vm-session-check.sh" > "$judgesrc"
+[ -s "$judgesrc" ] && pass "vm-session-check.sh has the judge_secs block" || fail "no judge_secs block in vm-session-check.sh"
+runjudge() { bash -c "ok() { echo \"PASS: \$*\"; }; bad() { echo \"FAIL: \$*\"; }; . '$judgesrc'; $1; echo \"rc=\$?\"" 2>&1; }
+out="$(runjudge 'judge_secs "the kill" 1 0 2')"
+expect_contains "judge_secs: inside the window passes" "$out" "PASS: the kill after 1 s (window 0-2 s)"
+expect_contains "judge_secs: inside the window returns 0" "$out" "rc=0"
+out="$(runjudge 'judge_secs "the kill" 3 0 2')"
+expect_contains "judge_secs: a slow kill fails" "$out" "FAIL: the kill after 3 s, outside the window 0-2 s"
+expect_contains "judge_secs: a slow kill returns 1" "$out" "rc=1"
+out="$(runjudge 'judge_secs "the backstop" 5 29 33')"
+expect_contains "judge_secs: the old 5 s grace fails the backstop" "$out" "FAIL: the backstop after 5 s, outside the window 29-33 s"
+out="$(runjudge 'judge_secs "the backstop" 31 29 33')"
+expect_contains "judge_secs: 31 s passes the backstop" "$out" "PASS: the backstop after 31 s"
+out="$(runjudge 'judge_secs "the kill" "" 0 2')"
+expect_contains "judge_secs: no AppExited at all fails" "$out" "FAIL: the kill: no time measured"
+expect_contains "judge_secs: no AppExited at all returns 1" "$out" "rc=1"
+# The kill mode is wired: a Kill call, the stubborn app in the repository, both windows judged.
+grep -q 'kill_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Kill s "$1"; }' "$here/vm-session-check.sh" \
+    && pass "vm-session-check.sh calls Session1.Kill (RUY-736)" || fail "vm-session-check.sh: no Kill call"
+grep -q '"$stubborn|trap '"''"' TERM;' "$here/vm-session-check.sh" \
+    && pass "vm-session-check.sh builds an app that ignores SIGTERM (RUY-736)" || fail "vm-session-check.sh: no SIGTERM-ignoring test app"
+grep -q 'judge_secs "AppExited after the Kill" "$secs" 0 2' "$here/vm-session-check.sh" \
+    && grep -q 'judge_secs "AppExited after the Stop (the backstop)" "$secs" 29 33' "$here/vm-session-check.sh" \
+    && pass "vm-session-check.sh kill judges the Kill (0-2 s) and the backstop (29-33 s)" || fail "vm-session-check.sh kill: a window is not judged"
 # vm-store-check.sh holds the install in a flatpak shim; no timing-dependent SIGSTOP.
 grep -q 'zz-hold-install.conf' "$here/vm-store-check.sh" && ! grep -q 'pkill -STOP' "$here/vm-store-check.sh"     && pass "vm-store-check.sh holds the install with a shim, not a race against SIGSTOP (RUY-708)" || fail "vm-store-check.sh: the install is not held deterministically"
 # ProtectSystem=strict: the drop-in must grant the shim's marker directory; an EXIT trap undoes the hold.

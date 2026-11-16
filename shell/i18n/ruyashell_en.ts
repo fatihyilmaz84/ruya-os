@@ -2528,13 +2528,35 @@ This can&apos;t be undone.</translation>
 <context>
     <name>LaunchSplash</name>
     <message>
-        <location filename="../qml/LaunchSplash.qml" line="+30"/>
-        <location line="+166"/>
+        <location filename="../qml/LaunchSplash.qml" line="+41"/>
+        <location line="+204"/>
+        <source>Force quit</source>
+        <translation>Force quit</translation>
+    </message>
+    <message>
+        <location line="-204"/>
+        <source>Wait at Home</source>
+        <translation>Wait at Home</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+195"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
     <message>
-        <location line="-136"/>
+        <location line="-150"/>
+        <location line="+103"/>
+        <source>%1 is not responding</source>
+        <translation>%1 is not responding</translation>
+    </message>
+    <message>
+        <location line="-102"/>
+        <source>Force quitting %1</source>
+        <translation>Force quitting %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Still starting %1</source>
         <translation>Still starting %1</translation>
     </message>
@@ -2549,7 +2571,12 @@ This can&apos;t be undone.</translation>
         <translation>Closing %1</translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+102"/>
+        <source>Force quitting %1…</source>
+        <translation>Force quitting %1…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Closing %1…</source>
         <translation>Closing %1…</translation>
     </message>
@@ -2562,6 +2589,11 @@ This can&apos;t be undone.</translation>
         <location line="+0"/>
         <source>Starting…</source>
         <translation>Starting…</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Force quit loses unsaved progress.</source>
+        <translation>Force quit loses unsaved progress.</translation>
     </message>
 </context>
 <context>
@@ -4582,7 +4614,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+701"/>
+        <location filename="../qml/Shell.qml" line="+703"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -4651,7 +4683,17 @@ This can&apos;t be undone.</translation>
         <translation>Could not close the running app.</translation>
     </message>
     <message>
-        <location line="+67"/>
+        <location line="+92"/>
+        <source>Could not force quit %1.</source>
+        <translation>Could not force quit %1.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Could not force quit the game.</source>
+        <translation>Could not force quit the game.</translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <source>%1 did not close. Restart the console if it keeps running.</source>
         <translation>%1 did not close. Restart the console if it keeps running.</translation>
     </message>
@@ -4767,17 +4809,17 @@ This can&apos;t be undone.</translation>
         <translation>Options</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+187"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>The chosen sound theme can&apos;t be used. The standard one plays instead.</translation>
     </message>
     <message>
-        <location line="-220"/>
+        <location line="-224"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1845"/>
+        <location line="-1886"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -4808,13 +4850,13 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1593"/>
+        <location line="+1634"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
     </message>
     <message>
-        <location line="+163"/>
+        <location line="+167"/>
         <source>mock services</source>
         <translation>mock services</translation>
     </message>

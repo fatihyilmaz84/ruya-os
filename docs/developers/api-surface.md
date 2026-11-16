@@ -30,7 +30,7 @@ Anything not on this list needs a new line in ADR-022 first (the owner's approva
 
 | Capability | What an app can do | Task | Missing |
 |---|---|---|---|
-| Lifecycle | learn "going to background / frozen / closing", answer "save now" within the 5 s | T-279, T-275 | mock, sample, conformance (the chapter `fullscreen-and-lifecycle.md` describes the pause as it is today, T-468; it needs the API added when T-279 is built) |
+| Lifecycle | learn "going to background / frozen / closing", answer "save now" within 5 s (stop sends `SIGTERM`; the service sends `SIGKILL` after up to 30 s; the player can Force quit from 5 s on (a console choice that may change), so save and exit within 5 s) | T-279, T-275 | mock, sample, conformance (the chapter `fullscreen-and-lifecycle.md` describes the pause as it is today, T-468; it needs the API added when T-279 is built) |
 | Achievements | unlock, set progress, list its own | T-246 | mock for off-device tests, conformance; re-seat on `Platform1` (T-246 designs its own portal) |
 | Play statistics, presence, now-playing | report what is played (game, system, state), read its own history | T-247 (the ledger, built, private), T-306 | the app-facing call is only in T-306; a presence/report sample and chapter are missing |
 | Notifications | post, update, withdraw; actions; kept in the notification centre | T-245 | chapter, sample, mock, conformance |
@@ -91,7 +91,7 @@ No code, so no bus permission, and the safest way to extend the console. The for
 
 ## What is public today
 
-Nothing in tier B. In tier C: the layouts and keys in the table above. Everything else that this guide mentions (the Guide button, the 5-second `SIGTERM` window, the freedesktop portals the Flatpak runtime ships) is behaviour of the platform, documented in its own chapter.
+Nothing in tier B. In tier C: the layouts and keys in the table above. Everything else that this guide mentions (the Guide button, the `SIGTERM` contract (stop sends `SIGTERM`; the service sends `SIGKILL` after up to 30 s; the player can Force quit from 5 s on (a console choice that may change), so save and exit within 5 s), the freedesktop portals the Flatpak runtime ships) is behaviour of the platform, documented in its own chapter.
 
 ## Retrofit audit of the open tasks (2026-11-08)
 

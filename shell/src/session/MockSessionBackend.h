@@ -27,6 +27,12 @@
 //
 // Stop (T-458): the app exits after a third of the start time unless setStopDelay says otherwise;
 // setStubbornStop makes it report AppExited "killed" after that delay while the record stays listed.
+// setIgnoreStop (RUY-736) is a game that does not close: Stop leaves it running ("stopping") until Kill or
+// the backstop (BackstopMs after the Stop, as ruya-session's STOP_GRACE) ends it with AppExited "killed".
+// Kill (RUY-736) follows ruya-session: "unknown-instance" for an unknown or empty name, "not-allowed" for
+// another profile's app (the injected ActiveProfile), else "ok" and AppExited "killed" at once (with
+// setStubbornStop the record stays listed); a frozen app is not thawed first. setKillAnswer makes it
+// answer a status and do nothing.
 //
 // InstanceOfPid (T-459): every launched instance has a made-up process id (pidOf, 4001 up), and
 // only those name an instance; any other pid is "not-found", 0 or less "invalid".
@@ -44,6 +50,7 @@ public:
     void refresh() override;
     void launch(const QString &appId, const QString &profile) override;
     void stop(const QString &instance) override;
+    void kill(const QString &instance) override;
     void freeze(const QString &instance) override;
     void thaw(const QString &instance) override;
     void instanceOfPid(int pid) override;
@@ -59,6 +66,12 @@ public:
     void setStopDelay(int ms) { m_stopDelayMs = ms; }
     // A stopped app is reported "killed" but stays in the running list (T-458).
     void setStubbornStop(bool stubborn) { m_stubbornStop = stubborn; }
+    // Stop does not end the app; only Kill or the backstop does (RUY-736).
+    void setIgnoreStop(bool ignore) { m_ignoreStop = ignore; }
+    // Kill answers `status` and changes nothing ("": the normal answer), RUY-736.
+    void setKillAnswer(const QString &status) { m_killAnswer = status; }
+    // ruya-session's STOP_GRACE: an ignored Stop is killed this long after it (RUY-736).
+    static constexpr int BackstopMs = 30000;
     QStringList calls() const { return m_calls; }
     // The pid of a launched instance's process (from 4001 up), 0 for an unknown instance.
     int pidOf(const QString &instance) const;
@@ -84,4 +97,6 @@ private:
     int m_pidDelayMs = 0;
     int m_stopDelayMs = -1;
     bool m_stubbornStop = false;
+    bool m_ignoreStop = false;
+    QString m_killAnswer;
 };

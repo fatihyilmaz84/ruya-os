@@ -47,6 +47,8 @@ Item {
     SignalSpy { id: launchedSpy; target: Session; signalName: "launchFinished" }
     SignalSpy { id: stoppedSpy; target: Session; signalName: "stopFinished" }
     SignalSpy { id: exitedSpy; target: Session; signalName: "appExited" }
+    SignalSpy { id: killedSpy; target: Session; signalName: "killFinished" }
+    SignalSpy { id: offerSpy; signalName: "offersForceQuitChanged" }     // target: the splash, per test
 
     TestCase {
         id: tc
@@ -102,6 +104,9 @@ Item {
             launchedSpy.clear()
             stoppedSpy.clear()
             exitedSpy.clear()
+            killedSpy.clear()
+            offerSpy.target = null
+            offerSpy.clear()
             while (Notifications.model.count > 0)
                 Notifications.dismiss(Notifications.model.get(0).toastId)
             Notifications.pending = []
@@ -412,15 +417,19 @@ Item {
             compare(Notifications.model.count, 0)
         }
 
+        // RUY-736: no longer after a fixed 5 s; Wait at Home (B on the stuck screen) brings Home back.
         function test_a_slow_exit_brings_home_back_with_a_closing_pill_and_play_only_toasts() {
             start()
             const app = playRacer()
-            tc.shell.closeSplashMs = 250
+            tc.shell.forceQuitAfterMs = 250
             Session.mockStopDelay(3000)
             closeGameFromHub()
             tryVerify(() => tc.shell.closingScreen, 2000)
-            tryVerify(() => !tc.shell.closingScreen, 2000, "Home comes back after the wait")
-            tryVerify(() => find("recentRow").activeFocus, 2000)
+            tryVerify(() => find("launchForceQuit").activeFocus, 2000, "stuck: Force quit has the focus")
+            keyClick(Qt.Key_Escape)                          // B: Wait at Home
+            tryVerify(() => !tc.shell.closingScreen, 2000, "Home comes back")
+            tryVerify(() => find("recentRow").activeFocus, 2000, "the focus is where Close left it: the card")
+            compare(Session.mockCalls().filter(c => c.startsWith("kill")).length, 0, "Wait at Home kills nothing")
             const card = find(tc.racerCard)
             verify(card.focused)
             compare(card.stateText, "Closing")
@@ -454,7 +463,6 @@ Item {
         function test_a_game_still_listed_after_the_kill_gets_a_warning_and_is_running_again() {
             start()
             const app = playRacer()
-            tc.shell.closeSplashMs = 150
             tc.shell.killCheckMs = 200
             Session.mockStubbornStop(true)
             Session.mockStopDelay(100)
@@ -466,6 +474,137 @@ Item {
             tryVerify(() => find(tc.racerCard).stateText === "Running", 2000, "it is listed, so the card says Running again")
             verify(!tc.shell.closingScreen)
             verify(app)
+        }
+
+        // ---- Force quit on the closing screen (RUY-736) ------------------------------------------
+
+        function test_a_game_that_does_not_close_is_offered_force_quit_which_ends_it() {
+            start()
+            playRacer()
+            tc.shell.forceQuitAfterMs = 800
+            Session.mockIgnoreStop(true)
+            const splash = find("launchSplash")
+            offerSpy.target = splash
+            closeGameFromHub()
+            tryVerify(() => tc.shell.closingScreen, 2000)
+            tryCompare(splash, "opacity", 1, 2000)
+            const instance = tc.shell.closeState.instance
+            // Before forceQuitAfterMs nothing is offered, as before RUY-736.
+            verify(!find("launchForceQuit").visible, "nothing to press yet")
+            compare(hintVerbs(), "")
+            verify(!find("launchDetail").visible)
+            compare(find("launchStatus").text, "Closing Turbo Racer…")
+            verify(splash.activeFocus, "the screen holds the focus")
+            // Then the stuck line, the detail line and the hints; Force quit has the focus.
+            tryVerify(() => splash.offersForceQuit, 3000)
+            compare(find("launchStatus").text, "Turbo Racer is not responding")
+            verify(find("launchDetail").visible)
+            compare(find("launchDetail").text, "Force quit loses unsaved progress.")
+            compare(hintVerbs(), "accept Force quit|back Wait at Home")
+            compare(splash.Accessible.name, "Turbo Racer is not responding")
+            tryVerify(() => find("launchForceQuit").activeFocus, 2000, "Force quit has the focus")
+            verify(!find("launchDots").visible, "a screen that waits: no dots")
+            compare(splash.animating, false, "the stuck line is still")
+            compare(Session.running.length, 1, "it has not ended")
+            // A: the kill; the screen ends on AppExited (that it waits for it: the test below, where
+            // the kill brings no end).
+            keyClick(Qt.Key_Return)
+            tryCompare(killedSpy, "count", 1)
+            compare(killedSpy.signalArguments[0][0], instance)
+            compare(killedSpy.signalArguments[0][1], "ok")
+            verify(Session.mockCalls().includes("kill " + instance))
+            tryCompare(exitedSpy, "count", 1)
+            compare(exitedSpy.signalArguments[0][3], "killed")
+            tryVerify(() => !tc.shell.closingScreen, 2000, "AppExited ends the screen")
+            tryVerify(() => find("recentRow").activeFocus, 2000, "the focus is where Close left it: the card")
+            verify(find(tc.racerCard).activeFocus)
+            tryVerify(() => find(tc.racerCard).stateText === "", 2000, "no pill after AppExited")
+            compare(Session.running.length, 0)
+            compare(Notifications.model.count, 0, "a Force quit needs no message")
+        }
+
+        function test_a_game_that_ends_by_itself_at_3s_never_shows_force_quit() {
+            start()
+            playRacer()
+            compare(tc.shell.forceQuitAfterMs, 5000, "the one constant (RUY-736)")
+            Session.mockStopDelay(3000)
+            const splash = find("launchSplash")
+            offerSpy.target = splash
+            closeGameFromHub()
+            tryVerify(() => tc.shell.closingScreen, 2000)
+            tryCompare(exitedSpy, "count", 1, 5000)
+            compare(exitedSpy.signalArguments[0][3], "quit")
+            tryVerify(() => !tc.shell.closingScreen, 2000)
+            compare(offerSpy.count, 0, "Force quit was never offered")
+            tryVerify(() => find("recentRow").activeFocus, 2000)
+            wait(2500)                                       // past the 5 s since the Close: still nothing
+            compare(offerSpy.count, 0)
+            verify(!tc.shell.closingScreen)
+        }
+
+        function test_a_refused_force_quit_toasts_and_brings_home_back() {
+            start()
+            playRacer()
+            tc.shell.forceQuitAfterMs = 250
+            Session.mockIgnoreStop(true)
+            Session.mockKillAnswer("not-allowed")
+            closeGameFromHub()
+            tryVerify(() => find("launchForceQuit").activeFocus, 3000)
+            keyClick(Qt.Key_Return)
+            tryCompare(killedSpy, "count", 1)
+            compare(killedSpy.signalArguments[0][1], "not-allowed")
+            tryVerify(() => toastTexts().includes("Could not force quit Turbo Racer."), 2000)
+            compare(Notifications.model.get(0).kind, "error")
+            tryVerify(() => !tc.shell.closingScreen, 2000, "Home")
+            tryVerify(() => find("recentRow").activeFocus, 2000, "the focus is where Close left it")
+            compare(find(tc.racerCard).stateText, "Closing", "the stop still runs: the card says Closing")
+            compare(Session.mockCalls().filter(c => c.startsWith("kill")).length, 0, "nothing was killed")
+        }
+
+        function test_the_hub_over_a_stuck_close_keeps_the_timer_and_back_returns_to_force_quit() {
+            start()
+            playRacer()
+            tc.shell.forceQuitAfterMs = 600
+            Session.mockIgnoreStop(true)
+            closeGameFromHub()
+            const splash = find("launchSplash")
+            tryVerify(() => tc.shell.closingScreen, 2000)
+            keyClick(Qt.Key_HomePage)
+            tryVerify(() => find("systemActions").activeFocus, 2000, "Guide opens the Hub over the closing screen")
+            tryVerify(() => splash.offersForceQuit, 3000, "the timer runs on while the Hub is open")
+            verify(find("systemActions").activeFocus, "the Hub keeps the focus")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("launchForceQuit").activeFocus, 2000, "Back lands on Force quit")
+            compare(hintVerbs(), "accept Force quit|back Wait at Home")
+            keyClick(Qt.Key_Escape)                          // B: Wait at Home
+            tryVerify(() => !tc.shell.closingScreen, 2000)
+            tryVerify(() => find("recentRow").activeFocus, 2000)
+            compare(find(tc.racerCard).stateText, "Closing")
+        }
+
+        function test_a_force_quit_with_no_end_offers_it_again() {
+            start()
+            playRacer()
+            tc.shell.forceQuitAfterMs = 300
+            Session.mockIgnoreStop(true)
+            Session.mockKillAnswer("ok")                     // answers ok, and nothing ends
+            closeGameFromHub()
+            tryVerify(() => find("launchForceQuit").activeFocus, 3000)
+            keyClick(Qt.Key_Return)
+            tryCompare(killedSpy, "count", 1)
+            verify(!find("launchSplash").offersForceQuit, "asked: nothing more to press while it waits")
+            verify(!find("launchForceQuit").visible)
+            verify(tc.shell.closingScreen, "the screen waits for the end")
+            compare(find("launchStatus").text, "Force quitting Turbo Racer…", "the A press is acknowledged")
+            compare(find("launchSplash").Accessible.name, "Force quitting Turbo Racer")
+            verify(!find("launchDetail").visible)
+            compare(hintVerbs(), "", "nothing to press while it waits")
+            verify(find("launchSplash").activeFocus, "the screen keeps the focus")
+            verify(!find("launchForceQuit").activeFocus, "not the hidden button")
+            tryVerify(() => find("launchSplash").offersForceQuit, 3000, "no end: Force quit again, never stranded")
+            verify(find("launchForceQuit").visible)
+            tryVerify(() => find("launchForceQuit").activeFocus, 2000, "with the focus")
+            verify(tc.shell.closingScreen)
         }
 
         function test_the_closing_screen_has_no_motion_under_reduced_motion() {
@@ -782,17 +921,66 @@ Item {
             verify(app)
         }
 
+        // RUY-736: the stuck closing screen (Force quit, Wait at Home), English and Turkish, 720p and 1080p.
+        function test_zz_screenshots_closing_stuck() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            for (const v of [[1280, 720, "720p"], [1920, 1080, "1080p"]]) {
+                host.width = v[0]
+                host.height = v[1]
+                for (const lang of ["en", "tr"]) {
+                    DeviceSettings.language = lang
+                    Session.mockReset()
+                    launchedSpy.clear()
+                    exitedSpy.clear()
+                    start()
+                    playRacer()
+                    tc.shell.forceQuitAfterMs = 300
+                    Session.mockIgnoreStop(true)
+                    closeGameFromHub()
+                    tryVerify(() => find("launchForceQuit").activeFocus, 4000)
+                    wait(900)
+                    grabImage(tc.shell).save(shotsDir + "/appflow-9-closing-stuck-" + v[2] + "-" + lang + ".png")
+                    tc.shell.destroy()
+                    wait(100)
+                }
+            }
+            DeviceSettings.language = "en"
+            host.width = 1280
+            host.height = 720
+        }
+
+        // RUY-736: after A on Force quit, before the end ("Force quitting <title>…").
+        function test_zz_screenshots_closing_force_quitting() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            start()
+            playRacer()
+            tc.shell.forceQuitAfterMs = 300
+            Session.mockIgnoreStop(true)
+            Session.mockKillAnswer("ok")                     // no end: the screen stays in this state
+            closeGameFromHub()
+            tryVerify(() => find("launchForceQuit").activeFocus, 4000)
+            tc.shell.forceQuitAfterMs = 60000                // no new offer before the grab
+            keyClick(Qt.Key_Return)
+            tryCompare(find("launchStatus"), "text", "Force quitting Turbo Racer…")
+            wait(900)
+            grabImage(tc.shell).save(shotsDir + "/appflow-10-closing-force-quitting.png")
+        }
+
         function test_zz_screenshots_closing() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             start()
             playRacer()
-            tc.shell.closeSplashMs = 2500
+            tc.shell.forceQuitAfterMs = 2500
             Session.mockStopDelay(60000)
             closeGameFromHub()
             tryVerify(() => tc.shell.closingScreen, 2000)
             wait(900)
             grabImage(tc.shell).save(shotsDir + "/appflow-7-closing-screen.png")
+            tryVerify(() => find("launchForceQuit").activeFocus, 4000)
+            keyClick(Qt.Key_Escape)                          // Wait at Home (RUY-736)
             tryVerify(() => !tc.shell.closingScreen, 4000)
             tryVerify(() => find("recentRow").activeFocus, 2000)
             wait(500)
