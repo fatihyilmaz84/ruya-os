@@ -254,18 +254,18 @@ Item {
 
         // ---- screenshots (dev.ps1 shots)
 
-        function shot(name) {
+        function showDrives() {
             openSystemPane()
             goTo("healthDrive_1")
             wait(800)
-            grabImage(tc.shell).save(shotsDir + "/" + name)
         }
 
         function test_zz_screenshots_warning_and_failing() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             setDrives([drive("Samsung SSD 860 EVO 500GB", "warning"), drive("WD_BLACK SN770 1TB", "failing", { type: "nvme" })])
-            shot("30-settings-drive-health.png")
+            showDrives()
+            grabImage(tc.shell).save(shotsDir + "/31-settings-drive-health.png")
         }
 
         function test_zz_screenshots_turkish() {
@@ -273,7 +273,8 @@ Item {
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             setDrives([drive("Samsung SSD 860 EVO 500GB", "warning"), drive("WD_BLACK SN770 1TB", "failing", { type: "nvme" })])
             DeviceSettings.language = "tr"
-            shot("30-settings-drive-health-tr.png")
+            showDrives()
+            grabImage(tc.shell).save(shotsDir + "/31-settings-drive-health-tr.png")
         }
     }
 }
