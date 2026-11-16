@@ -52,7 +52,9 @@ check() {
         sched="$(cat "$q/scheduler")"; rot="$(cat "$q/rotational" 2>/dev/null || echo ?)"
         echo "info: $d rotational=$rot scheduler: $sched"
         case "$d" in
-            vd*|nvme*) case "$sched" in *"[none]"*) ok "$d keeps none" ;; *) bad "$d scheduler is $sched, expected [none] (the rule must not touch it)" ;; esac ;;
+            vd*) case "$sched" in *"[none]"*) ok "$d keeps none" ;; *) bad "$d scheduler is $sched, expected [none] (the rule must not touch it)" ;; esac ;;
+            # A single-queue NVMe gets the kernel's mq-deadline by default; only bfq would mean a rule touched it.
+            nvme*) case "$sched" in *"[bfq]"*) bad "$d scheduler is $sched; the rule must not touch NVMe" ;; *) ok "$d keeps the kernel default" ;; esac ;;
             sd[a-z]*|mmcblk[0-9]*)
                 case "$d" in *boot[0-9]|*rpmb) continue ;; esac
                 if [ "$rot" = 0 ]; then
