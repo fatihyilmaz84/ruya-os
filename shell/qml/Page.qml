@@ -46,6 +46,9 @@ FocusScope {
     // The Shell's Uninstall dialog (02 §1.7, RUY-499): the Options menu and the app page share it.
     property UninstallConfirm uninstallConfirm: null
 
+    // The Shell's runner of a game card's action, function (itemId, action): the game page's Close game (RUY-524).
+    property var runOption: null
+
     signal backRequested()
     // Ask the shell to push another page over this one (a detail page, T-111).
     signal openRequested(string key, var params)

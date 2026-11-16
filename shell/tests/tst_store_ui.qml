@@ -29,6 +29,7 @@ Item {
         function init() {
             verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             Store.mockReset()
+            Library.resetMockForTests("")              // an uninstall drops its Library item (RUY-524)
             compare(Object.keys(Store.jobs).length, 0, "no job survives the reset")
             Store.controllerFilter = "any"
             Profiles.lock()
@@ -134,14 +135,15 @@ Item {
             tryVerify(() => jobsSpy.count > 0, 2000, "progress arrived")
             tryVerify(() => Store.app("org.example.Racer").installed === true)
             tryVerify(() => !find("page_appDetail").working)
-            compare(find("detailPrimary").text, "Open")
+            compare(find("detailPrimary").text, "Play")
             verify(find("detailUninstall").visible)
             verify(!find("detailProgress").visible)
             compare(find("detailError").visible, false)
         }
 
-        // T-434: the detail page's buttons lie straight on L0: translucent glass with blur, opaque
-        // without it (the Performance tier, 04 §3.6). The focused one keeps the focus fill.
+        // T-434: the detail page's Uninstall… row and progress track lie straight on L0: translucent glass with
+        // blur, opaque without it (the Performance tier, 04 §3.6). RUY-524: the buttons are the shared Primary and
+        // Secondary ones (fixed fills, 04 §5), so the row is the glass the page draws itself.
         function test_detail_buttons_are_opaque_glass_without_blur() {
             openStore()
             openApp("org.example.Racer")
@@ -151,12 +153,14 @@ Item {
             tryVerify(() => Store.app("org.example.Racer").installed === true)
             tryVerify(() => !find("page_appDetail").working && uninstall.visible, 2000, "installed")
             tryVerify(() => primary.activeFocus, 2000, "focus stays on the primary button")
-            compare(uninstall.color, Theme.glass, "translucent over the blurred L0 on High")
+            const fill = findChild(uninstall, "rowFill")
+            compare(fill.color, Theme.glass, "translucent over the blurred L0 on High")
             compare(find("detailProgress").color, Theme.glass)
             DeviceSettings.effectsQuality = "performance"
-            compare(uninstall.color, Theme.glassOpaque, "opaque glass on Performance")
+            tryCompare(fill, "color", Theme.glassOpaque, 2000, "opaque glass on Performance")
             compare(find("detailProgress").color, Theme.glassOpaque, "and the progress track")
-            compare(primary.color, Theme.focusFill, "the focused button keeps the focus fill")
+            uninstall.forceActiveFocus()
+            tryCompare(fill, "color", Theme.focusFill, 2000, "the focused row keeps the focus fill")
         }
 
         function cleanup() {
@@ -205,7 +209,7 @@ Item {
             verify(!find("page_appDetail").working)
             compare(find("detailError").visible, true)
             compare(find("detailPrimary").text, "Install")
-            verify(find("detailPrimary").active, "a retry is possible")
+            verify(!find("detailPrimary").dimmed, "a retry is possible")
         }
 
         // T-188: Flatpak completed the install while the service was away: no error, the app is
@@ -220,7 +224,7 @@ Item {
             Store.mockServiceRegained(["org.example.Racer"])
             tryCompare(reconciledSpy, "count", 1)
             tryVerify(() => !find("detailError").visible, 2000, "the error went")
-            tryVerify(() => find("detailPrimary").text === "Open")
+            tryVerify(() => find("detailPrimary").text === "Play")
             verify(!find("page_appDetail").working)
             verify(find("detailUninstall").visible)
         }
@@ -236,11 +240,11 @@ Item {
             verify(Store.jobs["org.example.Racer"] !== undefined)
             verify(find("page_appDetail").working, "the page shows the running job")
             verify(find("detailProgress").visible)
-            verify(!find("detailPrimary").active, "it cannot be started twice")
+            verify(find("detailPrimary").dimmed, "it cannot be started twice")
             verify(!find("detailUninstall").visible)
             Store.mockPauseJobs(false)
             tryVerify(() => !find("page_appDetail").working, 5000, "the job ended")
-            tryVerify(() => find("detailPrimary").text === "Open")
+            tryVerify(() => find("detailPrimary").text === "Play")
             verify(!find("detailProgress").visible)
             compare(find("detailError").visible, false)
         }
@@ -253,7 +257,7 @@ Item {
             verify(find("detailError").text.length > 0)
             compare(find("detailPrimary").text, "Install")
             compare(find("page_appDetail").working, false)
-            verify(find("detailPrimary").active, "stays installable")
+            verify(!find("detailPrimary").dimmed, "stays installable")
             verify(!find("detailUninstall").visible)
         }
 
@@ -416,12 +420,18 @@ Item {
             keyClick(Qt.Key_Enter)
         }
 
+        // The buttons, This app can, the facts, then Manage (RUY-524): Down until Uninstall… has the focus.
+        function downToUninstall() {
+            for (let i = 0; i < 20 && !find("detailUninstall").activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(find("detailUninstall").activeFocus, "Down reaches Uninstall…")
+        }
+
         function test_uninstall_confirm() {
             openStore()
             openApp("org.example.Puzzle")              // installed from the start
-            compare(find("detailPrimary").text, "Open")
-            keyClick(Qt.Key_Down)
-            verify(find("detailUninstall").activeFocus)
+            compare(find("detailPrimary").text, "Play")
+            downToUninstall()
             keyClick(Qt.Key_Return)
             tryVerify(() => find("uninstallCancel").activeFocus, 2000, "Cancel is the default")
             compare(barHints(), "accept Select|back Cancel", "the confirmation says what A and B do (T-285)")
@@ -451,7 +461,7 @@ Item {
         function test_uninstall_keeps_data_by_default() {
             openStore()
             openApp("org.example.Puzzle")
-            keyClick(Qt.Key_Down)
+            downToUninstall()
             keyClick(Qt.Key_Return)
             tryVerify(() => find("uninstallCancel").activeFocus)
             keyClick(Qt.Key_Right)
@@ -508,7 +518,7 @@ Item {
         function test_backspace_closes_the_uninstall_dialog() {
             openStore()
             openApp("org.example.Puzzle")
-            keyClick(Qt.Key_Down)
+            downToUninstall()
             keyClick(Qt.Key_Return)
             tryVerify(() => find("uninstallCancel").activeFocus)
             keyClick(Qt.Key_Backspace)
@@ -591,7 +601,7 @@ Item {
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryCompare(find("page_appDetail"), "detailsReady", true)
             compare(find("detailCompat").visible, false)
-            compare(find("detailPrimary").active, true, "Install is on")
+            compare(find("detailPrimary").dimmed, false, "Install is on")
         }
 
         function test_installed_incompatible_app_stays_in_the_installed_row() {
@@ -610,7 +620,7 @@ Item {
             tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
             tryCompare(find("page_appDetail"), "detailsReady", true)
             compare(find("detailPrimary").text, "Install")
-            compare(find("detailPrimary").active, false, "Install is off")
+            compare(find("detailPrimary").dimmed, true, "Install is off")
             compare(find("detailCompat").visible, true)
             compare(find("detailCompat").text, "Needs a newer RuyaOS")
             keyClick(Qt.Key_Return)
@@ -627,7 +637,7 @@ Item {
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryCompare(find("page_appDetail"), "detailsReady", true)
             compare(find("detailCompat").visible, false)
-            compare(find("detailPrimary").active, true)
+            compare(find("detailPrimary").dimmed, false)
         }
 
         function test_installed_incompatible_app_stays_and_says_so() {

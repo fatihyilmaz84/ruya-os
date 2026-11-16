@@ -788,7 +788,7 @@ Item {
             verify(find("homeDetails").activeFocus, "there is no Play to go to")
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Return)                          // Accept on the card opens Details
-            tryCompare(tc.shell, "currentPage", "details")
+            tryCompare(tc.shell, "currentPage", "appDetail")
             compare(launchedSpy.count, 0, "nothing was launched")
             compare(Notifications.model.count, 0, "and no error toast")
             // And asking the library for it anyway does nothing visible.

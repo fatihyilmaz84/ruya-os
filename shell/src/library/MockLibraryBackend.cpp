@@ -30,9 +30,29 @@ bool before(const LibraryItem &a, const LibraryItem &b)
 }
 } // namespace
 
+namespace {
+QList<MockLibraryBackend *> &liveBackends()
+{
+    static QList<MockLibraryBackend *> list;
+    return list;
+}
+} // namespace
+
+MockLibraryBackend::~MockLibraryBackend()
+{
+    liveBackends().removeAll(this);
+}
+
+void MockLibraryBackend::flatpakUninstalled(const QString &appId)
+{
+    for (MockLibraryBackend *b : std::as_const(liveBackends()))
+        b->removeItem(QStringLiteral("flatpak:") + appId);
+}
+
 MockLibraryBackend::MockLibraryBackend(QObject *parent)
     : LibraryBackend(parent)
 {
+    liveBackends().append(this);
     reset(QString());
 }
 
@@ -59,6 +79,10 @@ void MockLibraryBackend::reset(const QString &scenario)
         // "unlisted": one more Flatpak app that the Store's catalogue does not know (RUY-16: no Details row).
         if (scenario == QLatin1String("unlisted"))
             m_items.append(item("flatpak:org.example.Unlisted", "app", "Unlisted App", 1762000000));
+        // "chess": Open Chess, installed with an update in the Store's mock, is in the library too (the game page's
+        // update state, RUY-524).
+        if (scenario == QLatin1String("chess"))
+            m_items.append(item("flatpak:org.example.Chess", "game", "Open Chess", 1761900000));
         if (withArt) {
             const QString dir = scenario.mid(4);
             for (int i = 0; i < m_items.size(); ++i) {

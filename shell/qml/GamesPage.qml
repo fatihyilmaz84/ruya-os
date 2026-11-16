@@ -35,7 +35,7 @@ Page {
     function launch(id) {
         Sfx.select()
         if (Library.sessionAppId(id) === "")
-            page.openRequested("details", { id: id })
+            page.openRequested("appDetail", { id: id })
         else
             Library.launch(id)
     }

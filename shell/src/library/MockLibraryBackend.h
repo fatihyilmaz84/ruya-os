@@ -23,6 +23,10 @@ public:
     void reset(const QString &scenario);
     // Tests only: drops the item and announces the change (Library1's ItemsChanged after an app went).
     void removeItem(const QString &id);
+    // The mock Store removed this Flatpak app: the mock Library drops its item, as the real one does once it rescans (RUY-524).
+    static void flatpakUninstalled(const QString &appId);
+
+    ~MockLibraryBackend() override;
 
 private:
     QList<LibraryItem> m_items;

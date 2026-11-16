@@ -1,5 +1,6 @@
 #include "MockStoreBackend.h"
 #include "MockArt.h"
+#include "../library/MockLibraryBackend.h"
 
 #include <algorithm>
 
@@ -48,17 +49,17 @@ void MockStoreBackend::initState()
             "all", {"audio", "gamepad"}, 95),
         app("org.example.Platformer", "Pixel Hopper", "Jump, dash and collect every star.", "Tiny Studio", "official",
             "full", "7+", {"audio", "gamepad"}, 310),
-        app("org.example.Chess", "Open Chess", "Chess against the computer or a friend.", "Community", "community",
+        app("org.example.Chess", "Open Chess", "Chess against the computer or a friend.", "Open Source Collective", "community",
             "partial", "all", {"audio"}, 60),
-        app("org.example.Retro", "Retro Station", "Play classic console games from your own files.", "Community",
+        app("org.example.Retro", "Retro Station", "Play classic console games from your own files.", "Open Source Collective",
             "community", "partial", "12+", {"audio", "gamepad", "home-files"}, 240),
-        app("org.example.Player", "Open Player", "Movies and music from your network.", "Community", "community",
+        app("org.example.Player", "Open Player", "Movies and music from your network.", "Open Source Collective", "community",
             "partial", "all", {"audio", "network", "host-files"}, 180),
-        app("org.example.Browser", "Web Browser", "Browse the web with a mouse or keyboard.", "Community", "community",
+        app("org.example.Browser", "Web Browser", "Browse the web with a mouse or keyboard.", "Open Source Collective", "community",
             "none", "12+", {"audio", "network", "home-files"}, 410),
-        app("org.example.Editor", "Text Editor", "A plain text editor.", "Community", "community", "none", "all",
+        app("org.example.Editor", "Text Editor", "A plain text editor.", "Open Source Collective", "community", "none", "all",
             {"home-files"}, 45),
-        app("org.example.Stream", "Game Streamer", "Stream games from your PC.", "Community", "community", "full",
+        app("org.example.Stream", "Game Streamer", "Stream games from your PC.", "Open Source Collective", "community", "full",
             "12+", {"network", "audio", "gamepad", "all-devices"}, 150),
         app("org.example.Tools", "Dev Tools", "Experimental tools, may break.", "Some Developer", "developer", "none",
             "all", {"host-files", "session-bus", "network"}, 75),
@@ -154,7 +155,7 @@ void MockStoreBackend::addApps(int count)
         const QByteArray id = "org.example.Many" + QByteArray::number(i);
         const QByteArray name = "Sample App " + QByteArray::number(i);
         const char *controller = i % 5 == 0 ? "full" : i % 5 == 1 ? "partial" : "none";
-        m_apps.append(app(id.constData(), name.constData(), "A made-up app of a large catalogue.", "Community",
+        m_apps.append(app(id.constData(), name.constData(), "A made-up app of a large catalogue.", "Open Source Collective",
                           "community", controller, "all", {"audio"}, 10));
     }
     emit catalogChanged();
@@ -389,6 +390,8 @@ void MockStoreBackend::step()
         }
         a.newPermissions.clear();
         a.updateAvailable = false;
+        if (done.kind == Job::Uninstall)
+            MockLibraryBackend::flatpakUninstalled(done.id);
         emit installedChanged();
         finish(done, QStringLiteral("ok"));
     }

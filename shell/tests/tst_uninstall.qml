@@ -187,7 +187,7 @@ Item {
             keyClick(Qt.Key_Right)                       // Counter Strike
             compare(find("recentRow").currentItem.itemId, "steam:730")
             keyClick(Qt.Key_Menu)
-            compare(rowIds(), ["activity"], "not a Flatpak: no Uninstall…")
+            compare(rowIds(), ["details", "activity"], "not a Flatpak: no Uninstall…")
             keyClick(Qt.Key_Escape)
 
             keyClick(Qt.Key_Left)                        // Turbo Racer: a Store job runs on its card
@@ -593,7 +593,8 @@ Item {
             tc.shell.openPage("appDetail", { appId: tc.puzzleApp })
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryVerify(() => find("detailPrimary").activeFocus, 2000)
-            keyClick(Qt.Key_Down)
+            for (let i = 0; i < 20 && !find("detailUninstall").activeFocus; ++i)
+                keyClick(Qt.Key_Down)               // the buttons, the permissions, the facts, then Manage (RUY-524)
             verify(find("detailUninstall").activeFocus)
             keyClick(Qt.Key_Return)
             tryVerify(() => find("uninstallCancel").activeFocus, 2000)

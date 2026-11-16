@@ -69,6 +69,7 @@ FocusScope {
         page.openRequested.connect(root.openPage)
         page.optionRows = root.optionRows
         page.uninstallConfirm = uninstallConfirm
+        page.runOption = (itemId, action) => root.runOption("page", itemId, action)
         page.optionsOpenFor = Qt.binding(() => root.optionsOn && root.optionsPage === page ? root.optionsItemId : "")
         page.optionsRequested.connect((surface, itemId, anchor, kind) => root.openOptions(surface, itemId, anchor, kind, page))
         page.upFromTop.connect(root.focusNav)
@@ -1378,7 +1379,6 @@ FocusScope {
         media: mediaPage,
         store: storePage,
         appDetail: appDetailPage,
-        details: libraryDetailsPage,
         settings: settingsPage,
         systemInfo: systemInfoPage,
         controller: controllerPage,
@@ -1803,7 +1803,8 @@ FocusScope {
             eyebrow: root.libraryEmpty ? "" : (root.recentIsFallback ? qsTr("Installed") : qsTr("Continue playing"))
             title: root.libraryEmpty ? qsTr("Your library is empty") : (root.heroItem.title ?? "")
             meta: root.libraryEmpty ? "" : root.sourceLabel(root.heroItem.source ?? "")
-            primaryText: root.libraryEmpty ? qsTr("Open Store") : (root.heroClosing ? qsTr("Closing…") : root.heroRunning ? qsTr("Resume") : qsTr("Play"))
+            primaryText: root.libraryEmpty ? qsTr("Open Store") : (root.heroClosing ? qsTr("Closing…") : root.heroRunning ? qsTr("Resume")
+                                                                       : root.heroItem.kind === "app" ? qsTr("Open", "Button: start an app (a game says Play)") : qsTr("Play"))
             primaryShown: root.libraryEmpty || Library.sessionAppId(root.heroItem.id ?? "") !== ""
             primaryDimmed: root.heroClosing
             secondaryText: root.libraryEmpty ? "" : qsTr("Details")
@@ -1966,7 +1967,7 @@ FocusScope {
     }
 
     function openDetails() {
-        openPage("details", { id: heroItem.id })
+        openPage("appDetail", { id: heroItem.id })
     }
 
     // ---- The Options menu (02 §1.7, designed RUY-4) ----
@@ -1996,13 +1997,12 @@ FocusScope {
         const running = appId !== "" && !closing && runningAppIds.includes(appId)
         const rows = []
         if (appId !== "" && !running && !closing)
-            rows.push({ id: "play", label: qsTr("Play"), icon: "play_arrow" })
+            rows.push({ id: "play", label: item.kind === "app" ? qsTr("Open", "Button: start an app (a game says Play)") : qsTr("Play"), icon: "play_arrow" })
         if (running && windowOf(appId) !== undefined)
             rows.push({ id: "resume", label: qsTr("Resume"), icon: "play_arrow" })
         if (running)
             rows.push({ id: "close", label: item.kind === "game" ? qsTr("Close game") : qsTr("Close app"), icon: "close" })
-        if (appId !== "" && Store.available && Store.app(appId).id !== undefined)
-            rows.push({ id: "details", label: qsTr("Details"), icon: "info" })
+        rows.push({ id: "details", label: qsTr("Details"), icon: "info" })
         if (Profiles.activeProfile !== "" && (Profiles.active.role ?? "") !== "guest")
             rows.push({ id: "activity", label: qsTr("Your activity"), icon: "bar_chart" })
         // Uninstall…: an installed Flatpak app the Store knows, that does not run and has no Store job
@@ -2068,7 +2068,7 @@ FocusScope {
             closeCardApp(appId, item.title, item.art ? (item.art.hero ?? item.art.tile ?? "") : "")
             break
         case "details":
-            openPage("appDetail", { appId: appId })
+            openPage("appDetail", { id: id })
             break
         case "activity":
             openPage("activityGame", { appId: appId !== "" ? appId : id })
@@ -2234,7 +2234,6 @@ FocusScope {
     Component { id: mediaPage; MediaPage {} }
     Component { id: storePage; StorePage {} }
     Component { id: appDetailPage; AppDetailPage {} }
-    Component { id: libraryDetailsPage; LibraryDetailsPage {} }
     Component { id: settingsPage; SettingsPage {} }
     Component { id: systemInfoPage; SystemInfoPage {} }
     Component { id: controllerPage; ControllerPage {} }
