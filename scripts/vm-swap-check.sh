@@ -49,6 +49,8 @@ check() {
     echo "--- kernel defaults and systemd-oomd"
     sw="$(sysctl -n vm.swappiness)"
     [ "$sw" = 60 ] && ok "vm.swappiness = 60 (kernel default, unchanged)" || bad "vm.swappiness = $sw (expected the kernel default 60)"
+    pc="$(sysctl -n vm.page-cluster)"
+    [ "$pc" = 0 ] && ok "vm.page-cluster = 0 (zram has no seek to save)" || bad "vm.page-cluster = $pc (expected 0, sysctl.d/61-ruyaos-zram.conf; the kernel default is 3)"
     state="$(systemctl is-active systemd-oomd.service)"
     case "$state" in failed) bad "systemd-oomd.service failed" ;; *) ok "systemd-oomd.service is $state (not failed)" ;; esac
     if grep -rqs '^ManagedOOM' /usr/lib/systemd/system /etc/systemd/system /run/systemd/system 2>/dev/null; then
