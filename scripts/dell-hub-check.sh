@@ -31,7 +31,9 @@
 #      drop-in in /run), SuperTuxKart is started again, the compositor's frame meter (T-451) logs "perf-frames"
 #      four times a second. The game's FPS with the Hub closed (10 s) against with it open (10 s, the
 #      game is not frozen). PASS: the drop is under 10 % (budget). The shell is restarted again at the
-#      end to take the drop-in and the setting back, and the profile is signed in again.
+#      end to take the drop-in and the setting back, and the profile is signed in again. It also prints
+#      the closed-Hub frame-time p99 and the package temperature (RUYA_HUB_FPS_SECS sets the closed
+#      window, default 10 s). RUYA_HUB_ONLY_FPS=1 skips steps 1 to 3 (dell-epp-bench.sh uses it).
 # The shell restarts once more at the end (restore): it copies the shell.conf backup back and removes the
 # drop-in whether or not step 4 ran (RUYA_HUB_NOFPS=1 too), and the profile is signed in again.
 # Exit 0 PASS, 1 a FAIL, 2 NOT RUN.
@@ -140,6 +142,7 @@ sleep 12
 [ -n "$(active)" ] || signin || { echo "DELL HUB CHECK NOT RUN: could not sign in after the restart"; exit 2; }
 profile="$(active)"
 
+if [ -z "${RUYA_HUB_ONLY_FPS:-}" ]; then
 echo "== 1. Hidden, SuperTuxKart in front"
 stk
 ta=$(now)
@@ -207,6 +210,7 @@ set -- $(cost)
 echo "Hub open, still: render $1 ms in 10 s ($(( $1 / 100 )) % of the GPU), shell CPU $2 ticks in 10 s"
 [ "$1" -lt "$BUDGET_STILL_MS" ] && ok "an open Hub over a frozen game draws (almost) nothing ($1 ms in 10 s)" || bad "an open Hub keeps the GPU busy: $1 ms in 10 s (budget $BUDGET_STILL_MS)"
 keys esc w2
+fi   # RUYA_HUB_ONLY_FPS
 
 if [ -z "${RUYA_HUB_NOFPS:-}" ]; then
     echo "== 4. The game's FPS with the Hub closed and open"
@@ -217,8 +221,9 @@ if [ -z "${RUYA_HUB_NOFPS:-}" ]; then
     profile="$(active)"
     stk
     t1=$(now)
-    sleep 10
+    sleep "${RUYA_HUB_FPS_SECS:-10}"
     t2=$(now)
+    pkgtemp=$(r 'for z in /sys/class/thermal/thermal_zone*; do [ "$(cat $z/type)" = x86_pkg_temp ] && echo $(( $(cat $z/temp) / 1000 )); done | head -1')
     keys guide w4
     t3=$(now)
     sleep 10
@@ -228,6 +233,9 @@ if [ -z "${RUYA_HUB_NOFPS:-}" ]; then
         r "journalctl -b -o cat --since @$1 --until @$2 --no-pager | grep -a 'perf-frames' | grep -a 'full=1' | sed -n 's/.*fps=\([0-9]*\).*/\1/p' | awk '{s+=\$1; n++} END{if (n) printf \"%.1f %d\", s/n, n; else print \"0 0\"}'"
     }
     set -- $(fps "$t1" "$t2"); before=$1; nb=$2
+    # frame-time p99 of the closed-Hub window (the perf-frames p99Ms of each second): mean and worst
+    p99=$(r "journalctl -b -o cat --since @$t1 --until @$t2 --no-pager | grep -a 'perf-frames' | grep -a 'full=1' | sed -n 's/.*p99Ms=\([0-9.]*\).*/\1/p' | awk '{s+=\$1; n++; if (\$1>m) m=\$1} END{if (n) printf \"%.1f %.1f\", s/n, m; else print \"0 0\"}'")
+    echo "Game frame time p99 (Hub closed): mean $(echo $p99 | cut -d' ' -f1) ms, worst $(echo $p99 | cut -d' ' -f2) ms; package temperature at the end of the window: ${pkgtemp:-?} C"
     set -- $(fps "$t3" "$t4"); during=$1; nd=$2
     echo "Game FPS: Hub closed $before ($nb samples), Hub open $during ($nd samples)"
     if [ "$nb" -lt 10 ] || [ "$nd" -lt 10 ]; then
