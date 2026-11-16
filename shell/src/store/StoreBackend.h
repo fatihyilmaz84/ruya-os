@@ -8,6 +8,7 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QVariantList>
 #include <QVariantMap>
 
 // One app record of org.ruyaos.Store1 (api/dbus/org.ruyaos.Store1.xml, "App record").
@@ -24,6 +25,14 @@ struct AppInfo
     QStringList permissions;
     QStringList newPermissions; // what the available update adds; only getApp fills it
     qulonglong installedSize = 0;
+    qulonglong downloadSize = 0; // bytes an install downloads; 0 = unknown
+    QString version;          // newest release in the remote; empty = unknown
+    qint64 releaseDate = 0;   // unix seconds of that release; 0 = unknown
+    QString releaseNotes;     // plain text; only getApp fills it
+    QString installedVersion; // installed apps; empty = unknown
+    QString license;          // SPDX expression; empty = none
+    QStringList categories;   // raw AppStream names
+    QVariantList screenshots; // [{image, thumb, caption}]; only getApp fills it
     QString icon;
     QString tile;
     QString hero;
@@ -47,6 +56,14 @@ struct AppInfo
             {QStringLiteral("permissions"), permissions},
             {QStringLiteral("newPermissions"), newPermissions},
             {QStringLiteral("installedSize"), installedSize},
+            {QStringLiteral("downloadSize"), downloadSize},
+            {QStringLiteral("version"), version},
+            {QStringLiteral("releaseDate"), releaseDate},
+            {QStringLiteral("releaseNotes"), releaseNotes},
+            {QStringLiteral("installedVersion"), installedVersion},
+            {QStringLiteral("license"), license},
+            {QStringLiteral("categories"), categories},
+            {QStringLiteral("screenshots"), screenshots},
             {QStringLiteral("icon"), icon},
             {QStringLiteral("tile"), tile},
             {QStringLiteral("hero"), hero},

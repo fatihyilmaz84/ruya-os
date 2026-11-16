@@ -181,6 +181,7 @@ impl<F: Flatpak> Store<F> {
             app.remote = entry.remote.clone();
             app.source = trust_of(&entry.remote).to_owned();
             app.installed_size = entry.installed_size;
+            app.download_size = entry.download_size;
             app.permissions = permissions;
             catalogue.push(app);
         }
@@ -199,6 +200,7 @@ impl<F: Flatpak> Store<F> {
                 app.installed = true;
                 app.installed_size = app.installed_size.max(i.installed_size);
                 app.update_available = updates.contains(&app.id);
+                set_installed_version(app, &i.version);
             }
         }
         catalogue.sort_by_key(|a| a.name.to_lowercase());
@@ -333,10 +335,12 @@ impl<F: Flatpak> Store<F> {
                 Some(i) => {
                     app.installed = true;
                     app.installed_size = app.installed_size.max(i.installed_size);
+                    set_installed_version(app, &i.version);
                 }
                 None => {
                     app.installed = false;
                     app.update_available = false;
+                    app.installed_version.clear();
                 }
             }
         }
@@ -677,6 +681,12 @@ fn app_from(id: &str, component: Option<&Component>, api_level: u32) -> App {
             icon: c.icon.clone(),
             tile: c.tile.clone(),
             hero: c.hero.clone(),
+            version: c.version.clone(),
+            release_date: c.release_date,
+            release_notes: c.release_notes.clone(),
+            license: c.license.clone(),
+            categories: c.categories.clone(),
+            screenshots: c.screenshots.clone(),
             ..App::default()
         },
         None => App {
@@ -687,6 +697,18 @@ fn app_from(id: &str, component: Option<&Component>, api_level: u32) -> App {
             ..App::default()
         },
     }
+}
+
+/// What flatpak says is installed; an app with no update is at the catalogue's newest release
+/// when flatpak names no version.
+fn set_installed_version(app: &mut App, flatpak_version: &str) {
+    app.installed_version = if !flatpak_version.is_empty() {
+        flatpak_version.to_owned()
+    } else if !app.update_available {
+        app.version.clone()
+    } else {
+        String::new()
+    };
 }
 
 /// "org.example.TurboRacer" -> "TurboRacer" for an app AppStream does not describe.
@@ -1649,5 +1671,76 @@ mod tests {
         assert_eq!(list.len(), jobs::FINISHED_KEPT);
         let last = list.last().unwrap();
         assert_eq!(last.id, format!("job-{}", 2 * (jobs::FINISHED_KEPT + 5)));
+    }
+
+    const RICH: &str = r#"<components origin="ruyaos"><component type="desktop-application">
+      <id>org.ruya.Racer</id><name>Turbo Racer</name>
+      <project_license>MIT</project_license>
+      <categories><category>Game</category></categories>
+      <screenshots><screenshot type="default"><image type="source" width="800">https://x/1.png</image></screenshot></screenshots>
+      <releases><release version="1.5.0" timestamp="1709251200"><description><p>New.</p></description></release></releases>
+    </component></components>"#;
+
+    #[test]
+    fn the_record_carries_version_sizes_licence_and_categories() {
+        let s = store(
+            FakeFlatpak::default()
+                .with_remote("ruyaos", "RuyaOS", true)
+                .with_app("ruyaos", "org.ruya.Racer", 5_000_000)
+                .with_download_size("org.ruya.Racer", 1_500_000)
+                .with_appstream("ruyaos", RICH),
+        );
+        let racer = &s.search("racer", &ANY)[0];
+        assert_eq!(racer.download_size, 1_500_000);
+        assert_eq!(racer.version, "1.5.0");
+        assert_eq!(racer.release_date, 1_709_251_200);
+        assert_eq!(racer.license, "MIT");
+        assert_eq!(racer.categories, ["Game"]);
+        assert_eq!(racer.installed_version, "", "not installed");
+        let got = s.get_app("org.ruya.Racer").1;
+        assert_eq!(got.release_notes, "New.");
+        assert_eq!(got.screenshots[0].image, "https://x/1.png");
+    }
+
+    #[test]
+    fn the_installed_version_is_flatpaks_or_the_catalogues_when_up_to_date() {
+        let flat = || {
+            FakeFlatpak::default()
+                .with_remote("ruyaos", "RuyaOS", true)
+                .with_app("ruyaos", "org.ruya.Racer", 5_000_000)
+                .with_installed("ruyaos", "org.ruya.Racer", 5_000_000)
+                .with_appstream("ruyaos", RICH)
+        };
+        let s = store(flat().with_installed_version("org.ruya.Racer", "1.4.2"));
+        assert_eq!(s.get_app("org.ruya.Racer").1.installed_version, "1.4.2");
+        let s = store(flat());
+        assert_eq!(s.get_app("org.ruya.Racer").1.installed_version, "1.5.0");
+        let s = store(flat().with_update("org.ruya.Racer"));
+        assert_eq!(
+            s.get_app("org.ruya.Racer").1.installed_version,
+            "",
+            "an update is waiting: the catalogue's version is not the installed one"
+        );
+    }
+
+    #[test]
+    fn an_outside_removal_clears_the_installed_version() {
+        let s = store(
+            FakeFlatpak::default()
+                .with_remote("ruyaos", "RuyaOS", true)
+                .with_app("ruyaos", "org.ruya.Racer", 5_000_000)
+                .with_installed("ruyaos", "org.ruya.Racer", 5_000_000)
+                .with_installed_version("org.ruya.Racer", "1.4.2")
+                .with_appstream("ruyaos", RICH),
+        );
+        assert_eq!(s.get_app("org.ruya.Racer").1.installed_version, "1.4.2");
+        s.flatpak.remove_installed("org.ruya.Racer");
+        assert!(s.list_installed(&mut |_| {}).is_empty());
+        let app = s.get_app("org.ruya.Racer").1;
+        assert!(!app.installed);
+        assert_eq!(
+            app.installed_version, "",
+            "no stale version after an outside removal"
+        );
     }
 }

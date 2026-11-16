@@ -357,6 +357,71 @@ Item {
             verify(isInstalled("org.example.Chess"))
         }
 
+        // The game page data (RUY-523): one check per key of the app record.
+        function test_game_page_keys_come_with_getApp_only() {
+            const id = "org.example.Racer"
+            // A fresh search: an earlier test's loaded record may still sit in the old catalogue.
+            Store.search("racer")
+            tryVerify(() => Store.results.length === 2 && Store.mockPendingReplies() === 0)
+            const listed = Store.results.find(a => a.id === id)
+            tryVerify(() => Store.installed.length === 3)
+            verify(Store.installed.every(a => a.screenshots.length === 0 && a.releaseNotes === ""),
+                   "ListInstalled carries no screenshots or release notes")
+            compare(listed.screenshots.length, 0, "lists carry no screenshots")
+            compare(listed.releaseNotes, "", "lists carry no release notes")
+            Store.loadApp(id)
+            tryVerify(() => Store.app(id).screenshots.length === 5)
+            const a = Store.app(id)
+            compare(a.screenshots[0].caption, "The start grid")
+            verify(a.screenshots[0].image.length > 0)
+            verify(a.screenshots[0].thumb.length > 0)
+            verify(a.screenshots[2].image.indexOf("nonexistent") >= 0, "the third cannot load")
+            compare(a.version, "1.4.2")
+            verify(a.releaseDate > 0)
+            verify(a.releaseNotes.indexOf("• Steering") >= 0)
+            compare(a.installedVersion, "", "not installed")
+            verify(a.downloadSize > 0)
+            verify(a.downloadSize < a.installedSize)
+            compare(a.license, "MIT")
+            compare(a.categories, ["Game", "AdventureGame", "LogicGame"])
+        }
+
+        function test_game_page_keys_after_a_list_refresh_keep_the_loaded_ones() {
+            const id = "org.example.Racer"
+            Store.loadApp(id)
+            tryVerify(() => Store.app(id).screenshots.length === 5)
+            Store.mockCatalogChanged()
+            tryCompare(Store, "available", true)
+            tryVerify(() => Store.mockPendingReplies() === 0)
+            compare(Store.app(id).screenshots.length, 5)
+            compare(Store.app(id).releaseNotes.indexOf("Faster cars"), 0)
+        }
+
+        function test_installed_version_and_update_notes() {
+            const chess = Store.app("org.example.Chess")
+            compare(chess.installedVersion, "1.4.2")
+            compare(chess.version, "1.5.0")
+            Store.loadApp("org.example.Chess")
+            tryVerify(() => Store.app("org.example.Chess").releaseNotes.length > 0)
+            Store.update("org.example.Chess")
+            tryCompare(finished, "count", 1)
+            tryVerify(() => Store.app("org.example.Chess").installedVersion === "1.5.0")
+            Store.install("org.example.Racer")
+            tryCompare(finished, "count", 2)
+            tryVerify(() => Store.app("org.example.Racer").installedVersion === "1.4.2")
+        }
+
+        function test_the_empty_board_app_has_nothing_to_show() {
+            const id = "org.example.Puzzle"
+            Store.loadApp(id)
+            tryVerify(() => Store.app(id).downloadSize > 0)
+            const a = Store.app(id)
+            compare(a.screenshots.length, 0)
+            compare(a.description, "")
+            compare(a.license, "")
+            verify(Store.catalogue.every(x => x.downloadSize > 0 && x.installedSize > 0), "every mock app has both sizes")
+        }
+
         function test_uninstall() {
             Store.uninstall("org.example.Puzzle", true)
             tryCompare(finished, "count", 1)

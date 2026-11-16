@@ -1,5 +1,7 @@
 //! The store's view of an app (the `a{sv}` record of the contract) and the statuses.
 
+pub use crate::appstream::Screenshot;
+
 /// Status strings of the method replies (stable API, `api/dbus/org.ruyaos.Store1.xml`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
@@ -90,6 +92,20 @@ pub struct App {
     /// fills it, empty without an update.
     pub new_permissions: Vec<String>,
     pub installed_size: u64,
+    /// Bytes an install downloads, 0 unknown.
+    pub download_size: u64,
+    /// Newest release in the remote's AppStream, "" unknown.
+    pub version: String,
+    /// Unix seconds of that release, 0 unknown.
+    pub release_date: i64,
+    /// Plain text of that release's notes; `get_app` only.
+    pub release_notes: String,
+    /// Version flatpak reports for the installed app, "" unknown.
+    pub installed_version: String,
+    pub license: String,
+    pub categories: Vec<String>,
+    /// `get_app` only.
+    pub screenshots: Vec<Screenshot>,
     pub icon: String,
     pub tile: String,
     pub hero: String,

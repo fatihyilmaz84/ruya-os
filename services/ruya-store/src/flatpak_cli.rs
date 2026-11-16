@@ -67,7 +67,7 @@ impl Flatpak for FlatpakCli {
             if !valid_remote_name(&remote.name) {
                 continue;
             }
-            let columns = "--columns=application,origin,branch,installed-size";
+            let columns = "--columns=application,origin,branch,installed-size,download-size";
             let args = ["remote-ls", "--system", "--app", columns, &remote.name];
             // The catalogue is useful without the network: fall back to flatpak's own cache.
             let listing = output(&args).or_else(|_| {
@@ -93,7 +93,7 @@ impl Flatpak for FlatpakCli {
             "list",
             "--system",
             "--app",
-            "--columns=application,branch,origin,size",
+            "--columns=application,branch,origin,size,version",
         ])
         .map(|text| parse_installed(&text))
     }

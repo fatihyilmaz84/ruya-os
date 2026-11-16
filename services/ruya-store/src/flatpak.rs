@@ -14,6 +14,8 @@ pub struct RemoteApp {
     pub remote: String,
     pub branch: String,
     pub installed_size: u64,
+    /// Bytes an install downloads; 0 when flatpak printed none.
+    pub download_size: u64,
 }
 
 /// An app installed system-wide.
@@ -23,6 +25,8 @@ pub struct InstalledApp {
     pub branch: String,
     pub remote: String,
     pub installed_size: u64,
+    /// flatpak's version column; "" when the app names none.
+    pub version: String,
 }
 
 /// A software source (`flatpak remotes`).
@@ -217,7 +221,7 @@ fn rows(output: &str) -> impl Iterator<Item = Vec<&str>> {
         .map(|l| l.split('\t').map(str::trim).collect())
 }
 
-/// `flatpak remote-ls --app --columns=application,origin,branch,installed-size`. An app in several
+/// `flatpak remote-ls --app --columns=application,origin,branch,installed-size,download-size`. An app in several
 /// branches is listed once, `stable` first.
 pub fn parse_remote_ls(output: &str) -> Vec<RemoteApp> {
     let mut apps: Vec<RemoteApp> = Vec::new();
@@ -225,11 +229,13 @@ pub fn parse_remote_ls(output: &str) -> Vec<RemoteApp> {
         let [id, remote, branch, size, ..] = row[..] else {
             continue;
         };
+        let download = row.get(4).copied().unwrap_or("");
         let app = RemoteApp {
             id: id.to_owned(),
             remote: remote.to_owned(),
             branch: branch.to_owned(),
             installed_size: parse_size(size),
+            download_size: parse_size(download),
         };
         match apps.iter_mut().find(|a| a.id == app.id) {
             Some(known) if known.branch != "stable" && app.branch == "stable" => *known = app,
@@ -240,7 +246,7 @@ pub fn parse_remote_ls(output: &str) -> Vec<RemoteApp> {
     apps
 }
 
-/// `flatpak list --app --columns=application,branch,origin,size`.
+/// `flatpak list --app --columns=application,branch,origin,size,version`.
 pub fn parse_installed(output: &str) -> Vec<InstalledApp> {
     rows(output)
         .filter_map(|row| match row[..] {
@@ -249,6 +255,7 @@ pub fn parse_installed(output: &str) -> Vec<InstalledApp> {
                 branch: branch.to_owned(),
                 remote: remote.to_owned(),
                 installed_size: parse_size(size),
+                version: row.get(4).copied().unwrap_or("").to_owned(),
             }),
             _ => None,
         })
@@ -471,6 +478,7 @@ impl FakeFlatpak {
             remote: remote.to_owned(),
             branch: "stable".to_owned(),
             installed_size: size,
+            download_size: 0,
         });
         self
     }
@@ -481,7 +489,22 @@ impl FakeFlatpak {
             branch: "stable".to_owned(),
             remote: remote.to_owned(),
             installed_size: size,
+            version: String::new(),
         });
+        self
+    }
+
+    pub fn with_download_size(self, id: &str, bytes: u64) -> Self {
+        for a in self.state().available.iter_mut().filter(|a| a.id == id) {
+            a.download_size = bytes;
+        }
+        self
+    }
+
+    pub fn with_installed_version(self, id: &str, version: &str) -> Self {
+        for a in self.state().installed.iter_mut().filter(|a| a.id == id) {
+            a.version = version.to_owned();
+        }
         self
     }
 
@@ -574,6 +597,7 @@ impl FakeFlatpak {
             branch: "stable".to_owned(),
             remote: remote.to_owned(),
             installed_size: size,
+            version: String::new(),
         });
     }
 
@@ -677,6 +701,7 @@ impl Flatpak for FakeFlatpak {
                     branch: "stable".to_owned(),
                     remote: remote.clone(),
                     installed_size: size,
+                    version: String::new(),
                 });
             }
             Operation::Uninstall { id, .. } => {
@@ -774,6 +799,25 @@ mod tests {
         assert_eq!(apps[0].branch, "stable");
         assert_eq!(apps[0].installed_size, 2_000_000);
         assert_eq!(apps[1].id, "org.a.Two");
+    }
+
+    #[test]
+    fn remote_ls_reads_the_download_size_column() {
+        let out = "org.a.One\truya\tstable\t2 MB\t1.5 MB\norg.a.Two\truya\tstable\t5 kB\t\norg.a.Three\truya\tstable\t5 kB\n";
+        let apps = parse_remote_ls(out);
+        assert_eq!(apps[0].download_size, 1_500_000);
+        assert_eq!(apps[1].download_size, 0, "empty column: unknown");
+        assert_eq!(apps[2].download_size, 0, "no column: unknown");
+    }
+
+    #[test]
+    fn installed_reads_the_version_column() {
+        let apps = parse_installed(
+            "org.a.One\tstable\truya\t3 MB\t1.4.2\norg.a.Two\tstable\truya\t3 MB\t\norg.a.Three\tstable\truya\t3 MB\n",
+        );
+        assert_eq!(apps[0].version, "1.4.2");
+        assert_eq!(apps[1].version, "");
+        assert_eq!(apps[2].version, "");
     }
 
     #[test]

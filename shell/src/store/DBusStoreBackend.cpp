@@ -34,6 +34,21 @@ QVariantMap parseDict(const QDBusArgument &arg)
     return out;
 }
 
+// aa{sv} of { image, thumb, caption }
+QVariantList parseScreenshots(const QDBusArgument &arg)
+{
+    QVariantList out;
+    arg.beginArray();
+    while (!arg.atEnd()) {
+        const QVariantMap d = parseDict(arg);
+        out.append(QVariantMap{{QStringLiteral("image"), d.value(QStringLiteral("image")).toString()},
+                               {QStringLiteral("thumb"), d.value(QStringLiteral("thumb")).toString()},
+                               {QStringLiteral("caption"), d.value(QStringLiteral("caption")).toString()}});
+    }
+    arg.endArray();
+    return out;
+}
+
 AppInfo toApp(const QVariantMap &d)
 {
     AppInfo a;
@@ -57,6 +72,18 @@ AppInfo toApp(const QVariantMap &d)
     else
         a.newPermissions = added.toStringList();
     a.installedSize = d.value(QStringLiteral("installed_size")).toULongLong();
+    a.downloadSize = d.value(QStringLiteral("download_size")).toULongLong();
+    a.version = d.value(QStringLiteral("version")).toString();
+    a.releaseDate = d.value(QStringLiteral("release_date")).toLongLong();
+    a.releaseNotes = d.value(QStringLiteral("release_notes")).toString();
+    a.installedVersion = d.value(QStringLiteral("installed_version")).toString();
+    a.license = d.value(QStringLiteral("license")).toString();
+    const QVariant cats = d.value(QStringLiteral("categories"));
+    a.categories = cats.canConvert<QDBusArgument>() ? qdbus_cast<QStringList>(cats.value<QDBusArgument>())
+                                                    : cats.toStringList();
+    const QVariant shots = d.value(QStringLiteral("screenshots"));
+    if (shots.canConvert<QDBusArgument>())
+        a.screenshots = parseScreenshots(shots.value<QDBusArgument>());
     a.icon = d.value(QStringLiteral("icon")).toString();
     a.tile = d.value(QStringLiteral("tile")).toString();
     a.hero = d.value(QStringLiteral("hero")).toString();
