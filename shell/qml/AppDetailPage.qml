@@ -546,8 +546,13 @@ Page {
         wrapMode: Text.Wrap
     }
 
+    // The viewport clips the scrolled column, but a focus ring is drawn outside its item (focusRingOffset +
+    // focusRingWidth): the viewport reaches that far past the content's left and right edges, and the column
+    // is inset by as much, so a stop at x 96 (Play, Install) keeps its whole ring (owner, lead-27).
+    readonly property real ringBleed: (Theme.focusRingOffset + Theme.focusRingWidth) * u
+
     component Heading: Text {
-        width: viewport.width
+        width: column.width
         textFormat: Text.PlainText
         color: Theme.text
         font.pixelSize: Theme.typeHeadline * page.u
@@ -559,6 +564,8 @@ Page {
         id: viewport
         objectName: "detailViewport"
         anchors.fill: parent
+        anchors.leftMargin: -page.ringBleed
+        anchors.rightMargin: -page.ringBleed
         clip: true
 
         Keys.onPressed: event => {
@@ -573,7 +580,8 @@ Page {
         Column {
             id: column
             objectName: "detailColumn"
-            width: parent.width
+            x: page.ringBleed
+            width: parent.width - 2 * page.ringBleed
             y: -page.offset
             spacing: Theme.spaceXxl * page.u
             Behavior on y {

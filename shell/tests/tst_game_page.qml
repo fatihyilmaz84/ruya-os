@@ -324,11 +324,24 @@ Item {
             tryVerify(() => tc.shell.slots[tc.shell.slots.length - 1].settled, 2000, "the page has finished sliding in")
             const art = find("detailHero")
             const at = art.mapToItem(tc.shell, 0, 0)
-            const view = find("detailViewport").mapToItem(tc.shell, 0, 0)
+            // The content box is the column; the clipping viewport reaches a ring's width past it on both sides.
+            const column = find("detailColumn")
+            const view = column.mapToItem(tc.shell, 0, 0)
             compare(Math.round(view.x), Math.round(tc.shell.marginX), "the content starts at the safe-area margin: " + view.x + " " + tc.shell.marginX)
             fuzzyCompare(at.x - view.x, 1024, 1, "the art is at page x 1120 relative to the content's left edge")
-            fuzzyCompare(at.x + art.width, view.x + find("detailViewport").width, 1, "the art ends at the content's right edge, nothing clipped")
+            fuzzyCompare(at.x + art.width, view.x + column.width, 1, "the art ends at the content's right edge")
             compare(art.width, 704)
+            // Owner (lead-27): the focused Play button's ring was cut at the left edge. The whole ring lies
+            // inside the clipping viewport, also on the right of the art's column edge.
+            const viewport = find("detailViewport")
+            const play = find("detailPrimary")
+            tryVerify(() => play.activeFocus, 2000, "Play has the focus")
+            const ring = findChild(play, "focusRing")
+            verify(ring && ring.visible, "Play shows its focus ring")
+            const r = ring.mapToItem(viewport, 0, 0)
+            verify(r.x >= 0, "the ring's left edge lies inside the viewport: " + r.x)
+            verify(at.x + art.width + Theme.focusRingOffset + Theme.focusRingWidth
+                   <= viewport.mapToItem(tc.shell, 0, 0).x + viewport.width + 0.5, "a ring around the right edge would fit too")
             host.width = 1280
             host.height = 720
         }
