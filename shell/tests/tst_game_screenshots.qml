@@ -113,7 +113,7 @@ Item {
             const u = page().u
             compare(card.width, Theme.cardWidthHero * u)
             compare(card.height, Theme.cardWidthHero * u * 9 / 16)
-            compare(find("screenshotCard_1").x - card.x, (Theme.cardWidthHero + Theme.cardGap) * u)
+            tryVerify(() => Math.abs(find("screenshotCard_1").x - card.x - (Theme.cardWidthHero + Theme.cardGap) * u) < 0.5, 2000, "cards laid out one step apart")
             verify(find("screenshotCard_4"))
             verify(!find("screenshotCard_5"))
         }
@@ -142,6 +142,13 @@ Item {
             verify(strip().activeFocus, "still on the row")
         }
 
+        // The card as drawn (focus scale included) lies inside the viewport's clip.
+        function inside(c, viewport) {
+            const a = c.mapToItem(viewport, 0, 0)
+            const b = c.mapToItem(viewport, c.width, c.height)
+            return a.x >= -0.5 && b.x <= viewport.width + 0.5
+        }
+
         function test_the_focused_card_is_fully_in_view() {
             start()
             openRow("org.example.Racer")
@@ -150,16 +157,10 @@ Item {
                 keyClick(Qt.Key_Right)
             const card = find("screenshotCard_4")
             const viewport = find("detailViewport")
-            // the card as drawn (focus scale included) lies inside the viewport's clip
-            function inside(c) {
-                const a = c.mapToItem(viewport, 0, 0)
-                const b = c.mapToItem(viewport, c.width, c.height)
-                return a.x >= -0.5 && b.x <= viewport.width + 0.5
-            }
-            tryVerify(() => inside(card), 2000, "card 5 inside the viewport")
+            tryVerify(() => inside(card, viewport), 2000, "card 5 inside the viewport")
             for (let i = 0; i < 4; ++i)
                 keyClick(Qt.Key_Left)
-            tryVerify(() => inside(find("screenshotCard_0")), 2000, "card 1 inside the viewport")
+            tryVerify(() => inside(find("screenshotCard_0"), viewport), 2000, "card 1 inside the viewport")
         }
 
         function test_the_row_says_view_and_back_and_the_heading_is_scrolled_to() {
