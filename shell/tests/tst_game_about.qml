@@ -190,7 +190,7 @@ Item {
             compare(tc.shell.currentPage, "appDetail", "Back closed the sheet only")
         }
 
-        function test_the_fade_mask_is_soft_and_the_sheet_fades_over_overlayMs() {
+        function test_the_fade_mask_is_soft() {
             longOpenChess()
             focusAbout()
             const sheet = openSheet()
