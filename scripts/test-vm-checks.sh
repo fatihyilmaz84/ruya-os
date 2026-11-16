@@ -491,6 +491,25 @@ out="$(FAKE_MAP_COUNT=1048576 rungame)"
 expect_contains "Fedora's max_map_count fails" "$out" "FAIL: vm.max_map_count = 1048576"
 out="$(FAKE_SPLIT_LOCK=1 rungame)"
 expect_contains "split_lock_mitigate 1 fails" "$out" "FAIL: kernel.split_lock_mitigate = 1"
+# RUY-531: a fake /sys/block (vda none, sda flash, sdb rotational bfq)
+sb="$tmp/sysblock"
+mkblk() { mkdir -p "$sb/$1/queue"; echo "$2" > "$sb/$1/queue/scheduler"; echo "$3" > "$sb/$1/queue/rotational"; }
+mkblk vda "[none] mq-deadline kyber bfq" 0
+mkblk sda "none [mq-deadline] kyber bfq" 0
+mkblk sdb "none mq-deadline kyber [bfq]" 1
+out="$(SYS_BLOCK="$sb" rungame)"; rc=$?
+expect_contains "scheduler: vda none passes" "$out" "PASS: vda keeps none"
+expect_contains "scheduler: flash sda mq-deadline passes" "$out" "PASS: sda (flash) is mq-deadline"
+case "$out" in *"sdb (rotational 0)"*) fail "a rotational disk must not be asserted" ;; *) pass "scheduler: rotational sdb is not asserted" ;; esac
+[ "$rc" = 0 ] && pass "scheduler: all good exit 0" || fail "scheduler: all good exit $rc"
+mkblk sda "none mq-deadline kyber [bfq]" 0
+out="$(SYS_BLOCK="$sb" rungame)"; rc=$?
+expect_contains "scheduler: flash disk still on bfq fails" "$out" "FAIL: sda (rotational 0) scheduler is none mq-deadline kyber [bfq]"
+[ "$rc" = 1 ] && pass "scheduler: bfq on flash exit 1" || fail "scheduler: exit $rc"
+mkblk sda "none [mq-deadline] kyber bfq" 0
+mkblk vda "none [mq-deadline] kyber bfq" 0
+out="$(SYS_BLOCK="$sb" rungame)"
+expect_contains "scheduler: vda changed fails" "$out" "FAIL: vda scheduler is none [mq-deadline] kyber bfq"
 out="$(rungame flatpak)"; rc=$?
 expect_contains "flatpak without an app id is a usage error" "$out" "usage: vm-gaming-check.sh flatpak <app-id>"
 [ "$rc" = 2 ] && pass "flatpak without an app id: exit 2" || fail "flatpak without an app id: exit $rc"

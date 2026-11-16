@@ -1,0 +1,6 @@
+# I/O scheduler for flash disks (RUY-531, docs/specs/01-platform.md 1.5). systemd's
+# 60-block-scheduler.rules gives bfq to every sd*, mmcblk* and sr* disk; bfq costs CPU per request,
+# which flash does not need. This file sorts after it, so it wins: SATA SSD, eMMC and USB flash
+# (anything sd*/mmcblk* that reports rotational 0) get mq-deadline. Rotational disks keep bfq;
+# nvme*, zram*, vd*, sr* and loop* are not matched and keep their own default.
+ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="sd*[!0-9]|mmcblk*[0-9]", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="mq-deadline"

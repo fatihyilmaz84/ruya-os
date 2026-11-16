@@ -8,16 +8,19 @@
 #            profile user (the first ruya-p<N>; "nobody" when no profile exists yet) opens it read-write
 #            (python3), and its owner and SELinux label are printed for the record.
 #            sysctl: vm.max_map_count = 2147483642 and kernel.split_lock_mitigate = 0.
+#            scheduler (RUY-531): prints every block device's scheduler; vd*/nvme* stay [none]; an sd*/mmcblk*
+#            with rotational 0 is [mq-deadline].
 #   flatpak <app-id>   information only (RUY-525 criterion 3): does the sandbox of an installed Flatpak app
 #            see /dev/ntsync with --device=all and with --device=dri only? Prints INFO lines, never fails
 #            the run; prints UNVERIFIED when flatpak or the app is missing.
 #
-# NTSYNC_DEV overrides the device path (host tests, scripts/test-vm-checks.sh).
+# NTSYNC_DEV overrides the device path, SYS_BLOCK /sys/block (host tests, scripts/test-vm-checks.sh).
 set -u
 fail=0
 ok() { echo "PASS: $*"; }
 bad() { echo "FAIL: $*"; fail=1; }
 dev="${NTSYNC_DEV:-/dev/ntsync}"
+sysblock="${SYS_BLOCK:-/sys/block}"
 
 check() {
     echo "--- ntsync"
@@ -41,6 +44,22 @@ check() {
     [ "$mm" = 2147483642 ] && ok "vm.max_map_count = 2147483642" || bad "vm.max_map_count = $mm (expected 2147483642; Fedora's 10-map-count.conf is 1048576)"
     sl="$(sysctl -n kernel.split_lock_mitigate 2>&1)"
     [ "$sl" = 0 ] && ok "kernel.split_lock_mitigate = 0" || bad "kernel.split_lock_mitigate = $sl (expected 0; the kernel default is 1)"
+
+    echo "--- I/O scheduler (RUY-531)"
+    for q in "$sysblock"/*/queue; do
+        [ -r "$q/scheduler" ] || continue
+        d="$(basename "$(dirname "$q")")"
+        sched="$(cat "$q/scheduler")"; rot="$(cat "$q/rotational" 2>/dev/null || echo ?)"
+        echo "info: $d rotational=$rot scheduler: $sched"
+        case "$d" in
+            vd*|nvme*) case "$sched" in *"[none]"*) ok "$d keeps none" ;; *) bad "$d scheduler is $sched, expected [none] (the rule must not touch it)" ;; esac ;;
+            sd[a-z]*|mmcblk[0-9]*)
+                case "$d" in *boot[0-9]|*rpmb) continue ;; esac
+                if [ "$rot" = 0 ]; then
+                    case "$sched" in *"[mq-deadline]"*) ok "$d (flash) is mq-deadline" ;; *) bad "$d (rotational 0) scheduler is $sched, expected [mq-deadline] (61-ruya-block-scheduler.rules)" ;; esac
+                fi ;;
+        esac
+    done
 }
 
 flatpak_info() {
