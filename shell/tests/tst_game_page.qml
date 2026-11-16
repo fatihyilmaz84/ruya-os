@@ -346,6 +346,31 @@ Item {
             host.height = 720
         }
 
+        // Owner (lead-27): no hard edge above the hints. The Shell's hint shade spans the screen's width
+        // under the hint bar (and the version tag) and above the page; the game page's viewport reaches the
+        // screen's bottom so its content runs into the shade, while it scrolls by the room above the hints.
+        function test_the_hint_shade_and_the_viewport_under_it() {
+            host.width = 1920
+            host.height = 1080
+            start()
+            openPage({ appId: "org.example.Racer" })
+            tryCompare(tc.shell, "u", 1)
+            tryVerify(() => tc.shell.slots[tc.shell.slots.length - 1].settled, 2000, "the page has finished sliding in")
+            const shade = find("hintShade")
+            const bar = find("hintBar")
+            verify(shade.visible, "the shade is drawn with the hints")
+            compare(shade.width, tc.shell.width, "full width")
+            fuzzyCompare(shade.y + shade.height, tc.shell.height, 0.5, "down to the screen's edge")
+            verify(shade.y < bar.y, "it starts above the hint bar")
+            verify(shade.z < bar.z && find("versionTag").z >= bar.z, "under the hints and the version tag")
+            const viewport = find("detailViewport")
+            const bottom = viewport.mapToItem(tc.shell, 0, viewport.height).y
+            fuzzyCompare(bottom, tc.shell.height, 0.5, "the viewport reaches the screen's bottom")
+            verify(viewport.mapToItem(tc.shell, 0, page().viewHeight).y <= bar.y, "the scroll room ends above the hint bar")
+            host.width = 1280
+            host.height = 720
+        }
+
         // After Uninstall… the Library drops the item; a page opened with { id } keeps the app and shows the Store record.
         function test_uninstalling_from_an_id_page_keeps_the_page() {
             start()
@@ -425,7 +450,7 @@ Item {
             keyClick(Qt.Key_Down)
             verify(find("fact_developer").activeFocus, "the first fact")
             const info = find("detailInformation")
-            tryCompare(page(), "offset", Math.min(info.y, column.height - viewport.height))
+            tryCompare(page(), "offset", Math.min(info.y, column.height - page().viewHeight))
             verify(page().offset > 0, "the heading of Information moved up")
             tryVerify(() => Math.abs(column.y + page().offset) < 0.5, 2000, "the column glides to the offset")
             keyClick(Qt.Key_Right)
@@ -439,7 +464,7 @@ Item {
                 keyClick(Qt.Key_Down)
             const last = find("fact_appId")
             verify(last.activeFocus || find("fact_controller").activeFocus)
-            tryCompare(page(), "offset", Math.max(0, column.height - viewport.height), 2000, "never past the end")
+            tryCompare(page(), "offset", Math.max(0, column.height - page().viewHeight), 2000, "never past the end")
             // and back up to the header: offset 0
             for (let i = 0; i < 20; ++i)
                 keyClick(Qt.Key_Up)
@@ -633,7 +658,7 @@ Item {
             // the block's bottom edge and ring stay inside the viewport's clip (1080p: the Page frame leaves it ~7 short)
             const block = find("detailActivity")
             const viewport = find("detailViewport")
-            tryVerify(() => block.mapToItem(viewport, 0, block.height).y + Theme.focusRingWidth * page().u <= viewport.height + 0.5, 2000,
+            tryVerify(() => block.mapToItem(viewport, 0, block.height).y + Theme.focusRingWidth * page().u <= page().viewHeight + 0.5, 2000,
                       "the focused ring's bottom lies inside detailViewport")
             compare(hintVerbs(), "accept See all|back Back")
             keyClick(Qt.Key_Return)

@@ -528,9 +528,9 @@ Page {
     // The Your activity block is on the first screen, but the Page frame can leave its bottom edge and ring past
     // the viewport's clip (RUY-532): while it has the focus the column moves up by the overflow only.
     readonly property real activityOverflow: activitySection.block.activeFocus
-        ? Math.max(0, activitySection.y + activitySection.height + (Theme.focusRingOffset + Theme.focusRingWidth) * u - viewport.height) : 0
+        ? Math.max(0, activitySection.y + activitySection.height + (Theme.focusRingOffset + Theme.focusRingWidth) * u - viewHeight) : 0
     readonly property real offset: scrollTo === header ? activityOverflow
-        : Math.max(0, Math.min(scrollTo.y, column.height - viewport.height))
+        : Math.max(0, Math.min(scrollTo.y, column.height - viewHeight))
 
     hints: activitySection.block.activeFocus ? activitySection.block.hints : onFactStop ? backOnlyHints : [
         { action: "accept", text: qsTr("Select") },
@@ -550,6 +550,11 @@ Page {
     // focusRingWidth): the viewport reaches that far past the content's left and right edges, and the column
     // is inset by as much, so a stop at x 96 (Play, Install) keeps its whole ring (owner, lead-27).
     readonly property real ringBleed: (Theme.focusRingOffset + Theme.focusRingWidth) * u
+    // Below, the viewport reaches the screen's bottom edge (under the hint bar's band), so scrolled content
+    // runs into the Shell's hint shade and fades instead of ending in a hard line (owner, lead-27). The
+    // scroll still uses the room above the hints: `viewHeight`.
+    readonly property real underHints: marginY + (Theme.glyphSize + Theme.spaceM) * u
+    readonly property real viewHeight: viewport.height - underHints
 
     component Heading: Text {
         width: column.width
@@ -566,6 +571,7 @@ Page {
         anchors.fill: parent
         anchors.leftMargin: -page.ringBleed
         anchors.rightMargin: -page.ringBleed
+        anchors.bottomMargin: -page.underHints
         clip: true
 
         Keys.onPressed: event => {
