@@ -324,6 +324,156 @@ Item {
             compare(Performance.frameState, "unavailable", "no app in front")
         }
 
+        // ---- the 1% and 0.1% low over a rolling 60 s (RUY-738) --------------------------------------------
+
+        function lowStand(from) {
+            const stand = {
+                surface: createTemporaryObject(surfaceComponent, host),
+                win: createTemporaryObject(windowComponent, host)
+            }
+            Performance.fakeFrameClockMs(from)
+            Performance.frameWindow = stand.win
+            Performance.frameSource = stand.surface
+            return stand
+        }
+
+        // The first frame has no interval before it: N frames give N - 1 intervals.
+        function test_lows_of_a_steady_run_are_the_frame_rate() {
+            const stand = lowStand(0)
+            const consumer = createTemporaryObject(consumerComponent, host)
+            verify(consumer)
+            let t = drive(stand.surface, stand.win, 0, 20, 100, 1)   // 99 intervals
+            Performance.fakeFrameClockMs(t + 5)
+            Performance.updateFrames()
+            compare(Performance.fpsLow1, -1, "99 intervals: Measuring...")
+            t = drive(stand.surface, stand.win, t, 20, 1, 1)         // 100
+            Performance.fakeFrameClockMs(t + 5)
+            Performance.updateFrames()
+            compare(Performance.fpsLow1, 50, "100 intervals: the 1% low")
+            compare(Performance.fpsLow01, -1, "the 0.1% low waits for 1000")
+            t = drive(stand.surface, stand.win, t, 20, 899, 1)       // 999
+            Performance.fakeFrameClockMs(t + 5)
+            Performance.updateFrames()
+            compare(Performance.fpsLow01, -1, "999 intervals")
+            t = drive(stand.surface, stand.win, t, 20, 1, 1)         // 1000
+            Performance.fakeFrameClockMs(t + 5)
+            Performance.updateFrames()
+            compare(Performance.fpsLow1, 50)
+            compare(Performance.fpsLow01, 50, "1000 intervals: the 0.1% low")
+        }
+
+        function test_spikes_set_the_lows() {
+            const stand = lowStand(0)
+            const consumer = createTemporaryObject(consumerComponent, host)
+            verify(consumer)
+            // 1999 intervals: 1898 of 10 ms (100 FPS), 100 of 50 ms (20 FPS), one of 200 ms (5 FPS).
+            let t = 0
+            for (let i = 0; i < 2000; ++i)
+                t = drive(stand.surface, stand.win, t, i === 1000 ? 200 : (i % 20 === 5 ? 50 : 10), 1, 1)
+            Performance.fakeFrameClockMs(t + 1)
+            Performance.updateFrames()
+            // Nearest rank: 1980 of 1999 (1%) and 1998 (0.1%) are both 50 ms intervals.
+            compare(Performance.fpsLow1, 20)
+            compare(Performance.fpsLow01, 20)
+        }
+
+        function test_long_intervals_reach_the_01_percent_low_before_the_1_percent_low() {
+            const stand = lowStand(0)
+            const consumer = createTemporaryObject(consumerComponent, host)
+            verify(consumer)
+            let t = drive(stand.surface, stand.win, 0, 10, 1500, 1)   // 1499 intervals of 10 ms
+            t = drive(stand.surface, stand.win, t, 200, 1, 1)
+            t = drive(stand.surface, stand.win, t, 10, 1, 1)          // 1501 intervals, one long
+            Performance.fakeFrameClockMs(t + 1)
+            Performance.updateFrames()
+            compare(Performance.fpsLow1, 100)
+            compare(Performance.fpsLow01, 100, "rank 1500 of 1501 is still a 10 ms interval")
+            t = drive(stand.surface, stand.win, t, 200, 3, 1)         // 1504 intervals, four long
+            Performance.fakeFrameClockMs(t + 1)
+            Performance.updateFrames()
+            compare(Performance.fpsLow01, 5, "rank 1503 of 1504 is a long one")
+            compare(Performance.fpsLow1, 100, "rank 1489 is not")
+        }
+
+        function test_another_app_in_front_resets_the_lows() {
+            const first = lowStand(0)
+            const consumer = createTemporaryObject(consumerComponent, host)
+            verify(consumer)
+            let t = drive(first.surface, first.win, 0, 20, 200, 1)
+            Performance.updateFrames()
+            compare(Performance.fpsLow1, 50)
+            const second = createTemporaryObject(surfaceComponent, host)
+            Performance.frameSource = second
+            Performance.updateFrames()
+            compare(Performance.fpsLow1, -1, "the window starts again")
+            t = drive(second, first.win, t, 10, 150, 1)
+            Performance.fakeFrameClockMs(t + 1)
+            Performance.updateFrames()
+            compare(Performance.fpsLow1, 100, "none of the first app's 50 FPS intervals")
+        }
+
+        function test_a_pause_adds_no_interval_and_keeps_the_window() {
+            const stand = lowStand(0)
+            const consumer = createTemporaryObject(consumerComponent, host)
+            verify(consumer)
+            let t = drive(stand.surface, stand.win, 0, 10, 200, 1)
+            Performance.updateFrames()
+            compare(Performance.fpsLow1, 100)
+            consumer.active = false                 // the Hub opens
+            verify(!Performance.counting)
+            t += 20000
+            Performance.fakeFrameClockMs(t)
+            consumer.active = true
+            verify(Performance.counting)
+            t = drive(stand.surface, stand.win, t, 10, 150, 1)
+            Performance.fakeFrameClockMs(t + 1)
+            Performance.updateFrames()
+            compare(Performance.fpsLow1, 100, "the 20 s gap is not an interval")
+            compare(Performance.fpsLow01, -1, "199 + 149 intervals")
+        }
+
+        function test_values_older_than_60_seconds_leave_the_window() {
+            const stand = lowStand(0)
+            const consumer = createTemporaryObject(consumerComponent, host)
+            verify(consumer)
+            let t = drive(stand.surface, stand.win, 0, 50, 200, 1)    // 10 s of 20 FPS
+            t = drive(stand.surface, stand.win, t, 10, 150, 1)
+            Performance.fakeFrameClockMs(t + 1)
+            Performance.updateFrames()
+            compare(Performance.fpsLow1, 20, "slow intervals inside the 60 s")
+            t = drive(stand.surface, stand.win, t, 500, 119, 1)       // 59.5 s of 2 FPS
+            t = drive(stand.surface, stand.win, t, 10, 150, 1)
+            Performance.fakeFrameClockMs(t + 1)
+            Performance.updateFrames()
+            compare(Performance.fpsLow1, 2, "the 50 ms intervals are 61 s old, the 500 ms ones are not")
+            t = drive(stand.surface, stand.win, t, 10, 7000, 1)       // 70 s of 100 FPS
+            Performance.fakeFrameClockMs(t + 1)
+            Performance.updateFrames()
+            compare(Performance.fpsLow1, 100, "everything slow is older than 60 s")
+            compare(Performance.fpsLow01, 100)
+        }
+
+        function test_one_update_over_a_full_window_is_cheap() {
+            const stand = lowStand(0)
+            const consumer = createTemporaryObject(consumerComponent, host)
+            verify(consumer)
+            // 21700 frames at 360 FPS with hitches: the window is full (21600 values or 60 s).
+            let t = 0
+            for (let i = 0; i < 21700; ++i)
+                t = drive(stand.surface, stand.win, t, i % 97 === 0 ? 30 : 1000 / 360, 1, 1)
+            Performance.fakeFrameClockMs(t + 1)
+            Performance.updateFrames()
+            verify(Performance.fpsLow1 > 0 && Performance.fpsLow01 > 0)
+            verify(Performance.fpsLow01 <= Performance.fpsLow1)
+            const runs = 100
+            const began = Date.now()
+            for (let i = 0; i < runs; ++i)
+                Performance.updateFrames()
+            const perUpdate = (Date.now() - began) / runs
+            console.log("full-window update:", perUpdate, "ms")
+            verify(perUpdate < 1, "an update over a full window took " + perUpdate + " ms")
+        }
+
         function test_without_a_compositor_window_frames_are_unsupported() {
             const consumer = createTemporaryObject(consumerComponent, host)
             verify(consumer)

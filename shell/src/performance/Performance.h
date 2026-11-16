@@ -65,6 +65,12 @@ class Performance : public QObject
     Q_PROPERTY(double frameTimeP99Ms READ frameTimeP99Ms NOTIFY framesChanged)
     // The app's commits in the last second (more than fps when it draws faster than the display).
     Q_PROPERTY(int commitsPerSecond READ commitsPerSecond NOTIFY framesChanged)
+    // The 1% and 0.1% low (RUY-738): the 99th and 99.9th percentile frame interval (nearest rank) of
+    // the app in front over a rolling 60 s, as FPS; -1 while the window holds too few intervals
+    // (100 and 1000): "Measuring...". A pause (no consumer open) adds no interval; another app in
+    // front starts the window again.
+    Q_PROPERTY(int fpsLow1 READ fpsLow1 NOTIFY framesChanged)
+    Q_PROPERTY(int fpsLow01 READ fpsLow01 NOTIFY framesChanged)
 
 public:
     static constexpr int FrameUpdateMs = 250;
@@ -96,6 +102,8 @@ public:
     double frameTimeMs() const { return m_stats.meanMs; }
     double frameTimeP99Ms() const { return m_stats.p99Ms; }
     int commitsPerSecond() const { return m_stats.commits; }
+    int fpsLow1() const { return lowFps(m_stats.low1Ms); }
+    int fpsLow01() const { return lowFps(m_stats.low01Ms); }
 
     // A consumer opens and closes (PerformanceConsumer does this; balanced calls only).
     Q_INVOKABLE void acquire();
@@ -129,6 +137,7 @@ signals:
     void framesChanged();
 
 private:
+    static int lowFps(double ms) { return ms > 0 ? int(1000.0 / ms + 0.5) : -1; }
     void apply(const QVariantMap &metrics);
     void markUnavailable();
     void poll();

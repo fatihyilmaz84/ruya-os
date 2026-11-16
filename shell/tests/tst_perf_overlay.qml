@@ -103,6 +103,7 @@ Item {
             Performance.frameSource = null
             Performance.frameWindow = null
             Performance.fakeFrameClockMs(-1)
+            DeviceSettings.language = "en"
             Performance.mockFail(false)
             Performance.mockReplyDelay(0)
         }
@@ -367,6 +368,34 @@ Item {
             tryVerify(() => line("Fps") === "60 FPS", 2000, line("Fps"))
             compare(line("FrameTime"), "17 ms, slowest 17 ms")
             verify(!find("perfOverlayFrameTime").truncated)
+            // 119 intervals: the 1% low is there, the 0.1% low still measuring (RUY-738).
+            compare(line("Lows"), "1% low 60 FPS · 0.1% low Measuring...")
+            verify(!find("perfOverlayLows").truncated)
+        }
+
+        function test_the_lows_line_in_each_state() {
+            start()
+            playRacer()
+            DeviceSettings.setPerformanceOverlay("p2", true)
+            tryVerify(() => drawn(), 2000)
+            compare(line("Lows"), "Lows: Not available on this console", "no compositor window")
+            Performance.frameWindow = createTemporaryObject(windowComponent, host)
+            compare(line("Lows"), "Lows: No game in front")
+            Performance.frameSource = createTemporaryObject(surfaceComponent, host)
+            tryVerify(() => line("Lows") === "Lows: Measuring...", 2000, line("Lows"))
+        }
+
+        function test_the_lows_line_in_turkish() {
+            start()
+            playRacer()
+            const stand = frameStand()
+            DeviceSettings.setPerformanceOverlay("p2", true)
+            tryVerify(() => Performance.counting, 2000)
+            drive60(stand)
+            tryVerify(() => line("Lows") === "1% low 60 FPS · 0.1% low Measuring...", 2000, line("Lows"))
+            DeviceSettings.language = "tr"
+            tryVerify(() => line("Lows") === "%1 düşük 60 FPS · %0,1 düşük Ölçülüyor...", 2000, line("Lows"))
+            verify(!find("perfOverlayLows").truncated)
         }
 
         // Held numbers are not shown as live (T-451 review).
@@ -449,6 +478,10 @@ Item {
             tryVerify(() => !rightBlock().visible, 2000)
             wait(500)
             grabImage(tc.shell).save(shotsDir + "/perf-overlay-3-toast.png")
+            DeviceSettings.language = "tr"
+            tryVerify(() => line("Lows").indexOf("düşük") >= 0, 2000)
+            wait(500)
+            grabImage(tc.shell).save(shotsDir + "/perf-overlay-4-turkish.png")
         }
     }
 }

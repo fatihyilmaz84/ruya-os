@@ -76,6 +76,25 @@ Item {
         }
         return qsTr("Frame time: %1").arg(Performance.frameSource === null ? qsTr("No game in front") : qsTr("Measuring..."))
     }
+    // "1% low 48 FPS · 0.1% low 31 FPS": percentile frame intervals of the last 60 s (RUY-738); a low with too
+    // few intervals says "Measuring..." in its place.
+    // One low: the label ("1%", Turkish "%1") and the value. A single pass, so a "%1" inside the label is never
+    // taken for the next placeholder.
+    function both(pattern, first, second) {
+        return pattern.replace(/%([12])/g, (m, d) => d === "1" ? first : second)
+    }
+    function oneLow(label, fps) {
+        const value = fps < 0 ? qsTr("Measuring...") : qsTr("%1 FPS").arg(fps)
+        return both(qsTr("%1 low %2"), label, value)
+    }
+    function lowText() {
+        switch (Performance.frameState) {
+        case "supported":
+            return both(qsTr("%1 · %2"), oneLow(qsTr("1%"), Performance.fpsLow1), oneLow(qsTr("0.1%"), Performance.fpsLow01))
+        case "unsupported": return qsTr("Lows: %1").arg(qsTr("Not available on this console"))
+        }
+        return qsTr("Lows: %1").arg(Performance.frameSource === null ? qsTr("No game in front") : qsTr("Measuring..."))
+    }
 
     // ---- the two corners ---------------------------------------------------------------------------------
     component Corner: Rectangle {
@@ -108,6 +127,7 @@ Item {
         y: readout.marginY
         Line { objectName: "perfOverlayFps"; text: readout.fpsText() }
         Line { objectName: "perfOverlayFrameTime"; text: readout.frameTimeText() }
+        Line { objectName: "perfOverlayLows"; text: readout.lowText() }
     }
 
     Corner {
