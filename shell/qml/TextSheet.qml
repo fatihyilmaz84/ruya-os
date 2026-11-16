@@ -38,6 +38,11 @@ FocusScope {
     readonly property bool scrolls: maxOffset > 0.5
     readonly property bool moreBelow: scrolls && offset < maxOffset - 0.5
 
+    // The fade's mask is soft: MultiEffect's default (threshold 0, spread 0) turns any alpha above 0 into a full
+    // step, so nothing would fade. A spread of 1 maps the mask's alpha 0..1 through a smoothstep (RUY-534).
+    readonly property real fadeThreshold: 0.0
+    readonly property real fadeSpread: 1.0
+
     // What the hint bar says while this is open (Shell.modalHintsOf).
     readonly property var modalHints: scrolls
         ? [{ actions: ["up", "down"], text: qsTr("Scroll") }, { action: "back", text: qsTr("Close") }]
@@ -71,7 +76,7 @@ FocusScope {
     visible: opacity > 0
     opacity: shown ? 1 : 0
     enabled: shown
-    Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
+    Behavior on opacity { NumberAnimation { duration: Theme.overlayMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
 
     Rectangle {
         anchors.fill: parent
@@ -117,6 +122,8 @@ FocusScope {
         layer.effect: MultiEffect {
             maskEnabled: true
             maskSource: fadeMask
+            maskThresholdMin: sheet.fadeThreshold
+            maskSpreadAtMin: sheet.fadeSpread
         }
 
         Column {
@@ -175,6 +182,7 @@ FocusScope {
     // Opaque down to 85 % of the viewport, then transparent at its foot.
     Rectangle {
         id: fadeMask
+        objectName: "textSheetFadeMask"
         visible: false
         layer.enabled: true
         layer.smooth: true

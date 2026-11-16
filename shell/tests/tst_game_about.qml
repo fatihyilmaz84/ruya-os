@@ -190,6 +190,18 @@ Item {
             compare(tc.shell.currentPage, "appDetail", "Back closed the sheet only")
         }
 
+        function test_the_fade_mask_is_soft_and_the_sheet_fades_over_overlayMs() {
+            longOpenChess()
+            focusAbout()
+            const sheet = openSheet()
+            verify(sheet.fadeSpread > 0, "a spread of 0 is a hard step: nothing would fade")
+            verify(sheet.fadeThreshold < 1)
+            const fade = findChild(sheet, "textSheetFadeMask")
+            compare(fade.gradient.stops[0].position, 0.0)
+            compare(fade.gradient.stops[1].position, 0.85, "the last 15 %")
+            compare(fade.gradient.stops[2].color.a, 0, "transparent at the foot")
+        }
+
         function test_the_sheet_is_modal() {
             longOpenChess()
             focusAbout()
