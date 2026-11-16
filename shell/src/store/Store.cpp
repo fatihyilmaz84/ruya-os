@@ -216,9 +216,11 @@ void Store::setControllerFilter(const QString &filter)
 bool Store::patchFlags(QVariantList &list) const
 {
     QHash<QString, bool> installed; // id -> update available
+    QHash<QString, QString> versions; // id -> installed version
     for (const QVariant &v : m_installed) {
         const QVariantMap m = v.toMap();
         installed.insert(m.value(QStringLiteral("id")).toString(), m.value(QStringLiteral("updateAvailable")).toBool());
+        versions.insert(m.value(QStringLiteral("id")).toString(), m.value(QStringLiteral("installedVersion")).toString());
     }
     bool changed = false;
     for (QVariant &v : list) {
@@ -227,13 +229,16 @@ bool Store::patchFlags(QVariantList &list) const
         const bool isInstalled = it != installed.cend();
         const bool update = isInstalled && it.value();
         const QStringList added = update ? m_added.value(m.value(QStringLiteral("id")).toString()) : QStringList();
+        const QString version = isInstalled ? versions.value(m.value(QStringLiteral("id")).toString()) : QString();
         if (m.value(QStringLiteral("installed")).toBool() == isInstalled
             && m.value(QStringLiteral("updateAvailable")).toBool() == update
-            && m.value(QStringLiteral("newPermissions")).toStringList() == added)
+            && m.value(QStringLiteral("newPermissions")).toStringList() == added
+            && m.value(QStringLiteral("installedVersion")).toString() == version)
             continue;
         m.insert(QStringLiteral("installed"), isInstalled);
         m.insert(QStringLiteral("updateAvailable"), update);
         m.insert(QStringLiteral("newPermissions"), added);
+        m.insert(QStringLiteral("installedVersion"), version);
         v = m;
         changed = true;
     }

@@ -360,7 +360,10 @@ Item {
         // The game page data (RUY-523): one check per key of the app record.
         function test_game_page_keys_come_with_getApp_only() {
             const id = "org.example.Racer"
-            const listed = Store.app(id)
+            // A fresh search: an earlier test's loaded record may still sit in the old catalogue.
+            Store.search("racer")
+            tryVerify(() => Store.results.length === 2 && Store.mockPendingReplies() === 0)
+            const listed = Store.results.find(a => a.id === id)
             compare(listed.screenshots.length, 0, "lists carry no screenshots")
             compare(listed.releaseNotes, "", "lists carry no release notes")
             Store.loadApp(id)
