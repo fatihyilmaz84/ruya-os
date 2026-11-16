@@ -347,6 +347,8 @@ Item {
                 page().detailsReady = false
                 tryVerify(() => find("detailScreenshotsSection").visible, 1000)
                 settle()
+                page().detailsReady = false      // again, in case a late answer came in
+                wait(200)
                 grabImage(tc.shell).save(name("114-game-screenshots-loading"))
                 tc.shell.destroy()
                 wait(100)
