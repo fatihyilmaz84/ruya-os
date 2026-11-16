@@ -12,7 +12,10 @@ fi
 podman rm -f registry >/dev/null 2>&1 || true
 podman container prune -f >/dev/null
 podman images --format '{{.Repository}}:{{.Tag}}' | grep '^localhost:5000/' | xargs -r podman rmi -f >/dev/null
-podman image prune -f >/dev/null
+# Untagged images are also podman's build cache (the intermediate layers of the
+# Containerfile stages): keep the recent ones so the next image hits the cache
+# (RUY-771). Only those older than RUYA_CACHE_KEEP_HOURS (default 72) go.
+podman image prune -f --filter "until=${RUYA_CACHE_KEEP_HOURS:-72}h" >/dev/null
 podman images --format '  kept {{.Repository}}:{{.Tag}} {{.Size}}'
 fstrim -a >/dev/null 2>&1 || true
 echo "  WSL in use: $(df -h --output=used / | tail -1 | tr -d ' ')"

@@ -403,9 +403,9 @@ cmake -S shell -B shell/build -G Ninja && cmake --build shell/build && shell/bui
 
 ## Free disk space
 F: holds the WSL disk (`F:\wsl\ext4.vhdx`, since 2026-11-07), D: holds `output/` and is nearly full; `build.sh`/`make-disk.sh` refuse with under 15 GiB free on `/mnt/c` or `/mnt/f` (`scripts/lib-diskguard.sh`); and a full drive breaks `make-disk.sh` ("Cannot allocate memory"). After a session with image builds:
-- In WSL as root: `podman image prune -f; podman system prune -f`, and `podman rmi` every drill/registry tag you pushed. Keep `localhost/ruyaos:dev`, `fedora-bootc:44`, `bootc-image-builder` and `fedora:44` (the next build needs them).
+- In WSL as root: `podman image prune -f --filter until=72h` (a bare `prune -f` also deletes the build cache) and `podman container prune -f`, and `podman rmi` every drill/registry tag you pushed. Keep `localhost/ruyaos:dev`, `fedora-bootc:44`, `bootc-image-builder` and `fedora:44` (the next build needs them).
 - `output/qcow2/work.qcow2` and any `.iso` you no longer need; `disk.qcow2` is the newest fresh disk (`make-disk.sh` recreates it).
-- The VHDX never shrinks by itself (7 → 29 GB in one failed build, 2026-11-03). **`.\scripts\free-space.ps1`** does all of this section after every image build, passed or failed (owner rule): it refuses while a build runs, prunes untagged images, drill tags (`localhost:5000/*`) and stopped containers, keeps `ruyaos:dev` and the base images, deletes `work.qcow2` (unless `-KeepWork`), shuts WSL down and runs `wsl --manage FedoraLinux-44 --compact` (29 → 5.9 GB on 2026-11-03; the old export/import recipe is no longer needed).
+- The VHDX never shrinks by itself (7 → 29 GB in one failed build, 2026-11-03). **`.\scripts\free-space.ps1`** does all of this section after every image build, passed or failed (owner rule): it refuses while a build runs, prunes untagged images older than 72 h (`RUYA_CACHE_KEEP_HOURS`; younger ones are podman's build cache for the Containerfile stages and stay, so the next image does not rebuild from scratch), drill tags (`localhost:5000/*`) and stopped containers, keeps `ruyaos:dev` and the base images, deletes `work.qcow2` (unless `-KeepWork`), shuts WSL down and runs `wsl --manage FedoraLinux-44 --compact` (29 → 5.9 GB on 2026-11-03; the old export/import recipe is no longer needed).
 
 ## Problems hit (Phase 0 exit item 9)
 
