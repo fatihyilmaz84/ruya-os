@@ -12,6 +12,8 @@ fi
 podman rm -f registry >/dev/null 2>&1 || true
 podman container prune -f >/dev/null
 podman images --format '{{.Repository}}:{{.Tag}}' | grep '^localhost:5000/' | xargs -r podman rmi -f >/dev/null
+# build.sh tags every Containerfile stage as localhost/ruyaos-cache:<stage> (RUY-771), so the build
+# cache is not dangling and a plain prune keeps it; stale untagged images go.
 podman image prune -f >/dev/null
 podman images --format '  kept {{.Repository}}:{{.Tag}} {{.Size}}'
 fstrim -a >/dev/null 2>&1 || true

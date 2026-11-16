@@ -1473,6 +1473,14 @@ for group in \
     done
 done
 
+echo "== build stage names (RUY-771) =="
+source "$here/lib-stages.sh"
+printf '%s\n' 'ARG X=1' 'FROM a/b:${X} AS one' 'RUN true' 'FROM c as Two' 'FROM d AS three-3' 'FROM quay.io/final:${X}' > "$tmp/Containerfile.stages"
+got="$(ruya_stage_names "$tmp/Containerfile.stages" | tr '\n' ' ')"
+[ "$got" = "one Two three-3 " ] && pass "stage names: 3 named, the final FROM skipped" || fail "stage names: '$got'"
+real="$(ruya_stage_names "$here/../image/Containerfile" | tr '\n' ' ')"
+expect_contains "stage names: real Containerfile" "$real" "shell-build services-build qt-dmabuf xwayland-satellite"
+
 echo
 if [ "$fails" = 0 ]; then echo "vm-check tests: all passed"; else echo "vm-check tests: $fails failed"; fi
 exit $(( fails > 0 ))
