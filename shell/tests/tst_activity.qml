@@ -695,7 +695,7 @@ Item {
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
             compare(find("detailActivity"), null, "no Your activity button in the header")
-            tc.shell.openPage("activityGame", { appId: chess })
+            openGamePage(chess)
             tryCompare(tc.shell, "currentPage", "activityGame")
             compare(tc.shell.currentParams.appId, chess)
             tryCompare(Usage, "ready", true)
@@ -705,6 +705,13 @@ Item {
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryVerify(() => find("detailPrimary").activeFocus, 2000, "focus is back on the button")
+        }
+
+        // The ledger page over the game page, as the Options menu's row opens it: once the page below has
+        // settled (a page opened in the middle of the previous one's slide is not what a player does).
+        function openGamePage(appId) {
+            tryVerify(() => tc.shell.slots.length > 0 && tc.shell.slots[tc.shell.slots.length - 1].settled, 2000, "the page below has settled")
+            tc.shell.openPage("activityGame", { appId: appId })
         }
 
         // The item with the active focus and its parents, for failure messages.
@@ -756,7 +763,7 @@ Item {
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryVerify(() => find("detailPrimary").activeFocus, 2000)
             verifyFocusOnTop("store", "the app page over the Store")
-            tc.shell.openPage("activityGame", { appId: puzzle })
+            openGamePage(puzzle)
             tryCompare(tc.shell, "currentPage", "activityGame")
             tryVerify(() => find("gameMessage").visible)
             verifyFocusOnTop("appDetail", "the activity page over the app page")
@@ -782,7 +789,7 @@ Item {
             tc.shell.openPage("appDetail", { appId: chess })
             tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
             compare(find("detailPrimary").text, "Update", "Open Chess is not in the Library: the update is the first button")
-            tc.shell.openPage("activityGame", { appId: chess })
+            openGamePage(chess)
             tryCompare(tc.shell, "currentPage", "activityGame")
             verifyFocusOnTop("appDetail", "the game page")
             Store.update(chess)
@@ -843,7 +850,7 @@ Item {
             tc.shell.openPage("appDetail", { appId: chess })
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
-            tc.shell.openPage("activityGame", { appId: chess })
+            openGamePage(chess)
             tryCompare(tc.shell, "currentPage", "activityGame")
             tryVerify(() => find("gameMessage").visible)
             tryVerify(() => find("gameBody").activeFocus, 2000, "the page owns the focus although it has no rows")
@@ -865,7 +872,7 @@ Item {
             tc.shell.openPage("appDetail", { appId: chess })
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
-            tc.shell.openPage("activityGame", { appId: chess })
+            openGamePage(chess)
             tryCompare(tc.shell, "currentPage", "activityGame")
             tryVerify(() => find("gameBody").activeFocus, 2000, "the page owns the focus before the data arrives")
             verifyFocusOnTop("appDetail", "and once the app page has faded out")
@@ -873,7 +880,8 @@ Item {
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryVerify(() => find("detailPrimary").activeFocus, 2000, "focus is back on the button")
             Usage.mockFailNextRefresh("failed")
-            tc.shell.openPage("activityGame", { appId: chess })
+            tryVerify(() => tc.shell.closingSlots.length === 0, 2000, "the first activity page has faded out")
+            openGamePage(chess)
             tryCompare(tc.shell, "currentPage", "activityGame")
             tryVerify(() => find("gameBody").activeFocus, 2000, "and after a failed read")
             verifyFocusOnTop("appDetail", "and once the app page has faded out again")
@@ -886,7 +894,7 @@ Item {
         // a dialog: the focus is that modal's business, even between two steps of a flow).
         function test_the_safety_net_stays_out_while_a_modal_shows() {
             openActivity(sessions())
-            tc.shell.openPage("activityGame", { appId: chess })
+            openGamePage(chess)
             tryCompare(tc.shell, "currentPage", "activityGame")
             verifyFocusOnTop("activity", "the game page")
             const modal = createTemporaryObject(modalStandIn, find("modalLayer"))
