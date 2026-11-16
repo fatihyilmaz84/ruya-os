@@ -151,6 +151,7 @@ qt_add_qml_module(ruyashell
         qml/Notifications.qml
         qml/DeviceIcons.qml
         qml/ControllerPads.qml
+        qml/PadNumbering.qml
         qml/BluetoothText.qml
         qml/ProfileStatus.qml
         qml/SoundThemeText.qml

@@ -31,7 +31,7 @@ QtObject {
         return connection === "usb" ? qsTr("USB") : connection === "bluetooth" ? qsTr("Bluetooth") : ""
     }
 
-    // The Hub's pads: [{ id, name, rawName, family, model, transport, percent, state }], by name then id.
+    // The Hub's pads (a name alike another connected pad's gets its number): [{ id, name, rawName, family, model, transport, percent, state }], by name then id.
     function hubPads() {
         const batteries = Batteries.devices.filter(b => b.kind === "controller")
         const used = ({})
@@ -44,7 +44,8 @@ QtObject {
             if (battery)
                 used[battery.id] = true
             pads.push({ id: id,
-                        name: paired ? DeviceIcons.shownName(Bluetooth.devices, paired) : DeviceIcons.plain(g.name),
+                        name: DeviceIcons.gamepadBase(g) + DeviceIcons.padNumbers.tail(g.id),
+                        nameBase: DeviceIcons.gamepadBase(g), nameTail: DeviceIcons.padNumbers.tail(g.id),
                         rawName: g.name,
                         family: g.family !== "" && g.family !== "generic" ? g.family
                                 : (paired && paired.family ? paired.family : g.family),
@@ -79,8 +80,12 @@ QtObject {
             const match = hub.filter(p => p.transport === d.connection && key(p.rawName) === key(d.name))
             const hubPad = twins.length === 1 && match.length === 1 ? match[0] : null
             const own = d.battery >= 0
+            const nameBase = hubPad ? hubPad.nameBase : DeviceIcons.plain(d.name)
+            const nameTail = hubPad ? hubPad.nameTail : DeviceIcons.inputNumbers.tail(d.id)
             return { id: d.id,
-                     name: hubPad ? hubPad.name : DeviceIcons.plain(d.name),
+                     name: nameBase + nameTail,
+                     nameBase: nameBase,
+                     nameTail: nameTail,
                      family: d.family !== "generic" ? d.family : (hubPad ? hubPad.family : ""),
                      model: (d.model ?? "") !== "" ? d.model : (hubPad ? hubPad.model : ""),
                      connection: d.connection,

@@ -105,7 +105,7 @@ FocusScope {
 
     readonly property var padRecord: Input.devices.find(d => d.id === prompt.pad)
     readonly property string padName: padRecord
-        ? Notifications.named(DeviceIcons.padName(padRecord.id, padRecord.name ?? "", padRecord.family ?? ""))
+        ? DeviceIcons.padNameFit(padRecord.id, padRecord.name ?? "", padRecord.family ?? "", 30)
         : ""
     readonly property string padIcon: padRecord
         ? DeviceIcons.iconFor("controller", padRecord.family ?? "", padRecord.model ?? "") : "sports_esports"
@@ -169,7 +169,7 @@ FocusScope {
     function seatPadName(profileId) {
         const s = seatOf(profileId)
         const d = s ? Input.devices.find(x => x.id === s.device_id) : undefined
-        return Notifications.named(d ? DeviceIcons.padName(d.id, d.name ?? "", d.family ?? "") : qsTr("another controller"))
+        return d ? DeviceIcons.padNameFit(d.id, d.name ?? "", d.family ?? "", 30) : Notifications.named(qsTr("another controller"))
     }
     function guestName(number) {
         return number <= 1 ? qsTr("Guest") : qsTr("Guest %1").arg(number)

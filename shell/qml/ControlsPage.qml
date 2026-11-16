@@ -36,7 +36,7 @@ Page {
         if (page.pad && GameControls.familyControllers(page.pad.family) !== "")
             out.push({ value: "family:" + page.pad.family, label: GameControls.familyControllers(page.pad.family) })
         if (page.pad)
-            out.push({ value: "device:" + page.pad.id, label: qsTr("This %1").arg(GameControls.shortName(page.pad.name)) })
+            out.push({ value: "device:" + page.pad.id, label: qsTr("This %1").arg(GameControls.shortName(page.pad.nameBase, page.pad.nameTail)) })
         if (!out.some(o => o.value === current)) {
             const family = GameControls.familyControllers(GameControls.matchFamily)
             out.push({ value: current, label: current.startsWith("family:") && family !== "" ? family : qsTr("Another controller") })

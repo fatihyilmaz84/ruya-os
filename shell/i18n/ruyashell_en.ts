@@ -1323,7 +1323,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerPads</name>
     <message>
-        <location filename="../qml/ControllerPads.qml" line="+19"/>
+        <location filename="../qml/ControllerPads.qml" line="+37"/>
         <source>Battery not reported</source>
         <translation>Battery not reported</translation>
     </message>
@@ -1871,7 +1871,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 (%2)</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+88"/>
         <source>PlayStation controller</source>
         <translation>PlayStation controller</translation>
     </message>
@@ -3290,6 +3290,15 @@ This can&apos;t be undone.</translation>
         <location line="+169"/>
         <source>Touchpad</source>
         <translation>Touchpad</translation>
+    </message>
+</context>
+<context>
+    <name>PadNumbering</name>
+    <message>
+        <location filename="../qml/PadNumbering.qml" line="+106"/>
+        <source>%1 %2</source>
+        <extracomment>A controller name followed by its number when two connected controllers are named alike, e.g. &quot;PlayStation controller 2&quot;. The name (%1) must stay first; it is replaced by nothing here, so only the &quot; %2&quot; part shows.</extracomment>
+        <translation>%1 %2</translation>
     </message>
 </context>
 <context>

@@ -35,7 +35,7 @@ Page {
             return
         }
         captureSlot.active = true
-        page.capture.open(source, page.pad.id, GameControls.shortName(page.pad.name), page.family)
+        page.capture.open(source, page.pad.id, GameControls.shortName(page.pad.nameBase, page.pad.nameTail), page.family)
     }
 
     function applyCapture(source, input) {

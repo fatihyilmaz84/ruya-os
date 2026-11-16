@@ -498,7 +498,7 @@ QtObject {
             const failedId = String(failedPad).split("/")[0]
             const other = failedPad !== padKey ? ControllerPads.controllers().find(p => p.id === failedId) : null
             if (other)
-                Notifications.show(qsTr("Could not save the change for %1").arg(shortName(other.name)), "error", "", "", qsTr("Try again."))
+                Notifications.show(qsTr("Could not save the change for %1").arg(shortName(other.nameBase, other.nameTail)), "error", "", "", qsTr("Try again."))
             else
                 Notifications.show(qsTr("Could not save the change"), "error", "", "", qsTr("Try again."))
         }
@@ -724,10 +724,12 @@ QtObject {
         const list = ControllerPads.controllers()
         return list.find(p => p.id === id) ?? list[0] ?? null
     }
-    // "DualSense": the pad's name without " Wireless Controller", at most 30 characters.
-    function shortName(name) {
+    // "DualSense 2": the pad's name without " Wireless Controller", the name at most 30 characters with its
+    // number (`tail`, " 2" or "") kept whole after it (RUY-743).
+    function shortName(name, tail) {
+        const t = String(tail ?? "")
         const s = String(name ?? "").replace(/\s+Wireless Controller$/i, "")
-        return Notifications.named(s !== "" ? s : String(name ?? ""), 30)
+        return Notifications.named(s !== "" ? s : String(name ?? ""), 30 - t.length) + t
     }
     // "PlayStation controllers" for Applies to; "" for a pad without a family.
     function familyControllers(family) {
