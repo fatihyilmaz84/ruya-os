@@ -2659,6 +2659,27 @@ FocusScope {
     }
     readonly property PinPad pinPadInPicker: picker.pinPadItem
 
+    // The hint shade (owner, lead-27): a soft gradient behind the hint bar instead of a hard edge where a
+    // page's content is clipped above it. Full width, clear at the top, through the hero scrim's colour to
+    // the background colour at the screen's edge; it starts `spaceXxl` above the content's bottom edge (safe area + glyphSize + spaceM), so the
+    // content fades into it. Drawn with the hints, under the hint bar and above pages and modals.
+    Rectangle {
+        id: hintShade
+        objectName: "hintShade"
+        z: 29.5
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: root.marginY + (Theme.glyphSize + Theme.spaceM + Theme.spaceXxl) * root.u
+        visible: root.hintList.length > 0
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: Theme.heroScrimClear }
+            GradientStop { position: 0.45; color: Theme.hintShadeMid }
+            GradientStop { position: 0.8; color: Theme.heroScrim }
+            GradientStop { position: 1.0; color: Theme.background }
+        }
+    }
+
     HintBar {
         id: hintBar
         objectName: "hintBar"
@@ -2808,6 +2829,7 @@ FocusScope {
     Text {
         id: versionTag
         objectName: "versionTag"
+        z: hintBar.z        // above the hint shade, as the hints are
         anchors { right: parent.right; bottom: parent.bottom; margins: root.marginY / 2 }
         text: root.version
         color: Theme.text
@@ -2817,6 +2839,7 @@ FocusScope {
 
     Badge {
         objectName: "mockBadge"
+        z: hintBar.z
         visible: Profiles.mock
         // Bottom right, left of the version tag: the hint bar owns the bottom left.
         anchors { right: versionTag.left; rightMargin: Theme.spaceS * root.u; verticalCenter: versionTag.verticalCenter }
