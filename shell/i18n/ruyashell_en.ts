@@ -1323,7 +1323,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerPads</name>
     <message>
-        <location filename="../qml/ControllerPads.qml" line="+37"/>
+        <location filename="../qml/ControllerPads.qml" line="+19"/>
         <source>Battery not reported</source>
         <translation>Battery not reported</translation>
     </message>
@@ -1358,7 +1358,7 @@ This can&apos;t be undone.</translation>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="+72"/>
+        <location line="+77"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
@@ -1871,7 +1871,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 (%2)</translation>
     </message>
     <message>
-        <location line="+88"/>
+        <location line="+106"/>
         <source>PlayStation controller</source>
         <translation>PlayStation controller</translation>
     </message>
@@ -2251,7 +2251,7 @@ This can&apos;t be undone.</translation>
         <translation>It isn&apos;t a RuyaOS controls file.</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+21"/>
         <source>PlayStation controllers</source>
         <translation>PlayStation controllers</translation>
     </message>
@@ -6356,7 +6356,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>WallpaperPicker</name>
     <message>
-        <location filename="../qml/WallpaperPicker.qml" line="+23"/>
+        <location filename="../qml/WallpaperPicker.qml" line="+24"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -6366,7 +6366,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+102"/>
         <source>Wallpaper deleted</source>
         <translation>Wallpaper deleted</translation>
     </message>
@@ -6391,7 +6391,7 @@ This can&apos;t be undone.</translation>
         <translation>This picture could not be copied.</translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+73"/>
         <source>Wallpaper added</source>
         <translation>Wallpaper added</translation>
     </message>
@@ -6422,7 +6422,12 @@ This can&apos;t be undone.</translation>
         <translation>Current</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+42"/>
+        <source>No pictures found. Put JPG, PNG or WebP pictures on the drive, or in a Wallpapers folder.</source>
+        <translation>No pictures found. Put JPG, PNG or WebP pictures on the drive, or in a Wallpapers folder.</translation>
+    </message>
+    <message>
+        <location line="+18"/>
         <source>Copying…</source>
         <translation>Copying…</translation>
     </message>

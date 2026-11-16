@@ -1319,7 +1319,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerPads</name>
     <message>
-        <location filename="../qml/ControllerPads.qml" line="+37"/>
+        <location filename="../qml/ControllerPads.qml" line="+19"/>
         <source>Battery not reported</source>
         <translation>Pil düzeyi bildirilmiyor</translation>
     </message>
@@ -1354,7 +1354,7 @@ Bu geri alınamaz.</translation>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="+72"/>
+        <location line="+77"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
@@ -1866,7 +1866,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 (%2)</translation>
     </message>
     <message>
-        <location line="+88"/>
+        <location line="+106"/>
         <source>PlayStation controller</source>
         <translation>PlayStation kontrolcüsü</translation>
     </message>
@@ -2246,7 +2246,7 @@ Bu geri alınamaz.</translation>
         <translation>Bir RuyaOS kontrol dosyası değil.</translation>
     </message>
     <message>
-        <location line="+19"/>
+        <location line="+21"/>
         <source>PlayStation controllers</source>
         <translation>PlayStation kontrolcüleri</translation>
     </message>
@@ -6335,7 +6335,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>WallpaperPicker</name>
     <message>
-        <location filename="../qml/WallpaperPicker.qml" line="+23"/>
+        <location filename="../qml/WallpaperPicker.qml" line="+24"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -6345,7 +6345,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+102"/>
         <source>Wallpaper deleted</source>
         <translation>Duvar kağıdı silindi</translation>
     </message>
@@ -6370,7 +6370,7 @@ Bu geri alınamaz.</translation>
         <translation>Bu resim kopyalanamadı.</translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+73"/>
         <source>Wallpaper added</source>
         <translation>Duvar kağıdı eklendi</translation>
     </message>
@@ -6401,7 +6401,12 @@ Bu geri alınamaz.</translation>
         <translation>Geçerli</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+42"/>
+        <source>No pictures found. Put JPG, PNG or WebP pictures on the drive, or in a Wallpapers folder.</source>
+        <translation>Resim bulunamadı. JPG, PNG veya WebP resimlerini sürücünün ana klasörüne ya da bir Wallpapers klasörüne koyun.</translation>
+    </message>
+    <message>
+        <location line="+18"/>
         <source>Copying…</source>
         <translation>Kopyalanıyor…</translation>
     </message>
