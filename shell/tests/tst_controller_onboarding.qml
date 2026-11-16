@@ -197,8 +197,8 @@ Item {
             // Two toasts, each with its own pad's name and battery: the same name would not tell
             // which one arrived.
             const texts = toastTexts()
-            verify(texts.includes("Wireless Controller (00:04) connected | Battery 80% · Bluetooth"), texts.join(" | "))
-            verify(texts.includes("Wireless Controller (00:05) connected | Battery 55% · Bluetooth"), texts.join(" | "))
+            verify(texts.includes("Wireless Controller connected | Battery 80% · Bluetooth"), texts.join(" | "))
+            verify(texts.includes("Wireless Controller 2 connected | Battery 55% · Bluetooth"), texts.join(" | "))
             compare(Notifications.model.get(0).iconName, "pad_dualsense")
             compare(Notifications.model.get(1).iconName, "pad_dualsense")
             // The same connections again say nothing new.
@@ -217,14 +217,14 @@ Item {
             toasts.noteInput()                                              // somebody pressed a key
             bt(false, tc.padB)
             tryCompare(toasts, "disconnectedShown", 1)
-            compare(toastTexts(), ["Wireless Controller (00:05) disconnected"], "the pad that left, not the other")
+            compare(toastTexts(), ["Wireless Controller 2 disconnected"], "the pad that left, not the other")
             verify(tc.padA in toasts.shown, "pad A is still known as connected")
             verify(!(tc.padB in toasts.shown))
             // Then the other one.
             clearToasts()
             bt(false, tc.padA)
             tryCompare(toasts, "disconnectedShown", 2)
-            compare(toastTexts(), ["Wireless Controller (00:04) disconnected"])
+            compare(toastTexts(), ["Wireless Controller disconnected"])
         }
 
         function test_a_pad_alone_keeps_its_plain_name() {

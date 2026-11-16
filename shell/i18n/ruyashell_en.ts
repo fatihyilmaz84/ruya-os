@@ -1194,7 +1194,7 @@ This can&apos;t be undone.</translation>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+259"/>
+        <location line="+263"/>
         <location line="+77"/>
         <source>Buttons in games</source>
         <translation>Buttons in games</translation>
@@ -1323,7 +1323,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerPads</name>
     <message>
-        <location filename="../qml/ControllerPads.qml" line="+19"/>
+        <location filename="../qml/ControllerPads.qml" line="+37"/>
         <source>Battery not reported</source>
         <translation>Battery not reported</translation>
     </message>
@@ -1371,7 +1371,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+55"/>
+        <location filename="../qml/ControllerPage.qml" line="+56"/>
         <source>Works</source>
         <translation>Works</translation>
     </message>
@@ -1871,7 +1871,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 (%2)</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+88"/>
         <source>PlayStation controller</source>
         <translation>PlayStation controller</translation>
     </message>
@@ -2158,22 +2158,22 @@ This can&apos;t be undone.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+482"/>
-        <location line="+182"/>
+        <location filename="../qml/GameControls.qml" line="+495"/>
+        <location line="+187"/>
         <source>Could not save to the USB drive</source>
         <translation>Could not save to the USB drive</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-187"/>
         <location line="+6"/>
         <location line="+2"/>
-        <location line="+174"/>
+        <location line="+179"/>
         <location line="+36"/>
         <source>Try again.</source>
         <translation>Try again.</translation>
     </message>
     <message>
-        <location line="-210"/>
+        <location line="-215"/>
         <source>Could not save the change</source>
         <translation>Could not save the change</translation>
     </message>
@@ -2183,7 +2183,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not save the change for %1</translation>
     </message>
     <message>
-        <location line="-254"/>
+        <location line="-260"/>
         <source>Games see %1 as A and %2 as B, unlike menus.</source>
         <translation>Games see %1 as A and %2 as B, unlike menus.</translation>
     </message>
@@ -2193,7 +2193,7 @@ This can&apos;t be undone.</translation>
         <translation>Games see %1 as A and %2 as B.</translation>
     </message>
     <message>
-        <location line="+428"/>
+        <location line="+439"/>
         <source>Saved to the USB drive</source>
         <translation>Saved to the USB drive</translation>
     </message>
@@ -2635,7 +2635,7 @@ This can&apos;t be undone.</translation>
         <translation>Profile name</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+10"/>
         <source>Protect with a PIN</source>
         <translation>Protect with a PIN</translation>
     </message>
@@ -3225,6 +3225,15 @@ This can&apos;t be undone.</translation>
         <location line="+169"/>
         <source>Touchpad</source>
         <translation>Touchpad</translation>
+    </message>
+</context>
+<context>
+    <name>PadNumbering</name>
+    <message>
+        <location filename="../qml/PadNumbering.qml" line="+106"/>
+        <source>%1 %2</source>
+        <extracomment>A controller name followed by its number when two connected controllers are named alike, e.g. &quot;PlayStation controller 2&quot;. The name (%1) must stay first; it is replaced by nothing here, so only the &quot; %2&quot; part shows.</extracomment>
+        <translation>%1 %2</translation>
     </message>
 </context>
 <context>

@@ -1190,7 +1190,7 @@ Bu geri alınamaz.</translation>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+259"/>
+        <location line="+263"/>
         <location line="+77"/>
         <source>Buttons in games</source>
         <translation>Oyunlarda düğmeler</translation>
@@ -1319,7 +1319,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerPads</name>
     <message>
-        <location filename="../qml/ControllerPads.qml" line="+19"/>
+        <location filename="../qml/ControllerPads.qml" line="+37"/>
         <source>Battery not reported</source>
         <translation>Pil düzeyi bildirilmiyor</translation>
     </message>
@@ -1367,7 +1367,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+55"/>
+        <location filename="../qml/ControllerPage.qml" line="+56"/>
         <source>Works</source>
         <translation>Çalışıyor</translation>
     </message>
@@ -1866,7 +1866,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 (%2)</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+88"/>
         <source>PlayStation controller</source>
         <translation>PlayStation kontrolcüsü</translation>
     </message>
@@ -2153,22 +2153,22 @@ Bu geri alınamaz.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+482"/>
-        <location line="+182"/>
+        <location filename="../qml/GameControls.qml" line="+495"/>
+        <location line="+187"/>
         <source>Could not save to the USB drive</source>
         <translation>USB belleğe kaydedilemedi</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-187"/>
         <location line="+6"/>
         <location line="+2"/>
-        <location line="+174"/>
+        <location line="+179"/>
         <location line="+36"/>
         <source>Try again.</source>
         <translation>Yeniden dene.</translation>
     </message>
     <message>
-        <location line="-210"/>
+        <location line="-215"/>
         <source>Could not save the change</source>
         <translation>Değişiklik kaydedilemedi</translation>
     </message>
@@ -2178,7 +2178,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 için değişiklik kaydedilemedi</translation>
     </message>
     <message>
-        <location line="-254"/>
+        <location line="-260"/>
         <source>Games see %1 as A and %2 as B, unlike menus.</source>
         <translation>Oyunlar %1 düğmesini A, %2 düğmesini B olarak görür; menülerden farklı.</translation>
     </message>
@@ -2188,7 +2188,7 @@ Bu geri alınamaz.</translation>
         <translation>Oyunlar %1 düğmesini A, %2 düğmesini B olarak görür.</translation>
     </message>
     <message>
-        <location line="+428"/>
+        <location line="+439"/>
         <source>Saved to the USB drive</source>
         <translation>USB belleğe kaydedildi</translation>
     </message>
@@ -2630,7 +2630,7 @@ Bu geri alınamaz.</translation>
         <translation>Profil adı</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+10"/>
         <source>Protect with a PIN</source>
         <translation>PIN ile koru</translation>
     </message>
@@ -3214,6 +3214,15 @@ Bu geri alınamaz.</translation>
         <location line="+169"/>
         <source>Touchpad</source>
         <translation>Dokunmatik yüzey</translation>
+    </message>
+</context>
+<context>
+    <name>PadNumbering</name>
+    <message>
+        <location filename="../qml/PadNumbering.qml" line="+106"/>
+        <source>%1 %2</source>
+        <extracomment>A controller name followed by its number when two connected controllers are named alike, e.g. &quot;PlayStation controller 2&quot;. The name (%1) must stay first; it is replaced by nothing here, so only the &quot; %2&quot; part shows.</extracomment>
+        <translation>%1 %2</translation>
     </message>
 </context>
 <context>
