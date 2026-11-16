@@ -222,30 +222,51 @@ A package has **exactly one** `run`. (Several launch entries, "Game" and "Launch
 - **Wine prefix.** `prefix` lives in the player's data directory, `~/.var/app/play.<id>/data/prefix` (one per profile, one per game), created on first run from `prefix.template` if the package has one (copied, not linked), else by the runner. `epoch` is an integer: when an update raises it, the importer's first launch backs up the paths in `data.saves`, recreates the prefix, and restores them (so a runner change that needs a fresh prefix keeps saves).
 - **First-run setup** (`setup[]`): commands such as a Visual C++ redistributable, run **once per prefix, at first launch, inside the sandbox with the game's own permissions**, never at install time and never as root. They are shown on the launch splash ("Preparing the game for the first time") and have a timeout (10 minutes). A failed setup step is reported, not ignored. There is no network fetch at setup (no `winetricks` downloads): redistributables are shipped in the package.
 - Under Wine the Windows `Z:` drive is the *sandbox's* root, not the host's: the Flatpak sandbox is what limits files, not Wine's drive mapping.
-- **Display:** apps reach the compositor through the per-profile Wayland socket (T-164). **Windows games need either Xwayland or Wine's native Wayland driver; there is no Xwayland in the product today** (`permissions-and-sandbox.md`). Which one is a spike question (Q2) and a prerequisite for the Wine runner.
+- **Display:** apps reach the compositor through the per-profile Wayland socket (T-164).
+  - **Windows packages (`wine`, `proton`) get `sockets=x11`, not `wayland`.** They run on X11 through `ruya-session x11-run` (xwayland-satellite, ADR-034). Spike Q2 measured full screen, 60 FPS and 17 ms frames at 1080p on the Dell.
+  - Wine's own Wayland driver (`winewayland`) does not start on the compositor today. It needs `wl_data_device_manager` >= 2, `wl_output` >= 3 and `xdg_wm_base` >= 2, plus pointer constraints and relative pointer for mouse-look. It becomes an option after a compositor task.
+- **The launcher owns `WINEPREFIX`.** A package-set `WINEPREFIX=/tmp/...` would silently put the prefix in the sandbox's tmpfs, so saves would be lost at exit (spike Q4). `run.env` refuses it (§18 item 21).
+- **32-bit Windows code** needs `--allow=multiarch` and the `Compat.i386` (and `GL32`) extensions: without them Flatpak's seccomp kills it with SIGSYS (spike Q4). Flathub's Wine 11 and GE-Proton 11 both use the old WoW64 layout (`i386-unix`).
 
 ### 6.4 The Play platform (what the sandbox contains)
 
-Recommended, to be proven by T-229: the package is installed as a Flatpak **app** whose runtime is the freedesktop platform plus **extensions we publish on the `ruyaos` remote**:
+Proven by the T-229 spike (RUY-91, 2026-11-16, Q1): the package is installed as a Flatpak **app** whose runtime is the freedesktop platform plus **extensions we publish on the `ruyaos` remote**. Installing the app pulled the declared launcher extension on its own (a related ref), and `command=` may be an absolute path into that extension (`/app/launcher/bin/ruya-play-launch`).
 
 - `org.ruyaos.Play.Launcher`: the small launcher (`ruya-play-launch`) that reads `/app/play.json`, resolves components (§6.2), prepares the prefix, applies the env allow-list and `exec`s the runner. One launcher for every package, updated with the OS or the Store, so a launcher fix reaches every game.
 - `org.ruyaos.Play.Runner.Wine//<major>`, `...Proton...`: **system runners**, one extension branch per major version, updated by the Store, shared by all packages (this is what makes `source: system` cheap). They bundle DXVK and VKD3D-Proton as part of the runner.
 - Support libraries a game commonly wants (32-bit compat, gamescope, MangoHud, GameMode) as extensions the app may mount.
 
-**The image preinstalls the Wine runner** (owner, 2026-11-06, D3), so a Windows package with `source: system` works offline from the first boot; the Store still updates it independently of the OS. **RuyaOS provides only Wine as a system runner** (amended by ADR-025, owner 2026-11-09: GE-Proton is preinstalled and the default; Wine, Wine-GE, UMU-Proton and other builds are Store runners, chosen per game) (owner, 2026-11-06). Proton and its Steam Linux Runtime, emulators, console firmware and BIOS files are never shipped or hosted by RuyaOS: a packager who needs them bundles them (as `components[]` with `source: bundled`) and carries the licence and distribution duty. Proton needs a nested container (pressure-vessel) that may not work inside the sandbox; whether a bundled one can run is a spike question (Q3). Wine alone is the v1 system runner.
+**The image preinstalls the Wine runner** (owner, 2026-11-06, D3), so a Windows package with `source: system` works offline from the first boot; the Store still updates it independently of the OS. **RuyaOS provides only Wine as a system runner** (amended by ADR-025, owner 2026-11-09: GE-Proton is preinstalled and the default; Wine, Wine-GE, UMU-Proton and other builds are Store runners, chosen per game) (owner, 2026-11-06). Proton and its Steam Linux Runtime, emulators, console firmware and BIOS files are never shipped or hosted by RuyaOS: a packager who needs them bundles them (as `components[]` with `source: bundled`) and carries the licence and distribution duty. **Proton without its container (spike Q3).**
+- Proton through umu and the Steam Linux Runtime (pressure-vessel) does **not** run inside the sandbox on Flatpak 1.18.4. The sub-sandbox portal is reachable, but its `--usr-path` / `--app-path` fails ("Can't find source path /proc/self/fd/N"); without the portal, pressure-vessel exits 125.
+- So in v1 a Proton runner (the preinstalled GE-Proton, or a bundled one) runs **directly**, without umu and the runtime, like a Wine runner. It needs `STEAM_COMPAT_DATA_PATH` under `${data}` and `multiarch`, and it runs on the X11 path. Measured: 60 FPS; 2.2 s to the game's GL load with a fresh 280 MB prefix, 1.6 s warm.
+- A package that bundles the Steam Linux Runtime is unsupported until a Flatpak with a working portal passes the re-test in `scripts/spikes/play/q3-proton.sh`. If that ever becomes supported, the runtime is one shared extension, never 696 MB per profile and app (umu's default).
 
 ## 7. Installing
 
 ### 7.1 Where things live
 
-Recommended design (T-229 confirms; it keeps every existing service working):
+Design confirmed by the T-229 spike (RUY-91, Q1; it keeps every existing service working):
 
 - **Install = import as a system Flatpak app** named `play.<id>`, built by the importer from the package and committed to the system Flatpak installation (`/var/lib/flatpak`, the same place and the same machinery as every other app). Consequences, all by reuse: the app is shared by profiles; per-profile data is `~/.var/app/play.<id>/{data,config,cache}` (03 §4.5a, so backups, "Keep saves?" and storage sizes already apply); `ruya-store` lists, updates, rolls back (`Rollback`) and uninstalls it; `ruya-library` finds it (exported desktop entry, `Game` category); `ruya-session` launches it (`flatpak run play.<id>`); permissions are Flatpak's. OSTree stores files by content hash, so **two packages that bundle the same Wine build share one copy on disk**.
 - The importer adds to the app's `/app`: `play.json`, `play.files`, `play.sig`, the vetted art (`/app/share/ruyaos/play/art/`), the payload and bundled components. Its Flatpak metadata (`command=ruya-play-launch`, permissions) is **generated from the manifest** by the importer; the package never supplies Flatpak metadata, so it cannot request what §8's vocabulary does not allow.
 - Trust of the generated commit: after the importer verified the package's signature (§9), it signs the OSTree commit with a **device-local key** generated on first use (root, 0600, under `/var/lib/ruya-play/`, never in the image, never in the repo). Flatpak verifies that signature as with any remote, so `ruya-store`'s rule "never `--no-gpg-verify`" is unchanged. The local key only says "this device's importer accepted this package", which is what we want.
 - The package file itself is not needed after install (a USB stick can be removed). Keeping or deleting the downloaded copy is the player's choice.
 
-If the spike shows this route does not work (for example a runner that cannot be an extension), the fallback is the same sandbox driven directly through bubblewrap by `ruya-session`, with the same manifest, permissions and trust rules; that changes §7.1 and §6.4 only, and needs an ADR amendment (the invariant says Flatpak sandboxes).
+**What the commit step must do (spike Q1, Flatpak 1.18.4):**
+- Create every extension point's mount directory in `/app`. Otherwise bwrap fails at run time ("Can't mkdir parents ... Read-only file system").
+- Write the app's own `share/applications/play.<id>.desktop` (category `Game`). Without it nothing is exported, and exports not named after the app id are refused.
+- Use `install --or-update`: a plain `install` of an installed ref does nothing.
+- Use a **`bare-user-only` staging repo on the same reflink-capable filesystem as `/var/lib/flatpak`** (XFS on the image). The Dell measured these numbers:
+
+| Payload | Repo mode | Commit | Install | Disk peak | A second app with the same files |
+|---|---|---|---|---|---|
+| 20 GiB | `bare-user-only` | 52 s | 0.4 s | 1.03x the payload | +0 bytes |
+| 20 GiB | `archive-z2` | 472 s | 117 s | 3.1x | +0 bytes |
+| 2 GiB | `bare-user-only` | 5.3 s | 0.6 s | 1x | +0 bytes |
+
+Two apps that bundle Flathub's 430 MB Wine tree added 23 MiB in total, because they share objects with the installed `org.winehq.Wine`.
+
+The bubblewrap fallback is not needed: the spike confirmed the Flatpak route (ADR-014, "Spike result").
 
 ### 7.2 Who may install
 
@@ -394,9 +415,9 @@ A developer guide chapter and two sample packages (a native Linux one, a Windows
 
 | # | Question | Who | Default if unanswered |
 |---|---|---|---|
-| Q1 | Does the "import as a Flatpak app signed by a device key" route work with the pinned Flatpak (extension mounts for launcher and runners, `command`, generated metadata, signed local commit, size of the commit step for a 30 GB payload)? | T-229 | Fall back to direct bubblewrap under `ruya-session` (needs an ADR amendment). |
-| Q2 | Windows games need X11 or Wine's Wayland driver: Xwayland in the compositor, or Wine >= 10 with `winewayland`? Fullscreen, controllers, vsync and gamescope with either? | T-229 (and a compositor task) | Block the Wine runner until one works. |
-| Q3 | Can a *bundled* Proton / Steam Linux Runtime (pressure-vessel) nest inside the sandbox (sub-sandbox portal)? Packagers supply it; this only decides whether we document it as supported. | T-229 | Documented as unsupported until proven. |
+| Q1 | Does the "import as a Flatpak app signed by a device key" route work with the pinned Flatpak (extension mounts for launcher and runners, `command`, generated metadata, signed local commit, size of the commit step for a 30 GB payload)? | T-229 | *Answered (RUY-91, 2026-11-16): yes.* GPG checks stay on, and the launcher extension installs as a related ref. A 20 GiB payload commits in 52 s and installs in 0.4 s, with a 1.03x disk peak (`bare-user-only` staging on XFS). What the commit step must do: §7.1. No bubblewrap fallback. |
+| Q2 | Windows games need X11 or Wine's Wayland driver: Xwayland in the compositor, or Wine >= 10 with `winewayland`? Fullscreen, controllers, vsync and gamescope with either? | T-229 (and a compositor task) | *Answered (RUY-91): X11 through xwayland-satellite for v1* (full screen, 60 FPS at 1080p, composited, so no tearing path). `winewayland` (Wine 11, GE-Proton 11) refuses the compositor's protocol versions: §6.3. Controller input under Wine and gamescope were not tested (no pad connected): open for T-239. |
+| Q3 | Can a *bundled* Proton / Steam Linux Runtime (pressure-vessel) nest inside the sandbox (sub-sandbox portal)? Packagers supply it; this only decides whether we document it as supported. | T-229 | *Answered (RUY-91): not on Flatpak 1.18.4.* The portal's `--usr-path` fails. GE-Proton without the runtime works, and is the v1 path (§6.4). Documented as unsupported; re-test on a newer Flatpak with `q3-proton.sh`. |
 | Q4 | Emulators: packagers bundle them (decided). Open: does the format need an `emulator` capability check (e.g. needs GPU API X)? | lead | No; `requirements.gpu_api` is enough. |
 | Q5 | Trailer playback: vetted file with the shell's media stack (v1) or an out-of-process player? | lead, T-242 | v1 as in §5; hardening later. |
 | Q6 | Revocation freshness: how old may the cached list be, and what happens past that? | lead, T-231 | Warn but still allow. |
@@ -420,7 +441,7 @@ Found while planning stores (ADR-032, `10-stores.md`). Nothing here is built, so
 4. **Sideloading needs an admin (owner, confirmed 2026-11-10).** §7.2 let a Standard profile install any signed low or medium package from a USB stick, system-wide, for every profile; a signature proves nothing about a stranger's key (§0.7). Store and USB installs follow `10-stores.md` §4: an admin, or an admin's PIN.
 
 **B. Contradictions with later decisions**
-5. **Runners (ADR-025, 2026-11-09).** §6.4, §14, Q3 and D3 still say Wine is the only system runner and Proton is never shipped; GE-Proton is now preinstalled and the default. So Q3 (does Proton's container nest inside the sandbox) is no longer optional: it decides whether the default runner works for `.play` at all, and is the first question of T-229.
+5. **Runners (ADR-025, 2026-11-09).** §6.4, §14, Q3 and D3 still say Wine is the only system runner and Proton is never shipped; GE-Proton is now preinstalled and the default. So Q3 (does Proton's container nest inside the sandbox) is no longer optional: it decides whether the default runner works for `.play` at all, and is the first question of T-229. *Answered (RUY-91):* the default runner works for `.play`, but only without its container (§6.4).
 6. **Words.** The tier `developer` and "developer remote" collide with the store trust `third-party` and with "developer mode". Keep the tier names, write "third-party store" for the place.
 7. **Revocation (§9.2, Q6)** assumed the `ruyaos` remote; with D2 there is none in v1. It is one file with the store blocklist, shipped in the image and changed by OS updates (`10-stores.md` §6); a fresher copy from the official store is later. T-241 owns what an installed, revoked package does.
 
@@ -439,8 +460,8 @@ Found while planning stores (ADR-032, `10-stores.md`). Nothing here is built, so
 17. **Squatting an id.** The first package to claim an id on a console owns it (trust on first use); the genuine game is then refused as "not the same developer". The same admin action as item 16 is the way out; the message must say so.
 18. **A developer who loses the key** has no rotation path (rotation needs the old key). Say it plainly in the guide: players must remove and reinstall (item 16), or the official store's countersignature decides.
 19. **Feeds (§11 way 2).** "Redirects must stay on the registrable domain" needs a public-suffix list on the console: use the exact host. `expires` needs a correct clock, and a console can boot offline with a wrong one: a feed is also refused when its newest release is older than the installed build's `signed_at`. A feed signed with the package key keeps that key on a web server: allow a feed key delegated by the package key (one statement, like rotation).
-20. **Disk space.** A downloaded 30 GB package needs the archive, the staging copy and the OSTree objects unless staging and repository share extents; §11 only says "old + new". T-229 measures the peak and the importer checks that number before the download.
-21. **`run.env` is a deny-list, called an allow-list** (§6.3): `WINEPREFIX`, `WINESERVER`, `VK_ICD_FILENAMES`, `VK_LAYER_PATH`, `GST_PLUGIN_PATH`, `QT_PLUGIN_PATH` pass it and break what the platform sets. Not an escape (the package runs its own code in its own sandbox either way), but make it a real allow-list of prefixes.
+20. **Disk space.** A downloaded 30 GB package needs the archive, the staging copy and the OSTree objects unless staging and repository share extents; §11 only says "old + new". T-229 measures the peak and the importer checks that number before the download. *Measured (RUY-91):* the staging copy is the whole peak, about 1.03x the payload, while staging, the local repo and `/var/lib/flatpak` share one reflink-capable filesystem. The check asks for archive + payload + 5 % there, and for archive + 2x payload anywhere else. A filesystem without reflinks was not measured.
+21. **`run.env` is a deny-list, called an allow-list** (§6.3): `WINEPREFIX`, `WINESERVER`, `VK_ICD_FILENAMES`, `VK_LAYER_PATH`, `GST_PLUGIN_PATH`, `QT_PLUGIN_PATH` pass it and break what the platform sets. Not an escape (the package runs its own code in its own sandbox either way), but make it a real allow-list of prefixes. *Seen in RUY-91 (Q4):* `LD_PRELOAD` reaches the process, `VK_ICD_FILENAMES` can leave the game with no GPU, and `WINEPREFIX=/tmp/...` loses saves. So the list also leaves out `WINEPREFIX`, `VK_*`, `__GLX_*`, `__EGL_*`, `MESA_*` and `LIBGL_*`.
 22. **Threats missing from §9.1:** a hostile store index (answered in `10-stores.md` §11.1), a hostile `runner.json` in a bundled component (it is parsed by the launcher inside the sandbox: fine, but say so), and a child profile seeing a system-wide package whose rating is the developer's own claim (T-211: treated as not rated).
 23. **USB limits.** A `.play.zip` over 4 GiB does not fit on FAT32, the commonest stick format; the folder form does unless one file is over 4 GiB. `ruya-pack build` warns; the guide recommends exFAT. A stick pulled during import is a clean failure (staging removed): add it to the hostile-case fixtures.
 
