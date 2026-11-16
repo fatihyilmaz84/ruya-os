@@ -181,8 +181,8 @@ FocusScope {
         width: viewport.width
         height: viewport.height
         gradient: Gradient {
-            GradientStop { position: 0.0; color: "white" }
-            GradientStop { position: 0.85; color: "white" }
+            GradientStop { position: 0.0; color: "white" }   // token-ok: a mask, only its alpha counts
+            GradientStop { position: 0.85; color: "white" }   // token-ok: a mask, only its alpha counts
             GradientStop { position: 1.0; color: "transparent" }
         }
     }
