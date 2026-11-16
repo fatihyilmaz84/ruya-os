@@ -33,8 +33,19 @@ param(
 # text a caller's pipe (`| Select-Object -Last 3`) could cut (RUY-654).
 
 $Repo = Split-Path -Parent $PSScriptRoot
-$Path = if ([IO.Path]::IsPathRooted($File)) { $File } else { Join-Path $Repo $File }
-if (-not (Test-Path -LiteralPath $Path)) { Write-Host "no such file: $Path"; exit 2 }
+# RUY-765: a relative -File is the caller's, so it resolves against the current location (never against this
+# script's checkout: the main checkout's script run from a worktree once wrote an empty file into main). The
+# file must exist (nothing is ever created) and belong to the checkout this script and its dev.ps1 build.
+$here = (Get-Location -PSProvider FileSystem).ProviderPath
+$Path = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($File)) { $File } else { Join-Path $here $File }))
+if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { Write-Host "no such file: $Path"; exit 2 }
+$owner = Split-Path -Parent $Path
+while ($owner -and -not (Test-Path -LiteralPath (Join-Path $owner ".git"))) { $owner = Split-Path -Parent $owner }
+if ($owner) {
+    if ([IO.Path]::GetFullPath($owner).TrimEnd('\') -ne [IO.Path]::GetFullPath($Repo).TrimEnd('\')) {
+        Write-Host "$Path is in the checkout $owner, but this script is ${Repo}'s: run $owner\scripts\revert-check.ps1"; exit 2
+    }
+} elseif (-not $Runner) { Write-Host "$Path is in no checkout"; exit 2 }
 
 $bytes = [IO.File]::ReadAllBytes($Path)
 $text = [Text.Encoding]::UTF8.GetString($bytes)

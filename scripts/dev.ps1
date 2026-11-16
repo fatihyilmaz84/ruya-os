@@ -420,8 +420,27 @@ function Test-RevertCheckPiping {
             }
         }
     }
+    # RUY-765: a relative -File resolves against the current location; one that is not there is refused and
+    # never created in this checkout; a file in another checkout (a worktree) is refused, unchanged.
+    Push-Location $fx
+    try {
+        $lines = @(& $script -File "target.txt" -Old "value=good" -New "value=bad" -Runner $runner -Test tst_fixture -LogDir $fx *>&1 | Out-String -Stream)
+        if ($LASTEXITCODE -ne 0 -or (Get-Content -Raw -LiteralPath $target) -ne "value=good`n") { $ok = $false; Write-Host "    relative -File: exit $LASTEXITCODE, output:`n$($lines -join "`n")" -ForegroundColor Yellow }
+        $ghost = "ruya-revert-ghost-" + [guid]::NewGuid().ToString("N") + ".qml"
+        $null = & $script -File $ghost -Old "a" -New "b" -Runner $runner *>&1 | Out-String
+        $code = $LASTEXITCODE
+        if ($code -ne 2 -or (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $PSScriptRoot) $ghost)) -or (Test-Path -LiteralPath (Join-Path $fx $ghost))) { $ok = $false; Write-Host "    missing relative -File: exit $code (want 2) or a file was created" -ForegroundColor Yellow }
+    } finally { Pop-Location }
+    $other = Join-Path $fx "other-checkout"
+    New-Item -ItemType Directory -Path $other | Out-Null
+    Set-Content -LiteralPath (Join-Path $other ".git") -Value "gitdir: elsewhere"
+    $otherFile = Join-Path $other "target.txt"
+    [IO.File]::WriteAllText($otherFile, "value=good`n")
+    $null = & $script -File $otherFile -Old "value=good" -New "value=bad" -Runner $runner *>&1 | Out-String
+    $code = $LASTEXITCODE
+    if ($code -ne 2 -or (Get-Content -Raw -LiteralPath $otherFile) -ne "value=good`n") { $ok = $false; Write-Host "    file in another checkout: exit $code (want 2) or it was changed" -ForegroundColor Yellow }
     Remove-Item -Recurse -Force $fx -ErrorAction SilentlyContinue
-    Record "revert-check self-check (CAUGHT / NOT CAUGHT is the same plain and piped through Select-Object -Last 3)" $ok
+    Record "revert-check self-check (CAUGHT / NOT CAUGHT is the same plain and piped through Select-Object -Last 3; paths resolve against the caller, RUY-765)" $ok
 }
 
 # -InputFile: one test file (the `qml` fast mode), through the runner's -input, offscreen, with its own log.
