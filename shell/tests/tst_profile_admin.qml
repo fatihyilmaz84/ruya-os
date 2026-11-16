@@ -1016,7 +1016,12 @@ Item {
             tryVerify(() => find("profileRow_p1").activeFocus)
             keyClick(Qt.Key_Return)
             compare(tc.shell.currentPage, "settings")
-            verify(find("rowDelete") === null)
+            // The deleted admin's page (and its rowDelete) is destroyed after its close, which can lag under load
+            // (failed three times on lead-26's loaded host): wait for it to go, then prove no page opened since.
+            tryVerify(() => find("rowDelete") === null, 2000, "the closed profile page is gone")
+            wait(Theme.pageMs + 50)
+            compare(tc.shell.currentPage, "settings", "selecting oneself opened no page")
+            verify(find("rowDelete") === null, "no Delete for the last admin")
         }
 
         function test_back_leaves_each_pane_to_the_category_list() {
