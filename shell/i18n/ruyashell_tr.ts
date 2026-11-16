@@ -57,7 +57,7 @@
 <context>
     <name>ActivityGamePage</name>
     <message>
-        <location filename="../qml/ActivityGamePage.qml" line="+75"/>
+        <location filename="../qml/ActivityGamePage.qml" line="+68"/>
         <location line="+1"/>
         <source>Back</source>
         <translation>Geri</translation>
@@ -291,7 +291,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+173"/>
+        <location filename="../qml/AppDetailPage.qml" line="+191"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -519,12 +519,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-7"/>
-        <location line="+312"/>
+        <location line="+321"/>
         <source>Steam</source>
         <translation>Steam</translation>
     </message>
     <message>
-        <location line="-311"/>
+        <location line="-320"/>
         <source>Steam app ID</source>
         <translation>Steam uygulama kimliği</translation>
     </message>
@@ -594,7 +594,7 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+573"/>
+        <location line="+587"/>
         <source>No special permissions.</source>
         <translation>Özel bir izni yok.</translation>
     </message>
@@ -609,7 +609,7 @@ Bu geri alınamaz.</translation>
         <translation>Bilgiler</translation>
     </message>
     <message>
-        <location line="+33"/>
+        <location line="+34"/>
         <source>Play time for Steam games is not counted yet.</source>
         <translation>Steam oyunlarının oynama süresi henüz sayılmıyor.</translation>
     </message>
@@ -634,7 +634,7 @@ Bu geri alınamaz.</translation>
         <translation>Kaldırmak için önce oyunu kapatın.</translation>
     </message>
     <message>
-        <location line="-848"/>
+        <location line="-863"/>
         <source>Install</source>
         <translation>Kur</translation>
     </message>
@@ -645,7 +645,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelle</translation>
     </message>
     <message>
-        <location line="+620"/>
+        <location line="+625"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Bu konsoldakinden daha yeni bir RuyaOS gerekiyor. Yüklü kalır.</translation>
     </message>
@@ -655,12 +655,12 @@ Bu geri alınamaz.</translation>
         <translation>Daha yeni bir RuyaOS gerekiyor</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+18"/>
         <source>Store details are unavailable right now.</source>
         <translation>Mağaza ayrıntıları şu anda kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+47"/>
         <location line="+9"/>
         <source>This app can</source>
         <translation>Bu uygulama şunları yapabilir</translation>
@@ -671,12 +671,12 @@ Bu geri alınamaz.</translation>
         <translation>Yüksek risk</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-104"/>
         <source>The update adds: %1</source>
         <translation>Güncelleme şunları ekliyor: %1</translation>
     </message>
     <message>
-        <location line="-649"/>
+        <location line="-653"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Aç</translation>
@@ -714,7 +714,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+367"/>
+        <location line="+376"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -730,27 +730,27 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+152"/>
+        <location line="+149"/>
         <source>Update ready</source>
         <translation>Güncelleme hazır</translation>
     </message>
     <message>
-        <location line="-141"/>
+        <location line="-138"/>
         <source>Installed through Steam</source>
         <translation>Steam üzerinden kuruldu</translation>
     </message>
     <message>
         <location line="+94"/>
         <source>Start this game from Steam for now.</source>
-        <translation>Bu oyunu şimdilik Steam'den başlatın.</translation>
+        <translation>Bu oyunu şimdilik Steam&apos;den başlatın.</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+30"/>
         <source>%1 % · It keeps going if you leave this page.</source>
         <translation>%%1 · Bu sayfadan çıksanız da sürer.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+7"/>
         <source>Download %1 · %2 on disk</source>
         <translation>İndirme %1 · Diskte %2</translation>
     </message>
@@ -765,12 +765,12 @@ Bu geri alınamaz.</translation>
         <translation>Diskte %1</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+5"/>
         <source>Update ready: version %1</source>
         <translation>Güncelleme hazır: sürüm %1</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+18"/>
         <source>An admin&apos;s PIN is needed to update this app.</source>
         <translation>Bu uygulamayı güncellemek için bir yöneticinin PIN&apos;i gerekir.</translation>
     </message>
@@ -2462,9 +2462,73 @@ Bu geri alınamaz.</translation>
         <translation>Dün</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+18"/>
         <source>%1 %2</source>
         <translation>%1 %2</translation>
+    </message>
+</context>
+<context>
+    <name>GameActivity</name>
+    <message>
+        <location filename="../qml/GameActivity.qml" line="+34"/>
+        <location line="+21"/>
+        <source>Your activity</source>
+        <translation>Etkinliğiniz</translation>
+    </message>
+    <message>
+        <location line="-14"/>
+        <source>Loading…</source>
+        <translation>Yükleniyor…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>You have not played this yet. When you do, the time you spend shows up here.</source>
+        <translation>Bunu henüz oynamadınız. Oynadığınızda harcadığınız süre burada görünür.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>See all</source>
+        <translation>Tümünü gör</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+41"/>
+        <source>Time used</source>
+        <translation>Kullanım süresi</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Time played</source>
+        <translation>Oynama süresi</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Last used</source>
+        <translation>Son kullanım</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Last played</source>
+        <translation>Son oynama</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Times opened</source>
+        <translation>Açılma sayısı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Times played</source>
+        <translation>Oynama sayısı</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Last 30 days</source>
+        <translation>Son 30 gün</translation>
     </message>
 </context>
 <context>
@@ -2907,9 +2971,6 @@ Bu geri alınamaz.</translation>
         <source>Force quit loses unsaved progress.</source>
         <translation>Zorla kapatınca kaydedilmemiş ilerleme kaybolur.</translation>
     </message>
-</context>
-<context>
-    <name>LibraryDetailsPage</name>
 </context>
 <context>
     <name>ManageProfilesPane</name>
