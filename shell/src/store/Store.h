@@ -16,7 +16,8 @@
 // mock elsewhere, like Audio and Profiles.
 //
 // App records are plain objects: { id, name, summary, description, developer, source,
-// controller, ageRating, permissions, newPermissions, installedSize, icon, tile, hero, installed,
+// controller, ageRating, permissions, newPermissions, installedSize, downloadSize, version, releaseDate,
+// releaseNotes, installedVersion, license, categories, screenshots, icon, tile, hero, installed,
 // updateAvailable, compatible }. permissions and newPermissions (what the available update adds) are complete
 // only after loadApp() of that app has answered.
 class Store : public QObject
@@ -164,6 +165,7 @@ private:
     // that job ("" if unknown). An app leaves it once a later job of it is reported.
     QHash<QString, QString> m_lost;
     QHash<QString, QStringList> m_added; // app id -> what its update adds, from loadApp
+    QHash<QString, QVariantMap> m_getOnly; // app id -> screenshots and releaseNotes, from loadApp (lists carry none)
     QString m_lastQuery;
     bool m_gamepadOnly = false;
     bool m_available = false;

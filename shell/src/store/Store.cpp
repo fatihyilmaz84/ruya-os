@@ -28,6 +28,7 @@ Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
         }
     });
     connect(m_backend.get(), &StoreBackend::appLoaded, this, [this](const AppInfo &app) {
+        m_getOnly.insert(app.id, QVariantMap{{QStringLiteral("screenshots"), app.screenshots}, {QStringLiteral("releaseNotes"), app.releaseNotes}});
         if (app.newPermissions.isEmpty())
             m_added.remove(app.id);
         else
@@ -151,7 +152,13 @@ QVariantList Store::toList(const QList<AppInfo> &apps) const
         // The lists never carry what an update adds; GetApp did, and the page still needs it.
         if (a.updateAvailable && a.newPermissions.isEmpty())
             a.newPermissions = m_added.value(a.id);
-        out.append(a.toVariant());
+        QVariantMap m = a.toVariant();
+        const auto kept = m_getOnly.constFind(a.id);
+        if (kept != m_getOnly.cend()) {
+            m.insert(QStringLiteral("screenshots"), kept->value(QStringLiteral("screenshots")));
+            m.insert(QStringLiteral("releaseNotes"), kept->value(QStringLiteral("releaseNotes")));
+        }
+        out.append(m);
     }
     return out;
 }
@@ -162,11 +169,20 @@ bool Store::mergeDetails(QVariantList &list, const AppInfo &app) const
         QVariantMap m = v.toMap();
         if (m.value(QStringLiteral("id")).toString() != app.id)
             continue;
-        if (m.value(QStringLiteral("permissions")).toStringList() == app.permissions
-            && m.value(QStringLiteral("newPermissions")).toStringList() == app.newPermissions)
+        // What getApp reads beyond the lists: permissions, what an update adds, the screenshots
+        // and the release notes (the other new keys the lists carry too, but a list may be older).
+        const QVariantMap detail = app.toVariant();
+        bool changed = false;
+        for (const char *key : {"permissions", "newPermissions", "screenshots", "releaseNotes", "version", "releaseDate",
+                                "installedVersion", "downloadSize", "license", "categories"}) {
+            const QString k = QString::fromLatin1(key);
+            if (m.value(k) != detail.value(k)) {
+                m.insert(k, detail.value(k));
+                changed = true;
+            }
+        }
+        if (!changed)
             return false;
-        m.insert(QStringLiteral("permissions"), app.permissions);
-        m.insert(QStringLiteral("newPermissions"), app.newPermissions);
         v = m;
         return true;
     }
@@ -307,6 +323,7 @@ void Store::mockReset()
         return;
     mock->reset();
     m_lost.clear();
+    m_getOnly.clear();
     // The reset drops the mock's running jobs without a JobFinished, so the jobs this facade
     // already saw progress for would stay in `jobs` for ever (T-167).
     if (!m_jobs.isEmpty()) {

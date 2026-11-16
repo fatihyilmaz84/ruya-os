@@ -20,6 +20,11 @@ AppInfo app(const char *id, const char *name, const char *summary, const char *d
     a.ageRating = QString::fromLatin1(age);
     a.permissions = permissions;
     a.installedSize = megabytes * 1024 * 1024;
+    a.downloadSize = megabytes * 1024 * 1024 * 2 / 5; // a download is smaller than the installed app
+    a.version = QStringLiteral("1.0.0");
+    a.releaseDate = 1704067200; // 2024-01-01
+    a.license = QStringLiteral("GPL-3.0-or-later");
+    a.categories = {QStringLiteral("Game")};
     return a;
 }
 } // namespace
@@ -74,10 +79,38 @@ void MockStoreBackend::initState()
     // Installed from the start; Open Chess has an update that adds a permission, Text Editor one that adds none.
     for (const char *id : {"org.example.Puzzle", "org.example.Chess", "org.example.Editor"})
         m_apps[indexOf(QString::fromLatin1(id))].installed = true;
+    for (AppInfo &a : m_apps)
+        a.installedVersion = a.installed ? a.version : QString();
     AppInfo &chess = m_apps[indexOf(QStringLiteral("org.example.Chess"))];
     chess.updateAvailable = true;
     chess.newPermissions = {QStringLiteral("all-devices")};
     m_apps[indexOf(QStringLiteral("org.example.Editor"))].updateAvailable = true; // adds nothing
+    // The game page data (RUY-523). Turbo Racer has everything: five screenshots (the third one
+    // cannot be loaded, for the viewer's error board), notes, a licence and categories. Open Chess is
+    // installed at 1.4.2 and its update brings 1.5.0 with notes. Block Puzzle has no description,
+    // screenshots or licence (the empty board).
+    AppInfo &racer = m_apps[indexOf(QStringLiteral("org.example.Racer"))];
+    racer.version = QStringLiteral("1.4.2");
+    racer.releaseDate = 1709251200; // 2024-03-01
+    racer.releaseNotes = QStringLiteral("Faster cars and a new track.\n\nFixes:\n\n• Steering on the ice track\n• Menu sounds");
+    racer.license = QStringLiteral("MIT");
+    racer.categories = {QStringLiteral("Game"), QStringLiteral("AdventureGame"), QStringLiteral("LogicGame")};
+    racer.description = QStringLiteral("Race around the world with up to four players.\n\nUnlock cars, tune them and beat the ghost laps.");
+    const char *captions[] = {"The start grid", "Night race", "Broken picture", "Photo mode", "Podium"};
+    for (int n = 0; n < 5; ++n) {
+        const QString url = n == 2 ? QStringLiteral("file:///nonexistent/mock-shot-3.png")
+                                    : QStringLiteral("file:///mock/racer-%1.png").arg(n + 1);
+        racer.screenshots.append(QVariantMap{{QStringLiteral("image"), url},
+                                             {QStringLiteral("thumb"), url},
+                                             {QStringLiteral("caption"), QString::fromLatin1(captions[n])}});
+    }
+    chess.version = QStringLiteral("1.5.0");
+    chess.releaseDate = 1710460800; // 2024-03-15
+    chess.installedVersion = QStringLiteral("1.4.2");
+    chess.releaseNotes = QStringLiteral("A stronger computer opponent and a new board theme.");
+    AppInfo &puzzle = m_apps[indexOf(QStringLiteral("org.example.Puzzle"))];
+    puzzle.description.clear();
+    puzzle.license.clear();
 }
 
 void MockStoreBackend::applyLevel()
@@ -98,6 +131,19 @@ void MockStoreBackend::setArtDir(const QString &dir)
 {
     for (int i = 0; i < m_apps.size(); ++i)
         m_apps[i].tile = mockArtPath(dir, i);
+    // Turbo Racer's screenshots show pictures too, except the third (a broken URL on purpose).
+    const int racer = indexOf(QStringLiteral("org.example.Racer"));
+    if (racer >= 0) {
+        QVariantList &shots = m_apps[racer].screenshots;
+        for (int n = 0; n < shots.size(); ++n) {
+            if (n == 2)
+                continue;
+            QVariantMap shot = shots.at(n).toMap();
+            shot.insert(QStringLiteral("image"), mockArtPath(dir, n));
+            shot.insert(QStringLiteral("thumb"), mockArtPath(dir, n));
+            shots[n] = shot;
+        }
+    }
     emit catalogChanged();
 }
 
@@ -164,10 +210,12 @@ QList<AppInfo> MockStoreBackend::installedApps() const
     return out;
 }
 
-// The lists carry no newPermissions (the service reads those in GetApp only).
+// The lists carry no newPermissions, screenshots or releaseNotes (the service reads those in GetApp only).
 AppInfo MockStoreBackend::listed(AppInfo a)
 {
     a.newPermissions.clear();
+    a.screenshots.clear();
+    a.releaseNotes.clear();
     return a;
 }
 
@@ -331,6 +379,7 @@ void MockStoreBackend::step()
         const Job done = m_jobs.takeFirst();
         AppInfo &a = m_apps[indexOf(done.id)];
         a.installed = done.kind != Job::Uninstall;
+        a.installedVersion = a.installed ? a.version : QString();
         if (done.kind == Job::Update) {
             for (const QString &p : std::as_const(a.newPermissions)) {
                 if (!a.permissions.contains(p))

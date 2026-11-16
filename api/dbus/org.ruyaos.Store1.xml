@@ -53,8 +53,25 @@
                          fills it (it reads the installed and the new version's metadata, the new
                          one fresh each time); the lists carry an empty array. A Standard profile
                          needs the admin PIN for an update that adds a high-risk permission.
-    installed_size  t    bytes on disk when installed (download size is not exposed)
-    icon            s    URL (https: or file:) or "" - the shell draws a generated tile then
+    installed_size  t    bytes on disk when installed
+    download_size   t    bytes an install downloads (flatpak's download-size column); absent = unknown
+    version         s    the newest <release> in the remote's AppStream (by timestamp/date, not file
+                         order) = what Install gets or the update brings; absent = unknown
+    release_date    x    unix seconds of that release; absent = unknown
+    release_notes   s    GetApp only: that release's <description> as plain text (paragraphs
+                         separated by one blank line, <li> as "• " lines); absent = none
+    installed_version s  installed apps only: flatpak's version column, else the version of the
+                         catalogue's release when the app is up to date; absent = unknown
+    license         s    <project_license> as written (an SPDX expression); absent = none
+    categories      as   <categories> in AppStream order, raw names ("Game", "AdventureGame", ...);
+                         the shell maps them to words; absent = none
+    screenshots     aa{sv} GetApp only (Search and ListInstalled carry none). AppStream order, the
+                         type="default" one first, at most 10. Each {image s, thumb s, caption s}:
+                         image = URL of the widest <image> at most 1920 px wide (the type="source"
+                         one if none has a width); thumb = the narrowest at least 400 px wide (else
+                         image); caption = <caption> or "".
+    Optional keys above are absent when unknown: a client never shows "Unknown" for them.
+    icon           s    URL (https: or file:) or "" - the shell draws a generated tile then
     tile            s    URL or ""
     hero            s    URL or ""
     installed       b

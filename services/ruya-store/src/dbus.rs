@@ -8,10 +8,10 @@ use std::time::Duration;
 use async_channel::{Receiver, Sender};
 use zbus::message::Header;
 use zbus::object_server::SignalEmitter;
-use zbus::zvariant::{Array, OwnedValue, Value};
+use zbus::zvariant::{Array, OwnedValue, Signature, Value};
 use zbus::{fdo, interface, Connection};
 
-use crate::app::App;
+use crate::app::{App, Screenshot};
 use crate::flatpak::{
     Appstream, Flatpak, FlatpakError, InstalledApp, Operation, Progress, RemoteApp, RemoteInfo,
 };
@@ -181,7 +181,7 @@ fn dict(entries: Vec<(&str, Value<'_>)>) -> Dict {
         .collect()
 }
 
-fn record(app: &App) -> Dict {
+fn record(app: &App, detail: bool) -> Dict {
     let mut entries = vec![
         ("id", Value::from(app.id.clone())),
         ("name", Value::from(app.name.clone())),
@@ -210,7 +210,61 @@ fn record(app: &App) -> Dict {
     if !app.age_rating.is_empty() {
         entries.push(("age_rating", Value::from(app.age_rating.clone())));
     }
+    if app.download_size > 0 {
+        entries.push(("download_size", Value::from(app.download_size)));
+    }
+    if !app.version.is_empty() {
+        entries.push(("version", Value::from(app.version.clone())));
+    }
+    if app.release_date > 0 {
+        entries.push(("release_date", Value::from(app.release_date)));
+    }
+    if !app.installed_version.is_empty() {
+        entries.push((
+            "installed_version",
+            Value::from(app.installed_version.clone()),
+        ));
+    }
+    if !app.license.is_empty() {
+        entries.push(("license", Value::from(app.license.clone())));
+    }
+    if !app.categories.is_empty() {
+        entries.push((
+            "categories",
+            Value::Array(Array::from(app.categories.clone())),
+        ));
+    }
+    // Only GetApp: the lists stay small.
+    if detail {
+        if !app.release_notes.is_empty() {
+            entries.push(("release_notes", Value::from(app.release_notes.clone())));
+        }
+        if !app.screenshots.is_empty() {
+            entries.push(("screenshots", screenshots(&app.screenshots)));
+        }
+    }
     dict(entries)
+}
+
+/// `aa{sv}` of {image, thumb, caption}.
+fn screenshots(list: &[Screenshot]) -> Value<'static> {
+    let element = Signature::try_from("a{sv}").unwrap_or(Signature::Str);
+    let mut out = Array::new(&element);
+    for s in list {
+        let mut d = zbus::zvariant::Dict::new(&Signature::Str, &Signature::Variant);
+        for (k, v) in [
+            ("image", &s.image),
+            ("thumb", &s.thumb),
+            ("caption", &s.caption),
+        ] {
+            let _ = d.append(
+                Value::from(k),
+                Value::Value(Box::new(Value::from(v.clone()))),
+            );
+        }
+        let _ = out.append(Value::Dict(d));
+    }
+    Value::Array(out)
 }
 
 fn job_record(job: &JobInfo) -> Dict {
@@ -249,7 +303,7 @@ impl StoreIface {
             .store
             .search(query, &options)
             .iter()
-            .map(record)
+            .map(|a| record(a, false))
             .collect())
     }
 
@@ -259,7 +313,7 @@ impl StoreIface {
         // The first call for an app reads its permissions with flatpak: not on the executor.
         let (status, app) = blocking::unblock(move || store.get_app(&id)).await;
         let app = if status == crate::app::Status::Ok {
-            record(&app)
+            record(&app, true)
         } else {
             Dict::new()
         };
@@ -271,7 +325,7 @@ impl StoreIface {
         let apps = self
             .off_executor(|store, emit| store.list_installed(emit))
             .await;
-        apps.iter().map(record).collect()
+        apps.iter().map(|a| record(a, false)).collect()
     }
 
     async fn list_jobs(&self) -> Vec<Dict> {
@@ -524,5 +578,70 @@ mod tests {
         // (The job thread starts 100 ms later; its progress events follow, so only the first
         // event is looked at.)
         assert_eq!(events.try_recv(), Ok(Event::InstalledChanged));
+    }
+
+    #[test]
+    fn lists_carry_no_screenshots_or_notes_but_get_app_does() {
+        let app = App {
+            id: "org.a.B".into(),
+            version: "1.5.0".into(),
+            release_date: 1_709_251_200,
+            release_notes: "New.".into(),
+            license: "MIT".into(),
+            categories: vec!["Game".into()],
+            download_size: 7,
+            installed_version: "1.4.2".into(),
+            screenshots: vec![Screenshot {
+                image: "https://x/i.png".into(),
+                thumb: "https://x/t.png".into(),
+                caption: "Cap".into(),
+            }],
+            ..App::default()
+        };
+        let list = record(&app, false);
+        assert!(!list.contains_key("screenshots"));
+        assert!(!list.contains_key("release_notes"));
+        assert_eq!(<&str>::try_from(&list["version"]).unwrap(), "1.5.0");
+        assert_eq!(
+            <i64>::try_from(&list["release_date"]).unwrap(),
+            1_709_251_200
+        );
+        assert_eq!(<u64>::try_from(&list["download_size"]).unwrap(), 7);
+        assert_eq!(
+            <&str>::try_from(&list["installed_version"]).unwrap(),
+            "1.4.2"
+        );
+        assert_eq!(<&str>::try_from(&list["license"]).unwrap(), "MIT");
+        assert!(list.contains_key("categories"));
+
+        let full = record(&app, true);
+        assert_eq!(<&str>::try_from(&full["release_notes"]).unwrap(), "New.");
+        let shots = &full["screenshots"];
+        assert_eq!(shots.value_signature().to_string(), "aa{sv}");
+        let Value::Array(arr) = &**shots else {
+            panic!("not an array")
+        };
+        assert_eq!(arr.len(), 1);
+        let Value::Dict(d) = &arr[0] else {
+            panic!("not a dict")
+        };
+        assert_eq!(d.iter().count(), 3, "image, thumb and caption all landed");
+    }
+
+    #[test]
+    fn unknown_keys_are_left_out() {
+        let r = record(&App::default(), true);
+        for key in [
+            "version",
+            "release_date",
+            "release_notes",
+            "installed_version",
+            "download_size",
+            "license",
+            "categories",
+            "screenshots",
+        ] {
+            assert!(!r.contains_key(key), "{key}");
+        }
     }
 }

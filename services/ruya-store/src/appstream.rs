@@ -21,6 +21,116 @@ pub struct Component {
     pub icon: String,
     pub tile: String,
     pub hero: String,
+    /// At most 10, the `type="default"` one first.
+    pub screenshots: Vec<Screenshot>,
+    /// Version of the newest `<release>` (by timestamp or date, not file order); "" when none.
+    pub version: String,
+    /// Unix seconds of that release; 0 when unknown.
+    pub release_date: i64,
+    /// That release's `<description>` as plain text; "" when none.
+    pub release_notes: String,
+    /// `<project_license>` as written (an SPDX expression).
+    pub license: String,
+    /// `<categories>` in AppStream order, raw names.
+    pub categories: Vec<String>,
+}
+
+/// One screenshot: `image` is the widest picture of at most 1920 px, `thumb` the narrowest of at
+/// least 400 px (else `image`).
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Screenshot {
+    pub image: String,
+    pub thumb: String,
+    pub caption: String,
+}
+
+const MAX_SCREENSHOTS: usize = 10;
+const MAX_IMAGE_WIDTH: u32 = 1920;
+const MIN_THUMB_WIDTH: u32 = 400;
+
+/// (type, width, url) of one `<image>`; width 0 when it names none.
+type Image = (String, u32, String);
+
+struct ShotBuild {
+    default: bool,
+    images: Vec<Image>,
+    caption: String,
+}
+
+impl ShotBuild {
+    fn finish(self) -> Option<Screenshot> {
+        let widest = self
+            .images
+            .iter()
+            .filter(|(_, w, _)| *w > 0 && *w <= MAX_IMAGE_WIDTH)
+            .fold(None::<&Image>, |best, i| match best {
+                Some(b) if b.1 >= i.1 => Some(b),
+                _ => Some(i),
+            });
+        let image = widest
+            .or_else(|| self.images.iter().find(|(kind, _, _)| kind == "source"))
+            .or_else(|| self.images.first())
+            .map(|(_, _, url)| url.clone())?;
+        let thumb = self
+            .images
+            .iter()
+            .filter(|(_, w, _)| *w >= MIN_THUMB_WIDTH)
+            .fold(None::<&Image>, |best, i| match best {
+                Some(b) if b.1 <= i.1 => Some(b),
+                _ => Some(i),
+            })
+            .map_or_else(|| image.clone(), |(_, _, url)| url.clone());
+        Some(Screenshot {
+            image,
+            thumb,
+            caption: self.caption,
+        })
+    }
+}
+
+/// A `<release>`; notes are (is_list_item, text) in document order.
+struct ReleaseBuild {
+    version: String,
+    when: i64,
+    notes: Vec<(bool, String)>,
+}
+
+/// "• " lines for `<li>`, one blank line between the other blocks.
+fn plain_notes(notes: &[(bool, String)]) -> String {
+    let mut out = String::new();
+    let mut prev_item = false;
+    for (item, text) in notes {
+        if !out.is_empty() {
+            out.push_str(if *item && prev_item { "\n" } else { "\n\n" });
+        }
+        if *item {
+            out.push_str("\u{2022} ");
+        }
+        out.push_str(text);
+        prev_item = *item;
+    }
+    out
+}
+
+/// Unix seconds of "YYYY-MM-DD" (a time after it is ignored); 0 when not a date.
+fn date_to_unix(date: &str) -> i64 {
+    let mut parts = date.get(..10).unwrap_or("").split('-');
+    let (Some(y), Some(m), Some(d)) = (parts.next(), parts.next(), parts.next()) else {
+        return 0;
+    };
+    let (Ok(y), Ok(m), Ok(d)) = (y.parse::<i64>(), m.parse::<i64>(), d.parse::<i64>()) else {
+        return 0;
+    };
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+        return 0;
+    }
+    // Days from civil date (Howard Hinnant's algorithm).
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    (era * 146_097 + doe - 719_468) * 86_400
 }
 
 /// An element that is open: its name and the attributes the rules look at.
@@ -32,6 +142,9 @@ struct Open {
     key: String,
     id: String,
     size: String,
+    version: String,
+    timestamp: String,
+    date: String,
 }
 
 /// OARS severity words, 0 (none) to 3 (intense).
@@ -64,10 +177,32 @@ struct Builder {
     cached_icon: String,
     /// The older `<developer_name>`; used only when there is no `<developer><name>`.
     developer_name: String,
+    shots: Vec<ShotBuild>,
+    releases: Vec<ReleaseBuild>,
 }
 
 impl Builder {
     fn finish(mut self) -> Component {
+        // The default screenshot first, otherwise AppStream order; ten at most.
+        self.shots.sort_by_key(|s| !s.default);
+        self.c.screenshots = self
+            .shots
+            .into_iter()
+            .filter_map(ShotBuild::finish)
+            .take(MAX_SCREENSHOTS)
+            .collect();
+        // The newest release; on equal times the first in the file.
+        let mut newest: Option<&ReleaseBuild> = None;
+        for r in &self.releases {
+            if newest.is_none_or(|n| r.when > n.when) {
+                newest = Some(r);
+            }
+        }
+        if let Some(r) = newest {
+            self.c.version = r.version.clone();
+            self.c.release_date = r.when;
+            self.c.release_notes = plain_notes(&r.notes);
+        }
         if self.c.developer.is_empty() {
             self.c.developer = self.developer_name;
         }
@@ -114,6 +249,9 @@ pub fn parse(xml: &str, icon_base: &str) -> Vec<Component> {
                 {
                     cur = is_app(&open).then(Builder::default);
                 }
+                if let Some(b) = cur.as_mut() {
+                    on_start(b, &stack, &open);
+                }
                 stack.push(open);
             }
             Event::Text(t) => {
@@ -138,6 +276,12 @@ pub fn parse(xml: &str, icon_base: &str) -> Vec<Component> {
                     }
                 }
             }
+            Event::Empty(e) => {
+                // `<release .../>`: no children, but it is a release.
+                if let Some(b) = cur.as_mut() {
+                    on_start(b, &stack, &open_of(&e));
+                }
+            }
             Event::Eof => break,
             _ => {}
         }
@@ -153,6 +297,9 @@ fn open_of(e: &BytesStart<'_>) -> Open {
         key: String::new(),
         id: String::new(),
         size: String::new(),
+        version: String::new(),
+        timestamp: String::new(),
+        date: String::new(),
     };
     for attr in e.attributes().flatten() {
         let value = attr
@@ -165,6 +312,9 @@ fn open_of(e: &BytesStart<'_>) -> Open {
             b"key" => open.key = value,
             b"id" => open.id = value,
             b"width" => open.size = value,
+            b"version" => open.version = value,
+            b"timestamp" => open.timestamp = value,
+            b"date" => open.date = value,
             _ => {}
         }
     }
@@ -179,6 +329,31 @@ fn is_app(component: &Open) -> bool {
     )
 }
 
+/// Elements that start a record of their own: a screenshot and a release.
+fn on_start(b: &mut Builder, stack: &[Open], open: &Open) {
+    let parent = stack.last().map_or("", |p| p.name.as_str());
+    match (open.name.as_str(), parent) {
+        ("screenshot", "screenshots") => b.shots.push(ShotBuild {
+            default: open.kind == "default",
+            images: Vec::new(),
+            caption: String::new(),
+        }),
+        ("release", "releases") => {
+            let when = open
+                .timestamp
+                .trim()
+                .parse::<i64>()
+                .unwrap_or_else(|_| date_to_unix(open.date.trim()));
+            b.releases.push(ReleaseBuild {
+                version: open.version.clone(),
+                when,
+                notes: Vec::new(),
+            });
+        }
+        _ => {}
+    }
+}
+
 fn on_text(b: &mut Builder, stack: &[Open], text: &str, icon_base: &str) {
     if text.is_empty() {
         return;
@@ -189,6 +364,7 @@ fn on_text(b: &mut Builder, stack: &[Open], text: &str, icon_base: &str) {
         .checked_sub(2)
         .and_then(|i| stack.get(i))
         .map_or("", |p| p.name.as_str());
+    let in_release = stack.iter().any(|o| o.name == "release");
     let in_description = stack
         .iter()
         .any(|o| o.name == "description" && !o.translated);
@@ -200,7 +376,25 @@ fn on_text(b: &mut Builder, stack: &[Open], text: &str, icon_base: &str) {
         ("summary", "component") if !top.translated => b.c.summary.push_str(text),
         ("developer_name", "component") if !top.translated => b.developer_name.push_str(text),
         ("name", "developer") if !top.translated => b.c.developer.push_str(text),
+        ("p" | "li", _) if in_description && in_release && !top.translated => {
+            if let Some(r) = b.releases.last_mut() {
+                r.notes.push((top.name == "li", text.to_owned()));
+            }
+        }
         ("p" | "li", _) if in_description && !top.translated => b.paragraphs.push(text.to_owned()),
+        ("project_license", "component") => b.c.license.push_str(text),
+        ("category", "categories") => b.c.categories.push(text.to_owned()),
+        ("image", "screenshot") => {
+            if let Some(s) = b.shots.last_mut() {
+                let width = top.size.trim().parse::<u32>().unwrap_or(0);
+                s.images.push((top.kind.clone(), width, text.to_owned()));
+            }
+        }
+        ("caption", "screenshot") if !top.translated => {
+            if let Some(s) = b.shots.last_mut() {
+                s.caption.push_str(text);
+            }
+        }
         ("icon", "component") => match top.kind.as_str() {
             "remote" => b.c.icon = text.to_owned(),
             "cached" if b.cached_icon.is_empty() => {
@@ -568,5 +762,108 @@ mod tests {
         // Nothing known about the installed version: everything counts as added.
         assert_eq!(added_permissions(&[], &old), ["network", "audio"]);
         assert!(added_permissions(&old, &[]).is_empty());
+    }
+
+    const DETAIL: &str = r#"<components><component type="desktop-application">
+  <id>org.example.Racer.desktop</id><name>Turbo Racer</name>
+  <project_license>MIT AND CC-BY-4.0</project_license>
+  <categories><category>Game</category><category>AdventureGame</category><category>LogicGame</category></categories>
+  <screenshots>
+    <screenshot>
+      <caption>Second in the file</caption>
+      <image type="thumbnail" width="224" height="126">https://x/a-224.png</image>
+      <image type="thumbnail" width="624" height="351">https://x/a-624.png</image>
+      <image type="thumbnail" width="1248" height="702">https://x/a-1248.png</image>
+      <image type="source" width="3840" height="2160">https://x/a-4k.png</image>
+    </screenshot>
+    <screenshot type="default">
+      <image type="source">https://x/b-src.png</image>
+    </screenshot>
+    <screenshot>
+      <image type="thumbnail" width="200" height="100">https://x/c-200.png</image>
+      <image type="thumbnail" width="1920" height="1080">https://x/c-1920.png</image>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="1.0.0" date="2023-05-01"><description><p>Old.</p></description></release>
+    <release version="1.5.0" timestamp="1709251200">
+      <description><p>Faster cars.</p><p>Fixes:</p><ul><li>Steering</li><li>Brakes</li></ul></description>
+    </release>
+    <release version="1.4.0" date="2024-01-15"><description><p>Mid.</p></description></release>
+  </releases>
+</component></components>"#;
+
+    #[test]
+    fn screenshots_pick_the_right_sizes_in_the_right_order() {
+        let c = &parse(DETAIL, "/i")[0];
+        let shots: Vec<_> = c
+            .screenshots
+            .iter()
+            .map(|s| (s.image.as_str(), s.thumb.as_str(), s.caption.as_str()))
+            .collect();
+        assert_eq!(
+            shots,
+            [
+                ("https://x/b-src.png", "https://x/b-src.png", ""),
+                (
+                    "https://x/a-1248.png",
+                    "https://x/a-624.png",
+                    "Second in the file"
+                ),
+                ("https://x/c-1920.png", "https://x/c-1920.png", ""),
+            ],
+            "default first; widest at most 1920 (4k source ignored); narrowest at least 400; source without widths"
+        );
+    }
+
+    #[test]
+    fn at_most_ten_screenshots() {
+        let mut xml = String::from("<components><component><id>org.a.B</id><screenshots>");
+        for n in 0..12 {
+            xml.push_str(&format!(
+                "<screenshot><image type=\"source\">https://x/{n}.png</image></screenshot>"
+            ));
+        }
+        xml.push_str("</screenshots></component></components>");
+        let shots = &parse(&xml, "/i")[0].screenshots;
+        assert_eq!(shots.len(), 10);
+        assert_eq!(shots[9].image, "https://x/9.png");
+    }
+
+    #[test]
+    fn the_newest_release_wins_whatever_the_file_order() {
+        let c = &parse(DETAIL, "/i")[0];
+        assert_eq!(c.version, "1.5.0");
+        assert_eq!(c.release_date, 1_709_251_200);
+        assert_eq!(c.description, "", "release text is not the app description");
+        let by_date = "<components><component><id>org.a.B</id><releases>\
+            <release version=\"1\" date=\"2024-01-15\"/><release version=\"2\" date=\"2024-03-01\"/>\
+            </releases></component></components>";
+        let c = &parse(by_date, "/i")[0];
+        assert_eq!((c.version.as_str(), c.release_date), ("2", 1_709_251_200));
+        assert_eq!(date_to_unix("2024-01-15"), 1_705_276_800);
+        assert_eq!(date_to_unix("nonsense"), 0);
+        let none = "<components><component><id>org.a.B</id></component></components>";
+        let c = &parse(none, "/i")[0];
+        assert_eq!(
+            (c.version.as_str(), c.release_date, c.release_notes.as_str()),
+            ("", 0, "")
+        );
+    }
+
+    #[test]
+    fn release_notes_are_plain_text() {
+        let c = &parse(DETAIL, "/i")[0];
+        assert_eq!(
+            c.release_notes,
+            "Faster cars.\n\nFixes:\n\n\u{2022} Steering\n\u{2022} Brakes"
+        );
+    }
+
+    #[test]
+    fn licence_and_categories_are_read_as_written() {
+        let c = &parse(DETAIL, "/i")[0];
+        assert_eq!(c.license, "MIT AND CC-BY-4.0");
+        assert_eq!(c.categories, ["Game", "AdventureGame", "LogicGame"]);
     }
 }

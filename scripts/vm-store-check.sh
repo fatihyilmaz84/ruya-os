@@ -47,6 +47,9 @@ build_repo() {
   <project_license>MIT</project_license>
   <developer_name>RuyaOS</developer_name>
   <description><p>Nothing to see.</p></description>
+  <categories><category>Game</category></categories>
+  <screenshots><screenshot type="default"><image type="source" width="800" height="450">https://example.org/ruya-store-test.png</image></screenshot></screenshots>
+  <releases><release version="1.2.3" date="2024-03-01"><description><p>Check release.</p></description></release></releases>
   <custom><value key="x-ruya-min-api-level">99</value></custom>
 </component>
 EOF
@@ -168,6 +171,16 @@ check)
     echo "$got" | head -c 800; echo
     # T-156: the record carries new_permissions, empty for an app with no update.
     echo "$got" | grep -q '"new_permissions" as 0' && ok "GetApp reports an empty new_permissions" || bad "GetApp new_permissions: $got"
+    # RUY-523: the game page data. The test app's metainfo has a release, a screenshot, a licence
+    # and a category; the download size comes from remote-ls.
+    echo "$got" | grep -q '"version" s "1.2.3"' && ok "GetApp reports the newest release as version" || bad "GetApp version: $got"
+    echo "$got" | grep -Eq '"download_size" t [1-9][0-9]*' && ok "GetApp reports a download_size above 0" || bad "GetApp download_size: $got"
+    echo "$got" | grep -q '"license" s "MIT"' && ok "GetApp reports the licence" || bad "GetApp license: $got"
+    echo "$got" | grep -q '"release_notes" s "Check release."' && ok "GetApp reports the release notes" || bad "GetApp release_notes: $got"
+    echo "$got" | grep -q '"screenshots" aa{sv} [1-9]' && ok "GetApp reports at least one screenshot" || bad "GetApp screenshots: $got"
+    echo "$got" | grep -q 'ruya-store-test.png' && ok "the screenshot carries its image URL" || bad "GetApp screenshot url: $got"
+    lists="$(as_shell busctl --system call "$svc" "$path" "$ifc" Search sa{sv} "" 0 | grep -Ec '"screenshots"|"release_notes"')"
+    [ "$lists" = 0 ] && ok "Search records carry no screenshots or release_notes" || bad "Search carries $lists GetApp-only keys"
     # RUY-156: the test app asks for API level 99 (x-ruya-min-api-level), far above the console's.
     echo "$got" | grep -q '"compatible" b false' && ok "GetApp reports compatible=false for a minimum of 99" || bad "GetApp compatible: $got"
     # Only the test app's own record: the list holds every app of the remotes (Flathub has thousands).
