@@ -778,6 +778,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruya-notifications"
+version = "0.1.0"
+dependencies = [
+ "async-io",
+ "futures-lite",
+ "libc",
+ "ruya-contract-test",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "zbus",
+]
+
+[[package]]
 name = "ruya-pads"
 version = "0.1.0"
 

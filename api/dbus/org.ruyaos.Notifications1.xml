@@ -2,12 +2,13 @@
  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 <!--
   org.ruyaos.Notifications1 — the notification centre's history, per profile, and its settings.
-  DRAFT, shell-facing half only (RUY-413). The service, the per-profile store, the bridge that
-  receives notifications from apps on each profile's bus and the app-facing side (freedesktop
-  org.freedesktop.Notifications or Platform1, still to be decided) are RUY-88 (T-245). Until that
-  service exists the shell runs against its mock (MockNotificationsBackend), which follows this
-  contract. Bus name org.ruyaos.Notifications1 on the system bus at /org/ruyaos/Notifications1;
-  the bus policy will let only ruya-shell and root call it (CLAUDE.md, restrictive policies).
+  Served by ruya-notifications (RUY-730): the shell-facing half drafted by RUY-413, with the
+  per-profile store under /var/lib/ruyaos/notifications. The bridge that receives notifications
+  from apps on each profile's bus and the app-facing side (freedesktop
+  org.freedesktop.Notifications or Platform1, still to be decided) stay RUY-88 (T-245). Off Linux
+  the shell runs against its mock (MockNotificationsBackend), which follows this contract. Bus
+  name org.ruyaos.Notifications1 on the system bus at /org/ruyaos/Notifications1; the bus policy
+  lets only ruya-shell and root call it (CLAUDE.md, restrictive policies).
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §1.4.
 
   Stability: a draft and internal. No element carries org.ruyaos.Stability, so nothing here is

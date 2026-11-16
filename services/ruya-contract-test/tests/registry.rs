@@ -12,10 +12,8 @@ use std::path::{Path, PathBuf};
 use ruya_contract_test::{contract_dir, interface_names};
 
 /// Interfaces of the contract that no Rust service serves, with the reason.
-const NOT_SERVED: &[(&str, &str)] = &[(
-    "org.ruyaos.Notifications1",
-    "a draft the shell runs against its mock; the Rust service is RUY-88 (T-245)",
-)];
+/// Empty since RUY-730 (ruya-notifications serves Notifications1).
+const NOT_SERVED: &[(&str, &str)] = &[];
 
 fn services_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")

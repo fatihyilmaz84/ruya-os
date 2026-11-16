@@ -166,7 +166,13 @@ DBusNotificationsBackend::DBusNotificationsBackend(QObject *parent)
     qDBusRegisterMetaType<RuyaQuietHours>();
     qDBusRegisterMetaType<RuyaSourceSwitches>();
     connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] { serviceUp(); });
-    connect(&m_watcher, &QDBusServiceWatcher::serviceUnregistered, this, [this] { m_up = false; });
+    connect(&m_watcher, &QDBusServiceWatcher::serviceUnregistered, this, [this] {
+        const bool was = m_up;
+        m_up = false;
+        m_known = true;
+        if (was)
+            tellAbsent();       // it went away: once, until it is back
+    });
     // Is it there already? Asked without blocking.
     auto ask = QDBusMessage::createMethodCall(QStringLiteral("org.freedesktop.DBus"), QStringLiteral("/org/freedesktop/DBus"),
                                               QStringLiteral("org.freedesktop.DBus"), QStringLiteral("NameHasOwner"));
@@ -175,9 +181,12 @@ DBusNotificationsBackend::DBusNotificationsBackend(QObject *parent)
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         QDBusPendingReply<bool> reply = *w;
-        m_known = true;
-        if (reply.isValid() && reply.value())
+        if (reply.isValid() && reply.value()) {
             serviceUp();
+        } else if (!m_up) {
+            m_known = true;
+            tellAbsent();       // missing at start: the journal says so (RUY-730)
+        }
     });
     m_bus.connect(Service, Path, Interface, QStringLiteral("Added"), this, SLOT(onAdded(QDBusMessage)));
     m_bus.connect(Service, Path, Interface, QStringLiteral("Removed"), this, SLOT(onRemoved(QDBusMessage)));
@@ -192,18 +201,26 @@ void DBusNotificationsBackend::serviceUp()
         return;
     m_up = true;
     m_known = true;
+    m_toldAbsent = false;       // a later disappearance is logged again
     refreshSettings();
     emit changed(QString());     // the facade lists again
+}
+
+void DBusNotificationsBackend::tellAbsent()
+{
+    if (m_toldAbsent)
+        return;
+    m_toldAbsent = true;
+    // scripts/vm-notifications-check.sh looks for this line.
+    qWarning("ruya-shell: Notifications1 is not on the bus; notifications are not kept");
 }
 
 bool DBusNotificationsBackend::available()
 {
     if (m_up)
         return true;
-    if (m_known && !m_toldAbsent) {
-        m_toldAbsent = true;
-        qWarning("ruya-shell: Notifications1 is not on the bus: notifications are shown but not kept");
-    }
+    if (m_known)
+        tellAbsent();
     return false;
 }
 

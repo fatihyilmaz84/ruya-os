@@ -29,6 +29,10 @@
 #   - vm-boot-check.sh     the `watchdog` mode (RUY-483): the unit's three settings, a restart or trip before the
 #                          test, a missing start line, no restart, a second restart and a restart without systemd's
 #                          trip line each FAIL; a shell that stays stopped is continued at exit
+#   - vm-notifications-check.sh (RUY-730) against a fake Notifications1: each step (unit, exposure, Post and
+#                          Added, MarkRead, a restart that loses items, ids or the setting, the shell's journal
+#                          line and GetAll, the shell's Post, keyed replace, Withdraw, a switched-off source,
+#                          nobody's Post) can FAIL; the exit trap locks again and puts the setting back
 # Needs bash and python3 (python on Windows). Exit 0 = all pass.
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -1180,6 +1184,217 @@ out="$(FAKE_OTHER_RESTART=1 runwd)"
 expect_contains "watchdog: a restart without the trip line: FAIL" "$out" "FAIL: no 'Watchdog timeout' line from systemd since the stop"
 out="$(RUYA_WD_START_S=1 FAKE_NO_START2=1 runwd)"
 expect_contains "watchdog: no start line from the new shell: FAIL" "$out" "FAIL: the new shell (pid 2002) did not log"
+
+# --- vm-notifications-check.sh (RUY-730): each assertion can fail -------------------------------
+# A fake Notifications1 and Profiles1 behind busctl, systemctl, systemd-analyze, journalctl, runuser and id,
+# over one JSON state file; the signals and calls a real busctl monitor would see go to a bus log that the
+# fake monitor follows with tail. FAKE_BUG breaks one rule.
+echo "vm-notifications-check.sh: each assertion can fail"
+nt="$tmp/notif"; mkdir -p "$nt/bin"
+cat > "$nt/fake.py" <<'PYEOF'
+import json, os, sys
+state_path, buslog, tool = sys.argv[1], sys.argv[2], sys.argv[3]
+args = sys.argv[4:]
+bugs = set(os.environ.get("FAKE_BUG", "").split(","))
+caller = os.environ.get("FAKE_CALLER", "root")
+try:
+    with open(state_path) as f:
+        st = json.load(f)
+except FileNotFoundError:
+    st = {"next": 1, "items": {}, "toast": 4, "sources": {}, "active": "", "journal": []}
+
+def save():
+    with open(state_path, "w") as f:
+        json.dump(st, f)
+
+def out(sig, *data):
+    print(json.dumps({"type": sig, "data": list(data)}))
+
+def bus(member, data, sender=":1.9"):
+    with open(buslog, "a", newline="\n") as f:
+        f.write(json.dumps({"type": "signal", "sender": sender, "member": member, "payload": {"data": data}}) + "\n")
+
+def restart():
+    if "no_persist" in bugs:
+        st["items"] = {}
+    if "id_reuse" in bugs:
+        st["next"] = 1
+    if "setting_lost" in bugs:
+        st["toast"] = 4
+    if "shell_silent" not in bugs:
+        st["journal"].append("ruya-shell: Notifications1 is not on the bus; notifications are not kept")
+    if "no_reread" not in bugs:
+        bus("GetAll", ["org.ruyaos.Notifications1"], sender=":1.7")
+
+if tool == "systemctl":
+    if args[0] == "is-active":
+        print("inactive" if "inactive" in bugs else "active")
+    elif args[0] == "restart":
+        restart()
+    save()
+    sys.exit(0)
+if tool == "systemd-analyze":
+    print("-> Overall exposure level for ruya-notifications.service: %s OK" % ("5.0" if "exposure" in bugs else "1.1"))
+    sys.exit(0)
+if tool == "journalctl":
+    print("\n".join(st["journal"]))
+    sys.exit(0)
+
+# busctl
+a = [x for x in args if not x.startswith("--")]
+verb = a[0]
+if verb == "status":
+    sys.exit(0)
+if verb == "list":
+    print(":1.7 1200 ruya-shell ruya-shell :1.7 ruya-compositor@tty1.service - -")
+    print(":1.9 1300 ruya-notifica root :1.9 ruya-notifications.service - -")
+    sys.exit(0)
+svc, rest = a[1], a[4:]
+if verb == "get-property":  # busctl --json: "data" is the value itself
+    name = rest[0]
+    value = {"ActiveProfile": ("s", st["active"]), "ToastSeconds": ("u", st["toast"]),
+             "SourcesEnabled": ("a{sb}", st["sources"])}[name]
+    print(json.dumps({"type": value[0], "data": value[1]}))
+    sys.exit(0)
+if verb == "set-property":
+    name, vals = rest[0], rest[2:]
+    if name == "ToastSeconds":
+        st["toast"] = int(vals[0])
+    elif name == "SourcesEnabled":
+        n = int(vals[0])
+        st["sources"] = {vals[1 + 2 * i]: vals[2 + 2 * i] == "true" for i in range(n)}
+    save()
+    sys.exit(0)
+method, vals = rest[0], rest[2:]
+if svc == "org.ruyaos.Profiles1":
+    if method == "ListProfiles":
+        out("a(ssssb)", [["p1", "Check Admin", "#3a5bd9", "admin", True]])
+    elif method == "SwitchTo":
+        st["active"] = vals[0]
+        out("suu", "ok", 0, 0)
+    elif method == "Lock":
+        st["active"] = ""
+    save()
+    sys.exit(0)
+items = st["items"]
+if method == "Post":
+    profile, key, source, title = vals[0], vals[1], vals[2], vals[5]
+    if caller == "nobody" and "nobody_allowed" not in bugs:
+        print("Call failed: Access denied", file=sys.stderr)
+        sys.exit(1)
+    if caller == "ruya-shell" and "shell_forbidden" in bugs:
+        out("su", "forbidden", 0)
+        sys.exit(0)
+    if st["sources"].get(source) is False and "source_kept" not in bugs:
+        out("su", "ok", 0)
+        sys.exit(0)
+    lst = items.setdefault(profile, [])
+    if key and "no_replace" not in bugs:
+        for it in [i for i in lst if i["key"] == key]:
+            lst.remove(it)
+            bus("Removed", [profile, [it["id"]], "replaced"])
+    iid = st["next"]
+    st["next"] += 1
+    lst.append({"id": iid, "key": key, "source": source, "title": title, "unread": True})
+    if "no_added" not in bugs:
+        bus("Added", [profile, [iid, source, "", "info", title, "", "", [], "normal", False, True, 0]])
+    out("su", "ok", iid)
+elif method == "List":
+    out("a(ussssssa(ss)sbbx)", [[i["id"], i["source"], "", "info", i["title"], "", "", [], "normal", False, i["unread"], 0] for i in items.get(vals[0], [])])
+elif method == "MarkRead":
+    if "unread_stays" not in bugs:
+        for i in items.get(vals[0], []):
+            i["unread"] = False
+    bus("Changed", [vals[0]])
+    out("s", "ok")
+elif method == "Withdraw":
+    for p, lst in items.items():
+        for it in [i for i in lst if i["key"] == vals[0]]:
+            if "no_withdraw" not in bugs:
+                lst.remove(it)
+                bus("Removed", [p, [it["id"]], "withdrawn"])
+    out("s", "ok")
+elif method == "Dismiss":
+    for lst in items.values():
+        for it in [i for i in lst if i["id"] == int(vals[0])]:
+            lst.remove(it)
+    out("s", "ok")
+save()
+PYEOF
+cat > "$nt/bin/busctl" <<'SHIMEOF'
+#!/bin/sh
+# monitor: prints what is added to the bus log from now on, until it is killed or its parent is gone
+# (a loop of the shell, not tail -f: a leftover native tail would hold the test's output pipe open).
+case " $* " in *" monitor "*)
+    n="$(wc -l < "$NOTIF_BUSLOG")"; i=0
+    while kill -0 "$PPID" 2>/dev/null && [ "$i" -lt 600 ]; do
+        m="$(wc -l < "$NOTIF_BUSLOG")"
+        if [ "$m" -gt "$n" ]; then tail -n "+$((n + 1))" "$NOTIF_BUSLOG" | head -n "$((m - n))"; n="$m"; fi
+        i=$((i + 1)); sleep 0.1
+    done
+    exit 0 ;;
+esac
+exec python3 "$NOTIF_PY" "$NOTIF_STATE" "$NOTIF_BUSLOG" busctl "$@"
+SHIMEOF
+for t in systemctl systemd-analyze journalctl; do
+    printf '#!/bin/sh\nexec python3 "$NOTIF_PY" "$NOTIF_STATE" "$NOTIF_BUSLOG" %s "$@"\n' "$t" > "$nt/bin/$t"
+done
+cat > "$nt/bin/runuser" <<'SHIMEOF'
+#!/bin/sh
+# runuser -u <user> -- <command...>
+user="$2"; shift 3
+FAKE_CALLER="$user" exec "$@"
+SHIMEOF
+cat > "$nt/bin/id" <<'SHIMEOF'
+#!/bin/sh
+echo 990
+SHIMEOF
+cat > "$nt/bin/stdbuf" <<'SHIMEOF'
+#!/bin/sh
+shift
+exec "$@"
+SHIMEOF
+chmod +x "$nt/bin/"*
+runnotif() { # FAKE_BUG comes from the caller's prefix
+    rm -f "$nt/state.json"; : > "$nt/bus.log"
+    NOTIF_PY="$nt/fake.py" NOTIF_STATE="$nt/state.json" NOTIF_BUSLOG="$nt/bus.log" \
+        NOTIF_BASELINE="$here/../image/security-baseline.json" NOTIF_WAIT=3 PATH="$nt/bin:$shims:$PATH" \
+        bash "$here/vm-notifications-check.sh" check 2>&1
+}
+out="$(runnotif)"; rc=$?
+expect_contains "notifications: a good service passes" "$out" "ALL CHECKS PASSED"
+expect_lacks "notifications: a good service: no FAIL" "$out" "FAIL"
+expect_contains "notifications: it signs a profile in when nobody is" "$out" "PASS: signed p1 in for the check"
+[ "$rc" = 0 ] && pass "notifications: a good service: exit 0" || fail "notifications: a good service: exit $rc"
+expect_lacks "notifications: the exit trap locks again" "$(cat "$nt/state.json")" '"active": "p1"'
+expect_contains "notifications: the exit trap puts ToastSeconds back" "$(cat "$nt/state.json")" '"toast": 4'
+expect_contains "notifications: the exit trap puts the sources back" "$(cat "$nt/state.json")" '"sources": {}'
+# Bugs that do not get in each other's way share a run (each run costs seconds of fake busctl calls).
+for group in \
+    "inactive,no_added,unread_stays,shell_silent,no_replace,source_kept,setting_lost" \
+    "exposure,no_persist,no_reread,shell_forbidden,no_withdraw,nobody_allowed" \
+    "id_reuse"; do
+    out="$(FAKE_BUG="$group" runnotif)"; rc=$?
+    [ "$rc" = 1 ] && pass "notifications, bugs $group: exit 1" || fail "notifications, bugs $group: exit $rc"
+    for case in \
+        "inactive|FAIL: ruya-notifications.service is not active" \
+        "exposure|FAIL: exposure 5.0 is above the baseline" \
+        "no_added|FAIL: no Added for item" \
+        "unread_stays|FAIL: MarkRead left item" \
+        "no_persist|FAIL: item 1 is gone after the restart" \
+        "id_reuse|is not above 1" \
+        "shell_silent|FAIL: no 'Notifications1 is not on the bus; notifications are not kept'" \
+        "no_reread|FAIL: no GetAll from the shell" \
+        "shell_forbidden|FAIL: a Post from ruya-shell" \
+        "no_replace|FAIL: the keyed Post did not replace" \
+        "no_withdraw|FAIL: Withdraw" \
+        "source_kept|FAIL: a switched-off source" \
+        "nobody_allowed|FAIL: a Post as nobody was not refused" \
+        "setting_lost|FAIL: ToastSeconds is '4' after the restart"; do
+        bug="${case%%|*}"; needle="${case#*|}"
+        case ",$group," in *",$bug,"*) expect_contains "notifications, bug $bug: caught" "$out" "$needle" ;; esac
+    done
+done
 
 echo
 if [ "$fails" = 0 ]; then echo "vm-check tests: all passed"; else echo "vm-check tests: $fails failed"; fi
