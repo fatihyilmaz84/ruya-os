@@ -404,6 +404,8 @@ Item {
             keyClick(Qt.Key_Up)
             verify(find("detailPrimary").activeFocus, "Up stops at the first stop")
             keyClick(Qt.Key_Down)
+            verify(find("detailAbout").activeFocus, "About is one stop, before This app can (RUY-534)")
+            keyClick(Qt.Key_Down)
             verify(find("detailPermissions").activeFocus, "This app can is one stop")
             compare(hintVerbs(), "back Back")
             keyClick(Qt.Key_Down)

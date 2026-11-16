@@ -70,6 +70,7 @@ Page {
     property string errorText: ""
 
     // Which sections are there (the stops depend on these, not on the visibility, which a covered page loses too).
+    readonly property bool aboutShown: hasRecord && (app.description ?? "") !== ""
     readonly property bool permsSectionShown: hasRecord && !isSteam && !detailsFailed
     readonly property bool permsListed: permsSectionShown && (app.permissions ?? []).length > 0
     readonly property bool manageShown: hasRecord && installed && !isSteam && !working
@@ -446,6 +447,8 @@ Page {
             buttons.push(secondaryButtons.itemAt(i))
         if (buttons.length > 0)
             rows.push(buttons)
+        if (aboutShown)
+            rows.push([about.block])
         if (permsListed)
             rows.push([permsBlock])
         for (let i = 0; i < factRepeater.count; i += 2)
@@ -471,7 +474,7 @@ Page {
         rows[0][0].focus = true
     }
 
-    readonly property string stopKey: primaryKind + "#" + secondaryKeys + "#" + factKeys + "#" + permsListed + "#" + uninstallShown
+    readonly property string stopKey: primaryKind + "#" + secondaryKeys + "#" + factKeys + "#" + aboutShown + "#" + permsListed + "#" + uninstallShown
     onStopKeyChanged: Qt.callLater(ensureFocus)
 
     function moveFocus(dx, dy) {
@@ -511,7 +514,10 @@ Page {
     readonly property real offset: scrollTo === header ? 0
         : Math.max(0, Math.min(scrollTo.y, column.height - viewport.height))
 
-    hints: onFactStop ? backOnlyHints : [
+    // About with "More" reads the whole text on Accept (the Text sheet); without it the block is only read.
+    readonly property bool aboutReadable: aboutShown && about.block.activeFocus && about.cut
+    hints: aboutReadable ? [{ action: "accept", text: qsTr("Read") }, { action: "back", text: qsTr("Back") }]
+         : onFactStop ? backOnlyHints : [
         { action: "accept", text: qsTr("Select") },
         { action: "back", text: qsTr("Back") }
     ]
@@ -802,6 +808,22 @@ Page {
                 }
             }
 
+            // (Screenshots, RUY-533, goes here.)
+
+            // ---- About ----
+            GameAbout {
+                id: about
+                objectName: "detailAboutSection"
+                u: page.u
+                visible: page.aboutShown
+                description: page.app.description ?? ""
+                notes: page.app.releaseNotes ?? ""
+                version: page.app.version ?? ""
+                showNotes: page.hasUpdate
+                block.onActiveFocusChanged: if (block.activeFocus) page.stopFocused(about, true)
+                onReadRequested: page.openTextSheet()
+            }
+
             // ---- This app can ----
             Column {
                 id: permsSection
@@ -964,6 +986,30 @@ Page {
                 }
             }
         }
+    }
+
+    // The Text sheet (04 §5), in the modal layer and built on its first opening.
+    Loader {
+        id: textSheetSlot
+        parent: page.overlay
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+        active: false
+        sourceComponent: Component {
+            TextSheet {
+                objectName: "aboutTextSheet"
+                u: page.u
+                title: page.title
+                description: page.app.description ?? ""
+                notesTitle: about.notesShown ? about.notesHeading : ""
+                notes: about.notesShown ? (page.app.releaseNotes ?? "") : ""
+            }
+        }
+    }
+    function openTextSheet() {
+        textSheetSlot.active = true
+        const sheet = textSheetSlot.item as TextSheet
+        sheet?.open()
     }
 
     // A stop took the focus: scroll to its section, and the hints of its kind.

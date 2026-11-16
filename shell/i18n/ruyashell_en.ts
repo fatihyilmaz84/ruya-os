@@ -293,7 +293,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+173"/>
+        <location filename="../qml/AppDetailPage.qml" line="+178"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -521,12 +521,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="-7"/>
-        <location line="+312"/>
+        <location line="+323"/>
         <source>Steam</source>
         <translation>Steam</translation>
     </message>
     <message>
-        <location line="-311"/>
+        <location line="-322"/>
         <source>Steam app ID</source>
         <translation>Steam app ID</translation>
     </message>
@@ -596,7 +596,12 @@ This can&apos;t be undone.</translation>
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+573"/>
+        <location line="+206"/>
+        <source>Read</source>
+        <translation>Read</translation>
+    </message>
+    <message>
+        <location line="+386"/>
         <source>No special permissions.</source>
         <translation>No special permissions.</translation>
     </message>
@@ -611,7 +616,7 @@ This can&apos;t be undone.</translation>
         <translation>Information</translation>
     </message>
     <message>
-        <location line="+33"/>
+        <location line="+34"/>
         <source>Play time for Steam games is not counted yet.</source>
         <translation>Play time for Steam games is not counted yet.</translation>
     </message>
@@ -636,7 +641,7 @@ This can&apos;t be undone.</translation>
         <translation>Close the game to uninstall it.</translation>
     </message>
     <message>
-        <location line="-848"/>
+        <location line="-868"/>
         <source>Install</source>
         <translation>Install</translation>
     </message>
@@ -647,7 +652,7 @@ This can&apos;t be undone.</translation>
         <translation>Update</translation>
     </message>
     <message>
-        <location line="+620"/>
+        <location line="+627"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Needs a newer RuyaOS than this console has. It stays installed.</translation>
     </message>
@@ -657,12 +662,12 @@ This can&apos;t be undone.</translation>
         <translation>Needs a newer RuyaOS</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+18"/>
         <source>Store details are unavailable right now.</source>
         <translation>Store details are unavailable right now.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+50"/>
         <location line="+9"/>
         <source>This app can</source>
         <translation>This app can</translation>
@@ -673,12 +678,12 @@ This can&apos;t be undone.</translation>
         <translation>High risk</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-107"/>
         <source>The update adds: %1</source>
         <translation>The update adds: %1</translation>
     </message>
     <message>
-        <location line="-649"/>
+        <location line="-655"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Open</translation>
@@ -716,12 +721,13 @@ This can&apos;t be undone.</translation>
         <translation>Try again</translation>
     </message>
     <message>
-        <location line="+367"/>
+        <location line="+378"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-2"/>
+        <location line="+3"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -732,12 +738,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+152"/>
+        <location line="+149"/>
         <source>Update ready</source>
         <translation>Update ready</translation>
     </message>
     <message>
-        <location line="-141"/>
+        <location line="-138"/>
         <source>Installed through Steam</source>
         <translation>Installed through Steam</translation>
     </message>
@@ -747,12 +753,12 @@ This can&apos;t be undone.</translation>
         <translation>Start this game from Steam for now.</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+30"/>
         <source>%1 % · It keeps going if you leave this page.</source>
         <translation>%1 % · It keeps going if you leave this page.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+7"/>
         <source>Download %1 · %2 on disk</source>
         <translation>Download %1 · %2 on disk</translation>
     </message>
@@ -767,12 +773,12 @@ This can&apos;t be undone.</translation>
         <translation>%1 on disk</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+5"/>
         <source>Update ready: version %1</source>
         <translation>Update ready: version %1</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+18"/>
         <source>An admin&apos;s PIN is needed to update this app.</source>
         <translation>An admin&apos;s PIN is needed to update this app.</translation>
     </message>
@@ -2473,6 +2479,29 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>GameAbout</name>
+    <message>
+        <location filename="../qml/GameAbout.qml" line="+19"/>
+        <source>About</source>
+        <translation>About</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>What&apos;s new in %1</source>
+        <translation>What&apos;s new in %1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>What&apos;s new</source>
+        <translation>What&apos;s new</translation>
+    </message>
+    <message>
+        <location line="+111"/>
+        <source>More</source>
+        <translation>More</translation>
+    </message>
+</context>
+<context>
     <name>GameControls</name>
     <message>
         <location filename="../qml/GameControls.qml" line="+495"/>
@@ -2912,9 +2941,6 @@ This can&apos;t be undone.</translation>
         <source>Force quit loses unsaved progress.</source>
         <translation>Force quit loses unsaved progress.</translation>
     </message>
-</context>
-<context>
-    <name>LibraryDetailsPage</name>
 </context>
 <context>
     <name>ManageProfilesPane</name>
@@ -6387,6 +6413,20 @@ This can&apos;t be undone.</translation>
         <location line="+12"/>
         <source>Shift</source>
         <translation>Shift</translation>
+    </message>
+</context>
+<context>
+    <name>TextSheet</name>
+    <message>
+        <location filename="../qml/TextSheet.qml" line="+43"/>
+        <source>Scroll</source>
+        <translation>Scroll</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>Close</source>
+        <translation>Close</translation>
     </message>
 </context>
 <context>

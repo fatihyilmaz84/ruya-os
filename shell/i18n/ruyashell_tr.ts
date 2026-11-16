@@ -291,7 +291,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+173"/>
+        <location filename="../qml/AppDetailPage.qml" line="+178"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -519,12 +519,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-7"/>
-        <location line="+312"/>
+        <location line="+323"/>
         <source>Steam</source>
         <translation>Steam</translation>
     </message>
     <message>
-        <location line="-311"/>
+        <location line="-322"/>
         <source>Steam app ID</source>
         <translation>Steam uygulama kimliği</translation>
     </message>
@@ -594,7 +594,12 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+573"/>
+        <location line="+206"/>
+        <source>Read</source>
+        <translation>Oku</translation>
+    </message>
+    <message>
+        <location line="+386"/>
         <source>No special permissions.</source>
         <translation>Özel bir izni yok.</translation>
     </message>
@@ -609,7 +614,7 @@ Bu geri alınamaz.</translation>
         <translation>Bilgiler</translation>
     </message>
     <message>
-        <location line="+33"/>
+        <location line="+34"/>
         <source>Play time for Steam games is not counted yet.</source>
         <translation>Steam oyunlarının oynama süresi henüz sayılmıyor.</translation>
     </message>
@@ -634,7 +639,7 @@ Bu geri alınamaz.</translation>
         <translation>Kaldırmak için önce oyunu kapatın.</translation>
     </message>
     <message>
-        <location line="-848"/>
+        <location line="-868"/>
         <source>Install</source>
         <translation>Kur</translation>
     </message>
@@ -645,7 +650,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelle</translation>
     </message>
     <message>
-        <location line="+620"/>
+        <location line="+627"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Bu konsoldakinden daha yeni bir RuyaOS gerekiyor. Yüklü kalır.</translation>
     </message>
@@ -655,12 +660,12 @@ Bu geri alınamaz.</translation>
         <translation>Daha yeni bir RuyaOS gerekiyor</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+18"/>
         <source>Store details are unavailable right now.</source>
         <translation>Mağaza ayrıntıları şu anda kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+50"/>
         <location line="+9"/>
         <source>This app can</source>
         <translation>Bu uygulama şunları yapabilir</translation>
@@ -671,12 +676,12 @@ Bu geri alınamaz.</translation>
         <translation>Yüksek risk</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-107"/>
         <source>The update adds: %1</source>
         <translation>Güncelleme şunları ekliyor: %1</translation>
     </message>
     <message>
-        <location line="-649"/>
+        <location line="-655"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Aç</translation>
@@ -714,12 +719,13 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+367"/>
+        <location line="+378"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-2"/>
+        <location line="+3"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -730,27 +736,27 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+152"/>
+        <location line="+149"/>
         <source>Update ready</source>
         <translation>Güncelleme hazır</translation>
     </message>
     <message>
-        <location line="-141"/>
+        <location line="-138"/>
         <source>Installed through Steam</source>
         <translation>Steam üzerinden kuruldu</translation>
     </message>
     <message>
         <location line="+94"/>
         <source>Start this game from Steam for now.</source>
-        <translation>Bu oyunu şimdilik Steam'den başlatın.</translation>
+        <translation>Bu oyunu şimdilik Steam&apos;den başlatın.</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+30"/>
         <source>%1 % · It keeps going if you leave this page.</source>
         <translation>%%1 · Bu sayfadan çıksanız da sürer.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+7"/>
         <source>Download %1 · %2 on disk</source>
         <translation>İndirme %1 · Diskte %2</translation>
     </message>
@@ -765,12 +771,12 @@ Bu geri alınamaz.</translation>
         <translation>Diskte %1</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+5"/>
         <source>Update ready: version %1</source>
         <translation>Güncelleme hazır: sürüm %1</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+18"/>
         <source>An admin&apos;s PIN is needed to update this app.</source>
         <translation>Bu uygulamayı güncellemek için bir yöneticinin PIN&apos;i gerekir.</translation>
     </message>
@@ -2468,6 +2474,29 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>GameAbout</name>
+    <message>
+        <location filename="../qml/GameAbout.qml" line="+19"/>
+        <source>About</source>
+        <translation>Hakkında</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>What&apos;s new in %1</source>
+        <translation>%1 sürümündeki yenilikler</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>What&apos;s new</source>
+        <translation>Yenilikler</translation>
+    </message>
+    <message>
+        <location line="+111"/>
+        <source>More</source>
+        <translation>Devamı</translation>
+    </message>
+</context>
+<context>
     <name>GameControls</name>
     <message>
         <location filename="../qml/GameControls.qml" line="+495"/>
@@ -2907,9 +2936,6 @@ Bu geri alınamaz.</translation>
         <source>Force quit loses unsaved progress.</source>
         <translation>Zorla kapatınca kaydedilmemiş ilerleme kaybolur.</translation>
     </message>
-</context>
-<context>
-    <name>LibraryDetailsPage</name>
 </context>
 <context>
     <name>ManageProfilesPane</name>
@@ -6369,6 +6395,20 @@ Bu geri alınamaz.</translation>
         <location line="+12"/>
         <source>Shift</source>
         <translation>Shift</translation>
+    </message>
+</context>
+<context>
+    <name>TextSheet</name>
+    <message>
+        <location filename="../qml/TextSheet.qml" line="+43"/>
+        <source>Scroll</source>
+        <translation>Kaydır</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>Close</source>
+        <translation>Kapat</translation>
     </message>
 </context>
 <context>
