@@ -29,6 +29,8 @@ FocusScope {
     // Closing and the game has not ended in `forceQuitAfterMs` (RUY-736): it offers Force quit (A) and
     // Wait at Home (B); the text is still, the dots stand still and hide (a screen that waits).
     property bool stuck: false
+    // Force quit was asked and the end has not come yet (RUY-736): "Force quitting <title>…", nothing to press.
+    property bool killing: false
     readonly property bool offersForceQuit: closing && stuck
     // Keys the shell keeps for itself (Guide): a function key -> bool.
     property var guideKey: function (key) { return false }
@@ -83,6 +85,7 @@ FocusScope {
 
     Accessible.role: Accessible.Pane
     Accessible.name: offersForceQuit ? qsTr("%1 is not responding").arg(title)
+                     : closing && killing ? qsTr("Force quitting %1").arg(title)
                      : closing ? qsTr("Closing %1").arg(title) : slow ? qsTr("Still starting %1").arg(title) : qsTr("Starting %1").arg(title)
 
     Rectangle {
@@ -185,6 +188,7 @@ FocusScope {
             width: parent.width
             textFormat: Text.PlainText
             text: splash.offersForceQuit ? qsTr("%1 is not responding").arg(splash.title)
+                  : splash.closing && splash.killing ? qsTr("Force quitting %1…").arg(splash.title)
                   : splash.closing ? qsTr("Closing %1…").arg(splash.title)
                   : splash.slow ? qsTr("Still starting…") : (splash.started ? qsTr("Starting…") : "")
             visible: text.length > 0

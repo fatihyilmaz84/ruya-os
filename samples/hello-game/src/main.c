@@ -4,7 +4,8 @@
  *  - full screen, drawn for 1920x1080 and scaled, everything readable inside the safe area;
  *  - a controller (any SDL gamepad, hot-plugged) or the keyboard;
  *  - saves in $XDG_DATA_HOME/saves/, written atomically with a .bak;
- *  - SIGTERM (what the console sends to stop a game) saves and exits within the 5 s grace.
+ *  - SIGTERM (what the console sends to stop a game) saves and exits within 5 s: the service
+ *    sends SIGKILL after up to 30 s, and the player can Force quit from 5 s on.
  */
 #include <errno.h>
 #include <math.h>
@@ -285,7 +286,8 @@ int main(int argc, char **argv)
         SDL_Delay(2); /* never spin, even where vsync does nothing (no display) */
     }
 
-    /* Quit event or SIGTERM: this is the moment to save. The console waits 5 seconds. */
+    /* Quit event or SIGTERM: this is the moment to save. Be done within 5 s: the player can Force
+       quit from then on (the service itself sends SIGKILL after up to 30 s). */
     printf("hello-game: %s, saving\n", g_terminate ? "SIGTERM" : "quit");
     save_now(slot, &g, g_terminate ? "sigterm" : "quit");
     if (pad)

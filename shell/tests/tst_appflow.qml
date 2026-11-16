@@ -595,7 +595,10 @@ Item {
             verify(!find("launchSplash").offersForceQuit, "asked: nothing more to press while it waits")
             verify(!find("launchForceQuit").visible)
             verify(tc.shell.closingScreen, "the screen waits for the end")
-            compare(find("launchStatus").text, "Closing Turbo Racer…")
+            compare(find("launchStatus").text, "Force quitting Turbo Racer…", "the A press is acknowledged")
+            compare(find("launchSplash").Accessible.name, "Force quitting Turbo Racer")
+            verify(!find("launchDetail").visible)
+            compare(hintVerbs(), "", "nothing to press while it waits")
             verify(find("launchSplash").activeFocus, "the screen keeps the focus")
             verify(!find("launchForceQuit").activeFocus, "not the hidden button")
             tryVerify(() => find("launchSplash").offersForceQuit, 3000, "no end: Force quit again, never stranded")
@@ -945,6 +948,24 @@ Item {
             DeviceSettings.language = "en"
             host.width = 1280
             host.height = 720
+        }
+
+        // RUY-736: after A on Force quit, before the end ("Force quitting <title>…").
+        function test_zz_screenshots_closing_force_quitting() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            start()
+            playRacer()
+            tc.shell.forceQuitAfterMs = 300
+            Session.mockIgnoreStop(true)
+            Session.mockKillAnswer("ok")                     // no end: the screen stays in this state
+            closeGameFromHub()
+            tryVerify(() => find("launchForceQuit").activeFocus, 4000)
+            tc.shell.forceQuitAfterMs = 60000                // no new offer before the grab
+            keyClick(Qt.Key_Return)
+            tryCompare(find("launchStatus"), "text", "Force quitting Turbo Racer…")
+            wait(900)
+            grabImage(tc.shell).save(shotsDir + "/appflow-10-closing-force-quitting.png")
         }
 
         function test_zz_screenshots_closing() {

@@ -2681,6 +2681,7 @@ FocusScope {
         shown: root.launching || root.closingScreen
         closing: !root.launching && root.closingScreen
         stuck: !root.launching && root.closeOffersForceQuit
+        killing: !root.launching && root.closeState !== null && root.closeState.killing
         appId: root.launchState ? root.launchState.appId : (root.closeState ? root.closeState.appId : "")
         title: root.launchState ? root.launchState.title : (root.closeState ? root.closeState.title : "")
         picture: root.launchState ? root.launchState.picture : (root.closeState ? root.closeState.picture : "")

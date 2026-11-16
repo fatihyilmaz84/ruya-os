@@ -44,7 +44,7 @@ Run this before you ask anyone to look at your game. It reuses the checklists of
 
 - [ ] Plays full screen at 720p, 1080p and 4K with a controller only; text is 24 px or more at 1080p; everything inside the safe area ([Full screen and lifecycle](fullscreen-and-lifecycle.md)).
 - [ ] The Guide button is unused; Esc and B do not quit; hot-plug works ([Controller input](controller-input.md)).
-- [ ] The game pauses when it loses focus, saves and exits within the 5 seconds on `SIGTERM`, exits 0.
+- [ ] The game pauses when it loses focus, saves and exits within 5 s of `SIGTERM` (stop sends `SIGTERM`; the service sends `SIGKILL` after up to 30 s; the player can Force quit from 5 s on (a console choice that may change), so save and exit within 5 s), exits 0.
 - [ ] Saves in `$XDG_DATA_HOME`, atomic with a `.bak`, rebuildable data in the cache; a killed game loses at most the last unsaved moment ([Saves and data](saves-and-data.md)).
 - [ ] Starts and plays with no audio device and no network, unless the game is online-only and says so.
 

@@ -2528,30 +2528,35 @@ This can&apos;t be undone.</translation>
 <context>
     <name>LaunchSplash</name>
     <message>
-        <location filename="../qml/LaunchSplash.qml" line="+39"/>
-        <location line="+195"/>
+        <location filename="../qml/LaunchSplash.qml" line="+41"/>
+        <location line="+204"/>
         <source>Force quit</source>
         <translation>Force quit</translation>
     </message>
     <message>
-        <location line="-195"/>
+        <location line="-204"/>
         <source>Wait at Home</source>
         <translation>Wait at Home</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+186"/>
+        <location line="+195"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
     <message>
-        <location line="-148"/>
-        <location line="+102"/>
+        <location line="-150"/>
+        <location line="+103"/>
         <source>%1 is not responding</source>
         <translation>%1 is not responding</translation>
     </message>
     <message>
-        <location line="-101"/>
+        <location line="-102"/>
+        <source>Force quitting %1</source>
+        <translation>Force quitting %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Still starting %1</source>
         <translation>Still starting %1</translation>
     </message>
@@ -2567,6 +2572,11 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+102"/>
+        <source>Force quitting %1…</source>
+        <translation>Force quitting %1…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Closing %1…</source>
         <translation>Closing %1…</translation>
     </message>
@@ -4764,12 +4774,12 @@ This can&apos;t be undone.</translation>
         <translation>Options</translation>
     </message>
     <message>
-        <location line="+186"/>
+        <location line="+187"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>The chosen sound theme can&apos;t be used. The standard one plays instead.</translation>
     </message>
     <message>
-        <location line="-223"/>
+        <location line="-224"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
@@ -4811,7 +4821,7 @@ This can&apos;t be undone.</translation>
         <translation>Sections</translation>
     </message>
     <message>
-        <location line="+166"/>
+        <location line="+167"/>
         <source>mock services</source>
         <translation>mock services</translation>
     </message>

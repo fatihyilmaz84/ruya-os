@@ -2523,30 +2523,35 @@ Bu geri alınamaz.</translation>
 <context>
     <name>LaunchSplash</name>
     <message>
-        <location filename="../qml/LaunchSplash.qml" line="+39"/>
-        <location line="+195"/>
+        <location filename="../qml/LaunchSplash.qml" line="+41"/>
+        <location line="+204"/>
         <source>Force quit</source>
         <translation>Zorla kapat</translation>
     </message>
     <message>
-        <location line="-195"/>
+        <location line="-204"/>
         <source>Wait at Home</source>
         <translation>Ana ekranda bekle</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+186"/>
+        <location line="+195"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="-148"/>
-        <location line="+102"/>
+        <location line="-150"/>
+        <location line="+103"/>
         <source>%1 is not responding</source>
         <translation>%1 yanıt vermiyor</translation>
     </message>
     <message>
-        <location line="-101"/>
+        <location line="-102"/>
+        <source>Force quitting %1</source>
+        <translation>%1 zorla kapatılıyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Still starting %1</source>
         <translation>%1 hâlâ başlıyor</translation>
     </message>
@@ -2562,6 +2567,11 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+102"/>
+        <source>Force quitting %1…</source>
+        <translation>%1 zorla kapatılıyor…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Closing %1…</source>
         <translation>%1 kapanıyor…</translation>
     </message>
@@ -4747,12 +4757,12 @@ Bu geri alınamaz.</translation>
         <translation>Seçenekler</translation>
     </message>
     <message>
-        <location line="+186"/>
+        <location line="+187"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
     </message>
     <message>
-        <location line="-223"/>
+        <location line="-224"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
@@ -4794,7 +4804,7 @@ Bu geri alınamaz.</translation>
         <translation>Bölümler</translation>
     </message>
     <message>
-        <location line="+166"/>
+        <location line="+167"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>

@@ -1,6 +1,6 @@
 # Saves and data
 
-Where your game writes things, and what the console does with them. The short version: **use the XDG directories, save atomically, finish within five seconds of `SIGTERM`, keep rebuildable stuff out of the saves.** Games that do this get backup, restore, clean uninstall and safe updates for free. Games that do not are still handled safely (see "If your app does not follow this").
+Where your game writes things, and what the console does with them. The short version: **use the XDG directories, save atomically, save and exit within 5 s of `SIGTERM` (Stop sends `SIGTERM`; the service sends `SIGKILL` after up to 30 s; the player can Force quit from 5 s on, a console choice that may change), keep rebuildable stuff out of the saves.** Games that do this get backup, restore, clean uninstall and safe updates for free. Games that do not are still handled safely (see "If your app does not follow this").
 
 *Checked against the console as of 2026-11-06. Items marked **planned** are not built yet.*
 
@@ -207,7 +207,7 @@ find $XDG_DATA_HOME $XDG_CONFIG_HOME $XDG_CACHE_HOME -type f -mmin -5
 
 - [ ] Saves are under `$XDG_DATA_HOME` (not cache, not `/tmp`, not a host path).
 - [ ] Saves are written atomically and the previous slot is kept as `.bak`.
-- [ ] `SIGTERM` writes any pending save and exits (status `0`) well within 5 seconds.
+- [ ] `SIGTERM` writes any pending save and exits (status `0`) well within 5 seconds (the player can Force quit from 5 s on; the service's `SIGKILL` comes after up to 30 s).
 - [ ] Rebuildable data is in `$XDG_CACHE_HOME`.
 - [ ] No `--filesystem=home` or `--filesystem=host` in the Flatpak manifest.
 - [ ] You tested pulling the plug: kill the app with `SIGKILL` during a save (`flatpak kill <your-app-id>`, a hard kill) and check the next start loads the previous good save.

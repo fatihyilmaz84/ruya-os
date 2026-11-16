@@ -12,7 +12,7 @@ A tiny game that does what the [RuyaOS developer guide](../../docs/developers/RE
 | Controller (hot-plug, dead zone, D-pad) with keyboard fallback | `src/main.c` |
 | Full screen, drawn for 1920x1080 and scaled; text 24 px or larger; nothing outside the safe area | `src/main.c` (`draw`), `src/game.h` (`SAFE_X`, `SAFE_Y`) |
 | Saves in `$XDG_DATA_HOME/saves/`, written atomically with a `.bak`, loaded with a checksum and a fallback | `src/save.c`, `src/game.c` |
-| `SIGTERM` saves and exits within the console's 5 seconds | `src/main.c` (`on_term`, end of `main`) |
+| `SIGTERM` saves and exits within 5 s (the player can Force quit from 5 s on; the service sends `SIGKILL` after up to 30 s) | `src/main.c` (`on_term`, end of `main`) |
 
 **Why C and SDL3.** The freedesktop runtime already contains SDL 3 (and SDL 2 through `sdl2-compat`), and its SDK has the compiler, so the manifest has one module and no downloads. Python with pygame-ce was considered: the runtime does not have it, so it would need a module for pygame and for SDL. SDL is also what most game engines use for controllers, so the input code carries over.
 
