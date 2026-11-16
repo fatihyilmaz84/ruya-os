@@ -318,6 +318,7 @@ Item {
             start()
             openPage({ appId: "org.example.Racer" })
             tryCompare(tc.shell, "u", 1)
+            tryVerify(() => tc.shell.slots[tc.shell.slots.length - 1].settled, 2000, "the page has finished sliding in")
             const art = find("detailHero")
             const at = art.mapToItem(tc.shell, 0, 0)
             const view = find("detailViewport").mapToItem(tc.shell, 0, 0)
