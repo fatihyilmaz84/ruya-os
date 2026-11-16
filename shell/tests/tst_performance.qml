@@ -412,24 +412,36 @@ Item {
             compare(Performance.fpsLow1, 100, "none of the first app's 50 FPS intervals")
         }
 
-        function test_a_pause_adds_no_interval_and_keeps_the_window() {
+        function test_a_pause_adds_no_interval() {
             const stand = lowStand(0)
             const consumer = createTemporaryObject(consumerComponent, host)
             verify(consumer)
-            let t = drive(stand.surface, stand.win, 0, 10, 200, 1)
-            Performance.updateFrames()
-            compare(Performance.fpsLow1, 100)
+            let t = drive(stand.surface, stand.win, 0, 10, 60, 1)     // 59 intervals
             consumer.active = false                 // the Hub opens
             verify(!Performance.counting)
             t += 20000
             Performance.fakeFrameClockMs(t)
             consumer.active = true
             verify(Performance.counting)
-            t = drive(stand.surface, stand.win, t, 10, 150, 1)
+            t = drive(stand.surface, stand.win, t, 10, 41, 1)         // 40 more: 99, not 100 with the gap
             Performance.fakeFrameClockMs(t + 1)
             Performance.updateFrames()
-            compare(Performance.fpsLow1, 100, "the 20 s gap is not an interval")
-            compare(Performance.fpsLow01, -1, "199 + 149 intervals")
+            compare(Performance.fpsLow1, -1, "the 20 s gap is not an interval")
+        }
+
+        function test_a_pause_keeps_the_window() {
+            const stand = lowStand(0)
+            const consumer = createTemporaryObject(consumerComponent, host)
+            verify(consumer)
+            let t = drive(stand.surface, stand.win, 0, 50, 200, 1)    // 20 FPS
+            consumer.active = false
+            t += 20000
+            Performance.fakeFrameClockMs(t)
+            consumer.active = true
+            t = drive(stand.surface, stand.win, t, 10, 150, 1)        // 100 FPS
+            Performance.fakeFrameClockMs(t + 1)
+            Performance.updateFrames()
+            compare(Performance.fpsLow1, 20, "the slow intervals from before the pause are still in the 60 s")
         }
 
         function test_values_older_than_60_seconds_leave_the_window() {
