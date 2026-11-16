@@ -525,7 +525,11 @@ Page {
     // The column follows the focus once the player has moved it: the focus the page starts with (the first fact
     // of a Steam game) leaves the header in view.
     property bool moved: false
-    readonly property real offset: scrollTo === header ? 0
+    // The Your activity block is on the first screen, but the Page frame can leave its bottom edge and ring past
+    // the viewport's clip (RUY-532): while it has the focus the column moves up by the overflow only.
+    readonly property real activityOverflow: activitySection.block.activeFocus
+        ? Math.max(0, activitySection.y + activitySection.height + (Theme.focusRingOffset + Theme.focusRingWidth) * u - viewport.height) : 0
+    readonly property real offset: scrollTo === header ? activityOverflow
         : Math.max(0, Math.min(scrollTo.y, column.height - viewport.height))
 
     hints: activitySection.block.activeFocus ? activitySection.block.hints : onFactStop ? backOnlyHints : [

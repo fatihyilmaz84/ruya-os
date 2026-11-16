@@ -58,6 +58,8 @@ Item {
         function cleanup() {
             DeviceSettings.language = "en"
             Store.mockPauseJobs(false)
+            host.width = 1280
+            host.height = 720
         }
 
         function start(itemCount) {
@@ -607,13 +609,19 @@ Item {
         }
 
         function test_accept_opens_the_activity_page_and_back_returns_to_the_block() {
+            host.width = 1920
+            host.height = 1080
             seedRuns()
             start()
             openPage({ id: tc.puzzle })
             tryVerify(() => find("detailActivity").visible, 2000)
             keyClick(Qt.Key_Down)
             verify(find("detailActivity").activeFocus, "Down from the buttons: the block")
-            compare(page().offset, 0, "the first screen does not scroll")
+            // the block's bottom edge and ring stay inside the viewport's clip (1080p: the Page frame leaves it ~7 short)
+            const block = find("detailActivity")
+            const viewport = find("detailViewport")
+            tryVerify(() => block.mapToItem(viewport, 0, block.height).y + Theme.focusRingWidth * page().u <= viewport.height + 0.5, 2000,
+                      "the focused ring's bottom lies inside detailViewport")
             compare(hintVerbs(), "accept See all|back Back")
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "activityGame")
@@ -627,6 +635,9 @@ Item {
             verify(find("detailActivity").activeFocus)
             keyClick(Qt.Key_Up)
             verify(find("detailPrimary").activeFocus)
+            tryCompare(page(), "offset", 0, 2000, "back on the buttons the column is at 0")
+            host.width = 1280
+            host.height = 720
         }
 
         function settle() { wait(900) }
