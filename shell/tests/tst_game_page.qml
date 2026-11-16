@@ -504,7 +504,7 @@ Item {
                 tc.shell.openPage("appDetail", { appId: "org.example.Broken" })
                 tryCompare(tc.shell, "currentPage", "appDetail")
                 tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
-                tryCompare(page(), "detailsReady", true)
+                tryVerify(() => page() !== null && page().detailsReady, 3000)
                 keyClick(Qt.Key_Return)
                 tryVerify(() => find("detailError").visible, 5000)
                 settle()
