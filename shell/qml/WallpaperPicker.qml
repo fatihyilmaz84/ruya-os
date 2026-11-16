@@ -4,8 +4,9 @@ import RuyaShell
 
 // Settings -> Display & motion -> Wallpaper (T-208): a modal grid of thumbnails. The first tile is
 // the default look (the animated blobs), then the bundled pictures, then the owner's copies.
-// Accept on a tile chooses it and closes. Below the grid: "Add from USB drive..." (while a mounted
-// drive has pictures in Wallpapers/ or Pictures/) opens the drive's pictures in the same grid, and
+// Accept on a tile chooses it and closes. Below the grid: "Add from USB drive..." (while a removable
+// drive is mounted) opens the drive's pictures in the same grid: the jpg, png and webp files in the
+// drive's root and in its Wallpapers/ and Pictures/ folders, or, when there are none, a message. And
 // Accept on one copies it (off the GUI thread: the grid shows "Copying..."); "Delete" removes the
 // copy that is highlighted. Back closes, or returns from the drive's pictures to the library.
 // Modal: it accepts every key. Focus returns to the item that had it before open().
@@ -39,7 +40,8 @@ FocusScope {
     }
     readonly property var currentEntry: grid.currentIndex >= 0 && grid.currentIndex < entries.length ? entries[grid.currentIndex] : null
     readonly property bool canDelete: !usbMode && currentEntry !== null && currentEntry.kind === "user"
-    readonly property bool canAdd: !usbMode && Wallpapers.usbImages.length > 0
+    readonly property bool driveMounted: usbMounts().length > 0
+    readonly property bool canAdd: !usbMode && driveMounted
     readonly property bool copying: Wallpapers.copyState === "copying"
     // A button that goes away (the drive is pulled, the highlighted copy is deleted) must not keep focus.
     onCanAddChanged: if (!canAdd && addButton.activeFocus) grid.forceActiveFocus()
@@ -185,13 +187,18 @@ FocusScope {
 
     Connections {
         target: Storage
-        function onVolumesChanged() { picker.rescan() }
+        function onVolumesChanged() {
+            picker.rescan()
+            // The drive went away with nothing to show for it (no list change follows an empty list).
+            if (picker.usbMode && !picker.driveMounted && !picker.copying)
+                picker.showLibrary()
+        }
     }
     // A drive that went away while its pictures were open: back to the library.
     Connections {
         target: Wallpapers
         function onUsbImagesChanged() {
-            if (picker.usbMode && Wallpapers.usbImages.length === 0 && !picker.copying)
+            if (picker.usbMode && Wallpapers.usbImages.length === 0 && !picker.copying && !picker.driveMounted)
                 picker.showLibrary()
         }
         function onCopyFinished(status, id, name) {
@@ -399,6 +406,23 @@ FocusScope {
             }
         }
 
+            // A drive without listed pictures: why (the grid is empty).
+            Text {
+                objectName: "wallpaperEmpty"
+                x: grid.x
+                y: grid.y
+                width: grid.width
+                height: grid.height
+                visible: picker.usbMode && picker.entries.length === 0
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                wrapMode: Text.Wrap
+                textFormat: Text.PlainText
+                text: qsTr("No pictures found. Put JPG, PNG or WebP pictures on the drive, or in a Wallpapers folder.")
+                color: Theme.textDim
+                font.pixelSize: Theme.typeBody * picker.u
+            }
+
             // While a copy runs the grid shows only that.
             Rectangle {
                 objectName: "wallpaperCopying"
@@ -422,7 +446,7 @@ FocusScope {
 
         Text {
             objectName: "wallpaperMessage"
-            visible: picker.usbMode
+            visible: picker.usbMode && (picker.entries.length > 0 || picker.message.length > 0)
             width: gridFrame.width
             textFormat: Text.PlainText
             text: picker.message.length > 0 ? picker.message

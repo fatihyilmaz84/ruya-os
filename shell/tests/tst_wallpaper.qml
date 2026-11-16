@@ -344,6 +344,57 @@ Item {
             verify(toastTexts().includes("Wallpaper deleted"))
         }
 
+        function test_usb_root_pictures_are_listed_and_deeper_folders_are_not() {
+            openPicker()
+            const picker = find("wallpaperPicker")
+            verify(!find("wallpaperAddUsb").visible, "no drive: no Add button")
+            Wallpapers.mockPrepareUsbKind("root")
+            Storage.mockPlugStick()
+            tryVerify(() => Wallpapers.usbImages.length === 2, 5000)
+            compare(Wallpapers.usbImages.map(e => e.name).join(","), "alpha,Beta", "the root, by name; Documents/ and deeper are not looked into")
+            tryVerify(() => find("wallpaperAddUsb").visible)
+            find("wallpaperAddUsb").forceActiveFocus()
+            keyClick(Qt.Key_Return)
+            compare(picker.mode, "usb")
+            compare(find("wallpaperGrid").count, 2)
+            verify(!find("wallpaperEmpty").visible)
+        }
+
+        function test_an_empty_drive_shows_the_button_then_why() {
+            openPicker()
+            const picker = find("wallpaperPicker")
+            const grid = find("wallpaperGrid")
+            Wallpapers.mockPrepareUsbKind("empty")
+            Storage.mockPlugStick()
+            tryVerify(() => find("wallpaperAddUsb").visible, 5000)
+            compare(Wallpapers.usbImages.length, 0)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            verify(find("wallpaperAddUsb").activeFocus)
+            keyClick(Qt.Key_Return)
+            compare(picker.mode, "usb", "it opens, and stays open")
+            compare(find("wallpaperTitle").text, "Pictures on the USB drive")
+            verify(find("wallpaperEmpty").visible)
+            compare(find("wallpaperEmpty").text, "No pictures found. Put JPG, PNG or WebP pictures on the drive, or in a Wallpapers folder.")
+            verify(grid.activeFocus)
+            keyClick(Qt.Key_Return)                      // nothing to accept
+            compare(picker.mode, "usb")
+            keyClick(Qt.Key_Escape)
+            compare(picker.mode, "library", "Back returns to the library")
+            verify(picker.shown)
+            verify(grid.activeFocus, "focus is on the grid")
+            verify(find("wallpaperAddUsb").visible)
+            // Pulling the drive while its (empty) view is open returns to the library, no button.
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            compare(picker.mode, "usb")
+            Storage.mockReset(false)
+            tryCompare(picker, "mode", "library", 5000)
+            verify(!find("wallpaperAddUsb").visible)
+            verify(grid.activeFocus)
+        }
+
         function test_usb_import_refuses_what_it_should() {
             const root = Wallpapers.mockPrepareUsb()
             const dir = root + "/Ruya Stick/Wallpapers/"
@@ -1091,6 +1142,26 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/70-wallpaper-page-default-performance.png")
             keyClick(Qt.Key_Escape)                      // pane -> list
             tryVerify(() => find("categoryList").activeFocus)
+        }
+
+        // RUY-766: a mounted drive without pictures, English and Turkish.
+        function test_zz_empty_drive_shots() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            openPicker()
+            Wallpapers.mockPrepareUsbKind("empty")
+            Storage.mockPlugStick()
+            tryVerify(() => find("wallpaperAddUsb").visible, 5000)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryCompare(find("wallpaperPicker"), "mode", "usb")
+            wait(900)
+            grabImage(tc.shell).save(shotsDir + "/70-wallpaper-picker-empty-drive.png")
+            DeviceSettings.language = "tr"
+            wait(600)
+            grabImage(tc.shell).save(shotsDir + "/70-wallpaper-picker-empty-drive-tr.png")
+            DeviceSettings.language = "en"
         }
 
         function test_zz_screenshots() {

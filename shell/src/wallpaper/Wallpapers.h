@@ -96,6 +96,9 @@ public:
     // (to reach the limit). mockSetCopyDelay makes each import take this long (ms) on its worker.
     // mockReset deletes every copy.
     Q_INVOKABLE QString mockPrepareUsb();
+    // A stick with pictures in its root only ("root": two, and a folder deeper than the top level
+    // with more), or with none that are listed ("empty"). Same mount point as mockPrepareUsb.
+    Q_INVOKABLE QString mockPrepareUsbKind(const QString &kind);
     Q_INVOKABLE QString mockPlantCorrupt();
     // importFile without the check against usbImages (to try files the list would never hold).
     Q_INVOKABLE void mockImportAny(const QString &path, const QColor &flatten);

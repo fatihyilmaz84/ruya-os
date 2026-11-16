@@ -344,12 +344,17 @@ void Wallpapers::scanUsb(const QStringList &mountPoints)
         for (int i = 0; i < roots.size(); ++i) {
             const QDir root(roots.at(i));
             const QString volume = QFileInfo(mountPoints.at(i)).fileName();
+            // The drive's root (files only, not recursive) and the Wallpapers / Pictures folders in it.
+            // Hidden and system entries are not listed (QDir skips them without the flags).
+            QStringList dirs{root.absolutePath()};
             const QStringList folders = root.entryList(QDir::Dirs | QDir::NoDotAndDotDot | QDir::NoSymLinks, QDir::Name | QDir::IgnoreCase);
             for (const QString &folder : folders) {
                 const QString lower = folder.toLower();
-                if (lower != QLatin1String("wallpapers") && lower != QLatin1String("pictures"))
-                    continue;
-                const QDir dir(root.filePath(folder));
+                if (lower == QLatin1String("wallpapers") || lower == QLatin1String("pictures"))
+                    dirs.append(root.filePath(folder));
+            }
+            for (const QString &path : std::as_const(dirs)) {
+                const QDir dir(path);
                 const QFileInfoList files = dir.entryInfoList(QDir::Files | QDir::NoSymLinks, QDir::Name | QDir::IgnoreCase);
                 int probed = 0;
                 for (const QFileInfo &info : files) {
@@ -568,7 +573,6 @@ QString Wallpapers::mockPrepareUsb()
     testPicture(1600, 1200, QColor(120, 40, 40), QColor(220, 160, 60)).save(root + QStringLiteral("/Pictures/photo.jpg"), "JPEG", 90);
     testPicture(800, 450, QColor(1, 2, 3), QColor(4, 5, 6)).save(root + QStringLiteral("/Other/hidden.jpg"), "JPEG");
     testPicture(800, 450, QColor(1, 2, 3), QColor(4, 5, 6)).save(root + QStringLiteral("/Wallpapers/nested/deep.jpg"), "JPEG");
-    testPicture(800, 450, QColor(1, 2, 3), QColor(4, 5, 6)).save(root + QStringLiteral("/top.jpg"), "JPEG");
     testPicture(320, 180, QColor(1, 2, 3), QColor(4, 5, 6)).save(root + QStringLiteral("/Wallpapers/old.bmp"), "BMP");
     // Not pictures, or over the limits: not listed (and refused by importFile).
     QFile garbage(root + QStringLiteral("/Wallpapers/broken.jpg"));
@@ -582,6 +586,29 @@ QString Wallpapers::mockPrepareUsb()
     QImage huge(7000, 6000, QImage::Format_Grayscale8);   // 42 megapixels: over the pixel limit
     huge.fill(Qt::gray);
     huge.save(root + QStringLiteral("/Wallpapers/huge.png"), "PNG");
+    return m_mockUsb->path();
+}
+
+QString Wallpapers::mockPrepareUsbKind(const QString &kind)
+{
+    if (!m_mock)
+        return QString();
+    m_mockUsb = std::make_unique<QTemporaryDir>();
+    const QString root = m_mockUsb->path() + QStringLiteral("/Ruya Stick");
+    QDir().mkpath(root + QStringLiteral("/Documents/deeper"));
+    if (kind == QLatin1String("root")) {
+        // Pictures in the root only (a folder deeper than the top level is not looked into).
+        testPicture(1600, 900, QColor(20, 60, 160), QColor(200, 80, 140)).save(root + QStringLiteral("/alpha.jpg"), "JPEG", 90);
+        testPicture(1280, 720, QColor(10, 90, 70), QColor(40, 160, 120)).save(root + QStringLiteral("/Beta.PNG"), "PNG");
+        testPicture(800, 450, QColor(1, 2, 3), QColor(4, 5, 6)).save(root + QStringLiteral("/Documents/deep.jpg"), "JPEG");
+        testPicture(800, 450, QColor(1, 2, 3), QColor(4, 5, 6)).save(root + QStringLiteral("/Documents/deeper/deeper.jpg"), "JPEG");
+    } else {
+        QFile notes(root + QStringLiteral("/readme.txt"));    // "empty": no picture anywhere that is listed
+        if (notes.open(QIODevice::WriteOnly))
+            notes.write("notes");
+        notes.close();
+        testPicture(800, 450, QColor(1, 2, 3), QColor(4, 5, 6)).save(root + QStringLiteral("/Documents/deep.jpg"), "JPEG");
+    }
     return m_mockUsb->path();
 }
 
