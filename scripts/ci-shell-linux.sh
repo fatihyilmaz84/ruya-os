@@ -5,10 +5,10 @@
 # so a shell change that passes dev.ps1 can still turn CI red; run this before handing over.
 #
 # Run from WSL, at the repository root (or a worktree):   bash scripts/ci-shell-linux.sh [--cold]
-# Warm cache (RUY-549): the dnf packages live in the podman image ruya-ci-shell:<hash of the Containerfile
-# below> (rebuilt only when that text, e.g. the dnf line, changes) and the CMake build directory in the
-# podman volume ruya-ci-shell-build (never in the repo), so a run after a one-file change only recompiles
-# that file. --cold drops both first. The summary says cold or warm and the minutes. A passing run writes
+# Package image (RUY-549): the dnf packages live in the podman image ruya-ci-shell:<hash of the Containerfile
+# below>, rebuilt only when that text (e.g. the dnf line) changes; --cold forces that rebuild. Every run builds
+# from a CLEAN build directory inside the container (no volume, no cached build state: a cached build dir once
+# tested stale code). The summary says "image: cached|built" and the minutes. A passing run writes
 # output/last-green-linux.txt (commit, tree, time) for push-main.ps1, which runs this script once per push
 # when shell/**, ci.yml or this script changed since that commit. The commit and tree come from
 # RUYA_CI_COMMIT / RUYA_CI_TREE (push-main.ps1 sets them; git cannot read a Windows worktree from WSL), else
@@ -51,12 +51,10 @@ command -v podman >/dev/null 2>&1 || { echo "CI-SHELL-LINUX: podman is not avail
 if pgrep -f "podman build" >/dev/null 2>&1; then echo "CI-SHELL-LINUX: a podman image build runs in this WSL; try again when it ends"; exit 3; fi
 started=$SECONDS
 imgtag="ruya-ci-shell:$(printf '%s' "$cfile" | sha256sum | cut -c1-12)"
-vol=ruya-ci-shell-build
-if [ "${1:-}" = "--cold" ]; then podman volume rm -f "$vol" >/dev/null 2>&1; podman rmi -f "$imgtag" >/dev/null 2>&1; fi
-mode=warm
-podman image exists "$imgtag" || mode=cold
-podman volume exists "$vol" || { mode=cold; podman volume create "$vol" >/dev/null; }
-if [ "$mode" = cold ] && ! podman image exists "$imgtag"; then
+if [ "${1:-}" = "--cold" ]; then podman rmi -f "$imgtag" >/dev/null 2>&1; fi
+image=cached
+if ! podman image exists "$imgtag"; then
+  image=built
   # Older tags of this image are dropped so the cache does not grow with every dnf change.
   podman images --format '{{.Repository}}:{{.Tag}}' | grep '^localhost/ruya-ci-shell:' | xargs -r podman rmi -f >/dev/null 2>&1
   printf '%s\n' "$cfile" | podman build -t "$imgtag" -f - "$ctx" >"$logs/image.log" 2>&1 \
@@ -65,11 +63,11 @@ fi
 
 tar -C "$repo" --exclude=./.git --exclude=./services/target --exclude=./output --exclude=./.claude/worktrees --exclude='./shell/build*' -cf "$src" .
 size=$(du -h "$src" | cut -f1)
-podman run --rm -v "$src":/src.tar:ro -v "$logs":/logs -v "$vol":/work/shell/build "$imgtag" bash -c "$inner" >"$log" 2>&1
+podman run --rm -v "$src":/src.tar:ro -v "$logs":/logs "$imgtag" bash -c "$inner" >"$log" 2>&1
 code=$?
 minutes=$(( (SECONDS - started + 30) / 60 ))
 # Summary: the STEP lines and, on a failure, the last lines before the failing STEP (<= 15 lines in all).
-echo "source copied into the container: $size; $mode run, $minutes min"
+echo "source copied into the container: $size; image: $image, $minutes min"
 grep -a '^STEP ' "$log"
 if [ "$code" -ne 0 ]; then
   grep -av '^STEP ' "$log" | tail -9
@@ -87,5 +85,5 @@ if [ -n "$commit" ]; then
 else
   echo "marker: not written (no clean git commit known here; push-main.ps1 passes it)"
 fi
-echo "CI-SHELL-LINUX: PASSED ($mode, $minutes min)"
+echo "CI-SHELL-LINUX: PASSED (image: $image, $minutes min)"
 exit 0
