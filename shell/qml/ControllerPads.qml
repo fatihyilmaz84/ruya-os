@@ -12,6 +12,24 @@ import RuyaShell
 //    each matched to the one hub pad with the same kernel name and connection when exactly one of
 //    each exists, so it gets the alias and the battery; otherwise its own record's name and battery.
 QtObject {
+    id: cpads
+
+    // The numbers of pads named alike (RUY-743, PadNumbering): the Hub's pads, and Input1's pads that are not
+    // matched to a hub pad. The name of a pad without its number is its base.
+    readonly property PadNumbering hubNumbers: PadNumbering {
+        entries: Bluetooth.gamepads.map(g => ({ id: g.id, base: cpads.hubBase(g) }))
+    }
+    readonly property PadNumbering rowNumbers: PadNumbering {
+        entries: Input.devices.map(d => ({ id: d.id, base: DeviceIcons.plain(d.name) }))
+    }
+
+    // A Devices1 pad's name without a number: the Bluetooth alias, else the name the pad gave itself.
+    function hubBase(g) {
+        const wanted = String(g.id).toLowerCase()
+        const paired = g.transport === "bluetooth" ? Bluetooth.devices.find(d => String(d.id).toLowerCase() === wanted) : undefined
+        return paired ? DeviceIcons.plain(paired.name) : DeviceIcons.plain(g.name)
+    }
+
     // Words for a pad's battery (04 §7: the words carry the state, all in `text`).
     // state: "charging" | "full" | "discharging" | "" (UPower's, or the record's).
     function batteryText(percent, state) {
@@ -31,7 +49,7 @@ QtObject {
         return connection === "usb" ? qsTr("USB") : connection === "bluetooth" ? qsTr("Bluetooth") : ""
     }
 
-    // The Hub's pads: [{ id, name, rawName, family, model, transport, percent, state }], by name then id.
+    // The Hub's pads (a name alike another connected pad's gets its number): [{ id, name, rawName, family, model, transport, percent, state }], by name then id.
     function hubPads() {
         const batteries = Batteries.devices.filter(b => b.kind === "controller")
         const used = ({})
@@ -44,7 +62,7 @@ QtObject {
             if (battery)
                 used[battery.id] = true
             pads.push({ id: id,
-                        name: paired ? DeviceIcons.shownName(Bluetooth.devices, paired) : DeviceIcons.plain(g.name),
+                        name: cpads.hubBase(g) + cpads.hubNumbers.tail(g.id),
                         rawName: g.name,
                         family: g.family !== "" && g.family !== "generic" ? g.family
                                 : (paired && paired.family ? paired.family : g.family),
@@ -80,7 +98,7 @@ QtObject {
             const hubPad = twins.length === 1 && match.length === 1 ? match[0] : null
             const own = d.battery >= 0
             return { id: d.id,
-                     name: hubPad ? hubPad.name : DeviceIcons.plain(d.name),
+                     name: hubPad ? hubPad.name : DeviceIcons.plain(d.name) + cpads.rowNumbers.tail(d.id),
                      family: d.family !== "generic" ? d.family : (hubPad ? hubPad.family : ""),
                      model: (d.model ?? "") !== "" ? d.model : (hubPad ? hubPad.model : ""),
                      connection: d.connection,

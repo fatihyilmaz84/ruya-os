@@ -220,8 +220,8 @@ Item {
             compare(padKeys().length, 3)
             compare(find("systemPanel").itemKeys.length, 4, "three pads and Controller settings")
             compare(find("systemPanel").itemKeys[3], "controllers:settings")
-            compare(rowName("controllers:pad:aa:00:00:00:00:04"), "Wireless Controller (00:04), Battery 80 % · Bluetooth")
-            compare(rowName("controllers:pad:aa:00:00:00:00:05"), "Wireless Controller (00:05), Battery 55 % · Bluetooth")
+            compare(rowName("controllers:pad:aa:00:00:00:00:04"), "Wireless Controller, Battery 80 % · Bluetooth")   // connected pads of one name: the number, not the address (RUY-743)
+            compare(rowName("controllers:pad:aa:00:00:00:00:05"), "Wireless Controller 2, Battery 55 % · Bluetooth")
             compare(rowName("controllers:pad:usb-1"), "Xbox Controller, Battery full · USB")
             // The silhouette of each: the model the service named, else the family's.
             compare(findChild(find("quickMenuItem_controllers:pad:usb-1"), "hubInfoIcon").name, "pad_xbox_series")
@@ -303,7 +303,7 @@ Item {
             tryVerify(() => Batteries.devices.length === 1)
             openControllers()
             compare(padKeys().length, 2)
-            compare(rowName("controllers:pad:aa:00:00:00:00:04"), "Wireless Controller (00:04), Battery 63 % · Bluetooth",
+            compare(rowName("controllers:pad:aa:00:00:00:00:04"), "Wireless Controller, Battery 63 % · Bluetooth",
                     "the battery list's reading wins, the paired device's alias names it")
             keyClick(Qt.Key_Escape)
         }
