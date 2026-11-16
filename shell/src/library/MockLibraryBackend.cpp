@@ -30,9 +30,29 @@ bool before(const LibraryItem &a, const LibraryItem &b)
 }
 } // namespace
 
+namespace {
+QList<MockLibraryBackend *> &liveBackends()
+{
+    static QList<MockLibraryBackend *> list;
+    return list;
+}
+} // namespace
+
+MockLibraryBackend::~MockLibraryBackend()
+{
+    liveBackends().removeAll(this);
+}
+
+void MockLibraryBackend::flatpakUninstalled(const QString &appId)
+{
+    for (MockLibraryBackend *b : std::as_const(liveBackends()))
+        b->removeItem(QStringLiteral("flatpak:") + appId);
+}
+
 MockLibraryBackend::MockLibraryBackend(QObject *parent)
     : LibraryBackend(parent)
 {
+    liveBackends().append(this);
     reset(QString());
 }
 

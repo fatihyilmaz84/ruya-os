@@ -311,6 +311,37 @@ Item {
             tryVerify(() => find("detail_retry") === null, 2000, "and goes when it answers again")
         }
 
+        // The art is the header's right edge: page x 1120..1824 at 1080p (the header starts at the content's x 96).
+        function test_the_art_sits_at_x_1120_to_1824_at_1080p() {
+            host.width = 1920
+            host.height = 1080
+            start()
+            openPage({ appId: "org.example.Racer" })
+            tryCompare(tc.shell, "u", 1)
+            const art = find("detailHero")
+            const at = art.mapToItem(tc.shell, 0, 0)
+            const view = find("detailViewport").mapToItem(tc.shell, 0, 0)
+            compare(Math.round(view.x), Math.round(tc.shell.marginX), "the content starts at the safe-area margin: " + view.x + " " + tc.shell.marginX)
+            fuzzyCompare(at.x - view.x, 1024, 1, "the art is at page x 1120 relative to the content's left edge")
+            fuzzyCompare(at.x + art.width, view.x + find("detailViewport").width, 1, "the art ends at the content's right edge, nothing clipped")
+            compare(art.width, 704)
+            host.width = 1280
+            host.height = 720
+        }
+
+        // After Uninstall… the Library drops the item; a page opened with { id } keeps the app and shows the Store record.
+        function test_uninstalling_from_an_id_page_keeps_the_page() {
+            start()
+            openPage({ id: tc.puzzle })
+            compare(page().title, "Block Puzzle")
+            Store.uninstall("org.example.Puzzle", false)
+            tryVerify(() => Library.item(tc.puzzle).id === undefined, 5000, "the Library drops the item")
+            tryVerify(() => Store.app("org.example.Puzzle").installed === false, 5000)
+            compare(page().title, "Block Puzzle", "the title stays")
+            compare(page().appId, "org.example.Puzzle")
+            tryCompare(find("detailPrimary"), "text", "Install")
+        }
+
         function test_an_install_error_is_a_status_line() {
             start()
             tc.shell.openPage("appDetail", { appId: "org.example.Broken" })

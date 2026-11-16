@@ -21,7 +21,11 @@ Page {
         return paramAppId !== "" ? (items.find(i => Library.sessionAppId(i.id) === paramAppId) ?? ({})) : ({})
     }
     readonly property bool hasItem: item.id !== undefined
-    readonly property string appId: paramAppId !== "" ? paramAppId : (hasItem ? Library.sessionAppId(item.id) : "")
+    readonly property string liveAppId: paramAppId !== "" ? paramAppId : (hasItem ? Library.sessionAppId(item.id) : "")
+    // Kept once known: after Uninstall… the Library drops the item, and the page falls back to the Store record (Install).
+    property string keptAppId: ""
+    onLiveAppIdChanged: if (liveAppId !== "") keptAppId = liveAppId
+    readonly property string appId: liveAppId !== "" ? liveAppId : keptAppId
     readonly property var app: appId === "" ? ({}) : (Store.catalogue.find(a => a.id === appId) ?? ({}))
     readonly property bool hasRecord: app.id !== undefined
     readonly property bool isSteam: hasItem && item.source === "steam"
@@ -223,7 +227,7 @@ Page {
     function dayText(unix) {
         const iso = TimeZone.formatIsoDate(unix * 1000)
         const ago = Usage.daysAgo(iso)
-        return ago < 0 || ago > 6 ? Qt.locale().toString(new Date(iso + "T12:00:00"), "d MMM yyyy")
+        return ago < 0 || ago > 6 ? Qt.locale(DeviceSettings.language).toString(new Date(iso + "T12:00:00"), "d MMM yyyy")
                                   : DurationText.dayWord(ago, iso)
     }
 
@@ -267,7 +271,7 @@ Page {
         add("developer", qsTr("Developer"), app.developer)
         add("source", qsTr("Source"), hasRecord ? sourceText(app.source ?? "") : qsTr("Flatpak"))
         add("version", qsTr("Version"), installed ? (app.installedVersion || app.version) : app.version)
-        add("updated", qsTr("Updated"), (app.releaseDate ?? 0) > 0 ? Qt.locale().toString(new Date(TimeZone.formatIsoDate(app.releaseDate * 1000) + "T12:00:00"), "d MMM yyyy") : "")
+        add("updated", qsTr("Updated"), (app.releaseDate ?? 0) > 0 ? Qt.locale(DeviceSettings.language).toString(new Date(TimeZone.formatIsoDate(app.releaseDate * 1000) + "T12:00:00"), "d MMM yyyy") : "")
         if (installed) {
             add("size", qsTr("Size on disk"), bytes(app.installedSize))
         } else {
@@ -346,6 +350,8 @@ Page {
     }
 
     Component.onCompleted: {
+        if (liveAppId !== "")
+            keptAppId = liveAppId
         loadDetails()
         Qt.callLater(ensureFocus)
     }
@@ -785,7 +791,7 @@ Page {
                 AppArt {
                     id: art
                     objectName: "detailHero"
-                    x: 1120 * page.u
+                    x: parent.width - width      // page x 1120..1824: the header starts at the content's left edge (x 96)
                     width: 704 * page.u
                     height: 396 * page.u
                     radius: Theme.radiusM * page.u

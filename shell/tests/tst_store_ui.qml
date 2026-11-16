@@ -29,6 +29,7 @@ Item {
         function init() {
             verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             Store.mockReset()
+            Library.resetMockForTests("")              // an uninstall drops its Library item (RUY-524)
             compare(Object.keys(Store.jobs).length, 0, "no job survives the reset")
             Store.controllerFilter = "any"
             Profiles.lock()
