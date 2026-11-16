@@ -349,8 +349,8 @@ FocusScope {
                 objectName: "pinPadName"
                 anchors.verticalCenter: parent.verticalCenter
                 textFormat: Text.PlainText
-                text: pad.padRecord ? Notifications.named(DeviceIcons.padName(pad.padRecord.id, pad.padRecord.name ?? "",
-                                                                              pad.padRecord.family ?? "")) : ""
+                text: pad.padRecord ? DeviceIcons.padNameFit(pad.padRecord.id, pad.padRecord.name ?? "",
+                                                                             pad.padRecord.family ?? "", 30) : ""
                 color: Theme.text
                 font.pixelSize: Theme.typeBody * pad.u
             }

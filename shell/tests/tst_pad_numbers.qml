@@ -116,12 +116,66 @@ Item {
         function test_the_controller_rows_are_numbered() {
             const one = "usb-1111-0001-aaaaaaaaaaa1"
             const two = "usb-1111-0001-aaaaaaaaaaa2"
+            plug("usb-a", "Twin Pad", "generic")
+            plug("usb-b", "Twin Pad", "generic")
             Input.mockAddDevice({ id: one, name: "Twin Pad", family: "generic", connection: "usb" })
             Input.mockAddDevice({ id: two, name: "Twin Pad", family: "generic", connection: "usb" })
             tryVerify(() => ControllerPads.controllers().filter(p => p.name.startsWith("Twin Pad")).length === 2)
             const names = ControllerPads.controllers().map(p => p.name).filter(n => n.startsWith("Twin Pad")).sort()
             compare(names.join("|"), "Twin Pad|Twin Pad 2")
             compare(DeviceIcons.padName(two, "Twin Pad", "generic"), "Twin Pad 2", "Who's playing and the PIN pad")
+            Input.mockRemoveDevice(one)
+            Input.mockRemoveDevice(two)
+        }
+
+        // One number per pad on every surface, also when the lists order two like pads differently.
+        function test_a_pad_has_one_number_on_every_surface_when_the_lists_order_like_pads_differently() {
+            const one = "usb-1111-0002-aaaaaaaaaaa1"
+            const two = "usb-1111-0002-aaaaaaaaaaa2"
+            // Devices1 lists usb-b before usb-a; Input1 lists the ids in the other order.
+            plug("usb-b", "Twin Pad", "generic")
+            plug("usb-a", "Twin Pad", "generic")
+            Input.mockAddDevice({ id: two, name: "Twin Pad", family: "generic", connection: "usb" })
+            Input.mockAddDevice({ id: one, name: "Twin Pad", family: "generic", connection: "usb" })
+            Batteries.mockClear()
+            Batteries.mockSet("up-b", 60, "discharging", "controller", "Twin Pad", "generic")
+            Batteries.mockSet("up-a", 50, "discharging", "controller", "Twin Pad", "generic")
+            tryVerify(() => Batteries.devices.length === 2)
+            tryVerify(() => ControllerPads.controllers().filter(p => p.name.startsWith("Twin Pad")).length === 2)
+            // Devices1 order: usb-b is "Twin Pad", usb-a is "Twin Pad 2".
+            compare(DeviceIcons.padName("usb-b", "Twin Pad", "generic"), "Twin Pad")
+            compare(DeviceIcons.padName("usb-a", "Twin Pad", "generic"), "Twin Pad 2")
+            // The rows and the Input1 names pair by position in id order: input 1 is usb-a, input 2 is usb-b.
+            compare(DeviceIcons.padName(one, "Twin Pad", "generic"), "Twin Pad 2")
+            compare(DeviceIcons.padName(two, "Twin Pad", "generic"), "Twin Pad")
+            const rows = ControllerPads.controllers()
+            compare(rows.find(p => p.id === one).name, "Twin Pad 2")
+            compare(rows.find(p => p.id === two).name, "Twin Pad")
+            // The chips: the battery list pairs the same way (up-a with usb-a).
+            compare(DeviceIcons.batteryName(Batteries.devices.find(b => b.id === "up-a")), "Twin Pad 2")
+            compare(DeviceIcons.batteryName(Batteries.devices.find(b => b.id === "up-b")), "Twin Pad")
+            Input.mockRemoveDevice(one)
+            Input.mockRemoveDevice(two)
+        }
+
+        // Controls in games: "DualSense" and "DualSense 2", the number kept after the shortened name.
+        function test_controls_in_games_tells_two_dualsense_pads_apart() {
+            Bluetooth.mockSetName("bt-pad-main", "DualSense Wireless Controller")
+            Bluetooth.mockSetName("bt-pad-old", "DualSense Wireless Controller")
+            Bluetooth.connectDevice("bt-pad-main")
+            Bluetooth.connectDevice("bt-pad-old")
+            tryVerify(() => Bluetooth.gamepads.length === 2)
+            const one = "bluetooth-054c-0ce6-aa0000000004"
+            const two = "bluetooth-054c-0ce6-aa0000000005"
+            Input.mockAddDevice({ id: one, name: "DualSense Wireless Controller", family: "playstation", connection: "bluetooth" })
+            Input.mockAddDevice({ id: two, name: "DualSense Wireless Controller", family: "playstation", connection: "bluetooth" })
+            tryVerify(() => ControllerPads.controllers().filter(p => p.id === one || p.id === two).length === 2)
+            const rows = ControllerPads.controllers().filter(p => p.id === one || p.id === two)
+            const shorts = rows.map(p => GameControls.shortName(p.nameBase, p.nameTail)).sort()
+            compare(shorts.join("|"), "DualSense|DualSense 2")
+            // A long name is cut, never its number.
+            compare(GameControls.shortName("W".repeat(48), " 2").length, 30)
+            verify(GameControls.shortName("W".repeat(48), " 2").endsWith(" 2"))
             Input.mockRemoveDevice(one)
             Input.mockRemoveDevice(two)
         }
@@ -155,12 +209,15 @@ Item {
 
         function test_two_controller_batteries_of_a_name_are_numbered() {
             Batteries.mockClear()
+            plug("usb-1", "Twin Pad", "xbox")
+            plug("usb-2", "Twin Pad", "xbox")
             Batteries.mockSet("up-1", 50, "discharging", "controller", "Twin Pad", "xbox")
             Batteries.mockSet("up-2", 60, "discharging", "controller", "Twin Pad", "xbox")
             tryVerify(() => Batteries.devices.length === 2)
             compare(DeviceIcons.batteryName(Batteries.devices.find(b => b.id === "up-1")), "Twin Pad")
             compare(DeviceIcons.batteryName(Batteries.devices.find(b => b.id === "up-2")), "Twin Pad 2")
             Batteries.mockRemove("up-1")
+            unplug("usb-1")
             tryVerify(() => Batteries.devices.length === 1)
             compare(DeviceIcons.batteryName(Batteries.devices[0]), "Twin Pad 2", "stays 2")
         }

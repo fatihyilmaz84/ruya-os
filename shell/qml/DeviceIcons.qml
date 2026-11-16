@@ -131,27 +131,47 @@ QtObject {
         return { name: name, tail: qsTr("%1 (%2)").replace("%1", () => "").replace("%2", () => address) }
     }
 
-    // The numbers of connected pads whose shown names are alike (RUY-743, PadNumbering). Three lists:
-    // Devices1's pads (toasts, chips of a Bluetooth pad), Input1's pads (Who's playing, the PIN pad) and the
-    // controller batteries without an address (the chips of a wired pad). Their bases are the names without a number.
+    // The numbers of connected pads whose names are alike (RUY-743, PadNumbering): one registry for every
+    // pad, keyed by the Devices1 id (Bluetooth.gamepads). A pad Input1 lists, and a controller battery without
+    // an address, is mapped onto its Devices1 pad (ControllerPads.hubIdOf / hubIdOfBattery), so a pad has one
+    // number on every surface.
     readonly property PadNumbering padNumbers: PadNumbering {
-        entries: Bluetooth.gamepads.map(g => ({ id: g.id, base: icons.padBase(g.id, g.name, g.family) }))
+        entries: Bluetooth.gamepads.map(g => ({ id: g.id, base: icons.gamepadBase(g) }))
     }
-    readonly property PadNumbering inputNumbers: PadNumbering {
-        entries: Input.devices.map(d => ({ id: d.id, base: icons.padBase(d.id, d.name, d.family ?? "") }))
+
+    // A Devices1 pad's name without a number: the Bluetooth alias, else the name the pad gave itself.
+    function gamepadBase(g) {
+        const wanted = String(g.id).toLowerCase()
+        const paired = g.transport === "bluetooth" ? Bluetooth.devices.find(d => String(d.id).toLowerCase() === wanted) : undefined
+        return paired ? plain(paired.name) : plain(g.name)
     }
-    readonly property PadNumbering batteryNumbers: PadNumbering {
-        entries: Batteries.devices.filter(b => b.kind === "controller" && String(b.address ?? "") === "")
-                                  .map(b => ({ id: b.id, base: icons.plain(b.name) }))
+
+    // The registry key of the pad `id` (a Devices1 id, or an Input1 id), "" when no connected pad has it.
+    function numberKey(id) {
+        if (padNumbers.knows(id))
+            return String(id)
+        const d = Input.devices.find(x => x.id === id)
+        const hub = d ? ControllerPads.hubIdOf(d) : ""
+        return hub !== "" && padNumbers.knows(hub) ? hub : ""
     }
 
     // The number of the connected pad `id` as text: " 2" for the second pad of a name, "" otherwise.
     function padTail(id) {
-        return padNumbers.knows(id) ? padNumbers.tail(id) : inputNumbers.tail(id)
+        const key = numberKey(id)
+        return key === "" ? "" : padNumbers.tail(key)
     }
 
     function padKnown(id) {
-        return padNumbers.knows(id) || inputNumbers.knows(id)
+        return numberKey(id) !== ""
+    }
+
+    // `padName` cut to `max` characters: the name is cut, the number is kept whole.
+    function padNameFit(id, name, family, max) {
+        const tail = padTail(id)
+        const full = padName(id, name, family)
+        if (tail === "" || !full.endsWith(tail))
+            return Notifications.named(full, max)
+        return Notifications.named(full.slice(0, full.length - tail.length), max - tail.length) + tail
     }
 
     // A pad's name without a number: the alias of the Bluetooth device with that address, else the family's
@@ -192,9 +212,8 @@ QtObject {
     function batteryParts(d) {
         const address = String(d.address ?? "")
         if (address === "") {
-            if (d.kind === "controller" && batteryNumbers.knows(d.id))
-                return { name: plain(d.name), tail: batteryNumbers.tail(d.id) }
-            return { name: plain(d.name), tail: "" }
+            const hub = ControllerPads.hubIdOfBattery(d)
+            return { name: plain(d.name), tail: hub !== "" && padNumbers.knows(hub) ? padNumbers.tail(hub) : "" }
         }
         const wanted = address.toLowerCase()
         const paired = Bluetooth.devices.find(x => x.id.toLowerCase() === wanted)

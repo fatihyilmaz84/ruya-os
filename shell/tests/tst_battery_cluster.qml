@@ -243,6 +243,10 @@ Item {
         // own ids and levels), both inside the cluster, none squeezed into the "+N".
         function test_battery_chips_for_two_pads() {
             Batteries.mockClear()
+            // Two wired pads connected: the chips of their batteries are numbered like the pads (RUY-743).
+            Bluetooth.mockGamepad(true, "usb-p1", "Wireless Controller", "playstation", "usb")
+            Bluetooth.mockGamepad(true, "usb-p2", "Wireless Controller", "playstation", "usb")
+            tryVerify(() => Bluetooth.gamepads.some(g => g.id === "usb-p2"), 2000)
             Batteries.mockSet("padA", 80, "discharging", "controller", "Wireless Controller", "playstation")
             Batteries.mockSet("padB", 55, "discharging", "controller", "Wireless Controller", "playstation")
             openShell(1920, 1080)
