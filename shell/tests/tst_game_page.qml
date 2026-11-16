@@ -516,9 +516,8 @@ Item {
             compare(find("activityBars").highlightIndex, 29)
             compare(find("activityBars").values.length, 30)
             verify(!find("activityMessage").visible)
-            // heading + block end above the viewport's bottom: nothing to scroll to on the first screen
-            const section = find("detailActivitySection")
-            verify(section.y + section.height <= find("detailViewport").height)
+            // the heading sits 64 under the header (396), where the design puts it
+            compare(Math.round(find("detailActivitySection").y / page().u), 460)
         }
 
         function test_an_app_says_used_and_opened() {
