@@ -44,6 +44,17 @@ QtObject {
         return Qt.locale().toString(new Date(day + "T12:00:00"), "ddd d MMM")
     }
 
+    // The day of an instant (unix seconds) in words: "Today", "Yesterday", a weekday up to a week back, else
+    // "3 Nov 2026"; "-" for none (RUY-532: the game page and the Activity page of a game).
+    function day(unix) {
+        if (!unix)
+            return "-"
+        const iso = TimeZone.formatIsoDate(unix * 1000)
+        const ago = Usage.daysAgo(iso)
+        return ago < 0 || ago > 6 ? Qt.locale().toString(new Date(iso + "T12:00:00"), "d MMM yyyy")
+                                  : dayWord(ago, iso)
+    }
+
     // "Yesterday 19:40": the day word and the clock time of an instant (unix seconds) in the
     // console's time zone.
     function when(daysAgo, day, startUnix) {

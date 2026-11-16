@@ -57,7 +57,7 @@
 <context>
     <name>ActivityGamePage</name>
     <message>
-        <location filename="../qml/ActivityGamePage.qml" line="+75"/>
+        <location filename="../qml/ActivityGamePage.qml" line="+68"/>
         <location line="+1"/>
         <source>Back</source>
         <translation>Geri</translation>
@@ -291,7 +291,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+178"/>
+        <location filename="../qml/AppDetailPage.qml" line="+192"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -519,12 +519,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-7"/>
-        <location line="+323"/>
+        <location line="+331"/>
         <source>Steam</source>
         <translation>Steam</translation>
     </message>
     <message>
-        <location line="-322"/>
+        <location line="-330"/>
         <source>Steam app ID</source>
         <translation>Steam uygulama kimliği</translation>
     </message>
@@ -594,12 +594,12 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+206"/>
+        <location line="+214"/>
         <source>Read</source>
         <translation>Oku</translation>
     </message>
     <message>
-        <location line="+386"/>
+        <location line="+399"/>
         <source>No special permissions.</source>
         <translation>Özel bir izni yok.</translation>
     </message>
@@ -639,7 +639,7 @@ Bu geri alınamaz.</translation>
         <translation>Kaldırmak için önce oyunu kapatın.</translation>
     </message>
     <message>
-        <location line="-868"/>
+        <location line="-889"/>
         <source>Install</source>
         <translation>Kur</translation>
     </message>
@@ -650,7 +650,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelle</translation>
     </message>
     <message>
-        <location line="+627"/>
+        <location line="+635"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Bu konsoldakinden daha yeni bir RuyaOS gerekiyor. Yüklü kalır.</translation>
     </message>
@@ -665,7 +665,7 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza ayrıntıları şu anda kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+50"/>
+        <location line="+63"/>
         <location line="+9"/>
         <source>This app can</source>
         <translation>Bu uygulama şunları yapabilir</translation>
@@ -676,12 +676,12 @@ Bu geri alınamaz.</translation>
         <translation>Yüksek risk</translation>
     </message>
     <message>
-        <location line="-107"/>
+        <location line="-120"/>
         <source>The update adds: %1</source>
         <translation>Güncelleme şunları ekliyor: %1</translation>
     </message>
     <message>
-        <location line="-655"/>
+        <location line="-663"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Aç</translation>
@@ -719,7 +719,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+378"/>
+        <location line="+386"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -2468,7 +2468,7 @@ Bu geri alınamaz.</translation>
         <translation>Dün</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+18"/>
         <source>%1 %2</source>
         <translation>%1 %2</translation>
     </message>
@@ -2494,6 +2494,70 @@ Bu geri alınamaz.</translation>
         <location line="+111"/>
         <source>More</source>
         <translation>Devamı</translation>
+    </message>
+</context>
+<context>
+    <name>GameActivity</name>
+    <message>
+        <location filename="../qml/GameActivity.qml" line="+34"/>
+        <location line="+21"/>
+        <source>Your activity</source>
+        <translation>Etkinliğiniz</translation>
+    </message>
+    <message>
+        <location line="-14"/>
+        <source>Loading…</source>
+        <translation>Yükleniyor…</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>You have not played this yet. When you do, the time you spend shows up here.</source>
+        <translation>Bunu henüz oynamadınız. Oynadığınızda harcadığınız süre burada görünür.</translation>
+    </message>
+    <message>
+        <location line="+17"/>
+        <source>See all</source>
+        <translation>Tümünü gör</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+41"/>
+        <source>Time used</source>
+        <translation>Kullanım süresi</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Time played</source>
+        <translation>Oynama süresi</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Last used</source>
+        <translation>Son kullanım</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Last played</source>
+        <translation>Son oynama</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Times opened</source>
+        <translation>Açılma sayısı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Times played</source>
+        <translation>Oynama sayısı</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>Last 30 days</source>
+        <translation>Son 30 gün</translation>
     </message>
 </context>
 <context>

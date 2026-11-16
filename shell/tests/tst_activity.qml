@@ -684,7 +684,7 @@ Item {
 
         // ---- the app page ----
 
-        // RUY-524: the header's "Your activity" button is gone (RUY-532 brings the block); the ledger page opens over the
+        // RUY-524: the header has no "Your activity" button; the block under it is RUY-532's. The ledger page opens over the
         // game page from the Options menu's row, and Back lands on the page's focused button.
         function test_the_activity_page_opens_over_the_app_page_and_back_returns_to_it() {
             Usage.mockSetData("p2", sessions(), today)
@@ -694,7 +694,9 @@ Item {
             tc.shell.openPage("appDetail", { appId: chess })
             tryCompare(tc.shell, "currentPage", "appDetail")
             tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
-            compare(find("detailActivity"), null, "no Your activity button in the header")
+            // RUY-532: Your activity is the block under the header (a section), not a button of the header.
+            tryVerify(() => find("detailActivity").visible, 2000, "the block under the header")
+            verify(!find("detailActivity").activeFocus)
             openGamePage(chess)
             tryCompare(tc.shell, "currentPage", "activityGame")
             compare(tc.shell.currentParams.appId, chess)

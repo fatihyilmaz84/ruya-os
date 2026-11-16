@@ -149,7 +149,7 @@ A running app's card is the game or app card with its Running pill (Resume and C
 
 Names in toasts are capped at 30 characters (`Notifications.named`, 04 §5).
 
-### 1.8 Game page (designed, lead 2026-11-13; built: RUY-523 Store1 keys, **RUY-524 part 1** (header, This app can, Information, Manage; `AppDetailPage.qml`, tests `tst_game_page.qml`); planned: RUY-532 activity, RUY-533 screenshots, RUY-534 About; no ratings, owner 2026-11-13, RUY-535; canvas "RuyaOS Game Page", https://claude.ai/artifact/Q2kou8fr7N5tBTWZUJjEUc)
+### 1.8 Game page (designed, lead 2026-11-13; built: RUY-523 Store1 keys, **RUY-524 part 1** (header, This app can, Information, Manage; `AppDetailPage.qml`, tests `tst_game_page.qml`); **RUY-532 activity** (`GameActivity.qml`); planned: RUY-533 screenshots, RUY-534 About; no ratings, owner 2026-11-13, RUY-535; canvas "RuyaOS Game Page", https://claude.ai/artifact/Q2kou8fr7N5tBTWZUJjEUc)
 
 Owner, 2026-11-13: "there is a stores page which is also sort of a details screen. Decide if we should merge, or keep separate. The activity could be shown directly on the page too."
 

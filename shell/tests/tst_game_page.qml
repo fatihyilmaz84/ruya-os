@@ -49,6 +49,7 @@ Item {
             Library.resetMockForTests("")
             Session.mockReset()
             Store.mockReset()
+            Usage.mockReset()
             launchedSpy.clear()
             launchSpy.clear()
             pidSpy.clear()
@@ -57,6 +58,8 @@ Item {
         function cleanup() {
             DeviceSettings.language = "en"
             Store.mockPauseJobs(false)
+            host.width = 1280
+            host.height = 720
         }
 
         function start(itemCount) {
@@ -479,6 +482,166 @@ Item {
 
         // ---- screenshots (dev.ps1 shots; English and Turkish, 1080p and 720p) ----
 
+        // ---- Your activity (RUY-532) ----
+
+        readonly property string today: "2026-11-07"
+
+        // One session: `ago` days before today, at 18:00 UTC, `secs` of play.
+        function mk(app, ago, secs) {
+            const d = new Date(Date.UTC(2026, 10, 7 - ago, 18, 0))
+            return { appId: app, start: d.getTime() / 1000, seconds: secs, reason: "quit",
+                     day: d.toISOString().slice(0, 10) }
+        }
+
+        function seedRuns() {
+            Usage.mockSetData("p2", [mk("org.example.Puzzle", 0, 1800), mk("org.example.Puzzle", 3, 3000),
+                                     mk("org.example.Puzzle", 20, 600), mk("org.example.Racer", 1, 900),
+                                     mk("org.example.Player", 1, 7200), mk("org.example.Player", 2, 60)], today)
+        }
+
+        // [value, caption] of a stat.
+        function stat(name) {
+            const item = find(name)
+            return [item.children[0].text, item.children[1].text]
+        }
+
+        function test_activity_shows_for_an_installed_game_with_its_numbers() {
+            seedRuns()
+            start()
+            openPage({ id: tc.puzzle })
+            tryVerify(() => find("detailActivity").visible, 2000)
+            compare(find("detailActivitySection").visible, true)
+            compare(find("activityHeading").text, "Your activity")
+            compare(stat("activityTotal"), ["1 h 30 min", "Time played"])
+            compare(stat("activityLast"), ["Today", "Last played"])
+            compare(stat("activitySessions"), ["3", "Times played"])
+            compare(find("detailActivity").width, find("detailColumn").width)
+            compare(find("detailActivity").height, 176 * page().u)
+            compare(find("activityBars").highlightIndex, 29)
+            compare(find("activityBars").values.length, 30)
+            verify(!find("activityMessage").visible)
+            // the heading sits 64 under the header (396), where the design puts it
+            compare(Math.round(find("detailActivitySection").y / page().u), 460)
+        }
+
+        function test_an_app_says_used_and_opened() {
+            seedRuns()
+            start()
+            Store.install("org.example.Player")
+            tryVerify(() => Store.app("org.example.Player").installed === true, 5000)
+            tryVerify(() => Store.jobs["org.example.Player"] === undefined, 5000)
+            openPage({ id: "flatpak:org.example.Player" })
+            tryVerify(() => find("detailActivity").visible, 2000)
+            compare(stat("activityTotal"), ["2 h 1 min", "Time used"])
+            compare(stat("activityLast"), ["Yesterday", "Last used"])
+            compare(stat("activitySessions"), ["2", "Times opened"])
+        }
+
+        function test_activity_is_in_turkish() {
+            seedRuns()
+            DeviceSettings.language = "tr"
+            start()
+            openPage({ id: tc.puzzle })
+            tryVerify(() => find("detailActivity").visible, 2000)
+            compare(find("activityHeading").text, "Etkinliğiniz")
+            compare(stat("activityTotal")[1], "Oynama süresi")
+            compare(stat("activitySessions")[1], "Oynama sayısı")
+            keyClick(Qt.Key_Down)
+            verify(find("detailActivity").activeFocus)
+            compare(hintVerbs(), "accept Tümünü gör|back Geri")
+        }
+
+        function test_activity_for_a_game_not_installed_only_with_runs() {
+            start()
+            openPage({ appId: "org.example.Racer" })
+            compare(page().installed, false)
+            tryCompare(Usage, "ready", true)
+            compare(find("detailActivitySection").visible, false, "not installed, no runs")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "")
+            seedRuns()
+            Usage.mockTouch("p2")
+            openPage({ appId: "org.example.Racer" })
+            tryVerify(() => find("detailActivitySection").visible, 3000, "not installed, with runs")
+            compare(stat("activitySessions")[0], "1")
+        }
+
+        function test_activity_is_not_there_for_steam_or_a_guest() {
+            Usage.mockSetData("p2", [mk("steam:730", 0, 600), mk("org.example.Puzzle", 0, 600)], today)
+            start()
+            tc.shell.openPage("appDetail", { id: "steam:730" })
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryVerify(() => find("fact_source") && find("fact_source").activeFocus, 2000)
+            compare(find("detailActivitySection").visible, false, "never for a Steam item")
+            tc.shell.closePage()
+            tryCompare(tc.shell, "currentPage", "")
+            Usage.mockSetData("p3", [mk("org.example.Puzzle", 0, 600)], today)
+            Profiles.switchTo("p3", "")                  // Sam, the Guest role
+            tryCompare(Profiles, "activeProfile", "p3")
+            compare(Profiles.active.role, "guest")
+            tc.shell.openPage("appDetail", { id: tc.puzzle })
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryVerify(() => find("detailPrimary") && find("detailPrimary").activeFocus, 2000)
+            compare(find("detailActivitySection").visible, false, "never for a Guest")
+        }
+
+        function test_not_played_is_a_sentence_and_not_a_stop() {
+            start()
+            openPage({ id: tc.puzzle })
+            tryCompare(Usage, "ready", true)
+            compare(find("detailActivitySection").visible, true, "installed")
+            verify(find("activityMessage").visible)
+            compare(find("activityMessage").text, "You have not played this yet. When you do, the time you spend shows up here.")
+            verify(!find("detailActivity").visible)
+            keyClick(Qt.Key_Down)
+            verify(!find("detailActivity").activeFocus, "skipped by Down")
+            verify(find("detailPermissions").activeFocus, "went on to This app can")
+        }
+
+        function test_loading_before_the_ledger_is_read() {
+            Usage.mockRefreshDelayed(1500)
+            start()
+            openPage({ id: tc.puzzle })
+            compare(Usage.ready, false)
+            verify(find("activityMessage").visible)
+            compare(find("activityMessage").text, "Loading…")
+            verify(!find("detailActivity").visible)
+            tryCompare(Usage, "ready", true, 5000)
+            Usage.mockRefreshDelayed(0)
+        }
+
+        function test_accept_opens_the_activity_page_and_back_returns_to_the_block() {
+            host.width = 1920
+            host.height = 1080
+            seedRuns()
+            start()
+            openPage({ id: tc.puzzle })
+            tryVerify(() => find("detailActivity").visible, 2000)
+            keyClick(Qt.Key_Down)
+            verify(find("detailActivity").activeFocus, "Down from the buttons: the block")
+            // the block's bottom edge and ring stay inside the viewport's clip (1080p: the Page frame leaves it ~7 short)
+            const block = find("detailActivity")
+            const viewport = find("detailViewport")
+            tryVerify(() => block.mapToItem(viewport, 0, block.height).y + Theme.focusRingWidth * page().u <= viewport.height + 0.5, 2000,
+                      "the focused ring's bottom lies inside detailViewport")
+            compare(hintVerbs(), "accept See all|back Back")
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "activityGame")
+            compare(tc.shell.currentParams.appId, "org.example.Puzzle")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryVerify(() => find("detailActivity").activeFocus, 2000, "Back: the focus is on the block again")
+            keyClick(Qt.Key_Down)
+            verify(find("detailPermissions").activeFocus, "Down: This app can")
+            keyClick(Qt.Key_Up)
+            verify(find("detailActivity").activeFocus)
+            keyClick(Qt.Key_Up)
+            verify(find("detailPrimary").activeFocus)
+            tryCompare(page(), "offset", 0, 2000, "back on the buttons the column is at 0")
+            host.width = 1280
+            host.height = 720
+        }
+
         function settle() { wait(900) }
 
         function test_zz_screenshots() {
@@ -514,6 +677,17 @@ Item {
                     keyClick(Qt.Key_Down)
                 settle()
                 grabImage(tc.shell).save(shotsDir + "/" + "103-game-page-manage-" + lang + "-" + size[2] + ".png")
+                keyClick(Qt.Key_Escape)
+                tryCompare(tc.shell, "currentPage", "")
+                // installed, with runs: Your activity focused (RUY-532)
+                seedRuns()
+                Usage.mockTouch("p2")
+                openPage({ id: tc.puzzle })
+                tryVerify(() => find("detailActivity").visible, 3000)
+                keyClick(Qt.Key_Down)
+                tryVerify(() => find("detailActivity").activeFocus, 2000)
+                settle()
+                grabImage(tc.shell).save(shotsDir + "/" + "108-game-page-activity-" + lang + "-" + size[2] + ".png")
                 keyClick(Qt.Key_Escape)
                 tryCompare(tc.shell, "currentPage", "")
                 // running

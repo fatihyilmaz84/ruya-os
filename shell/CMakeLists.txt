@@ -266,6 +266,7 @@ qt_add_qml_module(ruyashell
         qml/SystemInfoRows.qml
         qml/ActivityPage.qml
         qml/ActivityGamePage.qml
+        qml/GameActivity.qml
         qml/BarChart.qml
         qml/DurationText.qml
         qml/UsagePresence.qml
