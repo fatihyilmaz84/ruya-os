@@ -194,7 +194,7 @@ impl Builder {
         // The newest release; on equal times the first in the file.
         let mut newest: Option<&ReleaseBuild> = None;
         for r in &self.releases {
-            if newest.is_none_or(|n| r.when > n.when) {
+            if newest.map_or(true, |n| r.when > n.when) {
                 newest = Some(r);
             }
         }
