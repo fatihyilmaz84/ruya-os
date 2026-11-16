@@ -33,8 +33,8 @@ SettingsPane {
     property Item returnTo: null
 
     // A sensor row: label, a mark and its word when the level is not normal, and the value. A drive's
-    // row (RUY-737) names its own word and colour in `markText` and `markColor` and has the model as
-    // its second line (`detail`).
+    // row (RUY-737) names its own word and colour in `markText` and `markColor` (its `value` is then
+    // empty, the word is not said twice) and has the model as its second line (`detail`).
     component HealthRow: SettingControl {
         id: health
         property string value
@@ -42,7 +42,7 @@ SettingsPane {
         property string markText: ThermalText.levelText(level)
         property color markColor: ThermalText.levelColor(level)
         readonly property bool marked: markText !== ""
-        accessibleValue: marked ? value + ", " + markText : value
+        accessibleValue: marked ? (value !== "" ? value + ", " + markText : markText) : value
         trailingWidth: healthValue.implicitWidth + Theme.spaceL * u
                        + (marked ? healthLevel.implicitWidth + Theme.spaceM * u * 2 : 0)
 
@@ -597,7 +597,8 @@ SettingsPane {
             objectName: "healthDrive_" + index
             u: pane.u
             label: DriveHealth.nameOf(index)
-            value: DriveHealth.stateText(driveState)
+            // "Good" is the value; "Check soon" and "Failing" are the mark's word, not said twice.
+            value: driveState === "ok" ? DriveHealth.stateText(driveState) : ""
             detail: DriveHealth.detailOf(drive)
             markText: driveState === "ok" ? "" : DriveHealth.stateText(driveState)
             markColor: DriveHealth.markColor(driveState)
