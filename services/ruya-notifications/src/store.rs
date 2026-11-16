@@ -137,19 +137,49 @@ impl Persist for FileStore {
         let mut tmp = path.as_os_str().to_os_string();
         tmp.push(".tmp");
         let tmp = PathBuf::from(tmp);
-        fs::write(&tmp, text)?;
+        {
+            use std::io::Write;
+            let mut file = fs::File::create(&tmp)?;
+            file.write_all(text.as_bytes())?;
+            // On disk before the rename, so a power cut leaves the old file or the new one,
+            // never an empty one (as ruya-session's and ruya-store's stores do).
+            file.sync_all()?;
+        }
         restrict_permissions(&tmp)?;
         fs::rename(&tmp, &path)
     }
 
+    /// Removes the profile's file and whatever else of it is left: a `.tmp` and every
+    /// `.corrupt*` copy (a deleted profile's data is gone, 03 §1.4).
     fn remove(&mut self, profile: &str) -> io::Result<()> {
         if !valid_profile_id(profile) {
             return Ok(());
         }
-        match fs::remove_file(self.path(profile)) {
-            Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
-            _ => Ok(()),
+        let mut prefix = self
+            .path(profile)
+            .file_name()
+            .unwrap_or_default()
+            .to_os_string();
+        prefix.push(".");
+        let prefix = prefix.to_string_lossy().into_owned();
+        let mut doomed = vec![self.path(profile)];
+        if let Ok(entries) = fs::read_dir(&self.dir) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if let Some(rest) = name.strip_prefix(&prefix) {
+                    if rest == "tmp" || rest.starts_with("corrupt") {
+                        doomed.push(entry.path());
+                    }
+                }
+            }
         }
+        for path in doomed {
+            match fs::remove_file(&path) {
+                Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+                _ => {}
+            }
+        }
+        Ok(())
     }
 }
 
@@ -310,6 +340,30 @@ mod tests {
         store.remove("p4").unwrap();
         assert!(!dir.path().join("p4.json").exists());
         store.remove("p4").unwrap();
+    }
+
+    #[test]
+    fn remove_also_deletes_the_tmp_and_corrupt_copies_but_no_other_profile() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = FileStore::new(dir.path());
+        store.save("p4", &data(1)).unwrap();
+        store.save("p40", &data(1)).unwrap();
+        fs::write(dir.path().join("p4.json.tmp"), "half").unwrap();
+        fs::write(dir.path().join("p4.json.corrupt"), "old").unwrap();
+        fs::write(dir.path().join("p4.json.corrupt.1"), "older").unwrap();
+        store.remove("p4").unwrap();
+        for left in [
+            "p4.json",
+            "p4.json.tmp",
+            "p4.json.corrupt",
+            "p4.json.corrupt.1",
+        ] {
+            assert!(!dir.path().join(left).exists(), "{left} is gone");
+        }
+        assert!(
+            dir.path().join("p40.json").exists(),
+            "another profile's file stays"
+        );
     }
 
     #[cfg(unix)]
