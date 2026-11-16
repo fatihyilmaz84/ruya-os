@@ -83,6 +83,7 @@ graph TB
 | **ruya-devices** | Rust | Facade over udisks2, BlueZ, NetworkManager and PipeWire (wpctl/libpipewire) for the shell |
 | **Input daemon** | (reuse) | Grabs physical controllers, maps them (SDL GameController DB), re-emits virtual devices, routes to shell or game (ADR-003) |
 | **ruya-update** | Rust (thin) | Drives `bootc upgrade`/`switch`/`rollback`, reports status, schedules reboot |
+| **ruya-notifications** | Rust | The notification centre's history and settings, per profile (`Notifications1`, `03` §1.4; RUY-730) |
 
 **IPC.** All shell↔service traffic goes over **D-Bus** (system bus, `org.ruyaos.*`) with `zbus` on the service side and QtDBus or generated C++ proxies on the shell side. Privileged actions (install system app, OS update, add repo, create profile) go through **polkit**. The shell gets an admin authorization after the admin PIN is checked by `ruya-profiles`. Each interface is versioned (`org.ruyaos.Store1`). Interface XML lives in `/api/dbus/` and is the contract between the QML and Rust teams.
 

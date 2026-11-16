@@ -1,0 +1,49 @@
+[Unit]
+Description=RuyaOS notifications service (org.ruyaos.Notifications1)
+# The profile list (ListProfiles, ListGuests) and the active profile come from Profiles1, so the
+# profile service comes first. If Profiles1 is briefly absent the service asks again every 2 s;
+# it never exits for it (RUY-730).
+Wants=ruya-profiles.service
+After=ruya-profiles.service
+Before=ruya-compositor@tty1.service
+
+[Service]
+Type=dbus
+BusName=org.ruyaos.Notifications1
+ExecStart=/usr/bin/ruya-notifications
+Restart=on-failure
+# The history and settings, one root-only file per profile: /var/lib/ruyaos/notifications/<id>.json
+# (0600). It is the only place this service writes (ProtectSystem=strict leaves it writable).
+StateDirectory=ruyaos/notifications
+StateDirectoryMode=0700
+# Root only to own the bus name (the policy lets only root own it); no capability is needed:
+# it reads its own directory and the user database (the ruya-shell uid) and talks on the bus.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+PrivateDevices=yes
+PrivateIPC=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+UMask=0077
+ProtectProc=invisible
+ProcSubset=pid
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+[Install]
+WantedBy=multi-user.target
