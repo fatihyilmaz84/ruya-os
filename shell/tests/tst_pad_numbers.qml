@@ -128,32 +128,32 @@ Item {
             Input.mockRemoveDevice(two)
         }
 
-        // One number per pad on every surface, also when the lists order two like pads differently.
-        function test_a_pad_has_one_number_on_every_surface_when_the_lists_order_like_pads_differently() {
+        // A number never changes while the pad stays connected: A connects, then B; A keeps its name in every list.
+        function test_a_pad_keeps_its_name_in_every_list_when_another_connects() {
             const one = "usb-1111-0002-aaaaaaaaaaa1"
             const two = "usb-1111-0002-aaaaaaaaaaa2"
-            // Devices1 lists usb-b before usb-a; Input1 lists the ids in the other order.
-            plug("usb-b", "Twin Pad", "generic")
             plug("usb-a", "Twin Pad", "generic")
-            Input.mockAddDevice({ id: two, name: "Twin Pad", family: "generic", connection: "usb" })
             Input.mockAddDevice({ id: one, name: "Twin Pad", family: "generic", connection: "usb" })
             Batteries.mockClear()
-            Batteries.mockSet("up-b", 60, "discharging", "controller", "Twin Pad", "generic")
             Batteries.mockSet("up-a", 50, "discharging", "controller", "Twin Pad", "generic")
+            tryVerify(() => Batteries.devices.length === 1)
+            tryVerify(() => ControllerPads.controllers().some(p => p.id === one))
+            const seen = () => [DeviceIcons.padName("usb-a", "Twin Pad", "generic"),
+                                DeviceIcons.padName(one, "Twin Pad", "generic"),
+                                ControllerPads.controllers().find(p => p.id === one).name,
+                                ControllerPads.hubPads().find(p => p.id === "usb-a").name,
+                                DeviceIcons.batteryName(Batteries.devices.find(b => b.id === "up-a"))]
+            compare(seen().join("|"), "Twin Pad|Twin Pad|Twin Pad|Twin Pad|Twin Pad")
+            plug("usb-b", "Twin Pad", "generic")
+            Input.mockAddDevice({ id: two, name: "Twin Pad", family: "generic", connection: "usb" })
+            Batteries.mockSet("up-b", 60, "discharging", "controller", "Twin Pad", "generic")
             tryVerify(() => Batteries.devices.length === 2)
-            tryVerify(() => ControllerPads.controllers().filter(p => p.name.startsWith("Twin Pad")).length === 2)
-            // Devices1 order: usb-b is "Twin Pad", usb-a is "Twin Pad 2".
-            compare(DeviceIcons.padName("usb-b", "Twin Pad", "generic"), "Twin Pad")
-            compare(DeviceIcons.padName("usb-a", "Twin Pad", "generic"), "Twin Pad 2")
-            // The rows and the Input1 names pair by position in id order: input 1 is usb-a, input 2 is usb-b.
-            compare(DeviceIcons.padName(one, "Twin Pad", "generic"), "Twin Pad 2")
-            compare(DeviceIcons.padName(two, "Twin Pad", "generic"), "Twin Pad")
-            const rows = ControllerPads.controllers()
-            compare(rows.find(p => p.id === one).name, "Twin Pad 2")
-            compare(rows.find(p => p.id === two).name, "Twin Pad")
-            // The chips: the battery list pairs the same way (up-a with usb-a).
-            compare(DeviceIcons.batteryName(Batteries.devices.find(b => b.id === "up-a")), "Twin Pad 2")
-            compare(DeviceIcons.batteryName(Batteries.devices.find(b => b.id === "up-b")), "Twin Pad")
+            tryVerify(() => ControllerPads.controllers().some(p => p.id === two))
+            compare(seen().join("|"), "Twin Pad|Twin Pad|Twin Pad|Twin Pad|Twin Pad", "A is unchanged in every list")
+            compare(DeviceIcons.padName("usb-b", "Twin Pad", "generic"), "Twin Pad 2")
+            compare(DeviceIcons.padName(two, "Twin Pad", "generic"), "Twin Pad 2")
+            compare(ControllerPads.controllers().find(p => p.id === two).name, "Twin Pad 2")
+            compare(DeviceIcons.batteryName(Batteries.devices.find(b => b.id === "up-b")), "Twin Pad 2")
             Input.mockRemoveDevice(one)
             Input.mockRemoveDevice(two)
         }
@@ -166,9 +166,8 @@ Item {
             Bluetooth.connectDevice("bt-pad-old")
             tryVerify(() => Bluetooth.gamepads.length === 2)
             const one = "bluetooth-054c-0ce6-aa0000000004"
-            const two = "bluetooth-054c-0ce6-aa0000000005"
+            const two = "bluetooth-054c-0ce6-3f2a9c41d0b7"   // the mock's own DualSense, there from the start
             Input.mockAddDevice({ id: one, name: "DualSense Wireless Controller", family: "playstation", connection: "bluetooth" })
-            Input.mockAddDevice({ id: two, name: "DualSense Wireless Controller", family: "playstation", connection: "bluetooth" })
             tryVerify(() => ControllerPads.controllers().filter(p => p.id === one || p.id === two).length === 2)
             const rows = ControllerPads.controllers().filter(p => p.id === one || p.id === two)
             const shorts = rows.map(p => GameControls.shortName(p.nameBase, p.nameTail)).sort()
@@ -177,7 +176,6 @@ Item {
             compare(GameControls.shortName("W".repeat(48), " 2").length, 30)
             verify(GameControls.shortName("W".repeat(48), " 2").endsWith(" 2"))
             Input.mockRemoveDevice(one)
-            Input.mockRemoveDevice(two)
         }
 
         function test_two_bluetooth_pads_with_one_alias_are_numbered_and_the_paired_list_keeps_the_address_tail() {
@@ -209,15 +207,12 @@ Item {
 
         function test_two_controller_batteries_of_a_name_are_numbered() {
             Batteries.mockClear()
-            plug("usb-1", "Twin Pad", "xbox")
-            plug("usb-2", "Twin Pad", "xbox")
             Batteries.mockSet("up-1", 50, "discharging", "controller", "Twin Pad", "xbox")
             Batteries.mockSet("up-2", 60, "discharging", "controller", "Twin Pad", "xbox")
             tryVerify(() => Batteries.devices.length === 2)
             compare(DeviceIcons.batteryName(Batteries.devices.find(b => b.id === "up-1")), "Twin Pad")
             compare(DeviceIcons.batteryName(Batteries.devices.find(b => b.id === "up-2")), "Twin Pad 2")
             Batteries.mockRemove("up-1")
-            unplug("usb-1")
             tryVerify(() => Batteries.devices.length === 1)
             compare(DeviceIcons.batteryName(Batteries.devices[0]), "Twin Pad 2", "stays 2")
         }

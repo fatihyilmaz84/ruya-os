@@ -12,32 +12,6 @@ import RuyaShell
 //    each matched to the one hub pad with the same kernel name and connection when exactly one of
 //    each exists, so it gets the alias and the battery; otherwise its own record's name and battery.
 QtObject {
-    id: cpads
-
-    // The Devices1 pad (Bluetooth.gamepads id) an Input1 device is: the pads with the same kernel name and
-    // connection, in id order on both sides, pair up by position (Input1 ids carry no address, 06 section 4.1, so
-    // like pads cannot be told apart better; one pad of a name is exact). "" when there is none. RUY-743.
-    function hubIdOf(d) {
-        const key = x => DeviceIcons.plain(x.name).toLowerCase()
-        const mine = key(d)
-        const group = Input.devices.filter(x => x.connection === d.connection && key(x) === mine).map(x => String(x.id)).sort()
-        const hub = Bluetooth.gamepads.filter(g => g.transport === d.connection && key(g) === mine).map(g => String(g.id)).sort()
-        const i = group.indexOf(String(d.id))
-        return i >= 0 && i < hub.length ? hub[i] : ""
-    }
-
-    // The Devices1 pad a controller battery without an address is: the wired pads of its family and the
-    // address-less controller batteries of that family pair up by position, in id order.
-    function hubIdOfBattery(b) {
-        if (b.kind !== "controller" || String(b.address ?? "") !== "" || (b.family ?? "") === "")
-            return ""
-        const group = Batteries.devices.filter(x => x.kind === "controller" && String(x.address ?? "") === "" && x.family === b.family)
-                                       .map(x => String(x.id)).sort()
-        const hub = Bluetooth.gamepads.filter(g => g.transport !== "bluetooth" && g.family === b.family).map(g => String(g.id)).sort()
-        const i = group.indexOf(String(b.id))
-        return i >= 0 && i < hub.length ? hub[i] : ""
-    }
-
     // Words for a pad's battery (04 §7: the words carry the state, all in `text`).
     // state: "charging" | "full" | "discharging" | "" (UPower's, or the record's).
     function batteryText(percent, state) {
@@ -107,7 +81,7 @@ QtObject {
             const hubPad = twins.length === 1 && match.length === 1 ? match[0] : null
             const own = d.battery >= 0
             const nameBase = hubPad ? hubPad.nameBase : DeviceIcons.plain(d.name)
-            const nameTail = DeviceIcons.padNumbers.tail(cpads.hubIdOf(d))
+            const nameTail = hubPad ? hubPad.nameTail : DeviceIcons.inputNumbers.tail(d.id)
             return { id: d.id,
                      name: nameBase + nameTail,
                      nameBase: nameBase,
