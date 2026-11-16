@@ -871,13 +871,15 @@ fn exit_reason(inst: &Instance, code: i32, signaled: bool) -> (i32, ExitReason) 
         return (code, ExitReason::Killed);
     }
     if inst.state == State::Stopping {
-        // Asked to stop: the stop itself is a SIGTERM, so dying of a signal is still a quit.
-        // Only a death by the kill of `tick` (SIGKILL) is "killed": the unit's end can be held for
-        // its scope past the grace, so `tick` may send its kill to a unit that already died of
-        // the SIGTERM (VM 0.0.77, lead-18).
+        // Asked to stop: the stop itself is a SIGTERM, so dying of a signal before the backstop is
+        // still a quit. Once `tick` has sent its kill (the run outlived the grace), a signalled
+        // end is "killed" whatever its status: the unit's end is held for its scope, so the status
+        // is the SIGTERM the app ignored (15), not the SIGKILL that ended the run (VM 0.0.88,
+        // RUY-770). It cannot be told from a late report of an early SIGTERM death, and in both
+        // the run held past the grace and the OS had to kill it.
         return (
             code,
-            if signaled && inst.kill_sent && code == 9 {
+            if signaled && inst.kill_sent {
                 ExitReason::Killed
             } else {
                 ExitReason::Quit
@@ -1969,15 +1971,25 @@ mod tests {
     }
 
     #[test]
-    fn a_stop_that_ended_by_its_sigterm_is_a_quit_even_after_a_late_kill() {
-        // The unit died of the stop's SIGTERM, but its end reached the core only after the grace
-        // (held for the app's scope), so `tick` had already sent its kill.
+    fn the_backstop_kill_is_killed_even_when_the_status_is_the_ignored_sigterm() {
+        // VM 0.0.88 (RUY-770): the app ignores the stop's SIGTERM, `tick` sends its kill after the
+        // grace, and the run's end carries status 15 (the unit's own, held for its scope).
         let mut s = session();
         let unit = running(&mut s);
         let t0 = Instant::now();
         s.stop(&unit, t0);
         s.tick(t0 + STOP_GRACE);
         assert!(s.spawner.calls().iter().any(|c| c.starts_with("kill")));
+        assert_eq!(reason(s.on_event(exited(&unit, 15, true))), (15, "killed"));
+    }
+
+    #[test]
+    fn a_sigterm_death_before_the_backstop_is_a_quit() {
+        let mut s = session();
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        s.stop(&unit, t0);
+        s.tick(t0 + STOP_GRACE - Duration::from_millis(1));
         assert_eq!(reason(s.on_event(exited(&unit, 15, true))), (15, "quit"));
     }
 
