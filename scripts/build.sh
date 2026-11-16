@@ -23,6 +23,18 @@ podman build \
 
 echo "built ${image} (version ${version})"
 
+# Tag every named stage as localhost/ruyaos-cache:<stage>. A tagged stage tip is not dangling, so
+# neither it nor its parent layers are pruned by free-space (a plain `podman image prune -f`), and
+# the next build hits the cache whatever the layers' age (RUY-771). Each run is a cache hit.
+source scripts/lib-stages.sh
+while read -r stage; do
+    [[ -n "$stage" ]] || continue
+    podman build --target "$stage" \
+        --build-arg "RUYA_VERSION=${version}" \
+        ${FEDORA_VERSION:+--build-arg "FEDORA_VERSION=${FEDORA_VERSION}"} \
+        -f image/Containerfile -t "localhost/ruyaos-cache:${stage}" . 2>&1 | tee -a "$log"
+done < <(ruya_stage_names image/Containerfile)
+
 if [[ "${RUYA_KEEP_IMAGES:-}" != 1 ]]; then
     # Ids this build produced or took from the cache ("--> <id>", "--> Using cache <id>").
     used="$(sed -nE 's/^--> (Using cache )?([0-9a-f]{12}).*/\2/p' "$log" | sort -u)"
