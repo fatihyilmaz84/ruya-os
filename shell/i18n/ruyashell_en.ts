@@ -3611,7 +3611,7 @@ This can&apos;t be undone.</translation>
         <translation>Close</translation>
     </message>
     <message>
-        <location line="+41"/>
+        <location line="+44"/>
         <source>Options for %1</source>
         <translation>Options for %1</translation>
     </message>
@@ -5469,9 +5469,19 @@ This can&apos;t be undone.</translation>
         <translation>Inner dead zone</translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Ignores small moves</source>
+        <translation>Ignores small moves</translation>
+    </message>
+    <message>
         <location line="+13"/>
         <source>Outer dead zone</source>
         <translation>Outer dead zone</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Full tilt before the edge</source>
+        <translation>Full tilt before the edge</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -5479,9 +5489,29 @@ This can&apos;t be undone.</translation>
         <translation>Anti dead zone</translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Skips a game&apos;s dead zone</source>
+        <translation>Skips a game&apos;s dead zone</translation>
+    </message>
+    <message>
         <location line="+13"/>
         <source>Response curve</source>
         <translation>Response curve</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Slow near the centre</source>
+        <translation>Slow near the centre</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Quick near the centre</source>
+        <translation>Quick near the centre</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Same all the way</source>
+        <translation>Same all the way</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -5504,9 +5534,19 @@ This can&apos;t be undone.</translation>
         <translation>Sensitivity</translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Higher: full tilt sooner</source>
+        <translation>Higher: full tilt sooner</translation>
+    </message>
+    <message>
         <location line="+13"/>
         <source>Invert up and down</source>
         <translation>Invert up and down</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Push up to look down</source>
+        <translation>Push up to look down</translation>
     </message>
     <message>
         <location line="+9"/>

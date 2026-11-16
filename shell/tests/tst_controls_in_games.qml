@@ -1036,6 +1036,30 @@ Item {
             verify(find("rowResetStick").activeFocus)
         }
 
+        function test_every_stick_row_says_what_it_does() {
+            openStick("left")
+            const details = {
+                rowInner: "Ignores small moves", rowOuter: "Full tilt before the edge",
+                rowAnti: "Skips a game's dead zone", rowCurve: "Same all the way",
+                rowSensitivity: "Higher: full tilt sooner", rowInvert: "Push up to look down"
+            }
+            for (const name in details) {
+                compare(find(name).detail, details[name], name)
+                verify(find(name).hasDetail, name)
+                verify(find(name).Accessible.name.indexOf(details[name]) >= 0, name + " accessible name")
+            }
+            verify(!find("rowResetStick").hasDetail, "Reset this stick has none")
+            focusRow("stickBody", "rowCurve")
+            keyClick(Qt.Key_Right)
+            compare(find("rowCurve").currentLabel, "Precise")
+            compare(find("rowCurve").detail, "Slow near the centre")
+            keyClick(Qt.Key_Right)
+            compare(find("rowCurve").detail, "Quick near the centre")
+            DeviceSettings.language = "tr"
+            compare(find("rowCurve").detail, "Merkezde hızlı")
+            compare(find("rowInvert").detail, "Yukarı itince aşağı bakar")
+        }
+
         function test_the_preview_follows_the_stream() {
             openStick("left")
             tryVerify(() => Input.mockTestRunning(ds), 2000, "the stream runs while the page is open")
