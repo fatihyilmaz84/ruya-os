@@ -157,6 +157,7 @@ QtObject {
     readonly property real typeBody: 30
     readonly property real typeCaption: 24
     readonly property real typeMicro: 20
+    readonly property real lineFactor: 1.2   // fixed line box = round(size x lineFactor x u), not the font's own metrics
     readonly property int weightLight: Font.Light
     readonly property int weightRegular: Font.Normal
     readonly property int weightDemiBold: Font.DemiBold
