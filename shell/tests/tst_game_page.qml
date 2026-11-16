@@ -454,6 +454,8 @@ Item {
             keyClick(Qt.Key_Down)
             verify(find("screenshotStrip").activeFocus, "Screenshots is one stop (RUY-533)")
             keyClick(Qt.Key_Down)
+            verify(find("detailAbout").activeFocus, "About is one stop, before This app can (RUY-534)")
+            keyClick(Qt.Key_Down)
             verify(find("detailPermissions").activeFocus, "This app can is one stop")
             compare(hintVerbs(), "back Back")
             keyClick(Qt.Key_Down)

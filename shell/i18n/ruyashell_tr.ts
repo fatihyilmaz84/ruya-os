@@ -291,7 +291,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+196"/>
+        <location filename="../qml/AppDetailPage.qml" line="+197"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -519,12 +519,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-7"/>
-        <location line="+327"/>
+        <location line="+349"/>
         <source>Steam</source>
         <translation>Steam</translation>
     </message>
     <message>
-        <location line="-326"/>
+        <location line="-348"/>
         <source>Steam app ID</source>
         <translation>Steam uygulama kimliği</translation>
     </message>
@@ -594,7 +594,12 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+605"/>
+        <location line="+217"/>
+        <source>Read</source>
+        <translation>Oku</translation>
+    </message>
+    <message>
+        <location line="+425"/>
         <source>No special permissions.</source>
         <translation>Özel bir izni yok.</translation>
     </message>
@@ -634,7 +639,7 @@ Bu geri alınamaz.</translation>
         <translation>Kaldırmak için önce oyunu kapatın.</translation>
     </message>
     <message>
-        <location line="-881"/>
+        <location line="-918"/>
         <source>Install</source>
         <translation>Kur</translation>
     </message>
@@ -645,7 +650,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelle</translation>
     </message>
     <message>
-        <location line="+631"/>
+        <location line="+653"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Bu konsoldakinden daha yeni bir RuyaOS gerekiyor. Yüklü kalır.</translation>
     </message>
@@ -660,7 +665,7 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza ayrıntıları şu anda kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+74"/>
         <location line="+9"/>
         <source>This app can</source>
         <translation>Bu uygulama şunları yapabilir</translation>
@@ -671,12 +676,12 @@ Bu geri alınamaz.</translation>
         <translation>Yüksek risk</translation>
     </message>
     <message>
-        <location line="-116"/>
+        <location line="-131"/>
         <source>The update adds: %1</source>
         <translation>Güncelleme şunları ekliyor: %1</translation>
     </message>
     <message>
-        <location line="-659"/>
+        <location line="-681"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Aç</translation>
@@ -714,17 +719,18 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+382"/>
+        <location line="+389"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-2"/>
+        <location line="+3"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+98"/>
         <source>Running</source>
         <translation>Çalışıyor</translation>
     </message>
@@ -2465,6 +2471,29 @@ Bu geri alınamaz.</translation>
         <location line="+18"/>
         <source>%1 %2</source>
         <translation>%1 %2</translation>
+    </message>
+</context>
+<context>
+    <name>GameAbout</name>
+    <message>
+        <location filename="../qml/GameAbout.qml" line="+19"/>
+        <source>About</source>
+        <translation>Hakkında</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>What&apos;s new in %1</source>
+        <translation>%1 sürümündeki yenilikler</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>What&apos;s new</source>
+        <translation>Yenilikler</translation>
+    </message>
+    <message>
+        <location line="+111"/>
+        <source>More</source>
+        <translation>Devamı</translation>
     </message>
 </context>
 <context>
@@ -4643,7 +4672,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ScreenshotRow</name>
     <message>
-        <location filename="../qml/ScreenshotRow.qml" line="+27"/>
+        <location filename="../qml/ScreenshotRow.qml" line="+29"/>
         <source>View</source>
         <translation>Görüntüle</translation>
     </message>
@@ -4654,7 +4683,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+14"/>
-        <location line="+28"/>
+        <location line="+35"/>
         <source>Screenshots</source>
         <translation>Ekran görüntüleri</translation>
     </message>
@@ -5224,12 +5253,12 @@ Bu geri alınamaz.</translation>
         <translation>Seçenekler</translation>
     </message>
     <message>
-        <location line="+187"/>
+        <location line="+213"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
     </message>
     <message>
-        <location line="-224"/>
+        <location line="-250"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
@@ -5271,7 +5300,7 @@ Bu geri alınamaz.</translation>
         <translation>Bölümler</translation>
     </message>
     <message>
-        <location line="+167"/>
+        <location line="+193"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>
@@ -6473,6 +6502,20 @@ Bu geri alınamaz.</translation>
         <location line="+12"/>
         <source>Shift</source>
         <translation>Shift</translation>
+    </message>
+</context>
+<context>
+    <name>TextSheet</name>
+    <message>
+        <location filename="../qml/TextSheet.qml" line="+49"/>
+        <source>Scroll</source>
+        <translation>Kaydır</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+1"/>
+        <source>Close</source>
+        <translation>Kapat</translation>
     </message>
 </context>
 <context>

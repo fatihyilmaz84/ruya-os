@@ -70,6 +70,7 @@ Page {
     property string errorText: ""
 
     // Which sections are there (the stops depend on these, not on the visibility, which a covered page loses too).
+    readonly property bool aboutShown: hasRecord && (app.description ?? "") !== ""
     // Your activity (RUY-532): for a signed-in profile that is not a Guest, on an installed item or one the
     // ledger has runs of; never for a Steam item (the ledger has no per-Steam-game runs). The block is a
     // focus stop only when there is something to open.
@@ -470,6 +471,8 @@ Page {
             rows.push([activitySection.block])
         if (screenshotsStop)
             rows.push([shotsSection.strip])
+        if (aboutShown)
+            rows.push([about.block])
         if (permsListed)
             rows.push([permsBlock])
         for (let i = 0; i < factRepeater.count; i += 2)
@@ -495,7 +498,7 @@ Page {
         rows[0][0].focus = true
     }
 
-    readonly property string stopKey: primaryKind + "#" + secondaryKeys + "#" + factKeys + "#" + activityStop + "#" + screenshotsStop + "#" + permsListed + "#" + uninstallShown
+    readonly property string stopKey: primaryKind + "#" + secondaryKeys + "#" + factKeys + "#" + activityStop + "#" + screenshotsStop + "#" + aboutShown + "#" + permsListed + "#" + uninstallShown
     onStopKeyChanged: Qt.callLater(ensureFocus)
 
     function moveFocus(dx, dy) {
@@ -539,7 +542,12 @@ Page {
     readonly property real offset: scrollTo === header ? activityOverflow
         : Math.max(0, Math.min(scrollTo.y, column.height - viewHeight))
 
-    hints: activitySection.block.activeFocus ? activitySection.block.hints : shotsSection.strip.activeFocus ? shotsSection.hints : onFactStop ? backOnlyHints : [
+    // About with "More" reads the whole text on Accept (the Text sheet); without it the block is only read.
+    readonly property bool aboutReadable: aboutShown && about.block.activeFocus && about.cut
+    hints: activitySection.block.activeFocus ? activitySection.block.hints
+         : shotsSection.strip.activeFocus ? shotsSection.hints
+         : aboutReadable ? [{ action: "accept", text: qsTr("Read") }, { action: "back", text: qsTr("Back") }]
+         : onFactStop ? backOnlyHints : [
         { action: "accept", text: qsTr("Select") },
         { action: "back", text: qsTr("Back") }
     ]
@@ -871,6 +879,20 @@ Page {
                 strip.onActiveFocusChanged: if (strip.activeFocus) page.stopFocused(shotsSection, false)
             }
 
+            // ---- About ----
+            GameAbout {
+                id: about
+                objectName: "detailAboutSection"
+                u: page.u
+                visible: page.aboutShown
+                description: page.app.description ?? ""
+                notes: page.app.releaseNotes ?? ""
+                version: page.app.version ?? ""
+                showNotes: page.hasUpdate
+                block.onActiveFocusChanged: if (block.activeFocus) page.stopFocused(about, true)
+                onReadRequested: page.openTextSheet()
+            }
+
             // ---- This app can ----
             Column {
                 id: permsSection
@@ -1033,6 +1055,30 @@ Page {
                 }
             }
         }
+    }
+
+    // The Text sheet (04 §5), in the modal layer and built on its first opening.
+    Loader {
+        id: textSheetSlot
+        parent: page.overlay
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+        active: false
+        sourceComponent: Component {
+            TextSheet {
+                objectName: "aboutTextSheet"
+                u: page.u
+                title: page.title
+                description: page.app.description ?? ""
+                notesTitle: about.notesShown ? about.notesHeading : ""
+                notes: about.notesShown ? (page.app.releaseNotes ?? "") : ""
+            }
+        }
+    }
+    function openTextSheet() {
+        textSheetSlot.active = true
+        const sheet = textSheetSlot.item as TextSheet
+        sheet?.open()
     }
 
     // A stop took the focus: scroll to its section, and the hints of its kind.
