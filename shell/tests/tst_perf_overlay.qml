@@ -369,7 +369,7 @@ Item {
             compare(line("FrameTime"), "17 ms, slowest 17 ms")
             verify(!find("perfOverlayFrameTime").truncated)
             // 119 intervals: the 1% low is there, the 0.1% low still measuring (RUY-738).
-            compare(line("Lows"), "1% low 60 FPS · 0.1% low Measuring...")
+            compare(line("Lows"), "1% low 60 FPS · 0.1% low: measuring...")
             verify(!find("perfOverlayLows").truncated)
         }
 
@@ -392,9 +392,9 @@ Item {
             DeviceSettings.setPerformanceOverlay("p2", true)
             tryVerify(() => Performance.counting, 2000)
             drive60(stand)
-            tryVerify(() => line("Lows") === "1% low 60 FPS · 0.1% low Measuring...", 2000, line("Lows"))
+            tryVerify(() => line("Lows") === "1% low 60 FPS · 0.1% low: measuring...", 2000, line("Lows"))
             DeviceSettings.language = "tr"
-            tryVerify(() => line("Lows") === "%1 düşük 60 FPS · %0,1 düşük Ölçülüyor...", 2000, line("Lows"))
+            tryVerify(() => line("Lows") === "%1 düşük 60 FPS · %0,1 düşük: ölçülüyor...", 2000, line("Lows"))
             verify(!find("perfOverlayLows").truncated)
         }
 

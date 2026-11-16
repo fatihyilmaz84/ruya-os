@@ -84,8 +84,9 @@ Item {
         return pattern.replace(/%([12])/g, (m, d) => d === "1" ? first : second)
     }
     function oneLow(label, fps) {
-        const value = fps < 0 ? qsTr("Measuring...") : qsTr("%1 FPS").arg(fps)
-        return both(qsTr("%1 low %2"), label, value)
+        if (fps < 0)
+            return both(qsTr("%1 low: measuring..."), label, "")
+        return both(qsTr("%1 low %2"), label, qsTr("%1 FPS").arg(fps))
     }
     function lowText() {
         switch (Performance.frameState) {

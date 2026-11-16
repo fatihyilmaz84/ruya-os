@@ -395,6 +395,30 @@ Item {
             compare(Performance.fpsLow1, 100, "rank 1489 is not")
         }
 
+        // Nearest rank: the 1% low is the interval at rank ceil(0.99 n). With n = 2000 that is rank 1980, so
+        // 20 spikes (ranks 1981-2000) leave it on a normal interval and a 21st moves it onto a spike.
+        function lowsWithSpikes(spikes) {
+            const stand = lowStand(0)
+            const consumer = createTemporaryObject(consumerComponent, host)
+            verify(consumer)
+            let t = drive(stand.surface, stand.win, 0, 10, 1, 1)           // the first frame has no interval
+            for (let i = 0; i < 2000; ++i)
+                t = drive(stand.surface, stand.win, t, i % 95 === 0 && i / 95 < spikes ? 50 : 10, 1, 1)
+            Performance.fakeFrameClockMs(t + 1)
+            Performance.updateFrames()
+            const low = Performance.fpsLow1
+            consumer.destroy()
+            return low
+        }
+
+        function test_exactly_one_percent_of_spikes_does_not_move_the_1_percent_low() {
+            compare(lowsWithSpikes(20), 100, "20 of 2000 intervals are 1 %: the low stays on a normal one")
+        }
+
+        function test_more_than_one_percent_of_spikes_moves_the_1_percent_low() {
+            compare(lowsWithSpikes(21), 20, "21 of 2000 intervals: the low is a spike")
+        }
+
         function test_another_app_in_front_resets_the_lows() {
             const first = lowStand(0)
             const consumer = createTemporaryObject(consumerComponent, host)
