@@ -324,7 +324,7 @@ Item {
             tryVerify(() => tc.shell.slots[tc.shell.slots.length - 1].settled, 2000, "the page has finished sliding in")
             const art = find("detailHero")
             const at = art.mapToItem(tc.shell, 0, 0)
-            // The content box is the column; the clipping viewport reaches a ring's width past it on both sides.
+            // The content box is the column; the clipping viewport spans the screen's width (a side bleed of the safe-area margin).
             const column = find("detailColumn")
             const view = column.mapToItem(tc.shell, 0, 0)
             compare(Math.round(view.x), Math.round(tc.shell.marginX), "the content starts at the safe-area margin: " + view.x + " " + tc.shell.marginX)
@@ -332,7 +332,8 @@ Item {
             fuzzyCompare(at.x + art.width, view.x + column.width, 1, "the art ends at the content's right edge")
             compare(art.width, 704)
             // Owner (lead-27): the focused Play button's ring was cut at the left edge. The whole ring lies
-            // inside the clipping viewport, also on the right of the art's column edge.
+            // inside the clipping viewport, also on the right of the art's column edge; the viewport reaches
+            // both screen edges.
             const viewport = find("detailViewport")
             const play = find("detailPrimary")
             tryVerify(() => play.activeFocus, 2000, "Play has the focus")
@@ -342,6 +343,9 @@ Item {
             verify(r.x >= 0, "the ring's left edge lies inside the viewport: " + r.x)
             verify(at.x + art.width + Theme.focusRingOffset + Theme.focusRingWidth
                    <= viewport.mapToItem(tc.shell, 0, 0).x + viewport.width + 0.5, "a ring around the right edge would fit too")
+            const edges = viewport.mapToItem(tc.shell, 0, 0)
+            fuzzyCompare(edges.x, 0, 0.5, "the viewport reaches the screen's left edge")
+            fuzzyCompare(edges.x + viewport.width, tc.shell.width, 0.5, "and its right edge")
             host.width = 1280
             host.height = 720
         }
@@ -362,6 +366,9 @@ Item {
             compare(shade.width, tc.shell.width, "full width")
             fuzzyCompare(shade.y + shade.height, tc.shell.height, 0.5, "down to the screen's edge")
             verify(shade.y < bar.y, "it starts above the hint bar")
+            // Opaque from the hint bar's top down: content scrolled under it never shows behind the hints.
+            fuzzyCompare(shade.y + shade.solidAt * shade.height, bar.y, 0.5, "the shade is solid from the hint bar's top")
+            verify(shade.solidAt > 0.2 && shade.solidAt < 1, "with a fade above it: " + shade.solidAt)
             verify(shade.z < bar.z && find("versionTag").z >= bar.z, "under the hints and the version tag")
             const viewport = find("detailViewport")
             const bottom = viewport.mapToItem(tc.shell, 0, viewport.height).y
@@ -444,6 +451,8 @@ Item {
             compare(page().offset, 0, "in the header the column is at 0")
             keyClick(Qt.Key_Up)
             verify(find("detailPrimary").activeFocus, "Up stops at the first stop")
+            keyClick(Qt.Key_Down)
+            verify(find("screenshotStrip").activeFocus, "Screenshots is one stop (RUY-533)")
             keyClick(Qt.Key_Down)
             verify(find("detailAbout").activeFocus, "About is one stop, before This app can (RUY-534)")
             keyClick(Qt.Key_Down)

@@ -293,7 +293,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+192"/>
+        <location filename="../qml/AppDetailPage.qml" line="+197"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -521,12 +521,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="-7"/>
-        <location line="+331"/>
+        <location line="+349"/>
         <source>Steam</source>
         <translation>Steam</translation>
     </message>
     <message>
-        <location line="-330"/>
+        <location line="-348"/>
         <source>Steam app ID</source>
         <translation>Steam app ID</translation>
     </message>
@@ -596,12 +596,12 @@ This can&apos;t be undone.</translation>
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+214"/>
+        <location line="+217"/>
         <source>Read</source>
         <translation>Read</translation>
     </message>
     <message>
-        <location line="+399"/>
+        <location line="+425"/>
         <source>No special permissions.</source>
         <translation>No special permissions.</translation>
     </message>
@@ -641,7 +641,7 @@ This can&apos;t be undone.</translation>
         <translation>Close the game to uninstall it.</translation>
     </message>
     <message>
-        <location line="-889"/>
+        <location line="-918"/>
         <source>Install</source>
         <translation>Install</translation>
     </message>
@@ -652,7 +652,7 @@ This can&apos;t be undone.</translation>
         <translation>Update</translation>
     </message>
     <message>
-        <location line="+635"/>
+        <location line="+653"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Needs a newer RuyaOS than this console has. It stays installed.</translation>
     </message>
@@ -667,7 +667,7 @@ This can&apos;t be undone.</translation>
         <translation>Store details are unavailable right now.</translation>
     </message>
     <message>
-        <location line="+63"/>
+        <location line="+74"/>
         <location line="+9"/>
         <source>This app can</source>
         <translation>This app can</translation>
@@ -678,12 +678,12 @@ This can&apos;t be undone.</translation>
         <translation>High risk</translation>
     </message>
     <message>
-        <location line="-120"/>
+        <location line="-131"/>
         <source>The update adds: %1</source>
         <translation>The update adds: %1</translation>
     </message>
     <message>
-        <location line="-663"/>
+        <location line="-681"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Open</translation>
@@ -721,7 +721,7 @@ This can&apos;t be undone.</translation>
         <translation>Try again</translation>
     </message>
     <message>
-        <location line="+386"/>
+        <location line="+389"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -732,7 +732,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+98"/>
         <source>Running</source>
         <translation>Running</translation>
     </message>
@@ -4687,6 +4687,49 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>ScreenshotRow</name>
+    <message>
+        <location filename="../qml/ScreenshotRow.qml" line="+29"/>
+        <source>View</source>
+        <translation>View</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <location line="+35"/>
+        <source>Screenshots</source>
+        <translation>Screenshots</translation>
+    </message>
+</context>
+<context>
+    <name>ScreenshotViewer</name>
+    <message>
+        <location filename="../qml/ScreenshotViewer.qml" line="+26"/>
+        <source>Browse</source>
+        <translation>Browse</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Close</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <location line="+124"/>
+        <source>%1 of %2</source>
+        <translation>%1 of %2</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <source>Couldn&apos;t load this picture.</source>
+        <translation>Couldn&apos;t load this picture.</translation>
+    </message>
+</context>
+<context>
     <name>SectionNav</name>
     <message>
         <location filename="../qml/SectionNav.qml" line="+35"/>
@@ -5227,12 +5270,12 @@ This can&apos;t be undone.</translation>
         <translation>Options</translation>
     </message>
     <message>
-        <location line="+187"/>
+        <location line="+213"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>The chosen sound theme can&apos;t be used. The standard one plays instead.</translation>
     </message>
     <message>
-        <location line="-224"/>
+        <location line="-250"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
@@ -5274,7 +5317,7 @@ This can&apos;t be undone.</translation>
         <translation>Sections</translation>
     </message>
     <message>
-        <location line="+167"/>
+        <location line="+193"/>
         <source>mock services</source>
         <translation>mock services</translation>
     </message>
@@ -6482,7 +6525,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>TextSheet</name>
     <message>
-        <location filename="../qml/TextSheet.qml" line="+43"/>
+        <location filename="../qml/TextSheet.qml" line="+49"/>
         <source>Scroll</source>
         <translation>Scroll</translation>
     </message>

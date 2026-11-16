@@ -291,7 +291,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+192"/>
+        <location filename="../qml/AppDetailPage.qml" line="+197"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -519,12 +519,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-7"/>
-        <location line="+331"/>
+        <location line="+349"/>
         <source>Steam</source>
         <translation>Steam</translation>
     </message>
     <message>
-        <location line="-330"/>
+        <location line="-348"/>
         <source>Steam app ID</source>
         <translation>Steam uygulama kimliği</translation>
     </message>
@@ -594,12 +594,12 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+214"/>
+        <location line="+217"/>
         <source>Read</source>
         <translation>Oku</translation>
     </message>
     <message>
-        <location line="+399"/>
+        <location line="+425"/>
         <source>No special permissions.</source>
         <translation>Özel bir izni yok.</translation>
     </message>
@@ -639,7 +639,7 @@ Bu geri alınamaz.</translation>
         <translation>Kaldırmak için önce oyunu kapatın.</translation>
     </message>
     <message>
-        <location line="-889"/>
+        <location line="-918"/>
         <source>Install</source>
         <translation>Kur</translation>
     </message>
@@ -650,7 +650,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelle</translation>
     </message>
     <message>
-        <location line="+635"/>
+        <location line="+653"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Bu konsoldakinden daha yeni bir RuyaOS gerekiyor. Yüklü kalır.</translation>
     </message>
@@ -665,7 +665,7 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza ayrıntıları şu anda kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+63"/>
+        <location line="+74"/>
         <location line="+9"/>
         <source>This app can</source>
         <translation>Bu uygulama şunları yapabilir</translation>
@@ -676,12 +676,12 @@ Bu geri alınamaz.</translation>
         <translation>Yüksek risk</translation>
     </message>
     <message>
-        <location line="-120"/>
+        <location line="-131"/>
         <source>The update adds: %1</source>
         <translation>Güncelleme şunları ekliyor: %1</translation>
     </message>
     <message>
-        <location line="-663"/>
+        <location line="-681"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Aç</translation>
@@ -719,7 +719,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+386"/>
+        <location line="+389"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -730,7 +730,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+83"/>
+        <location line="+98"/>
         <source>Running</source>
         <translation>Çalışıyor</translation>
     </message>
@@ -4670,6 +4670,49 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>ScreenshotRow</name>
+    <message>
+        <location filename="../qml/ScreenshotRow.qml" line="+29"/>
+        <source>View</source>
+        <translation>Görüntüle</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <location line="+35"/>
+        <source>Screenshots</source>
+        <translation>Ekran görüntüleri</translation>
+    </message>
+</context>
+<context>
+    <name>ScreenshotViewer</name>
+    <message>
+        <location filename="../qml/ScreenshotViewer.qml" line="+26"/>
+        <source>Browse</source>
+        <translation>Gözat</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Close</source>
+        <translation>Kapat</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <location line="+124"/>
+        <source>%1 of %2</source>
+        <translation>%1 / %2</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <source>Couldn&apos;t load this picture.</source>
+        <translation>Bu resim yüklenemedi.</translation>
+    </message>
+</context>
+<context>
     <name>SectionNav</name>
     <message>
         <location filename="../qml/SectionNav.qml" line="+35"/>
@@ -5210,12 +5253,12 @@ Bu geri alınamaz.</translation>
         <translation>Seçenekler</translation>
     </message>
     <message>
-        <location line="+187"/>
+        <location line="+213"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
     </message>
     <message>
-        <location line="-224"/>
+        <location line="-250"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
@@ -5257,7 +5300,7 @@ Bu geri alınamaz.</translation>
         <translation>Bölümler</translation>
     </message>
     <message>
-        <location line="+167"/>
+        <location line="+193"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
     </message>
@@ -6464,7 +6507,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>TextSheet</name>
     <message>
-        <location filename="../qml/TextSheet.qml" line="+43"/>
+        <location filename="../qml/TextSheet.qml" line="+49"/>
         <source>Scroll</source>
         <translation>Kaydır</translation>
     </message>

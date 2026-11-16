@@ -21,7 +21,9 @@ Rectangle {
     // The picture's load state. While it loads (not when it failed or is absent) a gleam crosses
     // the placeholder (04 §3.8): not under reduced motion or on the Performance tier.
     property int imageStatus: image.status
-    readonly property bool pending: picture.length > 0 && imageStatus === Image.Loading
+    // `loading`: a placeholder for a picture whose address is not known yet (the game page's Screenshots while GetApp is pending).
+    property bool loading: false
+    readonly property bool pending: loading || (picture.length > 0 && imageStatus === Image.Loading)
     readonly property bool shimmering: shimmer && pending && Theme.shimmerOn
 
     // The art's colours for the card glow (T-281, 04 §3.8): the sampled colour of the picture
