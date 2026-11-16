@@ -70,6 +70,20 @@ Page {
     property string errorText: ""
 
     // Which sections are there (the stops depend on these, not on the visibility, which a covered page loses too).
+    // Your activity (RUY-532): for a signed-in profile that is not a Guest, on an installed item or one the
+    // ledger has runs of; never for a Steam item (the ledger has no per-Steam-game runs). The block is a
+    // focus stop only when there is something to open.
+    property int ledgerTick: 0
+    readonly property var ledger: Usage.game(ledgerTick >= 0 ? activityKey : "")
+    readonly property string activityKey: appId !== "" ? appId : (hasItem ? item.id : "")
+    Connections {
+        target: Usage
+        function onDataChanged() { page.ledgerTick++ }
+    }
+    readonly property bool activityShown: Profiles.activeProfile !== "" && (Profiles.active.role ?? "") !== "guest"
+        && !isSteam && activityKey !== "" && (installed || (Usage.ready && (ledger.total ?? 0) > 0))
+    readonly property bool activityStop: activityShown && Usage.ready && (ledger.total ?? 0) > 0
+    onVisibleChanged: Usage.setWatching(page, visible)
     readonly property bool permsSectionShown: hasRecord && !isSteam && !detailsFailed
     readonly property bool permsListed: permsSectionShown && (app.permissions ?? []).length > 0
     readonly property bool manageShown: hasRecord && installed && !isSteam && !working
@@ -353,6 +367,7 @@ Page {
         if (liveAppId !== "")
             keptAppId = liveAppId
         loadDetails()
+        Usage.setWatching(page, visible)
         Qt.callLater(ensureFocus)
     }
     onHasUpdateChanged: loadDetails()      // an update just finished: its permissions are the app's now
@@ -446,6 +461,8 @@ Page {
             buttons.push(secondaryButtons.itemAt(i))
         if (buttons.length > 0)
             rows.push(buttons)
+        if (activityStop)
+            rows.push([activitySection.block])
         if (permsListed)
             rows.push([permsBlock])
         for (let i = 0; i < factRepeater.count; i += 2)
@@ -471,7 +488,7 @@ Page {
         rows[0][0].focus = true
     }
 
-    readonly property string stopKey: primaryKind + "#" + secondaryKeys + "#" + factKeys + "#" + permsListed + "#" + uninstallShown
+    readonly property string stopKey: primaryKind + "#" + secondaryKeys + "#" + factKeys + "#" + activityStop + "#" + permsListed + "#" + uninstallShown
     onStopKeyChanged: Qt.callLater(ensureFocus)
 
     function moveFocus(dx, dy) {
@@ -508,10 +525,14 @@ Page {
     // The column follows the focus once the player has moved it: the focus the page starts with (the first fact
     // of a Steam game) leaves the header in view.
     property bool moved: false
-    readonly property real offset: scrollTo === header ? 0
+    // The Your activity block is on the first screen, but the Page frame can leave its bottom edge and ring past
+    // the viewport's clip (RUY-532): while it has the focus the column moves up by the overflow only.
+    readonly property real activityOverflow: activitySection.block.activeFocus
+        ? Math.max(0, activitySection.y + activitySection.height + (Theme.focusRingOffset + Theme.focusRingWidth) * u - viewport.height) : 0
+    readonly property real offset: scrollTo === header ? activityOverflow
         : Math.max(0, Math.min(scrollTo.y, column.height - viewport.height))
 
-    hints: onFactStop ? backOnlyHints : [
+    hints: activitySection.block.activeFocus ? activitySection.block.hints : onFactStop ? backOnlyHints : [
         { action: "accept", text: qsTr("Select") },
         { action: "back", text: qsTr("Back") }
     ]
@@ -800,6 +821,19 @@ Page {
                     appName: page.title
                     picture: page.app.hero || (page.item.art ? (page.item.art.hero || page.item.art.tile || "") : "")
                 }
+            }
+
+            // ---- Your activity ----
+            GameActivity {
+                id: activitySection
+                objectName: "detailActivitySection"
+                visible: page.activityShown
+                u: page.u
+                game: page.ledger
+                ready: Usage.ready
+                isApp: page.isApp
+                onOpenRequested: page.openRequested("activityGame", { appId: page.activityKey })
+                block.onActiveFocusChanged: if (block.activeFocus) page.stopFocused(header, false)
             }
 
             // ---- This app can ----

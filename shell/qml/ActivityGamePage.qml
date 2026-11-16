@@ -31,14 +31,7 @@ Page {
 
     hints: body.hints
 
-    function dayText(unix) {
-        if (!unix)
-            return "-"
-        const iso = TimeZone.formatIsoDate(unix * 1000)
-        const ago = Usage.daysAgo(iso)
-        return ago < 0 || ago > 6 ? Qt.locale().toString(new Date(iso + "T12:00:00"), "d MMM yyyy")
-                                  : DurationText.dayWord(ago, iso)
-    }
+    function dayText(unix) { return DurationText.day(unix) }
 
     // The date of bar i of the 30-day strip (the last bar is today).
     function stripDate(i) {
