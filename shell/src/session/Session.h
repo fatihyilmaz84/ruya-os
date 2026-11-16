@@ -35,6 +35,9 @@ public:
     // Results arrive with launchFinished / stopFinished; the app itself with appStarted.
     Q_INVOKABLE void launch(const QString &appId, const QString &profile);
     Q_INVOKABLE void stop(const QString &instance);
+    // Force quit (RUY-736, the closing screen): ends the whole run at once. The answer comes with
+    // killFinished, the end with appExited (reason "killed").
+    Q_INVOKABLE void kill(const QString &instance);
     // The Ruya Hub pauses the game (T-457): results with freezeFinished / thawFinished, the record's
     // `frozen` follows frozenChanged.
     Q_INVOKABLE void freeze(const QString &instance);
@@ -55,11 +58,16 @@ public:
     Q_INVOKABLE void mockDelayPidAnswers(int ms);
     // Stop ends the app after `ms` from now on (a negative number: the default, 0 again after mockReset), T-458.
     Q_INVOKABLE void mockStopDelay(int ms);
-    // Stop reports AppExited "killed" but leaves the record listed, from now on (T-458).
+    // Stop reports AppExited "killed" but leaves the record listed, from now on (T-458); so does Kill.
     Q_INVOKABLE void mockStubbornStop(bool stubborn);
+    // A game that does not close (RUY-736): Stop never ends it by itself, only Kill or the service's
+    // backstop (30 s after the Stop, AppExited "killed"), from now on (false again after mockReset).
+    Q_INVOKABLE void mockIgnoreStop(bool ignore);
+    // Kill answers `status` and does nothing (RUY-736); "" is the normal answer again (and after mockReset).
+    Q_INVOKABLE void mockKillAnswer(const QString &status);
     // The process id the mock gives a launched instance's window client (0 when unknown), T-459.
     Q_INVOKABLE int mockPidOf(const QString &instance) const;
-    // "freeze <instance>", "thaw <instance>", "stop <instance>" in the order they were asked.
+    // "freeze <instance>", "thaw <instance>", "stop <instance>", "kill <instance>" in the order they were asked.
     Q_INVOKABLE QStringList mockCalls() const;
 
 signals:
@@ -67,6 +75,7 @@ signals:
     // status: see api/dbus/org.ruyaos.Session1.xml; `instance` is set on "ok" only.
     void launchFinished(const QString &appId, const QString &profile, const QString &status, const QString &instance);
     void stopFinished(const QString &instance, const QString &status);
+    void killFinished(const QString &instance, const QString &status);
     void freezeFinished(const QString &instance, const QString &status);
     void thawFinished(const QString &instance, const QString &status);
     void frozenChanged(const QString &instance, bool frozen);

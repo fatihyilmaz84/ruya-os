@@ -14,9 +14,11 @@ use crate::spawner::{
     with_pulse_server, AdoptLister, Listing, Spawner, UnitEvent,
 };
 
-/// After `Stop`, the app has this long to quit before it is killed. It counts from the stop
-/// itself, after the thaw of a frozen app (which can take up to two bounded `systemctl` calls).
-pub const STOP_GRACE: Duration = Duration::from_secs(5);
+/// After `Stop`, the app has this long to quit before it is killed: the backstop (RUY-736). It
+/// counts from the stop itself, after the thaw of a frozen app (which can take up to two bounded
+/// `systemctl` calls). Long, so a game that saves on quit gets its time; a player who does not want
+/// to wait asks for `kill` (the closing screen's Force quit after 5 s).
+pub const STOP_GRACE: Duration = Duration::from_secs(30);
 
 /// A frozen app's memory is moved out to swap once it has been frozen this long (T-466): never
 /// at the Freeze itself, which is when the Hub opens and must stay instant.
@@ -170,6 +172,8 @@ struct Instance {
     reached_running: bool,
     stop_asked: Option<Instant>,
     kill_sent: bool,
+    /// `kill` was asked (RUY-736): its end is "killed", whatever signal the unit died of.
+    kill_asked: bool,
     /// An adopted unit of a profile that no longer exists: being stopped, never listed or
     /// reported (the shell never heard of it).
     hidden: bool,
@@ -258,11 +262,12 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             return (Status::AlreadyRunning, String::new());
         }
         if self.instances.iter().any(|i| same(&i)) {
-            // The old unit was told to stop and is not gone yet: its name is still taken, and the
-            // app is not "already running" either. The adapter waits for it (`is_stopping`)
-            // before it gets here; this is the answer when the wait ran out.
+            // The old unit was told to stop and is not gone yet: its name is still taken. The
+            // adapter waits for it (`is_stopping`) before it gets here; this is the answer when the
+            // wait ran out. With the 30 s backstop (RUY-736) a run may stay that long: it is still
+            // there, so "already-running" (the shell says the game is still closing).
             eprintln!("ruya-session: {app_id} is still ending, not launched");
-            return (Status::Failed, String::new());
+            return (Status::AlreadyRunning, String::new());
         }
         if !self.spawner.is_installed(app_id) {
             return (Status::UnknownApp, String::new());
@@ -288,6 +293,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                     reached_running: false,
                     stop_asked: None,
                     kill_sent: false,
+                    kill_asked: false,
                     hidden: false,
                     frozen: false,
                     frozen_at: None,
@@ -355,6 +361,44 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         };
         self.sync_audio(&user, false);
         status
+    }
+
+    /// Ends the app at once (RUY-736, the closing screen's Force quit): SIGKILL to the unit, if it
+    /// is still loaded, and every scope of the app (`Spawner::kill`). A starting, running, stopping
+    /// or frozen app of the signed-in profile (`active`; `None` in development mode, no check); a
+    /// frozen one is not thawed (the kill ends it anyway). The instance is then stopping and its end
+    /// is "killed". `tick` sends no second kill for it; a second `kill` does. `clock` gives the
+    /// start of the stop for an app that was not stopping yet.
+    pub fn kill(&mut self, instance: &str, active: Option<&str>, clock: impl Clock) -> Status {
+        let Some(inst) = self
+            .instances
+            .iter_mut()
+            .find(|i| i.unit == instance && !i.hidden)
+        else {
+            return Status::UnknownInstance;
+        };
+        if active.is_some_and(|a| a.is_empty() || a != inst.profile) {
+            return Status::NotAllowed;
+        }
+        if let Err(err) = self.spawner.kill(&inst.unit) {
+            eprintln!("ruya-session: killing {} failed: {err}", inst.unit);
+            return Status::Failed;
+        }
+        eprintln!("ruya-session: killing {} (Kill)", inst.unit);
+        if inst.reclaim == Reclaim::Sent {
+            self.spawner.cancel_reclaim(&inst.unit);
+            inst.reclaim = Reclaim::Skipped;
+        }
+        inst.kill_asked = true;
+        inst.kill_sent = true;
+        let was_stopping = inst.state == State::Stopping;
+        inst.state = State::Stopping;
+        inst.stop_asked.get_or_insert_with(|| clock.now());
+        if !was_stopping {
+            let user = inst.user.clone();
+            self.sync_audio(&user, false);
+        }
+        Status::Ok
     }
 
     /// The running, listed instance named `instance`, checked for Freeze and Thaw: it must be
@@ -589,6 +633,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 reached_running: true,
                 stop_asked: None,
                 kill_sent: false,
+                kill_asked: false,
                 hidden: orphan,
                 // Left frozen by a Freeze before the restart: listed as frozen, so a Stop thaws it
                 // first and a Thaw announces the change (T-457).
@@ -820,6 +865,11 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
 
 /// The exit code for the signal and the reason, from the state the instance was in.
 fn exit_reason(inst: &Instance, code: i32, signaled: bool) -> (i32, ExitReason) {
+    if inst.kill_asked {
+        // Force quit (RUY-736): the player ended it, whatever the unit died of (its front end may
+        // have ended on the stop's SIGTERM while the scope held the run).
+        return (code, ExitReason::Killed);
+    }
     if inst.state == State::Stopping {
         // Asked to stop: the stop itself is a SIGTERM, so dying of a signal is still a quit.
         // Only a death by the kill of `tick` (SIGKILL) is "killed": the unit's end can be held for
@@ -2353,15 +2403,19 @@ mod tests {
     }
 
     #[test]
-    fn launch_after_stop_does_not_answer_already_running() {
+    fn launch_while_a_stop_has_not_ended_answers_already_running() {
         let mut s = session();
         let unit = running(&mut s);
         // Running: a second launch is already-running.
         assert_eq!(s.launch(APP, "p1", 101).0, Status::AlreadyRunning);
         assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
         assert!(s.is_stopping(APP, "p1"));
-        // The old unit is still around: not "already running", and no second unit on its name.
-        assert_eq!(s.launch(APP, "p1", 102), (Status::Failed, String::new()));
+        // The old unit is still around (the 30 s backstop, RUY-736): still "already-running" once
+        // the adapter's wait has run out, and no second unit on its name.
+        assert_eq!(
+            s.launch(APP, "p1", 102),
+            (Status::AlreadyRunning, String::new())
+        );
         assert_eq!(
             s.spawner
                 .calls()
@@ -2376,5 +2430,131 @@ mod tests {
         assert_eq!(s.launch(APP, "p1", 103).0, Status::Ok);
         // Another profile was never in the way.
         assert_eq!(s.launch(APP, "p2", 104).0, Status::Ok);
+    }
+
+    // ---- Kill (RUY-736, the closing screen's Force quit) and the 30 s backstop ---------------
+
+    fn kills(s: &Session<FakeSpawner, ProfileSnapshot>) -> usize {
+        s.spawner
+            .calls()
+            .iter()
+            .filter(|c| c.starts_with("kill"))
+            .count()
+    }
+
+    #[test]
+    fn the_backstop_of_a_stop_is_thirty_seconds() {
+        assert_eq!(STOP_GRACE, Duration::from_secs(30));
+        let mut s = session();
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        s.stop(&unit, t0);
+        // The old 5 s grace kills nothing any more: a game that saves on quit has its time.
+        s.tick(t0 + Duration::from_secs(5));
+        s.tick(t0 + Duration::from_millis(29_999));
+        assert_eq!(kills(&s), 0);
+        s.tick(t0 + Duration::from_secs(30));
+        assert_eq!(kills(&s), 1, "the backstop still kills");
+        assert_eq!(reason(s.on_event(exited(&unit, 9, true))), (9, "killed"));
+    }
+
+    #[test]
+    fn kill_after_a_stop_ends_the_app_before_the_grace() {
+        let mut s = session();
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        assert_eq!(s.stop(&unit, t0), Status::Ok);
+        s.tick(t0 + Duration::from_secs(5));
+        assert_eq!(kills(&s), 0);
+        assert_eq!(
+            s.kill(&unit, Some("p1"), t0 + Duration::from_secs(5)),
+            Status::Ok
+        );
+        assert_eq!(s.spawner.calls().last(), Some(&format!("kill {unit}")));
+        // The backstop sends no second kill for it.
+        s.tick(t0 + STOP_GRACE);
+        assert_eq!(kills(&s), 1);
+        assert_eq!(s.list()[0].state, State::Stopping);
+        assert_eq!(reason(s.on_event(exited(&unit, 9, true))), (9, "killed"));
+        assert!(s.list().is_empty());
+    }
+
+    #[test]
+    fn kill_of_a_run_whose_unit_ended_on_the_sigterm_is_still_killed() {
+        // The Dell (2026-11-15): the unit's front end died of the stop's SIGTERM, the run was held
+        // by its live scope (the core has not seen the end yet). Kill still reaches the run, and
+        // its end, with the unit's own status 15, is "killed": the player ended it.
+        let mut s = session();
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        s.stop(&unit, t0);
+        assert_eq!(s.kill(&unit, Some("p1"), t0), Status::Ok);
+        assert_eq!(kills(&s), 1);
+        assert_eq!(reason(s.on_event(exited(&unit, 15, true))), (15, "killed"));
+    }
+
+    #[test]
+    fn kill_without_a_stop_ends_a_running_or_frozen_app() {
+        let mut s = session();
+        let unit = running(&mut s);
+        assert_eq!(s.freeze(&unit, Some("p1"), Instant::now()), Status::Ok);
+        let calls = s.spawner.calls().len();
+        assert_eq!(s.kill(&unit, Some("p1"), Instant::now()), Status::Ok);
+        // Not thawed first: the kill ends a frozen process anyway.
+        assert_eq!(
+            s.spawner.calls()[calls..],
+            [format!("kill {unit}")],
+            "only the kill"
+        );
+        assert_eq!(s.list()[0].state, State::Stopping);
+        // A second Kill sends it again.
+        assert_eq!(s.kill(&unit, Some("p1"), Instant::now()), Status::Ok);
+        assert_eq!(kills(&s), 2);
+        assert_eq!(reason(s.on_event(exited(&unit, 9, true))), (9, "killed"));
+    }
+
+    #[test]
+    fn kill_of_an_unknown_instance() {
+        let mut s = session();
+        running(&mut s);
+        for name in ["nope.service", ""] {
+            assert_eq!(
+                s.kill(name, Some("p1"), Instant::now()),
+                Status::UnknownInstance,
+                "{name:?}"
+            );
+        }
+        assert_eq!(kills(&s), 0);
+    }
+
+    #[test]
+    fn kill_of_another_profiles_app_is_not_allowed() {
+        let mut s = session();
+        let unit = running(&mut s);
+        // Another profile is signed in, or nobody is: refused, nothing is killed.
+        for active in ["p2", ""] {
+            assert_eq!(
+                s.kill(&unit, Some(active), Instant::now()),
+                Status::NotAllowed,
+                "{active:?}"
+            );
+        }
+        assert_eq!(kills(&s), 0);
+        assert_eq!(s.list()[0].state, State::Running, "untouched");
+        // Development mode (no profile check) kills it.
+        assert_eq!(s.kill(&unit, None, Instant::now()), Status::Ok);
+        assert_eq!(kills(&s), 1);
+    }
+
+    #[test]
+    fn a_kill_the_os_refuses_is_failed_and_changes_nothing() {
+        let spawner = FakeSpawner::new().with_app(APP).failing_kill();
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, vec![]);
+        let unit = running(&mut s);
+        assert_eq!(s.kill(&unit, Some("p1"), Instant::now()), Status::Failed);
+        assert_eq!(s.list()[0].state, State::Running);
+        // Its end is what it would have been without the Kill.
+        assert_eq!(reason(s.on_event(exited(&unit, 0, false))), (0, "quit"));
     }
 }

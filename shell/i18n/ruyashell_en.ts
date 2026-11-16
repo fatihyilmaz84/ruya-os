@@ -1194,7 +1194,7 @@ This can&apos;t be undone.</translation>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+259"/>
+        <location line="+263"/>
         <location line="+77"/>
         <source>Buttons in games</source>
         <translation>Buttons in games</translation>
@@ -1371,7 +1371,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+55"/>
+        <location filename="../qml/ControllerPage.qml" line="+56"/>
         <source>Works</source>
         <translation>Works</translation>
     </message>
@@ -2158,22 +2158,22 @@ This can&apos;t be undone.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+482"/>
-        <location line="+182"/>
+        <location filename="../qml/GameControls.qml" line="+495"/>
+        <location line="+187"/>
         <source>Could not save to the USB drive</source>
         <translation>Could not save to the USB drive</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-187"/>
         <location line="+6"/>
         <location line="+2"/>
-        <location line="+174"/>
+        <location line="+179"/>
         <location line="+36"/>
         <source>Try again.</source>
         <translation>Try again.</translation>
     </message>
     <message>
-        <location line="-210"/>
+        <location line="-215"/>
         <source>Could not save the change</source>
         <translation>Could not save the change</translation>
     </message>
@@ -2183,7 +2183,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not save the change for %1</translation>
     </message>
     <message>
-        <location line="-254"/>
+        <location line="-260"/>
         <source>Games see %1 as A and %2 as B, unlike menus.</source>
         <translation>Games see %1 as A and %2 as B, unlike menus.</translation>
     </message>
@@ -2193,7 +2193,7 @@ This can&apos;t be undone.</translation>
         <translation>Games see %1 as A and %2 as B.</translation>
     </message>
     <message>
-        <location line="+428"/>
+        <location line="+439"/>
         <source>Saved to the USB drive</source>
         <translation>Saved to the USB drive</translation>
     </message>
@@ -2528,13 +2528,30 @@ This can&apos;t be undone.</translation>
 <context>
     <name>LaunchSplash</name>
     <message>
-        <location filename="../qml/LaunchSplash.qml" line="+30"/>
-        <location line="+166"/>
+        <location filename="../qml/LaunchSplash.qml" line="+39"/>
+        <location line="+195"/>
+        <source>Force quit</source>
+        <translation>Force quit</translation>
+    </message>
+    <message>
+        <location line="-195"/>
+        <source>Wait at Home</source>
+        <translation>Wait at Home</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+186"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
     <message>
-        <location line="-136"/>
+        <location line="-148"/>
+        <location line="+102"/>
+        <source>%1 is not responding</source>
+        <translation>%1 is not responding</translation>
+    </message>
+    <message>
+        <location line="-101"/>
         <source>Still starting %1</source>
         <translation>Still starting %1</translation>
     </message>
@@ -2549,7 +2566,7 @@ This can&apos;t be undone.</translation>
         <translation>Closing %1</translation>
     </message>
     <message>
-        <location line="+101"/>
+        <location line="+102"/>
         <source>Closing %1…</source>
         <translation>Closing %1…</translation>
     </message>
@@ -2562,6 +2579,11 @@ This can&apos;t be undone.</translation>
         <location line="+0"/>
         <source>Starting…</source>
         <translation>Starting…</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Force quit loses unsaved progress.</source>
+        <translation>Force quit loses unsaved progress.</translation>
     </message>
 </context>
 <context>
@@ -2635,7 +2657,7 @@ This can&apos;t be undone.</translation>
         <translation>Profile name</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+10"/>
         <source>Protect with a PIN</source>
         <translation>Protect with a PIN</translation>
     </message>
@@ -4547,7 +4569,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+701"/>
+        <location filename="../qml/Shell.qml" line="+703"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -4616,7 +4638,17 @@ This can&apos;t be undone.</translation>
         <translation>Could not close the running app.</translation>
     </message>
     <message>
-        <location line="+67"/>
+        <location line="+92"/>
+        <source>Could not force quit %1.</source>
+        <translation>Could not force quit %1.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Could not force quit the game.</source>
+        <translation>Could not force quit the game.</translation>
+    </message>
+    <message>
+        <location line="+15"/>
         <source>%1 did not close. Restart the console if it keeps running.</source>
         <translation>%1 did not close. Restart the console if it keeps running.</translation>
     </message>
@@ -4732,17 +4764,17 @@ This can&apos;t be undone.</translation>
         <translation>Options</translation>
     </message>
     <message>
-        <location line="+183"/>
+        <location line="+186"/>
         <source>The chosen sound theme can&apos;t be used. The standard one plays instead.</source>
         <translation>The chosen sound theme can&apos;t be used. The standard one plays instead.</translation>
     </message>
     <message>
-        <location line="-220"/>
+        <location line="-223"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1845"/>
+        <location line="-1886"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -4773,13 +4805,13 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1593"/>
+        <location line="+1634"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
     </message>
     <message>
-        <location line="+163"/>
+        <location line="+166"/>
         <source>mock services</source>
         <translation>mock services</translation>
     </message>

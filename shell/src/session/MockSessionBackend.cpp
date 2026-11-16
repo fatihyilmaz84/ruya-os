@@ -59,6 +59,8 @@ void MockSessionBackend::reset()
     m_pidDelayMs = 0;
     m_stopDelayMs = -1;
     m_stubbornStop = false;
+    m_ignoreStop = false;
+    m_killAnswer.clear();
     m_lastActive = m_activeProfile ? m_activeProfile().value_or(QString()) : QString();
     emit runningListed(m_running);
 }
@@ -145,6 +147,11 @@ void MockSessionBackend::stop(const QString &instance)
     }
     m_calls.append(QStringLiteral("stop ") + instance);
     m_running[i].state = QStringLiteral("stopping");
+    if (m_ignoreStop) {
+        // The game does not close: the service's backstop kills it (RUY-736), unless Kill came first.
+        QTimer::singleShot(BackstopMs, this, [this, instance] { exitApp(instance, 9, QStringLiteral("killed")); });
+        return;
+    }
     const int delay = m_stopDelayMs >= 0 ? m_stopDelayMs : m_startMs / 3;
     QTimer::singleShot(delay, this, [this, instance] {
         if (!m_stubbornStop) {
@@ -155,6 +162,35 @@ void MockSessionBackend::stop(const QString &instance)
         const int j = indexOf(instance);
         if (j >= 0)
             emit appExited(instance, m_running.at(j).appId, 137, QStringLiteral("killed"));
+    });
+}
+
+void MockSessionBackend::kill(const QString &instance)
+{
+    const int i = indexOf(instance);
+    QString status = QStringLiteral("ok");
+    if (!m_killAnswer.isEmpty())
+        status = m_killAnswer;
+    else if (i < 0)
+        status = QStringLiteral("unknown-instance");
+    else if (m_activeProfile) {
+        const std::optional<QString> active = m_activeProfile();
+        if (active && (active->isEmpty() || *active != m_running.at(i).profile))
+            status = QStringLiteral("not-allowed");
+    }
+    QTimer::singleShot(0, this, [this, instance, status] { emit killFinished(instance, status); });
+    if (status != QLatin1String("ok") || !m_killAnswer.isEmpty())
+        return;                         // refused, or the forced answer: nothing is killed
+    m_calls.append(QStringLiteral("kill ") + instance);
+    m_running[i].state = QStringLiteral("stopping");
+    QTimer::singleShot(0, this, [this, instance] {
+        if (!m_stubbornStop) {
+            exitApp(instance, 9, QStringLiteral("killed"));
+            return;
+        }
+        const int j = indexOf(instance);   // killed, and still listed (the killCheckMs warning, T-458)
+        if (j >= 0)
+            emit appExited(instance, m_running.at(j).appId, 9, QStringLiteral("killed"));
     });
 }
 

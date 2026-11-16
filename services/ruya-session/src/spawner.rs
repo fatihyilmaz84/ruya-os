@@ -361,6 +361,31 @@ pub fn control_command(
     Ok(args)
 }
 
+/// The verb of the kill (the backstop of a `Stop`, and `Kill`, RUY-736).
+pub const KILL_VERB: &[&str] = &["kill", "--signal=SIGKILL", "--kill-whom=all"];
+
+/// The `systemctl` argument list of the kill: `control_command` with `KILL_VERB` on the unit and
+/// every scope of the app. When the unit has ended already (`unit_ended`: its end is held for a
+/// live scope, `RunScopes::unit_ended`) and scopes are listed, the unit is left out: systemctl
+/// answers a unit that is not loaded with "Failed to kill unit ...: not loaded" and exits non-zero
+/// (the Dell, 2026-11-15: the kill reached the scope, but every kill of such a run read as a
+/// failure in the journal). With no scope listed the unit is named anyway (a failed listing must
+/// not leave the kill with no target). Pure; user, app and every scope are validated again.
+pub fn kill_command(
+    user: &str,
+    unit: &str,
+    app_id: &str,
+    scopes: &[String],
+    unit_ended: bool,
+) -> Result<Vec<String>, String> {
+    let mut args = control_command(user, KILL_VERB, unit, app_id, scopes)?;
+    if unit_ended && !scopes.is_empty() {
+        let at = args.len() - scopes.len() - 1;
+        args.remove(at);
+    }
+    Ok(args)
+}
+
 /// The `systemctl` argument lists that clear what is left of a run of `app_id` in `user`'s
 /// manager once its end is handed on (`scope::Sweep`, T-435): stop the app's scopes that are
 /// still loaded (a second scope the Flatpak portal made, such as an Electron app's sandboxed
@@ -1357,6 +1382,7 @@ struct FakeState {
     fail_start: bool,
     fail_sound: bool,
     fail_freeze: bool,
+    fail_kill: bool,
     calls: Vec<String>,
     /// `app_audio` requests, as "user frozen=a,b running=a,b,c" (T-466).
     audio: Vec<String>,
@@ -1496,6 +1522,12 @@ impl FakeSpawner {
         self
     }
 
+    /// `kill` fails (RUY-736).
+    pub fn failing_kill(self) -> Self {
+        self.lock().fail_kill = true;
+        self
+    }
+
     /// Swap is active (T-466).
     pub fn with_swap(self) -> Self {
         self.lock().swap = true;
@@ -1593,7 +1625,12 @@ impl Spawner for FakeSpawner {
     }
 
     fn kill(&self, unit: &str) -> Result<(), String> {
-        self.lock().calls.push(format!("kill {unit}"));
+        let mut state = self.lock();
+        state.calls.push(format!("kill {unit}"));
+        if state.fail_kill {
+            return Err("fake kill failure".to_owned());
+        }
+        drop(state);
         self.emit(UnitEvent::Exited {
             unit: unit.to_owned(),
             code: 9,

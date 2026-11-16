@@ -116,6 +116,23 @@ void DBusSessionBackend::stop(const QString &instance)
     });
 }
 
+void DBusSessionBackend::kill(const QString &instance)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("Kill"));
+    msg << instance;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, instance](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString> reply = *w;
+        if (!reply.isValid()) {
+            qWarning("ruya-shell: Session1 Kill %s failed: %s", qPrintable(instance), qPrintable(reply.error().message()));
+            emit killFinished(instance, QStringLiteral("failed"));
+            return;
+        }
+        emit killFinished(instance, reply.argumentAt<0>());
+    });
+}
+
 void DBusSessionBackend::freeze(const QString &instance)
 {
     freezer(QStringLiteral("Freeze"), instance);

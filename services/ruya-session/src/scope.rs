@@ -149,6 +149,12 @@ impl RunScopes {
             .and_then(|r| r.scope.clone())
     }
 
+    /// Has the run's unit ended while its scope still holds the run (its end is held)? Then the
+    /// kill names the scopes only (`spawner::kill_command`, RUY-736).
+    pub fn unit_ended(&self, unit: &str) -> bool {
+        self.runs.get(unit).is_some_and(|r| r.held.is_some())
+    }
+
     /// CPU time of the run so far, in nanoseconds: the unit's and the scope's together. The
     /// scope's last reading stays after it has gone. `None` when nothing was readable.
     pub fn cpu_nsec(&self, unit: &str) -> Option<u64> {
@@ -173,7 +179,8 @@ impl RunScopes {
         if run.attached() {
             run.held.get_or_insert(event);
             // The scope is looked at every second from now on, not every `WATCH_EVERY`: a `Stop`
-            // that needed the kill must end inside `LAUNCH_WAIT`, or the launch after it fails.
+            // that needed the kill (a Force quit) must end inside `LAUNCH_WAIT`, or the launch
+            // after it answers "already-running".
             run.next_at = run.next_at.min(now + ATTACH_EVERY);
             return None;
         }
@@ -768,6 +775,47 @@ mod tests {
         assert!(control_command("root", &["stop"], UNIT, APP, &[]).is_err());
         let other = ["app-flatpak-org.other.Game-1.scope".to_owned()];
         assert!(control_command(USER, &["stop"], UNIT, APP, &other).is_err());
+    }
+
+    #[test]
+    fn the_kill_of_a_run_whose_unit_ended_names_only_its_scopes() {
+        use crate::spawner::{kill_command, KILL_VERB};
+        // The Dell (2026-11-15, ACBR and SeriousSamClassic): the unit died of the stop's SIGTERM
+        // and its end was held for the live scope; the kill named the unit too and systemctl
+        // answered "Unit ... not loaded" (exit 1), so every such kill read as a failure. RUY-736:
+        // while the end is held, the kill names the scopes alone.
+        let now = t0();
+        let mut scopes = RunScopes::new();
+        scopes.begin(UNIT, USER, APP, now);
+        let mut mgr = FakeManager::new(vec![unit_show(1000, None), scope_show(SCOPE, 1001, None)]);
+        round(&mut scopes, &mut mgr, now);
+        assert!(!scopes.unit_ended(UNIT), "the unit still runs");
+        let listed = [SCOPE.to_owned()];
+        let live = kill_command(USER, UNIT, APP, &listed, scopes.unit_ended(UNIT)).expect("kill");
+        assert_eq!(
+            &live[live.len() - 2..],
+            [UNIT, SCOPE],
+            "both while the unit lives"
+        );
+        assert!(live.windows(3).any(|w| w == KILL_VERB));
+        // The unit ends on the SIGTERM; the scope lives on and holds the run.
+        assert_eq!(scopes.on_unit_event(exited(143), now), None);
+        assert!(scopes.unit_ended(UNIT));
+        let held = kill_command(USER, UNIT, APP, &listed, scopes.unit_ended(UNIT)).expect("kill");
+        assert!(
+            !held.iter().any(|a| a == UNIT),
+            "the gone unit is not named"
+        );
+        assert_eq!(held.last().map(String::as_str), Some(SCOPE));
+        assert!(held.windows(3).any(|w| w == KILL_VERB));
+        // With no scope listed (a listing that failed) the unit is named anyway: never no target.
+        let bare = kill_command(USER, UNIT, APP, &[], true).expect("kill");
+        assert_eq!(bare.last().map(String::as_str), Some(UNIT));
+        // A run that is not followed (unknown unit) has not "ended".
+        assert!(!scopes.unit_ended("ruya-app-ruya-p1-org.x.Y.service"));
+        // Nothing foreign gets through.
+        let other = ["app-flatpak-org.other.Game-1.scope".to_owned()];
+        assert!(kill_command(USER, UNIT, APP, &other, true).is_err());
     }
 
     #[test]

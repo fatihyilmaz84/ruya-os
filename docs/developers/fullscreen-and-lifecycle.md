@@ -77,7 +77,7 @@ The freeze is the Linux cgroup freezer (`systemctl freeze` on the game's unit an
 3. **Do not resume gameplay by itself after a long gap.** Pause your own game on the gap (a pause menu, the way every console game does) and let the player press a button to continue. Do the same on a focus-loss event **if** your toolkit sends one: that is also the only signal you get when the setting is off or the freeze failed, where you keep running with no input under the Hub.
 4. **Re-check the clocks your game keeps.** Cooldowns, timeouts, "daily" resets and cut-scene timers that compare against the monotonic clock all see the gap. Wall-clock time (`CLOCK_REALTIME`) also advanced, as it does on any pause. A video or audio stream that follows a clock should seek or restart, not fast-forward to catch up.
 5. **Treat network connections as dropped.** Online games: after a gap, check the connection, reconnect and re-sync with the server before play continues; keep any "you were disconnected" screen short. Do not hold a lock or a lobby slot on the server that needs your replies in time. Offline games need nothing.
-6. **Save at safe points.** A frozen game cannot react to anything. Close game does thaw it first and gives it the 5 seconds of [Stopping](#stopping-quit-crashed-killed), but a power cut, the out-of-memory killer or a crash while you are frozen give you no chance. Write the player's progress at checkpoints ([Saves and data](saves-and-data.md)) instead of counting on being told.
+6. **Save at safe points.** A frozen game cannot react to anything. Close game does thaw it first and gives it the time of [Stopping](#stopping-quit-crashed-killed) (up to 30 seconds, less if the player chooses Force quit), but a power cut, the out-of-memory killer or a crash while you are frozen give you no chance. Write the player's progress at checkpoints ([Saves and data](saves-and-data.md)) instead of counting on being told.
 7. **Do not try to refuse or prevent the pause.** There is no call to say "do not freeze me" (the player's setting is the only switch), and the Hub is the player's way out.
 
 ```python
@@ -105,15 +105,17 @@ When the player chooses "Close game" in Ruya Hub, or the console must stop it, t
 
 1. if your game is frozen (the Hub froze it, or it sat frozen behind Home), **thaws it first**, so that it can handle the signal;
 2. stops the unit and the scope with `systemctl --user stop`: **SIGTERM** to every process of your app;
-3. waits **5 seconds** (`STOP_GRACE`, counted from the moment the `SIGTERM` is sent, after the thaw (T-466), so a slow thaw of a large game does not shorten the time you get);
+3. waits up to **30 seconds** (`STOP_GRACE`, RUY-736; it was 5 s before; counted from the moment the `SIGTERM` is sent, after the thaw (T-466), so a slow thaw of a large game does not shorten the time you get);
 4. if anything is still running, sends **SIGKILL** to the whole group.
+
+**Force quit (RUY-736).** The player does not have to wait the 30 seconds: while your game is closing the console shows the closing screen, and if your game has not ended **5 seconds** after the `SIGTERM` the screen offers **Force quit**. If the player takes it, the shell calls `Session1.Kill(instance)` and your game gets **SIGKILL** at once (every process, as in step 4), with no further chance to save; `reason` is then `killed`. So treat the first 5 seconds as the time you can count on: save and exit well within them. The player may also choose Wait at Home, which leaves you the rest of the 30 seconds.
 
 Then it announces `AppExited(instance, app_id, exit_code, reason)` and the shell updates. The `reason`:
 
 | reason | When | What the player sees |
 |---|---|---|
 | `quit` | after `Stop`, the app ended within the grace (by itself with any exit code, or by the SIGTERM); or, without a `Stop`, exit status 0 | nothing |
-| `killed` | the 5 seconds passed and the console had to kill it; or something outside killed it (a signal, the out-of-memory killer) | nothing in v1, an unsaved game may be lost |
+| `killed` | the player chose Force quit, or the 30 seconds passed and the console had to kill it; or something outside killed it (a signal, the out-of-memory killer) | nothing in v1, an unsaved game may be lost |
 | `crashed` | it exited with a non-zero status without being stopped | the toast "<name> stopped unexpectedly" |
 | `launch-failed` | it never got as far as running (for instance its Flatpak runtime is missing; a game that starts and then fails exits non-zero and is `crashed`) | the same toast |
 

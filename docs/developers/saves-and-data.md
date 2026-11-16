@@ -153,15 +153,15 @@ int save_atomic(const char *path, const void *data, size_t len)
 
 The format the sample writes is a text file with a version line and a CRC-32 on the last line (`game.c`: `game_serialise`, `game_parse`, `game_load`), so a half-written or damaged file is recognised and the `.bak` is used.
 
-## Stopping: you have five seconds
+## Stopping: count on five seconds
 
 When the player chooses Close game in Ruya Hub, or the console has to stop it (time limits: planned, T-211), the console asks your app to stop:
 
 1. It sends `SIGTERM` to every process of your app (the unit and the sandbox's scope).
-2. It waits **5 seconds**.
+2. It waits up to **30 seconds** (RUY-736; it was 5 seconds). After **5 seconds** the closing screen offers the player **Force quit**, which sends `SIGKILL` at once.
 3. It sends `SIGKILL` (no chance to save).
 
-Handle `SIGTERM` like "quit now": write the pending save (atomically, as above), then exit. Most frameworks turn it into a normal quit event (`SDL_EVENT_QUIT`, `QCoreApplication::aboutToQuit`, Godot's `NOTIFICATION_WM_CLOSE_REQUEST` or `get_tree().quit()`); check that yours does. After a stop the console reports the app as having quit, whatever its exit status; only an app that is still running after the 5 seconds is reported as killed (and may lose an unfinished save). Exit status `0` is still the right thing to return.
+Handle `SIGTERM` like "quit now": write the pending save (atomically, as above), then exit. Most frameworks turn it into a normal quit event (`SDL_EVENT_QUIT`, `QCoreApplication::aboutToQuit`, Godot's `NOTIFICATION_WM_CLOSE_REQUEST` or `get_tree().quit()`); check that yours does. After a stop the console reports the app as having quit, whatever its exit status; only an app that is still running after the 30 seconds, or that the player force quits, is reported as killed (and may lose an unfinished save). Exit status `0` is still the right thing to return.
 
 Python:
 

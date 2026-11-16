@@ -5,7 +5,11 @@
 # creates a profile through Profiles1 if there is none, and drives Launch / Stop over the system
 # bus as ruya-shell. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-session-check.sh scripts/vm-session-probe.qml root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-session-check.sh [check|restart|security|display|display-clean|clean]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-session-check.sh [check|restart|kill|security|display|display-clean|clean]
+# `kill` (RUY-736) runs a test app that ignores SIGTERM (it and a child it forks): Stop leaves it running,
+# Kill ends it within 2 s with AppExited "killed" (no "Failed to kill unit" line: the gone unit is not
+# named), Kill is refused while nobody is signed in, and without Kill the 30 s backstop ends it (about
+# 80 s in all). Like `restart` it needs a profile and installs the test apps itself.
 # `display` (T-164) checks the per-profile Wayland sockets and a profile's window in the app layer, and (T-376)
 # that no ruya-shell PipeWire output stream exists with that window in front;
 # it also needs vm-key-client.qml and vm-inject-key.py in /root (see the `display)` case).
@@ -42,6 +46,8 @@ sleeper_unit='org.ruyaos.Test\x2dSleeper'
 sleeper_glob='org.ruyaos.Test?x2dSleeper'
 sleeper_re='org[.]ruyaos[.]Test[\]x2dSleeper'
 crasher=org.ruyaos.TestCrasher
+# RUY-736: a game that does not close (it and its child ignore SIGTERM).
+stubborn=org.ruyaos.TestStubborn
 wclient=org.ruyaos.TestWaylandClient
 remote=ruyaos-session-test
 work=/var/lib/ruya-session-test
@@ -103,6 +109,7 @@ extra_scope() {
 }
 launch() { as_shell busctl --system call "$svc" "$path" "$ifc" Launch ss "$1" "$2"; }
 stop_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Stop s "$1"; }
+kill_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Kill s "$1"; }
 running() { as_shell busctl --system --json=short call "$svc" "$path" "$ifc" ListRunning; }
 freeze_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Freeze s "$1"; }
 thaw_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Thaw s "$1"; }
@@ -315,6 +322,16 @@ no_scopes_left() {
         || { bad "list-units of $1's manager failed, so no scope could be checked: $listed"; return 1; }
     if echo "$listed" | grep -q scope; then bad "$3"; else ok "$2"; fi
 }
+# --- judge_secs begin (test-vm-checks.sh sources these lines)
+# judge_secs <what> <measured seconds> <lo> <hi> (RUY-736): PASS when lo <= measured <= hi, else a FAIL
+# that names the window; a measurement that is not a number is a FAIL too.
+judge_secs() {
+    case "$2" in ''|*[!0-9]*) bad "$1: no time measured (got '$2')"; return 1;; esac
+    if [ "$2" -ge "$3" ] && [ "$2" -le "$4" ]; then ok "$1 after $2 s (window $3-$4 s)"; return 0; fi
+    bad "$1 after $2 s, outside the window $3-$4 s"
+    return 1
+}
+# --- judge_secs end
 # The unit name out of 'ss "ok" "ruya-app-..."'.
 unit_of() { sed -n 's/^ss "ok" "\(.*\)"$/\1/p'; }
 # Waits for a line of the signal log (an extended-regex pattern), up to $2 seconds; $3 is an optional label.
@@ -365,8 +382,11 @@ build_repo() {
     flatpak build-export --runtime "$work/repo" "$work/rt" stable >/dev/null 2>&1 || return 1
     # The sleeper burns a little CPU before it sleeps (RUY-23): the run's scope then has CPU to
     # read, which proves CPUUsageNSec works on a user scope (the journal's "scope gone, cpu N ms").
+    # The stubborn app (RUY-736) ignores SIGTERM, and so does the child it forks (an ignored signal stays
+    # ignored across fork and exec): a game that does not close.
     for spec in "$sleeper|i=0; while [ \$i -lt 50000 ]; do i=\$((i + 1)); done; exec sleep 3000" \
-                "$crasher|sleep 1; exit 3"; do
+                "$crasher|sleep 1; exit 3" \
+                "$stubborn|trap '' TERM; sleep 3005 & exec sleep 3006"; do
         id="${spec%%|*}"; body="${spec#*|}"
         mkdir -p "$work/$id/files/bin" "$work/$id/var"
         printf '#!/bin/sh\n%s\n' "$body" > "$work/$id/files/bin/run"; chmod 755 "$work/$id/files/bin/run"
@@ -536,7 +556,7 @@ restart)
     echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
     ls -Zd /var/lib/ruya-session /var/lib/ruya-session/usage 2>&1
     kill "$mon" 2>/dev/null
-    drop_test_apps "$wclient" "$sleeper" "$crasher" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
     rm -rf "$work"
     journalctl -u ruya-session -b --no-pager -p warning | tail -5
     ;;
@@ -586,7 +606,7 @@ display)
     out="$(probe_connect "$user" "/run/user/$uid/ruya-0")"; case "$out" in PermissionError*) ok "$user cannot reach the shell's own socket ruya-0";; *) bad "$user -> ruya-0: $out";; esac
 
     echo "--- the Wayland test app"
-    drop_test_apps "$wclient" "$sleeper" "$crasher" "$rt"
+    drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$rt"
     build_repo && ok "repository built" || { bad "cannot build the test repository"; exit 1; }
     flatpak remote-add --system --if-not-exists --no-gpg-verify "$remote" "file://$work/repo" || { bad "remote-add"; exit 1; }
     flatpak install --system -y --noninteractive "$remote" "$rt" "$wclient" >/dev/null 2>&1 \
@@ -689,6 +709,100 @@ for n in nodes:
     kill "$mon" 2>/dev/null
     echo "The window of $user stays open: take the VM screenshot now (vm-screenshot.ps1 profile-app), then run '$0 display-clean'."
     ;;
+kill)
+    echo "--- a profile and the test apps (RUY-736)"
+    pid="$(busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | grep -o '"p[0-9]*"' | tail -1 | tr -d '"')"
+    [ -n "$pid" ] && ok "profile $pid" || { bad "no profile: run 'check' on an empty store first"; exit 1; }
+    user="ruya-$pid"
+    if ! flatpak info --system "$stubborn" >/dev/null 2>&1; then
+        build_repo && ok "repository built" || { bad "cannot build the test repository"; exit 1; }
+        flatpak remote-add --system --if-not-exists --no-gpg-verify "$remote" "file://$work/repo" || { bad "remote-add"; exit 1; }
+        flatpak install --system -y --noninteractive --or-update "$remote" "$rt" "$sleeper" "$crasher" "$stubborn" >/dev/null 2>&1 \
+            && ok "test apps installed" || { bad "flatpak install of the test apps failed"; exit 1; }
+    fi
+    mkdir -p "$work"
+    systemctl --user -M "$user@.host" stop 'ruya-app-*.service' </dev/null 2>&1 | cat >/dev/null
+    pkill -KILL -u "$user" -f "sleep 300[56]" 2>/dev/null
+    # Kill is for the signed-in profile's app.
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" "" 2>&1)"
+    case "$out" in 'suu "ok"'*) ;; *'"wrong-pin"'*|*'"pin-required"'*) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" 1234 2>&1)";; esac
+    case "$out" in 'suu "ok"'*) ok "$pid signed in";; *) bad "SwitchTo $pid: $out"; exit 1;; esac
+    : > "$work/signals.log"
+    busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &
+    mon=$!
+    sleep 2
+    # start_stubborn: Launch the stubborn app, wait for AppStarted and its scope; sets $inst.
+    start_stubborn() {
+        local out n0 n
+        out="$(launch "$stubborn" "$pid")"; inst="$(echo "$out" | unit_of)"
+        [ -n "$inst" ] && ok "Launch: $inst" || { bad "Launch of $stubborn: $out"; return 1; }
+        n0="$1"
+        n=0; while [ "$(grep -c "\"member\":\"AppStarted\".*$stubborn" "$work/signals.log")" -le "$n0" ] && [ "$n" -lt 30 ]; do sleep 1; n=$((n + 1)); done
+        [ "$n" -lt 30 ] && ok "AppStarted arrived" || { bad "no AppStarted within 30 s"; return 1; }
+        n=0; until journalctl -u ruya-session -b --no-pager -o cat 2>/dev/null | grep -a -q "$inst: attached app-flatpak-$stubborn-" || [ "$n" -ge 20 ]; do sleep 1; n=$((n + 1)); done
+        [ "$n" -lt 20 ] && ok "the run attached its Flatpak scope" || bad "no 'attached app-flatpak-$stubborn-N.scope' line for $inst"
+        n=0; until pgrep -u "$user" -f "sleep 3006" >/dev/null 2>&1 || [ "$n" -ge 10 ]; do sleep 1; n=$((n + 1)); done
+        pgrep -u "$user" -f "sleep 3005" >/dev/null 2>&1 && ok "the app and its child run" || bad "no 'sleep 3005' child of the stubborn app"
+    }
+    # exited_secs <t0> <limit> <n before>: waits for one more AppExited of the stubborn app, then prints
+    # the seconds since t0 ("" when none came within the limit).
+    exited_secs() {
+        local n=0
+        while [ "$(grep -c "\"member\":\"AppExited\".*$stubborn" "$work/signals.log")" -le "$3" ]; do
+            [ "$n" -ge "$2" ] && return 0
+            sleep 1; n=$((n + 1))
+        done
+        echo "$(( $(date +%s) - $1 ))"
+    }
+    case "$(kill_app ruya-app-nope.service)" in 's "unknown-instance"') ok "Kill of an unknown instance: unknown-instance";; *) bad "Kill of an unknown instance";; esac
+
+    echo "--- Stop is ignored, Force quit (Kill) ends it at once"
+    start_stubborn 0 || exit 1
+    t0="$(date +%s)"
+    case "$(stop_app "$inst")" in 's "ok"') ok "Stop answered ok";; *) bad "Stop";; esac
+    sleep 3
+    if pgrep -u "$user" -f "sleep 3006" >/dev/null 2>&1 && pgrep -u "$user" -f "sleep 3005" >/dev/null 2>&1; then
+        ok "3 s after the Stop the app and its child still run (they ignore the SIGTERM)"
+    else
+        bad "the stubborn app died of the Stop's SIGTERM: the Kill below tests nothing"
+    fi
+    running | grep -q "$inst" && ok "it is still listed (stopping)" || bad "it is no longer listed 3 s after the Stop"
+    # Nobody signed in: Kill is refused, nothing is killed.
+    busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
+    sleep 1
+    case "$(kill_app "$inst")" in 's "not-allowed"') ok "Kill while nobody is signed in: not-allowed";; *) bad "Kill while locked was not refused";; esac
+    pgrep -u "$user" -f "sleep 3006" >/dev/null 2>&1 && ok "the refused Kill killed nothing" || bad "the app ended after a refused Kill"
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" "" 2>&1)"
+    case "$out" in 'suu "ok"'*) ;; *'"wrong-pin"'*|*'"pin-required"'*) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" 1234 2>&1)";; esac
+    case "$out" in 'suu "ok"'*) ok "$pid signed in again";; *) bad "SwitchTo $pid after the Lock: $out";; esac
+    tk="$(date +%s)"
+    case "$(kill_app "$inst")" in 's "ok"') ok "Kill answered ok";; *) bad "Kill";; esac
+    secs="$(exited_secs "$tk" 10 0)"
+    judge_secs "AppExited after the Kill" "$secs" 0 2
+    line="$(grep -E "\"member\":\"AppExited\".*$stubborn" "$work/signals.log" | tail -1)"; echo "$line"
+    echo "$line" | grep -q '"killed"' && ok "reason killed" || bad "the Kill's AppExited is not killed: $line"
+    gone "sleep 3006" && ok "the app is gone" || bad "the app survived the Kill"
+    gone "sleep 3005" && ok "its child is gone too (the scope was killed, not only the unit)" || bad "the child survived the Kill"
+    listed="$(systemctl --user -M "$user@.host" list-units --all --no-legend "app-flatpak-$stubborn-*.scope" </dev/null 2>&1)"
+    echo "$listed" | grep -q scope && bad "a scope of $stubborn is still listed after the Kill: $listed" || ok "no scope of $stubborn is left"
+    klog="$(journalctl -u ruya-session -b --no-pager -o cat --since "@$t0" 2>/dev/null)"
+    echo "$klog" | grep -a -E "Kill|kill" | tail -4 | sed 's/^/    /'
+    echo "$klog" | grep -a -q "killing $inst (Kill)" && ok "the journal says the Kill was sent" || bad "no 'killing $inst (Kill)' line"
+    echo "$klog" | grep -a -q "Failed to kill unit $inst" \
+        && bad "the kill still named the gone unit (Failed to kill unit $inst)" || ok "no 'Failed to kill unit' line: the gone unit was not named"
+
+    echo "--- the 30 s backstop: Stop, no Kill"
+    start_stubborn 1 || exit 1
+    t0="$(date +%s)"
+    case "$(stop_app "$inst")" in 's "ok"') ok "Stop answered ok";; *) bad "Stop";; esac
+    secs="$(exited_secs "$t0" 45 1)"
+    judge_secs "AppExited after the Stop (the backstop)" "$secs" 29 33
+    line="$(grep -E "\"member\":\"AppExited\".*$stubborn" "$work/signals.log" | tail -1)"; echo "$line"
+    echo "$line" | grep -q '"killed"' && ok "reason killed" || bad "the backstop's AppExited is not killed: $line"
+    gone "sleep 3006" && gone "sleep 3005" && ok "the app and its child are gone" || bad "the app or its child survived the backstop"
+    kill "$mon" 2>/dev/null
+    drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    ;;
 display-clean)
     inst="$(cat /root/vm-display-instance 2>/dev/null)"
     [ -n "$inst" ] && { t0="$(date +%s)"; stop_app "$inst"; wait_shell "ruya-compositor: app gone" "$t0" 20 && ok "Stop closed the window (app gone)" || bad "no 'app gone' after Stop"; }
@@ -703,7 +817,7 @@ display-clean)
     rm -rf "$work" /root/vm-display-instance /root/vm-display-other
     ;;
 clean)
-    drop_test_apps "$wclient" "$sleeper" "$crasher" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
     rm -rf "$work"
     ;;
 check)
@@ -1153,7 +1267,7 @@ check)
     fi
     kill "$mon" 2>/dev/null
     pkill -f "probe[.]qml" 2>/dev/null
-    drop_test_apps "$wclient" "$sleeper" "$crasher" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
     echo "--- journal of the service (warnings)"
     journalctl -u ruya-session -b --no-pager -p warning | tail -5
     ;;

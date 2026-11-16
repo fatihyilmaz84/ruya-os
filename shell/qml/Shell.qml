@@ -380,7 +380,9 @@ FocusScope {
     function focusCurrent() {
         if (!signedIn)
             return
-        if (launchState || closeState)
+        if (closeOffersForceQuit)
+            launchSplash.focusForceQuit()           // back from the Hub to a stuck close (RUY-736)
+        else if (launchState || closeState)
             launchSplash.forceActiveFocus()         // input to the shell is locked while an app starts or closes
         else if (focusedApp)
             focusedApp.forceActiveFocus()
@@ -1031,12 +1033,12 @@ FocusScope {
     // The part of Close game both ways in share (the Hub's, and the Options menu's on a card): the closing
     // screen's state, the instance marked as closing and the stop asked of the service.
     function startClose(instance, appId, title, picture) {
-        closeState = { instance: instance, appId: appId, title: title, picture: picture }
+        closeState = { instance: instance, appId: appId, title: title, picture: picture, stuck: false, killing: false }
         closingInstances = closingInstances.includes(instance) ? closingInstances : closingInstances.concat([instance])
         // The pads the route holds for this game stay until it has exited (RUY-611); a game whose pads
         // are not held now (not frozen behind Home) has none to keep.
         closePadHold = inputRoute.routeInstance === instance ? instance : closePadHold
-        closeSplashTimer.restart()
+        closeStuckTimer.restart()
         Session.stop(instance)          // a frozen game: the service thaws it first, so it can quit (T-457)
     }
 
@@ -1056,25 +1058,66 @@ FocusScope {
         focusCurrent()                  // the closing screen takes the focus
     }
 
-    // ---- The closing screen (T-458, 02 §1.5) ----
+    // ---- The closing screen (T-458, RUY-736, 02 §1.5) ----
     // Close game shows the splash in its closing mode over Home until the instance has ended
-    // (AppExited, or Stop answering that nothing runs); after `closeSplashMs` Home comes back anyway
-    // and the game's card says Closing (not Running) until the service has dropped the instance.
-    // `closingInstances` are the instances Close asked to stop. A game the service reports "killed"
-    // that is still listed after `killCheckMs` did not close: a warning, and the card is Running again.
-    property var closeState: null                  // { instance, appId, title, picture } while the screen is up
+    // (AppExited, or Stop answering that nothing runs). After `forceQuitAfterMs` without the end it is
+    // stuck: it offers Force quit (A: Session.kill, the screen stays until AppExited) and Wait at Home
+    // (B: Home comes back and the game's card says Closing, not Running, until the service has dropped
+    // the instance). A Force quit whose end has not come `forceQuitAfterMs` later offers both again;
+    // a refused Kill toasts and brings Home back. The service's own backstop kills a game 30 s after
+    // the Stop. `closingInstances` are the instances Close asked to stop. A game the service reports
+    // "killed" that is still listed after `killCheckMs` did not close: a warning, and the card is
+    // Running again.
+    // { instance, appId, title, picture, stuck, killing } while the screen is up: `stuck` once
+    // `forceQuitAfterMs` has passed, `killing` from Force quit until the end (or the next offer).
+    property var closeState: null
     property var closingInstances: []
     property var killChecks: []                    // [{ instance, title }] waiting for the list to be refreshed
-    property int closeSplashMs: 5000
+    property int forceQuitAfterMs: 5000
     property int killCheckMs: 1000
     readonly property bool closingScreen: closeState !== null
+    readonly property bool closeOffersForceQuit: closeState !== null && closeState.stuck && !closeState.killing
     readonly property var closingAppIds: Session.running
         .filter(r => r.profile === Profiles.activeProfile && closingInstances.includes(r.instance)).map(r => r.appId)
 
     Timer {
-        id: closeSplashTimer
-        interval: root.closeSplashMs
-        onTriggered: root.endClose()
+        id: closeStuckTimer
+        interval: root.forceQuitAfterMs
+        onTriggered: {
+            if (!root.closeState)
+                return
+            root.closeState = Object.assign({}, root.closeState, { stuck: true, killing: false })
+            if (!systemPanel.open)
+                launchSplash.focusForceQuit()       // the Hub keeps the focus; Back from it lands here
+        }
+    }
+
+    // A on Force quit (RUY-736): the kill, and the screen waits for AppExited.
+    function forceQuit() {
+        if (!closeOffersForceQuit)
+            return
+        closeState = Object.assign({}, closeState, { killing: true })
+        launchSplash.holdFocus()
+        closeStuckTimer.restart()       // no end in time: the offer comes back
+        Session.kill(closeState.instance)
+    }
+
+    Connections {
+        target: Session
+        function onKillFinished(instance, status) {
+            if (status === "ok")
+                return                          // AppExited ends the screen
+            if (status === "unknown-instance") {
+                root.stopRefused(instance)      // nothing runs any more
+                return
+            }
+            const st = root.closeState
+            const title = st && st.instance === instance ? st.title : ""
+            Notifications.show(title !== "" ? qsTr("Could not force quit %1.").arg(Notifications.named(title))
+                                            : qsTr("Could not force quit the game."), "error")
+            if (st && st.instance === instance)
+                root.endClose()                 // Home, the game still closing
+        }
     }
     Timer {
         id: killCheckTimer
@@ -1092,7 +1135,7 @@ FocusScope {
     }
 
     function dropCloseScreen() {
-        closeSplashTimer.stop()
+        closeStuckTimer.stop()
         closeState = null
     }
 
@@ -2637,6 +2680,7 @@ FocusScope {
         u: root.u
         shown: root.launching || root.closingScreen
         closing: !root.launching && root.closingScreen
+        stuck: !root.launching && root.closeOffersForceQuit
         appId: root.launchState ? root.launchState.appId : (root.closeState ? root.closeState.appId : "")
         title: root.launchState ? root.launchState.title : (root.closeState ? root.closeState.title : "")
         picture: root.launchState ? root.launchState.picture : (root.closeState ? root.closeState.picture : "")
@@ -2649,6 +2693,8 @@ FocusScope {
                 Session.stop(instance)
             root.endLaunch(true)
         }
+        onForceQuitRequested: root.forceQuit()
+        onWaitRequested: root.endClose()        // Wait at Home: the card says Closing until the end
     }
 
     // The performance overlay (T-469): the Hub's switch for the signed-in profile, a game in front (not Home,

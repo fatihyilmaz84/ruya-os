@@ -2,7 +2,7 @@
 # Checks the sample game (samples/hello-game, T-214) inside a running VM, as root: it follows
 # docs/developers/ from the other side. It installs the sample from a local repository, starts it
 # for a profile through Session1.Launch, and checks that it saves under the profile's
-# ~/.var/app/<id>/data/saves/, that Stop (SIGTERM, grace 5 s) makes it save once more and exit with
+# ~/.var/app/<id>/data/saves/, that Stop (SIGTERM; Force quit is offered after 5 s, RUY-736) makes it save once more and exit with
 # the reason "quit" (not "killed"), that a second launch loads the save, and that uninstalling with
 # "keep data" (Store1.Uninstall delete_data=false) keeps the save.
 #
@@ -143,8 +143,8 @@ case "$(stop_app "$inst")" in 's "ok"') ok "Stop answered ok";; *) bad "Stop";; 
 wait_sig "\"member\":\"AppExited\".*$app" 20 && ok "AppExited arrived after $(( $(date +%s) - t0 )) s" || bad "no AppExited within 20 s"
 line="$(grep -E "\"member\":\"AppExited\".*$app" "$work/signals.log" | head -1)"
 echo "$line" | grep -q '"quit"' && ok "reason quit (not killed)" || bad "AppExited: $line"
-# The clock has whole seconds and wait_sig polls once a second: 5 s of grace can read as 6 here.
-[ $(( $(date +%s) - t0 )) -le 6 ] && ok "it was gone within the 5 s grace (6 s measured with a 1 s poll)" || bad "it needed more than 6 s (grace 5 s)"
+# The clock has whole seconds and wait_sig polls once a second: 5 s can read as 6 here.
+[ $(( $(date +%s) - t0 )) -le 6 ] && ok "it was gone within 5 s, before the closing screen offers Force quit (6 s measured with a 1 s poll)" || bad "it needed more than 6 s (the closing screen offers Force quit after 5 s; RUY-736)"
 v="$(field played)"
 [ -n "$v" ] && [ "$v" -ge 3 ] && ok "the save written at SIGTERM holds the play time (played=$v s)" || bad "played=$v: the stop did not save"
 [ -f "$slot.bak" ] && ok "the previous save is kept as slot1.sav.bak" || bad "no .bak"
