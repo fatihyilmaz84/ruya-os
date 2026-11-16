@@ -430,11 +430,6 @@ Item {
 
         function settle() { wait(900) }
 
-        function shot(name, lang, size) {
-            settle()
-            grabImage(tc.shell).save(shotsDir + "/" + name + "-" + lang + size + ".png")
-        }
-
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
@@ -451,19 +446,23 @@ Item {
                 // not installed
                 openPage({ appId: "org.example.Racer" })
                 tryCompare(page(), "detailsReady", true)
-                shot("100-game-page-not-installed", lang, "-" + size[2])
+                settle()
+                grabImage(tc.shell).save(shotsDir + "/" + "100-game-page-not-installed-" + lang + "-" + size[2] + ".png")
                 keyClick(Qt.Key_Down)
                 keyClick(Qt.Key_Down)
-                shot("101-game-page-information", lang, "-" + size[2])
+                settle()
+                grabImage(tc.shell).save(shotsDir + "/" + "101-game-page-information-" + lang + "-" + size[2] + ".png")
                 keyClick(Qt.Key_Escape)
                 tryCompare(tc.shell, "currentPage", "")
                 // installed, with an update
                 openPage({ id: "flatpak:org.example.Chess" })
                 tryCompare(page(), "detailsReady", true)
-                shot("102-game-page-update", lang, "-" + size[2])
+                settle()
+                grabImage(tc.shell).save(shotsDir + "/" + "102-game-page-update-" + lang + "-" + size[2] + ".png")
                 for (let i = 0; i < 20; ++i)
                     keyClick(Qt.Key_Down)
-                shot("103-game-page-manage", lang, "-" + size[2])
+                settle()
+                grabImage(tc.shell).save(shotsDir + "/" + "103-game-page-manage-" + lang + "-" + size[2] + ".png")
                 keyClick(Qt.Key_Escape)
                 tryCompare(tc.shell, "currentPage", "")
                 // running
@@ -474,13 +473,15 @@ Item {
                 tc.shell.openPage("appDetail", { id: tc.puzzle })
                 tryCompare(tc.shell, "currentPage", "appDetail")
                 tryVerify(() => find("detailPrimary") && find("detailPrimary").text === "Resume", 2000)
-                shot("104-game-page-running", lang, "-" + size[2])
+                settle()
+                grabImage(tc.shell).save(shotsDir + "/" + "104-game-page-running-" + lang + "-" + size[2] + ".png")
                 tc.shell.closePage()
                 // Steam
                 tc.shell.openPage("appDetail", { id: "steam:730" })
                 tryCompare(tc.shell, "currentPage", "appDetail")
                 tryVerify(() => find("fact_source") && find("fact_source").activeFocus, 2000)
-                shot("105-game-page-steam", lang, "-" + size[2])
+                settle()
+                grabImage(tc.shell).save(shotsDir + "/" + "105-game-page-steam-" + lang + "-" + size[2] + ".png")
                 tc.shell.closePage()
                 // the Store does not answer
                 Store.mockServiceLost()
@@ -488,7 +489,8 @@ Item {
                 tc.shell.openPage("appDetail", { id: tc.puzzle })
                 tryCompare(tc.shell, "currentPage", "appDetail")
                 tryVerify(() => find("detail_retry") !== null, 2000)
-                shot("106-game-page-store-down", lang, "-" + size[2])
+                settle()
+                grabImage(tc.shell).save(shotsDir + "/" + "106-game-page-store-down-" + lang + "-" + size[2] + ".png")
                 Store.mockServiceRegained()
                 tc.shell.destroy()
                 wait(100)
