@@ -1194,7 +1194,7 @@ This can&apos;t be undone.</translation>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+259"/>
+        <location line="+263"/>
         <location line="+77"/>
         <source>Buttons in games</source>
         <translation>Buttons in games</translation>
@@ -1371,7 +1371,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+55"/>
+        <location filename="../qml/ControllerPage.qml" line="+56"/>
         <source>Works</source>
         <translation>Works</translation>
     </message>
@@ -2158,22 +2158,22 @@ This can&apos;t be undone.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+482"/>
-        <location line="+182"/>
+        <location filename="../qml/GameControls.qml" line="+495"/>
+        <location line="+187"/>
         <source>Could not save to the USB drive</source>
         <translation>Could not save to the USB drive</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-187"/>
         <location line="+6"/>
         <location line="+2"/>
-        <location line="+174"/>
+        <location line="+179"/>
         <location line="+36"/>
         <source>Try again.</source>
         <translation>Try again.</translation>
     </message>
     <message>
-        <location line="-210"/>
+        <location line="-215"/>
         <source>Could not save the change</source>
         <translation>Could not save the change</translation>
     </message>
@@ -2183,7 +2183,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not save the change for %1</translation>
     </message>
     <message>
-        <location line="-254"/>
+        <location line="-260"/>
         <source>Games see %1 as A and %2 as B, unlike menus.</source>
         <translation>Games see %1 as A and %2 as B, unlike menus.</translation>
     </message>
@@ -2193,7 +2193,7 @@ This can&apos;t be undone.</translation>
         <translation>Games see %1 as A and %2 as B.</translation>
     </message>
     <message>
-        <location line="+428"/>
+        <location line="+439"/>
         <source>Saved to the USB drive</source>
         <translation>Saved to the USB drive</translation>
     </message>
@@ -2635,7 +2635,7 @@ This can&apos;t be undone.</translation>
         <translation>Profile name</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+10"/>
         <source>Protect with a PIN</source>
         <translation>Protect with a PIN</translation>
     </message>
@@ -3258,18 +3258,20 @@ This can&apos;t be undone.</translation>
         <location line="+2"/>
         <location line="+9"/>
         <location line="+7"/>
+        <location line="+20"/>
         <source>Not available on this console</source>
         <translation>Not available on this console</translation>
     </message>
     <message>
-        <location line="-16"/>
+        <location line="-36"/>
         <location line="+11"/>
         <location line="+7"/>
+        <location line="+20"/>
         <source>Measuring...</source>
         <translation>Measuring...</translation>
     </message>
     <message>
-        <location line="-16"/>
+        <location line="-36"/>
         <source>%1 %</source>
         <translation>%1 %</translation>
     </message>
@@ -3285,11 +3287,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+4"/>
+        <location line="+22"/>
         <source>%1 FPS</source>
         <translation>%1 FPS</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-21"/>
         <location line="+2"/>
         <source>FPS: %1</source>
         <translation>FPS: %1</translation>
@@ -3297,11 +3300,12 @@ This can&apos;t be undone.</translation>
     <message>
         <location line="+0"/>
         <location line="+7"/>
+        <location line="+20"/>
         <source>No game in front</source>
         <translation>No game in front</translation>
     </message>
     <message>
-        <location line="-3"/>
+        <location line="-23"/>
         <source>%1, slowest %2</source>
         <translation>%1, slowest %2</translation>
     </message>
@@ -3312,7 +3316,38 @@ This can&apos;t be undone.</translation>
         <translation>Frame time: %1</translation>
     </message>
     <message>
-        <location line="+41"/>
+        <location line="+11"/>
+        <source>%1 low: measuring...</source>
+        <translation>%1 low: measuring...</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 low %2</source>
+        <translation>%1 low %2</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>%1 · %2</source>
+        <translation>%1 · %2</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>1%</source>
+        <translation>1%</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>0.1%</source>
+        <translation>0.1%</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+2"/>
+        <source>Lows: %1</source>
+        <translation>Lows: %1</translation>
+    </message>
+    <message>
+        <location line="+42"/>
         <source>CPU</source>
         <translation>CPU</translation>
     </message>

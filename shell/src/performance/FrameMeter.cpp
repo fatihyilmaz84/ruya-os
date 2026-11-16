@@ -56,7 +56,7 @@ void FrameMeter::setRunning(bool on)
     if (on == m_running)
         return;
     m_running = on;
-    reconnect();
+    reconnect(false);   // a pause keeps the lows' window; only the gap is dropped
 }
 
 void FrameMeter::setFakeNowMs(double ms)
@@ -80,7 +80,7 @@ void FrameMeter::disconnectAll()
 
 // Connected exactly while running with a surface and a window that have the two signals; a new
 // surface (another app in front) starts the count again.
-void FrameMeter::reconnect()
+void FrameMeter::reconnect(bool resetLows)
 {
     disconnectAll();
     const QMetaMethod commit = signalOf(m_source, "redraw()");
@@ -92,6 +92,11 @@ void FrameMeter::reconnect()
         m_presented.clear();
         m_commits.clear();
         m_since = nowNs();
+        m_lastFrame = -1;
+        if (resetLows) {
+            m_lowEnds.clear();
+            m_lowIntervals.clear();
+        }
     }
     if (counting) {
         const QMetaObject *meta = metaObject();
@@ -132,6 +137,16 @@ void FrameMeter::onPresented()
     m_pending = false;
     m_presented.append(now);
     prune(m_presented, now);
+    if (m_lastFrame >= 0 && now > m_lastFrame) {
+        m_lowEnds.append(now);
+        m_lowIntervals.append(now - m_lastFrame);
+        const int tooMany = std::max(0, int(m_lowEnds.size()) - MaxLowIntervals);
+        const auto old = std::find_if(m_lowEnds.begin(), m_lowEnds.end(), [now](qint64 t) { return t > now - LowWindowNs; });
+        const int drop = std::max(tooMany, int(old - m_lowEnds.begin()));
+        m_lowEnds.remove(0, drop);
+        m_lowIntervals.remove(0, drop);
+    }
+    m_lastFrame = now;
 }
 
 FrameMeter::Stats FrameMeter::stats() const
@@ -144,11 +159,28 @@ FrameMeter::Stats FrameMeter::stats() const
     QVector<qint64> presented;
     QVector<qint64> commits;
     qint64 since = 0;
+    QVector<qint64> lows;
     {
         QMutexLocker lock(&m_mutex);
         presented = m_presented;
         commits = m_commits;
         since = m_since;
+        const auto first = std::find_if(m_lowEnds.begin(), m_lowEnds.end(), [now](qint64 t) { return t > now - LowWindowNs; });
+        const int skip = int(first - m_lowEnds.begin());
+        lows = m_lowIntervals.mid(skip);
+    }
+    out.lowIntervals = int(lows.size());
+    if (out.lowIntervals >= MinFor1Low) {
+        // Nearest rank in integers (ceil(n * 99 / 100)): no float rounding at the edge.
+        const int n = out.lowIntervals;
+        const int rank1 = (n * 99 + 99) / 100;
+        std::nth_element(lows.begin(), lows.begin() + (rank1 - 1), lows.end());
+        out.low1Ms = double(lows[rank1 - 1]) / 1e6;
+        if (n >= MinFor01Low) {
+            const int rank01 = int((qint64(n) * 999 + 999) / 1000);
+            std::nth_element(lows.begin() + (rank1 - 1), lows.begin() + (rank01 - 1), lows.end());
+            out.low01Ms = double(lows[rank01 - 1]) / 1e6;
+        }
     }
     out.full = now - since >= WindowNs;
     QVector<double> intervals;

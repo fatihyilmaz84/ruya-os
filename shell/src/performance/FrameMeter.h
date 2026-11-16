@@ -38,7 +38,18 @@ public:
         double meanMs = -1;
         double p99Ms = -1;
         int commits = 0;       // the app's commits
+        // The lows over the rolling LowWindowNs of the front app's frame intervals (RUY-738): the
+        // 99th and 99.9th percentile interval (nearest rank), ms; -1 below MinFor1Low / MinFor01Low
+        // intervals. `lowIntervals` is how many the window holds.
+        int lowIntervals = 0;
+        double low1Ms = -1;
+        double low01Ms = -1;
     };
+
+    static constexpr qint64 LowWindowNs = 60LL * 1000 * 1000 * 1000;
+    static constexpr int MaxLowIntervals = 21600;   // 60 s at 360 fps
+    static constexpr int MinFor1Low = 100;
+    static constexpr int MinFor01Low = 1000;
 
     static constexpr qint64 WindowNs = 1000LL * 1000 * 1000;
 
@@ -64,7 +75,7 @@ private slots:
     void onPresented();
 
 private:
-    void reconnect();
+    void reconnect(bool resetLows = true);
     void disconnectAll();
     qint64 nowNs() const;
     static void prune(QVector<qint64> &stamps, qint64 now);
@@ -86,4 +97,10 @@ private:
     qint64 m_since = 0;              // when counting started
     QVector<qint64> m_presented;     // timestamps (ns) of presented new frames, the last two seconds
     QVector<qint64> m_commits;       // timestamps (ns) of commits, the last two seconds
+    // The rolling LowWindowNs of intervals (RUY-738): when each ended, and its length (ns). Cleared
+    // when the surface or window changes; kept over a pause (running off and on), where only the
+    // interval across the gap is dropped (`m_lastFrame` back to -1).
+    QVector<qint64> m_lowEnds;
+    QVector<qint64> m_lowIntervals;
+    qint64 m_lastFrame = -1;         // the previous presented frame, -1 when none counts
 };

@@ -1190,7 +1190,7 @@ Bu geri alınamaz.</translation>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+259"/>
+        <location line="+263"/>
         <location line="+77"/>
         <source>Buttons in games</source>
         <translation>Oyunlarda düğmeler</translation>
@@ -1367,7 +1367,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+55"/>
+        <location filename="../qml/ControllerPage.qml" line="+56"/>
         <source>Works</source>
         <translation>Çalışıyor</translation>
     </message>
@@ -2153,22 +2153,22 @@ Bu geri alınamaz.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+482"/>
-        <location line="+182"/>
+        <location filename="../qml/GameControls.qml" line="+495"/>
+        <location line="+187"/>
         <source>Could not save to the USB drive</source>
         <translation>USB belleğe kaydedilemedi</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-187"/>
         <location line="+6"/>
         <location line="+2"/>
-        <location line="+174"/>
+        <location line="+179"/>
         <location line="+36"/>
         <source>Try again.</source>
         <translation>Yeniden dene.</translation>
     </message>
     <message>
-        <location line="-210"/>
+        <location line="-215"/>
         <source>Could not save the change</source>
         <translation>Değişiklik kaydedilemedi</translation>
     </message>
@@ -2178,7 +2178,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 için değişiklik kaydedilemedi</translation>
     </message>
     <message>
-        <location line="-254"/>
+        <location line="-260"/>
         <source>Games see %1 as A and %2 as B, unlike menus.</source>
         <translation>Oyunlar %1 düğmesini A, %2 düğmesini B olarak görür; menülerden farklı.</translation>
     </message>
@@ -2188,7 +2188,7 @@ Bu geri alınamaz.</translation>
         <translation>Oyunlar %1 düğmesini A, %2 düğmesini B olarak görür.</translation>
     </message>
     <message>
-        <location line="+428"/>
+        <location line="+439"/>
         <source>Saved to the USB drive</source>
         <translation>USB belleğe kaydedildi</translation>
     </message>
@@ -2630,7 +2630,7 @@ Bu geri alınamaz.</translation>
         <translation>Profil adı</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+10"/>
         <source>Protect with a PIN</source>
         <translation>PIN ile koru</translation>
     </message>
@@ -3247,18 +3247,20 @@ Bu geri alınamaz.</translation>
         <location line="+2"/>
         <location line="+9"/>
         <location line="+7"/>
+        <location line="+20"/>
         <source>Not available on this console</source>
         <translation>Bu konsolda kullanılamıyor</translation>
     </message>
     <message>
-        <location line="-16"/>
+        <location line="-36"/>
         <location line="+11"/>
         <location line="+7"/>
+        <location line="+20"/>
         <source>Measuring...</source>
         <translation>Ölçülüyor...</translation>
     </message>
     <message>
-        <location line="-16"/>
+        <location line="-36"/>
         <source>%1 %</source>
         <translation>%%1</translation>
     </message>
@@ -3274,11 +3276,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+4"/>
+        <location line="+22"/>
         <source>%1 FPS</source>
         <translation>%1 FPS</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-21"/>
         <location line="+2"/>
         <source>FPS: %1</source>
         <translation>FPS: %1</translation>
@@ -3286,11 +3289,12 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="+0"/>
         <location line="+7"/>
+        <location line="+20"/>
         <source>No game in front</source>
         <translation>Önde oyun yok</translation>
     </message>
     <message>
-        <location line="-3"/>
+        <location line="-23"/>
         <source>%1, slowest %2</source>
         <translation>%1, en yavaş %2</translation>
     </message>
@@ -3301,7 +3305,38 @@ Bu geri alınamaz.</translation>
         <translation>Kare süresi: %1</translation>
     </message>
     <message>
-        <location line="+41"/>
+        <location line="+11"/>
+        <source>%1 low: measuring...</source>
+        <translation>%1 düşük: ölçülüyor...</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 low %2</source>
+        <translation>%1 düşük %2</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>%1 · %2</source>
+        <translation>%1 · %2</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>1%</source>
+        <translation>%1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>0.1%</source>
+        <translation>%0,1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+2"/>
+        <source>Lows: %1</source>
+        <translation>Düşükler: %1</translation>
+    </message>
+    <message>
+        <location line="+42"/>
         <source>CPU</source>
         <translation>İşlemci</translation>
     </message>
