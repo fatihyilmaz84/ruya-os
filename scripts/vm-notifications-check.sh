@@ -57,7 +57,7 @@ try: print(json.load(sys.stdin)["data"])
 except Exception: print("")'
 }
 # post <profile> <key> <source> <title>: the Post reply (status and id as JSON)
-post() { call Post 'sssssssa(ss)sb' "$1" "$2" "$3" "" info "$4" "" "" 0 normal false; }
+post() { call Post 'ssssssssa(ss)sb' "$1" "$2" "$3" "" info "$4" "" "" 0 normal false; }
 # items <profile>: "id unread title" per item of List
 items() {
     call List s "$1" | py 'import json, sys
@@ -233,7 +233,7 @@ else
     else
         fail "no GetAll from the shell ($shell_names) after the restart"
     fi
-    out="$(runuser -u ruya-shell -- busctl --system --json=short call "$svc" "$path" "$svc" Post 'sssssssa(ss)sb' "$profile" "" devices "" info "$tag shell" "" "" 0 normal false 2>&1)"
+    out="$(runuser -u ruya-shell -- busctl --system --json=short call "$svc" "$path" "$svc" Post 'ssssssssa(ss)sb' "$profile" "" devices "" info "$tag shell" "" "" 0 normal false 2>&1)"
     sid="$(echo "$out" | field 1)"
     if [ "$(echo "$out" | field 0)" = ok ] && [ "${sid:-0}" -gt 0 ] 2>/dev/null; then pass "a Post from ruya-shell's uid works (id $sid)"; posted="$posted $sid"; else fail "a Post from ruya-shell: $out"; fi
 fi
@@ -270,7 +270,7 @@ else
 fi
 
 echo "--- (f) a Post as nobody is refused"
-out="$(runuser -u nobody -- busctl --system --json=short call "$svc" "$path" "$svc" Post 'sssssssa(ss)sb' "$profile" "" system "" info "$tag nobody" "" "" 0 normal false 2>&1)"; rc=$?
+out="$(runuser -u nobody -- busctl --system --json=short call "$svc" "$path" "$svc" Post 'ssssssssa(ss)sb' "$profile" "" system "" info "$tag nobody" "" "" 0 normal false 2>&1)"; rc=$?
 if [ "$rc" != 0 ] && echo "$out" | grep -qi "access.*denied\|AccessDenied"; then
     pass "nobody: refused by the bus policy"
 elif [ "$rc" = 0 ] && [ "$(echo "$out" | field 0)" = forbidden ]; then

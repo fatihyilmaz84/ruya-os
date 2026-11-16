@@ -194,7 +194,7 @@ touch "$sec/units/ruya-aaa.service" "$sec/units/ruya-bbb@.service"
 cat > "$sec/baseline.json" <<'JSONEOF'
 {"units": {"ruya-aaa.service": {"max_exposure": 1.1, "reason": "t"}, "ruya-bbb@.service": {"max_exposure": 2.0, "reason": "t"}},
  "ports": [{"port": "tcp:any:22", "reason": "sshd"}, {"port": "udp:any:68", "reason": "dhcp"}, {"port": "tcp:loopback:53", "reason": "stub"}, {"port": "udp:loopback:323", "reason": "chronyd"}],
- "unconfined": [{"process": "ruya-odd", "reason": "t"}],
+ "unconfined": [{"process": "ruya-odd", "reason": "t"}, {"process": "ruya-notifications", "reason": "t"}],
  "setid": [{"path": "/usr/bin/passwd", "reason": "t"}],
  "accounts": [{"name": "root", "reason": "t"}],
  "xwayland_domains": [{"domain": "xserver_t", "reason": "t"}]}
@@ -290,6 +290,8 @@ out="$(FAKE_UNCONFINED=ruya-evil runsec)"
 expect_contains "an unconfined ruya process: FAIL" "$out" "ruya-evil"
 out="$(FAKE_UNCONFINED=ruya-odd runsec)"
 expect_lacks "a named unconfined process passes" "$out" "FAIL"
+out="$(FAKE_UNCONFINED=ruya-notificati runsec)"
+expect_lacks "a named process cut to 15 characters by ps passes" "$out" "FAIL"
 out="$(FAKE_SETUID=/usr/bin/evil runsec)"
 expect_contains "an extra setuid file: FAIL" "$out" "FAIL: setuid/setgid files not in the baseline: /usr/bin/evil"
 out="$(FAKE_WW=/etc/evil.conf runsec)"
@@ -1349,6 +1351,10 @@ if svc == "org.ruyaos.Profiles1":
     sys.exit(0)
 items = st["items"]
 if method == "Post":
+    # Like busctl: the signature must be the contract's (8 strings, a(ss), s, b).
+    if rest[1] != "ssssssssa(ss)sb" or len(vals) != 11:
+        print("Failed to parse '' number of array entries: Invalid argument", file=sys.stderr)
+        sys.exit(1)
     profile, key, source, title = vals[0], vals[1], vals[2], vals[5]
     if caller == "nobody" and "nobody_allowed" not in bugs:
         print("Call failed: Access denied", file=sys.stderr)

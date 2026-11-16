@@ -268,7 +268,8 @@ if enforce == "Enforcing":
     ok("SELinux is Enforcing")
 else:
     bad("SELinux is '%s', want Enforcing" % enforce)
-bun = {e["process"] for e in base.get("unconfined", [])}
+# ps prints the kernel's comm, cut to 15 characters (ruya-notifications -> ruya-notificati).
+bun = {e["process"][:15] for e in base.get("unconfined", [])}
 need_reasons("unconfined", "process")
 if unconfined - bun:
     bad("ruya-* processes in unconfined_service_t not in the baseline: " + ", ".join(sorted(unconfined - bun)))

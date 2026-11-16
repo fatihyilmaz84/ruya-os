@@ -453,7 +453,7 @@ restart)
     if ! flatpak info --system "$sleeper" >/dev/null 2>&1; then
         build_repo && ok "repository built" || { bad "cannot build the test repository"; exit 1; }
         flatpak remote-add --system --if-not-exists --no-gpg-verify "$remote" "file://$work/repo" || { bad "remote-add"; exit 1; }
-        flatpak install --system -y --noninteractive "$remote" "$rt" "$sleeper" "$crasher" >/dev/null 2>&1             && ok "test apps installed" || { bad "flatpak install of the test apps failed"; exit 1; }
+        flatpak install --system -y --noninteractive "$remote" "$rt" "$sleeper" "$crasher" >/tmp/ruya-flatpak-install.log 2>&1             && ok "test apps installed" || { tail -n 5 /tmp/ruya-flatpak-install.log; bad "flatpak install of the test apps failed"; exit 1; }
     fi
     mkdir -p "$work"
     systemctl --user -M "$user@.host" stop 'ruya-app-*.service' </dev/null 2>&1 | cat >/dev/null
@@ -717,8 +717,8 @@ kill)
     if ! flatpak info --system "$stubborn" >/dev/null 2>&1; then
         build_repo && ok "repository built" || { bad "cannot build the test repository"; exit 1; }
         flatpak remote-add --system --if-not-exists --no-gpg-verify "$remote" "file://$work/repo" || { bad "remote-add"; exit 1; }
-        flatpak install --system -y --noninteractive --or-update "$remote" "$rt" "$sleeper" "$crasher" "$stubborn" >/dev/null 2>&1 \
-            && ok "test apps installed" || { bad "flatpak install of the test apps failed"; exit 1; }
+        flatpak install --system -y --noninteractive --or-update "$remote" "$rt" "$sleeper" "$crasher" "$stubborn" >/tmp/ruya-flatpak-install.log 2>&1 \
+            && ok "test apps installed" || { tail -n 5 /tmp/ruya-flatpak-install.log; bad "flatpak install of the test apps failed"; exit 1; }
     fi
     mkdir -p "$work"
     systemctl --user -M "$user@.host" stop 'ruya-app-*.service' </dev/null 2>&1 | cat >/dev/null
