@@ -12,7 +12,7 @@
 #
 # Linux CI job (RUY-549): when shell/**, .github/workflows/ci.yml or scripts/ci-shell-linux.sh differ from the
 # commit in output\last-green-linux.txt (or there is no such marker), it runs ci-shell-linux.sh in WSL
-# (a clean build, about 12-15 min with the cached image, 20-40 when it is rebuilt) and refuses the push when a CI step is red (exit 10).
+# (a clean build, about 7-10 min with the cached image, 20-40 when it is rebuilt) and refuses the push when a CI step is red (exit 10).
 # No WSL or podman, or a running image build: one warning line, then the push. -DryRun only says whether it would run.
 param([switch]$DryRun)
 
@@ -101,7 +101,7 @@ if (Test-Path -LiteralPath $linuxMarker) {
 if (-not $linuxRun) {
     Say "SKIPPED the Linux CI job: $linuxWhy"
 } elseif ($DryRun) {
-    Say "(dry run) would run the Linux CI job (scripts/ci-shell-linux.sh in WSL; clean build, about 12-15 min, 20-40 with a rebuilt image; not run in a dry run): $linuxWhy"
+    Say "(dry run) would run the Linux CI job (scripts/ci-shell-linux.sh in WSL; clean build, about 7-10 min, 20-40 with a rebuilt image; not run in a dry run): $linuxWhy"
 } else {
     Say "running the Linux CI job in WSL: $linuxWhy"
     $drive = $Repo.Substring(0, 1).ToLower()
