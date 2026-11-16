@@ -492,12 +492,16 @@ Page {
         if (!to)
             return
         Sfx.navigate()
+        moved = true
         to.forceActiveFocus()
     }
 
     // ---- Scrolling: the column moves so the focused block's section heading is at the top ----
     property Item scrollTo: header
     property bool onFactStop: false
+    // The column follows the focus once the player has moved it: the focus the page starts with (the first fact
+    // of a Steam game) leaves the header in view.
+    property bool moved: false
     readonly property real offset: scrollTo === header ? 0
         : Math.max(0, Math.min(scrollTo.y, column.height - viewport.height))
 
@@ -958,7 +962,8 @@ Page {
 
     // A stop took the focus: scroll to its section, and the hints of its kind.
     function stopFocused(section, fact) {
-        scrollTo = section
+        if (moved)
+            scrollTo = section
         onFactStop = fact
     }
 }
