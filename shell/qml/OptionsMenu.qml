@@ -61,7 +61,7 @@ FocusScope {
     readonly property real dividerDelta: 2 * Theme.spaceXs * u - Theme.spaceXs * u + Theme.hairlineAt(u)
     readonly property int rowCount: rows.length
     // A fixed line box (typeHeadline x 1.2, 41 u at 1080p), not the font's metrics: Windows and Fedora's fonts differ by 1 px.
-    readonly property real titleHeight: Math.round(Theme.typeHeadline * 1.2 * u)
+    readonly property real titleHeight: Math.round(Theme.typeHeadline * Theme.lineFactor * u)
     readonly property real bodyTop: Theme.spaceL * u + titleHeight + Theme.spaceS * u     // where the rows (or the note) start
 
     // y of every row inside the rows layer, from the first row's top, dividers included.
@@ -76,11 +76,14 @@ FocusScope {
         return tops
     }
     readonly property real rowsHeight: rowCount > 0 ? rowTops[rowCount - 1] + rowHeight : 0
-    readonly property real noteHeight: note.length > 0 ? noteText.implicitHeight : 0
+    // The body lines have fixed line boxes too (lines x box), whatever the font's ascent and descent.
+    readonly property real bodyLineBox: Math.round(Theme.typeBody * Theme.lineFactor * u)
+    readonly property real noteLineBox: Math.round(Theme.typeCaption * Theme.lineFactor * u)
+    readonly property real noteHeight: note.length > 0 ? noteText.lineCount * noteLineBox : 0
     readonly property real sheetHeight: {
         if (rowCount > 0)
             return bodyTop + rowsHeight + (note.length > 0 ? Theme.spaceS * u + noteHeight : 0) + Theme.spaceS * u
-        const line = note.length > 0 ? noteHeight : emptyText.implicitHeight
+        const line = note.length > 0 ? noteHeight : emptyText.lineCount * bodyLineBox
         return bodyTop + line + Theme.spaceL * u
     }
 
@@ -309,6 +312,8 @@ FocusScope {
             text: qsTr("No options for this yet.")
             color: Theme.text
             font.pixelSize: Theme.typeBody * menu.u
+            lineHeightMode: Text.FixedHeight
+            lineHeight: menu.bodyLineBox
         }
 
         Text {
@@ -323,6 +328,8 @@ FocusScope {
             text: menu.note
             color: Theme.text
             font.pixelSize: Theme.typeCaption * menu.u
+            lineHeightMode: Text.FixedHeight
+            lineHeight: menu.noteLineBox
         }
 
         // The rows share one coordinate space with the glide, so the highlight can move between them.

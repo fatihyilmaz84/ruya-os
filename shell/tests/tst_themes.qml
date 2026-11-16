@@ -134,7 +134,7 @@ Item {
 
         // What no theme may change: sizes, type, motion, the ring width, the white art effects.
         function nonThemeable() {
-            return [Theme.typeBody, Theme.typeHero, Theme.typeCaption, Theme.spaceM, Theme.radiusM, Theme.radiusL,
+            return [Theme.typeBody, Theme.typeHero, Theme.typeCaption, Theme.lineFactor, Theme.spaceM, Theme.radiusM, Theme.radiusL,
                     Theme.rowHeight, Theme.buttonHeight, Theme.tileWidth, Theme.avatarSize, Theme.focusRingWidth,
                     Theme.focusRingOffset, Theme.focusScale, Theme.hairline, Theme.badgeFillAlpha,
                     Theme.focusMs, Theme.pageMs, Theme.tintMs, Theme.overlayMs, Theme.glareMs, Theme.pageSlide,

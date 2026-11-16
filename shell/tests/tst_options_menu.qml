@@ -421,7 +421,7 @@ Item {
             compare(empty.text, "No options for this yet.")
             compare(empty.font.pixelSize, Theme.typeBody)
             compare(empty.y, 36 + menu.titleHeight + 16)
-            compare(sheetOf(menu).height, 36 + menu.titleHeight + 16 + empty.implicitHeight + 36)
+            compare(sheetOf(menu).height, 36 + menu.titleHeight + 16 + 36 + 36)
             compare(menu.modalHints.length, 1)
             compare(menu.modalHints[0].action, "back")
             verify(menu.activeFocus, "the sheet holds the focus itself")
@@ -446,7 +446,33 @@ Item {
             compare(note.x, 52, "inset spaceL")
             compare(note.y, menu.bodyTop + menu.rowsHeight + Theme.spaceS, "spaceS under the last row")
             verify(!findChild(menu, "optionsEmpty").visible)
-            compare(sheetOf(menu).height, menu.bodyTop + menu.rowsHeight + Theme.spaceS + note.implicitHeight + Theme.spaceS)
+            compare(sheetOf(menu).height, menu.bodyTop + menu.rowsHeight + Theme.spaceS + 29 + Theme.spaceS)
+        }
+
+        function test_empty_state_height_is_a_fixed_line_box() {
+            const menu = menuOf(1)
+            menu.open(anchorAt(548, 300, 400, 225), "card", "T", [], "")
+            const empty = findChild(menu, "optionsEmpty")
+            compare(empty.lineHeightMode, Text.FixedHeight)
+            compare(empty.lineHeight, Math.round(Theme.typeBody * Theme.lineFactor))
+            compare(empty.lineCount, 1)
+            compare(sheetOf(menu).height, 36 + Math.round(Theme.typeHeadline * Theme.lineFactor) + 16 + 1 * 36 + 36)
+        }
+
+        function test_note_height_is_a_fixed_line_box() {
+            const menu = menuOf(1)
+            const note = findChild(menu, "optionsNote")
+            const box = Math.round(Theme.typeCaption * Theme.lineFactor)
+            menu.open(anchorAt(548, 300, 400, 225), "card", "T", rowsOf(2, false), "Store options are unavailable right now.")
+            compare(note.lineHeightMode, Text.FixedHeight)
+            compare(note.lineHeight, box)
+            compare(note.lineCount, 1)
+            compare(sheetOf(menu).height, menu.bodyTop + menu.rowsHeight + Theme.spaceS + 1 * box + Theme.spaceS)
+            menu.dismiss()
+            menu.open(anchorAt(548, 300, 400, 225), "card", "T", rowsOf(2, false),
+                      "Store options are unavailable right now, so only some options are shown.")
+            compare(note.lineCount, 2)
+            compare(sheetOf(menu).height, menu.bodyTop + menu.rowsHeight + Theme.spaceS + 2 * box + Theme.spaceS)
         }
 
         // No row left: the title, the note and B Close only, without the "No options for this yet." line.
