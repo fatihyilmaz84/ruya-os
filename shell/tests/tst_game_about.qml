@@ -195,7 +195,8 @@ Item {
             focusAbout()
             const sheet = openSheet()
             verify(sheet.fadeSpread > 0, "a spread of 0 is a hard step: nothing would fade")
-            verify(sheet.fadeThreshold < 1)
+            verify(sheet.fadeThreshold - sheet.fadeSpread / 2 <= 0 && sheet.fadeThreshold + sheet.fadeSpread / 2 >= 1,
+                   "the smoothstep spans the mask's whole alpha range 0..1")
             const fade = findChild(sheet, "textSheetFadeMask")
             compare(fade.gradient.stops[0].position, 0.0)
             compare(fade.gradient.stops[1].position, 0.85, "the last 15 %")

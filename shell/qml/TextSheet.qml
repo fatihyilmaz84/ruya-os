@@ -39,8 +39,9 @@ FocusScope {
     readonly property bool moreBelow: scrolls && offset < maxOffset - 0.5
 
     // The fade's mask is soft: MultiEffect's default (threshold 0, spread 0) turns any alpha above 0 into a full
-    // step, so nothing would fade. A spread of 1 maps the mask's alpha 0..1 through a smoothstep (RUY-534).
-    readonly property real fadeThreshold: 0.0
+    // step, so nothing would fade. Threshold 0.5 with spread 1 maps the mask's whole alpha 0..1 through a smoothstep
+    // (as SmoothMask does); threshold 0 would make everything from alpha 0.5 up fully opaque, a fade of one line.
+    readonly property real fadeThreshold: 0.5
     readonly property real fadeSpread: 1.0
 
     // What the hint bar says while this is open (Shell.modalHintsOf).
