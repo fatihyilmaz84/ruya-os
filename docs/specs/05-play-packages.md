@@ -421,7 +421,7 @@ A developer guide chapter and two sample packages (a native Linux one, a Windows
 | Q4 | Emulators: packagers bundle them (decided). Open: does the format need an `emulator` capability check (e.g. needs GPU API X)? | lead | No; `requirements.gpu_api` is enough. |
 | Q5 | Trailer playback: vetted file with the shell's media stack (v1) or an out-of-process player? | lead, T-242 | v1 as in §5; hardening later. |
 | Q6 | Revocation freshness: how old may the cached list be, and what happens past that? | lead, T-231 | Warn but still allow. |
-| Q7 | Per-profile installs (one profile's private game) versus system-wide only. | owner | System-wide only, like all apps (03 §4.1). |
+| Q7 | Per-profile installs (one profile's private game) versus system-wide only. | owner | *Decided (owner, 2026-11-17): system-wide only*, like all apps (03 §4.1): every profile sees an installed package, and its data stays per profile. |
 | D1 | *Decided 2026-11-06:* ADR-014 accepted, conditional on the T-229 spike confirming the Flatpak route. | owner | Done. |
 | D2 | *Decided in part (2026-11-06):* RuyaOS ships no emulators, Proton, firmware or discs. Open only if we host packages: what an Official remote accepts. | owner, later | No Official `.play` remote in v1. |
 | D3 | *Decided 2026-11-06:* the image preinstalls the Wine runner (T-244 reports the size cost). | owner | Done. |
