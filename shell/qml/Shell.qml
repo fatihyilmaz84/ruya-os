@@ -2660,9 +2660,10 @@ FocusScope {
     readonly property PinPad pinPadInPicker: picker.pinPadItem
 
     // The hint shade (owner, lead-27): a soft gradient behind the hint bar instead of a hard edge where a
-    // page's content is clipped above it. Full width, clear at the top, through the hero scrim's colour to
-    // the background colour at the screen's edge; it starts `spaceXxl` above the content's bottom edge (safe area + glyphSize + spaceM), so the
-    // content fades into it. Drawn with the hints, under the hint bar and above pages and modals.
+    // page's content is clipped above it. Full width; it starts `spaceXxl` above the content's bottom edge
+    // (safe area + glyphSize + spaceM), clear, through `hintShadeMid` to the opaque `background` at the top
+    // of the hint bar, and stays opaque below, so content scrolled under it (the game page) has faded out
+    // completely before the hints. Drawn with the hints, under the hint bar and above pages and modals.
     Rectangle {
         id: hintShade
         objectName: "hintShade"
@@ -2671,11 +2672,13 @@ FocusScope {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: root.marginY + (Theme.glyphSize + Theme.spaceM + Theme.spaceXxl) * root.u
+        // Where the hint bar's top lies in the shade (0..1): opaque from there down.
+        readonly property real solidAt: height > 0 ? Math.max(0, Math.min(1, (hintBar.y - y) / height)) : 1
         visible: root.hintList.length > 0
         gradient: Gradient {
             GradientStop { position: 0.0; color: Theme.heroScrimClear }
-            GradientStop { position: 0.45; color: Theme.hintShadeMid }
-            GradientStop { position: 0.8; color: Theme.heroScrim }
+            GradientStop { position: hintShade.solidAt * 0.5; color: Theme.hintShadeMid }
+            GradientStop { position: hintShade.solidAt; color: Theme.background }
             GradientStop { position: 1.0; color: Theme.background }
         }
     }

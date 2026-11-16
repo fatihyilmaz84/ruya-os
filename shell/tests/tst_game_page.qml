@@ -362,6 +362,9 @@ Item {
             compare(shade.width, tc.shell.width, "full width")
             fuzzyCompare(shade.y + shade.height, tc.shell.height, 0.5, "down to the screen's edge")
             verify(shade.y < bar.y, "it starts above the hint bar")
+            // Opaque from the hint bar's top down: content scrolled under it never shows behind the hints.
+            fuzzyCompare(shade.y + shade.solidAt * shade.height, bar.y, 0.5, "the shade is solid from the hint bar's top")
+            verify(shade.solidAt > 0.2 && shade.solidAt < 1, "with a fade above it: " + shade.solidAt)
             verify(shade.z < bar.z && find("versionTag").z >= bar.z, "under the hints and the version tag")
             const viewport = find("detailViewport")
             const bottom = viewport.mapToItem(tc.shell, 0, viewport.height).y
