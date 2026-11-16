@@ -104,6 +104,7 @@ void MockStoreBackend::initState()
                                              {QStringLiteral("thumb"), url},
                                              {QStringLiteral("caption"), QString::fromLatin1(captions[n])}});
     }
+    m_apps[indexOf(QStringLiteral("org.example.Editor"))].version = QStringLiteral("1.1.0"); // its update
     chess.version = QStringLiteral("1.5.0");
     chess.releaseDate = 1710460800; // 2024-03-15
     chess.installedVersion = QStringLiteral("1.4.2");

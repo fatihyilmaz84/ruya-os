@@ -71,7 +71,7 @@
                          one if none has a width); thumb = the narrowest at least 400 px wide (else
                          image); caption = <caption> or "".
     Optional keys above are absent when unknown: a client never shows "Unknown" for them.
-    icon           s    URL (https: or file:) or "" - the shell draws a generated tile then
+    icon            s    URL (https: or file:) or "" - the shell draws a generated tile then
     tile            s    URL or ""
     hero            s    URL or ""
     installed       b

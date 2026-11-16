@@ -384,7 +384,7 @@ fn on_text(b: &mut Builder, stack: &[Open], text: &str, icon_base: &str) {
         ("p" | "li", _) if in_description && !top.translated => b.paragraphs.push(text.to_owned()),
         ("project_license", "component") => b.c.license.push_str(text),
         ("category", "categories") => b.c.categories.push(text.to_owned()),
-        ("image", "screenshot") => {
+        ("image", "screenshot") if !top.translated => {
             if let Some(s) = b.shots.last_mut() {
                 let width = top.size.trim().parse::<u32>().unwrap_or(0);
                 s.images.push((top.kind.clone(), width, text.to_owned()));
@@ -814,6 +814,13 @@ mod tests {
             ],
             "default first; widest at most 1920 (4k source ignored); narrowest at least 400; source without widths"
         );
+    }
+
+    #[test]
+    fn a_localised_image_is_not_picked() {
+        let xml = "<components><component><id>org.a.B</id><screenshots><screenshot>\n            <image type=\"source\" width=\"800\">https://x/en.png</image>\n            <image type=\"source\" width=\"1200\" xml:lang=\"tr\">https://x/tr.png</image>\n            </screenshot></screenshots></component></components>";
+        let shots = &parse(xml, "/i")[0].screenshots;
+        assert_eq!(shots[0].image, "https://x/en.png");
     }
 
     #[test]

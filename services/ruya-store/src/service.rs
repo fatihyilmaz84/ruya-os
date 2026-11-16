@@ -340,6 +340,7 @@ impl<F: Flatpak> Store<F> {
                 None => {
                     app.installed = false;
                     app.update_available = false;
+                    app.installed_version.clear();
                 }
             }
         }
@@ -1719,6 +1720,27 @@ mod tests {
             s.get_app("org.ruya.Racer").1.installed_version,
             "",
             "an update is waiting: the catalogue's version is not the installed one"
+        );
+    }
+
+    #[test]
+    fn an_outside_removal_clears_the_installed_version() {
+        let s = store(
+            FakeFlatpak::default()
+                .with_remote("ruyaos", "RuyaOS", true)
+                .with_app("ruyaos", "org.ruya.Racer", 5_000_000)
+                .with_installed("ruyaos", "org.ruya.Racer", 5_000_000)
+                .with_installed_version("org.ruya.Racer", "1.4.2")
+                .with_appstream("ruyaos", RICH),
+        );
+        assert_eq!(s.get_app("org.ruya.Racer").1.installed_version, "1.4.2");
+        s.flatpak.remove_installed("org.ruya.Racer");
+        assert!(s.list_installed(&mut |_| {}).is_empty());
+        let app = s.get_app("org.ruya.Racer").1;
+        assert!(!app.installed);
+        assert_eq!(
+            app.installed_version, "",
+            "no stale version after an outside removal"
         );
     }
 }

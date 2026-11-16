@@ -364,6 +364,9 @@ Item {
             Store.search("racer")
             tryVerify(() => Store.results.length === 2 && Store.mockPendingReplies() === 0)
             const listed = Store.results.find(a => a.id === id)
+            tryVerify(() => Store.installed.length === 3)
+            verify(Store.installed.every(a => a.screenshots.length === 0 && a.releaseNotes === ""),
+                   "ListInstalled carries no screenshots or release notes")
             compare(listed.screenshots.length, 0, "lists carry no screenshots")
             compare(listed.releaseNotes, "", "lists carry no release notes")
             Store.loadApp(id)
