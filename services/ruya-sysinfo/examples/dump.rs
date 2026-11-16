@@ -10,6 +10,8 @@ fn show(prefix: &str, info: &Info) {
             Value::Text(t) => println!("{prefix}{key} = {t}"),
             Value::Unsigned(n) => println!("{prefix}{key} = {n}"),
             Value::Bool(b) => println!("{prefix}{key} = {b}"),
+            Value::Int(n) => println!("{prefix}{key} = {n}"),
+            Value::Words(w) => println!("{prefix}{key} = {}", w.join(",")),
             Value::Table(rows) => {
                 for (i, row) in rows.iter().enumerate() {
                     show(&format!("{prefix}{key}[{i}]."), row);

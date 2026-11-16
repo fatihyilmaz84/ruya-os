@@ -263,13 +263,32 @@ QtObject {
             const label = drives.length > 1 ? (en ? "Drive " + (i + 1) : qsTr("Drive %1").arg(i + 1)) : tx(QT_TR_NOOP("Drive"))
             section.rows.push({ uid: "storage/drive" + i, key: "drive" + i, label: label, value: parts.join(" · "),
                                 raw: d, sensitive: false, fraction: -1 })
-            // Health only where the drive reports it (NVMe).
-            if (d.health) {
-                const word = d.health === "ok" ? tx(QT_TR_NOOP("Healthy")) : tx(QT_TR_NOOP("Failing"))
+            // Health only where the drive reports it: SMART (RUY-737: "ok", "warning", "failing"; "unsupported"
+            // and absent say nothing), else the NVMe controller's state.
+            const smart = d.smart === "ok" || d.smart === "warning" || d.smart === "failing" ? d.smart : ""
+            const state = smart !== "" ? smart : d.health === "ok" ? "ok" : d.health ? "failing" : ""
+            if (state !== "") {
+                const word = state === "ok" ? tx(QT_TR_NOOP("Healthy")) : state === "warning" ? tx(QT_TR_NOOP("Check soon")) : tx(QT_TR_NOOP("Failing"))
                 section.rows.push({ uid: "storage/drive" + i + "health", key: "drive" + i + "_health",
                                     label: drives.length > 1 ? (en ? "Drive " + (i + 1) + " health" : qsTr("Drive %1 health").arg(i + 1))
                                                               : tx(QT_TR_NOOP("Drive health")),
-                                    value: word, raw: d.health, sensitive: false, fraction: -1 })
+                                    value: word, raw: state, sensitive: false, fraction: -1 })
+            }
+            // How long it has run and, for NVMe, how much of its life is used, where known.
+            if (d.power_on_hours !== undefined) {
+                const h = d.power_on_hours
+                section.rows.push({ uid: "storage/drive" + i + "hours", key: "drive" + i + "_hours",
+                                    label: drives.length > 1 ? (en ? "Drive " + (i + 1) + " powered on" : qsTr("Drive %1 powered on").arg(i + 1))
+                                                              : tx(QT_TR_NOOP("Powered on")),
+                                    value: en ? h + (h === 1 ? " hour" : " hours") : qsTr("%n hour(s)", "", h),
+                                    raw: h, sensitive: false, fraction: -1 })
+            }
+            if (d.wear_percent !== undefined) {
+                section.rows.push({ uid: "storage/drive" + i + "wear", key: "drive" + i + "_wear",
+                                    label: drives.length > 1 ? (en ? "Drive " + (i + 1) + " wear" : qsTr("Drive %1 wear").arg(i + 1))
+                                                              : tx(QT_TR_NOOP("Wear")),
+                                    value: en ? d.wear_percent + " %" : qsTr("%1 %").arg(d.wear_percent),
+                                    raw: d.wear_percent, sensitive: false, fraction: -1 })
             }
         }
         if (Storage.internal.valid && Storage.internal.totalBytes > 0) {

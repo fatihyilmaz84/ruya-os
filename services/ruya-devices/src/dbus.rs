@@ -2288,6 +2288,10 @@ fn system_value(value: &ruya_sysinfo::Value) -> Option<Value<'static>> {
         ruya_sysinfo::Value::Text(t) => Some(Value::from(t.clone())),
         ruya_sysinfo::Value::Unsigned(n) => Some(Value::from(*n)),
         ruya_sysinfo::Value::Bool(b) => Some(Value::from(*b)),
+        ruya_sysinfo::Value::Int(n) => Some(Value::from(
+            (*n).clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32,
+        )),
+        ruya_sysinfo::Value::Words(w) => Some(Value::from(w.clone())),
         ruya_sysinfo::Value::Table(rows) => {
             let row_type = Signature::dict(Signature::Str, Signature::Variant);
             let mut array = Array::new(&row_type);
@@ -2357,6 +2361,71 @@ pub async fn refresh_system(connection: Connection, system: SharedSystem) {
     if unblock(move || reading.refresh_if_stale(Instant::now())).await != Some(true) {
         return;
     }
+    announce_system_changed(&connection).await;
+}
+
+/// Follows udisks2's SMART properties (`PropertiesChanged` of the ATA and NVMe interfaces) and
+/// udisks2 itself appearing or leaving, and after a quiet moment reads the drives again and sends
+/// `SystemInfoChanged` if a record differs (RUY-737). udisks2 refreshes SMART on its own schedule;
+/// there is no polling here. Runs forever.
+#[cfg(target_os = "linux")]
+pub async fn watch_smart(
+    connection: Connection,
+    system: SharedSystem,
+    smart: Arc<crate::smart_source::SmartCache>,
+) {
+    use crate::udisks::UDISKS;
+
+    let changed = |interface: &'static str| {
+        MatchRule::builder()
+            .msg_type(zbus::message::Type::Signal)
+            .sender(UDISKS)
+            .and_then(|b| b.interface("org.freedesktop.DBus.Properties"))
+            .and_then(|b| b.member("PropertiesChanged"))
+            .and_then(|b| b.arg(0, interface))
+            .map(|b| b.build())
+    };
+    let owner = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender("org.freedesktop.DBus")
+        .and_then(|b| b.member("NameOwnerChanged"))
+        .and_then(|b| b.arg(0, UDISKS))
+        .map(|b| b.build());
+    let (Ok(ata), Ok(nvme), Ok(owner)) = (
+        changed("org.freedesktop.UDisks2.Drive.Ata"),
+        changed("org.freedesktop.UDisks2.NVMe.Controller"),
+        owner,
+    ) else {
+        return log::warn("cannot follow the SMART state of the drives");
+    };
+    let (ata, nvme, owner) = match (
+        MessageStream::for_match_rule(ata, &connection, None).await,
+        MessageStream::for_match_rule(nvme, &connection, None).await,
+        MessageStream::for_match_rule(owner, &connection, None).await,
+    ) {
+        (Ok(a), Ok(b), Ok(c)) => (a, b, c),
+        (Err(err), _, _) | (_, Err(err), _) | (_, _, Err(err)) => {
+            return log::warn(&format!(
+                "cannot follow the SMART state of the drives: {err}"
+            ));
+        }
+    };
+    let mut stream = futures_lite::stream::or(futures_lite::stream::or(ata, nvme), owner);
+    while stream.next().await.is_some() {
+        debounce::settle(&mut stream, debounce::QUIET, debounce::MAX_WAIT, None).await;
+        let (system, smart) = (system.clone(), smart.clone());
+        let differs = unblock(move || {
+            smart.invalidate();
+            system.refresh_now(Instant::now())
+        })
+        .await;
+        if differs {
+            announce_system_changed(&connection).await;
+        }
+    }
+}
+
+async fn announce_system_changed(connection: &Connection) {
     match connection
         .object_server()
         .interface::<_, SystemIface>(OBJECT_PATH)
@@ -2557,6 +2626,44 @@ mod tests {
         assert_eq!(signature("memory.total_bytes").as_deref(), Some("t"));
         assert_eq!(signature("console.secure_boot").as_deref(), Some("b"));
         assert_eq!(signature("storage.drives").as_deref(), Some("aa{sv}"));
+    }
+
+    #[test]
+    fn the_smart_keys_of_a_drive_have_the_contracts_types() {
+        use ruya_sysinfo::DriveSmart;
+        let src = FakeSource::new()
+            .file("/sys/block/sda/size", "2048\n")
+            .file("/sys/block/sda/removable", "0\n")
+            .smart(
+                "sda",
+                DriveSmart {
+                    smart: "warning".into(),
+                    reasons: vec!["bad-sectors".into()],
+                    power_on_hours: Some(5),
+                    wear_percent: Some(91),
+                    temperature_c: Some(-2),
+                },
+            );
+        let info = collect(&src);
+        let rows = info.get_table("storage.drives").expect("drives");
+        let Some(Value::Array(array)) = system_value(&ruya_sysinfo::Value::Table(rows.to_vec()))
+        else {
+            panic!("a table is an array");
+        };
+        let Some(Value::Dict(row)) = array.iter().next() else {
+            panic!("one record");
+        };
+        let signature = |key: &str| {
+            let Ok(Some(inner)) = row.get::<_, Value<'_>>(&key) else {
+                return "absent".to_owned();
+            };
+            inner.value_signature().to_string()
+        };
+        assert_eq!(signature("smart"), "s");
+        assert_eq!(signature("smart_reasons"), "as");
+        assert_eq!(signature("power_on_hours"), "t");
+        assert_eq!(signature("wear_percent"), "t");
+        assert_eq!(signature("temperature_c"), "i");
     }
 
     /// A slow card switch runs on the blocking pool: the executor stays free for every other

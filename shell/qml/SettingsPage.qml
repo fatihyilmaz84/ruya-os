@@ -181,8 +181,15 @@ Page {
             Accessible.role: Accessible.ListItem
             // Settings -> System carries the console's heat status (T-200): a mark while it is warm or hotter.
             readonly property bool heatMarked: modelData.key === "system" && Thermal.level !== "normal"
-            Accessible.name: heatMarked ? page.labelFor(modelData.key) + ", " + ThermalText.levelText(Thermal.level)
-                                        : page.labelFor(modelData.key)
+            // ... and a drive that is "Check soon" or failing (RUY-737, DriveHealth).
+            readonly property string driveMarked: modelData.key === "system" && (DriveHealth.worst === "warning" || DriveHealth.worst === "failing") ? DriveHealth.worst : ""
+            readonly property bool marked: heatMarked || driveMarked !== ""
+            // Red from "hot" or a failing drive on, amber below that.
+            readonly property color markColor: (heatMarked && Thermal.level !== "warm") || driveMarked === "failing" ? Theme.errorText : Theme.warningText
+            Accessible.name: marked ? page.labelFor(modelData.key)
+                                      + (heatMarked ? ", " + ThermalText.levelText(Thermal.level) : "")
+                                      + (driveMarked !== "" ? ", " + DriveHealth.stateText(driveMarked) : "")
+                                    : page.labelFor(modelData.key)
             Accessible.selected: selected
 
             width: categoryList.width
@@ -203,12 +210,12 @@ Page {
 
             Rectangle {
                 objectName: "categoryHeatMark_" + category.modelData.key
-                visible: category.heatMarked
+                visible: category.marked
                 anchors { right: parent.right; rightMargin: Theme.spaceM * page.u; verticalCenter: parent.verticalCenter }
                 width: Theme.spaceM * page.u
                 height: width
                 radius: width / 2
-                color: ThermalText.levelColor(Thermal.level)
+                color: category.markColor
             }
         }
     }

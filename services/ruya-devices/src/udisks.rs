@@ -12,6 +12,7 @@ use futures_lite::future;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
 use zbus::{Connection, DBusError};
 
+use crate::smart::{AtaProps, NvmeProps, Raw};
 use crate::storage::{RawVolume, Udisks, UnmountError};
 
 pub const UDISKS: &str = "org.freedesktop.UDisks2";
@@ -246,5 +247,134 @@ impl Udisks for UdisksClient {
             let args: HashMap<&str, Value<'_>> = HashMap::new();
             self.call(&drive, DRIVE, member, &(args,)).await.map(|_| ())
         })
+    }
+}
+
+// --- SMART (RUY-737) -------------------------------------------------------------------------------
+
+const ATA: &str = "org.freedesktop.UDisks2.Drive.Ata";
+const NVME: &str = "org.freedesktop.UDisks2.NVMe.Controller";
+const PARTITION: &str = "org.freedesktop.UDisks2.Partition";
+
+/// A number of whatever width udisks2 used for it.
+fn number(d: &Dict, key: &str) -> Option<f64> {
+    match d.get(key).map(|v| &**v)? {
+        Value::U8(n) => Some(f64::from(*n)),
+        Value::I16(n) => Some(f64::from(*n)),
+        Value::U16(n) => Some(f64::from(*n)),
+        Value::I32(n) => Some(f64::from(*n)),
+        Value::U32(n) => Some(f64::from(*n)),
+        Value::I64(n) => Some(*n as f64),
+        Value::U64(n) => Some(*n as f64),
+        Value::F64(n) => Some(*n),
+        _ => None,
+    }
+}
+
+fn whole(d: &Dict, key: &str) -> u64 {
+    number(d, key).filter(|n| *n > 0.0).map_or(0, |n| n as u64)
+}
+
+fn words(d: &Dict, key: &str) -> Vec<String> {
+    match d.get(key).map(|v| &**v) {
+        Some(Value::Array(items)) => items
+            .iter()
+            .filter_map(|i| match i {
+                Value::Str(s) => Some(s.as_str().to_owned()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// `sda` from the block's NUL-terminated `Device` bytes (`/dev/sda`).
+fn block_name(block: &Dict) -> Option<String> {
+    let Some(Value::Array(bytes)) = block.get("Device").map(|v| &**v) else {
+        return None;
+    };
+    let raw: Vec<u8> = bytes
+        .iter()
+        .filter_map(|b| match b {
+            Value::U8(b) if *b != 0 => Some(*b),
+            _ => None,
+        })
+        .collect();
+    let path = String::from_utf8_lossy(&raw).into_owned();
+    path.strip_prefix("/dev/").map(str::to_owned)
+}
+
+fn ata_props(d: &Dict) -> AtaProps {
+    AtaProps {
+        supported: flag(d, "SmartSupported"),
+        enabled: flag(d, "SmartEnabled"),
+        updated: whole(d, "SmartUpdated"),
+        failing: flag(d, "SmartFailing"),
+        bad_sectors: number(d, "SmartNumBadSectors").map_or(0, |n| n as i64),
+        selftest: text(d, "SmartSelftestStatus"),
+        temperature_k: number(d, "SmartTemperature").unwrap_or(0.0),
+        power_on_seconds: whole(d, "SmartPowerOnSeconds"),
+    }
+}
+
+impl UdisksClient {
+    /// The attributes only a method gives: spare, its threshold and the percentage used.
+    async fn nvme_attributes(&self, drive: &str) -> Dict {
+        let options: HashMap<&str, Value<'_>> = HashMap::new();
+        match self
+            .call(drive, NVME, "SmartGetAttributes", &(options,))
+            .await
+        {
+            Ok(reply) => reply.body().deserialize().unwrap_or_default(),
+            Err(_) => Dict::new(),
+        }
+    }
+
+    async fn smart(&self) -> Result<HashMap<String, Raw>, String> {
+        let objects = self.objects().await?;
+        let mut out = HashMap::new();
+        for ifaces in objects.values() {
+            let Some(block) = ifaces.get(BLOCK) else {
+                continue;
+            };
+            // A partition is not a drive; a block without a drive (loop, zram) has no SMART either.
+            if ifaces.contains_key(PARTITION) {
+                continue;
+            }
+            let drive_path = object(block, "Drive");
+            let Some(name) = block_name(block).filter(|_| !drive_path.is_empty()) else {
+                continue;
+            };
+            let Some(drive) = objects
+                .iter()
+                .find(|(p, _)| p.as_str() == drive_path)
+                .map(|(_, i)| i)
+            else {
+                continue;
+            };
+            let raw = if let Some(d) = drive.get(ATA) {
+                Raw::Ata(ata_props(d))
+            } else if let Some(d) = drive.get(NVME) {
+                let attrs = self.nvme_attributes(&drive_path).await;
+                Raw::Nvme(NvmeProps {
+                    updated: whole(d, "SmartUpdated"),
+                    critical: words(d, "SmartCriticalWarning"),
+                    power_on_hours: whole(d, "SmartPowerOnHours"),
+                    temperature_k: whole(d, "SmartTemperature") as u32,
+                    percent_used: number(&attrs, "percent_used").map(|n| n as u64),
+                    avail_spare: number(&attrs, "avail_spare").map(|n| n as u64),
+                    spare_thresh: number(&attrs, "spare_thresh").map(|n| n as u64),
+                })
+            } else {
+                Raw::Neither
+            };
+            out.insert(name, raw);
+        }
+        Ok(out)
+    }
+
+    /// Every drive's SMART state, by block device name. Blocks.
+    pub fn smart_drives(&self) -> Result<HashMap<String, Raw>, String> {
+        future::block_on(self.smart())
     }
 }

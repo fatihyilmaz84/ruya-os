@@ -11,6 +11,18 @@ use std::time::Duration;
 /// Longest a command may take; a hung one is killed and counts as "not readable".
 pub const COMMAND_TIMEOUT: Duration = Duration::from_secs(3);
 
+/// The SMART keys of one `storage.drives` record (api/dbus/org.ruyaos.Devices1.xml). The rules that
+/// make them are `ruya-devices/src/smart.rs`.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DriveSmart {
+    /// "ok" | "warning" | "failing" | "unsupported".
+    pub smart: String,
+    pub reasons: Vec<String>,
+    pub power_on_hours: Option<u64>,
+    pub wear_percent: Option<u64>,
+    pub temperature_c: Option<i64>,
+}
+
 /// Everything the collector reads. Paths are absolute, with `/`; every method answers `None`
 /// (or an empty list) for what cannot be read, which is what keeps a value absent.
 pub trait Source {
@@ -30,6 +42,13 @@ pub trait Source {
     /// (`hci1`) and its address, "" when not known. A source that does not know answers `None`
     /// and the collector takes the first adapter in sysfs (T-359).
     fn primary_bluetooth(&self) -> Option<(String, String)> {
+        None
+    }
+
+    /// What udisks2 says about the SMART state of the block device `block` (`sda`, `nvme0n1`), as
+    /// the service (`ruya-devices`) decided it (RUY-737). A source that does not know answers
+    /// `None`: every SMART key of the drive stays absent.
+    fn drive_smart(&self, _block: &str) -> Option<DriveSmart> {
         None
     }
 
@@ -170,6 +189,7 @@ pub struct FakeSource {
     /// Files that exist (listed, `exists`) but whose reading fails, like a root-only file.
     unreadable: BTreeSet<String>,
     commands: BTreeMap<String, String>,
+    smart: BTreeMap<String, DriveSmart>,
 }
 
 impl FakeSource {
@@ -179,6 +199,12 @@ impl FakeSource {
 
     pub fn file(mut self, path: &str, text: &str) -> Self {
         self.files.insert(path.to_owned(), text.as_bytes().to_vec());
+        self
+    }
+
+    /// What `drive_smart` answers for the block device `block`.
+    pub fn smart(mut self, block: &str, smart: DriveSmart) -> Self {
+        self.smart.insert(block.to_owned(), smart);
         self
     }
 
@@ -352,6 +378,10 @@ fn normalise(path: &str) -> String {
 }
 
 impl Source for FakeSource {
+    fn drive_smart(&self, block: &str) -> Option<DriveSmart> {
+        self.smart.get(block).cloned()
+    }
+
     fn read(&self, path: &str) -> Option<String> {
         let bytes = self.files.get(&self.canonical(path))?;
         Some(String::from_utf8_lossy(bytes).into_owned())

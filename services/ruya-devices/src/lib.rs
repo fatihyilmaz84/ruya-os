@@ -34,6 +34,8 @@ pub mod park;
 pub mod performance;
 pub mod pipewire;
 pub mod report;
+pub mod smart;
+pub mod smart_source;
 pub mod storage;
 pub mod store;
 pub mod sysinfo;

@@ -466,7 +466,13 @@ expect_contains "the remote is deleted" "$log" "remote-delete --system --force r
 # --- vm-gaming-check.sh (RUY-525, RUY-527): each assertion can fail ---------------------------------
 echo "vm-gaming-check.sh: ntsync and the two sysctls, each can fail"
 gm="$tmp/gaming/bin"; mkdir -p "$gm"
-printf '#!/bin/sh\nif [ "${FAKE_NO_NTSYNC:-}" ]; then echo "Module Size Used by"; else echo "Module Size Used by"; echo "ntsync 24576 0"; fi\n' > "$gm/lsmod"
+cat > "$gm/lsmod" <<'SHIMEOF'
+#!/bin/sh
+echo "Module Size Used by"
+[ -z "${FAKE_NO_NTSYNC:-}" ] && echo "ntsync 24576 0"
+[ -z "${FAKE_NO_DRIVETEMP:-}" ] && echo "drivetemp 16384 0"
+exit 0
+SHIMEOF
 cat > "$gm/sysctl" <<'SHIMEOF'
 #!/bin/sh
 case "$2" in
@@ -485,6 +491,9 @@ expect_contains "all good: passes" "$out" "ALL CHECKS PASSED"
 out="$(FAKE_NO_NTSYNC=1 rungame)"; rc=$?
 expect_contains "module not loaded fails" "$out" "FAIL: module ntsync is not loaded"
 [ "$rc" = 1 ] && pass "module not loaded: exit 1" || fail "module not loaded: exit $rc"
+out="$(FAKE_NO_DRIVETEMP=1 rungame)"; rc=$?
+expect_contains "drivetemp not loaded fails" "$out" "FAIL: module drivetemp is not loaded"
+[ "$rc" = 1 ] && pass "drivetemp not loaded: exit 1" || fail "drivetemp not loaded: exit $rc"
 out="$(DEVPATH="$tmp/no-such-dev" rungame)"
 expect_contains "no device fails" "$out" "FAIL: $tmp/no-such-dev is not a character device"
 out="$(FAKE_MODE=660 rungame)"
@@ -1132,6 +1141,37 @@ out="$(btrun "usb" "")"
 expect_contains "PrimaryAdapterOff set with both adapters on: FAIL" "$out" "should be empty with both adapters on, not 'usb' / ''"
 out="$(btrun "" "hci0")"
 expect_contains "AdapterInUse set with both adapters on: FAIL" "$out" "not '' / 'hci0'"
+
+# --- vm-devices-check.sh smart_check (RUY-737): the virtio disk is "unsupported" and has no numbers --------------
+echo "vm-devices-check.sh: smart_check, the virtio disk and a failing drive"
+smd="$tmp/smart/bin"; mkdir -p "$smd"
+cat > "$smd/busctl" <<'SHIMEOF'
+#!/bin/sh
+echo "a{sv} 1 \"storage.drives\" aa{sv} 1 2 \"model\" s \"QEMU\" \"size_bytes\" t 100 ${FAKE_SMART_KEYS-\"smart\" s \"unsupported\"}"
+SHIMEOF
+cat > "$smd/lsblk" <<'SHIMEOF'
+#!/bin/sh
+echo "${FAKE_DISK-vda} disk"
+SHIMEOF
+chmod +x "$smd"/*
+smartrun() {
+    (
+        export VM_CHECK_LIB_ONLY=1
+        # shellcheck disable=SC1090
+        . "$here/vm-devices-check.sh"
+        PATH="$smd:$PATH" smart_check
+    ) 2>&1
+}
+out="$(smartrun)"
+expect_contains "virtio disk unsupported: PASS" "$out" "PASS: the virtio disk's record says smart unsupported"
+expect_contains "virtio disk without numbers: PASS" "$out" "PASS: no hours, wear or temperature for the virtio disk"
+out="$(FAKE_SMART_KEYS='"smart" s "ok"' smartrun)"
+expect_contains "virtio disk reading ok: FAIL" "$out" "FAIL: the virtio disk's record has no"
+out="$(FAKE_SMART_KEYS='"smart" s "unsupported" "power_on_hours" t 5' smartrun)"
+expect_contains "virtio disk with hours: FAIL" "$out" "FAIL: a virtio disk carries power_on_hours"
+out="$(FAKE_DISK=sda FAKE_SMART_KEYS='"smart" s "failing"' smartrun)"
+expect_contains "a failing drive: FAIL" "$out" "FAIL: a drive reports smart failing"
+expect_contains "a real disk: info only" "$out" "info: no virtio disk here"
 
 # --- vm-boot-check.sh watchdog (RUY-483): the unit's settings, no early trip, the SIGSTOP restart ------------------
 echo "vm-boot-check.sh watchdog: WatchdogSec=30s, no trip since boot, a stopped shell is restarted by the watchdog"

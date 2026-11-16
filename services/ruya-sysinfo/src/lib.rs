@@ -23,7 +23,7 @@ pub mod storage;
 pub mod value;
 
 pub use collect::{collect, collect_live, collect_static, LIVE_KEYS};
-pub use source::{FakeSource, RootSource, Source};
+pub use source::{DriveSmart, FakeSource, RootSource, Source};
 pub use value::{Info, Value};
 
 /// The Dell of the T-226 task as a dump (`FakeSource::from_dump`): what the service answers in

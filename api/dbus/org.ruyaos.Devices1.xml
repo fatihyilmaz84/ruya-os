@@ -1213,8 +1213,34 @@
         storage.drives          aa{sv}  the internal drives (not removable, not behind USB), one
                                     record each: model s, type s ("nvme" | "ssd" | "hdd" | "emmc"),
                                     size_bytes t, and health s ("ok" | "failed") for NVMe only, from
-                                    the controller state that sysfs gives (no SMART; no health for
-                                    other drives)
+                                    the controller state that sysfs gives (no health for other
+                                    drives). `health` is superseded by `smart` and kept for
+                                    compatibility. The SMART keys below come from udisks2
+                                    (Drive.Ata, Drive.NVMe.Controller; no smartctl), are all
+                                    optional, and an absent key means unknown (never shown as
+                                    "Unknown"); all are absent when udisks2 is not there or has
+                                    not read the drive yet. Experimental (RUY-737):
+                                      smart           s   "ok" | "warning" | "failing" | "unsupported".
+                                                          failing: ATA SmartFailing, or an NVMe
+                                                          critical warning for spare, reliability or
+                                                          read-only. warning: bad sectors > 0, a failed
+                                                          ATA self-test, NVMe available spare at or
+                                                          below its threshold, or wear >= 90 %. SMART
+                                                          unsupported or off (the VM's virtio disk):
+                                                          "unsupported". Otherwise "ok"
+                                      smart_reasons   as  machine words, why it is not "ok":
+                                                          "failing" (ATA SmartFailing) | "bad-sectors" |
+                                                          "critical-warning" | "spare-low" | "worn" |
+                                                          "self-test-failed"; absent when ok
+                                      power_on_hours  t   ATA SmartPowerOnSeconds / 3600; NVMe
+                                                          SmartPowerOnHours as given
+                                      wear_percent    t   NVMe percentage used (can pass 100)
+                                      temperature_c   i   the drive's own SMART reading in degrees
+                                                          Celsius; the shell shows it only where Thermal
+                                                          has no sensor for that drive (SATA drives get
+                                                          one from drivetemp, which the image loads)
+                                    SystemInfoChanged is also sent when udisks2 reports that a SMART
+                                    value changed (no polling of its own).
 
         network.interface        s  the interface of the default route ("eno1")
         network.mac              s  its hardware address
