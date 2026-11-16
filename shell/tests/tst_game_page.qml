@@ -407,6 +407,8 @@ Item {
             keyClick(Qt.Key_Up)
             verify(find("detailPrimary").activeFocus, "Up stops at the first stop")
             keyClick(Qt.Key_Down)
+            verify(find("screenshotStrip").activeFocus, "Screenshots is one stop (RUY-533)")
+            keyClick(Qt.Key_Down)
             verify(find("detailPermissions").activeFocus, "This app can is one stop")
             compare(hintVerbs(), "back Back")
             keyClick(Qt.Key_Down)

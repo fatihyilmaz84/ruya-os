@@ -293,7 +293,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+191"/>
+        <location filename="../qml/AppDetailPage.qml" line="+196"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -521,12 +521,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="-7"/>
-        <location line="+321"/>
+        <location line="+327"/>
         <source>Steam</source>
         <translation>Steam</translation>
     </message>
     <message>
-        <location line="-320"/>
+        <location line="-326"/>
         <source>Steam app ID</source>
         <translation>Steam app ID</translation>
     </message>
@@ -596,7 +596,7 @@ This can&apos;t be undone.</translation>
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+587"/>
+        <location line="+605"/>
         <source>No special permissions.</source>
         <translation>No special permissions.</translation>
     </message>
@@ -636,7 +636,7 @@ This can&apos;t be undone.</translation>
         <translation>Close the game to uninstall it.</translation>
     </message>
     <message>
-        <location line="-863"/>
+        <location line="-881"/>
         <source>Install</source>
         <translation>Install</translation>
     </message>
@@ -647,7 +647,7 @@ This can&apos;t be undone.</translation>
         <translation>Update</translation>
     </message>
     <message>
-        <location line="+625"/>
+        <location line="+631"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Needs a newer RuyaOS than this console has. It stays installed.</translation>
     </message>
@@ -662,7 +662,7 @@ This can&apos;t be undone.</translation>
         <translation>Store details are unavailable right now.</translation>
     </message>
     <message>
-        <location line="+47"/>
+        <location line="+59"/>
         <location line="+9"/>
         <source>This app can</source>
         <translation>This app can</translation>
@@ -673,12 +673,12 @@ This can&apos;t be undone.</translation>
         <translation>High risk</translation>
     </message>
     <message>
-        <location line="-104"/>
+        <location line="-116"/>
         <source>The update adds: %1</source>
         <translation>The update adds: %1</translation>
     </message>
     <message>
-        <location line="-653"/>
+        <location line="-659"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Open</translation>
@@ -716,7 +716,7 @@ This can&apos;t be undone.</translation>
         <translation>Try again</translation>
     </message>
     <message>
-        <location line="+376"/>
+        <location line="+382"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -4655,6 +4655,49 @@ This can&apos;t be undone.</translation>
         <location filename="../qml/ScreenSaver.qml" line="+56"/>
         <source>Screen saver</source>
         <translation>Screen saver</translation>
+    </message>
+</context>
+<context>
+    <name>ScreenshotRow</name>
+    <message>
+        <location filename="../qml/ScreenshotRow.qml" line="+27"/>
+        <source>View</source>
+        <translation>View</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <location line="+28"/>
+        <source>Screenshots</source>
+        <translation>Screenshots</translation>
+    </message>
+</context>
+<context>
+    <name>ScreenshotViewer</name>
+    <message>
+        <location filename="../qml/ScreenshotViewer.qml" line="+26"/>
+        <source>Browse</source>
+        <translation>Browse</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Close</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <location line="+50"/>
+        <location line="+124"/>
+        <source>%1 of %2</source>
+        <translation>%1 of %2</translation>
+    </message>
+    <message>
+        <location line="-18"/>
+        <source>Couldn&apos;t load this picture.</source>
+        <translation>Couldn&apos;t load this picture.</translation>
     </message>
 </context>
 <context>

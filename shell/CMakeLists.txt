@@ -265,6 +265,8 @@ qt_add_qml_module(ruyashell
         qml/ActivityPage.qml
         qml/ActivityGamePage.qml
         qml/GameActivity.qml
+        qml/ScreenshotRow.qml
+        qml/ScreenshotViewer.qml
         qml/BarChart.qml
         qml/DurationText.qml
         qml/UsagePresence.qml
