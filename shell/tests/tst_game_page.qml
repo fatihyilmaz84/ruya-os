@@ -294,6 +294,20 @@ Item {
             verify(find("detail_retry").activeFocus, "Try again keeps the focus")
         }
 
+        function test_the_service_going_away_offers_try_again() {
+            start()
+            openPage({ id: tc.puzzle })
+            compare(find("detail_retry"), null, "the Store answers: no Try again")
+            Store.mockServiceLost()
+            tryVerify(() => !Store.available)
+            tryVerify(() => find("detail_retry") !== null, 2000, "Try again appears")
+            verify(find("detailStoreDown").visible)
+            compare(find("detailPrimary").text, "Play", "the Library data and Play stay")
+            Store.mockServiceRegained()
+            tryVerify(() => Store.available)
+            tryVerify(() => find("detail_retry") === null, 2000, "and goes when it answers again")
+        }
+
         function test_an_install_error_is_a_status_line() {
             start()
             tc.shell.openPage("appDetail", { appId: "org.example.Broken" })

@@ -71,8 +71,8 @@ Page {
     readonly property bool manageShown: hasRecord && installed && !isSteam && !working
     readonly property bool uninstallShown: manageShown && !running && !closing
 
-    // The Store does not answer about this item: GetApp failed, or the Library lists a Flatpak the Store has no record of.
-    readonly property bool storeDown: detailsFailed || (!hasRecord && hasItem && appId !== "")
+    // The Store does not answer about this item: GetApp failed, the service is away, or the Library lists a Flatpak the Store has no record of.
+    readonly property bool storeDown: detailsFailed || (appId !== "" && !Store.available) || (!hasRecord && hasItem && appId !== "")
 
     title: hasRecord ? (app.name ?? "") : hasItem ? (item.title ?? "") : (appId.split(".").pop() ?? "")
 
