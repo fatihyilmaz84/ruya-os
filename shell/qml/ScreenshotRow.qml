@@ -53,9 +53,9 @@ Column {
         property real scrollX: 0
         readonly property bool stop: root.count > 0
 
-        // What the focused card grows by (scale and ring): the page clips at the content edge, so the
-        // card is kept this far inside it.
-        readonly property real grow: (Theme.focusScale - 1) / 2 * root.cardWidth + (Theme.focusRingOffset + Theme.focusRingWidth) * root.u
+        // What the focused card grows by (its scale; the ring's own width is the page's ringBleed): the page
+        // clips just outside the content edge, so the card is kept this far inside it.
+        readonly property real grow: (Theme.focusScale - 1) / 2 * root.cardWidth
 
         function reveal() {
             const left = currentIndex * root.step
