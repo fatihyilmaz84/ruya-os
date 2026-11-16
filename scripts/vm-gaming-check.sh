@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Checks the image's gaming kernel settings (RUY-525 ntsync, RUY-527 sysctls; docs/specs/01-platform.md 1.5)
+# Checks the image's gaming kernel settings (RUY-525 ntsync, RUY-527 sysctls, RUY-737 the drivetemp module; docs/specs/01-platform.md 1.5)
 # inside a running VM, as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-gaming-check.sh root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-gaming-check.sh [check|flatpak <app-id>]
@@ -25,6 +25,8 @@ sysblock="${SYS_BLOCK:-/sys/block}"
 check() {
     echo "--- ntsync"
     if lsmod | grep -q '^ntsync '; then ok "module ntsync is loaded"; else bad "module ntsync is not loaded (modules-load.d/ruyaos-ntsync.conf)"; fi
+    # RUY-737: SATA drives get a temperature (Device health) only through this hwmon driver.
+    if lsmod | grep -q '^drivetemp '; then ok "module drivetemp is loaded"; else bad "module drivetemp is not loaded (modules-load.d/ruyaos-drivetemp.conf)"; fi
     if [ -c "$dev" ]; then ok "$dev is a character device"; else bad "$dev is not a character device"; fi
     if [ -e "$dev" ]; then
         mode="$(stat -c '%a' "$dev")"

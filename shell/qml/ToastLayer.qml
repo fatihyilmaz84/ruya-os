@@ -46,6 +46,18 @@ Item {
         }
     }
 
+    // A drive's SMART says it is failing (once per drive and boot, DriveHealth.failing): the one drive
+    // notice that is not about plugging. The action opens Settings > System, where Device health says
+    // which drive (RUY-737).
+    Connections {
+        target: DriveHealth
+        function onFailing(model) {
+            Notifications.show(qsTr("A drive is failing"), "warning", "", "warning",
+                               model !== "" ? qsTr("%1 · Back up your saves").arg(model) : qsTr("Back up your saves"),
+                               { source: "devices", actions: [{ id: "settings:system", label: qsTr("Open Settings") }] })
+        }
+    }
+
     // A drive was plugged in (once per drive and insert, when its volumes are in the list; a stick
     // with several partitions names the first and counts the rest), and an eject finished.
     // No actions yet; nothing on the drive is opened or run.

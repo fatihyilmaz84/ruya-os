@@ -32,13 +32,19 @@ SettingsPane {
     property string rollbackStep: "idle"     // idle | pin | confirm | working
     property Item returnTo: null
 
-    // A sensor row: label, a mark and its word when the level is not normal, and the value.
+    // A sensor row: label, a mark and its word when the level is not normal, and the value. A drive's
+    // row (RUY-737) names its own word and colour in `markText` and `markColor` and has the model as
+    // its second line (`detail`).
     component HealthRow: SettingControl {
         id: health
         property string value
         property string level: "normal"
-        readonly property bool marked: level !== "normal"
-        accessibleValue: marked ? value + ", " + ThermalText.levelText(level) : value
+        property string markText: ThermalText.levelText(level)
+        property color markColor: ThermalText.levelColor(level)
+        readonly property bool marked: markText !== ""
+        accessibleValue: marked ? value + ", " + markText : value
+        trailingWidth: healthValue.implicitWidth + Theme.spaceL * u
+                       + (marked ? healthLevel.implicitWidth + Theme.spaceM * u * 2 : 0)
 
         Text {
             id: healthValue
@@ -54,8 +60,8 @@ SettingsPane {
             objectName: "levelText"
             visible: health.marked
             anchors { right: healthValue.left; rightMargin: Theme.spaceM * health.u; verticalCenter: parent.verticalCenter }
-            text: ThermalText.levelText(health.level)
-            color: ThermalText.levelColor(health.level)
+            text: health.markText
+            color: health.markColor
             font.pixelSize: Theme.typeBody * health.u
         }
 
@@ -66,7 +72,7 @@ SettingsPane {
             width: Theme.spaceM * health.u
             height: width
             radius: width / 2
-            color: ThermalText.levelColor(health.level)
+            color: health.markColor
         }
     }
 
@@ -103,6 +109,38 @@ SettingsPane {
         Qt.callLater(pane.refocus, before)
     }
 
+    // The drives' rows (RUY-737) follow DriveHealth.drives by key, in place, like the sensors.
+    ListModel { id: driveModel }
+
+    function syncDrives() {
+        const before = pane.activeFocus ? focusableRows().findIndex(r => r.activeFocus) : -1
+        const list = DriveHealth.drives
+        for (let i = driveModel.count - 1; i >= 0; --i) {
+            const key = driveModel.get(i).driveKey
+            if (!list.some(d => d.key === key))
+                driveModel.remove(i)
+        }
+        for (let i = 0; i < list.length; ++i) {
+            const d = list[i]
+            const entry = { driveKey: d.key, driveState: d.state }
+            let at = -1
+            for (let j = 0; j < driveModel.count; ++j) {
+                if (driveModel.get(j).driveKey === d.key) {
+                    at = j
+                    break
+                }
+            }
+            if (at < 0) {
+                driveModel.insert(i, entry)
+            } else {
+                driveModel.set(at, entry)
+                if (at !== i)
+                    driveModel.move(at, i, 1)
+            }
+        }
+        Qt.callLater(pane.refocus, before)
+    }
+
     // After a list update: if the focused row vanished, focus the row now at its place (or the last).
     function refocus(index) {
         if (!pane.activeFocus || index < 0)
@@ -127,7 +165,14 @@ SettingsPane {
         target: Thermal
         function onSensorsChanged() { pane.syncSensors() }
     }
-    Component.onCompleted: syncSensors()
+    Connections {
+        target: DriveHealth
+        function onDrivesChanged() { pane.syncDrives() }
+    }
+    Component.onCompleted: {
+        syncSensors()
+        syncDrives()
+    }
 
     function channelLabel(channel) {
         return channel === "beta" ? qsTr("Beta") : qsTr("Stable")
@@ -535,6 +580,27 @@ SettingsPane {
             label: ThermalText.nameOf(sensorId)
             value: ThermalText.valueText({ cls: sensorClass, value: reading })
             level: sensorLevel
+        }
+    }
+
+    // One row per internal drive that reports SMART, after the temperatures (RUY-737): "Good", or
+    // "Check soon" / "Failing" with a mark and the word (colour is never alone); the model is the second
+    // line. A drive without SMART (the VM's virtio disk) has no row.
+    Repeater {
+        model: driveModel
+        HealthRow {
+            id: driveRow
+            required property int index
+            required property string driveKey
+            required property string driveState
+            readonly property var drive: DriveHealth.drives.find(d => d.key === driveKey) ?? ({ model: "" })
+            objectName: "healthDrive_" + index
+            u: pane.u
+            label: DriveHealth.nameOf(index)
+            value: DriveHealth.stateText(driveState)
+            detail: DriveHealth.detailOf(drive)
+            markText: driveState === "ok" ? "" : DriveHealth.stateText(driveState)
+            markColor: DriveHealth.markColor(driveState)
         }
     }
 }

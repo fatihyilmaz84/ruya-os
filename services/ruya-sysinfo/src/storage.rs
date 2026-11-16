@@ -70,6 +70,19 @@ pub fn collect_static(src: &dyn Source, info: &mut Info) {
                 row.text("health", health);
             }
         }
+        if let Some(smart) = src.drive_smart(&name) {
+            row.text("smart", &smart.smart);
+            row.words("smart_reasons", smart.reasons);
+            if let Some(h) = smart.power_on_hours {
+                row.unsigned("power_on_hours", h);
+            }
+            if let Some(w) = smart.wear_percent {
+                row.unsigned("wear_percent", w);
+            }
+            if let Some(t) = smart.temperature_c {
+                row.int("temperature_c", t);
+            }
+        }
         drives.push(row);
     }
     if !drives.is_empty() {
@@ -125,6 +138,62 @@ mod tests {
         assert_eq!(rows[0].get_unsigned("size_bytes"), Some(976_773_168 * 512));
         assert_eq!(rows[0].get_text("type"), Some("ssd"));
         assert!(!rows[0].contains("health"), "no health for a SATA drive");
+    }
+
+    #[test]
+    fn smart_keys_come_from_the_source_and_are_absent_without() {
+        use crate::source::DriveSmart;
+        let src = FakeSource::new()
+            .file(
+                "/sys/block/sda/size",
+                "976773168
+",
+            )
+            .file(
+                "/sys/block/sda/removable",
+                "0
+",
+            )
+            .file(
+                "/sys/block/sdb/size",
+                "976773168
+",
+            )
+            .file(
+                "/sys/block/sdb/removable",
+                "0
+",
+            )
+            .smart(
+                "sda",
+                DriveSmart {
+                    smart: "warning".into(),
+                    reasons: vec!["bad-sectors".into()],
+                    power_on_hours: Some(12_000),
+                    wear_percent: Some(91),
+                    temperature_c: Some(-3),
+                },
+            );
+        let mut info = Info::new();
+        collect_static(&src, &mut info);
+        let rows = info.get_table("storage.drives").expect("a table");
+        assert_eq!(rows[0].get_text("smart"), Some("warning"));
+        assert_eq!(
+            rows[0].get_words("smart_reasons"),
+            Some(&["bad-sectors".to_owned()][..])
+        );
+        assert_eq!(rows[0].get_unsigned("power_on_hours"), Some(12_000));
+        assert_eq!(rows[0].get_unsigned("wear_percent"), Some(91));
+        assert_eq!(rows[0].get_int("temperature_c"), Some(-3));
+        for key in [
+            "smart",
+            "smart_reasons",
+            "power_on_hours",
+            "wear_percent",
+            "temperature_c",
+        ] {
+            assert!(!rows[1].contains(key), "{key}: unknown stays absent");
+        }
     }
 
     #[test]

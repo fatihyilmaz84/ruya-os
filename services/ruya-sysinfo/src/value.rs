@@ -8,6 +8,10 @@ pub enum Value {
     Text(String),
     Unsigned(u64),
     Bool(bool),
+    /// A signed number (a temperature).
+    Int(i64),
+    /// A list of words (the reasons a drive is not ok).
+    Words(Vec<String>),
     /// A list of records (the drives).
     Table(Vec<Info>),
 }
@@ -37,6 +41,17 @@ impl Info {
         self.set(key, Value::Unsigned(value));
     }
 
+    pub fn int(&mut self, key: &str, value: i64) {
+        self.set(key, Value::Int(value));
+    }
+
+    /// A list of words; an empty one is not set.
+    pub fn words(&mut self, key: &str, value: Vec<String>) {
+        if !value.is_empty() {
+            self.set(key, Value::Words(value));
+        }
+    }
+
     pub fn flag(&mut self, key: &str, value: bool) {
         self.set(key, Value::Bool(value));
     }
@@ -55,6 +70,20 @@ impl Info {
     pub fn get_unsigned(&self, key: &str) -> Option<u64> {
         match self.0.get(key) {
             Some(Value::Unsigned(n)) => Some(*n),
+            _ => None,
+        }
+    }
+
+    pub fn get_int(&self, key: &str) -> Option<i64> {
+        match self.0.get(key) {
+            Some(Value::Int(n)) => Some(*n),
+            _ => None,
+        }
+    }
+
+    pub fn get_words(&self, key: &str) -> Option<&[String]> {
+        match self.0.get(key) {
+            Some(Value::Words(w)) => Some(w),
             _ => None,
         }
     }

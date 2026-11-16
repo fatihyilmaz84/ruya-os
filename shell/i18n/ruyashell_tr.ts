@@ -1190,7 +1190,7 @@ Bu geri alınamaz.</translation>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+259"/>
+        <location line="+263"/>
         <location line="+77"/>
         <source>Buttons in games</source>
         <translation>Oyunlarda düğmeler</translation>
@@ -1367,7 +1367,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+55"/>
+        <location filename="../qml/ControllerPage.qml" line="+56"/>
         <source>Works</source>
         <translation>Çalışıyor</translation>
     </message>
@@ -2108,6 +2108,39 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>DriveHealth</name>
+    <message>
+        <location filename="../qml/DriveHealth.qml" line="+61"/>
+        <source>Good</source>
+        <translation>İyi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Check soon</source>
+        <translation>Yakında kontrol edin</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Failing</source>
+        <translation>Arızalı</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>%1 %2</source>
+        <translation>%1 %2</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>%1 °C</source>
+        <translation>%1 °C</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 · %2</source>
+        <translation>%1 · %2</translation>
+    </message>
+</context>
+<context>
     <name>DurationText</name>
     <message>
         <location filename="../qml/DurationText.qml" line="+23"/>
@@ -2153,22 +2186,22 @@ Bu geri alınamaz.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+482"/>
-        <location line="+182"/>
+        <location filename="../qml/GameControls.qml" line="+495"/>
+        <location line="+187"/>
         <source>Could not save to the USB drive</source>
         <translation>USB belleğe kaydedilemedi</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-187"/>
         <location line="+6"/>
         <location line="+2"/>
-        <location line="+174"/>
+        <location line="+179"/>
         <location line="+36"/>
         <source>Try again.</source>
         <translation>Yeniden dene.</translation>
     </message>
     <message>
-        <location line="-210"/>
+        <location line="-215"/>
         <source>Could not save the change</source>
         <translation>Değişiklik kaydedilemedi</translation>
     </message>
@@ -2178,7 +2211,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 için değişiklik kaydedilemedi</translation>
     </message>
     <message>
-        <location line="-254"/>
+        <location line="-260"/>
         <source>Games see %1 as A and %2 as B, unlike menus.</source>
         <translation>Oyunlar %1 düğmesini A, %2 düğmesini B olarak görür; menülerden farklı.</translation>
     </message>
@@ -2188,7 +2221,7 @@ Bu geri alınamaz.</translation>
         <translation>Oyunlar %1 düğmesini A, %2 düğmesini B olarak görür.</translation>
     </message>
     <message>
-        <location line="+428"/>
+        <location line="+439"/>
         <source>Saved to the USB drive</source>
         <translation>USB belleğe kaydedildi</translation>
     </message>
@@ -2630,7 +2663,7 @@ Bu geri alınamaz.</translation>
         <translation>Profil adı</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+10"/>
         <source>Protect with a PIN</source>
         <translation>PIN ile koru</translation>
     </message>
@@ -4341,7 +4374,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+306"/>
+        <location line="+313"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -5337,18 +5370,18 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+157"/>
+        <location line="+176"/>
         <source>On</source>
         <translation>Açık</translation>
     </message>
     <message>
-        <location line="-157"/>
-        <location line="+157"/>
+        <location line="-176"/>
+        <location line="+176"/>
         <source>Off</source>
         <translation>Kapalı</translation>
     </message>
     <message>
-        <location line="-151"/>
+        <location line="-170"/>
         <source>Machine</source>
         <translation>Makine</translation>
     </message>
@@ -5520,7 +5553,7 @@ Bu geri alınamaz.</translation>
         <translation>Sürücü</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+8"/>
         <source>Healthy</source>
         <translation>Sağlıklı</translation>
     </message>
@@ -5528,6 +5561,11 @@ Bu geri alınamaz.</translation>
         <location line="+0"/>
         <source>Failing</source>
         <translation>Arızalı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Check soon</source>
+        <translation>Yakında kontrol edin</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -5540,7 +5578,34 @@ Bu geri alınamaz.</translation>
         <translation>Sürücü sağlığı</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+7"/>
+        <source>Drive %1 powered on</source>
+        <translation>Sürücü %1 çalışma süresi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Powered on</source>
+        <translation>Çalışma süresi</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%n hour(s)</source>
+        <translation>
+            <numerusform>%n saat</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Drive %1 wear</source>
+        <translation>Sürücü %1 aşınma</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Wear</source>
+        <translation>Aşınma</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Console storage</source>
         <translation>Konsol depolaması</translation>
     </message>
@@ -5586,7 +5651,8 @@ Bu geri alınamaz.</translation>
         <translation>Sinyal</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-26"/>
+        <location line="+26"/>
         <location line="+40"/>
         <location line="+8"/>
         <source>%1 %</source>
@@ -5662,7 +5728,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SystemPane</name>
     <message>
-        <location filename="../qml/SystemPane.qml" line="+133"/>
+        <location filename="../qml/SystemPane.qml" line="+178"/>
         <location line="+312"/>
         <source>Beta</source>
         <translation>Beta</translation>
@@ -5821,7 +5887,7 @@ Bu geri alınamaz.</translation>
         <translation>Bunu yalnızca bir yönetici yapabilir.</translation>
     </message>
     <message>
-        <location line="-282"/>
+        <location line="-289"/>
         <source>The console is warm. Nothing needs to be done.</source>
         <translation>Konsol sıcak. Yapılması gereken bir şey yok.</translation>
     </message>
@@ -5836,7 +5902,7 @@ Bu geri alınamaz.</translation>
         <translation>Konsol aşırı sıcak. Uygulamalar kapatıldı; soğumazsa konsol kapanır.</translation>
     </message>
     <message>
-        <location line="+218"/>
+        <location line="+225"/>
         <source>Language</source>
         <translation>Dil</translation>
     </message>
@@ -6077,6 +6143,21 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+11"/>
+        <source>A drive is failing</source>
+        <translation>Bir sürücü arızalanıyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 · Back up your saves</source>
+        <translation>%1 · Kayıtlarınızı yedekleyin</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back up your saves</source>
+        <translation>Kayıtlarınızı yedekleyin</translation>
+    </message>
+    <message>
+        <location line="+11"/>
         <source>Drive inserted</source>
         <translation>Sürücü takıldı</translation>
     </message>
@@ -6088,7 +6169,8 @@ Bu geri alınamaz.</translation>
         </translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-11"/>
+        <location line="+13"/>
         <source>Open Settings</source>
         <translation>Ayarları aç</translation>
     </message>

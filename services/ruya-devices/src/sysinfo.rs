@@ -105,6 +105,17 @@ impl SystemInfo {
         info
     }
 
+    /// Reads the slow part again now, whatever its age (udisks2 reported a SMART change). `true`
+    /// when it differs from what was kept. Blocks: call it on the blocking pool.
+    pub fn refresh_now(&self, now: Instant) -> bool {
+        let read = collect_static(self.source.as_ref());
+        let mut cache = self.lock();
+        let changed = cache.info.as_ref() != Some(&read);
+        cache.info = Some(read);
+        cache.stamp = Some(now);
+        changed
+    }
+
     /// The slow part is older than [`STATIC_MAX_AGE`] (and was read at least once).
     pub fn is_stale(&self, now: Instant) -> bool {
         match self.lock().stamp {
@@ -324,6 +335,23 @@ mod tests {
             None,
             "stamped by the first: not stale for the second"
         );
+    }
+
+    #[test]
+    fn refresh_now_reads_at_once_and_reports_a_difference() {
+        let (info, files) = rig(machine(400, "Old CPU"));
+        let t0 = Instant::now();
+        info.current(t0);
+        assert!(
+            !info.refresh_now(t0 + Duration::from_secs(1)),
+            "nothing differs"
+        );
+        *files.lock().unwrap() = machine(400, "New CPU");
+        assert!(
+            info.refresh_now(t0 + Duration::from_secs(2)),
+            "young, but asked for"
+        );
+        assert_eq!(info.current(t0).get_text("cpu.model"), Some("New CPU"));
     }
 
     #[test]

@@ -6,13 +6,26 @@ namespace {
 constexpr quint64 GiB = 1024ull * 1024 * 1024;
 constexpr quint64 MiB = 1024ull * 1024;
 
-QVariantMap drive(const char *model, const char *type, quint64 bytes, const char *health = nullptr)
+// `smart` (RUY-737): "ok" | "warning" | "failing" | "unsupported", with the hours and, for NVMe, the wear;
+// none of them for a drive whose SMART the mock leaves unknown.
+QVariantMap drive(const char *model, const char *type, quint64 bytes, const char *health = nullptr,
+                  const char *smart = nullptr, quint64 hours = 0, int wear = -1, int celsius = -1000)
 {
     QVariantMap d{{QStringLiteral("model"), QString::fromLatin1(model)},
                   {QStringLiteral("type"), QString::fromLatin1(type)},
                   {QStringLiteral("size_bytes"), QVariant::fromValue<quint64>(bytes)}};
     if (health)
         d.insert(QStringLiteral("health"), QString::fromLatin1(health));
+    if (smart) {
+        d.insert(QStringLiteral("smart"), QString::fromLatin1(smart));
+        if (QByteArray(smart) != "unsupported") {
+            d.insert(QStringLiteral("power_on_hours"), QVariant::fromValue<quint64>(hours));
+            if (wear >= 0)
+                d.insert(QStringLiteral("wear_percent"), QVariant::fromValue<quint64>(quint64(wear)));
+            if (celsius > -1000)
+                d.insert(QStringLiteral("temperature_c"), celsius);
+        }
+    }
     return d;
 }
 
@@ -67,7 +80,7 @@ QVariantMap dell()
     text(m, "graphics.connector", "HDMI-A-1");
     text(m, "graphics.preferred_mode", "1920x1080");
     m.insert(QStringLiteral("storage.drives"),
-             QVariantList{drive("Samsung SSD 870", "ssd", 500107862016ull)});
+             QVariantList{drive("Samsung SSD 870", "ssd", 500107862016ull, nullptr, "ok", 12345, -1, 38)});
     text(m, "network.interface", "eno1");
     text(m, "network.mac", "c8:4b:d6:aa:bb:cc");
     number(m, "network.link_mbps", 1000);
@@ -103,7 +116,7 @@ QVariantMap amd()
     text(m, "graphics.connector", "HDMI-A-1");
     text(m, "graphics.preferred_mode", "3840x2160");
     m.insert(QStringLiteral("storage.drives"),
-             QVariantList{drive("KINGSTON OM8PDP3512B-A01", "nvme", 512110190592ull, "ok")});
+             QVariantList{drive("KINGSTON OM8PDP3512B-A01", "nvme", 512110190592ull, "ok", "ok", 812, 4, 41)});
     // Wi-Fi only: no wired link speed.
     text(m, "network.interface", "wlp2s0");
     text(m, "network.mac", "7c:b2:7d:11:22:33");
@@ -136,7 +149,7 @@ QVariantMap nvidia()
     text(m, "graphics.connector", "DP-1");
     text(m, "graphics.preferred_mode", "2560x1440");
     m.insert(QStringLiteral("storage.drives"),
-             QVariantList{drive("WD_BLACK SN770 1TB", "nvme", 1000204886016ull, "ok"),
+             QVariantList{drive("WD_BLACK SN770 1TB", "nvme", 1000204886016ull, "ok", "ok", 5120, 7, 44),
                           drive("ST2000DM008-2FR102", "hdd", 2000398934016ull)});
     text(m, "network.interface", "enp5s0");
     text(m, "network.mac", "d8:5e:d3:44:55:66");

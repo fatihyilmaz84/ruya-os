@@ -1194,7 +1194,7 @@ This can&apos;t be undone.</translation>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+259"/>
+        <location line="+263"/>
         <location line="+77"/>
         <source>Buttons in games</source>
         <translation>Buttons in games</translation>
@@ -1371,7 +1371,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+55"/>
+        <location filename="../qml/ControllerPage.qml" line="+56"/>
         <source>Works</source>
         <translation>Works</translation>
     </message>
@@ -2113,6 +2113,39 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>DriveHealth</name>
+    <message>
+        <location filename="../qml/DriveHealth.qml" line="+61"/>
+        <source>Good</source>
+        <translation>Good</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Check soon</source>
+        <translation>Check soon</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Failing</source>
+        <translation>Failing</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>%1 %2</source>
+        <translation>%1 %2</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>%1 °C</source>
+        <translation>%1 °C</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 · %2</source>
+        <translation>%1 · %2</translation>
+    </message>
+</context>
+<context>
     <name>DurationText</name>
     <message>
         <location filename="../qml/DurationText.qml" line="+23"/>
@@ -2158,22 +2191,22 @@ This can&apos;t be undone.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+482"/>
-        <location line="+182"/>
+        <location filename="../qml/GameControls.qml" line="+495"/>
+        <location line="+187"/>
         <source>Could not save to the USB drive</source>
         <translation>Could not save to the USB drive</translation>
     </message>
     <message>
-        <location line="-182"/>
+        <location line="-187"/>
         <location line="+6"/>
         <location line="+2"/>
-        <location line="+174"/>
+        <location line="+179"/>
         <location line="+36"/>
         <source>Try again.</source>
         <translation>Try again.</translation>
     </message>
     <message>
-        <location line="-210"/>
+        <location line="-215"/>
         <source>Could not save the change</source>
         <translation>Could not save the change</translation>
     </message>
@@ -2183,7 +2216,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not save the change for %1</translation>
     </message>
     <message>
-        <location line="-254"/>
+        <location line="-260"/>
         <source>Games see %1 as A and %2 as B, unlike menus.</source>
         <translation>Games see %1 as A and %2 as B, unlike menus.</translation>
     </message>
@@ -2193,7 +2226,7 @@ This can&apos;t be undone.</translation>
         <translation>Games see %1 as A and %2 as B.</translation>
     </message>
     <message>
-        <location line="+428"/>
+        <location line="+439"/>
         <source>Saved to the USB drive</source>
         <translation>Saved to the USB drive</translation>
     </message>
@@ -2635,7 +2668,7 @@ This can&apos;t be undone.</translation>
         <translation>Profile name</translation>
     </message>
     <message>
-        <location line="+25"/>
+        <location line="+10"/>
         <source>Protect with a PIN</source>
         <translation>Protect with a PIN</translation>
     </message>
@@ -4358,7 +4391,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+306"/>
+        <location line="+313"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -5354,18 +5387,18 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+157"/>
+        <location line="+176"/>
         <source>On</source>
         <translation>On</translation>
     </message>
     <message>
-        <location line="-157"/>
-        <location line="+157"/>
+        <location line="-176"/>
+        <location line="+176"/>
         <source>Off</source>
         <translation>Off</translation>
     </message>
     <message>
-        <location line="-151"/>
+        <location line="-170"/>
         <source>Machine</source>
         <translation>Machine</translation>
     </message>
@@ -5537,7 +5570,7 @@ This can&apos;t be undone.</translation>
         <translation>Drive</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+8"/>
         <source>Healthy</source>
         <translation>Healthy</translation>
     </message>
@@ -5545,6 +5578,11 @@ This can&apos;t be undone.</translation>
         <location line="+0"/>
         <source>Failing</source>
         <translation>Failing</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Check soon</source>
+        <translation>Check soon</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -5557,7 +5595,35 @@ This can&apos;t be undone.</translation>
         <translation>Drive health</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+7"/>
+        <source>Drive %1 powered on</source>
+        <translation>Drive %1 powered on</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Powered on</source>
+        <translation>Powered on</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+1"/>
+        <source>%n hour(s)</source>
+        <translation>
+            <numerusform>%n hour</numerusform>
+            <numerusform>%n hours</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>Drive %1 wear</source>
+        <translation>Drive %1 wear</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Wear</source>
+        <translation>Wear</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Console storage</source>
         <translation>Console storage</translation>
     </message>
@@ -5603,7 +5669,8 @@ This can&apos;t be undone.</translation>
         <translation>Signal</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-26"/>
+        <location line="+26"/>
         <location line="+40"/>
         <location line="+8"/>
         <source>%1 %</source>
@@ -5679,7 +5746,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>SystemPane</name>
     <message>
-        <location filename="../qml/SystemPane.qml" line="+133"/>
+        <location filename="../qml/SystemPane.qml" line="+178"/>
         <location line="+312"/>
         <source>Beta</source>
         <translation>Beta</translation>
@@ -5838,7 +5905,7 @@ This can&apos;t be undone.</translation>
         <translation>Only an admin can do this.</translation>
     </message>
     <message>
-        <location line="-282"/>
+        <location line="-289"/>
         <source>The console is warm. Nothing needs to be done.</source>
         <translation>The console is warm. Nothing needs to be done.</translation>
     </message>
@@ -5853,7 +5920,7 @@ This can&apos;t be undone.</translation>
         <translation>The console is too hot. Apps are closed and it powers off if it does not cool down.</translation>
     </message>
     <message>
-        <location line="+218"/>
+        <location line="+225"/>
         <source>Language</source>
         <translation>Language</translation>
     </message>
@@ -6095,6 +6162,21 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+11"/>
+        <source>A drive is failing</source>
+        <translation>A drive is failing</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>%1 · Back up your saves</source>
+        <translation>%1 · Back up your saves</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Back up your saves</source>
+        <translation>Back up your saves</translation>
+    </message>
+    <message>
+        <location line="+11"/>
         <source>Drive inserted</source>
         <translation>Drive inserted</translation>
     </message>
@@ -6107,7 +6189,8 @@ This can&apos;t be undone.</translation>
         </translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-11"/>
+        <location line="+13"/>
         <source>Open Settings</source>
         <translation>Open Settings</translation>
     </message>

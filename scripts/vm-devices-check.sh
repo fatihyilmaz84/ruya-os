@@ -781,6 +781,23 @@ thermal_level() { busctl --system get-property "$svc" "$path" "$therm" Level; }
 # Devices1.Storage.SaveReport's refusals (and, with a mounted USB stick, a real save).
 sysi=org.ruyaos.Devices1.System
 
+# smart_check (RUY-737): the SMART keys of storage.drives. The VM's disk is virtio, which has no SMART: its record
+# says "unsupported" and carries no hours, wear or temperature (the shell then shows no drive health row). A real
+# disk (the Dell) is compared by eye with `udisksctl info`: INFO lines, never a failure.
+smart_check() {
+    local vols names
+    vols="$(busctl --system call "$svc" "$path" "$sysi" GetInfo)"
+    names="$(lsblk -dn -o NAME,TYPE 2>/dev/null | awk '$2 == "disk" {print $1}')"
+    if echo "$names" | grep -q '^vd'; then
+        if echo "$vols" | grep -q '"smart" s "unsupported"'; then ok "the virtio disk's record says smart unsupported"; else bad "the virtio disk's record has no \"smart\" s \"unsupported\""; fi
+        if echo "$vols" | grep -q '"power_on_hours"\|"wear_percent"\|"temperature_c"'; then bad "a virtio disk carries power_on_hours, wear_percent or temperature_c"; else ok "no hours, wear or temperature for the virtio disk"; fi
+    else
+        echo "info: no virtio disk here; smart in storage.drives: $(echo "$vols" | grep -o '"smart" s "[a-z]*"' | tr '\n' ' ')"
+        echo "info: compare power_on_hours with: udisksctl info -b /dev/sda | grep -i poweron"
+    fi
+    if echo "$vols" | grep -q '"smart" s "failing"'; then bad "a drive reports smart failing"; fi
+}
+
 # sys_key <key>: the value of one scalar key of GetInfo (strings without their quotes), "" when absent.
 sys_key() {
     local line
@@ -872,6 +889,7 @@ sysinfo_check() {
         if echo "$vols" | grep -q "\"size_bytes\" t $s"; then n=$((n + 1)); else bad "internal disk of $s bytes is not in storage.drives"; fi
     done
     if [ -z "$sizes" ]; then echo "lsblk lists no internal disk"; else ok "$n internal disk(s) found in storage.drives (lsblk sizes)"; fi
+    smart_check
 
     # Network
     want="$(ip route show default 2>/dev/null | awk '{for (i = 1; i < NF; i++) if ($i == "dev") {print $(i + 1); exit}}')"

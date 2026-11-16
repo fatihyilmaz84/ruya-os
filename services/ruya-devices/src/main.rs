@@ -14,7 +14,7 @@ use ruya_devices::bluetooth::{AgentHandler, AgentSlot, Bluetooth, FakeBluez};
 #[cfg(target_os = "linux")]
 use ruya_devices::dbus::{
     watch, watch_batteries, watch_bluetooth, watch_input, watch_installed, watch_network,
-    watch_storage, watch_thermal, watch_time,
+    watch_smart, watch_storage, watch_thermal, watch_time,
 };
 use ruya_devices::dbus::{
     AudioIface, BatteriesIface, BluetoothIface, DisplayIface, DynBluez, DynNm, DynPipeWire,
@@ -31,6 +31,7 @@ use ruya_devices::input::{DynInputSource, FakeInput, InputDevice, InputPresence}
 use ruya_devices::network::{FakeNetworkManager, Network};
 use ruya_devices::output_policy::ChoiceStore;
 use ruya_devices::performance::Performance;
+use ruya_devices::smart_source::{session_reader, SmartCache, WithSmart};
 use ruya_devices::storage::{FakeUdisks, RawVolume, Storage};
 use ruya_devices::store::Store;
 use ruya_devices::sysinfo::{DynInfoSource, SystemInfo, WithPrimaryAdapter};
@@ -139,6 +140,35 @@ fn timedate(session: bool) -> Result<DynTimedate, Box<dyn Error>> {
     }
     let _ = session;
     Ok(Box::new(FakeTimedate::with_zones()))
+}
+
+/// The SMART records of `storage.drives`: udisks2's drives on the image, a fixed sample machine in
+/// `--session` (`RUYA_DEVICES_FAKE_SMART`: ok | warning | failing | unsupported | none).
+fn smart_cache(session: bool) -> Arc<SmartCache> {
+    #[cfg(target_os = "linux")]
+    if !session {
+        // Connected on first use, so a missing system bus is "no SMART", not a failed start.
+        let client = std::sync::Mutex::new(None::<ruya_devices::udisks::UdisksClient>);
+        return Arc::new(SmartCache::new(Box::new(move || {
+            let mut slot = client.lock().unwrap_or_else(|e| e.into_inner());
+            if slot.is_none() {
+                *slot = Some(ruya_devices::udisks::UdisksClient::connect()?);
+            }
+            match slot.as_ref().map(|c| c.smart_drives()) {
+                Some(Ok(drives)) => Ok(drives),
+                Some(Err(err)) => {
+                    // A failure may be a stale connection: connect again next time.
+                    *slot = None;
+                    Err(err)
+                }
+                None => Err("no connection".to_owned()),
+            }
+        })));
+    }
+    let _ = session;
+    Arc::new(SmartCache::new(session_reader(
+        std::env::var("RUYA_DEVICES_FAKE_SMART").ok(),
+    )))
 }
 
 fn udisks(session: bool) -> Result<DynUdisks, Box<dyn Error>> {
@@ -399,6 +429,8 @@ async fn follow_system(
     usage: SharedUsage,
     thermal: SharedThermal,
     time: SharedTime,
+    system: SharedSystem,
+    smart: Arc<SmartCache>,
 ) {
     #[cfg(target_os = "linux")]
     futures_lite::future::zip(
@@ -417,7 +449,10 @@ async fn follow_system(
                                 watch_installed(connection.clone(), usage),
                                 futures_lite::future::zip(
                                     watch_thermal(connection.clone(), thermal),
-                                    watch_time(connection, time),
+                                    futures_lite::future::zip(
+                                        watch_time(connection.clone(), time),
+                                        watch_smart(connection, system, smart),
+                                    ),
                                 ),
                             ),
                         ),
@@ -431,6 +466,7 @@ async fn follow_system(
     {
         let _keep = (
             connection, audio, net, batteries, bluetooth, input, storage, usage, thermal, time,
+            system, smart,
         );
         futures_lite::future::pending::<()>().await;
     }
@@ -527,9 +563,13 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     // The slow part is read once, now, off the main thread, so the first call finds it.
     let primary_bt = bluetooth.clone();
-    let system: SharedSystem = Arc::new(SystemInfo::new(Box::new(WithPrimaryAdapter::new(
-        info_source(session),
-        Box::new(move || primary_bt.primary_adapter()),
+    let smart = smart_cache(session);
+    let system: SharedSystem = Arc::new(SystemInfo::new(Box::new(WithSmart::new(
+        Box::new(WithPrimaryAdapter::new(
+            info_source(session),
+            Box::new(move || primary_bt.primary_adapter()),
+        )),
+        smart.clone(),
     ))));
     // Read only when the shell asks (its Performance view is open); no timer of its own.
     let performance: SharedPerformance = Arc::new(Performance::new(
@@ -581,12 +621,13 @@ fn run() -> Result<(), Box<dyn Error>> {
         if session {
             let _keep = (
                 connection, audio, net, batteries, bluetooth, input, storage, usage, monitor, time,
-                system, display,
+                system, display, smart,
             );
             futures_lite::future::pending::<()>().await;
         } else {
             follow_system(
                 connection, audio, net, batteries, bluetooth, input, storage, usage, monitor, time,
+                system, smart,
             )
             .await;
         }
