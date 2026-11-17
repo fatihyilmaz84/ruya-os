@@ -88,10 +88,9 @@ fn schema_paths(root: &Value, node: &Value, at: &str, out: &mut BTreeSet<String>
 
 #[test]
 fn the_field_reference_lists_the_schemas_properties_and_no_others() {
-    let schema: Value = serde_json::from_str(
-        &std::fs::read_to_string(repo("api/play/play.schema.json")).unwrap(),
-    )
-    .unwrap();
+    let schema: Value =
+        serde_json::from_str(&std::fs::read_to_string(repo("api/play/play.schema.json")).unwrap())
+            .unwrap();
     let mut want = BTreeSet::new();
     schema_paths(&schema, &schema, "", &mut want);
     assert!(want.contains("run.prefix.epoch") && want.contains("components[].bundled.path"));

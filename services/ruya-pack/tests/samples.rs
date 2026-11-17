@@ -75,12 +75,7 @@ fn the_wine_sample_builds_validates_and_inspects_with_the_system_wine() {
     // Without a named system runner the dry run says it did not check; with one it resolves.
     let unchecked = run_p(&["validate"], &[&zip]);
     assert_ok(&unchecked);
-    let checked = run(&[
-        "validate",
-        zip.to_str().unwrap(),
-        "--system-wine",
-        "10.2",
-    ]);
+    let checked = run(&["validate", zip.to_str().unwrap(), "--system-wine", "10.2"]);
     assert_ok(&checked);
     assert!(
         checked.json["warnings"]
