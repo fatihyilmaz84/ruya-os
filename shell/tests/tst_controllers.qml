@@ -1026,6 +1026,35 @@ Item {
             Input.mockListFail(false)
         }
 
+        function padActionsShots(dir, lang, w, h, withDialog) {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            const tag = lang + (h === 720 ? "-720p" : "")
+            host.width = w
+            host.height = h
+            DeviceSettings.language = lang
+            addMatchedPad()
+            openController(tc.wc)
+            tryVerify(() => page("rowPadRename").visible, 2000)
+            page("rowPadRename").forceActiveFocus()
+            settle()
+            if (!withDialog) {
+                grabImage(tc.shell).save(dir + "51-pad-rename-forget-" + tag + ".png")
+                return
+            }
+            page("rowPadForget").forceActiveFocus()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btForgetConfirm") !== null && find("btForgetConfirm").shown, 2000)
+            verify(findChild(find("btForgetConfirm"), "powerCancel").activeFocus)
+            settle()
+            grabImage(tc.shell).save(dir + "51-pad-forget-confirm-" + tag + ".png")
+        }
+
+        function test_zz_screenshots_pad_actions() { padActionsShots(shotsDir + "/", "en", 1920, 1080, false) }
+        function test_zz_screenshots_pad_actions_tr() { padActionsShots(shotsDir + "/", "tr", 1920, 1080, false) }
+        function test_zz_screenshots_pad_forget() { padActionsShots(shotsDir + "/", "en", 1920, 1080, true) }
+        function test_zz_screenshots_pad_forget_720p_tr() { padActionsShots(shotsDir + "/", "tr", 1280, 720, true) }
+
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
