@@ -165,6 +165,9 @@ Item {
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "store")
             tryVerify(() => find("storeInstallUsb").activeFocus, 2000, "Back lands on the Store's entry")
+            // The closed page is destroyed after its exit animation; until then find() can return it in
+            // place of the next one (lead-30: 1 in 4 runs failed "only that drive" on the old page).
+            tryVerify(() => find("page_installSources") === null, 2000, "the Store's Install from USB page is gone")
             tc.shell.closePage()
             // Settings -> Storage: a row per mounted removable drive.
             Storage.mockReset()
