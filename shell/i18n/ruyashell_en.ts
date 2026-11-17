@@ -2988,7 +2988,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>InstallPackagePage</name>
     <message>
-        <location filename="../qml/InstallPackagePage.qml" line="+62"/>
+        <location filename="../qml/InstallPackagePage.qml" line="+64"/>
         <source>Developer</source>
         <translation>Developer</translation>
     </message>
@@ -3023,30 +3023,24 @@ This can&apos;t be undone.</translation>
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+314"/>
+        <location line="+324"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location line="-242"/>
+        <location line="-244"/>
         <source>Install cancelled</source>
         <translation>Install cancelled</translation>
     </message>
     <message>
-        <location line="-3"/>
-        <source>Installed</source>
-        <comment>Toast: the install finished</comment>
-        <translation>Installed</translation>
-    </message>
-    <message>
-        <location line="+156"/>
-        <location line="+194"/>
+        <location line="+153"/>
+        <location line="+206"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-194"/>
-        <location line="+4"/>
+        <location line="-206"/>
+        <location line="+6"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -3071,7 +3065,7 @@ This can&apos;t be undone.</translation>
         <translation>Play</translation>
     </message>
     <message>
-        <location line="+89"/>
+        <location line="+99"/>
         <location line="+8"/>
         <source>This game can</source>
         <translation>This game can</translation>
@@ -4120,7 +4114,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>PlayCopy</name>
     <message>
-        <location filename="../qml/PlayCopy.qml" line="+24"/>
+        <location filename="../qml/PlayCopy.qml" line="+26"/>
         <source>ZIP file</source>
         <translation>ZIP file</translation>
     </message>
@@ -4258,6 +4252,28 @@ This can&apos;t be undone.</translation>
         <location line="+12"/>
         <source>It can&apos;t be installed. Get a fresh copy from the developer.</source>
         <translation>It can&apos;t be installed. Get a fresh copy from the developer.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Installed</source>
+        <comment>Toast: the install finished</comment>
+        <translation>Installed</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Not installed</source>
+        <comment>Toast: the install failed</comment>
+        <translation>Not installed</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>It won&apos;t start. You can still remove it.</source>
+        <translation>It won&apos;t start. You can still remove it.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Remove</source>
+        <translation>Remove</translation>
     </message>
 </context>
 <context>
@@ -5783,7 +5799,7 @@ This can&apos;t be undone.</translation>
         <translation>Store options are unavailable right now.</translation>
     </message>
     <message>
-        <location line="+91"/>
+        <location line="+123"/>
         <source>Could not uninstall %1. Try again.</source>
         <translation>Could not uninstall %1. Try again.</translation>
     </message>
@@ -5815,7 +5831,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1889"/>
+        <location line="-1921"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -5846,7 +5862,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1637"/>
+        <location line="+1669"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
@@ -6131,7 +6147,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+336"/>
+        <location filename="../qml/StoragePane.qml" line="+342"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 is still in use. Close what uses it and try again.</translation>
     </message>
@@ -6156,13 +6172,13 @@ This can&apos;t be undone.</translation>
         <translation>Not supported</translation>
     </message>
     <message>
-        <location line="-287"/>
-        <location line="+288"/>
+        <location line="-293"/>
+        <location line="+294"/>
         <source>%1 free of %2</source>
         <translation>%1 free of %2</translation>
     </message>
     <message>
-        <location line="-239"/>
+        <location line="-245"/>
         <source>Games</source>
         <translation>Games</translation>
     </message>
@@ -6217,7 +6233,7 @@ This can&apos;t be undone.</translation>
         <translation>Rescan %1</translation>
     </message>
     <message>
-        <location line="+185"/>
+        <location line="+191"/>
         <source>Read-only</source>
         <translation>Read-only</translation>
     </message>
@@ -6247,13 +6263,13 @@ This can&apos;t be undone.</translation>
         <translation>System</translation>
     </message>
     <message>
-        <location line="-305"/>
-        <location line="+305"/>
+        <location line="-311"/>
+        <location line="+311"/>
         <source>Other</source>
         <translation>Other</translation>
     </message>
     <message>
-        <location line="-316"/>
+        <location line="-322"/>
         <source>Plug it in again</source>
         <translation>Plug it in again</translation>
     </message>
@@ -6268,12 +6284,12 @@ This can&apos;t be undone.</translation>
         <translation>Nothing found here</translation>
     </message>
     <message>
-        <location line="+309"/>
+        <location line="+315"/>
         <source>Drives</source>
         <translation>Drives</translation>
     </message>
     <message>
-        <location line="-290"/>
+        <location line="-296"/>
         <source>Eject %1</source>
         <translation>Eject %1</translation>
     </message>

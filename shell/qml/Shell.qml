@@ -2085,6 +2085,38 @@ FocusScope {
         }
     }
 
+    // ---- An install ends while its package page is closed (04 §5.4 Result, RUY-809) ----
+    // The package page reports its own job. When none is open for the path, the Shell does, so a player who
+    // went Back mid-install still learns how it ended: success and failure toast, cancelled says nothing.
+    // The name and size come from the last Inspect of that path (the page that started the job asked it).
+    property var playInspected: ({})            // path -> { name, size }
+
+    function packagePageOpen(path) {
+        return pageStack.some(e => e.key === "installPackage" && (e.params.path ?? "") === path)
+    }
+
+    Connections {
+        target: Play
+        function onInspected(path, record) {
+            const known = root.playInspected
+            known[path] = { name: record.name ?? "", size: record.size ?? 0 }
+            root.playInspected = known
+        }
+        function onJobFinished(key, status) {
+            if (status === "cancelled" || root.packagePageOpen(key))
+                return
+            const known = root.playInspected[key] ?? null
+            if (status === "ok") {
+                Notifications.show(PlayCopy.installedToast(), "success", "", "", known ? known.name : "")
+                return
+            }
+            const free = Storage.internal.valid ? Storage.internal.freeBytes : -1
+            const size = known ? known.size : 0
+            const toFree = Storage.formatBytes(free >= 0 && size > free ? size - free : size)
+            Notifications.show(PlayCopy.notInstalledToast(), "error", "", "", PlayCopy.jobStatusText(status, toFree))
+        }
+    }
+
     // ---- Uninstall from a card (02 §1.7, RUY-499) ----
     // The dialog (UninstallConfirm, also the app page's) asks the Store; the Shell follows the job of the
     // apps it started: success toasts and moves the focus once the card has left the list (the Library

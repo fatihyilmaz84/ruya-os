@@ -309,12 +309,12 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="+4"/>
         <source>Full controller support</source>
-        <translation>Tam kumanda desteği</translation>
+        <translation>Tam kontrolcü desteği</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>Partial controller support</source>
-        <translation>Kısmi kumanda desteği</translation>
+        <translation>Kısmi kontrolcü desteği</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -344,7 +344,7 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="+1"/>
         <source>Uses game controllers</source>
-        <translation>Oyun kumandalarını kullanır</translation>
+        <translation>Oyun kontrolcülerini kullanır</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -581,7 +581,7 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="+1"/>
         <source>Controller</source>
-        <translation>Kumanda</translation>
+        <translation>Kontrolcü</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2983,7 +2983,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>InstallPackagePage</name>
     <message>
-        <location filename="../qml/InstallPackagePage.qml" line="+62"/>
+        <location filename="../qml/InstallPackagePage.qml" line="+64"/>
         <source>Developer</source>
         <translation>Geliştirici</translation>
     </message>
@@ -3018,30 +3018,24 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+314"/>
+        <location line="+324"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
     <message>
-        <location line="-242"/>
+        <location line="-244"/>
         <source>Install cancelled</source>
         <translation>Kurulum iptal edildi</translation>
     </message>
     <message>
-        <location line="-3"/>
-        <source>Installed</source>
-        <comment>Toast: the install finished</comment>
-        <translation>Kuruldu</translation>
-    </message>
-    <message>
-        <location line="+156"/>
-        <location line="+194"/>
+        <location line="+153"/>
+        <location line="+206"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-194"/>
-        <location line="+4"/>
+        <location line="-206"/>
+        <location line="+6"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -3066,7 +3060,7 @@ Bu geri alınamaz.</translation>
         <translation>Oyna</translation>
     </message>
     <message>
-        <location line="+89"/>
+        <location line="+99"/>
         <location line="+8"/>
         <source>This game can</source>
         <translation>Bu oyun şunları yapabilir</translation>
@@ -4107,7 +4101,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>PlayCopy</name>
     <message>
-        <location filename="../qml/PlayCopy.qml" line="+24"/>
+        <location filename="../qml/PlayCopy.qml" line="+26"/>
         <source>ZIP file</source>
         <translation>ZIP dosyası</translation>
     </message>
@@ -4245,6 +4239,28 @@ Bu geri alınamaz.</translation>
         <location line="+12"/>
         <source>It can&apos;t be installed. Get a fresh copy from the developer.</source>
         <translation>Kurulamaz. Geliştiriciden yeni bir kopya alın.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Installed</source>
+        <comment>Toast: the install finished</comment>
+        <translation>Kuruldu</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Not installed</source>
+        <comment>Toast: the install failed</comment>
+        <translation>Kurulmadı</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>It won&apos;t start. You can still remove it.</source>
+        <translation>Başlatılamaz. Yine de kaldırabilirsiniz.</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Remove</source>
+        <translation>Kaldır</translation>
     </message>
 </context>
 <context>
@@ -5765,7 +5781,7 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza seçenekleri şu anda kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+91"/>
+        <location line="+123"/>
         <source>Could not uninstall %1. Try again.</source>
         <translation>%1 kaldırılamadı. Yeniden deneyin.</translation>
     </message>
@@ -5797,7 +5813,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1889"/>
+        <location line="-1921"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -5828,7 +5844,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1637"/>
+        <location line="+1669"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
@@ -6113,7 +6129,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+336"/>
+        <location filename="../qml/StoragePane.qml" line="+342"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 hâlâ kullanımda. Kullanan uygulamayı kapatıp tekrar deneyin.</translation>
     </message>
@@ -6138,13 +6154,13 @@ Bu geri alınamaz.</translation>
         <translation>Desteklenmiyor</translation>
     </message>
     <message>
-        <location line="-287"/>
-        <location line="+288"/>
+        <location line="-293"/>
+        <location line="+294"/>
         <source>%1 free of %2</source>
         <translation>%2 içinde %1 boş</translation>
     </message>
     <message>
-        <location line="-239"/>
+        <location line="-245"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
@@ -6199,7 +6215,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 yeniden tara</translation>
     </message>
     <message>
-        <location line="+185"/>
+        <location line="+191"/>
         <source>Read-only</source>
         <translation>Salt okunur</translation>
     </message>
@@ -6229,13 +6245,13 @@ Bu geri alınamaz.</translation>
         <translation>Sistem</translation>
     </message>
     <message>
-        <location line="-305"/>
-        <location line="+305"/>
+        <location line="-311"/>
+        <location line="+311"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="-316"/>
+        <location line="-322"/>
         <source>Plug it in again</source>
         <translation>Yeniden takın</translation>
     </message>
@@ -6250,12 +6266,12 @@ Bu geri alınamaz.</translation>
         <translation>Burada bir şey bulunamadı</translation>
     </message>
     <message>
-        <location line="+309"/>
+        <location line="+315"/>
         <source>Drives</source>
         <translation>Sürücüler</translation>
     </message>
     <message>
-        <location line="-290"/>
+        <location line="-296"/>
         <source>Eject %1</source>
         <translation>%1 sürücüsünü çıkar</translation>
     </message>
@@ -7287,7 +7303,7 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="+11"/>
         <source>Controller battery low</source>
-        <translation>Kumanda pili zayıf</translation>
+        <translation>Kontrolcü pili zayıf</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -7534,7 +7550,7 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="+33"/>
         <source>another controller</source>
-        <translation>başka bir kumanda</translation>
+        <translation>başka bir kontrolcü</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -7559,7 +7575,7 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="+27"/>
         <source>This controller stops playing as %1.</source>
-        <translation>Bu kumanda artık %1 olarak oynamıyor.</translation>
+        <translation>Bu kontrolcü artık %1 olarak oynamıyor.</translation>
     </message>
     <message>
         <location line="+3"/>

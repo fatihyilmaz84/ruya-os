@@ -49,6 +49,7 @@ public:
     bool developerMode() const { return m_developerMode; }
     // Installed payload of this app no longer matches its file table: a verify ends invalid-package.
     void corruptInstalled(const QString &appId);
+    void setInstalled(const QString &appId, uint build) { m_installed.insert(appId, build); }
     void pauseJobs(bool paused);
     // The running job stands still once it has reported this percent (it then needs pauseJobs(false)).
     void pauseAtPercent(int percent) { m_pauseAt = percent; }

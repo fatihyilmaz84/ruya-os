@@ -28,6 +28,8 @@ Page {
     readonly property string blocked: PlayCopy.blockReason(info)
     readonly property var trust: PlayTrust.describe(info)
     readonly property bool installed: info !== null && (info.installedBuild ?? 0) > 0 && info.installedBuild >= info.build
+    // Installed, then put on the block list: it will not start; Remove takes the place of Play.
+    readonly property bool revokedInstalled: installed && info.revoked === true
     // The Library item that starts the installed game (Play); absent until the Library has listed it.
     readonly property var libraryItem: info ? (Library.items.find(i => Library.sessionAppId(i.id) === "play." + info.id) ?? null) : null
 
@@ -43,7 +45,7 @@ Page {
 
     // "loading" | "install" | "play" | "busy" | "none": which buttons there are (keys only, so a progress tick
     // does not rebuild the focus order).
-    readonly property string mode: loading ? "loading" : working ? (cancelShown ? "cancel" : "busy") : installed ? "play" : info ? "install" : "none"
+    readonly property string mode: loading ? "loading" : working ? (cancelShown ? "cancel" : "busy") : installed ? (revokedInstalled ? "remove" : "play") : info ? "install" : "none"
 
     // ---- Words ----
     readonly property real freeBytes: Storage.internal.valid ? Storage.internal.freeBytes : -1
@@ -117,11 +119,19 @@ Page {
             Library.launch(libraryItem.id)
     }
 
+    // Remove an installed game that was revoked: the Shell's Uninstall dialog (it asks an admin's PIN itself).
+    function removeGame() {
+        if (info)
+            uninstallConfirm?.open("play." + info.id, title)
+    }
+
     function press(which) {
         if (which === "install")
             askInstall()
         else if (which === "play")
             play()
+        else if (which === "remove")
+            removeGame()
         else if (which === "cancel")
             cancelInstall()
     }
@@ -167,7 +177,7 @@ Page {
             page.requested = false
             page.inspect()          // the installed build, and what Install would end with now
             if (status === "ok") {
-                Notifications.show(qsTr("Installed", "Toast: the install finished"), "success", "", "", page.info ? page.info.name : "")
+                Notifications.show(PlayCopy.installedToast(), "success", "", "", page.info ? page.info.name : "")
                 Qt.callLater(page.focusMain)
             } else if (status === "cancelled") {
                 Notifications.show(qsTr("Install cancelled"), "info")
@@ -229,7 +239,7 @@ Page {
         const rows = []
         if (trustRow.opensSheet && info)
             rows.push([trustRow])
-        const buttons = [installButton, playButton, cancelButton].filter(b => b.visible)
+        const buttons = [installButton, playButton, removeButton, cancelButton].filter(b => b.visible)
         if (buttons.length > 0)
             rows.push(buttons)
         if (shotsSection.visible && shotsSection.count > 0)
@@ -243,7 +253,7 @@ Page {
 
     // The button the page starts on: Install, Play, or Cancel while the job runs.
     function mainButton() {
-        return [installButton, playButton, cancelButton].find(b => b.visible) ?? null
+        return [installButton, playButton, removeButton, cancelButton].find(b => b.visible) ?? null
     }
 
     // The first time the record is in and the page is on screen: onto the main button, once.
@@ -325,7 +335,9 @@ Page {
 
     hints: cancelButton.activeFocus ? [{ action: "accept", text: qsTr("Cancel") }, { action: "back", text: qsTr("Back") }]
          : shotsSection.strip.activeFocus ? shotsSection.hints
-         : onFactStop ? backOnlyHints : [
+         : onFactStop ? backOnlyHints
+         // Select would do nothing here: Install is dimmed, or the job is past Cancel (RUY-809).
+         : (installButton.activeFocus && blocked !== "") || (mode === "busy" && !trustRow.activeFocus) ? backOnlyHints : [
         { action: "accept", text: qsTr("Select") },
         { action: "back", text: qsTr("Back") }
     ]
@@ -479,11 +491,21 @@ Page {
                             PrimaryButton {
                                 id: playButton
                                 objectName: "installPlay"
-                                visible: !page.working && page.installed
+                                visible: !page.working && page.installed && !page.revokedInstalled
                                 width: Math.max(280 * page.u, implicitWidth)        // token-ok: AppDetailPage's buttons
                                 u: page.u
                                 text: qsTr("Play")
                                 onAccepted: page.play()
+                                onActiveFocusChanged: if (activeFocus) page.stopFocused(header)
+                            }
+                            PrimaryButton {
+                                id: removeButton
+                                objectName: "installRemove"
+                                visible: !page.working && page.revokedInstalled
+                                width: Math.max(280 * page.u, implicitWidth)        // token-ok: AppDetailPage's buttons
+                                u: page.u
+                                text: PlayCopy.removeLabel()
+                                onAccepted: page.removeGame()
                                 onActiveFocusChanged: if (activeFocus) page.stopFocused(header)
                             }
                         }
@@ -526,11 +548,11 @@ Page {
 
                     Text {
                         objectName: "installBlocked"
-                        visible: page.info !== null && !page.working && !page.installed && page.blocked !== ""
+                        visible: page.info !== null && !page.working && (page.revokedInstalled || (!page.installed && page.blocked !== ""))
                         width: parent.width
                         textFormat: Text.PlainText
                         wrapMode: Text.Wrap
-                        text: page.blocked
+                        text: page.revokedInstalled ? PlayCopy.revokedInstalledLine() : page.blocked
                         color: page.info && page.info.verdict === "bad-signature" ? Theme.errorText : Theme.text
                         font.pixelSize: Theme.typeBody * page.u
                     }

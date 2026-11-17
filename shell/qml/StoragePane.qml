@@ -315,6 +315,12 @@ SettingsPane {
         }
     }
 
+    // "Packages on this drive" comes and goes with ruya-play (RUY-809).
+    Connections {
+        target: PlayCopy
+        function onInstallFromUsbAllowedChanged() { pane.syncRows() }
+    }
+
     function labelOf(id) {
         const v = Storage.volumes.find(x => x.id === id)
         return v ? v.label : ""
