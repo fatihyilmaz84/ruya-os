@@ -44,6 +44,11 @@ Item {
         }
     }
 
+    Component {
+        id: shellComponent
+        Shell { anchors.fill: parent; version: "test"; focus: true }
+    }
+
     TestCase {
         id: tc
         name: "PlayComponents"
@@ -615,6 +620,35 @@ Item {
             keyClick(Qt.Key_Escape)
             tryVerify(() => !v.shown)
             verify(r.strip.activeFocus)
+        }
+
+        // The Shell sets ModalLayer.covered while the Hub is open; a trailer in a viewer on that layer pauses.
+        function test_the_shell_pauses_the_trailer_when_the_hub_opens() {
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            const shell = createTemporaryObject(shellComponent, host)
+            verify(shell)
+            shell.forceActiveFocus()
+            tryVerify(() => Profiles.profiles.length === 3)
+            tryVerify(() => findChild(shell, "profileList").activeFocus, 2000)
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryCompare(Profiles, "activeProfile", "p2")
+            tryVerify(() => findChild(shell, "homePlay").activeFocus, 2000)
+            const layer = findChild(shell, "modalLayer")
+            compare(layer.covered, false)
+            const r = createTemporaryObject(shotsComponent, shell, { overlay: layer, trailer: trailer({}) })
+            const v = openTrailer(r)
+            const player = v.trailerPlayer.player
+            tryCompare(player, "playbackState", 1)
+            shell.guideDown(false)                             // the controller's Guide button (the viewer takes the key itself)
+            tryVerify(() => findChild(shell, "systemActions").activeFocus, 2000, "the Hub opens")
+            compare(layer.covered, true)
+            tryCompare(player, "playbackState", 2)
+            keyClick(Qt.Key_Escape)                            // B closes the Hub
+            tryVerify(() => !findChild(shell, "systemActions").activeFocus, 2000)
+            tryCompare(layer, "covered", false)
+            tryCompare(player, "playbackState", 1, 3000, "it goes on when the Hub closes")
         }
 
         // ---- screenshots (dev.ps1 shots) ----
