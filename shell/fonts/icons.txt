@@ -46,6 +46,7 @@ schedule efd6
 chevron_left e5cb
 chevron_right e5cc
 play_arrow e037
+pause e034
 close e5cd
 delete e92e
 bar_chart e26b

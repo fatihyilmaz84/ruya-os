@@ -58,6 +58,7 @@ Item {
         "chevron_left": 0xe5cb,
         "chevron_right": 0xe5cc,
         "play_arrow": 0xe037,
+        "pause": 0xe034,
         "close": 0xe5cd,
         "delete": 0xe92e,
         "bar_chart": 0xe26b,
