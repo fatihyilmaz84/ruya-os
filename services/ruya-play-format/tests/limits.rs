@@ -490,3 +490,65 @@ fn problems_are_capped_and_say_so() {
     assert_eq!(p.len(), MAX_PROBLEMS + 1);
     assert_eq!(p.last().unwrap().code, "problems.truncated");
 }
+
+// ----- the values of the spec, written out ---------------------------------------------------
+
+#[test]
+fn the_constants_are_the_numbers_of_the_spec() {
+    // docs/specs/05-play-packages.md 4.4. A boundary test above moves with its constant, so the
+    // numbers themselves are pinned here.
+    assert_eq!(MAX_MANIFEST_BYTES, 1024 * 1024);
+    assert_eq!(MAX_JSON_DEPTH, 12);
+    assert_eq!(MAX_TABLE_BYTES, 64 * 1024 * 1024);
+    assert_eq!(MAX_TABLE_ENTRIES, 200_000);
+    assert_eq!(MAX_ZIP_ENTRIES, 220_000);
+    assert_eq!((MAX_PATH_BYTES, MAX_COMPONENT_BYTES), (1024, 255));
+    assert_eq!(MAX_LINK_HOPS, 8);
+    assert_eq!(
+        (EXPANSION_FREE_BYTES, MAX_EXPANSION_RATIO),
+        (1024 * 1024, 200)
+    );
+    assert_eq!(MAX_LANGUAGES, 30);
+    assert_eq!(
+        (
+            MAX_NAME_CHARS,
+            MAX_SUMMARY_CHARS,
+            MAX_DESCRIPTION_CHARS,
+            MAX_VERSION_CHARS
+        ),
+        (60, 140, 4000, 32)
+    );
+    assert_eq!(
+        (MAX_CREDIT_NAME_CHARS, MAX_TAG_CHARS, MAX_TAGS, MAX_GENRES),
+        (80, 24, 12, 4)
+    );
+    assert_eq!((MAX_LINKS, MAX_URL_BYTES), (12, 2048));
+    assert_eq!(
+        (MAX_SCREENSHOTS, MAX_CAPTION_CHARS, MAX_REASON_CHARS),
+        (20, 100, 120)
+    );
+    assert_eq!(
+        (MAX_ID_BYTES, MAX_FLATPAK_ID_BYTES, MIN_ID_ELEMENTS),
+        (120, 255, 3)
+    );
+    assert_eq!(
+        (
+            MAX_COMPONENTS,
+            MAX_LOCAL_ID_BYTES,
+            MAX_COMPONENT_VERSION_BYTES
+        ),
+        (16, 32, 32)
+    );
+    assert_eq!(
+        (MAX_ENV_ENTRIES, MAX_ENV_NAME_BYTES, MAX_ENV_VALUE_BYTES),
+        (64, 64, 1024)
+    );
+    assert_eq!((MAX_COMMAND_ARGS, MAX_ARG_BYTES), (64, 4096));
+    assert_eq!((MAX_SETUP_STEPS, MAX_DISCS, MAX_DATA_PATHS), (16, 16, 32));
+    assert_eq!(
+        (MAX_PLAYERS, MAX_AGE_ATTRIBUTES, MAX_LICENCE_BYTES),
+        (64, 40, 128)
+    );
+    assert_eq!(MAX_PROBLEMS, 100);
+    assert_eq!(SUPPORTED_FORMAT, 1);
+}
