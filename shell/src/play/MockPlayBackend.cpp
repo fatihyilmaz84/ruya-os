@@ -78,7 +78,7 @@ const QList<MockPlayBackend::Fixture> &MockPlayBackend::fixtures()
             i.size = megabytes * 1024 * 1024;
             i.tier = QString::fromLatin1(tier);
             if (i.tier != QLatin1String("unverified")) {
-                i.signerKeyId = QStringLiteral("3f9a41c07be2d605");
+                i.signerKeyId = QStringLiteral("3f9a41c07be2d6058e21b4a9d0c7f312");
                 i.signerName = i.developer;
                 i.keyState = QStringLiteral("new");
             }
@@ -133,7 +133,7 @@ const QList<MockPlayBackend::Fixture> &MockPlayBackend::fixtures()
         PlayInfo imp = base("com.example.impostor", "Pixel Forest 2", "Claims an id another key owns.", "Mallory Games",
                             4, "developer", "full", "all", 150);
         imp.keyState = QStringLiteral("different");
-        imp.signerKeyId = QStringLiteral("c01d00d5badc0ffe");
+        imp.signerKeyId = QStringLiteral("c01d00d5badc0ffe7a3e91b2c4d5f608");
         imp.permissions = {perm("input:controllers", "Uses controllers", "low")};
         add("impostor", "folder", "different-developer", imp);
 

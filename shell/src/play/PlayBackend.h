@@ -67,7 +67,7 @@ struct PlayInfo
     QString requirement = QStringLiteral("ok"); // "ok" | "unsupported"
     QString verdict = QStringLiteral("ok");     // "ok" or a JobFinished status
     QString tier = QStringLiteral("unverified"); // "official" | "developer" | "unverified"
-    QString signerKeyId;                        // 16 hex characters; empty = none
+    QString signerKeyId;                        // 32 hex characters; empty = none
     QString signerName;
     QString keyState;                           // "new" | "same" | "different"; empty = unsigned
     QList<PlayPermission> permissions;

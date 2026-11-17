@@ -91,7 +91,7 @@
                          "different-developer", "needs-developer-mode", "revoked", "unsupported").
                          A hint for the page; Install repeats every check.
     tier            s    "official" | "developer" | "unverified"
-    signer_key_id   s    16 hex characters; absent for "unverified" without a signature
+    signer_key_id   s    32 hex characters (05 §9.2); absent for "unverified" without a signature
     signer_name     s    the name in the signature; absent as above
     key_state       s    "new" (this id was never installed) | "same" (installed under this key) |
                          "different" (installed or kept under another key). Absent for an

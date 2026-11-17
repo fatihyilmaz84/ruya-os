@@ -126,8 +126,8 @@ Item {
             compare(i.requirement, "ok")
             compare(i.verdict, "ok")
             compare(i.tier, "developer")
-            compare(i.signerKeyId, "3f9a41c07be2d605")
-            compare(i.signerKeyId.length, 16)
+            compare(i.signerKeyId, "3f9a41c07be2d6058e21b4a9d0c7f312")
+            compare(i.signerKeyId.length, 32)
             compare(i.signerName, "Example Games")
             compare(i.keyState, "new")
             compare(i.permissions.map(x => x.key),
@@ -171,7 +171,7 @@ Item {
             i = inspect("impostor")
             compare(i.keyState, "different")
             compare(i.verdict, "different-developer")
-            verify(i.signerKeyId !== "3f9a41c07be2d605")
+            verify(i.signerKeyId !== "3f9a41c07be2d6058e21b4a9d0c7f312")
 
             compare(inspect("tampered").verdict, "bad-signature")
 
