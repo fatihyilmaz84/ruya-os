@@ -227,5 +227,20 @@ Item {
             tryVerify(() => Input.route === "shell" && Input.status === "ok", 2000, "the Hub on purpose: shell")
             compare(tc.shell.gapInstance, "")
         }
+
+        function test_home_on_purpose_in_the_gap_sends_shell_at_once() {
+            start()
+            const run = launch("org.example.Racer")
+            const first = firstWindow(run)
+            tc.shell.windowGapMs = 60000
+            first.destroy()
+            tryVerify(() => Input.route === "overlay" && Input.instance === run.instance, 2000, "gap begins")
+            compare(tc.shell.gapInstance, run.instance)
+            Input.mockClearCalls()
+
+            tc.shell.sendAppsHome()
+            compare(tc.shell.gapInstance, "", "Home ends the gap in the same call")
+            tryVerify(() => Input.route === "shell" && Input.status === "ok", 2000, "Home on purpose: shell, no hold")
+        }
     }
 }
