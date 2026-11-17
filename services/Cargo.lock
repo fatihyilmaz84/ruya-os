@@ -1041,6 +1041,22 @@ name = "ruya-pads"
 version = "0.1.0"
 
 [[package]]
+name = "ruya-play"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "image",
+ "rustix",
+ "ruya-play-art",
+ "ruya-play-format",
+ "ruya-play-trust",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
 name = "ruya-play-art"
 version = "0.1.0"
 dependencies = [

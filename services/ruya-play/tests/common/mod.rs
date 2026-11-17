@@ -1,0 +1,519 @@
+//! The test harness: an importer over temporary folders with fakes, packages built with the
+//! format crate's fixture builder (`Fx`), signing, real art, and directory snapshots.
+#![allow(dead_code)]
+
+#[path = "../../../ruya-play-format/tests/common/mod.rs"]
+pub mod fx;
+
+#[allow(unused_imports)]
+pub use fx::{sha_hex, write_zip, Fx, ZE};
+
+use ruya_play::core::deps::{ArtVetter, NoHooks, RuyaPlayArt};
+use ruya_play::core::fakes::{
+    CommitHook, FixedClock, FixedFreeSpace, FnOpener, RecordingCommit, StaticBlocklists,
+};
+use ruya_play::core::installed::MemoryInstalled;
+use ruya_play::{Config, Deps, Event, FreeSpace, Hooks, Importer, JobResult, MethodStatus};
+use ruya_play::{OpenError, Phase};
+use ruya_play_art::{Outcome, Slot, SlotResult};
+use ruya_play_format::{Entry, EntryKind, FolderSource, MemorySource, Problem, Source, ZipSource};
+use ruya_play_trust::{
+    countersign, sign_package, MemoryTrustStore, SecretKey, StoreKeys, TrustStore,
+};
+use std::collections::BTreeMap;
+use std::io::{self, Cursor, Read};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+/// The clock every harness starts at (2026-11-17).
+pub const NOW: i64 = 1_794_873_600;
+
+/// The developer key of the tests (the published test seed of 05 §9.2, worth nothing).
+pub fn dev_key() -> SecretKey {
+    let seed: [u8; 32] = std::array::from_fn(|i| i as u8);
+    SecretKey::from_seed(&seed)
+}
+
+/// Another developer.
+pub fn other_key() -> SecretKey {
+    SecretKey::from_seed(&[0x77; 32])
+}
+
+/// The store key of the tests.
+pub fn store_key() -> SecretKey {
+    let seed: [u8; 32] = std::array::from_fn(|i| 0x20 + i as u8);
+    SecretKey::from_seed(&seed)
+}
+
+/// A PNG of `w` x `h` (real art for the art step).
+pub fn png(w: u32, h: u32) -> Vec<u8> {
+    let img = image::RgbaImage::from_pixel(w, h, image::Rgba([200, 60, 20, 255]));
+    let mut out = Cursor::new(Vec::new());
+    img.write_to(&mut out, image::ImageFormat::Png).unwrap();
+    out.into_inner()
+}
+
+/// Bytes of a payload file of `n` bytes that is not all one value.
+pub fn payload(n: usize) -> Vec<u8> {
+    (0..n).map(|i| (i % 251) as u8).collect()
+}
+
+/// A small game with real art: a 512 px icon, a 1 MiB payload file (several chunks) and a script.
+pub fn game() -> Fx {
+    let mut fx = Fx::minimal();
+    fx.files = vec![
+        ("art/icon.png".into(), png(512, 512)),
+        ("payload/data.bin".into(), payload(1024 * 1024 + 17)),
+        ("payload/game".into(), b"#!/bin/sh\necho hi\n".to_vec()),
+    ];
+    fx
+}
+
+/// Root files added to a source (signatures), the rest passed through.
+pub struct Overlay {
+    pub inner: Box<dyn Source>,
+    pub extra: Vec<(String, Vec<u8>)>,
+}
+
+impl Source for Overlay {
+    fn entries(&self) -> Result<Vec<Entry>, Vec<Problem>> {
+        let mut v = self.inner.entries()?;
+        for (p, d) in &self.extra {
+            v.push(Entry {
+                path: p.clone(),
+                kind: EntryKind::File,
+                size: d.len() as u64,
+            });
+        }
+        Ok(v)
+    }
+    fn open(&self, path: &str) -> io::Result<Box<dyn Read + '_>> {
+        match self.extra.iter().find(|(p, _)| p == path) {
+            Some((_, d)) => Ok(Box::new(Cursor::new(d.clone()))),
+            None => self.inner.open(path),
+        }
+    }
+}
+
+fn read_root(src: &dyn Source, name: &str) -> Option<Vec<u8>> {
+    let listed = src
+        .entries()
+        .ok()?
+        .into_iter()
+        .any(|e| e.path == name && e.kind == EntryKind::File);
+    if !listed {
+        return None;
+    }
+    let mut v = Vec::new();
+    src.open(name)
+        .ok()?
+        .take(64 << 20)
+        .read_to_end(&mut v)
+        .ok()?;
+    Some(v)
+}
+
+/// `inner` with a `play.sig` by `key` (and a `store.sig` by `store`), when its `play.json` names an
+/// ASCII id and a build, as a signer would; otherwise `inner` unchanged. (`sign_package` also
+/// signs a non-ASCII id, which `verify_signatures` then refuses as `sig.malformed`.)
+pub fn signed(
+    inner: Box<dyn Source>,
+    key: &SecretKey,
+    store: Option<&SecretKey>,
+) -> Box<dyn Source> {
+    let (Some(json), Some(files)) = (
+        read_root(&*inner, "play.json"),
+        read_root(&*inner, "play.files"),
+    ) else {
+        return inner;
+    };
+    let Ok(v) = serde_json::from_slice::<serde_json::Value>(&json) else {
+        return inner;
+    };
+    let (Some(id), Some(build)) = (v["id"].as_str(), v["build"].as_u64()) else {
+        return inner;
+    };
+    if !id.is_ascii() {
+        return inner;
+    }
+    let Ok(sig) = sign_package(key, id, build, &json, &files, NOW, &[]) else {
+        return inner;
+    };
+    let mut extra = vec![("play.sig".to_string(), sig.clone())];
+    if let Some(store) = store {
+        extra.push(("store.sig".into(), countersign(store, id, build, &sig, NOW)));
+    }
+    Box::new(Overlay { inner, extra })
+}
+
+/// How a test package is held.
+#[derive(Clone)]
+pub enum Pkg {
+    /// In memory.
+    Mem(MemorySource),
+    /// A zip in memory.
+    Zip(Vec<u8>),
+    /// A folder on disk.
+    Folder(PathBuf),
+    /// Signed by the key (and countersigned by the store key) whenever it is opened.
+    Signed(Box<Pkg>, Arc<SecretKey>, Option<Arc<SecretKey>>),
+    /// Any source, made fresh for each open.
+    Custom(Arc<dyn Fn() -> Box<dyn Source> + Send + Sync>),
+}
+
+impl Pkg {
+    /// `fx` in memory, signed by [`dev_key`].
+    pub fn signed(fx: &Fx) -> Pkg {
+        Pkg::Signed(Box::new(Pkg::Mem(fx.mem())), Arc::new(dev_key()), None)
+    }
+
+    /// Open it.
+    pub fn open(&self) -> Result<Box<dyn Source>, OpenError> {
+        match self {
+            Pkg::Mem(m) => Ok(Box::new(m.clone())),
+            Pkg::Zip(bytes) => ZipSource::new(Cursor::new(bytes.clone()))
+                .map(|z| Box::new(z) as Box<dyn Source>)
+                .map_err(OpenError::Problems),
+            Pkg::Folder(p) => Ok(Box::new(FolderSource::new(p))),
+            Pkg::Signed(inner, key, store) => Ok(signed(inner.open()?, key, store.as_deref())),
+            Pkg::Custom(make) => Ok(make()),
+        }
+    }
+}
+
+/// An art step that passes every slot without reading it (the format crate's fixtures carry
+/// placeholder bytes, not images; `ruya-play-art`'s own suite vets real art).
+pub struct PassArt;
+
+impl ArtVetter for PassArt {
+    fn vet(&self, inputs: &[(Slot, PathBuf)], _out_dir: &Path) -> Vec<SlotResult> {
+        inputs
+            .iter()
+            .map(|(slot, _)| SlotResult {
+                slot: *slot,
+                outcome: Outcome::Ok { files: Vec::new() },
+            })
+            .collect()
+    }
+}
+
+/// What a harness is built from.
+pub struct Setup {
+    pub packages: Vec<(PathBuf, Pkg)>,
+    pub free: u64,
+    pub free_space: Option<Box<dyn FreeSpace>>,
+    pub blocklist: StaticBlocklists,
+    pub trust: MemoryTrustStore,
+    pub developer_mode: bool,
+    pub installed: MemoryInstalled,
+    pub store_keys: StoreKeys,
+    pub art: Box<dyn ArtVetter>,
+    pub hooks: Box<dyn Hooks>,
+    pub commit_hook: Option<CommitHook>,
+    /// The clock at start.
+    pub now: i64,
+    /// Replaces `trust` and `installed` (stores a test shares or makes fail).
+    pub stores: Option<(SharedTrust, SharedInstalled)>,
+}
+
+impl Default for Setup {
+    fn default() -> Self {
+        Setup {
+            packages: Vec::new(),
+            free: u64::MAX,
+            free_space: None,
+            blocklist: StaticBlocklists::empty(),
+            trust: MemoryTrustStore::new(),
+            developer_mode: false,
+            installed: MemoryInstalled::new(),
+            store_keys: StoreKeys::new(vec![store_key().public()]),
+            art: Box::new(RuyaPlayArt),
+            hooks: Box::new(NoHooks),
+            commit_hook: None,
+            now: NOW,
+            stores: None,
+        }
+    }
+}
+
+/// The path tests give a package.
+pub fn pkg_path(name: &str) -> PathBuf {
+    if cfg!(windows) {
+        PathBuf::from(format!("C:\\media\\usb\\{name}"))
+    } else {
+        PathBuf::from(format!("/run/media/usb/{name}"))
+    }
+}
+
+impl Setup {
+    /// One package at [`pkg_path`]`("game.play")`.
+    pub fn with(pkg: Pkg) -> Setup {
+        Setup {
+            packages: vec![(pkg_path("game.play"), pkg)],
+            ..Setup::default()
+        }
+    }
+
+    /// Build the harness in fresh temporary folders.
+    pub fn build(self) -> Harness {
+        let root = tempfile::tempdir().unwrap();
+        Harness::open_in(root, self)
+    }
+}
+
+/// An importer over temporary folders, and handles on its fakes.
+pub struct Harness {
+    pub root: tempfile::TempDir,
+    pub cfg: Config,
+    pub target: PathBuf,
+    pub outside: PathBuf,
+    pub importer: Importer,
+    pub commit: Arc<RecordingCommit>,
+    pub free: Arc<FixedFreeSpace>,
+    pub clock: Arc<FixedClock>,
+    pub events: Vec<Event>,
+}
+
+impl Harness {
+    /// An importer over `root` (which may hold a previous run's folders).
+    pub fn open_in(root: tempfile::TempDir, setup: Setup) -> Harness {
+        let cfg = Config::under(root.path());
+        let target = root.path().join("target");
+        let outside = root.path().join("outside");
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        let mut commit = RecordingCommit::new(Some(target.clone()));
+        commit.hook = setup.commit_hook;
+        let commit = Arc::new(commit);
+        let free = Arc::new(FixedFreeSpace::new(setup.free));
+        let clock = Arc::new(FixedClock::at(setup.now));
+        let packages: BTreeMap<PathBuf, Pkg> = setup.packages.into_iter().collect();
+        let opener = FnOpener(move |p: &Path| match packages.get(p) {
+            Some(pkg) => pkg.open(),
+            None => Err(OpenError::Missing),
+        });
+        let (mut trust, installed): (
+            Box<dyn TrustStore + Send>,
+            Box<dyn ruya_play::InstalledBuilds + Send>,
+        ) = match setup.stores {
+            Some((t, i)) => (Box::new(t), Box::new(i)),
+            None => (Box::new(setup.trust), Box::new(setup.installed)),
+        };
+        trust.set_developer_mode(setup.developer_mode).unwrap();
+        let free_space: Box<dyn FreeSpace> = match setup.free_space {
+            Some(f) => f,
+            None => Box::new(Arc::clone(&free)),
+        };
+        let deps = Deps {
+            opener: Box::new(opener),
+            free_space,
+            art: setup.art,
+            commit: Box::new(Arc::clone(&commit)),
+            clock: Box::new(Arc::clone(&clock)),
+            blocklists: Box::new(setup.blocklist),
+            store_keys: setup.store_keys,
+            trust,
+            installed,
+            hooks: setup.hooks,
+        };
+        let importer = Importer::open(cfg.clone(), deps).expect("the importer opens");
+        Harness {
+            root,
+            cfg,
+            target,
+            outside,
+            importer,
+            commit,
+            free,
+            clock,
+            events: Vec::new(),
+        }
+    }
+
+    /// Queue `path` (as an admin) and run it to its end.
+    pub fn install_at(&mut self, path: &Path) -> JobResult {
+        let (status, job) = self.importer.queue_install(path, true);
+        assert_eq!(status, MethodStatus::Ok, "queue {}", path.display());
+        let mut events = Vec::new();
+        let result = self
+            .importer
+            .run_next(&mut |e| events.push(e))
+            .expect("a job ran");
+        assert_eq!(result.job, job);
+        self.events.extend(events);
+        result
+    }
+
+    /// Install the one package of [`Setup::with`].
+    pub fn install(&mut self) -> JobResult {
+        self.install_at(&pkg_path("game.play"))
+    }
+
+    /// Everything below the staging root.
+    pub fn staging(&self) -> Vec<String> {
+        listing(&self.cfg.staging)
+    }
+
+    /// Everything below the fake commit's target.
+    pub fn installed_files(&self) -> Vec<String> {
+        listing(&self.target)
+    }
+
+    /// Assert that a refused job left nothing: no staging directory, nothing installed, and the
+    /// commit step never ran.
+    #[track_caller]
+    pub fn assert_nothing_left(&self) {
+        assert_eq!(self.staging(), Vec::<String>::new(), "staging is not empty");
+        assert_eq!(
+            self.installed_files(),
+            Vec::<String>::new(),
+            "something was installed"
+        );
+        assert!(self.commit.calls().is_empty(), "the commit step ran");
+    }
+
+    /// The progress events of the run, checked: the percent never decreases and the phase never
+    /// goes back; exactly one Finished, last.
+    #[track_caller]
+    pub fn assert_events_ordered(&self) {
+        let mut last = (Phase::None, 0u32);
+        let mut finished = 0;
+        for (i, e) in self.events.iter().enumerate() {
+            match e {
+                Event::Progress { percent, phase, .. } => {
+                    assert!(finished == 0, "progress after Finished");
+                    assert!(
+                        *phase >= last.0,
+                        "phase went back at event {i}: {:?}",
+                        self.events
+                    );
+                    assert!(
+                        *percent >= last.1,
+                        "percent went down at event {i}: {:?}",
+                        self.events
+                    );
+                    last = (*phase, *percent);
+                }
+                Event::Finished { .. } => finished += 1,
+            }
+        }
+        assert_eq!(finished, 1, "{:?}", self.events);
+        assert!(matches!(self.events.last(), Some(Event::Finished { .. })));
+    }
+}
+
+/// Every path below `dir`, sorted, read without following links (`name -> target` for a link).
+pub fn listing(dir: &Path) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut pending = vec![(dir.to_path_buf(), String::new())];
+    while let Some((d, prefix)) = pending.pop() {
+        let Ok(rd) = std::fs::read_dir(&d) else {
+            continue;
+        };
+        for e in rd.flatten() {
+            let name = format!("{prefix}{}", e.file_name().to_string_lossy());
+            let meta = std::fs::symlink_metadata(e.path()).unwrap();
+            if meta.file_type().is_symlink() {
+                let t = std::fs::read_link(e.path()).unwrap();
+                out.push(format!("{name} -> {}", t.display()));
+            } else {
+                if meta.is_dir() {
+                    pending.push((e.path(), format!("{name}/")));
+                }
+                out.push(name);
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// The codes of a result's problems.
+pub fn codes(r: &JobResult) -> Vec<String> {
+    r.problems.iter().map(|p| p.code.clone()).collect()
+}
+
+/// Which writes of the shared stores fail.
+#[derive(Clone, Default)]
+pub struct Faults {
+    pub put: Arc<std::sync::atomic::AtomicBool>,
+    pub remove: Arc<std::sync::atomic::AtomicBool>,
+    pub record: Arc<std::sync::atomic::AtomicBool>,
+    pub forget: Arc<std::sync::atomic::AtomicBool>,
+}
+
+fn on(flag: &std::sync::atomic::AtomicBool) -> bool {
+    flag.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+/// A trust store the test can look into, whose writes can be made to fail.
+#[derive(Clone, Default)]
+pub struct SharedTrust {
+    pub inner: Arc<std::sync::Mutex<MemoryTrustStore>>,
+    pub faults: Faults,
+}
+
+fn trust_io() -> ruya_play_trust::TrustError {
+    ruya_play_trust::TrustError::StateIo {
+        detail: "the disk is full".into(),
+    }
+}
+
+impl TrustStore for SharedTrust {
+    fn get(
+        &self,
+        id: &str,
+    ) -> Result<Option<ruya_play_trust::IdRecord>, ruya_play_trust::TrustError> {
+        self.inner.lock().unwrap().get(id)
+    }
+    fn put(
+        &mut self,
+        record: ruya_play_trust::IdRecord,
+    ) -> Result<(), ruya_play_trust::TrustError> {
+        if on(&self.faults.put) {
+            return Err(trust_io());
+        }
+        self.inner.lock().unwrap().put(record)
+    }
+    fn remove(&mut self, id: &str) -> Result<bool, ruya_play_trust::TrustError> {
+        if on(&self.faults.remove) {
+            return Err(trust_io());
+        }
+        self.inner.lock().unwrap().remove(id)
+    }
+    fn developer_mode(&self) -> Result<bool, ruya_play_trust::TrustError> {
+        self.inner.lock().unwrap().developer_mode()
+    }
+    fn set_developer_mode(&mut self, on: bool) -> Result<(), ruya_play_trust::TrustError> {
+        self.inner.lock().unwrap().set_developer_mode(on)
+    }
+}
+
+/// Installed builds the test can look into, whose writes can be made to fail.
+#[derive(Clone, Default)]
+pub struct SharedInstalled {
+    pub inner: Arc<std::sync::Mutex<MemoryInstalled>>,
+    pub faults: Faults,
+}
+
+fn installed_io() -> Problem {
+    Problem::new("installed.io", "installed.json", "the disk is full")
+}
+
+impl ruya_play::InstalledBuilds for SharedInstalled {
+    fn build_of(&self, id: &str) -> Result<Option<u64>, Problem> {
+        self.inner.lock().unwrap().build_of(id)
+    }
+    fn record(&mut self, id: &str, build: u64) -> Result<(), Problem> {
+        if on(&self.faults.record) {
+            return Err(installed_io());
+        }
+        self.inner.lock().unwrap().record(id, build)
+    }
+    fn forget(&mut self, id: &str) -> Result<(), Problem> {
+        if on(&self.faults.forget) {
+            return Err(installed_io());
+        }
+        self.inner.lock().unwrap().forget(id)
+    }
+}

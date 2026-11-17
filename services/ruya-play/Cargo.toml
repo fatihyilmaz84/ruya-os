@@ -1,0 +1,24 @@
+[package]
+name = "ruya-play"
+description = "RuyaOS .play importer core: jobs, staging, unpack, verify, art vetting and the commit hand-off (docs/specs/05-play-packages.md section 7.3)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ruya-play-format = { path = "../ruya-play-format" }  # the one parser: Source, validate, Problem
+ruya-play-trust = { path = "../ruya-play-trust" }  # inspect, tiers, continuity, revocation
+ruya-play-art = { path = "../ruya-play-art" }  # art and video vetting
+serde = { version = "1", features = ["derive"] }  # the jobs and installed-builds state files
+serde_json = "1"
+sha2 = "0.10"  # hashing while unpacking (already in the tree)
+
+[target.'cfg(unix)'.dependencies]
+# Directory file descriptors: openat/mkdirat/symlinkat with O_NOFOLLOW, fchmod, fstatvfs (already in the tree).
+rustix = { version = "1", default-features = false, features = ["std", "fs"] }
+
+[dev-dependencies]
+tempfile = "3"
+flate2 = "1"  # the format crate's zip fixture writer (already in the tree)
+image = { version = "0.25", default-features = false, features = ["png"] }  # real art for the art-step tests (already in the tree)
