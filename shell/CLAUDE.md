@@ -24,7 +24,7 @@ Specs: `docs/specs/02-shell.md` (behaviour) and `docs/specs/04-design-system.md`
 - **No literal colours, durations, easings, font sizes, spacing, radii or control sizes in components:** use the `Theme` tokens of `04` §3 (`lint-tokens.ps1` fails on most literals; a rare exception ends its line with `// token-ok: <reason>`). **Builders don't invent tokens or components:** take the closest existing one and add an Inbox line (`04` §8); the lead changes the system. A feedback animation (shake, pulse) does not start under `Theme.reducedMotion`.
 - User-visible strings: `qsTr()`, with `%n` plurals where counts appear (see Translations below).
 - Effects: `MultiEffect` or precompiled `.qsb` shaders only. Never inline GLSL. Blur the shared backdrop; never stack more fullscreen blurs.
-- **Glass and motion (`04` §3.8, how-to in `PATTERNS.md`):** glass gets `GlassLayers` and `GlassShadow`; durations are `Theme` tokens, already scaled for reduced motion (never multiply again); decorative animation is gated (`Theme.glareOn`/`shimmerOn`, `LiquidGate`) and never runs forever on a still screen; a single-row selector uses `FocusGlide.qml`.
+- **Glass and motion (`04` §3.8, `PATTERNS.md`):** `GlassLayers` + `GlassShadow`; duration tokens are already scaled for reduced motion; decorative animation is gated (`LiquidGate`) and never runs forever on a still screen.
 - Never block the GUI thread: service calls are asynchronous (invoke, then react to a signal).
 
 ## Focus and input rules (the most common source of bugs)
@@ -61,14 +61,14 @@ All user-visible strings use `qsTr()`. After adding or changing one, refresh the
 - Every `init()` starts with `verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())` (T-127: re-activates the window or fails clearly). Copy it into new test files.
 - **Test motion scale:** tests run with duration tokens at a tenth (`windowGuard`); a test whose subject is a duration sets `Theme.motionFactor = 1.0` itself, with a comment. Wait on fades with `tryVerify`/`tryCompare` or `Theme.pageMs + n`, never a literal `wait(300)`; times that are not tokens are not scaled (`PATTERNS.md`, "Test motion scale").
 - Drive the UI with `keyClick()` using only the keys listed above, unless a test is specifically about keyboard input.
-- **Test member lint** (`lint-test-members.ps1`, in `test`): qmllint over `tests/*.qml` fails on any member read QML cannot see. Expose the member, never silence it; type a test's shell as `property Shell shell` (`PATTERNS.md`, "Test member lint").
+- **Test member lint** (in `test`) fails on a member QML cannot see: expose it, never silence it (`PATTERNS.md`).
 - Iterate with `dev.ps1 qml tst_x` (PARTIAL: that file only, no lints); `test` still gates.
 - Give an `objectName` to every element a test needs to find, and find it with `findChild(shell, "name")`.
 - Wait on asynchronous results with `tryCompare` or `tryVerify(() => …)`, **never** `tryCompare` on a `QVariantList`'s `length` (it polls a frozen copy). `tryCompare(x, "opacity", 1)` is fuzzy (0.99999 passes): a property derived from the exact end gets its own `tryVerify` (T-421).
 - Assert focus explicitly (`find("x").activeFocus`) after every navigation step that matters. A missing focus assertion let a real bug through once.
 - State that would leak between tests (lockouts, created profiles) gets its own `tst_*.qml` file.
 - UI tasks: extend `test_zz_screenshots` (or add a similar test) so `dev.ps1 shots` captures the new screens, then review the PNGs. `shots` runs only functions that save to `shotsDir`, so a screenshot must not rely on an earlier test function.
-- Product code that waits for a presented frame needs a path for no frame at all (a sleeping display; `PATTERNS.md`, "A `shots` window that presents no frames").
+- Product code that waits for a presented frame needs a path for no frame at all (`PATTERNS.md`).
 
 ## C++ rules
 

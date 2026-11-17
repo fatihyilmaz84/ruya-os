@@ -4,7 +4,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 
 ## Where the truth lives
 
-**Paper Plane is the source of truth for all work (owner, 2026-11-12):** http://192.168.178.164:8687, project `RUY`. Tickets `RUY-n` hold the tasks, their state, order (`next`), Outcome and review verdicts; labels mark the lists (`inbox`, `blocker`, `owner-decision`, `vm-queue`, `dell`). **Never create or edit `docs/tasks/*.md` or `docs/STATUS*.md`**: they are a frozen archive (tasks up to T-472; a ticket's title starts with its old `T-nnn` id). Access: the `mcp__paperplane-<role>__*` tools, else curl with `C:\Users\FSYY\.paperplane\ruy-<role>.token` (never print or commit a token). Telemetry (OpenTelemetry to Paper Plane) is on for every session on this PC.
+**Paper Plane is the source of truth for all work (owner, 2026-11-12):** http://192.168.178.164:8687, project `RUY`. Tickets `RUY-n` hold tasks, state, order (`next`), Outcomes and verdicts; labels mark the lists (`inbox`, `blocker`, `owner-decision`, `vm-queue`, `dell`). **Never create or edit `docs/tasks/*.md` or `docs/STATUS*.md`** (frozen archive up to T-472). Access: the `mcp__paperplane-<role>__*` tools, else curl with `C:\Users\FSYY\.paperplane\ruy-<role>.token` (never print or commit a token).
 
 | What | Where |
 |---|---|
@@ -19,7 +19,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 ## Session workflow (do every step, in order)
 
 0. **Which session?** Lead: `docs/LEAD.md`. Planning: `docs/tasks/PLANNING.md`. A dispatched builder is the `ruya-builder` agent in its own worktree (`.claude/agents/ruya-builder.md`). A builder session the **owner starts directly** works in the main checkout with the builder token. Builders don't create tickets; follow-ups go to the lead (the HANDOFF's `inbox`), who files them.
-1. **Orient** (direct sessions). Paper Plane `next` (the best Ready ticket whose blockers are done; the `owner:lead` label is lead-only in Paper Plane, so a builder never gets those). **One ticket per session**, unless it says it is small enough to pair.
+1. **Orient** (direct sessions). Paper Plane `next` (the best Ready ticket you may claim). **One ticket per session**, unless it says it is small enough to pair.
    - `git status` shows changes you didn't make? Another session may be running: stop and tell the user.
    - Nothing Ready? Stop and say the backlog needs a planning session. Don't invent work.
 2. **Read before coding.** The whole ticket (`get`: description and latest comments), every spec section it links, the `CLAUDE.md` of each area you touch, and the existing code you will change.
@@ -27,14 +27,14 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 4. **Build within scope.** Implement exactly the ticket's Scope.
    - **Every follow-up** you notice (debt, flaky build, missing feature, spec gap) is one `inbox` line in your handover (the lead files it as a ticket labelled `inbox`). A follow-up that exists only in prose is lost.
    - Crossing the shell/service boundary: **write or extend the D-Bus XML first**; the mock, the D-Bus client and the Rust service all follow it.
-   - **Contracts are drafts until the first release.** If the task can't be done cleanly within the contract, extend it in the same commit (XML, Rust service and tests, mock, D-Bus client) and explain it in the Outcome; no workarounds such as extra calls to recover missing data. "Don't change the contract" in a task means "no unnecessary changes". Never break behaviour other code relies on.
+   - **Contracts are drafts until the first release.** If the task can't be done cleanly within the contract, extend it in the same commit (XML, service and tests, mock, D-Bus client) and explain it in the Outcome; no workarounds. Never break behaviour other code relies on.
 5. **Verify.**
    - `.\scripts\dev.ps1 test` must end with `ALL GREEN`. Its Qt Quick tests run **offscreen**, independent of the desktop. A red `test` is a real failure.
    - UI change: also `.\scripts\dev.ps1 shots` (real GPU windows; needs an unlocked, undisturbed desktop: `TEST WINDOW LOST ACTIVATION` → re-run, never edit a test to suit the desktop). Read the changed screenshots in `output\shell-shots\review\` (half size) against the criteria and `04` §8, and fix what you see.
    - Image builds: see Hard rules, **Host**.
 6. **Document.**
    - Update every spec section whose behaviour changed (specs describe what the code does) and `docs/dev-setup.md` if commands changed.
-   - The Outcome goes to the ticket: `move` it to **In Review** with `branch`, `commit` and `evidence` (a `Verified:` line: host / host (vm pending: <check>) / vm / unverified / hw = built and tested on Windows / on the VM queue / booted in QEMU / not run / real hardware), then a `comment` starting `Outcome:` (what was built, files, deviations). Blocked: `move` to Blocked with the reason. Only the lead moves a ticket to Done, after a recorded `approve`.
+   - The Outcome goes to the ticket: `move` it to **In Review** with `branch`, `commit` and `evidence` (a `Verified:` line: `host`, `host (vm pending: <check>)`, `vm`, `hw` or `unverified`), then a `comment` starting `Outcome:` (what was built, files, deviations). Blocked: `move` to Blocked with the reason. Only the lead moves a ticket to Done, after a recorded `approve`.
 7. **Commit.** One commit per ticket (a small series is fine), format below, naming `RUY-n`. Dispatched builders commit on their branch; the lead merges. **Builders never push**; the lead pushes `main` with `scripts\push-main.ps1` (`LEAD.md`). `image/bib/config.toml` holds the dev SSH key and stays git-ignored.
 
 ## Definition of done (all must hold)
@@ -49,9 +49,9 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 
 - **Decisions.** ADRs marked *Accepted* in `00-overview.md` are binding. If a task seems to need a different decision, or a new owner-level one (legal, licensing, product scope, spending, publishing), don't decide: add a *Proposed* ADR, move the ticket to Blocked with the question (the lead files an `owner-decision` ticket), and stop.
 - **Host.** Windows, with a Fedora 44 WSL distribution for image builds and QEMU (WHPX) for boot tests (`docs/dev-setup.md`). Never install system software or change system settings; `dnf` inside the WSL distribution is fine.
-  - **VM checks (owner, 2026-11-03; lead-20: WSL is the lead's).** Image, service or shell logic that only Linux can show: write or extend its `scripts/vm-*-check.sh` (with host fixtures in `test-vm-checks.sh`) and hand over `Verified: host (vm pending: <check>)`. Builders run nothing in WSL unless their dispatch says so: the lead builds one image at a time (`image-chain.sh`) and runs every pending check in its VM queue.
-  - **Unverifiable here** (say so): real GPU/KPI numbers, controllers in the VM, VM audio output (none unless `-Audio`), the shell over D-Bus unless tested in the VM over SSH.
-  - **The Dell is a pure test machine (owner, 2026-11-08/13).** The lead and any agent it sends may do anything on it over SSH without asking (settings, services, reboot, wipe, switch the image) and report it afterwards (`Dell: <what>`); the real fix goes into the code. Never the owner's PC; the SSH key stays out of the repo.
+  - **VM checks (owner, 2026-11-03).** Linux-only behaviour gets a `scripts/vm-*-check.sh` (host fixtures in `test-vm-checks.sh`) and `Verified: host (vm pending: <check>)`. Builders run nothing in WSL unless dispatched to; the lead builds images (`image-chain.sh`) and runs the VM queue.
+  - **Unverifiable here** (say so): real GPU/KPI numbers, controllers or audio in the VM, the shell over D-Bus unless tested in the VM over SSH.
+  - **The Dell is a pure test machine (owner, 2026-11-08/13):** the lead and its agents may do anything on it over SSH without asking and report it (`Dell: <what>`); the real fix goes into the code. Never the owner's PC; the SSH key stays out of the repo.
 - **Tests are the spec's teeth.** Never weaken an assertion, add `skip()`, or delete a test to get green. If a test is wrong, fix it and say why in the Outcome.
 - **Security invariants:**
   - PIN hashes never leave `ruya-profiles`.
