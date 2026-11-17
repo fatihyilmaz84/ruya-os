@@ -814,7 +814,10 @@ Item {
                 keyClick(Qt.Key_Return)
                 tryVerify(() => Play.jobs[Play.mockPath("starhopper")] !== undefined && Play.jobs[Play.mockPath("starhopper")].percent >= 60, 5000)
                 tryVerify(() => !find("installCancel").visible, 3000)
-                keyClick(Qt.Key_Down)               // off the trust row (Select opens the signer sheet): nothing to select
+                // Off the trust row (Select opens the signer sheet) onto a block that only reads: Back is the one hint.
+                for (let i = 0; i < 6 && shown() !== "back Back"; ++i)
+                    keyClick(Qt.Key_Down)
+                compare(shown(), "back Back")
                 settle()
                 shot("130-install-busy-hint-" + lang)
                 Play.mockPauseJobs(false)
