@@ -119,6 +119,7 @@ const FIXES: &[(&str, &str)] = &[
     ("art.colour_profile", "Export the image as sRGB (or with an RGB ICC profile)."),
     ("art.format_unsupported", "Use PNG, JPEG or WebP."),
     ("art.magic_mismatch", "The file's contents do not match its extension; export it again in the format its name says."),
+    ("art.no_screenshots", "Add a screenshot, or remove the empty screenshots list."),
     ("art.too_many_screenshots", "Keep at most 20 screenshots."),
     ("art.file_too_large", "Make the file smaller: icon and logo 2 MB, cover and screenshots 4 MB, hero 8 MB."),
     ("art.dimensions_too_large", "Scale the image below 16384 pixels each way and 100 megapixels."),

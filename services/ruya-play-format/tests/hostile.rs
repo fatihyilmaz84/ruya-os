@@ -1031,6 +1031,15 @@ fn art_slots() {
     let mut fx = Fx::minimal();
     fx.manifest.as_object_mut().unwrap().remove("art");
     assert_rejected(check(&fx), "manifest.missing");
+    // An empty screenshots list is refused; leaving the key out is fine (05 section 5).
+    let mut fx = Fx::minimal();
+    fx.manifest["art"]["screenshots"] = json!([]);
+    assert_rejected(check(&fx), "art.no_screenshots");
+    fx.manifest["art"]
+        .as_object_mut()
+        .unwrap()
+        .remove("screenshots");
+    assert_valid(check(&fx));
 }
 
 #[test]

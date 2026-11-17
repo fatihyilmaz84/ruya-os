@@ -221,6 +221,7 @@ codes! {
     ART_PATH = "art.path",
     ART_MISSING = "art.missing",
     ART_EXTENSION = "art.extension",
+    ART_NO_SCREENSHOTS = "art.no_screenshots",
     DATA_PATH = "data.path",
     PATH_EMPTY = "path.empty",
     PATH_TRAVERSAL = "path.traversal",
