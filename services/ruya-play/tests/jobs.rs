@@ -143,3 +143,24 @@ fn leftovers_are_removed_without_following_links() {
         );
     }
 }
+
+#[test]
+fn a_counter_at_its_end_hands_out_no_name_and_does_not_panic() {
+    let root = tempfile::tempdir().unwrap();
+    let cfg = ruya_play::Config::under(root.path());
+    std::fs::create_dir_all(&cfg.state).unwrap();
+    let mut last = JobRecord::queued("job-7", JobKind::Install, "/run/media/usb/a.play");
+    last.finish(JobStatus::Ok, "", 7);
+    std::fs::write(cfg.jobs_file(), jobs::encode(u64::MAX, &[last])).unwrap();
+    let h = Harness::open_in(root, Setup::with(Pkg::signed(&game())));
+    assert_eq!(
+        h.importer.queue_install(&pkg_path("game.play"), true),
+        (ruya_play::MethodStatus::Failed, String::new())
+    );
+    assert_eq!(h.importer.list_jobs().len(), 1);
+    let text = std::fs::read_to_string(h.cfg.jobs_file()).unwrap();
+    assert!(
+        text.starts_with(&format!("{{\"format\":1,\"counter\":{}}}", u64::MAX)),
+        "{text}"
+    );
+}

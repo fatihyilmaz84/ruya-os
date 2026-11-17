@@ -169,6 +169,7 @@ fn status_of_code(code: &str) -> JobStatus {
         | codes::INSTALLED_CORRUPT
         | codes::INSTALLED_IO
         | codes::COMMIT_FAILED
+        | codes::ROLLBACK_FAILED
         | codes::JOB_INTERRUPTED => JobStatus::Failed,
         _ => match group {
             "sig" | "store_sig" => JobStatus::BadSignature,
@@ -239,6 +240,7 @@ mod tests {
             ("state.corrupt", JobStatus::Failed),
             ("staging.changed", JobStatus::Failed),
             ("commit.failed", JobStatus::Failed),
+            ("rollback.failed", JobStatus::Failed),
         ];
         for (code, status) in cases {
             assert_eq!(status_of(&[p(code)]), status, "{code}");

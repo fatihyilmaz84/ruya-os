@@ -12,8 +12,10 @@
 //! 6. re-walk the staged tree against the table and check revocation again, now with the `runner`
 //!    hashes of the bundled components;
 //! 7. vet the art from the staged copy;
-//! 8. the [`Commit`] step (the point of no return: `Cancel` answers `too-late`);
-//! 9. `record_install` in the trust store, then the installed build.
+//! 8. `record_install` in the trust store, then the installed build, **before** the commit, so a
+//!    failure fails closed (both are rolled back when the commit fails; a failed rollback is
+//!    journalled);
+//! 9. the [`Commit`] step (past the point of no return: `Cancel` answers `too-late`).
 //!
 //! The source is read once; everything after step 5 reads the staged copy only. Any failure or
 //! cancel removes the job's staging directory; a crash leaves only staging directories, which
@@ -33,8 +35,8 @@ use crate::core::unpack::{self, staging_problem, Control, Stop, Unpacked};
 use ruya_play_format::Problem;
 use ruya_play_trust::revocation::Selected;
 use ruya_play_trust::{
-    inspect, is_revoked, record_install, select_blocklist, Context, Inspection, ListCheck,
-    StoreKeys, TrustError, TrustStore,
+    inspect, is_revoked, record_install, select_blocklist, Context, Continuity, IdRecord,
+    Inspection, ListCheck, StoreKeys, TrustError, TrustStore,
 };
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
@@ -66,6 +68,11 @@ impl Config {
     /// The job table's file.
     pub fn jobs_file(&self) -> PathBuf {
         self.state.join("jobs")
+    }
+
+    /// The journal of records that could not be rolled back.
+    pub fn journal_file(&self) -> PathBuf {
+        self.state.join("journal")
     }
 }
 
@@ -206,6 +213,15 @@ pub struct Importer {
     trust: Mutex<Box<dyn TrustStore + Send>>,
     installed: Mutex<Box<dyn InstalledBuilds + Send>>,
     hooks: Box<dyn Hooks>,
+}
+
+/// What [`Importer::record`] found before it wrote, to undo it.
+struct Prior {
+    id: String,
+    trust_written: bool,
+    trust_before: Option<IdRecord>,
+    build_written: bool,
+    build_before: Option<u64>,
 }
 
 /// A refusal of steps 1 to 3: the problems, and the inspection when the package got that far.
@@ -512,8 +528,13 @@ impl Importer {
         if st.jobs.iter().any(|j| j.is_active() && j.path == text) {
             return (MethodStatus::Busy, String::new());
         }
-        st.counter += 1;
-        let job = format!("job-{}", st.counter);
+        // The counter comes from a file: at its end no name is handed out twice and nothing
+        // panics.
+        let Some(next) = st.counter.checked_add(1) else {
+            return (MethodStatus::Failed, String::new());
+        };
+        st.counter = next;
+        let job = format!("job-{next}");
         st.jobs
             .push(JobRecord::queued(&job, JobKind::Install, text));
         self.shared.save(&mut st);
@@ -801,7 +822,7 @@ impl Importer {
             return fail(problems);
         }
 
-        // 8. Commit: past this point Cancel answers too-late.
+        // 8 and 9. Past this point Cancel answers too-late.
         {
             let mut st = self.shared.lock();
             if cancel.load(Ordering::SeqCst) {
@@ -810,6 +831,13 @@ impl Importer {
             }
             st.no_return.insert(job.to_string());
         }
+        // The key record and the installed build are written before the commit, so a failure
+        // leaves at worst a record that refuses another key (fail closed), never a committed app
+        // without one.
+        let prior = match self.record(insp) {
+            Ok(p) => p,
+            Err(problems) => return fail(problems),
+        };
         self.hooks.step(job, &Step::Committing);
         reporter.at(Phase::Committing, VETTED);
         let request = CommitRequest {
@@ -831,30 +859,16 @@ impl Importer {
             let pct = from + ((to - from) as f32 * frac) as u32;
             reporter.at(phase.max(Phase::Committing), pct);
         });
-        match committed {
-            Ok(()) => {}
-            Err(CommitError::NoSpace(m)) => {
-                return fail(one(codes::SPACE_NOT_ENOUGH, "", m));
-            }
-            Err(CommitError::Failed(m)) => {
-                return fail(one(codes::COMMIT_FAILED, "", m));
-            }
-        }
-
-        // 9. The key record, then the installed build.
-        let manifest = &insp.package.manifest;
-        let recorded = record_install(
-            &mut **self.trust(),
-            &manifest.id,
-            insp.signatures.key(),
-            &insp.continuity,
-            self.clock.now(),
-        );
-        if let Err(e) = recorded {
-            return fail(vec![e.to_problem()]);
-        }
-        if let Err(p) = self.installed().record(&manifest.id, manifest.build) {
-            return fail(vec![p]);
+        let failure = match committed {
+            Ok(()) => None,
+            Err(CommitError::NoSpace(m)) => Some(Problem::new(codes::SPACE_NOT_ENOUGH, "", m)),
+            Err(CommitError::Failed(m)) => Some(Problem::new(codes::COMMIT_FAILED, "", m)),
+        };
+        if let Some(p) = failure {
+            let mut result = fail(vec![p]);
+            // The status stays the commit's; a failed rollback is journalled and listed.
+            result.problems.extend(self.roll_back(job, insp, prior));
+            return result;
         }
         reporter.at(Phase::Installing, 100);
         JobResult {
@@ -863,6 +877,109 @@ impl Importer {
             problems,
             art: vetted,
             inspection: Some(insp.clone()),
+        }
+    }
+
+    /// Step 8, before the commit: `record_install` in the trust store, then the installed build.
+    /// Returns what was there before, for [`Self::roll_back`]. When the second write fails, the
+    /// first one is rolled back.
+    fn record(&self, insp: &Inspection) -> Result<Prior, Vec<Problem>> {
+        let manifest = &insp.package.manifest;
+        let id = manifest.id.clone();
+        // Only first sight and a rotation change the trust record.
+        let trust_written = matches!(
+            insp.continuity,
+            Continuity::FirstSight { .. } | Continuity::Rotated { .. }
+        );
+        let trust_before = self.trust().get(&id).map_err(|e| vec![e.to_problem()])?;
+        record_install(
+            &mut **self.trust(),
+            &id,
+            insp.signatures.key(),
+            &insp.continuity,
+            self.clock.now(),
+        )
+        .map_err(|e| vec![e.to_problem()])?;
+        let mut prior = Prior {
+            id,
+            trust_written,
+            trust_before,
+            build_written: false,
+            build_before: None,
+        };
+        let before = self.installed().build_of(&prior.id);
+        let written = before.and_then(|b| {
+            prior.build_before = b;
+            self.installed().record(&prior.id, manifest.build)
+        });
+        if let Err(p) = written {
+            let mut problems = vec![p];
+            problems.extend(self.roll_back("", insp, prior));
+            return Err(problems);
+        }
+        prior.build_written = true;
+        Ok(prior)
+    }
+
+    /// Undo [`Self::record`] after a failed commit: a record this install created is dropped, one
+    /// that existed before is put back, and so is the installed build. If that fails, the stale
+    /// record can only refuse a different key later (the safe direction); it is written to the
+    /// journal (`state/journal`) and returned as `rollback.failed`.
+    fn roll_back(&self, job: &str, insp: &Inspection, prior: Prior) -> Option<Problem> {
+        let mut faults = Vec::new();
+        if prior.trust_written {
+            let undone = match prior.trust_before {
+                None => self.trust().remove(&prior.id).map(|_| ()),
+                Some(record) => self.trust().put(record),
+            };
+            if let Err(e) = undone {
+                faults.push(format!("the key record: {}", e.message()));
+            }
+        }
+        if prior.build_written {
+            let undone = match prior.build_before {
+                None => self.installed().forget(&prior.id),
+                Some(b) => self.installed().record(&prior.id, b),
+            };
+            if let Err(p) = undone {
+                faults.push(format!("the installed build: {}", p.message));
+            }
+        }
+        if faults.is_empty() {
+            return None;
+        }
+        let detail = faults.join("; ");
+        self.journal(job, &insp.package.manifest.id, &detail);
+        Some(Problem::new(
+            codes::ROLLBACK_FAILED,
+            "",
+            format!("The install failed and its records could not be undone ({detail}); they can only refuse another key."),
+        ))
+    }
+
+    /// Append one line to `state/journal` (and to the log).
+    fn journal(&self, job: &str, id: &str, detail: &str) {
+        let line = serde_json::json!({
+            "time": self.clock.now(),
+            "job": job,
+            "id": id,
+            "event": "rollback_failed",
+            "detail": detail,
+        });
+        eprintln!("ruya-play: {line}");
+        let mut o = std::fs::OpenOptions::new();
+        o.create(true).append(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            o.mode(0o600);
+        }
+        let written = o.open(self.cfg.journal_file()).and_then(|mut f| {
+            f.write_all(format!("{line}\n").as_bytes())?;
+            f.sync_all()
+        });
+        if let Err(e) = written {
+            eprintln!("ruya-play: writing the journal failed: {e}");
         }
     }
 }

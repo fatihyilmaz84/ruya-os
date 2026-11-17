@@ -374,7 +374,7 @@ fn the_source_is_read_once_so_the_verified_manifest_is_the_installed_one() {
 }
 
 #[test]
-fn trust_decides_the_status_and_the_key_is_recorded_only_after_the_commit() {
+fn trust_decides_the_status_and_a_failed_commit_leaves_no_key_record() {
     // Unsigned: developer mode decides.
     let mut h = Setup::with(Pkg::Mem(game().mem())).build();
     let r = h.install();
@@ -613,4 +613,204 @@ fn install_statuses_and_one_job_at_a_time() {
     assert!(h.importer.run_next(&mut |_| {}).is_none());
     // The path is free again once its job finished.
     assert_eq!(h.importer.queue_install(&p, true).0, MethodStatus::Ok);
+}
+
+fn set(flag: &std::sync::atomic::AtomicBool) {
+    flag.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Shared stores, for the record and rollback tests.
+fn stores() -> (SharedTrust, SharedInstalled) {
+    (SharedTrust::default(), SharedInstalled::default())
+}
+
+fn key_of(t: &SharedTrust, id: &str) -> Option<String> {
+    use ruya_play_trust::TrustStore;
+    t.get(id).unwrap().map(|r| r.key.key_id())
+}
+
+fn build_of(i: &SharedInstalled, id: &str) -> Option<u64> {
+    use ruya_play::InstalledBuilds;
+    i.build_of(id).unwrap()
+}
+
+/// Build 2 of the game, signed by `next`, carrying the rotation from the developer key.
+fn rotated_build_2(next: &ruya_play_trust::SecretKey) -> Pkg {
+    let mut fx = game();
+    fx.manifest["build"] = json!(2);
+    let next = next.clone();
+    Pkg::Custom(Arc::new(move || {
+        let m = fx.mem();
+        let rot =
+            ruya_play_trust::sign_rotation(&dev_key(), "com.example.mini", &next.public(), 1, NOW);
+        let sig = ruya_play_trust::sign_package(
+            &next,
+            "com.example.mini",
+            2,
+            &fx.manifest_bytes(),
+            &fx.table(),
+            NOW,
+            &[rot.as_slice()],
+        )
+        .unwrap();
+        let mut m = m;
+        m.add_file("play.sig", sig);
+        Box::new(m) as Box<dyn Source>
+    }))
+}
+
+#[test]
+fn the_records_are_written_before_the_commit_and_rolled_back_when_it_fails() {
+    // First sight: a failed commit leaves no record and no build.
+    let (t, i) = stores();
+    let mut setup = Setup::with(Pkg::signed(&game()));
+    setup.stores = Some((t.clone(), i.clone()));
+    let (t2, i2) = (t.clone(), i.clone());
+    setup.commit_hook = Some(Box::new(move |_req| {
+        // At the commit, both records are already there (fail closed).
+        assert_eq!(
+            key_of(&t2, "com.example.mini"),
+            Some(dev_key().public().key_id())
+        );
+        assert_eq!(build_of(&i2, "com.example.mini"), Some(1));
+    }));
+    let mut h = setup.build();
+    *h.commit.fail.lock().unwrap() = Some(CommitError::Failed("no".into()));
+    let r = h.install();
+    assert_eq!(
+        (r.status, codes(&r)),
+        (JobStatus::Failed, vec!["commit.failed".to_string()])
+    );
+    assert_eq!(key_of(&t, "com.example.mini"), None);
+    assert_eq!(build_of(&i, "com.example.mini"), None);
+    assert!(!h.cfg.journal_file().exists());
+
+    // A rotation over an existing record: a failed commit puts the old record back.
+    let next = other_key();
+    let (t, i) = stores();
+    let setup = Setup {
+        packages: vec![
+            (pkg_path("b1"), Pkg::signed(&game())),
+            (pkg_path("b2"), rotated_build_2(&next)),
+        ],
+        stores: Some((t.clone(), i.clone())),
+        ..Setup::default()
+    };
+    let mut h = setup.build();
+    assert_eq!(h.install_at(&pkg_path("b1")).status, JobStatus::Ok);
+    let before = {
+        use ruya_play_trust::TrustStore;
+        t.get("com.example.mini").unwrap().unwrap()
+    };
+    *h.commit.fail.lock().unwrap() = Some(CommitError::NoSpace("full".into()));
+    let r = h.install_at(&pkg_path("b2"));
+    assert_eq!(
+        (r.status, codes(&r)),
+        (JobStatus::DiskFull, vec!["space.not_enough".to_string()])
+    );
+    let after = {
+        use ruya_play_trust::TrustStore;
+        t.get("com.example.mini").unwrap().unwrap()
+    };
+    assert_eq!(after, before, "the record changed");
+    assert_eq!(build_of(&i, "com.example.mini"), Some(1));
+    // And once the commit works, the rotation is applied.
+    let r = h.install_at(&pkg_path("b2"));
+    assert_eq!(r.status, JobStatus::Ok, "{:?}", r.problems);
+    assert_eq!(key_of(&t, "com.example.mini"), Some(next.public().key_id()));
+    assert_eq!(build_of(&i, "com.example.mini"), Some(2));
+}
+
+#[test]
+fn a_record_that_cannot_be_written_means_no_commit() {
+    for fault in ["put", "record"] {
+        let (t, i) = stores();
+        match fault {
+            "put" => set(&t.faults.put),
+            _ => set(&i.faults.record),
+        }
+        let mut setup = Setup::with(Pkg::signed(&game()));
+        setup.stores = Some((t.clone(), i.clone()));
+        let mut h = setup.build();
+        let r = h.install();
+        let want = if fault == "put" {
+            "state.io"
+        } else {
+            "installed.io"
+        };
+        assert_eq!(
+            (r.status, codes(&r)),
+            (JobStatus::Failed, vec![want.to_string()]),
+            "{fault}"
+        );
+        h.assert_nothing_left();
+        // The key record written before the failed build record is gone again.
+        assert_eq!(key_of(&t, "com.example.mini"), None, "{fault}");
+        assert_eq!(build_of(&i, "com.example.mini"), None, "{fault}");
+    }
+}
+
+#[test]
+fn a_rollback_that_fails_is_journalled_and_keeps_the_safe_record() {
+    let (t, i) = stores();
+    set(&t.faults.remove);
+    set(&i.faults.forget);
+    let mut setup = Setup::with(Pkg::signed(&game()));
+    setup.stores = Some((t.clone(), i.clone()));
+    let mut h = setup.build();
+    *h.commit.fail.lock().unwrap() = Some(CommitError::Failed("no".into()));
+    let r = h.install();
+    // The status stays the commit's.
+    assert_eq!(r.status, JobStatus::Failed);
+    assert_eq!(
+        codes(&r),
+        vec!["commit.failed".to_string(), "rollback.failed".to_string()]
+    );
+    // The stale record names the developer key: it can only refuse another one.
+    assert_eq!(
+        key_of(&t, "com.example.mini"),
+        Some(dev_key().public().key_id())
+    );
+    let journal = std::fs::read_to_string(h.cfg.journal_file()).unwrap();
+    let line: serde_json::Value = serde_json::from_str(journal.lines().next().unwrap()).unwrap();
+    assert_eq!(line["job"], "job-1");
+    assert_eq!(line["id"], "com.example.mini");
+    assert_eq!(line["event"], "rollback_failed");
+    assert!(
+        line["detail"].as_str().unwrap().contains("the key record"),
+        "{line}"
+    );
+    assert!(
+        line["detail"]
+            .as_str()
+            .unwrap()
+            .contains("the installed build"),
+        "{line}"
+    );
+    assert_eq!(h.staging(), Vec::<String>::new());
+}
+
+#[test]
+fn an_entry_the_table_does_not_list_is_refused_before_the_commit() {
+    let staging: Arc<Mutex<Option<std::path::PathBuf>>> = Arc::default();
+    let s = Arc::clone(&staging);
+    let mut setup = Setup::with(Pkg::signed(&game()));
+    setup.hooks = Box::new(ruya_play::core::fakes::FnHooks(
+        move |_job: &str, step: &ruya_play::Step<'_>| match step {
+            ruya_play::Step::StagingCreated { dir } => *s.lock().unwrap() = Some(dir.to_path_buf()),
+            ruya_play::Step::Unpacked => {
+                let dir = s.lock().unwrap().clone().unwrap();
+                std::fs::write(dir.join("tree").join("payload").join("planted.so"), b"x").unwrap();
+            }
+            _ => {}
+        },
+    ));
+    let mut h = setup.build();
+    let r = h.install();
+    assert_eq!(
+        (r.status, codes(&r)),
+        (JobStatus::Failed, vec!["staging.changed".to_string()])
+    );
+    assert_eq!(r.problems[0].path, "payload/planted.so");
+    h.assert_nothing_left();
 }

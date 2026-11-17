@@ -212,6 +212,8 @@ pub struct Setup {
     pub commit_hook: Option<CommitHook>,
     /// The clock at start.
     pub now: i64,
+    /// Replaces `trust` and `installed` (stores a test shares or makes fail).
+    pub stores: Option<(SharedTrust, SharedInstalled)>,
 }
 
 impl Default for Setup {
@@ -229,6 +231,7 @@ impl Default for Setup {
             hooks: Box::new(NoHooks),
             commit_hook: None,
             now: NOW,
+            stores: None,
         }
     }
 }
@@ -289,7 +292,13 @@ impl Harness {
             Some(pkg) => pkg.open(),
             None => Err(OpenError::Missing),
         });
-        let mut trust = setup.trust;
+        let (mut trust, installed): (
+            Box<dyn TrustStore + Send>,
+            Box<dyn ruya_play::InstalledBuilds + Send>,
+        ) = match setup.stores {
+            Some((t, i)) => (Box::new(t), Box::new(i)),
+            None => (Box::new(setup.trust), Box::new(setup.installed)),
+        };
         trust.set_developer_mode(setup.developer_mode).unwrap();
         let free_space: Box<dyn FreeSpace> = match setup.free_space {
             Some(f) => f,
@@ -303,8 +312,8 @@ impl Harness {
             clock: Box::new(Arc::clone(&clock)),
             blocklists: Box::new(setup.blocklist),
             store_keys: setup.store_keys,
-            trust: Box::new(trust),
-            installed: Box::new(setup.installed),
+            trust,
+            installed,
             hooks: setup.hooks,
         };
         let importer = Importer::open(cfg.clone(), deps).expect("the importer opens");
@@ -422,4 +431,89 @@ pub fn listing(dir: &Path) -> Vec<String> {
 /// The codes of a result's problems.
 pub fn codes(r: &JobResult) -> Vec<String> {
     r.problems.iter().map(|p| p.code.clone()).collect()
+}
+
+/// Which writes of the shared stores fail.
+#[derive(Clone, Default)]
+pub struct Faults {
+    pub put: Arc<std::sync::atomic::AtomicBool>,
+    pub remove: Arc<std::sync::atomic::AtomicBool>,
+    pub record: Arc<std::sync::atomic::AtomicBool>,
+    pub forget: Arc<std::sync::atomic::AtomicBool>,
+}
+
+fn on(flag: &std::sync::atomic::AtomicBool) -> bool {
+    flag.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+/// A trust store the test can look into, whose writes can be made to fail.
+#[derive(Clone, Default)]
+pub struct SharedTrust {
+    pub inner: Arc<std::sync::Mutex<MemoryTrustStore>>,
+    pub faults: Faults,
+}
+
+fn trust_io() -> ruya_play_trust::TrustError {
+    ruya_play_trust::TrustError::StateIo {
+        detail: "the disk is full".into(),
+    }
+}
+
+impl TrustStore for SharedTrust {
+    fn get(
+        &self,
+        id: &str,
+    ) -> Result<Option<ruya_play_trust::IdRecord>, ruya_play_trust::TrustError> {
+        self.inner.lock().unwrap().get(id)
+    }
+    fn put(
+        &mut self,
+        record: ruya_play_trust::IdRecord,
+    ) -> Result<(), ruya_play_trust::TrustError> {
+        if on(&self.faults.put) {
+            return Err(trust_io());
+        }
+        self.inner.lock().unwrap().put(record)
+    }
+    fn remove(&mut self, id: &str) -> Result<bool, ruya_play_trust::TrustError> {
+        if on(&self.faults.remove) {
+            return Err(trust_io());
+        }
+        self.inner.lock().unwrap().remove(id)
+    }
+    fn developer_mode(&self) -> Result<bool, ruya_play_trust::TrustError> {
+        self.inner.lock().unwrap().developer_mode()
+    }
+    fn set_developer_mode(&mut self, on: bool) -> Result<(), ruya_play_trust::TrustError> {
+        self.inner.lock().unwrap().set_developer_mode(on)
+    }
+}
+
+/// Installed builds the test can look into, whose writes can be made to fail.
+#[derive(Clone, Default)]
+pub struct SharedInstalled {
+    pub inner: Arc<std::sync::Mutex<MemoryInstalled>>,
+    pub faults: Faults,
+}
+
+fn installed_io() -> Problem {
+    Problem::new("installed.io", "installed.json", "the disk is full")
+}
+
+impl ruya_play::InstalledBuilds for SharedInstalled {
+    fn build_of(&self, id: &str) -> Result<Option<u64>, Problem> {
+        self.inner.lock().unwrap().build_of(id)
+    }
+    fn record(&mut self, id: &str, build: u64) -> Result<(), Problem> {
+        if on(&self.faults.record) {
+            return Err(installed_io());
+        }
+        self.inner.lock().unwrap().record(id, build)
+    }
+    fn forget(&mut self, id: &str) -> Result<(), Problem> {
+        if on(&self.faults.forget) {
+            return Err(installed_io());
+        }
+        self.inner.lock().unwrap().forget(id)
+    }
 }

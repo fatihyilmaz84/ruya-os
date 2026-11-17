@@ -21,6 +21,9 @@ pub const INSTALLED_CORRUPT: &str = "installed.corrupt";
 pub const INSTALLED_IO: &str = "installed.io";
 /// The commit step failed.
 pub const COMMIT_FAILED: &str = "commit.failed";
+/// The commit failed and the key record or installed build written before it could not be undone
+/// (journalled in `state/journal`; the stale record can only refuse another key).
+pub const ROLLBACK_FAILED: &str = "rollback.failed";
 /// The service stopped while the job was queued or running.
 pub const JOB_INTERRUPTED: &str = "job.interrupted";
 
@@ -34,5 +37,6 @@ pub const ALL: &[&str] = &[
     INSTALLED_CORRUPT,
     INSTALLED_IO,
     COMMIT_FAILED,
+    ROLLBACK_FAILED,
     JOB_INTERRUPTED,
 ];
