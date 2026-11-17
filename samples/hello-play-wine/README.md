@@ -39,7 +39,7 @@ On Linux with a MinGW-w64 cross compiler (Fedora: `sudo dnf install mingw64-gcc`
 
 Sign it with your own key before you give it to anyone (`ruya-pack keygen`, `ruya-pack sign`; never commit a key). To check the runner choice against a Wine version: `ruya-pack validate hello-play-wine.play.zip --system-wine 10.2`.
 
-The two C programs were **not compiled** on the machine this was written on; run `./build.sh` once before relying on them. Running the package on a console is **planned** (RUY-100, RUY-101). The `steamuser` folder in `data.saves` is the user name the Proton-style runners use; confirm it on a console when the launcher exists.
+CI compiles both programs and builds and inspects the zip on every push (`scripts/ci-samples-linux.sh`). Running the package on a console is **planned** (RUY-100, RUY-101). The `steamuser` folder in `data.saves` is the user name the Proton-style runners use; confirm it on a console when the launcher exists.
 
 ## Licence
 
