@@ -993,9 +993,9 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
-    <name>BluetoothPane</name>
+    <name>BluetoothDeviceActions</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+101"/>
+        <location filename="../qml/BluetoothDeviceActions.qml" line="+26"/>
         <source>Forget %1?</source>
         <translation>Forget %1?</translation>
     </message>
@@ -1005,7 +1005,25 @@ This can&apos;t be undone.</translation>
         <translation>It will have to be paired again to be used.</translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+1"/>
+        <source>Forget %1</source>
+        <translation>Forget %1</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>That name does not work. Try another.</source>
+        <translation>That name does not work. Try another.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Could not rename the controller.</source>
+        <translation>Could not rename the controller.</translation>
+    </message>
+</context>
+<context>
+    <name>BluetoothPane</name>
+    <message>
+        <location filename="../qml/BluetoothPane.qml" line="+147"/>
         <source>Pairing…</source>
         <translation>Pairing…</translation>
     </message>
@@ -1025,12 +1043,12 @@ This can&apos;t be undone.</translation>
         <translation>Connected</translation>
     </message>
     <message>
-        <location line="+131"/>
+        <location line="+128"/>
         <source>Pair a new controller</source>
         <translation>Pair a new controller</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+91"/>
         <source>Pair again %1</source>
         <translation>Pair again %1</translation>
     </message>
@@ -1045,7 +1063,7 @@ This can&apos;t be undone.</translation>
         <translation>Rename %1</translation>
     </message>
     <message>
-        <location line="-271"/>
+        <location line="-241"/>
         <source>Paired</source>
         <translation>Paired</translation>
     </message>
@@ -1085,17 +1103,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not start looking for controllers.</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>That name does not work. Try another.</source>
-        <translation>That name does not work. Try another.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Could not rename the controller.</source>
-        <translation>Could not rename the controller.</translation>
-    </message>
-    <message>
-        <location line="+15"/>
+        <location line="+17"/>
         <source>Another device tried to pair and was turned away.</source>
         <translation>Another device tried to pair and was turned away.</translation>
     </message>
@@ -1120,8 +1128,7 @@ This can&apos;t be undone.</translation>
         <translation>Scanning…</translation>
     </message>
     <message>
-        <location line="-196"/>
-        <location line="+362"/>
+        <location line="+139"/>
         <source>Forget %1</source>
         <translation>Forget %1</translation>
     </message>
@@ -1643,7 +1650,7 @@ This can&apos;t be undone.</translation>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="+77"/>
+        <location line="+79"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
@@ -1656,7 +1663,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+56"/>
+        <location filename="../qml/ControllerPage.qml" line="+59"/>
         <source>Works</source>
         <translation>Works</translation>
     </message>
@@ -1746,12 +1753,12 @@ This can&apos;t be undone.</translation>
         <translation>Try again.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+15"/>
         <source>Controller disconnected</source>
         <translation>Controller disconnected</translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+78"/>
         <source>Button test</source>
         <translation>Button test</translation>
     </message>
@@ -1825,7 +1832,17 @@ This can&apos;t be undone.</translation>
         <translation>Nintendo labels</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+38"/>
+        <source>Rename %1</source>
+        <translation>Rename %1</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Forget %1</source>
+        <translation>Forget %1</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>What it can do</source>
         <translation>What it can do</translation>
     </message>
@@ -5619,7 +5636,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+704"/>
+        <location filename="../qml/Shell.qml" line="+755"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -5677,7 +5694,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 stopped unexpectedly</translation>
     </message>
     <message>
-        <location line="+148"/>
+        <location line="+149"/>
         <location line="+29"/>
         <source>Could not close %1.</source>
         <translation>Could not close %1.</translation>
@@ -5831,7 +5848,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1921"/>
+        <location line="-1922"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -5857,7 +5874,7 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+62"/>
-        <location line="+107"/>
+        <location line="+108"/>
         <source>Running app</source>
         <translation>Running app</translation>
     </message>

@@ -268,6 +268,7 @@ qt_add_qml_module(ruyashell
         qml/DisplayPane.qml
         qml/AudioPane.qml
         qml/NetworkPane.qml
+        qml/BluetoothDeviceActions.qml
         qml/BluetoothPane.qml
         qml/ControllersPane.qml
         qml/ControllerPage.qml

@@ -53,6 +53,7 @@ Item {
         }
 
         function cleanup() {
+            Bluetooth.mockReset()
             clearToasts()
             DeviceSettings.language = "en"
             DeviceSettings.theme = "dreamglass"
@@ -385,6 +386,100 @@ Item {
             compare(tc.shell.currentPage, "settings", "the closed controller page does not close Settings")
             verify(find("paneControllers").activeFocus, "the pane keeps the focus")
             verify(!toastTexts().some(t => t.startsWith("Controller disconnected")), "no toast for a page that is gone")
+        }
+
+        // RUY-504: Rename and Forget for a Bluetooth pad.
+        function page(name) { return findChild(find("page_controller"), name) }
+
+        readonly property string wc: "bluetooth-054c-0ce6-aa0000000004"
+        // A Bluetooth pad that Devices1 knows too (one gamepad, one paired device): the page matches it.
+        function addMatchedPad() {
+            Bluetooth.mockReset()
+            Bluetooth.mockTwoPads()
+            Bluetooth.disconnectDevice("AA:00:00:00:00:05")   // the second like pad would make the match ambiguous
+            tryVerify(() => !Bluetooth.gamepads.some(g => g.id === "AA:00:00:00:00:05"))
+            Bluetooth.mockGamepad(true, "AA:00:00:00:00:04", "Wireless Controller", "playstation", "bluetooth")
+            Input.mockAddDevice({ id: tc.wc, name: "Wireless Controller", family: "playstation", model: "dualsense", connection: "bluetooth" })
+            tryVerify(() => Input.devices.length === 4 && ControllerPads.controllers().some(p => p.id === tc.wc && p.btId !== ""), 2000)
+        }
+
+        function test_a_usb_pad_and_an_unmatched_one_have_neither_row() {
+            openController(xbox)
+            tryVerify(() => find("capsHeading").visible, 2000)
+            verify(!page("rowPadRename").visible && !page("rowPadForget").visible, "USB: neither row")
+        }
+
+        function test_an_unmatched_bluetooth_pad_has_neither_row() {
+            openController(ds)           // the mock lists it on Input1 only: no Bluetooth device to name
+            tryVerify(() => find("capsHeading").visible, 2000)
+            verify(!page("rowPadRename").visible && !page("rowPadForget").visible, "no match: neither row")
+        }
+
+        function test_a_matched_bluetooth_pad_has_rename_and_forget_in_order() {
+            addMatchedPad()
+            openController(tc.wc)
+            tryVerify(() => find("capsHeading").visible, 2000)
+            verify(page("rowPadRename").visible && page("rowPadForget").visible, "Bluetooth: both rows")
+            verify(page("rowPadRename").label.startsWith("Rename "), page("rowPadRename").label)
+            verify(page("rowPadForget").label.startsWith("Forget "), page("rowPadForget").label)
+            verify(page("rowPadRename").y < find("capsHeading").y && page("rowPadForget").y > page("rowPadRename").y, "before the group")
+            page("rowGamesLayout").forceActiveFocus()
+            keyClick(Qt.Key_Down)
+            verify(page("rowPadRename").activeFocus, "Rename after the settings rows")
+            compare(find("page_controller").hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join("|"), "accept Select|back Back")
+            keyClick(Qt.Key_Down)
+            verify(page("rowPadForget").activeFocus, "Forget after Rename")
+        }
+
+        function test_rename_opens_the_keyboard_and_calls_the_service() {
+            addMatchedPad()
+            openController(tc.wc)
+            tryVerify(() => page("rowPadRename").visible, 2000)
+            const btId = ControllerPads.controllers().find(p => p.id === tc.wc).btId
+            verify(btId !== "", "the pad is matched to a Bluetooth device")
+            page("rowPadRename").forceActiveFocus()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btRenameEntry") !== null && find("btRenameEntry").shown, 2000)
+            compare(find("btRenameEntry").text, Bluetooth.devices.find(d => d.id === btId).name, "starts with the alias")
+            find("btRenameEntry").accepted("Couch Pad")
+            tryVerify(() => Bluetooth.devices.find(d => d.id === btId).name === "Couch Pad", 2000, "Bluetooth.rename ran")
+            find("btRenameEntry").close()
+            tryVerify(() => !find("btRenameEntry").shown, 2000)
+            tryVerify(() => page("rowPadRename").activeFocus, 2000, "focus returns to the row")
+            tryCompare(find("page_controller"), "title", "Couch Pad")
+        }
+
+        function test_forget_asks_with_cancel_focused_and_back_cancels() {
+            addMatchedPad()
+            openController(tc.wc)
+            tryVerify(() => page("rowPadForget").visible, 2000)
+            page("rowPadForget").forceActiveFocus()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btForgetConfirm") !== null && find("btForgetConfirm").shown, 2000)
+            compare(findChild(find("btForgetConfirm"), "powerConfirmTitle").text.startsWith("Forget "), true)
+            verify(findChild(find("btForgetConfirm"), "powerCancel").activeFocus, "Cancel is focused")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("btForgetConfirm").shown, 2000)
+            compare(tc.shell.currentPage, "controller")
+            verify(page("rowPadForget").activeFocus, "focus returns to the row")
+        }
+
+        function test_forgetting_closes_the_page_without_the_disconnect_toast() {
+            addMatchedPad()
+            openController(tc.wc)
+            tryVerify(() => page("rowPadForget").visible, 2000)
+            const btId = ControllerPads.controllers().find(p => p.id === tc.wc).btId
+            page("rowPadForget").forceActiveFocus()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("btForgetConfirm") !== null && find("btForgetConfirm").shown, 2000)
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => Bluetooth.devices.find(d => d.id === btId) === undefined, 2000, "the service forgot it")
+            Input.mockRemoveDevice(tc.wc)                  // the pad leaves the bus with it
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => padRow(tc.wc) === null, 2000)
+            wait(300)
+            verify(!toastTexts().some(t => t.startsWith("Controller disconnected")), "forgetting is the player's own act: " + toastTexts().join(";"))
         }
 
         // ---- the button test ---------------------------------------------------------------------------------------
