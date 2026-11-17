@@ -464,6 +464,8 @@ fn the_schema_states_the_same_limits_as_the_crate() {
         n("/properties/art/properties/screenshots/maxItems"),
         MAX_SCREENSHOTS
     );
+    // 05 section 5: when the list is there it holds at least one (art.no_screenshots).
+    assert_eq!(n("/properties/art/properties/screenshots/minItems"), 1);
     assert_eq!(n("/properties/components/maxItems"), MAX_COMPONENTS);
     assert_eq!(
         n("/properties/data/properties/saves/maxItems"),
