@@ -708,7 +708,7 @@ Item {
             grabImage(tc.stage)
             wait(300)
         }
-        property Item stage: null
+        property var stage: null
 
         function test_zz_screenshots() {
             if (!shotsDir)

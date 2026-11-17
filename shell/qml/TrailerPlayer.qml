@@ -110,7 +110,7 @@ Item {
 
         Rectangle {
             anchors.fill: parent
-            color: "black"
+            color: "black"      // token-ok: the video letterbox is black, whatever the theme
         }
         Image {
             objectName: "trailerPoster"
