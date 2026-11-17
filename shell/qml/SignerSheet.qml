@@ -58,8 +58,10 @@ FocusScope {
     Accessible.role: Accessible.Dialog
     Accessible.name: qsTr("Who signed this")
 
-    Keys.onPressed: event => {
-        if (BackKey.isBackOrBackspace(event.key)) {
+    Keys.onPressed: event => sheet.handleKey(event)
+
+    function handleKey(event) {
+        if (BackKey.isBackOrBackspace(event.key) && !event.isAutoRepeat) {      // a held B closes once
             Sfx.back()
             sheet.close()
         }

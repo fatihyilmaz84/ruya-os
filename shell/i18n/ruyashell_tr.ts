@@ -3906,7 +3906,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>PlayTrust</name>
     <message>
-        <location filename="../qml/PlayTrust.qml" line="+55"/>
+        <location filename="../qml/PlayTrust.qml" line="+54"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -3924,6 +3924,11 @@ Bu geri alınamaz.</translation>
         <location line="+1"/>
         <source>Signed by %1 · key %2</source>
         <translation>%1 imzalı · anahtar %2</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Signed by key %1</source>
+        <translation>anahtar %1 imzalı</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -4882,17 +4887,17 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+57"/>
-        <location line="+165"/>
+        <location line="+169"/>
         <source>%1 of %2</source>
         <translation>%1 / %2</translation>
     </message>
     <message>
-        <location line="-165"/>
+        <location line="-169"/>
         <source>Trailer</source>
         <translation>Fragman</translation>
     </message>
     <message>
-        <location line="+117"/>
+        <location line="+121"/>
         <source>Couldn&apos;t load this picture.</source>
         <translation>Bu resim yüklenemedi.</translation>
     </message>
@@ -5494,37 +5499,37 @@ Bu geri alınamaz.</translation>
     <name>SignerSheet</name>
     <message>
         <location filename="../qml/SignerSheet.qml" line="+25"/>
-        <location line="+175"/>
+        <location line="+177"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="-141"/>
-        <location line="+86"/>
+        <location line="-143"/>
+        <location line="+88"/>
         <source>Who signed this</source>
         <translation>Kim imzaladı</translation>
     </message>
     <message>
-        <location line="-115"/>
-        <location line="+124"/>
+        <location line="-117"/>
+        <location line="+126"/>
         <source>Signed by</source>
         <translation>İmzalayan</translation>
     </message>
     <message>
-        <location line="-123"/>
-        <location line="+129"/>
+        <location line="-125"/>
+        <location line="+131"/>
         <source>Key</source>
         <translation>Anahtar</translation>
     </message>
     <message>
-        <location line="-128"/>
-        <location line="+134"/>
+        <location line="-130"/>
+        <location line="+136"/>
         <source>Seen before</source>
         <translation>Daha önce görüldü mü</translation>
     </message>
     <message>
-        <location line="-133"/>
-        <location line="+139"/>
+        <location line="-135"/>
+        <location line="+141"/>
         <source>Trust</source>
         <translation>Güven</translation>
     </message>

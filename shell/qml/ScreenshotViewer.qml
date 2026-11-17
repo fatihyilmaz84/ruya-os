@@ -94,14 +94,18 @@ FocusScope {
     Accessible.role: Accessible.Dialog
     Accessible.name: trailerMode ? (trailer.name || qsTr("Trailer")) : qsTr("%1 of %2").arg(index + 1).arg(count)
 
-    Keys.onPressed: event => {
+    Keys.onPressed: event => viewer.handleKey(event)
+
+    function handleKey(event) {
         if (BackKey.isBackOrBackspace(event.key)) {
             Sfx.back()
             viewer.close()
         } else if (viewer.trailerMode) {
             if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                Sfx.select()
-                trailerBox.toggle()
+                if (!event.isAutoRepeat) {      // a held A does not toggle again
+                    Sfx.select()
+                    trailerBox.toggle()
+                }
             } else if (event.key === Qt.Key_Left) {
                 trailerBox.seek(-trailerBox.seekMs)
             } else if (event.key === Qt.Key_Right) {

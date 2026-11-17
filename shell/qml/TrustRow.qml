@@ -99,8 +99,8 @@ FocusScope {
     Keys.onEnterPressed: event => row.accept(event)
 
     function accept(event) {
-        if (!opensSheet) {
-            event.accepted = false
+        if (!opensSheet || event.isAutoRepeat) {      // a held key opens nothing again
+            event.accepted = event.isAutoRepeat
             return
         }
         Sfx.select()

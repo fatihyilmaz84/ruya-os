@@ -40,7 +40,7 @@ QtObject {
         return info.tier === "official" || info.tier === "developer" ? info.tier : "unverified"
     }
 
-    // { state, kind, badge, icon, iconError, line, bad, opensSheet }: `iconError` = the icon is `errorText`
+    // { state, kind, solid (always true: a trust badge is always `solid`, 04 5.4), badge, icon, iconError, line, bad, opensSheet }: `iconError` = the icon is `errorText`
     // (unverified, changed, revoked); `bad` = the line is `errorText` too (changed, revoked); `opensSheet` = Accept
     // opens the signer sheet (official, developer, unverified).
     function describe(info) {
@@ -49,24 +49,23 @@ QtObject {
         const state = stateOf(info)
         const name = info ? (info.signerName ?? "") : ""
         const key = shortKey(info ? info.signerKeyId : "")
-        const who = name !== "" ? name : key
         switch (state) {
         case "official":
-            return { state: state, kind: "success", badge: qsTr("Official"), icon: "check_circle", iconError: false, bad: false, opensSheet: true,
-                     line: qsTr("Signed by %1 and the RuyaOS store").arg(who) }
+            return { state: state, kind: "success", solid: true, badge: qsTr("Official"), icon: "check_circle", iconError: false, bad: false, opensSheet: true,
+                     line: qsTr("Signed by %1 and the RuyaOS store").arg(name !== "" ? name : key) }
         case "developer":
-            return { state: state, kind: "warning", badge: qsTr("Developer"), icon: "info", iconError: false, bad: false, opensSheet: true,
-                     line: qsTr("Signed by %1 · key %2").arg(who).arg(key) }
+            return { state: state, kind: "warning", solid: true, badge: qsTr("Developer"), icon: "info", iconError: false, bad: false, opensSheet: true,
+                     line: name !== "" ? qsTr("Signed by %1 · key %2").arg(name).arg(key) : qsTr("Signed by key %1").arg(key) }
         case "changed":
-            return { state: state, kind: "error", badge: qsTr("Changed since signed"), icon: "error", iconError: true, bad: true, opensSheet: false,
+            return { state: state, kind: "error", solid: true, badge: qsTr("Changed since signed"), icon: "error", iconError: true, bad: true, opensSheet: false,
                      line: qsTr("This package was changed after it was signed.") }
         case "revoked": {
             const reason = info.revokedReason ?? ""
-            return { state: state, kind: "error", badge: qsTr("Removed for safety"), icon: "error", iconError: true, bad: true, opensSheet: false,
+            return { state: state, kind: "error", solid: true, badge: qsTr("Removed for safety"), icon: "error", iconError: true, bad: true, opensSheet: false,
                      line: reason !== "" ? qsTr("Removed for safety: %1").arg(reason) : qsTr("Removed for safety") }
         }
         }
-        return { state: "unverified", kind: "error", badge: qsTr("Unverified"), icon: "warning", iconError: true, bad: false, opensSheet: true,
+        return { state: "unverified", kind: "error", solid: true, badge: qsTr("Unverified"), icon: "warning", iconError: true, bad: false, opensSheet: true,
                  line: qsTr("Not signed. Anyone could have changed it.") }
     }
 

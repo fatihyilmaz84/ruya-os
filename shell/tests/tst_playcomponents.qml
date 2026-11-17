@@ -84,6 +84,9 @@ Item {
                 { tag: "developer", info: developer(), state: "developer", kind: "warning", badge: "Developer", icon: "info",
                   line: "Signed by Pixel Forest · key 0123…cdef", sheet: true,
                   trBadge: "Geliştirici", trLine: "Pixel Forest imzalı · anahtar 0123…cdef" },
+                { tag: "developer-no-name", info: record({ tier: "developer", signerKeyId: host.key32 }), state: "developer", kind: "warning",
+                  badge: "Developer", icon: "info", line: "Signed by key 0123…cdef", sheet: true,
+                  trBadge: "Geliştirici", trLine: "anahtar 0123…cdef imzalı" },
                 { tag: "unverified", info: record({}), state: "unverified", kind: "error", badge: "Unverified", icon: "warning",
                   line: "Not signed. Anyone could have changed it.", sheet: true,
                   trBadge: "Doğrulanmamış", trLine: "İmzasız. Herhangi biri değiştirmiş olabilir." },
@@ -114,6 +117,7 @@ Item {
             compare(t.icon, data.icon)
             compare(t.line, data.line)
             compare(t.opensSheet, data.sheet)
+            compare(t.solid, true)
             DeviceSettings.language = "tr"
             t = PlayTrust.describe(data.info)
             compare(t.badge, data.trBadge)
@@ -122,6 +126,8 @@ Item {
 
         function test_the_short_key_and_the_groups() {
             compare(PlayTrust.shortKey(host.key32), "0123…cdef")
+            verify(PlayTrust.shortKey(host.key32).indexOf("...") < 0, "one ellipsis character, not three dots")
+            compare(PlayTrust.shortKey(host.key32).charCodeAt(4), 0x2026)
             compare(PlayTrust.shortKey(""), "")
             compare(PlayTrust.groupedKey(host.key32), "0123 4567 89ab cdef 0123 4567 89ab cdef")
             compare(PlayTrust.groupedKey(host.key32).split(" ").length, 8)
@@ -144,23 +150,18 @@ Item {
 
         // ---- contrast of the trust badges (04 §7: 4.5:1), computed, on all five themes ----
 
-        // The trust badge in the signer sheet (and wherever it sits on glass or art) is `solid`: its own opaque
-        // `toastBackground`, so the ground behind does not matter. That is the promise, held on every theme.
-        // The translucent 18 % fill (the page's badge row, on the ground) is held to a floor of 4:1 and the
-        // shortfall against 4.5:1 is pinned below; over glass over the backdrop it is not promised (04 §7).
+        // A trust badge is always `solid` (04 5.4): its own `toastBackground` (94 % alpha) over whatever is behind.
+        // The text is the kind colour; held to 4.5:1 over the ground, the panel and glass over each backdrop
+        // sample, for success, warning and error, on every theme.
         function badgeRows(t) {
             const rows = []
             const samples = ThemeMath.backdropSamples(t, t.defaultTint)
+            const grounds = [["background", t.background], ["panel", t.panel]]
+            for (let i = 0; i < samples.strict.length; ++i)
+                grounds.push(["glass over backdrop sample " + i, ThemeMath.over(t.glass, samples.strict[i])])
             for (const kind of ["toastSuccess", "toastWarning", "toastError"]) {
-                const tone = t[kind]
-                const fill = Qt.rgba(tone.r, tone.g, tone.b, Theme.badgeFillAlpha)
-                const on = (label, ground, min) => rows.push({ label: kind + " " + label,
-                                                               ratio: ThemeMath.contrast(tone, ThemeMath.over(fill, ground)), min: min })
-                rows.push({ label: kind + " solid, on toastBackground", ratio: ThemeMath.contrast(tone, t.toastBackground), min: 4.5 })
-                on("translucent on background", t.background, 4)
-                on("translucent on panel", t.panel, 4)
-                for (let i = 0; i < samples.strict.length; ++i)
-                    on("translucent on glass over backdrop sample " + i, ThemeMath.over(t.glass, samples.strict[i]), 2)
+                for (const g of grounds)
+                    rows.push({ label: kind + " on " + g[0], ratio: ThemeMath.contrast(t[kind], ThemeMath.over(t.toastBackground, g[1])), min: 4.5 })
             }
             return rows
         }
@@ -171,28 +172,16 @@ Item {
             const rows = badgeRows(Themes.snapshot(Themes.byKey(data.key)))
             const bad = rows.filter(r => r.ratio < r.min).map(r => r.label + ": " + r.ratio.toFixed(2) + " < " + r.min)
             verify(bad.length === 0, data.key + " fails: " + bad.join("; "))
-            verify(rows.length === 3 * 7, "every row was measured")
+            verify(rows.length === 3 * 6, "every row was measured")
         }
 
-        // The known shortfall of the translucent fill against 4.5:1, so a fix has to change this text: the
-        // error badge on Aurora's and Ember's panel and on Daylight's ground, and Daylight's success badge.
-        function test_translucent_badge_shortfall_is_pinned() {
-            const shortfalls = []
-            for (const s of Themes.all) {
-                const t = Themes.snapshot(s)
-                for (const r of badgeRows(t)) {
-                    if (r.label.indexOf("translucent on background") > 0 || r.label.indexOf("translucent on panel") > 0) {
-                        if (r.ratio < 4.5)
-                            shortfalls.push(s.key + " " + r.label)
-                    }
-                }
+        function test_every_trust_badge_is_solid() {
+            for (const d of test_trust_states_data()) {
+                const t = PlayTrust.describe(d.info)
+                compare(t.solid, true, d.tag)
             }
-            shortfalls.sort()
-            compare(shortfalls.join("|"), [
-                "aurora toastError translucent on panel",
-                "daylight toastError translucent on background",
-                "daylight toastSuccess translucent on background",
-                "ember toastError translucent on panel"].join("|"))
+            const o = openSheet(developer())
+            compare(findChild(o.sheet, "signerBadge").solid, true)
         }
 
         // ---- the trust row ----
@@ -346,6 +335,52 @@ Item {
             compare(card.width, 1100 * host.u)
             verify(card.height > 0 && card.height <= host.height, "height " + card.height)
             verify(card.x >= 0 && card.x + card.width <= host.width)
+        }
+
+        // ---- held keys: an auto-repeat press changes nothing ----
+
+        function fakeKey(key, repeat) { return { key: key, isAutoRepeat: repeat, accepted: false } }
+
+        function test_a_held_key_does_nothing_more() {
+            const r = row({})
+            const v = openTrailer(r)
+            const box = v.trailerPlayer
+            const sounds = Sfx.selectCount
+            const ev = fakeKey(Qt.Key_Return, true)
+            v.handleKey(ev)
+            compare(box.wantsPlay, true, "a repeat does not pause")
+            compare(Sfx.selectCount, sounds)
+            verify(ev.accepted, "still a modal: the key is taken")
+            v.handleKey(fakeKey(Qt.Key_Return, false))
+            compare(box.wantsPlay, false, "the first press does")
+            v.handleKey(fakeKey(Qt.Key_Return, true))
+            compare(box.wantsPlay, false)
+            const back = fakeKey(Qt.Key_Escape, true)
+            v.handleKey(back)
+            // Back on the viewer is a single press as before (closing twice is harmless), so only the toggle is guarded.
+            verify(back.accepted)
+        }
+
+        function test_a_held_accept_does_not_open_the_sheet_twice() {
+            const row2 = createTemporaryObject(rowComponent, host, { info: developer() })
+            let opened = 0
+            row2.activated.connect(() => { ++opened })
+            const ev = fakeKey(Qt.Key_Return, true)
+            row2.accept(ev)
+            compare(opened, 0)
+            verify(ev.accepted, "taken, not passed on")
+            row2.accept(fakeKey(Qt.Key_Return, false))
+            compare(opened, 1)
+        }
+
+        function test_a_held_back_does_not_close_the_sheet() {
+            const o = openSheet(developer())
+            const ev = fakeKey(Qt.Key_Escape, true)
+            o.sheet.handleKey(ev)
+            verify(o.sheet.shown, "a repeat of B closes nothing")
+            verify(ev.accepted)
+            o.sheet.handleKey(fakeKey(Qt.Key_Escape, false))
+            verify(!o.sheet.shown)
         }
 
         // ---- the permission list ----

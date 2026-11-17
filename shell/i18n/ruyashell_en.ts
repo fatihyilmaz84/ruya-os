@@ -3919,7 +3919,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>PlayTrust</name>
     <message>
-        <location filename="../qml/PlayTrust.qml" line="+55"/>
+        <location filename="../qml/PlayTrust.qml" line="+54"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -3937,6 +3937,11 @@ This can&apos;t be undone.</translation>
         <location line="+1"/>
         <source>Signed by %1 · key %2</source>
         <translation>Signed by %1 · key %2</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Signed by key %1</source>
+        <translation>Signed by key %1</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -4900,17 +4905,17 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+57"/>
-        <location line="+165"/>
+        <location line="+169"/>
         <source>%1 of %2</source>
         <translation>%1 of %2</translation>
     </message>
     <message>
-        <location line="-165"/>
+        <location line="-169"/>
         <source>Trailer</source>
         <translation>Trailer</translation>
     </message>
     <message>
-        <location line="+117"/>
+        <location line="+121"/>
         <source>Couldn&apos;t load this picture.</source>
         <translation>Couldn&apos;t load this picture.</translation>
     </message>
@@ -5512,37 +5517,37 @@ This can&apos;t be undone.</translation>
     <name>SignerSheet</name>
     <message>
         <location filename="../qml/SignerSheet.qml" line="+25"/>
-        <location line="+175"/>
+        <location line="+177"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
     <message>
-        <location line="-141"/>
-        <location line="+86"/>
+        <location line="-143"/>
+        <location line="+88"/>
         <source>Who signed this</source>
         <translation>Who signed this</translation>
     </message>
     <message>
-        <location line="-115"/>
-        <location line="+124"/>
+        <location line="-117"/>
+        <location line="+126"/>
         <source>Signed by</source>
         <translation>Signed by</translation>
     </message>
     <message>
-        <location line="-123"/>
-        <location line="+129"/>
+        <location line="-125"/>
+        <location line="+131"/>
         <source>Key</source>
         <translation>Key</translation>
     </message>
     <message>
-        <location line="-128"/>
-        <location line="+134"/>
+        <location line="-130"/>
+        <location line="+136"/>
         <source>Seen before</source>
         <translation>Seen before</translation>
     </message>
     <message>
-        <location line="-133"/>
-        <location line="+139"/>
+        <location line="-135"/>
+        <location line="+141"/>
         <source>Trust</source>
         <translation>Trust</translation>
     </message>
