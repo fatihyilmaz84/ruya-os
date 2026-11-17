@@ -1239,6 +1239,13 @@ switch ($Command) {
                         Run-QmlTests (Join-Path $Repo "output\shell-shots") $null $ShotFiles
                         Save-ReviewCopies (Join-Path $Repo "output\shell-shots")
                         Write-Host "    screenshots: $(Join-Path $Repo 'output\shell-shots') (half size for review: review\)"
+                        # Which code the PNGs show (lead-30: review shots older than the last commit were
+                        # reviewed twice): the commit, and "+ uncommitted changes" when the tree was dirty.
+                        $shotHead = (& git -C $Repo rev-parse --short=8 HEAD 2>$null)
+                        $shotDirty = (& git -C $Repo status --porcelain --untracked-files=no 2>$null)
+                        $shotAt = if ($shotDirty) { "$shotHead + uncommitted changes" } else { "$shotHead" }
+                        Set-Content -Path (Join-Path $Repo "output\shell-shots\review\SHOTS-AT.txt") -Value $shotAt -Encoding utf8
+                        Write-Host "    shots taken at: $shotAt (review\SHOTS-AT.txt; a reviewer compares it with the branch head)"
                     }
                 } finally {
                     $shotsLock.ReleaseMutex()

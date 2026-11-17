@@ -340,7 +340,7 @@ The bubblewrap fallback is not needed: the spike confirmed the Flatpak route (AD
 
 ### 7.2 Who may install
 
-Follows 03 §4.4. Admins install directly. A Standard profile may install a package whose permissions are all low or medium risk; anything with a high-risk permission needs an admin PIN (same dialog as the Store). `unverified` packages need **developer mode** (an admin setting, default off, red "Unverified" badge on every screen that shows the app) and are limited to low and medium permissions. A restricted profile (parental controls, T-211) cannot install.
+Follows 03 §4.4. Admins install directly. A Standard profile needs an admin's PIN for every package it installs from USB (§18 item 4: sideloading needs an admin or an admin's PIN; the Store's dialog; as built by RUY-98, `admin_approved`); the confirm sheet names a high-risk permission when there is one (04 §5.4). `unverified` packages need **developer mode** (an admin setting, default off, red "Unverified" badge on every screen that shows the app) and are limited to low and medium permissions. A restricted profile (parental controls, T-211) cannot install.
 
 ### 7.3 The import pipeline (what `ruya-play` does)
 

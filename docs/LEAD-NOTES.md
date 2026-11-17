@@ -2,62 +2,60 @@
 
 The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand off at 50-60 % context; no no-op turns; builders run nothing in WSL since lead-20**). **Rewrite this file at the end of every lead session**; keep it under about 6 KB. Paper Plane is the source of truth (http://192.168.178.164:8687, project `RUY`). **Goals are formations** (`formation` lists them). This file is the lead's session record.
 
-## State after lead-29 (Opus, 2026-11-17)
+## State after lead-30 (Opus, 2026-11-17)
 
-- **Review range:** 93922571..HEAD. **Paper Plane `changes` cursor 4609.**
-- **Merged (7):**
-  - RUY-501 (stick details);
-  - the `.play` foundations: RUY-92 (format crate), RUY-94 (art vetting), RUY-96 (Play1 contract, mock, client), RUY-93 (signing, trust), RUY-95 (`ruya-pack`), RUY-99 (importer core).
-  - Every `.play` crate took 2 or 3 review rounds, and each round 1 found real security holes. A lead review comment before the build is on every ticket.
-- **Lead fixes:**
-  - `image/Containerfile` declares `RUYA_VERSION` at its first use (RUY-771): the package layers missed the cache on every version.
-  - `push-main.ps1` pushes the tested commit, not the `main` ref.
-  - Play1 key ids are 32 hex characters.
-  - Spec wording fixes in 02 and 05.
-- **Image 0.0.90:**
-  - VM queue: 17 of 18 passed, and RUY-770 `kill` passed. `vm-session-check` failed twice under load and passed alone, filed as RUY-784.
-  - The Dell is on 0.0.90 (rollback 0.0.89). Its idle GPU was not measured (someone was using it).
-- **Dell:** the Steam Flatpak and runtimes are installed (RUY-776; about 16 GB, plus `/var/tmp/slr` 1 GB). There is a usroverlay with strace and gdb (gone at reboot). Diagnostic files are in `/root/diag-*`.
-- **Upstream:** filed containers/bubblewrap#835 (owner's yes): the portal's `--usr-path` fd bug.
+- **Review range:** e4df6f63..HEAD. **Paper Plane `changes` cursor:** run `changes` with no cursor at the start; lead-30 ended past 4616.
+- **Merged or committed (5):**
+  - RUY-801 (lead; Steam in X11 mode and Big Picture). Two image files, `x11-apps` and `app-args`, plus per-app launch arguments in ruya-session.
+  - RUY-97 (lead; the design). Canvas "RuyaOS Play Packages" https://claude.ai/artifact/SSS7j1ShDEvknxwiv1xsSj and 04 §5.4 (every number and string). `pause` added to the icon subset.
+  - RUY-802 (builder; the .play components). Two rounds; trust badges are always `solid` (lead decision, for contrast).
+  - RUY-98 (builder; Install from USB). One round. Code, design and UX reviews all clean. Play1 gained the developer-mode calls.
+  - The lead's review docs fix: 05 §7.2, 04 §5.4 and 02 Settings now say a Standard profile always enters an admin's PIN.
+- **The Dell, by hand:**
+  - A usroverlay holds `/usr/share/ruyaos/x11-apps` and a `/usr/local/bin/flatpak` wrapper that adds `-gamepadui`. Both are gone at reboot.
+  - Profile p1 is signed in to Steam (the owner) and opens in Big Picture.
+  - The steam-wrapper stamp for p1 is set (RUY-800).
+- **The owner on the Wii U Pro in Steam:** "B selects, A is back". This is by design (games get positional buttons, 06 §11.2). The fix is Settings > Controllers > the pad > Button layout in games > Nintendo layout. Whether Nintendo pads should default to that in Steam is an open owner question.
 
-## Owner direction (2026-11-17, still in force)
-- `.play` only, foundations first, two lanes (formation **RUY-780**: 7/17 done). Q7: a package is system-wide, with data per profile.
-- The weekly plan was at **80 %** at the handoff (resets 2026-11-20 18:00), past the 70 % row. **Run one lane**; tell the owner.
-- **RUY-798:** the owner's `burnout3-ruya-native` (a separate repo; its code is developed there) is the real native `.play` test game, after RUY-100/101. The owner's PS2 data never enters RuyaOS repos, images or CI.
+## Owner direction (still in force)
+- `.play` only, foundations first (formation **RUY-780**). The weekly plan is at **82 %** (resets 2026-11-20 18:00): **one lane**.
+- RUY-798: the owner's `burnout3-ruya-native` is the native `.play` test game, after RUY-100 and RUY-101.
 
 ## First thing next session
-1. **RUY-97, the design step** (lead): a Claude Design canvas for the package page and the install flow (`LEAD.md` 5, "Design first"). It must exist before RUY-98 (the shell's Install from USB, now unblocked by RUY-96).
-2. **RUY-100**, the `ruya-play` service in the image: lead, VM. Its comments list the inputs from RUY-96 and RUY-99:
-   - uid check for `admin_approved`;
-   - reconcile at start;
-   - surface `state/journal`;
-   - Play1 off `NOT_SERVED`;
-   - helper memory above 1.25 GiB;
-   - store-blocklist file (RUY-796).
-
-   Then RUY-101 (launcher; its comment has the `resolve()` contract) and RUY-102 (permissions).
-3. Review each ticket against main before the build. Fix the stale "Wine is the only system runner" wording (ADR-025) where it remains.
+1. **Image 0.0.91** (`image-chain.sh`): the VM queue (RUY-390) has RUY-801's check, "Steam in Big Picture on the Dell with no overlay". Update the Dell. The Dell's overlay goes at that reboot.
+2. **RUY-100** (lead, VM): the `ruya-play` service. Its comments list the inputs. Also fold in RUY-805 (per-permission reasons and the revocation reason in Inspect) and the developer-mode calls RUY-98 drafted (`Get/SetDeveloperMode`; the trust store already has `set_developer_mode`). Then RUY-101 and RUY-102.
+3. **RUY-809** (builder, high): Install from USB follow-ups (the result after leaving the page, Back-only hints, a revoked installed game, hiding the entry without ruya-play, "kumanda" to "kontrolcü").
 4. **Owner-pending:**
-   - RUY-786: the hands-on sleep test, "later";
-   - RUY-776: a Steam login on the Dell for a real Proton game.
-5. Parked: RUY-773, 761, 17, 744, 526, RUY-12's re-plan, inbox triage (now up to RUY-799), the architect audit (due), and the owner's hands-on checks RUY-766, 736, 743 and 738.
+   - RUY-786: the sleep test;
+   - RUY-776: a free Proton game on the Dell, now possible (Steam is signed in);
+   - the Nintendo-layout default question above.
+5. **Parked:**
+   - inbox RUY-799 to RUY-811 to triage: RUY-800 (steam-devices warning), 803 (first-seen date), 804 (Turkish dotted-I caps), 805, 806, 807 (translucent badge contrast), 808, 810 (tier on cards), 811;
+   - the architect audit (due);
+   - RUY-773, 761, 17, 744, 526;
+   - a stale worktree `.claude/worktrees/ruy-4-options-menu-design-af91a0` (not this session's; look before removing).
 
 ## Concerns (ranked)
-1. **RUY-786:** after sleep and wake, LibreQuake was not controllable (owner: "nothing moved at all"). Not reproduced. Leads: the hop from the physical pad to evdev after reconnect (the wiimote driver's node), and the input masks at rebind (`routing.rs` `mask_held`, `bind`). RUY-785 (rumble lost on reconnect) is confirmed and separate.
-2. **The weekly plan at 80 %.**
-3. **The `.play` Linux paths have run only in WSL `cargo test`** (ruya-play's openat code), not in an image. RUY-100's `vm-play-check.sh` is the first real run.
-4. Flaky tests under parallel load: RUY-794 (`tst_player_chips`), RUY-784 (`vm-session-check`).
+1. **RUY-786:** after sleep and wake the pad did not move LibreQuake. Not reproduced. Leads are in lead-29's notes: the reconnect hop, and `routing.rs` `mask_held`/`bind`.
+2. **The weekly plan at 82 %.**
+3. **The `.play` Linux paths** have run only in WSL `cargo test` and on the mock. RUY-100's `vm-play-check.sh` is the first real run.
+4. **Flaky tests under load:** RUY-794, RUY-784.
+5. **Instruction budgets:** root `CLAUDE.md` 11.3 KB (budget about 10) and `shell/CLAUDE.md` 8.0 KB (about 7). Prune next session.
 
-## Process changes in lead-29
-- **Scripts:** `push-main.ps1` pushes the commit it tested (`$head:refs/heads/main`). It used to push the `main` ref at its end, so a merge made during its 7-minute Linux CI job could have gone out untested. The lead aborted such a merge this session.
-- **Lead:** for security-critical crates, run the code reviewer and the API reviewer in parallel and send one combined round-2 list. It worked every time. A small delta round (RUY-94 r3, RUY-99 r2) can be verified by the lead directly: read the diff, run the tests, record the approve.
-- **Tests:** the Unix-only `cargo test` paths can run in WSL before a merge: `CARGO_TARGET_DIR=/root/tgt-x cargo test -p <crate> --locked` from `/mnt/d/...`. From Git Bash, call `wsl.exe` with `MSYS_NO_PATHCONV=1`, or the script path is mangled.
-- **Paper Plane:** the MCP servers timed out at session start ("version negotiation probe"), then connected on retry. Not filed.
+## Process changes in lead-30
+- **Tests:** `dev.ps1 shots` writes `review\SHOTS-AT.txt` (the commit, plus "+ uncommitted changes" when the tree was dirty). The builder's and reviewer's check lines name it. Shots older than the last commit were reviewed twice this session (RUY-802 round 1, RUY-98's progress shot).
+- **Lead:** the design step worked as follows:
+  - an Explore subagent gathered the spec, contract and component facts (about 140k tokens, outside the lead's context);
+  - one parameterised `Main.dc.html` plus thin boards, published several per call;
+  - the numbers written into 04 rather than the ticket;
+  - the build split into a builder ticket.
+  A lead design session costs about 60k tokens of the lead's own context.
+- **Builders:** RUY-98 took 386k tokens in one round (over the 300k mark) for five screens plus a contract change. Write page-flow tickets of that size as two tickets.
 
 ## Quality signals (one row per lead session)
 
 | Date | Range reviewed | Tasks | Findings (fixed / filed) | `dev.ps1 test` | VM |
 |---|---|---|---|---|---|
-| 2026-11-16 (lead-27) | 86dab5a..70292d6 | 6 merged + 1 lead fix (765); 2 filed (772, 773) | round 2 on 771, 532, 533, 534; 2 owner UI fixes; 3 spec gaps closed; 2 PP issues | 2077 passed, 0 failed (RUY-533 gate) | Dell on 0.0.88 checks; 0.0.89 built, Dell updated |
 | 2026-11-16 (lead-28) | 70292d6..9392257 | 1 merged (548) + the `.play` spike (91); 4 filed (776-779) | none on 548 (both reviews clean) | 2089 passed, 0 failed (RUY-548 gate) | spike on the Dell (hw); 0.0.90 building |
-| 2026-11-17 (lead-29) | 9392257..HEAD | 7 merged (501, 92, 94, 96, 93, 95, 99); 16 filed (784-799) | 2-3 review rounds on each .play crate (zip overflow, iCCP bomb, rotation splice, blocklist downgrade, key echo, record-before-commit); 5 lead fixes; bubblewrap#835 | 2106 passed, 0 failed (RUY-99 gate) | 0.0.90: 17/18 + kill PASS; Dell on 0.0.90 |
+| 2026-11-17 (lead-29) | 9392257..e4df6f6 | 7 merged (501, 92, 94, 96, 93, 95, 99); 16 filed (784-799) | 2-3 review rounds on each .play crate; 5 lead fixes; bubblewrap#835 | 2106 passed, 0 failed (RUY-99 gate) | 0.0.90: 17/18 + kill PASS; Dell on 0.0.90 |
+| 2026-11-17 (lead-30) | e4df6f6..HEAD | 2 lead (801, 97) + 2 merged (802, 98); 12 filed (800, 803-811) | 802: one round 2 (solid badges, TR label, held keys); 98: clean, 3 doc fixes by the lead | 2191 passed, 0 failed (RUY-98 gate) | Dell: Steam fixed by hand (hw); no image |

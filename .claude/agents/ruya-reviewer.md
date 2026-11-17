@@ -49,7 +49,7 @@ At most about 40 lines. One line per acceptance criterion; findings only where s
 ```
 REVIEW RUY-n (round N)
 verdict: APPROVE | CHANGES_REQUESTED
-checks (run by reviewer): <qml files | rust | docs | full test> <result> at <sha>, screenshots <n/a | reviewed: files>, revert check: <what you undid, what failed>
+checks (run by reviewer): <qml files | rust | docs | full test> <result> at <sha>, screenshots <n/a | reviewed: files, SHOTS-AT <sha> (older than the head or dirty: re-shoot before judging)>, revert check: <what you undid, what failed>
 
 criteria: <all verified, one line each below | the unproven ones>
 - [x] <criterion> - <evidence in a few words>

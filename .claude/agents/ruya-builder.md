@@ -59,7 +59,7 @@ status: done | partial | blocked
 branch: t/RUY-n-slug   commit: <sha>
 summary: <2-3 sentences>
 criteria: <all met, proofs in the Outcome comment | unmet: <id> - <why>, ...>
-checks: test <ALL GREEN: N QML + M skips, R Rust | failed: what>, shots <n/a | N, reviewed: files>
+checks: test <ALL GREEN: N QML + M skips, R Rust | failed: what>, shots <n/a | N at <review\SHOTS-AT.txt: the round's last commit, re-shoot if older or dirty>, reviewed: files>
 revert: <each new test file: the change undone with revert-check.ps1 -> CAUGHT | none: no new test>   (never "not run": run it)
 vm: <n/a | pending lead run: <check> | this task: <version tag>, RUYA_BOOT_OK, <check> results>
 deviations: <none | one line each, with why>
