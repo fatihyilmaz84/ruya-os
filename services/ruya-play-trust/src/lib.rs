@@ -37,8 +37,8 @@ pub use error::{codes, RevokedBy, TrustError};
 pub use inspect::{inspect, Context, Inspection, Refusal};
 pub use keys::{generate_key, PublicKey, SecretKey};
 pub use revocation::{
-    is_revoked, select_blocklist, sign_blocklist, verify_downloaded, Blocklist, ListSource,
-    PackageFacts, Selected,
+    is_revoked, select_blocklist, sign_blocklist, verify_downloaded, Blocklist, ListCheck,
+    ListSource, PackageFacts, Selected,
 };
 pub use signing::{
     bind_to_manifest, countersign, sign_package, sign_rotation, verify_signatures,

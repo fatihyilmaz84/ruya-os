@@ -52,6 +52,8 @@ struct RawPlay {
     play_json_sha256: String,
     play_files_sha256: String,
     signed_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rotations_sha256: Option<String>,
 }
 
 /// What `play.sig` states: this id and build, with exactly this `play.json` and `play.files`.
@@ -68,6 +70,9 @@ pub struct PlayStatement {
     pub play_files_sha256: String,
     /// When it was signed (the developer's claim; never used to decide trust).
     pub signed_at: UnixSeconds,
+    /// The digest of the rotations `play.sig` carries ([`crate::envelope::rotations_digest`]);
+    /// present exactly when it carries some, so only the package key decides what it carries.
+    pub rotations_sha256: Option<String>,
 }
 
 impl PlayStatement {
@@ -78,12 +83,16 @@ impl PlayStatement {
         check_id(&raw.id, file)?;
         check_sha(&raw.play_json_sha256, "play_json_sha256", file)?;
         check_sha(&raw.play_files_sha256, "play_files_sha256", file)?;
+        if let Some(r) = &raw.rotations_sha256 {
+            check_sha(r, "rotations_sha256", file)?;
+        }
         Ok(PlayStatement {
             signed_at: time(&raw.signed_at, "signed_at", file)?,
             id: raw.id,
             build: raw.build,
             play_json_sha256: raw.play_json_sha256,
             play_files_sha256: raw.play_files_sha256,
+            rotations_sha256: raw.rotations_sha256,
         })
     }
 
@@ -95,6 +104,7 @@ impl PlayStatement {
             play_json_sha256: self.play_json_sha256.clone(),
             play_files_sha256: self.play_files_sha256.clone(),
             signed_at: format_utc(self.signed_at),
+            rotations_sha256: self.rotations_sha256.clone(),
         })
         .expect("a statement is always JSON")
     }

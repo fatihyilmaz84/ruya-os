@@ -6,8 +6,8 @@ use common::*;
 use ruya_play_trust::keys::sha256_hex;
 use ruya_play_trust::revocation::{BuildRange, Entry};
 use ruya_play_trust::{
-    inspect, is_revoked, select_blocklist, sign_blocklist, Blocklist, Context, ListSource,
-    PackageFacts, RevokedBy, TrustError,
+    inspect, is_revoked, select_blocklist, sign_blocklist, Blocklist, Context, ListCheck,
+    ListSource, PackageFacts, RevokedBy, TrustError,
 };
 
 const H1: &str = "1111111111111111111111111111111111111111111111111111111111111111";
@@ -16,7 +16,7 @@ fn facts() -> PackageFacts {
     PackageFacts {
         id: "com.example.mini".into(),
         build: 7,
-        key_ids: vec!["0123456789abcdef".into()],
+        key_ids: vec!["0123456789abcdef0123456789abcdef".into()],
         play_files_sha256: H1.into(),
     }
 }
@@ -37,7 +37,7 @@ fn revoked_by(list: &Blocklist, runners: &[String]) -> Option<RevokedBy> {
 fn the_file_reads_as_specified() {
     let text = format!(
         "# RuyaOS store blocklist\n\nserial 12\n[stores]\nfingerprint abc A store we do not read here\n[packages]\n\
-         key 0123456789abcdef The key was stolen\r\n\
+         key 0123456789abcdef0123456789abcdef The key was stolen\r\n\
          id com.Example.Game 1-142 Builds up to 142 carry malware\n\
          content {H1} Known malware\n\
          runner {} Wine 8.0 has a sandbox escape\n\
@@ -50,7 +50,7 @@ fn the_file_reads_as_specified() {
         l.entries,
         vec![
             (
-                Entry::Key("0123456789abcdef".into()),
+                Entry::Key("0123456789abcdef0123456789abcdef".into()),
                 "The key was stolen".into()
             ),
             (
@@ -115,9 +115,12 @@ fn malformed_lists_are_errors() {
         ),
         (
             "upper-case key id",
-            "[packages]\nkey 0123456789ABCDEF x\n".into(),
+            "[packages]\nkey 0123456789ABCDEF0123456789ABCDEF x\n".into(),
         ),
-        ("no reason", "[packages]\nkey 0123456789abcdef\n".into()),
+        (
+            "no reason",
+            "[packages]\nkey 0123456789abcdef0123456789abcdef\n".into(),
+        ),
         ("bad range", "[packages]\nid com.example.a 9-3 x\n".into()),
         ("no range", "[packages]\nid com.example.a\n".into()),
         ("bad hash", "[packages]\ncontent 1234 x\n".into()),
@@ -125,11 +128,14 @@ fn malformed_lists_are_errors() {
         ("serial text", "serial one\n".into()),
         (
             "control character",
-            "[packages]\nkey 0123456789abcdef x\u{1b}[2J\n".into(),
+            "[packages]\nkey 0123456789abcdef0123456789abcdef x\u{1b}[2J\n".into(),
         ),
         (
             "long reason",
-            format!("[packages]\nkey 0123456789abcdef {}\n", "x".repeat(201)),
+            format!(
+                "[packages]\nkey 0123456789abcdef0123456789abcdef {}\n",
+                "x".repeat(201)
+            ),
         ),
     ] {
         let e = Blocklist::parse(text.as_bytes()).unwrap_err();
@@ -149,10 +155,13 @@ fn malformed_lists_are_errors() {
 #[test]
 fn a_revocation_by_key_matches() {
     assert_eq!(
-        revoked_by(&list("key 0123456789abcdef x\n"), &[]),
+        revoked_by(&list("key 0123456789abcdef0123456789abcdef x\n"), &[]),
         Some(RevokedBy::Key)
     );
-    assert_eq!(revoked_by(&list("key fedcba9876543210 x\n"), &[]), None);
+    assert_eq!(
+        revoked_by(&list("key fedcba9876543210fedcba9876543210 x\n"), &[]),
+        None
+    );
 }
 
 #[test]
@@ -215,7 +224,7 @@ fn inspect_refuses_a_revoked_package() {
             &Context {
                 store_keys: &console.store_keys,
                 trust: &console.trust,
-                blocklist: Some(&l),
+                blocklist: ListCheck::Use(&l),
                 runner_hashes: std::slice::from_ref(&runner),
                 verify_content: true,
             },
@@ -233,7 +242,7 @@ fn inspect_refuses_a_revoked_package() {
         &Context {
             store_keys: &console.store_keys,
             trust: &console.trust,
-            blocklist: Some(&l),
+            blocklist: ListCheck::Use(&l),
             runner_hashes: &[],
             verify_content: true,
         },
@@ -244,28 +253,54 @@ fn inspect_refuses_a_revoked_package() {
 #[test]
 fn a_newer_verified_download_is_used() {
     let console = Console::new();
-    let image = list("");
-    let text = b"serial 2\n[packages]\nkey 0123456789abcdef x\n";
+    let text = b"serial 2\n[packages]\nkey 0123456789abcdef0123456789abcdef x\n";
     let sig = sign_blocklist(&console.store, text, now() - 60, now() + 86_400);
-    let s = select_blocklist(image, Some((text, &sig)), &console.store_keys, now());
+    let s = select_blocklist(
+        Some(b"serial 1\n"),
+        Some((text, &sig)),
+        &console.store_keys,
+        now(),
+    )
+    .unwrap();
     assert_eq!(s.source, ListSource::Downloaded);
     assert_eq!(s.list.serial, 2);
     assert_eq!(s.set_aside, None);
 }
 
 #[test]
+fn a_download_never_removes_an_image_entry() {
+    let console = Console::new();
+    let image = b"serial 1\n[packages]\nkey fedcba9876543210fedcba9876543210 From the image\n";
+    let text = b"serial 2\n[packages]\nkey 0123456789abcdef0123456789abcdef From the store\n";
+    let sig = sign_blocklist(&console.store, text, now() - 60, now() + 86_400);
+    let s = select_blocklist(Some(image), Some((text, &sig)), &console.store_keys, now()).unwrap();
+    assert_eq!(s.source, ListSource::Downloaded);
+    assert_eq!(s.list.entries.len(), 2);
+    // The image's entry, missing from the download, still revokes.
+    let mut f = facts();
+    f.key_ids = vec!["fedcba9876543210fedcba9876543210".into()];
+    let Some(e) = is_revoked(&s.list, &f, &[]) else {
+        panic!("the image entry was dropped")
+    };
+    assert_eq!(e.code(), "revoked.key");
+    assert!(e.message().contains("From the image"));
+    // And the download's own entry revokes too.
+    assert_eq!(revoked_by(&s.list, &[]), Some(RevokedBy::Key));
+}
+
+#[test]
 fn a_download_that_is_not_newer_is_set_aside() {
     let console = Console::new();
-    let image = Blocklist::parse(b"serial 3\n").unwrap();
     for serial in [2, 3] {
         let text = format!("serial {serial}\n");
         let sig = sign_blocklist(&console.store, text.as_bytes(), now() - 60, now() + 86_400);
         let s = select_blocklist(
-            image.clone(),
+            Some(b"serial 3\n"),
             Some((text.as_bytes(), &sig)),
             &console.store_keys,
             now(),
-        );
+        )
+        .unwrap();
         assert_eq!(s.source, ListSource::Image);
         assert_eq!(
             s.set_aside.unwrap().code(),
@@ -278,7 +313,8 @@ fn a_download_that_is_not_newer_is_set_aside() {
 #[test]
 fn a_bad_download_falls_back_to_the_image_and_never_blocks() {
     let (console, other) = (Console::new(), key());
-    let image = list("key fedcba9876543210 from the image\n");
+    let image_text = b"serial 1\n[packages]\nkey fedcba9876543210fedcba9876543210 from the image\n";
+    let image = Blocklist::parse(image_text).unwrap();
     let text = b"serial 9\n";
     let cases = [
         sign_blocklist(&other, text, now() - 60, now() + 86_400),
@@ -287,15 +323,59 @@ fn a_bad_download_falls_back_to_the_image_and_never_blocks() {
     ];
     for sig in cases {
         let s = select_blocklist(
-            image.clone(),
+            Some(image_text),
             Some((text, &sig)),
             &console.store_keys,
             now(),
-        );
+        )
+        .unwrap();
         assert_eq!(s.source, ListSource::Image);
         assert_eq!(s.list, image);
         assert!(s.set_aside.is_some());
     }
-    let s = select_blocklist(image.clone(), None, &console.store_keys, now());
+    let s = select_blocklist(Some(image_text), None, &console.store_keys, now()).unwrap();
     assert_eq!((s.source, s.set_aside), (ListSource::Image, None));
+}
+
+#[test]
+fn a_malformed_or_missing_image_blocklist_fails_closed() {
+    let (console, dev) = (Console::new(), key());
+    let text = b"serial 9\n";
+    let sig = sign_blocklist(&console.store, text, now() - 60, now() + 86_400);
+    for image in [
+        Some(&b"[packages]\nkey 0123 x\n"[..]),
+        Some(&b"\xff"[..]),
+        None,
+    ] {
+        // Not even a good download makes up for it: the image copy is the floor.
+        let selected = select_blocklist(image, Some((text, &sig)), &console.store_keys, now());
+        assert_eq!(
+            selected.as_ref().unwrap_err().code(),
+            "blocklist.unavailable"
+        );
+        let r = inspect(
+            &Pkg::minimal().signed(&dev).mem(),
+            &Context {
+                store_keys: &console.store_keys,
+                trust: &console.trust,
+                blocklist: ListCheck::of(&selected),
+                runner_hashes: &[],
+                verify_content: true,
+            },
+        );
+        assert_refused(&r, "blocklist.unavailable");
+    }
+    // A good image list lets the same package through.
+    let selected = select_blocklist(Some(b"serial 1\n"), None, &console.store_keys, now());
+    let r = inspect(
+        &Pkg::minimal().signed(&dev).mem(),
+        &Context {
+            store_keys: &console.store_keys,
+            trust: &console.trust,
+            blocklist: ListCheck::of(&selected),
+            runner_hashes: &[],
+            verify_content: true,
+        },
+    );
+    assert!(r.is_ok());
 }

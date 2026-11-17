@@ -198,7 +198,7 @@ impl Console {
             &Context {
                 store_keys: &self.store_keys,
                 trust: &self.trust,
-                blocklist: None,
+                blocklist: ruya_play_trust::ListCheck::NotChecked,
                 runner_hashes: &[],
                 verify_content: true,
             },

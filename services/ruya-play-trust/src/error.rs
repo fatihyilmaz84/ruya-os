@@ -26,8 +26,8 @@ pub mod codes {
     pub const SIG_WRONG_ID: &str = "sig.wrong_id";
     /// The signature is for another `build`.
     pub const SIG_WRONG_BUILD: &str = "sig.wrong_build";
-    /// `store.sig` is signed by a key that is not a pinned store key.
-    pub const STORE_SIG_UNKNOWN_KEY: &str = "store_sig.unknown_key";
+    /// The rotations `play.sig` carries are not the ones its statement names (`rotations_sha256`).
+    pub const SIG_ROTATIONS_CHANGED: &str = "sig.rotations_changed";
     /// `store.sig` without `play.sig`.
     pub const STORE_SIG_WITHOUT_PLAY_SIG: &str = "store_sig.without_play_sig";
     /// `play.sig` is not the one `store.sig` countersigned.
@@ -38,6 +38,8 @@ pub mod codes {
     pub const ROTATION_REPLAYED: &str = "rotation.replayed";
     /// A rotation statement for another `id`.
     pub const ROTATION_WRONG_ID: &str = "rotation.wrong_id";
+    /// A rotation hands the id to a key this console retired for it.
+    pub const ROTATION_TO_RETIRED_KEY: &str = "rotation.to_retired_key";
     /// An unsigned package while developer mode is off.
     pub const TRUST_NEEDS_DEVELOPER_MODE: &str = "trust.needs_developer_mode";
     /// The id is owned by another key on this console (trust on first use).
@@ -62,6 +64,8 @@ pub mod codes {
     pub const BLOCKLIST_EXPIRED: &str = "blocklist.expired";
     /// A downloaded blocklist is not newer than the image's copy.
     pub const BLOCKLIST_NOT_NEWER: &str = "blocklist.not_newer";
+    /// The image's blocklist is missing or cannot be read: installs are refused (fail closed).
+    pub const BLOCKLIST_UNAVAILABLE: &str = "blocklist.unavailable";
     /// The trust state file cannot be read as written (never reset silently).
     pub const STATE_CORRUPT: &str = "state.corrupt";
     /// The trust state file could not be read or written.
@@ -78,12 +82,13 @@ pub mod codes {
         SIG_PLAY_FILES_CHANGED,
         SIG_WRONG_ID,
         SIG_WRONG_BUILD,
-        STORE_SIG_UNKNOWN_KEY,
+        SIG_ROTATIONS_CHANGED,
         STORE_SIG_WITHOUT_PLAY_SIG,
         STORE_SIG_PLAY_SIG_CHANGED,
         ROTATION_NOT_BY_OLD_KEY,
         ROTATION_REPLAYED,
         ROTATION_WRONG_ID,
+        ROTATION_TO_RETIRED_KEY,
         TRUST_NEEDS_DEVELOPER_MODE,
         TRUST_DIFFERENT_DEVELOPER,
         CEILING_REFUSED,
@@ -96,6 +101,7 @@ pub mod codes {
         BLOCKLIST_CHANGED,
         BLOCKLIST_EXPIRED,
         BLOCKLIST_NOT_NEWER,
+        BLOCKLIST_UNAVAILABLE,
         STATE_CORRUPT,
         STATE_IO,
     ];
@@ -144,8 +150,8 @@ pub enum TrustError {
         signed: u64,
         package: u64,
     },
-    /// See [`codes::STORE_SIG_UNKNOWN_KEY`].
-    StoreKeyUnknown { key_id: String },
+    /// See [`codes::SIG_ROTATIONS_CHANGED`].
+    RotationsChanged,
     /// See [`codes::STORE_SIG_WITHOUT_PLAY_SIG`].
     StoreSigWithoutPlaySig,
     /// See [`codes::STORE_SIG_PLAY_SIG_CHANGED`].
@@ -156,6 +162,8 @@ pub enum TrustError {
     RotationReplayed { seq: u64, applied: u64 },
     /// See [`codes::ROTATION_WRONG_ID`].
     RotationWrongId { file: String },
+    /// See [`codes::ROTATION_TO_RETIRED_KEY`].
+    RotationToRetiredKey { key_id: String },
     /// See [`codes::TRUST_NEEDS_DEVELOPER_MODE`].
     NeedsDeveloperMode,
     /// See [`codes::TRUST_DIFFERENT_DEVELOPER`]. `found` is `None` for an unsigned package.
@@ -178,6 +186,8 @@ pub enum TrustError {
     BlocklistExpired { expires: String },
     /// See [`codes::BLOCKLIST_NOT_NEWER`].
     BlocklistNotNewer { serial: u64, image: u64 },
+    /// See [`codes::BLOCKLIST_UNAVAILABLE`].
+    BlocklistUnavailable { detail: String },
     /// See [`codes::STATE_CORRUPT`].
     StateCorrupt { detail: String },
     /// See [`codes::STATE_IO`].
@@ -198,12 +208,13 @@ impl TrustError {
             PlayFilesChanged => codes::SIG_PLAY_FILES_CHANGED,
             WrongId { .. } => codes::SIG_WRONG_ID,
             WrongBuild { .. } => codes::SIG_WRONG_BUILD,
-            StoreKeyUnknown { .. } => codes::STORE_SIG_UNKNOWN_KEY,
+            RotationsChanged => codes::SIG_ROTATIONS_CHANGED,
             StoreSigWithoutPlaySig => codes::STORE_SIG_WITHOUT_PLAY_SIG,
             PlaySigChanged => codes::STORE_SIG_PLAY_SIG_CHANGED,
             RotationNotByOldKey { .. } => codes::ROTATION_NOT_BY_OLD_KEY,
             RotationReplayed { .. } => codes::ROTATION_REPLAYED,
             RotationWrongId { .. } => codes::ROTATION_WRONG_ID,
+            RotationToRetiredKey { .. } => codes::ROTATION_TO_RETIRED_KEY,
             NeedsDeveloperMode => codes::TRUST_NEEDS_DEVELOPER_MODE,
             DifferentDeveloper { .. } => codes::TRUST_DIFFERENT_DEVELOPER,
             CeilingRefused { .. } => codes::CEILING_REFUSED,
@@ -218,6 +229,7 @@ impl TrustError {
             BlocklistChanged => codes::BLOCKLIST_CHANGED,
             BlocklistExpired { .. } => codes::BLOCKLIST_EXPIRED,
             BlocklistNotNewer { .. } => codes::BLOCKLIST_NOT_NEWER,
+            BlocklistUnavailable { .. } => codes::BLOCKLIST_UNAVAILABLE,
             StateCorrupt { .. } => codes::STATE_CORRUPT,
             StateIo { .. } => codes::STATE_IO,
         }
@@ -238,7 +250,9 @@ impl TrustError {
             | RotationWrongId { file } => file.clone(),
             PlayJsonChanged => "play.json".into(),
             PlayFilesChanged => "play.files".into(),
-            StoreKeyUnknown { .. } | StoreSigWithoutPlaySig | PlaySigChanged => "store.sig".into(),
+            StoreSigWithoutPlaySig | PlaySigChanged => "store.sig".into(),
+            RotationsChanged | RotationToRetiredKey { .. } => "play.sig".into(),
+            BlocklistUnavailable { .. } => "store-blocklist".into(),
             RotationReplayed { .. } => "play.sig".into(),
             CeilingRefused { permission, .. } => format!("/permissions/{permission}"),
             BlocklistMalformed { line, .. } if *line > 0 => format!("store-blocklist:{line}"),
@@ -283,9 +297,9 @@ impl TrustError {
             WrongBuild { file, signed, package } => format!(
                 "{file} was signed for build {signed}, but the package is build {package}."
             ),
-            StoreKeyUnknown { key_id } => format!(
-                "store.sig is signed by key {key_id}, which is not the RuyaOS store key."
-            ),
+            RotationsChanged => {
+                "The key changes play.sig carries are not the ones its developer signed.".into()
+            }
             StoreSigWithoutPlaySig => {
                 "store.sig countersigns play.sig, but the package has no play.sig.".into()
             }
@@ -299,6 +313,9 @@ impl TrustError {
                 "The key change number {seq} is not newer than the last one this console applied ({applied})."
             ),
             RotationWrongId { file } => format!("{file} hands over another game."),
+            RotationToRetiredKey { key_id } => format!(
+                "A key change hands the game back to key {key_id}, which this console retired for it; a retired key is never accepted again."
+            ),
             NeedsDeveloperMode => {
                 "This package is not signed. An admin must turn on developer mode to install it."
                     .into()
@@ -328,6 +345,9 @@ impl TrustError {
             }
             BlocklistNotNewer { serial, image } => format!(
                 "The downloaded blocklist (serial {serial}) is not newer than the system's (serial {image})."
+            ),
+            BlocklistUnavailable { detail } => format!(
+                "The system's safety list cannot be read ({detail}), so nothing can be installed until an OS update repairs it."
             ),
             StateCorrupt { detail } => {
                 format!("The trust records cannot be read ({detail}); they were not changed.")

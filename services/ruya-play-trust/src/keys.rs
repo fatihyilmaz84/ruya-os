@@ -6,8 +6,8 @@ use base64ct::{Base64, Encoding};
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
 use sha2::{Digest, Sha256};
 
-/// Characters of the key id: the first 16 hex characters of the SHA-256 of the 32 key bytes.
-pub const KEY_ID_CHARS: usize = 16;
+/// Characters of the key id (128 bits): the first 32 hex characters of the SHA-256 of the 32 key bytes.
+pub const KEY_ID_CHARS: usize = 32;
 
 pub(crate) fn hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
@@ -151,7 +151,7 @@ mod tests {
         assert_eq!(b.len(), 44);
         assert_eq!(PublicKey::from_base64(&b).unwrap(), k);
         assert!(is_key_id(&k.key_id()));
-        assert_eq!(k.key_id(), sha256_hex(k.as_bytes())[..16]);
+        assert_eq!(k.key_id(), sha256_hex(k.as_bytes())[..32]);
     }
 
     #[test]

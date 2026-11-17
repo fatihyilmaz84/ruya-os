@@ -167,6 +167,7 @@ fn a_signature_made_for_another_purpose_does_not_verify() {
         play_json_sha256: sha256_hex(&pkg.manifest_bytes()),
         play_files_sha256: sha256_hex(&pkg.table()),
         signed_at: now(),
+        rotations_sha256: None,
     };
     let mut wrong = pkg.clone();
     wrong.play_sig = Some(envelope::seal(
@@ -269,10 +270,27 @@ fn a_weak_key_is_refused() {
 }
 
 #[test]
-fn a_store_sig_by_a_key_that_is_not_pinned_is_refused() {
-    let (console, dev, impostor) = (Console::new(), key(), key());
-    let pkg = Pkg::minimal().signed(&dev).countersigned(&impostor);
-    assert_refused(&console.inspect(&pkg), "store_sig.unknown_key");
+fn a_store_sig_by_a_key_that_is_not_pinned_is_ignored() {
+    // A third-party store's countersignature is not RuyaOS's: the package stays `developer`.
+    let (console, dev, other_store) = (Console::new(), key(), key());
+    let pkg = Pkg::minimal().signed(&dev).countersigned(&other_store);
+    let i = console.inspect(&pkg).unwrap();
+    assert_eq!(i.tier.tier, Tier::Developer);
+    assert!(i.signatures.store.is_none());
+    assert_eq!(
+        i.signatures.unpinned_store_key,
+        Some(other_store.public().key_id())
+    );
+    // A reserved id stays refused: an ignored store.sig does not make it official.
+    let reserved = Pkg::minimal()
+        .with_id("org.ruyaos.bundled-game")
+        .signed(&dev)
+        .countersigned(&other_store);
+    assert_refused(&console.inspect(&reserved), "id.reserved");
+    // A broken one is still an error, not ignored.
+    let mut broken = pkg;
+    broken.store_sig = Some(b"{}".to_vec());
+    assert_refused(&console.inspect(&broken), "sig.malformed");
 }
 
 #[test]
@@ -332,7 +350,9 @@ fn a_store_sig_with_rotations_is_refused() {
 
 // The downloaded blocklist (05 §9.2): its own signature by the store key, and `expires`.
 
-const LIST: &[u8] = b"serial 5\n[packages]\nkey 0123456789abcdef A stolen key\n";
+const LIST: &[u8] = b"serial 5\n[packages]\nkey 0123456789abcdef0123456789abcdef A stolen key\n";
+const IMAGE_LIST: &[u8] =
+    b"serial 2\n[packages]\nkey fedcba9876543210fedcba9876543210 From the image\n";
 
 #[test]
 fn an_expired_revocation_list_is_refused() {
@@ -386,15 +406,15 @@ fn a_revocation_list_that_is_not_the_signed_text_is_refused() {
 #[test]
 fn the_image_blocklist_is_used_when_the_downloaded_copy_is_expired() {
     let console = Console::new();
-    let image =
-        Blocklist::parse(b"serial 2\n[packages]\nkey fedcba9876543210 From the image\n").unwrap();
+    let image = Blocklist::parse(IMAGE_LIST).unwrap();
     let sig = sign_blocklist(&console.store, LIST, now() - 40 * 86_400, now() - 86_400);
     let s = select_blocklist(
-        image.clone(),
+        Some(IMAGE_LIST),
         Some((LIST, &sig)),
         &console.store_keys,
         now(),
-    );
+    )
+    .unwrap();
     assert_eq!(s.source, ListSource::Image);
     assert_eq!(s.list, image);
     assert_eq!(s.set_aside.unwrap().code(), "blocklist.expired");

@@ -20,7 +20,7 @@
 
 use crate::envelope::{self, Domain};
 use crate::error::{RevokedBy, TrustError};
-use crate::keys::{is_key_id, is_sha256_hex, sha256_hex};
+use crate::keys::{is_key_id, is_sha256_hex, sha256_hex, KEY_ID_CHARS};
 use crate::signing::StoreKeys;
 use crate::statement::BlocklistStatement;
 use crate::time::UnixSeconds;
@@ -172,7 +172,10 @@ impl Blocklist {
                 (Some("packages"), "key") => {
                     let k = words.get(1).copied().unwrap_or_default();
                     if !is_key_id(k) {
-                        return Err(bad(n, "a key id is 16 lower-case hex characters"));
+                        return Err(bad(
+                            n,
+                            format!("a key id is {KEY_ID_CHARS} lower-case hex characters"),
+                        ));
                     }
                     let reason = reason_of(&words[2..], n)?;
                     list.entries.push((Entry::Key(k.to_string()), reason));
@@ -296,16 +299,16 @@ pub fn sign_blocklist(
 /// Which copy is in use.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ListSource {
-    /// The image's copy.
+    /// The image's copy alone.
     Image,
-    /// The verified downloaded copy.
+    /// The image's copy together with the verified downloaded copy.
     Downloaded,
 }
 
 /// The list in use, and why a downloaded copy was not used.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Selected {
-    /// The entries to check.
+    /// The entries to check: the image's, plus the download's when it is used.
     pub list: Blocklist,
     /// Where they come from.
     pub source: ListSource,
@@ -314,23 +317,54 @@ pub struct Selected {
     pub set_aside: Option<TrustError>,
 }
 
-/// Choose the list (Q6): the downloaded copy when it verifies and is newer than the image's,
-/// otherwise the image's copy, with the reason. Never an error: staleness alone blocks nothing.
+impl Blocklist {
+    /// Every entry of both lists (an entry in both keeps the first reason); the higher serial.
+    /// A downloaded list never removes an entry of the image's.
+    pub fn union(&self, other: &Blocklist) -> Blocklist {
+        let mut entries = self.entries.clone();
+        for (entry, reason) in &other.entries {
+            if !entries.iter().any(|(e, _)| e == entry) {
+                entries.push((entry.clone(), reason.clone()));
+            }
+        }
+        Blocklist {
+            serial: self.serial.max(other.serial),
+            entries,
+        }
+    }
+}
+
+/// Choose the list (Q6). `image` is the image's file (`None` when it is missing or unreadable):
+/// when it is missing or does not parse, nothing can be checked, so the result is
+/// `blocklist.unavailable` and installs are refused (fail closed). Otherwise the downloaded copy
+/// is added when it verifies and has a higher serial than the image's; when it does not, the
+/// image's copy is used alone, with the reason. Staleness alone blocks nothing, and a download
+/// never removes an entry: the checks use the union.
 pub fn select_blocklist(
-    image: Blocklist,
+    image: Option<&[u8]>,
     downloaded: Option<(&[u8], &[u8])>,
     store_keys: &StoreKeys,
     now: UnixSeconds,
-) -> Selected {
+) -> Result<Selected, TrustError> {
+    let image = match image {
+        None => {
+            return Err(TrustError::BlocklistUnavailable {
+                detail: format!("{IMAGE_BLOCKLIST_PATH} is missing"),
+            })
+        }
+        Some(bytes) => Blocklist::parse(bytes).map_err(|e| TrustError::BlocklistUnavailable {
+            detail: e.message(),
+        })?,
+    };
     let image_copy = |set_aside| Selected {
         list: image.clone(),
         source: ListSource::Image,
         set_aside,
     };
     let Some((text, sig)) = downloaded else {
-        return image_copy(None);
+        return Ok(image_copy(None));
     };
-    match verify_downloaded(text, sig, store_keys, now) {
+    Ok(match verify_downloaded(text, sig, store_keys, now) {
         Err(e) => image_copy(Some(e)),
         Ok((list, _)) if list.serial <= image.serial => {
             image_copy(Some(TrustError::BlocklistNotNewer {
@@ -339,9 +373,30 @@ pub fn select_blocklist(
             }))
         }
         Ok((list, _)) => Selected {
-            list,
+            list: image.union(&list),
             source: ListSource::Downloaded,
             set_aside: None,
         },
+    })
+}
+
+/// What the inspect step does about revocation.
+#[derive(Debug, Clone, Copy)]
+pub enum ListCheck<'a> {
+    /// Not checked here (the caller checks later, e.g. at launch).
+    NotChecked,
+    /// Check against this list.
+    Use(&'a Blocklist),
+    /// The image's list could not be read: refuse ([`select_blocklist`]'s error).
+    Unavailable(&'a TrustError),
+}
+
+impl<'a> ListCheck<'a> {
+    /// The check for the result of [`select_blocklist`].
+    pub fn of(selected: &'a Result<Selected, TrustError>) -> ListCheck<'a> {
+        match selected {
+            Ok(s) => ListCheck::Use(&s.list),
+            Err(e) => ListCheck::Unavailable(e),
+        }
     }
 }

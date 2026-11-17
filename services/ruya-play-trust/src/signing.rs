@@ -70,8 +70,11 @@ pub struct StoreSignature {
 pub struct Signatures {
     /// `play.sig`, when present.
     pub developer: Option<DeveloperSignature>,
-    /// `store.sig`, when present (only with `play.sig`).
+    /// `store.sig`, when present and by a pinned store key (only with `play.sig`).
     pub store: Option<StoreSignature>,
+    /// The key id of a valid `store.sig` by a key that is not pinned: ignored for the tier (a
+    /// third-party store's own key is RUY-106's business), kept for display.
+    pub unpinned_store_key: Option<String>,
 }
 
 impl Signatures {
@@ -97,9 +100,11 @@ fn rotation_of(opened: Opened, id: &str, file: &str) -> Result<RotationStatement
 }
 
 /// Verify the signatures of a package: `play.sig` must verify and name exactly these `play.json`
-/// and `play.files` bytes; every rotation it carries must verify and be signed by its old key;
-/// `store.sig` must be by a pinned store key and countersign exactly this `play.sig` for the same
-/// id and build. The id and build still have to match the manifest ([`bind_to_manifest`]).
+/// and `play.files` bytes and exactly the rotations it carries (`rotations_sha256`); every rotation
+/// must verify and be signed by its old key. A valid `store.sig` by a pinned store key must
+/// countersign exactly this `play.sig` for the same id and build; one by another key is ignored
+/// (the tier stays `developer`), a broken one is an error. The id and build still have to match
+/// the manifest ([`bind_to_manifest`]).
 pub fn verify_signatures(
     bytes: &PackageBytes<'_>,
     store_keys: &StoreKeys,
@@ -110,16 +115,19 @@ pub fn verify_signatures(
         }
         return Ok(Signatures::default());
     };
-    let (outer, inner) = envelope::open_play_sig(play_sig)?;
-    let statement = PlayStatement::parse(&outer.statement)?;
+    let opened = envelope::open_play_sig(play_sig)?;
+    let statement = PlayStatement::parse(&opened.outer.statement)?;
     if sha256_hex(bytes.play_json) != statement.play_json_sha256 {
         return Err(TrustError::PlayJsonChanged);
     }
     if sha256_hex(bytes.play_files) != statement.play_files_sha256 {
         return Err(TrustError::PlayFilesChanged);
     }
-    let mut rotations = Vec::with_capacity(inner.len());
-    for (i, r) in inner.into_iter().enumerate() {
+    if statement.rotations_sha256 != opened.rotations_sha256 {
+        return Err(TrustError::RotationsChanged);
+    }
+    let mut rotations = Vec::with_capacity(opened.rotations.len());
+    for (i, r) in opened.rotations.into_iter().enumerate() {
         rotations.push(rotation_of(
             r,
             &statement.id,
@@ -127,23 +135,22 @@ pub fn verify_signatures(
         )?);
     }
     let developer = DeveloperSignature {
-        key: outer.key,
+        key: opened.outer.key,
         statement,
         rotations,
     };
 
-    let store = match bytes.store_sig {
-        None => None,
-        Some(store_sig) => Some(verify_store_sig(
-            store_sig,
-            play_sig,
-            &developer.statement,
-            store_keys,
-        )?),
-    };
+    let (mut store, mut unpinned_store_key) = (None, None);
+    if let Some(store_sig) = bytes.store_sig {
+        match verify_store_sig(store_sig, play_sig, &developer.statement, store_keys)? {
+            Ok(s) => store = Some(s),
+            Err(key_id) => unpinned_store_key = Some(key_id),
+        }
+    }
     Ok(Signatures {
         developer: Some(developer),
         store,
+        unpinned_store_key,
     })
 }
 
@@ -152,13 +159,11 @@ fn verify_store_sig(
     play_sig: &[u8],
     play: &PlayStatement,
     store_keys: &StoreKeys,
-) -> Result<StoreSignature, TrustError> {
+) -> Result<Result<StoreSignature, String>, TrustError> {
     let file = "store.sig";
     let opened = envelope::open(store_sig, Domain::StoreSig, file)?;
     if !store_keys.contains(&opened.key) {
-        return Err(TrustError::StoreKeyUnknown {
-            key_id: opened.key.key_id(),
-        });
+        return Ok(Err(opened.key.key_id()));
     }
     let statement = StoreStatement::parse(&opened.statement)?;
     if sha256_hex(play_sig) != statement.play_sig_sha256 {
@@ -178,10 +183,10 @@ fn verify_store_sig(
             package: play.build,
         });
     }
-    Ok(StoreSignature {
+    Ok(Ok(StoreSignature {
         key: opened.key,
         statement,
-    })
+    }))
 }
 
 /// The signed id and build must be exactly the manifest's (the hashes already bind its bytes; this
@@ -224,6 +229,7 @@ pub fn sign_package(
         play_json_sha256: sha256_hex(play_json),
         play_files_sha256: sha256_hex(play_files),
         signed_at,
+        rotations_sha256: envelope::rotations_digest(rotations)?,
     };
     envelope::seal_with(key, Domain::PlaySig, &statement.to_bytes(), rotations)
 }

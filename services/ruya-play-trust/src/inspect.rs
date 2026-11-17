@@ -7,7 +7,7 @@ use crate::continuity::{continuity_of, Continuity};
 use crate::envelope::MAX_SIG_FILE_BYTES;
 use crate::error::TrustError;
 use crate::keys::sha256_hex;
-use crate::revocation::{is_revoked, Blocklist, PackageFacts};
+use crate::revocation::{is_revoked, ListCheck, PackageFacts};
 use crate::signing::{bind_to_manifest, verify_signatures, PackageBytes, Signatures, StoreKeys};
 use crate::store::TrustStore;
 use crate::tier::{check_ceiling, decide_tier, Assessment, TierDecision};
@@ -21,8 +21,9 @@ pub struct Context<'a> {
     pub store_keys: &'a StoreKeys,
     /// Key records and the developer-mode flag (read only here).
     pub trust: &'a dyn TrustStore,
-    /// The blocklist in use ([`crate::revocation::select_blocklist`]), if checked here.
-    pub blocklist: Option<&'a Blocklist>,
+    /// The blocklist check ([`ListCheck::of`] the result of
+    /// [`crate::revocation::select_blocklist`]); an unavailable list refuses every package.
+    pub blocklist: ListCheck<'a>,
     /// Hashes of the runner the package will use, when known.
     pub runner_hashes: &'a [String],
     /// Hash every file against `play.files` (the format crate's `verify_content`).
@@ -131,6 +132,9 @@ fn read_root(
 
 /// Inspect a package. See the module text for the order.
 pub fn inspect(source: &dyn Source, ctx: &Context<'_>) -> Result<Inspection, Refusal> {
+    if let ListCheck::Unavailable(e) = ctx.blocklist {
+        return Err(Refusal::Trust(e.clone()));
+    }
     let entries = source.entries().map_err(Refusal::Format)?;
     let sig_limit = MAX_SIG_FILE_BYTES as u64;
     let too_big = |name: &str| TrustError::Malformed {
@@ -188,7 +192,7 @@ pub fn inspect(source: &dyn Source, ctx: &Context<'_>) -> Result<Inspection, Ref
         assessment,
         play_files_sha256: sha256_hex(&play_files),
     };
-    if let Some(list) = ctx.blocklist {
+    if let ListCheck::Use(list) = ctx.blocklist {
         if let Some(revoked) = is_revoked(list, &inspection.facts(), ctx.runner_hashes) {
             return Err(revoked.into());
         }

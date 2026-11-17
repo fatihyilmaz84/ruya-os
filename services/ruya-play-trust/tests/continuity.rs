@@ -144,17 +144,35 @@ fn a_rotation_signed_by_the_new_key_is_rejected() {
 
 #[test]
 fn a_replayed_older_rotation_is_rejected() {
-    // A -> B (1), then B -> A (2): the console is back on A at seq 2. Whoever holds B replays the
-    // first statement to take the id again.
+    // The console first saw A with its history up to seq 5. An older statement of A (seq 3, a key
+    // change A gave up) is replayed by whoever holds B to take the id.
+    let (mut console, a, b, w) = (Console::new(), key(), key(), key());
+    install(
+        &mut console,
+        &Pkg::minimal().signed_rotating(&a, &[&rotation(&w, &a, 5)]),
+    )
+    .unwrap();
+    assert_eq!(owner(&console).unwrap().seq, 5);
+    let old = rotation(&a, &b, 3);
+    let r = console.inspect(&Pkg::minimal().signed_rotating(&b, &[&old]));
+    assert_refused(&r, "rotation.replayed");
+    assert_eq!(owner(&console).unwrap().key, a.public());
+}
+
+#[test]
+fn a_retired_key_stays_retired() {
+    // A -> B (1) was applied; A then signs B's way back as "B -> A (2)" with B's help: refused.
     let (mut console, a, b) = (Console::new(), key(), key());
     install(&mut console, &Pkg::minimal().signed(&a)).unwrap();
     let r1 = rotation(&a, &b, 1);
-    let r2 = rotation(&b, &a, 2);
     install(&mut console, &Pkg::minimal().signed_rotating(&b, &[&r1])).unwrap();
-    install(&mut console, &Pkg::minimal().signed_rotating(&a, &[&r2])).unwrap();
-    assert_eq!(owner(&console).unwrap().seq, 2);
-    let r = console.inspect(&Pkg::minimal().signed_rotating(&b, &[&r1]));
-    assert_refused(&r, "rotation.replayed");
+    let back = rotation(&b, &a, 2);
+    let r = console.inspect(&Pkg::minimal().signed_rotating(&a, &[&r1, &back]));
+    assert_refused(&r, "rotation.to_retired_key");
+    assert!(r.unwrap_err().problems()[0]
+        .message
+        .contains(&a.public().key_id()));
+    assert_eq!(owner(&console).unwrap().key, b.public());
 }
 
 #[test]
@@ -250,11 +268,79 @@ fn a_broken_rotation_is_refused_even_on_first_sight() {
     let r = console.inspect(&Pkg::minimal().signed_rotating(&b, &[&r1]));
     assert_refused(&r, "sig.bad_signature");
     assert_eq!(r.unwrap_err().problems()[0].path, "play.sig rotation 1");
-    // On first sight the newest carried rotation that ends at the key is remembered.
+}
+
+/// Add `rotation` to a signed package's `play.sig` after it was signed (a mirror or a USB copy
+/// splicing one in), leaving the developer's signature as it was.
+fn splice(pkg: &mut Pkg, rotation: &[u8]) {
+    let mut env: serde_json::Value =
+        serde_json::from_slice(pkg.play_sig.as_ref().unwrap()).unwrap();
+    let r: serde_json::Value = serde_json::from_slice(rotation).unwrap();
+    match env.get_mut("rotations") {
+        Some(list) => list.as_array_mut().unwrap().push(r),
+        None => env["rotations"] = serde_json::json!([r]),
+    }
+    pkg.play_sig = Some(serde_json::to_vec(&env).unwrap());
+}
+
+#[test]
+fn on_first_sight_only_rotations_the_package_key_signed_set_the_seq() {
+    let (mut console, a, b, x) = (Console::new(), key(), key(), key());
+    // B's own package names its history: the seq is remembered.
     let ok = console
         .inspect(&Pkg::minimal().signed_rotating(&b, &[&rotation(&a, &b, 4)]))
         .unwrap();
     assert_eq!(ok.continuity, Continuity::FirstSight { seq: 4 });
+    // A throwaway key X splices in "X -> B, seq u64::MAX" to lock out B's later key changes.
+    let mut spliced = Pkg::minimal().signed(&b);
+    splice(
+        &mut spliced,
+        &sign_rotation(&x, ID, &b.public(), u64::MAX, now()),
+    );
+    let r = console.inspect(&spliced);
+    assert_refused(&r, "sig.rotations_changed");
+    assert!(install(&mut console, &spliced).is_err());
+    assert!(owner(&console).is_none(), "nothing was recorded");
+    // Added next to B's own rotation, or with B's rotation swapped out, it is refused too.
+    let mut added = Pkg::minimal().signed_rotating(&b, &[&rotation(&a, &b, 1)]);
+    splice(
+        &mut added,
+        &sign_rotation(&x, ID, &b.public(), u64::MAX, now()),
+    );
+    assert_refused(&console.inspect(&added), "sig.rotations_changed");
+    let mut removed = Pkg::minimal().signed_rotating(&b, &[&rotation(&a, &b, 1)]);
+    let mut env: serde_json::Value =
+        serde_json::from_slice(removed.play_sig.as_ref().unwrap()).unwrap();
+    env.as_object_mut().unwrap().remove("rotations");
+    removed.play_sig = Some(serde_json::to_vec(&env).unwrap());
+    assert_refused(&console.inspect(&removed), "sig.rotations_changed");
+}
+
+#[test]
+fn a_spliced_third_key_rotation_cannot_lock_out_a_genuine_one() {
+    let (mut console, b, c, x) = (Console::new(), key(), key(), key());
+    install(&mut console, &Pkg::minimal().signed(&b)).unwrap();
+    let mut spliced = Pkg::minimal().signed(&b);
+    splice(
+        &mut spliced,
+        &sign_rotation(&x, ID, &b.public(), u64::MAX, now()),
+    );
+    assert_refused(&console.inspect(&spliced), "sig.rotations_changed");
+    assert_eq!(owner(&console).unwrap().seq, 0);
+    // B's genuine key change still works.
+    let i = install(
+        &mut console,
+        &Pkg::minimal().signed_rotating(&c, &[&rotation(&b, &c, 1)]),
+    )
+    .unwrap();
+    assert_eq!(
+        i.continuity,
+        Continuity::Rotated {
+            from: b.public(),
+            to: c.public(),
+            seq: 1
+        }
+    );
 }
 
 #[test]

@@ -7,7 +7,7 @@
 //! error (the format crate's scan), unknown keys are an error, base64 is strict.
 
 use crate::error::TrustError;
-use crate::keys::{KeyFault, PublicKey, SecretKey};
+use crate::keys::{sha256_hex, KeyFault, PublicKey, SecretKey};
 use base64ct::{Base64, Encoding};
 use ruya_play_format::json::find_duplicate_key;
 use ruya_play_format::manifest::json_depth_exceeds;
@@ -209,9 +209,53 @@ pub fn open(bytes: &[u8], domain: Domain, file: &str) -> Result<Opened, TrustErr
     )
 }
 
-/// Read and verify `play.sig`: the developer's envelope plus the rotation envelopes it carries
-/// (each verified for [`Domain::Rotation`]; their meaning is checked by the caller).
-pub fn open_play_sig(bytes: &[u8]) -> Result<(Opened, Vec<Opened>), TrustError> {
+/// The SHA-256 that binds the rotations a `play.sig` carries to the developer's signature: over the
+/// ASCII bytes of each rotation envelope's `statement` and `sig` base64 strings, in carried order,
+/// joined by one `\n` (`statement1\nsig1\nstatement2\nsig2`). `None` when there are none.
+fn rotations_digest_of(inner: &[RawInner]) -> Option<String> {
+    if inner.is_empty() {
+        return None;
+    }
+    let parts: Vec<&str> = inner
+        .iter()
+        .flat_map(|r| [r.statement.as_str(), r.sig.as_str()])
+        .collect();
+    Some(sha256_hex(parts.join("\n").as_bytes()))
+}
+
+fn read_rotations(rotations: &[&[u8]]) -> Result<Vec<RawInner>, TrustError> {
+    if rotations.len() > MAX_ROTATIONS {
+        return Err(TrustError::Malformed {
+            file: "rotation".into(),
+            detail: format!("more than {MAX_ROTATIONS} rotations"),
+        });
+    }
+    rotations
+        .iter()
+        .map(|r| strict_json::<RawInner>(r, MAX_SIG_FILE_BYTES, MAX_SIG_DEPTH, "rotation"))
+        .collect()
+}
+
+/// The `rotations_sha256` the `play.sig` statement must name for these sealed rotations (each the
+/// output of [`seal`] for [`Domain::Rotation`]); `None` for no rotations.
+pub fn rotations_digest(rotations: &[&[u8]]) -> Result<Option<String>, TrustError> {
+    Ok(rotations_digest_of(&read_rotations(rotations)?))
+}
+
+/// A verified `play.sig`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenedPlaySig {
+    /// The developer's envelope.
+    pub outer: Opened,
+    /// The rotation envelopes it carries, each verified for [`Domain::Rotation`] (their meaning
+    /// is checked by the caller).
+    pub rotations: Vec<Opened>,
+    /// [`rotations_digest`] of what it carries; the statement must name exactly this.
+    pub rotations_sha256: Option<String>,
+}
+
+/// Read and verify `play.sig`: the developer's envelope plus the rotation envelopes it carries.
+pub fn open_play_sig(bytes: &[u8]) -> Result<OpenedPlaySig, TrustError> {
     let file = "play.sig";
     let raw: RawEnvelope = strict_json(bytes, MAX_SIG_FILE_BYTES, MAX_SIG_DEPTH, file)?;
     let outer = open_inner(
@@ -222,7 +266,16 @@ pub fn open_play_sig(bytes: &[u8]) -> Result<(Opened, Vec<Opened>), TrustError> 
         Domain::PlaySig,
         file,
     )?;
-    let inner = raw.rotations.unwrap_or_default();
+    let inner = match raw.rotations {
+        Some(list) if list.is_empty() => {
+            return Err(TrustError::Malformed {
+                file: file.to_string(),
+                detail: "rotations is empty; leave it out".into(),
+            })
+        }
+        Some(list) => list,
+        None => Vec::new(),
+    };
     if inner.len() > MAX_ROTATIONS {
         return Err(TrustError::Malformed {
             file: file.to_string(),
@@ -241,7 +294,11 @@ pub fn open_play_sig(bytes: &[u8]) -> Result<(Opened, Vec<Opened>), TrustError> 
             &name,
         )?);
     }
-    Ok((outer, rotations))
+    Ok(OpenedPlaySig {
+        outer,
+        rotations,
+        rotations_sha256: rotations_digest_of(&inner),
+    })
 }
 
 /// The envelope bytes of `statement` signed by `key` for `domain`.
@@ -249,8 +306,8 @@ pub fn seal(key: &SecretKey, domain: Domain, statement: &[u8]) -> Vec<u8> {
     seal_with(key, domain, statement, &[]).expect("no rotations to read")
 }
 
-/// The envelope bytes of `statement` signed by `key`, carrying the already sealed `rotations`
-/// (each the output of [`seal`] for [`Domain::Rotation`]). Only `play.sig` uses this; a rotation
+/// The envelope bytes of `statement` signed by `key`, carrying the already sealed `rotations`.
+/// Only `play.sig` uses this, and its statement must name [`rotations_digest`] of them; a rotation
 /// that is not an envelope is refused.
 pub fn seal_with(
     key: &SecretKey,
@@ -258,15 +315,7 @@ pub fn seal_with(
     statement: &[u8],
     rotations: &[&[u8]],
 ) -> Result<Vec<u8>, TrustError> {
-    let mut inner = Vec::with_capacity(rotations.len());
-    for r in rotations {
-        inner.push(strict_json::<RawInner>(
-            r,
-            MAX_SIG_FILE_BYTES,
-            MAX_SIG_DEPTH,
-            "rotation",
-        )?);
-    }
+    let inner = read_rotations(rotations)?;
     let mut message = domain.prefix().to_vec();
     message.extend_from_slice(statement);
     let sig = key.sign_raw(&message);

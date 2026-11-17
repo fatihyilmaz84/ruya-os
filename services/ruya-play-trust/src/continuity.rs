@@ -13,7 +13,8 @@ use crate::time::UnixSeconds;
 pub enum Continuity {
     /// No record: the package's key will own the id once it is installed. `seq` is the newest
     /// rotation the package carries that ends at its key (0 without one), recorded so that
-    /// statement cannot be replayed.
+    /// statement cannot be replayed. The carried rotations are bound to the package key's own
+    /// signature (`rotations_sha256`), so only that key decides this number.
     FirstSight { seq: u64 },
     /// The id's key signed the package.
     SameKey,
@@ -42,9 +43,10 @@ fn different(id: &str, record: &IdRecord, found: Option<&PublicKey>) -> TrustErr
 /// - No record: first sight (or unsigned).
 /// - Same key: fine; the rotations it carries are ignored.
 /// - Another key: walk the rotations from the recorded key, each signed by the key it hands over
-///   from (checked when `play.sig` was read) and with a `seq` above the last applied one, until the
-///   package's key is reached. A matching rotation whose `seq` is not above is `rotation.replayed`;
-///   no path is `trust.different_developer`.
+///   from and bound to the package key's signature (both checked when `play.sig` was read) and
+///   with a `seq` above the last applied one, until the package's key is reached. A step to a key
+///   retired for this id is `rotation.to_retired_key`; a matching rotation whose `seq` is not above
+///   is `rotation.replayed`; no path is `trust.different_developer`.
 /// - Unsigned with a record: `trust.different_developer`.
 pub fn check_continuity(
     record: Option<&IdRecord>,
@@ -85,6 +87,11 @@ pub fn check_continuity(
                 .map(|r| r.seq);
         }
         let Some(r) = next else { break };
+        if record.retired.contains(&r.new_key.key_id()) {
+            return Err(TrustError::RotationToRetiredKey {
+                key_id: r.new_key.key_id(),
+            });
+        }
         current = r.new_key.clone();
         seq = r.seq;
         if current == *key {

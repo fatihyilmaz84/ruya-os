@@ -13,7 +13,7 @@ fn record(id: &str) -> IdRecord {
         key: key().public(),
         first_seen: now(),
         seq: 2,
-        retired: vec!["0123456789abcdef".into()],
+        retired: vec!["0123456789abcdef0123456789abcdef".into()],
     }
 }
 
@@ -93,7 +93,10 @@ fn corrupt_state_is_an_error_and_the_file_is_left_alone() {
             "bad time",
             text.replace(&first_seen, "      \"first_seen\": \"yesterday\","),
         ),
-        ("bad retired", text.replace("0123456789abcdef", "nothex")),
+        (
+            "bad retired",
+            text.replace("0123456789abcdef0123456789abcdef", "nothex"),
+        ),
     ];
     for (what, bytes) in cases {
         assert_ne!(bytes, text, "{what}: the case changes nothing");
@@ -150,11 +153,35 @@ fn a_failed_write_keeps_the_old_state() {
 }
 
 #[test]
+fn a_leftover_temporary_file_does_not_affect_the_next_open() {
+    let dir = tempfile::tempdir().unwrap();
+    let (path, tmp) = (
+        dir.path().join("trust.json"),
+        dir.path().join("trust.json.tmp"),
+    );
+    // A crash before the first rename: only the temporary file exists.
+    fs::write(&tmp, b"{ half a state").unwrap();
+    let mut s = FileTrustStore::open(&path).unwrap();
+    assert_eq!(s.get("com.example.a").unwrap(), None);
+    s.put(record("com.example.a")).unwrap();
+    // A crash before a later rename: the state file is the last good one.
+    fs::write(&tmp, b"{ another half").unwrap();
+    let mut s = FileTrustStore::open(&path).unwrap();
+    assert!(s.get("com.example.a").unwrap().is_some());
+    // The next write replaces the leftover and keeps everything.
+    s.put(record("com.example.b")).unwrap();
+    assert!(!tmp.exists());
+    let s = FileTrustStore::open(&path).unwrap();
+    assert!(s.get("com.example.a").unwrap().is_some());
+    assert!(s.get("com.example.b").unwrap().is_some());
+}
+
+#[test]
 fn too_many_retired_keys_are_refused() {
     let dir = tempfile::tempdir().unwrap();
     let mut s = FileTrustStore::open(dir.path().join("trust.json")).unwrap();
     let mut r = record("com.example.a");
-    r.retired = vec!["0123456789abcdef".into(); MAX_RETIRED + 1];
+    r.retired = vec!["0123456789abcdef0123456789abcdef".into(); MAX_RETIRED + 1];
     assert_eq!(s.put(r).unwrap_err().code(), "state.io");
 }
 

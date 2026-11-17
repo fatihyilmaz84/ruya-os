@@ -203,7 +203,7 @@ pub fn encode_state(store: &MemoryTrustStore) -> Vec<u8> {
 }
 
 /// The file-backed store. Every change is written before it returns: a temporary file next to the
-/// state, flushed to disk, mode 0600, then renamed over it. A failed write leaves the old state in
+/// state, created with mode 0600, flushed to disk, renamed over it, and the folder flushed. A failed write leaves the old state in
 /// the file and in memory.
 #[derive(Debug)]
 pub struct FileTrustStore {
@@ -246,27 +246,54 @@ fn tmp_path(path: &Path) -> PathBuf {
 }
 
 fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir)?;
-    }
+    let dir = match path.parent() {
+        Some(d) if !d.as_os_str().is_empty() => d.to_path_buf(),
+        _ => PathBuf::from("."),
+    };
+    fs::create_dir_all(&dir)?;
     let tmp = tmp_path(path);
+    // A temporary file left by a write that failed before its rename is not ours to trust: it is
+    // replaced, never read.
+    match fs::remove_file(&tmp) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+        _ => {}
+    }
     {
-        let mut f = fs::File::create(&tmp)?;
-        restrict_permissions(&tmp)?;
+        let mut f = create_private(&tmp)?;
         f.write_all(bytes)?;
         f.sync_all()?;
     }
-    fs::rename(&tmp, path)
+    fs::rename(&tmp, path)?;
+    sync_dir(&dir)
 }
 
+/// Create `path` new, mode 0600 from the start (never wider, not even while it is empty).
 #[cfg(unix)]
-fn restrict_permissions(path: &Path) -> io::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+fn create_private(path: &Path) -> io::Result<fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)
 }
 
 #[cfg(not(unix))]
-fn restrict_permissions(_path: &Path) -> io::Result<()> {
+fn create_private(path: &Path) -> io::Result<fs::File> {
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+}
+
+/// Flush the directory entry of the rename, so the new state survives a power cut.
+#[cfg(unix)]
+fn sync_dir(dir: &Path) -> io::Result<()> {
+    fs::File::open(dir)?.sync_all()
+}
+
+#[cfg(not(unix))]
+fn sync_dir(_dir: &Path) -> io::Result<()> {
     Ok(())
 }
 
