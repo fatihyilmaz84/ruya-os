@@ -11,7 +11,7 @@ use image::imageops::FilterType;
 use image::metadata::Orientation;
 use image::{DynamicImage, ExtendedColorType, ImageDecoder, Limits, RgbaImage};
 
-use crate::{codes, fail, Fail, Slot};
+use crate::{codes, fail, open_regular, read_limited, Fail, Slot};
 
 /// Largest accepted width or height (05 section 5).
 pub const MAX_DIMENSION: u32 = 8192;
@@ -179,6 +179,127 @@ fn check_complete(format: Format, bytes: &[u8]) -> Result<(), Fail> {
     }
 }
 
+/// Limits given to a decoder: the dimension limits and a 1 GiB allocation budget. They hold
+/// for the pixel decode; metadata chunks are bounded by `scan_png` and `scan_webp` instead.
+fn decode_limits() -> Limits {
+    let mut limits = Limits::default();
+    limits.max_image_width = Some(MAX_DIMENSION);
+    limits.max_image_height = Some(MAX_DIMENSION);
+    limits.max_alloc = Some(1024 * MIB);
+    limits
+}
+
+/// Largest ICC profile accepted, compressed or not.
+const MAX_ICC: usize = 2 * 1024 * 1024;
+
+struct PngScan {
+    /// IHDR, PLTE, tRNS, IDAT and IEND only.
+    clean: Vec<u8>,
+    /// The inflated iCCP profile, within `MAX_ICC`.
+    icc: Option<Vec<u8>>,
+}
+
+fn scan_png(bytes: &[u8]) -> Result<PngScan, Fail> {
+    let cut = || Fail {
+        code: codes::CORRUPT,
+        message: "PNG chunk list is cut off or malformed".into(),
+    };
+    let mut clean = bytes[..8].to_vec();
+    let mut icc = None;
+    let mut pos = 8usize;
+    let mut ended = false;
+    while bytes.len() - pos >= 12 {
+        let len = u32::from_be_bytes([bytes[pos], bytes[pos + 1], bytes[pos + 2], bytes[pos + 3]])
+            as usize;
+        if len > bytes.len() - pos - 12 {
+            return Err(cut());
+        }
+        let kind = &bytes[pos + 4..pos + 8];
+        let whole = &bytes[pos..pos + 12 + len];
+        let data = &bytes[pos + 8..pos + 8 + len];
+        match kind {
+            b"IHDR" | b"PLTE" | b"tRNS" | b"IDAT" => clean.extend_from_slice(whole),
+            b"IEND" => {
+                clean.extend_from_slice(whole);
+                ended = true;
+                break;
+            }
+            b"acTL" => return fail(codes::ANIMATED, "animated PNG"),
+            b"iCCP" if icc.is_none() => icc = Some(inflate_iccp(data)?),
+            _ => {}
+        }
+        pos += 12 + len;
+    }
+    if !ended {
+        return Err(cut());
+    }
+    Ok(PngScan { clean, icc })
+}
+
+fn inflate_iccp(data: &[u8]) -> Result<Vec<u8>, Fail> {
+    let bad = |m: &str| Fail {
+        code: codes::COLOUR_PROFILE,
+        message: m.to_string(),
+    };
+    let name_end = data
+        .iter()
+        .position(|b| *b == 0)
+        .ok_or_else(|| bad("bad iCCP chunk"))?;
+    if name_end == 0 || name_end > 79 || data.get(name_end + 1) != Some(&0) {
+        return Err(bad("bad iCCP chunk"));
+    }
+    match miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(&data[name_end + 2..], MAX_ICC) {
+        Ok(v) => Ok(v),
+        Err(e) if e.status == miniz_oxide::inflate::TINFLStatus::HasMoreOutput => fail(
+            codes::ICC_TOO_LARGE,
+            format!("the ICC profile inflates to more than {MAX_ICC} bytes"),
+        ),
+        Err(_) => Err(bad("the iCCP data does not inflate")),
+    }
+}
+
+/// Every RIFF chunk must lie inside the file (the decoder allocates a chunk's declared size
+/// before reading it) and the ICC profile is bounded.
+fn scan_webp(bytes: &[u8]) -> Result<(), Fail> {
+    let mut pos = 12usize;
+    while bytes.len() - pos.min(bytes.len()) >= 8 {
+        let size = u32::from_le_bytes([
+            bytes[pos + 4],
+            bytes[pos + 5],
+            bytes[pos + 6],
+            bytes[pos + 7],
+        ]) as usize;
+        if size > bytes.len() - pos - 8 {
+            return fail(codes::CORRUPT, "WebP chunk runs past the end of the file");
+        }
+        if &bytes[pos..pos + 4] == b"ICCP" && size > MAX_ICC {
+            return fail(codes::ICC_TOO_LARGE, "the ICC profile is too large");
+        }
+        pos += 8 + size + (size & 1);
+    }
+    Ok(())
+}
+
+/// Centre-crop to the exact ratio `aw:ah` (the largest whole multiple that fits), in place.
+/// A source inside the 1 % tolerance is cropped, never stretched.
+fn crop_to_aspect(img: RgbaImage, (aw, ah): (u32, u32)) -> RgbaImage {
+    let (w, h) = img.dimensions();
+    let k = (w / aw).min(h / ah).max(1);
+    let (cw, ch) = (k * aw, k * ah);
+    if (cw, ch) == (w, h) {
+        return img;
+    }
+    let (x0, y0) = ((w - cw) as usize / 2, (h - ch) as usize / 2);
+    let (w, cw, ch) = (w as usize, cw as usize, ch as usize);
+    let mut raw = img.into_raw();
+    for row in 0..ch {
+        let src = ((y0 + row) * w + x0) * 4;
+        raw.copy_within(src..src + cw * 4, row * cw * 4);
+    }
+    raw.truncate(cw * ch * 4);
+    RgbaImage::from_raw(cw as u32, ch as u32, raw).expect("buffer length was just set")
+}
+
 fn aspect_ok(w: u32, h: u32, (aw, ah): (u32, u32)) -> bool {
     // |w/h - aw/ah| <= 1 % of aw/ah, in integers.
     let lhs = u64::from(w) * u64::from(ah);
@@ -198,23 +319,15 @@ fn swaps_axes(o: Orientation) -> bool {
 
 pub(crate) fn vet_image(slot: Slot, path: &Path, out_dir: &Path) -> Result<Vec<PathBuf>, Fail> {
     let spec = spec_for(slot);
-    let meta = std::fs::symlink_metadata(path).map_err(|e| Fail {
-        code: codes::IO,
-        message: format!("{}: {e}", path.display()),
-    })?;
-    if !meta.is_file() {
-        return fail(codes::NOT_A_FILE, "not a regular file");
-    }
-    if meta.len() > spec.max_bytes {
+    let (mut file, size) = open_regular(path, codes::NOT_A_FILE, codes::IO)?;
+    if size > spec.max_bytes {
         return fail(
             codes::FILE_TOO_LARGE,
-            format!("{} bytes, at most {}", meta.len(), spec.max_bytes),
+            format!("{size} bytes, at most {}", spec.max_bytes),
         );
     }
-    let bytes = std::fs::read(path).map_err(|e| Fail {
-        code: codes::IO,
-        message: e.to_string(),
-    })?;
+    let bytes = read_limited(&mut file, spec.max_bytes, codes::FILE_TOO_LARGE, codes::IO)?;
+    drop(file);
 
     let format = detect(&bytes)?;
     if let Some(claimed) = ext_format(path) {
@@ -243,21 +356,32 @@ pub(crate) fn vet_image(slot: Slot, path: &Path, out_dir: &Path) -> Result<Vec<P
 
     check_complete(format, &bytes)?;
     let corrupt = |e: image::ImageError| Fail {
-        code: codes::CORRUPT,
+        // a decoder that checks the dimension limits itself, before any pixel
+        code: if matches!(e, image::ImageError::Limits(_)) {
+            codes::DIMENSIONS_TOO_LARGE
+        } else {
+            codes::CORRUPT
+        },
         message: e.to_string(),
     };
-    let cur = Cursor::new(bytes.as_slice());
     let (img, icc) = match format {
         Format::Png => {
-            let dec = PngDecoder::new(cur).map_err(corrupt)?;
-            if dec.is_apng().map_err(corrupt)? {
-                return fail(codes::ANIMATED, "animated PNG");
-            }
+            // Rebuilt from the chunks the decoder needs: the decoder inflates iCCP and compressed
+            // text chunks without a budget we could rely on (and drops an over-budget iCCP
+            // silently), so those chunks never reach it.
+            let scan = scan_png(&bytes)?;
+            let dec = PngDecoder::with_limits(Cursor::new(scan.clean.as_slice()), decode_limits())
+                .map_err(corrupt)?;
+            let (img, _) = header_then_decode(dec, &spec, slot)?;
+            (img, scan.icc)
+        }
+        Format::Jpeg => {
+            let dec = JpegDecoder::new(Cursor::new(bytes.as_slice())).map_err(corrupt)?;
             header_then_decode(dec, &spec, slot)?
         }
-        Format::Jpeg => header_then_decode(JpegDecoder::new(cur).map_err(corrupt)?, &spec, slot)?,
         Format::Webp => {
-            let dec = WebPDecoder::new(cur).map_err(corrupt)?;
+            scan_webp(&bytes)?;
+            let dec = WebPDecoder::new(Cursor::new(bytes.as_slice())).map_err(corrupt)?;
             if dec.has_animation() {
                 return fail(codes::ANIMATED, "animated WebP");
             }
@@ -267,6 +391,10 @@ pub(crate) fn vet_image(slot: Slot, path: &Path, out_dir: &Path) -> Result<Vec<P
     };
     drop(bytes);
 
+    let img = match spec.aspect {
+        Some(a) => crop_to_aspect(img, a),
+        None => img,
+    };
     let transform = match icc {
         Some(profile) => Some(srgb_transform(&profile)?),
         None => None,
@@ -348,11 +476,7 @@ fn header_then_decode<D: ImageDecoder>(
         _ => {}
     }
     let icc = dec.icc_profile().unwrap_or(None);
-    let mut limits = Limits::default();
-    limits.max_image_width = Some(MAX_DIMENSION);
-    limits.max_image_height = Some(MAX_DIMENSION);
-    limits.max_alloc = Some(1024 * MIB);
-    dec.set_limits(limits).map_err(|e| Fail {
+    dec.set_limits(decode_limits()).map_err(|e| Fail {
         code: codes::CORRUPT,
         message: e.to_string(),
     })?;
@@ -432,6 +556,17 @@ pub(crate) fn write_all(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn crop_is_centred_and_exact() {
+        let img = RgbaImage::from_fn(35, 20, |x, y| image::Rgba([x as u8, y as u8, 0, 255]));
+        let c = crop_to_aspect(img, (16, 9)); // k = min(2, 2) = 2 -> 32x18, offset (1, 1)
+        assert_eq!(c.dimensions(), (32, 18));
+        assert_eq!(c.get_pixel(0, 0).0, [1, 1, 0, 255]);
+        assert_eq!(c.get_pixel(31, 17).0, [32, 18, 0, 255]);
+        let sq = crop_to_aspect(RgbaImage::new(10, 7), (1, 1));
+        assert_eq!(sq.dimensions(), (7, 7));
+    }
 
     #[test]
     fn aspect_tolerance_is_one_percent() {

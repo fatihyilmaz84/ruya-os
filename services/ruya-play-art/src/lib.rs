@@ -85,6 +85,7 @@ pub mod codes {
     pub const TOO_SMALL: &str = "art.too_small";
     pub const ASPECT_RATIO: &str = "art.aspect_ratio";
     pub const COLOUR_PROFILE: &str = "art.colour_profile";
+    pub const ICC_TOO_LARGE: &str = "art.icc_too_large";
     pub const TOO_MANY_SCREENSHOTS: &str = "art.too_many_screenshots";
 
     pub const VIDEO_NOT_A_FILE: &str = "video.not_a_file";
@@ -94,6 +95,8 @@ pub mod codes {
     pub const HEADER_INVALID: &str = "video.header_invalid";
     pub const NO_VIDEO_TRACK: &str = "video.no_video_track";
     pub const CODEC_NOT_ALLOWED: &str = "video.codec_not_allowed";
+    pub const SAMPLE_ENTRIES: &str = "video.sample_entries";
+    pub const CONTENT_ENCODING: &str = "video.content_encoding";
     pub const TRACK_NOT_ALLOWED: &str = "video.track_not_allowed";
     pub const AUDIO_NOT_ALLOWED: &str = "video.audio_not_allowed";
     pub const NO_DURATION: &str = "video.no_duration";
@@ -113,6 +116,72 @@ pub(crate) fn fail<T>(code: &'static str, message: impl Into<String>) -> Result<
         code,
         message: message.into(),
     })
+}
+
+/// Open a file once and check it on the open handle (no check-then-open race): a symlink, a
+/// reparse point or anything that is not a regular file is `not_a_file`. Returns the handle and
+/// its size.
+pub(crate) fn open_regular(
+    path: &Path,
+    not_a_file: &'static str,
+    io_code: &'static str,
+) -> Result<(std::fs::File, u64), Fail> {
+    let mut o = std::fs::OpenOptions::new();
+    o.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        o.custom_flags(libc::O_NOFOLLOW);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        o.custom_flags(0x0020_0000); // FILE_FLAG_OPEN_REPARSE_POINT: do not follow
+    }
+    let file = match o.open(path) {
+        Ok(f) => f,
+        Err(e) => {
+            return match std::fs::symlink_metadata(path) {
+                Ok(m) if !m.is_file() => fail(not_a_file, "not a regular file"),
+                _ => fail(io_code, format!("{}: {e}", path.display())),
+            }
+        }
+    };
+    let meta = file.metadata().map_err(|e| Fail {
+        code: io_code,
+        message: e.to_string(),
+    })?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if meta.file_attributes() & 0x400 != 0 {
+            return fail(not_a_file, "a reparse point is not a regular file");
+        }
+    }
+    if !meta.is_file() {
+        return fail(not_a_file, "not a regular file");
+    }
+    Ok((file, meta.len()))
+}
+
+/// Read at most `max` bytes from the handle; one byte more means the file is too large (it may
+/// have grown since `open_regular` looked at it).
+pub(crate) fn read_limited(
+    file: &mut std::fs::File,
+    max: u64,
+    too_large: &'static str,
+    io_code: &'static str,
+) -> Result<Vec<u8>, Fail> {
+    use std::io::Read;
+    let mut v = Vec::new();
+    file.take(max + 1).read_to_end(&mut v).map_err(|e| Fail {
+        code: io_code,
+        message: e.to_string(),
+    })?;
+    if v.len() as u64 > max {
+        return fail(too_large, format!("more than {max} bytes"));
+    }
+    Ok(v)
 }
 
 /// True when the slot is malformed and the package must be refused: a broken `icon` or `hero`

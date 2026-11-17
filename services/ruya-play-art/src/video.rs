@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
-use crate::{codes, fail, Fail, Slot};
+use crate::{codes, fail, open_regular, Fail, Slot};
 
 const MIB: u64 = 1024 * 1024;
 /// How much of a WebM file is read (Info and Tracks come before the first Cluster).
@@ -88,18 +88,13 @@ pub(crate) fn vet_video(slot: Slot, path: &Path, out_dir: &Path) -> Result<Vec<P
         code: codes::VIDEO_IO,
         message: format!("{}: {e}", path.display()),
     };
-    let meta = std::fs::symlink_metadata(path).map_err(io)?;
-    if !meta.is_file() {
-        return fail(codes::VIDEO_NOT_A_FILE, "not a regular file");
-    }
-    let size = meta.len();
+    let (mut file, size) = open_regular(path, codes::VIDEO_NOT_A_FILE, codes::VIDEO_IO)?;
     if size > lim.max_bytes {
         return fail(
             codes::VIDEO_FILE_TOO_LARGE,
             format!("{size} bytes, at most {}", lim.max_bytes),
         );
     }
-    let mut file = File::open(path).map_err(io)?;
     let mut head = Vec::new();
     (&mut file)
         .take(WEBM_HEAD as u64)
@@ -129,7 +124,11 @@ pub(crate) fn vet_video(slot: Slot, path: &Path, out_dir: &Path) -> Result<Vec<P
     };
     let tmp = out_dir.join(format!("{}.{ext}.part", slot.key()));
     std::fs::create_dir_all(out_dir).map_err(io)?;
-    std::fs::copy(path, &tmp).map_err(io)?;
+    // Copied from the handle that was vetted, not from the path.
+    file.seek(SeekFrom::Start(0)).map_err(io)?;
+    let mut part = File::create(&tmp).map_err(io)?;
+    std::io::copy(&mut (&mut file).take(size), &mut part).map_err(io)?;
+    drop(part);
     let dest = out_dir.join(format!("{}.{ext}", slot.key()));
     std::fs::rename(&tmp, &dest).map_err(io)?;
     Ok(vec![dest])
@@ -233,6 +232,7 @@ const ID_DEFAULT_DURATION: u32 = 0x23_E383;
 const ID_VIDEO: u32 = 0xE0;
 const ID_PIXEL_W: u32 = 0xB0;
 const ID_PIXEL_H: u32 = 0xBA;
+const ID_CONTENT_ENCODINGS: u32 = 0x6D80;
 const ID_CLUSTER: u32 = 0x1F43_B675;
 
 struct Elem<'a> {
@@ -388,6 +388,12 @@ fn webm_track(buf: &[u8]) -> Result<Track, Fail> {
                 if ns > 0 {
                     t.fps = Some(1e9 / ns as f64);
                 }
+            }
+            ID_CONTENT_ENCODINGS => {
+                return fail(
+                    codes::CONTENT_ENCODING,
+                    "compressed or encrypted tracks are not accepted",
+                )
             }
             ID_VIDEO => {
                 let mut q = 0;
@@ -567,6 +573,12 @@ fn mp4_track(trak: &[u8]) -> Result<Track, Fail> {
                                 for (st, sd) in boxes(fd)? {
                                     match &st {
                                         b"stsd" => {
+                                            if be32(sd, 4) != Some(1) {
+                                                return fail(
+                                                    codes::SAMPLE_ENTRIES,
+                                                    "a track must have exactly one sample entry",
+                                                );
+                                            }
                                             if let Some(c) = sd.get(12..16) {
                                                 t.codec = String::from_utf8_lossy(c).into_owned();
                                             }

@@ -450,3 +450,95 @@ fn report_canonical_sizes() {
         assert!(sizes.iter().all(|(_, n)| *n < 64 * 1024 * 1024));
     }
 }
+
+fn zlib_zeros(n: usize) -> Vec<u8> {
+    miniz_oxide::deflate::compress_to_vec_zlib(&vec![0u8; n], 6)
+}
+
+#[test]
+fn iccp_inflate_bomb_is_refused_before_any_decode() {
+    let src = tempdir().unwrap();
+    let out = tempdir().unwrap();
+    let before = decode_count();
+    // a few KB on disk, 64 MiB inflated: far over the 2 MiB profile budget
+    let mut data = b"icc\0\0".to_vec();
+    data.extend(zlib_zeros(64 * 1024 * 1024));
+    assert!(data.len() < 200_000);
+    let bomb = png_insert_before_idat(&png(512, 512), &png_chunk(b"iCCP", &data));
+    let o = run(Slot::Icon, write(src.path(), "i.png", &bomb), out.path());
+    assert_eq!(code(&o), codes::ICC_TOO_LARGE);
+    assert_eq!(decode_count(), before, "pixels were requested");
+    assert!(std::fs::read_dir(out.path()).unwrap().next().is_none());
+}
+
+#[test]
+fn compressed_text_chunks_never_reach_the_decoder() {
+    let src = tempdir().unwrap();
+    let out = tempdir().unwrap();
+    let mut data = b"k\0\0".to_vec();
+    data.extend(zlib_zeros(64 * 1024 * 1024));
+    let png = png_insert_before_idat(&png(512, 512), &png_chunk(b"zTXt", &data));
+    let o = run(Slot::Icon, write(src.path(), "i.png", &png), out.path());
+    assert_eq!(files(&o).len(), 3);
+}
+
+#[test]
+fn webp_chunk_sizes_are_bounded_by_the_file() {
+    let src = tempdir().unwrap();
+    let out = tempdir().unwrap();
+    // an ICCP chunk that claims almost 4 GiB in a file of a few KB
+    let mut lying = webp(1920, 1080);
+    lying.extend_from_slice(b"ICCP");
+    lying.extend_from_slice(&0xFFFF_FF00u32.to_le_bytes());
+    let o = run(Slot::Hero, write(src.path(), "h.webp", &lying), out.path());
+    assert_eq!(code(&o), codes::CORRUPT);
+    // an honest ICCP chunk over the profile budget
+    let mut vp8x = vec![0x20, 0, 0, 0];
+    vp8x.extend_from_slice(&[0x7F, 0x07, 0x00, 0x37, 0x04, 0x00]); // 1920 x 1080 canvas
+    let big = riff(&[
+        (b"VP8X", vp8x),
+        (b"ICCP", vec![0u8; 3 * 1024 * 1024]),
+        (b"VP8L", vp8l_payload(&webp(1920, 1080))),
+    ]);
+    let o = run(Slot::Hero, write(src.path(), "g.webp", &big), out.path());
+    assert_eq!(code(&o), codes::ICC_TOO_LARGE);
+}
+
+#[test]
+fn a_hero_inside_the_tolerance_is_cropped_not_stretched() {
+    let src = tempdir().unwrap();
+    let out = tempdir().unwrap();
+    // 3840 x 2140 is 0.9 % off 16:9
+    let o = run(
+        Slot::Hero,
+        write(src.path(), "h.png", &png(3840, 2140)),
+        out.path(),
+    );
+    let f = files(&o);
+    assert_eq!(dims(&f[0]), (3792, 2133));
+    for p in &f {
+        let (w, h) = dims(p);
+        assert_eq!(w * 9, h * 16, "{p:?} is {w}x{h}");
+    }
+    // the middle of the source is the middle of the output: the source gradient is horizontal in
+    // red, so a crop keeps the centre value and a stretch would too; check an edge instead
+    let px = image::open(&f[0]).unwrap().to_rgb8();
+    let src_red = |x: u32| (x * 255 / 3840) as i32;
+    let left = i32::from(px.get_pixel(0, 1000).0[0]);
+    assert!(
+        (left - src_red(24)).abs() <= 1,
+        "left edge {left} vs {}",
+        src_red(24)
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlink_is_not_followed() {
+    let src = tempdir().unwrap();
+    let out = tempdir().unwrap();
+    let real = write(src.path(), "real.png", &png(1920, 1080));
+    let link = src.path().join("link.png");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    assert_eq!(code(&run(Slot::Hero, link, out.path())), codes::NOT_A_FILE);
+}

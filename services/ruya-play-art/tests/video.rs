@@ -22,6 +22,7 @@ struct WTrack {
     w: u32,
     h: u32,
     fps: Option<u32>,
+    enc: bool,
 }
 
 fn vtrack(codec: &'static str, w: u32, h: u32, fps: u32) -> WTrack {
@@ -31,6 +32,7 @@ fn vtrack(codec: &'static str, w: u32, h: u32, fps: u32) -> WTrack {
         w,
         h,
         fps: Some(fps),
+        enc: false,
     }
 }
 
@@ -41,6 +43,7 @@ fn atrack(codec: &'static str) -> WTrack {
         w: 0,
         h: 0,
         fps: None,
+        enc: false,
     }
 }
 
@@ -60,6 +63,9 @@ fn webm_doc(doctype: &str, seconds: f64, tracks: &[WTrack]) -> Vec<u8> {
                 &[0x23, 0xE3, 0x83],
                 &(1_000_000_000u64 / u64::from(fps)).to_be_bytes(),
             ));
+        }
+        if t.enc {
+            e.extend(elem(&[0x6D, 0x80], &elem(&[0x62, 0x40], &[])));
         }
         if t.kind == 1 {
             let mut vid = elem(&[0xB0], &t.w.to_be_bytes());
@@ -94,6 +100,8 @@ struct MTrack {
     w: u32,
     h: u32,
     fps: u32,
+    /// a second sample entry in the stsd
+    extra: Option<&'static [u8; 4]>,
 }
 
 fn mv(fourcc: &'static [u8; 4], w: u32, h: u32, fps: u32) -> MTrack {
@@ -103,6 +111,7 @@ fn mv(fourcc: &'static [u8; 4], w: u32, h: u32, fps: u32) -> MTrack {
         w,
         h,
         fps,
+        extra: None,
     }
 }
 
@@ -113,6 +122,7 @@ fn ma(fourcc: &'static [u8; 4]) -> MTrack {
         w: 0,
         h: 0,
         fps: 0,
+        extra: None,
     }
 }
 
@@ -127,8 +137,11 @@ fn mp4_trak(t: &MTrack, seconds: u32) -> Vec<u8> {
     let mut hdlr = vec![0u8; 8];
     hdlr.extend_from_slice(t.handler);
     hdlr.extend_from_slice(&[0u8; 13]);
-    let mut stsd = vec![0, 0, 0, 0, 0, 0, 0, 1];
+    let mut stsd = vec![0, 0, 0, 0, 0, 0, 0, 1 + u8::from(t.extra.is_some())];
     stsd.extend(bx(t.fourcc, &[0u8; 8]));
+    if let Some(x) = t.extra {
+        stsd.extend(bx(x, &[0u8; 8]));
+    }
     let mut stts = vec![0, 0, 0, 0, 0, 0, 0, 1];
     stts.extend_from_slice(&(t.fps * seconds).to_be_bytes());
     stts.extend_from_slice(&(ts / t.fps.max(1)).to_be_bytes());
@@ -329,6 +342,7 @@ fn tracks_other_than_one_video_and_one_audio_are_refused() {
         w: 0,
         h: 0,
         fps: None,
+        enc: false,
     };
     refused(
         Slot::Trailer,
@@ -354,6 +368,7 @@ fn tracks_other_than_one_video_and_one_audio_are_refused() {
         w: 0,
         h: 0,
         fps: 0,
+        extra: None,
     };
     refused(
         Slot::Trailer,
@@ -504,5 +519,54 @@ fn missing_video_is_missing() {
     assert_eq!(
         run(Slot::Preview, src.path().join("no.webm"), out.path()),
         Outcome::Missing
+    );
+}
+
+#[test]
+fn a_track_with_two_sample_entries_is_refused() {
+    // the first entry is allowed; the second must not hide behind it
+    let v = MTrack {
+        extra: Some(b"hvc1"),
+        ..mv(b"avc1", 1280, 720, 30)
+    };
+    refused(
+        Slot::Trailer,
+        "a.mp4",
+        &mp4(10, &[v]),
+        codes::SAMPLE_ENTRIES,
+    );
+    let a = MTrack {
+        extra: Some(b"ac-3"),
+        ..ma(b"mp4a")
+    };
+    refused(
+        Slot::Trailer,
+        "a.mp4",
+        &mp4(10, &[mv(b"avc1", 1280, 720, 30), a]),
+        codes::SAMPLE_ENTRIES,
+    );
+}
+
+#[test]
+fn compressed_or_encrypted_tracks_are_refused() {
+    let t = WTrack {
+        enc: true,
+        ..vtrack("V_VP9", 1280, 720, 30)
+    };
+    refused(
+        Slot::Trailer,
+        "a.webm",
+        &webm(10.0, &[t]),
+        codes::CONTENT_ENCODING,
+    );
+    let a = WTrack {
+        enc: true,
+        ..atrack("A_OPUS")
+    };
+    refused(
+        Slot::Trailer,
+        "a.webm",
+        &webm(10.0, &[vtrack("V_VP9", 1280, 720, 30), a]),
+        codes::CONTENT_ENCODING,
     );
 }
