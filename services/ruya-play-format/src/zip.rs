@@ -85,6 +85,7 @@ fn zip64_fields(
     need_off: bool,
 ) -> Result<[Option<u64>; 3], ()> {
     let mut out = [None, None, None];
+    let mut seen64 = false;
     let mut i = 0;
     while i < extra.len() {
         if extra.len() - i < 4 {
@@ -97,6 +98,10 @@ fn zip64_fields(
             return Err(());
         }
         if id == 1 {
+            if seen64 {
+                return Err(());
+            }
+            seen64 = true;
             let mut data = &extra[i..i + len];
             let mut take = |want: bool| -> Result<Option<u64>, ()> {
                 if !want {
@@ -236,7 +241,7 @@ impl<R: Read + Seek> ZipSource<R> {
                 return Err(malformed("the ZIP64 record is missing"));
             }
             let rest = le64(&rec, 4);
-            if rec_off + 12 + rest != locator_pos {
+            if rec_off.checked_add(12).and_then(|x| x.checked_add(rest)) != Some(locator_pos) {
                 return Err(malformed(
                     "there is data between the ZIP64 record and its locator",
                 ));
@@ -548,6 +553,20 @@ impl<R: Read + Seek> ZipSource<R> {
                     break;
                 }
             };
+            if descriptor {
+                let room = len.saturating_sub(data_end).min(24) as usize;
+                let ok = read_at(&mut reader, data_end, room).is_ok_and(|b| {
+                    descriptor_matches(&b, entries[i].crc, entries[i].compressed, entries[i].size)
+                });
+                if !ok {
+                    problems.add(
+                        codes::ZIP_LOCAL_MISMATCH,
+                        entries[i].name.clone(),
+                        "The entry's data descriptor disagrees with the central directory.",
+                    );
+                    break;
+                }
+            }
             entries[i].data_start = data_start;
             expected = data_end;
             prev_descriptor = descriptor;
@@ -588,6 +607,22 @@ impl<R: Read + Seek> ZipSource<R> {
     }
 }
 
+/// The data descriptor after an entry's data (with or without its signature, 32 or 64 bit sizes)
+/// gives the CRC and sizes the central directory gives.
+fn descriptor_matches(buf: &[u8], crc: u32, csize: u64, size: u64) -> bool {
+    let b = if buf.len() >= 4 && le32(buf, 0) == 0x0807_4b50 {
+        &buf[4..]
+    } else {
+        buf
+    };
+    let ok32 = b.len() >= 12
+        && le32(b, 0) == crc
+        && le32(b, 4) as u64 == csize
+        && le32(b, 8) as u64 == size;
+    let ok64 = b.len() >= 20 && le32(b, 0) == crc && le64(b, 4) == csize && le64(b, 12) == size;
+    ok32 || ok64
+}
+
 fn gap_to_cd_ok(expected: u64, cd_off: u64, descriptor: bool) -> bool {
     cd_off == expected
         || (descriptor && cd_off > expected && DESCRIPTOR_LENGTHS.contains(&(cd_off - expected)))
@@ -604,6 +639,9 @@ fn unwrap_single_folder(entries: &mut Vec<ZipEntry>) {
     else {
         return;
     };
+    if crate::path::check_path(&top).is_err() {
+        return;
+    }
     let prefix = format!("{top}/");
     if !entries.iter().all(|e| e.name.starts_with(&prefix))
         || !entries
@@ -659,7 +697,7 @@ impl Read for Checked<'_> {
             ))
         };
         // Ask for one byte more than is left, so extra content is noticed.
-        let want = (buf.len() as u64).min(self.declared - self.seen + 1) as usize;
+        let want = (buf.len() as u64).min((self.declared - self.seen).saturating_add(1)) as usize;
         let n = match self.inner.read(&mut buf[..want]) {
             Ok(n) => n,
             Err(e)

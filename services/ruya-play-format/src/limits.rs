@@ -213,7 +213,7 @@ pub const RESERVED_APP_NAMES: [&str; 6] =
     ["settings", "ruyaos", "store", "home", "guide", "update"];
 
 /// `run.env` names the platform owns, matched exactly (05 §6.3, §18 item 21).
-pub const ENV_DENY_EXACT: [&str; 8] = [
+pub const ENV_DENY_EXACT: [&str; 13] = [
     "PATH",
     "HOME",
     "DISPLAY",
@@ -222,11 +222,16 @@ pub const ENV_DENY_EXACT: [&str; 8] = [
     "WINESERVER",
     "WINELOADER",
     "WINEDLLPATH",
+    "WINEARCH",
+    "TMPDIR",
+    "GCONV_PATH",
+    "LOCPATH",
+    "NLSPATH",
 ];
 /// `run.env` name prefixes the platform owns. This is a deny table, not an allow-list: native games
 /// need variables of their own, and a package can do nothing in its own sandbox that it could not do
 /// anyway; these are the ones that break what the launcher sets.
-pub const ENV_DENY_PREFIX: [&str; 17] = [
+pub const ENV_DENY_PREFIX: [&str; 18] = [
     "LD_",
     "XDG_",
     "FLATPAK_",
@@ -236,6 +241,7 @@ pub const ENV_DENY_PREFIX: [&str; 17] = [
     "PIPEWIRE_",
     "SDL_",
     "STEAM_COMPAT_",
+    "PRESSURE_VESSEL_",
     "VK_",
     "MESA_",
     "LIBGL_",

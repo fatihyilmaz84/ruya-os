@@ -178,7 +178,7 @@
       "pattern": "^[Hh][Tt][Tt][Pp][Ss]://[^/?#@\\s]+([/?#]\\S*)?$"
     },
     "artPath": { "type": "string", "pattern": "^art/[^\\\\:\\u0000-\\u001F]+$" },
-    "dataPath": { "type": "string", "maxLength": 1030, "pattern": "^(prefix|data|config):[^/\\\\\\u0000-\\u001F][^\\\\\\u0000-\\u001F]*$" },
+    "dataPath": { "type": "string", "maxLength": 1030, "pattern": "^(prefix|data|config):[^/\\\\\\u0000-\\u001F][^\\\\\\u0000-\\u001F]*$", "not": { "pattern": "[:/]\\.{0,2}(/|$)" } },
     "version": { "type": "string", "minLength": 1, "maxLength": 32, "pattern": "^[A-Za-z0-9._+-]+$" },
     "localId": { "type": "string", "maxLength": 32, "pattern": "^[a-z][a-z0-9_-]*$" },
     "component": {
@@ -222,14 +222,14 @@
         "runner": { "enum": ["native", "wine", "proton", "emulator", "engine"] },
         "component": { "$ref": "#/$defs/localId" },
         "command": { "$ref": "#/$defs/command" },
-        "cwd": { "type": "string", "pattern": "^\\$\\{(payload|data|config|prefix|component:[a-z][a-z0-9_-]*)\\}(/.*)?$" },
+        "cwd": { "type": "string", "pattern": "^\\$\\{(payload|data|config|prefix|component:[a-z][a-z0-9_-]*)\\}(/.*)?$", "not": { "pattern": "(^|/)\\.\\.(/|$)" } },
         "env": {
           "description": "Names are [A-Z][A-Z0-9_]* and not one the platform owns (a deny table, not an allow-list). Values are at most 1024 bytes.",
           "type": "object",
           "maxProperties": 64,
           "propertyNames": {
             "pattern": "^[A-Z][A-Z0-9_]{0,63}$",
-            "not": { "pattern": "^(PATH|HOME|DISPLAY|XAUTHORITY|WINEPREFIX|WINESERVER|WINELOADER|WINEDLLPATH)$|^(LD_|XDG_|FLATPAK_|DBUS_|WAYLAND_|PULSE_|PIPEWIRE_|SDL_|STEAM_COMPAT_|VK_|MESA_|LIBGL_|GST_|QT_|GTK_|GDK_|GIO_)" }
+            "not": { "pattern": "^(PATH|HOME|DISPLAY|XAUTHORITY|WINEPREFIX|WINESERVER|WINELOADER|WINEDLLPATH|WINEARCH|TMPDIR|GCONV_PATH|LOCPATH|NLSPATH)$|^(LD_|XDG_|FLATPAK_|DBUS_|WAYLAND_|PULSE_|PIPEWIRE_|SDL_|STEAM_COMPAT_|PRESSURE_VESSEL_|VK_|MESA_|LIBGL_|GST_|QT_|GTK_|GDK_|GIO_)" }
           },
           "additionalProperties": { "type": "string", "maxLength": 1024, "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]*$" }
         },

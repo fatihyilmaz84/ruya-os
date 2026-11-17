@@ -23,8 +23,8 @@ impl Problem {
     pub fn new(code: &str, path: impl Into<String>, message: impl Into<String>) -> Self {
         Problem {
             code: code.to_string(),
-            path: path.into(),
-            message: message.into(),
+            path: safe_text(&path.into(), PATH_CHARS),
+            message: safe_text(&message.into(), MESSAGE_CHARS),
         }
     }
 }
@@ -41,9 +41,56 @@ impl fmt::Display for Problem {
 
 impl std::error::Error for Problem {}
 
+/// Most characters of package text a problem repeats.
+pub const QUOTE_CHARS: usize = 80;
+/// Most characters of a problem's `path`.
+const PATH_CHARS: usize = 160;
+/// Most characters of a problem's `message`.
+const MESSAGE_CHARS: usize = 600;
+
+fn needs_escape(c: char) -> bool {
+    c.is_control()
+        || matches!(
+            c,
+            '\u{00AD}'
+                | '\u{061C}'
+                | '\u{200B}'..='\u{200F}'
+                | '\u{202A}'..='\u{202E}'
+                | '\u{2060}'..='\u{2064}'
+                | '\u{2066}'..='\u{2069}'
+                | '\u{FEFF}'
+        )
+}
+
+/// Make package-controlled text safe to show: control, bidi and zero-width characters become
+/// `\u{XXXX}` escapes, and the text is cut to `max` characters (with `...` when cut).
+pub fn safe_text(s: &str, max: usize) -> String {
+    let mut out = String::new();
+    for (n, c) in s.chars().enumerate() {
+        if n >= max {
+            out.push_str("...");
+            break;
+        }
+        if needs_escape(c) {
+            out.push_str(&format!("\\u{{{:04X}}}", c as u32));
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// Quote package-controlled text for a message: `"..."` with `"` and `\` escaped, non-printable,
+/// bidi and zero-width characters escaped, cut to [`QUOTE_CHARS`] characters. Every problem that
+/// repeats a key, value, name or path from a package goes through this.
+pub fn quote(s: &str) -> String {
+    let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
+    format!("\"{}\"", safe_text(&escaped, QUOTE_CHARS))
+}
+
 /// Escape one segment of a JSON pointer (RFC 6901).
 pub fn pointer_segment(s: &str) -> String {
-    s.replace('~', "~0").replace('/', "~1")
+    safe_text(&s.replace('~', "~0").replace('/', "~1"), QUOTE_CHARS)
 }
 
 /// Append a segment to a JSON pointer.
@@ -118,6 +165,8 @@ macro_rules! codes {
 codes! {
     FORMAT_TOO_NEW = "format.too_new",
     FORMAT_INVALID = "format.invalid",
+    JSON_DUPLICATE_KEY = "json.duplicate_key",
+    RUN_ARGUMENT_PATH = "run.argument_path",
     MANIFEST_TOO_BIG = "manifest.too_big",
     MANIFEST_TOO_DEEP = "manifest.too_deep",
     MANIFEST_NOT_UTF8 = "manifest.not_utf8",

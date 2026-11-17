@@ -99,7 +99,10 @@ fn parse_line(line: &str) -> Result<FileEntry, String> {
             }
             Ok(FileEntry::Dir { path: l.p })
         }
-        other => Err(format!("\"t\" is f, l or d, not \"{other}\"")),
+        other => Err(format!(
+            "\"t\" is f, l or d, not {otherq}",
+            otherq = crate::problem::quote(other)
+        )),
     }
 }
 
@@ -153,13 +156,19 @@ pub fn parse_table(bytes: &[u8], problems: &mut Problems) -> Vec<FileEntry> {
                 if let Some(prev) = entries.last() {
                     use std::cmp::Ordering;
                     match prev.path().as_bytes().cmp(e.path().as_bytes()) {
-                        Ordering::Equal => {
-                            problems.add(codes::TABLE_DUPLICATE, e.path(), "The path is listed twice.")
-                        }
+                        Ordering::Equal => problems.add(
+                            codes::TABLE_DUPLICATE,
+                            e.path(),
+                            "The path is listed twice.",
+                        ),
                         Ordering::Greater => problems.add(
                             codes::TABLE_NOT_SORTED,
                             e.path(),
-                            format!("The table must be sorted by path (bytewise); \"{}\" comes after \"{}\".", e.path(), prev.path()),
+                            format!(
+                                "The table must be sorted by path (bytewise); {} comes after {}.",
+                                crate::problem::quote(e.path()),
+                                crate::problem::quote(prev.path())
+                            ),
                         ),
                         Ordering::Less => {}
                     }
@@ -253,16 +262,16 @@ pub fn check_table(entries: &[FileEntry], problems: &mut Problems) {
                     codes::LINK_AS_PARENT,
                     p,
                     format!(
-                        "\"{}\" is a link, so nothing can be stored below it.",
-                        &p[..i]
+                        "{} is a link, so nothing can be stored below it.",
+                        crate::problem::quote(&p[..i])
                     ),
                 ),
                 Some(FileEntry::File { .. }) => problems.add(
                     codes::TABLE_PARENT_NOT_DIR,
                     p,
                     format!(
-                        "\"{}\" is a file, so nothing can be stored below it.",
-                        &p[..i]
+                        "{} is a file, so nothing can be stored below it.",
+                        crate::problem::quote(&p[..i])
                     ),
                 ),
             }
@@ -288,7 +297,10 @@ fn resolve_link(path: &str, to: &str) -> Resolved {
     {
         return Fault(
             codes::LINK_ABSOLUTE,
-            format!("The link target \"{to}\" is absolute; targets are relative to the link."),
+            format!(
+                "The link target {toq} is absolute; targets are relative to the link.",
+                toq = crate::problem::quote(to)
+            ),
         );
     }
     if to.is_empty()
@@ -299,7 +311,10 @@ fn resolve_link(path: &str, to: &str) -> Resolved {
     {
         return Fault(
             codes::LINK_TARGET_INVALID,
-            format!("The link target \"{to}\" is not a plain relative path."),
+            format!(
+                "The link target {toq} is not a plain relative path.",
+                toq = crate::problem::quote(to)
+            ),
         );
     }
     let mut comps: Vec<&str> = path.split('/').collect();
@@ -315,7 +330,10 @@ fn resolve_link(path: &str, to: &str) -> Resolved {
             "" => {
                 return Fault(
                     codes::LINK_TARGET_INVALID,
-                    format!("The link target \"{to}\" has an empty part."),
+                    format!(
+                        "The link target {toq} has an empty part.",
+                        toq = crate::problem::quote(to)
+                    ),
                 )
             }
             "." => {}
@@ -323,7 +341,10 @@ fn resolve_link(path: &str, to: &str) -> Resolved {
                 if comps.pop().is_none() {
                     return Fault(
                         codes::LINK_ESCAPES_TREE,
-                        format!("The link target \"{to}\" goes above the package root."),
+                        format!(
+                            "The link target {toq} goes above the package root.",
+                            toq = crate::problem::quote(to)
+                        ),
                     );
                 }
             }
@@ -334,7 +355,11 @@ fn resolve_link(path: &str, to: &str) -> Resolved {
     if comps.first().copied() != Some(top) {
         return Fault(
             codes::LINK_LEAVES_TOP_DIR,
-            format!("The link target \"{to}\" leaves the top-level folder \"{top}\"; links stay inside it."),
+            format!(
+                "The link target {toq} leaves the top-level folder {topq}; links stay inside it.",
+                toq = crate::problem::quote(to),
+                topq = crate::problem::quote(top)
+            ),
         );
     }
     To(comps.join("/"))
@@ -382,7 +407,10 @@ fn check_link(path: &str, to: &str, index: &TableIndex<'_>, problems: &mut Probl
                     problems.add(
                         codes::LINK_DANGLING,
                         path,
-                        format!("The link target \"{target}\" is not in the package."),
+                        format!(
+                            "The link target {targetq} is not in the package.",
+                            targetq = crate::problem::quote(&target)
+                        ),
                     );
                 }
                 return;

@@ -597,3 +597,43 @@ fn the_schema_states_the_same_limits_as_the_crate() {
         );
     }
 }
+
+#[test]
+fn data_paths_and_cwd_have_no_dot_dot_parts_in_the_schema_either() {
+    for bad in [
+        "data:../x",
+        "data:a/../b",
+        "data:a//b",
+        "data:a/",
+        "data:",
+        "data:./x",
+        "/etc",
+        "x:y",
+    ] {
+        assert_schema_rejects(&with("data", json!({"saves": [bad]})), "/data/saves/0");
+    }
+    for ok in [
+        "data:.hidden/x",
+        "prefix:drive_c/users/steamuser/Documents/Star Hopper",
+        "config:a..b",
+    ] {
+        assert_schema_ok(&with("data", json!({"saves": [ok]})));
+    }
+    assert_schema_rejects(&with_run("cwd", json!("${payload}/../x")), "/run/cwd");
+    assert_schema_rejects(&with_run("cwd", json!("${payload}/..")), "/run/cwd");
+    assert_schema_ok(&with_run("cwd", json!("${payload}/sub/..x")));
+}
+
+#[test]
+fn the_newer_env_names_are_in_the_schema() {
+    for name in [
+        "WINEARCH",
+        "TMPDIR",
+        "GCONV_PATH",
+        "LOCPATH",
+        "NLSPATH",
+        "PRESSURE_VESSEL_X",
+    ] {
+        assert_schema_rejects(&with_run("env", json!({ name: "x" })), name);
+    }
+}

@@ -345,6 +345,10 @@ pub struct ZE {
     pub cd_offset: Option<u64>,
     /// Raw name bytes for both headers (to write a name that is not UTF-8).
     pub name_bytes: Option<Vec<u8>>,
+    /// Raw extra field bytes for the central directory entry.
+    pub cd_extra: Vec<u8>,
+    /// The CRC the data descriptor carries (default: the right one).
+    pub descriptor_crc: Option<u32>,
 }
 
 impl ZE {
@@ -365,6 +369,8 @@ impl ZE {
             pad_before: vec![],
             cd_offset: None,
             name_bytes: None,
+            cd_extra: vec![],
+            descriptor_crc: None,
         }
     }
 
@@ -465,7 +471,7 @@ pub fn write_zip_opts(entries: &[ZE], zip64: bool) -> Vec<u8> {
         out.extend(&stored);
         if descriptor {
             out.extend(0x0807_4b50u32.to_le_bytes());
-            out.extend(crc.to_le_bytes());
+            out.extend(e.descriptor_crc.unwrap_or(crc).to_le_bytes());
             out.extend((csize as u32).to_le_bytes());
             out.extend((usize_ as u32).to_le_bytes());
         }
@@ -496,13 +502,14 @@ pub fn write_zip_opts(entries: &[ZE], zip64: bool) -> Vec<u8> {
                 .clone()
                 .unwrap_or_else(|| c.e.name.as_bytes().to_vec());
         out.extend((name_bytes.len() as u16).to_le_bytes());
-        out.extend(0u16.to_le_bytes());
+        out.extend((c.e.cd_extra.len() as u16).to_le_bytes());
         out.extend(0u16.to_le_bytes());
         out.extend(0u16.to_le_bytes());
         out.extend(0u16.to_le_bytes());
         out.extend(c.e.external.to_le_bytes());
         out.extend((c.e.cd_offset.unwrap_or(c.offset) as u32).to_le_bytes());
         out.extend(&name_bytes);
+        out.extend(&c.e.cd_extra);
     }
     let cd_size = out.len() as u64 - cd_start;
     if zip64 {

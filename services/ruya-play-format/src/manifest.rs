@@ -327,6 +327,19 @@ pub fn json_depth_exceeds(bytes: &[u8], max: usize) -> bool {
     false
 }
 
+/// True when `bytes` is a `play.json` whose `format` is a number of 2 or more: a package for a newer
+/// console. Nothing else of such a package is checked (05 section 15).
+pub fn is_future_format(bytes: &[u8]) -> bool {
+    if bytes.len() as u64 > MAX_MANIFEST_BYTES || json_depth_exceeds(bytes, MAX_JSON_DEPTH) {
+        return false;
+    }
+    let Ok(Value::Object(root)) = serde_json::from_slice::<Value>(bytes) else {
+        return false;
+    };
+    matches!(root.get("format"), Some(Value::Number(n))
+        if n.as_f64().is_some_and(|f| f >= (SUPPORTED_FORMAT + 1) as f64))
+}
+
 /// Check an `id` and its `play.<id>` Flatpak form. `official` allows the reserved prefixes.
 pub fn check_id(id: &str, official: bool) -> Result<(), (&'static str, String)> {
     let bad = |m: String| Err((codes::ID_INVALID, m));
@@ -342,14 +355,18 @@ pub fn check_id(id: &str, official: bool) -> Result<(), (&'static str, String)> 
             return bad("The id has an empty part between dots.".into());
         }
         if e.as_bytes()[0].is_ascii_digit() {
-            return bad(format!("The id part \"{e}\" starts with a digit."));
+            return bad(format!(
+                "The id part {eq} starts with a digit.",
+                eq = crate::problem::quote(e)
+            ));
         }
         if !e
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
         {
             return bad(format!(
-                "The id part \"{e}\" may only contain letters, digits, _ and -."
+                "The id part {eq} may only contain letters, digits, _ and -.",
+                eq = crate::problem::quote(e)
             ));
         }
     }
@@ -357,7 +374,7 @@ pub fn check_id(id: &str, official: bool) -> Result<(), (&'static str, String)> 
     if let Some(e) = elements[..last].iter().find(|e| e.contains('-')) {
         return Err((
             codes::ID_FLATPAK_INVALID,
-            format!("The id part \"{e}\" has a - ; Flatpak ids allow - only in the last part (the app is installed as play.<id>)."),
+            format!("The id part {eq} has a - ; Flatpak ids allow - only in the last part (the app is installed as play.<id>).", eq = crate::problem::quote(e)),
         ));
     }
     if "play.".len() + id.len() > MAX_FLATPAK_ID_BYTES {
@@ -366,7 +383,12 @@ pub fn check_id(id: &str, official: bool) -> Result<(), (&'static str, String)> 
             format!("play.<id> is longer than {MAX_FLATPAK_ID_BYTES} bytes."),
         ));
     }
-    if !official && (id.starts_with("org.ruyaos.") || id.starts_with("play.")) {
+    if !official
+        && ({
+            let lower = id.to_ascii_lowercase();
+            lower.starts_with("org.ruyaos.") || lower.starts_with("play.")
+        })
+    {
         return Err((
             codes::ID_RESERVED,
             "Ids starting with org.ruyaos. or play. are reserved for RuyaOS.".into(),
@@ -477,7 +499,7 @@ impl<'a> Checker<'a> {
                 self.p.add(
                     code,
                     pointer_join(at, k),
-                    format!("\"{k}\" is not a key of {what}; a key this console does not know is refused, not ignored."),
+                    format!("{kq} is not a key of {what}; a key this console does not know is refused, not ignored.", kq = crate::problem::quote(k)),
                 );
             }
         }
@@ -549,7 +571,11 @@ impl<'a> Checker<'a> {
             self.p.add(
                 codes::VALUE_UNKNOWN,
                 at,
-                format!("\"{s}\" is not one of: {}.", allowed.join(", ")),
+                format!(
+                    "{sq} is not one of: {}.",
+                    allowed.join(", "),
+                    sq = crate::problem::quote(s)
+                ),
             );
             None
         }
@@ -593,7 +619,10 @@ impl<'a> Checker<'a> {
                 self.p.add(
                     codes::LANG_INVALID,
                     &here,
-                    format!("\"{lang}\" is not a language tag like en or pt-BR."),
+                    format!(
+                        "{langq} is not a language tag like en or pt-BR.",
+                        langq = crate::problem::quote(lang)
+                    ),
                 );
                 ok = false;
                 continue;
@@ -604,6 +633,9 @@ impl<'a> Checker<'a> {
                 }
                 None => ok = false,
             }
+        }
+        if !self.case_distinct(o.keys(), at) {
+            ok = false;
         }
         if !o.contains_key("en") {
             self.p.add(
@@ -634,11 +666,35 @@ impl<'a> Checker<'a> {
         out
     }
 
+    /// Language tags are the same tag when they differ only in case (`EN` and `en`).
+    fn case_distinct<'k>(&mut self, keys: impl Iterator<Item = &'k String>, at: &str) -> bool {
+        let mut seen = BTreeSet::new();
+        let mut ok = true;
+        for k in keys {
+            if !seen.insert(k.to_ascii_lowercase()) {
+                self.p.add(
+                    codes::LIST_DUPLICATE,
+                    pointer_join(at, k),
+                    format!(
+                        "The language tag {} repeats another that differs only in letter case.",
+                        crate::problem::quote(k)
+                    ),
+                );
+                ok = false;
+            }
+        }
+        ok
+    }
+
     fn no_duplicates(&mut self, items: &[String], at: &str, code: &str) {
         let mut seen = BTreeSet::new();
         for s in items {
             if !seen.insert(s) {
-                self.p.add(code, at, format!("\"{s}\" appears twice."));
+                self.p.add(
+                    code,
+                    at,
+                    format!("{sq} appears twice.", sq = crate::problem::quote(s)),
+                );
             }
         }
     }
@@ -678,8 +734,11 @@ impl<'a> Checker<'a> {
             }
         }
         if !self.table.is_file(s) {
-            self.p
-                .add(code_missing, at, format!("\"{s}\" is not in play.files."));
+            self.p.add(
+                code_missing,
+                at,
+                format!("{sq} is not in play.files.", sq = crate::problem::quote(s)),
+            );
             return None;
         }
         Some(s.to_string())
@@ -720,9 +779,10 @@ impl<'a> Checker<'a> {
                     if is_reserved_app_name(text) {
                         self.p.add(
                             codes::NAME_RESERVED,
-                            format!("/name/{lang}"),
+                            pointer_join("/name", lang),
                             format!(
-                                "\"{text}\" looks like a RuyaOS system name; pick another name."
+                                "{textq} looks like a RuyaOS system name; pick another name.",
+                                textq = crate::problem::quote(text)
                             ),
                         );
                         return None;
@@ -787,7 +847,10 @@ impl<'a> Checker<'a> {
                     s.p.add(
                         codes::LANG_INVALID,
                         at,
-                        format!("\"{t}\" is not a language tag like en or pt-BR."),
+                        format!(
+                            "{tq} is not a language tag like en or pt-BR.",
+                            tq = crate::problem::quote(t)
+                        ),
                     );
                     None
                 }
@@ -851,7 +914,10 @@ impl<'a> Checker<'a> {
                             self.p.add(
                                 codes::REQUIREMENTS_ARCH,
                                 "/requirements/arch",
-                                format!("\"{s}\" is not supported; version 1 runs x86_64 only."),
+                                format!(
+                                    "{sq} is not supported; version 1 runs x86_64 only.",
+                                    sq = crate::problem::quote(s)
+                                ),
                             );
                         }
                     }
@@ -1058,13 +1124,17 @@ impl<'a> Checker<'a> {
                     );
                     return None;
                 }
+                let _ = self.case_distinct(map.keys(), "/art/logo");
                 for (lang, p) in map {
                     let here = pointer_join("/art/logo", lang);
                     if !is_language_tag(lang) {
                         self.p.add(
                             codes::LANG_INVALID,
                             &here,
-                            format!("\"{lang}\" is not a language tag."),
+                            format!(
+                                "{langq} is not a language tag.",
+                                langq = crate::problem::quote(lang)
+                            ),
                         );
                         continue;
                     }
@@ -1269,7 +1339,10 @@ impl<'a> Checker<'a> {
                     self.p.add(
                         codes::COMPONENT_DUPLICATE,
                         format!("{at}/id"),
-                        format!("There are two components with id \"{id}\"."),
+                        format!(
+                            "There are two components with id {idq}.",
+                            idq = crate::problem::quote(id)
+                        ),
                     );
                 }
             }
@@ -1308,11 +1381,14 @@ impl<'a> Checker<'a> {
                 );
                 return None;
             }
-            if self.table.is_file(s) || !self.table.exists(s) {
+            if !self.table.is_dir(s) {
                 self.p.add(
                     codes::COMPONENT_BUNDLED_MISSING,
                     &here,
-                    format!("The folder \"{s}\" is not in play.files."),
+                    format!(
+                        "The folder {sq} is not in play.files.",
+                        sq = crate::problem::quote(s)
+                    ),
                 );
                 return None;
             }
@@ -1398,7 +1474,7 @@ impl<'a> Checker<'a> {
                 for (k, val) in r {
                     let at = pointer_join("/permissions/reasons", k);
                     if !PERMISSION_KEYS.contains(&k.as_str()) || k == "reasons" {
-                        self.p.add(codes::PERMISSIONS_REASON_KEY, &at, format!("\"{k}\" is not a permission, so there is nothing to give a reason for."));
+                        self.p.add(codes::PERMISSIONS_REASON_KEY, &at, format!("{kq} is not a permission, so there is nothing to give a reason for.", kq = crate::problem::quote(k)));
                         continue;
                     }
                     if let Some(t) = self.localized(val, &at, MAX_REASON_CHARS, false) {
@@ -1471,11 +1547,29 @@ impl<'a> Checker<'a> {
                     self.p.add(
                         codes::RUN_PLACEHOLDER_COMPONENT,
                         at,
-                        format!("${{component:{id}}} names a component that is not declared."),
+                        format!(
+                            "${{component:{idq}}} names a component that is not declared.",
+                            idq = crate::problem::quote(id)
+                        ),
                     );
                 }
             }
             rest = &after[end + 1..];
+        }
+    }
+
+    /// A `${placeholder}/...` argument has no `..` part (the same rule as `data.*`).
+    fn argument_path(&mut self, arg: &str, at: &str) {
+        let rest = arg
+            .strip_prefix("${")
+            .and_then(|t| t.split_once('}'))
+            .map(|(_, r)| r);
+        if rest.is_some_and(|r| r.split('/').any(|c| c == "..")) {
+            self.p.add(
+                codes::RUN_ARGUMENT_PATH,
+                at,
+                "A path that starts with a ${...} placeholder has no .. part.",
+            );
         }
     }
 
@@ -1488,7 +1582,10 @@ impl<'a> Checker<'a> {
                 self.p.add(
                     codes::RUN_COMMAND_MISSING,
                     at,
-                    format!("The program \"{full}\" is not in play.files."),
+                    format!(
+                        "The program {fullq} is not in play.files.",
+                        fullq = crate::problem::quote(&full)
+                    ),
                 );
             }
         }
@@ -1510,14 +1607,17 @@ impl<'a> Checker<'a> {
         for (k, val) in e {
             let at = pointer_join("/run/env", k);
             if !env_name_grammar(k) {
-                self.p.add(codes::ENV_BAD_NAME, &at, format!("\"{k}\" is not a variable name: use capital letters, digits and _, starting with a letter."));
+                self.p.add(codes::ENV_BAD_NAME, &at, format!("{kq} is not a variable name: use capital letters, digits and _, starting with a letter.", kq = crate::problem::quote(k)));
                 continue;
             }
             if env_name_denied(k) {
                 self.p.add(
                     codes::ENV_RESERVED,
                     &at,
-                    format!("{k} is set by the platform and cannot be set by a package."),
+                    format!(
+                        "{kq} is set by the platform and cannot be set by a package.",
+                        kq = crate::problem::quote(k)
+                    ),
                 );
                 continue;
             }
@@ -1560,11 +1660,14 @@ impl<'a> Checker<'a> {
                     .add(codes::PREFIX_TEMPLATE_MISSING, "/run/prefix/template", msg);
                 return None;
             }
-            if self.table.is_file(s) || !self.table.exists(s) {
+            if !self.table.is_dir(s) {
                 self.p.add(
                     codes::PREFIX_TEMPLATE_MISSING,
                     "/run/prefix/template",
-                    format!("The folder \"{s}\" is not in play.files."),
+                    format!(
+                        "The folder {sq} is not in play.files.",
+                        sq = crate::problem::quote(s)
+                    ),
                 );
                 return None;
             }
@@ -1630,7 +1733,10 @@ impl<'a> Checker<'a> {
                     None => self.p.add(
                         codes::RUN_COMPONENT_UNKNOWN,
                         "/run/component",
-                        format!("There is no component \"{id}\"."),
+                        format!(
+                            "There is no component {idq}.",
+                            idq = crate::problem::quote(id)
+                        ),
                     ),
                     Some(c) if c.kind != want => self.p.add(
                         codes::RUN_COMPONENT_TYPE,
@@ -1662,7 +1768,10 @@ impl<'a> Checker<'a> {
                     s.p.add(
                         codes::RUN_DISC_NOT_IN_TABLE,
                         at,
-                        format!("The disc \"{p}\" is not in play.files."),
+                        format!(
+                            "The disc {pq} is not in play.files.",
+                            pq = crate::problem::quote(p)
+                        ),
                     );
                     return None;
                 }
@@ -1678,6 +1787,7 @@ impl<'a> Checker<'a> {
         if let Some(cmd) = &command {
             for (i, a) in cmd.iter().enumerate() {
                 self.placeholders(a, &format!("/run/command/{i}"), components, has_discs);
+                self.argument_path(a, &format!("/run/command/{i}"));
             }
             self.program_exists(&cmd[0], "/run/command/0");
         }
@@ -1739,6 +1849,7 @@ impl<'a> Checker<'a> {
                                 components,
                                 has_discs,
                             );
+                            self.argument_path(a, &format!("{at}/command/{j}"));
                         }
                         self.program_exists(&cmd[0], &format!("{at}/command/0"));
                     }
@@ -1747,7 +1858,10 @@ impl<'a> Checker<'a> {
                             self.p.add(
                                 codes::LIST_DUPLICATE,
                                 format!("{at}/id"),
-                                format!("There are two setup steps with id \"{id}\"."),
+                                format!(
+                                    "There are two setup steps with id {idq}.",
+                                    idq = crate::problem::quote(&id)
+                                ),
                             );
                         }
                         setup.push(SetupStep { id, command, once });
@@ -1823,6 +1937,14 @@ pub fn parse_manifest(
         );
         return None;
     }
+    if let Some(at) = crate::json::find_duplicate_key(bytes) {
+        problems.add(
+            codes::JSON_DUPLICATE_KEY,
+            at,
+            "This object names the same key twice; keep one.",
+        );
+        return None;
+    }
     let value: Value = match serde_json::from_slice(bytes) {
         Ok(v) => v,
         Err(e) => {
@@ -1851,8 +1973,19 @@ pub fn parse_manifest(
             );
             return None;
         }
-        Some(v) => match v.as_u64() {
-            Some(n) if n >= 1 => n,
+        Some(v) => match v {
+            Value::Number(n)
+                if n.as_f64()
+                    .is_some_and(|f| f >= (SUPPORTED_FORMAT + 1) as f64) =>
+            {
+                c.p.add(
+                    codes::FORMAT_TOO_NEW,
+                    "/format",
+                    "This package needs a newer RuyaOS.",
+                );
+                return None;
+            }
+            Value::Number(n) if n.as_u64() == Some(1) => 1,
             _ => {
                 c.p.add(
                     codes::FORMAT_INVALID,
@@ -1863,14 +1996,6 @@ pub fn parse_manifest(
             }
         },
     };
-    if format > SUPPORTED_FORMAT {
-        c.p.add(
-            codes::FORMAT_TOO_NEW,
-            "/format",
-            "This package needs a newer RuyaOS.",
-        );
-        return None;
-    }
     let ident = c.identity(root);
     let mut m = PartialManifest {
         summary: None,

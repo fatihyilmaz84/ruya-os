@@ -107,7 +107,10 @@ pub fn check_path(p: &str) -> Result<(), PathFault> {
         if is_reserved_device(component) {
             return Err((
                 codes::PATH_RESERVED_NAME,
-                format!("\"{component}\" is a reserved Windows device name."),
+                format!(
+                    "{componentq} is a reserved Windows device name.",
+                    componentq = crate::problem::quote(component)
+                ),
             ));
         }
     }
@@ -134,7 +137,7 @@ pub fn check_case_collisions<'a>(paths: impl Iterator<Item = &'a str>, problems:
                     problems.add(
                         codes::PATH_CASE_COLLISION,
                         p,
-                        format!("\"{prefix}\" and \"{first}\" differ only in letter case; they are the same name on USB sticks and under Wine."),
+                        format!("{prefixq} and {firstq} differ only in letter case; they are the same name on USB sticks and under Wine.", prefixq = crate::problem::quote(prefix), firstq = crate::problem::quote(first)),
                     );
                     break;
                 }

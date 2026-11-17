@@ -27,7 +27,7 @@ fn codes_are_unique_dotted_lower_case() {
 
 #[test]
 fn every_code_is_asserted_by_a_test() {
-    let tests: String = ["hostile", "limits", "forms", "schema"]
+    let tests: String = ["hostile", "limits", "forms", "schema", "hardening"]
         .iter()
         .map(|t| read(&format!("tests/{t}.rs")))
         .collect();

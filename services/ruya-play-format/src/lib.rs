@@ -13,6 +13,7 @@
 //! ```
 
 pub mod folder;
+pub mod json;
 pub mod limits;
 pub mod manifest;
 pub mod path;
@@ -112,6 +113,22 @@ fn read_small(source: &dyn Source, path: &str, limit: u64) -> Result<Vec<u8>, Pr
 pub fn validate(source: &dyn Source, opts: &ValidateOptions) -> Result<Package, Vec<Problem>> {
     let entries = source.entries()?;
     let mut problems = Problems::new();
+
+    // 0. A package for a newer console is told so and nothing else: its rules are not ours.
+    let manifest_listed = entries.iter().find(|e| {
+        e.path == "play.json" && e.kind == EntryKind::File && e.size <= limits::MAX_MANIFEST_BYTES
+    });
+    if manifest_listed.is_some() {
+        if let Ok(bytes) = read_small(source, "play.json", limits::MAX_MANIFEST_BYTES) {
+            if manifest::is_future_format(&bytes) {
+                return Err(vec![Problem::new(
+                    codes::FORMAT_TOO_NEW,
+                    "/format",
+                    "This package needs a newer RuyaOS.",
+                )]);
+            }
+        }
+    }
 
     // 1. Names and kinds. No content is read before this passes.
     for e in &entries {
