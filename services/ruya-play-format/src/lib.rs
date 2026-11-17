@@ -19,6 +19,7 @@ pub mod limits;
 pub mod manifest;
 pub mod path;
 pub mod problem;
+pub mod resolve;
 pub mod source;
 pub mod table;
 pub mod text;

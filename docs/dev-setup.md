@@ -289,6 +289,22 @@ ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-power-check.sh --p
 
 It prints `pkcheck` verdicts for the six `login1` actions for the `ruya-shell` process (all must be `exit 0`) and for an ordinary user (none may be), logind's `CanPowerOff` for both, what the shell's Power backend read at start-up, the modes of what the image ships (nothing group- or world-writable), and, with `--power-off`, a refused `PowerOff` as the ordinary user followed by the real one as `ruya-shell` (QEMU exits). Without `--power-off` the VM stays up.
 
+## The `.play` developer tool (RUY-95)
+
+`ruya-pack` is a Rust crate of the services workspace (`services/ruya-pack`, library plus binary) and builds on Windows, Linux and macOS with no system libraries. Its tests are part of `.\scripts\dev.ps1 rust` and `test`. From the repo root:
+
+```powershell
+cd services
+cargo run -p ruya-pack -- init ..\output\mygame --id com.example.mygame --name "My Game"
+cargo run -p ruya-pack -- validate ..\output\mygame          # a folder or a .play.zip; add --json for the machine form
+cargo run -p ruya-pack -- build ..\output\mygame --deflate   # writes play.files and ..\output\mygame.play.zip
+cargo run -p ruya-pack -- keygen ..\output\mykey              # mykey.key (secret) and mykey.pub
+cargo run -p ruya-pack -- sign ..\output\mygame.play.zip --key ..\output\mykey.key
+cargo run -p ruya-pack -- inspect ..\output\mygame.play.zip --system-wine 10.2
+```
+
+`cargo build --release -p ruya-pack` leaves `services/target/release/ruya-pack(.exe)`. Exit codes are 0 ok, 1 problems found, 2 usage, 3 I/O; the key comes from `--key <file>` or the environment variable `RUYA_PACK_KEY`, never an argument. The tests need no Linux and no VM; `cargo test -p ruya-pack` runs them alone. Spec: `docs/specs/05-play-packages.md` section 13.
+
 ## Shell-only iteration
 
 **Use `scripts\dev.ps1` for everything below.** It wraps these commands with the right flags and PATH:
