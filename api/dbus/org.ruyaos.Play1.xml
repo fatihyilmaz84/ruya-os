@@ -6,7 +6,8 @@
   installed one. Updates and feeds arrive later (T-241) and extend this file.
   Served by ruya-play on the system bus at /org/ruyaos/Play1 (ruya-play: RUY-100, NOT BUILT YET; the
   shell's mock backend, shell/src/play, follows this contract and is the only implementation today).
-  org.ruyaos.Stability=experimental: a draft until the service exists (ADR-022).
+  Draft, internal: no element carries org.ruyaos.Stability, so nothing here is a developer
+  surface (ADR-022); the contract stays a draft until the service exists.
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/05-play-packages.md §7.3.
 
   Method statuses (stable API once released; the names of Store1 are reused where the meaning is
@@ -21,8 +22,13 @@
     "busy"              a job for that package or app is already queued or running
     "forbidden"         Install without options "admin_approved" = true. Sideloading needs an admin
                         or an admin's PIN (05 §18 item 4); the shell checks the PIN through
-                        Profiles1, as for the Store, and the service accepts the option only from
-                        the shell's own bus name
+                        Profiles1, as for the Store (PINs never leave the shell's path to
+                        Profiles1). Trust boundary, enforced by ruya-play: the option counts only
+                        when the caller's uid (GetConnectionUnixUser) is ruya-shell or 0; the bus
+                        policy lets only ruya-shell and root call Play1 and it is never on
+                        ruya-link's allow-list; and the service applies the tier ceilings,
+                        developer mode and the refusal of unverified + high risk itself, whatever
+                        the option says
     "invalid"           malformed argument (a relative path, an empty id, a bad option type)
     "failed"            internal error
 
@@ -160,7 +166,8 @@
         id       s   the job name returned by Install/Verify
         kind     s   "install" | "verify"
         path     s   install: the package path; verify: ""
-        app      s   the app id (install: the manifest id once known, else "")
+        app      s   the Flatpak id play.<id>, the key Verify takes (install: once the manifest
+                     is read, else "")
         state    s   "queued" | "running" | "finished"
         status   s   "" unless state is "finished", then the JobFinished status
         reason   s   "" or "interrupted" (the service died while the job ran; status "failed")
