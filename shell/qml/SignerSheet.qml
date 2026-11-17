@@ -24,6 +24,14 @@ FocusScope {
     // What the hint bar says while this is open (Shell.modalHintsOf).
     readonly property var modalHints: [{ action: "back", text: qsTr("Close") }]
 
+    // The key column: 300 u (04 5.4), wider when a translated label does not fit it ("Daha önce görüldü mü").
+    readonly property real labelWidth: Math.max(300 * u,        // token-ok: 04 5.4 Signer sheet
+                                                Math.max(m1.advanceWidth, m2.advanceWidth, m3.advanceWidth, m4.advanceWidth) + Theme.spaceS * u)
+    TextMetrics { id: m1; text: qsTr("Signed by"); font.pixelSize: Theme.typeBody * sheet.u; font.weight: Theme.weightDemiBold }
+    TextMetrics { id: m2; text: qsTr("Key"); font.pixelSize: Theme.typeBody * sheet.u; font.weight: Theme.weightDemiBold }
+    TextMetrics { id: m3; text: qsTr("Seen before"); font.pixelSize: Theme.typeBody * sheet.u; font.weight: Theme.weightDemiBold }
+    TextMetrics { id: m4; text: qsTr("Trust"); font.pixelSize: Theme.typeBody * sheet.u; font.weight: Theme.weightDemiBold }
+
     signal closed()
 
     function open(record, from) {
@@ -91,7 +99,7 @@ FocusScope {
 
         Text {
             x: Theme.spaceL * sheet.u
-            width: 300 * sheet.u            // token-ok: 04 §5.4 Signer sheet
+            width: sheet.labelWidth
             anchors.verticalCenter: parent.verticalCenter
             textFormat: Text.PlainText
             elide: Text.ElideRight
@@ -102,7 +110,7 @@ FocusScope {
         }
         Text {
             objectName: "signerValue"
-            x: (Theme.spaceL + 300) * sheet.u         // token-ok: 04 §5.4 Signer sheet
+            x: Theme.spaceL * sheet.u + sheet.labelWidth
             width: parent.width - x - Theme.spaceL * sheet.u
             anchors.verticalCenter: parent.verticalCenter
             visible: fact.value !== ""
@@ -115,7 +123,7 @@ FocusScope {
         }
         Item {
             id: slot
-            x: (Theme.spaceL + 300) * sheet.u         // token-ok: 04 §5.4 Signer sheet
+            x: Theme.spaceL * sheet.u + sheet.labelWidth
             height: parent.height
             width: parent.width - x - Theme.spaceL * sheet.u
         }

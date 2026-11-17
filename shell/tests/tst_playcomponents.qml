@@ -299,6 +299,11 @@ Item {
             compare(seen.text, data.trSeen)
             compare(findChild(o.sheet, "signerNote").text, data.trNote)
             compare(findChild(o.sheet, "signerTitle").text, "Kim imzaladı")
+            // The Turkish labels are not clipped by the key column.
+            for (const name of ["signerRowName", "signerRowSeen", "signerRowTrust"]) {
+                const label = findChild(o.sheet, name).children.find(c => c.font && c.font.weight === Theme.weightDemiBold)
+                verify(label && !label.truncated, name + " label is whole")
+            }
         }
 
         function test_the_key_is_in_eight_groups_of_four() {

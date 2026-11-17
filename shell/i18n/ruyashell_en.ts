@@ -5512,7 +5512,7 @@ This can&apos;t be undone.</translation>
     <name>SignerSheet</name>
     <message>
         <location filename="../qml/SignerSheet.qml" line="+25"/>
-        <location line="+167"/>
+        <location line="+175"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
@@ -5523,22 +5523,26 @@ This can&apos;t be undone.</translation>
         <translation>Who signed this</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-115"/>
+        <location line="+124"/>
         <source>Signed by</source>
         <translation>Signed by</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="-123"/>
+        <location line="+129"/>
         <source>Key</source>
         <translation>Key</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="-128"/>
+        <location line="+134"/>
         <source>Seen before</source>
         <translation>Seen before</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="-133"/>
+        <location line="+139"/>
         <source>Trust</source>
         <translation>Trust</translation>
     </message>

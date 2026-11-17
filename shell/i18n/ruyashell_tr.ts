@@ -5494,7 +5494,7 @@ Bu geri alınamaz.</translation>
     <name>SignerSheet</name>
     <message>
         <location filename="../qml/SignerSheet.qml" line="+25"/>
-        <location line="+167"/>
+        <location line="+175"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
@@ -5505,22 +5505,26 @@ Bu geri alınamaz.</translation>
         <translation>Kim imzaladı</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="-115"/>
+        <location line="+124"/>
         <source>Signed by</source>
         <translation>İmzalayan</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="-123"/>
+        <location line="+129"/>
         <source>Key</source>
         <translation>Anahtar</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="-128"/>
+        <location line="+134"/>
         <source>Seen before</source>
         <translation>Daha önce görüldü mü</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="-133"/>
+        <location line="+139"/>
         <source>Trust</source>
         <translation>Güven</translation>
     </message>
