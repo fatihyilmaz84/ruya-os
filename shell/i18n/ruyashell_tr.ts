@@ -599,7 +599,7 @@ Bu geri alınamaz.</translation>
         <translation>Oku</translation>
     </message>
     <message>
-        <location line="+425"/>
+        <location line="+394"/>
         <source>No special permissions.</source>
         <translation>Özel bir izni yok.</translation>
     </message>
@@ -639,7 +639,7 @@ Bu geri alınamaz.</translation>
         <translation>Kaldırmak için önce oyunu kapatın.</translation>
     </message>
     <message>
-        <location line="-918"/>
+        <location line="-887"/>
         <source>Install</source>
         <translation>Kur</translation>
     </message>
@@ -671,12 +671,7 @@ Bu geri alınamaz.</translation>
         <translation>Bu uygulama şunları yapabilir</translation>
     </message>
     <message>
-        <location line="+36"/>
-        <source>High risk</source>
-        <translation>Yüksek risk</translation>
-    </message>
-    <message>
-        <location line="-131"/>
+        <location line="-95"/>
         <source>The update adds: %1</source>
         <translation>Güncelleme şunları ekliyor: %1</translation>
     </message>
@@ -3826,6 +3821,21 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>PermissionList</name>
+    <message>
+        <location filename="../qml/PermissionList.qml" line="+73"/>
+        <source>High risk</source>
+        <translation>Yüksek risk</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+40"/>
+        <source>And %n more</source>
+        <translation>
+            <numerusform>Ve %n tane daha</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
     <name>PinPad</name>
     <message>
         <location filename="../qml/PinPad.qml" line="+50"/>
@@ -3891,6 +3901,140 @@ Bu geri alınamaz.</translation>
         <location line="+0"/>
         <source>OK</source>
         <translation>Tamam</translation>
+    </message>
+</context>
+<context>
+    <name>PlayTrust</name>
+    <message>
+        <location filename="../qml/PlayTrust.qml" line="+55"/>
+        <source>Official</source>
+        <translation>Resmi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Signed by %1 and the RuyaOS store</source>
+        <translation>%1 ve RuyaOS mağazası imzalı</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Developer</source>
+        <translation>Geliştirici</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Signed by %1 · key %2</source>
+        <translation>%1 imzalı · anahtar %2</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Changed since signed</source>
+        <translation>İmzadan sonra değişmiş</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This package was changed after it was signed.</source>
+        <translation>Bu paket imzalandıktan sonra değiştirilmiş.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+1"/>
+        <source>Removed for safety</source>
+        <translation>Güvenlik için kaldırıldı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Removed for safety: %1</source>
+        <translation>Güvenlik için kaldırıldı: %1</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Unverified</source>
+        <translation>Doğrulanmamış</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Not signed. Anyone could have changed it.</source>
+        <translation>İmzasız. Herhangi biri değiştirmiş olabilir.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Yes, the same key as the installed game</source>
+        <translation>Evet, kurulu oyunla aynı anahtar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No, a different key</source>
+        <translation>Hayır, farklı bir anahtar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No, a new key</source>
+        <translation>Hayır, yeni bir anahtar</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>The developer and the RuyaOS store both signed every file.</source>
+        <translation>Her dosyayı hem geliştirici hem RuyaOS mağazası imzaladı.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>A signature shows that this key signed every file. It doesn&apos;t prove who the developer is.</source>
+        <translation>İmza, her dosyayı bu anahtarın imzaladığını gösterir. Geliştiricinin kim olduğunu kanıtlamaz.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Nobody signed this package, so nothing shows who made it or whether it was changed.</source>
+        <translation>Bu paketi kimse imzalamadı; kimin yaptığı ya da değiştirilip değiştirilmediği bilinemez.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Plays sound, uses graphics</source>
+        <translation>Ses çalar, grafik kullanır</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Uses controllers</source>
+        <translation>Kontrolcüleri kullanır</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Uses controllers, keyboard and mouse</source>
+        <translation>Kontrolcü, klavye ve fare kullanır</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Accesses all devices</source>
+        <translation>Tüm aygıtlara erişir</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Uses the network</source>
+        <translation>Ağı kullanır</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Reads files on USB drives</source>
+        <translation>USB bellekteki dosyaları okur</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Changes files on USB drives</source>
+        <translation>USB bellekteki dosyaları değiştirir</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Runs 32-bit programs</source>
+        <translation>32 bit programlar çalıştırır</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Asks the system to prioritise it</source>
+        <translation>Sistemden öncelik ister</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Can inspect other programs</source>
+        <translation>Diğer programları inceleyebilir</translation>
     </message>
 </context>
 <context>
@@ -4672,9 +4816,14 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ScreenshotRow</name>
     <message>
-        <location filename="../qml/ScreenshotRow.qml" line="+29"/>
+        <location filename="../qml/ScreenshotRow.qml" line="+37"/>
         <source>View</source>
         <translation>Görüntüle</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Play</source>
+        <translation>Oynat</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -4687,11 +4836,42 @@ Bu geri alınamaz.</translation>
         <source>Screenshots</source>
         <translation>Ekran görüntüleri</translation>
     </message>
+    <message>
+        <location line="-35"/>
+        <location line="+35"/>
+        <source>Screenshots and trailer</source>
+        <translation>Ekran görüntüleri ve fragman</translation>
+    </message>
+    <message>
+        <location line="+109"/>
+        <source>Trailer · %1</source>
+        <translation>Fragman · %1</translation>
+    </message>
 </context>
 <context>
     <name>ScreenshotViewer</name>
     <message>
-        <location filename="../qml/ScreenshotViewer.qml" line="+26"/>
+        <location filename="../qml/ScreenshotViewer.qml" line="+33"/>
+        <source>Pause</source>
+        <translation>Duraklat</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Play</source>
+        <translation>Oynat</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Seek 10 s</source>
+        <translation>10 sn sar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Browse</source>
         <translation>Gözat</translation>
     </message>
@@ -4701,13 +4881,18 @@ Bu geri alınamaz.</translation>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="+50"/>
-        <location line="+124"/>
+        <location line="+57"/>
+        <location line="+165"/>
         <source>%1 of %2</source>
         <translation>%1 / %2</translation>
     </message>
     <message>
-        <location line="-18"/>
+        <location line="-165"/>
+        <source>Trailer</source>
+        <translation>Fragman</translation>
+    </message>
+    <message>
+        <location line="+117"/>
         <source>Couldn&apos;t load this picture.</source>
         <translation>Bu resim yüklenemedi.</translation>
     </message>
@@ -5241,7 +5426,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kaldırıldı.</translation>
     </message>
     <message>
-        <location line="+529"/>
+        <location line="+530"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -5263,7 +5448,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1884"/>
+        <location line="-1885"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -5294,7 +5479,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1632"/>
+        <location line="+1633"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
@@ -5303,6 +5488,41 @@ Bu geri alınamaz.</translation>
         <location line="+193"/>
         <source>mock services</source>
         <translation>sahte hizmetler</translation>
+    </message>
+</context>
+<context>
+    <name>SignerSheet</name>
+    <message>
+        <location filename="../qml/SignerSheet.qml" line="+25"/>
+        <location line="+167"/>
+        <source>Close</source>
+        <translation>Kapat</translation>
+    </message>
+    <message>
+        <location line="-141"/>
+        <location line="+86"/>
+        <source>Who signed this</source>
+        <translation>Kim imzaladı</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Signed by</source>
+        <translation>İmzalayan</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Key</source>
+        <translation>Anahtar</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Seen before</source>
+        <translation>Daha önce görüldü mü</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Trust</source>
+        <translation>Güven</translation>
     </message>
 </context>
 <context>
@@ -6744,6 +6964,14 @@ Bu geri alınamaz.</translation>
         <location line="-263"/>
         <source>Safe to remove</source>
         <translation>Çıkarmak güvenli</translation>
+    </message>
+</context>
+<context>
+    <name>TrailerPlayer</name>
+    <message>
+        <location filename="../qml/TrailerPlayer.qml" line="+160"/>
+        <source>The trailer can&apos;t play.</source>
+        <translation>Fragman oynatılamıyor.</translation>
     </message>
 </context>
 <context>

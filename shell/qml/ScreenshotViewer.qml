@@ -9,7 +9,9 @@ import RuyaShell
 // sound), Back closes. Every other key is taken: nothing leaks to the page or the Guide overlay's owner.
 //
 //   open(shots, index)    shots: [{ image, thumb, caption }]; the focus is taken
-//   closed(index)         the picture last shown (the row puts the focus on its card)
+//   openTrailer(trailer) trailer: { video, poster, name, seconds } (RUY-802, 04 §5.4): the same box plays the
+//                        trailer (TrailerPlayer); A plays or pauses, Left / Right seek 10 s, Back closes
+//   closed(index)         the picture last shown (the row puts the focus on its card); -1 for the trailer
 //
 // The picture is the `image`; until it is there the `thumb` is stretched to the box; if it cannot be
 // loaded the box says so. Opening, closing and stepping fade; none of it under reduced motion.
@@ -20,9 +22,18 @@ FocusScope {
     property var shots: []
     property int index: 0
     property bool shown: false
+    // The trailer in the box (null = the pictures), and whether the Hub (or "Who's playing?") is over it.
+    property var trailer: null
+    property bool covered: false
+    readonly property bool trailerMode: trailer !== null
+    readonly property alias trailerPlayer: trailerBox
 
     // What the hint bar says while this is open (Shell.modalHintsOf).
-    readonly property var modalHints: [
+    readonly property var modalHints: trailerMode ? [
+        { action: "accept", text: trailerBox.wantsPlay ? qsTr("Pause") : qsTr("Play") },
+        { actions: ["left", "right"], text: qsTr("Seek 10 s") },
+        { action: "back", text: qsTr("Back") }
+    ] : [
         { actions: ["left", "right"], text: qsTr("Browse") },
         { action: "back", text: qsTr("Close") }
     ]
@@ -42,6 +53,7 @@ FocusScope {
     signal closed(int index)
 
     function open(list, at) {
+        trailer = null
         shots = list
         index = Math.max(0, Math.min(at, list.length - 1))
         front = 0
@@ -51,11 +63,17 @@ FocusScope {
         forceActiveFocus()
     }
 
+    function openTrailer(t) {
+        trailer = t
+        shown = true
+        forceActiveFocus()
+    }
+
     function close() {
         if (!shown)
             return
         shown = false
-        closed(index)
+        closed(trailerMode ? -1 : index)
     }
 
     function step(by) {
@@ -74,12 +92,23 @@ FocusScope {
     Behavior on opacity { NumberAnimation { duration: Theme.overlayMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
 
     Accessible.role: Accessible.Dialog
-    Accessible.name: qsTr("%1 of %2").arg(index + 1).arg(count)
+    Accessible.name: trailerMode ? (trailer.name || qsTr("Trailer")) : qsTr("%1 of %2").arg(index + 1).arg(count)
 
     Keys.onPressed: event => {
         if (BackKey.isBackOrBackspace(event.key)) {
             Sfx.back()
             viewer.close()
+        } else if (viewer.trailerMode) {
+            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                Sfx.select()
+                trailerBox.toggle()
+            } else if (event.key === Qt.Key_Left) {
+                trailerBox.seek(-trailerBox.seekMs)
+            } else if (event.key === Qt.Key_Right) {
+                trailerBox.seek(trailerBox.seekMs)
+            } else {
+                trailerBox.wake()
+            }
         } else if (event.key === Qt.Key_Left) {
             viewer.step(-1)
         } else if (event.key === Qt.Key_Right) {
@@ -188,11 +217,41 @@ FocusScope {
         }
     }
 
-    ShotPicture { id: pictureA; active: viewer.front === 0 }
-    ShotPicture { id: pictureB; active: viewer.front === 1 }
+    ShotPicture { id: pictureA; active: viewer.front === 0 && !viewer.trailerMode }
+    ShotPicture { id: pictureB; active: viewer.front === 1 && !viewer.trailerMode }
+
+    // The trailer: in the same box, playing only while the viewer shows it.
+    TrailerPlayer {
+        id: trailerBox
+        objectName: "trailerPlayer"
+        x: viewer.boxX
+        y: viewer.boxY
+        width: viewer.boxWidth
+        height: viewer.boxHeight
+        u: viewer.u
+        visible: viewer.trailerMode
+        trailer: viewer.trailer
+        active: viewer.shown && viewer.trailerMode
+        covered: viewer.covered
+    }
+
+    Text {
+        objectName: "viewerTrailerName"
+        visible: viewer.trailerMode
+        x: viewer.boxX
+        y: 940 * viewer.u       // token-ok: 04 §5.4 Screenshots and trailer
+        width: viewer.boxWidth
+        textFormat: Text.PlainText
+        elide: Text.ElideRight
+        text: viewer.trailer ? (viewer.trailer.name ?? "") : ""
+        color: Theme.text
+        font.pixelSize: Theme.typeBody * viewer.u
+        font.weight: Theme.weightDemiBold
+    }
 
     Text {
         objectName: "viewerCounter"
+        visible: !viewer.trailerMode
         x: 0
         width: parent.width
         y: 932 * viewer.u       // token-ok: 04 §5 Screenshot viewer
@@ -227,12 +286,12 @@ FocusScope {
         objectName: "viewerPrevious"
         x: 96 * viewer.u          // token-ok: 04 §5 Screenshot viewer
         glyph: "chevron_left"
-        wanted: viewer.hasPrevious
+        wanted: viewer.hasPrevious && !viewer.trailerMode
     }
     Arrow {
         objectName: "viewerNext"
         x: 1748 * viewer.u        // token-ok: 04 §5 Screenshot viewer
         glyph: "chevron_right"
-        wanted: viewer.hasNext
+        wanted: viewer.hasNext && !viewer.trailerMode
     }
 }
