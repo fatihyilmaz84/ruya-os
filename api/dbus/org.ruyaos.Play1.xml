@@ -1,0 +1,191 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<!--
+  org.ruyaos.Play1 — install .play packages (docs/specs/05-play-packages.md) from a drive: list the
+  candidate packages on mounted drives, look inside one, install it as ONE job, re-verify an
+  installed one. Updates and feeds arrive later (T-241) and extend this file.
+  Served by ruya-play on the system bus at /org/ruyaos/Play1 (ruya-play: RUY-100, NOT BUILT YET; the
+  shell's mock backend, shell/src/play, follows this contract and is the only implementation today).
+  org.ruyaos.Stability=experimental: a draft until the service exists (ADR-022).
+  Contract between shell (Qt/QML) and services (Rust); see docs/specs/05-play-packages.md §7.3.
+
+  Method statuses (stable API once released; the names of Store1 are reused where the meaning is
+  the same):
+    "ok"                success (Install/Verify: the job was queued, its result arrives with
+                        JobFinished)
+    "unknown-source"    the path is not one of the candidates ListSources lists (Inspect, Install):
+                        a drive that was unplugged, or a path that was never offered
+    "unknown-app"       Verify of an app that is not installed from a .play
+    "unknown-job"       Cancel of a job the service does not know
+    "too-late"          Cancel of a job that passed the point of no return (phase "committing")
+    "busy"              a job for that package or app is already queued or running
+    "forbidden"         Install without options "admin_approved" = true. Sideloading needs an admin
+                        or an admin's PIN (05 §18 item 4); the shell checks the PIN through
+                        Profiles1, as for the Store, and the service accepts the option only from
+                        the shell's own bus name
+    "invalid"           malformed argument (a relative path, an empty id, a bad option type)
+    "failed"            internal error
+
+  JobFinished statuses (one job covers a package from the first byte read to "installed"):
+    "ok"                done (for Verify: every file matches play.files)
+    "invalid-package"   a rule of §4 was broken or a hash did not match (Inspect shows the problems;
+                        for Verify: the installed payload no longer matches play.files)
+    "bad-signature"     the package was changed after it was signed (05 §9.2: never downgraded to
+                        unverified)
+    "different-developer" the id is installed (or its saves are kept) under another key (05 §9.2, key
+                        continuity)
+    "needs-developer-mode" the package is unverified and developer mode is off (05 §7.2)
+    "revoked"           the package, its key or its content is on the block list (05 §9.2)
+    "unsupported"       format.too_new, or an architecture other than x86_64
+    "disk-full"         not enough space
+    "cancelled"         Cancel reached the job in time
+    "failed"            internal error
+
+  Jobs are named by an opaque string returned from Install/Verify. The shell sees ONE job from
+  import to installed. The Flatpak transaction itself runs in ruya-store's one queue (05 §18 item 2)
+  inside the "installing" phase; the shell never sees it as a second job.
+  JobProgress phases, in this order (a phase may be skipped, never repeated): "staging" (copy into
+  the staging directory, hashing as it goes), "verifying" (signature, key continuity, file table),
+  "vetting-art" (decode and re-encode art and video), "committing" (the root part builds the OSTree
+  commit), "installing" (the Store's Flatpak transaction). A Verify job only reports "verifying".
+  percent is 0-100 for the whole job and never decreases.
+
+  Every list is a plain array and every record an a{sv} dictionary, so fields can be added later
+  without breaking clients (unknown keys are ignored). Optional keys are absent when unknown: a
+  client never shows "Unknown" for them.
+
+  Source record (ListSources), keys:
+    drive           s    the drive's id (Devices1 volume id)
+    drive_label     s    the drive's name for display
+    path            s    absolute path of the package: a folder or a .play.zip; this is what Inspect
+                         and Install take
+    name            s    the file or folder name (NOT read from the package: nothing was opened)
+    kind            s    "folder" | "zip"
+    size            t    bytes on disk (a folder: the sum of its files, at most as far as it was
+                         cheap to know; 0 = unknown)
+
+  Inspect record (a{sv}), keys. Everything comes from the unprivileged helper's result (05 §7.3
+  step 2); no payload byte was copied.
+    id              s    the manifest id, e.g. "com.example.starhopper" (the installed app is
+                         "play." + id)
+    name            s    display name in the player's language, else English
+    summary         s    one line, same rule
+    version         s    version text
+    build           u    the integer that orders versions
+    developer       s    developer name
+    genres          as   raw genre keys
+    players         s    "1", "1-2", "2-4", ...
+    controller      s    "full" | "partial" | "none"
+    age_label       s    the age label the package declares ("all" | "7+" | "12+" | "16+" | "18+"); absent
+                         when it declares none (not "all")
+    size            t    bytes the installed package will take
+    requirement     s    "ok" | "unsupported" (format too new or another architecture)
+    verdict         s    what Install would finish with if an admin started it now: "ok" or a
+                         JobFinished status ("invalid-package", "bad-signature",
+                         "different-developer", "needs-developer-mode", "revoked", "unsupported").
+                         A hint for the page; Install repeats every check.
+    tier            s    "official" | "developer" | "unverified"
+    signer_key_id   s    16 hex characters; absent for "unverified" without a signature
+    signer_name     s    the name in the signature; absent as above
+    key_state       s    "new" (this id was never installed) | "same" (installed under this key) |
+                         "different" (installed or kept under another key). Absent for an
+                         unsigned package
+    permissions     a(sss) (key, words, risk) in the order of 05 §8; key = the vocabulary key with its
+                         value ("network", "input:controllers+keyboard-mouse", "devel"); words = the
+                         plain-language line in English (the shell may translate by key); risk =
+                         "low" | "medium" | "high"
+    art             a{ss} role ("icon", "hero", "card", "cover", "logo", ...) -> path of the VETTED
+                         file in staging (05 §5); absent roles were not supplied
+    screenshots     as   paths of vetted screenshots (thumbnails not listed)
+    revoked         b    true when the package is on the block list
+    installed_build u    the build installed now; absent when the id is not installed
+    problems        a(sss) (code, path, message) of 05 §4.5 and ruya-play-art (art.*, video.*).
+                         The shell maps the code to its own translated text and never shows
+                         message. Empty when the package is clean; a package with problems has
+                         verdict "invalid-package" (or "unsupported" for format.too_new)
+
+  Nothing is opened, run or mounted by ListSources (05 §9.1: no autorun). A package is only read
+  after the player picks it (Inspect).
+-->
+<node>
+  <interface name="org.ruyaos.Play1">
+
+    <!-- Candidate packages on mounted removable drives: folders with a play.json and *.play.zip
+         files, paths and names only. Never opens one. Drives without candidates are absent. -->
+    <method name="ListSources">
+      <arg name="sources" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!-- Look inside one candidate (05 §7.3 step 2). status "ok" returns the record; any other
+         status returns an empty dictionary. A package that breaks a rule is still "ok": its problems
+         are in the record. -->
+    <method name="Inspect">
+      <arg name="path" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="info" type="a{sv}" direction="out"/>
+    </method>
+
+    <!--
+      Queue the installation of a candidate. job is "" unless status is "ok".
+      options (a{sv}, unknown keys are ignored):
+        admin_approved  b   the shell vouches that an admin is signed in or gave the PIN. Required
+                            (without it: "forbidden").
+    -->
+    <method name="Install">
+      <arg name="path" type="s" direction="in"/>
+      <arg name="options" type="a{sv}" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="job" type="s" direction="out"/>
+    </method>
+
+    <!-- Re-hash an installed package against its play.files (05 §7.3). app_id is the Flatpak
+         application id, "play." + the manifest id (what Library1 and Session1 call it). job is ""
+         unless status is "ok". -->
+    <method name="Verify">
+      <arg name="app_id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="job" type="s" direction="out"/>
+    </method>
+
+    <!-- Stop a queued or running job. status "ok" means the job will finish with "cancelled". -->
+    <method name="Cancel">
+      <arg name="job" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!--
+      The service's job table: the jobs queued or running and the last finished ones (the 20 most
+      recent), oldest first. The shell calls it when it (re)connects and replaces what it shows by
+      the answer (same rules as Store1.ListJobs). One dictionary per job:
+        id       s   the job name returned by Install/Verify
+        kind     s   "install" | "verify"
+        path     s   install: the package path; verify: ""
+        app      s   the app id (install: the manifest id once known, else "")
+        state    s   "queued" | "running" | "finished"
+        status   s   "" unless state is "finished", then the JobFinished status
+        reason   s   "" or "interrupted" (the service died while the job ran; status "failed")
+        percent  u   0-100 (100 for an "ok" job, 0 for a queued one)
+        phase    s   as JobProgress, "" while queued
+    -->
+    <method name="ListJobs">
+      <arg name="jobs" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!-- phase: see the header; percent 0-100, never decreasing within a job. -->
+    <signal name="JobProgress">
+      <arg name="job" type="s"/>
+      <arg name="percent" type="u"/>
+      <arg name="phase" type="s"/>
+    </signal>
+
+    <!-- Always sent once per job; for an "ok" install the Store's InstalledChanged comes first. -->
+    <signal name="JobFinished">
+      <arg name="job" type="s"/>
+      <arg name="status" type="s"/>
+    </signal>
+
+    <!-- A drive was mounted or unmounted, or a candidate appeared or went: call ListSources again. -->
+    <signal name="SourcesChanged"/>
+
+  </interface>
+</node>

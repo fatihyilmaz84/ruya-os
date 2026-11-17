@@ -47,6 +47,8 @@ public:
 
     // A job the shell knows without a call: the mock starts its jobs this way.
     void track(const QString &job, const QString &app) { m_apps.insert(job, app); }
+    // The service's name of the tracked job of this app/key, or "" (Play: cancel by key).
+    QString jobFor(const QString &app) const { return m_apps.key(app); }
     // The service lost its jobs: forget all of them. Returns what was tracked (job -> app).
     QHash<QString, QString> lose();
     // Forget all jobs without saying anything (test hook).
