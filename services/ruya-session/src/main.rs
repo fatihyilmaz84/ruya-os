@@ -22,10 +22,19 @@ fn main() {
     // `x11-run <app id> [launch args]` / `x11-cleanup <app id>`: the main process and the
     // ExecStopPost of an X11-mode app unit, as the profile user (ADR-034, `ruya_session::x11`).
     let args: Vec<String> = std::env::args().collect();
-    if let [_, verb, app_id, app_args @ ..] = args.as_slice() {
-        if verb == "x11-run" || (verb == "x11-cleanup" && app_args.is_empty()) {
-            x11_subcommand(verb, app_id, app_args);
+    match ruya_session::x11::subcommand(&args) {
+        ruya_session::x11::Subcommand::Run { app_id, app_args } => {
+            x11_subcommand("x11-run", &app_id, &app_args)
         }
+        ruya_session::x11::Subcommand::Cleanup { app_id } => {
+            x11_subcommand("x11-cleanup", &app_id, &[])
+        }
+        ruya_session::x11::Subcommand::Bad(msg) => {
+            // A malformed helper call never falls through to the service (RUY-801 review).
+            eprintln!("ruya-session: {msg}");
+            std::process::exit(2);
+        }
+        ruya_session::x11::Subcommand::Service => {}
     }
     if let Err(err) = run() {
         eprintln!("ruya-session: fatal: {err}");

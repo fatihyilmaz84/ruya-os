@@ -2,7 +2,7 @@
 //!
 //! Wayland stays the only display path: an app runs in X11 mode only when its Flatpak metadata
 //! asks for X11 and not for Wayland (`needs_x11`), or when its id is on the override list
-//! (`X11_OVERRIDES`, one id per line, empty in the image). Then the main process of the app's
+//! (`X11_OVERRIDES`, one id per line; the image lists Steam). Then the main process of the app's
 //! unit is not `flatpak run` but this binary's `x11-run` helper, running as the profile user:
 //!   1. it makes `$XDG_RUNTIME_DIR/ruya-x11/<app id>/` (0700) and writes a random
 //!      MIT-MAGIC-COOKIE-1 into an Xauthority file there (0600, `xauth_record`);
@@ -217,6 +217,41 @@ pub fn app_env_x11(display: u32, auth: &Path) -> Vec<(String, Option<String>)> {
         ("XDG_SESSION_TYPE".to_owned(), Some("x11".to_owned())),
         ("WAYLAND_DISPLAY".to_owned(), None),
     ]
+}
+
+/// What this binary was asked to do, from its argv (`main.rs`): an X11 helper of an app unit,
+/// or the service itself. A malformed helper call is refused, never run as the service.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Subcommand {
+    /// `x11-run <app id> [launch args]`
+    Run {
+        app_id: String,
+        app_args: Vec<String>,
+    },
+    /// `x11-cleanup <app id>`
+    Cleanup { app_id: String },
+    /// `x11-run` or `x11-cleanup` with the wrong arguments: exit with this message.
+    Bad(String),
+    /// Anything else: the service (`--session` and the env overrides are `run()`'s).
+    Service,
+}
+
+/// Reads the argv (`args[0]` is the program).
+pub fn subcommand(args: &[String]) -> Subcommand {
+    match args {
+        [_, verb, app_id, app_args @ ..] if verb == "x11-run" => Subcommand::Run {
+            app_id: app_id.clone(),
+            app_args: app_args.to_vec(),
+        },
+        [_, verb, app_id] if verb == "x11-cleanup" => Subcommand::Cleanup {
+            app_id: app_id.clone(),
+        },
+        [_, verb, ..] if verb == "x11-run" || verb == "x11-cleanup" => Subcommand::Bad(format!(
+            "usage: ruya-session x11-run <app id> [launch args] | x11-cleanup <app id> (got {} arguments)",
+            args.len() - 1
+        )),
+        _ => Subcommand::Service,
+    }
 }
 
 /// The app's argument list: `flatpak run <id>` and the image's launch arguments for it.
@@ -890,6 +925,31 @@ mod tests {
             ]
         );
         assert_eq!(app_argv(APP, &[]), ["flatpak", "run", APP]);
+        let argv = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            subcommand(&argv(&["rs", "x11-run", APP, "-gamepadui"])),
+            Subcommand::Run {
+                app_id: APP.to_owned(),
+                app_args: vec!["-gamepadui".to_owned()]
+            }
+        );
+        assert_eq!(
+            subcommand(&argv(&["rs", "x11-cleanup", APP])),
+            Subcommand::Cleanup {
+                app_id: APP.to_owned()
+            }
+        );
+        // A malformed helper call is refused, never the service (RUY-801 review).
+        assert!(matches!(
+            subcommand(&argv(&["rs", "x11-cleanup", APP, "x"])),
+            Subcommand::Bad(_)
+        ));
+        assert!(matches!(
+            subcommand(&argv(&["rs", "x11-run"])),
+            Subcommand::Bad(_)
+        ));
+        assert_eq!(subcommand(&argv(&["rs"])), Subcommand::Service);
+        assert_eq!(subcommand(&argv(&["rs", "--session"])), Subcommand::Service);
         assert_eq!(
             app_argv(APP, &["-gamepadui".to_owned()]),
             ["flatpak", "run", APP, "-gamepadui"]
