@@ -1,0 +1,18 @@
+[package]
+name = "ruya-play-art"
+description = "Vetting of the art and video files of a .play package: header checks, decode, sRGB, re-encode to canonical WebP (05 section 5, 12)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# Pure-Rust decoders (png, jpeg, webp) and the lossless WebP encoder (image-webp inside); no C codec (05 9.1).
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+# Pure-Rust colour management: ICC profile -> sRGB (BSD-3-Clause OR Apache-2.0).
+moxcms = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
+crc32fast = "1"  # PNG chunk CRCs for hand-built fixtures (already in the tree via png)
+moxcms = "0.8"  # builds a Display P3 ICC profile for the fixture
