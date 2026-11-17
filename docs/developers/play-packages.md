@@ -140,12 +140,12 @@ Required: `format`, `id`, `name`, `version`, `build`, `art` and `run` (with `art
 | `tags` | At most 12 free tags of at most 24 characters. |
 | `languages` | At most 30 language tags the game supports. |
 | `players` | How many play: `min`, `max` (1 to 64) and `modes`. |
-| `players.min` | The fewest players. |
-| `players.max` | The most players. |
+| `players.min` | The fewest players. Required when `players` is present. |
+| `players.max` | The most players. Required when `players` is present. |
 | `players.modes` | Any of `single`, `local`, `online`. |
 | `controller` | `full`, `partial` or `none`: the same meaning as `x-ruya-controller` ([Controller input](controller-input.md)). The Store's gamepad filter reads it. |
 | `age_rating` | OARS 1.1 content answers, as in AppStream ([AppStream metadata](appstream-metadata.md)). Missing means "Not rated", never "All ages". |
-| `age_rating.scheme` | Always `oars-1.1`. |
+| `age_rating.scheme` | Always `oars-1.1`. Required when `age_rating` is present. |
 | `age_rating.content` | A map of OARS attribute to level, for example `"violence-cartoon": "mild"`. |
 | `licence` | The licence of the package contents. |
 | `licence.package` | An SPDX id, or `LicenseRef-proprietary`. |
@@ -159,10 +159,10 @@ Required: `format`, `id`, `name`, `version`, `build`, `art` and `run` (with `art
 | `requirements.gpu_api` | `vulkan` and/or `opengl`. |
 | `art` | The art slots; see [Artwork](#artwork). |
 | `art.icon` | Required. Path under `art/`, PNG or WebP. |
-| `art.logo` | Optional title logo. |
+| `art.logo` | Optional title logo: one path, or a map from language tag to path (a different logo per language, at most 30). |
 | `art.hero` | The big 16:9 picture. Needed to be placed on Home. |
 | `art.cover` | Optional 2:3 poster. |
-| `art.screenshots` | 1 to 20 screenshots. |
+| `art.screenshots` | Optional; when present, 1 to 20 screenshots (an empty list is `art.no_screenshots`). |
 | `art.screenshots[].file` | A path under `art/`. |
 | `art.screenshots[].caption` | Localized, at most 100 characters. |
 | `art.trailer` | Optional video. |
@@ -185,8 +185,8 @@ Required: `format`, `id`, `name`, `version`, `build`, `art` and `run` (with `art
 | `run.runner` | `native`, `wine`, `proton`, `emulator` or `engine`. |
 | `run.component` | The `id` of the component that runs it (not for `native`). |
 | `run.command` | An **argument list**, never a shell string. Placeholders: `${payload}`, `${component:<id>}`, `${data}`, `${config}`, `${prefix}`, `${disc}`. |
-| `run.cwd` | Working directory, usually `${payload}`. |
-| `run.env` | Extra environment variables. A deny list applies: the variables the platform sets (`PATH`, `HOME`, `WINEPREFIX`, `LD_*`, `XDG_*`, `SDL_*`, ...) are refused with `env.reserved`; `WINEDLLOVERRIDES`, `DXVK_*` and `PROTON_*` pass. |
+| `run.cwd` | Working directory, usually `${payload}`. Must start with a placeholder (`${payload}`, `${data}`, `${config}`, `${prefix}` or `${component:<id>}`), optionally followed by `/` and a path without `..`. |
+| `run.env` | Extra environment variables. A deny list applies: the variables the platform sets (`PATH`, `HOME`, `WINEPREFIX`, `LD_*`, `XDG_*`, `SDL_*`, ...) are refused with `env.reserved`; `WINEDLLOVERRIDES`, `DXVK_*` and `PROTON_*` pass. Names match `[A-Z][A-Z0-9_]*` (at most 64 characters), values are at most 1024 bytes without control characters, at most 64 variables. The full deny list is `PATH`, `HOME`, `DISPLAY`, `XAUTHORITY`, `WINEPREFIX`, `WINESERVER`, `WINELOADER`, `WINEDLLPATH`, `WINEARCH`, `TMPDIR`, `GCONV_PATH`, `LOCPATH`, `NLSPATH` and every name starting `LD_`, `XDG_`, `FLATPAK_`, `DBUS_`, `WAYLAND_`, `PULSE_`, `PIPEWIRE_`, `SDL_`, `STEAM_COMPAT_`, `PRESSURE_VESSEL_`, `VK_`, `MESA_`, `LIBGL_`, `GST_`, `QT_`, `GTK_`, `GDK_` or `GIO_`. |
 | `run.launch_mode` | `fullscreen` (default), `gamescope` or `default`. |
 | `run.prefix` | The Wine prefix settings (Windows runners). |
 | `run.prefix.arch` | `win32` or `win64`. |
@@ -196,7 +196,7 @@ Required: `format`, `id`, `name`, `version`, `build`, `art` and `run` (with `art
 | `run.setup[].id` | A name for the step. |
 | `run.setup[].command` | An argument list, like `run.command`. |
 | `run.setup[].once` | `true`: run once per prefix. |
-| `run.discs` | Ordered disc images under `payload/`, for emulated games; `${disc}` is the first. |
+| `run.discs` | Ordered disc images, for emulated games; at most 16, no repeats, each starting with `payload/`; `${disc}` is the first. |
 | `permissions` | What you ask for; see [Permissions](#permissions-and-what-each-costs-the-player). |
 | `permissions.network` | `true` or `false` (default `false`). |
 | `permissions.input` | `controllers`, `controllers+keyboard-mouse` (default) or `all-devices`. |
@@ -207,8 +207,8 @@ Required: `format`, `id`, `name`, `version`, `build`, `art` and `run` (with `art
 | `permissions.devel` | `true` to allow ptrace (rare anti-tamper). High risk. |
 | `permissions.reasons` | A map of permission key to a short localized reason (at most 120 characters), shown next to it. |
 | `data` | Where your saves are, for backup. |
-| `data.saves` | Up to 32 paths with a root name: `data:` (your `$XDG_DATA_HOME`), `config:`, or `prefix:` (inside the Wine prefix). |
-| `data.cache` | The same, for things that can be rebuilt (never backed up). |
+| `data.saves` | Up to 32 paths with a root name: `data:` (your `$XDG_DATA_HOME`), `config:`, or `prefix:` (inside the Wine prefix). Each is at most 1030 bytes and has no `..` or `.` part and no `\`. |
+| `data.cache` | The same rules, for things that can be rebuilt (never backed up). |
 | `update` | (planned) A self-hosted feed; see [Updates](#updates). |
 | `update.feed` | The https address of your signed feed. |
 | `update.channel` | A channel name, for example `stable`. |
@@ -386,7 +386,8 @@ The codes are `licence.text_missing` and `licence.source_missing`. Anti-cheat ti
 
 1. `ruya-pack validate`, `inspect` and (for Windows runners) `validate --system-wine <version>` run the console's verifier and resolution off the device. Most failures are found here.
 2. The shell's "Install from USB" page (Store toolbar and Settings, Storage) lists packages on a mounted drive and shows one as a game page: trust badge, signer, permissions in plain words, size. It runs against the mock backend only until the install service exists.
-3. Developer mode is a switch in Settings, System (admins only). It lets an **unsigned** package install; a signed package does not need it.
+3. A Standard profile needs an admin's PIN for every USB install; an admin installs directly.
+4. Developer mode is a switch in Settings, System (admins only). It lets an **unsigned** package install; a signed package does not need it.
 
 Planned: installing from USB on a real console, starting the game, the launch splash and the Compatibility screen, `ruya-pack run`. When they exist this section will say what to expect and what the logs look like.
 
@@ -421,6 +422,7 @@ Common ones first:
 | `art.io` | Fix the image as the message says. |
 | `art.magic_mismatch` | The file's contents do not match its extension; export it again in the format its name says. |
 | `art.missing` | Add the file listed in play.json to the package, or remove the entry. |
+| `art.no_screenshots` | Add a screenshot, or remove the empty screenshots list. |
 | `art.not_a_file` | Fix the image as the message says. |
 | `art.path` | Fix the image as the message says. |
 | `art.svg` | Export the image as PNG, JPEG or WebP; SVG is not accepted. |

@@ -1193,6 +1193,13 @@ impl<'a> Checker<'a> {
         let mut screenshots = Vec::new();
         if let Some(v) = a.get("screenshots") {
             if let Some(list) = self.array(v, "/art/screenshots", MAX_SCREENSHOTS) {
+                if list.is_empty() {
+                    self.p.add(
+                        codes::ART_NO_SCREENSHOTS,
+                        "/art/screenshots",
+                        "Give at least one screenshot, or leave the list out.",
+                    );
+                }
                 for (i, item) in list.iter().enumerate() {
                     let here = format!("/art/screenshots/{i}");
                     let Some(s) = self.obj(item, &here) else {

@@ -115,3 +115,137 @@ fn the_field_reference_lists_the_schemas_properties_and_no_others() {
         "field reference vs schema: missing {missing:?}, not in the schema {extra:?}"
     );
 }
+
+fn schema() -> Value {
+    serde_json::from_str(&std::fs::read_to_string(repo("api/play/play.schema.json")).unwrap())
+        .unwrap()
+}
+
+/// The guide row of one field: the line that starts with its name.
+fn row(text: &str, field: &str) -> String {
+    let start = format!("| `{field}` |");
+    text.lines()
+        .find(|l| l.starts_with(&start))
+        .unwrap_or_else(|| panic!("no row for {field}"))
+        .to_string()
+}
+
+#[test]
+fn the_field_reference_states_the_schemas_constraints() {
+    let (s, text) = (schema(), guide());
+    let num = |p: &str| {
+        s.pointer(p)
+            .and_then(Value::as_u64)
+            .unwrap_or_else(|| panic!("{p}"))
+    };
+
+    // art.screenshots: 1 to 20 when present.
+    let shots = "/properties/art/properties/screenshots";
+    let r = row(&text, "art.screenshots");
+    assert!(r.contains(&format!(
+        "{} to {}",
+        num(&format!("{shots}/minItems")),
+        num(&format!("{shots}/maxItems"))
+    )));
+
+    // players.min / players.max / age_rating.scheme are required by the schema, and say so.
+    for (obj, key) in [
+        ("players", "min"),
+        ("players", "max"),
+        ("age_rating", "scheme"),
+    ] {
+        let req = s
+            .pointer(&format!("/properties/{obj}/required"))
+            .unwrap()
+            .as_array()
+            .unwrap();
+        assert!(
+            req.iter().any(|v| v == key),
+            "{obj}.{key} not required in the schema"
+        );
+        assert!(
+            row(&text, &format!("{obj}.{key}")).contains("Required"),
+            "{obj}.{key}"
+        );
+    }
+
+    // art.logo may be a map from language tag.
+    assert!(s
+        .pointer("/properties/art/properties/logo/oneOf/1/type")
+        .is_some());
+    assert!(row(&text, "art.logo").contains("map from language tag"));
+
+    // data.*: the byte limit and the forbidden parts.
+    let max = num("/$defs/dataPath/maxLength");
+    assert!(row(&text, "data.saves").contains(&format!("{max} bytes")));
+    assert!(row(&text, "data.cache").contains("same rules"));
+    assert!(row(&text, "data.saves").contains("`..`") && row(&text, "data.saves").contains("`\\`"));
+
+    // run.discs: the payload/ prefix.
+    let pat = s.pointer("/$defs/run/properties/discs/items/pattern");
+    let pat = pat.or_else(|| s.pointer("/properties/run/properties/discs/items/pattern"));
+    assert!(pat
+        .and_then(Value::as_str)
+        .unwrap()
+        .starts_with("^payload/"));
+    assert!(row(&text, "run.discs").contains("`payload/`"));
+}
+
+/// The first `run` object that carries `properties.env`.
+fn find<'a>(v: &'a Value, key: &str) -> Option<&'a Value> {
+    match v {
+        Value::Object(m) => m.get(key).or_else(|| m.values().find_map(|c| find(c, key))),
+        Value::Array(a) => a.iter().find_map(|c| find(c, key)),
+        _ => None,
+    }
+}
+
+#[test]
+fn the_run_env_and_cwd_rows_name_every_rule_of_the_schema() {
+    let (s, text) = (schema(), guide());
+    let env = find(&s, "env").expect("run.env");
+    let row_env = row(&text, "run.env");
+
+    // Every name and prefix of the deny pattern appears in the row.
+    let deny = env["propertyNames"]["not"]["pattern"].as_str().unwrap();
+    let (names, prefixes) = deny.split_once("$|^(").expect("deny pattern shape");
+    let names = names.trim_start_matches("^(").trim_end_matches(')');
+    let prefixes = prefixes.trim_end_matches(')');
+    for n in names.split('|') {
+        assert!(
+            row_env.contains(&format!("`{n}`")),
+            "deny name {n} missing from run.env"
+        );
+    }
+    for p in prefixes.split('|') {
+        assert!(
+            row_env.contains(&format!("`{p}`")),
+            "deny prefix {p} missing from run.env"
+        );
+    }
+    let len = env["additionalProperties"]["maxLength"].as_u64().unwrap();
+    assert!(row_env.contains(&format!("{len} bytes")));
+    assert!(row_env.contains("[A-Z][A-Z0-9_]*"));
+
+    // run.cwd: every placeholder of the pattern appears in the row.
+    let cwd = find(&s, "cwd").unwrap()["pattern"].as_str().unwrap();
+    let group = cwd
+        .split_once("\\{(")
+        .unwrap()
+        .1
+        .split_once(")\\}")
+        .unwrap()
+        .0;
+    let row_cwd = row(&text, "run.cwd");
+    for ph in group.split('|') {
+        let ph = if ph.starts_with("component:") {
+            "component:<id>"
+        } else {
+            ph
+        };
+        assert!(
+            row_cwd.contains(&format!("${{{ph}}}")),
+            "cwd placeholder {ph}"
+        );
+    }
+}
