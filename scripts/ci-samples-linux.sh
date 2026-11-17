@@ -23,7 +23,15 @@ export RUYA_PACK="$target/release/ruya-pack"
 export CC="${CC:-cc} -Werror"
 # The Wine build.sh quotes $MINGW_CC as one word, so -Werror goes in a tiny wrapper.
 wrap=$(mktemp -d)
-trap 'rm -rf "$wrap"' EXIT
+# The build outputs (all git-ignored) go on exit: left in place they fail ruya-pack's samples test.
+clean() {
+    rm -rf "$wrap"
+    for s in hello-play-native hello-play-wine; do
+        p="$root/samples/$s"
+        rm -rf "$p/package/payload" "$p/package/play.files" "$p/package/play.sig" "$p/$s.play.zip"
+    done
+}
+trap clean EXIT
 printf '#!/bin/sh
 exec %s -Werror "$@"
 ' "${MINGW_CC:-x86_64-w64-mingw32-gcc}" > "$wrap/mingw-gcc"
