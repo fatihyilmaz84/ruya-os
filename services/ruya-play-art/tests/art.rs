@@ -472,7 +472,7 @@ fn iccp_inflate_bomb_is_refused_before_any_decode() {
 }
 
 #[test]
-fn compressed_text_chunks_never_reach_the_decoder() {
+fn a_compressed_text_chunk_bomb_does_not_break_a_png() {
     let src = tempdir().unwrap();
     let out = tempdir().unwrap();
     let mut data = b"k\0\0".to_vec();
