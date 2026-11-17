@@ -1034,6 +1034,11 @@ Item {
             host.height = h
             DeviceSettings.language = lang
             addMatchedPad()
+            wait(800)
+            if (find("whosPlayingFrame") && find("whosPlayingFrame").visible) {
+                keyClick(Qt.Key_Escape)                  // the new pad's "wants to play": Not now
+                tryVerify(() => !find("whosPlayingFrame").visible, 3000)
+            }
             openController(tc.wc)
             tryVerify(() => page("rowPadRename").visible, 2000)
             page("rowPadRename").forceActiveFocus()
