@@ -1,0 +1,18 @@
+[package]
+name = "ruya-play-format"
+description = "RuyaOS .play packages: the one parser and validator of play.json, play.files and the folder and zip forms (docs/specs/05-play-packages.md)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }  # Problem and the file-table lines
+serde_json = "1"  # play.json and play.files (already in the tree)
+sha2 = "0.10"  # file hashes (already in the tree)
+unicode-normalization = "0.1"  # the NFC rule for package paths (pure Rust)
+flate2 = "1"  # deflate entries of a zip and its CRC (already in the tree)
+
+[dev-dependencies]
+tempfile = "3"
+regex = "1"  # `pattern` keywords in the schema test's small validator

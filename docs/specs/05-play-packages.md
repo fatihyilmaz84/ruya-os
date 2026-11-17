@@ -97,7 +97,7 @@ UTF-8 JSON, at most 1 MiB, nesting depth at most 12. Unknown keys are ignored (s
     { "kind": "manual",   "url": "https://example.com/manual.pdf" },
     { "kind": "source",   "url": "https://github.com/example/starhopper" }
   ],
-  "requirements": { "arch": "x86_64", "min_ram_mb": 4096, "gpu_api": ["vulkan"], "installed_mb": 4800 },
+  "requirements": { "arch": "x86_64", "min_ram_mb": 4096, "gpu_api": ["vulkan"] },
   "art": { "icon": "art/icon.png", "logo": "art/logo.webp", "hero": "art/hero.webp",
            "cover": "art/cover.webp",
            "screenshots": [ { "file": "art/shot1.webp", "caption": { "en": "The first world" } } ],
@@ -132,8 +132,8 @@ UTF-8 JSON, at most 1 MiB, nesting depth at most 12. Unknown keys are ignored (s
 
 | Field | Rule |
 |---|---|
-| `id` | Reverse-DNS, the Flatpak id grammar (letters, digits, `_`, `-`, at least three elements, none empty, none starting with a digit, at most 120 chars), lower-case recommended. Must not start with `org.ruyaos.` or `play.` unless it is ours; reserved names refused. Identity of the app for ever: a changed id is a different app. |
-| `name`, `summary`, `description` | Localized maps (`"en"` required, other BCP-47 tags optional, at most 30 languages). `name` <= 60 chars, `summary` <= 140, `description` <= 4000, **plain text** with `\n\n` paragraph breaks (no markup, no HTML, no links inline). Control characters, bidi overrides and zero-width characters are stripped. A name that looks like a system name (Settings, RuyaOS, Store, Home, Guide, "Update") is refused unless the Official tier. |
+| `id` | Reverse-DNS, the Flatpak id grammar (letters, digits, `_`, `-`, at least three elements, none empty, none starting with a digit, at most 120 bytes), lower-case recommended. The app is installed as `play.<id>`, which must itself be a valid Flatpak id: `-` only in the **last** element and at most 255 bytes (`id.flatpak_invalid`). Must not start with `org.ruyaos.` or `play.` unless it is ours; reserved names refused. Identity of the app for ever: a changed id is a different app. |
+| `name`, `summary`, `description` | Localized maps (`"en"` required, other BCP-47 tags optional, at most 30 languages). `name` <= 60 chars, `summary` <= 140, `description` <= 4000, **plain text** with `\n\n` paragraph breaks (no markup, no HTML, no links inline). Control characters (a line break only in `description`), bidi overrides and zero-width characters are **refused** (`text.control`, `text.bidi`, `text.zero_width`), not silently stripped: a signed manifest is shown exactly as written. Text that looks like markup (`<b>`, `</`, `<!`) or contains `://` is refused (`text.markup`, `text.link`). A name that looks like a system name (Settings, RuyaOS, Store, Home, Guide, "Update") is refused unless the Official tier. |
 | `version`, `build` | `version` is display text (<= 32 chars); `build` is a positive integer that **only increases** and is what update ordering uses. |
 | `developer`, `publisher` | `name` <= 80 chars, optional `url` (https). Self-asserted; shown with the signature state, never as proof. |
 | `genres` | From a closed vocabulary (action, adventure, arcade, platformer, puzzle, racing, role-playing, shooter, simulation, sports, strategy, fighting, music, party, family, sandbox, horror, visual-novel, retro, utility, other; list kept in the schema) at most 4; the first maps to the shell's category tint (04). `tags` are free text, <= 12, <= 24 chars. |
@@ -141,7 +141,7 @@ UTF-8 JSON, at most 1 MiB, nesting depth at most 12. Unknown keys are ignored (s
 | `age_rating` | OARS 1.1 content attributes (as in AppStream); the shell derives the label, parental controls (T-211) read it. Missing = "Not rated" (never "All ages"). |
 | `licence` | SPDX id or `LicenseRef-proprietary` for the package contents; `terms_url` https. Bundled third-party code declares its own (see components). |
 | `links` | At most 12; `kind` from `homepage`, `support`, `manual`, `source`, `community`, `store`, `privacy`, `changelog`, `donate`, `other`; `https` URLs only (no `javascript:`, `file:`, `data:`, `http:`). The shell shows them as text and a QR code; **it never opens them automatically** (there is no browser in the base image). |
-| `requirements` | Facts for the "can this run here" check and the install-space check: `arch` (`x86_64` only in v1), `min_ram_mb`, `gpu_api` (`vulkan`, `opengl`), `installed_mb` (must match the file table within 1 %). |
+| `requirements` | Facts for the "can this run here" check and the install-space check: `arch` (`x86_64` only in v1), `min_ram_mb`, `gpu_api` (`vulkan`, `opengl`). The installed size is **computed** from the file table (the sum of the file sizes, `Package::installed_bytes`), never declared; a manifest that still has `installed_mb` is accepted and the key ignored (`requirements` is not a strict object). |
 | `run`, `components`, `permissions`, `data`, `update` | §6 to §11. |
 
 ### 4.2 `play.files` (the file table)
@@ -155,13 +155,63 @@ JSON Lines, UTF-8, one object per line, sorted by `p` (bytewise), no blank lines
 {"p":"payload/saves","t":"d"}
 ```
 
-- `t`: `f` file (size `s`, SHA-256 `h`, optional `x:1` = executable), `l` symlink (relative `to`, resolved lexically it must stay inside the same top-level directory, must not point at another link, at most 8 per directory chain), `d` empty directory. Everything else is invalid.
+- `t`: `f` file (size `s`, SHA-256 `h` as 64 lower-case hex digits, optional `x:1` = executable), `l` symlink, `d` empty directory. Everything else is invalid, and so is a key not listed here.
+  - **Links** (`to` relative to the link's folder, resolved lexically): the link is inside a top-level folder (not at the root); the target stays inside the **same top-level folder** and exists in the table; nothing is stored *below* a link or a file. A link may point at another link: a chain may pass through **at most 8 links** (a bundled Wine's `libx.so -> libx.so.1 -> libx.so.1.2` is legal; `ruya-pack build` flattens what it can). A loop is invalid.
+  - **A Wine prefix template** (`run.prefix.template`) never contains a folder named `dosdevices` (it has a colon and absolute links); the launcher creates it.
 - Paths: relative, `/` separators, NFC-normalised UTF-8, no empty, `.` or `..` components, no leading `/`, no `\`, no `:` in a component, no control characters, each component <= 255 bytes, the whole path <= 1024, **unique even when case is ignored** (exFAT and Wine games), no Windows reserved names (`CON`, `NUL`, ...) and no trailing dot or space. At most 200,000 entries.
 - The importer sets file modes itself: 0644, or 0755 with `x:1`. No setuid/setgid/sticky, no file capabilities, no xattrs, ownership root (after commit), timestamps from the manifest's build time.
 
 ### 4.3 Folder versus zip, one rule set
 
-The folder and the zip are read through the same verifier: it lists entries, applies §4.2's rules to the *names and kinds* **before** reading any content, then streams content while hashing. A zip adds: no encrypted entries, no entry that is a symlink or has odd external attributes, no duplicate names, no data in front of or behind the archive that a second reader could interpret differently (central directory only; local headers must agree with it), declared sizes enforced while reading, **expansion limit** (any entry over 1 MiB that expands more than 200:1 is refused; total unpacked size must equal the file table's total and fit in free space with 10 % to spare, checked before the first byte is written).
+The folder and the zip are read through the same verifier (the crate `services/ruya-play-format`, the only parser: the importer, `ruya-pack`, the service and the Store all use it). It lists entries and applies §4.2's rules to the *names and kinds* **before** reading any content, then reads `play.files` and `play.json`, checks the table against the listing, and only then streams content while hashing; a package that fails an earlier step is not read further. A zip adds, as built (`zip.rs`, written for this format rather than taken from a general zip crate):
+
+- no encrypted entries (flags, strong encryption, AES), only the methods stored and deflate, no split archives;
+- no entry that is a symlink, a device or a FIFO (the Unix mode in the external attributes), a hard link (two directory entries for the same local header) or an NTFS reparse point;
+- no duplicate names (also not `x` and `x/`);
+- central directory only: the end record is the last 22 bytes (no archive comment), the directory ends where the end record (or the ZIP64 record) begins, every entry's local header agrees with the directory (name, flags, method, CRC and sizes), and the entries tile the file exactly from offset 0 up to the directory (no data in front, between or behind; an entry with a data descriptor may have one of the four legal descriptor lengths after it);
+- declared sizes enforced while reading (the content has exactly the declared size and CRC);
+- **expansion limit**: any entry over 1 MiB that expands more than 200:1 is refused. A single top-level folder around `play.json` is unwrapped (§2).
+
+The total unpacked size is the sum of the table's file sizes (`Package::installed_bytes`); fitting it into free space (with 10 % to spare) is the importer's check (T-237), made before the first byte is written.
+
+### 4.4 Limits as built
+
+All of them are constants in `limits.rs`, repeated in `api/play/play.schema.json` where a schema can say them (a test keeps the two equal), and each has a boundary test (below, at, above) in `tests/limits.rs`.
+
+| Limit | Value | Code |
+|---|---|---|
+| `play.json` size / nesting depth | 1 MiB / 12 (the top-level object is depth 1) | `manifest.too_big`, `manifest.too_deep` |
+| `play.files` size / entries | 64 MiB / 200,000 | `table.too_big`, `table.too_many` |
+| Zip entries (files plus directory entries) / folder entries | 220,000 | `zip.too_many_entries`, `folder.too_many_entries` |
+| Path / path component | 1024 / 255 bytes | `path.too_long`, `path.component_too_long` |
+| Link chain | 8 links | `link.chain_too_long` |
+| Expansion | free up to 1 MiB, then 200:1 | `zip.ratio` |
+| Languages in a localized text, in `languages` | 30 | `lang.too_many`, `list.too_long` |
+| `name` / `summary` / `description` / `version` | 60 / 140 / 4000 / 32 characters | `text.too_long` |
+| Developer and publisher name; tag; tags; genres | 80 / 24 characters; 12; 4 | `text.too_long`, `list.too_long` |
+| Links; URL | 12; 2048 bytes (https only, no user info) | `list.too_long`, `url.invalid`, `url.not_https` |
+| Screenshots; caption; permission reason | 20; 100; 120 characters | `list.too_long`, `text.too_long` |
+| `id` | 120 bytes (`play.<id>` 255) | `id.invalid`, `id.flatpak_invalid` |
+| Components; component id; version string | 16; 32; 32 bytes | `list.too_long`, `value.unknown` |
+| `run.env` entries / name / value | 64 / 64 / 1024 bytes | `list.too_long`, `env.bad_name`, `env.bad_value` |
+| Command arguments / one argument | 64 / 4096 bytes | `list.too_long`, `text.too_long` |
+| Setup steps; discs; paths in `data.saves` and `data.cache` | 16; 16; 32 each | `list.too_long` |
+| Players; OARS attributes; licence expression | 64; 40; 128 bytes | `value.range`, `list.too_long`, `value.unknown` |
+| Problems in one result | 100, then `problems.truncated` | |
+
+### 4.5 Error codes
+
+A check returns a list of problems `{ code, path, message }`. `code` is a stable dotted string (a code never changes meaning); `path` is a JSON pointer for `play.json` and the package path for files; `message` is English a developer can act on. The shell maps codes to translated text (T-236). `tests/codes.rs` fails when a code is missing from this list or is asserted by no test.
+
+| Group | Codes |
+|---|---|
+| Format and JSON | `format.too_new`, `format.invalid`, `manifest.too_big`, `manifest.too_deep`, `manifest.not_utf8`, `manifest.invalid_json`, `manifest.type`, `manifest.missing`, `value.unknown`, `value.range`, `list.too_long`, `list.duplicate` |
+| Identity and text | `id.invalid`, `id.flatpak_invalid`, `id.reserved`, `name.reserved`, `text.control`, `text.bidi`, `text.zero_width`, `text.markup`, `text.link`, `text.too_long`, `text.empty`, `lang.invalid`, `lang.too_many`, `lang.missing_en`, `url.not_https`, `url.invalid`, `requirements.arch` |
+| Permissions, components, run | `permissions.unknown_key`, `permissions.reason_key`, `component.unknown_key`, `component.missing_field`, `component.duplicate`, `component.bundled_missing`, `component.path`, `run.unknown_key`, `run.component_missing`, `run.component_unknown`, `run.component_type`, `run.component_unexpected`, `run.placeholder_component`, `run.disc_placeholder_without_discs`, `run.disc_not_in_table`, `run.disc_path`, `run.disc_duplicate`, `run.command_missing`, `run.cwd`, `env.bad_name`, `env.reserved`, `env.bad_value`, `prefix.dosdevices`, `prefix.template_missing`, `art.path`, `art.missing`, `art.extension`, `data.path` |
+| Paths | `path.empty`, `path.traversal`, `path.dot`, `path.absolute`, `path.backslash`, `path.colon`, `path.control`, `path.empty_component`, `path.component_too_long`, `path.too_long`, `path.not_nfc`, `path.case_collision`, `path.reserved_name`, `path.trailing_dot_space`, `path.invalid_utf8` |
+| Kinds, table and links | `entry.symlink`, `entry.hardlink`, `entry.device`, `entry.special`, `table.not_utf8`, `table.too_big`, `table.too_many`, `table.line_invalid`, `table.blank_line`, `table.not_sorted`, `table.duplicate`, `table.reserved_path`, `table.parent_not_dir`, `link.absolute`, `link.target_invalid`, `link.at_root`, `link.escapes_tree`, `link.leaves_top_dir`, `link.chain_too_long`, `link.loop`, `link.dangling`, `link.as_parent` |
+| Table against package | `package.no_manifest`, `package.no_table`, `package.root_kind`, `package.extra_file`, `package.extra_dir`, `package.missing_file`, `package.missing_dir`, `package.kind_mismatch`, `package.size_mismatch`, `package.hash_mismatch`, `package.read_failed`, `problems.truncated` |
+| Zip and folder | `zip.not_a_zip`, `zip.trailing_data`, `zip.leading_data`, `zip.malformed`, `zip.encrypted`, `zip.method`, `zip.multi_disk`, `zip.duplicate_entry`, `zip.ratio`, `zip.too_many_entries`, `zip.gap`, `zip.overlap`, `zip.local_mismatch`, `zip.declared_size_lies`, `zip.crc_mismatch`, `folder.unreadable`, `folder.too_many_entries` |
 
 ## 5. Artwork and video
 
@@ -190,7 +240,7 @@ The art slots are the contract between a developer and the shell; the shell neve
 |---|---|---|---|
 | `native` | Linux x86-64 program | an ELF (or script) inside the package | none required; uses the Play platform's runtime libraries |
 | `wine` | Windows program | `.exe` and data | `type: wine` |
-| `proton` | Windows program through Proton (+umu / Steam Linux Runtime) | `.exe` and data | `type: proton` |
+| `proton` | Windows program through Proton, run directly (no umu, no Steam Linux Runtime, §6.4) | `.exe` and data | `type: proton` |
 | `emulator` | A disc/ROM image run by an emulator | image(s), saves skeleton | `type: emulator` (an emulator build, e.g. PS3, PSP, GameCube) |
 | `engine` | A game engine or interpreter that runs content (ScummVM, DOSBox, ...) | the game's content files | `type: engine` |
 
@@ -203,21 +253,26 @@ A package has **exactly one** `run`. (Several launch entries, "Game" and "Launch
 | `source` | Behaviour | Needs |
 |---|---|---|
 | `bundled` | Only the shipped copy, always. Reproducible, size cost. | `bundled` block |
-| `system` | Only the OS's runner of that `type` and at least `min`. If the OS has none, the installer offers to fetch it (`ruyaos` remote) and refuses the install without network. | `min` |
+| `system` | Only the OS's runner of that `type` and at least `min`. If the OS has none, the installer offers to fetch it from the official store (§18 item 7) and refuses the install without network. | `min` |
 | `prefer-system` | The OS's runner if it is present and at least `min`; otherwise the bundled copy. Smallest while safe. | `min` and `bundled` |
 | `prefer-bundled` | The shipped copy, unless the player chooses the system one in the game's Compatibility setting. | `bundled` |
 | `newest` | Whichever of bundled and system has the higher version; a tie goes to bundled. "Bundle my tested Wine, but use the OS's if it is newer and fixes more." | `min` and `bundled` |
 
 - `tested` is the version the developer verified. It is shown on the Compatibility screen ("Tested with Wine 9.20; running with 10.2") and is not enforced. `max_major` (optional) is enforced: a system runner with a higher major version is skipped (a developer can fence off a known break), falling back to the bundled copy or failing with a clear message.
 - Versions compare only within a runner **family** (`wine`, `proton`, `proton-ge`, one per emulator id). Each runner carries a `runner.json` (family, version, architecture, entry commands, capabilities), read as untrusted data like everything else. Different families never replace each other.
-- **Per-game override (the player's choice).** Settings for a game (Options menu, "Compatibility") offer "Package default", "Bundled" (if it has one) and "System" (if it satisfies `min`), plus a "Try the bundled runner" safety net after a crash. The choice is stored per profile in the app's own `config/` and cannot widen permissions, since every runner runs in the same sandbox.
+- **Per-game override (the player's choice).** Settings for a game (Options menu, "Compatibility") offer "Package default", "Bundled" (if it has one) and "System" (if it satisfies `min`), plus a "Try the bundled runner" safety net after a crash. The choice is stored per profile by `ruya-library` (T-385, §18 item 3), not in the app's own `config/` where the game could change it, and cannot widen permissions, since every runner runs in the same sandbox.
 - **Why not always "system"?** Wine regressions are real: a game tested on 9.20 may break on 10.x. The developer decides how much to trust the OS's runner; the player can still choose.
 - **Licensing duty of bundled third-party code.** A bundled component declares its SPDX `licence`; for copyleft code (Wine is LGPL-2.1, many emulators are GPL) it must include the licence text under `licences/` and a `source_url` (or the source itself). `ruya-pack validate` checks this and the Official review enforces it. RuyaOS only provides the tool; the developer is the distributor of what they bundle.
 
 ### 6.3 Launching
 
 - `run.command` is an **argv array**, never a shell string. Placeholders (the only substitutions): `${payload}`, `${component:<id>}` (that component's root), `${data}` (`$XDG_DATA_HOME`), `${config}`, `${prefix}` (the Wine prefix), `${disc}` (the first disc image). Anything else is literal.
-- `run.env` is an allow-list: variable names matching `[A-Z][A-Z0-9_]*` and not `LD_*`, `PATH`, `HOME`, `XDG_*`, `FLATPAK_*`, `DBUS_*`, `WAYLAND_*`, `DISPLAY`, `XAUTHORITY`, `PULSE_*`, `PIPEWIRE_*`, `SDL_*` (the platform sets those). Wine/DXVK/Proton variables (`WINE*`, `DXVK_*`, `VKD3D_*`, `PROTON_*`, `STEAM_COMPAT_*`) and `MANGOHUD*` are allowed. Values are plain strings, <= 1024 bytes.
+- `run.env` is a **deny list**, not an allow-list (native games need variables of their own, and a package can do nothing in its own sandbox that it could not do anyway): names match `[A-Z][A-Z0-9_]*` (at most 64 bytes, so `__GLX_*` and `__EGL_*` fail the grammar) and are none of the names the platform sets. The table (`limits.rs`, `ENV_DENY_EXACT` and `ENV_DENY_PREFIX`; refused with `env.reserved`):
+  - exactly: `PATH`, `HOME`, `DISPLAY`, `XAUTHORITY`, `WINEPREFIX`, `WINESERVER`, `WINELOADER`, `WINEDLLPATH`;
+  - prefixes: `LD_`, `XDG_`, `FLATPAK_`, `DBUS_`, `WAYLAND_`, `PULSE_`, `PIPEWIRE_`, `SDL_`, `STEAM_COMPAT_` (the launcher sets them for GE-Proton), `VK_`, `MESA_`, `LIBGL_`, `GST_`, `QT_`, `GTK_`, `GDK_`, `GIO_`.
+
+  `WINEDLLOVERRIDES`, `WINEDEBUG`, `DXVK_*`, `VKD3D_*`, `PROTON_*` and `MANGOHUD*` pass. At most 64 variables; values are plain strings of at most 1024 bytes without control characters.
+- **`run.discs[]`** (optional, at most 16, ordered): payload files for emulated games and multi-disc sets, each a file listed in the table under `payload/`. `${disc}` is `discs[0]`; a `${disc}` in `run.command`, `run.cwd` or a setup command with no `discs` is an error (`run.disc_placeholder_without_discs`).
 - `launch_mode`: `fullscreen` (default) \| `gamescope` \| `default`, the same values as `x-ruya-launch-mode` (03 §4.1).
 - **Wine prefix.** `prefix` lives in the player's data directory, `~/.var/app/play.<id>/data/prefix` (one per profile, one per game), created on first run from `prefix.template` if the package has one (copied, not linked), else by the runner. `epoch` is an integer: when an update raises it, the importer's first launch backs up the paths in `data.saves`, recreates the prefix, and restores them (so a runner change that needs a fresh prefix keeps saves).
 - **First-run setup** (`setup[]`): commands such as a Visual C++ redistributable, run **once per prefix, at first launch, inside the sandbox with the game's own permissions**, never at install time and never as root. They are shown on the launch splash ("Preparing the game for the first time") and have a timeout (10 minutes). A failed setup step is reported, not ignored. There is no network fetch at setup (no `winetricks` downloads): redistributables are shipped in the package.
@@ -294,7 +349,7 @@ A closed vocabulary. The manifest requests; the importer maps each entry to the 
 | `network` | `false` (default) \| `true` | `--share=network` | medium | "Uses the network" |
 | `removable_media` | `none` (default) \| `read` \| `write` | read-only or read-write access to mounted drives under `/run/media` | medium | "Reads / changes files on USB drives" |
 | `multiarch` | bool | `--allow=multiarch` (32-bit Wine) | medium | "Runs 32-bit programs" |
-| `microphone`, `camera`, `bluetooth` | bool | portal / socket access as the platform provides | medium | "Uses the microphone" ... |
+| `microphone`, `camera`, `bluetooth` | not in the vocabulary yet | no portal backend exists (§18 item 12): a package that asks is refused with `permissions.unknown_key`, not silently reduced | | |
 | `gamemode`, `realtime` | bool | talk to GameMode only; no other bus names | low | "Asks the system to prioritise it" |
 | `devel` | bool | `--allow=devel` (ptrace, perf), needed by rare anti-tamper | **high** | "Can inspect other programs" |
 | `reasons` | map key -> localized text (<= 120 chars) | shown next to the permission | | the developer's own words |
@@ -408,7 +463,7 @@ A developer guide chapter and two sample packages (a native Linux one, a Windows
 ## 15. Compatibility and versioning of the format
 
 - `format` is a major number; additive fields keep it; a new required behaviour bumps it. A console supports every major it knows and refuses newer ones with "needs a newer RuyaOS". Developers can keep a package readable by an older console by not using newer fields (the validator has `--target-os`).
-- The schema file `api/play/play.schema.json` is the machine-readable contract (like `api/dbus/*.xml`: a draft until the first release, extend it in the same commit as the code that uses it).
+- The schema file `api/play/play.schema.json` is the machine-readable contract (like `api/dbus/*.xml`: a draft until the first release, extend it in the same commit as the code that uses it). It states the shapes, vocabularies and numbers; the crate `services/ruya-play-format` is the only parser and applies the rules a schema cannot (the file table, paths, cross-references, reserved ids and names). `tests/schema.rs` keeps the schema's numbers and vocabularies equal to the crate's constants. Strict objects (`permissions`, `run`, `components`, and the objects inside them) refuse unknown keys with `permissions.unknown_key`, `run.unknown_key` or `component.unknown_key`; a `format` above the one the crate knows gives `format.too_new` and nothing else is checked.
 - The `play.` Flatpak id prefix and the `${...}` placeholders are part of the format; changing them is a major bump.
 
 ## 16. Open questions (answered by the spike or the owner)
@@ -432,7 +487,7 @@ Epic **T-228** and tasks T-229 to T-243 (the list is in the epic file; T-244 was
 
 ## 18. Review of this draft (lead, 2026-11-10): what to fix before T-230 starts
 
-Found while planning stores (ADR-032, `10-stores.md`). Nothing here is built, so nothing is broken yet; each item names where it gets fixed. **A to D change the design and win over the sections above; the rest are corrections for the first task that touches the section.**
+*Built in RUY-92 (T-230): items 8, 9, 10, 12, 15, 21 and 24 are in the format crate and `api/play/play.schema.json`; items 11, 13, 14, 16 to 20, 22 and 23 belong to later tickets (T-231, T-237, T-239 and the importer).* Found while planning stores (ADR-032, `10-stores.md`). Nothing here is built, so nothing is broken yet; each item names where it gets fixed. **A to D change the design and win over the sections above; the rest are corrections for the first task that touches the section.**
 
 **A. Decided here (the text above is stale where it differs)**
 1. **Stores carry `.play` files, never ready-made `play.<id>` Flatpaks** (`10-stores.md` §11). §11 way 1 ("OSTree deltas, like any other app") is replaced: every install and update, from any store, a feed or a USB drive, goes through the one importer. Reason: a store-built Flatpak would bring its own Flatpak metadata and art, the two things §7.1 and §5 say a package never supplies.
@@ -466,5 +521,5 @@ Found while planning stores (ADR-032, `10-stores.md`). Nothing here is built, so
 23. **USB limits.** A `.play.zip` over 4 GiB does not fit on FAT32, the commonest stick format; the folder form does unless one file is over 4 GiB. `ruya-pack build` warns; the guide recommends exFAT. A stick pulled during import is a clean failure (staging removed): add it to the hostile-case fixtures.
 
 **E. Small**
-24. §12 "Options menu (T-221)" is T-393/T-394; "Library1 ... T-163" is as built. §13 `ruya-pack` gains `index` (`10-stores.md` §11). `requirements.installed_mb` duplicates the file table: compute it, do not declare it.
+24. (*Built in RUY-92: computed.*) §12 "Options menu (T-221)" is T-393/T-394; "Library1 ... T-163" is as built. §13 `ruya-pack` gains `index` (`10-stores.md` §11). `requirements.installed_mb` duplicates the file table: compute it, do not declare it.
 25. Runner extensions pile up (one branch per major): who removes a major no package uses, and what a package pinned by `max_major` does when that major is gone, is not said (T-239).
