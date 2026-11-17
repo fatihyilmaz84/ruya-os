@@ -989,9 +989,9 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
-    <name>BluetoothPane</name>
+    <name>BluetoothDeviceActions</name>
     <message>
-        <location filename="../qml/BluetoothPane.qml" line="+101"/>
+        <location filename="../qml/BluetoothDeviceActions.qml" line="+26"/>
         <source>Forget %1?</source>
         <translation>%1 unutulsun mu?</translation>
     </message>
@@ -1001,7 +1001,25 @@ Bu geri alınamaz.</translation>
         <translation>Kullanılması için yeniden eşleştirilmesi gerekir.</translation>
     </message>
     <message>
-        <location line="+68"/>
+        <location line="+1"/>
+        <source>Forget %1</source>
+        <translation>%1 cihazını unut</translation>
+    </message>
+    <message>
+        <location line="+19"/>
+        <source>That name does not work. Try another.</source>
+        <translation>Bu ad olmaz. Başka bir ad deneyin.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Could not rename the controller.</source>
+        <translation>Kontrolcünün adı değiştirilemedi.</translation>
+    </message>
+</context>
+<context>
+    <name>BluetoothPane</name>
+    <message>
+        <location filename="../qml/BluetoothPane.qml" line="+147"/>
         <source>Pairing…</source>
         <translation>Eşleştiriliyor…</translation>
     </message>
@@ -1021,12 +1039,12 @@ Bu geri alınamaz.</translation>
         <translation>Bağlı</translation>
     </message>
     <message>
-        <location line="+131"/>
+        <location line="+128"/>
         <source>Pair a new controller</source>
         <translation>Yeni kontrolcü eşleştir</translation>
     </message>
     <message>
-        <location line="+118"/>
+        <location line="+91"/>
         <source>Pair again %1</source>
         <translation>%1 cihazını yeniden eşleştir</translation>
     </message>
@@ -1041,7 +1059,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 adını değiştir</translation>
     </message>
     <message>
-        <location line="-271"/>
+        <location line="-241"/>
         <source>Paired</source>
         <translation>Eşleşti</translation>
     </message>
@@ -1081,17 +1099,7 @@ Bu geri alınamaz.</translation>
         <translation>Kontrolcü aramaya başlanamadı.</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>That name does not work. Try another.</source>
-        <translation>Bu ad olmaz. Başka bir ad deneyin.</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Could not rename the controller.</source>
-        <translation>Kontrolcünün adı değiştirilemedi.</translation>
-    </message>
-    <message>
-        <location line="+15"/>
+        <location line="+17"/>
         <source>Another device tried to pair and was turned away.</source>
         <translation>Başka bir cihaz eşleşmeyi denedi ve geri çevrildi.</translation>
     </message>
@@ -1116,8 +1124,7 @@ Bu geri alınamaz.</translation>
         <translation>Taranıyor…</translation>
     </message>
     <message>
-        <location line="-196"/>
-        <location line="+362"/>
+        <location line="+139"/>
         <source>Forget %1</source>
         <translation>%1 cihazını unut</translation>
     </message>
@@ -1639,7 +1646,7 @@ Bu geri alınamaz.</translation>
         <translation>Bluetooth</translation>
     </message>
     <message>
-        <location line="+77"/>
+        <location line="+79"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
@@ -1652,7 +1659,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerPage</name>
     <message>
-        <location filename="../qml/ControllerPage.qml" line="+56"/>
+        <location filename="../qml/ControllerPage.qml" line="+59"/>
         <source>Works</source>
         <translation>Çalışıyor</translation>
     </message>
@@ -1742,12 +1749,12 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+15"/>
         <source>Controller disconnected</source>
         <translation>Kontrolcü bağlantısı kesildi</translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+78"/>
         <source>Button test</source>
         <translation>Düğme testi</translation>
     </message>
@@ -1821,7 +1828,17 @@ Bu geri alınamaz.</translation>
         <translation>Nintendo etiketleri</translation>
     </message>
     <message>
-        <location line="+36"/>
+        <location line="+38"/>
+        <source>Rename %1</source>
+        <translation>%1 adını değiştir</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Forget %1</source>
+        <translation>%1 cihazını unut</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>What it can do</source>
         <translation>Neler yapabilir</translation>
     </message>
@@ -5601,7 +5618,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+704"/>
+        <location filename="../qml/Shell.qml" line="+755"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -5659,7 +5676,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 beklenmedik şekilde durdu</translation>
     </message>
     <message>
-        <location line="+148"/>
+        <location line="+149"/>
         <location line="+29"/>
         <source>Could not close %1.</source>
         <translation>%1 kapatılamadı.</translation>
@@ -5813,7 +5830,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1921"/>
+        <location line="-1922"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -5839,7 +5856,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+62"/>
-        <location line="+107"/>
+        <location line="+108"/>
         <source>Running app</source>
         <translation>Çalışan uygulama</translation>
     </message>

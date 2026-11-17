@@ -14,7 +14,7 @@ import RuyaShell
 // "What it can do" with one read-only row per capability the model has (Input1.GetCapabilities, in
 // descriptor order; buttons, sticks and the D-pad are one row, the battery is in the left column),
 // each saying "Works", "Not passed to games", "Not available now" or "Not supported yet" (06 §4.3).
-// Back (or Left) closes the page. The pad disconnecting closes it (and the Button test over it) with
+// Back (or Left) closes the page. A Bluetooth pad matched to exactly one device also has "Rename %1" and "Forget %1" (RUY-504: the Bluetooth pane's keyboard and confirmation, BluetoothDeviceActions) after the settings rows, before the group; forgetting closes the page without the toast. The pad disconnecting closes it (and the Button test over it) with
 // the toast "Controller disconnected".
 Page {
     id: page
@@ -29,6 +29,9 @@ Page {
     // Button layout in games is editable while GameControls can read the profiles (RUY-500).
     readonly property bool layoutAvailable: Input.confirmButtonsAvailable && GameControls.loadState === "ok"
                                                  && GameControls.pad !== null && GameControls.pad.id === page.padId
+    // The Bluetooth device this pad was matched to (exactly one, ControllerPads), for Rename and Forget (RUY-504).
+    readonly property var btDevice: (pad.btId ?? "") !== "" ? (Bluetooth.devices.find(d => d.id === pad.btId) ?? null) : null
+    readonly property var btShown: btDevice ? DeviceIcons.shownParts(Bluetooth.devices, btDevice) : ({ name: "", tail: "" })
     glyphFamily: pad.family ?? ""
     glyphConfirmMode: confirmMode
     Component.onCompleted: {
@@ -109,14 +112,17 @@ Page {
 
     // The pad disconnected: the page closes (once), with a toast that names it. A page that is
     // closing for any reason (Back too) never asks to close again: that would close the page below.
+    // A pad the player forgot here left on purpose: it closes the page without the toast.
     property bool gone: false
+    property bool forgotOnPurpose: false
     onBackRequested: gone = true
     function checkGone() {
         if (gone || Input.devicesState !== "ok" || Input.devices.some(d => d.id === padId))
             return
         gone = true
-        Notifications.show(qsTr("Controller disconnected"), "info", "", DeviceIcons.iconFor("controller", pad.family, pad.model),
-                           pad.name)
+        if (!forgotOnPurpose)
+            Notifications.show(qsTr("Controller disconnected"), "info", "", DeviceIcons.iconFor("controller", pad.family, pad.model),
+                               pad.name)
         page.backRequested()
     }
 
@@ -163,6 +169,20 @@ Page {
                     elide: Text.ElideRight
                 }
             }
+        }
+    }
+
+    BluetoothDeviceActions {
+        id: actions
+        u: page.u
+        overlay: page.overlay
+        onForgetConfirmed: page.forgotOnPurpose = true
+    }
+    Connections {
+        target: Bluetooth
+        function onFinished(op, id, status) {
+            if (op === "forget" && status !== "ok")
+                page.forgotOnPurpose = false       // refused: the pad is still here
         }
     }
 
@@ -284,6 +304,26 @@ Page {
             secondPosition: buttons ? buttons.b : ""
             firstName: "gamesNoteA"
             secondName: "gamesNoteB"
+        }
+
+        // Rename and Forget for a Bluetooth pad (RUY-504), the Bluetooth pane's own flows.
+        SettingRow {
+            objectName: "rowPadRename"
+            kind: "action"
+            visible: page.btDevice !== null
+            u: page.u
+            label: qsTr("Rename %1").arg(page.btShown.name)
+            labelTail: page.btShown.tail
+            onActivated: actions.askRename(page.btDevice.id, page.btDevice.name, DeviceIcons.shownName(Bluetooth.devices, page.btDevice))
+        }
+        SettingRow {
+            objectName: "rowPadForget"
+            kind: "action"
+            visible: page.btDevice !== null
+            u: page.u
+            label: qsTr("Forget %1").arg(page.btShown.name)
+            labelTail: page.btShown.tail
+            onActivated: actions.askForget(page.btDevice.id, DeviceIcons.shownName(Bluetooth.devices, page.btDevice))
         }
 
         GroupLabel {

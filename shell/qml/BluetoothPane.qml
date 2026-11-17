@@ -92,29 +92,6 @@ SettingsPane {
         Qt.callLater(pane.ensureFocusedVisible)
     }
 
-    // The device the confirmation and the keyboard are for.
-    property string forgetId: ""
-    property string renameId: ""
-
-    function askForget(id, name) {
-        forgetSlot.active = true
-        forgetConfirm.customTitle = qsTr("Forget %1?").arg(name)
-        forgetConfirm.detail = qsTr("It will have to be paired again to be used.")
-        forgetConfirm.customConfirmName = qsTr("Forget %1").arg(name)
-        pane.forgetId = id
-        forgetConfirm.open("custom")
-    }
-
-    // `shown`: the name the row shows (two like pads are told apart by the end of the address), the
-    // keyboard's title; `name` is the pad's alias, what the field starts with.
-    function askRename(id, name, shown) {
-        pane.renameId = id
-        renameSlot.active = true
-        // The part of the shown name that is the end of the address stays whole when the title is cut.
-        const base = DeviceIcons.plain(name)
-        renameEntry.open(shown, name, { maxLength: 48, layout: "text", titleTail: shown.startsWith(base) ? shown.slice(base.length) : "" })
-    }
-
     // The words for a failed operation: the one mapping the pairing screen shares (T-301).
     function statusText(op, status) {
         return BluetoothText.statusText(op, status, "device")
@@ -243,11 +220,8 @@ SettingsPane {
                                                             : qsTr("Could not start looking for controllers."), "warning")
                 return
             }
-            if (op === "rename" && status !== "ok") {
-                Notifications.show(status === "invalid" ? qsTr("That name does not work. Try another.")
-                                                          : qsTr("Could not rename the controller."), "warning")
-                return
-            }
+            if (op === "rename")
+                return                         // BluetoothDeviceActions toasts a failure
             if (op === "connect" && status === "not-confirmed") {
                 const dev = Bluetooth.devices.find(d => d.id === id)
                 if (dev)
@@ -330,35 +304,10 @@ SettingsPane {
     }
     readonly property ControllerOnboarding onboarding: onboardingSlot.item as ControllerOnboarding
 
-    Loader {
-        id: renameSlot
-        parent: pane.overlay
-        width: parent ? parent.width : 0
-        height: parent ? parent.height : 0
-        active: false
-        sourceComponent: Component {
-            TextEntry {
-                objectName: "btRenameEntry"
-                u: pane.u
-                onAccepted: text => Bluetooth.rename(pane.renameId, text)
-            }
-        }
-    }
-    readonly property TextEntry renameEntry: renameSlot.item as TextEntry
-
-    Loader {
-        id: forgetSlot
-        parent: pane.overlay
-        width: parent ? parent.width : 0
-        height: parent ? parent.height : 0
-        active: false
-        sourceComponent: Component {
-            PowerConfirm {
-                objectName: "btForgetConfirm"
-                u: pane.u
-                onConfirmed: Bluetooth.forget(pane.forgetId)
-            }
-        }
+    BluetoothDeviceActions {
+        id: deviceActions
+        u: pane.u
+        overlay: pane.overlay
     }
     Loader {
         id: keyboardSlot
@@ -376,8 +325,6 @@ SettingsPane {
         }
     }
     readonly property PowerConfirm keyboardConfirm: keyboardSlot.item as PowerConfirm
-
-    readonly property PowerConfirm forgetConfirm: forgetSlot.item as PowerConfirm
 
     Repeater {
         model: deviceModel
@@ -446,7 +393,7 @@ SettingsPane {
             u: pane.u
             label: qsTr("Rename %1").arg(shownBase)
             labelTail: shownTail
-            onActivated: pane.askRename(devId, name, shown)
+            onActivated: deviceActions.askRename(devId, name, shown)
         }
     }
 
@@ -464,7 +411,7 @@ SettingsPane {
             u: pane.u
             label: qsTr("Forget %1").arg(shownBase)
             labelTail: shownTail
-            onActivated: pane.askForget(devId, shown)
+            onActivated: deviceActions.askForget(devId, shown)
         }
     }
 }

@@ -51,6 +51,7 @@ QtObject {
                                 : (paired && paired.family ? paired.family : g.family),
                         model: (g.model ?? "") !== "" ? g.model : (paired ? (paired.model ?? "") : ""),
                         transport: g.transport,
+                        btId: paired ? paired.id : "",
                         percent: battery ? battery.percent : (paired && paired.battery >= 0 ? paired.battery : -1),
                         state: battery ? battery.state : "" })
         }
@@ -69,7 +70,7 @@ QtObject {
         return pads
     }
 
-    // Input1's pads as rows: [{ id, name, family, model, connection, layout, percent, state, slot }], sorted by
+    // Input1's pads as rows: [{ id, name, family, model, connection, btId (the matched Bluetooth device's id, "" for USB or no match), layout, percent, state, slot }], sorted by
     // player (slot 1..n; none last), then name, then id.
     function controllers() {
         const devices = Input.devices
@@ -89,6 +90,7 @@ QtObject {
                      family: d.family !== "generic" ? d.family : (hubPad ? hubPad.family : ""),
                      model: (d.model ?? "") !== "" ? d.model : (hubPad ? hubPad.model : ""),
                      connection: d.connection,
+                     btId: hubPad ? hubPad.btId : "",
                      layout: d.layout ?? "",
                      percent: own ? d.battery : (hubPad ? hubPad.percent : -1),
                      state: own ? (d.charging ? "charging" : (d.battery >= 100 ? "full" : "discharging"))
