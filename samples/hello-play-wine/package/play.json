@@ -1,0 +1,38 @@
+{
+  "format": 1,
+  "id": "org.example.helloplaywine",
+  "name": { "en": "Hello Play Wine" },
+  "version": "1.0.0",
+  "build": 1,
+  "summary": { "en": "A tiny Windows game packaged as a .play that runs on the OS's Wine." },
+  "description": { "en": "Move a square with the arrow keys; the step count is saved in the Wine prefix.\n\nThe sample for the .play developer guide: a Windows program, the OS's Wine, a saves path inside the prefix and a first-run setup step." },
+  "developer": { "name": "RuyaOS contributors" },
+  "release_date": "2026-11-17",
+  "genres": ["arcade"],
+  "tags": ["sample", "wine"],
+  "languages": ["en"],
+  "players": { "min": 1, "max": 1, "modes": ["single"] },
+  "controller": "none",
+  "licence": { "package": "CC0-1.0" },
+  "requirements": { "arch": "x86_64", "min_ram_mb": 512 },
+  "art": { "icon": "art/icon.png", "hero": "art/hero.png" },
+  "components": [
+    { "id": "wine", "type": "wine", "source": "system", "min": "9.0", "tested": "9.20" }
+  ],
+  "run": {
+    "runner": "wine",
+    "component": "wine",
+    "command": ["${payload}/hello.exe"],
+    "cwd": "${payload}",
+    "launch_mode": "fullscreen",
+    "prefix": { "arch": "win64", "epoch": 1 },
+    "setup": [
+      { "id": "first-run", "command": ["${payload}/setup.exe"], "once": true }
+    ]
+  },
+  "permissions": {
+    "network": false,
+    "input": "controllers+keyboard-mouse"
+  },
+  "data": { "saves": ["prefix:drive_c/users/steamuser/Documents/Hello Play"] }
+}

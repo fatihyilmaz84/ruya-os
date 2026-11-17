@@ -1,0 +1,6 @@
+# Built by build.sh; nothing here is committed (no binaries, no keys, no packages).
+/package/payload/
+/package/play.files
+/package/play.sig
+*.play.zip
+*.key
