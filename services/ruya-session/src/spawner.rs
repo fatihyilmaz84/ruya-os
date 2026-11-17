@@ -942,7 +942,32 @@ pub fn launch_command(
     app_id: &str,
     env: &[(String, String)],
 ) -> Result<Vec<String>, String> {
-    launch_command_in(user, app_id, env, DisplayMode::Wayland)
+    launch_command_in(user, app_id, env, DisplayMode::Wayland, &[])
+}
+
+/// The image's per-app launch arguments: a line is an app id and the arguments `flatpak run`
+/// passes to that app (`#` starts a comment). Steam gets `-gamepadui`, so it always opens in
+/// Big Picture (owner, 2026-11-17).
+pub const APP_ARGS: &str = "/usr/share/ruyaos/app-args";
+
+/// The arguments the list gives `app_id` (the first line naming it), or none.
+pub fn app_args_from(list: &str, app_id: &str) -> Vec<String> {
+    list.lines()
+        .map(|line| line.split('#').next().unwrap_or("").split_whitespace())
+        .find_map(|mut words| {
+            (words.next() == Some(app_id)).then(|| words.map(str::to_owned).collect())
+        })
+        .unwrap_or_default()
+}
+
+/// A launch argument is one plain word (it reaches `systemd-run` and the app's argv as one
+/// entry): ASCII letters, digits and `-_.=:/`, at most 64 characters.
+pub fn valid_app_arg(arg: &str) -> bool {
+    !arg.is_empty()
+        && arg.len() <= 64
+        && arg
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '=' | ':' | '/'))
 }
 
 /// How an app reaches the screen (ADR-034): on the profile's Wayland socket, or through a private
@@ -959,18 +984,23 @@ pub const SESSION_PROGRAM: &str = "/usr/bin/ruya-session";
 
 /// `launch_command` for either display mode. In X11 mode the unit runs
 /// `ruya-session x11-run <app_id>` (which starts the X server and then `flatpak run`) and cleans
-/// up with `ruya-session x11-cleanup <app_id>` after any end, a Stop included.
+/// up with `ruya-session x11-cleanup <app_id>` after any end, a Stop included. `app_args`
+/// (from `APP_ARGS`) follow the app id in both modes; `x11-run` hands them to `flatpak run`.
 pub fn launch_command_in(
     user: &str,
     app_id: &str,
     env: &[(String, String)],
     mode: DisplayMode,
+    app_args: &[String],
 ) -> Result<Vec<String>, String> {
     if !user.strip_prefix("ruya-").is_some_and(valid_profile_id) {
         return Err(format!("not a profile user: {user:?}"));
     }
     if !valid_app_id(app_id) {
         return Err(format!("not an application id: {app_id:?}"));
+    }
+    if let Some(bad) = app_args.iter().find(|a| !valid_app_arg(a)) {
+        return Err(format!("bad launch argument for {app_id}: {bad:?}"));
     }
     let mut args: Vec<String> = [
         "systemd-run",
@@ -1011,6 +1041,7 @@ pub fn launch_command_in(
         }
     }
     args.push(app_id.to_owned());
+    args.extend(app_args.iter().cloned());
     Ok(args)
 }
 
@@ -1830,7 +1861,7 @@ mod tests {
     #[test]
     fn an_x11_launch_runs_the_helper_and_cleans_up_after_it() {
         let app = "io.github.divVerent.aaaaxy";
-        let args = launch_command_in("ruya-p1", app, &env(), DisplayMode::X11).expect("valid");
+        let args = launch_command_in("ruya-p1", app, &env(), DisplayMode::X11, &[]).expect("valid");
         assert_eq!(
             args,
             [
@@ -1853,10 +1884,81 @@ mod tests {
         // No PrivateTmp: Flatpak binds the host's /tmp/.X11-unix/X<n> into the sandbox.
         assert!(!args.iter().any(|a| a.contains("PrivateTmp")));
         assert_eq!(
-            launch_command_in("ruya-p1", app, &env(), DisplayMode::Wayland),
+            launch_command_in("ruya-p1", app, &env(), DisplayMode::Wayland, &[]),
             launch_command("ruya-p1", app, &env())
         );
-        assert!(launch_command_in("ruya-p1", "../x", &env(), DisplayMode::X11).is_err());
+        assert!(launch_command_in("ruya-p1", "../x", &env(), DisplayMode::X11, &[]).is_err());
+    }
+
+    #[test]
+    fn launch_arguments_follow_the_app_id_in_both_modes() {
+        let steam = "com.valvesoftware.Steam";
+        let gamepadui = vec!["-gamepadui".to_owned()];
+        let x11 = launch_command_in("ruya-p1", steam, &env(), DisplayMode::X11, &gamepadui)
+            .expect("valid");
+        assert_eq!(
+            x11[x11.len() - 4..],
+            ["/usr/bin/ruya-session", "x11-run", steam, "-gamepadui"]
+        );
+        // The cleanup needs no arguments.
+        assert!(x11.contains(&format!(
+            "--property=ExecStopPost=/usr/bin/ruya-session x11-cleanup {steam}"
+        )));
+        let wayland = launch_command_in("ruya-p1", steam, &env(), DisplayMode::Wayland, &gamepadui)
+            .expect("valid");
+        assert_eq!(
+            wayland[wayland.len() - 5..],
+            ["--", "flatpak", "run", steam, "-gamepadui"]
+        );
+        for bad in ["", "-a b", "--x;rm", "$(x)", "a\nb", &"x".repeat(65)] {
+            assert!(
+                launch_command_in(
+                    "ruya-p1",
+                    steam,
+                    &env(),
+                    DisplayMode::X11,
+                    &[bad.to_owned()]
+                )
+                .is_err(),
+                "{bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_launch_argument_list_is_read_per_app() {
+        let list = "# comment\n\norg.other.App -a\ncom.valvesoftware.Steam  -gamepadui  # Big Picture\ncom.valvesoftware.Steam -late\n";
+        assert_eq!(
+            app_args_from(list, "com.valvesoftware.Steam"),
+            ["-gamepadui"]
+        );
+        assert_eq!(app_args_from(list, "org.other.App"), ["-a"]);
+        assert!(app_args_from(list, "org.other.Ap").is_empty());
+        assert!(
+            app_args_from("# com.valvesoftware.Steam -x\n", "com.valvesoftware.Steam").is_empty()
+        );
+        assert!(app_args_from("", "com.valvesoftware.Steam").is_empty());
+    }
+
+    #[test]
+    fn the_image_starts_steam_in_big_picture() {
+        let list = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../image/rootfs/usr/share/ruyaos/app-args"),
+        )
+        .expect("image/rootfs/usr/share/ruyaos/app-args");
+        assert_eq!(
+            app_args_from(&list, "com.valvesoftware.Steam"),
+            ["-gamepadui"]
+        );
+        // Every argument the image ships is one the launch accepts.
+        for line in list.lines() {
+            let mut words = line.split('#').next().unwrap_or("").split_whitespace();
+            if let Some(app) = words.next() {
+                assert!(valid_app_id(app), "{app:?}");
+                assert!(words.all(valid_app_arg), "{line:?}");
+            }
+        }
     }
 
     #[test]

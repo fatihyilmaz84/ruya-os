@@ -1,0 +1,7 @@
+# Per-app launch arguments: an app id, then the arguments `flatpak run <id>` passes to the app.
+# Read by services/ruya-session (spawner::APP_ARGS) at every launch; spec 03, "Launch arguments".
+# One plain word per argument: ASCII letters, digits and -_.=:/ (spawner::valid_app_arg).
+
+# Steam always opens in Big Picture (owner, 2026-11-17): one fullscreen, controller-first window.
+# Its desktop mode opens several windows (main, friends list) of which the console shows one.
+com.valvesoftware.Steam -gamepadui

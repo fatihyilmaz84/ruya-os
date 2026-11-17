@@ -19,12 +19,12 @@ use ruya_session::usage_store::FileStore;
 use ruya_session::usage_tracker::Tracker;
 
 fn main() {
-    // `x11-run <app id>` / `x11-cleanup <app id>`: the main process and the ExecStopPost of an
-    // X11-mode app unit, as the profile user (ADR-034, `ruya_session::x11`).
+    // `x11-run <app id> [launch args]` / `x11-cleanup <app id>`: the main process and the
+    // ExecStopPost of an X11-mode app unit, as the profile user (ADR-034, `ruya_session::x11`).
     let args: Vec<String> = std::env::args().collect();
-    if let [_, verb, app_id] = args.as_slice() {
-        if verb == "x11-run" || verb == "x11-cleanup" {
-            x11_subcommand(verb, app_id);
+    if let [_, verb, app_id, app_args @ ..] = args.as_slice() {
+        if verb == "x11-run" || (verb == "x11-cleanup" && app_args.is_empty()) {
+            x11_subcommand(verb, app_id, app_args);
         }
     }
     if let Err(err) = run() {
@@ -34,7 +34,7 @@ fn main() {
 }
 
 #[cfg(target_os = "linux")]
-fn x11_subcommand(verb: &str, app_id: &str) -> ! {
+fn x11_subcommand(verb: &str, app_id: &str, app_args: &[String]) -> ! {
     use ruya_session::x11::{exit_like, run_cleanup, run_helper, End, LinuxOs};
     let mut os = LinuxOs::default();
     let runtime = std::env::var("XDG_RUNTIME_DIR").ok();
@@ -48,11 +48,12 @@ fn x11_subcommand(verb: &str, app_id: &str) -> ! {
         app_id,
         runtime.as_deref(),
         wayland.as_deref(),
+        app_args,
     ))
 }
 
 #[cfg(not(target_os = "linux"))]
-fn x11_subcommand(verb: &str, _app_id: &str) -> ! {
+fn x11_subcommand(verb: &str, _app_id: &str, _app_args: &[String]) -> ! {
     eprintln!("ruya-session: {verb} needs Linux");
     std::process::exit(ruya_session::x11::EXIT_LAUNCH_FAILED)
 }

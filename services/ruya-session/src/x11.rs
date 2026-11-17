@@ -32,9 +32,10 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::spawner::valid_app_id;
+use crate::spawner::{valid_app_arg, valid_app_id};
 
-/// The per-app override list: an app id per line (`#` starts a comment). Empty in the image.
+/// The per-app override list: an app id per line (`#` starts a comment). The image ships
+/// `image/rootfs/usr/share/ruyaos/x11-apps` (Steam).
 pub const X11_OVERRIDES: &str = "/usr/share/ruyaos/x11-apps";
 /// The X server bridge (ADR-034 point 4; RUY-434 ships it patched for Qt's compositor).
 pub const SATELLITE_PROGRAM: &str = "/usr/bin/xwayland-satellite";
@@ -218,9 +219,11 @@ pub fn app_env_x11(display: u32, auth: &Path) -> Vec<(String, Option<String>)> {
     ]
 }
 
-/// The app's argument list.
-pub fn app_argv(app_id: &str) -> Vec<String> {
-    vec!["flatpak".to_owned(), "run".to_owned(), app_id.to_owned()]
+/// The app's argument list: `flatpak run <id>` and the image's launch arguments for it.
+pub fn app_argv(app_id: &str, app_args: &[String]) -> Vec<String> {
+    let mut argv = vec!["flatpak".to_owned(), "run".to_owned(), app_id.to_owned()];
+    argv.extend(app_args.iter().cloned());
+    argv
 }
 
 /// How a process ended.
@@ -356,17 +359,23 @@ fn end_process(os: &mut dyn X11Os, pid: u32) {
     }
 }
 
-/// The `x11-run` helper: starts a private X server, runs the app on it, cleans up. Returns how
+/// The `x11-run` helper: starts a private X server, runs the app on it (with the launch
+/// arguments `spawner::launch_command_in` put after the app id), cleans up. Returns how
 /// the app ended, or `End::Code(EXIT_LAUNCH_FAILED)` when no X server came up.
 pub fn run_helper(
     os: &mut dyn X11Os,
     app_id: &str,
     runtime_dir: Option<&str>,
     wayland: Option<&str>,
+    app_args: &[String],
 ) -> End {
     let fail = End::Code(EXIT_LAUNCH_FAILED);
     if !valid_app_id(app_id) {
         os.log(&format!("not an application id: {app_id:?}"));
+        return fail;
+    }
+    if let Some(bad) = app_args.iter().find(|a| !valid_app_arg(a)) {
+        os.log(&format!("bad launch argument: {bad:?}"));
         return fail;
     }
     let Some(runtime) = runtime_dir.filter(|d| d.starts_with('/')) else {
@@ -464,7 +473,7 @@ pub fn run_helper(
         return fail;
     }
     os.log(&format!("{app_id} runs on display :{n}"));
-    let end = match os.run(&app_argv(app_id), &app_env_x11(n, &auth)) {
+    let end = match os.run(&app_argv(app_id, app_args), &app_env_x11(n, &auth)) {
         Ok(end) => end,
         Err(err) => {
             os.log(&format!("cannot run flatpak: {err}"));
@@ -788,6 +797,21 @@ mod tests {
     }
 
     #[test]
+    fn the_image_runs_steam_in_x11_mode() {
+        // The shipped list, against the Steam Flatpak's real sockets (Flathub, 2026-11-17):
+        // it lists wayland too, so without the list Steam would start without a DISPLAY.
+        let list = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../image/rootfs/usr/share/ruyaos/x11-apps"),
+        )
+        .expect("image/rootfs/usr/share/ruyaos/x11-apps");
+        let steam = "[Context]\nshared=ipc;network;\nsockets=pulseaudio;wayland;x11;\n";
+        assert!(!needs_x11(steam, "com.valvesoftware.Steam", ""));
+        assert!(needs_x11(steam, "com.valvesoftware.Steam", &list));
+        assert!(!needs_x11("[Context]\nsockets=wayland;\n", APP, &list));
+    }
+
+    #[test]
     fn the_mode_is_read_from_the_installed_metadata() {
         let root = std::env::temp_dir().join(format!("ruya-x11-meta-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
@@ -865,7 +889,11 @@ mod tests {
                 ("WAYLAND_DISPLAY".to_owned(), None),
             ]
         );
-        assert_eq!(app_argv(APP), ["flatpak", "run", APP]);
+        assert_eq!(app_argv(APP, &[]), ["flatpak", "run", APP]);
+        assert_eq!(
+            app_argv(APP, &["-gamepadui".to_owned()]),
+            ["flatpak", "run", APP, "-gamepadui"]
+        );
         assert_eq!(socket_path(3), Path::new("/tmp/.X11-unix/X3"));
         assert_eq!(lock_path(3), Path::new("/tmp/.X3-lock"));
     }
@@ -1102,7 +1130,7 @@ mod tests {
     }
 
     fn helper(os: &mut Fake) -> End {
-        run_helper(os, APP, Some(RUNTIME), Some(WAYLAND))
+        run_helper(os, APP, Some(RUNTIME), Some(WAYLAND), &[])
     }
 
     #[test]
@@ -1293,19 +1321,29 @@ mod tests {
     fn the_helper_refuses_a_broken_environment() {
         let mut os = Fake::new();
         assert_eq!(
-            run_helper(&mut os, "../x", Some(RUNTIME), Some(WAYLAND)),
+            run_helper(&mut os, "../x", Some(RUNTIME), Some(WAYLAND), &[]),
             End::Code(EXIT_LAUNCH_FAILED)
         );
         assert_eq!(
-            run_helper(&mut os, APP, None, Some(WAYLAND)),
+            run_helper(
+                &mut os,
+                APP,
+                Some(RUNTIME),
+                Some(WAYLAND),
+                &["a;b".to_owned()]
+            ),
             End::Code(EXIT_LAUNCH_FAILED)
         );
         assert_eq!(
-            run_helper(&mut os, APP, Some("run/user"), Some(WAYLAND)),
+            run_helper(&mut os, APP, None, Some(WAYLAND), &[]),
             End::Code(EXIT_LAUNCH_FAILED)
         );
         assert_eq!(
-            run_helper(&mut os, APP, Some(RUNTIME), None),
+            run_helper(&mut os, APP, Some("run/user"), Some(WAYLAND), &[]),
+            End::Code(EXIT_LAUNCH_FAILED)
+        );
+        assert_eq!(
+            run_helper(&mut os, APP, Some(RUNTIME), None, &[]),
             End::Code(EXIT_LAUNCH_FAILED)
         );
         os.dirs.remove(Path::new(X11_SOCKET_DIR));

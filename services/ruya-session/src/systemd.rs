@@ -51,11 +51,12 @@ use crate::follow::{
 };
 use crate::scope::{RunScopes, Sweep};
 use crate::spawner::{
-    active_app_scopes, any_swap, app_scopes, cancel_reclaim_command, control_command,
-    control_groups_command, flatpak_app_installed, kill_command, launch_command_in,
-    list_scopes_command, park_audio_command, parse_control_groups, parse_profile_users, parse_show,
-    pulse_start_command, reclaim_amount, reclaim_command, sweep_commands, unit_app_id, unit_name,
-    LineTail, RunFollower, RunningUnit, ShowUnit, KILL_VERB, SHOW_PROPERTIES, SWAP_COMMAND,
+    active_app_scopes, any_swap, app_args_from, app_scopes, cancel_reclaim_command,
+    control_command, control_groups_command, flatpak_app_installed, kill_command,
+    launch_command_in, list_scopes_command, park_audio_command, parse_control_groups,
+    parse_profile_users, parse_show, pulse_start_command, reclaim_amount, reclaim_command,
+    sweep_commands, unit_app_id, unit_name, LineTail, RunFollower, RunningUnit, ShowUnit, APP_ARGS,
+    KILL_VERB, SHOW_PROPERTIES, SWAP_COMMAND,
 };
 use crate::spawner::{
     AdoptLister, AudioJob, AudioQueue, DisplayMode, Listing, ReclaimLedger, Spawner, UnitEvent,
@@ -492,7 +493,12 @@ impl Spawner for SystemdSpawner {
         } else {
             DisplayMode::Wayland
         };
-        let args = launch_command_in(user, app_id, env, mode)?;
+        // Per-app launch arguments from the image (Steam: Big Picture); a missing file is none.
+        let app_args = app_args_from(
+            &std::fs::read_to_string(APP_ARGS).unwrap_or_default(),
+            app_id,
+        );
+        let args = launch_command_in(user, app_id, env, mode, &app_args)?;
         let unit = unit_name(user, app_id);
         self.gate
             .units
