@@ -564,7 +564,7 @@ Item {
             compare(find("whosPlayingDetail").text, "", "Player One's own card says nothing")
             keyClick(Qt.Key_Right)
             DeviceSettings.language = "tr"
-            tryVerify(() => find("whosPlayingDetail").text === "Bu kumanda artık Player One olarak oynamıyor.", 2000,
+            tryVerify(() => find("whosPlayingDetail").text === "Bu kontrolcü artık Player One olarak oynamıyor.", 2000,
                       "the open prompt follows the language")
             compare(cardList().currentIndex, 1, "the model did not reset")
             keyClick(Qt.Key_Right)                                  // p3, the guest-role profile (RUY-680)

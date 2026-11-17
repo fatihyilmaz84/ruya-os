@@ -15,7 +15,9 @@ QtObject {
     // Whether this profile may see "Install from USB" at all. True today: a Standard profile sees it and an admin's
     // PIN gates the install (05 §18 item 4). Restricted profiles (parental controls, T-211) get false here once
     // that flag exists; the Store's entry, Settings -> Storage and the sources page all read this one property.
-    readonly property bool installFromUsbAllowed: true
+    // It is also false while ruya-play is not running (`Play.available`): the list would be empty even with a stick
+    // plugged in (RUY-809).
+    readonly property bool installFromUsbAllowed: Play.available
 
     // "Folder" / "ZIP file": what a source is, under its name.
     function kindText(kind) {
@@ -111,5 +113,23 @@ QtObject {
         if (verdict === "bad-signature")
             return qsTr("It can't be installed. Get a fresh copy from the developer.")
         return jobStatusText(verdict)
+    }
+
+    // The toasts of an install that ends while its package page is closed (the page's own result is its toast or dialog).
+    function installedToast() {
+        return language === undefined ? "" : qsTr("Installed", "Toast: the install finished")
+    }
+
+    function notInstalledToast() {
+        return language === undefined ? "" : qsTr("Not installed", "Toast: the install failed")
+    }
+
+    // An installed game that was revoked after it was installed: Play is replaced by Remove and this line.
+    function revokedInstalledLine() {
+        return language === undefined ? "" : qsTr("It won't start. You can still remove it.")
+    }
+
+    function removeLabel() {
+        return language === undefined ? "" : qsTr("Remove")
     }
 }

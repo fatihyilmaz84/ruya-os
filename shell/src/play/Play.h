@@ -65,6 +65,8 @@ public:
     Q_INVOKABLE void mockSetDriveMounted(bool mounted);
     Q_INVOKABLE void mockSetDeveloperMode(bool on);
     Q_INVOKABLE void mockCorruptInstalled(const QString &appId);
+    // The app is installed at this build (a game put on the block list after it was installed: oldbad, 7).
+    Q_INVOKABLE void mockSetInstalled(const QString &appId, uint build);
     Q_INVOKABLE void mockPauseJobs(bool paused);
     // The running job stands still after it reported this percent, until mockPauseJobs(false).
     Q_INVOKABLE void mockPauseAtPercent(int percent);

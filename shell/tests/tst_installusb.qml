@@ -582,6 +582,147 @@ Item {
             tryCompare(tc.shell, "currentPage", "")
         }
 
+        // ---- RUY-809: after the page, Back-only hints, a revoked installed game, no ruya-play ----
+
+        // Starts an install, lets it reach `percent` and leaves the page; the job goes on.
+        function installAndLeave(fixture, percent) {
+            openPackage(fixture)
+            Play.mockPauseAtPercent(percent)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installConfirm").shown, 2000)
+            keyClick(Qt.Key_Return)
+            const key = Play.mockPath(fixture)
+            tryVerify(() => Play.jobs[key] !== undefined && Play.jobs[key].percent >= percent, 5000)
+            closePackage()
+            return key
+        }
+
+        function test_an_install_that_ends_after_the_page_closed_gives_a_toast() {
+            start("admin")
+            const key = installAndLeave("starhopper", 30)
+            compare(toastTexts().length, 0, "nothing yet")
+            Play.mockPauseJobs(false)
+            tryVerify(() => toastTexts().length > 0, 15000)
+            compare(toastTexts(), ["Installed: Star Hopper"])
+            wait(300)
+            compare(toastTexts().length, 1, "one toast")
+            verify(Play.jobs[key] === undefined)
+        }
+
+        function test_a_failed_install_after_the_page_closed_gives_an_error_toast_with_the_sentence() {
+            start("admin")
+            installAndLeave("flaky", 30)
+            Play.mockPauseJobs(false)
+            tryVerify(() => toastTexts().length > 0, 15000)
+            compare(toastTexts(), ["Not installed: The install didn't finish. Try again."])
+            compare(Notifications.model.get(0).kind, "error")
+        }
+
+        function test_a_cancelled_install_after_the_page_closed_gives_no_toast() {
+            start("admin")
+            const key = installAndLeave("starhopper", 30)
+            Play.cancel(key)
+            Play.mockPauseJobs(false)
+            tryVerify(() => Play.jobs[key] === undefined, 5000)
+            wait(300)
+            compare(toastTexts().length, 0)
+        }
+
+        function test_an_install_that_ends_with_the_page_open_gives_no_second_toast() {
+            start("admin")
+            openPackage("flaky")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installConfirm").shown, 2000)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installResult").shown, 15000)
+            wait(300)
+            compare(toastTexts().length, 0, "the page shows a dialog, the Shell stays quiet")
+            keyClick(Qt.Key_Return)
+            closePackage()
+            openPackage("starhopper")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installConfirm").shown, 2000)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installInstalledBadge").visible, 15000)
+            wait(300)
+            compare(toastTexts(), ["Installed: Star Hopper"])
+        }
+
+        function test_hints_are_back_only_while_install_is_dimmed_or_past_cancel() {
+            start("admin")
+            openPackage("homebrew")                  // needs developer mode: Install is dimmed
+            verify(find("installButton").dimmed)
+            verify(find("installButton").activeFocus)
+            compare(shown(), "back Back", "dimmed Install")
+            closePackage()
+            openPackage("tampered")
+            compare(shown(), "back Back", "dimmed Install (changed)")
+            closePackage()
+            openPackage("starhopper")
+            compare(shown(), "accept Select|back Back", "Install works")
+            closePackage()
+            // Past committing the job has no Cancel.
+            installAndLeave("starhopper", 60)
+            tc.shell.openPage("installPackage", { path: Play.mockPath("starhopper") })
+            tryCompare(tc.shell, "currentPage", "installPackage")
+            tryVerify(() => page().info !== null, 3000, "Inspect answered")
+            tryCompare(page(), "mode", "busy")
+            verify(!find("installCancel").visible)
+            // The focus may not have settled on a stop yet: then (and on any stop that only reads) it is Back only.
+            if (!find("installTrustRow").activeFocus)
+                compare(shown(), "back Back", "no Cancel from committing on")
+            find("installTrustRow").forceActiveFocus()
+            compare(shown(), "accept Select|back Back", "the trust row opens the signer sheet")
+            find("installPermissions").forceActiveFocus()
+            compare(shown(), "back Back", "past Cancel, nothing to select")
+            Play.mockPauseJobs(false)
+        }
+
+        function test_an_installed_game_that_was_revoked_offers_remove_not_play() {
+            start("admin")
+            Play.mockSetInstalled("com.example.oldbad", 7)
+            openPackage("oldbad")
+            tryCompare(page(), "mode", "remove")
+            verify(find("installRemove").visible)
+            verify(!find("installPlay").visible)
+            verify(!find("installButton").visible)
+            verify(find("installRemove").activeFocus, "Remove is the main button")
+            verify(find("installBlocked").visible)
+            compare(find("installBlocked").text, "It won't start. You can still remove it.")
+            compare(shown(), "accept Select|back Back")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("uninstallConfirm").shown, 2000, "Remove opens the Uninstall dialog")
+            compare(find("uninstallConfirm").appId, "play.com.example.oldbad")
+            keyClick(Qt.Key_Escape)
+            // Not installed: the page is as before (Install dimmed with the reason).
+            closePackage()
+            Play.mockSetInstalled("com.example.oldbad", 0)
+            openPackage("oldbad")
+            verify(find("installButton").visible && !find("installRemove").visible)
+        }
+
+        function test_install_from_usb_is_hidden_without_ruya_play() {
+            start("admin")
+            tc.shell.openPage("store")
+            tryCompare(tc.shell, "currentPage", "store")
+            tryVerify(() => find("storeInstallUsb") && find("storeInstallUsb").visible, 2000)
+            Storage.mockReset()
+            Storage.mockPlugStick()
+            Play.mockServiceLost()
+            tryCompare(Play, "available", false)
+            tryVerify(() => !find("storeInstallUsb").visible, 2000, "the Store's entry")
+            tc.shell.closePage()
+            tryCompare(tc.shell, "currentPage", "")
+            tc.shell.openPage("settings", { category: "storage" })
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("paneStorage") !== null && find("paneStorage").visible, 3000)
+            tryVerify(() => find("storageVol_vol-stick") !== null, 3000, "the drive is listed")
+            verify(find("storagePackages_vol-stick") === null, "Settings -> Storage")
+            Play.mockServiceRegained()
+            tryCompare(Play, "available", true)
+            tryVerify(() => find("storagePackages_vol-stick") !== null, 3000, "and it is back with the service")
+        }
+
         // ---- Screenshots (dev.ps1 shots) ----
 
         function settle() { wait(300) }
@@ -589,14 +730,29 @@ Item {
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
-            const shot = name => grabImage(tc.shell).save(shotsDir + "/" + name + ".png")
+            // A toast of an earlier step must not sit in the next picture (120-tr and 128 once showed "Installed").
+            const clearToasts = () => {
+                while (Notifications.model.count > 0)
+                    Notifications.dismiss(Notifications.model.get(0).toastId)
+                Notifications.pending = []
+                Notifications.held = []
+            }
+            const shot = name => {
+                clearToasts()
+                wait(600)                       // the toast's fade-out (Theme.pageMs) ends before the picture
+                clearToasts()
+                tryCompare(Notifications.model, "count", 0)
+                grabImage(tc.shell).save(shotsDir + "/" + name + ".png")
+            }
             for (const lang of ["en", "tr"]) {
                 DeviceSettings.language = lang
                 Play.mockReset()
+                clearToasts()
                 start("admin")
                 tc.shell.openPage("installSources", {})
                 tryCompare(tc.shell, "currentPage", "installSources")
                 tryVerify(() => find("sourcesList").count === 11, 2000)
+                clearToasts()
                 settle()
                 shot("120-install-sources-" + lang)
                 closePackage()
@@ -643,9 +799,38 @@ Item {
                 tryVerify(() => find("installConfirm").shown, 2000)
                 keyClick(Qt.Key_Return)
                 tryVerify(() => find("installResult").shown, 15000)
+                clearToasts()
                 settle()
                 shot("128-install-failed-" + lang)
                 keyClick(Qt.Key_Return)
+                closePackage()
+
+                // Past committing: no Cancel, the hint bar says Back only. A fresh mock: starhopper is installed by now.
+                Play.mockReset()
+                openPackage("starhopper")
+                Play.mockPauseAtPercent(60)
+                keyClick(Qt.Key_Return)
+                tryVerify(() => find("installConfirm").shown, 2000)
+                keyClick(Qt.Key_Return)
+                tryVerify(() => Play.jobs[Play.mockPath("starhopper")] !== undefined && Play.jobs[Play.mockPath("starhopper")].percent >= 60, 5000)
+                tryVerify(() => !find("installCancel").visible, 3000)
+                // Off the trust row (Select opens the signer sheet) onto a block that only reads: Back is the one hint.
+                for (let i = 0; i < 6 && shown().indexOf("accept") >= 0; ++i)
+                    keyClick(Qt.Key_Down)
+                verify(shown().indexOf("accept") < 0, "Back only: " + shown())
+                settle()
+                shot("130-install-busy-hint-" + lang)
+                Play.mockPauseJobs(false)
+                tryVerify(() => find("installInstalledBadge").visible, 15000)
+                closePackage()
+
+                // An installed game that was put on the block list: Remove and the line.
+                Play.mockReset()
+                Play.mockSetInstalled("com.example.oldbad", 7)
+                openPackage("oldbad")
+                clearToasts()
+                settle()
+                shot("131-install-revoked-installed-" + lang)
                 closePackage()
 
                 Profiles.lock()

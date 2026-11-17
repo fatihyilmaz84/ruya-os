@@ -173,6 +173,12 @@ void Play::mockSetDeveloperMode(bool on)
         mock->setDeveloperMode(on);
 }
 
+void Play::mockSetInstalled(const QString &appId, uint build)
+{
+    if (auto *mock = qobject_cast<MockPlayBackend *>(m_backend.get()))
+        mock->setInstalled(appId, build);
+}
+
 void Play::mockCorruptInstalled(const QString &appId)
 {
     if (auto *mock = qobject_cast<MockPlayBackend *>(m_backend.get()))
