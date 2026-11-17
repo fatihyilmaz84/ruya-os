@@ -668,7 +668,13 @@ Item {
             tryVerify(() => page().info !== null, 3000, "Inspect answered")
             tryCompare(page(), "mode", "busy")
             verify(!find("installCancel").visible)
-            compare(shown(), "back Back", "no Cancel from committing on")
+            // The focus may not have settled on a stop yet: then (and on any stop that only reads) it is Back only.
+            if (!find("installTrustRow").activeFocus)
+                compare(shown(), "back Back", "no Cancel from committing on")
+            find("installTrustRow").forceActiveFocus()
+            compare(shown(), "accept Select|back Back", "the trust row opens the signer sheet")
+            find("installPermissions").forceActiveFocus()
+            compare(shown(), "back Back", "past Cancel, nothing to select")
             Play.mockPauseJobs(false)
         }
 
@@ -729,10 +735,14 @@ Item {
                 while (Notifications.model.count > 0)
                     Notifications.dismiss(Notifications.model.get(0).toastId)
                 Notifications.pending = []
+                Notifications.held = []
             }
             const shot = name => {
-                grabImage(tc.shell).save(shotsDir + "/" + name + ".png")
                 clearToasts()
+                wait(600)                       // the toast's fade-out (Theme.pageMs) ends before the picture
+                clearToasts()
+                tryCompare(Notifications.model, "count", 0)
+                grabImage(tc.shell).save(shotsDir + "/" + name + ".png")
             }
             for (const lang of ["en", "tr"]) {
                 DeviceSettings.language = lang
@@ -804,7 +814,7 @@ Item {
                 keyClick(Qt.Key_Return)
                 tryVerify(() => Play.jobs[Play.mockPath("starhopper")] !== undefined && Play.jobs[Play.mockPath("starhopper")].percent >= 60, 5000)
                 tryVerify(() => !find("installCancel").visible, 3000)
-                clearToasts()
+                keyClick(Qt.Key_Down)               // off the trust row (Select opens the signer sheet): nothing to select
                 settle()
                 shot("130-install-busy-hint-" + lang)
                 Play.mockPauseJobs(false)
