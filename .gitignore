@@ -2,6 +2,7 @@
 /target/
 /build/
 services/target/
+services/target-samples/
 shell/build/
 image/bib/config.toml
 *.qcow2

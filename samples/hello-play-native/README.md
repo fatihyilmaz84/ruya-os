@@ -21,7 +21,7 @@ build.sh            compile the game, then build the zip with ruya-pack
 make-art.py         draws the two PNGs (Python standard library, same bytes every run)
 ```
 
-No binary is committed. The tests (`services/ruya-pack/tests/samples.rs`) copy `package/` to a scratch folder, write a stand-in file where the compiled game goes and run `ruya-pack build`, `validate` and `inspect` on it, so they need no compiler.
+No binary is committed. The tests (`services/ruya-pack/tests/samples.rs`) copy `package/` to a scratch folder, write a stand-in file where the compiled game goes and run `ruya-pack build`, `validate` and `inspect` on it, so they need no compiler. CI compiles the game and builds and inspects the zip on every push (`scripts/ci-samples-linux.sh`).
 
 ## Build
 
