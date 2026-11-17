@@ -79,7 +79,7 @@ A store is somebody else's server. These hold for every third-party store, are e
 
 ## 6. The blocklist (planned: T-441)
 
-A file in the image, `/usr/share/ruyaos/store-blocklist` (key fingerprints and URL hosts, one per line, with a reason), updated only with OS updates and therefore signed with them. The service reads it at start and after an OS update. Empty at first. Only the owner adds an entry (malware, a stolen key), each with a reason an admin can read on the console (owner, 2026-11-10).
+A file in the image, `/usr/share/ruyaos/store-blocklist` (key fingerprints and URL hosts, one per line, with a reason), updated only with OS updates and therefore signed with them. The service reads it at start and after an OS update. Empty at first. Only the owner adds an entry (malware, a stolen key), each with a reason an admin can read on the console (owner, 2026-11-10). The file has a `serial <n>` header line and two sections: `[stores]` (this section, T-441) and `[packages]`, the `.play` revocation entries (key ids, id and build ranges, content and runner hashes; grammar in 05 §9.2, read by `ruya-play-trust` since RUY-93, which skips `[stores]`).
 
 ## 7. Contract (`org.ruyaos.Store1`, draft until the first release; planned: T-440)
 
