@@ -162,7 +162,7 @@ Required: `format`, `id`, `name`, `version`, `build`, `art` and `run` (with `art
 | `art.logo` | Optional title logo. |
 | `art.hero` | The big 16:9 picture. Needed to be placed on Home. |
 | `art.cover` | Optional 2:3 poster. |
-| `art.screenshots` | Up to 20 screenshots. |
+| `art.screenshots` | 1 to 20 screenshots. |
 | `art.screenshots[].file` | A path under `art/`. |
 | `art.screenshots[].caption` | Localized, at most 100 characters. |
 | `art.trailer` | Optional video. |
@@ -209,7 +209,7 @@ Required: `format`, `id`, `name`, `version`, `build`, `art` and `run` (with `art
 | `data` | Where your saves are, for backup. |
 | `data.saves` | Up to 32 paths with a root name: `data:` (your `$XDG_DATA_HOME`), `config:`, or `prefix:` (inside the Wine prefix). |
 | `data.cache` | The same, for things that can be rebuilt (never backed up). |
-| `update` | A self-hosted feed; see [Updates](#updates). |
+| `update` | (planned) A self-hosted feed; see [Updates](#updates). |
 | `update.feed` | The https address of your signed feed. |
 | `update.channel` | A channel name, for example `stable`. |
 
@@ -352,6 +352,10 @@ A signature proves that **the same key signed this**, not who you are. The conso
 - **Continuity.** The console keeps, per id, the key that owns it (trust on first use). Every later install or update of that id must be signed by the **same key**, and an unsigned package for a signed id is refused. A different key gets "This isn't the same developer".
 - **Rotation.** To move to a new key, sign the next build with the new key and the old one: `ruya-pack sign game.play.zip --key new.key --rotate-from old.key`. The package carries a statement signed by the old key that hands the id to the new one; the console follows the chain from the key it knows. Rotations are numbered, a replayed one is refused, and a retired key stays retired.
 - **If you lose the key you cannot rotate.** The player or an admin has to use "Forget this game's data and key" and install the package signed with the new key. Back the key up.
+- **If the key is stolen or leaked** (not only lost), act at once while you still hold it: sign a new build with the new key and `--rotate-from` the old one, so players follow the chain, and report the old key id so it can go on the revocation list (`revoked.key`). Until you rotate, whoever has the key can sign packages the console accepts as yours.
+- `--rotate-from` takes a key **file** only, never key text, like `--key`.
+- **On Windows the key file gets no 0600 protection** (that is a Unix file mode). Keep it in a folder only you can read, not in a synced or shared folder.
+- **Read the `build.signature_dropped` warning before you ship.** `build` leaves `play.sig` out, so a package you forget to sign again counts as `unverified` on the console (developer mode only, and high-risk permissions refused).
 - The console records `signed_at` (the date `sign` ran, or `--signed-at` for reproducible builds) but never uses it to decide trust.
 
 ## Updates
@@ -615,7 +619,7 @@ Common ones first:
 
 ## The samples
 
-Both samples are public domain (CC0) and committed **without** any binary: the folder `package/` holds the manifest, the art and the licences, and a script builds the program into `package/payload/` (git-ignored).
+Both samples are public domain (CC0) and committed **without** any binary: the folder `package/` holds the manifest and the art (neither sample bundles third-party code, so neither has a `licences/` folder; bundled code would need one), and a script builds the program into `package/payload/` (git-ignored).
 
 | Sample | What it shows | Build |
 |---|---|---|

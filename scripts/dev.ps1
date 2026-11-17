@@ -897,6 +897,8 @@ Checked 2026-11-06.
            files = @{ "api/play/play.schema.json" = $playSchema }; expect = 1; text = "/run/extra: false schema" },
         @{ name = "a play.json block that fails a pattern"; a = (& $manifestBlock '{"format":1,"id":"Game","run":{"runner":"wine"}}'); other = $other;
            files = @{ "api/play/play.schema.json" = $playSchema }; expect = 1; text = "/id: does not match" },
+        @{ name = "a play.json block with a fractional integer"; a = (& $manifestBlock '{"format":1,"id":"com.example.game","build":1.5,"run":{"runner":"wine"}}'); other = $other;
+           files = @{ "api/play/play.schema.json" = $playSchema }; expect = 1; text = "/build: not a integer" },
         @{ name = "a json block that is not a play.json is only parsed"; a = (& $manifestBlock '{"format":1,"other":true}'); other = $other;
            files = @{ "api/play/play.schema.json" = $playSchema }; expect = 0; text = "" }
     )

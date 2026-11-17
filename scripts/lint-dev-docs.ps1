@@ -148,7 +148,7 @@ function Test-SchemaType($v, [string]$t) {
         'array'   { return ($v -is [System.Array]) }
         'string'  { return ($v -is [string]) }
         'boolean' { return ($v -is [bool]) }
-        'integer' { return (($v -is [int]) -or ($v -is [long]) -or ($v -is [decimal]) -or (($v -is [double]) -and ($v -eq [Math]::Floor($v)))) }
+        'integer' { return (($v -is [int]) -or ($v -is [long]) -or ((($v -is [double]) -or ($v -is [decimal])) -and ($v -eq [Math]::Floor($v)))) }
         'number'  { return (($v -is [int]) -or ($v -is [long]) -or ($v -is [decimal]) -or ($v -is [double])) }
         default   { throw "schema type $t is not supported by the lint" }
     }
