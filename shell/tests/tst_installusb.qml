@@ -583,11 +583,10 @@ Item {
 
         function settle() { wait(300) }
 
-        function shot(name) { grabImage(tc.shell).save(shotsDir + "/" + name + ".png") }
-
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
+            const shot = name => grabImage(tc.shell).save(shotsDir + "/" + name + ".png")
             for (const lang of ["en", "tr"]) {
                 DeviceSettings.language = lang
                 Play.mockReset()

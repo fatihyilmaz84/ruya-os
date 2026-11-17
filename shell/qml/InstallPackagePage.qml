@@ -457,7 +457,7 @@ Page {
                         id: buttonArea
                         width: parent.width
                         visible: page.info !== null
-                        height: Theme.rowHeight * page.u + Theme.spaceXl * page.u
+                        height: (page.working ? progress.height : Theme.rowHeight * page.u) + Theme.spaceXl * page.u
 
                         Row {
                             id: buttonRow
