@@ -118,6 +118,8 @@ FocusScope {
             visible: fact.value !== ""
             textFormat: Text.PlainText          // the signer's name is the package's text
             elide: Text.ElideRight
+            fontSizeMode: Text.HorizontalFit        // the 39-character key stays whole beside a long Turkish label
+            minimumPixelSize: Theme.typeCaption * sheet.u
             text: fact.value
             color: fact.error ? Theme.errorText : Theme.text
             font.pixelSize: Theme.typeBody * sheet.u

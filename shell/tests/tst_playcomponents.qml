@@ -288,6 +288,9 @@ Item {
             compare(seen.text, data.trSeen)
             compare(findChild(o.sheet, "signerNote").text, data.trNote)
             compare(findChild(o.sheet, "signerTitle").text, "Kim imzaladı")
+            const keyValue = findChild(findChild(o.sheet, "signerRowKey"), "signerValue")
+            verify(!keyValue.truncated, "the key is whole in Turkish")
+            verify(keyValue.contentWidth <= keyValue.width + 0.5)
             // The Turkish labels are not clipped by the key column.
             for (const name of ["signerRowName", "signerRowSeen", "signerRowTrust"]) {
                 const label = findChild(o.sheet, name).children.find(c => c.font && c.font.weight === Theme.weightDemiBold)
