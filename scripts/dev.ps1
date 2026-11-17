@@ -883,6 +883,25 @@ Checked 2026-11-06.
         @{ name = "an api/dbus file with -- inside a comment"; a = $chapter; other = $other;
            files = @{ "api/dbus/t2.xml" = ($xmlHead + "<!-- runs ruya-devices --display-guard -->" + $xmlTail) }; expect = 1; text = "api/dbus/t2.xml: is not well-formed xml (line 1)" }
     )
+    # RUY-105: a json block that is a whole play.json must satisfy api/play/play.schema.json.
+    $playSchema = '{"type":"object","required":["format","id","run"],"additionalProperties":true,"properties":{"format":{"const":1},"id":{"type":"string","pattern":"^[a-z]+(\\.[a-z]+){2,}$"},"build":{"$ref":"#/$defs/build"},"run":{"type":"object","additionalProperties":false,"required":["runner"],"properties":{"runner":{"enum":["native","wine"]}}}},"$defs":{"build":{"type":"integer","minimum":1}}}'
+    $manifestBlock = { param($m) $chapter + "`n${fence}json`n$m`n${fence}`n" }
+    $cases += @(
+        @{ name = "a play.json block that satisfies the schema"; a = (& $manifestBlock '{"format":1,"id":"com.example.game","build":3,"run":{"runner":"wine"}}'); other = $other;
+           files = @{ "api/play/play.schema.json" = $playSchema }; expect = 0; text = "" },
+        @{ name = "a play.json block below a minimum"; a = (& $manifestBlock '{"format":1,"id":"com.example.game","build":0,"run":{"runner":"wine"}}'); other = $other;
+           files = @{ "api/play/play.schema.json" = $playSchema }; expect = 1; text = "play.json block does not satisfy play.schema.json: /build: below 1" },
+        @{ name = "a play.json block with a value outside an enum"; a = (& $manifestBlock '{"format":1,"id":"com.example.game","run":{"runner":"dos"}}'); other = $other;
+           files = @{ "api/play/play.schema.json" = $playSchema }; expect = 1; text = "/run/runner: not one of the allowed values" },
+        @{ name = "a play.json block with an unknown key in a strict object"; a = (& $manifestBlock '{"format":1,"id":"com.example.game","run":{"runner":"wine","extra":true}}'); other = $other;
+           files = @{ "api/play/play.schema.json" = $playSchema }; expect = 1; text = "/run/extra: false schema" },
+        @{ name = "a play.json block that fails a pattern"; a = (& $manifestBlock '{"format":1,"id":"Game","run":{"runner":"wine"}}'); other = $other;
+           files = @{ "api/play/play.schema.json" = $playSchema }; expect = 1; text = "/id: does not match" },
+        @{ name = "a play.json block with a fractional integer"; a = (& $manifestBlock '{"format":1,"id":"com.example.game","build":1.5,"run":{"runner":"wine"}}'); other = $other;
+           files = @{ "api/play/play.schema.json" = $playSchema }; expect = 1; text = "/build: not a integer" },
+        @{ name = "a json block that is not a play.json is only parsed"; a = (& $manifestBlock '{"format":1,"other":true}'); other = $other;
+           files = @{ "api/play/play.schema.json" = $playSchema }; expect = 0; text = "" }
+    )
     # RUY-656: apis.json carries the normalised argument signature of each element.
     $sigXml = $xmlHead + "<method name=`"Do`"><arg name=`"a`" type=`"s`" direction=`"in`"/><arg name=`"b`" type=`"i`"/><arg name=`"r`" type=`"b`" direction=`"out`"/>$stabOk$sinceOk</method>" +
         "<signal name=`"Sig`"><arg name=`"x`" type=`"s`"/><arg name=`"y`" type=`"u`"/>$stabOk$sinceOk</signal>" +

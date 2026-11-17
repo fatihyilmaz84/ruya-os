@@ -1,0 +1,30 @@
+{
+  "format": 1,
+  "id": "org.example.helloplaynative",
+  "name": { "en": "Hello Play Native" },
+  "version": "1.0.0",
+  "build": 1,
+  "summary": { "en": "A tiny native Linux game packaged as a .play." },
+  "description": { "en": "Move a square, collect coins, keep the best score.\n\nThe sample for the .play developer guide: a native game with a controller, saves and no permissions beyond input." },
+  "developer": { "name": "RuyaOS contributors" },
+  "release_date": "2026-11-17",
+  "genres": ["arcade"],
+  "tags": ["sample"],
+  "languages": ["en"],
+  "players": { "min": 1, "max": 1, "modes": ["single"] },
+  "controller": "full",
+  "licence": { "package": "CC0-1.0" },
+  "requirements": { "arch": "x86_64", "min_ram_mb": 512 },
+  "art": { "icon": "art/icon.png", "hero": "art/hero.png" },
+  "run": {
+    "runner": "native",
+    "command": ["${payload}/hello-game"],
+    "cwd": "${payload}",
+    "launch_mode": "fullscreen"
+  },
+  "permissions": {
+    "network": false,
+    "input": "controllers+keyboard-mouse"
+  },
+  "data": { "saves": ["data:saves"] }
+}

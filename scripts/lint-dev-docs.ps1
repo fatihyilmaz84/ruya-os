@@ -2,7 +2,8 @@
 #   - every chapter linked from README.md exists, and every chapter in the folder is linked there;
 #   - every relative link (and #anchor) in every file resolves;
 #   - fenced code blocks: `python` parses (ast), `sh`/`bash` pass `bash -n`, `xml` is well-formed,
-#     `json` parses;
+#     `json` parses, and a `json` block that is a whole play.json (it has format, id and run) must
+#     satisfy api/play/play.schema.json (RUY-105; a small validator for the keywords it uses);
 #   - a fenced `c` block whose first line is `/* sample: <repo path> */` is the sample's code: each
 #     of its lines must be in that file, in order (a line that is only `...` or `/* ... */` is a gap);
 #   - a fenced `xml` block that starts with `<component` and is introduced (within the three lines
@@ -136,6 +137,123 @@ function Get-XmlShape($node, [string]$path, $out) {
     }
 }
 
+# --- JSON Schema subset (RUY-105) ---------------------------------------------------------------
+# The keywords api/play/play.schema.json uses, nothing else (a keyword this does not know is itself
+# a finding, as in services/ruya-play-format/tests/schema.rs, so a new keyword cannot be ignored).
+# $v and $schema come from ConvertFrom-Json (PSCustomObject, object[], string, bool, numbers).
+$SchemaAnnotations = @('$schema', '$id', 'title', 'description', '$comment', '$defs', 'default')
+function Test-SchemaType($v, [string]$t) {
+    switch ($t) {
+        'object'  { return ($v -is [System.Management.Automation.PSCustomObject]) }
+        'array'   { return ($v -is [System.Array]) }
+        'string'  { return ($v -is [string]) }
+        'boolean' { return ($v -is [bool]) }
+        'integer' { return (($v -is [int]) -or ($v -is [long]) -or ((($v -is [double]) -or ($v -is [decimal])) -and ($v -eq [Math]::Floor($v)))) }
+        'number'  { return (($v -is [int]) -or ($v -is [long]) -or ($v -is [decimal]) -or ($v -is [double])) }
+        default   { throw "schema type $t is not supported by the lint" }
+    }
+}
+function Test-SchemaEqual($a, $b) {
+    if (($a -is [string]) -and ($b -is [string])) { return ($a -ceq $b) }
+    if (($a -is [string]) -or ($b -is [string])) { return $false }
+    return ((ConvertTo-Json -InputObject $a -Compress -Depth 20) -eq (ConvertTo-Json -InputObject $b -Compress -Depth 20))
+}
+function Get-SchemaErrors($root, $schema, $v, [string]$at, $out) {
+    if ($schema -is [bool]) { if (-not $schema) { $out.Add("${at}: false schema") }; return }
+    foreach ($p in $schema.PSObject.Properties) {
+        $k = $p.Name; $kv = $p.Value
+        if ($SchemaAnnotations -contains $k) { continue }
+        switch ($k) {
+            '$ref' {
+                $target = $root
+                foreach ($seg in ($kv -replace '^#/?', '').Split('/', [StringSplitOptions]::RemoveEmptyEntries)) { $target = $target.$seg }
+                Get-SchemaErrors $root $target $v $at $out
+            }
+            'type' { if (-not (Test-SchemaType $v $kv)) { $out.Add("${at}: not a $kv") } }
+            'enum' {
+                $hit = $false
+                foreach ($e in $kv) { if (Test-SchemaEqual $v $e) { $hit = $true; break } }
+                if (-not $hit) { $out.Add("${at}: not one of the allowed values") }
+            }
+            'const' { if (-not (Test-SchemaEqual $v $kv)) { $out.Add("${at}: not $kv") } }
+            'minimum' { if ((Test-SchemaType $v 'number') -and ([double]$v -lt [double]$kv)) { $out.Add("${at}: below $kv") } }
+            'maximum' { if ((Test-SchemaType $v 'number') -and ([double]$v -gt [double]$kv)) { $out.Add("${at}: above $kv") } }
+            'minLength' { if (($v -is [string]) -and ($v.Length -lt $kv)) { $out.Add("${at}: too short") } }
+            'maxLength' { if (($v -is [string]) -and ($v.Length -gt $kv)) { $out.Add("${at}: too long") } }
+            'pattern' { if (($v -is [string]) -and (-not [regex]::IsMatch($v, $kv))) { $out.Add("${at}: does not match $kv") } }
+            'minItems' { if (($v -is [System.Array]) -and ($v.Count -lt $kv)) { $out.Add("${at}: too few items") } }
+            'maxItems' { if (($v -is [System.Array]) -and ($v.Count -gt $kv)) { $out.Add("${at}: too many items") } }
+            'uniqueItems' {
+                if (($v -is [System.Array]) -and $kv) {
+                    $seen = @{}
+                    foreach ($x in $v) {
+                        $key = ConvertTo-Json -InputObject $x -Compress -Depth 20
+                        if ($seen.ContainsKey($key)) { $out.Add("${at}: items repeat"); break }
+                        $seen[$key] = $true
+                    }
+                }
+            }
+            'items' {
+                if ($v -is [System.Array]) {
+                    for ($i = 0; $i -lt $v.Count; $i++) { Get-SchemaErrors $root $kv $v[$i] "$at/$i" $out }
+                }
+            }
+            'required' {
+                if (Test-SchemaType $v 'object') {
+                    foreach ($r in $kv) { if (-not $v.PSObject.Properties[$r]) { $out.Add("${at}: missing $r") } }
+                }
+            }
+            'maxProperties' { if ((Test-SchemaType $v 'object') -and (@($v.PSObject.Properties).Count -gt $kv)) { $out.Add("${at}: too many properties") } }
+            'properties' {
+                if (Test-SchemaType $v 'object') {
+                    foreach ($sp in $kv.PSObject.Properties) {
+                        $x = $v.PSObject.Properties[$sp.Name]
+                        if ($x) { Get-SchemaErrors $root $sp.Value $x.Value "$at/$($sp.Name)" $out }
+                    }
+                }
+            }
+            'additionalProperties' {
+                if (Test-SchemaType $v 'object') {
+                    $known = $schema.PSObject.Properties['properties']
+                    foreach ($vp in $v.PSObject.Properties) {
+                        if ($known -and $known.Value.PSObject.Properties[$vp.Name]) { continue }
+                        Get-SchemaErrors $root $kv $vp.Value "$at/$($vp.Name)" $out
+                    }
+                }
+            }
+            'propertyNames' {
+                if (Test-SchemaType $v 'object') {
+                    foreach ($vp in $v.PSObject.Properties) { Get-SchemaErrors $root $kv $vp.Name "$at/$($vp.Name) (name)" $out }
+                }
+            }
+            'allOf' { foreach ($sub in $kv) { Get-SchemaErrors $root $sub $v $at $out } }
+            'oneOf' {
+                $n = 0
+                foreach ($sub in $kv) {
+                    $e = New-Object System.Collections.Generic.List[string]
+                    Get-SchemaErrors $root $sub $v $at $e
+                    if ($e.Count -eq 0) { $n++ }
+                }
+                if ($n -ne 1) { $out.Add("${at}: matches $n of the oneOf branches") }
+            }
+            'not' {
+                $e = New-Object System.Collections.Generic.List[string]
+                Get-SchemaErrors $root $kv $v $at $e
+                if ($e.Count -eq 0) { $out.Add("${at}: matches a pattern that is not allowed") }
+            }
+            'if' {
+                $e = New-Object System.Collections.Generic.List[string]
+                Get-SchemaErrors $root $kv $v $at $e
+                $then = $schema.PSObject.Properties['then']
+                if (($e.Count -eq 0) -and $then) { Get-SchemaErrors $root $then.Value $v $at $out }
+            }
+            'then' { }
+            default { $out.Add("${at}: the lint does not know the schema keyword $k") }
+        }
+    }
+}
+$playSchemaText = $null
+
 if (-not (Test-Path $Dir)) { Write-Host "dev docs lint: $Dir does not exist" -ForegroundColor Red; exit 1 }
 $files = @(Get-ChildItem $Dir -Filter "*.md" | Sort-Object Name)
 $readme = $files | Where-Object { $_.Name -eq "README.md" }
@@ -244,8 +362,18 @@ foreach ($f in $files) {
                 }
             }
             '^json$' {
-                try { $null = $body | ConvertFrom-Json }
-                catch { Fail $where "json block does not parse: $($_.Exception.Message)" }
+                try { $obj = $body | ConvertFrom-Json }
+                catch { Fail $where "json block does not parse: $($_.Exception.Message)"; break }
+                # RUY-105: a whole play.json (it has format, id and run) must satisfy the schema.
+                $isManifest = ($obj -is [System.Management.Automation.PSCustomObject]) -and $obj.PSObject.Properties['format'] -and $obj.PSObject.Properties['id'] -and $obj.PSObject.Properties['run']
+                if (-not $isManifest) { break }
+                $schemaPath = Join-Path (Join-Path (Join-Path $Repo "api") "play") "play.schema.json"
+                if (-not (Test-Path $schemaPath)) { Fail $where "json block is a play.json but api/play/play.schema.json does not exist"; break }
+                if ($null -eq $playSchemaText) { $playSchemaText = [IO.File]::ReadAllText($schemaPath, $Utf8) }
+                $schemaDoc = $playSchemaText | ConvertFrom-Json
+                $errs = New-Object System.Collections.Generic.List[string]
+                Get-SchemaErrors $schemaDoc $schemaDoc $obj "" $errs
+                foreach ($e in $errs) { Fail $where "play.json block does not satisfy play.schema.json: $e" }
             }
             '^c$' {
                 $first = ($b.body | Where-Object { $_.Trim() } | Select-Object -First 1)
