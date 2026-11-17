@@ -2,8 +2,9 @@
 //! `play.json`, `play.files` and the folder and zip forms.
 //!
 //! Pure Rust, no D-Bus, no Flatpak, no network. Everything inside a package is untrusted data
-//! (05 §9.3): [`validate`] lists names and kinds first, applies every path rule, and reads content
-//! only when the names pass. It returns the [`Package`] or the full list of [`Problem`]s.
+//! (05 §9.3): [`validate`] lists the entries, reads only a small regular `play.json` for its
+//! `format` (a newer major stops there), applies every path rule to the names and kinds, and opens
+//! nothing else until they pass. It returns the [`Package`] or the full list of [`Problem`]s.
 //!
 //! ```
 //! use ruya_play_format::{validate, MemorySource, ValidateOptions};
@@ -107,7 +108,8 @@ fn read_small(source: &dyn Source, path: &str, limit: u64) -> Result<Vec<u8>, Pr
     Ok(buf)
 }
 
-/// Validate the package in `source`: the names and kinds first, then `play.files`, then
+/// Validate the package in `source`: the `format` of a small regular `play.json` (step 0, the only
+/// read before the names pass), then the names and kinds, then `play.files`, then
 /// `play.json`, then how the table matches the entries, then (unless disabled) every file's size
 /// and hash. A package that fails an earlier step is not read further.
 pub fn validate(source: &dyn Source, opts: &ValidateOptions) -> Result<Package, Vec<Problem>> {
@@ -130,7 +132,7 @@ pub fn validate(source: &dyn Source, opts: &ValidateOptions) -> Result<Package, 
         }
     }
 
-    // 1. Names and kinds. No content is read before this passes.
+    // 1. Names and kinds. Nothing but step 0's play.json is read before this passes.
     for e in &entries {
         if let Err((code, msg)) = path::check_path(&e.path) {
             problems.add(code, &e.path, msg);
