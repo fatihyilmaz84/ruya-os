@@ -1,0 +1,20 @@
+[package]
+name = "ruya-play-trust"
+description = "RuyaOS .play packages: signatures, trust tiers, key continuity, permission ceilings and revocation (docs/specs/05-play-packages.md section 9.2)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ruya-play-format = { path = "../ruya-play-format" }  # the one parser: strict JSON, Problem, Source, validate
+# Ed25519 (BSD-3-Clause, pure Rust); verify_strict refuses malleable signatures and weak keys.
+ed25519-dalek = { version = "2.1", default-features = false, features = ["std", "fast", "zeroize"] }
+getrandom = "0.2"  # the seed of a new key (already in the tree via rand_core)
+base64ct = { version = "1.8", features = ["alloc"] }  # strict base64 of keys and signatures (already in the tree)
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+
+[dev-dependencies]
+tempfile = "3"
