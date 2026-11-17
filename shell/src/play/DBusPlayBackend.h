@@ -22,11 +22,14 @@ public:
     void install(const QString &path, bool adminApproved) override;
     void verify(const QString &appId) override;
     void cancel(const QString &key) override;
+    void readDeveloperMode() override;
+    void requestDeveloperMode(bool on, bool adminApproved) override;
     void listJobs() override;
 
 private slots:
     void onJobProgress(const QString &job, uint percent, const QString &phase);
     void onJobFinished(const QString &job, const QString &status);
+    void onDeveloperModeChanged(bool on);
 
 private:
     // Install and Verify both answer (status, job).

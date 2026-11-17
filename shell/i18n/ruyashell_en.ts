@@ -2931,6 +2931,207 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>InstallConfirmSheet</name>
+    <message>
+        <location filename="../qml/InstallConfirmSheet.qml" line="+32"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+187"/>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <location line="-159"/>
+        <location line="+63"/>
+        <source>Install %1?</source>
+        <translation>Install %1?</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>%1 · key %2</source>
+        <translation>%1 · key %2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Signed by key %1</source>
+        <translation>Signed by key %1</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Needs %1 · %2 free</source>
+        <translation>Needs %1 · %2 free</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>This game can</source>
+        <translation>This game can</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>A high-risk permission needs an admin&apos;s PIN.</source>
+        <translation>A high-risk permission needs an admin&apos;s PIN.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>An admin&apos;s PIN is needed to install this app.</source>
+        <translation>An admin&apos;s PIN is needed to install this app.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Install</source>
+        <translation>Install</translation>
+    </message>
+</context>
+<context>
+    <name>InstallPackagePage</name>
+    <message>
+        <location filename="../qml/InstallPackagePage.qml" line="+62"/>
+        <source>Developer</source>
+        <translation>Developer</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Version</source>
+        <translation>Version</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installed size</source>
+        <translation>Installed size</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Age rating</source>
+        <translation>Age rating</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Controller</source>
+        <translation>Controller</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>App ID</source>
+        <translation>App ID</translation>
+    </message>
+    <message>
+        <location line="+34"/>
+        <source>Enter an admin&apos;s PIN</source>
+        <translation>Enter an admin&apos;s PIN</translation>
+    </message>
+    <message>
+        <location line="+314"/>
+        <source>Installed</source>
+        <translation>Installed</translation>
+    </message>
+    <message>
+        <location line="-242"/>
+        <source>Install cancelled</source>
+        <translation>Install cancelled</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <source>Installed</source>
+        <comment>Toast: the install finished</comment>
+        <translation>Installed</translation>
+    </message>
+    <message>
+        <location line="+156"/>
+        <location line="+194"/>
+        <source>Cancel</source>
+        <translation>Cancel</translation>
+    </message>
+    <message>
+        <location line="-194"/>
+        <location line="+4"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>Loading…</source>
+        <translation>Loading…</translation>
+    </message>
+    <message>
+        <location line="+88"/>
+        <source>Install</source>
+        <translation>Install</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Play</source>
+        <translation>Play</translation>
+    </message>
+    <message>
+        <location line="+89"/>
+        <location line="+8"/>
+        <source>This game can</source>
+        <translation>This game can</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Information</source>
+        <translation>Information</translation>
+    </message>
+</context>
+<context>
+    <name>InstallResultDialog</name>
+    <message>
+        <location filename="../qml/InstallResultDialog.qml" line="+22"/>
+        <location line="+90"/>
+        <source>OK</source>
+        <translation>OK</translation>
+    </message>
+    <message>
+        <location line="-63"/>
+        <location line="+38"/>
+        <source>Not installed</source>
+        <translation>Not installed</translation>
+    </message>
+</context>
+<context>
+    <name>InstallSourcesPage</name>
+    <message>
+        <location filename="../qml/InstallSourcesPage.qml" line="+15"/>
+        <location line="+89"/>
+        <source>Install from USB</source>
+        <translation>Install from USB</translation>
+    </message>
+    <message>
+        <location line="-56"/>
+        <source>Select</source>
+        <translation>Select</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>Games found on your USB drives</source>
+        <translation>Games found on your USB drives</translation>
+    </message>
+    <message>
+        <location line="+189"/>
+        <source>No games on USB drives</source>
+        <translation>No games on USB drives</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Copy a .play folder, or a .zip of one, to a USB drive, then plug it in.</source>
+        <translation>Copy a .play folder, or a .zip of one, to a USB drive, then plug it in.</translation>
+    </message>
+</context>
+<context>
     <name>LaunchSplash</name>
     <message>
         <location filename="../qml/LaunchSplash.qml" line="+41"/>
@@ -3914,6 +4115,149 @@ This can&apos;t be undone.</translation>
         <location line="+0"/>
         <source>OK</source>
         <translation>OK</translation>
+    </message>
+</context>
+<context>
+    <name>PlayCopy</name>
+    <message>
+        <location filename="../qml/PlayCopy.qml" line="+24"/>
+        <source>ZIP file</source>
+        <translation>ZIP file</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Folder</source>
+        <translation>Folder</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Full controller support</source>
+        <translation>Full controller support</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Partial controller support</source>
+        <translation>Partial controller support</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Needs keyboard and mouse</source>
+        <translation>Needs keyboard and mouse</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>All ages</source>
+        <translation>All ages</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Not rated</source>
+        <translation>Not rated</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Ages %1</source>
+        <translation>Ages %1</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Version %1 · %2 · %3 players · %4</source>
+        <translation>Version %1 · %2 · %3 players · %4</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Copying from the USB drive</source>
+        <translation>Copying from the USB drive</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Checking the signature</source>
+        <translation>Checking the signature</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Checking the pictures</source>
+        <translation>Checking the pictures</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Installing</source>
+        <translation>Installing</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>%1 · %2 %</source>
+        <translation>%1 · %2 %</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>This package is damaged or incomplete. Copy it to the USB drive again.</source>
+        <translation>This package is damaged or incomplete. Copy it to the USB drive again.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This package was changed after it was signed. Get a fresh copy from the developer.</source>
+        <translation>This package was changed after it was signed. Get a fresh copy from the developer.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This isn&apos;t the same developer as the installed game. An admin can forget this game&apos;s data and key in Options.</source>
+        <translation>This isn&apos;t the same developer as the installed game. An admin can forget this game&apos;s data and key in Options.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Unsigned packages need developer mode. An admin can turn it on in Settings.</source>
+        <translation>Unsigned packages need developer mode. An admin can turn it on in Settings.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This game was removed for safety and can&apos;t be installed.</source>
+        <translation>This game was removed for safety and can&apos;t be installed.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This game needs a newer RuyaOS. Update the system, then try again.</source>
+        <translation>This game needs a newer RuyaOS. Update the system, then try again.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>There isn&apos;t enough space. Free %1, then try again.</source>
+        <translation>There isn&apos;t enough space. Free %1, then try again.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The install didn&apos;t finish. Try again.</source>
+        <translation>The install didn&apos;t finish. Try again.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Only an admin can install from USB.</source>
+        <translation>Only an admin can install from USB.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Another install is running. Try again when it ends.</source>
+        <translation>Another install is running. Try again when it ends.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The USB drive was removed. Plug it in, then try again.</source>
+        <translation>The USB drive was removed. Plug it in, then try again.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>It&apos;s too late to cancel. The install is finishing.</source>
+        <translation>It&apos;s too late to cancel. The install is finishing.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Something went wrong. Try again.</source>
+        <translation>Something went wrong. Try again.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>It can&apos;t be installed. Get a fresh copy from the developer.</source>
+        <translation>It can&apos;t be installed. Get a fresh copy from the developer.</translation>
     </message>
 </context>
 <context>
@@ -5070,7 +5414,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+313"/>
+        <location line="+314"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -5353,7 +5697,7 @@ This can&apos;t be undone.</translation>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
     <message>
-        <location line="+62"/>
+        <location line="+64"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Wallpaper could not be loaded</translation>
     </message>
@@ -5449,7 +5793,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 was uninstalled.</translation>
     </message>
     <message>
-        <location line="+530"/>
+        <location line="+532"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -5471,7 +5815,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1885"/>
+        <location line="-1889"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -5502,7 +5846,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1633"/>
+        <location line="+1637"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
@@ -5517,37 +5861,37 @@ This can&apos;t be undone.</translation>
     <name>SignerSheet</name>
     <message>
         <location filename="../qml/SignerSheet.qml" line="+25"/>
-        <location line="+177"/>
+        <location line="+179"/>
         <source>Close</source>
         <translation>Close</translation>
     </message>
     <message>
-        <location line="-143"/>
-        <location line="+88"/>
+        <location line="-145"/>
+        <location line="+90"/>
         <source>Who signed this</source>
         <translation>Who signed this</translation>
     </message>
     <message>
-        <location line="-117"/>
-        <location line="+126"/>
+        <location line="-119"/>
+        <location line="+128"/>
         <source>Signed by</source>
         <translation>Signed by</translation>
     </message>
     <message>
-        <location line="-125"/>
-        <location line="+131"/>
+        <location line="-127"/>
+        <location line="+133"/>
         <source>Key</source>
         <translation>Key</translation>
     </message>
     <message>
-        <location line="-130"/>
-        <location line="+136"/>
+        <location line="-132"/>
+        <location line="+138"/>
         <source>Seen before</source>
         <translation>Seen before</translation>
     </message>
     <message>
-        <location line="-135"/>
-        <location line="+141"/>
+        <location line="-137"/>
+        <location line="+143"/>
         <source>Trust</source>
         <translation>Trust</translation>
     </message>
@@ -5787,7 +6131,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+327"/>
+        <location filename="../qml/StoragePane.qml" line="+336"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 is still in use. Close what uses it and try again.</translation>
     </message>
@@ -5812,13 +6156,13 @@ This can&apos;t be undone.</translation>
         <translation>Not supported</translation>
     </message>
     <message>
-        <location line="-284"/>
-        <location line="+285"/>
+        <location line="-287"/>
+        <location line="+288"/>
         <source>%1 free of %2</source>
         <translation>%1 free of %2</translation>
     </message>
     <message>
-        <location line="-236"/>
+        <location line="-239"/>
         <source>Games</source>
         <translation>Games</translation>
     </message>
@@ -5863,7 +6207,12 @@ This can&apos;t be undone.</translation>
         <translation>Could not read this drive</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+28"/>
+        <source>Packages on this drive</source>
+        <translation>Packages on this drive</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Rescan %1</source>
         <translation>Rescan %1</translation>
     </message>
@@ -5898,13 +6247,13 @@ This can&apos;t be undone.</translation>
         <translation>System</translation>
     </message>
     <message>
-        <location line="-302"/>
-        <location line="+302"/>
+        <location line="-305"/>
+        <location line="+305"/>
         <source>Other</source>
         <translation>Other</translation>
     </message>
     <message>
-        <location line="-313"/>
+        <location line="-316"/>
         <source>Plug it in again</source>
         <translation>Plug it in again</translation>
     </message>
@@ -5919,7 +6268,7 @@ This can&apos;t be undone.</translation>
         <translation>Nothing found here</translation>
     </message>
     <message>
-        <location line="+306"/>
+        <location line="+309"/>
         <source>Drives</source>
         <translation>Drives</translation>
     </message>
@@ -5980,7 +6329,7 @@ This can&apos;t be undone.</translation>
         <translation>Update available</translation>
     </message>
     <message>
-        <location line="+127"/>
+        <location line="+131"/>
         <source>Search</source>
         <translation>Search</translation>
     </message>
@@ -5995,7 +6344,12 @@ This can&apos;t be undone.</translation>
         <translation>Show all apps</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+17"/>
+        <source>Install from USB</source>
+        <translation>Install from USB</translation>
+    </message>
+    <message>
+        <location line="+42"/>
         <source>Search results</source>
         <translation>Search results</translation>
     </message>
@@ -6522,18 +6876,18 @@ This can&apos;t be undone.</translation>
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+178"/>
-        <location line="+312"/>
+        <location line="+342"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-312"/>
-        <location line="+311"/>
+        <location line="-342"/>
+        <location line="+341"/>
         <source>Stable</source>
         <translation>Stable</translation>
     </message>
     <message>
-        <location line="-306"/>
+        <location line="-336"/>
         <source>Last checked %1</source>
         <translation>Last checked %1</translation>
     </message>
@@ -6663,7 +7017,17 @@ This can&apos;t be undone.</translation>
         <translation>Online games can lose their connection while paused.</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+10"/>
+        <source>Developer mode</source>
+        <translation>Developer mode</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Allows unsigned packages. Only turn it on for games you trust.</source>
+        <translation>Allows unsigned packages. Only turn it on for games you trust.</translation>
+    </message>
+    <message>
+        <location line="+91"/>
         <source>Device health</source>
         <translation>Device health</translation>
     </message>
@@ -6673,14 +7037,15 @@ This can&apos;t be undone.</translation>
         <translation>No temperature sensors were found on this device.</translation>
     </message>
     <message>
-        <location line="-202"/>
+        <location line="-232"/>
         <location line="+8"/>
         <location line="+76"/>
+        <location line="+48"/>
         <source>Only an admin can do this.</source>
         <translation>Only an admin can do this.</translation>
     </message>
     <message>
-        <location line="-289"/>
+        <location line="-337"/>
         <source>The console is warm. Nothing needs to be done.</source>
         <translation>The console is warm. Nothing needs to be done.</translation>
     </message>
@@ -6700,7 +7065,7 @@ This can&apos;t be undone.</translation>
         <translation>Language</translation>
     </message>
     <message>
-        <location line="+87"/>
+        <location line="+117"/>
         <source>Updates</source>
         <translation>Updates</translation>
     </message>

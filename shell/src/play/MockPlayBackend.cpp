@@ -252,7 +252,31 @@ void MockPlayBackend::setDriveMounted(bool mounted)
 
 void MockPlayBackend::setDeveloperMode(bool on)
 {
+    if (m_developerMode == on)
+        return;
     m_developerMode = on;
+    emit developerModeChanged(on);
+}
+
+void MockPlayBackend::readDeveloperMode()
+{
+    const bool on = m_developerMode;
+    QTimer::singleShot(0, this, [this, on] { emit developerModeChanged(on); });
+}
+
+void MockPlayBackend::requestDeveloperMode(bool on, bool adminApproved)
+{
+    const QString op = QStringLiteral("developer-mode");
+    if (failing(op, QString()))
+        return;
+    if (!adminApproved) {
+        answerLater(op, QString(), QStringLiteral("forbidden"));
+        return;
+    }
+    QTimer::singleShot(0, this, [this, op, on] {
+        emit answered(op, QString(), QStringLiteral("ok"));
+        setDeveloperMode(on);
+    });
 }
 
 void MockPlayBackend::corruptInstalled(const QString &appId)
@@ -472,6 +496,7 @@ void MockPlayBackend::loseService()
 
 void MockPlayBackend::regainService()
 {
+    readDeveloperMode();
     listSources();
     listJobs();
 }

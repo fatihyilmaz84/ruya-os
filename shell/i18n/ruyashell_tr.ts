@@ -2926,6 +2926,207 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>InstallConfirmSheet</name>
+    <message>
+        <location filename="../qml/InstallConfirmSheet.qml" line="+32"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+187"/>
+        <source>Cancel</source>
+        <translation>İptal</translation>
+    </message>
+    <message>
+        <location line="-159"/>
+        <location line="+63"/>
+        <source>Install %1?</source>
+        <translation>%1 kurulsun mu?</translation>
+    </message>
+    <message>
+        <location line="+25"/>
+        <source>%1 · key %2</source>
+        <translation>%1 · anahtar %2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Signed by key %1</source>
+        <translation>anahtar %1 imzalı</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Needs %1 · %2 free</source>
+        <translation>%1 gerekir · %2 boş</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>This game can</source>
+        <translation>Bu oyun şunları yapabilir</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>A high-risk permission needs an admin&apos;s PIN.</source>
+        <translation>Yüksek riskli bir izin için yönetici PIN&apos;i gerekir.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>An admin&apos;s PIN is needed to install this app.</source>
+        <translation>Bu uygulamayı yüklemek için bir yöneticinin PIN&apos;i gerekir.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
+        <source>Install</source>
+        <translation>Kur</translation>
+    </message>
+</context>
+<context>
+    <name>InstallPackagePage</name>
+    <message>
+        <location filename="../qml/InstallPackagePage.qml" line="+62"/>
+        <source>Developer</source>
+        <translation>Geliştirici</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Version</source>
+        <translation>Sürüm</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Installed size</source>
+        <translation>Kurulu boyut</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Age rating</source>
+        <translation>Yaş sınırı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Controller</source>
+        <translation>Kontrolcü</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>App ID</source>
+        <translation>Uygulama kimliği</translation>
+    </message>
+    <message>
+        <location line="+34"/>
+        <source>Enter an admin&apos;s PIN</source>
+        <translation>Bir yöneticinin PIN&apos;ini girin</translation>
+    </message>
+    <message>
+        <location line="+314"/>
+        <source>Installed</source>
+        <translation>Kurulu</translation>
+    </message>
+    <message>
+        <location line="-242"/>
+        <source>Install cancelled</source>
+        <translation>Kurulum iptal edildi</translation>
+    </message>
+    <message>
+        <location line="-3"/>
+        <source>Installed</source>
+        <comment>Toast: the install finished</comment>
+        <translation>Kuruldu</translation>
+    </message>
+    <message>
+        <location line="+156"/>
+        <location line="+194"/>
+        <source>Cancel</source>
+        <translation>İptal</translation>
+    </message>
+    <message>
+        <location line="-194"/>
+        <location line="+4"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+57"/>
+        <source>Loading…</source>
+        <translation>Yükleniyor…</translation>
+    </message>
+    <message>
+        <location line="+88"/>
+        <source>Install</source>
+        <translation>Kur</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Play</source>
+        <translation>Oyna</translation>
+    </message>
+    <message>
+        <location line="+89"/>
+        <location line="+8"/>
+        <source>This game can</source>
+        <translation>Bu oyun şunları yapabilir</translation>
+    </message>
+    <message>
+        <location line="+29"/>
+        <source>Information</source>
+        <translation>Bilgiler</translation>
+    </message>
+</context>
+<context>
+    <name>InstallResultDialog</name>
+    <message>
+        <location filename="../qml/InstallResultDialog.qml" line="+22"/>
+        <location line="+90"/>
+        <source>OK</source>
+        <translation>Tamam</translation>
+    </message>
+    <message>
+        <location line="-63"/>
+        <location line="+38"/>
+        <source>Not installed</source>
+        <translation>Kurulmadı</translation>
+    </message>
+</context>
+<context>
+    <name>InstallSourcesPage</name>
+    <message>
+        <location filename="../qml/InstallSourcesPage.qml" line="+15"/>
+        <location line="+89"/>
+        <source>Install from USB</source>
+        <translation>USB&apos;den kur</translation>
+    </message>
+    <message>
+        <location line="-56"/>
+        <source>Select</source>
+        <translation>Seç</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+33"/>
+        <source>Games found on your USB drives</source>
+        <translation>USB belleklerdeki oyunlar</translation>
+    </message>
+    <message>
+        <location line="+189"/>
+        <source>No games on USB drives</source>
+        <translation>USB belleklerde oyun yok</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Copy a .play folder, or a .zip of one, to a USB drive, then plug it in.</source>
+        <translation>Bir .play klasörünü ya da onun .zip dosyasını USB belleğe kopyalayıp takın.</translation>
+    </message>
+</context>
+<context>
     <name>LaunchSplash</name>
     <message>
         <location filename="../qml/LaunchSplash.qml" line="+41"/>
@@ -3901,6 +4102,149 @@ Bu geri alınamaz.</translation>
         <location line="+0"/>
         <source>OK</source>
         <translation>Tamam</translation>
+    </message>
+</context>
+<context>
+    <name>PlayCopy</name>
+    <message>
+        <location filename="../qml/PlayCopy.qml" line="+24"/>
+        <source>ZIP file</source>
+        <translation>ZIP dosyası</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Folder</source>
+        <translation>Klasör</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Full controller support</source>
+        <translation>Tam kontrolcü desteği</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Partial controller support</source>
+        <translation>Kısmi kontrolcü desteği</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Needs keyboard and mouse</source>
+        <translation>Klavye ve fare gerekir</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>All ages</source>
+        <translation>Her yaş</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Not rated</source>
+        <translation>Derecelendirilmemiş</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Ages %1</source>
+        <translation>%1 yaş ve üzeri</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Version %1 · %2 · %3 players · %4</source>
+        <translation>Sürüm %1 · %2 · %3 oyuncu · %4</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Copying from the USB drive</source>
+        <translation>USB bellekten kopyalanıyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Checking the signature</source>
+        <translation>İmza denetleniyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Checking the pictures</source>
+        <translation>Görseller denetleniyor</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Installing</source>
+        <translation>Kuruluyor</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>%1 · %2 %</source>
+        <translation>%1 · %%2</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>This package is damaged or incomplete. Copy it to the USB drive again.</source>
+        <translation>Bu paket bozuk ya da eksik. USB belleğe yeniden kopyalayın.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This package was changed after it was signed. Get a fresh copy from the developer.</source>
+        <translation>Bu paket imzalandıktan sonra değiştirilmiş. Geliştiriciden yeni bir kopya alın.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This isn&apos;t the same developer as the installed game. An admin can forget this game&apos;s data and key in Options.</source>
+        <translation>Bu, kurulu oyunun geliştiricisi değil. Bir yönetici Seçenekler&apos;den bu oyunun verilerini ve anahtarını silebilir.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Unsigned packages need developer mode. An admin can turn it on in Settings.</source>
+        <translation>İmzasız paketler için geliştirici modu gerekir. Bir yönetici bunu Ayarlar&apos;dan açabilir.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This game was removed for safety and can&apos;t be installed.</source>
+        <translation>Bu oyun güvenlik için kaldırıldı ve kurulamaz.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This game needs a newer RuyaOS. Update the system, then try again.</source>
+        <translation>Bu oyun daha yeni bir RuyaOS gerektiriyor. Sistemi güncelleyip yeniden deneyin.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>There isn&apos;t enough space. Free %1, then try again.</source>
+        <translation>Yeterli alan yok. %1 yer açıp yeniden deneyin.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>The install didn&apos;t finish. Try again.</source>
+        <translation>Kurulum tamamlanmadı. Yeniden deneyin.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Only an admin can install from USB.</source>
+        <translation>USB&apos;den yalnızca bir yönetici kurabilir.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Another install is running. Try again when it ends.</source>
+        <translation>Başka bir kurulum sürüyor. Bitince yeniden deneyin.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The USB drive was removed. Plug it in, then try again.</source>
+        <translation>USB bellek çıkarıldı. Takıp yeniden deneyin.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>It&apos;s too late to cancel. The install is finishing.</source>
+        <translation>İptal için çok geç. Kurulum bitiyor.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Something went wrong. Try again.</source>
+        <translation>Bir sorun oluştu. Yeniden deneyin.</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>It can&apos;t be installed. Get a fresh copy from the developer.</source>
+        <translation>Kurulamaz. Geliştiriciden yeni bir kopya alın.</translation>
     </message>
 </context>
 <context>
@@ -5052,7 +5396,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+313"/>
+        <location line="+314"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -5335,7 +5679,7 @@ Bu geri alınamaz.</translation>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
     <message>
-        <location line="+62"/>
+        <location line="+64"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
@@ -5431,7 +5775,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kaldırıldı.</translation>
     </message>
     <message>
-        <location line="+530"/>
+        <location line="+532"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -5453,7 +5797,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1885"/>
+        <location line="-1889"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -5484,7 +5828,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1633"/>
+        <location line="+1637"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
@@ -5499,37 +5843,37 @@ Bu geri alınamaz.</translation>
     <name>SignerSheet</name>
     <message>
         <location filename="../qml/SignerSheet.qml" line="+25"/>
-        <location line="+177"/>
+        <location line="+179"/>
         <source>Close</source>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="-143"/>
-        <location line="+88"/>
+        <location line="-145"/>
+        <location line="+90"/>
         <source>Who signed this</source>
         <translation>Kim imzaladı</translation>
     </message>
     <message>
-        <location line="-117"/>
-        <location line="+126"/>
+        <location line="-119"/>
+        <location line="+128"/>
         <source>Signed by</source>
         <translation>İmzalayan</translation>
     </message>
     <message>
-        <location line="-125"/>
-        <location line="+131"/>
+        <location line="-127"/>
+        <location line="+133"/>
         <source>Key</source>
         <translation>Anahtar</translation>
     </message>
     <message>
-        <location line="-130"/>
-        <location line="+136"/>
+        <location line="-132"/>
+        <location line="+138"/>
         <source>Seen before</source>
         <translation>Daha önce görüldü mü</translation>
     </message>
     <message>
-        <location line="-135"/>
-        <location line="+141"/>
+        <location line="-137"/>
+        <location line="+143"/>
         <source>Trust</source>
         <translation>Güven</translation>
     </message>
@@ -5769,7 +6113,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>StoragePane</name>
     <message>
-        <location filename="../qml/StoragePane.qml" line="+327"/>
+        <location filename="../qml/StoragePane.qml" line="+336"/>
         <source>%1 is still in use. Close what uses it and try again.</source>
         <translation>%1 hâlâ kullanımda. Kullanan uygulamayı kapatıp tekrar deneyin.</translation>
     </message>
@@ -5794,13 +6138,13 @@ Bu geri alınamaz.</translation>
         <translation>Desteklenmiyor</translation>
     </message>
     <message>
-        <location line="-284"/>
-        <location line="+285"/>
+        <location line="-287"/>
+        <location line="+288"/>
         <source>%1 free of %2</source>
         <translation>%2 içinde %1 boş</translation>
     </message>
     <message>
-        <location line="-236"/>
+        <location line="-239"/>
         <source>Games</source>
         <translation>Oyunlar</translation>
     </message>
@@ -5845,7 +6189,12 @@ Bu geri alınamaz.</translation>
         <translation>Bu sürücü okunamadı</translation>
     </message>
     <message>
-        <location line="+27"/>
+        <location line="+28"/>
+        <source>Packages on this drive</source>
+        <translation>Bu bellekteki paketler</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Rescan %1</source>
         <translation>%1 yeniden tara</translation>
     </message>
@@ -5880,13 +6229,13 @@ Bu geri alınamaz.</translation>
         <translation>Sistem</translation>
     </message>
     <message>
-        <location line="-302"/>
-        <location line="+302"/>
+        <location line="-305"/>
+        <location line="+305"/>
         <source>Other</source>
         <translation>Diğer</translation>
     </message>
     <message>
-        <location line="-313"/>
+        <location line="-316"/>
         <source>Plug it in again</source>
         <translation>Yeniden takın</translation>
     </message>
@@ -5901,7 +6250,7 @@ Bu geri alınamaz.</translation>
         <translation>Burada bir şey bulunamadı</translation>
     </message>
     <message>
-        <location line="+306"/>
+        <location line="+309"/>
         <source>Drives</source>
         <translation>Sürücüler</translation>
     </message>
@@ -5962,7 +6311,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelleme var</translation>
     </message>
     <message>
-        <location line="+127"/>
+        <location line="+131"/>
         <source>Search</source>
         <translation>Ara</translation>
     </message>
@@ -5977,7 +6326,12 @@ Bu geri alınamaz.</translation>
         <translation>Tüm uygulamaları göster</translation>
     </message>
     <message>
-        <location line="+43"/>
+        <location line="+17"/>
+        <source>Install from USB</source>
+        <translation>USB&apos;den kur</translation>
+    </message>
+    <message>
+        <location line="+42"/>
         <source>Search results</source>
         <translation>Arama sonuçları</translation>
     </message>
@@ -6503,18 +6857,18 @@ Bu geri alınamaz.</translation>
     <name>SystemPane</name>
     <message>
         <location filename="../qml/SystemPane.qml" line="+178"/>
-        <location line="+312"/>
+        <location line="+342"/>
         <source>Beta</source>
         <translation>Beta</translation>
     </message>
     <message>
-        <location line="-312"/>
-        <location line="+311"/>
+        <location line="-342"/>
+        <location line="+341"/>
         <source>Stable</source>
         <translation>Kararlı</translation>
     </message>
     <message>
-        <location line="-306"/>
+        <location line="-336"/>
         <source>Last checked %1</source>
         <translation>Son kontrol: %1</translation>
     </message>
@@ -6644,7 +6998,17 @@ Bu geri alınamaz.</translation>
         <translation>Çevrimiçi oyunların bağlantısı duraklatılmışken kopabilir.</translation>
     </message>
     <message>
-        <location line="+80"/>
+        <location line="+10"/>
+        <source>Developer mode</source>
+        <translation>Geliştirici modu</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Allows unsigned packages. Only turn it on for games you trust.</source>
+        <translation>İmzasız paketlere izin verir. Yalnızca güvendiğiniz oyunlar için açın.</translation>
+    </message>
+    <message>
+        <location line="+91"/>
         <source>Device health</source>
         <translation>Cihaz sağlığı</translation>
     </message>
@@ -6654,14 +7018,15 @@ Bu geri alınamaz.</translation>
         <translation>Bu cihazda sıcaklık sensörü bulunamadı.</translation>
     </message>
     <message>
-        <location line="-202"/>
+        <location line="-232"/>
         <location line="+8"/>
         <location line="+76"/>
+        <location line="+48"/>
         <source>Only an admin can do this.</source>
         <translation>Bunu yalnızca bir yönetici yapabilir.</translation>
     </message>
     <message>
-        <location line="-289"/>
+        <location line="-337"/>
         <source>The console is warm. Nothing needs to be done.</source>
         <translation>Konsol sıcak. Yapılması gereken bir şey yok.</translation>
     </message>
@@ -6681,7 +7046,7 @@ Bu geri alınamaz.</translation>
         <translation>Dil</translation>
     </message>
     <message>
-        <location line="+87"/>
+        <location line="+117"/>
         <source>Updates</source>
         <translation>Güncellemeler</translation>
     </message>

@@ -169,12 +169,14 @@ DBusPlayBackend::DBusPlayBackend(QObject *parent)
     });
     connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] {
         listSources();
+        readDeveloperMode();
         listJobs(); // what became of the jobs the old owner took with it
     });
     m_bus.connect(Service, Path, Interface, QStringLiteral("SourcesChanged"), this, SIGNAL(sourcesChanged()));
     m_bus.connect(Service, Path, Interface, QStringLiteral("JobProgress"), this,
                   SLOT(onJobProgress(QString, uint, QString)));
     m_bus.connect(Service, Path, Interface, QStringLiteral("JobFinished"), this, SLOT(onJobFinished(QString, QString)));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("DeveloperModeChanged"), this, SLOT(onDeveloperModeChanged(bool)));
 }
 
 void DBusPlayBackend::listSources()
@@ -274,6 +276,39 @@ void DBusPlayBackend::cancel(const QString &key)
     });
 }
 
+void DBusPlayBackend::readDeveloperMode()
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("GetDeveloperMode"));
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<bool> reply = *w;
+        if (!reply.isValid()) {
+            qWarning("ruya-shell: Play1 GetDeveloperMode failed: %s", qPrintable(reply.error().message()));
+            return;
+        }
+        emit developerModeChanged(reply.argumentAt<0>());
+    });
+}
+
+void DBusPlayBackend::requestDeveloperMode(bool on, bool adminApproved)
+{
+    const QVariantMap options{{QStringLiteral("admin_approved"), adminApproved}}; // a{sv}
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("SetDeveloperMode"));
+    msg << on << options;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString> reply = *w;
+        if (!reply.isValid()) {
+            qWarning("ruya-shell: Play1 SetDeveloperMode failed: %s", qPrintable(reply.error().message()));
+            emit answered(QStringLiteral("developer-mode"), QString(), QStringLiteral("failed"));
+            return;
+        }
+        emit answered(QStringLiteral("developer-mode"), QString(), reply.argumentAt<0>());
+    });
+}
+
 void DBusPlayBackend::listJobs()
 {
     const quint64 request = jobBook().listSent();
@@ -299,4 +334,9 @@ void DBusPlayBackend::onJobProgress(const QString &job, uint percent, const QStr
 void DBusPlayBackend::onJobFinished(const QString &job, const QString &status)
 {
     jobBook().onFinished(job, status);
+}
+
+void DBusPlayBackend::onDeveloperModeChanged(bool on)
+{
+    emit developerModeChanged(on);
 }

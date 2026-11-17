@@ -11,7 +11,7 @@
 #include <memory>
 
 // QML face of org.ruyaos.Play1 (api/dbus/org.ruyaos.Play1.xml): the packages on mounted drives, a
-// look inside one, and the install and verify jobs. No UI uses it yet (RUY-98).
+// look inside one, and the install and verify jobs. The install pages (RUY-98) use it.
 // Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux and the mock elsewhere, like the
 // Store. The service (ruya-play, RUY-100) does not exist yet, so on Linux the facade stays
 // unavailable until it does.
@@ -33,6 +33,8 @@ class Play : public QObject
     Q_PROPERTY(QVariantMap jobs READ jobs NOTIFY jobsChanged)
     // True once the service has answered a list, false again when it is lost.
     Q_PROPERTY(bool available READ isAvailable NOTIFY availableChanged)
+    // Developer mode (05 7.2): unsigned packages may be installed. An admin's setting, off until the service says.
+    Q_PROPERTY(bool developerMode READ developerMode NOTIFY developerModeChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
 
 public:
@@ -45,6 +47,7 @@ public:
     QVariantMap jobs() const { return m_jobs; }
     bool isAvailable() const { return m_available; }
     bool isMock() const { return m_backend->isMock(); }
+    bool developerMode() const { return m_developerMode; }
 
     // Answers with `inspected` (status "ok") or `answered("inspect", path, status)` alone.
     Q_INVOKABLE void inspect(const QString &path);
@@ -54,6 +57,8 @@ public:
     Q_INVOKABLE void verify(const QString &appId);
     Q_INVOKABLE void cancel(const QString &key);
     Q_INVOKABLE void refreshSources();
+    // answered("developer-mode", "", status): "ok", "forbidden" (adminApproved false) or "failed".
+    Q_INVOKABLE void setDeveloperMode(bool on, bool adminApproved);
 
     // Tests only, and only with the mock backend (otherwise no-op).
     Q_INVOKABLE void mockReset();
@@ -74,8 +79,9 @@ signals:
     void sourcesChanged();
     void jobsChanged();
     void availableChanged();
+    void developerModeChanged();
     void inspected(const QString &path, const QVariantMap &info);
-    // op "inspect" | "install" | "verify" | "cancel"; status: a method status of the XML.
+    // op "inspect" | "install" | "verify" | "cancel" | "developer-mode"; status: a method status of the XML.
     void answered(const QString &op, const QString &key, const QString &status);
     // status: a JobFinished status of the XML.
     void jobFinished(const QString &key, const QString &status);
@@ -90,4 +96,5 @@ private:
     // Keys whose job was given up as failed when the service was lost -> the service's job id.
     QHash<QString, QString> m_lost;
     bool m_available = false;
+    bool m_developerMode = false;
 };
