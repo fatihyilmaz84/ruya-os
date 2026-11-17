@@ -277,8 +277,13 @@ FocusScope {
         // The application id the window gives itself, when the compositor knows it (Compositor.qml),
         // and the running instance its client's process belongs to, asked of Session1 by the pid
         // (T-459; "" until the answer, and for a process of no instance; `pending` until it comes).
+        // A window of a client that already has one (xwayland-satellite: each X window of a game has its own
+        // surface, RUY-814) takes its sibling's instance at once, with no lookup, so the Input route never
+        // sees a window without an instance.
+        const pid = item.pid ?? 0
+        const sibling = pid > 0 ? apps.find(r => r.pid === pid && r.instance !== "" && r.profile === (profile ?? "")) : undefined
         const record = { item: item, id: ++appSerial, profile: profile ?? "", appId: item.appId ?? "",
-                         pid: item.pid ?? 0, instance: "", pending: (item.pid ?? 0) > 0 }
+                         pid: pid, instance: sibling ? sibling.instance : "", pending: pid > 0 && !sibling }
         item.visible = appShownTo(record.profile)
         appGuard.createObject(item, { recordId: record.id, appItem: item })
         apps = apps.concat([record])
@@ -287,7 +292,7 @@ FocusScope {
         if (launchState && appShownTo(record.profile) && (record.appId === "" || record.appId === launchState.appId))
             endLaunch(false)
         focusApp(item)
-        if (record.pid > 0)
+        if (record.pending)
             Session.instanceOfPid(record.pid)
     }
 
@@ -344,9 +349,17 @@ FocusScope {
             return
         // (A destroyed item has already cleared focusedApp; null means "none" unless the apps are behind Home.)
         const wasFront = focusedApp === record.item || (!focusedApp && !appsBehindHome)
+        const gone = instanceOfWindow(record)
         apps = apps.filter(r => r.id !== id)
         if (!focusedApp || wasFront)
             focusedApp = appsBehindHome ? null : fallbackFront()
+        // The last window of a running instance went and nothing else is in front (RUY-814, item 3).
+        if (wasFront && gone && !focusedApp && !appsBehindHome && signedIn && gone.state !== "stopping"
+                && gone.profile === Profiles.activeProfile && !closingInstances.includes(gone.instance)
+                && !apps.some(r => { const o = instanceOfWindow(r); return o && o.instance === gone.instance })) {
+            gapInstance = gone.instance
+            windowGapTimer.restart()
+        }
         // An app that was behind Home going away leaves the focus where the user put it.
         if (!systemPanel.open && !whosPlaying.pausing && (wasFront || focusedApp !== null))
             focusCurrent()              // the next app, else the page or Home
@@ -433,7 +446,8 @@ FocusScope {
         if (!signedIn) {
             optionsMenu.dismiss()
             uninstallConfirm.dismiss()
-            endLaunch(false)     // nobody to start it for; the app, if it starts, waits hidden (T-164)
+            endWindowGap()
+            endLaunch(false)    // nobody to start it for; the app, if it starts, waits hidden (T-164)
             dropCloseScreen()
             dropAllPages()       // the next sign-in starts at home
             homeSavedFocus = null
@@ -569,6 +583,8 @@ FocusScope {
         overlay: systemPanel.open || whosPlaying.pausing || modeConfirm.shown || IdleClock.covered
         heldInstance: root.heldGame ? root.heldGame.instance : ""
         heldAppId: root.heldGame ? root.heldGame.appId : ""
+        lookupPending: root.frontLookupPending
+        runningInstances: Session.running.map(r => r.instance)
     }
 
     // The game whose pads outlive the screen with no app in front (RUY-611, 06 §5.2): a game can still
@@ -581,6 +597,38 @@ FocusScope {
     // Lock, a profile switch and a game that is not frozen behind Home keep the old rule (the pads go).
     property string lastFrontInstance: ""
     property string closePadHold: ""
+    // The window gap (RUY-814): the last window of a running instance closed and the next one has not
+    // mapped yet (an installer, then the game). The instance's pads stay (route "overlay", the held game
+    // path) for `windowGapMs` at most; the gap ends when any window is in front again, the instance is
+    // gone, the Hub opens or Home is chosen, or the profile signs out. Not a UI duration: no Theme token.
+    property int windowGapMs: 3000
+    property string gapInstance: ""
+    function endWindowGap() {
+        gapInstance = ""
+        windowGapTimer.stop()
+    }
+    Timer {
+        id: windowGapTimer
+        interval: root.windowGapMs
+        onTriggered: root.gapInstance = ""
+    }
+    onAppOpenChanged: if (appOpen) endWindowGap()
+    Connections {
+        target: systemPanel
+        function onOpenChanged() { if (systemPanel.open) root.endWindowGap() }
+    }
+    Connections {
+        target: Session
+        function onRunningChanged() {
+            if (root.gapInstance !== "" && !Session.running.some(r => r.instance === root.gapInstance))
+                root.endWindowGap()
+        }
+    }
+    // The front window's instance lookup is pending (InputRoute holds the route meanwhile).
+    readonly property bool frontLookupPending: {
+        const r = focusedApp ? recordOf(focusedApp) : undefined
+        return r !== undefined && r.pending
+    }
     onQuickMenuAppChanged: {
         if (quickMenuApp && quickMenuApp.instance !== "")
             lastFrontInstance = quickMenuApp.instance
@@ -593,6 +641,9 @@ FocusScope {
                         ? mine.find(r => r.instance === closePadHold) : undefined
         if (closing)
             return closing
+        const gap = gapInstance !== "" ? mine.find(r => r.instance === gapInstance && r.state !== "stopping") : undefined
+        if (gap)
+            return gap
         const front = lastFrontInstance !== "" ? mine.find(r => r.instance === lastFrontInstance) : undefined
         return front && front.frozen && front.state !== "stopping" ? front : null
     }
@@ -957,6 +1008,7 @@ FocusScope {
         const at = found ? recentIds.indexOf(found.id) : -1
         appsBehindHome = true
         focusedApp = null
+        endWindowGap()
         if (at >= 0) {
             recentRow.currentIndex = at
             homeSavedFocus = recentRow

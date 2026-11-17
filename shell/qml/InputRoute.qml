@@ -15,6 +15,13 @@ import RuyaShell
 //            or one being closed until it has exited, so a game that saves its controller choice on
 //            quit (LibreQuake: "Gamepad removed" -> joy_device -1) still finds its pads
 //   app      the app in front has the keys and is not frozen
+// Two gaps between windows keep the pads (RUY-814; Input destroys them on "shell"):
+//   - a new window whose instance Session1 has not yet named (`lookupPending`) holds the last sent
+//     "app"/"overlay" of this profile while that instance still runs, until the reply comes (no timer):
+//     the reply naming the same instance changes nothing, another instance or none sends where it ends up;
+//   - the last window of a running instance closing, and the next one not mapped yet (an installer, then
+//     the game): Shell.qml names the instance as the held game ("overlay") for `windowGapMs`.
+// A window of the same client (same pid) takes its sibling's instance at once and has no lookup.
 // The Thaw (overlay -> app with the same instance) gives the app the same pads back. Lock, a profile
 // change and Home with no game held ("locked" or "shell", no instance) still make Input destroy them. The calls are
 // coalesced to one per event-loop turn (Qt.callLater), so a change that moves several inputs at once
@@ -41,20 +48,49 @@ QtObject {
     property string heldInstance: ""
     property string heldAppId: ""
 
+    // The instance lookup of the app in front is pending (RUY-814): a window just mapped and Session1
+    // has not yet said which instance its process belongs to (Shell.qml: the focused record's `pending`).
+    property bool lookupPending: false
+    // The instances Session1 lists as running, for the window hold below.
+    property var runningInstances: []
+
+    // What was last sent (the hold below keeps it).
+    property string sentRoute: ""
+    property string sentInstance: ""
+    property string sentAppId: ""
+    property string sentProfile: ""
+
     readonly property bool holding: signedIn && !appInFront && heldInstance !== "" && heldAppId !== ""
+
+    // The window hold (RUY-814): while the front window's instance is not yet known, the last sent
+    // "app"/"overlay" of this profile stays, as long as that instance still runs. A second window of a
+    // running game (xwayland-satellite gives each X window its own surface) would else send "shell" for
+    // one reply's time, and Input destroys the pads on "shell". It needs no timer: the reply ends it
+    // (a reply naming another instance or none sends where things end up).
+    readonly property bool windowHold: signedIn && appInFront && lookupPending && instance === ""
+                                       && (sentRoute === "app" || sentRoute === "overlay")
+                                       && sentInstance !== "" && sentAppId !== "" && sentProfile === profile
+                                       && runningInstances.includes(sentInstance)
 
     readonly property string route: !signedIn ? "locked"
                                   : holding ? "overlay"
+                                  : windowHold ? (overlay ? "overlay" : sentRoute)
                                   : !appInFront || instance === "" || appId === "" ? "shell"
                                   : overlay || frozen ? "overlay" : "app"
     readonly property string routeInstance: holding ? heldInstance
+                                          : windowHold ? sentInstance
                                           : route === "app" || route === "overlay" ? instance : ""
-    readonly property string routeAppId: holding ? heldAppId : routeInstance !== "" ? appId : ""
+    readonly property string routeAppId: holding ? heldAppId
+                                       : windowHold ? sentAppId : routeInstance !== "" ? appId : ""
     readonly property string routeProfile: route === "locked" ? "" : profile
 
     readonly property string request: route + "|" + routeInstance + "|" + routeAppId + "|" + routeProfile
 
     function send() {
+        sentRoute = route
+        sentInstance = routeInstance
+        sentAppId = routeAppId
+        sentProfile = routeProfile
         Input.setRoute(route, routeInstance, routeAppId, routeProfile)
     }
 
