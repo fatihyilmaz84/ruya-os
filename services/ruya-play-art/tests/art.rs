@@ -377,6 +377,9 @@ fn exif_orientation_is_applied_before_the_checks() {
     // stored 1080x1920, orientation 6 (rotate 90 clockwise) -> shown 1920x1080
     let input = jpeg_with_exif(&jpeg(1080, 1920), &tiff(6, b""));
     let o = run(Slot::Hero, write(src.path(), "h.jpg", &input), out.path());
+    assert_eq!(dims(&files(&o)[0]), (1920, 1080)); // the same for a PNG: the orientation is in the eXIf chunk
+    let stored = png_insert_before_idat(&png(1080, 1920), &png_chunk(b"eXIf", &tiff(6, b"")));
+    let o = run(Slot::Hero, write(src.path(), "h.png", &stored), out.path());
     assert_eq!(dims(&files(&o)[0]), (1920, 1080));
 }
 

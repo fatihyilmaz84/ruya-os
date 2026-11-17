@@ -193,7 +193,7 @@ fn decode_limits() -> Limits {
 const MAX_ICC: usize = 2 * 1024 * 1024;
 
 struct PngScan {
-    /// IHDR, PLTE, tRNS, IDAT and IEND only.
+    /// IHDR, PLTE, tRNS, eXIf (the orientation), IDAT and IEND only.
     clean: Vec<u8>,
     /// The inflated iCCP profile, within `MAX_ICC`.
     icc: Option<Vec<u8>>,
@@ -218,7 +218,7 @@ fn scan_png(bytes: &[u8]) -> Result<PngScan, Fail> {
         let whole = &bytes[pos..pos + 12 + len];
         let data = &bytes[pos + 8..pos + 8 + len];
         match kind {
-            b"IHDR" | b"PLTE" | b"tRNS" | b"IDAT" => clean.extend_from_slice(whole),
+            b"IHDR" | b"PLTE" | b"tRNS" | b"eXIf" | b"IDAT" => clean.extend_from_slice(whole),
             b"IEND" => {
                 clean.extend_from_slice(whole);
                 ended = true;

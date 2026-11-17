@@ -131,7 +131,8 @@ pub(crate) fn open_regular(
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        o.custom_flags(libc::O_NOFOLLOW);
+        // O_NONBLOCK: opening a FIFO must not block before the type check.
+        o.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     }
     #[cfg(windows)]
     {
