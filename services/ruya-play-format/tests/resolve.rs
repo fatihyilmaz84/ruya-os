@@ -6,6 +6,7 @@ use ruya_play_format::resolve::{
     Unresolved,
 };
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 
 fn comp(source: &str, min: Option<&str>, bundled: Option<&str>) -> Component {
     Component {
@@ -29,7 +30,11 @@ fn wine(v: &str) -> SystemRunner {
 }
 
 fn chosen(c: &Component, sys: &[SystemRunner], o: Override) -> Result<Chosen, Unresolved> {
-    resolve_one(c, sys, o).outcome
+    resolve_one(c, sys, &none(), o).outcome
+}
+
+fn none() -> BTreeMap<String, String> {
+    BTreeMap::new()
 }
 
 fn bundled(v: &str) -> Chosen {
@@ -92,7 +97,7 @@ fn newest_skips_a_system_runner_below_min() {
 fn max_major_fences_the_system_runner() {
     let mut c = comp("newest", Some("9.0"), Some("9.20"));
     c.max_major = Some(9);
-    let r = resolve_one(&c, &[wine("10.2")], Override::PackageDefault);
+    let r = resolve_one(&c, &[wine("10.2")], &none(), Override::PackageDefault);
     assert_eq!(r.outcome, Ok(bundled("9.20")));
     assert_eq!(
         r.notes,
@@ -176,11 +181,16 @@ fn the_player_override_wins_only_when_it_can() {
     );
     // System asked for, but too old: the package default runs, and it says so.
     let old = [wine("8.0")];
-    let r = resolve_one(&c, &old, Override::System);
+    let r = resolve_one(&c, &old, &none(), Override::System);
     assert_eq!(r.outcome, Ok(bundled("9.20")));
     assert_eq!(r.notes, vec![Note::OverrideSystemUnavailable]);
     // Bundled asked for, but there is none.
-    let r = resolve_one(&comp("system", Some("9.0"), None), &sys, Override::Bundled);
+    let r = resolve_one(
+        &comp("system", Some("9.0"), None),
+        &sys,
+        &none(),
+        Override::Bundled,
+    );
     assert_eq!(r.outcome, Ok(system("wine", "10.2")));
     assert_eq!(r.notes, vec![Note::OverrideBundledUnavailable]);
 }
@@ -220,6 +230,7 @@ fn the_newest_runner_of_a_family_is_used_and_all_components_resolve_in_order() {
     let r = resolve(
         &[a, b],
         &[wine("9.5"), wine("10.2"), wine("10.1")],
+        &none(),
         Override::PackageDefault,
     );
     assert!(r.ok());
@@ -227,4 +238,120 @@ fn the_newest_runner_of_a_family_is_used_and_all_components_resolve_in_order() {
     assert_eq!(r.components[0].outcome, Ok(system("wine", "10.2")));
     assert_eq!(r.components[0].tested.as_deref(), Some("9.20"));
     assert_eq!(r.components[1].outcome, Ok(bundled("1.0")));
+}
+
+fn proton(source: &str, min: Option<&str>, bundled: Option<&str>) -> Component {
+    let mut c = comp(source, min, bundled);
+    c.id = "proton".into();
+    c.kind = "proton".into();
+    c
+}
+
+fn ge(v: &str) -> SystemRunner {
+    SystemRunner::new("proton-ge", v)
+}
+
+#[test]
+fn a_bundled_valve_proton_is_never_replaced_by_the_system_ge_proton() {
+    let sys = [ge("GE-Proton10-9")];
+    for source in ["newest", "prefer-system", "prefer-bundled"] {
+        let c = proton(source, Some("9"), Some("9.0"));
+        // No runner.json family given: a bundled proton is Valve's `proton`.
+        assert_eq!(
+            chosen(&c, &sys, Override::PackageDefault),
+            Ok(bundled("9.0")),
+            "{source}"
+        );
+        // The player's System override cannot cross families either.
+        let r = resolve_one(&c, &sys, &none(), Override::System);
+        assert_eq!(r.outcome, Ok(bundled("9.0")), "{source}");
+        assert_eq!(r.notes, vec![Note::OverrideSystemUnavailable], "{source}");
+    }
+    // A system `proton` of the same family does count.
+    let c = proton("newest", Some("9"), Some("9.0"));
+    assert_eq!(
+        chosen(
+            &c,
+            &[SystemRunner::new("proton", "9.5")],
+            Override::PackageDefault
+        ),
+        Ok(system("proton", "9.5"))
+    );
+}
+
+#[test]
+fn the_bundled_copys_declared_family_decides_what_a_system_runner_must_be() {
+    let mut families = BTreeMap::new();
+    families.insert("proton".to_string(), "proton-ge".to_string());
+    let c = proton("newest", Some("9"), Some("GE-Proton9-20"));
+    let sys = [ge("GE-Proton10-9")];
+    let r = resolve_one(&c, &sys, &families, Override::PackageDefault);
+    assert_eq!(r.outcome, Ok(system("proton-ge", "GE-Proton10-9")));
+    // And a bundled copy that declares an unrelated family is compared with nothing here.
+    families.insert("proton".to_string(), "proton-cachy".to_string());
+    let r = resolve_one(&c, &sys, &families, Override::PackageDefault);
+    assert_eq!(r.outcome, Ok(bundled("GE-Proton9-20")));
+}
+
+#[test]
+fn source_system_with_type_proton_means_the_os_ge_proton() {
+    let c = proton("system", Some("9"), None);
+    assert_eq!(
+        chosen(&c, &[ge("GE-Proton10-9")], Override::PackageDefault),
+        Ok(system("proton-ge", "GE-Proton10-9"))
+    );
+    // Valve's proton is accepted for a system lookup only when there is no proton-ge.
+    assert_eq!(
+        chosen(
+            &c,
+            &[SystemRunner::new("proton", "9.5")],
+            Override::PackageDefault
+        ),
+        Ok(system("proton", "9.5"))
+    );
+    // A wine runner never serves a proton component.
+    assert!(matches!(
+        chosen(&c, &[wine("10.2")], Override::PackageDefault),
+        Err(Unresolved::NoSystemRunner { .. })
+    ));
+}
+
+#[test]
+fn a_too_old_ge_proton_never_falls_back_to_another_family() {
+    let c = proton("system", Some("GE-Proton10-0"), None);
+    let sys = [
+        ge("GE-Proton9-27"),
+        SystemRunner::new("proton", "GE-Proton11-1"),
+    ];
+    assert_eq!(
+        chosen(&c, &sys, Override::PackageDefault),
+        Err(Unresolved::SystemTooOld {
+            have: "GE-Proton9-27".into(),
+            min: "GE-Proton10-0".into()
+        })
+    );
+}
+
+#[test]
+fn the_system_override_does_not_apply_to_source_bundled() {
+    let c = comp("bundled", None, Some("9.20"));
+    let r = resolve_one(&c, &[wine("10.2")], &none(), Override::System);
+    assert_eq!(r.outcome, Ok(bundled("9.20")));
+    assert_eq!(r.notes, vec![Note::OverrideSystemUnavailable]);
+}
+
+#[test]
+fn a_bundled_component_needs_no_runner_list_and_no_family_entry() {
+    let c = comp("bundled", None, Some("9.20"));
+    assert_eq!(
+        chosen(&c, &[], Override::PackageDefault),
+        Ok(bundled("9.20"))
+    );
+    // Runners of other families are not looked at.
+    assert_eq!(
+        chosen(&c, &[ge("GE-Proton10-9")], Override::PackageDefault),
+        Ok(bundled("9.20"))
+    );
+    let r = resolve_one(&c, &[], &none(), Override::PackageDefault);
+    assert!(r.notes.is_empty());
 }

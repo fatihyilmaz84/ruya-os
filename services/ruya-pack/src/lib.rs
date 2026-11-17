@@ -27,7 +27,9 @@ pub mod sign;
 pub mod validate;
 pub mod zipw;
 
-pub use report::{Item, Outcome, Reply, Stop, EXIT_IO, EXIT_OK, EXIT_PROBLEMS, EXIT_USAGE};
+pub use report::{
+    redact, Item, Outcome, Reply, Stop, EXIT_IO, EXIT_OK, EXIT_PROBLEMS, EXIT_USAGE, SCHEMA,
+};
 
 use serde_json::json;
 
@@ -85,17 +87,23 @@ usage: ruya-pack <command> [options]   (every command takes --json)
         write play.files and a deterministic zip, then validate it
   keygen <name> [--force]
         write <name>.key (secret) and <name>.pub
-  sign <pkg> [--key FILE | RUYA_PACK_KEY] [--rotate-from OLDKEYFILE] [--signed-at TIME] [--deflate]
+  sign <pkg> [--key FILE | RUYA_PACK_KEY] [--rotate-from OLDKEYFILE] [--rotation-seq N]
+       [--signed-at TIME] [--deflate]
         write play.sig
   inspect <pkg> [--system-wine V] ...
         show what the console will show
 
 exit codes: 0 ok, 1 problems found, 2 usage, 3 I/O
+
+for scripts:
+  - warnings never change the exit code
+  - text mode prints exits 0 and 1 to stdout, exits 2 and 3 to stderr
+  - --json always prints the result object to stdout, whatever the exit code
+  - the result object has a schema number (1); a key never appears in any output
 ";
 
 /// Run one command line (the arguments after the program name).
 pub fn run(args: &[String], ctx: &Context) -> Outcome {
-    let json_out = args.iter().any(|a| a == "--json");
     let rest: Vec<String> = args.to_vec();
     let Some(cmd) = rest
         .iter()
@@ -105,7 +113,7 @@ pub fn run(args: &[String], ctx: &Context) -> Outcome {
         if rest.iter().any(|a| a == "--help" || a == "-h") {
             return Outcome {
                 exit: EXIT_OK,
-                json: json!({"ok": true, "command": "help", "problems": [], "warnings": [], "usage": USAGE}),
+                json: json!({"schema": report::SCHEMA, "ok": true, "command": "help", "problems": [], "warnings": [], "usage": USAGE}),
                 text: USAGE.to_string(),
             };
         }
@@ -123,7 +131,7 @@ pub fn run(args: &[String], ctx: &Context) -> Outcome {
     if tail.iter().any(|a| a == "--help" || a == "-h") {
         return Outcome {
             exit: EXIT_OK,
-            json: json!({"ok": true, "command": "help", "problems": [], "warnings": [], "usage": USAGE}),
+            json: json!({"schema": report::SCHEMA, "ok": true, "command": "help", "problems": [], "warnings": [], "usage": USAGE}),
             text: USAGE.to_string(),
         };
     }
@@ -135,8 +143,10 @@ pub fn run(args: &[String], ctx: &Context) -> Outcome {
         "keygen" => keys::keygen(&tail, ctx),
         "sign" => sign::run(&tail, ctx),
         "inspect" => inspect::run(&tail, ctx),
-        other => Err(Stop::Usage(format!("unknown command {other}; try --help"))),
+        other => Err(Stop::Usage(format!(
+            "unknown command {}; try --help",
+            report::redact(other)
+        ))),
     };
-    let _ = json_out;
     Outcome::of(&cmd, result)
 }

@@ -175,7 +175,15 @@ fn a_bundled_wine_needs_its_licence_text_and_a_source() {
     );
 
     // The source itself under licences/ also satisfies the duty.
-    put(&c, "licences/source/wine-9.20.tar.xz", b"source");
+    // A licences/ file that merely has "source" in its name is not the source.
+    put(
+        &c,
+        "licences/source-notes.txt",
+        b"we have the source somewhere",
+    );
+    let (b, _) = build(&c, &[]);
+    assert_eq!(problem_codes(&b), ["licence.source_missing"]);
+    put(&c, "sources/wine-9.20.tar.xz", b"source");
     let (b, _) = build(&c, &[]);
     assert_ok(&b);
 
@@ -295,4 +303,23 @@ fn a_zip_over_four_gib_and_a_file_over_four_gib_warn_about_fat32() {
         1,
         "only the file: a zip of 4 GiB - 1 still fits"
     );
+}
+
+#[test]
+fn licence_files_match_by_whole_words_not_by_substring() {
+    let t = tempfile::tempdir().unwrap();
+    // "wine" is inside "swineherd" and "winery" but names neither.
+    let a = t.path().join("a");
+    wine_with(&a, |_| {}, false, true);
+    put(&a, "licences/swineherd.txt", b"x");
+    put(&a, "licences/winery/readme.txt", b"x");
+    let (b, _) = build(&a, &[]);
+    assert_eq!(problem_codes(&b), ["licence.text_missing"]);
+    // A folder named for the component counts, and so does the licence id as a file name.
+    put(&a, "licences/Wine/COPYING.LIB", b"x");
+    assert_ok(&build(&a, &[]).0);
+    let c = t.path().join("c");
+    wine_with(&c, |_| {}, false, true);
+    put(&c, "licences/LGPL-2.1-or-later.txt", b"x");
+    assert_ok(&build(&c, &[]).0);
 }

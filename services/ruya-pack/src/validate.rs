@@ -6,13 +6,16 @@
 use crate::args::{parse, Parsed, Spec};
 use crate::fixes::codes;
 use crate::pkg::{self, OpenError, Opened};
-use crate::report::{items, Item, Reply, Stop};
+use crate::report::{items, redact, Item, Reply, Stop};
 use crate::Context;
 use ruya_play_art::{Outcome as ArtOutcome, Slot};
 use ruya_play_format::manifest::{ArtPath, Manifest};
-use ruya_play_format::resolve::{resolve, Chosen, Override, Resolution, SystemRunner};
+use ruya_play_format::resolve::{
+    lookup_families, resolve, Chosen, Override, Resolution, SystemRunner,
+};
 use ruya_play_format::{FileEntry, Package, Source, ValidateOptions};
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -35,7 +38,8 @@ pub fn runners_from(p: &Parsed) -> Result<Vec<SystemRunner>, Stop> {
             }
             _ => {
                 return Err(Stop::Usage(format!(
-                    "--system-runner takes family=version, not {v}"
+                    "--system-runner takes family=version, not {}",
+                    redact(v)
                 )))
             }
         }
@@ -92,7 +96,8 @@ pub fn check(source: &dyn Source, runners: &[SystemRunner], zip_bytes: u64) -> C
     vet_art(source, &package.manifest, &mut out);
     licence_duty(&package, &mut out.problems);
     fat32(&package, zip_bytes, &mut out.warnings);
-    dry_run(&package.manifest, runners, &mut out);
+    let families = bundled_families(source, &package.manifest);
+    dry_run(&package.manifest, runners, &families, &mut out);
     out.package = Some(package);
     out
 }
@@ -188,49 +193,66 @@ fn is_copyleft(spdx: &str) -> bool {
     .any(|c| u.contains(c))
 }
 
+/// The words of a name: letters and digits, lower case (`wine-LGPL-2.1.txt` is wine, lgpl, 2, 1, txt).
+fn tokens(s: &str) -> Vec<String> {
+    s.to_lowercase()
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn has_words(hay: &[String], needle: &[String]) -> bool {
+    !needle.is_empty() && hay.windows(needle.len()).any(|w| w == needle)
+}
+
 /// The licence duty of bundled components (05 section 6.2): the SPDX id (the format crate checks
-/// its shape), the licence text under `licences/`, and for copyleft code a `source_url` or the
-/// source itself under `licences/`.
+/// its shape), a licence text under `licences/` (a path segment or file name that names the
+/// component, the licence or the bundled folder as whole words), and for copyleft code a
+/// `source_url` or the source itself as a file under `sources/` (or `licences/sources/`).
 fn licence_duty(p: &Package, problems: &mut Vec<Item>) {
-    let under_licences: Vec<String> = p
+    let files: Vec<&str> = p
         .files
         .iter()
         .filter_map(|f| match f {
-            FileEntry::File { path, .. } if path.starts_with("licences/") => {
-                Some(path.to_lowercase())
-            }
+            FileEntry::File { path, .. } => Some(path.as_str()),
             _ => None,
         })
         .collect();
+    let licence_files: Vec<Vec<Vec<String>>> = files
+        .iter()
+        .filter_map(|f| f.strip_prefix("licences/"))
+        .map(|rest| rest.split('/').map(tokens).collect())
+        .collect();
+    let has_source_files = files
+        .iter()
+        .any(|f| f.starts_with("sources/") || f.starts_with("licences/sources/"));
     for (i, c) in p.manifest.components.iter().enumerate() {
         let Some(b) = &c.bundled else { continue };
         let at = format!("/components/{i}/bundled");
-        let folder = b.path.rsplit('/').next().unwrap_or("").to_lowercase();
-        let names = [c.id.to_lowercase(), b.licence.to_lowercase(), folder];
-        let has_text = under_licences.iter().any(|f| {
-            names
+        let folder = b.path.rsplit('/').next().unwrap_or("");
+        let names = [tokens(&c.id), tokens(&b.licence), tokens(folder)];
+        let has_text = licence_files.iter().any(|segments| {
+            segments
                 .iter()
-                .any(|n| !n.is_empty() && f.contains(n.as_str()))
+                .any(|seg| names.iter().any(|n| has_words(seg, n)))
         });
         if !has_text {
             problems.push(Item::new(
                 codes::LICENCE_TEXT_MISSING,
                 format!("{at}/licence"),
                 format!(
-                    "The bundled component \"{}\" ({}) has no licence text under licences/; a file there must be named after the component or the licence.",
+                    "The bundled component \"{}\" ({}) has no licence text under licences/; a file or folder there must be named after the component or the licence.",
                     c.id, b.licence
                 ),
             ));
         }
-        if is_copyleft(&b.licence)
-            && b.source_url.is_none()
-            && !under_licences.iter().any(|f| f.contains("source"))
-        {
+        if is_copyleft(&b.licence) && b.source_url.is_none() && !has_source_files {
             problems.push(Item::new(
                 codes::LICENCE_SOURCE_MISSING,
                 format!("{at}/source_url"),
                 format!(
-                    "{} is copyleft: the package must say where the source of \"{}\" is.",
+                    "{} is copyleft: the package must say where the source of \"{}\" is (source_url, or the source as a file under sources/).",
                     b.licence, c.id
                 ),
             ));
@@ -260,12 +282,33 @@ pub fn fat32(p: &Package, zip_bytes: u64, warnings: &mut Vec<Item>) {
     }
 }
 
+/// The family each bundled copy declares in its `runner.json` (`family`); a copy without one has the
+/// default family of its type (`resolve::default_bundled_family`).
+pub fn bundled_families(source: &dyn Source, m: &Manifest) -> BTreeMap<String, String> {
+    let mut out = BTreeMap::new();
+    for c in &m.components {
+        let Some(b) = &c.bundled else { continue };
+        let path = format!("{}/runner.json", b.path.trim_end_matches('/'));
+        let family = pkg::read_small(source, &path, 64 * 1024)
+            .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+            .and_then(|v| v.get("family").and_then(Value::as_str).map(str::to_string));
+        if let Some(f) = family {
+            out.insert(c.id.clone(), f);
+        }
+    }
+    out
+}
+
 /// Dry-run the resolution for the components whose family has a runner named on the command line.
-fn dry_run(m: &Manifest, runners: &[SystemRunner], out: &mut Checked) {
-    use ruya_play_format::resolve::families_of;
+fn dry_run(
+    m: &Manifest,
+    runners: &[SystemRunner],
+    families: &BTreeMap<String, String>,
+    out: &mut Checked,
+) {
     let mut checked = Vec::new();
     for c in &m.components {
-        let named = families_of(c)
+        let named = lookup_families(c, families)
             .iter()
             .any(|f| runners.iter().any(|r| &r.family == f));
         // A component that never looks at the OS needs no list; the others are skipped honestly.
@@ -289,7 +332,7 @@ fn dry_run(m: &Manifest, runners: &[SystemRunner], out: &mut Checked) {
     if checked.is_empty() {
         return;
     }
-    let r = resolve(&checked, runners, Override::PackageDefault);
+    let r = resolve(&checked, runners, families, Override::PackageDefault);
     for (i, c) in r.components.iter().enumerate() {
         if let Err(why) = &c.outcome {
             out.problems.push(Item::new(

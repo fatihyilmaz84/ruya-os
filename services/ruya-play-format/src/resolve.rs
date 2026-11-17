@@ -2,11 +2,33 @@
 //! dry run) and the launcher (RUY-101) both call, so the answer a developer sees is the answer the
 //! console computes.
 //!
-//! Inputs are the manifest's components, the runners the OS provides (family and version) and the
-//! player's per-game override. Nothing is read from disk; versions compare as numbers.
+//! Inputs are the manifest's components, the runners the OS provides (family and version), the
+//! family of each bundled copy (from its `runner.json`; the caller reads it) and the player's
+//! per-game override. Nothing is read from disk; versions compare as numbers.
+//!
+//! The signature is fixed, because the launcher (RUY-101) calls it:
+//!
+//! `resolve(components: &[Component], system_runners: &[SystemRunner],
+//! bundled_families: &BTreeMap<String, String>, over: Override) -> Resolution`
+//!
+//! `bundled_families` maps a component id to the family its bundled copy declares. A missing entry
+//! means the default family of the component's type (`wine` for wine, `proton` for proton, the
+//! component id for an emulator or engine). Rules:
+//!
+//! * `source: system` looks for the OS's runner: `wine` for `type: wine`, `proton-ge` and then
+//!   `proton` for `type: proton` (GE-Proton is the OS's Proton, ADR-025), the component id for an
+//!   emulator or engine.
+//! * Every other source (and the player's System override) counts a system runner only when its
+//!   family equals the bundled copy's family. A bundled Valve `proton` is never replaced by, or
+//!   compared with, the system `proton-ge`; the result is the bundled copy.
+//! * Inside one family the newest system runner counts. If it is below `min` or above `max_major`
+//!   the component is not served by the system: a too-old `proton-ge` never falls back to another
+//!   family.
+//! * The System override does not apply to `source: bundled` ("only the shipped copy, always").
 //!
 //! ```
 //! use ruya_play_format::resolve::{resolve, Chosen, Override, SystemRunner};
+//! use std::collections::BTreeMap;
 //! # use ruya_play_format::manifest::{Bundled, Component};
 //! let wine = Component {
 //!     id: "wine".into(), kind: "wine".into(), source: "newest".into(),
@@ -15,12 +37,13 @@
 //!         licence: "LGPL-2.1-or-later".into(), source_url: None }),
 //! };
 //! let system = [SystemRunner::new("wine", "10.2")];
-//! let r = resolve(&[wine], &system, Override::PackageDefault);
+//! let r = resolve(&[wine], &system, &BTreeMap::new(), Override::PackageDefault);
 //! assert!(matches!(r.components[0].outcome, Ok(Chosen::System { .. })));
 //! ```
 
 use crate::manifest::Component;
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 
 /// A runner the OS provides.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -202,10 +225,10 @@ pub fn major_of(v: &str) -> u64 {
     numbers(v).first().copied().unwrap_or(0)
 }
 
-/// The runner families whose system runners may serve `c`. GE-Proton is the OS's Proton (ADR-025),
-/// so a `proton` component can use a `proton-ge` runner; emulators and engines are one family per
-/// component id. Versions are only compared inside one family: the newest runner of the first
-/// family that has any wins.
+/// The families of the OS's runners that may serve a `source: system` component. GE-Proton is the
+/// OS's Proton (ADR-025), so `type: proton` looks for `proton-ge`, then `proton`; emulators and
+/// engines are one family per component id. Versions are only compared inside one family: the
+/// newest runner of the first family that has any decides.
 pub fn families_of(c: &Component) -> Vec<String> {
     match c.kind.as_str() {
         "wine" => vec!["wine".into()],
@@ -214,13 +237,34 @@ pub fn families_of(c: &Component) -> Vec<String> {
     }
 }
 
+/// The family of a bundled copy when its `runner.json` is not known: the type's own family.
+pub fn default_bundled_family(c: &Component) -> String {
+    match c.kind.as_str() {
+        "wine" => "wine".into(),
+        "proton" => "proton".into(),
+        _ => c.id.clone(),
+    }
+}
+
+/// The system families that count for `c`: for `source: system` (or a component with no bundled
+/// copy) [`families_of`]; for every other source the one family of the bundled copy.
+pub fn lookup_families(c: &Component, bundled_families: &BTreeMap<String, String>) -> Vec<String> {
+    if c.source == "system" || c.bundled.is_none() {
+        families_of(c)
+    } else {
+        vec![bundled_families
+            .get(&c.id)
+            .cloned()
+            .unwrap_or_else(|| default_bundled_family(c))]
+    }
+}
+
 enum System {
     Usable(SystemRunner),
     Unusable(Unresolved),
 }
 
-fn system_for(c: &Component, runners: &[SystemRunner]) -> System {
-    let families = families_of(c);
+fn system_for(c: &Component, runners: &[SystemRunner], families: Vec<String>) -> System {
     for family in &families {
         let best = runners
             .iter()
@@ -265,12 +309,18 @@ fn system_chosen(r: &SystemRunner) -> Chosen {
 pub fn resolve_one(
     c: &Component,
     system_runners: &[SystemRunner],
+    bundled_families: &BTreeMap<String, String>,
     over: Override,
 ) -> ComponentResolution {
-    let system = system_for(c, system_runners);
+    let system = system_for(c, system_runners, lookup_families(c, bundled_families));
     let mut notes = Vec::new();
     let mut over = over;
     match (over, &system, bundled_of(c)) {
+        // `source: bundled` is the shipped copy, always.
+        (Override::System, _, _) if c.source == "bundled" => {
+            notes.push(Note::OverrideSystemUnavailable);
+            over = Override::PackageDefault;
+        }
         (Override::Bundled, _, None) => {
             notes.push(Note::OverrideBundledUnavailable);
             over = Override::PackageDefault;
@@ -343,12 +393,13 @@ fn by_source(
 pub fn resolve(
     components: &[Component],
     system_runners: &[SystemRunner],
+    bundled_families: &BTreeMap<String, String>,
     over: Override,
 ) -> Resolution {
     Resolution {
         components: components
             .iter()
-            .map(|c| resolve_one(c, system_runners, over))
+            .map(|c| resolve_one(c, system_runners, bundled_families, over))
             .collect(),
     }
 }

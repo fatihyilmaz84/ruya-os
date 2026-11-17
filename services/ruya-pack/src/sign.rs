@@ -88,13 +88,17 @@ pub fn run(args: &[String], ctx: &Context) -> Result<Reply, Stop> {
         None => None,
     };
     if old.as_ref().is_some_and(|o| o.public() == key.public()) {
-        return Err(Stop::Usage(
+        return Err(Stop::UsageCode(
+            crate::fixes::codes::KEY_SAME,
             "--rotate-from is the same key as the signing key".into(),
         ));
     }
     let signed_at = match p.one("signed-at") {
         Some(t) => parse_utc(t).ok_or_else(|| {
-            Stop::Usage(format!("--signed-at takes YYYY-MM-DDTHH:MM:SSZ, not {t}"))
+            Stop::Usage(format!(
+                "--signed-at takes YYYY-MM-DDTHH:MM:SSZ, not {}",
+                crate::report::redact(t)
+            ))
         })?,
         None => ctx.now,
     };

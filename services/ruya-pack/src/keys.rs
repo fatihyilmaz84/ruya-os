@@ -57,28 +57,31 @@ pub fn load(file: Option<&str>, ctx: &Context) -> Result<SecretKey, Stop> {
 }
 
 pub(crate) fn load_named(file: Option<&str>, ctx: &Context, flag: &str) -> Result<SecretKey, Stop> {
-    let bad = |item: Item| Stop::Usage(format!("{} ({})", item.message, item.code));
+    // The values of --key and --rotate-from are never echoed: not as a path, not in a message.
+    let bad = |item: Item| Stop::UsageCode(codes::KEY_INVALID, item.message);
     match file {
         Some(path) => {
+            if seed_from_base64(path).is_some() {
+                return Err(Stop::UsageCode(
+                    codes::KEY_INVALID,
+                    format!("{flag} takes the name of a key file, not the key itself; put the key in a file or in RUYA_PACK_KEY"),
+                ));
+            }
             let text = std::fs::read_to_string(path).map_err(|e| {
-                // A key typed where a file name belongs must not be echoed back.
-                if seed_from_base64(path).is_some() {
-                    Stop::Usage(format!(
-                        "{flag} takes the name of a key file, not the key itself; put the key in a file or in RUYA_PACK_KEY"
-                    ))
-                } else {
-                    Stop::io("cannot read the key file", Path::new(path), &e)
-                }
+                Stop::UsageCode(
+                    codes::KEY_INVALID,
+                    format!("the file named by {flag} cannot be read as a key file ({e})"),
+                )
             })?;
             parse_key_file(&text).map_err(bad)
         }
         None => match &ctx.key_env {
             Some(v) => seed_from_base64(v)
                 .ok_or_else(|| bad(invalid("RUYA_PACK_KEY is not the base64 of a 32-byte key."))),
-            None => Err(Stop::Usage(format!(
-                "no key: pass {flag} <file> or set RUYA_PACK_KEY ({})",
-                codes::KEY_MISSING
-            ))),
+            None => Err(Stop::UsageCode(
+                codes::KEY_MISSING,
+                format!("no key: pass {flag} <file> or set RUYA_PACK_KEY"),
+            )),
         },
     }
 }
@@ -130,7 +133,7 @@ pub fn keygen(args: &[String], _ctx: &Context) -> Result<Reply, Stop> {
         if !force && path.exists() {
             reply.problems.push(Item::new(
                 codes::KEY_EXISTS,
-                path.display().to_string(),
+                crate::report::redact(&path.display().to_string()),
                 "The file exists already; keygen never replaces a key silently.",
             ));
         }

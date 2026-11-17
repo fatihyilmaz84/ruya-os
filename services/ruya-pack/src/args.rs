@@ -2,7 +2,7 @@
 //! unknown option is a usage error. A key is never an option value (05 section 13): there is no
 //! option that takes key text.
 
-use crate::report::Stop;
+use crate::report::{redact, Stop};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// What one command accepts.
@@ -83,7 +83,7 @@ pub fn parse(args: &[String], spec: &Spec) -> Result<Parsed, Stop> {
             };
             out.values.entry(bare.to_string()).or_default().push(v);
         } else {
-            return Err(Stop::Usage(format!("unknown option {name}")));
+            return Err(Stop::Usage(format!("unknown option {}", redact(name))));
         }
     }
     let (min, max) = spec.positionals;

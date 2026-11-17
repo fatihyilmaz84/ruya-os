@@ -29,6 +29,8 @@ pub mod codes {
     pub const KEY_INVALID: &str = "key.invalid";
     /// No key was given.
     pub const KEY_MISSING: &str = "key.missing";
+    /// `--rotate-from` names the signing key itself.
+    pub const KEY_SAME: &str = "key.same";
     /// A key file would be overwritten.
     pub const KEY_EXISTS: &str = "key.exists";
     /// A runner needed by the package is not in the list given on the command line.
@@ -49,6 +51,7 @@ pub mod codes {
         KEY_INVALID,
         KEY_MISSING,
         KEY_EXISTS,
+        KEY_SAME,
         RESOLVE_NOT_CHECKED,
     ];
 }
@@ -59,8 +62,8 @@ pub const FALLBACK: &str = "See the developer guide's error catalogue for this c
 /// Exact codes first, then groups (`group.`) as the fallback inside a family of codes.
 const FIXES: &[(&str, &str)] = &[
     // pack's own
-    ("licence.text_missing", "Add the licence text of the bundled component as a file under licences/, named after the component or the licence (licences/wine-LGPL-2.1.txt)."),
-    ("licence.source_missing", "Set bundled.source_url to where the source of the bundled code can be downloaded, or ship the source under licences/source/."),
+    ("licence.text_missing", "Add the licence text of the bundled component as a file under licences/ whose name or folder names the component or the licence (licences/wine-LGPL-2.1.txt)."),
+    ("licence.source_missing", "Set bundled.source_url to where the source of the bundled code can be downloaded, or ship the source as a file under sources/."),
     ("build.symlink", "Remove the link, or build with --links-as-data to record a relative link inside the folder in play.files."),
     ("build.symlink_unsupported", "Make the link relative and keep its target inside the same top-level folder, or replace it with a copy of the file."),
     ("build.signature_dropped", "Run ruya-pack sign on the new package: a signature covers play.files, which the build just wrote."),
@@ -71,6 +74,7 @@ const FIXES: &[(&str, &str)] = &[
     ("io.error", "Check that the path exists, that you may read it, and that the disk is not full."),
     ("key.invalid", "Use a key file made by ruya-pack keygen (header ruyaos-play-key-v1), or RUYA_PACK_KEY holding its base64 line."),
     ("key.missing", "Pass --key <file> or set RUYA_PACK_KEY; make a key with ruya-pack keygen <name>."),
+    ("key.same", "Rotate from the previous key: --rotate-from takes the old key file, --key the new one."),
     ("key.exists", "Choose another name, or pass --force to replace the key (the old key is gone for good)."),
     ("resolve.not_checked", "Pass --system-wine <version> (or --system-proton-ge, --system-runner family=version) to check the dry run."),
     ("resolve.no_system_runner", "Give the component a bundled copy and source prefer-system or newest, or accept that the installer fetches the runner."),

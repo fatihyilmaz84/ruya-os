@@ -152,3 +152,93 @@ fn inspect_prints_the_resolution_next_to_the_tested_version() {
         o.text
     );
 }
+
+#[test]
+fn a_bundled_valve_proton_is_not_replaced_by_the_system_ge_proton_but_a_ge_copy_is() {
+    let t = tempfile::tempdir().unwrap();
+    let edit = |m: &mut serde_json::Value| {
+        m["components"] = json!([{"id": "proton", "type": "proton", "source": "newest", "min": "9",
+            "bundled": {"path": "components/proton", "version": "9.0", "licence": "BSD-3-Clause"}}]);
+        m["run"] = json!({"runner": "proton", "component": "proton", "command": ["${payload}/StarHopper.exe"]});
+    };
+    // No runner.json: the copy is Valve's proton.
+    let a = t.path().join("a");
+    wine_with(&a, edit, true, true);
+    put(&a, "components/proton/bin/proton", b"x");
+    put(&a, "licences/proton-BSD-3-Clause.txt", b"x");
+    assert_ok(&build(&a, &[]).0);
+    let o = resolution(&a, &["--system-proton-ge", "GE-Proton10-9"]);
+    assert_ok(&o);
+    assert!(
+        o.json["resolution"].is_null(),
+        "the GE-Proton is not this copy's family: nothing to compare"
+    );
+    assert_eq!(o.json["warnings"][0]["code"], json!("resolve.not_checked"));
+    let o = resolution(
+        &a,
+        &[
+            "--system-proton-ge",
+            "GE-Proton10-9",
+            "--system-runner",
+            "proton=9.5",
+        ],
+    );
+    assert_ok(&o);
+    assert_eq!(o.json["resolution"][0]["family"], json!("proton"));
+    assert_eq!(o.json["resolution"][0]["version"], json!("9.5"));
+    // The same package with a runner.json that declares proton-ge: the system GE-Proton counts.
+    let b = t.path().join("b");
+    wine_with(&b, edit, true, true);
+    put(&b, "components/proton/bin/proton", b"x");
+    put(
+        &b,
+        "components/proton/runner.json",
+        br#"{"family": "proton-ge", "version": "GE-Proton9-20"}"#,
+    );
+    put(&b, "licences/proton-BSD-3-Clause.txt", b"x");
+    assert_ok(&build(&b, &[]).0);
+    let o = resolution(&b, &["--system-proton-ge", "GE-Proton10-9"]);
+    assert_ok(&o);
+    assert_eq!(o.json["resolution"][0]["runner"], json!("system"));
+    assert_eq!(o.json["resolution"][0]["family"], json!("proton-ge"));
+}
+
+#[test]
+fn a_bundled_component_names_no_runner_and_needs_none() {
+    let t = tempfile::tempdir().unwrap();
+    let dir = built(t.path(), |m| {
+        m["components"][0]["source"] = json!("bundled")
+    });
+    // No runner.json in the copy, no list, and a list of another family: bundled each time.
+    for flags in [
+        &[][..],
+        &["--system-proton-ge", "GE-Proton10-9"],
+        &["--system-wine", "99"],
+    ] {
+        let o = resolution(&dir, flags);
+        assert_ok(&o);
+        assert_eq!(
+            o.json["resolution"][0]["runner"],
+            json!("bundled"),
+            "{flags:?}"
+        );
+        assert!(o.json["warnings"].as_array().unwrap().is_empty());
+    }
+}
+
+#[test]
+fn every_result_object_carries_its_schema_number() {
+    let t = tempfile::tempdir().unwrap();
+    let dir = built(t.path(), |_| {});
+    for a in [
+        vec!["validate", "--json", dir.to_str().unwrap()],
+        vec!["inspect", "--json", dir.to_str().unwrap()],
+        vec!["keygen", "--json", t.path().join("k").to_str().unwrap()],
+        vec!["frobnicate", "--json"],
+        vec!["--help", "--json"],
+    ] {
+        let o = run(&a);
+        assert_eq!(o.json["schema"], json!(1), "{a:?}");
+        assert!(o.json["command"].is_string());
+    }
+}
