@@ -3600,7 +3600,7 @@ Bu geri alınamaz.</translation>
         <translation>Kapat</translation>
     </message>
     <message>
-        <location line="+41"/>
+        <location line="+44"/>
         <source>Options for %1</source>
         <translation>%1 seçenekleri</translation>
     </message>
@@ -5452,9 +5452,19 @@ Bu geri alınamaz.</translation>
         <translation>İç ölü bölge</translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Ignores small moves</source>
+        <translation>Küçük kıpırtıyı yok sayar</translation>
+    </message>
+    <message>
         <location line="+13"/>
         <source>Outer dead zone</source>
         <translation>Dış ölü bölge</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Full tilt before the edge</source>
+        <translation>Kenardan önce tam eğim</translation>
     </message>
     <message>
         <location line="+13"/>
@@ -5462,9 +5472,29 @@ Bu geri alınamaz.</translation>
         <translation>Ters ölü bölge</translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Skips a game&apos;s dead zone</source>
+        <translation>Oyunun ölü bölgesini atlar</translation>
+    </message>
+    <message>
         <location line="+13"/>
         <source>Response curve</source>
         <translation>Tepki eğrisi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Slow near the centre</source>
+        <translation>Merkezde yavaş</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Quick near the centre</source>
+        <translation>Merkezde hızlı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Same all the way</source>
+        <translation>Baştan sona aynı</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -5487,9 +5517,19 @@ Bu geri alınamaz.</translation>
         <translation>Duyarlılık</translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Higher: full tilt sooner</source>
+        <translation>Yüksek: tam eğim erken</translation>
+    </message>
+    <message>
         <location line="+13"/>
         <source>Invert up and down</source>
         <translation>Yukarı ve aşağıyı ters çevir</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Push up to look down</source>
+        <translation>Yukarı itince aşağı bakar</translation>
     </message>
     <message>
         <location line="+9"/>

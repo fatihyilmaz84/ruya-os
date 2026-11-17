@@ -268,6 +268,7 @@ Page {
             objectName: "rowInner"
             u: page.u
             label: qsTr("Inner dead zone")
+            detail: qsTr("Ignores small moves")
             from: 0
             to: 30
             stepSize: 1
@@ -281,6 +282,7 @@ Page {
             objectName: "rowOuter"
             u: page.u
             label: qsTr("Outer dead zone")
+            detail: qsTr("Full tilt before the edge")
             from: 0
             to: 20
             stepSize: 1
@@ -294,6 +296,7 @@ Page {
             objectName: "rowAnti"
             u: page.u
             label: qsTr("Anti dead zone")
+            detail: qsTr("Skips a game's dead zone")
             from: 0
             to: 30
             stepSize: 1
@@ -307,6 +310,8 @@ Page {
             objectName: "rowCurve"
             u: page.u
             label: qsTr("Response curve")
+            detail: curveRow.value === "precise" ? qsTr("Slow near the centre")
+                  : curveRow.value === "aggressive" ? qsTr("Quick near the centre") : qsTr("Same all the way")
             options: [{ value: "linear", label: qsTr("Linear") }, { value: "precise", label: qsTr("Precise") },
                       { value: "aggressive", label: qsTr("Aggressive") }]
             onEdited: v => GameControls.setStick(page.side, "curve", v, false)
@@ -318,6 +323,7 @@ Page {
             objectName: "rowSensitivity"
             u: page.u
             label: qsTr("Sensitivity")
+            detail: qsTr("Higher: full tilt sooner")
             from: 50
             to: 150
             stepSize: 5
@@ -331,6 +337,7 @@ Page {
             objectName: "rowInvert"
             u: page.u
             label: qsTr("Invert up and down")
+            detail: qsTr("Push up to look down")
             onToggled: on => GameControls.setStick(page.side, "invert_y", on, false)
         }
         Binding { target: invertRow; property: "checked"; value: page.settings.invert_y === true }
