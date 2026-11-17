@@ -1,0 +1,26 @@
+[package]
+name = "ruya-pack"
+description = "RuyaOS .play developer tool: init, validate, build, sign, keygen and inspect, on the same crates the console verifies with (docs/specs/05-play-packages.md section 13)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "ruya_pack"
+
+[[bin]]
+name = "ruya-pack"
+path = "src/main.rs"
+
+[dependencies]
+ruya-play-format = { path = "../ruya-play-format" }  # the one parser and validator; resolve() for the dry run
+ruya-play-art = { path = "../ruya-play-art" }  # the off-device art and video vetting
+ruya-play-trust = { path = "../ruya-play-trust" }  # keys, play.sig, tiers, inspect
+serde_json = "1"  # the --json result and the play.json skeleton (already in the tree)
+sha2 = "0.10"  # play.files hashes (already in the tree)
+flate2 = "1"  # zip deflate, CRC and the PNG's zlib stream; its backend is miniz_oxide (already in the tree)
+base64ct = { version = "1.8", features = ["alloc"] }  # the key file's seed (already in the tree)
+tempfile = "3"  # scratch directory of the art vetting (already in the tree)
+
+[dev-dependencies]

@@ -1023,6 +1023,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruya-pack"
+version = "0.1.0"
+dependencies = [
+ "base64ct",
+ "flate2",
+ "ruya-play-art",
+ "ruya-play-format",
+ "ruya-play-trust",
+ "serde_json",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
 name = "ruya-pads"
 version = "0.1.0"
 
