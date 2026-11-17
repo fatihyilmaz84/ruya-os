@@ -99,7 +99,9 @@ RUN set -eux; \
 
 # ---- OS image -----------------------------------------------------------------------
 FROM quay.io/fedora/fedora-bootc:${FEDORA_VERSION}
-ARG RUYA_VERSION=0.0.0-dev
+# ARG RUYA_VERSION is declared further down, just before its first use: buildah puts a declared
+# build arg's value into every later RUN's cache key, so a new version number here rebuilt the
+# package layers on every image (RUY-771, 0.0.90).
 
 # Ordered build steps (image/build/NN-*.sh). Bind-mounted, so the scripts are not shipped.
 RUN --mount=type=bind,source=image/build,target=/ctx/build \
@@ -136,6 +138,7 @@ RUN cat /usr/share/ruyaos/xwayland-satellite-built-against \
 # pkexec (polkit) and pam_timestamp_check (pam) lose their setuid bit (RUY-18): their packages stay
 # (polkitd answers the services over D-Bus, PAM logs the shell in), the helpers are unused on a
 # console; 98-guard.sh fails the build if either still has the bit.
+ARG RUYA_VERSION=0.0.0-dev
 RUN --mount=type=bind,source=image/build,target=/ctx/build \
     --mount=type=bind,source=image/rootfs,target=/ctx/rootfs \
     cp -r --no-preserve=mode,ownership /ctx/rootfs/. / \
