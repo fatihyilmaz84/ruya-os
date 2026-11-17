@@ -2443,6 +2443,7 @@ FocusScope {
         // Raised above the Hub (z 20) while the notification sheet or "Who's playing?" shows over it.
         z: whosPlaying.visible && systemPanel.open ? 21 : 15
         glassSource: l0          // the layer the glass sheets of the picker modals blur
+        covered: systemPanel.open || whosPlaying.pausing
     }
 
     // The Options menu (02 §1.7): one for every surface, in the modal layer.

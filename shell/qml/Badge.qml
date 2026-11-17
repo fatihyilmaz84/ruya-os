@@ -1,7 +1,7 @@
 import QtQuick
 import RuyaShell
 
-// Small status pill (04 §5): one or two words in caps. kind: neutral | success | info | warning.
+// Small status pill (04 §5): one or two words in caps. kind: neutral | success | info | warning | error (RUY-802).
 Rectangle {
     id: badge
 
@@ -16,6 +16,7 @@ Rectangle {
     readonly property color tone: kind === "success" ? Theme.toastSuccess
                                 : kind === "info" ? Theme.toastInfo
                                 : kind === "warning" ? Theme.toastWarning
+                                : kind === "error" ? Theme.toastError
                                 : Theme.textDim
 
     implicitWidth: label.implicitWidth + 2 * Theme.spaceS * u + edge

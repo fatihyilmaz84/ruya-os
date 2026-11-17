@@ -601,7 +601,7 @@ This can&apos;t be undone.</translation>
         <translation>Read</translation>
     </message>
     <message>
-        <location line="+425"/>
+        <location line="+394"/>
         <source>No special permissions.</source>
         <translation>No special permissions.</translation>
     </message>
@@ -641,7 +641,7 @@ This can&apos;t be undone.</translation>
         <translation>Close the game to uninstall it.</translation>
     </message>
     <message>
-        <location line="-918"/>
+        <location line="-887"/>
         <source>Install</source>
         <translation>Install</translation>
     </message>
@@ -673,12 +673,7 @@ This can&apos;t be undone.</translation>
         <translation>This app can</translation>
     </message>
     <message>
-        <location line="+36"/>
-        <source>High risk</source>
-        <translation>High risk</translation>
-    </message>
-    <message>
-        <location line="-131"/>
+        <location line="-95"/>
         <source>The update adds: %1</source>
         <translation>The update adds: %1</translation>
     </message>
@@ -3837,6 +3832,22 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>PermissionList</name>
+    <message>
+        <location filename="../qml/PermissionList.qml" line="+73"/>
+        <source>High risk</source>
+        <translation>High risk</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+40"/>
+        <source>And %n more</source>
+        <translation>
+            <numerusform>And %n more</numerusform>
+            <numerusform>And %n more</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
     <name>PinPad</name>
     <message>
         <location filename="../qml/PinPad.qml" line="+50"/>
@@ -3903,6 +3914,145 @@ This can&apos;t be undone.</translation>
         <location line="+0"/>
         <source>OK</source>
         <translation>OK</translation>
+    </message>
+</context>
+<context>
+    <name>PlayTrust</name>
+    <message>
+        <location filename="../qml/PlayTrust.qml" line="+54"/>
+        <source>Official</source>
+        <translation>Official</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Signed by %1 and the RuyaOS store</source>
+        <translation>Signed by %1 and the RuyaOS store</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Developer</source>
+        <translation>Developer</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Signed by %1 · key %2</source>
+        <translation>Signed by %1 · key %2</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Signed by key %1</source>
+        <translation>Signed by key %1</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Changed since signed</source>
+        <translation>Changed since signed</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This package was changed after it was signed.</source>
+        <translation>This package was changed after it was signed.</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <location line="+1"/>
+        <source>Removed for safety</source>
+        <translation>Removed for safety</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Removed for safety: %1</source>
+        <translation>Removed for safety: %1</translation>
+    </message>
+    <message>
+        <location line="+3"/>
+        <source>Unverified</source>
+        <translation>Unverified</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Not signed. Anyone could have changed it.</source>
+        <translation>Not signed. Anyone could have changed it.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Yes, the same key as the installed game</source>
+        <translation>Yes, the same key as the installed game</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No, a different key</source>
+        <translation>No, a different key</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No, a new key</source>
+        <translation>No, a new key</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>The developer and the RuyaOS store both signed every file.</source>
+        <translation>The developer and the RuyaOS store both signed every file.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>A signature shows that this key signed every file. It doesn&apos;t prove who the developer is.</source>
+        <translation>A signature shows that this key signed every file. It doesn&apos;t prove who the developer is.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Nobody signed this package, so nothing shows who made it or whether it was changed.</source>
+        <translation>Nobody signed this package, so nothing shows who made it or whether it was changed.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Plays sound, uses graphics</source>
+        <translation>Plays sound, uses graphics</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Uses controllers</source>
+        <translation>Uses controllers</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Uses controllers, keyboard and mouse</source>
+        <translation>Uses controllers, keyboard and mouse</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Accesses all devices</source>
+        <translation>Accesses all devices</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Uses the network</source>
+        <translation>Uses the network</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Reads files on USB drives</source>
+        <translation>Reads files on USB drives</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Changes files on USB drives</source>
+        <translation>Changes files on USB drives</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Runs 32-bit programs</source>
+        <translation>Runs 32-bit programs</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Asks the system to prioritise it</source>
+        <translation>Asks the system to prioritise it</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Can inspect other programs</source>
+        <translation>Can inspect other programs</translation>
     </message>
 </context>
 <context>
@@ -4689,9 +4839,14 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ScreenshotRow</name>
     <message>
-        <location filename="../qml/ScreenshotRow.qml" line="+29"/>
+        <location filename="../qml/ScreenshotRow.qml" line="+37"/>
         <source>View</source>
         <translation>View</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Play</source>
+        <translation>Play</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -4704,11 +4859,42 @@ This can&apos;t be undone.</translation>
         <source>Screenshots</source>
         <translation>Screenshots</translation>
     </message>
+    <message>
+        <location line="-35"/>
+        <location line="+35"/>
+        <source>Screenshots and trailer</source>
+        <translation>Screenshots and trailer</translation>
+    </message>
+    <message>
+        <location line="+109"/>
+        <source>Trailer · %1</source>
+        <translation>Trailer · %1</translation>
+    </message>
 </context>
 <context>
     <name>ScreenshotViewer</name>
     <message>
-        <location filename="../qml/ScreenshotViewer.qml" line="+26"/>
+        <location filename="../qml/ScreenshotViewer.qml" line="+33"/>
+        <source>Pause</source>
+        <translation>Pause</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Play</source>
+        <translation>Play</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Seek 10 s</source>
+        <translation>Seek 10 s</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+2"/>
         <source>Browse</source>
         <translation>Browse</translation>
     </message>
@@ -4718,13 +4904,18 @@ This can&apos;t be undone.</translation>
         <translation>Close</translation>
     </message>
     <message>
-        <location line="+50"/>
-        <location line="+124"/>
+        <location line="+57"/>
+        <location line="+169"/>
         <source>%1 of %2</source>
         <translation>%1 of %2</translation>
     </message>
     <message>
-        <location line="-18"/>
+        <location line="-169"/>
+        <source>Trailer</source>
+        <translation>Trailer</translation>
+    </message>
+    <message>
+        <location line="+121"/>
         <source>Couldn&apos;t load this picture.</source>
         <translation>Couldn&apos;t load this picture.</translation>
     </message>
@@ -5258,7 +5449,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 was uninstalled.</translation>
     </message>
     <message>
-        <location line="+529"/>
+        <location line="+530"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -5280,7 +5471,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1884"/>
+        <location line="-1885"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -5311,7 +5502,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1632"/>
+        <location line="+1633"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
@@ -5320,6 +5511,45 @@ This can&apos;t be undone.</translation>
         <location line="+193"/>
         <source>mock services</source>
         <translation>mock services</translation>
+    </message>
+</context>
+<context>
+    <name>SignerSheet</name>
+    <message>
+        <location filename="../qml/SignerSheet.qml" line="+25"/>
+        <location line="+177"/>
+        <source>Close</source>
+        <translation>Close</translation>
+    </message>
+    <message>
+        <location line="-143"/>
+        <location line="+88"/>
+        <source>Who signed this</source>
+        <translation>Who signed this</translation>
+    </message>
+    <message>
+        <location line="-117"/>
+        <location line="+126"/>
+        <source>Signed by</source>
+        <translation>Signed by</translation>
+    </message>
+    <message>
+        <location line="-125"/>
+        <location line="+131"/>
+        <source>Key</source>
+        <translation>Key</translation>
+    </message>
+    <message>
+        <location line="-130"/>
+        <location line="+136"/>
+        <source>Seen before</source>
+        <translation>Seen before</translation>
+    </message>
+    <message>
+        <location line="-135"/>
+        <location line="+141"/>
+        <source>Trust</source>
+        <translation>Trust</translation>
     </message>
 </context>
 <context>
@@ -6765,6 +6995,14 @@ This can&apos;t be undone.</translation>
         <location line="-263"/>
         <source>Safe to remove</source>
         <translation>Safe to remove</translation>
+    </message>
+</context>
+<context>
+    <name>TrailerPlayer</name>
+    <message>
+        <location filename="../qml/TrailerPlayer.qml" line="+160"/>
+        <source>The trailer can&apos;t play.</source>
+        <translation>The trailer can&apos;t play.</translation>
     </message>
 </context>
 <context>

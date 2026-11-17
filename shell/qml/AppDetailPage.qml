@@ -919,48 +919,17 @@ Page {
                     accessibleValue: (page.app.permissions ?? []).map(p => page.permissionText(p)).join(", ")
                     onActiveFocusChanged: if (activeFocus) page.stopFocused(permsSection, true)
 
-                    Grid {
+                    PermissionList {
                         id: permsGrid
                         x: Theme.spaceL * page.u
                         y: Theme.spaceM * page.u
+                        width: permsBlock.width - 2 * Theme.spaceL * page.u
+                        u: page.u
                         columns: 2
-                        columnSpacing: Theme.spaceM * page.u
-                        rowSpacing: Theme.spaceXs * page.u
-
-                        Repeater {
-                            model: page.app.permissions ?? []
-
-                            delegate: Row {
-                                id: perm
-
-                                required property string modelData
-                                readonly property bool risky: page.highRisk.indexOf(modelData) >= 0
-
-                                objectName: "permission_" + modelData
-                                width: (permsBlock.width - 2 * Theme.spaceL * page.u - Theme.spaceM * page.u) / 2
-                                height: 44 * page.u
-                                spacing: Theme.spaceS * page.u
-
-                                Badge {
-                                    objectName: "riskFlag_" + perm.modelData
-                                    visible: perm.risky
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    u: page.u
-                                    kind: "warning"
-                                    text: qsTr("High risk")
-                                }
-
-                                Text {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: Math.min(implicitWidth, parent.width - (perm.risky ? 120 * page.u : 0))
-                                    elide: Text.ElideRight
-                                    textFormat: Text.PlainText      // an id the service sent shows raw
-                                    text: page.permissionText(perm.modelData)
-                                    color: perm.risky ? Theme.warningText : Theme.text
-                                    font.pixelSize: Theme.typeBody * page.u
-                                }
-                            }
-                        }
+                        shellWords: false       // the Store's words (permissionText), not the .play table
+                        entries: (page.app.permissions ?? []).map(id => ({
+                            key: id, words: page.permissionText(id),
+                            risk: page.highRisk.indexOf(id) >= 0 ? "high" : "low" }))
                     }
                 }
 
