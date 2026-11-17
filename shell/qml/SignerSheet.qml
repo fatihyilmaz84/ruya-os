@@ -80,7 +80,7 @@ FocusScope {
         property string label
         property string value
         property bool error: false
-        property alias extra: slot.data
+        default property alias extra: slot.data
 
         width: parent ? parent.width : 0
         height: Theme.rowHeight * sheet.u

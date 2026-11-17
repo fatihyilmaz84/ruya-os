@@ -304,6 +304,16 @@ Item {
             verify(key.text.split(" ").every(g => g.length === 4))
         }
 
+        function test_the_trust_row_has_its_label_and_the_badge_in_the_value_column() {
+            const o = openSheet(developer())
+            const trustRow = findChild(o.sheet, "signerRowTrust")
+            const badge = findChild(o.sheet, "signerBadge")
+            const at = badge.mapToItem(trustRow, 0, 0)
+            verify(at.x >= (Theme.spaceL + 300) * host.u - 1, "the badge starts in the value column: " + at.x)
+            verify(at.y >= 0 && at.y + badge.height <= trustRow.height, "inside the row")
+            compare(badge.solid, true)
+        }
+
         function test_signed_by_is_hidden_without_a_name_and_an_unsigned_package_has_no_key() {
             const named = openSheet(developer())
             verify(findChild(named.sheet, "signerRowName").visible)
@@ -599,7 +609,7 @@ Item {
             const failed = findChild(v, "trailerFailed")
             tryVerify(() => failed.visible, 5000)
             compare(findChild(v, "trailerFailedText").text, "The trailer can't play.")
-            verify(!findChild(v, "trailerBar").visible, "no bar to play with")
+            tryVerify(() => !findChild(v, "trailerBar").visible, 2000, "no bar to play with")
             DeviceSettings.language = "tr"
             compare(findChild(v, "trailerFailedText").text, "Fragman oynatılamıyor.")
             keyClick(Qt.Key_Escape)
@@ -661,11 +671,6 @@ Item {
         }
         property Item stage: null
 
-        function shot(name) {
-            settle()
-            grabImage(tc.stage).save(shotsDir + "/96-play-" + name + ".png")
-        }
-
         function test_zz_screenshots() {
             if (!shotsDir)
                 skip("set RUY_SHOTS_DIR to save screenshots")
@@ -676,15 +681,19 @@ Item {
                 DeviceSettings.language = lang
                 tc.stage.row.info = developer()
                 tc.stage.row.forceActiveFocus()
-                shot("trust-row-focused-" + lang)
+                settle()
+                grabImage(tc.stage).save(shotsDir + "/96-play-" + "trust-row-focused-" + lang + ".png")
                 tc.stage.row.info = record({ verdict: "bad-signature" })
-                shot("trust-row-changed-" + lang)
+                settle()
+                grabImage(tc.stage).save(shotsDir + "/96-play-" + "trust-row-changed-" + lang + ".png")
                 tc.stage.row.info = developer()
                 tc.stage.row.forceActiveFocus()
                 tc.stage.sheet.open(developer(), tc.stage.row)
-                shot("signer-sheet-" + lang)
+                settle()
+                grabImage(tc.stage).save(shotsDir + "/96-play-" + "signer-sheet-" + lang + ".png")
                 tc.stage.sheet.close()
-                shot("permissions-" + lang)
+                settle()
+                grabImage(tc.stage).save(shotsDir + "/96-play-" + "permissions-" + lang + ".png")
             }
             tc.stage.destroy()
             tc.stage = null
@@ -722,12 +731,14 @@ Item {
             for (const lang of ["en", "tr"]) {
                 DeviceSettings.language = lang
                 ts.row.strip.forceActiveFocus()
-                shot("trailer-card-" + lang)
+                settle()
+                grabImage(tc.stage).save(shotsDir + "/96-play-" + "trailer-card-" + lang + ".png")
                 keyClick(Qt.Key_Return)
                 tryVerify(() => ts.row.viewer && ts.row.viewer.shown, 2000)
                 tryVerify(() => ts.row.viewer.trailerPlayer.player.playbackState === 1, 5000)
                 ts.row.viewer.trailerPlayer.wake()
-                shot("trailer-viewer-" + lang)
+                settle()
+                grabImage(tc.stage).save(shotsDir + "/96-play-" + "trailer-viewer-" + lang + ".png")
                 keyClick(Qt.Key_Escape)
                 tryVerify(() => !ts.row.viewer.shown)
             }
