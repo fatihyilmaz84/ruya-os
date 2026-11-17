@@ -1,66 +1,63 @@
 # Lead notes (handoff between lead sessions)
 
-The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand off at 50-60 % context; no no-op turns; up to four lanes; builders run nothing in WSL since lead-20**). **Rewrite this file at the end of every lead session**; keep it under about 6 KB. Paper Plane is the source of truth (http://192.168.178.164:8687, project `RUY`). **Goals are formations** (`formation` lists them). This file is the lead's session record.
+The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand off at 50-60 % context; no no-op turns; builders run nothing in WSL since lead-20**). **Rewrite this file at the end of every lead session**; keep it under about 6 KB. Paper Plane is the source of truth (http://192.168.178.164:8687, project `RUY`). **Goals are formations** (`formation` lists them). This file is the lead's session record.
 
-## State after lead-28 (Opus, 2026-11-16; owner: "finish for tonight, we continue tomorrow")
+## State after lead-29 (Opus, 2026-11-17)
 
-- **Review range:** 70292d68..HEAD.
-- **Merged:**
-  - RUY-548 (Options menu line boxes, `Theme.lineFactor`): reviewer APPROVE, design review clean, gate 2089 passed / 0 failed.
-  - RUY-91, the `.play` spike (lead).
-- **Paper Plane:** `changes` cursor **4427**. Formations RUY-555 (CI green) and RUY-556 (game page) are closed.
-- **The `.play` spike (RUY-91), owner request.** Run by an Opus agent on the Dell; answers in 05 §6.3, §6.4, §7.1, §16 and §18, ADR-014 "Spike result", and an ADR-025 note. Raw results: `scripts/spikes/play/RESULTS.md`.
-  - The Flatpak import route works (no bubblewrap fallback).
-  - Windows display in v1 is X11 through xwayland-satellite.
-  - GE-Proton runs directly, without umu and the Steam Linux Runtime: the Flatpak 1.18.4 portal's `--usr-path` is broken.
-  - Filed: RUY-776 (portal, **high**: it may break Proton in the Steam Flatpak), RUY-777 (Wine games ignore SIGTERM, 31.5 s stop), RUY-778 (compositor protocol versions), RUY-779 (no memory limits on game units).
-  - Comments on RUY-92, 100, 101; RUY-32 narrowed.
-  - RUY-90 (epic) was released by the owner after the spike (see "Owner direction").
-- **Dell:** the sleep block for the spike is removed (suspend works again). It still runs 0.0.89. Left on it: Flathub Wine 11 and the Sdk 25.08, and `/var/tmp/ruy91` (2.2 GB), which can go.
+- **Review range:** 93922571..HEAD. **Paper Plane `changes` cursor 4609.**
+- **Merged (7):**
+  - RUY-501 (stick details);
+  - the `.play` foundations: RUY-92 (format crate), RUY-94 (art vetting), RUY-96 (Play1 contract, mock, client), RUY-93 (signing, trust), RUY-95 (`ruya-pack`), RUY-99 (importer core).
+  - Every `.play` crate took 2 or 3 review rounds, and each round 1 found real security holes. A lead review comment before the build is on every ticket.
+- **Lead fixes:**
+  - `image/Containerfile` declares `RUYA_VERSION` at its first use (RUY-771): the package layers missed the cache on every version.
+  - `push-main.ps1` pushes the tested commit, not the `main` ref.
+  - Play1 key ids are 32 hex characters.
+  - Spec wording fixes in 02 and 05.
+- **Image 0.0.90:**
+  - VM queue: 17 of 18 passed, and RUY-770 `kill` passed. `vm-session-check` failed twice under load and passed alone, filed as RUY-784.
+  - The Dell is on 0.0.90 (rollback 0.0.89). Its idle GPU was not measured (someone was using it).
+- **Dell:** the Steam Flatpak and runtimes are installed (RUY-776; about 16 GB, plus `/var/tmp/slr` 1 GB). There is a usroverlay with strace and gdb (gone at reboot). Diagnostic files are in `/root/diag-*`.
+- **Upstream:** filed containers/bubblewrap#835 (owner's yes): the portal's `--usr-path` fd bug.
 
-## In flight at the handoff
-1. **RUY-501** (stick editor detail lines): the builder's HANDOFF is done (d716f231 in `D:\dev\RuyaOS-worktrees\RUY-501`, test 2090 passed, shots EN/TR at 1080p and 720p, revert CAUGHT); the ticket is In Review. Next lead:
-   - read its Outcome on the ticket;
-   - dispatch `ruya-reviewer` and `ruya-design-reviewer` (new copy, EN and TR);
-   - merge, gate, remove the worktree.
-2. **Image 0.0.90** (`image-chain.sh 0.0.90 oci`, from 70292d68, started 22:3x): still building after about 70 min, so the second build in a row did **not** hit the cache the way RUY-771 expects. Read `output/chain/summary.txt` and `build.log` ("Using cache" lines), and put both times on RUY-771 (0.0.89: 29 min). It does not contain RUY-548, RUY-91 or RUY-501.
-3. **Push refused at the end of lead-28:** `push-main.ps1` said "dev.ps1 test is not ALL GREEN". The merge gate on the same code (RUY-548) was green with 2089 passed, and the image build ran alongside (load). A re-run while the image build was still going was ALL GREEN (2089 passed, 0 failed; the VM check lint took 199 s under load). So the refusal was a load flake in the host tests: which check failed was not kept, because the log tail cut it. If it recurs, keep the full push log. A second push followed: if `git status -sb` says ahead, it failed too. Check that RUY-548's Fedora CI run happened (`output/last-green-linux.txt`).
-
-## Owner direction (2026-11-17): the next sessions are all about `.play`
-The owner answered four questions at the end of lead-28:
-- **Foundations first**, in the epic's order. The epic RUY-90 is released (Done); the goal is formation **RUY-780**.
-- **Two lanes at a time.**
-- **Q7:** an installed package is system-wide, with data per profile (05 §16).
-- **Order:** finish the half-done non-.play work below, then only `.play`.
+## Owner direction (2026-11-17, still in force)
+- `.play` only, foundations first, two lanes (formation **RUY-780**: 7/17 done). Q7: a package is system-wide, with data per profile.
+- The weekly plan was at **80 %** at the handoff (resets 2026-11-20 18:00), past the 70 % row. **Run one lane**; tell the owner.
+- **RUY-798:** the owner's `burnout3-ruya-native` (a separate repo; its code is developed there) is the real native `.play` test game, after RUY-100/101. The owner's PS2 data never enters RuyaOS repos, images or CI.
 
 ## First thing next session
-1. Finish the in-flight items above:
-   - RUY-501: review and merge;
-   - the failed push (see 3 above);
-   - image 0.0.90: RUY-771's times, then the VM queue on RUY-390 (RUY-770 `vm-session-check.sh kill`), then `scripts/dell-update.sh 0.0.90`.
-2. **RUY-776:** install Steam on the Dell and run a Proton game. Windows `.play` games depend on the same Flatpak portal.
-3. **Then `.play` only.** Review each child ticket against main and the spike comments ("Lead review before the build"), and fix the stale "Wine is the only system runner" wording (ADR-025) in each one you touch.
-   - First lanes, host-verifiable and in different crates: **RUY-92** (format crate and schema; its run.env comment) and **RUY-94** (art and video vetting).
-   - Next: RUY-93 (signing, lead), RUY-95 (`ruya-pack`), RUY-96 (`Play1` contract, mock, client), RUY-99 (importer core).
-   - Check the blockers (`formation ref=RUY-780` showed 12 blocked) and set the order with `sort_order`.
-   - RUY-97 (design step) needs a Claude Design canvas before RUY-98 (the shell).
-4. **Parked while `.play` runs:** RUY-773, 761, 17, 744, 526, RUY-12's re-plan, inbox triage (RUY-666..779), the architect audit, and the owner's hands-on checks RUY-766, 736, 743 and 738.
+1. **RUY-97, the design step** (lead): a Claude Design canvas for the package page and the install flow (`LEAD.md` 5, "Design first"). It must exist before RUY-98 (the shell's Install from USB, now unblocked by RUY-96).
+2. **RUY-100**, the `ruya-play` service in the image: lead, VM. Its comments list the inputs from RUY-96 and RUY-99:
+   - uid check for `admin_approved`;
+   - reconcile at start;
+   - surface `state/journal`;
+   - Play1 off `NOT_SERVED`;
+   - helper memory above 1.25 GiB;
+   - store-blocklist file (RUY-796).
+
+   Then RUY-101 (launcher; its comment has the `resolve()` contract) and RUY-102 (permissions).
+3. Review each ticket against main before the build. Fix the stale "Wine is the only system runner" wording (ADR-025) where it remains.
+4. **Owner-pending:**
+   - RUY-786: the hands-on sleep test, "later";
+   - RUY-776: a Steam login on the Dell for a real Proton game.
+5. Parked: RUY-773, 761, 17, 744, 526, RUY-12's re-plan, inbox triage (now up to RUY-799), the architect audit (due), and the owner's hands-on checks RUY-766, 736, 743 and 738.
 
 ## Concerns (ranked)
-1. **Weekly plan at 72 %** (resets 2026-11-20 18:00). One lane only; the spike ran on the owner's request despite the "no spikes" row.
-2. **Flatpak 1.18.4's portal** (RUY-776) may break Steam's Proton on the image. Unchecked.
-3. **The image build cache** (RUY-771) did not hold for the second build in a row.
-4. VM fakes too lenient (lead-26, architect topic).
+1. **RUY-786:** after sleep and wake, LibreQuake was not controllable (owner: "nothing moved at all"). Not reproduced. Leads: the hop from the physical pad to evdev after reconnect (the wiimote driver's node), and the input masks at rebind (`routing.rs` `mask_held`, `bind`). RUY-785 (rumble lost on reconnect) is confirmed and separate.
+2. **The weekly plan at 80 %.**
+3. **The `.play` Linux paths have run only in WSL `cargo test`** (ruya-play's openat code), not in an image. RUY-100's `vm-play-check.sh` is the first real run.
+4. Flaky tests under parallel load: RUY-794 (`tst_player_chips`), RUY-784 (`vm-session-check`).
 
-## Process changes in lead-28
-- Lead: I didn't start with the owner's "next" item (the spike) and went into the routine loop first. Rule kept: a handoff's owner request comes before the build loop (already in "First thing"; no new text).
-- Dell: a runtime sleep block (`systemctl mask --runtime` on the sleep targets plus a `systemd-inhibit` unit) keeps it awake during agent runs; both end at a reboot.
-- Paper Plane: none.
+## Process changes in lead-29
+- **Scripts:** `push-main.ps1` pushes the commit it tested (`$head:refs/heads/main`). It used to push the `main` ref at its end, so a merge made during its 7-minute Linux CI job could have gone out untested. The lead aborted such a merge this session.
+- **Lead:** for security-critical crates, run the code reviewer and the API reviewer in parallel and send one combined round-2 list. It worked every time. A small delta round (RUY-94 r3, RUY-99 r2) can be verified by the lead directly: read the diff, run the tests, record the approve.
+- **Tests:** the Unix-only `cargo test` paths can run in WSL before a merge: `CARGO_TARGET_DIR=/root/tgt-x cargo test -p <crate> --locked` from `/mnt/d/...`. From Git Bash, call `wsl.exe` with `MSYS_NO_PATHCONV=1`, or the script path is mangled.
+- **Paper Plane:** the MCP servers timed out at session start ("version negotiation probe"), then connected on retry. Not filed.
 
 ## Quality signals (one row per lead session)
 
 | Date | Range reviewed | Tasks | Findings (fixed / filed) | `dev.ps1 test` | VM |
 |---|---|---|---|---|---|
-| 2026-11-16 (lead-26) | 8864330..86dab5a | 11 merged; 5 filed (764, 765, 766, 770, 771) | second rounds on 743 (3 rounds) and 524; 2 spec gaps closed; 2 VM-check bugs fixed | 2051 passed, 0 failed (RUY-524 gate) | 0.0.88 queue: all but RUY-770 and sample; Dell on 0.0.88 |
 | 2026-11-16 (lead-27) | 86dab5a..70292d6 | 6 merged + 1 lead fix (765); 2 filed (772, 773) | round 2 on 771, 532, 533, 534; 2 owner UI fixes; 3 spec gaps closed; 2 PP issues | 2077 passed, 0 failed (RUY-533 gate) | Dell on 0.0.88 checks; 0.0.89 built, Dell updated |
-| 2026-11-16 (lead-28) | 70292d6..HEAD | 1 merged (548) + the `.play` spike (91); 4 filed (776-779) | none on 548 (both reviews clean) | 2089 passed, 0 failed (RUY-548 gate) | spike on the Dell (hw); 0.0.90 building |
+| 2026-11-16 (lead-28) | 70292d6..9392257 | 1 merged (548) + the `.play` spike (91); 4 filed (776-779) | none on 548 (both reviews clean) | 2089 passed, 0 failed (RUY-548 gate) | spike on the Dell (hw); 0.0.90 building |
+| 2026-11-17 (lead-29) | 9392257..HEAD | 7 merged (501, 92, 94, 96, 93, 95, 99); 16 filed (784-799) | 2-3 review rounds on each .play crate (zip overflow, iCCP bomb, rotation splice, blocklist downgrade, key echo, record-before-commit); 5 lead fixes; bubblewrap#835 | 2106 passed, 0 failed (RUY-99 gate) | 0.0.90: 17/18 + kill PASS; Dell on 0.0.90 |

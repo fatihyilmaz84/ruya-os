@@ -121,7 +121,9 @@ if ($DryRun) {
 }
 # --quiet: git writes its "To <url>" progress line to stderr, which PowerShell 5.1 shows as a
 # NativeCommandError when the output is redirected (lead-13); only real errors reach stderr now.
-& $git push --quiet origin main
+# Push the commit that was checked ($head), not whatever `main` points at by now: a merge made
+# while the Linux CI job ran would otherwise go out untested (lead-29).
+& $git push --quiet origin "${head}:refs/heads/main"
 if ($LASTEXITCODE -ne 0) { Stop-Push "git push was rejected (someone else pushed, or history diverged): don't force; tell the owner" }
 Write-Host "pushed: $(& $git log --oneline -1 origin/main)" -ForegroundColor Green
 # What dev.ps1 test cannot see (red CI on 2026-11-07: clippy 1.92 casts, Fedora qmllint property-override).
