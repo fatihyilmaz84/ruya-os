@@ -340,6 +340,7 @@ Page {
                     objectName: "paneStorage"
                     anchors.fill: parent
                     u: page.u
+                    onPackagesRequested: drive => page.openRequested("installSources", ({ drive: drive }))
                     onExitRequested: page.leavePane()
                 }
             }

@@ -37,6 +37,8 @@ public:
     void install(const QString &path, bool adminApproved) override;
     void verify(const QString &appId) override;
     void cancel(const QString &key) override;
+    void readDeveloperMode() override;
+    void requestDeveloperMode(bool on, bool adminApproved) override;
     void listJobs() override;
 
     // Tests only.

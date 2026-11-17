@@ -465,6 +465,36 @@ SettingsPane {
         text: qsTr("Online games can lose their connection while paused.")
     }
 
+    // Developer mode (RUY-98, 05 §7.2): admins only, off by default. It lets unsigned .play packages install;
+    // the service checks the caller again (`admin_approved`, only an admin's pane sends it).
+    ToggleRow {
+        id: developerModeRow
+        objectName: "rowDeveloperMode"
+        u: pane.u
+        visible: pane.isAdmin
+        label: qsTr("Developer mode")
+        onToggled: checked => Play.setDeveloperMode(checked, pane.isAdmin)
+    }
+    Binding { target: developerModeRow; property: "checked"; value: Play.developerMode }
+
+    SettingNote {
+        objectName: "developerModeNote"
+        u: pane.u
+        visible: pane.isAdmin
+        text: qsTr("Allows unsigned packages. Only turn it on for games you trust.")
+    }
+
+    Connections {
+        target: Play
+        function onAnswered(op, key, status) {
+            if (op !== "developer-mode" || status === "ok")
+                return
+            developerModeRow.checked = Play.developerMode      // the change was refused: the switch shows the truth
+            Sfx.error()
+            Notifications.show(status === "forbidden" ? qsTr("Only an admin can do this.") : PlayCopy.methodStatusText(status), "error")
+        }
+    }
+
     GroupLabel {
         objectName: "updatesHeading"
         u: pane.u

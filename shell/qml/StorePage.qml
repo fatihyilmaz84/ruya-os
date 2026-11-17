@@ -409,12 +409,16 @@ Page {
             objectName: "storeToolbar"
             width: parent.width
             height: Theme.rowHeight * page.u
+            // Search, Show all apps and Install from USB share the width (two when the last is not offered).
+            readonly property real gap: 2 * Theme.spaceS * page.u
+            readonly property int cells: PlayCopy.installFromUsbAllowed ? 3 : 2
+            readonly property real cellWidth: (width - (cells - 1) * gap) / cells
 
             SettingRow {
                 id: searchRow
                 objectName: "storeSearch"
                 kind: "page"
-                width: toolbar.width * 0.5 - Theme.spaceS * page.u
+                width: toolbar.cellWidth
                 u: page.u
                 label: qsTr("Search")
                 value: page.query
@@ -426,13 +430,29 @@ Page {
             ToggleRow {
                 id: showAll
                 objectName: "storeShowAll"
-                x: toolbar.width * 0.5 + Theme.spaceS * page.u
-                width: toolbar.width * 0.5 - Theme.spaceS * page.u
+                x: toolbar.cellWidth + toolbar.gap
+                width: toolbar.cellWidth
                 u: page.u
                 label: qsTr("Show all apps")
                 checked: Store.controllerFilter === "any"
                 onToggled: checked => Store.controllerFilter = checked ? "any" : "gamepad"
                 Keys.onLeftPressed: { Sfx.navigate(); searchRow.forceActiveFocus() }
+                Keys.onRightPressed: if (usbRow.visible) { Sfx.navigate(); usbRow.forceActiveFocus() }
+                Keys.onDownPressed: { Sfx.navigate(); page.focusContent() }
+            }
+
+            // Install from USB (RUY-98): the .play packages on the plugged-in drives.
+            SettingRow {
+                id: usbRow
+                objectName: "storeInstallUsb"
+                visible: PlayCopy.installFromUsbAllowed
+                kind: "page"
+                x: 2 * (toolbar.cellWidth + toolbar.gap)
+                width: toolbar.cellWidth
+                u: page.u
+                label: qsTr("Install from USB")
+                onActivated: page.openRequested("installSources", ({}))
+                Keys.onLeftPressed: { Sfx.navigate(); showAll.forceActiveFocus() }
                 Keys.onDownPressed: { Sfx.navigate(); page.focusContent() }
             }
         }

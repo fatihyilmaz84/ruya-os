@@ -1389,7 +1389,9 @@ FocusScope {
         controlsStick: controlsStickPage,
         activity: activityPage,
         activityGame: activityGamePage,
-        power: powerPage
+        power: powerPage,
+        installSources: installSourcesPage,
+        installPackage: installPackagePage
     })
     readonly property var pageComponents: Object.assign({}, builtinPages, extraPages)
 
@@ -2245,6 +2247,8 @@ FocusScope {
     Component { id: activityPage; ActivityPage {} }
     Component { id: activityGamePage; ActivityGamePage {} }
     Component { id: powerPage; PowerPage {} }
+    Component { id: installSourcesPage; InstallSourcesPage {} }
+    Component { id: installPackagePage; InstallPackagePage {} }
 
     // Hosts the page slots, one per open page (plus any still fading out). Its only
     // children are slots, which are destroyed after their fade-out.

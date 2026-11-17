@@ -159,6 +159,22 @@
       <arg name="status" type="s" direction="out"/>
     </method>
 
+    <!-- Developer mode (05 7.2): an admin's setting, off by default, that lets unsigned packages
+         install. GetDeveloperMode reads it; SetDeveloperMode changes it. options (a{sv}):
+           admin_approved  b   as for Install; without it status is "forbidden".
+         status: "ok", "forbidden", "failed". DeveloperModeChanged follows every change. -->
+    <method name="GetDeveloperMode">
+      <arg name="on" type="b" direction="out"/>
+    </method>
+    <method name="SetDeveloperMode">
+      <arg name="on" type="b" direction="in"/>
+      <arg name="options" type="a{sv}" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+    <signal name="DeveloperModeChanged">
+      <arg name="on" type="b"/>
+    </signal>
+
     <!--
       The service's job table: the jobs queued or running and the last finished ones (the 20 most
       recent), oldest first. The shell calls it when it (re)connects and replaces what it shows by

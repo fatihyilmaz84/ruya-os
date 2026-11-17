@@ -1,0 +1,665 @@
+import QtQuick
+import QtTest
+import RuyaShell
+
+// Install from USB (05 §7.3, 04 §5.4, RUY-98): the sources list, the package page for every mock fixture (trust
+// badge, permission words, why Install is dimmed), the confirm sheet, the admin's PIN for a profile that is not
+// an admin's, the progress and the result (toast, dialog), a job that outlives its page, developer mode, the
+// entry points and the hint bar of every screen. The mock service has eleven packages on one drive ("STICK").
+// Signs in as Player One (p1, admin, PIN 1234) unless a test says it is Ada (p2, standard, no PIN).
+Item {
+    id: host
+    width: 1280
+    height: 720
+
+    Component {
+        id: shellComponent
+        Shell { anchors.fill: parent; version: "test"; focus: true }
+    }
+
+    // The status the service last gave the developer-mode call.
+    property string devAnswer: ""
+    Connections {
+        target: Play
+        function onAnswered(op, key, status) {
+            if (op === "developer-mode")
+                host.devAnswer = status
+        }
+    }
+
+    TestCase {
+        id: tc
+        name: "InstallUsb"
+        when: windowShown
+
+        property Shell shell: null
+
+        function find(name) { return findChild(tc.shell, name) }
+        function toastTexts() {
+            const out = []
+            for (let i = 0; i < Notifications.model.count; ++i)
+                out.push(Notifications.model.get(i).text + (Notifications.model.get(i).detail !== "" ? ": " + Notifications.model.get(i).detail : ""))
+            return out
+        }
+        function page() { return find("page_installPackage") }
+
+        function init() {
+            verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
+            while (Notifications.model.count > 0)
+                Notifications.dismiss(Notifications.model.get(0).toastId)
+            Notifications.pending = []
+            Play.mockReset()
+            Store.mockReset()
+            Profiles.lock()
+            Profiles.resetMockForTests("seeded")
+            tryVerify(() => Profiles.profiles.length === 3)
+            tryCompare(Profiles, "activeProfile", "")
+            tryVerify(() => Play.sources.length === 11)
+        }
+
+        function cleanup() {
+            Play.mockPauseJobs(false)
+        }
+
+        function start(who) {
+            tc.shell = createTemporaryObject(shellComponent, host)
+            verify(tc.shell)
+            tc.shell.forceActiveFocus()
+            Profiles.switchTo(who === "ada" ? "p2" : "p1", who === "ada" ? "" : "1234")
+            tryCompare(Profiles, "activeProfile", who === "ada" ? "p2" : "p1")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
+        }
+
+        // The hints as "accept Select|back Back", read from the bar's own delegates (what is drawn).
+        function shown() {
+            const bar = find("hintBar")
+            if (!bar.visible)
+                return ""
+            const parts = []
+            for (const b of ["left_right", "accept", "back", "done", "view", "tabPrev_tabNext", "options"]) {
+                const h = findChild(bar, "hint_" + b)
+                if (h)
+                    parts.push(b + " " + h.verb)
+            }
+            return parts.join("|")
+        }
+
+        function openPackage(fixture) {
+            tc.shell.openPage("installPackage", { path: Play.mockPath(fixture) })
+            tryCompare(tc.shell, "currentPage", "installPackage")
+            tryVerify(() => page().info !== null, 3000, "Inspect answered")
+            tryVerify(() => page().mainButton() !== null && page().mainButton().activeFocus, 3000, "the main button has the focus")
+        }
+
+        // A closed page fades out before its slot goes: wait until it is gone, so find() cannot return the old one.
+        function closePackage() {
+            tc.shell.closePage()
+            tryCompare(tc.shell, "currentPage", "")
+            tryVerify(() => find("page_installPackage") === null, 5000, "the old page is gone")
+        }
+
+        function enterPin(pin) {
+            for (const ch of pin)
+                keyClick(Qt.Key_0 + Number(ch))
+            keyClick(Qt.Key_Enter)
+        }
+
+        // ---- The list of packages ----
+
+        function test_sources_list_focus_and_open() {
+            start("admin")
+            tc.shell.openPage("installSources", {})
+            tryCompare(tc.shell, "currentPage", "installSources")
+            const list = find("sourcesList")
+            tryVerify(() => list.count === 11, 2000)
+            tryVerify(() => list.activeFocus, 2000, "the list has the focus")
+            compare(list.currentIndex, 0)
+            compare(find("sourcesDrive").text.indexOf("STICK"), 0, "the drive's label heads its rows")
+            compare(find("sourceName").text, "starhopper")
+            compare(shown(), "accept Select|back Back")
+            keyClick(Qt.Key_Down)
+            compare(list.currentIndex, 1)
+            keyClick(Qt.Key_Up)
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "installPackage")
+            compare(page().path, Play.mockPath("starhopper"))
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "installSources")
+            tryVerify(() => find("sourcesList").activeFocus, 2000, "Back lands on the list")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "")
+        }
+
+        function test_sources_for_one_drive_and_empty_state() {
+            start("admin")
+            tc.shell.openPage("installSources", { drive: "vol-other" })
+            tryCompare(tc.shell, "currentPage", "installSources")
+            tryVerify(() => find("sourcesEmpty").visible, 2000, "no packages on that drive")
+            verify(!find("sourcesList").visible)
+            compare(shown(), "back Back", "nothing to select")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "")
+            // The same page with no drive plugged in, then SourcesChanged brings the packages.
+            Play.mockSetDriveMounted(false)
+            tc.shell.openPage("installSources", {})
+            tryCompare(tc.shell, "currentPage", "installSources")
+            tryVerify(() => find("sourcesEmpty").visible, 2000)
+            compare(find("sourcesEmptyHelp").text, "Copy a .play folder, or a .zip of one, to a USB drive, then plug it in.")
+            Play.mockSetDriveMounted(true)
+            tryVerify(() => find("sourcesList").visible && find("sourcesList").count === 11, 2000, "the list fills in")
+            tryVerify(() => find("sourcesList").activeFocus, 2000, "and takes the focus")
+        }
+
+        function test_entry_points() {
+            start("admin")
+            tc.shell.openPage("store")
+            tryCompare(tc.shell, "currentPage", "store")
+            tryVerify(() => find("storeInstallUsb") && find("storeInstallUsb").visible, 2000)
+            compare(find("storeInstallUsb").kind, "page")
+            find("storeShowAll").forceActiveFocus()
+            keyClick(Qt.Key_Right)
+            verify(find("storeInstallUsb").activeFocus, "Right from Show all apps")
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "installSources")
+            compare(find("page_installSources").drive, "", "from the Store: every drive")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "store")
+            tryVerify(() => find("storeInstallUsb").activeFocus, 2000, "Back lands on the Store's entry")
+            tc.shell.closePage()
+            // Settings -> Storage: a row per mounted removable drive.
+            Storage.mockReset()
+            Storage.mockPlugStick()
+            tryVerify(() => Storage.volumes.some(v => v.id === "vol-stick"), 2000)
+            tc.shell.openPage("settings", { category: "storage" })
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("paneStorage") !== null && find("paneStorage").visible, 3000, "the Storage pane is shown: " + find("page_settings").params.category)
+            tryVerify(() => find("storagePackages_vol-stick") !== null, 3000, "Packages on this drive: " + find("paneStorage").focusableRows().map(r => r.objectName))
+            compare(find("storagePackages_vol-stick").label, "Packages on this drive")
+            verify(find("storagePackages_vol-internal") === null, "not the console's own disk")
+            find("storagePackages_vol-stick").forceActiveFocus()
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "installSources")
+            compare(find("page_installSources").drive, "vol-stick", "only that drive")
+            tryVerify(() => find("sourcesList").count === 11, 2000)
+        }
+
+        // ---- The package page ----
+
+        function test_each_fixture_shows_its_badge_and_permission_words() {
+            start("admin")
+            const cases = [
+                { fixture: "starhopper", badge: "Developer", kind: "warning", words: {
+                    "input:controllers+keyboard-mouse": "Uses controllers, keyboard and mouse",
+                    "network": "Uses the network", "removable_media:read": "Reads files on USB drives",
+                    "multiarch": "Runs 32-bit programs", "gamemode": "Asks the system to prioritise it" } },
+                { fixture: "pixelforest.play.zip", badge: "Official", kind: "success", words: { "input:controllers": "Uses controllers" } },
+                { fixture: "homebrew", badge: "Unverified", kind: "error", words: {} },
+                { fixture: "tampered", badge: "Changed since signed", kind: "error", words: {} },
+                { fixture: "oldbad", badge: "Removed for safety", kind: "error", words: { "network": "Uses the network" } },
+                { fixture: "rawaccess.play.zip", badge: "Developer", kind: "warning", words: {
+                    "input:all-devices": "Accesses all devices", "devel": "Can inspect other programs" } }
+            ]
+            for (const c of cases) {
+                openPackage(c.fixture)
+                const badge = find("installTrustBadge")
+                compare(badge.text, c.badge, c.fixture)
+                compare(badge.kind, c.kind, c.fixture)
+                verify(badge.solid, "a trust badge is always solid, " + c.fixture)
+                verify(findChild(find("installPermissionList"), "permission_always") !== null, "every game plays sound and uses graphics, " + c.fixture)
+                for (const key of Object.keys(c.words)) {
+                    const row = findChild(find("installPermissionList"), "permission_" + key)
+                    verify(row !== null, c.fixture + " lists " + key)
+                    compare(findChild(row, "permissionWords").text, c.words[key], c.fixture + " " + key)
+                }
+                closePackage()
+            }
+            openPackage("rawaccess.play.zip")
+            verify(findChild(find("installPermissionList"), "riskFlag_devel").visible, "a high-risk permission carries the flag")
+            verify(!findChild(find("installPermissionList"), "riskFlag_network").visible)
+        }
+
+        function test_the_trust_row_opens_the_signer_sheet() {
+            start("admin")
+            openPackage("starhopper")
+            verify(find("installButton").activeFocus, "Install has the focus on entry")
+            keyClick(Qt.Key_Up)
+            verify(find("installTrustRow").activeFocus, "the trust row is above Install")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installSigner").shown, 2000)
+            compare(shown(), "back Close")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("installSigner").shown, 2000)
+            tryVerify(() => find("installTrustRow").activeFocus, 2000, "Back returns to the trust row")
+            // A changed package has no signer to show: the row is not a stop.
+            closePackage()
+            openPackage("tampered")
+            verify(!find("installTrustRow").activeFocus)
+            keyClick(Qt.Key_Up)
+            verify(find("installButton").activeFocus, "nothing above Install to go to")
+        }
+
+        function test_the_corrupted_package_says_how_to_fix_it() {
+            start("admin")
+            openPackage("broken")
+            verify(find("installButton").dimmed, "Install is dimmed")
+            verify(find("installBlocked").visible)
+            compare(find("installBlocked").text, "This package is damaged or incomplete. Copy it to the USB drive again.")
+            keyClick(Qt.Key_Return)
+            verify(!find("installConfirm").shown, "Accept on a dimmed Install opens nothing")
+            verify(find("installButton").activeFocus)
+            closePackage()
+            openPackage("tampered")
+            compare(find("installBlocked").text, "It can't be installed. Get a fresh copy from the developer.")
+            closePackage()
+            openPackage("oldbad")
+            verify(find("installButton").dimmed)
+            compare(find("installBlocked").text, "This game was removed for safety and can't be installed.")
+            closePackage()
+            openPackage("future")
+            compare(find("installBlocked").text, "This game needs a newer RuyaOS. Update the system, then try again.")
+        }
+
+        function test_the_unverified_package_is_blocked_until_developer_mode_is_on() {
+            start("admin")
+            openPackage("homebrew")
+            verify(find("installButton").dimmed)
+            compare(find("installBlocked").text, "Unsigned packages need developer mode. An admin can turn it on in Settings.")
+            keyClick(Qt.Key_Return)
+            verify(!find("installConfirm").shown)
+            Play.mockSetDeveloperMode(true)
+            tryVerify(() => !find("installButton").dimmed, 3000, "developer mode makes it installable")
+            verify(!find("installBlocked").visible)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installConfirm").shown, 2000)
+            compare(find("installConfirmBadge").text, "Unverified", "the red badge shows on the confirm sheet too")
+            compare(find("installConfirmBadge").kind, "error")
+        }
+
+        // ---- Confirm, the admin's PIN ----
+
+        function test_a_standard_profile_asks_for_an_admins_pin_when_a_permission_is_high_risk() {
+            start("ada")
+            openPackage("rawaccess.play.zip")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installConfirm").shown, 2000)
+            tryVerify(() => find("installConfirmInstall").activeFocus, 2000, "Install has the focus")
+            compare(shown(), "accept Select|back Cancel")
+            compare(find("installConfirmPin").text, "A high-risk permission needs an admin's PIN.")
+            compare(find("installConfirmTitle").text, "Install Raw Access?")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installPinPad").shown, 2000, "the admin's PIN pad")
+            tryVerify(() => find("installPinPad").activeFocus, 2000)
+            enterPin("0000")
+            tryVerify(() => findChild(find("installPinPad"), "pinMessage").text.indexOf("Wrong PIN") === 0, 2000,
+                      "a wrong PIN shows the pad's message")
+            verify(find("installPinPad").shown, "the pad stays for another try")
+            compare(Object.keys(Play.jobs).length, 0)
+            verify(!page().working, "nothing was installed")
+            enterPin("1234")
+            tryVerify(() => page().working, 3000, "the right PIN starts the job")
+            tryVerify(() => !find("installPinPad").shown, 2000)
+        }
+
+        function test_back_from_the_pin_pad_cancels_and_focus_returns_to_install() {
+            start("ada")
+            openPackage("rawaccess.play.zip")
+            keyClick(Qt.Key_Return)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installPinPad").shown, 2000)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("installPinPad").shown, 2000)
+            tryVerify(() => find("installButton").activeFocus, 2000, "back on Install")
+            verify(!page().working)
+        }
+
+        function test_an_admin_needs_no_pin_and_a_standard_profile_asks_even_for_low_risk() {
+            start("admin")
+            openPackage("rawaccess.play.zip")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installConfirm").shown, 2000)
+            verify(!find("installConfirmPin").visible, "an admin is not warned")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => page().working, 3000, "the install starts at once")
+            verify(!find("installPinPad").shown)
+            Play.mockPauseJobs(false)
+            tryVerify(() => !page().working, 10000)
+            closePackage()
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            tc.shell.destroy()
+            start("ada")
+            openPackage("pixelforest.play.zip")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installConfirm").shown, 2000)
+            compare(find("installConfirmPin").text, "An admin's PIN is needed to install this app.",
+                    "only an admin installs from USB (05 §18 item 4), so a Standard profile always enters the PIN")
+        }
+
+        function test_the_confirm_sheet_says_what_is_installed() {
+            start("admin")
+            openPackage("starhopper")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installConfirm").shown, 2000)
+            compare(find("installConfirmBadge").text, "Developer")
+            compare(find("installConfirmSigner").text, "Example Games · key 3f9a…f312")
+            verify(find("installConfirmNeeds").text.indexOf("Needs 5 GB · ") === 0, find("installConfirmNeeds").text)
+            // Up to four permission rows, then "And n more".
+            const more = findChild(find("installConfirmPermissions"), "permissionMore")
+            tryVerify(() => more.visible, 2000)
+            compare(more.text, "And 2 more")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("installConfirm").shown, 2000)
+            tryVerify(() => find("installButton").activeFocus, 2000, "Cancel returns to Install")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installConfirm").shown, 2000)
+            keyClick(Qt.Key_Right)
+            verify(find("installConfirmCancel").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !find("installConfirm").shown, 2000)
+            verify(!page().working, "Cancel installs nothing")
+        }
+
+        // ---- Progress and the result ----
+
+        function test_install_runs_to_the_result() {
+            start("admin")
+            openPackage("starhopper")
+            Play.mockPauseAtPercent(30)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installConfirm").shown, 2000)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => page().working, 3000)
+            tryVerify(() => find("installCancel").visible && find("installCancel").activeFocus, 3000, "Cancel has the focus")
+            tryVerify(() => Play.jobs[Play.mockPath("starhopper")] !== undefined && Play.jobs[Play.mockPath("starhopper")].percent >= 30, 5000)
+            compare(shown(), "accept Cancel|back Back")
+            verify(find("installProgress").visible)
+            verify(find("installPhase").text.indexOf("Checking the signature · ") === 0, find("installPhase").text)
+            verify(!find("installButton").visible)
+            Play.mockPauseJobs(false)
+            // From committing on there is no Cancel and the line says Installing.
+            tryVerify(() => find("installPhase").text.indexOf("Installing · ") === 0, 8000)
+            verify(!find("installCancel").visible, "no Cancel from committing on")
+            tryVerify(() => !page().working, 10000, "the job finished")
+            tryVerify(() => find("installInstalledBadge").visible, 3000, "the page shows Installed")
+            tryVerify(() => find("installPlay").visible && find("installPlay").activeFocus, 3000, "and Play, focused")
+            verify(toastTexts().indexOf("Installed: Star Hopper") >= 0, "a success toast with the name: " + toastTexts())
+        }
+
+        function test_the_list_gives_the_focus_to_the_next_package_after_an_install() {
+            start("admin")
+            tc.shell.openPage("installSources", {})
+            tryCompare(tc.shell, "currentPage", "installSources")
+            tryVerify(() => find("sourcesList").activeFocus, 2000)
+            keyClick(Qt.Key_Return)                     // starhopper
+            tryCompare(tc.shell, "currentPage", "installPackage")
+            tryVerify(() => page().info !== null, 3000)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installConfirm").shown, 2000)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => page().working, 3000)
+            tryVerify(() => find("installInstalledBadge").visible, 15000, "installed")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "installSources")
+            tryVerify(() => find("sourcesList").activeFocus, 2000)
+            compare(find("sourcesList").currentIndex, 1, "the focus is on the next package")
+        }
+
+        function test_leaving_the_page_mid_install_keeps_the_job() {
+            start("admin")
+            openPackage("starhopper")
+            const key = Play.mockPath("starhopper")
+            Play.mockPauseAtPercent(30)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installConfirm").shown, 2000)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => Play.jobs[key] !== undefined && Play.jobs[key].percent >= 30, 5000)
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "")
+            tryVerify(() => find("page_installPackage") === null, 5000, "the old page is gone")
+            verify(Play.jobs[key] !== undefined, "closing the page does not cancel")
+            // Back on the page the progress is there at once.
+            openPackage("starhopper")
+            tryVerify(() => page().working, 2000)
+            verify(find("installProgress").visible)
+            Play.mockPauseJobs(false)
+            tryVerify(() => !page().working, 10000)
+            tryVerify(() => find("installInstalledBadge").visible, 3000)
+        }
+
+        function test_cancel_is_explicit() {
+            start("admin")
+            openPackage("starhopper")
+            Play.mockPauseAtPercent(30)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installConfirm").shown, 2000)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installCancel").visible && find("installCancel").activeFocus, 5000)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !page().working, 5000, "the job ended")
+            verify(toastTexts().indexOf("Install cancelled") >= 0, "an info toast: " + toastTexts())
+            tryVerify(() => find("installButton").visible && find("installButton").activeFocus, 3000, "Install is back, focused")
+            verify(!find("installInstalledBadge").visible)
+        }
+
+        function test_a_failed_install_shows_its_sentence_in_a_dialog() {
+            const cases = [
+                { fixture: "flaky", text: "The install didn't finish. Try again." },
+                { fixture: "hugegame.play.zip", text: "There isn't enough space. Free 60.0 GB, then try again." }
+            ]
+            start("admin")
+            for (const c of cases) {
+                openPackage(c.fixture)
+                keyClick(Qt.Key_Return)
+                tryVerify(() => find("installConfirm").shown, 2000, c.fixture)
+                keyClick(Qt.Key_Return)
+                tryVerify(() => find("installResult").shown, 15000, c.fixture + " ends in the dialog")
+                tryVerify(() => find("installResultOk").activeFocus, 2000)
+                compare(find("installResultTitle").text, "Not installed")
+                verify(find("installResultSentence").text.indexOf(c.text.slice(0, 18)) === 0, find("installResultSentence").text)
+                compare(shown(), "accept OK")
+                keyClick(Qt.Key_Return)
+                tryVerify(() => !find("installResult").shown, 2000)
+                tryVerify(() => find("installButton").activeFocus, 3000, "OK returns to Install")
+                verify(!find("installInstalledBadge").visible)
+                closePackage()
+            }
+        }
+
+        function test_install_statuses_have_their_own_sentences() {
+            start("admin")
+            const expected = {
+                "invalid-package": "This package is damaged or incomplete. Copy it to the USB drive again.",
+                "bad-signature": "This package was changed after it was signed. Get a fresh copy from the developer.",
+                "different-developer": "This isn't the same developer as the installed game. An admin can forget this game's data and key in Options.",
+                "needs-developer-mode": "Unsigned packages need developer mode. An admin can turn it on in Settings.",
+                "revoked": "This game was removed for safety and can't be installed.",
+                "unsupported": "This game needs a newer RuyaOS. Update the system, then try again.",
+                "failed": "The install didn't finish. Try again."
+            }
+            for (const status of Object.keys(expected))
+                compare(PlayCopy.jobStatusText(status, ""), expected[status], status)
+            compare(PlayCopy.jobStatusText("disk-full", "2.0 GB"), "There isn't enough space. Free 2.0 GB, then try again.")
+            const methods = {
+                "forbidden": "Only an admin can install from USB.",
+                "busy": "Another install is running. Try again when it ends.",
+                "unknown-source": "The USB drive was removed. Plug it in, then try again.",
+                "too-late": "It's too late to cancel. The install is finishing.",
+                "invalid": "Something went wrong. Try again."
+            }
+            for (const status of Object.keys(methods))
+                compare(PlayCopy.methodStatusText(status), methods[status], status)
+        }
+
+        function test_a_refused_install_is_an_error_toast() {
+            start("admin")
+            openPackage("starhopper")
+            Play.mockFailNext()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installConfirm").shown, 2000)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => toastTexts().indexOf("Something went wrong. Try again.") >= 0, 3000)
+            verify(!page().working, "the page is not left working")
+            tryVerify(() => find("installButton").activeFocus, 3000)
+        }
+
+        // ---- Developer mode ----
+
+        function test_developer_mode_is_an_admins_switch_in_settings_and_off_by_default() {
+            start("ada")
+            tc.shell.openPage("settings", { category: "system" })
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("rowTimezone") !== null, 3000)
+            verify(!find("rowDeveloperMode").visible, "a Standard profile does not see it")
+            verify(!find("developerModeNote").visible)
+        }
+
+        function test_developer_mode_switch_for_an_admin() {
+            start("admin")
+            tc.shell.openPage("settings", { category: "system" })
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("rowDeveloperMode") !== null && find("rowDeveloperMode").visible, 3000)
+            compare(Play.developerMode, false, "off by default")
+            compare(find("rowDeveloperMode").checked, false)
+            compare(find("rowDeveloperMode").label, "Developer mode")
+            compare(find("developerModeNote").text, "Allows unsigned packages. Only turn it on for games you trust.")
+            find("rowDeveloperMode").forceActiveFocus()
+            keyClick(Qt.Key_Return)
+            tryCompare(Play, "developerMode", true)
+            tryCompare(find("rowDeveloperMode"), "checked", true)
+            keyClick(Qt.Key_Return)
+            tryCompare(Play, "developerMode", false)
+            tryCompare(find("rowDeveloperMode"), "checked", false)
+            // The service refuses a change that does not carry an admin's approval.
+            host.devAnswer = ""
+            Play.setDeveloperMode(true, false)
+            tryCompare(host, "devAnswer", "forbidden")
+            compare(Play.developerMode, false, "and nothing changed")
+        }
+
+        function test_the_unverified_game_installs_once_developer_mode_is_on() {
+            start("admin")
+            Play.setDeveloperMode(true, true)
+            tryCompare(Play, "developerMode", true)
+            openPackage("homebrew")
+            verify(!find("installButton").dimmed)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installConfirm").shown, 2000)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installInstalledBadge").visible, 15000, "the unsigned game installed")
+            compare(find("installTrustBadge").text, "Unverified", "and keeps its red badge")
+        }
+
+        // ---- Hints of every screen ----
+
+        function test_hints() {
+            start("admin")
+            tc.shell.openPage("installSources", {})
+            tryCompare(tc.shell, "currentPage", "installSources")
+            tryVerify(() => find("sourcesList").activeFocus, 2000)
+            compare(shown(), "accept Select|back Back", "sources")
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "installPackage")
+            tryVerify(() => find("installButton").activeFocus, 3000)
+            compare(shown(), "accept Select|back Back", "package page")
+            keyClick(Qt.Key_Down)                              // the permissions block (no screenshots row on the mock)
+            for (let i = 0; i < 6 && shown() !== "back Back"; ++i)
+                keyClick(Qt.Key_Down)
+            compare(shown(), "back Back", "a block that only reads")
+            for (let i = 0; i < 8 && !find("installButton").activeFocus; ++i)
+                keyClick(Qt.Key_Up)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installConfirm").shown, 2000)
+            compare(shown(), "accept Select|back Cancel", "confirm sheet")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("installConfirm").shown, 2000)
+            // Escape from every screen leaves it: the page, then the list, then the Store/Home.
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "installSources")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "")
+        }
+
+        // ---- Screenshots (dev.ps1 shots) ----
+
+        function settle() { wait(300) }
+
+        function shot(name) { grabImage(tc.shell).save(shotsDir + "/" + name + ".png") }
+
+        function test_zz_screenshots() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            for (const lang of ["en", "tr"]) {
+                DeviceSettings.language = lang
+                Play.mockReset()
+                start("admin")
+                tc.shell.openPage("installSources", {})
+                tryCompare(tc.shell, "currentPage", "installSources")
+                tryVerify(() => find("sourcesList").count === 11, 2000)
+                settle()
+                shot("120-install-sources-" + lang)
+                closePackage()
+
+                openPackage("starhopper")
+                settle()
+                shot("121-install-package-wine-" + lang)
+                keyClick(Qt.Key_Up)
+                keyClick(Qt.Key_Return)
+                tryVerify(() => find("installSigner").shown, 2000)
+                settle()
+                shot("122-install-signer-" + lang)
+                keyClick(Qt.Key_Escape)
+                tryVerify(() => !find("installSigner").shown, 2000)
+                keyClick(Qt.Key_Down)
+                keyClick(Qt.Key_Return)
+                tryVerify(() => find("installConfirm").shown, 2000)
+                settle()
+                shot("123-install-confirm-" + lang)
+                Play.mockPauseAtPercent(30)
+                keyClick(Qt.Key_Return)
+                tryVerify(() => find("installCancel").visible && find("installCancel").activeFocus, 5000)
+                tryVerify(() => Play.jobs[Play.mockPath("starhopper")] !== undefined && Play.jobs[Play.mockPath("starhopper")].percent >= 30, 5000)
+                settle()
+                shot("124-install-progress-" + lang)
+                Play.mockPauseJobs(false)
+                tryVerify(() => find("installInstalledBadge").visible, 15000)
+                settle()
+                shot("125-install-done-" + lang)
+                closePackage()
+
+                openPackage("homebrew")
+                settle()
+                shot("126-install-package-unverified-" + lang)
+                closePackage()
+
+                openPackage("tampered")
+                settle()
+                shot("127-install-package-changed-" + lang)
+                closePackage()
+
+                openPackage("flaky")
+                keyClick(Qt.Key_Return)
+                tryVerify(() => find("installConfirm").shown, 2000)
+                keyClick(Qt.Key_Return)
+                tryVerify(() => find("installResult").shown, 15000)
+                settle()
+                shot("128-install-failed-" + lang)
+                keyClick(Qt.Key_Return)
+                closePackage()
+
+                Profiles.lock()
+                tryCompare(Profiles, "activeProfile", "")
+                tc.shell.destroy()
+                start("ada")
+                openPackage("rawaccess.play.zip")
+                keyClick(Qt.Key_Return)
+                tryVerify(() => find("installConfirm").shown, 2000)
+                settle()
+                shot("129-install-confirm-pin-" + lang)
+                Profiles.lock()
+                tryCompare(Profiles, "activeProfile", "")
+                tc.shell.destroy()
+            }
+            DeviceSettings.language = "en"
+        }
+    }
+}

@@ -24,6 +24,12 @@ Play::Play(std::unique_ptr<PlayBackend> backend, QObject *parent)
     connect(m_backend.get(), &PlayBackend::inspected, this, [this](const QString &path, const PlayInfo &info) {
         emit inspected(path, info.toVariant());
     });
+    connect(m_backend.get(), &PlayBackend::developerModeChanged, this, [this](bool on) {
+        if (m_developerMode == on)
+            return;
+        m_developerMode = on;
+        emit developerModeChanged();
+    });
     connect(m_backend.get(), &PlayBackend::answered, this,
             [this](const QString &op, const QString &key, const QString &status) { emit answered(op, key, status); });
     connect(m_backend.get(), &PlayBackend::jobProgress, this, [this](const QString &key, int percent, const QString &phase) {
@@ -79,6 +85,7 @@ Play::Play(std::unique_ptr<PlayBackend> backend, QObject *parent)
         emit jobsReconciled();
     });
     m_backend->listSources();
+    m_backend->readDeveloperMode();
     m_backend->listJobs();
 }
 
@@ -129,6 +136,11 @@ void Play::cancel(const QString &key)
     m_backend->cancel(key);
 }
 
+void Play::setDeveloperMode(bool on, bool adminApproved)
+{
+    m_backend->requestDeveloperMode(on, adminApproved);
+}
+
 void Play::refreshSources()
 {
     m_backend->listSources();
@@ -141,6 +153,10 @@ void Play::mockReset()
         m_jobs.clear();
         m_lost.clear();
         emit jobsChanged();
+        if (m_developerMode) {
+            m_developerMode = false;
+            emit developerModeChanged();
+        }
         mock->listSources();
     }
 }

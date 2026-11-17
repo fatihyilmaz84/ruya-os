@@ -21,11 +21,17 @@ import RuyaShell
 // client scans) is asked again after 1.5, 3, 6, then every 10 s. Rows are updated in place, so
 // focus stays on its row.
 //
+// A "Packages on this drive" row (RUY-98) under each mounted removable volume's scan opens the list of .play
+// packages on that drive (`packagesRequested`, Install from USB).
+//
 // The service only reads names and sizes: nothing on a volume is opened or run from here.
 // Everything goes through the Storage singleton (org.ruyaos.Devices1.Storage); sizes come from
 // Storage.formatBytes. The "safe to remove" and "drive inserted" toasts are in ToastLayer.
 SettingsPane {
     id: pane
+
+    // Install from USB, for the drive (RUY-98): the page of the .play packages on that drive.
+    signal packagesRequested(string drive)
 
     readonly property var internal: Storage.internal
 
@@ -155,6 +161,9 @@ SettingsPane {
                        shown: true, removable: v.removable, mounted: v.mounted })
             if (usable) {
                 out.push(...scanRows(v.id))
+                if (PlayCopy.installFromUsbAllowed)
+                    out.push({ rowKey: "packages:" + v.id, entryKind: "packages", sub: "", volId: v.id, name: qsTr("Packages on this drive"),
+                               valueText: "", shown: true, removable: v.removable, mounted: v.mounted })
                 out.push({ rowKey: "rescan:" + v.id, entryKind: "rescan", sub: "", volId: v.id, name: qsTr("Rescan %1").arg(v.label),
                            valueText: "", shown: true, removable: v.removable, mounted: v.mounted })
             }
@@ -456,7 +465,7 @@ SettingsPane {
         model: rowModel
         SettingRow {
             required property string rowKey
-            required property string entryKind         // "volume" | "scan" | "rescan" | "eject"
+            required property string entryKind         // "volume" | "scan" | "packages" | "rescan" | "eject"
             required property string sub           // a scan row: "wait", "cat:games", "other", ...
             required property string volId
             required property string name
@@ -467,9 +476,11 @@ SettingsPane {
             objectName: entryKind === "volume" ? "storageVol_" + volId
                       : entryKind === "eject" ? "storageEject_" + volId
                       : entryKind === "rescan" ? "storageRescan_" + volId
+                      : entryKind === "packages" ? "storagePackages_" + volId
                       : "storageScan_" + volId + "_" + sub
             visible: shown
-            kind: entryKind === "eject" || entryKind === "rescan" ? "action" : entryKind === "scan" ? "info" : "item"
+            kind: entryKind === "eject" || entryKind === "rescan" ? "action" : entryKind === "scan" ? "info"
+                : entryKind === "packages" ? "page" : "item"
             // A Rescan row while its drive scans does nothing on Accept: Back only.
             hintKind: entryKind === "scan" || (entryKind === "rescan" && pane.rescanBlocked(volId)) ? "info" : "item"
             u: pane.u
@@ -485,6 +496,8 @@ SettingsPane {
                     pane.ejectVolume(volId)
                 else if (entryKind === "rescan")
                     pane.rescan(volId)
+                else if (entryKind === "packages")
+                    pane.packagesRequested(volId)
             }
         }
     }

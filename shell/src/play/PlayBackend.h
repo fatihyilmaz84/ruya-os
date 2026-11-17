@@ -144,6 +144,10 @@ public:
     virtual void install(const QString &path, bool adminApproved) = 0; // answered("install", path, status)
     virtual void verify(const QString &appId) = 0;   // answered("verify", appId, status)
     virtual void cancel(const QString &key) = 0;     // answered("cancel", key, status)
+    // Developer mode (05 7.2): read it (answers with developerModeChanged) and set it (answered("developer-mode",
+    // "", status); the new value follows as developerModeChanged).
+    virtual void readDeveloperMode() = 0;
+    virtual void requestDeveloperMode(bool on, bool adminApproved) = 0;
     // The service's job table; answers with jobsListed. Called at start and when the service's name
     // has a new owner.
     virtual void listJobs() = 0;
@@ -157,6 +161,7 @@ signals:
     // app id or job key it was about, status the method status of the XML ("ok" = accepted).
     // A transport failure is "failed".
     void answered(const QString &op, const QString &key, const QString &status);
+    void developerModeChanged(bool on);
     void jobProgress(const QString &key, int percent, const QString &phase);
     // status: a JobFinished status of the XML. Only jobs the service accepted finish here.
     void jobFinished(const QString &key, const QString &status);
