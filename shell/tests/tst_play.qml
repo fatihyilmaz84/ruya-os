@@ -131,15 +131,17 @@ Item {
             compare(i.signerName, "Example Games")
             compare(i.keyState, "new")
             compare(i.permissions.map(x => x.key),
-                    ["input:controllers+keyboard-mouse", "network", "removable_media:read", "multiarch", "gamemode"])
-            compare(i.permissions.map(x => x.risk), ["low", "medium", "medium", "medium", "low"])
+                    ["input:controllers+keyboard-mouse", "network", "removable_media:read", "multiarch", "gamemode",
+                     "network+removable_media"])
+            compare(i.permissions.map(x => x.risk), ["low", "medium", "medium", "medium", "low", "high"],
+                    "the service lists the high-risk pair last (RUY-864)")
             verify(i.permissions[1].words.length > 0)
             verify(i.art.icon.length > 0 && i.art.card.length > 0)
             compare(i.screenshots.length, 1)
             compare(i.revoked, false)
             compare(i.installedBuild, 0)
             compare(i.problems.length, 0)
-            compare(i.gate, "allowed")
+            compare(i.gate, "admin-pin-warning", "developer tier + the network/removable-media pair = high")
             compare(i.updateKnown, false, "not installed: no update keys")
             compare(i.permissionsAdded.length, 0)
             compare(i.addsHighRisk, false)

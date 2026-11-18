@@ -2945,18 +2945,18 @@ Bu geri alınamaz.</translation>
 <context>
     <name>InstallConfirmSheet</name>
     <message>
-        <location filename="../qml/InstallConfirmSheet.qml" line="+32"/>
+        <location filename="../qml/InstallConfirmSheet.qml" line="+42"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+187"/>
+        <location line="+210"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-159"/>
+        <location line="-182"/>
         <location line="+63"/>
         <source>Install %1?</source>
         <translation>%1 kurulsun mu?</translation>
@@ -2983,6 +2983,16 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+22"/>
+        <source>The update adds: %1</source>
+        <translation>Güncelleme şunları ekliyor: %1</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>The store has not reviewed this game, and it asks for a high-risk permission.</source>
+        <translation>Mağaza bu oyunu incelemedi ve oyun yüksek riskli bir izin istiyor.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
         <source>A high-risk permission needs an admin&apos;s PIN.</source>
         <translation>Yüksek riskli bir izin için yönetici PIN&apos;i gerekir.</translation>
     </message>
@@ -3000,7 +3010,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>InstallPackagePage</name>
     <message>
-        <location filename="../qml/InstallPackagePage.qml" line="+64"/>
+        <location filename="../qml/InstallPackagePage.qml" line="+68"/>
         <source>Developer</source>
         <translation>Geliştirici</translation>
     </message>
@@ -3078,12 +3088,17 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+99"/>
-        <location line="+8"/>
+        <location line="+20"/>
         <source>This game can</source>
         <translation>Bu oyun şunları yapabilir</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="-11"/>
+        <source>The update adds: %1</source>
+        <translation>Güncelleme şunları ekliyor: %1</translation>
+    </message>
+    <message>
+        <location line="+40"/>
         <source>Information</source>
         <translation>Bilgiler</translation>
     </message>
@@ -4418,6 +4433,11 @@ Bu geri alınamaz.</translation>
         <source>Can inspect other programs</source>
         <translation>Diğer programları inceleyebilir</translation>
     </message>
+    <message>
+        <location line="+1"/>
+        <source>Uses the network and reaches USB drives</source>
+        <translation>Ağı kullanır ve USB sürücülerine erişir</translation>
+    </message>
 </context>
 <context>
     <name>PlayerChip</name>
@@ -5654,12 +5674,12 @@ Bu geri alınamaz.</translation>
         <translation>Şimdi yeniden başlat</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+39"/>
         <source>%1 is still closing.</source>
         <translation>%1 hâlâ kapanıyor.</translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+88"/>
         <location line="+30"/>
         <source>%1 could not start</source>
         <translation>%1 başlatılamadı</translation>
@@ -5830,7 +5850,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1922"/>
+        <location line="-1938"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -5845,7 +5865,7 @@ Bu geri alınamaz.</translation>
         <translation>Beklemek için bir düğmeye bas</translation>
     </message>
     <message>
-        <location line="+108"/>
+        <location line="+124"/>
         <source>%1 is already running</source>
         <translation>%1 zaten çalışıyor</translation>
     </message>

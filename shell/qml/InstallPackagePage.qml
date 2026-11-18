@@ -24,6 +24,10 @@ Page {
 
     title: info ? (info.name ?? "") : ""
 
+    // What an update adds to the installed build's requests, only when the service could read them.
+    readonly property var added: info && info.updateKnown === true ? (info.permissionsAdded ?? []) : []
+    readonly property bool addsHighRisk: added.some(p => p.risk === "high")
+    readonly property string addedText: added.map(p => PlayTrust.permissionWords(p.key, p.words)).join(", ")
     readonly property bool isAdmin: (Profiles.active.role ?? "") === "admin"
     readonly property string blocked: PlayCopy.blockReason(info)
     readonly property var trust: PlayTrust.describe(info)
@@ -594,6 +598,18 @@ Page {
                 visible: page.info !== null
 
                 Heading { text: qsTr("This game can") }
+
+                // An update says what it adds (as the sheet and AppDetailPage's "The update adds:").
+                Text {
+                    objectName: "installUpdateAdds"
+                    visible: page.addedText !== ""
+                    width: parent.width
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                    text: qsTr("The update adds: %1").arg(page.addedText)
+                    color: page.addsHighRisk ? Theme.warningText : Theme.text
+                    font.pixelSize: Theme.typeBody * page.u
+                }
 
                 SettingControl {
                     id: permsBlock

@@ -105,6 +105,7 @@ QtObject {
         case "gamemode":
         case "realtime": return qsTr("Asks the system to prioritise it")
         case "devel": return qsTr("Can inspect other programs")
+        case "network+removable_media": return qsTr("Uses the network and reaches USB drives")
         }
         return words ?? key
     }
