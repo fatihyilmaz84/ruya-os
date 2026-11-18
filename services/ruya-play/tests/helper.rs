@@ -235,6 +235,26 @@ fn a_forged_staged_tree_is_refused_by_the_service() {
         ("a missing art file", |s| {
             std::fs::remove_file(s.join("art").join("icon-512.webp")).unwrap()
         }),
+        // RUY-829: a vetted file is bounded and starts as its format does.
+        ("an art file larger than its output can be", |s| {
+            let p = s.join("art").join("icon-128.webp");
+            let mut b = std::fs::read(&p).unwrap();
+            b.resize(128 * 128 * 4 + 64 * 1024 + 1, 0);
+            std::fs::write(p, b).unwrap();
+        }),
+        ("an art file that is not WebP", |s| {
+            std::fs::write(
+                s.join("art").join("icon-256.webp"),
+                b"\x89PNG\r\n\x1a\n not a webp at all",
+            )
+            .unwrap()
+        }),
+        ("a WebP whose RIFF size is not the file's", |s| {
+            let p = s.join("art").join("icon-512.webp");
+            let mut b = std::fs::read(&p).unwrap();
+            b.extend_from_slice(b"trailing bytes");
+            std::fs::write(p, b).unwrap();
+        }),
     ];
     #[cfg(unix)]
     {
@@ -384,6 +404,23 @@ fn a_helper_that_breaks_its_contract_fails_the_job() {
         (
             "cancelled when nobody asked",
             lines(&[r#"{"type":"result","outcome":"cancelled"}"#]),
+            Exit::Code(0),
+        ),
+        // RUY-829: on an "ok" result only the art step's problems are taken.
+        (
+            "a format problem on an ok result",
+            lines(&[
+                r#"{"type":"problem","code":"path.traversal","path":"payload/x","message":"m"}"#,
+                OK,
+            ]),
+            Exit::Code(0),
+        ),
+        (
+            "an importer code on an ok result",
+            lines(&[
+                r#"{"type":"problem","code":"staging.changed","path":"","message":"m"}"#,
+                OK,
+            ]),
             Exit::Code(0),
         ),
     ];

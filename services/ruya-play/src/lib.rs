@@ -7,10 +7,13 @@
 //! the service's own checks over the root files, the space check, the re-walk and re-hash of what
 //! the helper staged, the records, and the hand-off to a [`core::deps::Commit`]). The helper runs
 //! in-process ([`InProcessHelper`]) in tests and on Windows, and as a transient systemd unit
-//! ([`core::systemd_run::SystemdRunHelper`]) on the console. The binary, D-Bus and the Flatpak
-//! commit are RUY-829's.
+//! ([`core::systemd_run::SystemdRunHelper`]) on the console. Around it (RUY-829): the binary
+//! (`main.rs`), `org.ruyaos.Play1` ([`dbus`]), the D-Bus side's checks, the candidates on drives
+//! and the Flatpak commit ([`service`]).
 
 pub mod core;
+pub mod dbus;
+pub mod service;
 
 pub use crate::core::codes;
 pub use crate::core::deps::{

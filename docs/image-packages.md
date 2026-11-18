@@ -70,6 +70,10 @@ leaves: other packages depend on them (`udisks2` through `libblockdev-*`, `skope
 `greenboot` and `rpm-ostree`; `python3` through `python3-libdnf5`). `vm-*-check.sh` need
 `python3` and `pkaction`/`pkcheck` in the guest.
 
+`ruya-play` (RUY-829) calls `flatpak` (`build-finish`, `build-export`, `install`, `remote-add`), `ostree`
+(`init`) and `gpg` (its device key; `gnupg2` comes with the base through `gpgme`) and `systemd-run` (its helper
+unit): no package of its own.
+
 ### Gaming and media (codecs, GPU video, controllers)
 
 | Leaf | Why |

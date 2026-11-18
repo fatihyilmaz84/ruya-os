@@ -37,6 +37,10 @@
       "max_exposure": 1.1,
       "reason": "root, empty capability set, no network, 01-platform.md section 3 (T-162); measured 0.0.61"
     },
+    "ruya-play.service": {
+      "max_exposure": 3.5,
+      "reason": "estimate (RUY-829), not measured yet: root with CAP_CHOWN/DAC/FOWNER for the Flatpak commit and network for a missing runtime, hardened as ruya-store (3.3); RUY-100 measures it"
+    },
     "ruya-store.service": {
       "max_exposure": 3.3,
       "reason": "needs network for Flathub; measured 0.0.61"
@@ -76,6 +80,10 @@
     {
       "process": "ruya-notifications",
       "reason": "RUY-730, like every ruya-* service: no SELinux policy module for ruya-* yet, every service and the shell run unconfined_service_t; a custom policy is the fix (Inbox)"
+    },
+    {
+      "process": "ruya-play",
+      "reason": "RUY-829, like every ruya-* service: no SELinux policy module for ruya-* yet, every service and the shell run unconfined_service_t; a custom policy is the fix (Inbox)"
     },
     {
       "process": "ruya-profiles",

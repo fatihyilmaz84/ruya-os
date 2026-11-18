@@ -28,7 +28,8 @@ RUN cd /src/services \
     && install -Dm755 target/release/ruya-session /out/usr/bin/ruya-session \
     && install -Dm755 target/release/ruya-store /out/usr/bin/ruya-store \
     && install -Dm755 target/release/ruya-update /out/usr/bin/ruya-update \
-    && install -Dm755 target/release/ruya-notifications /out/usr/bin/ruya-notifications
+    && install -Dm755 target/release/ruya-notifications /out/usr/bin/ruya-notifications \
+    && install -Dm755 target/release/ruya-play /out/usr/bin/ruya-play
 
 # ---- Qt Wayland compositor: linux-dmabuf v4 (T-358) ---------------------------------
 # Apps get GPU buffers only through zwp_linux_dmabuf_v1 v4 feedback (Mesa 26 has no wl_drm).
@@ -148,7 +149,7 @@ RUN --mount=type=bind,source=image/build,target=/ctx/build \
     && for f in /usr/bin/pkexec /usr/bin/pam_timestamp_check; do if [ -e "$f" ]; then chmod u-s,g-s "$f"; fi; done \
     && (cd /ctx/rootfs && find . -mindepth 1 ! -type l -print0 | xargs -0 -I{} find "/{}" -maxdepth 0 -perm /022 > /tmp/writable \
         && test ! -s /tmp/writable || { echo "group/world-writable files shipped from image/rootfs:"; cat /tmp/writable; exit 1; }) \
-    && systemctl enable ruya-compositor@tty1.service ruya-inputd.service ruya-profiles.service ruya-session.service ruya-library.service ruya-store.service ruya-update.service ruya-notifications.service ruya-flathub-remote.service ruya-boot-marker.service ruya-grub-menu.service bluetooth.service \
+    && systemctl enable ruya-compositor@tty1.service ruya-inputd.service ruya-profiles.service ruya-session.service ruya-library.service ruya-store.service ruya-play.service ruya-update.service ruya-notifications.service ruya-flathub-remote.service ruya-boot-marker.service ruya-grub-menu.service bluetooth.service \
     && systemctl --global enable ruya-devices.service \
     && systemctl enable greenboot-healthcheck.service greenboot-set-rollback-trigger.service \
     && systemctl set-default graphical.target \

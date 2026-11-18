@@ -4,10 +4,11 @@
   org.ruyaos.Play1 — install .play packages (docs/specs/05-play-packages.md) from a drive: list the
   candidate packages on mounted drives, look inside one, install it as ONE job, re-verify an
   installed one. Updates and feeds arrive later (T-241) and extend this file.
-  Served by ruya-play on the system bus at /org/ruyaos/Play1 (ruya-play: RUY-100, NOT BUILT YET; the
-  shell's mock backend, shell/src/play, follows this contract and is the only implementation today).
+  Served by ruya-play on the system bus at /org/ruyaos/Play1 (RUY-829; services/ruya-play,
+  tests/contract.rs holds it to this file). The shell's mock backend, shell/src/play, follows the
+  same contract off Linux. Verify is not built yet: it answers "unknown-app" or "failed".
   Draft, internal: no element carries org.ruyaos.Stability, so nothing here is a developer
-  surface (ADR-022); the contract stays a draft until the service exists.
+  surface (ADR-022).
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/05-play-packages.md §7.3.
 
   Method statuses (stable API once released; the names of Store1 are reused where the meaning is
@@ -201,7 +202,9 @@
       <arg name="phase" type="s"/>
     </signal>
 
-    <!-- Always sent once per job; for an "ok" install the Store's InstalledChanged comes first. -->
+    <!-- Always sent once per job. For an "ok" install the app is in the system installation when
+         this is sent; ruya-library's watcher of the installation lists it (the Store's
+         InstalledChanged is not sent for it). -->
     <signal name="JobFinished">
       <arg name="job" type="s"/>
       <arg name="status" type="s"/>
