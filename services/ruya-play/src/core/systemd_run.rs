@@ -1,8 +1,11 @@
 //! The helper as a transient systemd unit (05 §7.3, RUY-828; run for real by RUY-100 in the VM).
 //!
-//! Each helper run is `systemd-run --wait --pipe --collect` of the service's own binary with
-//! `--helper`: the request goes in on standard input, the JSON Lines come back on standard output,
-//! and the unit has:
+//! Each helper run is `systemd-run --wait --collect` of the service's own binary with `--helper`
+//! (never `--pipe`: under SELinux PID 1 may not use descriptors a service passes over D-Bus,
+//! RUY-839). The request is a file the service wrote and the manager opens as standard input
+//! (`StandardInput=file:`), the JSON Lines go to a file the manager opens as standard output
+//! (`StandardOutput=file:`) that the service follows ([`Follower`]); both live in the run's own
+//! folder, [`io_dir`]. The unit has:
 //!
 //! - **no identity:** `DynamicUser=yes` (a fresh uid per run), `NoNewPrivileges=yes`, an empty
 //!   capability set, `RestrictSUIDSGID=yes`;
@@ -46,6 +49,12 @@ pub const CPU_QUOTA: &str = "200%";
 pub const INSPECT_MAX_SEC: u64 = 600;
 /// The time limit of an `install` run, in seconds.
 pub const INSTALL_MAX_SEC: u64 = 6 * 3600;
+/// The request file in a run's [`io_dir`].
+pub const REQUEST_FILE: &str = "in.json";
+/// The output file in a run's [`io_dir`].
+pub const OUTPUT_FILE: &str = "out.jsonl";
+/// The most output the service follows (a helper writes a few lines; more is a runaway).
+pub const MAX_OUTPUT_BYTES: u64 = 16 * 1024 * 1024;
 
 /// Starts the helper with `systemd-run` (Linux only; [`argv`] builds its command line everywhere).
 #[derive(Debug, Clone)]
@@ -67,6 +76,66 @@ pub fn unit_name(job: &str) -> Option<String> {
 /// The folder the helper writes into, as the service sees it after the run.
 pub fn private_dir(job: &str) -> Option<PathBuf> {
     unit_name(job).map(|u| Path::new(PRIVATE_STATE).join(u))
+}
+
+/// The folder of a run's request and output files: next to the helper's state folder (same
+/// filesystem, in the service's `ReadWritePaths`, removed with the other `ruya-play-helper-*`
+/// entries at start). The manager opens both files itself, as root, so no descriptor of the
+/// service is passed to it; the helper's own state folder is not used because the manager sets
+/// it up after it opens the standard streams.
+pub fn io_dir(job: &str) -> Option<PathBuf> {
+    unit_name(job).map(|u| PathBuf::from(format!("{PRIVATE_STATE}/{u}.io")))
+}
+
+/// Follows a file that another process (the manager, for the unit's standard output) appends to:
+/// each [`poll`](Follower::poll) hands the bytes written since the last one to the parser, whole
+/// lines or not (the parser keeps a partial line).
+#[derive(Debug)]
+pub struct Follower {
+    path: PathBuf,
+    offset: u64,
+    cap: u64,
+}
+
+impl Follower {
+    /// Follows `path`, which may not exist yet.
+    pub fn new(path: PathBuf) -> Follower {
+        Follower::with_cap(path, MAX_OUTPUT_BYTES)
+    }
+
+    /// As [`Follower::new`], refusing more than `cap` bytes in all.
+    pub fn with_cap(path: PathBuf, cap: u64) -> Follower {
+        Follower {
+            path,
+            offset: 0,
+            cap,
+        }
+    }
+
+    /// Hand the new bytes to `on_output`. `Ok(false)` when it refused them or the file grew past
+    /// the cap (the run is then stopped); a missing file is nothing yet.
+    pub fn poll(&mut self, on_output: &mut dyn FnMut(&[u8]) -> bool) -> std::io::Result<bool> {
+        use std::io::{Read, Seek, SeekFrom};
+        let mut file = match std::fs::File::open(&self.path) {
+            Ok(f) => f,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(true),
+            Err(e) => return Err(e),
+        };
+        file.seek(SeekFrom::Start(self.offset))?;
+        let mut buf = [0u8; 8192];
+        loop {
+            let n = match file.read(&mut buf) {
+                Ok(0) => return Ok(true),
+                Ok(n) => n,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(e),
+            };
+            self.offset += n as u64;
+            if self.offset > self.cap || !on_output(&buf[..n]) {
+                return Ok(false);
+            }
+        }
+    }
 }
 
 /// `request` as the helper inside the unit sees it: the source at [`SOURCE_IN_UNIT`] and its state
@@ -133,6 +202,8 @@ pub fn argv(exe: &Path, request: &Request, fd_name: &str) -> Option<Vec<String>>
     let source = open_file_path(&request.source)?;
     parse_fd_name(fd_name)?;
     let exe = exe.to_str()?.to_string();
+    let io = io_dir(&request.job)?;
+    let io = io.to_str()?;
     let runtime = match request.mode {
         Mode::Inspect => INSPECT_MAX_SEC,
         Mode::Install => INSTALL_MAX_SEC,
@@ -140,7 +211,6 @@ pub fn argv(exe: &Path, request: &Request, fd_name: &str) -> Option<Vec<String>>
     let mut v: Vec<String> = [
         "systemd-run",
         "--wait",
-        "--pipe",
         "--collect",
         "--quiet",
         "--service-type=exec",
@@ -180,6 +250,9 @@ pub fn argv(exe: &Path, request: &Request, fd_name: &str) -> Option<Vec<String>>
         format!("StateDirectory={unit}"),
         "StateDirectoryMode=0700".to_string(),
         format!("OpenFile={source}:{fd_name}:read-only,graceful"),
+        format!("StandardInput=file:{io}/{REQUEST_FILE}"),
+        format!("StandardOutput=file:{io}/{OUTPUT_FILE}"),
+        "StandardError=journal".to_string(),
     ];
     for p in props {
         v.push("-p".into());
@@ -195,11 +268,12 @@ pub fn argv(exe: &Path, request: &Request, fd_name: &str) -> Option<Vec<String>>
 mod imp {
     use super::UNIT_PREFIX;
     use super::{
-        argv, fd_name, inner_request, private_dir, unit_name, SystemdRunHelper, PRIVATE_STATE,
+        argv, fd_name, inner_request, io_dir, private_dir, unit_name, Follower, SystemdRunHelper,
+        OUTPUT_FILE, PRIVATE_STATE, REQUEST_FILE,
     };
     use crate::core::deps::{Exit, Helper};
     use crate::core::helper::Request;
-    use std::io::{self, Read, Write};
+    use std::io::{self, Write};
     use std::path::Path;
     use std::process::{Command, Stdio};
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -233,6 +307,19 @@ mod imp {
         std::fs::remove_dir_all(&private)
     }
 
+    /// Make the run's folder (root only) and write the request the unit reads as standard input.
+    fn prepare_io(io: &Path, inner: &Request) -> io::Result<()> {
+        use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+        let _ = std::fs::remove_dir_all(io);
+        std::fs::DirBuilder::new().mode(0o700).create(io)?;
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(io.join(REQUEST_FILE))?;
+        f.write_all(inner.to_json().as_bytes())
+    }
+
     impl Helper for SystemdRunHelper {
         fn run(
             &self,
@@ -256,57 +343,70 @@ mod imp {
             else {
                 return Exit::Lost("the job or the source path cannot be passed to systemd".into());
             };
+            let Some(io) = io_dir(&request.job) else {
+                return Exit::Lost("the job cannot be passed to systemd".into());
+            };
+            if let Err(e) = prepare_io(&io, &inner) {
+                let _ = std::fs::remove_dir_all(&io);
+                return Exit::Lost(format!("the helper's request could not be written ({e})"));
+            }
             let mut child = match Command::new(&args[0])
                 .args(&args[1..])
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
                 .stderr(Stdio::inherit())
                 .spawn()
             {
                 Ok(c) => c,
-                Err(e) => return Exit::Lost(format!("systemd-run could not start ({e})")),
+                Err(e) => {
+                    let _ = std::fs::remove_dir_all(&io);
+                    return Exit::Lost(format!("systemd-run could not start ({e})"));
+                }
             };
-            if let Some(mut stdin) = child.stdin.take() {
-                // A helper that does not read its request ends without a result.
-                let _ = stdin.write_all(inner.to_json().as_bytes());
-            }
-            let stopped = AtomicBool::new(false);
-            let done = AtomicBool::new(false);
-            let stdout = child.stdout.take();
-            std::thread::scope(|s| {
-                s.spawn(|| {
-                    while !done.load(Ordering::SeqCst) {
-                        if cancel.load(Ordering::SeqCst) && !stopped.swap(true, Ordering::SeqCst) {
-                            self.stop(&request.job);
-                        }
-                        std::thread::sleep(Duration::from_millis(100));
-                    }
-                });
-                if let Some(mut out) = stdout {
-                    let mut buf = [0u8; 8192];
-                    loop {
-                        match out.read(&mut buf) {
-                            Ok(0) => break,
-                            Ok(n) => {
-                                if !on_output(&buf[..n]) {
-                                    if !stopped.swap(true, Ordering::SeqCst) {
-                                        self.stop(&request.job);
-                                    }
-                                    break;
-                                }
-                            }
-                            Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
-                            Err(_) => break,
-                        }
+            let mut follower = Follower::new(io.join(OUTPUT_FILE));
+            let mut stopped = false;
+            let mut lost: Option<String> = None;
+            let status = loop {
+                let mut stop_now = cancel.load(Ordering::SeqCst);
+                match follower.poll(on_output) {
+                    Ok(true) => {}
+                    Ok(false) => stop_now = true,
+                    Err(e) => {
+                        lost = Some(format!("the helper's output could not be read ({e})"));
+                        stop_now = true;
                     }
                 }
-                done.store(true, Ordering::SeqCst);
-            });
-            let status = child.wait();
+                if stop_now && !stopped {
+                    stopped = true;
+                    self.stop(&request.job);
+                }
+                match child.try_wait() {
+                    Ok(Some(s)) => {
+                        // The unit is over: read what was written since the last look.
+                        if !stopped {
+                            match follower.poll(on_output) {
+                                Ok(true) => {}
+                                Ok(false) => stopped = true,
+                                Err(e) => {
+                                    lost =
+                                        Some(format!("the helper's output could not be read ({e})"))
+                                }
+                            }
+                        }
+                        break Ok(s);
+                    }
+                    Ok(None) => std::thread::sleep(Duration::from_millis(50)),
+                    Err(e) => break Err(e),
+                }
+            };
+            let _ = std::fs::remove_dir_all(&io);
             if let Err(e) = take_output(request) {
                 return Exit::Lost(format!("the helper's folder could not be taken over ({e})"));
             }
-            if stopped.load(Ordering::SeqCst) {
+            if let Some(why) = lost {
+                return Exit::Lost(why);
+            }
+            if stopped {
                 return Exit::Stopped;
             }
             match status {
@@ -377,17 +477,19 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            &v[..7],
+            &v[..6],
             &[
                 "systemd-run",
                 "--wait",
-                "--pipe",
                 "--collect",
                 "--quiet",
                 "--service-type=exec",
                 "--unit=ruya-play-helper-job-7"
             ]
         );
+        // RUY-839: no --pipe (PID 1 may not use the service's descriptors); the manager opens
+        // the request and the output files itself, in the run's folder.
+        assert!(!v.iter().any(|a| a.contains("pipe")), "{v:?}");
         assert_eq!(
             &v[v.len() - 3..],
             &["--", "/usr/libexec/ruya-play", "--helper"]
@@ -413,6 +515,9 @@ mod tests {
             "StateDirectory=ruya-play-helper-job-7",
             "StateDirectoryMode=0700",
             "OpenFile=/run/media/ruya-shell/USB/game.play.zip:source-2049-77:read-only,graceful",
+            "StandardInput=file:/var/lib/private/ruya-play-helper-job-7.io/in.json",
+            "StandardOutput=file:/var/lib/private/ruya-play-helper-job-7.io/out.jsonl",
+            "StandardError=journal",
         ] {
             assert!(p.contains(&want), "missing {want}: {p:?}");
         }
@@ -510,5 +615,115 @@ mod tests {
             private_dir("job-7").unwrap(),
             Path::new("/var/lib/private/ruya-play-helper-job-7")
         );
+    }
+
+    // --- the follower (RUY-839) ---
+
+    use crate::core::codes;
+    use crate::core::deps::Exit;
+    use crate::core::helper::{Ending, Session, MAX_LINE_BYTES};
+    use std::io::Write;
+
+    fn append(path: &Path, bytes: &[u8]) {
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .unwrap();
+        f.write_all(bytes).unwrap();
+    }
+
+    const PROGRESS: &str = r#"{"type":"progress","phase":"staging","done":1,"total":2}"#;
+    const RESULT: &str = r#"{"type":"result","outcome":"ok"}"#;
+
+    /// Poll `f` once into `session`; returns what `poll` said and the progress lines seen.
+    fn poll_into(f: &mut Follower, session: &mut Session, seen: &mut usize) -> bool {
+        f.poll(&mut |b| session.feed(b, &mut |_| *seen += 1))
+            .unwrap()
+    }
+
+    #[test]
+    fn the_follower_reads_a_file_that_grows_and_a_line_in_pieces() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("out.jsonl");
+        let mut f = Follower::new(path.clone());
+        let (mut s, mut seen) = (Session::new(), 0usize);
+        // The manager has not made the file yet: nothing, not an error.
+        assert!(poll_into(&mut f, &mut s, &mut seen));
+        // A line in two pieces: nothing is a line until its newline.
+        let (a, b) = PROGRESS.split_at(20);
+        append(&path, a.as_bytes());
+        assert!(poll_into(&mut f, &mut s, &mut seen));
+        assert_eq!(seen, 0);
+        append(
+            &path,
+            format!(
+                "{b}
+{PROGRESS}
+"
+            )
+            .as_bytes(),
+        );
+        assert!(poll_into(&mut f, &mut s, &mut seen));
+        assert_eq!(seen, 2);
+        // Nothing new: nothing more (the offset holds), then the result as the unit ends.
+        assert!(poll_into(&mut f, &mut s, &mut seen));
+        assert_eq!(seen, 2);
+        append(
+            &path,
+            format!(
+                "{RESULT}
+"
+            )
+            .as_bytes(),
+        );
+        assert!(poll_into(&mut f, &mut s, &mut seen));
+        assert!(matches!(s.finish(&Exit::Code(0), false), Ending::Ok { .. }));
+    }
+
+    #[test]
+    fn the_follower_ends_a_run_with_garbage_or_a_long_line_as_helper_failed() {
+        let dir = tempfile::tempdir().unwrap();
+        for (name, bytes) in [
+            (
+                "garbage",
+                b"this is not json
+"
+                .to_vec(),
+            ),
+            ("long", vec![b' '; MAX_LINE_BYTES + 1]),
+        ] {
+            let path = dir.path().join(name);
+            append(&path, &bytes);
+            let mut f = Follower::new(path);
+            let (mut s, mut seen) = (Session::new(), 0usize);
+            assert!(!poll_into(&mut f, &mut s, &mut seen), "{name}");
+            assert!(
+                matches!(s.finish(&Exit::Code(0), false), Ending::Failed(p) if p.code == codes::HELPER_FAILED),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_follower_stops_a_runaway_and_a_refusal() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("out.jsonl");
+        append(&path, &[b'x'; 100]);
+        let mut f = Follower::with_cap(path.clone(), 99);
+        assert!(!f.poll(&mut |_| true).unwrap());
+        let mut f = Follower::new(path);
+        assert!(!f.poll(&mut |_| false).unwrap());
+    }
+
+    #[test]
+    fn the_run_folder_is_next_to_the_state_folder_and_cleared_with_it() {
+        let io = io_dir("job-7").unwrap();
+        assert_eq!(io, Path::new("/var/lib/private/ruya-play-helper-job-7.io"));
+        assert!(io
+            .to_str()
+            .unwrap()
+            .starts_with(&format!("{PRIVATE_STATE}/{UNIT_PREFIX}")));
+        assert_eq!(io_dir("../x"), None);
     }
 }

@@ -1497,6 +1497,12 @@ got="$(echo '{"type":"aa{sv}","data":[[{"name":{"type":"s","data":"Hello"},"id":
 grep -q 'no-gpg-verify' "$here/vm-play-check.sh" && fail "vm-play-check.sh mentions --no-gpg-verify" || pass "vm-play-check.sh never turns signature checks off"
 grep -q 'trap cleanup EXIT' "$here/vm-play-check.sh" && pass "vm-play-check.sh cleans up on exit" || fail "vm-play-check.sh: no EXIT trap"
 grep -q 'mount -o loop,nosuid,nodev,noexec' "$here/vm-play-check.sh" && pass "vm-play-check.sh mounts its drive as ruya-devices does" || fail "vm-play-check.sh: the check drive is not mounted nosuid,nodev,noexec"
+# RUY-839: the probe is the product's own way (files the manager opens), and the script's old slips.
+grep -v '^ *#' "$here/vm-play-check.sh" | grep -q -- '--pipe' && fail "vm-play-check.sh uses --pipe (SELinux wedges PID 1's bus)" || pass "vm-play-check.sh never uses systemd-run --pipe"
+grep -q 'StandardOutput=file:\$pout' "$here/vm-play-check.sh" && pass "vm-play-check.sh: the probe's output is a file the manager opens" || fail "vm-play-check.sh: the probe has no StandardOutput=file:"
+grep -q '/var/tmp/x' "$here/vm-play-check.sh" && fail "vm-play-check.sh probes /var/tmp/x (PrivateTmp makes it succeed)" || pass "vm-play-check.sh: no /var/tmp/x write probe"
+grep -q 'chmod +x "\$pack"' "$here/vm-play-check.sh" && pass "vm-play-check.sh makes ruya-pack executable" || fail "vm-play-check.sh: ruya-pack keeps the mode scp gave it"
+[ "$(grep -c '^zin = zipfile.ZipFile(src)' "$here/vm-play-check.sh")" = 2 ] && pass "vm-play-check.sh re-opens the source before the bomb" || fail "vm-play-check.sh: the bomb reuses the tampered zip's ZipInfo objects"
 
 echo "== build stage names (RUY-771) =="
 source "$here/lib-stages.sh"
