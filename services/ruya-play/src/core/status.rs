@@ -170,7 +170,9 @@ fn status_of_code(code: &str) -> JobStatus {
         | codes::INSTALLED_IO
         | codes::COMMIT_FAILED
         | codes::ROLLBACK_FAILED
-        | codes::JOB_INTERRUPTED => JobStatus::Failed,
+        | codes::JOB_INTERRUPTED
+        | codes::HELPER_FAILED
+        | codes::SOURCE_CHANGED => JobStatus::Failed,
         _ => match group {
             "sig" | "store_sig" => JobStatus::BadSignature,
             "revoked" => JobStatus::Revoked,

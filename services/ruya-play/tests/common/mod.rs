@@ -13,7 +13,10 @@ use ruya_play::core::fakes::{
     CommitHook, FixedClock, FixedFreeSpace, FnOpener, RecordingCommit, StaticBlocklists,
 };
 use ruya_play::core::installed::MemoryInstalled;
-use ruya_play::{Config, Deps, Event, FreeSpace, Hooks, Importer, JobResult, MethodStatus};
+use ruya_play::{
+    Config, Deps, Event, FreeSpace, Helper, HelperDeps, Hooks, Importer, InProcessHelper,
+    JobResult, MethodStatus,
+};
 use ruya_play::{OpenError, Phase};
 use ruya_play_art::{Outcome, Slot, SlotResult};
 use ruya_play_format::{Entry, EntryKind, FolderSource, MemorySource, Problem, Source, ZipSource};
@@ -214,7 +217,12 @@ pub struct Setup {
     pub now: i64,
     /// Replaces `trust` and `installed` (stores a test shares or makes fail).
     pub stores: Option<(SharedTrust, SharedInstalled)>,
+    /// Wraps the in-process helper (a test that plays a hostile helper).
+    pub wrap_helper: Option<HelperWrap>,
 }
+
+/// Turns the harness's in-process helper into the helper the importer gets.
+pub type HelperWrap = Box<dyn FnOnce(Box<dyn Helper>) -> Box<dyn Helper>>;
 
 impl Default for Setup {
     fn default() -> Self {
@@ -232,6 +240,7 @@ impl Default for Setup {
             commit_hook: None,
             now: NOW,
             stores: None,
+            wrap_helper: None,
         }
     }
 }
@@ -304,17 +313,29 @@ impl Harness {
             Some(f) => f,
             None => Box::new(Arc::clone(&free)),
         };
-        let deps = Deps {
+        // The hooks see the helper's steps (staging, chunks, art) and the service's (before the
+        // unpack, the commit).
+        let hooks: Arc<dyn Hooks> = Arc::from(setup.hooks);
+        let helper: Box<dyn Helper> = Box::new(InProcessHelper::new(HelperDeps {
             opener: Box::new(opener),
-            free_space,
             art: setup.art,
+            store_keys: setup.store_keys.clone(),
+            hooks: Box::new(Arc::clone(&hooks)),
+        }));
+        let helper = match setup.wrap_helper {
+            Some(wrap) => wrap(helper),
+            None => helper,
+        };
+        let deps = Deps {
+            helper,
+            free_space,
             commit: Box::new(Arc::clone(&commit)),
             clock: Box::new(Arc::clone(&clock)),
             blocklists: Box::new(setup.blocklist),
             store_keys: setup.store_keys,
             trust,
             installed,
-            hooks: setup.hooks,
+            hooks: Box::new(hooks),
         };
         let importer = Importer::open(cfg.clone(), deps).expect("the importer opens");
         Harness {

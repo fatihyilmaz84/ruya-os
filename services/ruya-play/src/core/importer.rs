@@ -1,50 +1,57 @@
 //! The importer: the job table, one install at a time, `Inspect`, and the install pipeline in the
-//! order lead-29 fixed (05 §7.3):
+//! order lead-29 fixed (05 §7.3), split by lead-33 (RUY-828) between the unprivileged helper
+//! ([`crate::core::helper`], behind [`Helper`]) and this root side, which never opens a package:
 //!
-//! 1. read `play.json`, `play.files`, `play.sig` and `store.sig` once, as bounded bytes
-//!    ([`ReadOnce`]);
-//! 2. `ruya_play_trust::inspect` (verify, tier, `validate` with `official` only from a verified
-//!    `store.sig`, id and build binding, continuity, ceiling, blocklist), with the list from
-//!    `select_blocklist` and never `ListCheck::NotChecked`;
+//! 1. **helper, `inspect`:** open the package, read the listing and the four root files once,
+//!    `ruya_play_trust::inspect`, and stage the root files into `inspect/<name>/meta/` (and, for
+//!    `Inspect`, the vetted art into `inspect/<name>/art/`);
+//! 2. **service:** read those root files back once ([`MetaSource`], [`ReadOnce`]) and run
+//!    `ruya_play_trust::inspect` over them with its own key records, the blocklist from
+//!    `select_blocklist` (never `ListCheck::NotChecked`) and developer mode;
 //! 3. refuse a `build` not above the installed build of the id (`build.not_newer`);
 //! 4. free space: the installed size plus 10 %, before the first write (`space.not_enough`);
-//! 5. unpack into `staging/<job>/tree`, created exclusively, through directory handles;
-//! 6. re-walk the staged tree against the table and check revocation again, now with the `runner`
-//!    hashes of the bundled components;
-//! 7. vet the art from the staged copy;
-//! 8. `record_install` in the trust store, then the installed build, **before** the commit, so a
+//! 5. **helper, `install`:** open the package again (its root files must still have the verified
+//!    SHA-256s: `source.changed`), unpack into `staging/<job>/tree`, re-walk it, and vet the art
+//!    into `staging/<job>/art`;
+//! 6. **service:** the job folder holds `tree/` and `art/` only; re-walk the tree against the
+//!    verified table (kinds, sizes, modes, link targets), re-hash every file, check revocation
+//!    with the `runner` hashes of that copy, hold `art/` to what the helper named, and write the
+//!    verified root files into `meta/` itself;
+//! 7. `record_install` in the trust store, then the installed build, **before** the commit, so a
 //!    failure fails closed (both are rolled back when the commit fails; a failed rollback is
 //!    journalled);
-//! 9. the [`Commit`] step (past the point of no return: `Cancel` answers `too-late`).
+//! 8. the [`Commit`] step (past the point of no return: `Cancel` answers `too-late`).
 //!
-//! The source is read once; everything after step 5 reads the staged copy only. Any failure or
-//! cancel removes the job's staging directory; a crash leaves only staging directories, which
-//! [`Importer::open`] removes.
+//! Any failure or cancel removes the job's staging directory and its inspect folder; a crash
+//! leaves only those, which [`Importer::open`] removes.
 
-use crate::core::art::{self, VettedArt};
+use crate::core::art::VettedArt;
 use crate::core::codes;
 use crate::core::deps::{
-    ArtVetter, Blocklists, Clock, Commit, CommitError, CommitRequest, Deps, FreeSpace, Hooks,
-    InstalledBuilds, OpenError, Opener, Step,
+    Blocklists, Clock, Commit, CommitError, CommitRequest, Deps, FreeSpace, Helper, Hooks,
+    InstalledBuilds, Step,
 };
+use crate::core::helper::{self, ArtLine, Ending, Mode, Progress, Request, Session};
 use crate::core::jobs::{self, JobKind, JobRecord, JobState, MAX_PATH_BYTES};
+use crate::core::meta::MetaSource;
 use crate::core::read_once::ReadOnce;
-use crate::core::staging::{self, Dir};
+use crate::core::staging::{self, Dir, Kind};
 use crate::core::status::{status_of, JobStatus, MethodStatus, Phase};
-use crate::core::unpack::{self, staging_problem, Control, Stop, Unpacked};
+use crate::core::unpack::{self, staging_problem};
+use ruya_play_format::limits::ROOT_FILES;
 use ruya_play_format::Problem;
 use ruya_play_trust::revocation::Selected;
 use ruya_play_trust::{
     inspect, is_revoked, record_install, select_blocklist, Context, Continuity, IdRecord,
-    Inspection, ListCheck, StoreKeys, TrustError, TrustStore,
+    Inspection, ListCheck, StoreKeys, Tier, TrustError, TrustStore,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-/// Where the importer keeps things (05 §7.1; RUY-100 passes `/var/lib/ruya-play/...`).
+/// Where the importer keeps things (05 §7.1; RUY-829 passes `/var/lib/ruya-play/...`).
 #[derive(Debug, Clone)]
 pub struct Config {
     /// Downloaded packages (`incoming/`).
@@ -53,15 +60,19 @@ pub struct Config {
     pub staging: PathBuf,
     /// The jobs table and the installed builds.
     pub state: PathBuf,
+    /// One folder per helper `inspect` run: the root files it staged and, for `Inspect`, the
+    /// vetted art the record points at (the newest [`MAX_PREVIEWS`] are kept).
+    pub inspect: PathBuf,
 }
 
 impl Config {
-    /// `incoming/`, `staging/` and `state/` under `root`.
+    /// `incoming/`, `staging/`, `state/` and `inspect/` under `root`.
     pub fn under(root: &Path) -> Config {
         Config {
             incoming: root.join("incoming"),
             staging: root.join("staging"),
             state: root.join("state"),
+            inspect: root.join("inspect"),
         }
     }
 
@@ -75,6 +86,9 @@ impl Config {
         self.state.join("journal")
     }
 }
+
+/// How many `Inspect` folders (with their vetted art) are kept.
+pub const MAX_PREVIEWS: usize = 4;
 
 /// What a running job tells the shell.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,17 +130,20 @@ pub struct JobResult {
     pub inspection: Option<Inspection>,
 }
 
-/// What `Inspect` returns: data only, nothing written.
+/// What `Inspect` returns: data only; the helper stages the root files and the vetted art.
 #[derive(Debug, Clone)]
 pub struct InspectReport {
     /// What Install would end with now (`ok` or a job status).
     pub verdict: JobStatus,
-    /// The problems (05 §4.5 and §9.2 codes, and `build.not_newer`).
+    /// The problems (05 §4.5 and §9.2 codes, `build.not_newer`, and the art's).
     pub problems: Vec<Problem>,
     /// The package, when it passed the trust and format checks.
     pub inspection: Option<Inspection>,
     /// The build installed for the id now.
     pub installed_build: Option<u64>,
+    /// The vetted art (Play1's `art`), files under `inspect/inspect-<n>/art/`, when the package
+    /// passed; empty otherwise.
+    pub art: Vec<VettedArt>,
 }
 
 struct State {
@@ -202,10 +219,12 @@ pub struct Importer {
     cfg: Config,
     shared: Arc<Shared>,
     staging: Dir,
+    scratch: Dir,
+    previews: Mutex<VecDeque<String>>,
+    inspects: AtomicU64,
     running: Mutex<()>,
-    opener: Box<dyn Opener>,
+    helper: Box<dyn Helper>,
     free_space: Box<dyn FreeSpace>,
-    art: Box<dyn ArtVetter>,
     commit: Box<dyn Commit>,
     clock: Box<dyn Clock>,
     blocklists: Box<dyn Blocklists>,
@@ -232,6 +251,29 @@ struct Checked {
     inspection: Inspection,
     selected: Result<Selected, TrustError>,
     installed_build: Option<u64>,
+}
+
+/// Steps 1 to 3: the helper's `inspect` run, then the service's own checks.
+enum Front {
+    /// Nothing at the path.
+    Missing,
+    /// Refused: the problems, and the inspection when the service got that far.
+    Refused(Refusal),
+    /// The job was cancelled during the helper run.
+    Cancelled,
+    /// The helper broke its contract.
+    Failed(Problem),
+    /// Passed.
+    Checked(Box<Passed>),
+}
+
+/// A package that passed steps 1 to 3.
+struct Passed {
+    checked: Checked,
+    meta: MetaSource,
+    art: Vec<VettedArt>,
+    art_problems: Vec<Problem>,
+    art_refuses: bool,
 }
 
 fn create_private_dir(path: &Path) -> std::io::Result<()> {
@@ -305,6 +347,34 @@ impl Reporter<'_> {
             bytes_total: total,
         });
     }
+
+    /// A `progress` line of the helper, on the job's ranges. The helper's numbers are only
+    /// positions: the byte total is the service's own, and nothing goes back or past its phase.
+    fn helper(&mut self, p: &Progress) {
+        let part = |from: u32, to: u32, done: u64, total: u64| {
+            let span = u64::from(to - from);
+            let at = done.min(total).saturating_mul(span) / total.max(1);
+            from + u32::try_from(at).unwrap_or(to - from)
+        };
+        match p.phase {
+            Phase::Staging => {
+                let total = self.bytes_total;
+                let done = p.done.min(total);
+                self.bytes_done = done;
+                let pct = if done >= total {
+                    STAGED
+                } else {
+                    part(0, STAGED, done, total)
+                };
+                self.at(Phase::Staging, pct);
+            }
+            Phase::Verifying => self.at(Phase::Verifying, part(STAGED, VERIFIED, p.done, p.total)),
+            Phase::VettingArt => {
+                self.at(Phase::VettingArt, part(VERIFIED, VETTED, p.done, p.total))
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Percent at the end of each phase.
@@ -313,37 +383,81 @@ const VERIFIED: u32 = 75;
 const VETTED: u32 = 85;
 const COMMITTED: u32 = 95;
 
-struct UnpackCtl<'a, 'r> {
-    job: &'a str,
-    cancel: &'a AtomicBool,
-    hooks: &'a dyn Hooks,
-    reporter: &'a mut Reporter<'r>,
+fn changed(path: &str, what: &str) -> Problem {
+    Problem::new(codes::STAGING_CHANGED, path, what)
 }
 
-impl Control for UnpackCtl<'_, '_> {
-    fn cancelled(&self) -> bool {
-        self.cancel.load(Ordering::SeqCst)
+/// The top-level entries of a folder the helper wrote must be folders named in `allowed`.
+fn only_dirs(dir: &Dir, allowed: &[&str]) -> Result<(), Problem> {
+    let entries = dir.entries().map_err(|e| staging_problem("", &e))?;
+    for e in entries {
+        if e.kind != Kind::Dir || !allowed.contains(&e.name.as_str()) {
+            return Err(changed(
+                &e.name,
+                "The helper left an entry the importer does not take.",
+            ));
+        }
     }
-    fn progress(&mut self, done: u64) {
-        let total = self.reporter.bytes_total.max(1);
-        self.reporter.bytes_done = done;
-        let pct = u32::try_from(done.saturating_mul(u64::from(STAGED)) / total).unwrap_or(STAGED);
-        self.reporter.at(Phase::Staging, pct.min(STAGED));
+    Ok(())
+}
+
+/// Hold `art/` to what the helper said it wrote: those files, folders one level down, nothing
+/// else, and no setuid, setgid or sticky bit anywhere.
+fn check_art(art_dir: &Dir, lines: &[ArtLine]) -> Result<Vec<VettedArt>, Problem> {
+    let found = unpack::walk(art_dir).map_err(|e| staging_problem("art", &e))?;
+    let named: BTreeSet<&str> = lines
+        .iter()
+        .flat_map(|l| l.files.iter().map(String::as_str))
+        .collect();
+    for (path, f) in &found {
+        let ok = match f.kind {
+            Kind::File => named.contains(path.as_str()),
+            Kind::Dir => !path.contains('/'),
+            _ => false,
+        } && f.mode & 0o7000 == 0;
+        if !ok {
+            return Err(changed(
+                path,
+                "The art folder holds an entry the art step did not write.",
+            ));
+        }
     }
-    fn step(&mut self, step: &Step<'_>) {
-        self.hooks.step(self.job, step);
+    let mut out = Vec::new();
+    for l in lines {
+        let mut files = Vec::new();
+        for f in &l.files {
+            if found.get(f.as_str()).map(|e| e.kind) != Some(Kind::File) {
+                return Err(changed(f, "A vetted art file is missing."));
+            }
+            files.push(
+                staging::join_checked(art_dir.path(), f).map_err(|e| staging_problem(f, &e))?,
+            );
+        }
+        out.push(VettedArt {
+            slot: l.slot.clone(),
+            lang: l.lang.clone(),
+            files,
+        });
     }
+    Ok(out)
 }
 
 impl Importer {
-    /// Open the importer: create the folders, remove every staging directory a crash left, and
-    /// settle the jobs a previous run left queued or running (`failed`, `interrupted`, once).
+    /// Open the importer: create the folders, remove every staging and inspect folder a crash left
+    /// (and the helper's own leftovers), and settle the jobs a previous run left queued or running
+    /// (`failed`, `interrupted`, once).
     pub fn open(cfg: Config, deps: Deps) -> Result<Importer, Problem> {
-        for dir in [&cfg.incoming, &cfg.staging, &cfg.state] {
+        for dir in [&cfg.incoming, &cfg.staging, &cfg.state, &cfg.inspect] {
             create_private_dir(dir).map_err(|e| staging_problem("", &e))?;
         }
         let staging_root = Dir::open_root(&cfg.staging).map_err(|e| staging_problem("", &e))?;
         staging::clear(&staging_root).map_err(|e| staging_problem("", &e))?;
+        let scratch = Dir::open_root(&cfg.inspect).map_err(|e| staging_problem("", &e))?;
+        staging::clear(&scratch).map_err(|e| staging_problem("", &e))?;
+        if let Err(e) = deps.helper.clear() {
+            // Leftovers outside our folders only cost space; the service still starts.
+            eprintln!("ruya-play: removing the helpers' leftovers failed: {e}");
+        }
         let (counter, mut list) = jobs::load(&cfg.jobs_file()).map_err(|e| {
             Problem::new(
                 codes::STAGING_IO,
@@ -369,10 +483,12 @@ impl Importer {
             cfg,
             shared,
             staging: staging_root,
+            scratch,
+            previews: Mutex::new(VecDeque::new()),
+            inspects: AtomicU64::new(0),
             running: Mutex::new(()),
-            opener: deps.opener,
+            helper: deps.helper,
             free_space: deps.free_space,
-            art: deps.art,
             commit: deps.commit,
             clock: deps.clock,
             blocklists: deps.blocklists,
@@ -411,7 +527,7 @@ impl Importer {
         self.installed.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Steps 1 to 3 on a source that is read once.
+    /// Steps 2 and 3 over the root files the service read back (a source that is read once).
     fn check(&self, source: &ReadOnce<'_>) -> Result<Checked, Refusal> {
         let image = self.blocklists.image();
         let downloaded = self.blocklists.downloaded();
@@ -431,7 +547,8 @@ impl Importer {
                 // Never ListCheck::NotChecked: an install is always checked (RUY-93 review).
                 blocklist: ListCheck::of(&selected),
                 runner_hashes: &[],
-                // The unpacker hashes every file while it copies it: the source is read once.
+                // Only the root files are here; the helper hashes every file while it copies it,
+                // and the service re-hashes the staged copy.
                 verify_content: false,
             };
             inspect(source, &ctx).map_err(|r| Box::new((r.problems(), None)))?
@@ -463,35 +580,171 @@ impl Importer {
         })
     }
 
-    /// `Inspect(path)`: steps 1 to 3, reading data only; nothing is written.
+    /// A request for the helper, or `None` when a path is not plain text.
+    fn request(&self, mode: Mode, job: &str, source: &Path, staging: &Path) -> Option<Request> {
+        Some(Request {
+            mode,
+            job: job.to_string(),
+            source: source.to_str()?.to_string(),
+            staging: staging.to_str()?.to_string(),
+            now: self.clock.now(),
+            // A store that cannot be read is reported by the service's own inspect.
+            developer_mode: self.trust().developer_mode().unwrap_or(false),
+            blocklist: self.blocklists.image().map(|b| helper::hex(&b)),
+            art: false,
+            official: false,
+            expect: BTreeMap::new(),
+        })
+    }
+
+    /// Run the helper for `request` and read its output as untrusted lines.
+    fn run_helper(
+        &self,
+        request: &Request,
+        cancel: &AtomicBool,
+        on_progress: &mut dyn FnMut(&Progress),
+    ) -> Ending {
+        let mut session = Session::new();
+        let exit = self.helper.run(request, cancel, &mut |bytes| {
+            session.feed(bytes, &mut *on_progress)
+        });
+        session.finish(&exit, cancel.load(Ordering::SeqCst))
+    }
+
+    /// Steps 1 to 3: the helper inspects `path` into `inspect/<name>`, then the service checks
+    /// the root files it staged. With `art`, the vetted art stays in that folder (for `Inspect`);
+    /// otherwise the folder is gone when this returns.
+    fn front(&self, name: &str, path: &Path, art: bool, cancel: &AtomicBool) -> Front {
+        let dir = match self.scratch.create_dir(name, 0o700) {
+            Ok(d) => d,
+            Err(e) => {
+                if staging::is_changed(&e) {
+                    let _ = self.scratch.remove_entry(name);
+                }
+                return Front::Failed(staging_problem("", &e));
+            }
+        };
+        let front = self.front_in(&dir, name, path, art, cancel);
+        drop(dir);
+        let keep = art && matches!(front, Front::Checked(_));
+        let cleaned = if keep {
+            // The record points at art/ only.
+            ["meta", "src"]
+                .iter()
+                .try_for_each(|n| match self.scratch.open_dir(name) {
+                    Ok(d) => match d.remove_entry(n) {
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+                        other => other,
+                    },
+                    Err(e) => Err(e),
+                })
+        } else {
+            self.scratch.remove_entry(name)
+        };
+        match (cleaned, front) {
+            (Err(e), Front::Checked(_)) => Front::Failed(staging_problem("", &e)),
+            (_, front) => front,
+        }
+    }
+
+    fn front_in(
+        &self,
+        dir: &Dir,
+        name: &str,
+        path: &Path,
+        art: bool,
+        cancel: &AtomicBool,
+    ) -> Front {
+        let Some(mut request) = self.request(Mode::Inspect, name, path, dir.path()) else {
+            return Front::Failed(Problem::new(
+                codes::HELPER_FAILED,
+                "",
+                "A path is not plain text.",
+            ));
+        };
+        request.art = art;
+        let (art_lines, art_problems, art_refuses) =
+            match self.run_helper(&request, cancel, &mut |_| {}) {
+                Ending::Missing => return Front::Missing,
+                Ending::Refused(p) => return Front::Refused(Box::new((p, None))),
+                Ending::Cancelled => return Front::Cancelled,
+                Ending::Failed(p) => return Front::Failed(p),
+                Ending::Ok {
+                    problems,
+                    art,
+                    art_refuses,
+                } => (art, problems, art_refuses),
+            };
+        let allowed: &[&str] = if art {
+            &["meta", "src", "art"]
+        } else {
+            &["meta"]
+        };
+        let meta = only_dirs(dir, allowed)
+            .and_then(|()| {
+                dir.open_dir("meta")
+                    .map_err(|e| staging_problem("meta", &e))
+            })
+            .and_then(|m| MetaSource::read(&m));
+        let meta = match meta {
+            Ok(m) => m,
+            Err(p) => return Front::Refused(Box::new((vec![p], None))),
+        };
+        let checked = match self.check(&ReadOnce::new(&meta)) {
+            Ok(c) => c,
+            Err(refusal) => return Front::Refused(refusal),
+        };
+        let vetted = if art {
+            let found = match dir.open_dir("art") {
+                Ok(a) => check_art(&a, &art_lines),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound && art_lines.is_empty() => {
+                    Ok(Vec::new())
+                }
+                Err(e) => Err(staging_problem("art", &e)),
+            };
+            match found {
+                Ok(v) => v,
+                Err(p) => return Front::Refused(Box::new((vec![p], Some(checked.inspection)))),
+            }
+        } else {
+            Vec::new()
+        };
+        Front::Checked(Box::new(Passed {
+            checked,
+            meta,
+            art: vetted,
+            art_problems,
+            art_refuses,
+        }))
+    }
+
+    /// Remember an `Inspect` folder and drop the oldest beyond [`MAX_PREVIEWS`].
+    fn keep_preview(&self, name: String) {
+        let mut kept = self.previews.lock().unwrap_or_else(|e| e.into_inner());
+        kept.push_back(name);
+        while kept.len() > MAX_PREVIEWS {
+            if let Some(old) = kept.pop_front() {
+                let _ = self.scratch.remove_entry(&old);
+            }
+        }
+    }
+
+    /// `Inspect(path)`: steps 1 to 3 and the art. Nothing is written but the helper's inspect
+    /// folder (no staging folder, no job, no free-space query). `failed` when the helper broke
+    /// its contract.
     pub fn inspect(&self, path: &Path) -> (MethodStatus, Option<InspectReport>) {
-        if !path.is_absolute() {
+        if !path.is_absolute() || path.to_str().is_none() {
             return (MethodStatus::Invalid, None);
         }
-        let source = match self.opener.open(path) {
-            Err(OpenError::Missing) => return (MethodStatus::UnknownSource, None),
-            Err(OpenError::Problems(p)) => {
-                return (
-                    MethodStatus::Ok,
-                    Some(InspectReport {
-                        verdict: status_of(&p),
-                        problems: p,
-                        inspection: None,
-                        installed_build: None,
-                    }),
-                )
-            }
-            Ok(s) => s,
-        };
-        let once = ReadOnce::new(&*source);
-        let report = match self.check(&once) {
-            Ok(c) => InspectReport {
-                verdict: JobStatus::Ok,
-                problems: Vec::new(),
-                inspection: Some(c.inspection),
-                installed_build: c.installed_build,
-            },
-            Err(refusal) => {
+        let n = self
+            .inspects
+            .fetch_add(1, Ordering::SeqCst)
+            .saturating_add(1);
+        let name = format!("inspect-{n}");
+        let report = match self.front(&name, path, true, &AtomicBool::new(false)) {
+            Front::Missing => return (MethodStatus::UnknownSource, None),
+            Front::Cancelled | Front::Failed(_) => return (MethodStatus::Failed, None),
+            Front::Refused(refusal) => {
                 let (problems, inspection) = *refusal;
                 let installed_build = inspection.as_ref().and_then(|i| {
                     self.installed()
@@ -504,6 +757,22 @@ impl Importer {
                     problems,
                     inspection,
                     installed_build,
+                    art: Vec::new(),
+                }
+            }
+            Front::Checked(passed) => {
+                let p = *passed;
+                self.keep_preview(name);
+                InspectReport {
+                    verdict: if p.art_refuses {
+                        status_of(&p.art_problems)
+                    } else {
+                        JobStatus::Ok
+                    },
+                    problems: p.art_problems,
+                    inspection: Some(p.checked.inspection),
+                    installed_build: p.checked.installed_build,
+                    art: p.art,
                 }
             }
         };
@@ -603,8 +872,8 @@ impl Importer {
         cancel: &AtomicBool,
         reporter: &mut Reporter<'_>,
     ) -> JobResult {
-        let source = match self.opener.open(path) {
-            Err(OpenError::Missing) => {
+        let passed = match self.front(job, path, false, cancel) {
+            Front::Missing => {
                 return refused(
                     job,
                     one(
@@ -615,17 +884,15 @@ impl Importer {
                     None,
                 )
             }
-            Err(OpenError::Problems(p)) => return refused(job, p, None),
-            Ok(s) => s,
-        };
-        let once = ReadOnce::new(&*source);
-        let checked = match self.check(&once) {
-            Ok(c) => c,
-            Err(refusal) => {
-                let (p, insp) = *refusal;
+            Front::Refused(r) => {
+                let (p, insp) = *r;
                 return refused(job, p, insp);
             }
+            Front::Cancelled => return cancelled(job, None),
+            Front::Failed(p) => return refused(job, vec![p], None),
+            Front::Checked(p) => *p,
         };
+        let (checked, meta) = (passed.checked, passed.meta);
         let insp = checked.inspection.clone();
         let total = insp.package.installed_bytes;
         reporter.bytes_total = total;
@@ -660,7 +927,7 @@ impl Importer {
             return cancelled(job, Some(insp));
         }
 
-        // 5 to 9 write into the job's staging directory, which goes away whatever happens.
+        // 5 to 8 write into the job's staging directory, which goes away whatever happens.
         let job_dir = match self.staging.create_dir(job, 0o700) {
             Ok(d) => d,
             Err(e) => {
@@ -672,7 +939,7 @@ impl Importer {
                 return refused(job, vec![staging_problem("", &e)], Some(insp));
             }
         };
-        let mut result = self.staged(job, &job_dir, &once, &checked, cancel, reporter);
+        let mut result = self.staged(job, path, &job_dir, &meta, &checked, cancel, reporter);
         drop(job_dir);
         if let Err(e) = self.staging.remove_entry(job) {
             result.problems.push(staging_problem("", &e));
@@ -684,69 +951,60 @@ impl Importer {
         result
     }
 
-    /// Steps 5 to 9 inside `job_dir`.
+    /// Steps 5 to 8 inside `job_dir`.
+    #[allow(clippy::too_many_arguments)]
     fn staged(
         &self,
         job: &str,
+        path: &Path,
         job_dir: &Dir,
-        once: &ReadOnce<'_>,
+        meta: &MetaSource,
         checked: &Checked,
         cancel: &AtomicBool,
         reporter: &mut Reporter<'_>,
     ) -> JobResult {
         let insp = &checked.inspection;
         let fail = |problems: Vec<Problem>| refused(job, problems, Some(insp.clone()));
-        let dirs = (|| {
-            Ok::<_, std::io::Error>((
-                job_dir.create_dir("tree", unpack::EXEC_MODE)?,
-                job_dir.create_dir("meta", 0o700)?,
-                job_dir.create_dir("art", unpack::EXEC_MODE)?,
-            ))
-        })();
-        let (tree, meta, art_dir) = match dirs {
-            Ok(d) => d,
-            Err(e) => return fail(vec![staging_problem("", &e)]),
-        };
-        self.hooks.step(
-            job,
-            &Step::StagingCreated {
-                dir: job_dir.path(),
-            },
-        );
-        // The root files, exactly the bytes that were verified.
-        for name in ["play.json", "play.files", "play.sig", "store.sig"] {
-            let Some(bytes) = once.root(name) else {
-                continue;
-            };
-            let written = meta
-                .create_file(name, unpack::FILE_MODE)
-                .and_then(|mut f| f.write_all(&bytes));
-            if let Err(e) = written {
-                return fail(vec![staging_problem(name, &e)]);
-            }
-        }
 
-        // 5. Unpack.
+        // 5. The helper unpacks, re-walks and vets the art.
+        let Some(mut request) = self.request(Mode::Install, job, path, job_dir.path()) else {
+            return fail(one(codes::HELPER_FAILED, "", "A path is not plain text."));
+        };
+        request.official = insp.tier.tier == Tier::Official;
+        request.expect = meta.digests();
+        let ending = self.run_helper(&request, cancel, &mut |p| reporter.helper(p));
+        let (problems, art_lines) = match ending {
+            Ending::Ok { problems, art, .. } => (problems, art),
+            Ending::Cancelled => return cancelled(job, Some(insp.clone())),
+            Ending::Refused(p) => return fail(p),
+            Ending::Missing => {
+                return fail(one(
+                    codes::SOURCE_MISSING,
+                    "",
+                    "The package is not there any more.",
+                ))
+            }
+            Ending::Failed(p) => return fail(vec![p]),
+        };
+
+        // 6. The service's own pass: nothing the helper wrote is trusted.
         let files = &insp.package.files;
-        let unpacked: Unpacked = {
-            let mut ctl = UnpackCtl {
-                job,
-                cancel,
-                hooks: &*self.hooks,
-                reporter,
+        let dirs = only_dirs(job_dir, &["tree", "art"]).and_then(|()| {
+            let open = |n: &str| {
+                job_dir.open_dir(n).map_err(|e| {
+                    if e.kind() == std::io::ErrorKind::NotFound {
+                        changed(n, "The helper did not stage it.")
+                    } else {
+                        staging_problem(n, &e)
+                    }
+                })
             };
-            match unpack::unpack(once, files, &tree, &mut ctl) {
-                Ok(u) => u,
-                Err(Stop::Cancelled) => return cancelled(job, Some(insp.clone())),
-                Err(Stop::Package(p)) | Err(Stop::Staging(p)) => return fail(vec![p]),
-            }
+            Ok((open("tree")?, open("art")?))
+        });
+        let (tree, art_dir) = match dirs {
+            Ok(d) => d,
+            Err(p) => return fail(vec![p]),
         };
-        self.hooks.step(job, &Step::Unpacked);
-        reporter.bytes_done = unpacked.bytes;
-        reporter.at(Phase::Staging, STAGED);
-
-        // 6. The staged tree against the table, then revocation with the runner hashes.
-        reporter.at(Phase::Verifying, STAGED);
         let found = match unpack::walk(&tree) {
             Ok(f) => f,
             Err(e) => return fail(vec![staging_problem("", &e)]),
@@ -754,7 +1012,12 @@ impl Importer {
         if let Err(p) = unpack::check_tree(files, &found) {
             return fail(vec![p]);
         }
-        let runners = unpack::runner_hashes(&insp.package.manifest, files, &unpacked);
+        let rehashed = match unpack::rehash(&tree, files) {
+            Ok(u) => u,
+            Err(p) => return fail(vec![p]),
+        };
+        reporter.bytes_done = rehashed.bytes;
+        let runners = unpack::runner_hashes(&insp.package.manifest, files, &rehashed);
         match &checked.selected {
             Ok(selected) => {
                 if let Some(revoked) = is_revoked(&selected.list, &insp.facts(), &runners) {
@@ -764,65 +1027,28 @@ impl Importer {
             // inspect refused this already; never install unchecked.
             Err(e) => return fail(vec![e.to_problem()]),
         }
-        reporter.at(Phase::Verifying, VERIFIED);
-        if cancel.load(Ordering::SeqCst) {
-            return cancelled(job, Some(insp.clone()));
-        }
-
-        // 7. Art, from the staged copy.
-        reporter.at(Phase::VettingArt, VERIFIED);
-        let inputs = art::inputs(&insp.package.manifest.art);
-        let (mut results, mut problems, mut vetted) = (Vec::new(), Vec::new(), Vec::new());
-        for (i, input) in inputs.iter().enumerate() {
-            if cancel.load(Ordering::SeqCst) {
-                return cancelled(job, Some(insp.clone()));
-            }
-            self.hooks.step(
-                job,
-                &Step::ArtSlot {
-                    slot: input.slot.key(),
-                },
-            );
-            let out_dir = match &input.subdir {
-                None => art_dir.path().to_path_buf(),
-                Some(sub) => match art_dir.create_dir(sub, unpack::EXEC_MODE) {
-                    Ok(d) => d.path().to_path_buf(),
-                    Err(e) => return fail(vec![staging_problem("", &e)]),
-                },
-            };
-            let staged = match unpack::staged_path(&tree, &input.package_path) {
-                Ok(p) => p,
-                Err(p) => return fail(vec![p]),
-            };
-            let Some(result) = self
-                .art
-                .vet(&[(input.slot, staged)], &out_dir)
-                .into_iter()
-                .next()
-            else {
+        let vetted = match check_art(&art_dir, &art_lines) {
+            Ok(v) => v,
+            Err(p) => return fail(vec![p]),
+        };
+        // The root files, exactly the bytes the service verified.
+        let meta_dir = match job_dir.create_dir("meta", 0o700) {
+            Ok(d) => d,
+            Err(e) => return fail(vec![staging_problem("meta", &e)]),
+        };
+        for name in ROOT_FILES {
+            let Some(bytes) = meta.root(name) else {
                 continue;
             };
-            if let ruya_play_art::Outcome::Ok { files } = &result.outcome {
-                vetted.push(VettedArt {
-                    slot: input.slot.key(),
-                    lang: input.lang.clone(),
-                    files: files.clone(),
-                });
+            let written = meta_dir
+                .create_file(name, unpack::FILE_MODE)
+                .and_then(|mut f| f.write_all(bytes));
+            if let Err(e) = written {
+                return fail(vec![staging_problem(name, &e)]);
             }
-            problems.extend(art::problem_of(input, &result));
-            results.push(result);
-            let n = u32::try_from(inputs.len()).unwrap_or(u32::MAX).max(1);
-            let i = u32::try_from(i + 1).unwrap_or(u32::MAX);
-            reporter.at(
-                Phase::VettingArt,
-                VERIFIED + (VETTED - VERIFIED).saturating_mul(i) / n,
-            );
-        }
-        if art::refuses(&results) {
-            return fail(problems);
         }
 
-        // 8 and 9. Past this point Cancel answers too-late.
+        // 7 and 8. Past this point Cancel answers too-late.
         {
             let mut st = self.shared.lock();
             if cancel.load(Ordering::SeqCst) {
@@ -844,7 +1070,7 @@ impl Importer {
             job,
             tree: tree.path(),
             art: art_dir.path(),
-            meta: meta.path(),
+            meta: meta_dir.path(),
             manifest: &insp.package.manifest,
             tier: insp.tier.tier,
             assessment: &insp.assessment,
@@ -880,7 +1106,7 @@ impl Importer {
         }
     }
 
-    /// Step 8, before the commit: `record_install` in the trust store, then the installed build.
+    /// Step 7, before the commit: `record_install` in the trust store, then the installed build.
     /// Returns what was there before, for [`Self::roll_back`]. When the second write fails, the
     /// first one is rolled back.
     fn record(&self, insp: &Inspection) -> Result<Prior, Vec<Problem>> {

@@ -27,6 +27,13 @@ pub const ROLLBACK_FAILED: &str = "rollback.failed";
 /// The service stopped while the job was queued or running.
 pub const JOB_INTERRUPTED: &str = "job.interrupted";
 
+/// The unprivileged helper broke its contract: a malformed, over-long or unexpected line, too many
+/// problems, no result, a non-zero exit, or it was stopped without a cancel (05 §7.3).
+pub const HELPER_FAILED: &str = "helper.failed";
+/// The package answered differently when the helper opened it again for the unpack than when it
+/// was inspected (a root file's SHA-256 changed).
+pub const SOURCE_CHANGED: &str = "source.changed";
+
 /// Every code, for the tests that keep the list, the tests and the spec in step.
 pub const ALL: &[&str] = &[
     BUILD_NOT_NEWER,
@@ -39,4 +46,6 @@ pub const ALL: &[&str] = &[
     COMMIT_FAILED,
     ROLLBACK_FAILED,
     JOB_INTERRUPTED,
+    HELPER_FAILED,
+    SOURCE_CHANGED,
 ];
