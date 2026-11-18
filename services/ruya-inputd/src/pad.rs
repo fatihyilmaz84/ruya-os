@@ -26,6 +26,14 @@ pub mod code {
     pub const BTN_MODE: u16 = 0x13c;
     pub const BTN_THUMBL: u16 = 0x13d;
     pub const BTN_THUMBR: u16 = 0x13e;
+    pub const BTN_1: u16 = 0x101;
+    pub const BTN_2: u16 = 0x102;
+    pub const KEY_LEFT: u16 = 105;
+    pub const KEY_RIGHT: u16 = 106;
+    pub const KEY_UP: u16 = 103;
+    pub const KEY_DOWN: u16 = 108;
+    pub const KEY_NEXT: u16 = 0x197;
+    pub const KEY_PREVIOUS: u16 = 0x19c;
     pub const BTN_DPAD_UP: u16 = 0x220;
     pub const BTN_DPAD_DOWN: u16 = 0x221;
     pub const BTN_DPAD_LEFT: u16 = 0x222;
@@ -124,7 +132,33 @@ pub struct PadLayout {
     /// xpad (the Xbox family) reports the west button as `BTN_X` and the north one as `BTN_Y`;
     /// hid-playstation, hid-nintendo and gamepad.rst the other way round.
     pub xbox_xy: bool,
+    /// The model's own key table (`model_keys`), tried before the generic one; empty for every
+    /// pad that has none.
+    pub keys: &'static [(u16, PadButton)],
     pub ranges: Vec<(u16, Range)>,
+}
+
+/// Model mappings (06-input.md §4.2): the keys of a pad whose driver does not report a gamepad's
+/// codes, by `identity::model` (the one table). The bare Wii Remote is held sideways (hid-wiimote's
+/// `wiimod_keys_map`): the D-pad is turned a quarter turn, 2 and 1 sit under the right thumb.
+pub fn model_keys(model: &str) -> &'static [(u16, PadButton)] {
+    use PadButton::*;
+    match model {
+        "wii_remote" => &[
+            (code::KEY_UP, DpadLeft),
+            (code::KEY_DOWN, DpadRight),
+            (code::KEY_LEFT, DpadDown),
+            (code::KEY_RIGHT, DpadUp),
+            (code::BTN_2, East),
+            (code::BTN_1, South),
+            (code::BTN_SOUTH, North),
+            (code::BTN_EAST, West),
+            (code::KEY_NEXT, Start),
+            (code::KEY_PREVIOUS, Select),
+            (code::BTN_MODE, Guide),
+        ],
+        _ => &[],
+    }
 }
 
 impl PadLayout {
@@ -175,6 +209,9 @@ impl Normalizer {
 
     fn key(&mut self, ev_code: u16, pressed: bool) -> Vec<PadInput> {
         use PadButton::*;
+        if let Some(&(_, b)) = self.layout.keys.iter().find(|(c, _)| *c == ev_code) {
+            return vec![PadInput::Button(b, pressed)];
+        }
         let (west, north) = if self.layout.xbox_xy {
             (code::BTN_X, code::BTN_Y)
         } else {
@@ -584,6 +621,7 @@ mod tests {
     fn dualsense() -> Normalizer {
         Normalizer::new(PadLayout {
             xbox_xy: false,
+            keys: &[],
             ranges: vec![
                 (code::ABS_X, Range { min: 0, max: 255 }),
                 (code::ABS_Y, Range { min: 0, max: 255 }),
@@ -692,6 +730,7 @@ mod tests {
         );
         let mut xbox = Normalizer::new(PadLayout {
             xbox_xy: true,
+            keys: &[],
             ranges: vec![],
         });
         assert_eq!(
@@ -702,6 +741,67 @@ mod tests {
             xbox.event(code::EV_KEY, code::BTN_Y, 0),
             vec![PadInput::Button(PadButton::North, false)]
         );
+    }
+
+    fn pad_of(model: &str) -> Normalizer {
+        Normalizer::new(PadLayout {
+            xbox_xy: false,
+            keys: model_keys(model),
+            ranges: vec![],
+        })
+    }
+
+    #[test]
+    fn a_wii_remote_held_sideways_maps_every_key() {
+        use PadButton::*;
+        let table = [
+            (code::KEY_UP, DpadLeft),
+            (code::KEY_DOWN, DpadRight),
+            (code::KEY_LEFT, DpadDown),
+            (code::KEY_RIGHT, DpadUp),
+            (code::BTN_2, East),
+            (code::BTN_1, South),
+            (code::BTN_SOUTH, North),
+            (code::BTN_EAST, West),
+            (code::KEY_NEXT, Start),
+            (code::KEY_PREVIOUS, Select),
+            (code::BTN_MODE, Guide),
+        ];
+        let mut n = pad_of("wii_remote");
+        for (key, button) in table {
+            assert_eq!(
+                n.event(code::EV_KEY, key, 1),
+                vec![PadInput::Button(button, true)],
+                "press {key:#x}"
+            );
+            assert_eq!(
+                n.event(code::EV_KEY, key, 0),
+                vec![PadInput::Button(button, false)],
+                "release {key:#x}"
+            );
+        }
+        assert!(n.event(code::EV_KEY, code::KEY_UP, 2).is_empty());
+    }
+
+    #[test]
+    fn other_models_keep_their_codes_and_drop_the_wii_keys() {
+        for model in ["wiiu_pro", "xbox360", "dualsense", ""] {
+            let mut n = pad_of(model);
+            assert!(n.event(code::EV_KEY, code::KEY_UP, 1).is_empty(), "{model}");
+            assert!(n.event(code::EV_KEY, code::BTN_2, 1).is_empty(), "{model}");
+            assert_eq!(
+                n.event(code::EV_KEY, code::BTN_SOUTH, 1),
+                vec![PadInput::Button(PadButton::South, true)]
+            );
+            assert_eq!(
+                n.event(code::EV_KEY, code::BTN_EAST, 1),
+                vec![PadInput::Button(PadButton::East, true)]
+            );
+            assert_eq!(
+                n.event(code::EV_KEY, code::BTN_DPAD_UP, 1),
+                vec![PadInput::Button(PadButton::DpadUp, true)]
+            );
+        }
     }
 
     #[test]

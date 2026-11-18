@@ -55,6 +55,20 @@ What we take from InputPlumber: an intercept mode for overlays (our route `overl
 ### 4.2 Normalised input
 Buttons: `south east west north l1 r1 l3 r3 start select guide dpad_up dpad_down dpad_left dpad_right` plus `paddle1..4`, `misc1` (share/capture) and `touchpad_click`. Axes: `left_x left_y right_x right_y` as i16 (-32768..32767, up negative) and `left_trigger right_trigger` as 0..32767. Motion: `gyro_{x,y,z}` in deg/s ×16, `accel_{x,y,z}` in mg; touchpad contacts as (id, x, y) in 0..65535 of the pad's surface; `touchpad` names the surface as a whole (for touchpad-as-mouse). Every event keeps its **raw source** (`<node kind>:<evtype>:<code>`) so a profile can map an input that has no normal name. Buttons are named by **position**, not label: Nintendo's A is `east` (the family's confirm button, ADR-027, is a mapping on top: T-398).
 
+**Model mappings (RUY-826).** A pad whose driver does not report a gamepad's codes gets its own key table, chosen by `identity::model` (`pad::model_keys`, the one table) and tried before the generic one; every other model has none and maps exactly as above. The bare **Wii Remote** (`wii_remote`, hid-wiimote) is held **sideways**: the D-pad under the left thumb, 1 and 2 under the right, the IR end pointing left. It feeds the shell's navigation keys and, in route `app`, the virtual pad, so a game sees a normal pad with a D-pad and four face buttons. The `nintendo` family confirms with east, so 2 confirms and 1 goes back.
+
+| Wii Remote | Pad button |
+|---|---|
+| D-pad up / down / left / right (`KEY_UP/DOWN/LEFT/RIGHT`) | `dpad_left` / `dpad_right` / `dpad_down` / `dpad_up` (a quarter turn) |
+| 2 (`BTN_2`) | `east` |
+| 1 (`BTN_1`) | `south` |
+| A (`BTN_A`) | `north` |
+| B (`BTN_B`, trigger) | `west` |
+| + (`KEY_NEXT`) / - (`KEY_PREVIOUS`) | `start` / `select` |
+| Home (`BTN_MODE`) | `guide` |
+
+The Nunchuk, the accelerometer and the IR camera are separate evdev nodes and are not mapped (the Nunchuk and an upright layout are planned; motion is RUY-46).
+
 ### 4.3 Capability descriptor *(built, RUY-39)*
 Per device, per capability (`buttons`, `sticks`, `analog_triggers`, `dpad`, `gyro`, `accelerometer`, `touchpad`, `rumble`, `trigger_rumble`, `adaptive_triggers`, `lightbar`, `player_leds`, `speaker`, `microphone`, `battery`), four booleans:
 - `hardware` — the model has it (device table);
