@@ -102,6 +102,19 @@
                          value ("network", "input:controllers+keyboard-mouse", "devel"); words = the
                          plain-language line in English (the shell may translate by key); risk =
                          "low" | "medium" | "high"
+    gate            s    what the tier's ceiling (05 §8) makes of the requests: "allowed" |
+                         "admin-pin" (official, high risk) | "admin-pin-warning" (developer, high
+                         risk: the PIN after a warning). Absent when the package did not pass the
+                         trust checks (a request above the ceiling is a problem, ceiling.refused).
+                         Install needs admin_approved for every package whatever the gate; the
+                         shell uses the gate to ask for the admin's PIN (RUY-102)
+    permissions_added   a(sss) for an update (the id is installed): the requests this build adds to
+                         the installed one's, as in permissions. Absent when the id is not
+                         installed or the installed app's requests cannot be read
+    permissions_removed a(sss) the requests the installed build makes and this one drops; absent
+                         as above
+    adds_high_risk  b    true when permissions_added has a high-risk request (05 §8: such an
+                         update needs the admin's PIN); absent as above
     art             a{ss} role ("icon", "hero", "card", "cover", "logo", ...) -> path of the VETTED
                          file in staging (05 §5); absent roles were not supplied
     screenshots     as   paths of vetted screenshots (thumbnails not listed)

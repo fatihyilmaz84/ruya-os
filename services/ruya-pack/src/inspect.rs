@@ -19,22 +19,10 @@ const SPEC: Spec = Spec {
     positionals: (1, 1),
 };
 
-/// The words the console shows for a permission request (05 section 8).
+/// The words the console shows for a permission request: the one table of 05 section 8
+/// (`ruya_play_trust::permissions`), the same words `ruya-play`'s Inspect returns.
 pub fn plain_words(key: &str, value: &str) -> String {
-    match (key, value) {
-        ("input", "controllers") => "Uses controllers",
-        ("input", "controllers+keyboard-mouse") => "Uses controllers and keyboard and mouse",
-        ("input", "all-devices") => "Accesses all devices",
-        ("network", _) => "Uses the network",
-        ("removable_media", "read") => "Reads files on USB drives",
-        ("removable_media", "write") => "Changes files on USB drives",
-        ("multiarch", _) => "Runs 32-bit programs",
-        ("gamemode" | "realtime", _) => "Asks the system to prioritise it",
-        ("devel", _) => "Can inspect other programs",
-        ("network+removable_media", _) => "Uses the network and reaches USB drives",
-        _ => "Asks for a permission this tool has no words for",
-    }
-    .to_string()
+    ruya_play_trust::words(key, value).to_string()
 }
 
 fn risk_name(r: Risk) -> &'static str {
@@ -120,7 +108,10 @@ pub fn run(args: &[String], _ctx: &Context) -> Result<Reply, Stop> {
         Some(id) => format!("  signer: key {id}; tier {} ({reason})\n", tier.as_str()),
         None => format!("  signer: none; tier {} ({reason})\n", tier.as_str()),
     });
-    text.push_str("  permissions:\n    Plays sound, uses graphics\n");
+    text.push_str(&format!(
+        "  permissions:\n    {}\n",
+        ruya_play_trust::permissions::ALWAYS_WORDS
+    ));
     let mut perms = Vec::new();
     for (key, words, risk) in permission_lines(&m.permissions, tier) {
         text.push_str(&format!("    {words} [{}]\n", risk_name(risk)));

@@ -17,6 +17,8 @@
 //! The service reconciles before it takes its bus name, so no install runs against unreconciled
 //! records.
 
+use ruya_play_format::limits::{INPUT_MODES, REMOVABLE_MEDIA};
+use ruya_play_format::manifest::Permissions;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::path::Path;
@@ -105,6 +107,60 @@ pub fn build_in(play_json: &[u8], id: &str) -> Option<u64> {
     v.get("build")?.as_u64()
 }
 
+/// A committed app's own `play.json` bytes (at most [`MAX_PLAY_JSON_BYTES`]), `None` when it
+/// cannot be read or is longer. The id is not checked here; see [`plain_id`].
+pub fn deployed_play_json(installation: &Path, id: &str) -> Option<Vec<u8>> {
+    if !plain_id(id) {
+        return None;
+    }
+    read_bounded(&deployment_files(installation, id).join("play.json"))
+}
+
+fn read_bounded(path: &Path) -> Option<Vec<u8>> {
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)
+        .and_then(|f| f.take(MAX_PLAY_JSON_BYTES + 1).read_to_end(&mut bytes))
+        .ok()?;
+    (bytes.len() as u64 <= MAX_PLAY_JSON_BYTES).then_some(bytes)
+}
+
+/// The `permissions` of a committed app's `play.json` bytes, when its `id` is `id` (case folded):
+/// the vocabulary's values with the defaults filled in, `reasons` left out. `None` for anything
+/// the format would not have accepted (a key or value outside the vocabulary, a wrong type): the
+/// commit was validated, so that means it cannot be trusted to say what it asked for.
+pub fn permissions_in(play_json: &[u8], id: &str) -> Option<Permissions> {
+    let v: serde_json::Value = serde_json::from_slice(play_json).ok()?;
+    if !v.get("id")?.as_str()?.eq_ignore_ascii_case(id) {
+        return None;
+    }
+    let mut out = Permissions::default();
+    let Some(p) = v.get("permissions") else {
+        return Some(out);
+    };
+    for (key, value) in p.as_object()? {
+        match key.as_str() {
+            "input" => {
+                let s = value.as_str()?;
+                INPUT_MODES.contains(&s).then_some(())?;
+                out.input = s.to_string();
+            }
+            "removable_media" => {
+                let s = value.as_str()?;
+                REMOVABLE_MEDIA.contains(&s).then_some(())?;
+                out.removable_media = s.to_string();
+            }
+            "network" => out.network = value.as_bool()?,
+            "multiarch" => out.multiarch = value.as_bool()?,
+            "gamemode" => out.gamemode = value.as_bool()?,
+            "realtime" => out.realtime = value.as_bool()?,
+            "devel" => out.devel = value.as_bool()?,
+            "reasons" => {}
+            _ => return None,
+        }
+    }
+    Some(out)
+}
+
 /// Where a committed app's `/app` folder is: `app/play.<id>/current/active/files` below the
 /// installation. The id is not checked here; see [`plain_id`].
 pub fn deployment_files(installation: &Path, id: &str) -> std::path::PathBuf {
@@ -143,16 +199,7 @@ pub fn deployed_apps(installation: &Path) -> std::io::Result<BTreeMap<String, De
             continue;
         }
         let files = entry.path().join("current").join("active").join("files");
-        let mut bytes = Vec::new();
-        let read = std::fs::File::open(files.join("play.json")).and_then(|f| {
-            f.take(MAX_PLAY_JSON_BYTES + 1)
-                .read_to_end(&mut bytes)
-                .map(|_| ())
-        });
-        let build = match read {
-            Ok(()) if bytes.len() as u64 <= MAX_PLAY_JSON_BYTES => build_in(&bytes, id),
-            _ => None,
-        };
+        let build = read_bounded(&files.join("play.json")).and_then(|b| build_in(&b, id));
         let signed = std::fs::symlink_metadata(files.join("play.sig")).is_ok();
         out.insert(id.to_ascii_lowercase(), Deployed { build, signed });
     }

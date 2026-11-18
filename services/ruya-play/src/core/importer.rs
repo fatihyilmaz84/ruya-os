@@ -44,8 +44,8 @@ use ruya_play_format::limits::ROOT_FILES;
 use ruya_play_format::Problem;
 use ruya_play_trust::revocation::Selected;
 use ruya_play_trust::{
-    inspect, is_revoked, record_install, select_blocklist, Context, Continuity, IdRecord,
-    Inspection, ListCheck, StoreKeys, Tier, TrustError, TrustStore,
+    assess, diff, inspect, is_revoked, record_install, select_blocklist, Context, Continuity,
+    IdRecord, Inspection, ListCheck, PermissionDiff, StoreKeys, Tier, TrustError, TrustStore,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::io::Write;
@@ -150,6 +150,10 @@ pub struct InspectReport {
     /// The vetted art (Play1's `art`), files under `inspect/inspect-<n>/art/`, when the package
     /// passed; empty otherwise.
     pub art: Vec<VettedArt>,
+    /// For a package whose id is installed: what it changes in the installed app's requests
+    /// (05 §8). `None` when the id is not installed or the installed app's own `play.json` cannot
+    /// be read.
+    pub update: Option<PermissionDiff>,
 }
 
 struct State {
@@ -949,18 +953,22 @@ impl Importer {
                         .ok()
                         .flatten()
                 });
+                let update = self.update_of(inspection.as_ref(), installed_build);
                 InspectReport {
                     verdict: status_of(&problems),
                     problems,
                     inspection,
                     installed_build,
                     art: Vec::new(),
+                    update,
                 }
             }
             Front::Checked(passed) => {
                 let p = *passed;
                 self.keep_preview(name);
+                let update = self.update_of(Some(&p.checked.inspection), p.checked.installed_build);
                 InspectReport {
+                    update,
                     verdict: if p.art_refuses {
                         status_of(&p.art_problems)
                     } else {
@@ -974,6 +982,24 @@ impl Importer {
             }
         };
         (MethodStatus::Ok, Some(report))
+    }
+
+    /// What the inspected package changes in the requests of the installed app of its id: the
+    /// installed app's own `play.json` (our verified commit, read from the deployment as the
+    /// reconcile reads it) assessed against the new one. `None` when nothing is installed or the
+    /// installed requests cannot be read.
+    fn update_of(
+        &self,
+        inspection: Option<&Inspection>,
+        installed_build: Option<u64>,
+    ) -> Option<PermissionDiff> {
+        let insp = inspection?;
+        installed_build?;
+        let id = &insp.package.manifest.id;
+        let bytes = reconcile::deployed_play_json(&self.cfg.flatpak, id)?;
+        let installed = reconcile::permissions_in(&bytes, id)?;
+        let old = assess(insp.tier.tier, &installed);
+        Some(diff(&old, &insp.assessment))
     }
 
     /// `Install(path, options)`: queue an install. `forbidden` without `admin_approved`, `invalid`

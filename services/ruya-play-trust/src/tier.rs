@@ -2,6 +2,7 @@
 //! gates to the admin flow; this module only says what each tier allows.
 
 use crate::error::TrustError;
+use crate::permissions::{permission, HighRiskPair, HIGH_RISK_PAIRS};
 use crate::signing::Signatures;
 use ruya_play_format::manifest::Permissions;
 
@@ -85,6 +86,19 @@ pub enum Gate {
     Refused,
 }
 
+impl Gate {
+    /// The stable name of Play1's Inspect record: `allowed`, `admin-pin`, `admin-pin-warning` or
+    /// `refused`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Gate::Allowed => "allowed",
+            Gate::AdminPin => "admin-pin",
+            Gate::AdminPinWithWarning => "admin-pin-warning",
+            Gate::Refused => "refused",
+        }
+    }
+}
+
 /// The ceiling of one tier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ceiling {
@@ -140,40 +154,6 @@ impl Ceiling {
     }
 }
 
-/// The risk of one permission value. Values not listed (`network: false`, `removable_media:
-/// none`, a `false` bool) ask for nothing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PermissionRisk {
-    /// The `permissions` key.
-    pub key: &'static str,
-    /// The value as the manifest writes it (`true` for bools).
-    pub value: &'static str,
-    /// Its risk.
-    pub risk: Risk,
-}
-
-const fn pr(key: &'static str, value: &'static str, risk: Risk) -> PermissionRisk {
-    PermissionRisk { key, value, risk }
-}
-
-/// The risk table of 05 §8, one row per value that asks for something.
-pub const PERMISSION_RISKS: [PermissionRisk; 10] = [
-    pr("input", "controllers", Risk::Low),
-    pr("input", "controllers+keyboard-mouse", Risk::Low),
-    pr("input", "all-devices", Risk::High),
-    pr("network", "true", Risk::Medium),
-    pr("removable_media", "read", Risk::Medium),
-    pr("removable_media", "write", Risk::Medium),
-    pr("multiarch", "true", Risk::Medium),
-    pr("gamemode", "true", Risk::Low),
-    pr("realtime", "true", Risk::Low),
-    pr("devel", "true", Risk::High),
-];
-
-/// Pairs that count as high risk together though each alone is medium (05 §18 item 13): a way out
-/// for the player's files. Named `<a>+<b>` in an [`Assessment`].
-pub const HIGH_RISK_PAIRS: [(&str, &str); 1] = [("network", "removable_media")];
-
 /// One request and its risk.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Request {
@@ -217,16 +197,14 @@ fn asked(p: &Permissions) -> Vec<(&'static str, String)> {
     out
 }
 
-/// Assess `perms` under the ceiling of `tier`. A value missing from the table counts as high risk
+/// Assess `perms` under the ceiling of `tier`, with the risks of the one permission table
+/// ([`crate::permissions::PERMISSIONS`]). A value missing from the table counts as high risk
 /// (a new vocabulary value must be classed before it can be installed).
 pub fn assess(tier: Tier, perms: &Permissions) -> Assessment {
     let mut requests: Vec<Request> = asked(perms)
         .into_iter()
         .map(|(key, value)| {
-            let risk = PERMISSION_RISKS
-                .iter()
-                .find(|r| r.key == key && r.value == value)
-                .map_or(Risk::High, |r| r.risk);
+            let risk = permission(key, &value).map_or(Risk::High, |r| r.risk);
             Request {
                 key: key.to_string(),
                 value,
@@ -234,7 +212,7 @@ pub fn assess(tier: Tier, perms: &Permissions) -> Assessment {
             }
         })
         .collect();
-    for (a, b) in HIGH_RISK_PAIRS {
+    for HighRiskPair { a, b, .. } in HIGH_RISK_PAIRS {
         let has = |k: &str| requests.iter().any(|r| r.key == k);
         if has(a) && has(b) {
             requests.push(Request {

@@ -71,6 +71,11 @@ struct PlayInfo
     QString signerName;
     QString keyState;                           // "new" | "same" | "different"; empty = unsigned
     QList<PlayPermission> permissions;
+    QString gate;                               // "allowed" | "admin-pin" | "admin-pin-warning"; empty = absent
+    bool updateKnown = false;                   // the id is installed and its requests could be read
+    QList<PlayPermission> permissionsAdded;     // what this build adds (updateKnown only)
+    QList<PlayPermission> permissionsRemoved;   // what it drops (updateKnown only)
+    bool addsHighRisk = false;                  // permissionsAdded has a high-risk request
     QVariantMap art;                            // role -> vetted path
     QStringList screenshots;
     bool revoked = false;
@@ -80,12 +85,16 @@ struct PlayInfo
     // The record as QML sees it (camelCase keys).
     QVariantMap toVariant() const
     {
-        QVariantList perms;
-        for (const PlayPermission &p : permissions) {
-            perms.append(QVariantMap{{QStringLiteral("key"), p.key},
-                                     {QStringLiteral("words"), p.words},
-                                     {QStringLiteral("risk"), p.risk}});
-        }
+        const auto list = [](const QList<PlayPermission> &from) {
+            QVariantList out;
+            for (const PlayPermission &p : from) {
+                out.append(QVariantMap{{QStringLiteral("key"), p.key},
+                                       {QStringLiteral("words"), p.words},
+                                       {QStringLiteral("risk"), p.risk}});
+            }
+            return out;
+        };
+        const QVariantList perms = list(permissions);
         QVariantList probs;
         for (const PlayProblem &p : problems) {
             probs.append(QVariantMap{{QStringLiteral("code"), p.code},
@@ -112,6 +121,11 @@ struct PlayInfo
             {QStringLiteral("signerName"), signerName},
             {QStringLiteral("keyState"), keyState},
             {QStringLiteral("permissions"), perms},
+            {QStringLiteral("gate"), gate},
+            {QStringLiteral("updateKnown"), updateKnown},
+            {QStringLiteral("permissionsAdded"), list(permissionsAdded)},
+            {QStringLiteral("permissionsRemoved"), list(permissionsRemoved)},
+            {QStringLiteral("addsHighRisk"), addsHighRisk},
             {QStringLiteral("art"), art},
             {QStringLiteral("screenshots"), screenshots},
             {QStringLiteral("revoked"), revoked},

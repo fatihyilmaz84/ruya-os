@@ -376,6 +376,7 @@ fn the_inspect_record_has_the_contracts_keys() {
         "signer_key_id",
         "key_state",
         "permissions",
+        "gate",
         "art",
         "screenshots",
         "revoked",

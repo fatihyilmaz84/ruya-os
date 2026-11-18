@@ -4,8 +4,8 @@
 //! In the job's staging folder the commit lays out a Flatpak build directory `app/` (the package
 //! tree is renamed to `app/files`, the verified root files are copied next to it, the vetted art
 //! goes to `app/files/share/ruyaos/play/art/`, every extension point's mount folder and the app's
-//! own `share/applications/play.<id>.desktop` are created, and `app/metadata` is generated from the
-//! manifest), makes root the owner of everything with the modes of `play.files` (files 0644 or
+//! own `share/applications/play.<id>.desktop` and the trust record `share/ruyaos/play/trust.json`
+//! are written, and `app/metadata` is generated from the manifest and its assessment), makes root the owner of everything with the modes of `play.files` (files 0644 or
 //! 0755, folders 0755), then runs:
 //!
 //! 1. `flatpak build-finish` (exports the desktop entry),
@@ -22,6 +22,7 @@ use crate::core::deps::{Commit, CommitError, CommitRequest};
 use crate::core::status::Phase;
 use ruya_play_format::limits::ROOT_FILES;
 use ruya_play_format::manifest::Manifest;
+use ruya_play_trust::{grants, metadata_sections, Assessment, Gate, TrustRecord};
 use std::path::{Path, PathBuf};
 
 /// The system remote the importer installs from.
@@ -44,6 +45,9 @@ pub const EXTENSION_DIRS: &[&str] = &["launcher"];
 pub const RESERVED_TOP_LEVEL: &[&str] = &["launcher", "share"];
 /// The vetted art inside `/app`.
 pub const ART_IN_APP: &str = "share/ruyaos/play/art";
+/// The trust record inside `/app` (`ruya_play_trust::TrustRecord`, 05 §7.1): written by the commit
+/// from the verified signatures, never taken from the package (`share/` is reserved).
+pub const TRUST_RECORD_IN_APP: &str = "share/ruyaos/play/trust.json";
 
 /// The Flatpak id of a package id.
 pub fn app_id(id: &str) -> String {
@@ -72,31 +76,22 @@ fn english(map: &std::collections::BTreeMap<String, String>) -> String {
         .unwrap_or_default()
 }
 
-/// Windows programs run on X11 (05 §6.3); everything else on Wayland.
-fn display_socket(manifest: &Manifest) -> &'static str {
-    match manifest.run.runner.as_str() {
-        "wine" | "proton" => "x11",
-        _ => "wayland",
-    }
-}
-
-/// The generated Flatpak metadata. Permissions are the conservative default until RUY-102 maps
-/// the manifest's requests (05 §8): IPC, the display socket the runner needs, sound and the GPU;
-/// no network, no other device, no file system, no bus name, whatever the manifest asks.
-pub fn metadata(manifest: &Manifest) -> String {
+/// The generated Flatpak metadata, built from the manifest and its assessment (05 §8, RUY-851):
+/// what every app gets (IPC, the display socket its runner needs, sound, the GPU) and exactly the
+/// lines of `ruya_play_trust::permissions::PERMISSIONS` for each request the assessment holds.
+/// Nothing else: no key or value comes from the package (its `env`, `reasons` or field names
+/// never reach this file), a request without a row grants nothing, and the launcher extension is
+/// the importer's own.
+pub fn metadata(manifest: &Manifest, assessment: &Assessment) -> String {
     let app = app_id(&manifest.id);
-    let socket = display_socket(manifest);
+    let permissions = metadata_sections(&grants(&manifest.run.runner, assessment));
     format!(
         "[Application]\n\
          name={app}\n\
          runtime={RUNTIME}/{ARCH}/{RUNTIME_BRANCH}\n\
          command={LAUNCH_COMMAND}\n\
          \n\
-         [Context]\n\
-         shared=ipc;\n\
-         sockets={socket};pulseaudio;\n\
-         devices=dri;\n\
-         \n\
+         {permissions}\
          [Extension {LAUNCHER_EXTENSION}]\n\
          directory=launcher\n\
          version=1\n\
@@ -455,6 +450,12 @@ fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 /// return it.
 pub fn lay_out(request: &CommitRequest<'_>) -> Result<PathBuf, CommitError> {
     let manifest = request.manifest;
+    // The ceiling refused this before the records; a refused request is never laid out.
+    if request.assessment.gate == Gate::Refused {
+        return Err(CommitError::Failed(
+            "the assessment refuses a request; nothing is granted".into(),
+        ));
+    }
     let job_dir = request
         .tree
         .parent()
@@ -484,6 +485,9 @@ pub fn lay_out(request: &CommitRequest<'_>) -> Result<PathBuf, CommitError> {
     std::fs::create_dir_all(&art_parent).map_err(|e| io_fail("the art folder", &e))?;
     std::fs::rename(request.art, files.join(ART_IN_APP))
         .map_err(|e| io_fail("moving the art", &e))?;
+    let record = TrustRecord::of(request.tier, request.signatures, manifest);
+    std::fs::write(files.join(TRUST_RECORD_IN_APP), record.to_json())
+        .map_err(|e| io_fail("the trust record", &e))?;
     for dir in EXTENSION_DIRS {
         std::fs::create_dir(files.join(dir)).map_err(|e| io_fail(dir, &e))?;
     }
@@ -492,7 +496,7 @@ pub fn lay_out(request: &CommitRequest<'_>) -> Result<PathBuf, CommitError> {
     let desktop = apps.join(format!("{}.desktop", app_id(&manifest.id)));
     std::fs::write(&desktop, desktop_entry(manifest))
         .map_err(|e| io_fail("the desktop entry", &e))?;
-    std::fs::write(app.join("metadata"), metadata(manifest))
+    std::fs::write(app.join("metadata"), metadata(manifest, request.assessment))
         .map_err(|e| io_fail("the metadata", &e))?;
     Ok(app)
 }
