@@ -20,6 +20,7 @@ public:
     bool isMock() const override { return false; }
     void setRoute(const QString &route, const QString &instance, const QString &appId,
                   const QString &profile) override;
+    void preparePads(quint64 token, const QString &appId, const QString &profile) override;
     void refreshDevices() override;
     void getCapabilities(const QString &deviceId) override;
     void startTest(const QString &deviceId, bool holdLeftStick) override;

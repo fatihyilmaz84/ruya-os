@@ -5,7 +5,7 @@
 
   DRAFT (T-366 / RUY-2, lead 2026-11-12), partly built. ruya-inputd serves the Devices members
   ListDevices, DeviceAdded, DeviceChanged, DeviceRemoved and the Routing members SetRoute, Route,
-  RouteChanged since RUY-3 (T-367), UserActive since RUY-588, GetCapabilities and the button test (StartTest, StopTest,
+  RouteChanged since RUY-3 (T-367), PreparePads since RUY-837, UserActive since RUY-588, GetCapabilities and the button test (StartTest, StopTest,
   TestInput, TestEnded) since RUY-39 (T-368), and the controller profile members (ListProfiles,
   GetProfile, SaveProfile, ValidateProfile, DeleteProfile, AssignProfile for the global scope,
   GetEffectiveProfile, ProfilesChanged) since RUY-42 (T-369), ForgetConsoleProfile and
@@ -208,7 +208,8 @@
                      and always for "locked"
          Status: "ok", "invalid" (unknown route, a malformed or missing instance or app_id, a
          profile for "locked"), "unknown-profile" (not a profile account: root, system users and
-         ruya-shell never are). Virtual pads exist only for "app", and stay for "overlay" with the
+         ruya-shell never are). Virtual pads exist only for "app" (and before it, for PreparePads
+         below, RUY-837), and stay for "overlay" with the
          same instance and profile, frozen or not, and for the "app" that follows it: the same
          devices (event nodes), held in neutral (one neutral frame when the overlay starts, then
          nothing is written until the route is "app" again, so a frozen app finds no backlog at
@@ -238,6 +239,37 @@
       <arg name="route" type="s"/>
       <arg name="instance" type="s"/>
     </signal>
+
+    <!-- The pads before the game (RUY-837, 06 §5.1). A game that opens its pad once at start-up
+         (SDL with no hot-plug: Neverball) must find the pad, and its ACL, there before it starts;
+         the route "app" comes only with the game's window. So the shell calls this before
+         Session1.Launch and starts the game once it answers, or after at most 1 s without an
+         answer (a launch never hangs on Ruya Input). The service makes the virtual pads of every
+         seated pad for `profile` at once, as "app" does (pad1 first, the others' ACLs after
+         pad1's, RUY-541), and answers only when each of them is ready: its node exists and its
+         ACL is set (the "virtual pad ... ready" journal line), or its 2 s udev fallback has run.
+         The route does not change (no RouteChanged): pad input still navigates the shell, the
+         prepared pads stay neutral, and they stay through "shell" and "overlay" (any instance) of
+         the same profile. The next SetRoute "app" or "overlay" with this app_id and profile (any
+         instance: the shell does not know it yet) binds them: they are that instance's pads from
+         then on, nothing is made again. "locked", a profile change, "app" for another app, a
+         PreparePads for another app or 60 s without that SetRoute destroy them (journal: "prepared
+         pads for <app id> were not used in 60 s"). Making them ends the pads of the game the
+         service had (one owner at a time: a game held behind Home loses its pads, as it would
+         when the new game comes to the front).
+           app_id   the Flatpak id about to start (the form rule of SetRoute)
+           profile  the active console profile, the route's (the Trust rule of SetRoute)
+         Status, checked in this order: "invalid" (a malformed app_id), "unknown-profile" (not a
+         profile account), "not-allowed" (the route is "locked" or "app", or profile is not the
+         route's; also when the preparation ended before its pads were ready: replaced or
+         destroyed), "failed" (a pad's ACL could not be set, also by its fallback), "ok" (every pad
+         is ready; also with no seated pad, or when SetRoute bound them first). The same app_id
+         and profile again while prepared: the same pads, and the 60 s start again. -->
+    <method name="PreparePads">
+      <arg name="app_id" type="s" direction="in"/>
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
 
     <!-- Someone is playing (RUY-588). While the route is "app" the pads' input goes to the game's
          virtual pads and the shell sees none of it, so its idle clock would run on during play.

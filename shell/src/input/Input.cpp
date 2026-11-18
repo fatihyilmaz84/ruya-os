@@ -40,6 +40,7 @@ Input::Input(std::unique_ptr<InputBackend> backend, QObject *parent)
         emit statusChanged();
     });
     connect(m_backend.get(), &InputBackend::serviceOwnedChanged, this, &Input::serviceOwnedChanged);
+    connect(m_backend.get(), &InputBackend::preparePadsFinished, this, &Input::endPrepare);
     // A restarted service is in "shell" with no profile (06 §8): tell it again who is in front, and
     // ask for its devices.
     connect(m_backend.get(), &InputBackend::serviceAppeared, this, [this] {
@@ -770,6 +771,59 @@ void Input::setRoute(const QString &route, const QString &instance, const QStrin
         }
     }
     send();
+}
+
+void Input::preparePads(const QString &appId, const QString &profile)
+{
+    const quint64 token = ++m_nextPrepare;
+    auto *timer = new QTimer(this);
+    timer->setSingleShot(true);
+    timer->setInterval(prepareWaitMs);
+    connect(timer, &QTimer::timeout, this, [this, token] {
+        const auto it = m_prepares.constFind(token);
+        if (it == m_prepares.constEnd())
+            return;
+        qWarning("ruya-shell: Input1 PreparePads %s did not answer in %d ms; the app starts anyway",
+                 qPrintable(it->appId), prepareWaitMs);
+        endPrepare(token, QStringLiteral("timeout"));
+    });
+    m_prepares.insert(token, Prepare{appId, profile, timer});
+    timer->start();
+    m_backend->preparePads(token, appId, profile);
+}
+
+void Input::endPrepare(quint64 token, const QString &status)
+{
+    const auto it = m_prepares.find(token);
+    if (it == m_prepares.end())
+        return;                                 // already ended: a late answer is dropped
+    const Prepare p = it.value();
+    m_prepares.erase(it);
+    p.timer->stop();
+    p.timer->deleteLater();
+    if (status != QLatin1String("ok") && status != QLatin1String("timeout"))
+        qWarning("ruya-shell: Input1 PreparePads %s answered %s; the app starts anyway", qPrintable(p.appId),
+                 qPrintable(status));
+    emit padsPrepared(p.appId, p.profile, status);
+}
+
+void Input::mockPrepareDelayMs(int ms)
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        mock->setPrepareDelayMs(ms);
+}
+
+QVariantList Input::mockPrepareCalls() const
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        return mock->prepareCalls();
+    return {};
+}
+
+QString Input::mockPreparedAppId() const
+{
+    auto *mock = qobject_cast<MockInputBackend *>(m_backend.get());
+    return mock ? mock->preparedAppId() : QString();
 }
 
 void Input::send()

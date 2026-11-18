@@ -24,6 +24,12 @@
 //!   another instance or another profile destroys them (lock, switch, run end, an overlay that
 //!   names no app): a descriptor the app opened reads `ENODEV`, so nothing reaches it afterwards
 //!   (an ACL change would not close it).
+//! - `PreparePads` (RUY-837) makes them before the game starts, with no route change, for a game
+//!   that opens its pad once at start-up: they wait, neutral, through `shell` and `overlay` of the
+//!   profile, and the first `app` or `overlay` with that app id and profile binds them to its
+//!   instance. `locked`, a profile change, `app` for another app, another preparation or
+//!   `PREPARE_TTL` without that route destroy them. Its answer (`PadsPrepared`) waits until each
+//!   pad is ready (ACL set) or its udev fallback ran.
 //! - `overlay` over the pads' instance holds them in neutral (once); no input reaches them.
 //! - Entering `app` for a new owner, every seated pad's virtual pad is made at once (RUY-681), pad1
 //!   (the profile's active controller) first; the others' first ACL waits until pad1's ACL is set
@@ -68,6 +74,11 @@ pub const UDEV_FALLBACK: Duration = Duration::from_secs(2);
 
 /// How long a seat waits for its pad when the pad disconnects (RUY-627, ADR-017 point 9).
 pub const SEAT_HOLD: Duration = Duration::from_secs(60);
+
+/// How long pads made by `PreparePads` wait for the game's route (RUY-837): longer than a slow
+/// start (the shell's splash says "still starting" after 20 s), short enough that a launch that
+/// failed leaves nothing for long.
+pub const PREPARE_TTL: Duration = Duration::from_secs(60);
 
 /// `RUYA_SEAT_HOLD_SECS` (the VM checks only): a whole number of seconds, at least 1, else `None`.
 pub fn seat_hold_from_env(value: Option<&str>) -> Option<Duration> {
@@ -227,6 +238,14 @@ pub enum Notice {
         device_id: String,
         kind: &'static str,
     },
+    /// The preparation of `PreparePads` for `app_id` and `profile` is over (RUY-837): its pads
+    /// are ready (`Ok`), one could not get its ACL (`Failed`), or it ended before (`NotAllowed`).
+    /// The bus answers the waiting `PreparePads` calls with it; it is no signal.
+    PadsPrepared {
+        app_id: String,
+        profile: String,
+        status: Status,
+    },
     /// A journal line (without the "ruya-inputd: " prefix).
     Journal(String),
 }
@@ -327,6 +346,16 @@ struct Virtual {
     /// The physical pad has no left stick: its D-pad also moves the virtual left stick
     /// (RUY-832), so a game that steers with the stick can be played with it.
     mirror_dpad: bool,
+}
+
+/// Pads made before the game starts (`PreparePads`, RUY-837): the owner's instance is "" until
+/// the first `SetRoute` "app" or "overlay" with this app id and the owner's profile binds them.
+#[derive(Debug)]
+struct Prepared {
+    app_id: String,
+    until: Instant,
+    /// `PadsPrepared` was announced for this preparation.
+    answered: bool,
 }
 
 /// What a held seat keeps of its gone pad (RUY-627): the virtual pad the app still has (`None`
@@ -511,6 +540,8 @@ pub struct Router<B: Backend> {
     /// The bus name that set the route.
     caller: Option<String>,
     owner: Option<Owner>,
+    /// The owner's pads were made by `PreparePads` and no route has bound them yet (RUY-837).
+    prepared: Option<Prepared>,
     pads: BTreeMap<PadKey, Pad>,
     board: KeyBoard,
     next_key: PadKey,
@@ -567,6 +598,7 @@ impl<B: Backend> Router<B> {
             profile: String::new(),
             caller: None,
             owner: None,
+            prepared: None,
             pads: BTreeMap::new(),
             board: KeyBoard::default(),
             next_key: 1,
@@ -1032,6 +1064,16 @@ impl<B: Backend> Router<B> {
         for (_, v) in std::mem::take(&mut self.idle) {
             self.drop_virtual(0, v);
         }
+        // A preparation still waited on ends unready (RUY-837).
+        if let (Some(p), Some(o)) = (self.prepared.take(), self.owner.as_ref()) {
+            if !p.answered {
+                self.notices.push(Notice::PadsPrepared {
+                    app_id: p.app_id,
+                    profile: o.profile.clone(),
+                    status: Status::NotAllowed,
+                });
+            }
+        }
         self.owner = None;
     }
 
@@ -1049,9 +1091,10 @@ impl<B: Backend> Router<B> {
 
     /// Makes the virtual pad of every seated pad that has none, at once, by seat: player 1's pad
     /// (the profile's active controller) first, so it is pad1 (RUY-540, RUY-121, RUY-681). Only
-    /// under `app` with an owner; the ACLs of the others wait for pad1 (`assert_acl`).
+    /// under `app` with an owner, or for a preparation (`PreparePads`, RUY-837); the ACLs of the
+    /// others wait for pad1 (`assert_acl`).
     fn make_missing(&mut self, now: Instant) {
-        if self.route != Route::App || self.owner.is_none() {
+        if (self.route != Route::App && self.prepared.is_none()) || self.owner.is_none() {
             return;
         }
         let missing: Vec<PadKey> = self
@@ -1469,6 +1512,7 @@ impl<B: Backend> Router<B> {
             let why = format!("udev {}", ev.action);
             self.assert_acl(key, &ev.devname, &why);
             self.release_acls();
+            self.answer_prepared();
         }
     }
 
@@ -1478,6 +1522,7 @@ impl<B: Backend> Router<B> {
     pub fn tick(&mut self, now: Instant) {
         self.tick_tests(now);
         self.expire_holds(now);
+        self.expire_prepared(now);
         let mut due: Vec<(u32, PadKey, String)> = self
             .pads
             .iter_mut()
@@ -1500,6 +1545,98 @@ impl<B: Backend> Router<B> {
             }
         }
         self.release_acls();
+        self.answer_prepared();
+    }
+
+    // ---- pads before the game (RUY-837) -----------------------------------------------------
+
+    /// `Input1.PreparePads(app_id, profile)`: makes the virtual pads of every seated pad for
+    /// `profile` now, before the game starts, with no route change. `PadsPrepared` follows once
+    /// they are ready (at once when there are none). The next `SetRoute` "app" or "overlay" with
+    /// this app id and profile binds them (`apply`).
+    pub fn prepare_pads(&mut self, app_id: &str, profile: &str, now: Instant) -> Status {
+        if !valid_app_id(app_id) {
+            return Status::Invalid;
+        }
+        if !valid_profile_id(profile) {
+            return Status::UnknownProfile;
+        }
+        let Some(uid) = self.accounts.profile_uid(profile) else {
+            return Status::UnknownProfile;
+        };
+        if matches!(self.route, Route::Locked | Route::App) || self.profile != profile {
+            return Status::NotAllowed;
+        }
+        let again = self.prepared.as_ref().is_some_and(|p| p.app_id == app_id)
+            && self.owner.as_ref().is_some_and(|o| o.profile == profile);
+        if again {
+            if let Some(p) = self.prepared.as_mut() {
+                p.until = now + PREPARE_TTL;
+                p.answered = false;
+            }
+        } else {
+            self.destroy_all();
+            self.owner = Some(Owner {
+                instance: String::new(),
+                profile: profile.to_owned(),
+                uid,
+            });
+            self.prepared = Some(Prepared {
+                app_id: app_id.to_owned(),
+                until: now + PREPARE_TTL,
+                answered: false,
+            });
+            self.journal(format!("pads prepared for {app_id} (ruya-{profile})"));
+            self.make_missing(now);
+        }
+        self.answer_prepared();
+        Status::Ok
+    }
+
+    /// Announces the end of a preparation once each of its pads is ready or its udev fallback ran.
+    fn answer_prepared(&mut self) {
+        if self.prepared.as_ref().map_or(true, |p| p.answered) {
+            return;
+        }
+        let virts: Vec<&Virtual> = self.pads.values().filter_map(|p| p.virt.as_ref()).collect();
+        if !virts.iter().all(|v| v.ready || v.fallback_tried) {
+            return;
+        }
+        let status = if virts.iter().all(|v| v.ready) {
+            Status::Ok
+        } else {
+            Status::Failed
+        };
+        let Some(profile) = self.owner.as_ref().map(|o| o.profile.clone()) else {
+            return;
+        };
+        let Some(p) = self.prepared.as_mut() else {
+            return;
+        };
+        p.answered = true;
+        let app_id = p.app_id.clone();
+        self.notices.push(Notice::PadsPrepared {
+            app_id,
+            profile,
+            status,
+        });
+    }
+
+    /// A preparation no route took within `PREPARE_TTL`: its pads go.
+    fn expire_prepared(&mut self, now: Instant) {
+        let Some(p) = self.prepared.as_ref() else {
+            return;
+        };
+        if now < p.until {
+            return;
+        }
+        let line = format!(
+            "prepared pads for {} were not used in {} s",
+            p.app_id,
+            PREPARE_TTL.as_secs()
+        );
+        self.journal(line);
+        self.destroy_all();
     }
 
     // ---- routing ----------------------------------------------------------------------------
@@ -1587,6 +1724,33 @@ impl<B: Backend> Router<B> {
             let keys = self.board.release_except(NavKey::Guide);
             self.backend.nav_keys(&keys);
         }
+        // The game's first route takes the pads prepared for it (RUY-837), whatever its instance:
+        // the shell did not know it at PreparePads.
+        let adopt = matches!(r, Route::App | Route::Overlay)
+            && !instance.is_empty()
+            && self.prepared.as_ref().is_some_and(|p| p.app_id == app_id)
+            && self.owner.as_ref().is_some_and(|o| o.profile == profile);
+        if adopt {
+            if let Some(p) = self.prepared.take() {
+                if !p.answered {
+                    self.notices.push(Notice::PadsPrepared {
+                        app_id: p.app_id,
+                        profile: profile.to_owned(),
+                        status: Status::Ok,
+                    });
+                }
+            }
+            if let Some(o) = self.owner.as_mut() {
+                o.instance = instance.to_owned();
+            }
+            self.journal(format!(
+                "prepared pads for {app_id} bound to instance '{instance}'"
+            ));
+        }
+        // A preparation waits through "shell" and "overlay" of its profile.
+        let keep_prepared = self.prepared.is_some()
+            && matches!(r, Route::Shell | Route::Overlay)
+            && self.owner.as_ref().is_some_and(|o| o.profile == profile);
         let same_owner = self.owner.as_ref().is_some_and(|o| {
             !instance.is_empty() && o.instance == instance && o.profile == profile
         });
@@ -1628,6 +1792,7 @@ impl<B: Backend> Router<B> {
                 // index 0 (RUY-540); the others' ACLs follow once pad1 can be opened (RUY-541).
             }
             Route::Overlay if same_owner => self.neutral_all(),
+            Route::Overlay | Route::Shell if keep_prepared => {}
             Route::Overlay | Route::Shell | Route::Locked => self.destroy_all(),
         }
         // A test goes on in `shell` and `overlay` (RUY-611: a game frozen or closing behind Home
@@ -6889,5 +7054,186 @@ mod tests {
         assert_eq!(r.leave_player(2, t0()), Status::Ok);
         assert_eq!(destroyed(&r.backend_mut().take()), vec![vb]);
         assert!(r.idle.is_empty());
+    }
+
+    // ---- PreparePads (RUY-837) ----------------------------------------------------------------
+
+    /// The `PadsPrepared` notices since the last call (the rest is dropped).
+    fn prepared(r: &mut Router<Fake>) -> Vec<(String, String, Status)> {
+        r.take_notices()
+            .into_iter()
+            .filter_map(|n| match n {
+                Notice::PadsPrepared {
+                    app_id,
+                    profile,
+                    status,
+                } => Some((app_id, profile, status)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn done(app_id: &str, status: Status) -> Vec<(String, String, Status)> {
+        vec![(app_id.to_owned(), "p1".to_owned(), status)]
+    }
+
+    #[test]
+    fn prepared_pads_are_ready_before_the_game_and_its_first_route_keeps_them() {
+        // Neverball opens its pad once at start-up (the Dell, 0.0.90): the pads and their ACLs
+        // must be there before the game runs, while the shell is still in front.
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        sign_in(&mut r, a, "p1");
+        join(&mut r, b, "p2");
+        r.backend_mut().take();
+        r.take_notices();
+        assert_eq!(r.prepare_pads(STK, "p1", t0()), Status::Ok);
+        assert_eq!(
+            order(&r.backend_mut().take()),
+            vec![
+                format!("create {a} ruya-input/pad1"),
+                format!("create {b} ruya-input/pad2"),
+            ]
+        );
+        // No route change, and no answer before the ACLs are set.
+        assert_eq!(r.route(), Route::Shell);
+        let notices = r.take_notices();
+        assert!(
+            !notices
+                .iter()
+                .any(|n| matches!(n, Notice::RouteChanged { .. } | Notice::PadsPrepared { .. })),
+            "{notices:?}"
+        );
+        r.udev_event(&udev_node("add", "input101", "/dev/input/event21"));
+        assert!(prepared(&mut r).is_empty(), "pad2 is not ready yet");
+        r.udev_event(&udev_node("add", "input102", "/dev/input/event22"));
+        assert_eq!(
+            order(&r.backend_mut().take()),
+            vec!["acl /dev/input/event21", "acl /dev/input/event22"]
+        );
+        assert_eq!(prepared(&mut r), done(STK, Status::Ok));
+        assert!(acl::is_only_user(
+            &r.backend().acls["/dev/input/event21"],
+            P1_UID
+        ));
+        // Pad input still navigates the shell, and reaches no virtual pad.
+        r.input(a, &[press(PadButton::South)]);
+        r.input(a, &[release(PadButton::South)]);
+        let calls = r.backend_mut().take();
+        assert!(!nav(&calls).is_empty(), "{calls:?}");
+        assert!(
+            !calls.iter().any(|c| matches!(c, Call::Write(..))),
+            "{calls:?}"
+        );
+        // The shell, an overlay over another game, then the game's own window: the same devices.
+        let (va, vb) = (virtual_id(&r, a), virtual_id(&r, b));
+        assert_eq!(r.set_route("shell", "", "", "p1", SHELL, t0()), Status::Ok);
+        assert_eq!(
+            r.set_route("overlay", "old", RACER, "p1", SHELL, t0()),
+            Status::Ok
+        );
+        assert_eq!(
+            r.set_route("overlay", "", "", "p1", SHELL, t0()),
+            Status::Ok
+        );
+        app(&mut r, "i1", STK, "p1");
+        let calls = r.backend_mut().take();
+        assert!(
+            created(&calls).is_empty() && destroyed(&calls).is_empty(),
+            "{calls:?}"
+        );
+        assert_eq!((virtual_id(&r, a), virtual_id(&r, b)), (va, vb));
+        assert!(journal(&mut r)
+            .iter()
+            .any(|l| l == &format!("prepared pads for {STK} bound to instance 'i1'")));
+        assert_eq!(south_code(&mut r, a).0, va.expect("pad1"));
+        // Bound: they are the instance's pads now, gone with it as before.
+        assert_eq!(r.set_route("shell", "", "", "p1", SHELL, t0()), Status::Ok);
+        assert_eq!(destroyed(&r.backend_mut().take()).len(), 2);
+    }
+
+    #[test]
+    fn preparing_pads_is_refused_outside_the_shell_and_answers_at_once_with_no_pad() {
+        let mut r = router();
+        // Nobody signed in: the route's profile is "".
+        assert_eq!(r.prepare_pads(STK, "p1", t0()), Status::NotAllowed);
+        assert_eq!(r.prepare_pads("neverball", "p1", t0()), Status::Invalid);
+        assert_eq!(r.prepare_pads(STK, "root", t0()), Status::UnknownProfile);
+        assert_eq!(r.prepare_pads(STK, "Bad!", t0()), Status::UnknownProfile);
+        // A keyboard sign-in: no seated pad, nothing to wait for.
+        assert_eq!(r.set_route("shell", "", "", "p1", SHELL, t0()), Status::Ok);
+        r.take_notices();
+        assert_eq!(
+            r.prepare_pads(STK, "p2", t0()),
+            Status::NotAllowed,
+            "not the route's"
+        );
+        assert_eq!(r.prepare_pads(STK, "p1", t0()), Status::Ok);
+        assert_eq!(prepared(&mut r), done(STK, Status::Ok));
+        // Again: answered again, nothing made.
+        assert_eq!(r.prepare_pads(STK, "p1", t0()), Status::Ok);
+        assert_eq!(prepared(&mut r), done(STK, Status::Ok));
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(
+            r.prepare_pads(RACER, "p1", t0()),
+            Status::NotAllowed,
+            "a game is in front"
+        );
+        assert_eq!(r.set_route("locked", "", "", "", SHELL, t0()), Status::Ok);
+        assert_eq!(r.prepare_pads(STK, "p1", t0()), Status::NotAllowed);
+    }
+
+    #[test]
+    fn a_preparation_ends_with_a_lock_another_game_or_its_time() {
+        let start = t0();
+        let mut r = router();
+        let a = r.add_pad(pad("a"), start);
+        sign_in(&mut r, a, "p1");
+        // A lock before the ACL: the waiting call learns it, the pad goes.
+        assert_eq!(r.prepare_pads(STK, "p1", start), Status::Ok);
+        assert_eq!(r.set_route("locked", "", "", "", SHELL, start), Status::Ok);
+        assert_eq!(prepared(&mut r), done(STK, Status::NotAllowed));
+        assert_eq!(destroyed(&r.backend_mut().take()).len(), 1);
+        // Another game prepared: the first one's answer, then new pads for the second.
+        sign_in(&mut r, a, "p1");
+        assert_eq!(r.prepare_pads(STK, "p1", start), Status::Ok);
+        assert_eq!(r.prepare_pads(RACER, "p1", start), Status::Ok);
+        assert_eq!(prepared(&mut r), done(STK, Status::NotAllowed));
+        let calls = r.backend_mut().take();
+        assert_eq!((created(&calls).len(), destroyed(&calls).len()), (2, 1));
+        // Another app comes to the front: its own pads, the prepared ones go.
+        app(&mut r, "i9", STK, "p1");
+        assert_eq!(prepared(&mut r), done(RACER, Status::NotAllowed));
+        let calls = r.backend_mut().take();
+        assert_eq!((created(&calls).len(), destroyed(&calls).len()), (1, 1));
+        // No route takes them: they go after PREPARE_TTL.
+        assert_eq!(r.set_route("shell", "", "", "p1", SHELL, start), Status::Ok);
+        r.backend_mut().take();
+        assert_eq!(r.prepare_pads(STK, "p1", start), Status::Ok);
+        r.udev_event(&udev_node("add", "input105", "/dev/input/event25"));
+        assert_eq!(prepared(&mut r), done(STK, Status::Ok));
+        r.tick(start + PREPARE_TTL - Duration::from_secs(1));
+        assert!(destroyed(&r.backend_mut().take()).is_empty());
+        r.tick(start + PREPARE_TTL);
+        assert_eq!(destroyed(&r.backend_mut().take()).len(), 1);
+        assert!(journal(&mut r)
+            .iter()
+            .any(|l| l == &format!("prepared pads for {STK} were not used in 60 s")));
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(
+            created(&r.backend_mut().take()).len(),
+            1,
+            "made again for the game"
+        );
+        // An ACL that cannot be set: answered "failed" once the udev fallback ran.
+        assert_eq!(r.set_route("shell", "", "", "p1", SHELL, start), Status::Ok);
+        r.backend_mut().acl_fails = true;
+        r.take_notices();
+        assert_eq!(r.prepare_pads(STK, "p1", start), Status::Ok);
+        r.tick(start + UDEV_FALLBACK - Duration::from_millis(1));
+        assert!(prepared(&mut r).is_empty());
+        r.tick(start + UDEV_FALLBACK);
+        assert_eq!(prepared(&mut r), done(STK, Status::Failed));
     }
 }

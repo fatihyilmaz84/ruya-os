@@ -858,6 +858,8 @@ Item {
             start()
             const racer = racerFrozenBehindHome()
             tc.shell.launchApp("crashy", "Crashy", "")
+            // Session1 starts it once Input has answered PreparePads (RUY-837); its window comes after that.
+            tryVerify(() => tc.shell.launchState && tc.shell.launchState.started, 2000, "the launch has started")
             const app = createTemporaryObject(appComponent, host, { appId: "crashy" })
             tc.shell.addApp(app, "p2")                       // its window comes, and the game dies
             tryVerify(() => toastTexts().includes("crashy stopped unexpectedly"), 3000)

@@ -8,7 +8,12 @@
 # 500 ms and the worst at most 1000 ms: the first run after heavy checks is slow (644 ms once; a lone re-run
 # gave 190-426 ms), and the 1000 ms ceiling still catches a real regression. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|forget|shell|close|fallback|confirm|hold|twopads|guide|owner|nodes|start|useractive|signals|players|seathold|coop|join]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|forget|shell|close|fallback|confirm|hold|twopads|startpad|guide|owner|nodes|start|useractive|signals|players|seathold|coop|join]
+# `startpad` (RUY-837) with the shell stopped like `twopads`: a uinput pad signs the profile in; the profile user opens no
+# /dev/input node; PreparePads answers ok within 1 s with the route still `shell`; right after the answer the profile user's
+# one look at /dev/input (a game that scans once at its start, as Neverball does) opens exactly ruya-input/pad1; the route
+# `app` keeps that node, and the descriptor the "game" opened before it hears the pad's BTN_EAST. The journal must show
+# the prepared pad's "ready" line before "bound to instance" (pads ready before the game's route).
 # `profiles` ends with the RUY-468 step (`forget` runs it alone): see forget_check. Like `join`, it makes a profile as the
 # admin $me with PIN 1234.
 # `join` (RUY-628) with the shell running: busctl plays the calls of "Who's playing?" with a PIN, in the shell's order,
@@ -955,6 +960,25 @@ confirm)
     two_profiles
     [ -n "$me" ] && ok "profile $me" || { bad "need a profile"; exit 1; }
     confirm_check
+    ;;
+startpad)
+    two_profiles
+    [ -n "$me" ] && ok "profile $me" || { bad "need a profile"; exit 1; }
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
+    dir="$(mktemp -d "${CHECK_TMP:-/var/tmp}/ruya-input-check.XXXXXX")"
+    chmod 0755 "$dir"
+    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    since="$(date '+%Y-%m-%d %H:%M:%S')"
+    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe startpad --user "ruya-$me"
+    # The prepared pad is ready (its ACL set) before the game's route binds it.
+    order="$(journalctl -u ruya-inputd --since "$since" --no-pager -o cat \
+        | grep -E 'pads prepared for org\.ruyaos\.VmCheck|virtual pad ruya-input/pad1 ready|prepared pads for org\.ruyaos\.VmCheck bound' \
+        | awk '/pads prepared for/ {s = 1} s && /pad1 ready/ && !b {r = 1} /bound to instance/ {b = 1} END {print s + 0, r + 0, b + 0}')"
+    case "$order" in
+        "1 1 1") ok "journal: pads prepared, pad1 ready, then bound to the game's instance" ;;
+        *) bad "journal: prepared, ready before bound, bound: $order" ;;
+    esac
+    rm -rf "$dir"
     ;;
 twopads)
     two_profiles

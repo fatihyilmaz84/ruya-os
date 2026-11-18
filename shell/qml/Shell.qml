@@ -793,13 +793,15 @@ FocusScope {
     // ---- Launching, running and leaving apps (the call: T-386; the flow: T-147) ----
     // Play on a game (Home hero, a Recent card, the Games grid): the Library says what to start and
     // `launchApp` runs the launch: the splash comes up and takes the input (Guide still works),
-    // Session1.Launch starts the app as the signed-in profile, and the splash goes when the app's
-    // first window arrives (`addApp`). A failure answers with an error toast and the focus back
+    // Input1.PreparePads makes the player's pads (RUY-837), then Session1.Launch starts the app as
+    // the signed-in profile (at most 1 s later without Input's answer), and the splash goes when
+    // the app's first window arrives (`addApp`). A failure answers with an error toast and the focus back
     // where Play was; after `launchStillMs` (20 s) without a window the splash says "Still starting"
     // and offers Close. One launch at a time: a second Accept while one is pending is ignored. An item
     // with no Session1 path (a Steam game: `Library.sessionAppId` is "") is never offered Play, so
     // nothing asks for it. The pending launch is { appId, title, picture, profile, ok, instance,
-    // slow, restore }; its toasts name `title`, the request's own, never the raw launch spec.
+    // slow, restore, started (Session.launch was called, after the pads: RUY-837) }; its toasts
+    // name `title`, the request's own, never the raw launch spec.
     property var launchState: null
     property int launchStillMs: 20000
     readonly property bool launching: launchState !== null
@@ -831,11 +833,25 @@ FocusScope {
             return
         }
         launchState = { appId: appId, title: title, picture: picture ?? "", profile: Profiles.activeProfile,
-                        ok: false, instance: "", slow: false, restore: Window.activeFocusItem }
+                        ok: false, instance: "", slow: false, restore: Window.activeFocusItem, started: false }
         launchStillTimer.restart()
-        Session.launch(appId, Profiles.activeProfile)
+        // The player's pads first (RUY-837): a game that opens its pad once at start-up must find it,
+        // and its ACL, before it runs. Input answers when they are ready, or after at most 1 s; then
+        // the game starts (padsPrepared below), whatever the answer.
+        Input.preparePads(appId, Profiles.activeProfile)
         if (!systemPanel.open)
             focusCurrent()
+    }
+
+    Connections {
+        target: Input
+        function onPadsPrepared(appId, profile, status) {
+            const st = root.launchState
+            if (!st || st.started || st.appId !== appId || st.profile !== profile)
+                return                      // the splash ended meanwhile, or another launch's answer
+            root.launchState = Object.assign({}, st, { started: true })
+            Session.launch(appId, profile)
+        }
     }
 
     // Ends the splash. `restoreFocus`: it failed, so the focus goes back to where Play was.

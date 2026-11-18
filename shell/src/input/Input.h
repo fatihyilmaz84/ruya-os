@@ -115,6 +115,12 @@ public:
     // Sends the route unless it is the one already asked for and that call did not fail.
     Q_INVOKABLE void setRoute(const QString &route, const QString &instance, const QString &appId,
                               const QString &profile);
+    // Input1.PreparePads (RUY-837): the profile's virtual pads before the game starts, so a game that
+    // opens its pad once at start-up finds it. padsPrepared(appId, profile, status) follows exactly
+    // once: the service's answer, or "timeout" after prepareWaitMs (1 s) without one (logged), so a
+    // launch never waits longer on Ruya Input. A late answer is dropped.
+    Q_INVOKABLE void preparePads(const QString &appId, const QString &profile);
+    static constexpr int prepareWaitMs = 1000;
 
     QVariantList devices() const { return m_devices; }
     QString devicesState() const { return m_devicesState; }
@@ -230,6 +236,11 @@ public:
     // Every SetRoute that reached the mock service: [{ route, instance, appId, profile }].
     Q_INVOKABLE QVariantList mockCalls() const;
     Q_INVOKABLE void mockClearCalls();
+    // PreparePads (RUY-837): the mock answers after `ms` (0 by default; -1: never); every call as
+    // { appId, profile, route }; the app id whose prepared pads wait for a route ("" for none).
+    Q_INVOKABLE void mockPrepareDelayMs(int ms);
+    Q_INVOKABLE QVariantList mockPrepareCalls() const;
+    Q_INVOKABLE QString mockPreparedAppId() const;
     // What the mock service holds now, and whether it has virtual pads (and how often it made them).
     Q_INVOKABLE QString mockServiceRoute() const;
     Q_INVOKABLE QString mockServiceInstance() const;
@@ -281,6 +292,8 @@ public:
 signals:
     void routeChanged();
     void statusChanged();
+    // PreparePads ended: a status of the XML, "failed" (no service) or "timeout" (RUY-837).
+    void padsPrepared(const QString &appId, const QString &profile, const QString &status);
     void serviceOwnedChanged();
     void devicesChanged();
     void devicesStateChanged();
@@ -368,6 +381,16 @@ private:
     };
 
     std::unique_ptr<InputBackend> m_backend;
+    // PreparePads calls not ended yet (RUY-837), by token: app id, profile, the bound's timer.
+    struct Prepare
+    {
+        QString appId;
+        QString profile;
+        QTimer *timer = nullptr;
+    };
+    QHash<quint64, Prepare> m_prepares;
+    quint64 m_nextPrepare = 0;
+    void endPrepare(quint64 token, const QString &status);
     QString m_route;
     QString m_instance;
     QString m_appId;

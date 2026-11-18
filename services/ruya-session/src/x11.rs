@@ -14,7 +14,7 @@
 //!      given in the instance directory, the kernel-checked sender being the satellite itself, and
 //!      the display's socket exists) the socket is made 0700; a display taken meanwhile by another launch is retried with the next
 //!      number, a few times at most;
-//!   4. it runs `flatpak run <app id>` with `DISPLAY`, `XAUTHORITY`, `SDL_VIDEODRIVER=x11` and
+//!   4. it runs `flatpak run --device=input <app id>` with `DISPLAY`, `XAUTHORITY`, `SDL_VIDEODRIVER=x11` and
 //!      `XDG_SESSION_TYPE=x11`, and without `WAYLAND_DISPLAY` (`app_env_x11`);
 //!   5. when the app ends it stops the satellite, waits for Xwayland and removes the directory and
 //!      a stale X socket and lock (`cleanup`). The unit's `ExecStopPost` (`x11-cleanup`) does the
@@ -254,9 +254,15 @@ pub fn subcommand(args: &[String]) -> Subcommand {
     }
 }
 
-/// The app's argument list: `flatpak run <id>` and the image's launch arguments for it.
+/// The app's argument list: `flatpak run --device=input <id>` (as in Wayland mode, RUY-837) and
+/// the image's launch arguments for it.
 pub fn app_argv(app_id: &str, app_args: &[String]) -> Vec<String> {
-    let mut argv = vec!["flatpak".to_owned(), "run".to_owned(), app_id.to_owned()];
+    let mut argv = vec![
+        "flatpak".to_owned(),
+        "run".to_owned(),
+        crate::spawner::DEVICE_INPUT.to_owned(),
+        app_id.to_owned(),
+    ];
     argv.extend(app_args.iter().cloned());
     argv
 }
@@ -924,7 +930,10 @@ mod tests {
                 ("WAYLAND_DISPLAY".to_owned(), None),
             ]
         );
-        assert_eq!(app_argv(APP, &[]), ["flatpak", "run", APP]);
+        assert_eq!(
+            app_argv(APP, &[]),
+            ["flatpak", "run", "--device=input", APP]
+        );
         let argv = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         assert_eq!(
             subcommand(&argv(&["rs", "x11-run", APP, "-gamepadui"])),
@@ -952,7 +961,7 @@ mod tests {
         assert_eq!(subcommand(&argv(&["rs", "--session"])), Subcommand::Service);
         assert_eq!(
             app_argv(APP, &["-gamepadui".to_owned()]),
-            ["flatpak", "run", APP, "-gamepadui"]
+            ["flatpak", "run", "--device=input", APP, "-gamepadui"]
         );
         assert_eq!(socket_path(3), Path::new("/tmp/.X11-unix/X3"));
         assert_eq!(lock_path(3), Path::new("/tmp/.X3-lock"));
@@ -1207,7 +1216,10 @@ mod tests {
                 file_in(&dir(), "Xauthority").display()
             )]
         );
-        assert_eq!(os.events("run"), [format!("run flatpak run {APP}")]);
+        assert_eq!(
+            os.events("run"),
+            [format!("run flatpak run --device=input {APP}")]
+        );
         assert!(os.log.contains(&format!("log {APP} runs on display :1")));
         assert_eq!(os.app_env, app_env_x11(1, &file_in(&dir(), "Xauthority")));
         // The socket was made 0700 before the app started.

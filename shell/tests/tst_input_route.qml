@@ -32,6 +32,21 @@ Item {
     }
 
     SignalSpy { id: launchedSpy; target: Session; signalName: "launchFinished" }
+    SignalSpy { id: preparedSpy; target: Input; signalName: "padsPrepared" }
+
+    // What held when Session1 answered the launch (RUY-837): how many PreparePads had ended, whether
+    // the mock service had the pads, and when (ms since the epoch).
+    property int preparedAtLaunch: -1
+    property bool padsAtLaunch: false
+    property real launchedAt: 0
+    Connections {
+        target: Session
+        function onLaunchFinished() {
+            host.preparedAtLaunch = preparedSpy.count
+            host.padsAtLaunch = Input.mockPads()
+            host.launchedAt = Date.now()
+        }
+    }
     SignalSpy { id: testSpy; target: Input; signalName: "testStartFinished" }
 
     TestCase {
@@ -50,12 +65,17 @@ Item {
             Library.resetMockForTests("")
             Session.mockReset()
             Input.mockFail(false)
+            Input.mockPrepareDelayMs(0)
             launchedSpy.clear()
+            preparedSpy.clear()
+            host.preparedAtLaunch = -1
+            host.padsAtLaunch = false
         }
 
         function cleanup() {
             DeviceSettings.pauseGamesInHub = true
             Input.mockFail(false)
+            Input.mockPrepareDelayMs(0)
             Session.mockFailThaw(false)
         }
 
@@ -249,6 +269,62 @@ Item {
             checkCalls()
             verify(Input.mockCalls().every(c => c.route !== "app" || c.profile === "p2"),
                    "only Ada's game was ever routed")
+        }
+
+        // RUY-837: Play asks Input for the player's pads first and starts the game only once they are
+        // ready, so a game that opens its pad once at start-up (Neverball) finds it; the game's window
+        // then takes those pads, none are made again. Ada signs in and presses Play with Input
+        // answering after `delay` ms (-1: never); returns the time Play was pressed.
+        function pressPlayWithInputAnsweringAfter(delay) {
+            start()
+            signIn(1, "p2")
+            tryVerify(() => find("homePlay").activeFocus, 2000, "Home after sign-in")
+            expectRoute("shell", "", "", "p2", "Home")
+            tryVerify(() => Library.items.length === 10)
+            Input.mockPrepareDelayMs(delay)
+            const pressed = Date.now()
+            keyClick(Qt.Key_Return)
+            tryCompare(launchedSpy, "count", 1, 3000, "the game is launched")
+            const calls = Input.mockPrepareCalls()
+            compare(calls.length, 1, "one PreparePads")
+            compare(calls[0].appId, launchedSpy.signalArguments[0][0], "for the game launched")
+            compare(calls[0].profile, "p2")
+            compare(calls[0].route, "shell", "asked while the shell is in front")
+            verify(host.padsAtLaunch, "the pads existed when the game was launched")
+            return pressed
+        }
+
+        function test_play_starts_the_game_once_its_pads_are_ready() {
+            pressPlayWithInputAnsweringAfter(300)
+            compare(host.preparedAtLaunch, 1, "Input had answered before the launch")
+            compare(preparedSpy.signalArguments[0][2], "ok")
+            const generation = Input.mockPadGeneration()
+            compare(Input.mockServiceRoute(), "shell", "preparing changes no route")
+            const instance = launchedSpy.signalArguments[0][3]
+            tryVerify(() => recordOf(instance) !== undefined && recordOf(instance).state === "running")
+            const app = createTemporaryObject(appComponent, host)
+            tc.shell.addApp(app, "p2")
+            tryVerify(() => app.activeFocus, 2000, "the app takes the focus")
+            expectRoute("app", instance, "org.example.Racer", "p2", "the game in front")
+            compare(Input.mockPadGeneration(), generation, "the window takes the prepared pads")
+            compare(Input.mockPreparedAppId(), "", "no preparation waits any more")
+        }
+
+        function test_play_starts_the_game_after_1_s_when_input_does_not_answer() {
+            ignoreWarning(/PreparePads org\.example\.Racer did not answer in 1000 ms; the app starts anyway/)
+            const pressed = pressPlayWithInputAnsweringAfter(-1)
+            compare(host.preparedAtLaunch, 1, "the bound ended the wait")
+            compare(preparedSpy.signalArguments[0][2], "timeout")
+            verify(host.launchedAt - pressed >= 950, "waited about 1 s: " + (host.launchedAt - pressed))
+        }
+
+        function test_a_late_answer_starts_nothing_twice() {
+            ignoreWarning(/PreparePads org\.example\.Racer did not answer in 1000 ms/)
+            pressPlayWithInputAnsweringAfter(1500)
+            compare(preparedSpy.signalArguments[0][2], "timeout", "launched at the bound")
+            wait(800)                                   // the answer at 1.5 s comes and goes
+            compare(preparedSpy.count, 1, "the late answer is dropped")
+            compare(launchedSpy.count, 1, "and launches nothing")
         }
 
         // With the Hub's pause off the game is not frozen: the overlay keeps its pads (held in neutral)

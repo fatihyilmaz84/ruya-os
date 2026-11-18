@@ -350,13 +350,24 @@ void MockInputBackend::setRoute(const QString &route, const QString &instance, c
         status = QStringLiteral("invalid");
 
     if (status == QLatin1String("ok")) {
-        const bool sameOwner = m_pads && !instance.isEmpty() && instance == m_instance && profile == m_profile;
+        // The pads PreparePads made: the game's first "app" or "overlay" takes them, whatever its
+        // instance; "shell" and "overlay" of the profile keep them waiting (RUY-837).
+        const bool prepared = m_pads && !m_preparedAppId.isEmpty() && profile == m_profile;
+        const bool adopt = prepared && !instance.isEmpty() && appId == m_preparedAppId
+                           && (route == QLatin1String("app") || route == QLatin1String("overlay"));
+        const bool keepPrepared = prepared && !adopt
+                                  && (route == QLatin1String("shell") || route == QLatin1String("overlay"));
+        const bool sameOwner = adopt
+                               || (m_preparedAppId.isEmpty() && m_pads && !instance.isEmpty() && instance == m_instance
+                                   && profile == m_profile);
+        if (!keepPrepared)
+            m_preparedAppId.clear();
         if (route == QLatin1String("app")) {
             if (!sameOwner) {
                 m_pads = true;
                 ++m_padGeneration;
             }
-        } else if (!(route == QLatin1String("overlay") && sameOwner)) {
+        } else if (!(route == QLatin1String("overlay") && sameOwner) && !keepPrepared) {
             m_pads = false;
         }
         const bool profileChanged = profile != m_profile;
@@ -385,6 +396,33 @@ void MockInputBackend::setRoute(const QString &route, const QString &instance, c
         }
     }
     QTimer::singleShot(0, this, [this, request, status] { deliverRoute(request, status); });
+}
+
+void MockInputBackend::preparePads(quint64 token, const QString &appId, const QString &profile)
+{
+    m_prepareCalls.append(QVariantMap{
+        {QStringLiteral("appId"), appId},
+        {QStringLiteral("profile"), profile},
+        {QStringLiteral("route"), m_route},
+    });
+    QString status = QStringLiteral("ok");
+    if (m_fail)
+        status = QStringLiteral("failed");
+    else if (!validAppId(appId))
+        status = QStringLiteral("invalid");
+    else if (profile.isEmpty())
+        status = QStringLiteral("unknown-profile");
+    else if (m_route == QLatin1String("locked") || m_route == QLatin1String("app") || profile != m_profile)
+        status = QStringLiteral("not-allowed");
+    if (status == QLatin1String("ok") && m_preparedAppId != appId) {
+        m_preparedAppId = appId;
+        m_pads = true;
+        ++m_padGeneration;
+    }
+    if (m_prepareDelayMs < 0 && status == QLatin1String("ok"))
+        return;                                 // a service that never answers
+    QTimer::singleShot(status == QLatin1String("ok") ? m_prepareDelayMs : 0, this,
+                       [this, token, status] { emit preparePadsFinished(token, status); });
 }
 
 void MockInputBackend::readConfirmButton()
@@ -440,6 +478,7 @@ void MockInputBackend::restart()
     m_profile.clear();
     m_activeDevice.clear();   // a restarted service has seen no press yet
     m_pads = false;
+    m_preparedAppId.clear();
     // Nor does it know the seats; a process that is gone sends no PlayersChanged.
     m_seats.clear();
     m_padSinceChange.clear();
