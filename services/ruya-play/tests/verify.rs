@@ -47,6 +47,7 @@ fn deploy(h: &Harness, id: &str, fx: &Fx) -> PathBuf {
     }
     std::fs::write(files.join("play.files"), fx.table()).unwrap();
     std::fs::write(files.join("play.json"), fx.manifest_bytes()).unwrap();
+    std::fs::write(files.join(".ref"), b"").unwrap();
     std::fs::create_dir_all(files.join("launcher")).unwrap();
     std::fs::create_dir_all(files.join("share/applications")).unwrap();
     std::fs::write(
@@ -315,4 +316,51 @@ fn verify_never_writes_to_the_deployment() {
     assert_eq!(verify(&mut h, ID).status, JobStatus::InvalidPackage);
     assert_eq!(snapshot(&files), damaged);
     assert_eq!(h.staging(), Vec::<String>::new());
+}
+
+#[test]
+fn flatpaks_empty_top_level_ref_is_left_out_but_others_are_compared() {
+    let (mut h, fx) = harness();
+    let files = deploy(&h, ID, &fx);
+    assert!(files.join(".ref").is_file());
+    assert_eq!(verify(&mut h, ID).status, JobStatus::Ok);
+
+    // Not empty: an entry play.files does not list.
+    std::fs::write(files.join(".ref"), b"x").unwrap();
+    let r = verify(&mut h, ID);
+    assert_eq!(r.status, JobStatus::InvalidPackage);
+    assert_eq!(r.problems[0].path, ".ref");
+
+    // Nested: also compared.
+    std::fs::write(files.join(".ref"), b"").unwrap();
+    std::fs::write(files.join("payload/.ref"), b"").unwrap();
+    let r = verify(&mut h, ID);
+    assert_eq!(r.status, JobStatus::InvalidPackage);
+    assert_eq!(r.problems[0].path, "payload/.ref");
+}
+
+#[test]
+fn a_running_install_of_the_same_app_makes_verify_busy() {
+    let mut setup = Setup::with(Pkg::signed(&game()));
+    setup.installed = MemoryInstalled::new().with(ID, 0);
+    let h = setup.build();
+    deploy(&h, ID, &game());
+    let (status, _) = h.importer.queue_install(&pkg_path("game.play"), true);
+    assert_eq!(status, MethodStatus::Ok);
+    // The first progress past the start is the staging of the files: the job's app is known.
+    let mut answer = None;
+    let mut extra_job = None;
+    h.importer
+        .run_next(&mut |e| {
+            if matches!(e, Event::Progress { percent, .. } if percent > 0) && answer.is_none() {
+                let a = h.importer.queue_verify(ID);
+                if a.0 == MethodStatus::Ok {
+                    extra_job = Some(a.1.clone());
+                }
+                answer = Some(a);
+            }
+        })
+        .expect("ran");
+    assert_eq!(answer, Some((MethodStatus::Busy, String::new())));
+    assert_eq!(extra_job, None);
 }

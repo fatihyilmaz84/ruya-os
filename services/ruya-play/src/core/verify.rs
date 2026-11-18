@@ -9,7 +9,7 @@
 //! Nothing here writes. The tree is read without following links (a link is compared as a link).
 
 use crate::core::codes;
-use crate::core::staging::{Dir, Found};
+use crate::core::staging::{Dir, Found, Kind};
 use crate::core::unpack::{self, staging_problem, Stop};
 use crate::service::commit::RESERVED_TOP_LEVEL;
 use ruya_play_format::limits::{MAX_TABLE_BYTES, ROOT_FILES};
@@ -44,9 +44,16 @@ pub struct Tick {
     pub bytes_total: u64,
 }
 
-fn console_written(path: &str) -> bool {
+/// Flatpak's deploy writes an empty regular `.ref` at the top of `files/` (`flatpak run` locks
+/// it); it is the only entry of Flatpak's own that is left out. A non-empty or nested one is
+/// compared like any other entry.
+fn flatpak_ref(path: &str, f: &Found) -> bool {
+    path == ".ref" && f.kind == Kind::File && f.size == 0
+}
+
+fn console_written(path: &str, f: &Found) -> bool {
     let top = path.split('/').next().unwrap_or("");
-    RESERVED_TOP_LEVEL.contains(&top) || (ROOT_FILES.contains(&path))
+    RESERVED_TOP_LEVEL.contains(&top) || ROOT_FILES.contains(&path) || flatpak_ref(path, f)
 }
 
 fn read_table(files: &Dir) -> Result<Vec<FileEntry>, Problem> {
@@ -86,7 +93,10 @@ pub fn verify_files(files: &Dir, tick: &mut dyn FnMut(Tick) -> bool) -> Verdict 
         Err(p) => return Verdict::Differs(vec![p]),
     };
     let found: BTreeMap<String, Found> = match unpack::walk(files) {
-        Ok(f) => f.into_iter().filter(|(p, _)| !console_written(p)).collect(),
+        Ok(f) => f
+            .into_iter()
+            .filter(|(p, f)| !console_written(p, f))
+            .collect(),
         Err(e) => return Verdict::Differs(vec![staging_problem("", &e)]),
     };
     if let Err(p) = unpack::check_tree(&table, &found) {
