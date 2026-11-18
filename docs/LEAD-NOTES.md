@@ -2,60 +2,46 @@
 
 The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand off at 50-60 % context; no no-op turns; autonomous after an hour without the owner (`scripts\lead-clock.ps1`); builders run nothing in WSL**). **Rewrite this file at the end of every lead session**; keep it under about 6 KB. Paper Plane is the source of truth (http://192.168.178.164:8687, project `RUY`). **Goals are formations** (`formation` lists them). This file is the lead's session record.
 
-## State after lead-33 (Opus, 2026-11-18)
+## State after lead-34 (Opus, 2026-11-18)
 
-- **Review range:** acb7d04c..HEAD. **Paper Plane `changes` cursor:** 4921.
-- **Merged (6 tickets + 1 lead commit), every merge gate green:**
-  - RUY-826: a bare Wii Remote held sideways maps in inputd (`pad::model_keys`).
-  - RUY-832: on a stickless pad the D-pad also moves the virtual left stick. The owner checked both on the Dell (menus, SuperTuxKart).
-  - RUY-828: `.play` package reading runs in an unprivileged `systemd-run` helper.
-  - RUY-829: `ruya-play` is a service: Play1 on the bus, Flatpak commit, image files, `vm-play-check.sh`. Verify was split out as RUY-834.
-  - RUY-839: the helper starts without `--pipe` (see the VM finding below).
-  - RUY-837: every app gets `--device=input`. New `Input1.PreparePads`: the profile's pads exist before the game starts. Neverball and Project Starfighter open their pad only at start.
-  - f33f8a75: test runs mute the UI cues and trailer audio (owner request).
-- **Image 0.0.91** (built at 89a2bdf5) is on the Dell and booted in the VM (`RUYA_BOOT_OK`). It holds 826, 828, 829 and 832, but **not 837 or 839**. The owner said to skip the next image for now.
-- **VM finding (RUY-100):** under SELinux, PID 1 refuses pipe or file descriptors passed by a service through `systemd-run --pipe` (dontaudit, no AVC; permissive works). That broke every install. RUY-839 is the fix, still unverified in the VM. Scores: ruya-play 2.9, helper 0.9.
-- **Dell:** test overrides `devices=input` remain for `org.neverball.Neverball` and `io.github.pr_starfighter.starfighter`; remove them once 837 is checked there. `bootloader-update.service` fails at boot (RUY-24). The shell measured 21 % GPU in 10 s: unknown whether the owner was using it.
-- **No lanes or worktrees open**, apart from the kept `.claude/worktrees/design-pad-silhouettes-559410` (see lead-32). Its `settings.local.json` still has the old Paper Plane usage hooks, which is why `summary` warns about double usage events. Removing the hooks was refused by the permission check: ask the owner.
+- **Review range:** 45822466..HEAD. **Paper Plane `changes` cursor:** 5043.
+- **Stopped by the owner:** the weekly plan is at 94 % (reset 2026-11-20 18:00). No lanes, no worktrees open (four locked leftover folders under `D:\dev\RuyaOS-worktrees`, RUY-862).
+- **Merged (4 tickets + 2 lead commits):** RUY-834 (Play1.Verify; Flatpak's empty `/app/.ref` is left out), RUY-840 (a held game's pads are set aside, closed to the new game, and given back on a failed launch), RUY-851 (one `.play` permission table, metadata from it, update diff, `trust.json`), RUY-852 (Library1 lists `.play` art, facts, tier and signer, only for origin `ruyaos-play-local`). Lead: `shell/CLAUDE.md` pruned to 7.3 KB; 46dcb90e is the SELinux module (ADR-036). Every review asked for a round 2 except RUY-851's; all were real bugs.
+- **No merge gate ran for RUY-851/852** (the image's make-disk was running; I removed their worktrees before the gate). `dev.ps1 rust` is green on the merge. `push-main.ps1` runs the full test itself.
 
-## Owner direction (in force, new this session)
-- **RUY-838, game options:** a gear beside Play opens one options screen per Library item, for every source (Flatpak, `.play`, Steam).
-  - Settings are per profile, with a "Use for all profiles" checkmark.
-  - All profiles may change them; parental controls can restrict that later.
-  - Narrowing permissions is always allowed. Widening is allowed only in developer mode with an admin PIN (lead's proposal; the owner has not objected).
-  - Steam's own settings stay in Steam (no editing its files).
-  - Design first, after the weekly reset.
-- **Code Mode:** try it in one terminal lead session after the reset and compare tokens per ticket. The owner has to set the environment variable himself.
-- Still in force: Steam is first-class, no hacks (RUY-815); `.play` foundations first (RUY-780).
+## The .play blocker (owner: ".play first")
+- 0.0.92 VM: every USB install failed. PID 1 (`init_t`) opens the helper's `OpenFile=` source and SELinux denies `dosfs_t`/`fusefs_t`; `graceful` makes that look like "missing", so Inspect said `unknown-source`. The `incoming/` and 209/STDOUT failures were the check's `/tmp` file (fixed: `/run`).
+- **Fix: ADR-036, Accepted (lead)**, a two-rule CIL module (`image/rootfs/usr/share/selinux/packages/ruyaos/ruya_play_openfile.cil`, `semodule -i` in the Containerfile). It was measured live in the VM: helper 7/0; Inspect parses on vfat, exfat, ntfs3 and ntfs-3g. The alternative with no policy is an SCM_RIGHTS socket (in ADR-036). **The architect should check the ADR at the next audit.**
+- **Image 0.0.93** (46dcb90e, has the module, not 851/852) was making its disk at handoff (`output/chain/summary.txt`; then the oci for the Dell).
 
 ## First thing next session
-1. **The next image** (when the owner allows), then:
-   - RUY-100's re-run: `vm-play-check.sh check <zip> <ruya-pack>` and `helper`. Check that PID 1 opens the file stdio under `DynamicUser` and `ProtectSystem=strict`.
-   - `vm-input-check.sh startpad`.
-   - On the Dell: Neverball and Starfighter get the pad from the start. Then remove the overrides.
-   - All of these are queued on RUY-390.
-2. **RUY-494 (high, the owner asked):** every Godot 3.6 X11 game dies at start. xwayland-satellite panics on `wl_shm_pool` "invalid width, height or stride (Nx25)". ROTA (`net.hhoney.rota`) is a free reproducer. A `WAYLAND_DEBUG` trace in the VM is the lead's job.
-3. **RUY-825:** re-check Steam's controller config after a screen-saver wake on 0.0.91 (it has RUY-814).
-4. **After the weekly reset (2026-11-20 18:00):** the architect audit (focus questions in lead-32: RUY-825/812, 817, 820, 815) and RUY-838's canvas.
-5. **Ready, in order:** RUY-834 (Verify), RUY-840 (a failed launch drops the held game's pads), RUY-102 and RUY-104 (unblocked once RUY-100 passes in the VM).
+1. If 0.0.93 finished: `vm-play-check.sh check <zip> <ruya-pack>` and `helper` on a fresh VM. The packages come from `scripts/ci-samples-linux.sh` in WSL at the image's commit (header of `vm-play-check.sh`); `vm-queue.ps1` can't pass them (RUY-860). If it passes, RUY-100 is proven: comment, and unblock RUY-102/104's children.
+2. Image 0.0.94 from HEAD, then `vm-play-check.sh perms` (RUY-851) and `vm-library-check.sh play` (RUY-852), all on RUY-390.
+3. `.play` lanes, in order: RUY-863 (high: ruya-play ignores a Flathub `play.*` app), RUY-853 + RUY-864 (PIN gate, mock gate), RUY-856 (Home/detail visuals; UI reviews), RUY-861, RUY-848, RUY-865. Then RUY-101 (runners) and RUY-103 (updates).
+4. Dell is on 0.0.92 (`bootloader-update` still red, RUY-24). The owner was asked to try Neverball/Starfighter with a pad; if the pad works from the start, remove the `devices=input` overrides for `org.neverball.Neverball` and `io.github.pr_starfighter.starfighter`.
+5. Ask the owner about the old `.claude/worktrees/design-pad-silhouettes-559410` (its usage hooks double Paper Plane's events).
+
+## Owner direction (in force)
+- **.play first (2026-11-18):** `.play` lanes before any other goal (memory `play-packages-first`). The two lanes that weren't `.play` (RUY-842, RUY-24) were stopped and are Ready again with their lead reviews.
+- **Performance goal (2026-11-18), measure first:** formation RUY-558. RUY-842 (Dell baseline) blocks the tuning tickets. Direct scanout is RUY-783. Not done: `mitigations=off`, a third-party kernel, forced clocks, `isolcpus`.
+- RUY-838 game options (design first, after the reset); Code Mode trial after the reset; Steam first-class (RUY-815).
 
 ## Concerns (ranked)
-1. **`.play` installs are not proven on Linux** until RUY-100's re-run passes.
-2. **Godot 3 X11 games don't start** (RUY-494).
-3. **Steam focus** (RUY-825, RUY-812).
-4. **Weekly plan at 91 %:** cheap work only until the reset.
-5. `shell/CLAUDE.md` is 7.7 KB against a budget of about 7 KB: prune it at the next lead session.
+1. `.play` USB installs are unproven until 0.0.93's VM run.
+2. A `play.*` id is not enough to trust a deployment (RUY-863).
+3. D: free space (7.9 GB; builds need about 4 GB per worktree). RUY-862.
+4. Godot 3 X11 games (RUY-494), Steam focus (RUY-825/812).
 
-## Process changes in lead-33
-- **Lead:** I cut `merge-gate.ps1`'s output with `Select-Object -Last 8` and lost the name of a failing test (RUY-828's first gate; the re-run was green). **Read the gate's whole summary.** It already prints the FAIL lines.
-- **Builders:** none. RUY-829 came back `partial` with a coherent split (Verify), as briefed.
-- **Tests:** test runs no longer play sounds.
-- **Paper Plane:** `create` refused a description with `## Acceptance` instead of `## Acceptance criteria` and created nothing. That is fine, but the error message doesn't say the ticket was not created.
+## Process changes in lead-34
+- **Lead:** my design notes missed two attack paths (a new game opening the stashed pads; a `play.*` Flathub app spoofing a tier). Reviewers caught both. **Write the hostile case into the ticket's criteria.** I also removed worktrees before their merge gate; the order is gate, then remove.
+- **Builders:** none. Two builders' second hand-back was refused by the harness: read the worktree's commits instead of waiting.
+- **Tests:** `vm-play-check.sh` fails on any `init_t` AVC during its run (a denied `OpenFile=` is otherwise invisible).
+- **Paper Plane:** two transient ECONNRESET/ECONNREFUSED; the retries worked.
 
 ## Quality signals (one row per lead session)
 
 | Date | Range reviewed | Tasks | Findings (fixed / filed) | `dev.ps1 test` | VM |
 |---|---|---|---|---|---|
-| 2026-11-17 (lead-31) | 09defa5..11ae518 | 6 merged (814, 105, 818, 819, 823, 821); 9 filed | 105: one round 2; 1 lead review fix | 2207 passed, 0 failed; GitHub CI green | none |
 | 2026-11-18 (lead-32) | 11ae518..acb7d04 | 2 merged (822, 504); 1 filed (825) | 822: 1 lead fix; 504: round 2 for missing shots | 2207 passed, 0 failed | Dell: RUY-825 diagnosis (hw) |
-| 2026-11-18 (lead-33) | acb7d04..HEAD | 6 merged (826, 832, 828, 829, 837, 839) + 1 lead commit; 13 filed (827, 830, 831, 833-835, 838-841 and 829's split 834); 13 and 836 cancelled | 829: round 2 (fail-closed reconcile, dev docs); 837: API review clean; 1 gate flake | 2216 passed, 0 failed (RUY-837 gate) | 0.0.91: VM boot OK; vm-play-check 12/25 (SELinux, fixed by 839, unverified); Dell 0.0.91 (hw: Wii Remote) |
+| 2026-11-18 (lead-33) | acb7d04..4582246 | 6 merged (826, 832, 828, 829, 837, 839) + 1 lead commit; 13 filed | 829: round 2; 1 gate flake | 2216 passed, 0 failed | 0.0.91 boot OK; vm-play-check 12/25 (SELinux) |
+| 2026-11-18 (lead-34) | 4582246..HEAD | 4 merged (834, 840, 851, 852) + 2 lead commits; filed 842-865 (performance goal, .play splits, follow-ups); 2 lanes stopped | 834, 840, 852: round 2 (all real: .ref, stashed-pad ACL, origin spoof) | 2216 passed, 0 failed (RUY-840 gate); rust green on 852's merge | 0.0.92: startpad PASS, vm-play-check 20/12 FAIL (SELinux, fixed by ADR-036, unverified); Dell 0.0.92 |
