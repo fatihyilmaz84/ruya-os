@@ -474,3 +474,28 @@ fn the_image_ships_a_blocklist_that_parses() {
     let bytes = std::fs::read(path).expect("the image ships store-blocklist");
     ruya_play_trust::revocation::Blocklist::parse(&bytes).expect("it parses");
 }
+
+#[test]
+fn a_listing_that_fails_holds_every_id_until_a_reconcile_succeeds() {
+    let mut h = Setup::with(Pkg::signed(&game())).build();
+    let failed = h
+        .importer
+        .reconcile_listed(Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "/var/lib/flatpak/app",
+        )))
+        .unwrap_err();
+    assert_eq!(failed.code, "installed.unreconciled");
+    assert!(h.importer.held_all().is_some());
+    // Every id is refused, this one has no app and no record at all.
+    let r = h.install();
+    assert_eq!(codes(&r), vec!["installed.unreconciled".to_string()]);
+    assert_eq!(r.status, JobStatus::Failed);
+    assert!(h.commit.calls.lock().unwrap().is_empty());
+    let (_, report) = h.importer.inspect(&pkg_path("game.play"));
+    assert_eq!(report.unwrap().verdict, JobStatus::Failed);
+    // A reconcile that succeeds (the service's next start) lifts the hold.
+    h.importer.reconcile_listed(Ok(BTreeMap::new())).unwrap();
+    assert_eq!(h.importer.held_all(), None);
+    assert_eq!(h.install().status, JobStatus::Ok);
+}

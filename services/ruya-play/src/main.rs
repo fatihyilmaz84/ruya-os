@@ -205,24 +205,18 @@ fn start_up(importer: &Importer, cfg: &Config, session: bool) {
     if session {
         return;
     }
-    match reconcile::deployed_apps(Path::new(FLATPAK)) {
-        Ok(deployed) => {
-            match importer.reconcile(&deployed) {
-                Ok(actions) => {
-                    for a in actions {
-                        eprintln!("ruya-play: reconcile: {a:?}");
-                    }
-                }
-                Err(p) => {
-                    // Records that cannot be read: hold every committed id (fail closed).
-                    eprintln!("ruya-play: reconcile failed ({}); installs of the installed ids are refused", p.message);
-                    for id in deployed.keys() {
-                        importer.hold(id, "the records could not be read at start");
-                    }
-                }
+    // Fail closed: when the installed apps cannot be listed or the records cannot be read, every
+    // install is refused (installed.unreconciled) until a restart reconciles them.
+    match importer.reconcile_listed(reconcile::deployed_apps(Path::new(FLATPAK))) {
+        Ok(actions) => {
+            for a in actions {
+                eprintln!("ruya-play: reconcile: {a:?}");
             }
         }
-        Err(e) => eprintln!("ruya-play: the installed apps cannot be listed ({e})"),
+        Err(p) => eprintln!(
+            "ruya-play: reconcile failed ({}); every install is refused until the service restarts",
+            p.message
+        ),
     }
 }
 

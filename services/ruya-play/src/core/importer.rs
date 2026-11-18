@@ -235,6 +235,8 @@ pub struct Importer {
     hooks: Box<dyn Hooks>,
     /// Ids whose committed app could not be reconciled (lower case), with why.
     held: Mutex<BTreeMap<String, String>>,
+    /// Every id is held (the installed apps could not be reconciled at all), with why.
+    held_all: Mutex<Option<String>>,
 }
 
 /// What [`Importer::record`] found before it wrote, to undo it.
@@ -555,6 +557,7 @@ impl Importer {
             installed: Mutex::new(deps.installed),
             hooks: deps.hooks,
             held: Mutex::new(BTreeMap::new()),
+            held_all: Mutex::new(None),
         })
     }
 
@@ -609,6 +612,42 @@ impl Importer {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .insert(id.to_ascii_lowercase(), reason.to_string());
+    }
+
+    /// Refuse installs of every id with `installed.unreconciled` (the reconcile could not run).
+    pub fn hold_all(&self, reason: &str) {
+        *self.held_all.lock().unwrap_or_else(|e| e.into_inner()) = Some(reason.to_string());
+    }
+
+    /// Why every id is held, when it is.
+    pub fn held_all(&self) -> Option<String> {
+        self.held_all
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// The start-up reconcile over the listing of the installed apps, failing closed (RUY-829
+    /// round 2): when the apps cannot be listed, or the records cannot be read, every id is held
+    /// ([`Self::hold_all`]) and the error is returned; a reconcile that succeeds lifts that hold.
+    /// The service runs it once at start, so a global hold lasts until the next start.
+    pub fn reconcile_listed(
+        &self,
+        listed: std::io::Result<BTreeMap<String, reconcile::Deployed>>,
+    ) -> Result<Vec<reconcile::Action>, Problem> {
+        let result = match listed {
+            Ok(deployed) => self.reconcile(&deployed),
+            Err(e) => Err(Problem::new(
+                codes::INSTALLED_UNRECONCILED,
+                "",
+                format!("The installed apps cannot be listed ({e})."),
+            )),
+        };
+        match &result {
+            Ok(_) => *self.held_all.lock().unwrap_or_else(|e| e.into_inner()) = None,
+            Err(p) => self.hold_all(&p.message),
+        }
+        result
     }
 
     /// The held ids, lower case.
@@ -688,12 +727,13 @@ impl Importer {
         };
         let id = inspection.package.manifest.id.clone();
         let build = inspection.package.manifest.build;
-        let held = self
-            .held
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(&id.to_ascii_lowercase())
-            .cloned();
+        let held = self.held_all().or_else(|| {
+            self.held
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(&id.to_ascii_lowercase())
+                .cloned()
+        });
         if let Some(reason) = held {
             return Err(Box::new((
                 one(

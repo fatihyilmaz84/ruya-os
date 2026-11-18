@@ -2,9 +2,11 @@
 
 How to package a game as a `.play`: one folder or one `.play.zip` that holds the game, what it runs on, its art, a permission request and a signature, so a player can copy it to a USB stick and install it with a controller. The short version: **run `ruya-pack init`, put your game in `payload/`, list your art and permissions in `play.json`, run `ruya-pack build`, then `keygen` and `sign`. `ruya-pack validate` tells you what the console will say, before the console does.**
 
-*Checked against the code and specs as of 2026-11-17. Items marked **planned** are not built yet.*
+*Checked against the code and specs as of 2026-11-18. Items marked **planned** are not built yet.*
 
-**What exists today, and what does not.** The format, the verifier and the developer tool (`ruya-pack`) are built and tested; the shell has an "Install from USB" page that shows a package (on its mock backend). The service that installs a package on a real console (`ruya-play` as a D-Bus service, **planned: RUY-100**) and the launcher that runs it (**planned: RUY-101**) are not built. So this chapter can take you from an empty folder to a signed package that the console's own verifier accepts, but not yet to "it runs on my console". Where a step needs the unbuilt part it says **planned**.
+**What exists today, and what does not.** The format, the verifier and the developer tool (`ruya-pack`) are built and tested; the shell has an "Install from USB" page that shows a package (on its mock backend). The service that installs a package on a console is built (`ruya-play`, `org.ruyaos.Play1`, RUY-829): it inspects and unpacks a package in an unprivileged sandbox without network, checks it again as root and installs it as the system Flatpak app `play.<your id>`; its first run on a real console image is still being checked (RUY-100). The launcher that runs the installed game (**planned: RUY-101**) is not built, so an installed package does not start yet. So this chapter can take you from an empty folder to a signed package that the console verifies and installs, but not yet to "it runs on my console". Where a step needs the unbuilt part it says **planned**.
+
+**Permissions are not granted yet (until RUY-102).** Whatever `permissions` your manifest asks for, an installed `.play` gets one fixed sandbox: IPC, the display (Wayland, or X11 for the `wine` and `proton` runners), sound (PulseAudio) and the GPU (`dri`). **No network, even when `permissions.network` is `true`**; no other device, no `multiarch`, no USB drive access. Your requests are still checked against the trust ceiling and shown to the player before install; they are granted once RUY-102 maps them.
 
 ## What a package is, and is not
 
@@ -382,14 +384,14 @@ The codes are `licence.text_missing` and `licence.source_missing`. Anti-cheat ti
 
 ## Testing on a console
 
-**Planned (RUY-100, RUY-101); do not rely on it yet.** What you can do today:
+**Partly built: installing works through `ruya-play` (RUY-829, being checked on a console image under RUY-100); running the game is planned (RUY-101).** What you can do today:
 
 1. `ruya-pack validate`, `inspect` and (for Windows runners) `validate --system-wine <version>` run the console's verifier and resolution off the device. Most failures are found here.
-2. The shell's "Install from USB" page (Store toolbar and Settings, Storage) lists packages on a mounted drive and shows one as a game page: trust badge, signer, permissions in plain words, size. It runs against the mock backend only until the install service exists.
+2. The shell's "Install from USB" page (Store toolbar and Settings, Storage) lists packages on a mounted drive and shows one as a game page: trust badge, signer, permissions in plain words, size. Off the console it runs against the mock backend; on a console it talks to `ruya-play`.
 3. A Standard profile needs an admin's PIN for every USB install; an admin installs directly.
 4. Developer mode is a switch in Settings, System (admins only). It lets an **unsigned** package install; a signed package does not need it.
 
-Planned: installing from USB on a real console, starting the game, the launch splash and the Compatibility screen, `ruya-pack run`. When they exist this section will say what to expect and what the logs look like.
+Planned: starting the game, the launch splash and the Compatibility screen, `ruya-pack run`, and the permissions your manifest asks for (RUY-102; until then the fixed sandbox above, without network). When they exist this section will say what to expect and what the logs look like.
 
 ## Troubleshooting
 
@@ -632,4 +634,4 @@ Their tests (`services/ruya-pack/tests/samples.rs`) copy the folder to a scratch
 
 ## Sources
 
-Checked on 2026-11-17 against: `docs/specs/05-play-packages.md` sections 1 to 15 (format, art, runners, permissions, signatures, updates, tooling, legal); `api/play/play.schema.json`; `services/ruya-pack` (`init`, `build`, `keygen`, `sign`, `validate`, `inspect` run from an empty folder to a signed zip on Windows, output quoted above; `src/fixes.rs` for the catalogue; `tests/guide.rs` and `tests/samples.rs`); `services/ruya-play-format`, `ruya-play-art` and `ruya-play-trust` through the tool; `shell/qml/InstallSourcesPage.qml` and `InstallPackagePage.qml` (mock backend only); `samples/hello-play-native/` and `samples/hello-play-wine/` (manifests and stand-in builds pass `build`, `validate` and `inspect`; CI compiles both C samples and builds and inspects their zips with `scripts/ci-samples-linux.sh`, RUY-822). The console parts (service, launcher, Compatibility screen, feed updates) are planned: RUY-100, RUY-101, T-241.
+Checked on 2026-11-17 against: `docs/specs/05-play-packages.md` sections 1 to 15 (format, art, runners, permissions, signatures, updates, tooling, legal); `api/play/play.schema.json`; `services/ruya-pack` (`init`, `build`, `keygen`, `sign`, `validate`, `inspect` run from an empty folder to a signed zip on Windows, output quoted above; `src/fixes.rs` for the catalogue; `tests/guide.rs` and `tests/samples.rs`); `services/ruya-play-format`, `ruya-play-art` and `ruya-play-trust` through the tool; `shell/qml/InstallSourcesPage.qml` and `InstallPackagePage.qml` (mock backend only); `samples/hello-play-native/` and `samples/hello-play-wine/` (manifests and stand-in builds pass `build`, `validate` and `inspect`; CI compiles both C samples and builds and inspects their zips with `scripts/ci-samples-linux.sh`, RUY-822). `services/ruya-play` (the install service, RUY-829: Play1, the helper sandbox, the Flatpak commit with its fixed permission set). The launcher, the Compatibility screen, the permission mapping and feed updates are planned: RUY-101, RUY-102, T-241.
