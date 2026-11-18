@@ -1072,7 +1072,54 @@ impl<B: Backend> Router<B> {
             "pads of instance '{}' set aside for the next game",
             owner.instance
         ));
+        // Game B runs under the same uid: it must not be able to open the older pads (RUY-840).
+        let sysnames: Vec<String> = pads
+            .values()
+            .chain(idle.values())
+            .map(|v| v.sysname.clone())
+            .collect();
+        self.set_stash_acls(&sysnames, &acl::closed());
         self.stash = Some(Stash { owner, pads, idle });
+    }
+
+    /// Writes `acl` on the nodes of the stashed virtual pads (those that have one).
+    fn set_stash_acls(&mut self, sysnames: &[String], acl: &[u8]) {
+        for sysname in sysnames {
+            if let Some(node) = self.backend.node_of(sysname) {
+                if let Err(err) = self.backend.write_acl(&node, acl) {
+                    self.journal(format!(
+                        "setting the ACL of {sysname} ({node}) failed: {err}"
+                    ));
+                }
+            }
+        }
+    }
+
+    /// Ends the stash: its pads are destroyed.
+    fn drop_stash(&mut self) {
+        if let Some(st) = self.stash.take() {
+            for (key, v) in st.pads {
+                self.drop_virtual(key, v);
+            }
+            for (_, v) in st.idle {
+                self.drop_virtual(0, v);
+            }
+        }
+    }
+
+    /// A preparation ends without a game taking the pads: the held game gets its pads back if it
+    /// is still the one held behind Home (`overlay` with its instance), else they go (it exited).
+    fn end_stash(&mut self, why: &str) {
+        let held = self.stash.as_ref().is_some_and(|s| {
+            self.route == Route::Overlay
+                && self.instance == s.owner.instance
+                && self.profile == s.owner.profile
+        });
+        if held {
+            self.restore_stash(why);
+        } else {
+            self.destroy_all();
+        }
     }
 
     /// The new game did not take the pads: its prepared pads go and the held game's come back,
@@ -1084,6 +1131,13 @@ impl<B: Backend> Router<B> {
         };
         self.destroy_all();
         let mut back = Vec::new();
+        let sysnames: Vec<String> = st
+            .pads
+            .values()
+            .chain(st.idle.values())
+            .map(|v| v.sysname.clone())
+            .collect();
+        self.set_stash_acls(&sysnames, &acl::only_user(st.owner.uid));
         for (key, v) in st.pads {
             let fits = self.pads.get(&key).is_some_and(|p| p.virt.is_none())
                 && self
@@ -1134,14 +1188,7 @@ impl<B: Backend> Router<B> {
             self.drop_virtual(0, v);
         }
         // So do the pads a preparation set aside (RUY-840).
-        if let Some(st) = self.stash.take() {
-            for (key, v) in st.pads {
-                self.drop_virtual(key, v);
-            }
-            for (_, v) in st.idle {
-                self.drop_virtual(0, v);
-            }
-        }
+        self.drop_stash();
         // A preparation still waited on ends unready (RUY-837).
         if let (Some(p), Some(o)) = (self.prepared.take(), self.owner.as_ref()) {
             if !p.answered {
@@ -1655,7 +1702,7 @@ impl<B: Backend> Router<B> {
         } else {
             // A held game (bound owner of this profile) keeps its pads aside meanwhile (RUY-840).
             if self.stash.is_some() {
-                self.restore_stash("another game is prepared");
+                self.end_stash("another game is prepared");
             }
             let held = self.prepared.is_none()
                 && self
@@ -1729,11 +1776,7 @@ impl<B: Backend> Router<B> {
             PREPARE_TTL.as_secs()
         );
         self.journal(line);
-        if self.stash.is_some() {
-            self.restore_stash("the preparation expired");
-        } else {
-            self.destroy_all();
-        }
+        self.end_stash("the preparation expired");
     }
 
     // ---- routing ----------------------------------------------------------------------------
@@ -1829,14 +1872,7 @@ impl<B: Backend> Router<B> {
             && self.owner.as_ref().is_some_and(|o| o.profile == profile);
         if adopt {
             // The new game owns the pads: the held game's set-aside ones go (RUY-840).
-            if let Some(st) = self.stash.take() {
-                for (key, v) in st.pads {
-                    self.drop_virtual(key, v);
-                }
-                for (_, v) in st.idle {
-                    self.drop_virtual(0, v);
-                }
-            }
+            self.drop_stash();
             if let Some(p) = self.prepared.take() {
                 if !p.answered {
                     self.notices.push(Notice::PadsPrepared {
@@ -7498,6 +7534,33 @@ mod tests {
         // An owner with no instance (a preparation) is not a held game either.
         assert_eq!(r.prepare_pads(RACER, "p1", start), Status::Ok);
         assert!(r.stash.is_none());
+    }
+
+    #[test]
+    fn set_aside_pads_cannot_be_opened_by_the_new_game_and_open_again_on_return() {
+        let start = t0();
+        let (mut r, a, va) = held_then_prepared(start);
+        let sysname = r.stash.as_ref().unwrap().pads[&a].sysname.clone();
+        let node_a = format!("/dev/input/event-{sysname}");
+        let _ = va;
+        // The held game's node was opened for the profile; set aside it is closed.
+        assert_eq!(r.backend().acls[&node_a], acl::closed());
+        assert!(!acl::is_only_user(&r.backend().acls[&node_a], P1_UID));
+        r.set_route("app", "i1", STK, "p1", SHELL, start);
+        assert!(acl::is_only_user(&r.backend().acls[&node_a], P1_UID));
+    }
+
+    #[test]
+    fn a_preparation_that_ends_after_the_held_game_exited_leaves_no_pad() {
+        let start = t0();
+        let (mut r, _a, _va) = held_then_prepared(start);
+        assert_eq!(r.set_route("shell", "", "", "p1", SHELL, start), Status::Ok);
+        r.backend_mut().take();
+        r.tick(start + PREPARE_TTL);
+        assert!(r.stash.is_none() && r.prepared.is_none());
+        assert!(r.pads.values().all(|p| p.virt.is_none()) && r.idle.is_empty());
+        let calls = r.backend_mut().take();
+        assert!(created(&calls).is_empty(), "{calls:?}");
     }
 
     #[test]

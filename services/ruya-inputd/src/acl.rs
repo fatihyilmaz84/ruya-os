@@ -65,6 +65,22 @@ pub fn named_users(bytes: &[u8]) -> Option<Vec<(u32, u16)>> {
     )
 }
 
+/// The ACL of a virtual pad nobody but its owner (`ruya-input`) may open: a game's pads set
+/// aside while another game starts (RUY-840). The app that has the node open keeps its descriptor.
+pub fn closed() -> Vec<u8> {
+    let mut out = VERSION.to_le_bytes().to_vec();
+    for (tag, perm, id) in [
+        (USER_OBJ, RW, UNDEFINED_ID),
+        (GROUP_OBJ, 0, UNDEFINED_ID),
+        (OTHER, 0, UNDEFINED_ID),
+    ] {
+        out.extend_from_slice(&tag.to_le_bytes());
+        out.extend_from_slice(&perm.to_le_bytes());
+        out.extend_from_slice(&id.to_le_bytes());
+    }
+    out
+}
+
 /// True when the ACL is exactly what `only_user(uid)` writes: nothing to re-assert.
 pub fn is_only_user(bytes: &[u8], uid: u32) -> bool {
     let Some(entries) = parse(bytes) else {
