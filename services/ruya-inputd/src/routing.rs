@@ -358,6 +358,15 @@ struct Prepared {
     answered: bool,
 }
 
+/// A held game's virtual pads, set aside while a preparation for another game runs (RUY-840): the
+/// same devices come back if the new game never takes the pads.
+#[derive(Debug)]
+struct Stash {
+    owner: Owner,
+    pads: BTreeMap<PadKey, Virtual>,
+    idle: BTreeMap<u32, Virtual>,
+}
+
 /// What a held seat keeps of its gone pad (RUY-627): the virtual pad the app still has (`None`
 /// when the route had none, or it was destroyed meanwhile) and what the like-pad rule needs.
 #[derive(Debug)]
@@ -542,6 +551,8 @@ pub struct Router<B: Backend> {
     owner: Option<Owner>,
     /// The owner's pads were made by `PreparePads` and no route has bound them yet (RUY-837).
     prepared: Option<Prepared>,
+    /// The held game's pads while `prepared` runs for another game (RUY-840).
+    stash: Option<Stash>,
     pads: BTreeMap<PadKey, Pad>,
     board: KeyBoard,
     next_key: PadKey,
@@ -599,6 +610,7 @@ impl<B: Backend> Router<B> {
             caller: None,
             owner: None,
             prepared: None,
+            stash: None,
             pads: BTreeMap::new(),
             board: KeyBoard::default(),
             next_key: 1,
@@ -784,6 +796,10 @@ impl<B: Backend> Router<B> {
         let keys = self.board.pad_gone(&mut pad.mapper);
         self.backend.nav_keys(&keys);
         let twin = self.pads.values().any(|p| p.info.id == pad.info.id);
+        // A held game's stashed pad of this pad goes with it (RUY-840).
+        if let Some(v) = self.stash.as_mut().and_then(|s| s.pads.remove(&key)) {
+            self.drop_virtual(key, v);
+        }
         let mut virt = pad.virt.take();
         if seat.is_some() {
             // The node is gone, and the effects the app played on it with it: nothing to erase.
@@ -1039,6 +1055,59 @@ impl<B: Backend> Router<B> {
         self.journal(format!("virtual pad {} destroyed", v.phys));
     }
 
+    /// A preparation for another game starts while a game of this profile is held (frozen behind
+    /// Home): its virtual pads are set aside, not destroyed, so a failed launch gives them back
+    /// (RUY-840). Held seats' parked pads are destroyed as before.
+    fn stash_owner_pads(&mut self) {
+        let Some(owner) = self.owner.clone() else {
+            return;
+        };
+        let pads: BTreeMap<PadKey, Virtual> = self
+            .pads
+            .iter_mut()
+            .filter_map(|(&k, p)| p.virt.take().map(|v| (k, v)))
+            .collect();
+        let idle = std::mem::take(&mut self.idle);
+        self.journal(format!(
+            "pads of instance '{}' set aside for the next game",
+            owner.instance
+        ));
+        self.stash = Some(Stash { owner, pads, idle });
+    }
+
+    /// The new game did not take the pads: its prepared pads go and the held game's come back,
+    /// the same virtual devices (RUY-840). A pad that is gone or whose seat changed meanwhile
+    /// loses its stashed pad; the route's `make_missing` makes a new one.
+    fn restore_stash(&mut self, why: &str) {
+        let Some(st) = self.stash.take() else {
+            return;
+        };
+        self.destroy_all();
+        let mut back = Vec::new();
+        for (key, v) in st.pads {
+            let fits = self.pads.get(&key).is_some_and(|p| p.virt.is_none())
+                && self
+                    .seat_number(key)
+                    .is_some_and(|(n, p)| (v.n, v.player.as_str()) == (n, p.as_str()));
+            if fits {
+                back.push((key, v));
+            } else {
+                self.drop_virtual(key, v);
+            }
+        }
+        for (key, v) in back {
+            if let Some(p) = self.pads.get_mut(&key) {
+                p.virt = Some(v);
+            }
+        }
+        self.idle = st.idle;
+        self.journal(format!(
+            "pads of instance '{}' are the game's again: {why}",
+            st.owner.instance
+        ));
+        self.owner = Some(st.owner);
+    }
+
     fn destroy_all(&mut self) {
         // A held seat keeps its hold, but not its virtual pad (RUY-627).
         let parked: Vec<(PadKey, Virtual)> = self
@@ -1063,6 +1132,15 @@ impl<B: Backend> Router<B> {
         // The quiet pads of the game go with it (RUY-681).
         for (_, v) in std::mem::take(&mut self.idle) {
             self.drop_virtual(0, v);
+        }
+        // So do the pads a preparation set aside (RUY-840).
+        if let Some(st) = self.stash.take() {
+            for (key, v) in st.pads {
+                self.drop_virtual(key, v);
+            }
+            for (_, v) in st.idle {
+                self.drop_virtual(0, v);
+            }
         }
         // A preparation still waited on ends unready (RUY-837).
         if let (Some(p), Some(o)) = (self.prepared.take(), self.owner.as_ref()) {
@@ -1575,7 +1653,22 @@ impl<B: Backend> Router<B> {
                 p.answered = false;
             }
         } else {
+            // A held game (bound owner of this profile) keeps its pads aside meanwhile (RUY-840).
+            if self.stash.is_some() {
+                self.restore_stash("another game is prepared");
+            }
+            let held = self.prepared.is_none()
+                && self
+                    .owner
+                    .as_ref()
+                    .is_some_and(|o| !o.instance.is_empty() && o.profile == profile);
+            if held {
+                self.stash_owner_pads();
+            }
+            // `destroy_all` ends a stash too: this one is only now made.
+            let aside = self.stash.take();
             self.destroy_all();
+            self.stash = aside;
             self.owner = Some(Owner {
                 instance: String::new(),
                 profile: profile.to_owned(),
@@ -1636,7 +1729,11 @@ impl<B: Backend> Router<B> {
             PREPARE_TTL.as_secs()
         );
         self.journal(line);
-        self.destroy_all();
+        if self.stash.is_some() {
+            self.restore_stash("the preparation expired");
+        } else {
+            self.destroy_all();
+        }
     }
 
     // ---- routing ----------------------------------------------------------------------------
@@ -1731,6 +1828,15 @@ impl<B: Backend> Router<B> {
             && self.prepared.as_ref().is_some_and(|p| p.app_id == app_id)
             && self.owner.as_ref().is_some_and(|o| o.profile == profile);
         if adopt {
+            // The new game owns the pads: the held game's set-aside ones go (RUY-840).
+            if let Some(st) = self.stash.take() {
+                for (key, v) in st.pads {
+                    self.drop_virtual(key, v);
+                }
+                for (_, v) in st.idle {
+                    self.drop_virtual(0, v);
+                }
+            }
             if let Some(p) = self.prepared.take() {
                 if !p.answered {
                     self.notices.push(Notice::PadsPrepared {
@@ -1746,6 +1852,16 @@ impl<B: Backend> Router<B> {
             self.journal(format!(
                 "prepared pads for {app_id} bound to instance '{instance}'"
             ));
+        }
+        // The route is back to the held game: its own pads again, the prepared ones go (RUY-840).
+        // Only `app`: the shell may send `overlay` for the held game while the launch runs.
+        let back = !adopt
+            && r == Route::App
+            && self.stash.as_ref().is_some_and(|s| {
+                !instance.is_empty() && s.owner.instance == instance && s.owner.profile == profile
+            });
+        if back {
+            self.restore_stash("the route is back to it");
         }
         // A preparation waits through "shell" and "overlay" of its profile.
         let keep_prepared = self.prepared.is_some()
@@ -2476,6 +2592,13 @@ impl<B: Backend> Router<B> {
             .values_mut()
             .find_map(|p| p.virt.as_mut().filter(|v| v.id == id))
             .or_else(|| self.idle.values_mut().find(|v| v.id == id))
+            .or_else(|| {
+                let st = self.stash.as_mut()?;
+                st.pads
+                    .values_mut()
+                    .chain(st.idle.values_mut())
+                    .find(|v| v.id == id)
+            })
     }
 
     /// The app uploaded (or updated) rumble effect `effect` on virtual pad `id`. On a held seat's
@@ -7235,5 +7358,155 @@ mod tests {
         assert!(prepared(&mut r).is_empty());
         r.tick(start + UDEV_FALLBACK);
         assert_eq!(prepared(&mut r), done(STK, Status::Failed));
+    }
+
+    // ---- a held game's pads during a preparation (RUY-840) ------------------------------------
+
+    /// Game `i1` (STK) runs with pad a and is held behind Home (`overlay`); RACER is prepared.
+    fn held_then_prepared(start: Instant) -> (Router<Fake>, PadKey, VirtualId) {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), start);
+        sign_in(&mut r, a, "p1");
+        app(&mut r, "i1", STK, "p1");
+        settle(&mut r);
+        let va = virtual_id(&r, a).expect("the held game's pad");
+        assert_eq!(
+            r.set_route("overlay", "i1", STK, "p1", SHELL, start),
+            Status::Ok
+        );
+        r.backend_mut().take();
+        r.take_notices();
+        assert_eq!(r.prepare_pads(RACER, "p1", start), Status::Ok);
+        let calls = r.backend_mut().take();
+        assert!(destroyed(&calls).is_empty(), "{calls:?}");
+        assert_eq!(created(&calls).len(), 1);
+        assert_ne!(virtual_id(&r, a), Some(va));
+        (r, a, va)
+    }
+
+    #[test]
+    fn a_failed_launch_gives_the_held_game_its_pads_back() {
+        let start = t0();
+        let (mut r, a, va) = held_then_prepared(start);
+        assert_eq!(prepared(&mut r).len(), 0);
+        // The shell may say `overlay` for the held game meanwhile: the preparation waits on.
+        assert_eq!(
+            r.set_route("overlay", "i1", STK, "p1", SHELL, start),
+            Status::Ok
+        );
+        assert!(r.stash.is_some() && r.prepared.is_some());
+        assert_eq!(
+            r.set_route("app", "i1", STK, "p1", SHELL, start),
+            Status::Ok
+        );
+        assert_eq!(prepared(&mut r), done(RACER, Status::NotAllowed));
+        let calls = r.backend_mut().take();
+        assert!(created(&calls).is_empty(), "{calls:?}");
+        assert_eq!(
+            destroyed(&calls).len(),
+            1,
+            "only the prepared pad: {calls:?}"
+        );
+        assert!(!destroyed(&calls).contains(&va));
+        assert_eq!(virtual_id(&r, a), Some(va));
+        assert_eq!(south_code(&mut r, a).0, va);
+        assert!(r.stash.is_none());
+    }
+
+    #[test]
+    fn the_new_games_first_route_destroys_the_held_pads_and_binds_the_prepared_ones() {
+        let start = t0();
+        let (mut r, a, va) = held_then_prepared(start);
+        let vb = virtual_id(&r, a).unwrap();
+        app(&mut r, "i2", RACER, "p1");
+        let calls = r.backend_mut().take();
+        assert_eq!(destroyed(&calls), vec![va], "{calls:?}");
+        assert!(created(&calls).is_empty());
+        assert_eq!(virtual_id(&r, a), Some(vb));
+        assert!(r.stash.is_none());
+        assert_eq!(south_code(&mut r, a).0, vb);
+        // Gone with the new game, nothing else left.
+        assert_eq!(r.set_route("shell", "", "", "p1", SHELL, start), Status::Ok);
+        assert_eq!(destroyed(&r.backend_mut().take()), vec![vb]);
+    }
+
+    #[test]
+    fn an_unused_preparation_expires_and_the_held_game_has_its_pads_again() {
+        let start = t0();
+        let (mut r, a, va) = held_then_prepared(start);
+        r.tick(start + PREPARE_TTL);
+        let calls = r.backend_mut().take();
+        assert_eq!(destroyed(&calls).len(), 1, "{calls:?}");
+        assert!(created(&calls).is_empty());
+        assert_eq!(virtual_id(&r, a), Some(va));
+        let lines = journal(&mut r);
+        assert!(lines
+            .iter()
+            .any(|l| l == &format!("prepared pads for {RACER} were not used in 60 s")));
+        assert!(lines
+            .iter()
+            .any(|l| l == "pads of instance 'i1' are the game's again: the preparation expired"));
+        app(&mut r, "i1", STK, "p1");
+        assert_eq!(south_code(&mut r, a).0, va);
+    }
+
+    #[test]
+    fn a_third_game_prepared_gives_the_held_pads_back_and_sets_them_aside_again() {
+        let start = t0();
+        let (mut r, a, va) = held_then_prepared(start);
+        assert_eq!(r.prepare_pads("org.ruyaos.Third", "p1", start), Status::Ok);
+        let calls = r.backend_mut().take();
+        assert_eq!(destroyed(&calls).len(), 1, "{calls:?}");
+        assert_eq!(created(&calls).len(), 1);
+        assert!(!destroyed(&calls).contains(&va));
+        // The held game is still the one to get them back.
+        assert_eq!(
+            r.set_route("app", "i1", STK, "p1", SHELL, start),
+            Status::Ok
+        );
+        assert_eq!(virtual_id(&r, a), Some(va));
+    }
+
+    #[test]
+    fn a_lock_or_a_profile_switch_leaves_no_set_aside_pad() {
+        let start = t0();
+        let (mut r, _a, va) = held_then_prepared(start);
+        assert_eq!(r.set_route("locked", "", "", "", SHELL, start), Status::Ok);
+        let calls = r.backend_mut().take();
+        assert_eq!(destroyed(&calls).len(), 2, "{calls:?}");
+        assert!(destroyed(&calls).contains(&va));
+        assert!(r.stash.is_none());
+        assert!(r.pads.values().all(|p| p.virt.is_none()) && r.idle.is_empty());
+
+        let (mut r, _a, va) = held_then_prepared(start);
+        assert_eq!(r.set_route("shell", "", "", "p2", SHELL, start), Status::Ok);
+        let calls = r.backend_mut().take();
+        assert_eq!(destroyed(&calls).len(), 2, "{calls:?}");
+        assert!(destroyed(&calls).contains(&va));
+        assert!(r.stash.is_none());
+        assert!(r.pads.values().all(|p| p.virt.is_none()) && r.idle.is_empty());
+    }
+
+    #[test]
+    fn a_preparation_with_no_held_game_sets_nothing_aside() {
+        let start = t0();
+        let mut r = router();
+        let a = r.add_pad(pad("a"), start);
+        sign_in(&mut r, a, "p1");
+        assert_eq!(r.prepare_pads(STK, "p1", start), Status::Ok);
+        assert!(r.stash.is_none());
+        // An owner with no instance (a preparation) is not a held game either.
+        assert_eq!(r.prepare_pads(RACER, "p1", start), Status::Ok);
+        assert!(r.stash.is_none());
+    }
+
+    #[test]
+    fn a_pad_unplugged_while_set_aside_loses_its_held_pad() {
+        let start = t0();
+        let (mut r, a, va) = held_then_prepared(start);
+        r.remove_pad_at(a, start);
+        let calls = r.backend_mut().take();
+        assert!(destroyed(&calls).contains(&va), "{calls:?}");
+        assert!(r.stash.as_ref().is_some_and(|s| s.pads.is_empty()));
     }
 }
