@@ -169,6 +169,7 @@ fn status_of_code(code: &str) -> JobStatus {
         codes::STAGING_CHANGED
         | codes::STAGING_IO
         | codes::SOURCE_MISSING
+        | codes::SOURCE_UNREADABLE
         | codes::INSTALLED_CORRUPT
         | codes::INSTALLED_IO
         | codes::COMMIT_FAILED

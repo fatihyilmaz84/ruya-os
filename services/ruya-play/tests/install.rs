@@ -573,6 +573,99 @@ fn inspect_reads_only_data() {
 }
 
 #[test]
+fn a_top_level_ref_is_refused_before_the_commit_but_a_nested_one_is_allowed() {
+    // Flatpak writes /app/.ref itself (RUY-848).
+    let mut fx = game();
+    fx.file(".ref", b"");
+    let mut h = Setup::with(Pkg::signed(&fx)).build();
+    let (_, report) = h.importer.inspect(&pkg_path("game.play"));
+    let report = report.unwrap();
+    assert_eq!(report.verdict, JobStatus::InvalidPackage);
+    assert_eq!(report.problems[0].code, "package.reserved_ref");
+    assert_eq!(report.problems[0].path, ".ref");
+    let r = h.install();
+    assert_eq!(
+        (r.status, codes(&r)),
+        (
+            JobStatus::InvalidPackage,
+            vec!["package.reserved_ref".to_string()]
+        )
+    );
+    assert!(h.commit.calls().is_empty());
+    h.assert_nothing_left();
+
+    let mut fx = game();
+    fx.file("payload/.ref", b"data");
+    let mut h = Setup::with(Pkg::signed(&fx)).build();
+    let r = h.install();
+    assert_eq!(r.status, JobStatus::Ok, "{:?}", r.problems);
+}
+
+/// A helper that runs the real one after `before` (a path that changes under the service).
+struct Hooked {
+    real: Box<dyn ruya_play::Helper>,
+    before: Box<dyn Fn() + Send + Sync>,
+}
+
+impl ruya_play::Helper for Hooked {
+    fn run(
+        &self,
+        request: &ruya_play::Request,
+        cancel: &std::sync::atomic::AtomicBool,
+        on_output: &mut dyn FnMut(&[u8]) -> bool,
+    ) -> ruya_play::Exit {
+        (self.before)();
+        self.real.run(request, cancel, on_output)
+    }
+}
+
+#[test]
+fn a_path_that_is_there_but_gets_no_descriptor_is_a_read_failure() {
+    // The harness's opener knows only pkg_path("game.play"): a real file elsewhere is "missing"
+    // to the helper, as a denied OpenFile=...:graceful is.
+    let dir = tempfile::tempdir().unwrap();
+    let there = dir.path().join("there.play");
+    std::fs::write(&there, b"x").unwrap();
+    let mut h = Setup::with(Pkg::signed(&game())).build();
+    let (st, report) = h.importer.inspect(&there);
+    assert_eq!(st, MethodStatus::Ok);
+    let report = report.unwrap();
+    assert_eq!(report.verdict, JobStatus::Failed);
+    assert_eq!(report.problems[0].code, "source.unreadable");
+    assert!(report.inspection.is_none());
+    let r = h.install_at(&there);
+    assert_eq!(
+        (r.status, codes(&r)),
+        (JobStatus::Failed, vec!["source.unreadable".to_string()])
+    );
+    h.assert_nothing_left();
+    // A path that is really gone stays unknown-source / source.missing.
+    let gone = dir.path().join("gone.play");
+    assert_eq!(h.importer.inspect(&gone).0, MethodStatus::UnknownSource);
+    let r = h.install_at(&gone);
+    assert_eq!(codes(&r), vec!["source.missing".to_string()]);
+}
+
+#[test]
+fn a_path_that_vanishes_during_the_run_is_still_unknown_source() {
+    let dir = tempfile::tempdir().unwrap();
+    let there = dir.path().join("there.play");
+    std::fs::write(&there, b"x").unwrap();
+    let mut setup = Setup::with(Pkg::signed(&game()));
+    let doomed = there.clone();
+    setup.wrap_helper = Some(Box::new(move |real| {
+        Box::new(Hooked {
+            real,
+            before: Box::new(move || {
+                let _ = std::fs::remove_file(&doomed);
+            }),
+        })
+    }));
+    let h = setup.build();
+    assert_eq!(h.importer.inspect(&there).0, MethodStatus::UnknownSource);
+}
+
+#[test]
 fn install_statuses_and_one_job_at_a_time() {
     let h = Setup::with(Pkg::signed(&game())).build();
     let p = pkg_path("game.play");

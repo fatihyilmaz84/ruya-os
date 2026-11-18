@@ -747,6 +747,23 @@ impl Importer {
             };
             inspect(source, &ctx).map_err(|r| Box::new((r.problems(), None)))?
         };
+        // Flatpak's deploy writes an empty top-level `.ref` into every app and `flatpak run` locks
+        // it: a package that lists its own could never verify. A nested `a/.ref` is just a file.
+        if let Some(e) = inspection
+            .package
+            .files
+            .iter()
+            .find(|e| e.path().split('/').next() == Some(".ref"))
+        {
+            return Err(Box::new((
+                one(
+                    codes::PACKAGE_RESERVED_REF,
+                    e.path(),
+                    "A top-level .ref is Flatpak's own: remove it from the package.",
+                ),
+                Some(inspection.clone()),
+            )));
+        }
         let id = inspection.package.manifest.id.clone();
         let build = inspection.package.manifest.build;
         let held = self.held_all().or_else(|| {
@@ -874,8 +891,21 @@ impl Importer {
             ));
         };
         request.art = art;
+        // `OpenFile=...:graceful` makes a path PID 1 may not open look like a missing one: a path
+        // that is there before and after the run, and still reported missing, is a read failure.
+        let seen = std::fs::symlink_metadata(path).is_ok();
         let (art_lines, art_problems, art_refuses) =
             match self.run_helper(&request, cancel, &mut |_| {}) {
+                Ending::Missing if seen && std::fs::symlink_metadata(path).is_ok() => {
+                    return Front::Refused(Box::new((
+                        vec![Problem::new(
+                            codes::SOURCE_UNREADABLE,
+                            "",
+                            "The package is there but the console could not read it.",
+                        )],
+                        None,
+                    )))
+                }
                 Ending::Missing => return Front::Missing,
                 Ending::Refused(p) => return Front::Refused(Box::new((p, None))),
                 Ending::Cancelled => return Front::Cancelled,
