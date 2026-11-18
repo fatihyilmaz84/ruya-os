@@ -108,12 +108,41 @@ pub fn build_in(play_json: &[u8], id: &str) -> Option<u64> {
 }
 
 /// A committed app's own `play.json` bytes (at most [`MAX_PLAY_JSON_BYTES`]), `None` when it
-/// cannot be read or is longer. The id is not checked here; see [`plain_id`].
+/// cannot be read or is longer, when `id` is not a [`plain_id`], or when the deployment is not
+/// [`ours`].
 pub fn deployed_play_json(installation: &Path, id: &str) -> Option<Vec<u8>> {
-    if !plain_id(id) {
-        return None;
-    }
-    read_bounded(&deployment_files(installation, id).join("play.json"))
+    read_bounded(&our_files(installation, id)?.join("play.json"))
+}
+
+/// The most of a deployment's `deploy` file read to find its origin (the origin is its first
+/// string; the rest is the commit, subpaths and metadata).
+const MAX_DEPLOY_HEAD_BYTES: u64 = 4096;
+
+/// The Flatpak remote a deployed app came from: the first, NUL-terminated string of
+/// `app/play.<id>/current/active/deploy` (a GVariant `(ssasta{sv})`). `None` when the file is
+/// missing, unreadable, not UTF-8 or has no NUL in its first [`MAX_DEPLOY_HEAD_BYTES`].
+fn origin_of(installation: &Path, id: &str) -> Option<String> {
+    let path = deployment_files(installation, id).with_file_name("deploy");
+    let mut head = Vec::new();
+    std::fs::File::open(path)
+        .and_then(|f| f.take(MAX_DEPLOY_HEAD_BYTES).read_to_end(&mut head))
+        .ok()?;
+    let end = head.iter().position(|&b| b == 0)?;
+    String::from_utf8(head[..end].to_vec()).ok()
+}
+
+/// Is the deployed app `play.<id>` one this service made, i.e. committed from
+/// [`ruya_play_art::PLAY_REMOTE`]? `.play` is a real top-level domain, so a Flathub app can be
+/// named `play.<something>`; nothing else in this service may adopt, verify or read it. A missing
+/// or unreadable `deploy` file, a name that is not a [`plain_id`] and any other origin (a prefix
+/// of ours too) are not ours. The one origin check of every reader of `app/play.*`.
+pub fn ours(installation: &Path, id: &str) -> bool {
+    plain_id(id) && origin_of(installation, id).as_deref() == Some(ruya_play_art::PLAY_REMOTE)
+}
+
+/// [`deployment_files`] of an app that is [`ours`], else `None`.
+pub fn our_files(installation: &Path, id: &str) -> Option<std::path::PathBuf> {
+    ours(installation, id).then(|| deployment_files(installation, id))
 }
 
 fn read_bounded(path: &Path) -> Option<Vec<u8>> {
@@ -162,7 +191,7 @@ pub fn permissions_in(play_json: &[u8], id: &str) -> Option<Permissions> {
 }
 
 /// Where a committed app's `/app` folder is: `app/play.<id>/current/active/files` below the
-/// installation. The id is not checked here; see [`plain_id`].
+/// installation. Neither the id nor the origin is checked here; see [`our_files`].
 pub fn deployment_files(installation: &Path, id: &str) -> std::path::PathBuf {
     installation
         .join("app")
@@ -179,7 +208,8 @@ pub fn plain_id(id: &str) -> bool {
 
 /// The `play.*` apps of the Flatpak installation at `installation` (`/var/lib/flatpak`): every
 /// `app/play.<id>/current/active/files/` with what its `play.json` and `play.sig` say. An app
-/// folder that is not `play.` plus a plain id is skipped. A missing `app/` is an empty list.
+/// folder that is not `play.` plus a plain id, or whose deployment is not [`ours`], is skipped
+/// (so [`plan`] forgets a build recorded for it and never touches the app). A missing `app/` is an empty list.
 pub fn deployed_apps(installation: &Path) -> std::io::Result<BTreeMap<String, Deployed>> {
     let mut out = BTreeMap::new();
     let entries = match std::fs::read_dir(installation.join("app")) {
@@ -195,7 +225,7 @@ pub fn deployed_apps(installation: &Path) -> std::io::Result<BTreeMap<String, De
         let Some(id) = name.strip_prefix("play.") else {
             continue;
         };
-        if !plain_id(id) {
+        if !ours(installation, id) {
             continue;
         }
         let files = entry.path().join("current").join("active").join("files");
@@ -317,12 +347,25 @@ mod tests {
     fn deployed_apps_are_read_from_the_installation() {
         let root = tempfile::tempdir().unwrap();
         let app = |name: &str, json: Option<&[u8]>, sig: bool| {
+            let origin = match name {
+                "play.com.example.hub" => "flathub",
+                "play.com.example.evil" => "ruyaos-play-local-evil",
+                "play.com.example.nodeploy" => "",
+                _ => ruya_play_art::PLAY_REMOTE,
+            };
             let files = root
                 .path()
                 .join("app")
                 .join(name)
                 .join("current/active/files");
             std::fs::create_dir_all(&files).unwrap();
+            if !origin.is_empty() {
+                std::fs::write(
+                    files.parent().unwrap().join("deploy"),
+                    format!("{origin} abcdef "),
+                )
+                .unwrap();
+            }
             if let Some(j) = json {
                 std::fs::write(files.join("play.json"), j).unwrap();
             }
@@ -336,6 +379,14 @@ mod tests {
             true,
         );
         app("play.com.example.b", None, false);
+        // Not ours: another remote, a prefix of ours, no deploy file. All skipped.
+        for foreign in ["hub", "evil", "nodeploy"] {
+            app(
+                &format!("play.com.example.{foreign}"),
+                Some(format!(r#"{{"id":"com.example.{foreign}","build":9}}"#).as_bytes()),
+                true,
+            );
+        }
         app(
             "org.example.NotPlay",
             Some(br#"{"id":"x","build":1}"#),

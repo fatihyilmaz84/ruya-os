@@ -36,6 +36,7 @@ fn mode(_path: &Path, _bits: u32) {}
 fn deploy(h: &Harness, id: &str, fx: &Fx) -> PathBuf {
     let files = files_dir(h, id);
     std::fs::create_dir_all(&files).unwrap();
+    write_deploy(&h.cfg.flatpak, id, ruya_play_art::PLAY_REMOTE);
     for (p, d) in &fx.files {
         let full = files.join(p);
         std::fs::create_dir_all(full.parent().unwrap()).unwrap();
