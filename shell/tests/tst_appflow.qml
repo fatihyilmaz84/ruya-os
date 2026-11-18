@@ -665,6 +665,8 @@ Item {
         function test_a_crash_after_the_window_comes_back_to_home() {
             start()
             tc.shell.launchApp("crashy", "Crashy", "")
+            // Session1 starts it once Input has answered PreparePads (RUY-837); its window comes after that.
+            tryVerify(() => tc.shell.launchState && tc.shell.launchState.started, 2000, "the launch has started")
             const app = createTemporaryObject(appComponent, host, { appId: "crashy" })
             tc.shell.addApp(app, "p2")
             tryVerify(() => app.activeFocus, 2000)

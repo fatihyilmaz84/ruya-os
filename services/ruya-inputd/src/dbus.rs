@@ -74,7 +74,11 @@ pub type SharedRouter = Router<DynBackend>;
 pub struct Shared {
     router: Mutex<SharedRouter>,
     notices: async_channel::Sender<Notice>,
+    /// The `PreparePads` calls waiting for their answer (RUY-837): app id, profile, where to send it.
+    prepares: Mutex<Vec<Waiter>>,
 }
+
+type Waiter = (String, String, async_channel::Sender<Status>);
 
 impl Shared {
     pub fn new(router: SharedRouter) -> (Arc<Shared>, async_channel::Receiver<Notice>) {
@@ -83,9 +87,32 @@ impl Shared {
             Arc::new(Shared {
                 router: Mutex::new(router),
                 notices: tx,
+                prepares: Mutex::new(Vec::new()),
             }),
             rx,
         )
+    }
+
+    fn waiters(&self) -> MutexGuard<'_, Vec<Waiter>> {
+        self.prepares
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// `PreparePads`: the status, once the router announced the end of the preparation (at once
+    /// for a refusal). The router answers every preparation it accepted: its pads are ready, their
+    /// udev fallback (2 s) ran, or the preparation ended; the shell waits at most 1 s anyway.
+    pub async fn prepare(&self, app_id: &str, profile: &str) -> Status {
+        let (tx, rx) = async_channel::bounded(1);
+        // Registered first: the answer may come within the call itself (no pad to wait for).
+        self.waiters()
+            .push((app_id.to_owned(), profile.to_owned(), tx.clone()));
+        let status = self.with(|r| r.prepare_pads(app_id, profile, Instant::now()));
+        if status != Status::Ok {
+            self.waiters().retain(|(_, _, t)| !t.same_channel(&tx));
+            return status;
+        }
+        rx.recv().await.unwrap_or(Status::Failed)
     }
 
     /// A poisoned lock (a thread panicked) must not stop the others from releasing keys.
@@ -101,6 +128,17 @@ impl Shared {
         for notice in router.take_notices() {
             match notice {
                 Notice::Journal(line) => eprintln!("ruya-inputd: {line}"),
+                Notice::PadsPrepared {
+                    app_id,
+                    profile,
+                    status,
+                } => self.waiters().retain(|(a, p, tx)| {
+                    let this = *a == app_id && *p == profile;
+                    if this {
+                        let _ = tx.try_send(status);
+                    }
+                    !this
+                }),
                 other => {
                     let _ = self.notices.try_send(other);
                 }
@@ -281,6 +319,15 @@ impl InputIface {
             self.shared.with(|r| r.caller_left(&caller, Instant::now()));
         }
         status.as_str().to_owned()
+    }
+
+    /// `PreparePads` (RUY-837): answered once the pads are ready (the XML).
+    async fn prepare_pads(&self, app_id: &str, profile: &str) -> String {
+        self.shared
+            .prepare(app_id, profile)
+            .await
+            .as_str()
+            .to_owned()
     }
 
     #[zbus(out_args("status", "profiles"))]
@@ -519,7 +566,7 @@ pub async fn announce(connection: Connection, notices: async_channel::Receiver<N
             Notice::ForeignInput { device_id, kind } => {
                 InputIface::foreign_input(emitter, device_id, kind).await
             }
-            Notice::Journal(_) => Ok(()),
+            Notice::Journal(_) | Notice::PadsPrepared { .. } => Ok(()),
         };
         if let Err(err) = result {
             eprintln!("ruya-inputd: emitting {notice:?} failed: {err}");
@@ -632,5 +679,95 @@ mod tests {
             other => panic!("device_id: {other:?}"),
         }
         assert_eq!(dict.len(), 5, "the contract's keys, no more");
+    }
+}
+
+#[cfg(test)]
+mod prepare_tests {
+    //! PreparePads over the adapter (RUY-837): the call waits for the router's answer.
+    use super::*;
+    use crate::accounts::FixedAccounts;
+    use crate::pad::{PadButton, PadInput};
+    use crate::routing::{Created, NullBackend, PadInfo, PadKey, VirtualId, VirtualSpec};
+    use crate::udev::UdevEvent;
+
+    /// A uinput and filesystem that always work.
+    struct Works;
+
+    impl Backend for Works {
+        fn nav_keys(&mut self, _: &[crate::mapping::KeyEvent]) {}
+        fn create_virtual(&mut self, _: PadKey, _: &VirtualSpec) -> Result<Created, String> {
+            Ok(Created {
+                id: 1,
+                sysname: "input101".into(),
+            })
+        }
+        fn destroy_virtual(&mut self, _: VirtualId) {}
+        fn write_virtual(&mut self, _: VirtualId, _: &[crate::pad::OutEvent]) {}
+        fn node_of(&mut self, _: &str) -> Option<String> {
+            Some("/dev/input/event21".into())
+        }
+        fn read_acl(&mut self, _: &str) -> Option<Vec<u8>> {
+            None
+        }
+        fn write_acl(&mut self, _: &str, _: &[u8]) -> Result<(), String> {
+            Ok(())
+        }
+        fn ff_upload(&mut self, _: PadKey, _: i16, _: &crate::pad::Rumble) -> Result<i16, i32> {
+            Err(0)
+        }
+        fn ff_play(&mut self, _: PadKey, _: i16, _: i32) {}
+        fn ff_erase(&mut self, _: PadKey, _: i16) {}
+    }
+
+    const STK: &str = "net.supertuxkart.SuperTuxKart";
+
+    fn shared(backend: DynBackend) -> Arc<Shared> {
+        let router = Router::new(backend, Box::new(FixedAccounts(vec![("p1".into(), 1001)])));
+        Shared::new(router).0
+    }
+
+    #[test]
+    fn prepare_pads_answers_once_the_pad_is_ready() {
+        let shared = shared(Box::new(Works));
+        let now = Instant::now();
+        // The pad signs p1 in (its press, then the route), so it is seat 1.
+        shared.with(|r| {
+            let info = PadInfo {
+                id: "a".into(),
+                ..PadInfo::default()
+            };
+            let key = r.add_pad(info, now);
+            r.input(key, &[PadInput::Button(PadButton::South, true)]);
+            r.input(key, &[PadInput::Button(PadButton::South, false)]);
+            r.set_route("shell", "", "", "p1", ":1.5", now)
+        });
+        let mut call = Box::pin(shared.prepare(STK, "p1"));
+        // The pad is made, its ACL is not set: no answer yet.
+        assert_eq!(
+            futures_lite::future::block_on(futures_lite::future::poll_once(&mut call)),
+            None
+        );
+        shared.with(|r| {
+            r.udev_event(&UdevEvent {
+                action: "add".into(),
+                subsystem: "input".into(),
+                devpath: "/devices/virtual/input/input101/event21".into(),
+                devname: "/dev/input/event21".into(),
+            })
+        });
+        assert_eq!(futures_lite::future::block_on(call), Status::Ok);
+        assert!(shared.waiters().is_empty());
+    }
+
+    #[test]
+    fn prepare_pads_answers_a_refusal_and_a_preparation_with_no_pad_at_once() {
+        let shared = shared(Box::new(NullBackend));
+        let block = |f| futures_lite::future::block_on(f);
+        assert_eq!(block(shared.prepare(STK, "p1")), Status::NotAllowed);
+        assert!(shared.waiters().is_empty(), "a refusal leaves no waiter");
+        shared.with(|r| r.set_route("shell", "", "", "p1", ":1.5", Instant::now()));
+        assert_eq!(block(shared.prepare(STK, "p1")), Status::Ok);
+        assert!(shared.waiters().is_empty());
     }
 }

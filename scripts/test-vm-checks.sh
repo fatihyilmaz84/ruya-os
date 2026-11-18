@@ -1042,6 +1042,36 @@ $c2
 $r1")"; rc=$?
 expect_contains "twopads: pad2 never ready: FAIL" "$out" "FAIL: journal: pad2 was never ready during twopads"
 [ "$rc" = 1 ] && pass "twopads: pad2 never ready: exit 1" || fail "twopads: pad2 never ready: exit $rc"
+# --- vm-input-check.sh startpad (RUY-837): the prepared pad is ready before the game's route binds it ------------
+echo "vm-input-check.sh startpad: the probe runs, and the journal has the pad ready before it is bound"
+runstartpad() { # <journal lines>
+    printf '%s\n' "$1" > "$tmp/startpad.journal"
+    : > "$tmp/startpad.log"
+    FAKE_LOG="$tmp/startpad.log" FAKE_JOURNAL="$tmp/startpad.journal" CHECK_TMP="$pl/tmp" PATH="$tp/bin:$PATH" \
+        bash "$pl/with/vm-input-check.sh" startpad 2>&1
+}
+sp1='ruya-inputd: pads prepared for org.ruyaos.VmCheck (ruya-p1)'
+sp2="ruya-inputd: prepared pads for org.ruyaos.VmCheck bound to instance 'vm-check-startpad'"
+out="$(runstartpad "$sp1
+$c1
+$r1
+$sp2")"; rc=$?
+expect_contains "startpad: ready before bound: PASS" "$out" "PASS: journal: pads prepared, pad1 ready, then bound to the game's instance"
+expect_contains "startpad: the probe runs startpad" "$(cat "$tmp/startpad.log")" "probe startpad --user ruya-p1 --profile p1"
+[ "$rc" = 0 ] && pass "startpad: exit 0" || fail "startpad: exit $rc"
+out="$(runstartpad "$sp1
+$c1
+$sp2
+$r1")"; rc=$?
+expect_contains "startpad: ready only after bound: FAIL" "$out" "FAIL: journal: prepared, ready before bound, bound: 1 0 1"
+[ "$rc" = 1 ] && pass "startpad: ready after bound: exit 1" || fail "startpad: ready after bound: exit $rc"
+out="$(FAKE_PROBE_FAIL=1 runstartpad "$sp1
+$c1
+$r1
+$sp2")"; rc=$?
+[ "$rc" = 1 ] && pass "startpad: a FAIL of the probe: exit 1" || fail "startpad: a FAIL of the probe: exit $rc"
+out="$(FAKE_LOG="$tmp/startpad.log" CHECK_TMP="$pl/tmp" PATH="$tp/bin:$PATH" bash "$pl/alone/vm-input-check.sh" startpad 2>&1)"; rc=$?
+expect_contains "startpad without the probe: FAIL" "$out" "vm-input-probe.py is missing: copy it next to this script"
 # --- vm-input-check.sh join (RUY-628): VerifyPin wrong then right, ActiveProfile stays, JoinPlayer, ListPlayers -------
 echo "vm-input-check.sh join: the PIN is checked without a sign-in, then the pad joins and ListPlayers has the seat"
 jn="$tmp/join"; mkdir -p "$jn/bin" "$jn/state"

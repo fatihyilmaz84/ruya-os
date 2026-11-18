@@ -27,6 +27,10 @@ public:
     // Input1.SetRoute(route, instance, app_id, profile); the answer arrives as routeFinished.
     virtual void setRoute(const QString &route, const QString &instance, const QString &appId,
                           const QString &profile) = 0;
+    // Input1.PreparePads(app_id, profile) (RUY-837): the pads of a game about to start; the answer
+    // arrives as preparePadsFinished with the same token (the service answers once the pads are
+    // ready; Input bounds the wait).
+    virtual void preparePads(quint64 token, const QString &appId, const QString &profile) = 0;
     // Input1.ListDevices; the answer arrives as devicesListed (the newest request only).
     virtual void refreshDevices() = 0;
     // Input1.GetCapabilities(device_id); the answer arrives as capabilitiesFinished.
@@ -60,6 +64,8 @@ signals:
     // The newest SetRoute's answer: a status string of api/dbus/org.ruyaos.Input1.xml, or "failed"
     // when the call itself failed (no service, a D-Bus error). Older answers are dropped.
     void routeFinished(const QString &status);
+    // PreparePads answered: a status of the XML, or "failed" when the call itself failed.
+    void preparePadsFinished(quint64 token, const QString &status);
     // org.ruyaos.Input1 has a (new) owner: a restarted service starts in the route "shell", so the
     // shell sends its route again.
     void serviceAppeared();

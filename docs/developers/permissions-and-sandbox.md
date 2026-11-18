@@ -21,7 +21,7 @@ Your game runs in a Flatpak sandbox as the profile's own Unix user. What it may 
 |---|---|---|
 | `--socket=wayland` | draw to the screen | nothing (not listed) |
 | `--device=dri` | the GPU (OpenGL, Vulkan) | nothing |
-| `--device=input` | game controllers (`/dev/input`); needs Flatpak 1.18 as in Fedora 44, older ones only know `--device=all` | "Uses game controllers" |
+| `--device=input` | game controllers (`/dev/input`); needs Flatpak 1.18 as in Fedora 44, older ones only know `--device=all`. RuyaOS grants it to every app at launch *(experimental, RUY-837)*, because many games lack it; ask for it anyway (the Store lists what your manifest asks) | "Uses game controllers" |
 | `--socket=pulseaudio` | sound; this is the route RuyaOS provides for audio ([Audio and video](audio-and-video.md)) | "Plays sound" |
 | `--share=network` | online play, downloads, cloud saves of your own. **Only if you need it** | "Uses the network" |
 

@@ -157,6 +157,24 @@ void DBusInputBackend::setRoute(const QString &route, const QString &instance, c
     });
 }
 
+void DBusInputBackend::preparePads(quint64 token, const QString &appId, const QString &profile)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("PreparePads"));
+    msg << appId << profile;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, token, appId](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString> reply = *w;
+        if (!reply.isValid()) {
+            qWarning("ruya-shell: Input1 PreparePads %s failed: %s", qPrintable(appId),
+                     qPrintable(reply.error().message()));
+            emit preparePadsFinished(token, QStringLiteral("failed"));
+            return;
+        }
+        emit preparePadsFinished(token, reply.argumentAt<0>());
+    });
+}
+
 void DBusInputBackend::refreshDevices()
 {
     const quint64 request = beginDevicesRequest();

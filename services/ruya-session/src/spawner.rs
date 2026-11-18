@@ -931,9 +931,9 @@ pub fn app_env(
     env
 }
 
-/// The argument list that starts `flatpak run <app_id>` as `user` in that user's systemd manager
-/// and waits for it (`--wait`: the process lives as long as the app does, and prints the
-/// start and the end on stderr, see `parse_run_line`). `Type=exec` makes the start line mean
+/// The argument list that starts `flatpak run --device=input <app_id>` as `user` in that user's
+/// systemd manager and waits for it (`--wait`: the process lives as long as the app does, and
+/// prints the start and the end on stderr, see `parse_run_line`). `Type=exec` makes the start line mean
 /// "the program was executed". Pure: nothing is executed. Every value is validated again here
 /// (the core has checked them already), so the list holds only plain identifiers, and the
 /// application id comes after `--` so it can never be read as an option.
@@ -981,6 +981,13 @@ pub enum DisplayMode {
 /// This binary in the image; in X11 mode it is the unit's main process (`x11-run`) and its
 /// `ExecStopPost` (`x11-cleanup`).
 pub const SESSION_PROGRAM: &str = "/usr/bin/ruya-session";
+
+/// Every app gets the input devices in its sandbox (RUY-837, 06 §1 and §3), whatever its manifest
+/// asks: many games ask only `devices=dri`, and then `/dev/input` does not exist for them, so no
+/// pad can reach them. What opens there is still ruya-inputd's choice: every pad's node is closed
+/// to the profile users except the profile's own virtual pads (their ACL names only that user).
+/// Flatpak 1.15.6 or newer (the image has 1.18).
+pub const DEVICE_INPUT: &str = "--device=input";
 
 /// `launch_command` for either display mode. In X11 mode the unit runs
 /// `ruya-session x11-run <app_id>` (which starts the X server and then `flatpak run`) and cleans
@@ -1032,7 +1039,9 @@ pub fn launch_command_in(
         args.push(format!("--setenv={key}={value}"));
     }
     match mode {
-        DisplayMode::Wayland => args.extend(["--", "flatpak", "run"].map(str::to_owned)),
+        DisplayMode::Wayland => {
+            args.extend(["--", "flatpak", "run", DEVICE_INPUT].map(str::to_owned))
+        }
         DisplayMode::X11 => {
             args.push(format!(
                 "--property=ExecStopPost={SESSION_PROGRAM} x11-cleanup {app_id}"
@@ -1853,6 +1862,7 @@ mod tests {
                 "--",
                 "flatpak",
                 "run",
+                "--device=input",
                 "org.ruyaos.Racer",
             ]
         );
@@ -1907,8 +1917,15 @@ mod tests {
         let wayland = launch_command_in("ruya-p1", steam, &env(), DisplayMode::Wayland, &gamepadui)
             .expect("valid");
         assert_eq!(
-            wayland[wayland.len() - 5..],
-            ["--", "flatpak", "run", steam, "-gamepadui"]
+            wayland[wayland.len() - 6..],
+            [
+                "--",
+                "flatpak",
+                "run",
+                "--device=input",
+                steam,
+                "-gamepadui"
+            ]
         );
         for bad in ["", "-a b", "--x;rm", "$(x)", "a\nb", &"x".repeat(65)] {
             assert!(

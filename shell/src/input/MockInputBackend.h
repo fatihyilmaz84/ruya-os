@@ -13,7 +13,8 @@
 // In-memory stand-in for ruya-inputd's routing (RUY-409). It checks SetRoute's arguments by the
 // service's rules (services/ruya-inputd/src/routing.rs: the shape of each route and the app id's
 // form; any non-empty profile is taken), keeps the route and models the virtual pads: they exist
-// only for "app" and stay for "overlay" with the same instance and profile; anything else destroys
+// only for "app" (or from a PreparePads on, RUY-837) and stay for "overlay" with the same instance and
+// profile; anything else destroys
 // them (06 §5.1). Answers arrive asynchronously, like D-Bus replies. Every call is logged for tests.
 // Devices (RUY-39): three pads (a DualSense over Bluetooth, an Xbox pad over USB, a Pro Controller
 // over Bluetooth whose motion node does not open), each with the descriptor ruya-inputd's rules
@@ -41,6 +42,14 @@ public:
     bool isMock() const override { return true; }
     void setRoute(const QString &route, const QString &instance, const QString &appId,
                   const QString &profile) override;
+    // PreparePads (RUY-837) by the service's rules: the pads exist from then on (route unchanged)
+    // and the next "app" or "overlay" with that app id and profile keeps them; the answer comes
+    // after setPrepareDelayMs (0, asynchronously; -1: never).
+    void preparePads(quint64 token, const QString &appId, const QString &profile) override;
+    void setPrepareDelayMs(int ms) { m_prepareDelayMs = ms; }
+    // Tests: every PreparePads as { appId, profile, route } (the route when it arrived), oldest first.
+    QVariantList prepareCalls() const { return m_prepareCalls; }
+    QString preparedAppId() const { return m_preparedAppId; }
     void refreshDevices() override;
     void getCapabilities(const QString &deviceId) override;
     void startTest(const QString &deviceId, bool holdLeftStick) override;
@@ -157,7 +166,11 @@ public:
 
     // Tests: every SetRoute as { route, instance, appId, profile }, oldest first.
     QVariantList calls() const { return m_calls; }
-    void clearCalls() { m_calls.clear(); }
+    void clearCalls()   // also the PreparePads calls
+    {
+        m_calls.clear();
+        m_prepareCalls.clear();
+    }
     QString route() const { return m_route; }
     QString instance() const { return m_instance; }
     QString profile() const { return m_profile; }
@@ -197,6 +210,10 @@ private:
     QString m_profile;
     bool m_pads = false;
     int m_padGeneration = 0;
+    // The pads were made by PreparePads for this app id (and m_profile) and no route has taken them.
+    QString m_preparedAppId;
+    int m_prepareDelayMs = 0;
+    QVariantList m_prepareCalls;
     bool m_fail = false;
     bool m_holdSaves = false;
     bool m_holdGets = false;

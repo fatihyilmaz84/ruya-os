@@ -1028,6 +1028,104 @@ def cmd_playing(args):
         pad.close()
 
 
+def cmd_scan(args):
+    """A game's one look at /dev/input at its start (RUY-837): every event node it can open, as JSON."""
+    opened = []
+    for name in sorted(os.listdir("/dev/input")):
+        if not name.startswith("event"):
+            continue
+        node = "/dev/input/" + name
+        try:
+            fd = os.open(node, os.O_RDONLY | os.O_NONBLOCK)
+        except OSError:
+            continue
+        try:
+            opened.append({"node": node, "name": eviocgname(fd)})
+        finally:
+            os.close(fd)
+    print(json.dumps(opened), flush=True)
+
+
+def scan_as(user):
+    out = subprocess.run(["runuser", "-u", user, "--", sys.executable, os.path.abspath(__file__), "scan"],
+                         capture_output=True, text=True).stdout.strip()
+    try:
+        return json.loads(out)
+    except ValueError:
+        return out
+
+
+def cmd_startpad(args):
+    """RUY-837: PreparePads makes the profile's pad, with its ACL, before the game starts and while the route
+    is still `shell`; a game that looks at /dev/input once at its start (Neverball) sees exactly that pad, and
+    the game's route `app` keeps the same device, so the descriptor it opened then hears the player."""
+    fails = 0
+
+    def ok(msg):
+        print(f"PASS: {msg}", flush=True)
+
+    def bad(msg):
+        nonlocal fails
+        fails += 1
+        print(f"FAIL: {msg}", flush=True)
+
+    pad = FakePad(phys="vm-check/pad0", name=NAME)
+    bus = None
+    game = None
+    try:
+        if not wait_for(lambda: any(d.get("name") == NAME for d in (devices() or [])), 5):
+            bad("ListDevices does not list the pad")
+            return fails
+        bus = Bus()
+        if bus.call(SVC, PATH, IFC, "SetRoute", ["locked", "", "", ""]) != "ok":
+            bad("SetRoute locked")
+            return fails
+        pad.emit(EV_KEY, BTN_SOUTH, 1)
+        pad.emit(EV_KEY, BTN_SOUTH, 0)
+        time.sleep(0.3)
+        if bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile]) != "ok":
+            bad("SetRoute shell")
+            return fails
+        before = scan_as(args.user)
+        ok("before PreparePads the profile user opens no node") if before == [] else bad(f"before PreparePads: {before}")
+        t = time.monotonic()
+        status = bus.call(SVC, PATH, IFC, "PreparePads", ["org.ruyaos.VmCheck", args.profile])
+        took = time.monotonic() - t
+        ok(f"PreparePads answered ok in {took:.2f} s") if status == "ok" and took < 1.0 else bad(
+            f"PreparePads answered {status} in {took:.2f} s (the shell waits 1 s)")
+        ok("the route is still shell") if route_prop() == "shell" else bad(f"the route is {route_prop()}")
+        # The game's one look, right after the answer: exactly its pad, ruya-input/pad1.
+        v1, _ = node_by("phys", "ruya-input/pad1")
+        seen = scan_as(args.user)
+        if isinstance(seen, list) and [s["node"] for s in seen] == [v1]:
+            ok(f"the game's first look at /dev/input sees exactly its pad ({v1})")
+        else:
+            bad(f"the game's first look saw {seen}, its pad is {v1}")
+        game = Game(args.user, v1) if v1 else None
+        if not game or not game.hello.startswith("OPEN ok"):
+            bad(f"{args.user} cannot open pad1 at the game's start: {game.hello if game else 'no pad1'}")
+            return fails
+        # The game's window: the route app takes the prepared pad, the descriptor stays live.
+        if bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-startpad", "org.ruyaos.VmCheck", args.profile]) != "ok":
+            bad("SetRoute app")
+            return fails
+        same = node_by("phys", "ruya-input/pad1")[0]
+        ok("the route app keeps the same pad1 node") if same == v1 else bad(f"pad1 is {same} now, was {v1}")
+        pad.emit(EV_KEY, BTN_EAST, 1)
+        pad.emit(EV_KEY, BTN_EAST, 0)
+        got = game.events_until(lambda ev: len(ev) >= 2)
+        ok("the descriptor opened before the route hears the pad") if isinstance(got, list) and (EV_KEY, BTN_EAST, 1) in got \
+            else bad(f"the game's descriptor got {got}")
+    finally:
+        if game:
+            game.close()
+        if bus:
+            bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+            bus.close()
+        pad.close()
+    return fails
+
+
 def cmd_twopads(args):
     """RUY-540: two pads, one of them signs the profile in; on entry to `app` that pad is ruya-input/pad1 (SDL
     index 0). Run twice, once with each pad the active one, so the key order cannot decide it."""
@@ -2146,6 +2244,10 @@ def main():
     cf.add_argument("--profile", required=True)
     hd = sub.add_parser("hold")
     hd.add_argument("--profile", required=True)
+    sub.add_parser("scan")
+    sp = sub.add_parser("startpad")
+    sp.add_argument("--user", required=True)
+    sp.add_argument("--profile", required=True)
     tp = sub.add_parser("twopads")
     tp.add_argument("--user", required=True)
     tp.add_argument("--profile", required=True)
@@ -2203,6 +2305,8 @@ def main():
         sys.exit(1 if cmd_signals(args) else 0)
     if args.cmd == "twopads":
         sys.exit(1 if cmd_twopads(args) else 0)
+    if args.cmd == "startpad":
+        sys.exit(1 if cmd_startpad(args) else 0)
     if args.cmd == "guide":
         sys.exit(1 if cmd_guide(args) else 0)
     if args.cmd == "twoprofiles":
@@ -2219,7 +2323,7 @@ def main():
         sys.exit(1 if cmd_hold(args) else 0)
     if args.cmd == "owner":
         sys.exit(1 if cmd_owner(args) else 0)
-    {"listen": cmd_listen, "game": cmd_game, "open": cmd_open, "restart": cmd_restart, "pad": cmd_pad, "navpad": cmd_navpad, "playing": cmd_playing}[args.cmd](args)
+    {"listen": cmd_listen, "scan": cmd_scan, "game": cmd_game, "open": cmd_open, "restart": cmd_restart, "pad": cmd_pad, "navpad": cmd_navpad, "playing": cmd_playing}[args.cmd](args)
 
 
 if __name__ == "__main__":
