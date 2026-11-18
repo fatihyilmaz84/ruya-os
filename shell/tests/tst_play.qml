@@ -139,6 +139,10 @@ Item {
             compare(i.revoked, false)
             compare(i.installedBuild, 0)
             compare(i.problems.length, 0)
+            compare(i.gate, "allowed")
+            compare(i.updateKnown, false, "not installed: no update keys")
+            compare(i.permissionsAdded.length, 0)
+            compare(i.addsHighRisk, false)
         }
 
         function test_inspect_the_other_fixtures() {
@@ -148,6 +152,10 @@ Item {
             compare(i.installedBuild, 2, "build 2 is installed, this is build 3")
             compare(i.build, 3)
             compare(i.verdict, "ok")
+            compare(i.updateKnown, true, "an update of the installed build")
+            compare(i.permissionsRemoved.map(x => x.key), ["network"])
+            compare(i.permissionsAdded.length, 0)
+            compare(i.addsHighRisk, false)
 
             i = inspect("homebrew")
             compare(i.tier, "unverified")
@@ -167,6 +175,7 @@ Item {
 
             i = inspect("rawaccess.play.zip")
             compare(i.permissions.filter(x => x.risk === "high").map(x => x.key), ["input:all-devices", "devel"])
+            compare(i.gate, "admin-pin-warning", "developer tier, high risk")
 
             i = inspect("impostor")
             compare(i.keyState, "different")

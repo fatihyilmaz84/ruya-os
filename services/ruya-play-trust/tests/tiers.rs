@@ -7,7 +7,7 @@ use ruya_play_format::limits::{BOOL_PERMISSIONS, INPUT_MODES, REMOVABLE_MEDIA};
 use ruya_play_format::manifest::Permissions;
 use ruya_play_trust::{
     assess, ceiling, check_ceiling, decide_tier, Gate, Risk, Signatures, Tier, TierReason,
-    TrustStore, CEILINGS, HIGH_RISK_PAIRS, PERMISSION_RISKS,
+    TrustStore, CEILINGS, HIGH_RISK_PAIRS, PERMISSIONS,
 };
 use serde_json::json;
 
@@ -136,7 +136,7 @@ fn the_ceilings_are_the_table_of_the_spec() {
 
 #[test]
 fn the_risk_table_is_the_table_of_the_spec() {
-    let rows: Vec<(&str, &str, Risk)> = PERMISSION_RISKS
+    let rows: Vec<(&str, &str, Risk)> = PERMISSIONS
         .iter()
         .map(|r| (r.key, r.value, r.risk))
         .collect();
@@ -155,12 +155,13 @@ fn the_risk_table_is_the_table_of_the_spec() {
             ("devel", "true", Risk::High),
         ]
     );
-    assert_eq!(HIGH_RISK_PAIRS, [("network", "removable_media")]);
+    let pairs: Vec<(&str, &str)> = HIGH_RISK_PAIRS.iter().map(|p| (p.a, p.b)).collect();
+    assert_eq!(pairs, [("network", "removable_media")]);
 }
 
 #[test]
 fn every_value_of_the_vocabulary_is_classed() {
-    let classed = |k: &str, v: &str| PERMISSION_RISKS.iter().any(|r| r.key == k && r.value == v);
+    let classed = |k: &str, v: &str| PERMISSIONS.iter().any(|r| r.key == k && r.value == v);
     for v in INPUT_MODES {
         assert!(classed("input", v), "input {v}");
     }

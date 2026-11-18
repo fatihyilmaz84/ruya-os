@@ -73,7 +73,7 @@ fn init_fill_build_validate_sign_inspect() {
     assert_eq!(o.json["name"], json!("My Game"));
     assert_eq!(
         o.json["permissions"][0]["words"],
-        json!("Uses controllers and keyboard and mouse")
+        json!("Uses controllers, keyboard and mouse")
     );
     assert_eq!(o.json["permissions"][0]["risk"], json!("low"));
     let text = run_p(&["inspect"], &[&zip]).text;

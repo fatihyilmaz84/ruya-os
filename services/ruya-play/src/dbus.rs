@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_channel::{Receiver, Sender};
-use ruya_play_trust::{Continuity, Risk};
+use ruya_play_trust::{words, Continuity, Request, Risk};
 use zbus::message::Header;
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
@@ -116,24 +116,6 @@ fn risk_word(r: Risk) -> &'static str {
     }
 }
 
-/// The plain words of 05 §8 for a request, in English (the shell translates by key). The same
-/// table as `ruya-pack inspect`'s.
-pub fn plain_words(key: &str, value: &str) -> &'static str {
-    match (key, value) {
-        ("input", "controllers") => "Uses controllers",
-        ("input", "controllers+keyboard-mouse") => "Uses controllers and keyboard and mouse",
-        ("input", "all-devices") => "Accesses all devices",
-        ("network", _) => "Uses the network",
-        ("removable_media", "read") => "Reads files on USB drives",
-        ("removable_media", "write") => "Changes files on USB drives",
-        ("multiarch", _) => "Runs 32-bit programs",
-        ("gamemode" | "realtime", _) => "Asks the system to prioritise it",
-        ("devel", _) => "Can inspect other programs",
-        ("network+removable_media", _) => "Uses the network and reaches USB drives",
-        _ => "Asks for a permission",
-    }
-}
-
 /// The record's permission key: the vocabulary key, with its value when it is not a bool
 /// (`input:controllers`, `removable_media:read`, `network`, `network+removable_media`).
 fn permission_key(key: &str, value: &str) -> String {
@@ -142,6 +124,21 @@ fn permission_key(key: &str, value: &str) -> String {
     } else {
         format!("{key}:{value}")
     }
+}
+
+/// The `(key, words, risk)` triples of Play1's `permissions`, in the requests' order, with the
+/// words of the one permission table (`ruya_play_trust::permissions`).
+fn permission_triples(requests: &[Request]) -> Vec<(String, String, String)> {
+    requests
+        .iter()
+        .map(|r| {
+            (
+                permission_key(&r.key, &r.value),
+                words(&r.key, &r.value).to_string(),
+                risk_word(r.risk).to_string(),
+            )
+        })
+        .collect()
 }
 
 /// Play1's `art` (role -> file) and `screenshots` from the vetted art: `icon` is the 512 px icon,
@@ -198,7 +195,8 @@ pub fn art_roles(art: &[VettedArt]) -> (BTreeMap<String, String>, Vec<String>) {
 
 /// Play1's Inspect record. Optional keys are absent when unknown (`age_label`: the manifest
 /// declares an OARS map, not a label, so it is absent; `signer_name`: a signature carries a key,
-/// not a name).
+/// not a name). `gate` is the assessment's; `permissions_added`, `permissions_removed` and
+/// `adds_high_risk` are there only for an update whose installed requests could be read.
 pub fn inspect_record(report: &InspectReport) -> Dict {
     let mut e: Vec<(&str, Value<'_>)> = Vec::new();
     e.push(("verdict", Value::from(report.verdict.as_str().to_string())));
@@ -266,19 +264,25 @@ pub fn inspect_record(report: &InspectReport) -> Dict {
             e.retain(|(name, _)| *name != "key_state");
             e.push(("key_state", Value::from(k.to_string())));
         }
-        let perms: Vec<(String, String, String)> = insp
-            .assessment
-            .requests
-            .iter()
-            .map(|r| {
-                (
-                    permission_key(&r.key, &r.value),
-                    plain_words(&r.key, &r.value).to_string(),
-                    risk_word(r.risk).to_string(),
-                )
-            })
-            .collect();
-        e.push(("permissions", Value::from(perms)));
+        e.push((
+            "permissions",
+            Value::from(permission_triples(&insp.assessment.requests)),
+        ));
+        e.push((
+            "gate",
+            Value::from(insp.assessment.gate.as_str().to_string()),
+        ));
+        if let Some(d) = &report.update {
+            e.push((
+                "permissions_added",
+                Value::from(permission_triples(&d.added)),
+            ));
+            e.push((
+                "permissions_removed",
+                Value::from(permission_triples(&d.removed)),
+            ));
+            e.push(("adds_high_risk", Value::from(!d.high_risk_added.is_empty())));
+        }
     }
     let (roles, shots) = art_roles(&report.art);
     if !report.art.is_empty() {

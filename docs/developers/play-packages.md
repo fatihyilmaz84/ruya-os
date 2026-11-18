@@ -6,7 +6,7 @@ How to package a game as a `.play`: one folder or one `.play.zip` that holds the
 
 **What exists today, and what does not.** The format, the verifier and the developer tool (`ruya-pack`) are built and tested; the shell has an "Install from USB" page that shows a package (on its mock backend). The service that installs a package on a console is built (`ruya-play`, `org.ruyaos.Play1`, RUY-829): it inspects and unpacks a package in an unprivileged sandbox without network, checks it again as root and installs it as the system Flatpak app `play.<your id>`; its first run on a real console image is still being checked (RUY-100). The launcher that runs the installed game (**planned: RUY-101**) is not built, so an installed package does not start yet. So this chapter can take you from an empty folder to a signed package that the console verifies and installs, but not yet to "it runs on my console". Where a step needs the unbuilt part it says **planned**.
 
-**Permissions are not granted yet (until RUY-102).** Whatever `permissions` your manifest asks for, an installed `.play` gets one fixed sandbox: IPC, the display (Wayland, or X11 for the `wine` and `proton` runners), sound (PulseAudio) and the GPU (`dri`). **No network, even when `permissions.network` is `true`**; no other device, no `multiarch`, no USB drive access. Your requests are still checked against the trust ceiling and shown to the player before install; they are granted once RUY-102 maps them.
+**Your package gets exactly the permissions it asks for, under its trust tier's ceiling (RUY-851).** The console writes the sandbox from the closed vocabulary below and nothing else: every game gets IPC, the display (Wayland, or X11 for the `wine` and `proton` runners), sound (PulseAudio) and the GPU (`dri`), and each permission you ask for adds its own lines (for example `network: true` adds the network). Nothing in `run.env`, `reasons` or a field of your own can add a sandbox permission. *Verified on the host; the check on a console (`flatpak info --show-permissions`) is pending.*
 
 ## What a package is, and is not
 
@@ -333,9 +333,9 @@ The vocabulary is closed and static: you **request**, the shell shows each entry
 | Key | Values | What the player reads | Risk | The cost to you |
 |---|---|---|---|---|
 | (always) | | "Plays sound, uses graphics" | low | none |
-| `input` | `controllers`, `controllers+keyboard-mouse` (default), `all-devices` | "Uses controllers" / "...and keyboard and mouse" / "Accesses all devices" | low, low, **high** | `all-devices` makes the install need the admin's PIN with a warning, and an unsigned package with it cannot be installed at all |
+| `input` | `controllers`, `controllers+keyboard-mouse` (default), `all-devices` | "Uses controllers" / "Uses controllers, keyboard and mouse" / "Accesses all devices" | low, low, **high** | `all-devices` makes the install need the admin's PIN with a warning, and an unsigned package with it cannot be installed at all |
 | `network` | `false` (default), `true` | "Uses the network" | medium | players see it; do not ask unless the game goes online |
-| `removable_media` | `none` (default), `read`, `write` | "Reads / changes files on USB drives" | medium | `network` together with `removable_media` counts as **high** |
+| `removable_media` | `none` (default), `read`, `write` | "Reads files on USB drives" / "Changes files on USB drives" | medium | `network` together with `removable_media` counts as **high** |
 | `multiarch` | bool | "Runs 32-bit programs" | medium | only for 32-bit Windows code |
 | `gamemode`, `realtime` | bool | "Asks the system to prioritise it" | low | none |
 | `devel` | bool | "Can inspect other programs" | **high** | only for rare anti-tamper code; expect the admin gate |
@@ -391,7 +391,7 @@ The codes are `licence.text_missing` and `licence.source_missing`. Anti-cheat ti
 3. A Standard profile needs an admin's PIN for every USB install; an admin installs directly.
 4. Developer mode is a switch in Settings, System (admins only). It lets an **unsigned** package install; a signed package does not need it.
 
-Planned: starting the game, the launch splash and the Compatibility screen, `ruya-pack run`, and the permissions your manifest asks for (RUY-102; until then the fixed sandbox above, without network). When they exist this section will say what to expect and what the logs look like.
+Planned: starting the game, the launch splash and the Compatibility screen, and `ruya-pack run`. The permissions your manifest asks for are granted at install (above); the shell's PIN prompt for a high-risk request and its "The update adds: ..." sheet are still to come (RUY-102). When they exist this section will say what to expect and what the logs look like.
 
 ## Troubleshooting
 

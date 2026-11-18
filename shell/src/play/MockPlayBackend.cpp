@@ -103,6 +103,8 @@ const QList<MockPlayBackend::Fixture> &MockPlayBackend::fixtures()
         forest.keyState = QStringLiteral("same");
         forest.players = QStringLiteral("1");
         forest.permissions = {perm("input:controllers", "Uses controllers", "low")};
+        // An update of the installed build 2, which used the network.
+        forest.permissionsRemoved = {perm("network", "Uses the network", "medium")};
         add("pixelforest.play.zip", "zip", "ok", forest);
 
         PlayInfo home = base("com.example.homebrew", "Homebrew Quest", "Made by a stranger.", "Unknown", 1,
@@ -215,6 +217,26 @@ PlayInfo MockPlayBackend::infoOf(const Fixture &f) const
     PlayInfo i = f.info;
     i.verdict = verdictOf(f);
     i.installedBuild = m_installed.value(i.id, 0u);
+    // The gate the service derives from the tier's ceiling (05 §8); an unverified package with a
+    // high-risk request has none (the service refuses it with ceiling.refused).
+    bool high = false;
+    for (const PlayPermission &p : i.permissions)
+        high = high || p.risk == QLatin1String("high");
+    if (!high)
+        i.gate = QStringLiteral("allowed");
+    else if (i.tier == QLatin1String("official"))
+        i.gate = QStringLiteral("admin-pin");
+    else if (i.tier == QLatin1String("developer"))
+        i.gate = QStringLiteral("admin-pin-warning");
+    // The update keys only for an installed id.
+    i.updateKnown = i.installedBuild > 0;
+    if (!i.updateKnown) {
+        i.permissionsAdded.clear();
+        i.permissionsRemoved.clear();
+    }
+    i.addsHighRisk = false;
+    for (const PlayPermission &p : i.permissionsAdded)
+        i.addsHighRisk = i.addsHighRisk || p.risk == QLatin1String("high");
     return i;
 }
 

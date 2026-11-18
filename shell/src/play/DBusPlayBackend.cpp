@@ -100,6 +100,20 @@ PlayInfo toInfo(const QString &path, const QVariantMap &d)
         for (const QStringList &t : parseTriples(perms.value<QDBusArgument>()))
             i.permissions.append({t.at(0), t.at(1), t.at(2)});
     }
+    i.gate = d.value(QStringLiteral("gate")).toString();
+    const auto triples = [&d](const char *key) {
+        QList<PlayPermission> out;
+        const QVariant v = d.value(QString::fromLatin1(key));
+        if (v.canConvert<QDBusArgument>()) {
+            for (const QStringList &t : parseTriples(v.value<QDBusArgument>()))
+                out.append({t.at(0), t.at(1), t.at(2)});
+        }
+        return out;
+    };
+    i.updateKnown = d.contains(QStringLiteral("permissions_added"));
+    i.permissionsAdded = triples("permissions_added");
+    i.permissionsRemoved = triples("permissions_removed");
+    i.addsHighRisk = d.value(QStringLiteral("adds_high_risk")).toBool();
     const QVariant art = d.value(QStringLiteral("art"));
     if (art.canConvert<QDBusArgument>())
         i.art = parseStringMap(art.value<QDBusArgument>());

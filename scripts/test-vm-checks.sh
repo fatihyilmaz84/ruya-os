@@ -31,7 +31,9 @@
 #                          trip line each FAIL; a shell that stays stopped is continued at exit
 #   - vm-play-check.sh     (RUY-829) the `parse` mode reads busctl JSON by key (job state and status, statuses,
 #                          ListSources paths, Library1 ids); the check never turns signature checks off, cleans
-#                          up on exit and mounts its drive nosuid,nodev,noexec
+#                          up on exit and mounts its drive nosuid,nodev,noexec; `parse perms` (RUY-851) reads
+#                          Flatpak permission sections in any order as the perms mode compares them, and an
+#                          extra filesystem or bus name makes them differ from the mapped set
 #   - vm-notifications-check.sh (RUY-730) against a fake Notifications1: each step (unit, exposure, Post and
 #                          Added, MarkRead, a restart that loses items, ids or the setting, the shell's journal
 #                          line and GetAll, the shell's Post, keyed replace, Withdraw, a switched-off source,
@@ -1538,6 +1540,26 @@ grep -q 'call Verify s' "$here/vm-play-check.sh" && pass "vm-play-check.sh calls
 grep -q 'printf x >> "\$app/\$victim"' "$here/vm-play-check.sh" && pass "vm-play-check.sh damages a deployed file as root" || fail "vm-play-check.sh: no damaged file"
 grep -q '"ok invalid-package"' "$here/vm-play-check.sh" && grep -q 'package.hash_mismatch' "$here/vm-play-check.sh" && pass "vm-play-check.sh expects invalid-package with package.hash_mismatch" || fail "vm-play-check.sh: the damaged file is not expected to be reported"
 grep -q 'truncate -s "\$size"' "$here/vm-play-check.sh" && pass "vm-play-check.sh undoes the damage" || fail "vm-play-check.sh leaves the damaged file"
+# RUY-851: the perms mode compares flatpak info --show-permissions with 05 section 8's mapping.
+want="$(sed -n "/^PERMS_WANT='/,/'\$/p" "$here/vm-play-check.sh" | sed "s/^PERMS_WANT='//; s/'\$//")"
+shown='[Context]
+shared=network;ipc;
+sockets=pulseaudio;wayland;
+devices=dri;
+features=multiarch;
+
+[Session Bus Policy]
+com.feralinteractive.GameMode=talk
+'
+pp() { PATH="$shims:$PATH" bash "$here/vm-play-check.sh" parse perms | tr -d '\r'; }
+got="$(printf '%s' "$shown" | pp)"
+[ -n "$want" ] && [ "$got" = "$want" ] && pass "play perms: the mapped set in another order matches" || fail "play perms: '$got' is not '$want'"
+extra="$(printf '%s\n[Context]\nfilesystems=host;\n' "$shown" | pp)"
+[ "$extra" != "$want" ] && echo "$extra" | grep -qx '\[Context\] filesystems=host' && pass "play perms: an extra filesystem differs" || fail "play perms: filesystems=host went unseen"
+bus="$(printf '%s%s\n' "$shown" 'org.freedesktop.Flatpak=talk' | pp)"
+[ "$bus" != "$want" ] && pass "play perms: another bus name differs" || fail "play perms: an extra bus name went unseen"
+grep -q 'if \[ "\$mode" = perms \]' "$here/vm-play-check.sh" && grep -q -- '--show-permissions' "$here/vm-play-check.sh" && pass "vm-play-check.sh has a perms mode that reads --show-permissions" || fail "vm-play-check.sh: no perms mode"
+grep -q 'share/ruyaos/play/trust.json' "$here/vm-play-check.sh" && grep -q '"1 unverified None None False"' "$here/vm-play-check.sh" && pass "vm-play-check.sh checks the trust record" || fail "vm-play-check.sh: the trust record is not checked"
 [ "$(grep -c '^zin = zipfile.ZipFile(src)' "$here/vm-play-check.sh")" = 2 ] && pass "vm-play-check.sh re-opens the source before the bomb" || fail "vm-play-check.sh: the bomb reuses the tampered zip's ZipInfo objects"
 
 echo "== build stage names (RUY-771) =="

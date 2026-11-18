@@ -10,9 +10,16 @@
 #          finishes ok; append a byte to one deployed file as root -> invalid-package with
 #          package.hash_mismatch (state/jobs); an extra file -> invalid-package; restored -> ok;
 #          Verify of an unknown id is unknown-app, of "" invalid
+#   perms  RUY-851: a copy of the sample that asks for network, multiarch and gamemode installs
+#          unsigned (developer mode, from incoming/); `flatpak info --show-permissions` of the app
+#          equals exactly the set 05 section 8 maps those to (no filesystem, no other bus name),
+#          and the deployment's share/ruyaos/play/trust.json says format 1, unverified, no signer,
+#          no store signature
 #   parse  host fixtures only (scripts/test-vm-checks.sh): reads busctl --json=short on stdin;
 #          `parse status` prints a call's first string, `parse job <id>` the job's state and
-#          status, `parse sources` the listed paths, `parse items` Library1's ids
+#          status, `parse sources` the listed paths, `parse items` Library1's ids; `parse perms`
+#          reads Flatpak permission sections instead and prints one sorted line per entry
+#          ("[Context] shared=network")
 #
 # The packages: samples/hello-play-native built as scripts/ci-samples-linux.sh does (RUY-822),
 # without its clean-up, and ruya-pack from the same build:
@@ -92,8 +99,49 @@ elif what == "key":
 ' "$@"
 }
 
+# Flatpak permission sections (flatpak info --show-permissions) as sorted "[Section] key=value"
+# lines, one per list entry, so order and trailing semicolons do not matter.
+perm_lines() {
+    python3 -c '
+import sys
+section, out = None, set()
+for line in sys.stdin:
+    line = line.strip()
+    if not line or line.startswith("#"):
+        continue
+    if line.startswith("[") and line.endswith("]"):
+        section = line[1:-1]
+        continue
+    if section is None or "=" not in line:
+        continue
+    key, value = line.split("=", 1)
+    if section == "Context":
+        for v in value.split(";"):
+            if v:
+                out.add("[%s] %s=%s" % (section, key, v))
+    else:
+        out.add("[%s] %s=%s" % (section, key, value))
+for x in sorted(out):
+    print(x)
+'
+}
+
+# What 05 section 8 maps the perms package to: the native runner's base set plus network,
+# multiarch and gamemode.
+PERMS_WANT='[Context] devices=dri
+[Context] features=multiarch
+[Context] shared=ipc
+[Context] shared=network
+[Context] sockets=pulseaudio
+[Context] sockets=wayland
+[Session Bus Policy] com.feralinteractive.GameMode=talk'
+
 if [ "$mode" = parse ]; then
     shift
+    if [ "${1:-}" = perms ]; then
+        perm_lines
+        exit $?
+    fi
     parse "$@"
     exit $?
 fi
@@ -270,6 +318,43 @@ if [ "$mode" = verify ]; then
     [ "$got" = ok ] && ok "the sample installs (developer mode)" || bad "the sample: $got"
     [ "$got" = ok ] && verify_checks
     [ "$fail" = 0 ] && echo "vm-play-check verify: PASS" || echo "vm-play-check verify: FAIL"
+    exit "$fail"
+fi
+
+if [ "$mode" = perms ]; then
+    dev_mode true >/dev/null
+    python3 - "$zip" "$work/perms.play.zip" <<'PY'
+import json, sys, zipfile
+src, out = sys.argv[1:3]
+sample = zipfile.ZipFile(src)
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+    for i in sample.infolist():
+        b = sample.read(i.filename)
+        if i.filename.endswith("play.json") and i.filename.count("/") <= 1:
+            m = json.loads(b)
+            m["permissions"] = {"network": True, "multiarch": True, "gamemode": True}
+            b = json.dumps(m, indent=2).encode()
+        z.writestr(i, b)
+PY
+    mkdir -p "$state/incoming"
+    install -m 0600 "$work/perms.play.zip" "$state/incoming/vm-play-check.play.zip"
+    got="$(install_wait "$state/incoming/vm-play-check.play.zip")"
+    [ "$got" = ok ] && ok "the sample asking for network, multiarch and gamemode installs (developer mode)" || bad "the perms package: $got"
+    have="$(flatpak info --system --show-permissions "play.$appid" 2>&1 | perm_lines)"
+    if [ "$have" = "$PERMS_WANT" ]; then
+        ok "flatpak info --show-permissions play.$appid is exactly the mapped set"
+    else
+        bad "play.$appid's permissions differ from 05 section 8's mapping"
+        diff <(echo "$PERMS_WANT") <(echo "$have") | sed 's/^/    /'
+    fi
+    trust="/var/lib/flatpak/app/play.$appid/current/active/files/share/ruyaos/play/trust.json"
+    rec="$(python3 -c '
+import json, sys
+r = json.load(open(sys.argv[1], encoding="utf-8"))
+print(r.get("format"), r.get("tier"), r.get("signer_id"), r.get("signer_name"), r.get("store_signed"))
+' "$trust" 2>&1)"
+    [ "$rec" = "1 unverified None None False" ] && ok "the trust record says format 1, unverified, no signer" || bad "trust.json: $rec"
+    [ "$fail" = 0 ] && echo "vm-play-check perms: PASS" || echo "vm-play-check perms: FAIL"
     exit "$fail"
 fi
 
