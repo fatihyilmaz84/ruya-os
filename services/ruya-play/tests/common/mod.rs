@@ -424,6 +424,21 @@ impl Harness {
 }
 
 /// Every path below `dir`, sorted, read without following links (`name -> target` for a link).
+/// The `deploy` file Flatpak writes next to `files/` (RUY-863): a GVariant `(ssasta{sv})`, of
+/// which the origin is the first, NUL-terminated string. The rest is filler, as in a real one.
+pub fn write_deploy(installation: &Path, id: &str, origin: &str) {
+    let active = installation
+        .join("app")
+        .join(format!("play.{id}"))
+        .join("current")
+        .join("active");
+    std::fs::create_dir_all(&active).unwrap();
+    let mut bytes = origin.as_bytes().to_vec();
+    bytes.push(0);
+    bytes.extend_from_slice(b"0123456789abcdef\0\0\0\0\0\0\0\0");
+    std::fs::write(active.join("deploy"), bytes).unwrap();
+}
+
 pub fn listing(dir: &Path) -> Vec<String> {
     let mut out = Vec::new();
     let mut pending = vec![(dir.to_path_buf(), String::new())];

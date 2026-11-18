@@ -70,6 +70,11 @@ fn installed_with(perms: serde_json::Value, new: Fx) -> Harness {
     let h = setup.build();
     let files = ruya_play::core::reconcile::deployment_files(&h.cfg.flatpak, "com.example.mini");
     std::fs::create_dir_all(&files).unwrap();
+    write_deploy(
+        &h.cfg.flatpak,
+        "com.example.mini",
+        ruya_play_art::PLAY_REMOTE,
+    );
     let play_json =
         json!({"format": 1, "id": "com.example.mini", "build": 1, "permissions": perms});
     std::fs::write(files.join("play.json"), play_json.to_string()).unwrap();

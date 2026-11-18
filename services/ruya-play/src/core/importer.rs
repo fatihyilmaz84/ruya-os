@@ -1089,7 +1089,9 @@ impl Importer {
             Ok(None) => return (MethodStatus::UnknownApp, String::new()),
             Err(_) => return (MethodStatus::Failed, String::new()),
         }
-        let files = reconcile::deployment_files(&self.cfg.flatpak, id);
+        let Some(files) = reconcile::our_files(&self.cfg.flatpak, id) else {
+            return (MethodStatus::UnknownApp, String::new());
+        };
         if std::fs::symlink_metadata(&files).is_err() {
             return (MethodStatus::UnknownApp, String::new());
         }
@@ -1124,7 +1126,13 @@ impl Importer {
         reporter: &mut Reporter<'_>,
     ) -> JobResult {
         let id = app.strip_prefix("play.").unwrap_or(app);
-        let files = reconcile::deployment_files(&self.cfg.flatpak, id);
+        let Some(files) = reconcile::our_files(&self.cfg.flatpak, id) else {
+            return refused(
+                job,
+                vec![staging_problem("", &std::io::ErrorKind::NotFound.into())],
+                None,
+            );
+        };
         let tree = match Dir::open_root(&files) {
             Ok(d) => d,
             Err(e) => return refused(job, vec![staging_problem("", &e)], None),

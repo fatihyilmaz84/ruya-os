@@ -359,6 +359,10 @@ with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
             b = json.dumps(m, indent=2).encode()
         z.writestr(i, b)
 PY
+    # RUY-865: `check` installs the same id and its record would refuse this build again, so
+    # uninstall it first and restart the service (its start-up reconcile forgets the build).
+    flatpak uninstall --system -y --noninteractive "play.$appid" >/dev/null 2>&1
+    systemctl restart ruya-play.service
     mkdir -p "$state/incoming"
     install -m 0600 "$work/perms.play.zip" "$state/incoming/vm-play-check.play.zip"
     got="$(install_wait "$state/incoming/vm-play-check.play.zip")"
