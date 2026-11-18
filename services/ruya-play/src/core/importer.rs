@@ -25,7 +25,7 @@
 //! Any failure or cancel removes the job's staging directory and its inspect folder; a crash
 //! leaves only those, which [`Importer::open`] removes.
 
-use crate::core::art::VettedArt;
+use crate::core::art::{self, VettedArt};
 use crate::core::codes;
 use crate::core::deps::{
     Blocklists, Clock, Commit, CommitError, CommitRequest, Deps, FreeSpace, Helper, Hooks,
@@ -35,6 +35,7 @@ use crate::core::helper::{self, ArtLine, Ending, Mode, Progress, Request, Sessio
 use crate::core::jobs::{self, JobKind, JobRecord, JobState, MAX_PATH_BYTES};
 use crate::core::meta::MetaSource;
 use crate::core::read_once::ReadOnce;
+use crate::core::reconcile;
 use crate::core::staging::{self, Dir, Kind};
 use crate::core::status::{status_of, JobStatus, MethodStatus, Phase};
 use crate::core::unpack::{self, staging_problem};
@@ -232,6 +233,10 @@ pub struct Importer {
     trust: Mutex<Box<dyn TrustStore + Send>>,
     installed: Mutex<Box<dyn InstalledBuilds + Send>>,
     hooks: Box<dyn Hooks>,
+    /// Ids whose committed app could not be reconciled (lower case), with why.
+    held: Mutex<BTreeMap<String, String>>,
+    /// Every id is held (the installed apps could not be reconciled at all), with why.
+    held_all: Mutex<Option<String>>,
 }
 
 /// What [`Importer::record`] found before it wrote, to undo it.
@@ -383,7 +388,7 @@ const VERIFIED: u32 = 75;
 const VETTED: u32 = 85;
 const COMMITTED: u32 = 95;
 
-fn changed(path: &str, what: &str) -> Problem {
+fn changed(path: &str, what: impl Into<String>) -> Problem {
     Problem::new(codes::STAGING_CHANGED, path, what)
 }
 
@@ -399,6 +404,60 @@ fn only_dirs(dir: &Dir, allowed: &[&str]) -> Result<(), Problem> {
         }
     }
     Ok(())
+}
+
+/// One vetted art file before the shell can see it (RUY-829): a name `ruya-play-art` writes, at
+/// most the bytes such a file can have, and the first bytes of its container. Read through the
+/// folder handle, without following a link.
+fn check_art_file(art_dir: &Dir, rel: &str, size: u64) -> Result<(), Problem> {
+    use std::io::Read;
+    let name = rel.rsplit('/').next().unwrap_or(rel);
+    let Some((container, max)) = art::vetted_file_limit(name) else {
+        return Err(changed(
+            rel,
+            "The art step does not write a file of that name.",
+        ));
+    };
+    if size > max {
+        return Err(changed(
+            rel,
+            format!("A vetted art file has {size} bytes; at most {max} are possible."),
+        ));
+    }
+    let file = match rel.split_once('/') {
+        Some((sub, leaf)) => art_dir.open_dir(sub).and_then(|d| d.open_file(leaf)),
+        None => art_dir.open_file(rel),
+    };
+    let mut head = Vec::with_capacity(art::HEADER_BYTES);
+    file.and_then(|f| {
+        f.take(art::HEADER_BYTES as u64)
+            .read_to_end(&mut head)
+            .map(|_| ())
+    })
+    .map_err(|e| staging_problem(rel, &e))?;
+    if !art::header_matches(container, &head, size) {
+        return Err(changed(
+            rel,
+            "A vetted art file does not start as its format does.",
+        ));
+    }
+    Ok(())
+}
+
+/// On an `ok` result the helper reports only what the art step dropped (`art.*` and `video.*`,
+/// 05 §5): any other problem there breaks its contract (RUY-829).
+fn art_only(problems: Vec<Problem>) -> Result<Vec<Problem>, Problem> {
+    if problems
+        .iter()
+        .all(|p| p.code.starts_with("art.") || p.code.starts_with("video."))
+    {
+        return Ok(problems);
+    }
+    Err(Problem::new(
+        codes::HELPER_FAILED,
+        "",
+        "The helper finished a run and reported a problem that is not the art step's.",
+    ))
 }
 
 /// Hold `art/` to what the helper said it wrote: those files, folders one level down, nothing
@@ -426,9 +485,10 @@ fn check_art(art_dir: &Dir, lines: &[ArtLine]) -> Result<Vec<VettedArt>, Problem
     for l in lines {
         let mut files = Vec::new();
         for f in &l.files {
-            if found.get(f.as_str()).map(|e| e.kind) != Some(Kind::File) {
+            let Some(entry) = found.get(f.as_str()).filter(|e| e.kind == Kind::File) else {
                 return Err(changed(f, "A vetted art file is missing."));
-            }
+            };
+            check_art_file(art_dir, f, entry.size)?;
             files.push(
                 staging::join_checked(art_dir.path(), f).map_err(|e| staging_problem(f, &e))?,
             );
@@ -496,6 +556,8 @@ impl Importer {
             trust: Mutex::new(deps.trust),
             installed: Mutex::new(deps.installed),
             hooks: deps.hooks,
+            held: Mutex::new(BTreeMap::new()),
+            held_all: Mutex::new(None),
         })
     }
 
@@ -527,6 +589,116 @@ impl Importer {
         self.installed.lock().unwrap_or_else(|e| e.into_inner())
     }
 
+    /// The build installed for `id` (`state/installed.json`).
+    pub fn installed_build(&self, id: &str) -> Result<Option<u64>, Problem> {
+        self.installed().build_of(id)
+    }
+
+    /// Admin's developer mode (05 §7.2), from the trust store.
+    pub fn developer_mode(&self) -> Result<bool, Problem> {
+        self.trust().developer_mode().map_err(|e| e.to_problem())
+    }
+
+    /// Turn developer mode on or off; the caller checked that an admin asked.
+    pub fn set_developer_mode(&self, on: bool) -> Result<(), Problem> {
+        self.trust()
+            .set_developer_mode(on)
+            .map_err(|e| e.to_problem())
+    }
+
+    /// Refuse installs of `id` with `installed.unreconciled` (the start-up reconcile).
+    pub fn hold(&self, id: &str, reason: &str) {
+        self.held
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id.to_ascii_lowercase(), reason.to_string());
+    }
+
+    /// Refuse installs of every id with `installed.unreconciled` (the reconcile could not run).
+    pub fn hold_all(&self, reason: &str) {
+        *self.held_all.lock().unwrap_or_else(|e| e.into_inner()) = Some(reason.to_string());
+    }
+
+    /// Why every id is held, when it is.
+    pub fn held_all(&self) -> Option<String> {
+        self.held_all
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    /// The start-up reconcile over the listing of the installed apps, failing closed (RUY-829
+    /// round 2): when the apps cannot be listed, or the records cannot be read, every id is held
+    /// ([`Self::hold_all`]) and the error is returned; a reconcile that succeeds lifts that hold.
+    /// The service runs it once at start, so a global hold lasts until the next start.
+    pub fn reconcile_listed(
+        &self,
+        listed: std::io::Result<BTreeMap<String, reconcile::Deployed>>,
+    ) -> Result<Vec<reconcile::Action>, Problem> {
+        let result = match listed {
+            Ok(deployed) => self.reconcile(&deployed),
+            Err(e) => Err(Problem::new(
+                codes::INSTALLED_UNRECONCILED,
+                "",
+                format!("The installed apps cannot be listed ({e})."),
+            )),
+        };
+        match &result {
+            Ok(_) => *self.held_all.lock().unwrap_or_else(|e| e.into_inner()) = None,
+            Err(p) => self.hold_all(&p.message),
+        }
+        result
+    }
+
+    /// The held ids, lower case.
+    pub fn held(&self) -> Vec<String> {
+        self.held
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .keys()
+            .cloned()
+            .collect()
+    }
+
+    /// The start-up reconcile ([`reconcile::plan`]) against the committed apps `deployed`: the
+    /// recorded builds are corrected and the ids that cannot be matched are held. A record that
+    /// cannot be read or written holds the ids it concerns. Returns the steps taken, for the log.
+    pub fn reconcile(
+        &self,
+        deployed: &BTreeMap<String, reconcile::Deployed>,
+    ) -> Result<Vec<reconcile::Action>, Problem> {
+        let recorded = self.installed().all()?;
+        let mut trusted = BTreeSet::new();
+        for id in deployed.keys() {
+            if self.trust().get(id).map_err(|e| e.to_problem())?.is_some() {
+                trusted.insert(id.clone());
+            }
+        }
+        let actions = reconcile::plan(deployed, &recorded, &trusted);
+        for a in &actions {
+            let done = match a {
+                reconcile::Action::ForgetBuild { id } => self.installed().forget(id),
+                reconcile::Action::RecordBuild { id, build } => self.installed().record(id, *build),
+                reconcile::Action::Hold { id, reason } => {
+                    self.hold(id, reason);
+                    Ok(())
+                }
+            };
+            if let Err(p) = done {
+                let id = match a {
+                    reconcile::Action::ForgetBuild { id }
+                    | reconcile::Action::RecordBuild { id, .. }
+                    | reconcile::Action::Hold { id, .. } => id,
+                };
+                self.hold(
+                    id,
+                    &format!("its record could not be corrected ({})", p.message),
+                );
+            }
+        }
+        Ok(actions)
+    }
+
     /// Steps 2 and 3 over the root files the service read back (a source that is read once).
     fn check(&self, source: &ReadOnce<'_>) -> Result<Checked, Refusal> {
         let image = self.blocklists.image();
@@ -555,6 +727,23 @@ impl Importer {
         };
         let id = inspection.package.manifest.id.clone();
         let build = inspection.package.manifest.build;
+        let held = self.held_all().or_else(|| {
+            self.held
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(&id.to_ascii_lowercase())
+                .cloned()
+        });
+        if let Some(reason) = held {
+            return Err(Box::new((
+                one(
+                    codes::INSTALLED_UNRECONCILED,
+                    "/id",
+                    format!("The installed app of this id cannot be matched with its records ({reason}); uninstall it first."),
+                ),
+                Some(inspection),
+            )));
+        }
         let installed_build = self
             .installed()
             .build_of(&id)
@@ -673,7 +862,10 @@ impl Importer {
                     problems,
                     art,
                     art_refuses,
-                } => (art, problems, art_refuses),
+                } => match art_only(problems) {
+                    Ok(problems) => (art, problems, art_refuses),
+                    Err(p) => return Front::Failed(p),
+                },
             };
         let allowed: &[&str] = if art {
             &["meta", "src", "art"]
@@ -974,7 +1166,10 @@ impl Importer {
         request.expect = meta.digests();
         let ending = self.run_helper(&request, cancel, &mut |p| reporter.helper(p));
         let (problems, art_lines) = match ending {
-            Ending::Ok { problems, art, .. } => (problems, art),
+            Ending::Ok { problems, art, .. } => match art_only(problems) {
+                Ok(problems) => (problems, art),
+                Err(p) => return fail(vec![p]),
+            },
             Ending::Cancelled => return cancelled(job, Some(insp.clone())),
             Ending::Refused(p) => return fail(p),
             Ending::Missing => {

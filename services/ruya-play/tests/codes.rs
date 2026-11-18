@@ -43,6 +43,7 @@ fn every_code_is_asserted_by_a_test() {
         "tests/toctou.rs",
         "tests/modes.rs",
         "tests/helper.rs",
+        "tests/service.rs",
         "src/core/installed.rs",
         "src/core/jobs.rs",
     ];
@@ -84,6 +85,7 @@ fn the_status_words_are_the_contracts() {
         MethodStatus::Ok,
         MethodStatus::UnknownSource,
         MethodStatus::UnknownJob,
+        MethodStatus::UnknownApp,
         MethodStatus::TooLate,
         MethodStatus::Busy,
         MethodStatus::Forbidden,

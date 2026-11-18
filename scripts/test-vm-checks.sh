@@ -29,6 +29,9 @@
 #   - vm-boot-check.sh     the `watchdog` mode (RUY-483): the unit's three settings, a restart or trip before the
 #                          test, a missing start line, no restart, a second restart and a restart without systemd's
 #                          trip line each FAIL; a shell that stays stopped is continued at exit
+#   - vm-play-check.sh     (RUY-829) the `parse` mode reads busctl JSON by key (job state and status, statuses,
+#                          ListSources paths, Library1 ids); the check never turns signature checks off, cleans
+#                          up on exit and mounts its drive nosuid,nodev,noexec
 #   - vm-notifications-check.sh (RUY-730) against a fake Notifications1: each step (unit, exposure, Post and
 #                          Added, MarkRead, a restart that loses items, ids or the setting, the shell's journal
 #                          line and GetAll, the shell's Post, keyed replace, Withdraw, a switched-off source,
@@ -1472,6 +1475,28 @@ for group in \
         case ",$group," in *",$bug,"*) expect_contains "notifications, bug $bug: caught" "$out" "$needle" ;; esac
     done
 done
+
+echo "== vm-play-check.sh: JSON by key (RUY-829) =="
+pc() { PATH="$shims:$PATH" bash "$here/vm-play-check.sh" parse "$@"; }
+jobs_a='{"type":"aa{sv}","data":[[{"id":{"type":"s","data":"job-1"},"state":{"type":"s","data":"finished"},"status":{"type":"s","data":"bad-signature"}},{"status":{"type":"s","data":""},"state":{"type":"s","data":"running"},"id":{"type":"s","data":"job-2"}}]]}'
+got="$(echo "$jobs_a" | pc job job-1)"
+[ "$got" = "finished bad-signature" ] && pass "play: a finished job's state and status" || fail "play: job-1 read as '$got'"
+got="$(echo "$jobs_a" | pc job job-2)"
+[ "$got" = "running " ] && pass "play: keys in another order read the same" || fail "play: job-2 read as '$got'"
+got="$(echo "$jobs_a" | pc job job-3)"
+[ -z "$got" ] && pass "play: an unknown job reads as nothing" || fail "play: job-3 read as '$got'"
+got="$(echo '{"type":"ss","data":["ok","job-7"]}' | pc status)"
+[ "$got" = ok ] && pass "play: a call's status" || fail "play: status read as '$got'"
+got="$(echo '{"type":"ss","data":["ok","job-7"]}' | pc second)"
+[ "$got" = job-7 ] && pass "play: a call's job" || fail "play: job read as '$got'"
+srcs='{"type":"aa{sv}","data":[[{"size":{"type":"t","data":5},"path":{"type":"s","data":"/run/media/ruya-shell/A/x.play.zip"},"kind":{"type":"s","data":"zip"}},{"path":{"type":"s","data":"/run/media/ruya-shell/A/Game"}}]]}'
+got="$(echo "$srcs" | pc sources | tr -d '\r' | tr '\n' ' ')"
+[ "$got" = "/run/media/ruya-shell/A/x.play.zip /run/media/ruya-shell/A/Game " ] && pass "play: ListSources paths by key" || fail "play: sources read as '$got'"
+got="$(echo '{"type":"aa{sv}","data":[[{"name":{"type":"s","data":"Hello"},"id":{"type":"s","data":"play.com.example.hello"}}]]}' | pc items)"
+[ "$got" = play.com.example.hello ] && pass "play: Library1 ids by key" || fail "play: items read as '$got'"
+grep -q 'no-gpg-verify' "$here/vm-play-check.sh" && fail "vm-play-check.sh mentions --no-gpg-verify" || pass "vm-play-check.sh never turns signature checks off"
+grep -q 'trap cleanup EXIT' "$here/vm-play-check.sh" && pass "vm-play-check.sh cleans up on exit" || fail "vm-play-check.sh: no EXIT trap"
+grep -q 'mount -o loop,nosuid,nodev,noexec' "$here/vm-play-check.sh" && pass "vm-play-check.sh mounts its drive as ruya-devices does" || fail "vm-play-check.sh: the check drive is not mounted nosuid,nodev,noexec"
 
 echo "== build stage names (RUY-771) =="
 source "$here/lib-stages.sh"

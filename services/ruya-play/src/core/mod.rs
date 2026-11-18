@@ -12,6 +12,7 @@ pub mod jobs;
 pub mod meta;
 pub mod opener;
 pub mod read_once;
+pub mod reconcile;
 pub mod staging;
 pub mod status;
 pub mod systemd_run;

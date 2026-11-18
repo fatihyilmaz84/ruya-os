@@ -33,6 +33,13 @@ pub const HELPER_FAILED: &str = "helper.failed";
 /// The package answered differently when the helper opened it again for the unpack than when it
 /// was inspected (a root file's SHA-256 changed).
 pub const SOURCE_CHANGED: &str = "source.changed";
+/// The drive that holds the package is not mounted `nosuid,nodev,noexec` (05 §7.3 step 1): it was
+/// mounted by something other than `ruya-devices`, and nothing on it is read (RUY-829).
+pub const SOURCE_UNSAFE_MOUNT: &str = "source.unsafe_mount";
+/// A committed `play.<id>` app could not be matched with its records at start (no readable build,
+/// or signed without a key record): installs of the id are refused until it is uninstalled
+/// (RUY-829).
+pub const INSTALLED_UNRECONCILED: &str = "installed.unreconciled";
 
 /// Every code, for the tests that keep the list, the tests and the spec in step.
 pub const ALL: &[&str] = &[
@@ -48,4 +55,6 @@ pub const ALL: &[&str] = &[
     JOB_INTERRUPTED,
     HELPER_FAILED,
     SOURCE_CHANGED,
+    SOURCE_UNSAFE_MOUNT,
+    INSTALLED_UNRECONCILED,
 ];

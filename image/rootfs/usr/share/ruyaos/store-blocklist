@@ -1,0 +1,8 @@
+# The store blocklist of this image (docs/specs/05-play-packages.md section 9.2,
+# docs/specs/10-stores.md section 6). Authenticated by the OS update itself: no
+# signature, no expiry. A fresher downloaded copy replaces it only when it is
+# signed by a pinned store key and has a higher serial. ruya-play refuses every
+# install when this file is missing or does not parse (blocklist.unavailable).
+serial 1
+[stores]
+[packages]

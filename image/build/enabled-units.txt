@@ -12,6 +12,7 @@ ruya-library.service          library service
 ruya-profiles.service         profiles and PINs
 ruya-session.service          launches apps for the profiles
 ruya-store.service            Flatpak store
+ruya-play.service             .play importer, org.ruyaos.Play1 (RUY-829)
 ruya-update.service           updates
 ruya-notifications.service    notification history and settings per profile (RUY-730)
 ruya-devices.service          audio, network, Bluetooth, batteries (user unit)

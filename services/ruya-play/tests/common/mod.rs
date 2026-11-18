@@ -537,4 +537,7 @@ impl ruya_play::InstalledBuilds for SharedInstalled {
         }
         self.inner.lock().unwrap().forget(id)
     }
+    fn all(&self) -> Result<std::collections::BTreeMap<String, u64>, Problem> {
+        self.inner.lock().unwrap().all()
+    }
 }

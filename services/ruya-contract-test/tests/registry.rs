@@ -11,13 +11,9 @@ use std::path::{Path, PathBuf};
 
 use ruya_contract_test::{contract_dir, interface_names};
 
-/// Interfaces of the contract that no Rust service serves, with the reason.
-/// Play1 is served by ruya-play (RUY-100), which is not built yet: the shell's mock follows the
-/// contract until then (RUY-96). Take it off when the service gets its tests/contract.rs.
-const NOT_SERVED: &[(&str, &str)] = &[(
-    "org.ruyaos.Play1",
-    "ruya-play (RUY-100) is not built yet; the shell mock follows the contract",
-)];
+/// Interfaces of the contract that no Rust service serves, with the reason. None today (Play1 is
+/// served by ruya-play since RUY-829).
+const NOT_SERVED: &[(&str, &str)] = &[];
 
 fn services_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")

@@ -24,6 +24,8 @@ pub trait InstalledBuilds {
     fn record(&mut self, id: &str, build: u64) -> Result<(), Problem>;
     /// `id` was uninstalled (RUY-100's uninstall).
     fn forget(&mut self, id: &str) -> Result<(), Problem>;
+    /// Every id (lower case) and its build, for the start-up reconcile (RUY-829).
+    fn all(&self) -> Result<BTreeMap<String, u64>, Problem>;
 }
 
 fn fold(id: &str) -> String {
@@ -60,6 +62,9 @@ impl InstalledBuilds for MemoryInstalled {
     fn forget(&mut self, id: &str) -> Result<(), Problem> {
         self.builds.remove(&fold(id));
         Ok(())
+    }
+    fn all(&self) -> Result<BTreeMap<String, u64>, Problem> {
+        Ok(self.builds.clone())
     }
 }
 
@@ -170,6 +175,9 @@ impl FileInstalled {
 impl InstalledBuilds for FileInstalled {
     fn build_of(&self, id: &str) -> Result<Option<u64>, Problem> {
         Ok(self.builds.get(&fold(id)).copied())
+    }
+    fn all(&self) -> Result<BTreeMap<String, u64>, Problem> {
+        Ok(self.builds.clone())
     }
     fn record(&mut self, id: &str, build: u64) -> Result<(), Problem> {
         let mut next = self.builds.clone();

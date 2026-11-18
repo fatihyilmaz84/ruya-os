@@ -77,6 +77,8 @@ pub enum MethodStatus {
     UnknownSource,
     /// No such job.
     UnknownJob,
+    /// `Verify` of an app that is not installed from a `.play`.
+    UnknownApp,
     /// The job passed the point of no return (phase `committing`) or is finished.
     TooLate,
     /// A job for that package is already queued or running.
@@ -96,6 +98,7 @@ impl MethodStatus {
             MethodStatus::Ok => "ok",
             MethodStatus::UnknownSource => "unknown-source",
             MethodStatus::UnknownJob => "unknown-job",
+            MethodStatus::UnknownApp => "unknown-app",
             MethodStatus::TooLate => "too-late",
             MethodStatus::Busy => "busy",
             MethodStatus::Forbidden => "forbidden",
@@ -172,7 +175,9 @@ fn status_of_code(code: &str) -> JobStatus {
         | codes::ROLLBACK_FAILED
         | codes::JOB_INTERRUPTED
         | codes::HELPER_FAILED
-        | codes::SOURCE_CHANGED => JobStatus::Failed,
+        | codes::SOURCE_CHANGED
+        | codes::SOURCE_UNSAFE_MOUNT
+        | codes::INSTALLED_UNRECONCILED => JobStatus::Failed,
         _ => match group {
             "sig" | "store_sig" => JobStatus::BadSignature,
             "revoked" => JobStatus::Revoked,

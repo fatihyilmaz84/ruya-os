@@ -13,8 +13,14 @@
 //! - **limits:** `MemoryMax=2G` (above the art step's 1.25 GiB peak, 05 §7.3 item 7, with room
 //!   for the unpacker's buffers), no swap, `CPUQuota=200%`, `RuntimeMaxSec` (10 minutes for an
 //!   inspect, 6 hours for an install);
-//! - **one way in, one way out:** the source path bound read-only at [`SOURCE_IN_UNIT`], and one
-//!   writable folder, `StateDirectory=ruya-play-helper-<job>`: systemd creates it as
+//! - **one way in, one way out:** the source as one read-only file descriptor that the service
+//!   manager opens as root and passes in (`OpenFile=<path>:<name>:read-only,graceful`, RUY-829:
+//!   a bind keeps the file's own mode, and `incoming/` is root 0600, so the dynamic uid could not
+//!   read a download). The descriptor's name carries the device and inode the service saw with
+//!   `lstat` (a link is refused there) and the helper checks them on the descriptor
+//!   ([`passed_source`]; `crate::service::fd_source`), so a file swapped in between is refused.
+//!   The helper reads a zip through the descriptor and a folder through `/proc/self/fd/3`; its
+//!   request names [`SOURCE_IN_UNIT`]. And one writable folder, `StateDirectory=ruya-play-helper-<job>`: systemd creates it as
 //!   `/var/lib/private/ruya-play-helper-<job>`, owned by the dynamic uid, mode 0700, on `/var`
 //!   like `/var/lib/flatpak` (the reflink rule of 05 §7.1). After the unit is gone the service
 //!   moves its top-level entries into the job's own folder (`rename`, same filesystem, links are
@@ -23,8 +29,11 @@
 use crate::core::helper::Request;
 use std::path::{Path, PathBuf};
 
-/// Where the helper sees the package.
+/// The source path the helper finds in its request inside the unit: it stands for the passed
+/// descriptor (nothing is mounted there).
 pub const SOURCE_IN_UNIT: &str = "/run/ruya-play-helper/source";
+/// The first descriptor systemd passes (`SD_LISTEN_FDS_START`).
+pub const LISTEN_FDS_START: i32 = 3;
 /// The prefix of every helper unit and its state folder.
 pub const UNIT_PREFIX: &str = "ruya-play-helper-";
 /// Where systemd keeps the state folders of dynamic users.
@@ -70,30 +79,59 @@ pub fn inner_request(request: &Request) -> Option<Request> {
     Some(inner)
 }
 
-/// A path for a `BindReadOnlyPaths=` value: absolute, no control characters, quoted, with `\`,
-/// `"` and the `:` separator escaped.
-fn bind_path(path: &str) -> Option<String> {
-    if !path.starts_with('/') || path.chars().any(char::is_control) {
-        return None;
-    }
-    let mut out = String::with_capacity(path.len() + 2);
-    out.push('"');
-    for c in path.chars() {
-        if matches!(c, '\\' | '"' | ':') {
-            out.push('\\');
-        }
-        out.push(c);
-    }
-    out.push('"');
-    Some(out)
+/// A path for an `OpenFile=` value: absolute, with no control character and none of the
+/// characters its parser takes as a separator or an escape (`:`, `\`). A drive's own names never
+/// need them (FAT and exFAT forbid both); a path that has one refuses the run.
+fn open_file_path(path: &str) -> Option<&str> {
+    let plain = path.starts_with('/')
+        && !path
+            .chars()
+            .any(|c| c.is_control() || c == ':' || c == '\\');
+    plain.then_some(path)
 }
 
-/// The command line that runs `request` in a transient unit, or `None` when the job name or the
-/// source path cannot be passed safely (the run then fails with `helper.failed`).
-pub fn argv(exe: &Path, request: &Request) -> Option<Vec<String>> {
+/// The descriptor's name for a source with device `dev` and inode `ino` (as `lstat` saw them).
+pub fn fd_name(dev: u64, ino: u64) -> String {
+    format!("source-{dev}-{ino}")
+}
+
+/// The device and inode in a name from [`fd_name`].
+pub fn parse_fd_name(name: &str) -> Option<(u64, u64)> {
+    let (dev, ino) = name.strip_prefix("source-")?.split_once('-')?;
+    let num = |t: &str| -> Option<u64> {
+        if t.is_empty() || !t.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        t.parse().ok()
+    };
+    Some((num(dev)?, num(ino)?))
+}
+
+/// The source descriptor of a helper inside its unit, from `LISTEN_PID`, `LISTEN_FDS` and
+/// `LISTEN_FDNAMES` as systemd sets them (`pid` is the helper's own): exactly one descriptor, for
+/// this process, named by [`fd_name`]. Returns the descriptor number and the expected device and
+/// inode; `None` when no source was passed (`graceful`: the path was gone).
+pub fn passed_source(
+    pid: u32,
+    listen_pid: Option<&str>,
+    listen_fds: Option<&str>,
+    names: Option<&str>,
+) -> Option<(i32, u64, u64)> {
+    if listen_pid?.parse::<u32>().ok()? != pid || listen_fds? != "1" {
+        return None;
+    }
+    let (dev, ino) = parse_fd_name(names?)?;
+    Some((LISTEN_FDS_START, dev, ino))
+}
+
+/// The command line that runs `request` in a transient unit, its source passed as the descriptor
+/// named `fd_name` ([`fd_name`]), or `None` when the job name or the source path cannot be passed
+/// safely (the run then fails with `helper.failed`).
+pub fn argv(exe: &Path, request: &Request, fd_name: &str) -> Option<Vec<String>> {
     use crate::core::helper::Mode;
     let unit = unit_name(&request.job)?;
-    let source = bind_path(&request.source)?;
+    let source = open_file_path(&request.source)?;
+    parse_fd_name(fd_name)?;
     let exe = exe.to_str()?.to_string();
     let runtime = match request.mode {
         Mode::Inspect => INSPECT_MAX_SEC,
@@ -141,7 +179,7 @@ pub fn argv(exe: &Path, request: &Request) -> Option<Vec<String>> {
         "UMask=0077".to_string(),
         format!("StateDirectory={unit}"),
         "StateDirectoryMode=0700".to_string(),
-        format!("BindReadOnlyPaths={source}:{SOURCE_IN_UNIT}"),
+        format!("OpenFile={source}:{fd_name}:read-only,graceful"),
     ];
     for p in props {
         v.push("-p".into());
@@ -156,7 +194,9 @@ pub fn argv(exe: &Path, request: &Request) -> Option<Vec<String>> {
 #[cfg(target_os = "linux")]
 mod imp {
     use super::UNIT_PREFIX;
-    use super::{argv, inner_request, private_dir, unit_name, SystemdRunHelper, PRIVATE_STATE};
+    use super::{
+        argv, fd_name, inner_request, private_dir, unit_name, SystemdRunHelper, PRIVATE_STATE,
+    };
     use crate::core::deps::{Exit, Helper};
     use crate::core::helper::Request;
     use std::io::{self, Read, Write};
@@ -200,7 +240,19 @@ mod imp {
             cancel: &AtomicBool,
             on_output: &mut dyn FnMut(&[u8]) -> bool,
         ) -> Exit {
-            let (Some(args), Some(inner)) = (argv(&self.exe, request), inner_request(request))
+            use std::os::unix::fs::MetadataExt;
+            // The identity the helper checks on the descriptor. A missing path still runs: the
+            // manager passes nothing (`graceful`) and the helper reports it as missing.
+            let name = match std::fs::symlink_metadata(&request.source) {
+                Ok(m) if m.file_type().is_symlink() => {
+                    return Exit::Lost("the source is a link, not a package".into())
+                }
+                Ok(m) => fd_name(m.dev(), m.ino()),
+                Err(e) if e.kind() == io::ErrorKind::NotFound => fd_name(0, 0),
+                Err(e) => return Exit::Lost(format!("the source cannot be looked at ({e})")),
+            };
+            let (Some(args), Some(inner)) =
+                (argv(&self.exe, request, &name), inner_request(request))
             else {
                 return Exit::Lost("the job or the source path cannot be passed to systemd".into());
             };
@@ -321,6 +373,7 @@ mod tests {
         let v = argv(
             exe,
             &request(Mode::Install, "/run/media/ruya-shell/USB/game.play.zip"),
+            NAME,
         )
         .unwrap();
         assert_eq!(
@@ -359,17 +412,19 @@ mod tests {
             "InaccessiblePaths=-/var/lib/ruya-play",
             "StateDirectory=ruya-play-helper-job-7",
             "StateDirectoryMode=0700",
-            "BindReadOnlyPaths=\"/run/media/ruya-shell/USB/game.play.zip\":/run/ruya-play-helper/source",
+            "OpenFile=/run/media/ruya-shell/USB/game.play.zip:source-2049-77:read-only,graceful",
         ] {
             assert!(p.contains(&want), "missing {want}: {p:?}");
         }
-        // The state folder is the only writable path, and the source is bound read-only only.
+        // The state folder is the only writable path, and the source is passed read-only only.
         for prop in &p {
             assert!(!prop.starts_with("ReadWritePaths"), "{prop}");
             assert!(!prop.starts_with("BindPaths"), "{prop}");
+            assert!(!prop.starts_with("BindReadOnlyPaths"), "{prop}");
             assert!(!prop.starts_with("ProtectSystem=") || *prop == "ProtectSystem=strict");
             if prop.contains("game.play.zip") {
-                assert!(prop.starts_with("BindReadOnlyPaths="), "{prop}");
+                assert!(prop.starts_with("OpenFile="), "{prop}");
+                assert!(prop.ends_with(":read-only,graceful"), "{prop}");
             }
         }
         // No network setting but the one that takes it away.
@@ -377,29 +432,40 @@ mod tests {
             .iter()
             .any(|x| x.starts_with("PrivateNetwork=") && *x != "PrivateNetwork=yes"));
         // An inspect gets the short time limit.
-        let v = argv(exe, &request(Mode::Inspect, "/run/media/x")).unwrap();
+        let v = argv(exe, &request(Mode::Inspect, "/run/media/x"), NAME).unwrap();
         assert!(props(&v).contains(&"RuntimeMaxSec=600"));
     }
 
+    const NAME: &str = "source-2049-77";
+
     #[test]
-    fn the_source_path_is_escaped_or_refused() {
+    fn the_source_path_is_passed_plain_or_refused() {
         let exe = Path::new("/usr/libexec/ruya-play");
         let v = argv(
             exe,
-            &request(Mode::Install, "/run/media/u/MY STICK/a:b\\\"c.play.zip"),
+            &request(Mode::Install, "/run/media/u/MY STICK/game.play.zip"),
+            NAME,
         )
         .unwrap();
         assert!(props(&v).contains(
-            &"BindReadOnlyPaths=\"/run/media/u/MY STICK/a\\:b\\\\\\\"c.play.zip\":/run/ruya-play-helper/source"
+            &"OpenFile=/run/media/u/MY STICK/game.play.zip:source-2049-77:read-only,graceful"
         ));
-        assert_eq!(
-            argv(exe, &request(Mode::Install, "relative/game.play")),
-            None
-        );
-        assert_eq!(argv(exe, &request(Mode::Install, "/run/media/a\nb")), None);
+        for bad in [
+            "relative/game.play",
+            "/run/media/a\nb",
+            "/run/media/u/a:b.play.zip",
+            "/run/media/u/a\\b.play.zip",
+        ] {
+            assert_eq!(argv(exe, &request(Mode::Install, bad), NAME), None, "{bad}");
+        }
         let mut r = request(Mode::Install, "/run/media/x");
         r.job = "../../etc".into();
-        assert_eq!(argv(exe, &r), None);
+        assert_eq!(argv(exe, &r, NAME), None);
+        // A descriptor name that is not the service's own is refused too.
+        assert_eq!(
+            argv(exe, &request(Mode::Install, "/run/media/x"), "source:x"),
+            None
+        );
         assert_eq!(
             unit_name("job-12").as_deref(),
             Some("ruya-play-helper-job-12")
@@ -408,7 +474,35 @@ mod tests {
     }
 
     #[test]
-    fn the_helper_inside_sees_its_bind_and_its_state_folder() {
+    fn the_descriptor_carries_the_identity_the_service_saw() {
+        assert_eq!(fd_name(2049, 77), NAME);
+        assert_eq!(parse_fd_name(NAME), Some((2049, 77)));
+        for bad in [
+            "source-1",
+            "source--1",
+            "source-a-1",
+            "src-1-2",
+            "source-1-2-3",
+            "",
+        ] {
+            assert_eq!(parse_fd_name(bad), None, "{bad}");
+        }
+        assert_eq!(
+            passed_source(42, Some("42"), Some("1"), Some(NAME)),
+            Some((3, 2049, 77))
+        );
+        // Another process's descriptors, two of them, none, or a foreign name: no source.
+        assert_eq!(passed_source(42, Some("41"), Some("1"), Some(NAME)), None);
+        assert_eq!(passed_source(42, Some("42"), Some("2"), Some(NAME)), None);
+        assert_eq!(passed_source(42, None, None, None), None);
+        assert_eq!(
+            passed_source(42, Some("42"), Some("1"), Some("other")),
+            None
+        );
+    }
+
+    #[test]
+    fn the_helper_inside_sees_its_source_and_its_state_folder() {
         let inner = inner_request(&request(Mode::Install, "/run/media/x")).unwrap();
         assert_eq!(inner.source, SOURCE_IN_UNIT);
         assert_eq!(inner.staging, "/var/lib/ruya-play-helper-job-7");
