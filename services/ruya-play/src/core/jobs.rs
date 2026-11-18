@@ -11,6 +11,7 @@
 
 use crate::core::codes;
 use crate::core::status::{JobStatus, Phase};
+use ruya_play_format::Problem;
 use ruya_play_trust::time::UnixSeconds;
 use serde::{Deserialize, Serialize};
 use std::io::{self, Read, Write};
@@ -396,9 +397,93 @@ pub fn write_atomic(path: &Path, text: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
+/// The most problems [`problem_log_lines`] writes for one job.
+pub const MAX_LOGGED_PROBLEMS: usize = 8;
+/// The most characters of one field of a logged problem.
+pub const MAX_LOGGED_FIELD: usize = 256;
+
+/// The journal lines for a job that did not end `ok` (RUY-866): the job record keeps only the
+/// first code, so the message (the io error text, the rule that was broken) is logged here, one
+/// line per problem, at most [`MAX_LOGGED_PROBLEMS`], each field cleaned of control characters
+/// and cut to [`MAX_LOGGED_FIELD`] characters. Problems never carry secrets (05 §7). No lines for
+/// an `ok` or a `cancelled` job.
+pub fn problem_log_lines(job: &str, status: JobStatus, problems: &[Problem]) -> Vec<String> {
+    if matches!(status, JobStatus::Ok | JobStatus::Cancelled) {
+        return Vec::new();
+    }
+    let clean = |s: &str| -> String {
+        s.chars()
+            .map(|c| if c.is_control() { ' ' } else { c })
+            .take(MAX_LOGGED_FIELD)
+            .collect()
+    };
+    let mut out: Vec<String> = problems
+        .iter()
+        .take(MAX_LOGGED_PROBLEMS)
+        .map(|p| {
+            format!(
+                "ruya-play: {} {}: {} {}: {}",
+                clean(job),
+                status.as_str(),
+                clean(&p.code),
+                clean(&p.path),
+                clean(&p.message)
+            )
+        })
+        .collect();
+    if problems.len() > MAX_LOGGED_PROBLEMS {
+        out.push(format!(
+            "ruya-play: {} {}: {} more problems",
+            clean(job),
+            status.as_str(),
+            problems.len() - MAX_LOGGED_PROBLEMS
+        ));
+    }
+    if out.is_empty() {
+        out.push(format!(
+            "ruya-play: {} {}: no problem given",
+            clean(job),
+            status.as_str()
+        ));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_failed_job_logs_each_problem_cleaned_and_bounded() {
+        let p = Problem::new(
+            codes::STAGING_IO,
+            "",
+            "Writing into the staging folder failed (Not a directory (os error 20)).\n\x1b[2Jx",
+        );
+        let lines = problem_log_lines("job-4", JobStatus::Failed, std::slice::from_ref(&p));
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].starts_with("ruya-play: job-4 failed: staging.io : Writing into"));
+        assert!(lines[0].contains("(os error 20)"));
+        assert!(!lines[0].chars().any(char::is_control));
+
+        let long = Problem::new("x", "p".repeat(1000), "m".repeat(1000));
+        let many = vec![long; MAX_LOGGED_PROBLEMS + 3];
+        let lines = problem_log_lines("job-5", JobStatus::InvalidPackage, &many);
+        assert_eq!(lines.len(), MAX_LOGGED_PROBLEMS + 1);
+        assert!(lines[0].len() < 3 * MAX_LOGGED_FIELD);
+        assert!(lines[MAX_LOGGED_PROBLEMS].ends_with("3 more problems"));
+    }
+
+    #[test]
+    fn an_ok_job_logs_nothing_and_a_bare_failure_still_logs_a_line() {
+        let p = Problem::new("x", "", "y");
+        assert!(problem_log_lines("job-1", JobStatus::Ok, std::slice::from_ref(&p)).is_empty());
+        assert!(problem_log_lines("job-1", JobStatus::Cancelled, &[p]).is_empty());
+        assert_eq!(
+            problem_log_lines("job-2", JobStatus::Failed, &[]),
+            vec!["ruya-play: job-2 failed: no problem given".to_string()]
+        );
+    }
 
     fn job(n: u64, state: JobState, status: Option<JobStatus>) -> JobRecord {
         let mut j = JobRecord::queued(&format!("job-{n}"), JobKind::Install, "/run/media/a/x.play");

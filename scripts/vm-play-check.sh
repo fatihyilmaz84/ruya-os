@@ -51,6 +51,8 @@ work=/var/lib/ruya-play-check
 usb=/run/media/ruya-shell/PLAYCHECK
 loose=/run/media/ruya-shell/PLAYLOOSE
 state=/var/lib/ruya-play
+# staging/ and inspect/ live on the helpers' mount (RUY-866, 05 section 7.3).
+staging=/var/lib/private/ruya-play-work/staging
 fail=0
 since="$(date '+%Y-%m-%d %H:%M:%S')"
 
@@ -159,10 +161,21 @@ print(json.loads(z.read(name))["id"])
 PY
 }
 
-leftovers() { # staging/ and inspect/ jobs folders are empty after a finished job
-    n="$(find "$state/staging" -mindepth 1 2>/dev/null | wc -l)"
+leftovers() { # the service's staging/ exists and is empty after a finished job
+    [ -d "$staging" ] || return 1
+    n="$(find "$staging" -mindepth 1 2>/dev/null | wc -l)"
     [ "$n" = 0 ] || return 1
     return 0
+}
+
+# Inspect <path> is ok **and** its record lists no problem (RUY-866: on 0.0.93 the method said ok
+# while the record held staging.io). Prints "ok" or what was wrong.
+inspect_clean() {
+    out="$(call Inspect s "$1")" || { echo "call-failed"; return; }
+    st="$(echo "$out" | parse status)"
+    [ "$st" = ok ] || { echo "$st"; return; }
+    probs="$(echo "$out" | parse key problems)"
+    [ "$probs" = "[]" ] && echo ok || echo "ok with problems $probs"
 }
 
 # Install <path> and wait for the job to finish; prints the JobFinished status.
@@ -227,6 +240,7 @@ helper_checks() {
     case "$out" in *WRITE-STATE*) ok "the helper's sandbox writes its StateDirectory" ;; *) bad "the helper's sandbox cannot write its StateDirectory" ;; esac
     case "$out" in *READ-FD*) ok "the helper reads the passed descriptor of $1" ;; *) bad "the helper got no readable descriptor for $1" ;; esac
     rm -rf /var/lib/private/ruya-play-helper-probe
+    rm -f /var/lib/ruya-play-helper-probe
 }
 
 # Verify <id> and wait for the job; prints "<method status> <job status or ->" (RUY-834).
@@ -294,8 +308,8 @@ if [ "$mode" = helper ]; then
     mkdir -p "$state/incoming"
     install -m 0600 "$zip" "$state/incoming/vm-play-check.play.zip"
     helper_checks "$state/incoming/vm-play-check.play.zip"
-    st="$(call Inspect s "$state/incoming/vm-play-check.play.zip" | parse status)"
-    [ "$st" = ok ] && ok "Inspect of an incoming/ file (root 0600) is ok" || bad "Inspect of an incoming/ file: $st"
+    st="$(inspect_clean "$state/incoming/vm-play-check.play.zip")"
+    [ "$st" = ok ] && ok "Inspect of an incoming/ file (root 0600) is ok, no problems" || bad "Inspect of an incoming/ file: $st"
     rm -f "$state/incoming/vm-play-check.play.zip"
     ls /var/lib/private 2>/dev/null | grep -q '^ruya-play-helper-' && bad "a helper state folder was left" || ok "no helper state folder is left"
     avc_checks
@@ -403,8 +417,8 @@ done
 echo "$srcs" | grep -q "^$loose/" && bad "ListSources lists a drive mounted without noexec" || ok "ListSources skips a drive mounted without noexec"
 st="$(call Inspect s "$loose/signed-a.play.zip" | parse status)"
 [ "$st" = unknown-source ] && ok "Inspect on a drive without noexec is unknown-source" || bad "Inspect on a drive without noexec: $st"
-st="$(call Inspect s "$usb/signed-a.play.zip" | parse status)"
-[ "$st" = ok ] && ok "Inspect of a USB package is ok" || bad "Inspect of a USB package: $st"
+st="$(inspect_clean "$usb/signed-a.play.zip")"
+[ "$st" = ok ] && ok "Inspect of a USB package is ok, no problems" || bad "Inspect of a USB package: $st"
 st="$(call Inspect s /etc/shadow | parse status)"
 [ "$st" = unknown-source ] && ok "Inspect of a path that is no candidate is unknown-source" || bad "Inspect /etc/shadow: $st"
 st="$(as_shell busctl --system --json=short call "$svc" "$obj" "$svc" Install 'sa{sv}' "$usb/signed-a.play.zip" 0 | parse status)"
@@ -450,8 +464,8 @@ refused "the same id signed by another key" signed-b different-developer
 
 mkdir -p "$state/incoming"
 install -m 0600 "$work/signed-a.play.zip" "$state/incoming/vm-play-check.play.zip"
-st="$(call Inspect s "$state/incoming/vm-play-check.play.zip" | parse status)"
-[ "$st" = ok ] && ok "Inspect of a download in incoming/ (root 0600) is ok" || bad "Inspect of a download in incoming/: $st"
+st="$(inspect_clean "$state/incoming/vm-play-check.play.zip")"
+[ "$st" = ok ] && ok "Inspect of a download in incoming/ (root 0600) is ok, no problems" || bad "Inspect of a download in incoming/: $st"
 
 helper_checks "$usb/signed-a.play.zip"
 

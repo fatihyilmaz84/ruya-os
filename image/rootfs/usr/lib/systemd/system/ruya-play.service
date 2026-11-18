@@ -8,12 +8,14 @@ BusName=org.ruyaos.Play1
 ExecStart=/usr/bin/ruya-play
 Restart=on-failure
 Environment=HOME=/var/lib/ruya-play
-# /var/lib/ruya-play: incoming/, staging/, state/, the trust store, the staging OSTree repo and
-# the device key (root, 0700; docs/specs/05-play-packages.md section 7.1).
+# /var/lib/ruya-play: incoming/, state/, the trust store, the staging OSTree repo and the device
+# key (root, 0700; docs/specs/05-play-packages.md section 7.1).
 StateDirectory=ruya-play
 StateDirectoryMode=0700
 # /var/lib/flatpak: the system installation the app is committed to. /var/lib/private: the
-# helpers' StateDirectory folders, moved into staging/ after each run (core/systemd_run.rs).
+# helpers' StateDirectory folders and the service's own ruya-play-work/{staging,inspect}, which
+# the helpers' output is renamed into. They must share this one mount: every path here and the
+# StateDirectory is a mount of its own, and a rename between two mounts is EXDEV (RUY-866).
 # /var/tmp: flatpak's temporary files. Removable media under /run/media stays read-only
 # (ProtectSystem=strict); the helper gets the package as a descriptor, never a writable path.
 ReadWritePaths=/var/lib/flatpak /var/lib/private /var/tmp

@@ -23,11 +23,17 @@
 //!   `lstat` (a link is refused there) and the helper checks them on the descriptor
 //!   ([`passed_source`]; `crate::service::fd_source`), so a file swapped in between is refused.
 //!   The helper reads a zip through the descriptor and a folder through `/proc/self/fd/3`; its
-//!   request names [`SOURCE_IN_UNIT`]. And one writable folder, `StateDirectory=ruya-play-helper-<job>`: systemd creates it as
+//!   request names [`SOURCE_IN_UNIT`]. And one writable folder,
+//!   `StateDirectory=ruya-play-helper-<job>`: systemd creates it as
 //!   `/var/lib/private/ruya-play-helper-<job>`, owned by the dynamic uid, mode 0700, on `/var`
-//!   like `/var/lib/flatpak` (the reflink rule of 05 §7.1). After the unit is gone the service
-//!   moves its top-level entries into the job's own folder (`rename`, same filesystem, links are
-//!   moved, never followed) and removes the rest; then it re-walks what it got.
+//!   like `/var/lib/flatpak` (the reflink rule of 05 §7.1). The helper is given that real folder,
+//!   never the `/var/lib/ruya-play-helper-<job>` link systemd also makes, which the helper's
+//!   no-follow open refuses (ENOTDIR; RUY-866). After the unit is gone the service moves its
+//!   top-level entries into the job's own folder (`rename`, links are moved, never followed) and
+//!   removes the rest; then it re-walks what it got. The job's folder is under
+//!   `/var/lib/private/ruya-play-work` for that (the service's `Config::with_work`): in the
+//!   service's namespace `/var/lib/private` and `/var/lib/ruya-play` are separate mounts, and a
+//!   rename between them is EXDEV.
 
 use crate::core::helper::Request;
 use std::path::{Path, PathBuf};
@@ -144,7 +150,7 @@ pub fn inner_request(request: &Request) -> Option<Request> {
     let unit = unit_name(&request.job)?;
     let mut inner = request.clone();
     inner.source = SOURCE_IN_UNIT.to_string();
-    inner.staging = format!("/var/lib/{unit}");
+    inner.staging = format!("{PRIVATE_STATE}/{unit}");
     Some(inner)
 }
 
@@ -610,7 +616,9 @@ mod tests {
     fn the_helper_inside_sees_its_source_and_its_state_folder() {
         let inner = inner_request(&request(Mode::Install, "/run/media/x")).unwrap();
         assert_eq!(inner.source, SOURCE_IN_UNIT);
-        assert_eq!(inner.staging, "/var/lib/ruya-play-helper-job-7");
+        // The real folder, not systemd's /var/lib/<unit> link (RUY-866).
+        assert_eq!(inner.staging, "/var/lib/private/ruya-play-helper-job-7");
+        assert_eq!(Path::new(&inner.staging), private_dir("job-7").unwrap());
         assert_eq!(
             private_dir("job-7").unwrap(),
             Path::new("/var/lib/private/ruya-play-helper-job-7")

@@ -82,6 +82,19 @@ impl Config {
         }
     }
 
+    /// The same, with `staging/` and `inspect/` under `work` instead (RUY-866): the folders the
+    /// helpers' output is renamed into must be on the same mount as the helpers' own state
+    /// folders (`/var/lib/private/ruya-play-helper-<job>`), or `rename` fails with EXDEV: in the
+    /// service's namespace every `ReadWritePaths=` entry and its `StateDirectory=` is a mount of
+    /// its own, even on one filesystem.
+    pub fn with_work(self, work: &Path) -> Config {
+        Config {
+            staging: work.join("staging"),
+            inspect: work.join("inspect"),
+            ..self
+        }
+    }
+
     /// The job table's file.
     pub fn jobs_file(&self) -> PathBuf {
         self.state.join("jobs")
@@ -1165,6 +1178,9 @@ impl Importer {
             }
         };
         let error = result.problems.first().map_or("", |p| p.code.as_str());
+        for line in jobs::problem_log_lines(&job, result.status, &result.problems) {
+            eprintln!("{line}");
+        }
         let finished = self.clock.now();
         {
             let mut st = self.shared.lock();

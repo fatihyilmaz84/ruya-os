@@ -26,6 +26,10 @@ use ruya_play_trust::{FileTrustStore, StoreKeys};
 const ROOT: &str = "/var/lib/ruya-play";
 /// The system Flatpak installation.
 const FLATPAK: &str = "/var/lib/flatpak";
+/// `staging/` and `inspect/` (root, 0700): on the mount of the helpers' state folders, which
+/// are renamed into them (RUY-866, `Config::with_work`). Not `ruya-play-helper-*`, so the
+/// helpers' leftover sweep never removes it.
+const WORK: &str = "/var/lib/private/ruya-play-work";
 /// How often the mounts are looked at for `SourcesChanged`.
 const MOUNT_POLL: Duration = Duration::from_secs(2);
 
@@ -245,6 +249,9 @@ fn run(session: bool) -> Result<(), Box<dyn Error>> {
     let root = root_dir(session);
     std::fs::create_dir_all(&root)?;
     let mut cfg = Config::under(&root);
+    if !session {
+        cfg = cfg.with_work(Path::new(WORK));
+    }
     cfg.flatpak = PathBuf::from(FLATPAK);
     let env: Arc<dyn Environment> = Arc::new(SystemEnvironment);
     std::fs::create_dir_all(&cfg.state)?;

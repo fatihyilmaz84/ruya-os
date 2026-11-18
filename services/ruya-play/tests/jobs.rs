@@ -164,3 +164,22 @@ fn a_counter_at_its_end_hands_out_no_name_and_does_not_panic() {
         "{text}"
     );
 }
+
+/// RUY-866: the service's staging/ and inspect/ move to the helpers' mount; the rest stays.
+#[test]
+fn with_work_moves_only_staging_and_inspect() {
+    use std::path::Path;
+    let cfg = ruya_play::Config::under(Path::new("/var/lib/ruya-play"))
+        .with_work(Path::new("/var/lib/private/ruya-play-work"));
+    assert_eq!(
+        cfg.staging,
+        Path::new("/var/lib/private/ruya-play-work/staging")
+    );
+    assert_eq!(
+        cfg.inspect,
+        Path::new("/var/lib/private/ruya-play-work/inspect")
+    );
+    assert_eq!(cfg.incoming, Path::new("/var/lib/ruya-play/incoming"));
+    assert_eq!(cfg.state, Path::new("/var/lib/ruya-play/state"));
+    assert_eq!(cfg.jobs_file(), Path::new("/var/lib/ruya-play/state/jobs"));
+}
