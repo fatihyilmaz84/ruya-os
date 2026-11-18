@@ -107,9 +107,9 @@ void MockLibraryBackend::reset(const QString &scenario)
                 auto at = [&](const char *name) { return dir + QLatin1Char('/') + QLatin1String(name) + QStringLiteral(".png"); };
                 p.art = {{QStringLiteral("icon"), at("green")},
                          {QStringLiteral("logo"), at("logo")},
-                         {QStringLiteral("card"), at("blue")},
-                         {QStringLiteral("cover"), at("redblue")},
-                         {QStringLiteral("hero"), at("darkred")},
+                         {QStringLiteral("card"), at("playcard")},
+                         {QStringLiteral("cover"), at("playcover")},
+                         {QStringLiteral("hero"), at("playhero")},
                          {QStringLiteral("trailer"), QStringLiteral("/mock/play/trailer.webm")}};
                 LibraryItem quiet = item("flatpak:play.com.example.quiet", "game", "Quiet Quest", 1762050000);
                 quiet.art = {{QStringLiteral("icon"), at("pastel")}};

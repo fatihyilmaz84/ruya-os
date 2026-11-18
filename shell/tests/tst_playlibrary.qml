@@ -103,8 +103,8 @@ Item {
 
         function test_hero_art_and_cards_take_the_play_roles() {
             start()
-            verify(heroArtPicture().endsWith("darkred.png"), "the hero role: " + heroArtPicture())
-            verify(find("recentCard_" + hopper).picture.endsWith("blue.png"), "the card role: " + find("recentCard_" + hopper).picture)
+            verify(heroArtPicture().endsWith("playhero.png"), "the hero role: " + heroArtPicture())
+            verify(find("recentCard_" + hopper).picture.endsWith("playcard.png"), "the card role: " + find("recentCard_" + hopper).picture)
             // An icon-only .play app has no card art: the card keeps its monogram, as any item without art.
             compare(find("recentCard_" + quiet).picture, "")
         }
@@ -153,8 +153,11 @@ Item {
         function test_trust_row_is_a_stop_and_opens_the_signer_sheet() {
             start()
             openPage(hopper)
+            const play = find("detailPrimary")
+            const trustRow = find("detailTrustRow")
+            verify(trustRow.mapToItem(null, 0, 0).y > play.mapToItem(null, 0, 0).y, "the trust row is drawn below the buttons")
             keyClick(Qt.Key_Down)
-            tryVerify(() => find("detailTrustRow").activeFocus, 2000, "Down from the buttons lands on the trust row")
+            tryVerify(() => find("detailTrustRow").activeFocus, 2000, "Down from Play goes down to the trust row")
             keyClick(Qt.Key_Return)
             const sheet = find("detailSigner")
             tryCompare(sheet, "shown", true)
@@ -216,25 +219,25 @@ Item {
                 Library.resetMockForTests("playart:" + artFixtures)
                 start()
                 wait(900)
-                grabImage(tc.shell).save(shotsDir + "/" + "120-play-home-full-art-" + lang + "-1080p.png")
+                grabImage(tc.shell).save(shotsDir + "/" + "150-play-home-full-art-" + lang + "-1080p.png")
                 heroOn(quiet)
                 wait(900)
-                grabImage(tc.shell).save(shotsDir + "/" + "121-play-home-icon-only-" + lang + "-1080p.png")
+                grabImage(tc.shell).save(shotsDir + "/" + "151-play-home-icon-only-" + lang + "-1080p.png")
                 tc.shell.destroy()
                 tc.shell = null
                 start()
                 openPage(hopper)
                 wait(900)
-                grabImage(tc.shell).save(shotsDir + "/" + "122-play-page-full-art-" + lang + "-1080p.png")
+                grabImage(tc.shell).save(shotsDir + "/" + "152-play-page-full-art-" + lang + "-1080p.png")
                 keyClick(Qt.Key_Down)
                 keyClick(Qt.Key_Down)
                 wait(900)
-                grabImage(tc.shell).save(shotsDir + "/" + "123-play-page-trailer-" + lang + "-1080p.png")
+                grabImage(tc.shell).save(shotsDir + "/" + "153-play-page-trailer-" + lang + "-1080p.png")
                 keyClick(Qt.Key_Escape)
                 tryCompare(tc.shell, "currentPage", "")
                 openPage(quiet)
                 wait(900)
-                grabImage(tc.shell).save(shotsDir + "/" + "124-play-page-icon-only-" + lang + "-1080p.png")
+                grabImage(tc.shell).save(shotsDir + "/" + "154-play-page-icon-only-" + lang + "-1080p.png")
                 tc.shell.destroy()
                 tc.shell = null
             }

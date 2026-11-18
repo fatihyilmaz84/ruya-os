@@ -1534,7 +1534,7 @@ FocusScope {
                 const known = item && item.id
                 to.appId = known ? item.id : ""
                 to.appName = known ? (item.title ?? "") : ""
-                to.picture = known && item.art ? (item.art.hero ?? item.art.cover ?? item.art.tile ?? item.art.card ?? "") : ""
+                to.picture = known && item.art ? (item.art.hero ?? item.art.card ?? item.art.cover ?? item.art.tile ?? "") : ""
                 showB = !showB
             }
 

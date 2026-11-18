@@ -705,23 +705,6 @@ Page {
                         }
                     }
 
-                    // Who signed the package (a .play app): Accept opens the signer sheet.
-                    Item {
-                        width: parent.width
-                        visible: page.trustShown
-                        height: visible ? trustRow.height + Theme.spaceXs * page.u : 0
-
-                        TrustRow {
-                            id: trustRow
-                            objectName: "detailTrustRow"
-                            y: Theme.spaceXs * page.u
-                            u: page.u
-                            info: page.playInfo
-                            onActivated: signerSheet.open(page.playInfo, trustRow)
-                            onActiveFocusChanged: if (activeFocus) page.stopFocused(header, false)
-                        }
-                    }
-
                     Text {
                         objectName: "detailSummary"
                         visible: page.hasRecord && text !== ""
@@ -791,6 +774,23 @@ Page {
                             kind: "info"
                             enabled: false
                             label: qsTr("Start this game from Steam for now.")
+                        }
+                    }
+
+                    // Who signed the package (a .play app), below the buttons as it is in the focus order: Down from Play lands here.
+                    Item {
+                        width: parent.width
+                        visible: page.trustShown
+                        height: visible ? trustRow.height + Theme.spaceXs * page.u : 0
+
+                        TrustRow {
+                            id: trustRow
+                            objectName: "detailTrustRow"
+                            y: Theme.spaceXs * page.u
+                            u: page.u
+                            info: page.playInfo
+                            onActivated: signerSheet.open(page.playInfo, trustRow)
+                            onActiveFocusChanged: if (activeFocus) page.stopFocused(header, false)
                         }
                     }
 
@@ -879,7 +879,7 @@ Page {
                     u: page.u
                     appId: page.appId !== "" ? page.appId : (page.item.id ?? "")
                     appName: page.title
-                    picture: page.app.hero || (page.item.art ? (page.item.art.hero || page.item.art.cover || page.item.art.tile || page.item.art.card || "") : "")
+                    picture: page.app.hero || (page.item.art ? (page.item.art.hero || page.item.art.card || page.item.art.cover || page.item.art.tile || "") : "")
                 }
             }
 
