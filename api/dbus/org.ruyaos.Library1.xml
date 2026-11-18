@@ -22,8 +22,25 @@
     source       s    "steam" or "flatpak"
     launch       s    opaque launch spec for the session service: "steam://rungameid/<appid>"
                       for Steam, "flatpak:<application id>" for Flatpak
-    art          a{ss} artwork by role ("tile", "hero", "icon") -> file path or URL; may be empty
+    art          a{ss} artwork by role ("tile", "hero", "icon") -> file path or URL; may be empty.
+                      A .play app (below) adds the roles "logo", "card", "cover", "preview" (a short
+                      video) and "trailer" (a video); each is present only when the package has it
     last_played  x    unix seconds, 0 if unknown
+
+  Extra keys of a .play app (RUY-852; non-breaking, absent for every other item). A .play app is a
+  Flatpak app "play.<id>" that ruya-play installed; ruya-library reads them from its deployment
+  (/var/lib/flatpak/app/play.<id>/current/active/files/: play.json, share/ruyaos/play/art/ and
+  share/ruyaos/play/trust.json). Nothing is verified here (the tier and signer are what ruya-play
+  recorded at install). A deployment without a readable play.json is a plain item:
+    play         b    true. Present only for a .play app
+    title        s    (the key above) the name in play.json, English else the first language
+    genres       as   play.json genres (up to four); may be empty
+    players      (uu) fewest and most players; absent when play.json has none
+    controller   s    "full", "partial" or "none"; absent when play.json has none
+    age_rating   a{ss} OARS attribute -> "none", "mild", "moderate" or "intense"; absent when none
+    play_tier    s    "official", "developer" or "unverified"; absent when trust.json is missing or
+                      cannot be read
+    play_signer  s    the signer's name (else its key id); absent with no tier or no signer
 
   Order: last_played descending, then title (case-insensitive), then id.
 -->

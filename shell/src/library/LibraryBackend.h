@@ -6,6 +6,7 @@
 #include <QMap>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QVariantMap>
 
 // One item record of org.ruyaos.Library1 (api/dbus/org.ruyaos.Library1.xml, "Item record").
@@ -19,13 +20,24 @@ struct LibraryItem
     QMap<QString, QString> art;            // role ("tile", "hero", "icon") -> path or URL
     qlonglong lastPlayed = 0;              // unix seconds, 0 if unknown
 
+    // A .play app (RUY-852). The art map then also holds "logo", "card", "cover", "preview" and
+    // "trailer" when the package has them.
+    bool play = false;
+    QStringList genres;
+    int playersMin = 0;                    // 0, 0: unknown
+    int playersMax = 0;
+    QString controller;                    // "full" | "partial" | "none" | ""
+    QMap<QString, QString> ageRating;      // OARS attribute -> none | mild | moderate | intense
+    QString playTier;                      // "official" | "developer" | "unverified" | "" (unknown)
+    QString playSigner;
+
     // The record as QML sees it (camelCase keys).
     QVariantMap toVariant() const
     {
         QVariantMap artMap;
         for (auto it = art.constBegin(); it != art.constEnd(); ++it)
             artMap.insert(it.key(), it.value());
-        return {
+        QVariantMap out = {
             {QStringLiteral("id"), id},
             {QStringLiteral("kind"), kind},
             {QStringLiteral("title"), title},
@@ -34,6 +46,20 @@ struct LibraryItem
             {QStringLiteral("art"), artMap},
             {QStringLiteral("lastPlayed"), lastPlayed},
         };
+        if (play) { // the keys of a .play app exist only for one; every other record is unchanged
+            out.insert(QStringLiteral("play"), true);
+            out.insert(QStringLiteral("genres"), genres);
+            out.insert(QStringLiteral("playersMin"), playersMin);
+            out.insert(QStringLiteral("playersMax"), playersMax);
+            out.insert(QStringLiteral("controller"), controller);
+            QVariantMap rating;
+            for (auto it = ageRating.constBegin(); it != ageRating.constEnd(); ++it)
+                rating.insert(it.key(), it.value());
+            out.insert(QStringLiteral("ageRating"), rating);
+            out.insert(QStringLiteral("playTier"), playTier);
+            out.insert(QStringLiteral("playSigner"), playSigner);
+        }
+        return out;
     }
 };
 

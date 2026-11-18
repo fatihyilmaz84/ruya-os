@@ -2,7 +2,10 @@
 
 use std::path::PathBuf;
 
+use std::path::Path;
+
 use crate::flatpak::{self, AppLister};
+use crate::play::{self, PlayInfo};
 use crate::steam;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +51,8 @@ pub struct Item {
     pub art: Vec<(String, String)>,
     /// Unix seconds, 0 if unknown.
     pub last_played: i64,
+    /// Set for a `.play` app with a readable `play.json` (`play.rs`).
+    pub play: Option<PlayInfo>,
 }
 
 /// Last played first, then title (case-insensitive), then id, so equal titles keep a fixed order.
@@ -65,7 +70,7 @@ pub fn merge(steam: Vec<Item>, flatpak: Vec<Item>) -> Vec<Item> {
 
 /// Reads every Steam root and the Flatpak list. A failing part contributes nothing (and is
 /// logged): the library of the other source still shows.
-pub fn scan(steam_roots: &[PathBuf], lister: &dyn AppLister) -> Vec<Item> {
+pub fn scan(steam_roots: &[PathBuf], lister: &dyn AppLister, play_root: &Path) -> Vec<Item> {
     let mut steam_items: Vec<Item> = Vec::new();
     for root in steam_roots {
         for item in steam::scan_root(root) {
@@ -75,7 +80,16 @@ pub fn scan(steam_roots: &[PathBuf], lister: &dyn AppLister) -> Vec<Item> {
         }
     }
     let flatpak_items = match lister.list() {
-        Ok(text) => flatpak::parse_list(&text, lister),
+        Ok(text) => {
+            let mut items = flatpak::parse_list(&text, lister);
+            for item in &mut items {
+                if let Some(id) = item.id.strip_prefix("flatpak:") {
+                    let id = id.to_owned();
+                    play::enrich(item, &id, play_root);
+                }
+            }
+            items
+        }
         Err(err) => {
             eprintln!("ruya-library: Flatpak list unavailable: {err}");
             Vec::new()
@@ -110,6 +124,7 @@ mod tests {
             launch: String::new(),
             art: Vec::new(),
             last_played,
+            play: None,
         }
     }
 
@@ -158,7 +173,7 @@ mod tests {
         let roots = vec![root.clone(), root];
         let lister = FixtureLister::new("a.b.C\tCee\tflathub\nd.e.Game\tTux\tflathub\n")
             .with_desktop("d.e.Game", "[Desktop Entry]\nCategories=Game;\n");
-        let both = scan(&roots, &lister);
+        let both = scan(&roots, &lister, Path::new("/nonexistent"));
         assert_eq!(
             both.len(),
             3,
@@ -170,7 +185,7 @@ mod tests {
             "{kinds:?}"
         );
         assert!(kinds.contains(&("flatpak:a.b.C", Kind::App)), "{kinds:?}");
-        assert_eq!(scan(&roots, &Broken).len(), 1);
+        assert_eq!(scan(&roots, &Broken, Path::new("/nonexistent")).len(), 1);
     }
 
     #[test]

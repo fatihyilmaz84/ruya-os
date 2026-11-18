@@ -1004,6 +1004,8 @@ dependencies = [
  "blocking",
  "futures-lite",
  "ruya-contract-test",
+ "ruya-play-art",
+ "serde_json",
  "tempfile",
  "zbus",
 ]

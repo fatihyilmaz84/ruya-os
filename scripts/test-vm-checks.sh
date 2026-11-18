@@ -1540,6 +1540,31 @@ grep -q '"ok invalid-package"' "$here/vm-play-check.sh" && grep -q 'package.hash
 grep -q 'truncate -s "\$size"' "$here/vm-play-check.sh" && pass "vm-play-check.sh undoes the damage" || fail "vm-play-check.sh leaves the damaged file"
 [ "$(grep -c '^zin = zipfile.ZipFile(src)' "$here/vm-play-check.sh")" = 2 ] && pass "vm-play-check.sh re-opens the source before the bomb" || fail "vm-play-check.sh: the bomb reuses the tampered zip's ZipInfo objects"
 
+echo "== vm-library-check.sh: a .play app in Library1 (RUY-852) =="
+plroot="$tmp/plroot"; mkdir -p "$plroot"; : > "$plroot/icon-512.webp"; : > "$plroot/card-540.webp"
+play_rec() { # <play value> <tier json fragment> <icon path>
+    printf '{"type":"aa{sv}","data":[[{"id":{"type":"s","data":"flatpak:org.example.Tux"}},{"play":{"type":"b","data":%s},"id":{"type":"s","data":"flatpak:play.com.example.hello"},"title":{"type":"s","data":"Hello"},"genres":{"type":"as","data":["platformer"]},"players":{"type":"(uu)","data":[1,2]}%s,"art":{"type":"a{ss}","data":{"card":"%s/card-540.webp","icon":"%s"}}}]]}' "$1" "$2" "$plroot" "$3"
+}
+pj() { PLAY_FIXTURE_ROOT="$plroot" PATH="$shims:$PATH" bash "$here/vm-library-check.sh" playjudge com.example.hello; }
+tier=',"play_tier":{"type":"s","data":"developer"}'
+out="$(play_rec true "$tier" "$plroot/icon-512.webp" | pj)"; rc=$?
+[ "$rc" = 0 ] && expect_contains "library play: a full record passes" "$out" "ruya-shell can read the icon art" || fail "library play: a full record failed: $out"
+out="$(play_rec true "" "$plroot/icon-512.webp" | pj)"; rc=$?
+[ "$rc" = 0 ] && pass "library play: no tier is fine (trust.json may be absent)" || fail "library play: no tier failed: $out"
+out="$(play_rec true ',"play_tier":{"type":"s","data":"godlike"}' "$plroot/icon-512.webp" | pj)"; rc=$?
+[ "$rc" != 0 ] && pass "library play: an unknown tier FAILs" || fail "library play: an unknown tier passed"
+out="$(play_rec false "$tier" "$plroot/icon-512.webp" | pj)"; rc=$?
+[ "$rc" != 0 ] && pass "library play: play false FAILs" || fail "library play: play false passed"
+out="$(play_rec true "$tier" "$plroot/gone.webp" | pj)"; rc=$?
+[ "$rc" != 0 ] && pass "library play: an art path that cannot be read FAILs" || fail "library play: a missing art file passed"
+out="$(play_rec true "$tier" "/etc/passwd" | pj)"; rc=$?
+[ "$rc" != 0 ] && pass "library play: an art path outside the deployment FAILs" || fail "library play: an outside path passed"
+out="$(echo '{"type":"aa{sv}","data":[[{"id":{"type":"s","data":"flatpak:org.example.Tux"}}]]}' | pj)"; rc=$?
+[ "$rc" != 0 ] && pass "library play: an app that is not listed FAILs" || fail "library play: a missing item passed"
+out="$(printf '{"type":"aa{sv}","data":[[{"id":{"type":"s","data":"flatpak:play.com.example.hello"},"play":{"type":"b","data":true},"title":{"type":"s","data":"Hello"},"genres":{"type":"as","data":[]},"art":{"type":"a{ss}","data":{}}}]]}' | pj)"; rc=$?
+[ "$rc" != 0 ] && pass "library play: an item without art FAILs" || fail "library play: an item without icon passed"
+grep -q 'play_clean$' "$here/vm-library-check.sh" && grep -q 'rm -f "$play_state/incoming/vm-library-check.play.zip"' "$here/vm-library-check.sh" && pass "vm-library-check.sh play removes the sample and the incoming file" || fail "vm-library-check.sh play: no clean-up"
+
 echo "== build stage names (RUY-771) =="
 source "$here/lib-stages.sh"
 printf '%s\n' 'ARG X=1' 'FROM a/b:${X} AS one' 'RUN true' 'FROM c as Two' 'FROM d AS three-3' 'FROM quay.io/final:${X}' > "$tmp/Containerfile.stages"

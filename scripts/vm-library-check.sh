@@ -10,6 +10,13 @@
 #   seed      leaves the test game and app installed, for a screenshot of the shell (clean removes;
 #             a seed that failed cleans up itself)
 #   clean     removes the test remote, apps and repository
+#   play      RUY-852: installs the .play sample through Play1 (developer mode, from incoming/),
+#             then Library1 must list it with play true, its title, the art of its package as
+#             paths ruya-shell can read, genres, and a tier when ruya-play wrote trust.json;
+#             removes the sample and puts developer mode back (also on a failure).
+#             vm-library-check.sh play [/root/hello-play-native.play.zip]  (the sample as for
+#             vm-play-check.sh); `playjudge <id>` reads ListItems as busctl --json=short on stdin
+#             (host fixtures, scripts/test-vm-checks.sh)
 #   security  see vm-security-check.sh (unit hardening)
 # Boot the VM with plain smoke-test.ps1 -Keep (or -Work -Keep for the screenshot).
 set -u
@@ -117,6 +124,106 @@ wait_record() {
     return 1
 }
 
+# --- RUY-852: a .play app in the library -----------------------------------------------------------
+play_svc=org.ruyaos.Play1
+play_obj=/org/ruyaos/Play1
+play_state=/var/lib/ruya-play
+play_id=""
+play_dev=""
+
+# play_fields <app id>: ListItems (busctl --json=short) on stdin -> one "key=value" line per fact of
+# the item flatpak:play.<id>, read by key; "found=no" when it is not listed. The art is
+# "art.<role>=<path>".
+play_fields() {
+    python3 -c '
+import json, sys
+want = "flatpak:play." + sys.argv[1]
+def val(v):
+    return v.get("data") if isinstance(v, dict) and "type" in v and "data" in v else v
+doc = json.load(sys.stdin)
+for rec in (doc.get("data") or [[]])[0]:
+    if val(rec.get("id")) != want:
+        continue
+    print("found=yes")
+    for k in ("play", "title", "controller", "play_tier", "play_signer"):
+        if k in rec:
+            v = val(rec[k])
+            print("%s=%s" % (k, str(v).lower() if isinstance(v, bool) else v))
+    if "genres" in rec:
+        print("genres=%s" % ",".join(val(rec["genres"])))
+    if "players" in rec:
+        print("players=%s-%s" % tuple(val(rec["players"])))
+    for role, path in sorted((val(rec.get("art")) or {}).items()):
+        print("art.%s=%s" % (role, path))
+    sys.exit(0)
+print("found=no")
+' "$1"
+}
+
+# play_judge <app id>: ListItems on stdin; PASS/FAIL lines, sets $fail
+play_judge() {
+    local f line role path
+    f="$(play_fields "$1")"
+    echo "$f"
+    echo "$f" | grep -q '^found=yes$' && ok "play.$1 is in ListItems" || { bad "play.$1 is not in ListItems"; return; }
+    echo "$f" | grep -q '^play=true$' && ok "the item says play true" || bad "play is not true"
+    echo "$f" | grep -q '^title=.\+' && ok "the item has the title from play.json" || bad "no title"
+    echo "$f" | grep -q '^genres=' && ok "the item lists genres" || bad "no genres key"
+    echo "$f" | grep -q '^art\.icon=' && ok "the art has the icon role" || bad "no icon in the art"
+    while IFS= read -r line; do
+        role="${line#art.}"; role="${role%%=*}"; path="${line#*=}"
+        case "$path" in
+            /var/lib/flatpak/app/play."$1"/*|"${PLAY_FIXTURE_ROOT:-/nonexistent}"/*) ;;
+            *) bad "art $role is outside the deployment: $path"; continue ;;
+        esac
+        as_shell test -r "$path" && ok "ruya-shell can read the $role art" || bad "ruya-shell cannot read the $role art: $path"
+    done < <(echo "$f" | grep '^art\.')
+    # A tier is present only when ruya-play wrote trust.json; when it is there it is a known one.
+    if echo "$f" | grep -q '^play_tier='; then
+        echo "$f" | grep -Eq '^play_tier=(official|developer|unverified)$' && ok "the tier is a known one" || bad "unknown tier"
+    else
+        echo "(no play_tier: trust.json is not written yet, or unreadable)"
+    fi
+}
+
+# play_check <zip>
+play_check() {
+    local zip="$1" out job n line json
+    [ -f "$zip" ] || { bad "no sample at $zip"; return; }
+    play_id="$(python3 - "$zip" <<'PY'
+import json, sys, zipfile
+z = zipfile.ZipFile(sys.argv[1])
+name = next(n for n in z.namelist() if n.endswith("play.json") and n.count("/") <= 1)
+print(json.loads(z.read(name))["id"])
+PY
+)"
+    play_dev="$(busctl --system --json=short call "$play_svc" "$play_obj" "$play_svc" GetDeveloperMode | python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; print("true" if d and d[0]=="ok" and d[1] else "false")')"
+    busctl --system call "$play_svc" "$play_obj" "$play_svc" SetDeveloperMode 'ba{sv}' true 1 admin_approved b true >/dev/null || { bad "cannot turn developer mode on"; return; }
+    mkdir -p "$play_state/incoming"
+    install -m 0600 "$zip" "$play_state/incoming/vm-library-check.play.zip"
+    out="$(busctl --system --json=short call "$play_svc" "$play_obj" "$play_svc" Install 'sa{sv}' "$play_state/incoming/vm-library-check.play.zip" 1 admin_approved b true)"         || { bad "Play1.Install failed"; return; }
+    job="$(echo "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; print(d[1] if len(d)>1 else "")')"
+    n=0
+    while [ "$n" -lt 300 ]; do
+        line="$(busctl --system --json=short call "$play_svc" "$play_obj" "$play_svc" ListJobs | python3 -c '
+import json, sys
+def val(v):
+    return v.get("data") if isinstance(v, dict) and "type" in v and "data" in v else v
+for j in (json.load(sys.stdin).get("data") or [[]])[0]:
+    if val(j.get("id")) == sys.argv[1]:
+        print(val(j.get("state")), val(j.get("status")))
+' "$job")"
+        case "$line" in finished\ *) break ;; esac
+        sleep 1; n=$((n + 1))
+    done
+    [ "$line" = "finished ok" ] && ok "the sample installs" || { bad "the sample install: ${line:-timeout}"; return; }
+    n=0
+    until list_items_json | play_fields "$play_id" | grep -q '^found=yes$' || [ "$n" -ge 60 ]; do sleep 1; n=$((n + 1)); done
+    json="$(list_items_json)"
+    play_judge "$play_id" <<< "$json" # not a pipe: $fail must survive
+}
+list_items_json() { as_shell busctl --system --json=short call "$svc" "$path" "$ifc" ListItems; }
+
 clean_all() {
     flatpak uninstall --system -y "$game" "$notes" "$rt" >/dev/null 2>&1
     flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
@@ -130,8 +237,15 @@ clean_all() {
 mon=""
 need_clean=0
 keep_on_success=0
+play_clean() {
+    [ -n "${play_id:-}" ] && flatpak uninstall --system -y --noninteractive "play.$play_id" >/dev/null 2>&1
+    [ -n "${play_dev:-}" ] && busctl --system call "$play_svc" "$play_obj" "$play_svc" SetDeveloperMode 'ba{sv}' "$play_dev" 1 admin_approved b true >/dev/null 2>&1
+    rm -f "$play_state/incoming/vm-library-check.play.zip"
+    play_id=""
+}
 on_exit() {
     [ -n "$mon" ] && kill "$mon" 2>/dev/null
+    [ -n "${play_id:-}" ] && play_clean
     if [ "$need_clean" = 1 ] && { [ "$keep_on_success" = 0 ] || [ "$fail" != 0 ]; }; then
         echo "--- clean up (trap)"
         clean_all
@@ -141,6 +255,13 @@ trap on_exit EXIT
 trap 'fail=1; exit 1' INT TERM HUP
 
 case "${1:-check}" in
+play)
+    play_check "${2:-/root/hello-play-native.play.zip}"
+    play_clean
+    ;;
+playjudge)
+    play_judge "${2:?app id}"
+    ;;
 security)
     echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
     ;;

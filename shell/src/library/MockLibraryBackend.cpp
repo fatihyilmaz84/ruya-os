@@ -79,6 +79,26 @@ void MockLibraryBackend::reset(const QString &scenario)
         // "unlisted": one more Flatpak app that the Store's catalogue does not know (RUY-16: no Details row).
         if (scenario == QLatin1String("unlisted"))
             m_items.append(item("flatpak:org.example.Unlisted", "app", "Unlisted App", 1762000000));
+        // "play": one .play app with every field and role (RUY-852; the real art is on the VM).
+        if (scenario == QLatin1String("play")) {
+            LibraryItem p = item("flatpak:play.com.example.starhopper", "game", "Star Hopper", 1762100000);
+            p.art = {{QStringLiteral("icon"), QStringLiteral("/mock/play/icon-512.webp")},
+                     {QStringLiteral("logo"), QStringLiteral("/mock/play/logo.webp")},
+                     {QStringLiteral("card"), QStringLiteral("/mock/play/card-540.webp")},
+                     {QStringLiteral("cover"), QStringLiteral("/mock/play/cover-900.webp")},
+                     {QStringLiteral("hero"), QStringLiteral("/mock/play/hero-2160.webp")},
+                     {QStringLiteral("preview"), QStringLiteral("/mock/play/preview.webm")},
+                     {QStringLiteral("trailer"), QStringLiteral("/mock/play/trailer.webm")}};
+            p.play = true;
+            p.genres = {QStringLiteral("platformer"), QStringLiteral("adventure")};
+            p.playersMin = 1;
+            p.playersMax = 2;
+            p.controller = QStringLiteral("full");
+            p.ageRating = {{QStringLiteral("violence-cartoon"), QStringLiteral("mild")}};
+            p.playTier = QStringLiteral("developer");
+            p.playSigner = QStringLiteral("Example Games");
+            m_items.append(p);
+        }
         // "chess": Open Chess, installed with an update in the Store's mock, is in the library too (the game page's
         // update state, RUY-524).
         if (scenario == QLatin1String("chess"))

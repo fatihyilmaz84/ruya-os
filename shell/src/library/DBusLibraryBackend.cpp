@@ -62,6 +62,27 @@ LibraryItem toItem(const QVariantMap &d)
     if (art.canConvert<QDBusArgument>())
         i.art = parseArt(art.value<QDBusArgument>());
     i.lastPlayed = d.value(QStringLiteral("last_played")).toLongLong();
+    i.play = d.value(QStringLiteral("play")).toBool();
+    if (i.play) {
+        i.genres = d.value(QStringLiteral("genres")).toStringList();
+        const QVariant players = d.value(QStringLiteral("players"));
+        if (players.canConvert<QDBusArgument>()) { // (uu)
+            const QDBusArgument arg = players.value<QDBusArgument>();
+            uint lo = 0;
+            uint hi = 0;
+            arg.beginStructure();
+            arg >> lo >> hi;
+            arg.endStructure();
+            i.playersMin = int(lo);
+            i.playersMax = int(hi);
+        }
+        i.controller = d.value(QStringLiteral("controller")).toString();
+        const QVariant rating = d.value(QStringLiteral("age_rating"));
+        if (rating.canConvert<QDBusArgument>())
+            i.ageRating = parseArt(rating.value<QDBusArgument>()); // a{ss} as well
+        i.playTier = d.value(QStringLiteral("play_tier")).toString();
+        i.playSigner = d.value(QStringLiteral("play_signer")).toString();
+    }
     return i;
 }
 } // namespace

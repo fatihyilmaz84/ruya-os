@@ -20,6 +20,9 @@ type Dict = HashMap<String, OwnedValue>;
 pub struct Sources {
     pub steam_roots: Vec<PathBuf>,
     pub lister: Box<dyn AppLister>,
+    /// The Flatpak installation whose `play.*` deployments carry the art and `play.json`
+    /// (`/var/lib/flatpak`; a fixture folder in tests).
+    pub play_root: PathBuf,
 }
 
 pub struct LibraryIface {
@@ -30,7 +33,11 @@ pub struct LibraryIface {
 impl LibraryIface {
     /// Scans once, so the first `ListItems` has an answer.
     pub fn new(sources: Sources) -> Self {
-        let items = catalog::scan(&sources.steam_roots, sources.lister.as_ref());
+        let items = catalog::scan(
+            &sources.steam_roots,
+            sources.lister.as_ref(),
+            &sources.play_root,
+        );
         LibraryIface {
             sources: Arc::new(sources),
             items: Mutex::new(items),
@@ -55,6 +62,7 @@ impl LibraryIface {
         self.store(catalog::scan(
             &self.sources.steam_roots,
             self.sources.lister.as_ref(),
+            &self.sources.play_root,
         ))
     }
 
@@ -77,6 +85,28 @@ fn record(item: &Item) -> Dict {
         ("art", Value::from(art)),
         ("last_played", Value::from(item.last_played)),
     ];
+    let mut entries = entries;
+    // A `.play` app adds its own keys; others have none of them (Library1 XML).
+    if let Some(play) = &item.play {
+        entries.push(("play", Value::from(true)));
+        entries.push(("genres", Value::from(play.genres.clone())));
+        if let Some((min, max)) = play.players {
+            entries.push(("players", Value::from((min, max))));
+        }
+        if let Some(controller) = &play.controller {
+            entries.push(("controller", Value::from(controller.clone())));
+        }
+        if !play.age_rating.is_empty() {
+            let rating: HashMap<String, String> = play.age_rating.iter().cloned().collect();
+            entries.push(("age_rating", Value::from(rating)));
+        }
+        if let Some(tier) = &play.tier {
+            entries.push(("play_tier", Value::from(tier.clone())));
+        }
+        if let Some(signer) = &play.signer {
+            entries.push(("play_signer", Value::from(signer.clone())));
+        }
+    }
     entries
         .into_iter()
         .filter_map(|(k, v)| OwnedValue::try_from(v).ok().map(|v| (k.to_owned(), v)))
@@ -95,9 +125,14 @@ impl LibraryIface {
     async fn rescan(&self, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) {
         let sources = self.sources.clone();
         // File and process I/O: not on the executor.
-        let fresh =
-            blocking::unblock(move || catalog::scan(&sources.steam_roots, sources.lister.as_ref()))
-                .await;
+        let fresh = blocking::unblock(move || {
+            catalog::scan(
+                &sources.steam_roots,
+                sources.lister.as_ref(),
+                &sources.play_root,
+            )
+        })
+        .await;
         if self.store(fresh) {
             Self::announce(&emitter).await;
         }
@@ -105,4 +140,50 @@ impl LibraryIface {
 
     #[zbus(signal)]
     async fn items_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::catalog::{Kind, Source};
+    use crate::play::PlayInfo;
+
+    fn item(play: Option<PlayInfo>) -> Item {
+        Item {
+            id: "flatpak:play.a".into(),
+            kind: Kind::Game,
+            title: "A".into(),
+            source: Source::Flatpak,
+            launch: "flatpak:play.a".into(),
+            art: Vec::new(),
+            last_played: 0,
+            play,
+        }
+    }
+
+    #[test]
+    fn a_play_record_has_the_contracts_keys_and_others_none_of_them() {
+        let plain = record(&item(None));
+        assert!(["play", "genres", "players", "play_tier"]
+            .iter()
+            .all(|k| !plain.contains_key(*k)));
+        let rec = record(&item(Some(PlayInfo {
+            genres: vec!["platformer".into()],
+            players: Some((1, 4)),
+            controller: Some("full".into()),
+            age_rating: vec![("violence-cartoon".into(), "mild".into())],
+            tier: Some("official".into()),
+            signer: Some("Example".into()),
+        })));
+        assert_eq!(
+            bool::try_from(rec["play"].try_clone().unwrap()).unwrap(),
+            true
+        );
+        assert_eq!(rec["players"].value_signature().to_string(), "(uu)");
+        assert_eq!(rec["age_rating"].value_signature().to_string(), "a{ss}");
+        assert_eq!(rec["genres"].value_signature().to_string(), "as");
+        let tier: String = rec["play_tier"].try_clone().unwrap().try_into().unwrap();
+        assert_eq!(tier, "official");
+        assert!(rec.contains_key("controller") && rec.contains_key("play_signer"));
+    }
 }

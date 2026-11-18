@@ -15,9 +15,67 @@
 mod image_art;
 mod video;
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 pub use image_art::{peak_decode_bytes, MAX_DIMENSION, MAX_PIXELS};
+
+/// The roles of vetted art files, from the file names `ruya-play-art` writes (05 section 12).
+/// Each slot is its language (only a per-language logo has one) and its files. `icon` is the
+/// 512 px icon, then `hero`, `card`, `cover`, `logo` (English, else the first), `poster` (the
+/// trailer's), `trailer` and `preview`; the screenshots are the 1080 p files in order.
+/// `ruya-play` (Play1) and `ruya-library` (Library1) both call this so they agree.
+pub fn art_roles<'a, I>(slots: I) -> (BTreeMap<String, String>, Vec<String>)
+where
+    I: IntoIterator<Item = (Option<&'a str>, &'a [PathBuf])>,
+{
+    let mut roles = BTreeMap::new();
+    let mut shots: Vec<(u32, String)> = Vec::new();
+    let mut logos: Vec<(Option<String>, String)> = Vec::new();
+    for (lang, files) in slots {
+        for f in files {
+            let Some(name) = f.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            let path = f.to_string_lossy().into_owned();
+            let role = match name {
+                "icon-512.webp" => Some("icon"),
+                "hero-2160.webp" => Some("hero"),
+                "card-540.webp" => Some("card"),
+                "cover-900.webp" => Some("cover"),
+                "trailer-poster-1080.webp" => Some("poster"),
+                "trailer.webm" | "trailer.mp4" => Some("trailer"),
+                "preview.webm" | "preview.mp4" => Some("preview"),
+                "logo.webp" => {
+                    logos.push((lang.map(str::to_owned), path.clone()));
+                    None
+                }
+                _ => {
+                    if let Some(n) = name
+                        .strip_prefix("screenshot-")
+                        .and_then(|r| r.strip_suffix("-1080.webp"))
+                        .and_then(|n| n.parse().ok())
+                    {
+                        shots.push((n, path.clone()));
+                    }
+                    None
+                }
+            };
+            if let Some(role) = role {
+                roles.insert(role.to_string(), path);
+            }
+        }
+    }
+    let logo = logos
+        .iter()
+        .find(|(l, _)| l.as_deref() == Some("en"))
+        .or_else(|| logos.first());
+    if let Some((_, p)) = logo {
+        roles.insert("logo".into(), p.clone());
+    }
+    shots.sort();
+    (roles, shots.into_iter().map(|(_, p)| p).collect())
+}
 
 /// An art or video slot of a package (05 section 5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

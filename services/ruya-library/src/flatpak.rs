@@ -261,6 +261,7 @@ pub fn parse_list(output: &str, lister: &dyn AppLister) -> Vec<Item> {
                 launch: format!("flatpak:{id}"),
                 art: Vec::new(),
                 last_played: 0,
+                play: None,
             })
         })
         .collect()
