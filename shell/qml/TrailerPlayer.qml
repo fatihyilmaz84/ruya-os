@@ -92,7 +92,7 @@ Item {
     MediaPlayer {
         id: player
         source: root.active && root.trailer ? root.url(root.trailer.video) : ""
-        audioOutput: AudioOutput {}
+        audioOutput: AudioOutput { muted: SoundThemes.dry }   // silent in test runs
         videoOutput: video
         onMediaStatusChanged: if (mediaStatus === MediaPlayer.LoadedMedia) root.apply()
         onSourceChanged: if (source.toString() === "") position = 0

@@ -35,6 +35,9 @@ QtObject {
         property real base: 1.0
         source: sfx.themeCues[cue] ?? ""
         volume: base * sfx.gain
+        // Test runs (RUYA_SOUNDS_DRY) play every cue as usual, muted, so nothing is heard and the
+        // counters and states the tests read are unchanged.
+        muted: SoundThemes.dry
     }
 
     // The cue files of the active theme, with the bundled theme's for the cues it does not name.

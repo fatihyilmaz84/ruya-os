@@ -63,7 +63,8 @@ class SoundThemes : public QObject
     Q_PROPERTY(int installedLimit READ installedLimit CONSTANT)
     Q_PROPERTY(int maxCopyFiles READ maxCopyFiles CONSTANT)      // a theme may have at most this many files ...
     Q_PROPERTY(int maxCopyMb READ maxCopyMb CONSTANT)            // ... and this many MiB to be copied
-    // RUYA_SOUNDS_DRY=1 (tests): the ambient players are given no file, so a test run makes no noise.
+    // RUYA_SOUNDS_DRY=1 (tests): the ambient players are given no file, and the UI cues (Sfx) and the
+    // trailer's audio play muted, so a test run makes no noise.
     Q_PROPERTY(bool dry READ isDry CONSTANT)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
 
