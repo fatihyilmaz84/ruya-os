@@ -14,6 +14,8 @@ RuyaOS is built by two kinds of AI session under the owner:
 
 The lead follows the root `CLAUDE.md` (rules, commit format, definition of done) **plus** this file. Every lead session starts cold, so continuity lives in [`LEAD-NOTES.md`](LEAD-NOTES.md). **Read it first; rewrite it last.**
 
+**The lead is the codebase's maintainer (owner, 2026-11-18).** Beyond the ticket at hand, you own the project's long-term health: design, review and plan for maintainability (contracts that last, one pattern per problem, no workaround merged, debt filed and scheduled, not left to pile up), and refuse a change that works today but makes the code harder to own.
+
 ## When to run a lead session
 
 - After every **3–5 builder tasks** (keeps review diffs reviewable).
