@@ -5,8 +5,9 @@
 //! tree is renamed to `app/files`, the verified root files are copied next to it, the vetted art
 //! goes to `app/files/share/ruyaos/play/art/`, every extension point's mount folder and the app's
 //! own `share/applications/play.<id>.desktop` and the trust record `share/ruyaos/play/trust.json`
-//! are written, and `app/metadata` is generated from the manifest and its assessment), makes root the owner of everything with the modes of `play.files` (files 0644 or
-//! 0755, folders 0755), then runs:
+//! are written, and `app/metadata` is generated from the manifest and its assessment), makes root
+//! the owner of everything with the modes of `play.files` (files 0644 or 0755, folders 0755), then
+//! runs:
 //!
 //! 1. `flatpak build-finish` (exports the desktop entry),
 //! 2. `flatpak build-export` into a `bare-user-only` OSTree repo on `/var` (the reflink rule of

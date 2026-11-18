@@ -23,7 +23,8 @@ pub use crate::core::installed::InstalledBuilds;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OpenError {
     /// Nothing is there (the drive went away): `unknown-source` for `Inspect`, `failed` with
-    /// `source.missing` for a job.
+    /// `source.missing` for a job. A path the service saw before and after the run is not
+    /// missing: it is `source.unreadable` (the open was denied).
     Missing,
     /// It is there but it is not a package the format can read (`zip.not_a_zip`, ...).
     Problems(Vec<Problem>),
