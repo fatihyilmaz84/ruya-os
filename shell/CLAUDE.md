@@ -22,7 +22,7 @@ Specs: `docs/specs/02-shell.md` (behaviour) and `docs/specs/04-design-system.md`
 - Start files with `pragma ComponentBehavior: Bound` when they have delegates or inline components. Delegates use `required property`. qmllint runs with zero warnings allowed.
 - **Sizes are design pixels at 1080p × `u`** (`u = height / 1080`), passed down as a `u` property. Respect the safe area (`Theme.safeArea`).
 - **No literal colours, durations, easings, font sizes, spacing, radii or control sizes in components:** use the `Theme` tokens of `04` §3 (`lint-tokens.ps1` fails on most literals; a rare exception ends its line with `// token-ok: <reason>`). **Builders don't invent tokens or components:** take the closest existing one and add an Inbox line (`04` §8); the lead changes the system. A feedback animation (shake, pulse) does not start under `Theme.reducedMotion`.
-- User-visible strings: `qsTr()`, with `%n` plurals where counts appear (see Translations below).
+- User-visible strings: `qsTr()`, with `%n` plurals where counts appear. After adding or changing one, refresh the `.ts` files, translate the new entries (Turkish for real) and run the lint (`PATTERNS.md`, "Translations").
 - Effects: `MultiEffect` or precompiled `.qsb` shaders only. Never inline GLSL. Blur the shared backdrop; never stack more fullscreen blurs.
 - **Glass and motion (`04` §3.8, `PATTERNS.md`):** `GlassLayers` + `GlassShadow`; duration tokens are already scaled for reduced motion; decorative animation is gated (`LiquidGate`) and never runs forever on a still screen.
 - Never block the GUI thread: service calls are asynchronous (invoke, then react to a signal).
@@ -45,16 +45,12 @@ Specs: `docs/specs/02-shell.md` (behaviour) and `docs/specs/04-design-system.md`
 - `ListView`/`GridView` with `interactive: false` **also turns off key navigation**, so set `keyNavigationEnabled: true` explicitly.
 - **Modals** (PIN pad, overlay, dialogs) accept *every* key in `Keys.onPressed` (`event.accepted = true`), so nothing leaks underneath; a modal list then handles Up/Down itself (`incrementCurrentIndex()`), as the Guide overlay does.
 - **A held key repeats** (`event.isAutoRepeat`). Ignore repeats in handlers that toggle or close (a held Guide used to close the overlay it had just opened); time long presses from the first press and the release (`Shell.qml`, `guideHoldTimer`).
-- **Focus restoration:** when a modal or page closes, return focus to where it was. Guard any re-focus with a check that the target is still enabled; otherwise you will steal focus after state changes (see `ProfilePicker.onClosed`).
+- **Focus restoration:** when a modal or page closes, return focus to where it was, guarded by a check that the target is still enabled (`ProfilePicker.onClosed`).
 - `Sfx.navigate()` on focus moves, `Sfx.select()` on Accept, `Sfx.back()` on Back or errors.
 
 ## Patterns (read `shell/PATTERNS.md` when your task touches one)
 
 Pages, settings controls, modals from pages, text input (`TextEntry`, never a raw `TextInput`), translations, late replies, glass and motion, the gliding highlight, test motion scale, the test member lint.
-
-## Translations (every UI task)
-
-All user-visible strings use `qsTr()`. After adding or changing one, refresh the `.ts` files, translate the new entries (Turkish for real) and run the lint: the commands are in `PATTERNS.md`, "Translations".
 
 ## Tests (required for every behaviour you add)
 
@@ -65,7 +61,7 @@ All user-visible strings use `qsTr()`. After adding or changing one, refresh the
 - Iterate with `dev.ps1 qml tst_x` (PARTIAL: that file only, no lints); `test` still gates.
 - Give an `objectName` to every element a test needs to find, and find it with `findChild(shell, "name")`.
 - Wait on asynchronous results with `tryCompare` or `tryVerify(() => …)`, **never** `tryCompare` on a `QVariantList`'s `length` (it polls a frozen copy). `tryCompare(x, "opacity", 1)` is fuzzy (0.99999 passes): a property derived from the exact end gets its own `tryVerify` (T-421).
-- Assert focus explicitly (`find("x").activeFocus`) after every navigation step that matters. A missing focus assertion let a real bug through once.
+- Assert focus explicitly (`find("x").activeFocus`) after every navigation step that matters.
 - State that would leak between tests (lockouts, created profiles) gets its own `tst_*.qml` file.
 - UI tasks: extend `test_zz_screenshots` (or add a similar test) so `dev.ps1 shots` captures the new screens, then review the PNGs. `shots` runs only functions that save to `shotsDir`, so a screenshot must not rely on an earlier test function.
 - Product code that waits for a presented frame needs a path for no frame at all (`PATTERNS.md`).
@@ -73,4 +69,4 @@ All user-visible strings use `qsTr()`. After adding or changing one, refresh the
 ## C++ rules
 
 - C++17 (MSVC). Qt APIs up to 6.8. Use `QStringLiteral` for literals. Use `qWarning("ruya-shell: …")` for failures.
-- QtDBus code compiles on Windows but can only run on Linux. Keep it a thin translation of the XML contract, and mark it unverified in the ticket's evidence.
+- QtDBus code runs only on Linux: keep it a thin translation of the XML contract.
