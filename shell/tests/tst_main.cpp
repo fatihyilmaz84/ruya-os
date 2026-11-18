@@ -227,6 +227,19 @@ static QString writeArtFixtures(const QTemporaryDir &dir)
     p.fillRect(80, 0, 80, 90, QColor(40, 80, 230));
     p.end();
     two.save(dir.filePath(QStringLiteral("redblue.png")));
+    // A logo (RUY-856): white letters on a transparent ground, as a .play package's logo.webp.
+    QImage logo(480, 120, QImage::Format_ARGB32);
+    logo.fill(Qt::transparent);
+    QPainter lp(&logo);
+    lp.setRenderHint(QPainter::Antialiasing);
+    QFont lf;
+    lf.setPixelSize(80);
+    lf.setBold(true);
+    lp.setFont(lf);
+    lp.setPen(Qt::white);
+    lp.drawText(logo.rect(), Qt::AlignCenter, QStringLiteral("STAR HOP"));
+    lp.end();
+    logo.save(dir.filePath(QStringLiteral("logo.png")));
     return dir.path();
 }
 

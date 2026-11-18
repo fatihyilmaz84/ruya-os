@@ -30,6 +30,16 @@ Page {
     readonly property bool hasRecord: app.id !== undefined
     readonly property bool isSteam: hasItem && item.source === "steam"
     readonly property bool isApp: hasItem && item.kind === "app"
+    // A .play app (Library1's `play`, RUY-856): its trust badge, signer and trailer come from the Library item, each only when
+    // the item has the data. Any other item (a Flatpak that merely carries an art key) has none of them.
+    readonly property bool isPlay: hasItem && item.play === true
+    readonly property var playArt: isPlay && item.art ? item.art : ({})
+    readonly property string playTier: isPlay ? (item.playTier ?? "") : ""
+    // The Inspect-shaped record PlayTrust and SignerSheet read; Library1 has no key id, so the sheet shows no key rows.
+    readonly property var playInfo: playTier !== "" ? { tier: playTier, signerName: item.playSigner ?? "", signerKeyId: "", keyState: "" } : null
+    readonly property bool trustShown: playInfo !== null
+    readonly property var playTrailer: (playArt.trailer ?? "") !== ""
+        ? { video: playArt.trailer, poster: playArt.cover || playArt.hero || playArt.card || "", name: title, seconds: 0 } : null
     // An item the Library lists but Session1 cannot start (a Steam game).
     readonly property bool noLaunch: hasItem && Library.sessionAppId(item.id) === ""
     readonly property var job: appId === "" ? null : (Store.jobs[appId] ?? null)
@@ -88,15 +98,16 @@ Page {
     // Screenshots (RUY-533): the record's pictures, or four placeholders while GetApp is pending.
     readonly property var screenshots: app.screenshots ?? []
     readonly property bool screenshotsLoading: !detailsReady && !detailsFailed
-    readonly property bool screenshotsShown: hasRecord && !isSteam && (screenshots.length > 0 || screenshotsLoading)
-    readonly property bool screenshotsStop: screenshotsShown && screenshots.length > 0
+    readonly property bool screenshotsShown: (hasRecord && !isSteam && (screenshots.length > 0 || screenshotsLoading)) || playTrailer !== null
+    readonly property bool screenshotsStop: screenshotsShown && (screenshots.length > 0 || playTrailer !== null)
     readonly property bool permsSectionShown: hasRecord && !isSteam && !detailsFailed
     readonly property bool permsListed: permsSectionShown && (app.permissions ?? []).length > 0
     readonly property bool manageShown: hasRecord && installed && !isSteam && !working
     readonly property bool uninstallShown: manageShown && !running && !closing
 
     // The Store does not answer about this item: GetApp failed, the service is away, or the Library lists a Flatpak the Store has no record of.
-    readonly property bool storeDown: detailsFailed || (appId !== "" && !Store.available) || (!hasRecord && hasItem && appId !== "")
+    // A .play app is never in the Store: its page has nothing to ask it, so it is never "down" (RUY-856).
+    readonly property bool storeDown: !isPlay && (detailsFailed || (appId !== "" && !Store.available) || (!hasRecord && hasItem && appId !== ""))
 
     title: hasRecord ? (app.name ?? "") : hasItem ? (item.title ?? "") : (appId.split(".").pop() ?? "")
 
@@ -467,6 +478,8 @@ Page {
             buttons.push(secondaryButtons.itemAt(i))
         if (buttons.length > 0)
             rows.push(buttons)
+        if (trustShown && trustRow.opensSheet)
+            rows.push([trustRow])
         if (activityStop)
             rows.push([activitySection.block])
         if (screenshotsStop)
@@ -498,7 +511,7 @@ Page {
         rows[0][0].focus = true
     }
 
-    readonly property string stopKey: primaryKind + "#" + secondaryKeys + "#" + factKeys + "#" + activityStop + "#" + screenshotsStop + "#" + aboutShown + "#" + permsListed + "#" + uninstallShown
+    readonly property string stopKey: primaryKind + "#" + secondaryKeys + "#" + factKeys + "#" + trustShown + "#" + activityStop + "#" + screenshotsStop + "#" + aboutShown + "#" + permsListed + "#" + uninstallShown
     onStopKeyChanged: Qt.callLater(ensureFocus)
 
     function moveFocus(dx, dy) {
@@ -692,6 +705,23 @@ Page {
                         }
                     }
 
+                    // Who signed the package (a .play app): Accept opens the signer sheet.
+                    Item {
+                        width: parent.width
+                        visible: page.trustShown
+                        height: visible ? trustRow.height + Theme.spaceXs * page.u : 0
+
+                        TrustRow {
+                            id: trustRow
+                            objectName: "detailTrustRow"
+                            y: Theme.spaceXs * page.u
+                            u: page.u
+                            info: page.playInfo
+                            onActivated: signerSheet.open(page.playInfo, trustRow)
+                            onActiveFocusChanged: if (activeFocus) page.stopFocused(header, false)
+                        }
+                    }
+
                     Text {
                         objectName: "detailSummary"
                         visible: page.hasRecord && text !== ""
@@ -849,7 +879,7 @@ Page {
                     u: page.u
                     appId: page.appId !== "" ? page.appId : (page.item.id ?? "")
                     appName: page.title
-                    picture: page.app.hero || (page.item.art ? (page.item.art.hero || page.item.art.tile || "") : "")
+                    picture: page.app.hero || (page.item.art ? (page.item.art.hero || page.item.art.cover || page.item.art.tile || page.item.art.card || "") : "")
                 }
             }
 
@@ -873,7 +903,8 @@ Page {
                 visible: page.screenshotsShown
                 u: page.u
                 shots: page.screenshots
-                loading: page.screenshotsLoading
+                trailer: page.playTrailer
+                loading: page.screenshotsLoading && page.hasRecord
                 overlay: page.overlay
                 reach: page.sideBleed
                 strip.onActiveFocusChanged: if (strip.activeFocus) page.stopFocused(shotsSection, false)
@@ -1024,6 +1055,15 @@ Page {
                 }
             }
         }
+    }
+
+    SignerSheet {
+        id: signerSheet
+        objectName: "detailSigner"
+        parent: page.overlay
+        width: parent ? parent.width : 0
+        height: parent ? parent.height : 0
+        u: page.u
     }
 
     // The Text sheet (04 §5), in the modal layer and built on its first opening.

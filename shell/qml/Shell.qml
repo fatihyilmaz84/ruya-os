@@ -1011,7 +1011,7 @@ FocusScope {
     // the Library does not know it (the strip shows the tint and the initial).
     function cardArtOfApp(appId) {
         const found = Library.items.find(i => appId !== "" && Library.sessionAppId(i.id) === appId)
-        return found && found.art ? (found.art.tile ?? found.art.hero ?? "") : ""
+        return found && found.art ? (found.art.tile ?? found.art.card ?? found.art.cover ?? found.art.hero ?? "") : ""
     }
 
     // Home from the quick menu: the apps keep running behind it and lose the focus; Home shows the
@@ -1534,7 +1534,7 @@ FocusScope {
                 const known = item && item.id
                 to.appId = known ? item.id : ""
                 to.appName = known ? (item.title ?? "") : ""
-                to.picture = known && item.art ? (item.art.hero ?? item.art.tile ?? "") : ""
+                to.picture = known && item.art ? (item.art.hero ?? item.art.cover ?? item.art.tile ?? item.art.card ?? "") : ""
                 showB = !showB
             }
 
@@ -1872,6 +1872,8 @@ FocusScope {
 
             eyebrow: root.libraryEmpty ? "" : (root.recentIsFallback ? qsTr("Installed") : qsTr("Continue playing"))
             title: root.libraryEmpty ? qsTr("Your library is empty") : (root.heroItem.title ?? "")
+            // A .play app's logo replaces the title text (RUY-856); only for an item Library1 says is a .play app.
+            logo: !root.libraryEmpty && root.heroItem.play === true && root.heroItem.art ? (root.heroItem.art.logo ?? "") : ""
             meta: root.libraryEmpty ? "" : root.sourceLabel(root.heroItem.source ?? "")
             primaryText: root.libraryEmpty ? qsTr("Open Store") : (root.heroClosing ? qsTr("Closing…") : root.heroRunning ? qsTr("Resume")
                                                                        : root.heroItem.kind === "app" ? qsTr("Open", "Button: start an app (a game says Play)") : qsTr("Play"))
@@ -1928,7 +1930,7 @@ FocusScope {
                 y: (ListView.view.height - height) / 2
                 itemId: modelData
                 title: entry.title ?? ""
-                picture: entry.art ? (entry.art.tile ?? "") : ""
+                picture: entry.art ? (entry.art.tile ?? entry.art.card ?? entry.art.cover ?? "") : ""
                 focused: ListView.isCurrentItem && ListView.view.activeFocus
                 anchored: ListView.isCurrentItem && root.optionsOn && root.optionsSurface === "recent"
                 holdShown: ListView.isCurrentItem && recentHold.ringShown

@@ -10,11 +10,14 @@ FocusScope {
     property real u: 1
     property string eyebrow
     property string title
+    property string logo               // a .play app's logo (path or URL): drawn instead of the title once it has loaded (RUY-856)
     property string meta
     property string primaryText
     property string secondaryText      // empty: no secondary button
     property bool primaryShown: true   // false: no Play (an item with no launch path, T-147); Details takes the focus
     property bool primaryDimmed: false // the primary's action is unavailable for now (PrimaryButton.dimmed)
+    readonly property bool logoShown: logo !== "" && logoImage.status === Image.Ready
+    readonly property alias logoImage: logoImage
     readonly property alias playButton: play
     readonly property alias detailsButton: details
     // The item has an Options menu (02 §1.7): Accept acts on release and a long press opens the menu
@@ -49,8 +52,26 @@ FocusScope {
             font.letterSpacing: 2 * hero.u
             elide: Text.ElideRight
         }
+        // The logo takes the title's place: as high as two title lines, as wide as the block, never
+        // stretched. The title stays the item's accessible name; a logo that cannot load leaves the text.
+        Image {
+            id: logoImage
+            objectName: "heroLogo"
+            visible: hero.logoShown
+            width: parent.width
+            height: visible ? 2 * Theme.typeHero * hero.u : 0
+            horizontalAlignment: Image.AlignLeft
+            fillMode: Image.PreserveAspectFit
+            asynchronous: true
+            source: hero.logo.length === 0 ? "" : hero.logo.startsWith("/") ? "file://" + hero.logo
+                    : /^[A-Za-z]:\//.test(hero.logo) ? "file:///" + hero.logo : hero.logo
+            sourceSize.height: Math.ceil(2 * Theme.typeHero * hero.u)
+            Accessible.role: Accessible.StaticText
+            Accessible.name: hero.title
+        }
         Text {
             objectName: "heroTitle"
+            visible: !hero.logoShown
             width: parent.width
             textFormat: Text.PlainText
             text: hero.title

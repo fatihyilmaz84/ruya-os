@@ -293,7 +293,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+197"/>
+        <location filename="../qml/AppDetailPage.qml" line="+208"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -521,12 +521,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="-7"/>
-        <location line="+349"/>
+        <location line="+351"/>
         <source>Steam</source>
         <translation>Steam</translation>
     </message>
     <message>
-        <location line="-348"/>
+        <location line="-350"/>
         <source>Steam app ID</source>
         <translation>Steam app ID</translation>
     </message>
@@ -596,12 +596,12 @@ This can&apos;t be undone.</translation>
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+217"/>
+        <location line="+219"/>
         <source>Read</source>
         <translation>Read</translation>
     </message>
     <message>
-        <location line="+394"/>
+        <location line="+412"/>
         <source>No special permissions.</source>
         <translation>No special permissions.</translation>
     </message>
@@ -641,7 +641,7 @@ This can&apos;t be undone.</translation>
         <translation>Close the game to uninstall it.</translation>
     </message>
     <message>
-        <location line="-887"/>
+        <location line="-907"/>
         <source>Install</source>
         <translation>Install</translation>
     </message>
@@ -652,7 +652,7 @@ This can&apos;t be undone.</translation>
         <translation>Update</translation>
     </message>
     <message>
-        <location line="+653"/>
+        <location line="+672"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Needs a newer RuyaOS than this console has. It stays installed.</translation>
     </message>
@@ -667,18 +667,18 @@ This can&apos;t be undone.</translation>
         <translation>Store details are unavailable right now.</translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+75"/>
         <location line="+9"/>
         <source>This app can</source>
         <translation>This app can</translation>
     </message>
     <message>
-        <location line="-95"/>
+        <location line="-96"/>
         <source>The update adds: %1</source>
         <translation>The update adds: %1</translation>
     </message>
     <message>
-        <location line="-681"/>
+        <location line="-700"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Open</translation>
@@ -716,7 +716,7 @@ This can&apos;t be undone.</translation>
         <translation>Try again</translation>
     </message>
     <message>
-        <location line="+389"/>
+        <location line="+391"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -733,17 +733,17 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+149"/>
+        <location line="+166"/>
         <source>Update ready</source>
         <translation>Update ready</translation>
     </message>
     <message>
-        <location line="-138"/>
+        <location line="-155"/>
         <source>Installed through Steam</source>
         <translation>Installed through Steam</translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="+111"/>
         <source>Start this game from Steam for now.</source>
         <translation>Start this game from Steam for now.</translation>
     </message>
@@ -4316,7 +4316,12 @@ This can&apos;t be undone.</translation>
         <translation>Signed by %1 · key %2</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+1"/>
+        <source>Signed by %1</source>
+        <translation>Signed by %1</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Signed by key %1</source>
         <translation>Signed by key %1</translation>
     </message>
@@ -5247,6 +5252,11 @@ This can&apos;t be undone.</translation>
         <source>Trailer · %1</source>
         <translation>Trailer · %1</translation>
     </message>
+    <message>
+        <location line="+0"/>
+        <source>Trailer</source>
+        <translation>Trailer</translation>
+    </message>
 </context>
 <context>
     <name>ScreenshotViewer</name>
@@ -5672,12 +5682,12 @@ This can&apos;t be undone.</translation>
         <translation>Restart now</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+39"/>
         <source>%1 is still closing.</source>
         <translation>%1 is still closing.</translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+88"/>
         <location line="+30"/>
         <source>%1 could not start</source>
         <translation>%1 could not start</translation>
@@ -5741,17 +5751,17 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+26"/>
+        <location line="+28"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location line="-25"/>
+        <location line="-27"/>
         <source>Your library is empty</source>
         <translation>Your library is empty</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+4"/>
         <source>Open Store</source>
         <translation>Open Store</translation>
     </message>
@@ -5848,7 +5858,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1922"/>
+        <location line="-1940"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -5863,7 +5873,7 @@ This can&apos;t be undone.</translation>
         <translation>Press any button to wait</translation>
     </message>
     <message>
-        <location line="+108"/>
+        <location line="+124"/>
         <source>%1 is already running</source>
         <translation>%1 is already running</translation>
     </message>
@@ -5879,7 +5889,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1669"/>
+        <location line="+1671"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>

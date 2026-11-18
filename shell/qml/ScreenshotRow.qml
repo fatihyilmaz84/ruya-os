@@ -193,7 +193,7 @@ Column {
                             anchors { left: parent.left; right: parent.right; bottom: parent.bottom; margins: Theme.spaceS * root.u }
                             textFormat: Text.PlainText
                             elide: Text.ElideRight
-                            text: cell.isTrailer ? qsTr("Trailer · %1").arg(PlayTrust.clock(root.trailer.seconds ?? 0)) : ""
+                            text: !cell.isTrailer ? "" : (root.trailer.seconds ?? 0) > 0 ? qsTr("Trailer · %1").arg(PlayTrust.clock(root.trailer.seconds)) : qsTr("Trailer")      // Library1 has no length
                             color: Theme.text
                             font.pixelSize: Theme.typeCaption * root.u
                             font.weight: Theme.weightDemiBold
