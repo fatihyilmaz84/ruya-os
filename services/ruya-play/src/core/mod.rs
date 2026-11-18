@@ -17,3 +17,4 @@ pub mod staging;
 pub mod status;
 pub mod systemd_run;
 pub mod unpack;
+pub mod verify;

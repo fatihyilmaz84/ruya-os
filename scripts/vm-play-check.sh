@@ -6,6 +6,10 @@
 #          unit started with the helper's own properties (ruya-play --helper-argv), no network and
 #          no write outside its state folder from inside it, reading a USB source and an incoming/
 #          file (root 0600) through the passed descriptor, the StateDirectory handover
+#   verify RUY-834: install the sample (developer mode, from incoming/), Play1.Verify -> a job that
+#          finishes ok; append a byte to one deployed file as root -> invalid-package with
+#          package.hash_mismatch (state/jobs); an extra file -> invalid-package; restored -> ok;
+#          Verify of an unknown id is unknown-app, of "" invalid
 #   parse  host fixtures only (scripts/test-vm-checks.sh): reads busctl --json=short on stdin;
 #          `parse status` prints a call's first string, `parse job <id>` the job's state and
 #          status, `parse sources` the listed paths, `parse items` Library1's ids
@@ -162,6 +166,55 @@ helper_checks() {
     rm -rf /var/lib/private/ruya-play-helper-probe
 }
 
+# Verify <id> and wait for the job; prints "<method status> <job status or ->" (RUY-834).
+verify_wait() {
+    out="$(call Verify s "$1")" || { echo "call-failed -"; return; }
+    st="$(echo "$out" | parse status)"
+    [ "$st" = ok ] || { echo "$st -"; return; }
+    job="$(echo "$out" | parse second)"
+    n=0
+    while [ "$n" -lt 300 ]; do
+        line="$(call ListJobs | parse job "$job")"
+        case "$line" in finished\ *) echo "ok ${line#finished } $job"; return ;; esac
+        sleep 1; n=$((n + 1))
+    done
+    echo "ok timeout $job"
+}
+
+verify_checks() {
+    app="/var/lib/flatpak/app/play.$appid/current/active/files"
+    [ -d "$app" ] || { bad "no deployment at $app"; return; }
+    set -- $(verify_wait "play.$appid")
+    [ "$1 $2" = "ok ok" ] && ok "Verify of the installed sample finishes ok" || bad "Verify of the installed sample: $*"
+    # One listed file, from the stored play.files.
+    victim="$(python3 - "$app/play.files" <<'PY'
+import json, sys
+for line in open(sys.argv[1], encoding="utf-8"):
+    e = json.loads(line)
+    if e["t"] == "f" and e["s"] > 0:
+        print(e["p"])
+        break
+PY
+)"
+    [ -n "$victim" ] && [ -f "$app/$victim" ] || { bad "no listed file to damage in $app/play.files"; return; }
+    size="$(stat -c %s "$app/$victim")"
+    printf x >> "$app/$victim"
+    set -- $(verify_wait "play.$appid")
+    [ "$1 $2" = "ok invalid-package" ] && ok "a changed file makes Verify finish invalid-package" || bad "Verify after damaging $victim: $*"
+    grep -q 'package.hash_mismatch' "$state/state/jobs" && ok "the job table records package.hash_mismatch" || bad "state/jobs has no package.hash_mismatch"
+    truncate -s "$size" "$app/$victim"
+    : > "$app/zz-extra-file"
+    set -- $(verify_wait "play.$appid")
+    [ "$1 $2" = "ok invalid-package" ] && ok "an extra file makes Verify finish invalid-package" || bad "Verify with an extra file: $*"
+    rm -f "$app/zz-extra-file"
+    set -- $(verify_wait "play.$appid")
+    [ "$1 $2" = "ok ok" ] && ok "Verify is ok again once the damage is undone" || bad "Verify after the repair: $*"
+    set -- $(verify_wait "play.com.example.not-installed")
+    [ "$1" = unknown-app ] && ok "Verify of an app that is not installed is unknown-app" || bad "Verify of an unknown app: $*"
+    set -- $(verify_wait "")
+    [ "$1" = invalid ] && ok "Verify of an empty id is invalid" || bad "Verify of an empty id: $*"
+}
+
 cleanup() {
     [ -n "${appid:-}" ] && flatpak uninstall --system -y --noninteractive "play.$appid" >/dev/null 2>&1
     [ -n "${before_dev:-}" ] && dev_mode "$before_dev" >/dev/null 2>&1
@@ -192,6 +245,17 @@ trap cleanup EXIT
 appid="$(id_of "$zip")"
 before_dev="$(call GetDeveloperMode | parse status)"
 mkdir -p "$work" "$usb" "$loose"
+
+if [ "$mode" = verify ]; then
+    dev_mode true >/dev/null
+    mkdir -p "$state/incoming"
+    install -m 0600 "$zip" "$state/incoming/vm-play-check.play.zip"
+    got="$(install_wait "$state/incoming/vm-play-check.play.zip")"
+    [ "$got" = ok ] && ok "the sample installs (developer mode)" || bad "the sample: $got"
+    [ "$got" = ok ] && verify_checks
+    [ "$fail" = 0 ] && echo "vm-play-check verify: PASS" || echo "vm-play-check verify: FAIL"
+    exit "$fail"
+fi
 
 # The packages.
 cp "$zip" "$work/unsigned.play.zip"

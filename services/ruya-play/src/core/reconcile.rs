@@ -105,6 +105,22 @@ pub fn build_in(play_json: &[u8], id: &str) -> Option<u64> {
     v.get("build")?.as_u64()
 }
 
+/// Where a committed app's `/app` folder is: `app/play.<id>/current/active/files` below the
+/// installation. The id is not checked here; see [`plain_id`].
+pub fn deployment_files(installation: &Path, id: &str) -> std::path::PathBuf {
+    installation
+        .join("app")
+        .join(format!("play.{id}"))
+        .join("current")
+        .join("active")
+        .join("files")
+}
+
+/// Is `id` a name [`deployed_apps`] would list (not empty, no separator or control character)?
+pub fn plain_id(id: &str) -> bool {
+    !id.is_empty() && !id.contains(['/', '\\']) && !id.chars().any(char::is_control)
+}
+
 /// The `play.*` apps of the Flatpak installation at `installation` (`/var/lib/flatpak`): every
 /// `app/play.<id>/current/active/files/` with what its `play.json` and `play.sig` say. An app
 /// folder that is not `play.` plus a plain id is skipped. A missing `app/` is an empty list.
@@ -123,7 +139,7 @@ pub fn deployed_apps(installation: &Path) -> std::io::Result<BTreeMap<String, De
         let Some(id) = name.strip_prefix("play.") else {
             continue;
         };
-        if id.is_empty() || id.contains(['/', '\\']) || id.chars().any(char::is_control) {
+        if !plain_id(id) {
             continue;
         }
         let files = entry.path().join("current").join("active").join("files");

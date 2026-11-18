@@ -1532,6 +1532,12 @@ grep -v '^ *#' "$here/vm-play-check.sh" | grep -q -- '--pipe' && fail "vm-play-c
 grep -q 'StandardOutput=file:\$pout' "$here/vm-play-check.sh" && pass "vm-play-check.sh: the probe's output is a file the manager opens" || fail "vm-play-check.sh: the probe has no StandardOutput=file:"
 grep -q '/var/tmp/x' "$here/vm-play-check.sh" && fail "vm-play-check.sh probes /var/tmp/x (PrivateTmp makes it succeed)" || pass "vm-play-check.sh: no /var/tmp/x write probe"
 grep -q 'chmod +x "\$pack"' "$here/vm-play-check.sh" && pass "vm-play-check.sh makes ruya-pack executable" || fail "vm-play-check.sh: ruya-pack keeps the mode scp gave it"
+# RUY-834: the verify mode installs the sample, damages one deployed file and expects the job to say so.
+grep -q 'if \[ "\$mode" = verify \]' "$here/vm-play-check.sh" && pass "vm-play-check.sh has a verify mode" || fail "vm-play-check.sh: no verify mode"
+grep -q 'call Verify s' "$here/vm-play-check.sh" && pass "vm-play-check.sh calls Play1.Verify" || fail "vm-play-check.sh never calls Verify"
+grep -q 'printf x >> "\$app/\$victim"' "$here/vm-play-check.sh" && pass "vm-play-check.sh damages a deployed file as root" || fail "vm-play-check.sh: no damaged file"
+grep -q '"ok invalid-package"' "$here/vm-play-check.sh" && grep -q 'package.hash_mismatch' "$here/vm-play-check.sh" && pass "vm-play-check.sh expects invalid-package with package.hash_mismatch" || fail "vm-play-check.sh: the damaged file is not expected to be reported"
+grep -q 'truncate -s "\$size"' "$here/vm-play-check.sh" && pass "vm-play-check.sh undoes the damage" || fail "vm-play-check.sh leaves the damaged file"
 [ "$(grep -c '^zin = zipfile.ZipFile(src)' "$here/vm-play-check.sh")" = 2 ] && pass "vm-play-check.sh re-opens the source before the bomb" || fail "vm-play-check.sh: the bomb reuses the tampered zip's ZipInfo objects"
 
 echo "== build stage names (RUY-771) =="

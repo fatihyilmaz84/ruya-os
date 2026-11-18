@@ -244,7 +244,8 @@ fn watch_mounts(env: Arc<dyn Environment>, events: async_channel::Sender<Signal>
 fn run(session: bool) -> Result<(), Box<dyn Error>> {
     let root = root_dir(session);
     std::fs::create_dir_all(&root)?;
-    let cfg = Config::under(&root);
+    let mut cfg = Config::under(&root);
+    cfg.flatpak = PathBuf::from(FLATPAK);
     let env: Arc<dyn Environment> = Arc::new(SystemEnvironment);
     std::fs::create_dir_all(&cfg.state)?;
     let trust = FileTrustStore::open(root.join("trust.json")).map_err(|e| e.message())?;
