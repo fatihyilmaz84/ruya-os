@@ -9,6 +9,7 @@
 #include <QImage>
 #include <QLinearGradient>
 #include <QPainter>
+#include <QPolygonF>
 #include <QGuiApplication>
 #include <QPointer>
 #include <QSet>
@@ -227,6 +228,49 @@ static QString writeArtFixtures(const QTemporaryDir &dir)
     p.fillRect(80, 0, 80, 90, QColor(40, 80, 230));
     p.end();
     two.save(dir.filePath(QStringLiteral("redblue.png")));
+    // Three pictures that cannot be mistaken for a dark failed load (RUY-856, the .play fixture's hero, card and cover): a teal
+    // scene with a sun and stripes, an orange card with big circles, a portrait violet cover with a diamond.
+    auto scene = [&](const char *name, int w, int h, const QColor &from, const QColor &to, const QColor &mark, int kind) {
+        QImage image(w, h, QImage::Format_RGB32);
+        QPainter sp(&image);
+        sp.setRenderHint(QPainter::Antialiasing);
+        QLinearGradient g(0, 0, w, h);
+        g.setColorAt(0, from);
+        g.setColorAt(1, to);
+        sp.fillRect(image.rect(), g);
+        sp.setPen(Qt::NoPen);
+        sp.setBrush(mark);
+        if (kind == 0) {
+            sp.drawEllipse(QPointF(w * 0.72, h * 0.35), h * 0.22, h * 0.22);
+            for (int i = 0; i < 6; ++i)
+                sp.drawRect(QRectF(0, h * (0.62 + i * 0.06), w, h * 0.025));
+        } else if (kind == 1) {
+            sp.drawEllipse(QPointF(w * 0.3, h * 0.5), h * 0.35, h * 0.35);
+            sp.drawEllipse(QPointF(w * 0.75, h * 0.4), h * 0.2, h * 0.2);
+        } else {
+            QPolygonF d;
+            d << QPointF(w * 0.5, h * 0.2) << QPointF(w * 0.85, h * 0.5) << QPointF(w * 0.5, h * 0.8) << QPointF(w * 0.15, h * 0.5);
+            sp.drawPolygon(d);
+        }
+        sp.end();
+        image.save(dir.filePath(QString::fromLatin1(name) + QStringLiteral(".png")));
+    };
+    scene("playhero", 960, 540, QColor(10, 120, 130), QColor(20, 50, 90), QColor(255, 200, 80), 0);
+    scene("playcard", 480, 270, QColor(240, 130, 40), QColor(170, 50, 30), QColor(255, 230, 150), 1);
+    scene("playcover", 300, 450, QColor(120, 60, 200), QColor(50, 20, 110), QColor(240, 170, 255), 2);
+    // A logo (RUY-856): white letters on a transparent ground, as a .play package's logo.webp.
+    QImage logo(480, 120, QImage::Format_ARGB32);
+    logo.fill(Qt::transparent);
+    QPainter lp(&logo);
+    lp.setRenderHint(QPainter::Antialiasing);
+    QFont lf;
+    lf.setPixelSize(80);
+    lf.setBold(true);
+    lp.setFont(lf);
+    lp.setPen(Qt::white);
+    lp.drawText(logo.rect(), Qt::AlignCenter, QStringLiteral("STAR HOP"));
+    lp.end();
+    logo.save(dir.filePath(QStringLiteral("logo.png")));
     return dir.path();
 }
 

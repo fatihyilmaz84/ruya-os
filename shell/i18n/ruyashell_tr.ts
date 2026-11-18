@@ -291,7 +291,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+197"/>
+        <location filename="../qml/AppDetailPage.qml" line="+208"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -519,12 +519,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-7"/>
-        <location line="+349"/>
+        <location line="+351"/>
         <source>Steam</source>
         <translation>Steam</translation>
     </message>
     <message>
-        <location line="-348"/>
+        <location line="-350"/>
         <source>Steam app ID</source>
         <translation>Steam uygulama kimliği</translation>
     </message>
@@ -594,12 +594,12 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+217"/>
+        <location line="+219"/>
         <source>Read</source>
         <translation>Oku</translation>
     </message>
     <message>
-        <location line="+394"/>
+        <location line="+412"/>
         <source>No special permissions.</source>
         <translation>Özel bir izni yok.</translation>
     </message>
@@ -639,7 +639,7 @@ Bu geri alınamaz.</translation>
         <translation>Kaldırmak için önce oyunu kapatın.</translation>
     </message>
     <message>
-        <location line="-887"/>
+        <location line="-907"/>
         <source>Install</source>
         <translation>Kur</translation>
     </message>
@@ -650,7 +650,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelle</translation>
     </message>
     <message>
-        <location line="+653"/>
+        <location line="+672"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Bu konsoldakinden daha yeni bir RuyaOS gerekiyor. Yüklü kalır.</translation>
     </message>
@@ -665,18 +665,18 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza ayrıntıları şu anda kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+75"/>
         <location line="+9"/>
         <source>This app can</source>
         <translation>Bu uygulama şunları yapabilir</translation>
     </message>
     <message>
-        <location line="-95"/>
+        <location line="-96"/>
         <source>The update adds: %1</source>
         <translation>Güncelleme şunları ekliyor: %1</translation>
     </message>
     <message>
-        <location line="-681"/>
+        <location line="-700"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Aç</translation>
@@ -714,7 +714,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+389"/>
+        <location line="+391"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -731,12 +731,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+149"/>
+        <location line="+166"/>
         <source>Update ready</source>
         <translation>Güncelleme hazır</translation>
     </message>
     <message>
-        <location line="-138"/>
+        <location line="-155"/>
         <source>Installed through Steam</source>
         <translation>Steam üzerinden kuruldu</translation>
     </message>
@@ -746,7 +746,7 @@ Bu geri alınamaz.</translation>
         <translation>Bu oyunu şimdilik Steam&apos;den başlatın.</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+47"/>
         <source>%1 % · It keeps going if you leave this page.</source>
         <translation>%%1 · Bu sayfadan çıksanız da sürer.</translation>
     </message>
@@ -4318,12 +4318,17 @@ Bu geri alınamaz.</translation>
         <translation>%1 imzalı · anahtar %2</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="+2"/>
         <source>Signed by key %1</source>
         <translation>anahtar %1 imzalı</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="-1"/>
+        <source>Signed by %1</source>
+        <translation>%1 tarafından imzalandı</translation>
+    </message>
+    <message>
+        <location line="+3"/>
         <source>Changed since signed</source>
         <translation>İmzadan sonra değişmiş</translation>
     </message>
@@ -5249,6 +5254,11 @@ Bu geri alınamaz.</translation>
         <source>Trailer · %1</source>
         <translation>Fragman · %1</translation>
     </message>
+    <message>
+        <location line="+0"/>
+        <source>Trailer</source>
+        <translation>Fragman</translation>
+    </message>
 </context>
 <context>
     <name>ScreenshotViewer</name>
@@ -5743,17 +5753,17 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+26"/>
+        <location line="+28"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
     <message>
-        <location line="-25"/>
+        <location line="-27"/>
         <source>Your library is empty</source>
         <translation>Kitaplığın boş</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+4"/>
         <source>Open Store</source>
         <translation>Mağazayı aç</translation>
     </message>
@@ -5850,7 +5860,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1938"/>
+        <location line="-1940"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -5881,7 +5891,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1669"/>
+        <location line="+1671"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>

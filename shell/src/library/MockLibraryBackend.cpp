@@ -80,7 +80,12 @@ void MockLibraryBackend::reset(const QString &scenario)
         if (scenario == QLatin1String("unlisted"))
             m_items.append(item("flatpak:org.example.Unlisted", "app", "Unlisted App", 1762000000));
         // "play": one .play app with every field and role (RUY-852; the real art is on the VM).
-        if (scenario == QLatin1String("play")) {
+        // "playart:<dir>": the same app with real pictures from <dir> (tests and screenshots, RUY-856: logo.png,
+        // card/cover/hero/icon from the glow fixtures, the trailer's file does not exist so the trailer cannot play),
+        // plus an icon-only .play app and a Flatpak that is not a .play but carries a logo and a trailer key
+        // (it must never show a trust badge or a signer).
+        const bool playArt = scenario.startsWith(QLatin1String("playart:"));
+        if (scenario == QLatin1String("play") || playArt) {
             LibraryItem p = item("flatpak:play.com.example.starhopper", "game", "Star Hopper", 1762100000);
             p.art = {{QStringLiteral("icon"), QStringLiteral("/mock/play/icon-512.webp")},
                      {QStringLiteral("logo"), QStringLiteral("/mock/play/logo.webp")},
@@ -97,6 +102,25 @@ void MockLibraryBackend::reset(const QString &scenario)
             p.ageRating = {{QStringLiteral("violence-cartoon"), QStringLiteral("mild")}};
             p.playTier = QStringLiteral("developer");
             p.playSigner = QStringLiteral("Example Games");
+            if (playArt) {
+                const QString dir = scenario.mid(8);
+                auto at = [&](const char *name) { return dir + QLatin1Char('/') + QLatin1String(name) + QStringLiteral(".png"); };
+                p.art = {{QStringLiteral("icon"), at("green")},
+                         {QStringLiteral("logo"), at("logo")},
+                         {QStringLiteral("card"), at("playcard")},
+                         {QStringLiteral("cover"), at("playcover")},
+                         {QStringLiteral("hero"), at("playhero")},
+                         {QStringLiteral("trailer"), QStringLiteral("/mock/play/trailer.webm")}};
+                LibraryItem quiet = item("flatpak:play.com.example.quiet", "game", "Quiet Quest", 1762050000);
+                quiet.art = {{QStringLiteral("icon"), at("pastel")}};
+                quiet.play = true;
+                m_items.append(quiet);
+                LibraryItem odd = item("flatpak:org.example.Oddity", "game", "Oddity", 1762000000);
+                odd.art = {{QStringLiteral("logo"), at("logo")}, {QStringLiteral("trailer"), QStringLiteral("/mock/play/trailer.webm")}};
+                odd.playTier = QStringLiteral("official");      // never shown: `play` is false
+                odd.playSigner = QStringLiteral("Not A Signer");
+                m_items.append(odd);
+            }
             m_items.append(p);
         }
         // "chess": Open Chess, installed with an update in the Store's mock, is in the library too (the game page's

@@ -55,7 +55,9 @@ QtObject {
                      line: qsTr("Signed by %1 and the RuyaOS store").arg(name !== "" ? name : key) }
         case "developer":
             return { state: state, kind: "warning", solid: true, badge: qsTr("Developer"), icon: "info", iconError: false, bad: false, opensSheet: true,
-                     line: name !== "" ? qsTr("Signed by %1 · key %2").arg(name).arg(key) : qsTr("Signed by key %1").arg(key) }
+                     line: name !== "" && key !== "" ? qsTr("Signed by %1 · key %2").arg(name).arg(key)
+                         : name !== "" ? qsTr("Signed by %1").arg(name)     // Library1 gives a name and no key id (RUY-856)
+                         : qsTr("Signed by key %1").arg(key) }
         case "changed":
             return { state: state, kind: "error", solid: true, badge: qsTr("Changed since signed"), icon: "error", iconError: true, bad: true, opensSheet: false,
                      line: qsTr("This package was changed after it was signed.") }
