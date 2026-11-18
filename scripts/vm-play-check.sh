@@ -98,6 +98,10 @@ elif what == "items":
 elif what == "key":
     rec = data[1] if len(data) > 1 else {}
     print(val(rec.get(arg)) if arg in rec else "")
+elif what == "codes":
+    rec = data[1] if len(data) > 1 else {}
+    for p in (val(rec.get("problems")) or []):
+        print(p[0])
 ' "$@"
 }
 
@@ -168,14 +172,19 @@ leftovers() { # the service's staging/ exists and is empty after a finished job
     return 0
 }
 
-# Inspect <path> is ok **and** its record lists no problem (RUY-866: on 0.0.93 the method said ok
-# while the record held staging.io). Prints "ok" or what was wrong.
+# Inspect <path> is ok, its record's verdict is <verdict>, and it lists no internal fault
+# (staging.*, helper.*): on 0.0.93 the method said ok while the record held staging.io (RUY-866).
+# Rule problems (an unsigned package's tier, a broken optional art slot) are not faults here.
+# An empty <verdict> accepts any. Prints "ok" or what was wrong.
 inspect_clean() {
     out="$(call Inspect s "$1")" || { echo "call-failed"; return; }
     st="$(echo "$out" | parse status)"
     [ "$st" = ok ] || { echo "$st"; return; }
-    probs="$(echo "$out" | parse key problems)"
-    [ "$probs" = "[]" ] && echo ok || echo "ok with problems $probs"
+    verdict="$(echo "$out" | parse key verdict)"
+    faults="$(echo "$out" | parse codes | grep -E '^(staging|helper)\.' | tr '\n' ' ')"
+    if [ -n "$faults" ]; then echo "ok with faults: $faults"
+    elif [ -n "${2:-}" ] && [ "$verdict" != "$2" ]; then echo "verdict $verdict, want $2"
+    else echo ok; fi
 }
 
 # Install <path> and wait for the job to finish; prints the JobFinished status.
@@ -308,8 +317,8 @@ if [ "$mode" = helper ]; then
     mkdir -p "$state/incoming"
     install -m 0600 "$zip" "$state/incoming/vm-play-check.play.zip"
     helper_checks "$state/incoming/vm-play-check.play.zip"
-    st="$(inspect_clean "$state/incoming/vm-play-check.play.zip")"
-    [ "$st" = ok ] && ok "Inspect of an incoming/ file (root 0600) is ok, no problems" || bad "Inspect of an incoming/ file: $st"
+    st="$(inspect_clean "$state/incoming/vm-play-check.play.zip" "")"
+    [ "$st" = ok ] && ok "Inspect of an incoming/ file (root 0600) is ok, no internal fault" || bad "Inspect of an incoming/ file: $st"
     rm -f "$state/incoming/vm-play-check.play.zip"
     ls /var/lib/private 2>/dev/null | grep -q '^ruya-play-helper-' && bad "a helper state folder was left" || ok "no helper state folder is left"
     avc_checks
@@ -417,8 +426,8 @@ done
 echo "$srcs" | grep -q "^$loose/" && bad "ListSources lists a drive mounted without noexec" || ok "ListSources skips a drive mounted without noexec"
 st="$(call Inspect s "$loose/signed-a.play.zip" | parse status)"
 [ "$st" = unknown-source ] && ok "Inspect on a drive without noexec is unknown-source" || bad "Inspect on a drive without noexec: $st"
-st="$(inspect_clean "$usb/signed-a.play.zip")"
-[ "$st" = ok ] && ok "Inspect of a USB package is ok, no problems" || bad "Inspect of a USB package: $st"
+st="$(inspect_clean "$usb/signed-a.play.zip" ok)"
+[ "$st" = ok ] && ok "Inspect of a USB package is ok, no internal fault" || bad "Inspect of a USB package: $st"
 st="$(call Inspect s /etc/shadow | parse status)"
 [ "$st" = unknown-source ] && ok "Inspect of a path that is no candidate is unknown-source" || bad "Inspect /etc/shadow: $st"
 st="$(as_shell busctl --system --json=short call "$svc" "$obj" "$svc" Install 'sa{sv}' "$usb/signed-a.play.zip" 0 | parse status)"
@@ -464,8 +473,8 @@ refused "the same id signed by another key" signed-b different-developer
 
 mkdir -p "$state/incoming"
 install -m 0600 "$work/signed-a.play.zip" "$state/incoming/vm-play-check.play.zip"
-st="$(inspect_clean "$state/incoming/vm-play-check.play.zip")"
-[ "$st" = ok ] && ok "Inspect of a download in incoming/ (root 0600) is ok, no problems" || bad "Inspect of a download in incoming/: $st"
+st="$(inspect_clean "$state/incoming/vm-play-check.play.zip" "")"
+[ "$st" = ok ] && ok "Inspect of a download in incoming/ (root 0600) is ok, no internal fault" || bad "Inspect of a download in incoming/: $st"
 
 helper_checks "$usb/signed-a.play.zip"
 
