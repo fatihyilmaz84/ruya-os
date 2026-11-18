@@ -4494,6 +4494,68 @@ mod tests {
         nav(&r.backend_mut().take())
     }
 
+    fn wii_remote(id: &str) -> (PadInfo, crate::pad::Normalizer) {
+        let info = PadInfo {
+            name: "Nintendo Wii Remote".into(),
+            model: "wii_remote".into(),
+            ..family_pad(id, "nintendo")
+        };
+        let n = crate::pad::Normalizer::new(crate::pad::PadLayout {
+            keys: crate::pad::model_keys("wii_remote"),
+            ..Default::default()
+        });
+        (info, n)
+    }
+
+    /// Evdev presses and releases of `keys`, one frame each, through the remote's normaliser.
+    fn wii_taps(r: &mut Router<Fake>, a: PadKey, n: &mut crate::pad::Normalizer, keys: &[u16]) {
+        for &k in keys {
+            for v in [1, 0] {
+                for f in n.frames([(code::EV_KEY, k, v), (code::EV_SYN, code::SYN_REPORT, 0)]) {
+                    r.input(a, &f.inputs);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_wii_remote_reaches_a_game_as_a_normal_pad() {
+        let mut r = router();
+        let (info, mut n) = wii_remote("w");
+        let a = r.add_pad(info, t0());
+        sign_in(&mut r, a, "p1");
+        app(&mut r, "i1", STK, "p1");
+        r.backend_mut().take();
+        wii_taps(&mut r, a, &mut n, &[code::KEY_UP, code::BTN_2]);
+        assert_eq!(
+            writes(&r.backend_mut().take()),
+            vec![
+                (1, vec![(code::EV_ABS, code::ABS_HAT0X, -1)]),
+                (1, vec![(code::EV_ABS, code::ABS_HAT0X, 0)]),
+                (1, vec![(code::EV_KEY, code::BTN_EAST, 1)]),
+                (1, vec![(code::EV_KEY, code::BTN_EAST, 0)]),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_wii_remote_navigates_the_shell() {
+        let mut r = router();
+        let (info, mut n) = wii_remote("w");
+        let a = r.add_pad(info, t0());
+        sign_in(&mut r, a, "p1");
+        wii_taps(&mut r, a, &mut n, &[code::KEY_UP, code::BTN_2]);
+        assert_eq!(
+            keys_of(&mut r),
+            vec![
+                (NavKey::Left, true),
+                (NavKey::Left, false),
+                (NavKey::Accept, true),
+                (NavKey::Accept, false)
+            ]
+        );
+    }
+
     #[test]
     fn a_nintendo_pad_confirms_with_its_right_button() {
         let mut r = router();

@@ -378,7 +378,7 @@ fn probe(device: &Device, path: &Path) -> Probe {
     }
 }
 
-fn layout(device: &Device, hw: &Hardware) -> PadLayout {
+fn layout(device: &Device, hw: &Hardware, name: &str) -> PadLayout {
     let mut ranges = Vec::new();
     if let (Some(axes), Ok(info)) = (device.supported_absolute_axes(), device.get_abs_state()) {
         for abs in [
@@ -403,6 +403,7 @@ fn layout(device: &Device, hw: &Hardware) -> PadLayout {
     }
     PadLayout {
         xbox_xy: hw.driver == "xpad" || hw.vendor == 0x045e,
+        keys: crate::pad::model_keys(identity::model(hw, name)),
         ranges,
     }
 }
@@ -538,7 +539,7 @@ impl Scanner {
                 .is_some_and(|ff| ff.contains(FFEffectType::FF_RUMBLE)),
             port_bound: identity::port_bound(&hw),
         };
-        let normalizer = Normalizer::new(layout(&device, &hw));
+        let normalizer = Normalizer::new(layout(&device, &hw, &name));
         // SAFETY: the descriptor belongs to `device`, which outlives this borrow.
         let fd = unsafe { BorrowedFd::borrow_raw(device.as_raw_fd()) };
         let dup = fd
