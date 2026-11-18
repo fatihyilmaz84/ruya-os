@@ -349,7 +349,7 @@ Item {
             // Up to four permission rows, then "And n more".
             const more = findChild(find("installConfirmPermissions"), "permissionMore")
             tryVerify(() => more.visible, 2000)
-            compare(more.text, "And 2 more")
+            compare(more.text, "And 3 more", "the always row, five requests and the high-risk pair (RUY-864) make seven rows")
             keyClick(Qt.Key_Escape)
             tryVerify(() => !find("installConfirm").shown, 2000)
             tryVerify(() => find("installButton").activeFocus, 2000, "Cancel returns to Install")
@@ -833,9 +833,26 @@ Item {
                 shot("131-install-revoked-installed-" + lang)
                 closePackage()
 
+                // An update of an installed build that adds two high-risk requests (RUY-853): the page's line, then the sheet.
+                Play.mockReset()
+                Play.mockSetInstalled("com.example.rawaccess", 4)
+                openPackage("rawaccess.play.zip")
+                clearToasts()
+                settle()
+                shot("132-install-update-adds-" + lang)
+                keyClick(Qt.Key_Return)
+                tryVerify(() => find("installConfirm").shown, 2000)
+                tryVerify(() => find("installConfirm").opacity === 1, 2000)
+                settle()
+                shot("133-install-update-confirm-" + lang)
+                keyClick(Qt.Key_Escape)
+                tryVerify(() => !find("installConfirm").shown, 2000)
+                closePackage()
+
                 Profiles.lock()
                 tryCompare(Profiles, "activeProfile", "")
                 tc.shell.destroy()
+                Play.mockReset()            // the update shots above left rawaccess installed: 129 is a new package
                 start("ada")
                 openPackage("rawaccess.play.zip")
                 keyClick(Qt.Key_Return)

@@ -130,6 +130,9 @@ const QList<MockPlayBackend::Fixture> &MockPlayBackend::fixtures()
         raw.permissions = {perm("input:all-devices", "Accesses all devices", "high"),
                            perm("devel", "Can inspect other programs", "high"),
                            perm("network", "Uses the network", "medium")};
+        // Installed at an earlier build (mockSetInstalled), this is an update that adds the two high-risk requests.
+        raw.permissionsAdded = {perm("input:all-devices", "Accesses all devices", "high"),
+                                perm("devel", "Can inspect other programs", "high")};
         add("rawaccess.play.zip", "zip", "ok", raw);
 
         PlayInfo imp = base("com.example.impostor", "Pixel Forest 2", "Claims an id another key owns.", "Mallory Games",
@@ -219,6 +222,20 @@ PlayInfo MockPlayBackend::infoOf(const Fixture &f) const
     i.installedBuild = m_installed.value(i.id, 0u);
     // The gate the service derives from the tier's ceiling (05 §8); an unverified package with a
     // high-risk request has none (the service refuses it with ceiling.refused).
+    // The pair of 05 §8 / services/ruya-play-trust (HIGH_RISK_PAIRS): network with removable media counts as high
+    // risk together, and the service lists it as a request of its own, last.
+    auto asks = [&i](const char *key) {
+        for (const PlayPermission &p : i.permissions) {
+            if (p.key == QLatin1String(key) || p.key.startsWith(QLatin1String(key) + QLatin1Char(':')))
+                return true;
+        }
+        return false;
+    };
+    const QString pairKey = QStringLiteral("network+removable_media");
+    const bool hasPair = std::any_of(i.permissions.cbegin(), i.permissions.cend(),
+                                     [&pairKey](const PlayPermission &p) { return p.key == pairKey; });
+    if (asks("network") && asks("removable_media") && !hasPair)
+        i.permissions.append(perm("network+removable_media", "Uses the network and reaches USB drives", "high"));
     bool high = false;
     for (const PlayPermission &p : i.permissions)
         high = high || p.risk == QLatin1String("high");

@@ -2950,18 +2950,18 @@ This can&apos;t be undone.</translation>
 <context>
     <name>InstallConfirmSheet</name>
     <message>
-        <location filename="../qml/InstallConfirmSheet.qml" line="+32"/>
+        <location filename="../qml/InstallConfirmSheet.qml" line="+42"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+187"/>
+        <location line="+210"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-159"/>
+        <location line="-182"/>
         <location line="+63"/>
         <source>Install %1?</source>
         <translation>Install %1?</translation>
@@ -2988,6 +2988,16 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+22"/>
+        <source>The update adds: %1</source>
+        <translation>The update adds: %1</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>The store has not reviewed this game, and it asks for a high-risk permission.</source>
+        <translation>The store has not reviewed this game, and it asks for a high-risk permission.</translation>
+    </message>
+    <message>
+        <location line="+11"/>
         <source>A high-risk permission needs an admin&apos;s PIN.</source>
         <translation>A high-risk permission needs an admin&apos;s PIN.</translation>
     </message>
@@ -3005,7 +3015,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>InstallPackagePage</name>
     <message>
-        <location filename="../qml/InstallPackagePage.qml" line="+64"/>
+        <location filename="../qml/InstallPackagePage.qml" line="+68"/>
         <source>Developer</source>
         <translation>Developer</translation>
     </message>
@@ -3083,12 +3093,17 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+99"/>
-        <location line="+8"/>
+        <location line="+20"/>
         <source>This game can</source>
         <translation>This game can</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="-11"/>
+        <source>The update adds: %1</source>
+        <translation>The update adds: %1</translation>
+    </message>
+    <message>
+        <location line="+40"/>
         <source>Information</source>
         <translation>Information</translation>
     </message>
@@ -4431,6 +4446,11 @@ This can&apos;t be undone.</translation>
         <source>Can inspect other programs</source>
         <translation>Can inspect other programs</translation>
     </message>
+    <message>
+        <location line="+1"/>
+        <source>Uses the network and reaches USB drives</source>
+        <translation>Uses the network and reaches USB drives</translation>
+    </message>
 </context>
 <context>
     <name>PlayerChip</name>
@@ -5672,12 +5692,12 @@ This can&apos;t be undone.</translation>
         <translation>Restart now</translation>
     </message>
     <message>
-        <location line="+37"/>
+        <location line="+39"/>
         <source>%1 is still closing.</source>
         <translation>%1 is still closing.</translation>
     </message>
     <message>
-        <location line="+74"/>
+        <location line="+88"/>
         <location line="+30"/>
         <source>%1 could not start</source>
         <translation>%1 could not start</translation>
@@ -5848,7 +5868,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1922"/>
+        <location line="-1938"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -5863,7 +5883,7 @@ This can&apos;t be undone.</translation>
         <translation>Press any button to wait</translation>
     </message>
     <message>
-        <location line="+108"/>
+        <location line="+124"/>
         <source>%1 is already running</source>
         <translation>%1 is already running</translation>
     </message>

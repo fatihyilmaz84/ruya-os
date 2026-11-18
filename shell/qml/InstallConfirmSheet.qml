@@ -19,10 +19,20 @@ FocusScope {
     property bool shown: false
     property Item opener: null
     readonly property var trust: PlayTrust.describe(info)
-    readonly property var permissions: info ? (info.permissions ?? []) : []
-    readonly property bool highRisk: permissions.some(p => p.risk === "high")
+    // High risk first: the four rows the sheet shows never hide the one that gates the install.
+    readonly property var permissions: {
+        const all = info ? (info.permissions ?? []) : []
+        return all.filter(p => p.risk === "high").concat(all.filter(p => p.risk !== "high"))
+    }
+    // Inspect's gate: "allowed" | "admin-pin" | "admin-pin-warning" (Play1.xml); the warning line is the third's.
+    readonly property string gate: info ? (info.gate ?? "allowed") : "allowed"
+    readonly property bool warns: gate === "admin-pin-warning"
+    // An update lists what it adds, only when the service knows the installed requests (`updateKnown`).
+    readonly property var added: info && info.updateKnown === true ? (info.permissionsAdded ?? []) : []
+    readonly property bool addsHighRisk: added.some(p => p.risk === "high")
+    readonly property string addedText: added.map(p => PlayTrust.permissionWords(p.key, p.words)).join(", ")
     // Anyone but an admin enters an admin's PIN (05 §18 item 4); the line says why, in the sentence 04 §5.4 gives
-    // for a high-risk permission, else the Store's.
+    // when the gate is a PIN gate, else the Store's.
     readonly property bool needsPin: (Profiles.active.role ?? "") !== "admin"
     readonly property string key: PlayTrust.shortKey(info ? info.signerKeyId : "")
     readonly property string signer: info ? (info.signerName ?? "") : ""
@@ -186,14 +196,37 @@ FocusScope {
         }
 
         Text {
+            objectName: "installConfirmUpdateAdds"
+            visible: sheet.added.length > 0
+            width: parent.width
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
+            text: qsTr("The update adds: %1").arg(sheet.addedText)
+            color: sheet.addsHighRisk ? Theme.warningText : Theme.text
+            font.pixelSize: Theme.typeBody * sheet.u
+        }
+
+        // Developer-signed with a high-risk request: said to everyone, an admin included (05 §8).
+        Text {
+            objectName: "installConfirmWarning"
+            visible: sheet.warns
+            width: parent.width
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
+            text: qsTr("The store has not reviewed this game, and it asks for a high-risk permission.")
+            color: Theme.warningText
+            font.pixelSize: Theme.typeBody * sheet.u
+        }
+
+        Text {
             objectName: "installConfirmPin"
             visible: sheet.needsPin
             width: parent.width
             textFormat: Text.PlainText
             wrapMode: Text.Wrap
-            text: sheet.highRisk ? qsTr("A high-risk permission needs an admin's PIN.")
-                                 : qsTr("An admin's PIN is needed to install this app.")
-            color: sheet.highRisk ? Theme.warningText : Theme.text
+            text: sheet.gate !== "allowed" ? qsTr("A high-risk permission needs an admin's PIN.")
+                                           : qsTr("An admin's PIN is needed to install this app.")
+            color: sheet.gate !== "allowed" ? Theme.warningText : Theme.text
             font.pixelSize: Theme.typeBody * sheet.u
         }
 
