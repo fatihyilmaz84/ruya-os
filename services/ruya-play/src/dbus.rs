@@ -141,56 +141,10 @@ fn permission_triples(requests: &[Request]) -> Vec<(String, String, String)> {
         .collect()
 }
 
-/// Play1's `art` (role -> file) and `screenshots` from the vetted art: `icon` is the 512 px icon,
-/// `hero`, `card`, `cover`, `logo` (English, else the first), `poster` (the trailer's), `trailer`
-/// and `preview`; the screenshots are the 1080 p files in order.
+/// Play1's `art` (role -> file) and `screenshots` from the vetted art (the rules are
+/// `ruya_play_art::art_roles`, shared with Library1).
 pub fn art_roles(art: &[VettedArt]) -> (BTreeMap<String, String>, Vec<String>) {
-    let mut roles = BTreeMap::new();
-    let mut shots: Vec<(u32, String)> = Vec::new();
-    let mut logos: Vec<(Option<String>, String)> = Vec::new();
-    for slot in art {
-        for f in &slot.files {
-            let Some(name) = f.file_name().and_then(|n| n.to_str()) else {
-                continue;
-            };
-            let path = f.to_string_lossy().into_owned();
-            let role = match name {
-                "icon-512.webp" => Some("icon"),
-                "hero-2160.webp" => Some("hero"),
-                "card-540.webp" => Some("card"),
-                "cover-900.webp" => Some("cover"),
-                "trailer-poster-1080.webp" => Some("poster"),
-                "trailer.webm" | "trailer.mp4" => Some("trailer"),
-                "preview.webm" | "preview.mp4" => Some("preview"),
-                "logo.webp" => {
-                    logos.push((slot.lang.clone(), path.clone()));
-                    None
-                }
-                _ => {
-                    if let Some(n) = name
-                        .strip_prefix("screenshot-")
-                        .and_then(|r| r.strip_suffix("-1080.webp"))
-                        .and_then(|n| n.parse().ok())
-                    {
-                        shots.push((n, path.clone()));
-                    }
-                    None
-                }
-            };
-            if let Some(role) = role {
-                roles.insert(role.to_string(), path);
-            }
-        }
-    }
-    let logo = logos
-        .iter()
-        .find(|(l, _)| l.as_deref() == Some("en"))
-        .or_else(|| logos.first());
-    if let Some((_, p)) = logo {
-        roles.insert("logo".into(), p.clone());
-    }
-    shots.sort();
-    (roles, shots.into_iter().map(|(_, p)| p).collect())
+    ruya_play_art::art_roles(art.iter().map(|s| (s.lang.as_deref(), s.files.as_slice())))
 }
 
 /// Play1's Inspect record. Optional keys are absent when unknown (`age_label`: the manifest

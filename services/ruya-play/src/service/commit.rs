@@ -26,7 +26,7 @@ use ruya_play_trust::{grants, metadata_sections, Assessment, Gate, TrustRecord};
 use std::path::{Path, PathBuf};
 
 /// The system remote the importer installs from.
-pub const REMOTE: &str = "ruyaos-play-local";
+pub const REMOTE: &str = ruya_play_art::PLAY_REMOTE;
 /// The branch every imported app is committed on.
 pub const BRANCH: &str = "stable";
 /// The architecture (05 §6: x86_64 only).

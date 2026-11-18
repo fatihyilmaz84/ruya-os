@@ -79,6 +79,7 @@ pub fn parse_manifest(text: &str) -> Option<Item> {
         launch: format!("steam://rungameid/{appid}"),
         art: Vec::new(),
         last_played,
+        play: None,
     })
 }
 
