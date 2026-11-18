@@ -153,6 +153,7 @@ RUN --mount=type=bind,source=image/build,target=/ctx/build \
     && systemctl --global enable ruya-devices.service \
     && systemctl enable greenboot-healthcheck.service greenboot-set-rollback-trigger.service \
     && systemctl set-default graphical.target \
+    && semodule -i /usr/share/selinux/packages/ruyaos/ruya_play_openfile.cil \
     && /ctx/build/96-services.sh \
     && /ctx/build/90-initramfs.sh \
     && /ctx/build/92-branding.sh \

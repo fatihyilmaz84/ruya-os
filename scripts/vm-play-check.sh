@@ -45,6 +45,19 @@ usb=/run/media/ruya-shell/PLAYCHECK
 loose=/run/media/ruya-shell/PLAYLOOSE
 state=/var/lib/ruya-play
 fail=0
+since="$(date '+%Y-%m-%d %H:%M:%S')"
+
+# ADR-036: no SELinux denial of PID 1 (init_t) while the check ran. A denied OpenFile= of the
+# source shows up only as "missing" (graceful), so the journal is the proof.
+avc_checks() {
+    [ -n "$(semodule -l 2>/dev/null | grep -x ruya_play_openfile)" ] \
+        && ok "the SELinux module ruya_play_openfile is loaded" \
+        || bad "the SELinux module ruya_play_openfile is not loaded"
+    local denied
+    denied="$(journalctl --since "$since" -o cat 2>/dev/null | grep 'avc:  denied' | grep 'scontext=system_u:system_r:init_t')"
+    [ -z "$denied" ] && ok "no init_t AVC denial during the check" \
+        || bad "init_t AVC denials during the check: $(echo "$denied" | head -3)"
+}
 ok() { echo "PASS: $*"; }
 bad() { echo "FAIL: $*"; fail=1; }
 
@@ -130,7 +143,9 @@ helper_checks() {
     mapfile -t argv < <(/usr/bin/ruya-play --helper-argv "$1")
     [ "${#argv[@]}" -gt 3 ] || { bad "ruya-play --helper-argv printed no command line"; return; }
     # The helper's own properties around a probe instead of the helper.
-    pout="$(mktemp)"
+    # In /run, not /tmp: PID 1 (init_t) opens it for the probe unit and may not write the ssh
+    # session's user_tmp_t files (a check artefact, lead-34).
+    pout="$(mktemp -p /run)"
     probe=()
     skip=0
     for a in "${argv[@]}"; do
@@ -235,6 +250,7 @@ if [ "$mode" = helper ]; then
     [ "$st" = ok ] && ok "Inspect of an incoming/ file (root 0600) is ok" || bad "Inspect of an incoming/ file: $st"
     rm -f "$state/incoming/vm-play-check.play.zip"
     ls /var/lib/private 2>/dev/null | grep -q '^ruya-play-helper-' && bad "a helper state folder was left" || ok "no helper state folder is left"
+    avc_checks
     [ "$fail" = 0 ] && echo "vm-play-check helper: PASS" || echo "vm-play-check helper: FAIL"
     exit "$fail"
 fi
@@ -363,6 +379,7 @@ if [ -n "${TESTBIN:-}" ]; then
 else
     echo "SKIP: TESTBIN not set: the Unix-only core tests (toctou.rs, modes.rs) did not run here"
 fi
+avc_checks
 
 [ "$fail" = 0 ] && echo "vm-play-check: PASS" || echo "vm-play-check: FAIL"
 exit "$fail"

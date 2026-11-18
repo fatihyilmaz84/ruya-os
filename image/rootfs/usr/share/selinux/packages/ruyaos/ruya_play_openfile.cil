@@ -1,0 +1,7 @@
+; RuyaOS local SELinux policy (ADR-036, RUY-100). Installed by image/Containerfile with semodule -i.
+; ruya-play's helper unit gets its package as OpenFile=<path>:...:read-only (05 section 7). PID 1
+; opens that file in its pre-exec child (init_t); the stock policy denies init_t reading files on
+; FAT/exFAT/NTFS drives (dosfs_t) and FUSE drives such as ntfs-3g (fusefs_t). Read only: no write,
+; no exec, no directory rights. Measured in the VM on image 0.0.92 (lead-34).
+(allow init_t dosfs_t (file (getattr open read)))
+(allow init_t fusefs_t (file (getattr open read)))
