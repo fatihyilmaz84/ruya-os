@@ -753,7 +753,7 @@ impl Importer {
         }
         let id = inspection.package.manifest.id.clone();
         let build = inspection.package.manifest.build;
-        let held =self.held_all().or_else(|| {
+        let held = self.held_all().or_else(|| {
             self.held
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
