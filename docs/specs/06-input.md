@@ -67,6 +67,8 @@ Buttons: `south east west north l1 r1 l3 r3 start select guide dpad_up dpad_down
 | + (`KEY_NEXT`) / - (`KEY_PREVIOUS`) | `start` / `select` |
 | Home (`BTN_MODE`) | `guide` |
 
+**A pad without a left stick** (its probe found no `ABS_X`/`ABS_Y`, capability `sticks` with `driver` false; today the bare Wii Remote) also sends its D-pad in route `app` as the virtual pad's left stick at full deflection (RUY-832), besides the hat, so a game that steers or navigates with the stick can be played; it is centred with the same diff on release, neutral and a pad leaving. Pads with a stick are unchanged. A per-game choice belongs to the controller profiles (RUY-43).
+
 The Nunchuk, the accelerometer and the IR camera are separate evdev nodes and are not mapped (the Nunchuk and an upright layout are planned; motion is RUY-46).
 
 ### 4.3 Capability descriptor *(built, RUY-39)*

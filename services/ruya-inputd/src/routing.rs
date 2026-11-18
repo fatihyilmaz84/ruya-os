@@ -324,6 +324,9 @@ struct Virtual {
     playing: BTreeSet<i16>,
     /// The profile that applies to this pad, compiled.
     engine: Engine,
+    /// The physical pad has no left stick: its D-pad also moves the virtual left stick
+    /// (RUY-832), so a game that steers with the stick can be played with it.
+    mirror_dpad: bool,
 }
 
 /// What a held seat keeps of its gone pad (RUY-627): the virtual pad the app still has (`None`
@@ -444,6 +447,15 @@ fn mapper_events(
     }
 }
 
+/// Whether the pad's probe found no left stick (`ABS_X`/`ABS_Y`, `caps` "sticks"). A pad whose
+/// descriptor does not say is taken to have one.
+fn lacks_stick(info: &PadInfo) -> bool {
+    info.capabilities
+        .iter()
+        .find(|c| c.name == "sticks")
+        .is_some_and(|c| !c.driver)
+}
+
 impl Virtual {
     /// What the app may see of `state`: held-at-entry inputs and Guide masked out, then the
     /// profile's mapping (which never presses Guide either).
@@ -458,6 +470,17 @@ impl Virtual {
         t.apply(PadInput::Button(PadButton::Guide, false));
         let mut out = self.engine.apply(&t);
         out.apply(PadInput::Button(PadButton::Guide, false));
+        if self.mirror_dpad {
+            let axis = |neg: PadButton, pos: PadButton| match (out.pressed(neg), out.pressed(pos)) {
+                (true, false) => STICK_MIN,
+                (false, true) => STICK_MAX,
+                _ => 0,
+            };
+            let x = axis(PadButton::DpadLeft, PadButton::DpadRight);
+            let y = axis(PadButton::DpadUp, PadButton::DpadDown);
+            out.apply(PadInput::Axis(PadAxis::LeftX, x));
+            out.apply(PadInput::Axis(PadAxis::LeftY, y));
+        }
         out
     }
 
@@ -937,6 +960,7 @@ impl<B: Backend> Router<B> {
         };
         let pad_id = pad.info.id.clone();
         let family = pad.info.family.clone();
+        let mirror_dpad = lacks_stick(&pad.info);
         // The seated player's own controller profiles (RUY-643); a guest has none: the defaults.
         let engine = self.book.engine_for(&player, &family, &pad_id);
         self.drain_book();
@@ -959,6 +983,7 @@ impl<B: Backend> Router<B> {
                     effects: BTreeMap::new(),
                     playing: BTreeSet::new(),
                     engine,
+                    mirror_dpad,
                 };
                 if let Some(pad) = self.pads.get_mut(&key) {
                     v.mask_held(&pad.state);
@@ -4536,6 +4561,128 @@ mod tests {
                 (1, vec![(code::EV_KEY, code::BTN_EAST, 0)]),
             ]
         );
+    }
+
+    fn stickless_wii(id: &str) -> (PadInfo, crate::pad::Normalizer) {
+        let (mut info, n) = wii_remote(id);
+        info.capabilities = vec![crate::caps::Capability {
+            name: "sticks",
+            hardware: false,
+            driver: false,
+            available: false,
+            output: false,
+        }];
+        (info, n)
+    }
+
+    /// Evdev frames: `k` goes down (`v` 1) or up (0).
+    fn wii_key(r: &mut Router<Fake>, a: PadKey, n: &mut crate::pad::Normalizer, k: u16, v: i32) {
+        for f in n.frames([(code::EV_KEY, k, v), (code::EV_SYN, code::SYN_REPORT, 0)]) {
+            r.input(a, &f.inputs);
+        }
+    }
+
+    fn hat_x(v: i32) -> OutEvent {
+        (code::EV_ABS, code::ABS_HAT0X, v)
+    }
+    fn abs_x(v: i32) -> OutEvent {
+        (code::EV_ABS, code::ABS_X, v)
+    }
+    fn abs_y(v: i32) -> OutEvent {
+        (code::EV_ABS, code::ABS_Y, v)
+    }
+
+    fn flat(calls: &[Call]) -> Vec<OutEvent> {
+        writes(calls).into_iter().flat_map(|(_, e)| e).collect()
+    }
+
+    #[test]
+    fn a_pad_without_a_stick_also_moves_the_left_stick_with_its_dpad() {
+        let mut r = router();
+        let (info, mut n) = stickless_wii("w");
+        let a = r.add_pad(info, t0());
+        sign_in(&mut r, a, "p1");
+        app(&mut r, "i1", STK, "p1");
+        r.backend_mut().take();
+        // Held sideways, the remote's KEY_UP is the D-pad's left and KEY_RIGHT its up.
+        wii_key(&mut r, a, &mut n, code::KEY_UP, 1);
+        let got = flat(&r.backend_mut().take());
+        assert!(
+            got.contains(&hat_x(-1)) && got.contains(&abs_x(STICK_MIN)),
+            "{got:?}"
+        );
+        wii_key(&mut r, a, &mut n, code::KEY_UP, 0);
+        let got = flat(&r.backend_mut().take());
+        assert!(
+            got.contains(&hat_x(0)) && got.contains(&abs_x(0)),
+            "{got:?}"
+        );
+        // Up and right together.
+        wii_key(&mut r, a, &mut n, code::KEY_RIGHT, 1);
+        wii_key(&mut r, a, &mut n, code::KEY_DOWN, 1);
+        let got = flat(&r.backend_mut().take());
+        assert!(
+            got.contains(&abs_y(STICK_MIN)) && got.contains(&abs_x(STICK_MAX)),
+            "{got:?}"
+        );
+    }
+
+    #[test]
+    fn a_pad_with_sticks_sends_only_the_hat_for_its_dpad() {
+        let mut r = router();
+        let a = r.add_pad(pad("a"), t0());
+        sign_in(&mut r, a, "p1");
+        app(&mut r, "i1", STK, "p1");
+        r.backend_mut().take();
+        r.input(a, &[press(PadButton::DpadLeft)]);
+        assert_eq!(flat(&r.backend_mut().take()), vec![hat_x(-1)]);
+        // A pad whose probe found sticks (Xbox 360, Wii U Pro) behaves the same.
+        let mut info = pad("b");
+        info.capabilities = vec![crate::caps::Capability {
+            name: "sticks",
+            hardware: true,
+            driver: true,
+            available: true,
+            output: true,
+        }];
+        let b = r.add_pad(info, t0());
+        join(&mut r, b, "p2");
+        r.backend_mut().take();
+        r.input(b, &[press(PadButton::DpadLeft)]);
+        let got = flat(&r.backend_mut().take());
+        assert!(
+            got.contains(&hat_x(-1)) && !got.iter().any(|e| e.1 == code::ABS_X),
+            "{got:?}"
+        );
+    }
+
+    #[test]
+    fn the_mirrored_stick_is_centred_by_neutral_and_by_a_pad_leaving() {
+        let mut r = router();
+        let (info, mut n) = stickless_wii("w");
+        let a = r.add_pad(info, t0());
+        sign_in(&mut r, a, "p1");
+        app(&mut r, "i1", STK, "p1");
+        wii_key(&mut r, a, &mut n, code::KEY_UP, 1);
+        r.backend_mut().take();
+        // The overlay (the Hub) neutralises the virtual pad.
+        assert_eq!(
+            r.set_route("overlay", "i1", STK, "p1", SHELL, t0()),
+            Status::Ok
+        );
+        let got = flat(&r.backend_mut().take());
+        assert!(
+            got.contains(&abs_x(0)) && got.contains(&hat_x(0)),
+            "{got:?}"
+        );
+        // A pad that goes while the stick is pushed (let go first: a press held at entry is masked).
+        wii_key(&mut r, a, &mut n, code::KEY_UP, 0);
+        app(&mut r, "i1", STK, "p1");
+        wii_key(&mut r, a, &mut n, code::KEY_UP, 1);
+        r.backend_mut().take();
+        r.remove_pad(a);
+        let got = flat(&r.backend_mut().take());
+        assert!(got.contains(&abs_x(0)), "{got:?}");
     }
 
     #[test]
