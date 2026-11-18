@@ -39,6 +39,7 @@ use crate::core::reconcile;
 use crate::core::staging::{self, Dir, Kind};
 use crate::core::status::{status_of, JobStatus, MethodStatus, Phase};
 use crate::core::unpack::{self, staging_problem};
+use crate::core::verify;
 use ruya_play_format::limits::ROOT_FILES;
 use ruya_play_format::Problem;
 use ruya_play_trust::revocation::Selected;
@@ -64,6 +65,9 @@ pub struct Config {
     /// One folder per helper `inspect` run: the root files it staged and, for `Inspect`, the
     /// vetted art the record points at (the newest [`MAX_PREVIEWS`] are kept).
     pub inspect: PathBuf,
+    /// The Flatpak installation the apps are committed to (`/var/lib/flatpak`); `Verify` reads
+    /// the deployed files there and never writes.
+    pub flatpak: PathBuf,
 }
 
 impl Config {
@@ -74,6 +78,7 @@ impl Config {
             staging: root.join("staging"),
             state: root.join("state"),
             inspect: root.join("inspect"),
+            flatpak: root.join("flatpak"),
         }
     }
 
@@ -1002,24 +1007,116 @@ impl Importer {
         (MethodStatus::Ok, job)
     }
 
+    /// `Verify(app_id)`: queue a re-hash of the installed app `play.<id>` (05 §7.3). `invalid` for
+    /// an id that is not a plain name, `unknown-app` when no build is recorded for it or its
+    /// deployment is gone, `busy` while a verify of it is queued or running or the running install
+    /// is for it (jobs run one at a time, so a queued install of it waits its turn).
+    pub fn queue_verify(&self, id: &str) -> (MethodStatus, String) {
+        if !reconcile::plain_id(id) || id.len() > MAX_PATH_BYTES {
+            return (MethodStatus::Invalid, String::new());
+        }
+        match self.installed_build(id) {
+            Ok(Some(_)) => {}
+            Ok(None) => return (MethodStatus::UnknownApp, String::new()),
+            Err(_) => return (MethodStatus::Failed, String::new()),
+        }
+        let files = reconcile::deployment_files(&self.cfg.flatpak, id);
+        if std::fs::symlink_metadata(&files).is_err() {
+            return (MethodStatus::UnknownApp, String::new());
+        }
+        let app = format!("play.{id}");
+        let mut st = self.shared.lock();
+        let same = |j: &&JobRecord| {
+            j.is_active()
+                && j.app.eq_ignore_ascii_case(&app)
+                && (j.kind == JobKind::Verify || j.state == JobState::Running)
+        };
+        if st.jobs.iter().any(|j| same(&j)) {
+            return (MethodStatus::Busy, String::new());
+        }
+        let Some(next) = st.counter.checked_add(1) else {
+            return (MethodStatus::Failed, String::new());
+        };
+        st.counter = next;
+        let job = format!("job-{next}");
+        let mut record = JobRecord::queued(&job, JobKind::Verify, "");
+        record.app = app;
+        st.jobs.push(record);
+        self.shared.save(&mut st);
+        (MethodStatus::Ok, job)
+    }
+
+    /// The pipeline of one verify job: the deployed files against their stored `play.files`.
+    fn verify(
+        &self,
+        job: &str,
+        app: &str,
+        cancel: &AtomicBool,
+        reporter: &mut Reporter<'_>,
+    ) -> JobResult {
+        let id = app.strip_prefix("play.").unwrap_or(app);
+        let files = reconcile::deployment_files(&self.cfg.flatpak, id);
+        let tree = match Dir::open_root(&files) {
+            Ok(d) => d,
+            Err(e) => return refused(job, vec![staging_problem("", &e)], None),
+        };
+        let mut tick = |t: verify::Tick| {
+            reporter.bytes_total = t.bytes_total;
+            reporter.bytes_done = t.bytes_done;
+            let percent = if t.files_total == 0 {
+                0
+            } else {
+                u32::try_from(t.files_done * 100 / t.files_total).unwrap_or(100)
+            };
+            reporter.at(Phase::Verifying, percent.min(99));
+            !cancel.load(Ordering::SeqCst)
+        };
+        match verify::verify_files(&tree, &mut tick) {
+            verify::Verdict::Match => {
+                reporter.at(Phase::Verifying, 100);
+                JobResult {
+                    job: job.to_string(),
+                    status: JobStatus::Ok,
+                    problems: Vec::new(),
+                    art: Vec::new(),
+                    inspection: None,
+                }
+            }
+            verify::Verdict::Stopped => cancelled(job, None),
+            verify::Verdict::Differs(problems) => {
+                // The payload differs from what was verified at install: that is
+                // `invalid-package` whatever the code; only a read fault is `failed`.
+                let io = problems.iter().any(|p| p.code == codes::STAGING_IO);
+                let mut r = refused(job, problems, None);
+                r.status = if io {
+                    JobStatus::Failed
+                } else {
+                    JobStatus::InvalidPackage
+                };
+                r
+            }
+        }
+    }
+
     /// Run the oldest queued job to its end (blocking), sending its events in order. Only one job
     /// runs at a time: a second caller waits. Returns the result, or `None` when nothing is queued.
     pub fn run_next(&self, emit: &mut dyn FnMut(Event)) -> Option<JobResult> {
         let _one = self.running.lock().unwrap_or_else(|e| e.into_inner());
         let now = self.clock.now();
-        let (job, path, flag) = {
+        let (job, path, kind, app, flag) = {
             let mut st = self.shared.lock();
             let record = st.jobs.iter_mut().find(|j| j.state == JobState::Queued)?;
             record.state = JobState::Running;
             record.started = now;
             let (job, path) = (record.job.clone(), record.path.clone());
+            let (kind, app) = (record.kind, record.app.clone());
             let flag = Arc::clone(
                 st.cancels
                     .entry(job.clone())
                     .or_insert_with(|| Arc::new(AtomicBool::new(false))),
             );
             self.shared.save(&mut st);
-            (job, path, flag)
+            (job, path, kind, app, flag)
         };
         let result = {
             let mut reporter = Reporter {
@@ -1033,6 +1130,9 @@ impl Importer {
             };
             if flag.load(Ordering::SeqCst) {
                 cancelled(&job, None)
+            } else if kind == JobKind::Verify {
+                reporter.at(Phase::Verifying, 0);
+                self.verify(&job, &app, &flag, &mut reporter)
             } else {
                 reporter.at(Phase::Staging, 0);
                 self.install(&job, Path::new(&path), &flag, &mut reporter)

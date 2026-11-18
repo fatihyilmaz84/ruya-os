@@ -375,6 +375,29 @@ pub fn runner_hashes(manifest: &Manifest, files: &[FileEntry], unpacked: &Unpack
 /// verified it (`staging.changed`). The hashes it returns are the staged copy's, for
 /// [`runner_hashes`]. Run it after [`walk`] and [`check_tree`].
 pub fn rehash(tree: &Dir, files: &[FileEntry]) -> Result<Unpacked, Problem> {
+    let mismatch = |path: &str| {
+        changed(
+            path,
+            "The staged file is not the one play.files lists (its size or SHA-256 changed).",
+        )
+    };
+    match rehash_with(tree, files, &mismatch, &mut |_, _| true) {
+        Ok(u) => Ok(u),
+        Err(Stop::Package(p) | Stop::Staging(p)) => Err(p),
+        Err(Stop::Cancelled) => Err(changed("", "The re-hash was stopped.")),
+    }
+}
+
+/// [`rehash`] with its own word for a file whose size or hash differs (`mismatch`, a
+/// `Stop::Package`) and a `tick(files done, bytes read of this file and before)` after every chunk
+/// and file that stops the pass (`Stop::Cancelled`) when it returns false. Re-verification of an
+/// installed app (RUY-834) uses it over the deployed tree.
+pub fn rehash_with(
+    tree: &Dir,
+    files: &[FileEntry],
+    mismatch: &dyn Fn(&str) -> Problem,
+    tick: &mut dyn FnMut(usize, u64) -> bool,
+) -> Result<Unpacked, Stop> {
     let mut stack = DirStack {
         root: tree,
         open: Vec::new(),
@@ -382,6 +405,7 @@ pub fn rehash(tree: &Dir, files: &[FileEntry]) -> Result<Unpacked, Problem> {
     };
     let mut out = Unpacked::default();
     let mut buf = vec![0u8; CHUNK];
+    let mut done = 0usize;
     for entry in files {
         let FileEntry::File {
             path, size, sha256, ..
@@ -389,12 +413,15 @@ pub fn rehash(tree: &Dir, files: &[FileEntry]) -> Result<Unpacked, Problem> {
         else {
             continue;
         };
-        let (dir, leaf) = stack.parent_of(path)?;
+        let (dir, leaf) = stack.parent_of(path).map_err(Stop::Staging)?;
         let mut file = dir.open_file(leaf).map_err(|e| {
             if e.kind() == io::ErrorKind::NotFound {
-                changed(path, "A listed file is missing from the staged tree.")
+                Stop::Staging(changed(
+                    path,
+                    "A listed file is missing from the staged tree.",
+                ))
             } else {
-                staging_problem(path, &e)
+                Stop::Staging(staging_problem(path, &e))
             }
         })?;
         let (mut hasher, mut total) = (Sha256::new(), 0u64);
@@ -403,23 +430,27 @@ pub fn rehash(tree: &Dir, files: &[FileEntry]) -> Result<Unpacked, Problem> {
                 Ok(0) => break,
                 Ok(n) => n,
                 Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => return Err(staging_problem(path, &e)),
+                Err(e) => return Err(Stop::Staging(staging_problem(path, &e))),
             };
             total += n as u64;
             if total > *size {
                 break;
             }
             hasher.update(&buf[..n]);
+            if !tick(done, out.bytes + total) {
+                return Err(Stop::Cancelled);
+            }
         }
         let got = hex(&hasher.finalize());
         if total != *size || got != *sha256 {
-            return Err(changed(
-                path,
-                "The staged file is not the one play.files lists (its size or SHA-256 changed).",
-            ));
+            return Err(Stop::Package(mismatch(path)));
         }
         out.bytes += total;
         out.hashes.insert(path.clone(), got);
+        done += 1;
+        if !tick(done, out.bytes) {
+            return Err(Stop::Cancelled);
+        }
     }
     Ok(out)
 }

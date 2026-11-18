@@ -6,7 +6,8 @@
   installed one. Updates and feeds arrive later (T-241) and extend this file.
   Served by ruya-play on the system bus at /org/ruyaos/Play1 (RUY-829; services/ruya-play,
   tests/contract.rs holds it to this file). The shell's mock backend, shell/src/play, follows the
-  same contract off Linux. Verify is not built yet: it answers "unknown-app" or "failed".
+  same contract off Linux. Verify (RUY-834) re-hashes the deployed
+  files of an installed app against the play.files the commit stored in them, as a job.
   Draft, internal: no element carries org.ruyaos.Stability, so nothing here is a developer
   surface (ADR-022).
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/05-play-packages.md §7.3.

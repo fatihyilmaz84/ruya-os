@@ -436,7 +436,7 @@ impl PlayIface {
         (status.as_str().to_string(), job)
     }
 
-    /// Re-hash an installed package (not built yet: RUY-829 leaves it to a follow-up).
+    /// Queue a re-hash of an installed package against its `play.files`.
     #[zbus(out_args("status", "job"))]
     async fn verify(&self, app_id: String) -> (String, String) {
         let Some(id) = app_id.strip_prefix("play.").filter(|id| !id.is_empty()) else {
@@ -447,14 +447,11 @@ impl PlayIface {
             };
             return (s.as_str().to_string(), String::new());
         };
-        let installed = self.importer.installed_build(id).ok().flatten();
-        let s = if installed.is_some() {
-            eprintln!("ruya-play: Verify is not built yet");
-            MethodStatus::Failed
-        } else {
-            MethodStatus::UnknownApp
-        };
-        (s.as_str().to_string(), String::new())
+        let (status, job) = self.importer.queue_verify(id);
+        if status == MethodStatus::Ok {
+            self.kick();
+        }
+        (status.as_str().to_string(), job)
     }
 
     /// Stop a queued or running job.
