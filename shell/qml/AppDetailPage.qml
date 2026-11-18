@@ -781,12 +781,12 @@ Page {
                     Item {
                         width: parent.width
                         visible: page.trustShown
-                        height: visible ? trustRow.height + Theme.spaceXs * page.u : 0
+                        height: visible ? trustRow.height + Theme.spaceM * page.u : 0
 
                         TrustRow {
                             id: trustRow
                             objectName: "detailTrustRow"
-                            y: Theme.spaceXs * page.u
+                            y: Theme.spaceM * page.u
                             u: page.u
                             info: page.playInfo
                             onActivated: signerSheet.open(page.playInfo, trustRow)
