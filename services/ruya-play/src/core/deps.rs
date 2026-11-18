@@ -2,8 +2,11 @@
 //! `ProfileDirectory` pattern). Real implementations that need nothing from RUY-100 live next to
 //! them ([`crate::core::opener::DiskOpener`], [`RuyaPlayArt`], [`SystemClock`],
 //! [`ImageBlocklist`], [`StatvfsFreeSpace`] on Unix); the fakes are in [`crate::core::fakes`].
-//! The Flatpak-backed [`Commit`] is RUY-100's.
+//! The Flatpak-backed [`Commit`] is RUY-829's. Everything that reads package bytes runs behind
+//! [`Helper`] (RUY-828): [`crate::core::helper::InProcessHelper`] in tests and on Windows,
+//! [`crate::core::systemd_run::SystemdRunHelper`] on the console.
 
+use crate::core::helper::Request;
 use crate::core::status::Phase;
 use ruya_play_art::{Slot, SlotResult};
 use ruya_play_format::manifest::Manifest;
@@ -12,6 +15,7 @@ use ruya_play_trust::time::UnixSeconds;
 use ruya_play_trust::{Assessment, Signatures, StoreKeys, Tier, TrustStore};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 
 pub use crate::core::installed::InstalledBuilds;
 
@@ -138,14 +142,66 @@ pub trait Hooks: Send + Sync {
     fn step(&self, job: &str, step: &Step<'_>);
 }
 
-/// Everything the importer needs from outside.
+/// How a helper run ended, as the service sees the process.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Exit {
+    /// The helper exited with this code (0: it finished; its last line says how).
+    Code(i32),
+    /// The service stopped it (a cancel, or a line that broke the contract), or it was killed
+    /// (memory or time limit).
+    Stopped,
+    /// It could not be started or waited for.
+    Lost(String),
+}
+
+/// Runs the unprivileged helper for one request (05 §7.3, RUY-828): it opens the package, inspects
+/// it and, for an install, unpacks, verifies and vets the art into `request.staging`, and writes
+/// its JSON Lines ([`crate::core::helper::Line`]) to `on_output` as they come. `on_output` returns
+/// false when the service wants the helper stopped (a line that broke the contract). `cancel` is
+/// the job's cancel flag: once it is set the helper is stopped or stops itself.
+pub trait Helper: Send + Sync {
+    /// Run `request` to its end.
+    fn run(
+        &self,
+        request: &Request,
+        cancel: &AtomicBool,
+        on_output: &mut dyn FnMut(&[u8]) -> bool,
+    ) -> Exit;
+
+    /// Stop the running helper of `job` (the default does nothing: an in-process helper reads the
+    /// cancel flag itself).
+    fn stop(&self, _job: &str) {}
+
+    /// Remove what helpers of a previous run left outside the importer's folders (at start).
+    fn clear(&self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<T: Helper + ?Sized> Helper for std::sync::Arc<T> {
+    fn run(
+        &self,
+        request: &Request,
+        cancel: &AtomicBool,
+        on_output: &mut dyn FnMut(&[u8]) -> bool,
+    ) -> Exit {
+        (**self).run(request, cancel, on_output)
+    }
+    fn stop(&self, job: &str) {
+        (**self).stop(job)
+    }
+    fn clear(&self) -> io::Result<()> {
+        (**self).clear()
+    }
+}
+
+/// Everything the importer needs from outside. The service side never opens a package: the
+/// opener and the art step belong to the helper ([`crate::core::helper::HelperDeps`]).
 pub struct Deps {
-    /// Opens packages.
-    pub opener: Box<dyn Opener>,
+    /// Runs the unprivileged helper.
+    pub helper: Box<dyn Helper>,
     /// Free space in staging.
     pub free_space: Box<dyn FreeSpace>,
-    /// Art and video vetting.
-    pub art: Box<dyn ArtVetter>,
     /// The commit step.
     pub commit: Box<dyn Commit>,
     /// The clock.

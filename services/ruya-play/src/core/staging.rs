@@ -246,6 +246,30 @@ mod imp {
             Ok(std::fs::File::from(fd))
         }
 
+        /// Open the existing regular file `name` for reading (the service's re-hash of a tree the
+        /// helper wrote): a link is `staging.changed`, and so is anything but a regular file (a
+        /// FIFO is opened without blocking and refused).
+        pub fn open_file(&self, name: &str) -> io::Result<std::fs::File> {
+            let name = component(name)?;
+            let flags = OFlags::RDONLY
+                | OFlags::NOFOLLOW
+                | OFlags::NONBLOCK
+                | OFlags::CLOEXEC
+                | OFlags::NOCTTY;
+            let fd = rfs::openat(&self.fd, name, flags, Mode::empty()).map_err(|e| {
+                if e == Errno::NOENT {
+                    io::Error::from(e)
+                } else {
+                    classify(e, name)
+                }
+            })?;
+            let st = rfs::fstat(&fd)?;
+            if FileType::from_raw_mode(st.st_mode) != FileType::RegularFile {
+                return Err(changed(format!("{name:?} is not a regular file")));
+            }
+            Ok(std::fs::File::from(fd))
+        }
+
         /// Create the link `name` pointing at `target` (as written in `play.files`).
         pub fn symlink(&self, name: &str, target: &str, _target_is_dir: bool) -> io::Result<()> {
             let name = component(name)?;
@@ -389,6 +413,18 @@ mod imp {
                     e
                 }
             })
+        }
+
+        /// Open the existing regular file `name` for reading; a reparse point is an error.
+        pub fn open_file(&self, name: &str) -> io::Result<fs::File> {
+            let name = component(name)?;
+            plain_dir(&self.path, name)?;
+            let p = self.path.join(name);
+            let meta = fs::symlink_metadata(&p)?;
+            if !(meta.is_file() && plain(&meta)) {
+                return Err(changed(format!("{name:?} is not a regular file")));
+            }
+            fs::File::open(p)
         }
 
         /// Create the link `name` pointing at `target` (`/` separated, as in `play.files`).

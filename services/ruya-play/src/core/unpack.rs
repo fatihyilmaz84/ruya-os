@@ -133,6 +133,8 @@ fn ends_at_dir(index: &TableIndex<'_>, path: &str, to: &str) -> bool {
 struct DirStack<'a> {
     root: &'a Dir,
     open: Vec<(String, Dir)>,
+    /// Create a missing folder on the way (the unpacker), or fail (the re-hash).
+    create: bool,
 }
 
 impl<'a> DirStack<'a> {
@@ -150,9 +152,12 @@ impl<'a> DirStack<'a> {
         for c in &comps[keep..] {
             let next = {
                 let parent = self.open.last().map_or(self.root, |(_, d)| d);
-                parent
-                    .dir(c, EXEC_MODE)
-                    .map_err(|e| staging_problem(path, &e))?
+                let opened = if self.create {
+                    parent.dir(c, EXEC_MODE)
+                } else {
+                    parent.open_dir(c)
+                };
+                opened.map_err(|e| staging_problem(path, &e))?
             };
             self.open.push((c.to_string(), next));
         }
@@ -172,6 +177,7 @@ pub fn unpack(
     let mut stack = DirStack {
         root: tree,
         open: Vec::new(),
+        create: true,
     };
     let mut out = Unpacked::default();
     let mut buf = vec![0u8; CHUNK];
@@ -361,6 +367,61 @@ pub fn runner_hashes(manifest: &Manifest, files: &[FileEntry], unpacked: &Unpack
         out.push(hex(&h.finalize()));
     }
     out
+}
+
+/// The service's own pass over a tree the helper wrote (05 §7.3, lead-33): every file of the table
+/// is opened through folder handles (a link or a special file on the way is `staging.changed`),
+/// read once and must have its listed size and SHA-256, or the tree changed after the helper
+/// verified it (`staging.changed`). The hashes it returns are the staged copy's, for
+/// [`runner_hashes`]. Run it after [`walk`] and [`check_tree`].
+pub fn rehash(tree: &Dir, files: &[FileEntry]) -> Result<Unpacked, Problem> {
+    let mut stack = DirStack {
+        root: tree,
+        open: Vec::new(),
+        create: false,
+    };
+    let mut out = Unpacked::default();
+    let mut buf = vec![0u8; CHUNK];
+    for entry in files {
+        let FileEntry::File {
+            path, size, sha256, ..
+        } = entry
+        else {
+            continue;
+        };
+        let (dir, leaf) = stack.parent_of(path)?;
+        let mut file = dir.open_file(leaf).map_err(|e| {
+            if e.kind() == io::ErrorKind::NotFound {
+                changed(path, "A listed file is missing from the staged tree.")
+            } else {
+                staging_problem(path, &e)
+            }
+        })?;
+        let (mut hasher, mut total) = (Sha256::new(), 0u64);
+        loop {
+            let n = match file.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => n,
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(staging_problem(path, &e)),
+            };
+            total += n as u64;
+            if total > *size {
+                break;
+            }
+            hasher.update(&buf[..n]);
+        }
+        let got = hex(&hasher.finalize());
+        if total != *size || got != *sha256 {
+            return Err(changed(
+                path,
+                "The staged file is not the one play.files lists (its size or SHA-256 changed).",
+            ));
+        }
+        out.bytes += total;
+        out.hashes.insert(path.clone(), got);
+    }
+    Ok(out)
 }
 
 /// `staging::join_checked`, as a problem.
