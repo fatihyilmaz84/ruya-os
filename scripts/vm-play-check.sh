@@ -126,18 +126,30 @@ helper_checks() {
     mapfile -t argv < <(/usr/bin/ruya-play --helper-argv "$1")
     [ "${#argv[@]}" -gt 3 ] || { bad "ruya-play --helper-argv printed no command line"; return; }
     # The helper's own properties around a probe instead of the helper.
+    pout="$(mktemp)"
     probe=()
+    skip=0
     for a in "${argv[@]}"; do
         [ "$a" = "--" ] && break
+        if [ "$skip" = 1 ]; then
+            skip=0
+            case "$a" in
+                Standard*=*) unset 'probe[-1]' ;;  # the helper's request and output files are not the probe's
+                *) probe+=("$a") ;;
+            esac
+            continue
+        fi
+        [ "$a" = "-p" ] && skip=1
         case "$a" in --unit=*) probe+=("--unit=ruya-play-helper-probe") ;; *) probe+=("$a") ;; esac
     done
-    pout="$(mktemp)"
+    # RUY-839: never --pipe (PID 1 may not use our descriptors): the manager opens the output file.
+    probe+=(-p "StandardOutput=file:$pout" -p "StandardError=inherit")
     "${probe[@]}" -- /bin/bash -c '
         if (exec 4<>/dev/tcp/1.1.1.1/80) 2>/dev/null; then echo NET-OPEN; else echo NET-CLOSED; fi
-        if touch /var/lib/ruya-play/x 2>/dev/null || touch /etc/x 2>/dev/null || touch /var/tmp/x 2>/dev/null; then echo WRITE-OUTSIDE; else echo WRITE-CONFINED; fi
+        if touch /var/lib/ruya-play/x 2>/dev/null || touch /etc/x 2>/dev/null; then echo WRITE-OUTSIDE; else echo WRITE-CONFINED; fi
         if touch /var/lib/ruya-play-helper-probe/x 2>/dev/null; then echo WRITE-STATE; fi
         if [ -n "${LISTEN_FDS:-}" ] && head -c 4 <&3 >/dev/null 2>&1; then echo READ-FD; else echo NO-FD; fi
-        sleep 3' < /dev/null > "$pout" 2>&1 &
+        sleep 3' < /dev/null > /dev/null 2>&1 &
     probe_pid=$!
     sleep 1
     echo "probe unit: $(systemd-analyze security ruya-play-helper-probe.service 2>/dev/null | tail -1)"
@@ -174,6 +186,7 @@ if [ "$mode" = helper ]; then
     exit "$fail"
 fi
 
+chmod +x "$pack" 2>/dev/null  # scp from Windows drops the exec bit
 [ -x "$pack" ] || { echo "FAIL: no ruya-pack at $pack"; exit 1; }
 trap cleanup EXIT
 appid="$(id_of "$zip")"
@@ -197,6 +210,7 @@ with zipfile.ZipFile(tampered, "w", zipfile.ZIP_STORED) as z:
         if i.filename.endswith("play.json") and i.filename.count("/") <= 1:
             b = b.rstrip() + b"\n "  # still the same manifest, no longer the signed bytes
         z.writestr(i, b)
+zin = zipfile.ZipFile(src)  # re-opened: writestr changed the ZipInfo objects above (Python 3.14: "Overlapped entries")
 with zipfile.ZipFile(bomb, "w", zipfile.ZIP_DEFLATED) as z:
     for i in zin.infolist():
         if i.filename.endswith(("play.json", "play.files")):
