@@ -47,23 +47,24 @@ fn read_json(path: &Path) -> Option<serde_json::Value> {
     serde_json::from_slice(&bytes).ok()
 }
 
+/// Longest title or signer name listed (characters); longer text is cut.
+const MAX_TEXT_CHARS: usize = 120;
+/// At most this many genres (05 section 4).
+const MAX_GENRES: usize = 4;
+
+fn clip(s: &str) -> Option<String> {
+    let s = s.trim();
+    (!s.is_empty()).then(|| s.chars().take(MAX_TEXT_CHARS).collect())
+}
+
 fn text(v: &serde_json::Value, key: &str) -> Option<String> {
-    v.get(key)?
-        .as_str()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_owned)
+    v.get(key)?.as_str().and_then(clip)
 }
 
 /// The name in English, else the first language (the library has no player language).
 fn title(manifest: &serde_json::Value) -> Option<String> {
     let names = manifest.get("name")?.as_object()?;
-    let pick = |v: &serde_json::Value| {
-        v.as_str()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_owned)
-    };
+    let pick = |v: &serde_json::Value| v.as_str().and_then(clip);
     names
         .get("en")
         .and_then(pick)
@@ -202,7 +203,8 @@ pub fn enrich(item: &mut Item, flatpak_id: &str, root: &Path) {
             .and_then(serde_json::Value::as_array)
             .map(|g| {
                 g.iter()
-                    .filter_map(|s| s.as_str().map(str::to_owned))
+                    .filter_map(|s| s.as_str().and_then(clip))
+                    .take(MAX_GENRES)
                     .collect()
             })
             .unwrap_or_default(),

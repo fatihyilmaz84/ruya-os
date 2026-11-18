@@ -72,7 +72,10 @@ fn a_full_art_play_app_lists_every_role_and_field() {
     ] {
         put(&art.join(name), b"x");
     }
-    let items = list(dir.path(), "play.com.example.starhopper\tstarhopper\tx\n");
+    let items = list(
+        dir.path(),
+        "play.com.example.starhopper\tstarhopper\truyaos-play-local\n",
+    );
     let item = &items["flatpak:play.com.example.starhopper"];
     assert_eq!(item.title, "Star Hopper");
     for role in [
@@ -111,7 +114,7 @@ fn an_icon_only_package_has_just_the_icon() {
         br#"{ "name": { "en": "Small" }, "genres": [] }"#,
     );
     put(&f.join("share/ruyaos/play/art/icon-512.webp"), b"x");
-    let items = list(dir.path(), "play.com.example.small\tx\tx\n");
+    let items = list(dir.path(), "play.com.example.small\tx\truyaos-play-local\n");
     let item = &items["flatpak:play.com.example.small"];
     assert_eq!(item.art.len(), 1);
     assert!(art_of(item, "icon").is_some());
@@ -132,7 +135,7 @@ fn a_missing_or_garbled_play_json_is_a_plain_item() {
     put(&array.join("play.json"), b"[1, 2]");
     let items = list(
         dir.path(),
-        "play.com.example.missing\tMissing\tx\nplay.com.example.garbled\tGarbled\tx\nplay.com.example.array\tArray\tx\nplay.com.example.nodeploy\tNone\tx\n",
+        "play.com.example.missing\tMissing\truyaos-play-local\nplay.com.example.garbled\tGarbled\truyaos-play-local\nplay.com.example.array\tArray\truyaos-play-local\nplay.com.example.nodeploy\tNone\truyaos-play-local\n",
     );
     assert_eq!(items.len(), 4);
     for (id, title) in [
@@ -167,7 +170,7 @@ fn a_missing_or_garbled_trust_json_gives_no_tier() {
     }
     let rows: String = ["none", "garbled", "future", "odd"]
         .iter()
-        .map(|i| format!("play.com.example.{i}\tx\tx\n"))
+        .map(|i| format!("play.com.example.{i}\tx\truyaos-play-local\n"))
         .collect();
     for (id, item) in list(dir.path(), &rows) {
         let play = item.play.as_ref().unwrap_or_else(|| panic!("{id}"));
@@ -195,7 +198,7 @@ fn a_signer_without_a_name_shows_its_id_and_an_unsigned_app_none() {
     );
     let items = list(
         dir.path(),
-        "play.com.example.a\tx\tx\nplay.com.example.b\tx\tx\n",
+        "play.com.example.a\tx\truyaos-play-local\nplay.com.example.b\tx\truyaos-play-local\n",
     );
     let play = |id: &str| items[&format!("flatpak:play.{id}")].play.clone().unwrap();
     assert_eq!(play("com.example.a").signer.as_deref(), Some("k9"));
@@ -214,4 +217,42 @@ fn a_flatpak_app_that_is_not_play_is_unaffected() {
     let item = &items["flatpak:org.example.Tux"];
     assert_eq!(item.title, "Tux");
     assert!(item.play.is_none() && item.art.is_empty());
+}
+
+#[test]
+fn a_play_app_from_another_remote_stays_plain() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = files(dir.path(), "com.example.spoof");
+    put(&f.join("play.json"), PLAY_JSON.as_bytes());
+    put(
+        &f.join("share/ruyaos/play/trust.json"),
+        br#"{ "format": 1, "tier": "official", "signer_name": "RuyaOS" }"#,
+    );
+    put(&f.join("share/ruyaos/play/art/icon-512.webp"), b"x");
+    let items = list(dir.path(), "play.com.example.spoof\tSpoof\tflathub\n");
+    let item = &items["flatpak:play.com.example.spoof"];
+    assert_eq!(item.title, "Spoof");
+    assert!(item.play.is_none() && item.art.is_empty(), "{item:?}");
+}
+
+#[test]
+fn genres_title_and_signer_are_capped() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = files(dir.path(), "com.example.long");
+    let long = "n".repeat(500);
+    put(
+        &f.join("play.json"),
+        format!(r#"{{ "name": {{ "en": "{long}" }}, "genres": ["a","b","c","d","e","f"] }}"#)
+            .as_bytes(),
+    );
+    put(
+        &f.join("share/ruyaos/play/trust.json"),
+        format!(r#"{{ "format": 1, "tier": "developer", "signer_name": "{long}" }}"#).as_bytes(),
+    );
+    let items = list(dir.path(), "play.com.example.long\tx\truyaos-play-local\n");
+    let item = &items["flatpak:play.com.example.long"];
+    let play = item.play.as_ref().unwrap();
+    assert_eq!(item.title.chars().count(), 120);
+    assert_eq!(play.signer.as_ref().unwrap().chars().count(), 120);
+    assert_eq!(play.genres, ["a", "b", "c", "d"]);
 }

@@ -20,6 +20,11 @@ use std::path::{Path, PathBuf};
 
 pub use image_art::{peak_decode_bytes, MAX_DIMENSION, MAX_PIXELS};
 
+/// The system Flatpak remote `ruya-play` installs every `.play` app from. Only apps that came
+/// from it carry files the console wrote (art, `trust.json`); `ruya-library` trusts nothing from
+/// another remote (`.play` is a real top-level domain: Flathub may ship a `play.*` app).
+pub const PLAY_REMOTE: &str = "ruyaos-play-local";
+
 /// The roles of vetted art files, from the file names `ruya-play-art` writes (05 section 12).
 /// Each slot is its language (only a per-language logo has one) and its files. `icon` is the
 /// 512 px icon, then `hero`, `card`, `cover`, `logo` (English, else the first), `poster` (the

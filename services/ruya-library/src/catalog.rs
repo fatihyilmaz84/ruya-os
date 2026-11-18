@@ -1,8 +1,6 @@
 //! The merged library: Steam games and Flatpak apps in one deterministic order.
 
-use std::path::PathBuf;
-
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::flatpak::{self, AppLister};
 use crate::play::{self, PlayInfo};
@@ -82,10 +80,15 @@ pub fn scan(steam_roots: &[PathBuf], lister: &dyn AppLister, play_root: &Path) -
     let flatpak_items = match lister.list() {
         Ok(text) => {
             let mut items = flatpak::parse_list(&text, lister);
+            // Only apps from the console's own remote: another remote's `play.*` app could
+            // ship a trust.json of its own.
+            let ours = flatpak::play_origin_ids(&text);
             for item in &mut items {
                 if let Some(id) = item.id.strip_prefix("flatpak:") {
-                    let id = id.to_owned();
-                    play::enrich(item, &id, play_root);
+                    if ours.contains(id) {
+                        let id = id.to_owned();
+                        play::enrich(item, &id, play_root);
+                    }
                 }
             }
             items

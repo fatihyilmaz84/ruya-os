@@ -239,6 +239,18 @@ fn title_of(id: &str, listed: &str, lister: &dyn AppLister) -> String {
         .unwrap_or_else(|| if listed.is_empty() { id } else { listed }.to_owned())
 }
 
+/// The ids of the rows whose origin (third column) is the remote `ruya-play` installs from.
+pub fn play_origin_ids(output: &str) -> std::collections::HashSet<String> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let mut cols = line.split('\t').map(str::trim);
+            let id = cols.next().filter(|id| !id.is_empty())?;
+            (cols.nth(1) == Some(ruya_play_art::PLAY_REMOTE)).then(|| id.to_owned())
+        })
+        .collect()
+}
+
 /// One item per row. A row without an application id is skipped; a missing name falls back to
 /// the id (see `title_of`). The origin column is not used yet. The kind is `game` when the desktop entry's
 /// categories say so (`is_game`), else `app`.

@@ -31,7 +31,10 @@
   Flatpak app "play.<id>" that ruya-play installed; ruya-library reads them from its deployment
   (/var/lib/flatpak/app/play.<id>/current/active/files/: play.json, share/ruyaos/play/art/ and
   share/ruyaos/play/trust.json). Nothing is verified here (the tier and signer are what ruya-play
-  recorded at install). A deployment without a readable play.json is a plain item:
+  recorded at install). Only apps installed from the console's own Flatpak remote
+  ("ruyaos-play-local", ruya_play_art::PLAY_REMOTE) are read: a "play.*" app from any other remote
+  (".play" is a real top-level domain) is a plain item, so it cannot claim a tier. Text is cut at 120
+  characters and genres at four. A deployment without a readable play.json is a plain item:
     play         b    true. Present only for a .play app
     title        s    (the key above) the name in play.json, English else the first language
     genres       as   play.json genres (up to four); may be empty
