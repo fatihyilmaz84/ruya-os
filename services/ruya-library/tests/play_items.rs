@@ -256,3 +256,35 @@ fn genres_title_and_signer_are_capped() {
     assert_eq!(play.signer.as_ref().unwrap().chars().count(), 120);
     assert_eq!(play.genres, ["a", "b", "c", "d"]);
 }
+
+#[test]
+fn null_signer_fields_are_absent() {
+    let dir = tempfile::tempdir().unwrap();
+    for (id, trust) in [
+        (
+            "both",
+            r#"{ "format": 1, "tier": "unverified", "signer_id": null, "signer_name": null }"#,
+        ),
+        (
+            "name",
+            r#"{ "format": 1, "tier": "developer", "signer_id": "k1", "signer_name": null }"#,
+        ),
+    ] {
+        let f = files(dir.path(), &format!("com.example.{id}"));
+        put(&f.join("play.json"), br#"{ "name": { "en": "N" } }"#);
+        put(&f.join("share/ruyaos/play/trust.json"), trust.as_bytes());
+    }
+    let items = list(
+        dir.path(),
+        "play.com.example.both\tx\truyaos-play-local\nplay.com.example.name\tx\truyaos-play-local\n",
+    );
+    let play = |id: &str| {
+        items[&format!("flatpak:play.com.example.{id}")]
+            .play
+            .clone()
+            .unwrap()
+    };
+    assert_eq!(play("both").tier.as_deref(), Some("unverified"));
+    assert_eq!(play("both").signer, None);
+    assert_eq!(play("name").signer.as_deref(), Some("k1"));
+}
