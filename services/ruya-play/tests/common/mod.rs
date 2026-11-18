@@ -435,7 +435,7 @@ pub fn write_deploy(installation: &Path, id: &str, origin: &str) {
     std::fs::create_dir_all(&active).unwrap();
     let mut bytes = origin.as_bytes().to_vec();
     bytes.push(0);
-    bytes.extend_from_slice(b"0123456789abcdef        ");
+    bytes.extend_from_slice(b"0123456789abcdef\0\0\0\0\0\0\0\0");
     std::fs::write(active.join("deploy"), bytes).unwrap();
 }
 

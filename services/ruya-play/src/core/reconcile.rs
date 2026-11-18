@@ -362,7 +362,7 @@ mod tests {
             if !origin.is_empty() {
                 std::fs::write(
                     files.parent().unwrap().join("deploy"),
-                    format!("{origin} abcdef "),
+                    format!("{origin}\0abcdef\0"),
                 )
                 .unwrap();
             }
