@@ -175,10 +175,7 @@ mod tests {
             tier: Some("official".into()),
             signer: Some("Example".into()),
         })));
-        assert_eq!(
-            bool::try_from(rec["play"].try_clone().unwrap()).unwrap(),
-            true
-        );
+        assert!(bool::try_from(rec["play"].try_clone().unwrap()).unwrap());
         assert_eq!(rec["players"].value_signature().to_string(), "(uu)");
         assert_eq!(rec["age_rating"].value_signature().to_string(), "a{ss}");
         assert_eq!(rec["genres"].value_signature().to_string(), "as");
