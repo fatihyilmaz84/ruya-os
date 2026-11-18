@@ -121,7 +121,11 @@ Item {
             compare(find("installConfirmPin").text, "A high-risk permission needs an admin's PIN.")
             verify(find("installConfirmPin").visible)
             verify(!find("installConfirmUpdateAdds").visible, "not an update")
-            verify(find("permission_network+removable_media") !== null, "the pair is among the rows shown")
+            // High risk first: the pair (listed last by the service) is among the four rows shown, not behind "And n more".
+            const row = findChild(find("installConfirmPermissions"), "permission_network+removable_media")
+            verify(row !== null && row.visible, "the pair row is shown on the sheet")
+            verify(find("installConfirmPermissions").shownCount === 4 && findChild(find("installConfirmPermissions"), "permissionMore").visible,
+                   "the list is cut at four rows")
         }
 
         function test_the_admin_pin_gate_has_no_warning_line() {

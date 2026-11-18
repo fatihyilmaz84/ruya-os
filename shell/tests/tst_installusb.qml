@@ -852,6 +852,7 @@ Item {
                 Profiles.lock()
                 tryCompare(Profiles, "activeProfile", "")
                 tc.shell.destroy()
+                Play.mockReset()            // the update shots above left rawaccess installed: 129 is a new package
                 start("ada")
                 openPackage("rawaccess.play.zip")
                 keyClick(Qt.Key_Return)
