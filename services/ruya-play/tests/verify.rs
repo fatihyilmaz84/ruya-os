@@ -210,7 +210,7 @@ fn the_methods_statuses() {
 
 #[test]
 fn an_app_that_turns_foreign_between_queue_and_run_is_refused() {
-    let (mut h, fx) = harness();
+    let (h, fx) = harness();
     deploy(&h, ID, &fx);
     let (status, job) = h.importer.queue_verify(ID);
     assert_eq!(status, MethodStatus::Ok);
