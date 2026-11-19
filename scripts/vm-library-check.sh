@@ -17,7 +17,9 @@
 #             installed as "<its id>.library" (RUY-877), so this passes after vm-play-check.sh in
 #             any order.
 #             vm-library-check.sh play [/root/hello-play-native.play.zip]  (the sample as for
-#             vm-play-check.sh); `playjudge <id>` reads ListItems as busctl --json=short on stdin
+#             vm-play-check.sh; copy vm-play-check.sh next to this script, its `withid` mode
+#             writes the package's new id, RUY-878); `playid <id>` prints the id the play mode
+#             installs under (host fixtures); `playjudge <id>` reads ListItems as busctl --json=short on stdin
 #             (host fixtures, scripts/test-vm-checks.sh)
 #   security  see vm-security-check.sh (unit hardening)
 # Boot the VM with plain smoke-test.ps1 -Keep (or -Work -Keep for the screenshot).
@@ -188,6 +190,9 @@ play_judge() {
     fi
 }
 
+# The id the play mode installs the sample under (RUY-877).
+play_pkg_id() { echo "$1.library"; }
+
 # play_check <zip>
 play_check() {
     local zip="$1" out job n line json
@@ -204,20 +209,10 @@ PY
     mkdir -p "$play_state/incoming"
     # RUY-877: its own id ("<id>.library"), so vm-play-check.sh's records for the sample's id never
     # meet this unsigned install (ruya-play keeps a signer's trust record after an uninstall).
-    play_id="$play_id.library"
-    python3 - "$zip" "$play_state/incoming/vm-library-check.play.zip" "$play_id" <<'PY'
-import json, sys, zipfile
-src, out, new_id = sys.argv[1:4]
-sample = zipfile.ZipFile(src)
-with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-    for i in sample.infolist():
-        b = sample.read(i.filename)
-        if i.filename.endswith("play.json") and i.filename.count("/") <= 1:
-            m = json.loads(b)
-            m["id"] = new_id
-            b = json.dumps(m, indent=2).encode()
-        z.writestr(i, b)
-PY
+    play_id="$(play_pkg_id "$play_id")"
+    # The one id rewrite lives in vm-play-check.sh (RUY-878), which sits next to this script.
+    bash "$(dirname "$0")/vm-play-check.sh" withid "$zip" "$play_state/incoming/vm-library-check.play.zip" "$play_id" \
+        || { bad "vm-play-check.sh withid: no copy of the sample with the id $play_id"; return; }
     chmod 0600 "$play_state/incoming/vm-library-check.play.zip"
     out="$(busctl --system --json=short call "$play_svc" "$play_obj" "$play_svc" Install 'sa{sv}' "$play_state/incoming/vm-library-check.play.zip" 1 admin_approved b true)"         || { bad "Play1.Install failed"; return; }
     job="$(echo "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; print(d[1] if len(d)>1 else "")')"
@@ -276,6 +271,9 @@ case "${1:-check}" in
 play)
     play_check "${2:-/root/hello-play-native.play.zip}"
     play_clean
+    ;;
+playid)
+    play_pkg_id "${2:?app id}"
     ;;
 playjudge)
     play_judge "${2:?app id}"

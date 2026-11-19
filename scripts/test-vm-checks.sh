@@ -1598,6 +1598,13 @@ a, b = zipfile.ZipFile(sys.argv[1]), zipfile.ZipFile(sys.argv[2])
 print(json.loads(b.read("play.json"))["id"], json.loads(b.read("play.json"))["title"], a.read("art/icon.png") == b.read("art/icon.png"), a.namelist() == b.namelist())
 ' "$wi/in.zip" "$wi/out.zip")"
 [ "$got" = "org.example.hello.verify Hello True True" ] && pass "vm-play-check.sh withid changes only the id" || fail "vm-play-check.sh withid: '$got'"
+# RUY-879: check takes a new id each run (key A's trust record for an id outlives an uninstall).
+r1="$(bash "$here/vm-play-check.sh" runid org.example.hello)"; r2="$(bash "$here/vm-play-check.sh" runid org.example.hello)"
+[ "$r1" != "$r2" ] && pass "vm-play-check.sh check: two runs get two ids (RUY-879)" || fail "vm-play-check.sh runid: '$r1' twice"
+for r in "$r1" "$r2"; do
+    echo "$r" | grep -Eq '^org\.example\.hello\.c[0-9]+x[0-9]+$' && [ "$(( ${#r} + 5 ))" -le 255 ] || fail "vm-play-check.sh runid: '$r' breaks the id rules (letter-led part, length)"
+done
+grep -q 'appid="\$(run_id "\$appid")"' "$here/vm-play-check.sh" && grep -q 'with_id "\$zip" "\$work/run.play.zip"' "$here/vm-play-check.sh" && pass "vm-play-check.sh check builds every package from the run-id copy (RUY-879)" || fail "vm-play-check.sh check: not built from the run-id copy"
 ids="$(grep -o 'appid="\$appid\.[a-z]*"' "$here/vm-play-check.sh" | sort | tr '\n' ' ')"
 [ "$ids" = 'appid="$appid.perms" appid="$appid.verify" ' ] && pass "vm-play-check.sh: verify and perms install under their own ids (RUY-877)" || fail "vm-play-check.sh: mode ids '$ids'"
 ! grep -q 'systemctl restart ruya-play.service' <(sed -n '/^if \[ "\$mode" = perms \]/,/^fi$/p' "$here/vm-play-check.sh") && pass "vm-play-check.sh perms no longer uninstalls the check's id and restarts (RUY-865 workaround gone)" || fail "vm-play-check.sh perms still restarts the service"
@@ -1635,7 +1642,11 @@ out="$(echo '{"type":"aa{sv}","data":[[{"id":{"type":"s","data":"flatpak:org.exa
 [ "$rc" != 0 ] && pass "library play: an app that is not listed FAILs" || fail "library play: a missing item passed"
 out="$(printf '{"type":"aa{sv}","data":[[{"id":{"type":"s","data":"flatpak:play.com.example.hello"},"play":{"type":"b","data":true},"title":{"type":"s","data":"Hello"},"genres":{"type":"as","data":[]},"art":{"type":"a{ss}","data":{}}}]]}' | pj)"; rc=$?
 [ "$rc" != 0 ] && pass "library play: an item without art FAILs" || fail "library play: an item without icon passed"
-grep -q 'm\["id"\] = ' "$here/vm-library-check.sh" && grep -q '\.library' "$here/vm-library-check.sh" && pass "vm-library-check.sh play installs under its own id <id>.library (RUY-877)" || fail "vm-library-check.sh play: no own id"
+[ "$(bash "$here/vm-library-check.sh" playid com.example.hello | head -n 1)" = com.example.hello.library ] && pass "vm-library-check.sh play installs under its own id <id>.library (RUY-877)" || fail "vm-library-check.sh playid: not <id>.library"
+! grep -q 'm\["id"\] = ' "$here/vm-library-check.sh" && grep -q 'vm-play-check.sh" withid' "$here/vm-library-check.sh" && pass "vm-library-check.sh has no copy of the id rewrite, it calls vm-play-check.sh withid (RUY-878)" || fail "vm-library-check.sh: its own id rewrite"
+grep -q 'play_pkg_id "\$play_id"' "$here/vm-library-check.sh" && pass "vm-library-check.sh play installs under the id playid prints" || fail "vm-library-check.sh play does not use play_pkg_id"
+n="$(grep -c 'with_id "\$zip"' "$here/vm-play-check.sh")"; m="$(grep 'with_id "\$zip"' "$here/vm-play-check.sh" | grep -c 'bad "with_id.*exit 1')"
+[ "$n" = 3 ] && [ "$m" = 3 ] && pass "vm-play-check.sh: a failed with_id ends the mode with one FAIL (RUY-878)" || fail "vm-play-check.sh: with_id calls $n, ending the mode $m"
 grep -q 'play_clean$' "$here/vm-library-check.sh" && grep -q 'rm -f "$play_state/incoming/vm-library-check.play.zip"' "$here/vm-library-check.sh" && pass "vm-library-check.sh play removes the sample and the incoming file" || fail "vm-library-check.sh play: no clean-up"
 
 echo "== build stage names (RUY-771) =="
