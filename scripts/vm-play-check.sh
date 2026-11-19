@@ -43,8 +43,8 @@
 # The steps: an unsigned package without developer mode is needs-developer-mode; the tampered one
 # is bad-signature; the bomb is refused and the service keeps its PID; the A package installs
 # (flatpak list --system, Library1.ListItems, Session1.Launch when a profile exists; the check
-creates none: without one that step is a SKIP with its reason, so create a profile in the shell
-first, or the launch goes uncovered); the B
+# creates none: without one that step is a SKIP with its reason, so create a profile in the shell
+# first, or the launch goes uncovered); the B
 # package is different-developer; after every refusal staging/ is empty and no new play.* app is
 # installed; ListSources lists the drive's packages; a drive mounted without noexec is
 # unknown-source; a download in incoming/ inspects. At exit everything is removed again and the
