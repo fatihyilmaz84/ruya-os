@@ -17,6 +17,7 @@
 //! The service reconciles before it takes its bus name, so no install runs against unreconciled
 //! records.
 
+use crate::core::staging::Dir;
 use ruya_play_format::limits::{INPUT_MODES, REMOVABLE_MEDIA};
 use ruya_play_format::manifest::Permissions;
 use std::collections::{BTreeMap, BTreeSet};
@@ -111,44 +112,63 @@ pub fn build_in(play_json: &[u8], id: &str) -> Option<u64> {
 /// cannot be read or is longer, when `id` is not a [`plain_id`], or when the deployment is not
 /// [`ours`].
 pub fn deployed_play_json(installation: &Path, id: &str) -> Option<Vec<u8>> {
-    read_bounded(&our_files(installation, id)?.join("play.json"))
+    read_bounded(our_files(installation, id)?.open_file("play.json").ok()?)
 }
 
 /// The most of a deployment's `deploy` file read to find its origin (the origin is its first
 /// string; the rest is the commit, subpaths and metadata).
 const MAX_DEPLOY_HEAD_BYTES: u64 = 4096;
 
-/// The Flatpak remote a deployed app came from: the first, NUL-terminated string of
-/// `app/play.<id>/current/active/deploy` (a GVariant `(ssasta{sv})`). `None` when the file is
-/// missing, unreadable, not UTF-8 or has no NUL in its first [`MAX_DEPLOY_HEAD_BYTES`].
-fn origin_of(installation: &Path, id: &str) -> Option<String> {
-    let path = deployment_files(installation, id).with_file_name("deploy");
+/// The Flatpak remote a deployment came from: the first, NUL-terminated string of its `deploy`
+/// file (a GVariant `(ssasta{sv})`), read through `active`, the opened deployment folder. `None`
+/// when the file is missing, not a plain file, unreadable, not UTF-8 or has no NUL in its first
+/// [`MAX_DEPLOY_HEAD_BYTES`].
+fn origin_in(active: &Dir) -> Option<String> {
     let mut head = Vec::new();
-    std::fs::File::open(path)
+    active
+        .open_file("deploy")
         .and_then(|f| f.take(MAX_DEPLOY_HEAD_BYTES).read_to_end(&mut head))
         .ok()?;
     let end = head.iter().position(|&b| b == 0)?;
     String::from_utf8(head[..end].to_vec()).ok()
 }
 
-/// Is the deployed app `play.<id>` one this service made, i.e. committed from
-/// [`ruya_play_art::PLAY_REMOTE`]? `.play` is a real top-level domain, so a Flathub app can be
+/// Opens the deployment folder of the app `play.<id>` (`app/play.<id>/current/active`, where
+/// Flatpak's own `current` and `active` are links, resolved once here) and returns it only when it
+/// is one this service made, i.e. its `deploy` file, read through the opened folder, names
+/// [`ruya_play_art::PLAY_REMOTE`]. `.play` is a real top-level domain, so a Flathub app can be
 /// named `play.<something>`; nothing else in this service may adopt, verify or read it. A missing
 /// or unreadable `deploy` file, a name that is not a [`plain_id`] and any other origin (a prefix
-/// of ours too) are not ours. The one origin check of every reader of `app/play.*`.
+/// of ours too) are not ours. The one origin check of every reader of `app/play.*`: the caller
+/// reads the app only through the returned folder, so what it reads is what was checked.
+pub fn open_ours(installation: &Path, id: &str) -> Option<Dir> {
+    if !plain_id(id) {
+        return None;
+    }
+    let link = installation
+        .join("app")
+        .join(format!("play.{id}"))
+        .join("current")
+        .join("active");
+    let active = Dir::open_root(&std::fs::canonicalize(link).ok()?).ok()?;
+    (origin_in(&active).as_deref() == Some(ruya_play_art::PLAY_REMOTE)).then_some(active)
+}
+
+/// Is the deployed app `play.<id>` one this service made? See [`open_ours`].
 pub fn ours(installation: &Path, id: &str) -> bool {
-    plain_id(id) && origin_of(installation, id).as_deref() == Some(ruya_play_art::PLAY_REMOTE)
+    open_ours(installation, id).is_some()
 }
 
-/// [`deployment_files`] of an app that is [`ours`], else `None`.
-pub fn our_files(installation: &Path, id: &str) -> Option<std::path::PathBuf> {
-    ours(installation, id).then(|| deployment_files(installation, id))
+/// The `/app` folder (`files`) of an app that is [`ours`], opened through the folder that was
+/// checked; `None` when it is not ours or has no such folder.
+pub fn our_files(installation: &Path, id: &str) -> Option<Dir> {
+    open_ours(installation, id)?.open_dir("files").ok()
 }
 
-fn read_bounded(path: &Path) -> Option<Vec<u8>> {
+fn read_bounded(file: std::fs::File) -> Option<Vec<u8>> {
     let mut bytes = Vec::new();
-    std::fs::File::open(path)
-        .and_then(|f| f.take(MAX_PLAY_JSON_BYTES + 1).read_to_end(&mut bytes))
+    file.take(MAX_PLAY_JSON_BYTES + 1)
+        .read_to_end(&mut bytes)
         .ok()?;
     (bytes.len() as u64 <= MAX_PLAY_JSON_BYTES).then_some(bytes)
 }
@@ -191,7 +211,7 @@ pub fn permissions_in(play_json: &[u8], id: &str) -> Option<Permissions> {
 }
 
 /// Where a committed app's `/app` folder is: `app/play.<id>/current/active/files` below the
-/// installation. Neither the id nor the origin is checked here; see [`our_files`].
+/// installation. Neither the id nor the origin is checked here; see [`open_ours`].
 pub fn deployment_files(installation: &Path, id: &str) -> std::path::PathBuf {
     installation
         .join("app")
@@ -209,7 +229,8 @@ pub fn plain_id(id: &str) -> bool {
 /// The `play.*` apps of the Flatpak installation at `installation` (`/var/lib/flatpak`): every
 /// `app/play.<id>/current/active/files/` with what its `play.json` and `play.sig` say. An app
 /// folder that is not `play.` plus a plain id, or whose deployment is not [`ours`], is skipped
-/// (so [`plan`] forgets a build recorded for it and never touches the app). A missing `app/` is an empty list.
+/// (so [`plan`] forgets a build recorded for it and never touches the app). A missing `app/` is
+/// an empty list.
 pub fn deployed_apps(installation: &Path) -> std::io::Result<BTreeMap<String, Deployed>> {
     let mut out = BTreeMap::new();
     let entries = match std::fs::read_dir(installation.join("app")) {
@@ -225,12 +246,19 @@ pub fn deployed_apps(installation: &Path) -> std::io::Result<BTreeMap<String, De
         let Some(id) = name.strip_prefix("play.") else {
             continue;
         };
-        if !ours(installation, id) {
+        let Some(files) = our_files(installation, id) else {
             continue;
-        }
-        let files = entry.path().join("current").join("active").join("files");
-        let build = read_bounded(&files.join("play.json")).and_then(|b| build_in(&b, id));
-        let signed = std::fs::symlink_metadata(files.join("play.sig")).is_ok();
+        };
+        let build = files
+            .open_file("play.json")
+            .ok()
+            .and_then(read_bounded)
+            .and_then(|b| build_in(&b, id));
+        // Anything named `play.sig` (a link too) counts as signed; only its absence does not.
+        let signed = !matches!(
+            files.open_file("play.sig"),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound
+        );
         out.insert(id.to_ascii_lowercase(), Deployed { build, signed });
     }
     Ok(out)
@@ -408,7 +436,8 @@ mod tests {
     #[test]
     fn rollback_failures_are_logged_cleanly() {
         let journal = concat!(
-            r#"{"time":5,"job":"job-2","id":"com.example.a","event":"rollback_failed","detail":"the key record: disk\nfull"}"#,
+            r#"{"time":5,"job":"job-2","id":"com.example.a","event":"rollback_failed","#,
+            r#""detail":"the key record: disk\nfull"}"#,
             "\n",
             r#"{"event":"other"}"#,
             "\nnot json\n"
@@ -416,7 +445,8 @@ mod tests {
         assert_eq!(
             rollback_failures(journal),
             vec![
-                "an earlier install's records could not be rolled back: time 5, job job-2, id com.example.a: the key record: diskfull"
+                "an earlier install's records could not be rolled back: time 5, job job-2, \
+                 id com.example.a: the key record: diskfull"
             ]
         );
     }

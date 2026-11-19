@@ -1078,10 +1078,7 @@ impl Importer {
             Ok(None) => return (MethodStatus::UnknownApp, String::new()),
             Err(_) => return (MethodStatus::Failed, String::new()),
         }
-        let Some(files) = reconcile::our_files(&self.cfg.flatpak, id) else {
-            return (MethodStatus::UnknownApp, String::new());
-        };
-        if std::fs::symlink_metadata(&files).is_err() {
+        if reconcile::our_files(&self.cfg.flatpak, id).is_none() {
             return (MethodStatus::UnknownApp, String::new());
         }
         let app = format!("play.{id}");
@@ -1115,16 +1112,14 @@ impl Importer {
         reporter: &mut Reporter<'_>,
     ) -> JobResult {
         let id = app.strip_prefix("play.").unwrap_or(app);
-        let Some(files) = reconcile::our_files(&self.cfg.flatpak, id) else {
+        // The origin is checked on the folder the job then reads (a deployment that turned
+        // foreign since it was queued is refused).
+        let Some(tree) = reconcile::our_files(&self.cfg.flatpak, id) else {
             return refused(
                 job,
                 vec![staging_problem("", &std::io::ErrorKind::NotFound.into())],
                 None,
             );
-        };
-        let tree = match Dir::open_root(&files) {
-            Ok(d) => d,
-            Err(e) => return refused(job, vec![staging_problem("", &e)], None),
         };
         let mut tick = |t: verify::Tick| {
             reporter.bytes_total = t.bytes_total;
