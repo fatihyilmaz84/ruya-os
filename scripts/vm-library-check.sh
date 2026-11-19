@@ -17,7 +17,7 @@
 #             play_signer_key_id (the sample installs unsigned) and play_screenshots equal to the
 #             screenshots its play.json declares, in order, as paths ruya-shell can read (RUY-886);
 #             removes the sample and puts developer mode back (also on a failure). The sample is
-#             installed as "<its id>.library" (RUY-877), so this passes after vm-play-check.sh in
+#             installed as "<its id>_library" (RUY-877), so this passes after vm-play-check.sh in
 #             any order.
 #             vm-library-check.sh play [/root/hello-play-native.play.zip]  (the sample as for
 #             vm-play-check.sh; copy vm-play-check.sh next to this script, its `withid` mode
@@ -234,8 +234,8 @@ play_judge() {
     fi
 }
 
-# The id the play mode installs the sample under (RUY-877).
-play_pkg_id() { echo "$1.library"; }
+# The id the play mode installs the sample under (RUY-877): vm-play-check.sh's one id-suffix rule.
+play_pkg_id() { bash "$(dirname "$0")/vm-play-check.sh" pkgid "$1" library; }
 
 # play_check <zip>
 play_check() {
@@ -256,9 +256,9 @@ PY
     play_dev="$(busctl --system --json=short call "$play_svc" "$play_obj" "$play_svc" GetDeveloperMode | python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; print("true" if d and d[0]=="ok" and d[1] else "false")')"
     busctl --system call "$play_svc" "$play_obj" "$play_svc" SetDeveloperMode 'ba{sv}' true 1 admin_approved b true >/dev/null || { bad "cannot turn developer mode on"; return; }
     mkdir -p "$play_state/incoming"
-    # RUY-877: its own id ("<id>.library"), so vm-play-check.sh's records for the sample's id never
+    # RUY-877: its own id ("<id>_library"), so vm-play-check.sh's records for the sample's id never
     # meet this unsigned install (ruya-play keeps a signer's trust record after an uninstall).
-    play_id="$(play_pkg_id "$play_id")"
+    play_id="$(play_pkg_id "$play_id")" || { bad "no package id for the sample $play_id"; return; }
     # The one id rewrite lives in vm-play-check.sh (RUY-878), which sits next to this script.
     bash "$playcheck" withid "$zip" "$play_state/incoming/vm-library-check.play.zip" "$play_id" \
         || { bad "$playcheck withid: no copy of the sample with the id $play_id"; return; }

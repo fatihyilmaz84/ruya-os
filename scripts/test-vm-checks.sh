@@ -1650,13 +1650,13 @@ with zipfile.ZipFile(sys.argv[1], "w") as z:
     z.writestr("play.json", json.dumps({"id": "org.example.hello", "title": "Hello"}))
     z.writestr("art/icon.png", b"png")
 PY
-bash "$here/vm-play-check.sh" withid "$wi/in.zip" "$wi/out.zip" org.example.hello.verify
+bash "$here/vm-play-check.sh" withid "$wi/in.zip" "$wi/out.zip" org.example.hello_verify
 got="$(python3 -c '
 import json, sys, zipfile
 a, b = zipfile.ZipFile(sys.argv[1]), zipfile.ZipFile(sys.argv[2])
 print(json.loads(b.read("play.json"))["id"], json.loads(b.read("play.json"))["title"], a.read("art/icon.png") == b.read("art/icon.png"), a.namelist() == b.namelist())
 ' "$wi/in.zip" "$wi/out.zip")"
-[ "$got" = "org.example.hello.verify Hello True True" ] && pass "vm-play-check.sh withid changes only the id" || fail "vm-play-check.sh withid: '$got'"
+[ "$got" = "org.example.hello_verify Hello True True" ] && pass "vm-play-check.sh withid changes only the id" || fail "vm-play-check.sh withid: '$got'"
 # RUY-879: check takes a new id each run (key A's trust record for an id outlives an uninstall).
 r1="$(bash "$here/vm-play-check.sh" runid org.example.hello)"; r2="$(bash "$here/vm-play-check.sh" runid org.example.hello)"
 [ "$r1" != "$r2" ] && pass "vm-play-check.sh check: two runs get two ids (RUY-879)" || fail "vm-play-check.sh runid: '$r1' twice"
@@ -1673,13 +1673,22 @@ echo "$r3" | grep -Eq '^org\.example\.hello-game_c[0-9]+x[0-9]+$' && pass "vm-pl
 # An id that would pass the limit is refused with a FAIL line, no id printed (the limit, not 255).
 long="org.example.$(printf 'a%.0s' $(seq 1 100))"
 out="$(bash "$here/vm-play-check.sh" runid "$long" 2>&1)"; rc=$?
-[ "$rc" != 0 ] && expect_contains "vm-play-check.sh runid: an id that would pass $rust_max bytes FAILs" "$out" "FAIL: the run id" || fail "vm-play-check.sh runid: a $(( ${#long} + 20 ))-byte id passed (rc $rc)"
+[ "$rc" != 0 ] && expect_contains "vm-play-check.sh runid: an id that would pass $rust_max bytes FAILs" "$out" "FAIL: the package id" || fail "vm-play-check.sh runid: a $(( ${#long} + 20 ))-byte id passed (rc $rc)"
 short="org.example.$(printf 'a%.0s' $(seq 1 85))"
 out="$(bash "$here/vm-play-check.sh" runid "$short" 2>&1)"; rc=$?
 [ "$rc" = 0 ] && [ "${#out}" -le "$rust_max" ] && pass "vm-play-check.sh runid: an id that fits the limit passes" || fail "vm-play-check.sh runid: '$out' (rc $rc)"
 grep -q 'appid="\$(run_id "\$appid")"' "$here/vm-play-check.sh" && grep -q 'with_id "\$zip" "\$work/run.play.zip"' "$here/vm-play-check.sh" && pass "vm-play-check.sh check builds every package from the run-id copy (RUY-879)" || fail "vm-play-check.sh check: not built from the run-id copy"
-ids="$(grep -o 'appid="\$appid\.[a-z]*"' "$here/vm-play-check.sh" | sort | tr '\n' ' ')"
-[ "$ids" = 'appid="$appid.perms" appid="$appid.verify" ' ] && pass "vm-play-check.sh: verify and perms install under their own ids (RUY-877)" || fail "vm-play-check.sh: mode ids '$ids'"
+ids="$(grep -o 'appid="\$(pkg_id "\$appid" [a-z]*)"' "$here/vm-play-check.sh" | sort | tr '\n' ' ')"
+[ "$ids" = 'appid="$(pkg_id "$appid" perms)" appid="$(pkg_id "$appid" verify)" ' ] && pass "vm-play-check.sh: verify and perms install under their own ids, through pkg_id (RUY-877, RUY-887)" || fail "vm-play-check.sh: mode ids '$ids'"
+! grep -Eq 'appid="\$appid\.|run_id\(\) \{ echo' "$here/vm-play-check.sh" && pass "vm-play-check.sh: no id is made by appending a dotted part (RUY-887)" || fail "vm-play-check.sh: an id with an appended dotted part"
+# RUY-887: every mode's id keeps a last part with '-' valid (verify, perms, the library check, check).
+for part in verify perms library; do
+    got="$(bash "$here/vm-play-check.sh" pkgid org.example.hello-game "$part")"
+    [ "$got" = "org.example.hello-game_$part" ] && pass "vm-play-check.sh pkgid: a last part with '-' stays valid for $part" || fail "vm-play-check.sh pkgid $part: '$got'"
+done
+got="$(bash "$here/vm-library-check.sh" playid org.example.hello-game)"
+[ "$got" = "org.example.hello-game_library" ] && pass "vm-library-check.sh play: its id for a last part with '-' is valid (RUY-887)" || fail "vm-library-check.sh playid: '$got'"
+grep -q 'vm-play-check.sh" pkgid' "$here/vm-library-check.sh" && ! grep -Eq 'echo "\$1[._]library"' "$here/vm-library-check.sh" && pass "vm-library-check.sh has no id suffix rule of its own, it asks vm-play-check.sh pkgid" || fail "vm-library-check.sh: its own id suffix"
 ! grep -q 'systemctl restart ruya-play.service' <(sed -n '/^if \[ "\$mode" = perms \]/,/^fi$/p' "$here/vm-play-check.sh") && pass "vm-play-check.sh perms no longer uninstalls the check's id and restarts (RUY-865 workaround gone)" || fail "vm-play-check.sh perms still restarts the service"
 pc="$here/../image/rootfs/usr/lib/tmpfiles.d/ruya-play.conf"
 if grep -qx 'R /var/lib/ruya-play/staging - - - -' "$pc" && grep -qx 'R /var/lib/ruya-play/inspect - - - -' "$pc"     && ! grep -Eq '^[dDfFwzZ] +/var/lib/ruya-play/(staging|inspect)' "$pc"; then
@@ -1742,7 +1751,7 @@ grep -q 'judge_screenshots "\$1" "\$f" "\${2:-0}"' "$here/vm-library-check.sh" &
 nopc="$tmp/nopc"; mkdir -p "$nopc"; cp "$here/vm-library-check.sh" "$nopc/"; : > "$nopc/sample.zip"
 out="$(PATH="$shims:$PATH" bash "$nopc/vm-library-check.sh" play "$nopc/sample.zip" 2>&1)"
 expect_contains "library play: a missing vm-play-check.sh FAIL names its path" "$out" "FAIL: no $nopc/vm-play-check.sh: copy vm-play-check.sh next to this script"
-[ "$(bash "$here/vm-library-check.sh" playid com.example.hello | head -n 1)" = com.example.hello.library ] && pass "vm-library-check.sh play installs under its own id <id>.library (RUY-877)" || fail "vm-library-check.sh playid: not <id>.library"
+[ "$(bash "$here/vm-library-check.sh" playid com.example.hello | head -n 1)" = com.example.hello_library ] && pass "vm-library-check.sh play installs under its own id <id>_library (RUY-877)" || fail "vm-library-check.sh playid: not <id>.library"
 ! grep -q 'm\["id"\] = ' "$here/vm-library-check.sh" && grep -q '"\$playcheck" withid' "$here/vm-library-check.sh" && pass "vm-library-check.sh has no copy of the id rewrite, it calls vm-play-check.sh withid (RUY-878)" || fail "vm-library-check.sh: its own id rewrite"
 grep -q 'play_pkg_id "\$play_id"' "$here/vm-library-check.sh" && pass "vm-library-check.sh play installs under the id playid prints" || fail "vm-library-check.sh play does not use play_pkg_id"
 n="$(grep -c 'with_id "\$zip"' "$here/vm-play-check.sh")"; m="$(grep 'with_id "\$zip"' "$here/vm-play-check.sh" | grep -c 'bad "with_id.*exit 1')"
