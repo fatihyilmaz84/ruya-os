@@ -1660,9 +1660,23 @@ print(json.loads(b.read("play.json"))["id"], json.loads(b.read("play.json"))["ti
 # RUY-879: check takes a new id each run (key A's trust record for an id outlives an uninstall).
 r1="$(bash "$here/vm-play-check.sh" runid org.example.hello)"; r2="$(bash "$here/vm-play-check.sh" runid org.example.hello)"
 [ "$r1" != "$r2" ] && pass "vm-play-check.sh check: two runs get two ids (RUY-879)" || fail "vm-play-check.sh runid: '$r1' twice"
+# The limit is the format's own (MAX_ID_BYTES), written once in the script and asserted here.
+rust_max="$(sed -n 's/^pub const MAX_ID_BYTES: usize = \([0-9]*\);/\1/p' "$here/../services/ruya-play-format/src/limits.rs")"
+script_max="$(sed -n 's/^PLAY_MAX_ID_BYTES=\([0-9]*\)$/\1/p' "$here/vm-play-check.sh")"
+[ -n "$rust_max" ] && [ "$rust_max" = "$script_max" ] && pass "vm-play-check.sh PLAY_MAX_ID_BYTES is the format's MAX_ID_BYTES ($rust_max)" || fail "vm-play-check.sh PLAY_MAX_ID_BYTES '$script_max' differs from MAX_ID_BYTES '$rust_max'"
 for r in "$r1" "$r2"; do
-    echo "$r" | grep -Eq '^org\.example\.hello\.c[0-9]+x[0-9]+$' && [ "$(( ${#r} + 5 ))" -le 255 ] || fail "vm-play-check.sh runid: '$r' breaks the id rules (letter-led part, length)"
+    echo "$r" | grep -Eq '^org\.example\.hello_c[0-9]+x[0-9]+$' && [ "${#r}" -le "$rust_max" ] && [ "$(( ${#r} + 5 ))" -le 255 ] || fail "vm-play-check.sh runid: '$r' breaks the id rules (letter-led part, length)"
 done
+# A last part with '-' stays valid (Flatpak allows '-' only there): the run part joins it with '_'.
+r3="$(bash "$here/vm-play-check.sh" runid org.example.hello-game)"
+echo "$r3" | grep -Eq '^org\.example\.hello-game_c[0-9]+x[0-9]+$' && pass "vm-play-check.sh runid: a last part with '-' keeps no '-' outside the last part" || fail "vm-play-check.sh runid: '$r3' for a last part with '-'"
+# An id that would pass the limit is refused with a FAIL line, no id printed (the limit, not 255).
+long="org.example.$(printf 'a%.0s' $(seq 1 100))"
+out="$(bash "$here/vm-play-check.sh" runid "$long" 2>&1)"; rc=$?
+[ "$rc" != 0 ] && expect_contains "vm-play-check.sh runid: an id that would pass $rust_max bytes FAILs" "$out" "FAIL: the run id" || fail "vm-play-check.sh runid: a $(( ${#long} + 20 ))-byte id passed (rc $rc)"
+short="org.example.$(printf 'a%.0s' $(seq 1 85))"
+out="$(bash "$here/vm-play-check.sh" runid "$short" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && [ "${#out}" -le "$rust_max" ] && pass "vm-play-check.sh runid: an id that fits the limit passes" || fail "vm-play-check.sh runid: '$out' (rc $rc)"
 grep -q 'appid="\$(run_id "\$appid")"' "$here/vm-play-check.sh" && grep -q 'with_id "\$zip" "\$work/run.play.zip"' "$here/vm-play-check.sh" && pass "vm-play-check.sh check builds every package from the run-id copy (RUY-879)" || fail "vm-play-check.sh check: not built from the run-id copy"
 ids="$(grep -o 'appid="\$appid\.[a-z]*"' "$here/vm-play-check.sh" | sort | tr '\n' ' ')"
 [ "$ids" = 'appid="$appid.perms" appid="$appid.verify" ' ] && pass "vm-play-check.sh: verify and perms install under their own ids (RUY-877)" || fail "vm-play-check.sh: mode ids '$ids'"
@@ -1680,10 +1694,11 @@ grep -q 'share/ruyaos/play/trust.json' "$here/vm-play-check.sh" && grep -q '"1 u
 
 echo "== vm-library-check.sh: a .play app in Library1 (RUY-852) =="
 plroot="$tmp/plroot"; mkdir -p "$plroot"; : > "$plroot/icon-512.webp"; : > "$plroot/card-540.webp"
+for i in 0 1; do : > "$plroot/screenshot-$i-1080.webp"; done
 play_rec() { # <play value> <tier json fragment> <icon path>
     printf '{"type":"aa{sv}","data":[[{"id":{"type":"s","data":"flatpak:org.example.Tux"}},{"play":{"type":"b","data":%s},"id":{"type":"s","data":"flatpak:play.com.example.hello"},"title":{"type":"s","data":"Hello"},"genres":{"type":"as","data":["platformer"]},"players":{"type":"(uu)","data":[1,2]}%s,"art":{"type":"a{ss}","data":{"card":"%s/card-540.webp","icon":"%s"}}}]]}' "$1" "$2" "$plroot" "$3"
 }
-pj() { PLAY_FIXTURE_ROOT="$plroot" PATH="$shims:$PATH" bash "$here/vm-library-check.sh" playjudge com.example.hello; }
+pj() { PLAY_FIXTURE_ROOT="$plroot" PATH="$shims:$PATH" bash "$here/vm-library-check.sh" playjudge com.example.hello "$@"; }
 tier=',"play_tier":{"type":"s","data":"developer"}'
 out="$(play_rec true "$tier" "$plroot/icon-512.webp" | pj)"; rc=$?
 [ "$rc" = 0 ] && expect_contains "library play: a full record passes" "$out" "ruya-shell can read the icon art" || fail "library play: a full record failed: $out"
@@ -1701,8 +1716,34 @@ out="$(echo '{"type":"aa{sv}","data":[[{"id":{"type":"s","data":"flatpak:org.exa
 [ "$rc" != 0 ] && pass "library play: an app that is not listed FAILs" || fail "library play: a missing item passed"
 out="$(printf '{"type":"aa{sv}","data":[[{"id":{"type":"s","data":"flatpak:play.com.example.hello"},"play":{"type":"b","data":true},"title":{"type":"s","data":"Hello"},"genres":{"type":"as","data":[]},"art":{"type":"a{ss}","data":{}}}]]}' | pj)"; rc=$?
 [ "$rc" != 0 ] && pass "library play: an item without art FAILs" || fail "library play: an item without icon passed"
+# RUY-886: play_signer_key_id and play_screenshots. The sample installs unsigned and declares n shots.
+shots() { printf ',"play_screenshots":{"type":"as","data":[%s]}' "$1"; }
+two="\"$plroot/screenshot-0-1080.webp\",\"$plroot/screenshot-1-1080.webp\""
+kid=0123456789abcdef0123456789abcdef
+out="$(play_rec true "$tier$(shots "$two")" "$plroot/icon-512.webp" | pj 2)"; rc=$?
+[ "$rc" = 0 ] && expect_contains "library play: the screenshots in order as readable paths pass" "$out" "play_screenshots lists 2 screenshot(s)" || fail "library play: good screenshots failed: $out"
+out="$(play_rec true "$tier" "$plroot/icon-512.webp" | pj 2)"; rc=$?
+[ "$rc" != 0 ] && expect_contains "library play: a missing play_screenshots key FAILs when the sample has shots" "$out" "play_screenshots lists 0, the sample has 2" || fail "library play: missing shots passed"
+out="$(play_rec true "$tier$(shots "$two")" "$plroot/icon-512.webp" | pj 0)"; rc=$?
+[ "$rc" != 0 ] && expect_contains "library play: shots the sample does not have FAIL" "$out" "play_screenshots lists 2, the sample has 0" || fail "library play: extra shots passed"
+out="$(play_rec true "$tier$(shots "\"$plroot/screenshot-1-1080.webp\",\"$plroot/screenshot-0-1080.webp\"")" "$plroot/icon-512.webp" | pj 2)"; rc=$?
+[ "$rc" != 0 ] && expect_contains "library play: screenshots out of order FAIL" "$out" "not screenshot-<n>-1080 files in rising order" || fail "library play: shots out of order passed"
+out="$(play_rec true "$tier$(shots "\"$plroot/screenshot-0-1080.webp\",\"$plroot/screenshot-9-1080.webp\"")" "$plroot/icon-512.webp" | pj 2)"; rc=$?
+[ "$rc" != 0 ] && expect_contains "library play: an unreadable screenshot FAILs" "$out" "ruya-shell cannot read screenshot shot.1" || fail "library play: an unreadable shot passed"
+out="$(play_rec true "$tier$(shots "\"/etc/passwd\"")" "$plroot/icon-512.webp" | pj 1)"; rc=$?
+[ "$rc" != 0 ] && expect_contains "library play: a screenshot outside the deployment FAILs" "$out" "screenshot shot.0 is outside the deployment" || fail "library play: an outside shot passed"
+out="$(play_rec true "$tier,\"play_signer_key_id\":{\"type\":\"s\",\"data\":\"$kid\"}" "$plroot/icon-512.webp" | pj 0)"; rc=$?
+[ "$rc" != 0 ] && expect_contains "library play: a key id on an unsigned sample FAILs" "$out" "play_signer_key_id is '$kid' for an unsigned sample" || fail "library play: a key id on an unsigned sample passed"
+out="$(play_rec true "$tier,\"play_signer_key_id\":{\"type\":\"s\",\"data\":\"$kid\"}" "$plroot/icon-512.webp" | pj 0 "$kid")"; rc=$?
+[ "$rc" = 0 ] && expect_contains "library play: a signed run's key id passes" "$out" "play_signer_key_id is the signer's key id" || fail "library play: the expected key id failed: $out"
+out="$(play_rec true "$tier" "$plroot/icon-512.webp" | pj 0 "$kid")"; rc=$?
+[ "$rc" != 0 ] && pass "library play: a missing key id FAILs when the run signs" || fail "library play: a missing key id passed"
+grep -q 'judge_screenshots "\$1" "\$f" "\${2:-0}"' "$here/vm-library-check.sh" && grep -q 'play_judge "\$play_id" "\$shots" ""' "$here/vm-library-check.sh" && # The missing-script FAIL names the full path it looked for (RUY-887).
+nopc="$tmp/nopc"; mkdir -p "$nopc"; cp "$here/vm-library-check.sh" "$nopc/"; : > "$nopc/sample.zip"
+out="$(PATH="$shims:$PATH" bash "$nopc/vm-library-check.sh" play "$nopc/sample.zip" 2>&1)"
+expect_contains "library play: a missing vm-play-check.sh FAIL names its path" "$out" "FAIL: no $nopc/vm-play-check.sh: copy vm-play-check.sh next to this script"
 [ "$(bash "$here/vm-library-check.sh" playid com.example.hello | head -n 1)" = com.example.hello.library ] && pass "vm-library-check.sh play installs under its own id <id>.library (RUY-877)" || fail "vm-library-check.sh playid: not <id>.library"
-! grep -q 'm\["id"\] = ' "$here/vm-library-check.sh" && grep -q 'vm-play-check.sh" withid' "$here/vm-library-check.sh" && pass "vm-library-check.sh has no copy of the id rewrite, it calls vm-play-check.sh withid (RUY-878)" || fail "vm-library-check.sh: its own id rewrite"
+! grep -q 'm\["id"\] = ' "$here/vm-library-check.sh" && grep -q '"\$playcheck" withid' "$here/vm-library-check.sh" && pass "vm-library-check.sh has no copy of the id rewrite, it calls vm-play-check.sh withid (RUY-878)" || fail "vm-library-check.sh: its own id rewrite"
 grep -q 'play_pkg_id "\$play_id"' "$here/vm-library-check.sh" && pass "vm-library-check.sh play installs under the id playid prints" || fail "vm-library-check.sh play does not use play_pkg_id"
 n="$(grep -c 'with_id "\$zip"' "$here/vm-play-check.sh")"; m="$(grep 'with_id "\$zip"' "$here/vm-play-check.sh" | grep -c 'bad "with_id.*exit 1')"
 [ "$n" = 3 ] && [ "$m" = 3 ] && pass "vm-play-check.sh: a failed with_id ends the mode with one FAIL (RUY-878)" || fail "vm-play-check.sh: with_id calls $n, ending the mode $m"

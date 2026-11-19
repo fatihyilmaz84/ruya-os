@@ -21,7 +21,7 @@
 #          and the deployment's share/ruyaos/play/trust.json says format 1, unverified, no signer,
 #          no store signature
 #   runid  host fixtures only: `runid <id>` prints the id check would use for <id>
-#   Every mode that installs uses its own package id (RUY-877): "<id>.c<run>" for check (one
+#   Every mode that installs uses its own package id (RUY-877): "<id>_c<run>" for check (one
 #   fresh id per run, RUY-879; its signed-A/B steps need one id within the run, on purpose),
 #   "<id>.verify" for verify and "<id>.perms" for perms, written into a copy of the sample's
 #   play.json. ruya-play keeps a signer's trust record for an id after an uninstall (05 section
@@ -184,9 +184,20 @@ with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
 PY
 }
 
-# run_id <id>: check's package id for this run. The extra part starts with a letter (a part may
-# not start with a digit, ruya-play-format check_id) and the pid keeps two runs in one second apart.
-run_id() { echo "$1.c$(date +%s)x$$"; }
+# The format's longest id (MAX_ID_BYTES in services/ruya-play-format/src/limits.rs; the host fixtures
+# check the two agree). ruya-play refuses a longer id, so run_id must not make one.
+PLAY_MAX_ID_BYTES=120
+
+# run_id <id>: check's package id for this run: "<id>_c<time>x<pid>", the run part joined to the last
+# part with "_" so the id stays valid whatever that part holds (a "-" is allowed in the last part
+# only, so a new part after it would break the id; the part still starts with its own letter) and the
+# pid keeps two runs in one second apart. Prints nothing and returns 1 when the result would pass
+# PLAY_MAX_ID_BYTES.
+run_id() {
+    local r="$1_c$(date +%s)x$$"
+    [ "${#r}" -le "$PLAY_MAX_ID_BYTES" ] || { echo "FAIL: the run id '$r' is longer than $PLAY_MAX_ID_BYTES bytes; the sample's id is too long for this check" >&2; return 1; }
+    echo "$r"
+}
 
 if [ "$mode" = parse ]; then
     shift
@@ -450,7 +461,7 @@ print(r.get("format"), r.get("tier"), r.get("signer_id"), r.get("signer_name"), 
 fi
 
 # The packages: all made from one copy with this run's id, before anything is signed (RUY-879).
-appid="$(run_id "$appid")"
+appid="$(run_id "$appid")" || { bad "no run id for $appid"; exit 1; }
 with_id "$zip" "$work/run.play.zip" "$appid" || { bad "with_id: no copy of the sample with the id $appid"; exit 1; }
 cp "$work/run.play.zip" "$work/unsigned.play.zip"
 (cd "$work" && "$pack" keygen a >/dev/null && "$pack" keygen b >/dev/null) || bad "ruya-pack keygen"

@@ -26,8 +26,7 @@ Item {
             compare(p.playTier, "developer")
             compare(p.playSigner, "Example Games")
             compare(p.playSignerKeyId, "0123456789abcdef0123456789abcdef")
-            compare(p.playScreenshots.length, 3)
-            verify(p.playScreenshots[0].endsWith("screenshot-0-1080.webp"))
+            compare(p.playScreenshots.length, 0, "no screenshot path to a file the mock does not have (RUY-886)")
             for (const role of ["logo", "card", "cover", "preview", "trailer"])
                 verify(p.art[role], role)
         }

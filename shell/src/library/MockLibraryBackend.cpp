@@ -79,7 +79,9 @@ void MockLibraryBackend::reset(const QString &scenario)
         // "unlisted": one more Flatpak app that the Store's catalogue does not know (RUY-16: no Details row).
         if (scenario == QLatin1String("unlisted"))
             m_items.append(item("flatpak:org.example.Unlisted", "app", "Unlisted App", 1762000000));
-        // "play": one .play app with every field and role (RUY-852; the real art is on the VM).
+        // "play": one .play app with every field and role (RUY-852; the real art is on the VM). It has no
+        // screenshots: the mock ships no image to point them at, and a path to a file that is not there draws
+        // a "cannot load" card (RUY-886); "playart:<dir>" has them.
         // "playart:<dir>": the same app with real pictures from <dir> (tests and screenshots, RUY-856: logo.png,
         // card/cover/hero/icon from the glow fixtures, the trailer's file does not exist so the trailer cannot play),
         // plus an icon-only .play app and a Flatpak that is not a .play but carries a logo and a trailer key
@@ -103,9 +105,6 @@ void MockLibraryBackend::reset(const QString &scenario)
             p.playTier = QStringLiteral("developer");
             p.playSigner = QStringLiteral("Example Games");
             p.playSignerKeyId = QStringLiteral("0123456789abcdef0123456789abcdef");
-            p.playScreenshots = {QStringLiteral("/mock/play/screenshot-0-1080.webp"),
-                                 QStringLiteral("/mock/play/screenshot-1-1080.webp"),
-                                 QStringLiteral("/mock/play/screenshot-2-1080.webp")};
             if (playArt) {
                 const QString dir = scenario.mid(8);
                 auto at = [&](const char *name) { return dir + QLatin1Char('/') + QLatin1String(name) + QStringLiteral(".png"); };

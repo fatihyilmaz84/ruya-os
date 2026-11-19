@@ -13,14 +13,16 @@
 #   clean     removes the test remote, apps and repository
 #   play      RUY-852: installs the .play sample through Play1 (developer mode, from incoming/),
 #             then Library1 must list it with play true, its title, the art of its package as
-#             paths ruya-shell can read, genres, and a tier when ruya-play wrote trust.json;
+#             paths ruya-shell can read, genres, a tier when ruya-play wrote trust.json, no
+#             play_signer_key_id (the sample installs unsigned) and play_screenshots equal to the
+#             screenshots its play.json declares, in order, as paths ruya-shell can read (RUY-886);
 #             removes the sample and puts developer mode back (also on a failure). The sample is
 #             installed as "<its id>.library" (RUY-877), so this passes after vm-play-check.sh in
 #             any order.
 #             vm-library-check.sh play [/root/hello-play-native.play.zip]  (the sample as for
 #             vm-play-check.sh; copy vm-play-check.sh next to this script, its `withid` mode
 #             writes the package's new id, RUY-878); `playid <id>` prints the id the play mode
-#             installs under (host fixtures); `playjudge <id>` reads ListItems as busctl --json=short on stdin
+#             installs under (host fixtures); `playjudge <id> [screenshots [key id]]` reads ListItems as busctl --json=short on stdin
 #             (host fixtures, scripts/test-vm-checks.sh)
 #   security  see vm-security-check.sh (unit hardening)
 # Boot the VM with plain smoke-test.ps1 -Keep (or -Work -Keep for the screenshot).
@@ -150,7 +152,7 @@ for rec in (doc.get("data") or [[]])[0]:
     if val(rec.get("id")) != want:
         continue
     print("found=yes")
-    for k in ("play", "title", "controller", "play_tier", "play_signer"):
+    for k in ("play", "title", "controller", "play_tier", "play_signer", "play_signer_key_id"):
         if k in rec:
             v = val(rec[k])
             print("%s=%s" % (k, str(v).lower() if isinstance(v, bool) else v))
@@ -160,12 +162,55 @@ for rec in (doc.get("data") or [[]])[0]:
         print("players=%s-%s" % tuple(val(rec["players"])))
     for role, path in sorted((val(rec.get("art")) or {}).items()):
         print("art.%s=%s" % (role, path))
+    for i, path in enumerate(val(rec.get("play_screenshots")) or []):
+        print("shot.%d=%s" % (i, path))
     sys.exit(0)
 print("found=no")
 ' "$1"
 }
 
-# play_judge <app id>: ListItems on stdin; PASS/FAIL lines, sets $fail
+# judge_readable <app id> <what> <path>: the path lies in the app's deployment and ruya-shell can read it
+judge_readable() {
+    case "$3" in
+        /var/lib/flatpak/app/play."$1"/*|"${PLAY_FIXTURE_ROOT:-/nonexistent}"/*) ;;
+        *) bad "$2 is outside the deployment: $3"; return ;;
+    esac
+    as_shell test -r "$3" && ok "ruya-shell can read $2" || bad "ruya-shell cannot read $2: $3"
+}
+
+# judge_signer_key_id <fields> <expected key id>: play_signer_key_id is absent when the expected id
+# is empty (an unsigned sample), else it is exactly that id (32 hex, 05 section 9)
+judge_signer_key_id() {
+    local got
+    got="$(echo "$1" | sed -n 's/^play_signer_key_id=//p')"
+    if [ -z "$2" ]; then
+        [ -z "$got" ] && ok "an unsigned sample has no play_signer_key_id" || bad "play_signer_key_id is '$got' for an unsigned sample"
+    else
+        [ "$got" = "$2" ] && echo "$got" | grep -Eq '^[0-9a-f]{32}$' && ok "play_signer_key_id is the signer's key id" || bad "play_signer_key_id is '$got', not $2"
+    fi
+}
+
+# judge_screenshots <app id> <fields> <expected count>: play_screenshots lists the sample's
+# screenshots (the 1080p files, screenshot-<n>-1080.*, n rising), as paths ruya-shell can read;
+# the key is absent when the sample has none
+judge_screenshots() {
+    local shots n=0 line path name idx prev=-1 ordered=yes
+    shots="$(echo "$2" | grep '^shot\.' || true)"
+    [ -n "$shots" ] && n="$(echo "$shots" | wc -l)"
+    [ "$n" = "$3" ] && ok "play_screenshots lists $3 screenshot(s)" || { bad "play_screenshots lists $n, the sample has $3"; return; }
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        path="${line#*=}"; name="${path##*/}"
+        idx="$(echo "$name" | sed -n 's/^screenshot-\([0-9]\{1,\}\)-1080\..*$/\1/p')"
+        { [ -n "$idx" ] && [ "$idx" -gt "$prev" ]; } || ordered=no
+        [ -n "$idx" ] && prev="$idx"
+        judge_readable "$1" "screenshot ${line%%=*}" "$path"
+    done <<< "$shots"
+    [ "$ordered" = yes ] && ok "the screenshots are the 1080p files in order" || bad "the screenshots are not screenshot-<n>-1080 files in rising order"
+}
+
+# play_judge <app id> [screenshots in the sample] [expected signer key id]: ListItems on stdin;
+# PASS/FAIL lines, sets $fail
 play_judge() {
     local f line role path
     f="$(play_fields "$1")"
@@ -177,12 +222,10 @@ play_judge() {
     echo "$f" | grep -q '^art\.icon=' && ok "the art has the icon role" || bad "no icon in the art"
     while IFS= read -r line; do
         role="${line#art.}"; role="${role%%=*}"; path="${line#*=}"
-        case "$path" in
-            /var/lib/flatpak/app/play."$1"/*|"${PLAY_FIXTURE_ROOT:-/nonexistent}"/*) ;;
-            *) bad "art $role is outside the deployment: $path"; continue ;;
-        esac
-        as_shell test -r "$path" && ok "ruya-shell can read the $role art" || bad "ruya-shell cannot read the $role art: $path"
+        judge_readable "$1" "the $role art" "$path"
     done < <(echo "$f" | grep '^art\.')
+    judge_signer_key_id "$f" "${3:-}"
+    judge_screenshots "$1" "$f" "${2:-0}"
     # A tier is present only when ruya-play wrote trust.json; when it is there it is a known one.
     if echo "$f" | grep -q '^play_tier='; then
         echo "$f" | grep -Eq '^play_tier=(official|developer|unverified)$' && ok "the tier is a known one" || bad "unknown tier"
@@ -196,15 +239,20 @@ play_pkg_id() { echo "$1.library"; }
 
 # play_check <zip>
 play_check() {
-    local zip="$1" out job n line json
+    local zip="$1" out job n line json shots playcheck
     [ -f "$zip" ] || { bad "no sample at $zip"; return; }
-    play_id="$(python3 - "$zip" <<'PY'
+    playcheck="$(dirname "$0")/vm-play-check.sh"
+    [ -f "$playcheck" ] || { bad "no $playcheck: copy vm-play-check.sh next to this script"; return; }
+    # The sample's id and the number of screenshots its play.json declares (the sample installs unsigned).
+    { read -r play_id; read -r shots; } < <(python3 - "$zip" <<'PY'
 import json, sys, zipfile
 z = zipfile.ZipFile(sys.argv[1])
 name = next(n for n in z.namelist() if n.endswith("play.json") and n.count("/") <= 1)
-print(json.loads(z.read(name))["id"])
+m = json.loads(z.read(name))
+print(m["id"])
+print(len(m.get("art", {}).get("screenshots", [])))
 PY
-)"
+)
     play_dev="$(busctl --system --json=short call "$play_svc" "$play_obj" "$play_svc" GetDeveloperMode | python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; print("true" if d and d[0]=="ok" and d[1] else "false")')"
     busctl --system call "$play_svc" "$play_obj" "$play_svc" SetDeveloperMode 'ba{sv}' true 1 admin_approved b true >/dev/null || { bad "cannot turn developer mode on"; return; }
     mkdir -p "$play_state/incoming"
@@ -212,8 +260,8 @@ PY
     # meet this unsigned install (ruya-play keeps a signer's trust record after an uninstall).
     play_id="$(play_pkg_id "$play_id")"
     # The one id rewrite lives in vm-play-check.sh (RUY-878), which sits next to this script.
-    bash "$(dirname "$0")/vm-play-check.sh" withid "$zip" "$play_state/incoming/vm-library-check.play.zip" "$play_id" \
-        || { bad "vm-play-check.sh withid: no copy of the sample with the id $play_id"; return; }
+    bash "$playcheck" withid "$zip" "$play_state/incoming/vm-library-check.play.zip" "$play_id" \
+        || { bad "$playcheck withid: no copy of the sample with the id $play_id"; return; }
     chmod 0600 "$play_state/incoming/vm-library-check.play.zip"
     out="$(busctl --system --json=short call "$play_svc" "$play_obj" "$play_svc" Install 'sa{sv}' "$play_state/incoming/vm-library-check.play.zip" 1 admin_approved b true)"         || { bad "Play1.Install failed"; return; }
     job="$(echo "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; print(d[1] if len(d)>1 else "")')"
@@ -234,7 +282,7 @@ for j in (json.load(sys.stdin).get("data") or [[]])[0]:
     n=0
     until list_items_json | play_fields "$play_id" | grep -q '^found=yes$' || [ "$n" -ge 60 ]; do sleep 1; n=$((n + 1)); done
     json="$(list_items_json)"
-    play_judge "$play_id" <<< "$json" # not a pipe: $fail must survive
+    play_judge "$play_id" "$shots" "" <<< "$json" # not a pipe: $fail must survive
 }
 list_items_json() { as_shell busctl --system --json=short call "$svc" "$path" "$ifc" ListItems; }
 
@@ -277,7 +325,7 @@ playid)
     play_pkg_id "${2:?app id}"
     ;;
 playjudge)
-    play_judge "${2:?app id}"
+    play_judge "${2:?app id}" "${3:-0}" "${4:-}"
     ;;
 security)
     echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
