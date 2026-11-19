@@ -46,6 +46,10 @@ jobs:
         run: pwsh -NoProfile -File scripts/lint-icons.ps1
       - name: Spec lint (components named in 04)
         run: pwsh -NoProfile -File scripts/lint-spec-components.ps1
+      - name: Duplicate-code lint (new copied blocks, RUY-889)
+        run: |
+          pwsh -NoProfile -File scripts/lint-duplicates.ps1
+          pwsh -NoProfile -File scripts/lint-duplicates.ps1 -SelfTest
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

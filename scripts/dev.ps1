@@ -1099,6 +1099,15 @@ function Test-SpecComponents {
     Record "spec lint self-check (rejects an unlisted component)" $rejected
 }
 
+# RUY-889: no new copied block of 80+ tokens in shell, services or scripts: scripts\lint-duplicates.ps1 (shared with CI).
+function Test-Duplicates {
+    Step "duplicate-code lint (new copied blocks fail; old ones are on the baseline)"
+    & (Join-Path $PSScriptRoot "lint-duplicates.ps1")
+    Record "duplicate lint" ($LASTEXITCODE -eq 0)
+    & (Join-Path $PSScriptRoot "lint-duplicates.ps1") -SelfTest
+    Record "duplicate lint self-check (rejects a planted copy, passes a near-copy, shrinks the baseline)" ($LASTEXITCODE -eq 0)
+}
+
 # RUY-660: the self-checks of the scripts themselves need no build, so `docs` runs them too (revert-check
 # -Mode docs relies on it). Once per process: `test` (via Do-Shell) and `docs` each run them once.
 function Test-ScriptSelfChecks {
@@ -1110,6 +1119,7 @@ function Test-ScriptSelfChecks {
     Test-RevertCheckPiping
     Step "Shots filter and retry self-check (RUY-511)"
     Test-ShotsFilterAndRetry
+    Test-Duplicates
 }
 
 function Do-Shell {
