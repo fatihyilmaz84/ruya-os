@@ -1078,7 +1078,7 @@ impl Importer {
             Ok(None) => return (MethodStatus::UnknownApp, String::new()),
             Err(_) => return (MethodStatus::Failed, String::new()),
         }
-        if !reconcile::ours(&self.cfg.flatpak, id) {
+        if reconcile::our_files(&self.cfg.flatpak, id).is_none() {
             return (MethodStatus::UnknownApp, String::new());
         }
         let app = format!("play.{id}");

@@ -225,6 +225,17 @@ fn an_app_that_turns_foreign_between_queue_and_run_is_refused() {
 }
 
 #[test]
+fn a_deployment_without_files_is_unknown_app() {
+    let (h, _) = harness();
+    // Ours (a `deploy` naming our remote) but no `files/` folder.
+    write_deploy(&h.cfg.flatpak, ID, ruya_play_art::PLAY_REMOTE);
+    assert_eq!(
+        h.importer.queue_verify(ID),
+        (MethodStatus::UnknownApp, String::new())
+    );
+}
+
+#[test]
 fn cancelling_a_queued_verify_finishes_cancelled() {
     let (h, fx) = harness();
     let files = deploy(&h, ID, &fx);
