@@ -27,6 +27,7 @@ You never decide or expand what is public. The ticket's `surface:` label (missin
 
 ## Self-check before the HANDOFF (what reviews keep finding)
 
+- **Genuine fix, one copy (owner, 2026-11-19; reviews block on it):** fix the cause, never the symptom (no special case, sleep, retry, bent test, "for now" code). Before you write a new function, constant, table, helper or component, grep for one that does it and reuse or extend it; never copy a block. If the clean fix needs more than the Scope, stop and ask the lead (`questions for lead:`) instead of patching. The HANDOFF's `reuse:` line says what you reused and what you searched for before each new helper.
 - **Revert test:** every new test fails when you temporarily undo the change it covers. Use `.\scripts\revert-check.ps1 -File <path> -Old '<text>' -New '<text>'` (it rebuilds, runs the tests, restores the file and rebuilds again; a hand-made mutation once "stayed green" on a stale binary). A file under `services\<crate>\` runs `cargo test -p <crate>`, with `-Test <name filter>` (lead-18). Pick the mode by file: QML/C++ the default (`-Test tst_x`); `services\` the Rust filter; lints and `scripts\*.ps1` self-checks `-Mode docs` (runs `dev.ps1 docs`, no build); `scripts\vm-*.sh` `-Mode vmchecks` (runs `test-vm-checks.sh`). Say which change you undid in the Outcome comment.
 - **No test lost:** `.\scripts\lost-tests.ps1` ends `lost-tests: none` (a rename or a deliberate removal is named in the Outcome comment with its reason; T-147 deleted nine silently).
 - **Keep `output\shell-shots\review\` until the lead has merged:** the UX and design reviewers look at those PNGs (a builder's scratch cleanup removed them once). Clean other scratch only.
@@ -63,6 +64,7 @@ checks: test <ALL GREEN: N QML + M skips, R Rust | failed: what>, shots <n/a | N
 revert: <each new test file: the change undone with revert-check.ps1 -> CAUGHT | none: no new test>   (never "not run": run it)
 vm: <n/a | pending lead run: <check> | this task: <version tag>, RUYA_BOOT_OK, <check> results>
 deviations: <none | one line each, with why>
+reuse: <existing code reused; each new helper: what you searched for and why none fitted>
 possibly public: <none | what an app could now reach, tagged experimental>
 unverified: <none | one line each>
 paper plane: <claim, move, comment ok | what failed>
