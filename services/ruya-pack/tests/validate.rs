@@ -288,6 +288,7 @@ fn a_zip_over_four_gib_and_a_file_over_four_gib_warn_about_fat32() {
             executable: false,
         }],
         installed_bytes: 5_000_000_000,
+        runners: Default::default(),
     };
     let mut w = Vec::new();
     ruya_pack::validate::fat32(&pkg, 4_294_967_296, &mut w);

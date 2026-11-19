@@ -62,6 +62,7 @@ No code, so no bus permission, and the safest way to extend the console. The for
 | Sound themes (cues, ambient bed) | [Sound themes](sound-themes.md) | public, written, checker built |
 | Controller profiles (the player's controls in games, exported to a USB drive; schema v1, `docs/specs/schemas/input-profile-v1.json`, RUY-42) | [Controller input](controller-input.md#the-players-controls-what-your-game-sees-is-already-remapped), `samples/controller-profile-example` | experimental, written (the service applies buttons, sticks and triggers; keys, mouse, layers and macros are planned, T-372) |
 | `.play` packages | `05-play-packages.md` (epic T-228) | parked by the owner |
+| `runner.json` of a runner (format 1, ADR-037) | [Play packages](play-packages.md), `api/play/runner.schema.json`, `05` §6.2.1 | experimental, written (the parser and `ruya-pack validate` are built; the launcher that starts a runner through it is planned, RUY-901) |
 | Theme, wallpaper and icon packs | none | unplanned |
 
 ## How a public thing is made

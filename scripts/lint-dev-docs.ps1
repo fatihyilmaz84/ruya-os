@@ -3,7 +3,8 @@
 #   - every relative link (and #anchor) in every file resolves;
 #   - fenced code blocks: `python` parses (ast), `sh`/`bash` pass `bash -n`, `xml` is well-formed,
 #     `json` parses, and a `json` block that is a whole play.json (it has format, id and run) must
-#     satisfy api/play/play.schema.json (RUY-105; a small validator for the keywords it uses);
+#     satisfy api/play/play.schema.json (RUY-105; a small validator for the keywords it uses), a
+#     whole runner.json (format, family and kind) api/play/runner.schema.json (RUY-898);
 #   - a fenced `c` block whose first line is `/* sample: <repo path> */` is the sample's code: each
 #     of its lines must be in that file, in order (a line that is only `...` or `/* ... */` is a gap);
 #   - a fenced `xml` block that starts with `<component` and is introduced (within the three lines
@@ -252,7 +253,7 @@ function Get-SchemaErrors($root, $schema, $v, [string]$at, $out) {
         }
     }
 }
-$playSchemaText = $null
+$schemaTexts = @{}
 
 if (-not (Test-Path $Dir)) { Write-Host "dev docs lint: $Dir does not exist" -ForegroundColor Red; exit 1 }
 $files = @(Get-ChildItem $Dir -Filter "*.md" | Sort-Object Name)
@@ -364,16 +365,20 @@ foreach ($f in $files) {
             '^json$' {
                 try { $obj = $body | ConvertFrom-Json }
                 catch { Fail $where "json block does not parse: $($_.Exception.Message)"; break }
-                # RUY-105: a whole play.json (it has format, id and run) must satisfy the schema.
-                $isManifest = ($obj -is [System.Management.Automation.PSCustomObject]) -and $obj.PSObject.Properties['format'] -and $obj.PSObject.Properties['id'] -and $obj.PSObject.Properties['run']
-                if (-not $isManifest) { break }
-                $schemaPath = Join-Path (Join-Path (Join-Path $Repo "api") "play") "play.schema.json"
-                if (-not (Test-Path $schemaPath)) { Fail $where "json block is a play.json but api/play/play.schema.json does not exist"; break }
-                if ($null -eq $playSchemaText) { $playSchemaText = [IO.File]::ReadAllText($schemaPath, $Utf8) }
-                $schemaDoc = $playSchemaText | ConvertFrom-Json
+                # RUY-105: a whole play.json (it has format, id and run) must satisfy its schema;
+                # RUY-898: so must a whole runner.json (it has format, family and kind).
+                $isObject = $obj -is [System.Management.Automation.PSCustomObject]
+                $schemaName = $null
+                if ($isObject -and $obj.PSObject.Properties['format'] -and $obj.PSObject.Properties['id'] -and $obj.PSObject.Properties['run']) { $schemaName = "play" }
+                elseif ($isObject -and $obj.PSObject.Properties['format'] -and $obj.PSObject.Properties['family'] -and $obj.PSObject.Properties['kind']) { $schemaName = "runner" }
+                if (-not $schemaName) { break }
+                $schemaPath = Join-Path (Join-Path (Join-Path $Repo "api") "play") "$schemaName.schema.json"
+                if (-not (Test-Path $schemaPath)) { Fail $where "json block is a $schemaName.json but api/play/$schemaName.schema.json does not exist"; break }
+                if (-not $schemaTexts.ContainsKey($schemaName)) { $schemaTexts[$schemaName] = [IO.File]::ReadAllText($schemaPath, $Utf8) }
+                $schemaDoc = $schemaTexts[$schemaName] | ConvertFrom-Json
                 $errs = New-Object System.Collections.Generic.List[string]
                 Get-SchemaErrors $schemaDoc $schemaDoc $obj "" $errs
-                foreach ($e in $errs) { Fail $where "play.json block does not satisfy play.schema.json: $e" }
+                foreach ($e in $errs) { Fail $where "$schemaName.json block does not satisfy $schemaName.schema.json: $e" }
             }
             '^c$' {
                 $first = ($b.body | Where-Object { $_.Trim() } | Select-Object -First 1)

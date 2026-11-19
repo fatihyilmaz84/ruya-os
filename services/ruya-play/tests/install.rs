@@ -10,6 +10,7 @@ use ruya_play::core::helper::Mode;
 use ruya_play::core::installed::MemoryInstalled;
 use ruya_play::core::staging::Kind;
 use ruya_play::{CommitError, JobState, JobStatus, MethodStatus, Phase};
+use ruya_play_format::runner::{RunnerEntry, RunnerHasher};
 use ruya_play_format::{Entry, Problem, Source};
 use ruya_play_trust::Tier;
 use serde_json::json;
@@ -254,28 +255,43 @@ fn the_blocklist_is_always_checked_and_an_unreadable_one_refuses_every_install()
     }
 }
 
-/// The `runner` hash of 05 §7.3 for the component under `prefix`, from the fixture's own table.
+/// The `runner` hash of 05 §7.3 for the component under `prefix`, from the fixture's own files,
+/// fed in path order to the format's one formula.
 fn runner_hash_of(fx: &Fx, prefix: &str) -> String {
-    let mut lines: Vec<(String, String)> = Vec::new();
-    for (p, d) in &fx.files {
+    let shas: Vec<(&str, String, bool)> = fx
+        .files
+        .iter()
+        .map(|(p, d)| (p.as_str(), sha_hex(d), fx.exec.contains(p)))
+        .collect();
+    let mut entries: Vec<(&str, RunnerEntry<'_>)> = Vec::new();
+    for (p, sha, exec) in &shas {
         if let Some(rel) = p.strip_prefix(prefix) {
-            let x = if fx.exec.contains(p) { "x" } else { "-" };
-            lines.push((p.clone(), format!("f\0{rel}\0{}\0{x}\n", sha_hex(d))));
+            entries.push((
+                p,
+                RunnerEntry::File {
+                    rel,
+                    sha256: sha,
+                    exec: *exec,
+                },
+            ));
         }
     }
     for (p, to) in &fx.links {
         if let Some(rel) = p.strip_prefix(prefix) {
-            lines.push((p.clone(), format!("l\0{rel}\0{to}\n")));
+            entries.push((p, RunnerEntry::Link { rel, to }));
         }
     }
     for p in &fx.dirs {
         if let Some(rel) = p.strip_prefix(prefix) {
-            lines.push((p.clone(), format!("d\0{rel}\n")));
+            entries.push((p, RunnerEntry::Dir { rel }));
         }
     }
-    lines.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
-    let text: String = lines.into_iter().map(|(_, l)| l).collect();
-    sha_hex(text.as_bytes())
+    entries.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+    let mut h = RunnerHasher::new();
+    for (_, e) in &entries {
+        h.add(e);
+    }
+    h.finish()
 }
 
 #[test]

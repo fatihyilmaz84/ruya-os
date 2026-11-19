@@ -420,14 +420,14 @@ fn is_local_id(s: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'_' || *c == b'-')
 }
 
-fn is_version_text(s: &str) -> bool {
+pub(crate) fn is_version_text(s: &str) -> bool {
     !s.is_empty()
         && s.len() <= MAX_COMPONENT_VERSION_BYTES
         && s.bytes()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'_' | b'+' | b'-'))
 }
 
-fn is_spdx_like(s: &str) -> bool {
+pub(crate) fn is_spdx_like(s: &str) -> bool {
     !s.is_empty()
         && s.len() <= MAX_LICENCE_BYTES
         && s.bytes().all(|c| {

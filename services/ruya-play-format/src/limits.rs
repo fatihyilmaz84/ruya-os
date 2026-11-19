@@ -204,6 +204,34 @@ pub const BUNDLED_KEYS: [&str; 4] = ["path", "version", "licence", "source_url"]
 pub const PREFIX_KEYS: [&str; 3] = ["arch", "template", "epoch"];
 /// Every key a `run.setup[]` step accepts.
 pub const SETUP_KEYS: [&str; 3] = ["id", "command", "once"];
+/// The newest `runner.json` `format` this crate understands (ADR-037).
+pub const SUPPORTED_RUNNER_FORMAT: u64 = 1;
+/// Largest `runner.json`, in bytes (64 KiB).
+pub const MAX_RUNNER_JSON_BYTES: u64 = 64 * 1024;
+/// Longest runner `family`, in bytes (`[a-z0-9][a-z0-9.-]{0,63}`).
+pub const MAX_RUNNER_FAMILY_BYTES: usize = 64;
+/// Every key `runner.json` accepts.
+pub const RUNNER_KEYS: [&str; 9] = [
+    "format",
+    "family",
+    "kind",
+    "version",
+    "arch",
+    "entry",
+    "capabilities",
+    "licence",
+    "source_url",
+];
+/// The keys `runner.json` must have (`entry` too for `wine` and `proton`).
+pub const RUNNER_REQUIRED_KEYS: [&str; 5] = ["format", "family", "kind", "version", "arch"];
+/// The one architecture a runner of format 1 runs on.
+pub const RUNNER_ARCH: &str = "x86_64";
+/// The `entry` keys of a `wine` runner.
+pub const RUNNER_ENTRY_WINE: [&str; 2] = ["wine", "wineserver"];
+/// The `entry` keys of a `proton` runner.
+pub const RUNNER_ENTRY_PROTON: [&str; 1] = ["proton"];
+/// The closed list of runner `capabilities` (informational in format 1).
+pub const RUNNER_CAPABILITIES: [&str; 4] = ["multiarch", "dxvk", "vkd3d", "ntsync"];
 /// The placeholders `run.command`, `run.cwd` and setup commands substitute (05 §6.3). Anything else
 /// is literal text.
 pub const PLACEHOLDERS: [&str; 5] = ["payload", "data", "config", "prefix", "disc"];
@@ -231,7 +259,7 @@ pub const ENV_DENY_EXACT: [&str; 13] = [
 /// `run.env` name prefixes the platform owns. This is a deny table, not an allow-list: native games
 /// need variables of their own, and a package can do nothing in its own sandbox that it could not do
 /// anyway; these are the ones that break what the launcher sets.
-pub const ENV_DENY_PREFIX: [&str; 18] = [
+pub const ENV_DENY_PREFIX: [&str; 19] = [
     "LD_",
     "XDG_",
     "FLATPAK_",
@@ -250,6 +278,7 @@ pub const ENV_DENY_PREFIX: [&str; 18] = [
     "GTK_",
     "GDK_",
     "GIO_",
+    "RUYA_",
 ];
 
 /// True when an entry of `uncompressed` bytes stored in `compressed` bytes expands more than the
