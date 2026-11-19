@@ -210,7 +210,9 @@ pub fn enrich(item: &mut Item, flatpak_id: &str, root: &Path) {
             .as_ref()
             .and_then(|t| text(t, "signer_name").or_else(|| text(t, "signer_id"))),
     );
-    let signer_key_id = tier.as_ref().and(trust.as_ref().and_then(|t| text(t, "signer_id")));
+    let signer_key_id = tier
+        .as_ref()
+        .and(trust.as_ref().and_then(|t| text(t, "signer_id")));
     item.play = Some(PlayInfo {
         genres: manifest
             .get("genres")
