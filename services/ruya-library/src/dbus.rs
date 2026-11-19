@@ -106,6 +106,12 @@ fn record(item: &Item) -> Dict {
         if let Some(signer) = &play.signer {
             entries.push(("play_signer", Value::from(signer.clone())));
         }
+        if let Some(key_id) = &play.signer_key_id {
+            entries.push(("play_signer_key_id", Value::from(key_id.clone())));
+        }
+        if !play.screenshots.is_empty() {
+            entries.push(("play_screenshots", Value::from(play.screenshots.clone())));
+        }
     }
     entries
         .into_iter()
@@ -174,6 +180,8 @@ mod tests {
             age_rating: vec![("violence-cartoon".into(), "mild".into())],
             tier: Some("official".into()),
             signer: Some("Example".into()),
+            signer_key_id: Some("0123456789abcdef0123456789abcdef".into()),
+            screenshots: vec!["/a/screenshot-0-1080.webp".into()],
         })));
         assert!(bool::try_from(rec["play"].try_clone().unwrap()).unwrap());
         assert_eq!(rec["players"].value_signature().to_string(), "(uu)");
@@ -182,5 +190,9 @@ mod tests {
         let tier: String = rec["play_tier"].try_clone().unwrap().try_into().unwrap();
         assert_eq!(tier, "official");
         assert!(rec.contains_key("controller") && rec.contains_key("play_signer"));
+        assert_eq!(rec["play_signer_key_id"].value_signature().to_string(), "s");
+        assert_eq!(rec["play_screenshots"].value_signature().to_string(), "as");
+        let bare = record(&item(Some(PlayInfo::default())));
+        assert!(!bare.contains_key("play_signer_key_id") && !bare.contains_key("play_screenshots"));
     }
 }

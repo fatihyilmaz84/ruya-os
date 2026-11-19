@@ -44,6 +44,10 @@
     play_tier    s    "official", "developer" or "unverified"; absent when trust.json is missing or
                       cannot be read
     play_signer  s    the signer's name (else its key id); absent with no tier or no signer
+    play_signer_key_id s  the signer's key id as trust.json's signer_id holds it (32 hex, never
+                      computed here); absent with no tier or no signer
+    play_screenshots as  the 1080p screenshots in order (paths the shell can read, at most 20);
+                      absent when there are none
 
   Order: last_played descending, then title (case-insensitive), then id.
 -->

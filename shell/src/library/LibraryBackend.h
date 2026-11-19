@@ -30,6 +30,8 @@ struct LibraryItem
     QMap<QString, QString> ageRating;      // OARS attribute -> none | mild | moderate | intense
     QString playTier;                      // "official" | "developer" | "unverified" | "" (unknown)
     QString playSigner;
+    QString playSignerKeyId;               // trust.json's signer_id (32 hex); "" when unsigned
+    QStringList playScreenshots;           // 1080p screenshot paths in order; empty when none
 
     // The record as QML sees it (camelCase keys).
     QVariantMap toVariant() const
@@ -58,6 +60,8 @@ struct LibraryItem
             out.insert(QStringLiteral("ageRating"), rating);
             out.insert(QStringLiteral("playTier"), playTier);
             out.insert(QStringLiteral("playSigner"), playSigner);
+            out.insert(QStringLiteral("playSignerKeyId"), playSignerKeyId);
+            out.insert(QStringLiteral("playScreenshots"), playScreenshots);
         }
         return out;
     }

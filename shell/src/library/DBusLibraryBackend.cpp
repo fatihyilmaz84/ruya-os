@@ -82,6 +82,8 @@ LibraryItem toItem(const QVariantMap &d)
             i.ageRating = parseArt(rating.value<QDBusArgument>()); // a{ss} as well
         i.playTier = d.value(QStringLiteral("play_tier")).toString();
         i.playSigner = d.value(QStringLiteral("play_signer")).toString();
+        i.playSignerKeyId = d.value(QStringLiteral("play_signer_key_id")).toString();
+        i.playScreenshots = d.value(QStringLiteral("play_screenshots")).toStringList();
     }
     return i;
 }

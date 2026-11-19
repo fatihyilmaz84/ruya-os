@@ -35,8 +35,9 @@ Page {
     readonly property bool isPlay: hasItem && item.play === true
     readonly property var playArt: isPlay && item.art ? item.art : ({})
     readonly property string playTier: isPlay ? (item.playTier ?? "") : ""
-    // The Inspect-shaped record PlayTrust and SignerSheet read; Library1 has no key id, so the sheet shows no key rows.
-    readonly property var playInfo: playTier !== "" ? { tier: playTier, signerName: item.playSigner ?? "", signerKeyId: "", keyState: "" } : null
+    // The Inspect-shaped record PlayTrust and SignerSheet read. Library1 has the key id (trust.json's signer_id) but no
+    // `keyState`: "Seen before" compares at install time, so the sheet leaves that row out for an installed app.
+    readonly property var playInfo: playTier !== "" ? { tier: playTier, signerName: item.playSigner ?? "", signerKeyId: item.playSignerKeyId ?? "", keyState: "" } : null
     readonly property bool trustShown: playInfo !== null
     readonly property var playTrailer: (playArt.trailer ?? "") !== ""
         ? { video: playArt.trailer, poster: playArt.cover || playArt.hero || playArt.card || "", name: title, seconds: 0 } : null
@@ -96,9 +97,11 @@ Page {
     readonly property bool activityStop: activityShown && Usage.ready && (ledger.total ?? 0) > 0
     onVisibleChanged: Usage.setWatching(page, visible)
     // Screenshots (RUY-533): the record's pictures, or four placeholders while GetApp is pending.
-    readonly property var screenshots: app.screenshots ?? []
+    // An installed .play app has no store record: its pictures are the Library item's paths (Library1 `play_screenshots`).
+    readonly property var playShots: isPlay ? (item.playScreenshots ?? []).map(p => ({ image: p, thumb: p, caption: "" })) : []
+    readonly property var screenshots: playShots.length > 0 ? playShots : (app.screenshots ?? [])
     readonly property bool screenshotsLoading: !detailsReady && !detailsFailed
-    readonly property bool screenshotsShown: (hasRecord && !isSteam && (screenshots.length > 0 || screenshotsLoading)) || playTrailer !== null
+    readonly property bool screenshotsShown: (hasRecord && !isSteam && (screenshots.length > 0 || screenshotsLoading)) || playShots.length > 0 || playTrailer !== null
     readonly property bool screenshotsStop: screenshotsShown && (screenshots.length > 0 || playTrailer !== null)
     readonly property bool permsSectionShown: hasRecord && !isSteam && !detailsFailed
     readonly property bool permsListed: permsSectionShown && (app.permissions ?? []).length > 0

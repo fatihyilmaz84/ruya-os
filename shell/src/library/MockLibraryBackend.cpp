@@ -102,6 +102,10 @@ void MockLibraryBackend::reset(const QString &scenario)
             p.ageRating = {{QStringLiteral("violence-cartoon"), QStringLiteral("mild")}};
             p.playTier = QStringLiteral("developer");
             p.playSigner = QStringLiteral("Example Games");
+            p.playSignerKeyId = QStringLiteral("0123456789abcdef0123456789abcdef");
+            p.playScreenshots = {QStringLiteral("/mock/play/screenshot-0-1080.webp"),
+                                 QStringLiteral("/mock/play/screenshot-1-1080.webp"),
+                                 QStringLiteral("/mock/play/screenshot-2-1080.webp")};
             if (playArt) {
                 const QString dir = scenario.mid(8);
                 auto at = [&](const char *name) { return dir + QLatin1Char('/') + QLatin1String(name) + QStringLiteral(".png"); };
@@ -111,6 +115,7 @@ void MockLibraryBackend::reset(const QString &scenario)
                          {QStringLiteral("cover"), at("playcover")},
                          {QStringLiteral("hero"), at("playhero")},
                          {QStringLiteral("trailer"), QStringLiteral("/mock/play/trailer.webm")}};
+                p.playScreenshots = {at("playhero"), at("playcover"), at("playcard")};
                 LibraryItem quiet = item("flatpak:play.com.example.quiet", "game", "Quiet Quest", 1762050000);
                 quiet.art = {{QStringLiteral("icon"), at("pastel")}};
                 quiet.play = true;

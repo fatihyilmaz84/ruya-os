@@ -16,7 +16,7 @@ const PLAY_JSON: &str = r#"{
   "art": { "icon": "a.png", "logo": { "en": "l.png", "de": "d.png" } }
 }"#;
 
-const TRUST_JSON: &str = r#"{ "format": 1, "tier": "developer", "signer_id": "k1",
+const TRUST_JSON: &str = r#"{ "format": 1, "tier": "developer", "signer_id": "0123456789abcdef0123456789abcdef",
   "signer_name": "Example Games", "store_signed": false }"#;
 
 fn files(root: &Path, id: &str) -> std::path::PathBuf {
@@ -65,6 +65,9 @@ fn a_full_art_play_app_lists_every_role_and_field() {
         "cover-900.webp",
         "trailer-poster-1080.webp",
         "screenshot-0-1080.webp",
+        "screenshot-2-1080.webp",
+        "screenshot-1-1080.webp",
+        "screenshot-0-thumb.webp",
         "trailer.webm",
         "preview.webm",
         "logo-0/logo.webp",
@@ -103,6 +106,55 @@ fn a_full_art_play_app_lists_every_role_and_field() {
     );
     assert_eq!(play.tier.as_deref(), Some("developer"));
     assert_eq!(play.signer.as_deref(), Some("Example Games"));
+    assert_eq!(
+        play.signer_key_id.as_deref(),
+        Some("0123456789abcdef0123456789abcdef")
+    );
+    // The 1080p screenshots in index order, not the thumbnails.
+    let shots: Vec<String> = play
+        .screenshots
+        .iter()
+        .map(|p| p.replace('\\', "/").rsplit('/').next().unwrap().to_owned())
+        .collect();
+    assert_eq!(
+        shots,
+        [
+            "screenshot-0-1080.webp",
+            "screenshot-1-1080.webp",
+            "screenshot-2-1080.webp"
+        ]
+    );
+}
+
+#[test]
+fn an_unsigned_app_without_screenshots_has_neither() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = files(dir.path(), "com.example.bare");
+    put(&f.join("play.json"), br#"{ "name": { "en": "B" } }"#);
+    put(
+        &f.join("share/ruyaos/play/trust.json"),
+        br#"{ "format": 1, "tier": "unverified", "signer_id": null }"#,
+    );
+    put(&f.join("share/ruyaos/play/art/icon-512.webp"), b"x");
+    let items = list(dir.path(), "play.com.example.bare\tx\truyaos-play-local\n");
+    let play = items["flatpak:play.com.example.bare"].play.clone().unwrap();
+    assert!(play.signer_key_id.is_none() && play.screenshots.is_empty());
+}
+
+#[test]
+fn screenshots_are_capped_at_the_formats_maximum() {
+    let dir = tempfile::tempdir().unwrap();
+    let f = files(dir.path(), "com.example.many");
+    put(&f.join("play.json"), br#"{ "name": { "en": "M" } }"#);
+    for n in 0..25 {
+        put(
+            &f.join(format!("share/ruyaos/play/art/screenshot-{n}-1080.webp")),
+            b"x",
+        );
+    }
+    let items = list(dir.path(), "play.com.example.many\tx\truyaos-play-local\n");
+    let play = items["flatpak:play.com.example.many"].play.clone().unwrap();
+    assert_eq!(play.screenshots.len(), 20);
 }
 
 #[test]
