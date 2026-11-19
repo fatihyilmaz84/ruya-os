@@ -163,6 +163,40 @@ Item {
             compare(find("gameCard_" + data.id).picture, data.art)
         }
 
+        // ---- screenshots (dev.ps1 shots; 1080p): the card-only and cover-only items on Home, the launch splash and the grid ----
+
+        function test_zz_screenshots() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            host.width = 1920
+            host.height = 1080
+            start()
+            wait(900)
+            grabImage(tc.shell).save(shotsDir + "/" + "160-artroles-home-card-only-1080p.png")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => find("recentRow").activeFocus)
+            keyClick(Qt.Key_Right)
+            tryCompare(find("recentRow"), "currentIndex", 1)
+            keyClick(Qt.Key_Up)
+            wait(900)
+            grabImage(tc.shell).save(shotsDir + "/" + "161-artroles-home-cover-only-1080p.png")
+            Library.launch(coverOnly)
+            tryVerify(() => find("launchSplash").shown, 2000)
+            wait(1200)
+            grabImage(tc.shell).save(shotsDir + "/" + "162-artroles-splash-cover-only-1080p.png")
+            tc.shell.destroy()
+            tc.shell = null
+            Session.mockReset()
+            start()
+            keyClick(Qt.Key_Up)
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "games")
+            tryVerify(() => find("gameCard_" + cardOnly), 2000)
+            wait(900)
+            grabImage(tc.shell).save(shotsDir + "/" + "163-artroles-games-1080p.png")
+        }
+
         function test_screen_saver_keeps_items_with_card_or_cover_art() {
             tryVerify(() => Library.items.length === 12)
             const saver = createTemporaryObject(saverComponent, host, { width: 1280, height: 720 })
