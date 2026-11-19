@@ -76,7 +76,11 @@ foreach ($f in Get-ChildItem $Scripts -Filter "vm-*.ps1") {
 foreach ($f in Get-ChildItem $Scripts -Filter "vm-*.sh") {
     $listed = Get-VmModes $f.FullName
     if ($null -eq $listed) { $problems.Add("scripts/$($f.Name): no '# modes: <mode> ...' line ('# modes: none' when it takes no mode)"); continue }
-    $dispatched = @(Get-VmDispatchedModes $f.FullName)
+    $dispatch = Get-VmDispatchedModes $f.FullName
+    foreach ($u in $dispatch.unreadable) {
+        $problems.Add("scripts/$($f.Name): cannot read the mode dispatch ($u); use mode=`"`${1:-...}`" + case, or '# modes: none'")
+    }
+    $dispatched = @($dispatch.modes)
     $missing = @($dispatched | Where-Object { $_ -notin $listed })
     $extra = @($listed | Where-Object { $_ -notin $dispatched })
     if ($missing) { $problems.Add("scripts/$($f.Name): dispatches but does not list in '# modes:': $($missing -join ' ')") }
@@ -93,6 +97,23 @@ try {
     [IO.File]::WriteAllText((Join-Path $qs "vm-b-check.sh"), "#!/usr/bin/env bash`n")
     [IO.File]::WriteAllText((Join-Path $qs "vm-play-check.sh"), "#!/usr/bin/env bash`n# modes: check helper verify perms parse`n")
     [IO.File]::WriteAllText((Join-Path $qs "vm-library-check.sh"), "#!/usr/bin/env bash`n# modes: check play`n")
+    # The dispatch reader on one fixture per shape (RUY-890): a script it cannot read must fail, never
+    # count as single-mode.
+    $shapes = @(
+        @{ name = "known";    body = "mode=`"`${1:-check}`"`ncase `"`$mode`" in`n    check) ;;`n    extra) ;;`nesac`n"; modes = "check extra"; unreadable = 0 },
+        @{ name = "inline";   body = "case `"`${1:-check}`" in`n    check) ;;`n    other) ;;`nesac`n"; modes = "check other"; unreadable = 0 },
+        @{ name = "assigned"; body = "what=`"`${1:-check}`"`ncase `"`$what`" in`n    check) ;;`n    extra) ;;`nesac`n"; modes = "check extra"; unreadable = 0 },
+        @{ name = "assigned-test"; body = "sel=`$1`nif [ `"`$sel`" = extra ]; then :; fi`n"; modes = "extra"; unreadable = 0 },
+        @{ name = "unreadable-unquoted"; body = "case `${1:-check} in`n    check) ;;`nesac`n"; modes = "check"; unreadable = 1 },
+        @{ name = "unreadable-test"; body = "case `"`$1`$2`" in`n    extra) ;;`nesac`n"; modes = ""; unreadable = 1 }
+    )
+    foreach ($s in $shapes) {
+        $sp = Join-Path $qs "shape-$($s.name).sh"
+        [IO.File]::WriteAllText($sp, "#!/usr/bin/env bash`n$($s.body)")
+        $d = Get-VmDispatchedModes $sp
+        if (($d.modes -join " ") -ne $s.modes) { $problems.Add("mode dispatch fixture '$($s.name)': read modes '$($d.modes -join ' ')', want '$($s.modes)'") }
+        if ($d.unreadable.Count -ne $s.unreadable) { $problems.Add("mode dispatch fixture '$($s.name)': $($d.unreadable.Count) unreadable lines, want $($s.unreadable)") }
+    }
     $rules = @(
         @{ check = "vm-a-check.sh"; skip = $false },
         @{ check = "vm-a-check.sh other"; skip = $false },
@@ -122,6 +143,12 @@ try {
     }
     if ((Get-PlayVmFiles $qt).files.Count -ne 2) { $problems.Add("vm-queue rules: Get-PlayVmFiles does not list both files") }
 } finally { Remove-Item -Recurse -Force $qt -ErrorAction SilentlyContinue }
+
+# 1e. One WSL command builds the .play files (RUY-890): dev-setup.md quotes the very string the queue's
+# SKIP text prints.
+$devSetup = [IO.File]::ReadAllText((Join-Path $Repo "docs\dev-setup.md"))
+if (-not $devSetup.Contains($script:PlayCommand)) { $problems.Add("docs/dev-setup.md does not quote the queue's play-vm-files command: $($script:PlayCommand)") }
+if (@([regex]::Matches($devSetup, 'wsl -d FedoraLinux-44[^\r\n`]*play-vm-files\.sh') | ForEach-Object { $_.Value } | Sort-Object -Unique).Count -gt 1) { $problems.Add("docs/dev-setup.md gives more than one WSL command for play-vm-files.sh") }
 
 # 2. the host tests on canned data
 $r = Run-Native $bash @((Join-Path $Scripts "test-vm-checks.sh") -replace '\\', '/')

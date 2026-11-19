@@ -8,7 +8,9 @@
 # The .play files. vm-play-check.sh and vm-library-check.sh play need the sample package and
 # ruya-pack on the guest (scripts/play-vm-files.sh builds both into output\play-vm).
 
-$script:PlayCommand = "bash scripts/play-vm-files.sh   (WSL: wsl -d FedoraLinux-44 -- bash scripts/play-vm-files.sh)"
+# The one command that builds them (root: its podman and dnf steps need it). docs/dev-setup.md quotes
+# this string, and lint-vm-checks.ps1 checks that it does.
+$script:PlayCommand = "wsl -d FedoraLinux-44 -u root bash /mnt/d/dev/RuyaOS/scripts/play-vm-files.sh"
 
 # The modes a script lists in its `# modes:` line; $null when it has no such line.
 function Get-VmModes([string]$Path) {
@@ -22,14 +24,26 @@ function Get-VmModes([string]$Path) {
     return $null
 }
 
-# The modes a script dispatches: the default of `${1:-x}`, the labels of a `case "${1:-..}" in` / `case "$mode" in` block (also `$part`; the
-# labels at the block's first indentation, so a nested case does not count) and the
-# `[ "${1:-..}" = mode ]` / `[ "$mode" = mode ]` tests. This is the lint's side of the line
-# above; the queue never guesses.
+# What a script dispatches (the lint's side of the `# modes:` line; the queue never guesses):
+# @{ modes = <sorted modes>; unreadable = <lines it could not read> }.
+# Modes: the default of `${1:-x}`, the labels of a `case <selector> in` block (the labels at the
+# block's first indentation, so a nested case does not count) and the `[ <selector> = mode ]` tests.
+# A selector is `${1...}`, `$1` (top level only) or a variable the script assigns from them at its top level
+# (`mode="${1:-check}"`, `what=$1`). A top-level `case`/`if`/`elif`/`while`/`[` that uses `$1` in
+# any other way is `unreadable`: the lint fails on it instead of treating the script as having
+# only the default mode (RUY-890).
 function Get-VmDispatchedModes([string]$Path) {
     $lines = [IO.File]::ReadAllLines($Path)
     $found = New-Object System.Collections.Generic.HashSet[string]
-    $sel = '"(\$\{1(?::-[^}]*)?\}|\$mode|\$part)"'
+    $unreadable = New-Object System.Collections.Generic.List[string]
+    $names = New-Object System.Collections.Generic.List[string]
+    foreach ($l in $lines) {
+        if ($l -match '^(\w+)="?\$(\{1(:-[^}]*)?\}|1)"?\s*(#.*)?$') { $names.Add([regex]::Escape('$' + $Matches[1])) }
+    }
+    # `$1` alone is a selector only at the top level: inside a function it is that function's argument.
+    $selectors = @('\$\{1(?::-[^}]*)?\}') + $names
+    $selNested = '"(' + ($selectors -join '|') + ')"'
+    $selTop = '"(' + ((@($selectors) + '\$1') -join '|') + ')"'
     $label = '^"?([\w-]+)"?(\|"?[\w-]+"?)*\)'
     $add = {
         param($text)
@@ -38,10 +52,17 @@ function Get-VmDispatchedModes([string]$Path) {
             if ($p -and $p -ne '*') { [void]$found.Add($p) }
         }
     }
+    $heredoc = $null
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $l = $lines[$i]
+        # a here-document is text for another program (a shim, a python script), not this script's dispatch
+        if ($heredoc) { if ($l.Trim() -eq $heredoc) { $heredoc = $null }; continue }
+        if ($l -match '(?<!<)<<-?\s*[''"]?([A-Za-z_]\w*)[''"]?') { $heredoc = $Matches[1] }
         if ($l -match '^\s*#') { continue }
+        $read = $false
+        $sel = if ($l -match '^\S') { $selTop } else { $selNested }
         if ($l -match "^(\s*)case $sel in\s*(.*)$") {
+            $read = $true
             $indent = $Matches[1].Length
             $rest = $Matches[3]
             if ($rest -match $label) { & $add $Matches[0]; continue }   # `case .. in a|b) ;; *) ..` on one line
@@ -57,9 +78,13 @@ function Get-VmDispatchedModes([string]$Path) {
         }
         # the mode a bare call runs: ${1:-check}
         foreach ($t in [regex]::Matches($l, '\$\{1:-([A-Za-z][\w-]*)\}')) { [void]$found.Add($t.Groups[1].Value) }
-        foreach ($t in [regex]::Matches($l, "\[ $sel ==? `"?(-{0,2}[A-Za-z][\w-]*)`"? \]")) { [void]$found.Add($t.Groups[2].Value) }
+        foreach ($t in [regex]::Matches($l, "\[ $sel ==? `"?(-{0,2}[A-Za-z][\w-]*)`"? \]")) { [void]$found.Add($t.Groups[2].Value); $read = $true }
+        # a top-level dispatch on $1 that no rule above read
+        if (-not $read -and $l -match '^(case|if|elif|while|\[)\b' -and ($l -replace "'[^']*'", '') -match '\$\{?1\b') {
+            $unreadable.Add("line $($i + 1): $($l.Trim())")
+        }
     }
-    return @($found | Sort-Object)
+    return @{ modes = @($found | Sort-Object); unreadable = @($unreadable) }
 }
 
 # The package and ruya-pack the .play checks copy: @{ files = <paths>; ready = <both exist> }.
