@@ -117,7 +117,7 @@ QtObject {
         const first = info.problems && info.problems.length > 0 ? info.problems[0] : null
         if (verdict === "invalid-package" && first && first.code === "ceiling.refused")
             return qsTr("This game is not signed, so it may not have this permission: %1. Ask the developer for a signed version.")
-                .arg(PlayTrust.permissionWords(first.path.substring(first.path.lastIndexOf("/") + 1), ""))
+                .arg(PlayTrust.permissionWords(first.path.substring(first.path.lastIndexOf("/") + 1)))   // an unknown key shows itself
         return jobStatusText(verdict)
     }
 
