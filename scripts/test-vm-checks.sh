@@ -1588,6 +1588,13 @@ print(json.loads(b.read("play.json"))["id"], json.loads(b.read("play.json"))["ti
 ids="$(grep -o 'appid="\$appid\.[a-z]*"' "$here/vm-play-check.sh" | sort | tr '\n' ' ')"
 [ "$ids" = 'appid="$appid.perms" appid="$appid.verify" ' ] && pass "vm-play-check.sh: verify and perms install under their own ids (RUY-877)" || fail "vm-play-check.sh: mode ids '$ids'"
 ! grep -q 'systemctl restart ruya-play.service' <(sed -n '/^if \[ "\$mode" = perms \]/,/^fi$/p' "$here/vm-play-check.sh") && pass "vm-play-check.sh perms no longer uninstalls the check's id and restarts (RUY-865 workaround gone)" || fail "vm-play-check.sh perms still restarts the service"
+pc="$here/../image/rootfs/usr/lib/tmpfiles.d/ruya-play.conf"
+if grep -qx 'R /var/lib/ruya-play/staging - - - -' "$pc" && grep -qx 'R /var/lib/ruya-play/inspect - - - -' "$pc"     && ! grep -Eq '^[dDfFwzZ] +/var/lib/ruya-play/(staging|inspect)' "$pc"; then
+    pass "ruya-play.conf removes the old staging/ and inspect/ and creates neither (RUY-867)"
+else
+    fail "ruya-play.conf: R lines for the old staging/ and inspect/ missing, or a line creates them"
+fi
+grep -q 'the old \$state/\$old is gone' "$here/vm-play-check.sh" && pass "vm-play-check.sh checks the old folders are gone (RUY-867)" || fail "vm-play-check.sh: no old-folder step"
 grep -q 'SKIP: no profile on this VM' "$here/vm-play-check.sh" && ! grep -q 'bad "no profile' "$here/vm-play-check.sh" && pass "vm-play-check.sh: no profile is a SKIP, not a FAIL (RUY-877)" || fail "vm-play-check.sh: no profile is not a SKIP"
 grep -q 'share/ruyaos/play/trust.json' "$here/vm-play-check.sh" && grep -q '"1 unverified None None False"' "$here/vm-play-check.sh" && pass "vm-play-check.sh checks the trust record" || fail "vm-play-check.sh: the trust record is not checked"
 [ "$(grep -c '^zin = zipfile.ZipFile(src)' "$here/vm-play-check.sh")" = 2 ] && pass "vm-play-check.sh re-opens the source before the bomb" || fail "vm-play-check.sh: the bomb reuses the tampered zip's ZipInfo objects"
