@@ -192,7 +192,7 @@ fn the_build_folder_gets_the_modes_of_play_files() {
 fn the_layout_still_refuses_a_reserved_top_level_name_in_the_tree() {
     // A package cannot get this far (`table.reserved_top_level`); the layout keeps its own check
     // as an invariant, so a tree that has one anyway is `commit.failed`, never merged.
-    for name in ["launcher", "share"] {
+    for name in ["launcher", "runners", "share"] {
         let state = tempfile::tempdir().unwrap();
         let seen: Seen = Arc::default();
         let s2 = seen.clone();

@@ -3,10 +3,11 @@
 //! re-walk ([`unpack::walk`], [`unpack::check_tree`], [`unpack::rehash_with`]) over the deployment.
 //!
 //! What the console itself writes into `/app` is not in `play.files` and is left out of the
-//! comparison: the root files ([`ROOT_FILES`]) and the reserved top-level names
-//! ([`RESERVED_TOP_LEVEL`]: the launcher mount and `share/`, art and desktop entry; Flatpak's own
-//! empty `.ref` too), and the empty mount folders of the other extension points with their parents
-//! when the table does not list them (ADR-038: `runners/`, `lib/i386-linux-gnu/`).
+//! comparison: the root files ([`ROOT_FILES`]), `share/` (art, desktop entry, trust record),
+//! Flatpak's own empty `.ref`, and the empty mount folder of each extension point with its parents
+//! when the table does not list them (ADR-038: `launcher/`, `runners/`, `lib/i386-linux-gnu/`).
+//! Anything inside a mount folder is compared (RUY-900: before it, all of `launcher/` was left
+//! out).
 //!
 //! Nothing here writes. The tree is read without following links (a link is compared as a link).
 
@@ -57,8 +58,10 @@ pub(crate) fn flatpak_ref(path: &str, f: &Found) -> bool {
 fn console_written(path: &str, f: &Found) -> bool {
     let top = path.split('/').next().unwrap_or("");
     // `.ref` is in the format's list too, but only Flatpak's own empty file is left out (below):
-    // a `.ref` that is not that is compared like any other entry.
-    (top != ".ref" && RESERVED_TOP_LEVEL.contains(&top))
+    // a `.ref` that is not that is compared like any other entry. The reserved mount folders
+    // (`launcher`, `runners`) are empty in a deployment: [`mount_folder`] leaves out the folder,
+    // and anything inside it is compared.
+    (top != ".ref" && RESERVED_TOP_LEVEL.contains(&top) && !EXTENSION_DIRS.contains(&top))
         || ROOT_FILES.contains(&path)
         || flatpak_ref(path, f)
 }

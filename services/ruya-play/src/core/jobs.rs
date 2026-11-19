@@ -8,6 +8,11 @@
 //! line. It is read as untrusted input like `ruya-store`'s: a line that does not parse or breaks a
 //! rule is dropped, a file that is not one gives an empty table, and nothing in it is ever resumed:
 //! a job left queued or running is settled once to `failed` with the reason `interrupted`.
+//!
+//! **Forward-compatible (RUY-900):** a key this service does not know, in the header or on a job
+//! line, is ignored, so a file written by a newer image still reads after a bootc rollback. A
+//! field may only be added with a safe default for a reader that does not know it; a change an
+//! older reader must not misread raises `format` (a file of another format is an empty table).
 
 use crate::core::codes;
 use crate::core::status::{JobStatus, Phase};
@@ -204,14 +209,12 @@ pub fn settle(jobs: &mut [JobRecord], now: UnixSeconds) -> usize {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Header {
     format: u64,
     counter: u64,
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct RawJob {
     job: String,
     source: String,
@@ -505,6 +508,17 @@ mod tests {
         let text = encode(4, &jobs);
         assert!(text.contains("\"source\":\"play\""), "{text}");
         assert_eq!(decode(&text), (4, jobs));
+    }
+
+    #[test]
+    fn a_file_from_a_newer_image_reads_after_a_rollback() {
+        // Unknown keys in the header and on a job line are ignored, never a dropped table.
+        let jobs = vec![job(3, JobState::Queued, None)];
+        let text = encode(3, &jobs);
+        let mut lines = text.lines();
+        let header = lines.next().unwrap().replacen('{', "{\"later\":true,", 1);
+        let line = lines.next().unwrap().replacen('{', "{\"eta_s\":12,", 1);
+        assert_eq!(decode(&format!("{header}\n{line}\n")), (3, jobs));
     }
 
     #[test]

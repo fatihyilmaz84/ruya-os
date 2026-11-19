@@ -591,12 +591,13 @@ fn inspect_reads_only_data() {
 
 #[test]
 fn a_reserved_top_level_name_is_refused_before_the_unpack_but_a_nested_one_is_allowed() {
-    // Flatpak writes /app/.ref itself (RUY-848); `launcher` and `share` are the console's (RUY-870).
-    // The format refuses all three as `table.reserved_top_level`, the folder and anything below.
+    // Flatpak writes /app/.ref itself (RUY-848); `launcher`, `runners` (RUY-900) and `share` are the
+    // console's (RUY-870). The format refuses all four as `table.reserved_top_level`, the folder and anything below.
     for path in [
         ".ref",
         ".ref/x",
         "launcher/bin/a",
+        "runners/GEProton10/x",
         "share/x",
         "share/applications/evil.desktop",
     ] {

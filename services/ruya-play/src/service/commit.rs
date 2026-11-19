@@ -26,10 +26,9 @@
 
 use crate::core::deps::{Commit, CommitError, CommitRequest, RecommitRequest};
 use crate::core::status::Phase;
-use ruya_play_format::limits::ROOT_FILES;
+use ruya_play_format::limits::{windows_runner, I386_LIB_DIR, ROOT_FILES};
 use ruya_play_format::manifest::Manifest;
 use ruya_play_format::table::RESERVED_TOP_LEVEL;
-use ruya_play_trust::permissions::windows_runner;
 use ruya_play_trust::{grants, metadata_sections, Assessment, Gate, TrustRecord};
 use std::path::{Path, PathBuf};
 
@@ -65,7 +64,7 @@ pub const RUNNER_DIR: &str = "runners";
 /// The freedesktop runtime's 32-bit libraries, for Windows runners (05 §16 Q3).
 pub const COMPAT_I386_EXTENSION: &str = "org.freedesktop.Platform.Compat.i386";
 /// Its mount folder in `/app`.
-pub const COMPAT_I386_DIR: &str = "lib/i386-linux-gnu";
+pub const COMPAT_I386_DIR: &str = I386_LIB_DIR;
 /// The 32-bit GL drivers, for Windows runners.
 pub const GL32_EXTENSION: &str = "org.freedesktop.Platform.GL32";
 /// Its mount folder in `/app` (inside the Compat.i386 mount).
@@ -126,7 +125,8 @@ pub struct ExtensionPoint {
 /// The extension points of an app of `runner` (ADR-038): the launcher and the system runners
 /// (`org.ruyaos.Play.Runner.<Name>` under `/app/runners/<Name>`) for every app, never fetched by
 /// Flatpak (the image links them in, `no-autodownload`), and for a Windows runner the freedesktop
-/// runtime's 32-bit points as the spike declared them (`scripts/spikes/play/q3-proton.sh`). Those
+/// runtime's 32-bit points as the spike declared them (`scripts/spikes/play/q3-proton.sh`), also
+/// `no-autodownload` (offline first: the image preinstalls them, RUY-34). Those
 /// are inert unless the package asks for `multiarch`, which is a permission
 /// (`ruya_play_trust::permissions`), not something the runner grants.
 pub fn extension_points(runner: &str) -> Vec<ExtensionPoint> {
@@ -155,7 +155,10 @@ pub fn extension_points(runner: &str) -> Vec<ExtensionPoint> {
         out.push(ExtensionPoint {
             id: COMPAT_I386_EXTENSION,
             directory: COMPAT_I386_DIR,
-            keys: vec![("version", s(RUNTIME_BRANCH))],
+            keys: vec![
+                ("version", s(RUNTIME_BRANCH)),
+                ("no-autodownload", s("true")),
+            ],
         });
         out.push(ExtensionPoint {
             id: GL32_EXTENSION,
@@ -166,6 +169,7 @@ pub fn extension_points(runner: &str) -> Vec<ExtensionPoint> {
                 ("subdirectories", s("true")),
                 ("add-ld-path", s("lib")),
                 ("merge-dirs", s(GL32_MERGE_DIRS)),
+                ("no-autodownload", s("true")),
             ],
         });
     }

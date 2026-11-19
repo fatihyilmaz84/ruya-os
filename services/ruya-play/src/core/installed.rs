@@ -6,6 +6,12 @@
 //! that cannot be read as written is `installed.corrupt` and is never reset silently (the
 //! `ruya-profiles` rule). An entry without `generation` (written before generations existed)
 //! reads as generation 0.
+//!
+//! **Forward-compatible (RUY-900):** a key this service does not know, at the top or on an entry,
+//! is ignored, so a file written by a newer image still reads after a bootc rollback (an unknown
+//! key must never make it `installed.corrupt`, which holds every install). A field may only be
+//! added with a safe default for a reader that does not know it; a change an older reader must
+//! not misread raises `format`, which such a reader refuses as `installed.corrupt`.
 
 use crate::core::codes;
 use crate::core::jobs::write_atomic;
@@ -124,14 +130,12 @@ impl InstalledBuilds for MemoryInstalled {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct RawFile {
     format: u64,
     installed: Vec<RawEntry>,
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct RawEntry {
     id: String,
     build: u64,
@@ -350,7 +354,6 @@ mod tests {
             br#"{"format":2,"installed":[]}"#,
             br#"{"format":1,"installed":[{"id":"a b","build":1}]}"#,
             br#"{"format":1,"installed":[{"id":"a","build":1},{"id":"A","build":2}]}"#,
-            br#"{"format":1,"installed":[],"extra":1}"#,
         ] {
             std::fs::write(&path, bad).unwrap();
             let e = FileInstalled::open(&path).unwrap_err();
@@ -362,5 +365,32 @@ mod tests {
             );
             assert_eq!(std::fs::read(&path).unwrap(), bad);
         }
+    }
+
+    #[test]
+    fn a_file_from_a_newer_image_reads_after_a_rollback() {
+        // Unknown keys at the top and on an entry are ignored, never `installed.corrupt` (which
+        // would hold every install after a bootc rollback).
+        let t = tempfile::tempdir().unwrap();
+        let path = t.path().join("installed.json");
+        std::fs::write(
+            &path,
+            br#"{"format":1,"installed":[{"id":"a","build":4,"generation":2,"later":"x"}],"extra":1}"#,
+        )
+        .unwrap();
+        let mut f = FileInstalled::open(&path).unwrap();
+        assert_eq!(
+            f.get("a").unwrap(),
+            Some(Installed {
+                build: 4,
+                generation: 2
+            })
+        );
+        // Writing it again keeps what this reader knows.
+        f.record("a", 5).unwrap();
+        assert_eq!(
+            FileInstalled::open(&path).unwrap().build_of("a").unwrap(),
+            Some(5)
+        );
     }
 }

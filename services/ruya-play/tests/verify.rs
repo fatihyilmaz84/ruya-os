@@ -165,7 +165,11 @@ fn the_empty_mount_folders_are_left_out_but_not_what_is_put_in_them() {
     assert!(files.join("lib/i386-linux-gnu/GL").is_dir());
     let r = verify(&mut h, ID);
     assert_eq!(r.status, JobStatus::Ok, "{:?}", r.problems);
-    for planted in ["runners/extra.bin", "lib/i386-linux-gnu/GL/extra.bin"] {
+    for planted in [
+        "launcher/extra.bin",
+        "runners/extra.bin",
+        "lib/i386-linux-gnu/GL/extra.bin",
+    ] {
         std::fs::write(files.join(planted), b"x").unwrap();
         let r = verify(&mut h, ID);
         assert_eq!(codes(&r), ["staging.changed"], "{planted}");

@@ -144,6 +144,19 @@ pub const OARS_VALUES: [&str; 4] = ["none", "mild", "moderate", "intense"];
 pub const GPU_APIS: [&str; 2] = ["vulkan", "opengl"];
 /// `run.runner`, closed.
 pub const RUNNERS: [&str; 5] = ["native", "wine", "proton", "emulator", "engine"];
+/// The `run.runner` values that run Windows programs: X11 (05 section 6.3) and the runtime's 32-bit
+/// libraries mounted at [`I386_LIB_DIR`] (ADR-038).
+pub const WINDOWS_RUNNERS: [&str; 2] = ["wine", "proton"];
+
+/// Is `runner` one of [`WINDOWS_RUNNERS`]?
+pub fn windows_runner(runner: &str) -> bool {
+    WINDOWS_RUNNERS.contains(&runner)
+}
+
+/// Where the console mounts the runtime's 32-bit libraries (`org.freedesktop.Platform.Compat.i386`)
+/// in the `/app` of a package of a Windows runner (ADR-038, RUY-900): such a package may have
+/// nothing there (`run.lib_i386_reserved`).
+pub const I386_LIB_DIR: &str = "lib/i386-linux-gnu";
 /// `components[].type`, closed.
 pub const COMPONENT_TYPES: [&str; 4] = ["wine", "proton", "emulator", "engine"];
 /// `components[].source`, closed.

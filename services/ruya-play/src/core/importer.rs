@@ -740,10 +740,29 @@ impl Importer {
         Ok(actions)
     }
 
+    /// The staging filesystem has room for `bytes` of files: their size plus 10 % (the spike
+    /// measured a 1.03x peak), asked before anything is written. `space.not_enough` when not, a
+    /// staging problem when the question fails. Installs and re-commits ask the same.
+    fn space_for(&self, bytes: u64) -> Result<(), Problem> {
+        let needed = bytes.saturating_add(bytes.div_ceil(10));
+        match self.free_space.available(&self.cfg.staging) {
+            Err(e) => Err(staging_problem("", &e)),
+            Ok(free) if free < needed => Err(Problem::new(
+                codes::SPACE_NOT_ENOUGH,
+                "",
+                format!(
+                    "The package needs {needed} bytes free (its size plus 10 %); {free} are free."
+                ),
+            )),
+            Ok(_) => Ok(()),
+        }
+    }
+
     /// Commit the installed app `play.<id>` again with the metadata generated now (ADR-038; the
     /// reconcile's [`reconcile::Action::Recommit`]), one job at a time with the installs: its
     /// deployed `/app` (only when it is [`reconcile::open_ours`], read through the folder that
-    /// check opened) is copied into `staging/recommit-<id>/files` without Flatpak's `.ref`, what
+    /// check opened) is copied, after the same free-space question as an install, into
+    /// `staging/recommit-<id>/files` without Flatpak's `.ref`, what
     /// the metadata is generated from is read back from it ([`reconcile::installed_app`]), the
     /// copy goes through [`Commit::recommit`], the staging folder is removed and the generation is
     /// stamped into `installed.json`. Returns false when there was nothing to do: the record
@@ -765,6 +784,13 @@ impl Importer {
             return Ok(false);
         };
         let (manifest, assessment) = reconcile::installed_app(&files)?;
+        // The copy is a reflink on XFS, but a full copy elsewhere: ask as an install does.
+        let bytes = unpack::walk(&files)
+            .map_err(|e| staging_problem("", &e))?
+            .values()
+            .map(|f| f.size)
+            .fold(0u64, u64::saturating_add);
+        self.space_for(bytes)?;
         let name = format!("recommit-{id}");
         let job_dir = self
             .staging
@@ -1325,21 +1351,8 @@ impl Importer {
         }
 
         // 4. Space, before the first write: the installed size plus 10 %.
-        let needed = total.saturating_add(total.div_ceil(10));
-        match self.free_space.available(&self.cfg.staging) {
-            Err(e) => return refused(job, vec![staging_problem("", &e)], Some(insp)),
-            Ok(free) if free < needed => {
-                return refused(
-                    job,
-                    one(
-                        codes::SPACE_NOT_ENOUGH,
-                        "",
-                        format!("The package needs {needed} bytes free (its size plus 10 %); {free} are free."),
-                    ),
-                    Some(insp),
-                )
-            }
-            Ok(_) => {}
+        if let Err(p) = self.space_for(total) {
+            return refused(job, vec![p], Some(insp));
         }
         self.hooks.step(job, &Step::BeforeUnpack);
         if cancel.load(Ordering::SeqCst) {

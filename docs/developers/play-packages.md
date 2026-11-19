@@ -75,7 +75,8 @@ Star Hopper.play/
 ```
 
 - A package holds **only regular files and folders**. A symlink, hard link, device or FIFO makes it invalid (USB sticks formatted exFAT or FAT have none). If your game needs links, `ruya-pack build --links-as-data` records a relative link that stays inside the same top-level folder as data, and the console recreates it.
-- The top-level names `.ref`, `launcher` and `share` are the console's: a package may not have them at its top (the folder or anything below it; `table.reserved_top_level`). `payload/share/` is fine.
+- The top-level names `.ref`, `launcher`, `runners` and `share` are the console's: a package may not have them at its top (the folder or anything below it; `table.reserved_top_level`). `payload/share/` is fine. A `wine` or `proton` package may also have nothing in `lib/i386-linux-gnu/`, where the console mounts the runtime's 32-bit libraries (`run.lib_i386_reserved`); a native package may use that folder. An update that switches a game from `native` to `wine` or `proton` must not carry `lib/i386-linux-gnu/` over.
+- `/app/runners/` exists in every installed game, may be empty and is read-only. The console's system runners are mounted there (**planned**, RUY-34), but its folder names and contents are not an API: the launcher picks the runner (05 section 6.2), and a package must not use a path into `/app/runners/`.
 - Names are relative, use `/`, and must stay unique even when letter case is ignored (exFAT and Wine). `build` tells you which two files collide.
 - A file of 4 GiB or more cannot be copied to a FAT32 stick. `build` warns (`size.fat32`); tell your players to use exFAT.
 - The executable bit is recorded in `play.files`. On Windows, `build` marks a file that starts with `#!` or an ELF header, or one you name with `--exec payload/start`.
@@ -347,7 +348,7 @@ A Windows game keeps its saves in a Wine **prefix**, a fake `C:` drive. The cons
 - **`run.prefix.epoch`** is a whole number. When an update raises it, the first launch backs up `data.saves`, recreates the prefix, and restores them. Raise it only when a new runner or a new redistributable needs a clean prefix.
 - **First-run setup** (`run.setup[]`) runs commands such as a Visual C++ redistributable **once per prefix, at the first launch, inside the sandbox with the game's own permissions**; never at install time and never as root. They show on the launch splash and time out after 10 minutes; a failed step is reported, not ignored. There is **no network** at setup (no `winetricks` downloads): ship the redistributable in the package. The sample's step, `setup.exe`, does nothing and exits `0`, to show the field.
 - Under Wine the `Z:` drive is the sandbox's root, not the host's. The Flatpak sandbox limits files, not Wine's drive mapping.
-- **32-bit Windows programs** need `"multiarch": true` (below); without it the sandbox kills them. The console mounts the runtime's 32-bit libraries (`org.freedesktop.Platform.Compat.i386` and `GL32`) for every `wine` and `proton` package; the permission is what lets 32-bit code run. Do not ship anything under `lib/i386-linux-gnu/` or a top-level `runners/` folder: the console mounts there and refuses an install that would hide your files (RUY-900; the system runners under `/app/runners/` are **planned**, RUY-34). *The generated metadata is verified on the host; the mounts on a console are pending (`vm-play-check.sh launch-windows`).*
+- **32-bit Windows programs** need `"multiarch": true` (below); without it the sandbox kills them. The console mounts the runtime's 32-bit libraries (`org.freedesktop.Platform.Compat.i386` and `GL32`) for every `wine` and `proton` package; the permission is what lets 32-bit code run (the folder is reserved, see [Layout](#layout)). *The generated metadata is verified on the host; the mounts on a console are pending (`vm-play-check.sh launch-windows`).*
 - Windows packages show through X11 on the console's compositor; you do not need to do anything for it.
 
 ## Permissions and what each costs the player
@@ -571,6 +572,7 @@ Common ones first:
 | `run.disc_not_in_table` | Fix the run block of play.json (05 section 6.3). |
 | `run.disc_path` | Fix the run block of play.json (05 section 6.3). |
 | `run.disc_placeholder_without_discs` | Fix the run block of play.json (05 section 6.3). |
+| `run.lib_i386_reserved` | Move the files out of lib/i386-linux-gnu/ (for example below payload/): a wine or proton package gets the runtime's 32-bit libraries mounted there. |
 | `run.placeholder_component` | Fix the run block of play.json (05 section 6.3). |
 | `run.unknown_key` | Fix the run block of play.json (05 section 6.3). |
 | `runner.arch_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
@@ -614,7 +616,7 @@ Common ones first:
 | `table.not_utf8` | Run ruya-pack build to write play.files again; do not edit it by hand. |
 | `table.parent_not_dir` | Run ruya-pack build to write play.files again; do not edit it by hand. |
 | `table.reserved_path` | Run ruya-pack build to write play.files again; do not edit it by hand. |
-| `table.reserved_top_level` | Move the contents below another folder (for example payload/): .ref, launcher and share at the top of a package belong to the console. |
+| `table.reserved_top_level` | Move the contents below another folder (for example payload/): .ref, launcher, runners and share at the top of a package belong to the console. |
 | `table.too_big` | Run ruya-pack build to write play.files again; do not edit it by hand. |
 | `table.too_many` | Run ruya-pack build to write play.files again; do not edit it by hand. |
 | `text.bidi` | Write plain text: no markup, no links, no control or invisible characters. |

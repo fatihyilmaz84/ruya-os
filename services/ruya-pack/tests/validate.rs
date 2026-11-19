@@ -327,8 +327,9 @@ fn licence_files_match_by_whole_words_not_by_substring() {
 
 #[test]
 fn a_reserved_top_level_name_is_refused_with_its_own_fix_but_a_nested_one_is_not() {
-    // The console writes .ref, launcher and share into the installed app (RUY-870).
-    for rel in [".ref/x", "launcher/bin/a", "share/x"] {
+    // The console writes .ref, launcher, runners and share into the installed app (RUY-870,
+    // RUY-900).
+    for rel in [".ref/x", "launcher/bin/a", "runners/x", "share/x"] {
         let t = tempfile::tempdir().unwrap();
         let dir = t.path().join("game");
         native(&dir);

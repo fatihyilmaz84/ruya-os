@@ -123,6 +123,22 @@ fn a_failed_recommit_keeps_the_generation_and_is_tried_again() {
 }
 
 #[test]
+fn a_recommit_asks_for_space_as_an_install_does() {
+    use std::sync::atomic::Ordering;
+    let (h, installed) = deployed(&Fx::minimal(), 0);
+    // Less than the deployed /app takes: nothing is copied or committed.
+    h.free.bytes.store(4, Ordering::SeqCst);
+    let err = h.importer.recommit(ID).unwrap_err();
+    assert_eq!(err.code, "space.not_enough");
+    assert!(h.free.calls.load(Ordering::SeqCst) >= 1);
+    assert!(h.commit.recommits().is_empty());
+    assert!(h.staging().is_empty(), "{:?}", h.staging());
+    assert_eq!(generation(&installed), 0);
+    h.free.bytes.store(u64::MAX, Ordering::SeqCst);
+    assert_eq!(h.importer.recommit(ID), Ok(true));
+}
+
+#[test]
 fn an_app_that_cannot_be_read_back_is_not_committed() {
     let (h, installed) = deployed(&Fx::minimal(), 0);
     std::fs::remove_file(files_dir(&h, ID).join("share/ruyaos/play/trust.json")).unwrap();

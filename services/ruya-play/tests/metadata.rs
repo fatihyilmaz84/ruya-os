@@ -45,11 +45,13 @@ const PLAY_POINTS: &str = "[Extension org.ruyaos.Play.Launcher]\n\
                            autodelete=false\n";
 
 /// What a Windows runner adds: the runtime's 32-bit points, exactly as the spike declared them
-/// (`scripts/spikes/play/q3-proton.sh`), on the runtime's branch.
+/// (`scripts/spikes/play/q3-proton.sh`), on the runtime's branch, never fetched by Flatpak (the
+/// image preinstalls them, RUY-34).
 const WINDOWS_POINTS: &str = "\n\
                               [Extension org.freedesktop.Platform.Compat.i386]\n\
                               directory=lib/i386-linux-gnu\n\
                               version=26.08\n\
+                              no-autodownload=true\n\
                               \n\
                               [Extension org.freedesktop.Platform.GL32]\n\
                               directory=lib/i386-linux-gnu/GL\n\
@@ -59,7 +61,8 @@ const WINDOWS_POINTS: &str = "\n\
                               add-ld-path=lib\n\
                               merge-dirs=vulkan/icd.d;glvnd/egl_vendor.d;\
                               egl/egl_external_platform.d;lib/dri;lib/gbm;\
-                              vulkan/explicit_layer.d;vulkan/implicit_layer.d\n";
+                              vulkan/explicit_layer.d;vulkan/implicit_layer.d\n\
+                              no-autodownload=true\n";
 
 /// The metadata of a native app around its permission sections.
 fn around(id: &str, permissions: &str) -> String {
@@ -84,6 +87,8 @@ fn proton_full() -> Fx {
     let mut fx = Fx::wine_full();
     fx.manifest["run"]["runner"] = json!("proton");
     fx.manifest["components"][0]["type"] = json!("proton");
+    // A bundled Proton without runner.json starts through its `proton` script (ADR-037).
+    fx.file("components/wine/proton", b"#!/bin/sh");
     fx
 }
 

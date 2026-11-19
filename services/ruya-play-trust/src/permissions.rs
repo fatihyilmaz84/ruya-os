@@ -170,15 +170,10 @@ pub const ALWAYS: [Grant; 3] = [
     ctx("devices", "dri"),
 ];
 
-/// The runner kinds that run Windows programs (05 §6.1): X11 (05 §6.3) and the 32-bit runtime
-/// extension points in the generated metadata (ADR-038).
-pub fn windows_runner(runner: &str) -> bool {
-    matches!(runner, "wine" | "proton")
-}
-
-/// The display socket of a runner: Windows programs run on X11 (05 §6.3), the rest on Wayland.
+/// The display socket of a runner: Windows programs
+/// (`ruya_play_format::limits::windows_runner`) run on X11 (05 §6.3), the rest on Wayland.
 pub fn display_socket(runner: &str) -> Grant {
-    if windows_runner(runner) {
+    if ruya_play_format::limits::windows_runner(runner) {
         ctx("sockets", "x11")
     } else {
         ctx("sockets", "wayland")
