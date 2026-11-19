@@ -58,9 +58,7 @@ if rows:
 }
 policy_pick="$(pick_output speaker)"
 [ -n "$policy_pick" ] || policy_pick="$(pick_output any)"
-set -- $policy_pick
-out_id="${1:-}"
-was_default="${2:-}"
+read -r out_id was_default _ <<< "$policy_pick"
 if [ -z "$out_id" ]; then
     echo "AUDIO_SAVED_OUTPUT_FAIL (no active output in ListOutputs)"
 else
@@ -71,16 +69,16 @@ else
     as_shell systemctl --user restart pipewire.service wireplumber.service 2>&1
     sleep 8
     after="$(default_node)"
-    set -- $(busctl --system --json=short call org.ruyaos.Devices1 /org/ruyaos/Devices1 org.ruyaos.Devices1.Audio ListOutputs 2>/dev/null         | python3 -c '
+    read -r _ now_default now_saved _ <<< "$(busctl --system --json=short call org.ruyaos.Devices1 /org/ruyaos/Devices1 org.ruyaos.Devices1.Audio ListOutputs 2>/dev/null         | python3 -c '
 import json, sys
 want = sys.argv[1]
 for o in json.load(sys.stdin)["data"][0]:
     o = {k: v["data"] for k, v in o.items()}
     if o.get("id") == want:
         print(o["id"], str(o["is_default"]).lower(), str(o["is_saved"]).lower())
-' "$out_id")
-    echo "after the restart: $out_id is_default=${2:-?} is_saved=${3:-?}, default sink node=$after"
-    if [ "$status" = 's "ok"' ] && [ "$was_default" = true ] && [ "${2:-}" = true ] && [ "${3:-}" = true ] && [ -n "$after" ]; then
+' "$out_id")"
+    echo "after the restart: $out_id is_default=${now_default:-?} is_saved=${now_saved:-?}, default sink node=$after"
+    if [ "$status" = 's "ok"' ] && [ "$was_default" = true ] && [ "$now_default" = true ] && [ "$now_saved" = true ] && [ -n "$after" ]; then
         echo "AUDIO_SAVED_OUTPUT_OK"
     else
         echo "AUDIO_SAVED_OUTPUT_FAIL"

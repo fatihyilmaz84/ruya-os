@@ -951,7 +951,8 @@ print("yes" if want in seats else "no %s" % seats)' "$slot" "$joiner" "$pad")"
     case "$out" in 'suu "ok"'*) ok "DeleteProfile $joiner: the check's profile is removed" ;; *) bad "DeleteProfile $joiner: $out" ;; esac
 }
 
-case "${1:-check}" in
+mode="${1:-check}"
+case "$mode" in
 start)
     two_profiles
     [ -n "$me" ] && ok "profile $me signs in" || { bad "need a profile"; exit 1; }
@@ -1032,7 +1033,7 @@ seathold|coop)
     [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
     two_profiles
     [ -n "$me" ] && ok "profile $me signs in" || { bad "need a profile"; exit 1; }
-    if [ "$1" = coop ]; then
+    if [ "$mode" = coop ]; then
         echo "--- split-screen co-op (RUY-681): player 2's pad reaches pad2, which outlives the hold until the game ends"
     else
         echo "--- a seat is held while its pad is gone (RUY-627): RUYA_SEAT_HOLD_SECS=5, a second profile for player 2"
@@ -1053,7 +1054,7 @@ seathold|coop)
     dir="$(mktemp -d "${CHECK_TMP:-/var/tmp}/ruya-input-check.XXXXXX")"
     chmod 0755 "$dir"
     install -m 0644 "$probe" "$dir/vm-input-probe.py"
-    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe "$1" --user "ruya-$me" --other "$player2"
+    probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe "$mode" --user "ruya-$me" --other "$player2"
     rm -rf "$dir"
     rm -f "$dropin/50-ruya-check-seat-hold.conf"
     systemctl daemon-reload

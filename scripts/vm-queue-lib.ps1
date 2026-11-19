@@ -26,30 +26,35 @@ function Get-VmModes([string]$Path) {
 
 # What a script dispatches (the lint's side of the `# modes:` line; the queue never guesses):
 # @{ modes = <sorted modes>; unreadable = <lines it could not read> }.
-# One way to dispatch, enforced (RUY-890). The canonical forms, the only ones read:
-#   case "${1:-default}" in            labels at one indentation, `esac` at the case's
-#   [ "${1:-default}" = mode ]         also `==`
-#   name="${1:-default}"               at the top level; then `case "$name" in` and `[ "$name" = mode ]`
-# Any OTHER top-level (unindented) reference to `$1`, `${1...}` or to such a name (`$name`,
-# `${name}`, `!=`, `[[ ]]`, unquoted, `mode=${1-x}`, an echo of it, ...) is `unreadable`: the lint
-# fails on it, never guessing a single mode. Indented lines are function bodies, where `$1` is that
-# function's own argument, and here-documents are text for another program: both are skipped.
+#
+# One way to dispatch, enforced (RUY-890). A script whose `# modes:` is not `none` reads its mode
+# with exactly one of
+#   case "${1:-default}" in            (or ${1-default}; `[ "${1:-default}" = mode ]` is read too)
+#   mode="${1:-default}"               at the top level, then `case "$mode" in` / `[ "$mode" = mode ]`
+# and the lint reads the labels of that case (at the block's first indentation) and the tested modes.
+# Outside function bodies (`name() {` ... `}` at the same indentation) ANY other reference to `$1`,
+# `${1...}`, `$@`, `$*`, or to the selector variable in a test or branch, at any indent, is
+# `unreadable`, and so is `set -- args`: the lint fails on it, never guessing a single mode. Inside a
+# function `$1`, `$@` and `$*` are its own arguments; only the selector variable in a test or branch
+# is still refused. The selector variable may be used inside a plain command line (`echo "mode $mode"`, `run "$mode"`).
+# A `# modes: none` script has no canonical form: it may not use `$1`/`$@`/`$*` outside functions.
+# Here-documents and multi-line single-quoted strings are text for another program: skipped.
 function Get-VmDispatchedModes([string]$Path) {
     $lines = [IO.File]::ReadAllLines($Path)
     $found = New-Object System.Collections.Generic.HashSet[string]
     $unreadable = New-Object System.Collections.Generic.List[string]
-    $assign = '^(\w+)="\$\{1:-[^}]*\}"\s*(#.*)?$'
-    # A top-level `set --` rebinds $1: from there on `$1` is not the script's mode.
-    $setAt = $lines.Count
-    for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match '^set --( |$)') { $setAt = $i; break } }
+    $listed = Get-VmModes $Path
+    $none = ($null -ne $listed -and $listed.Count -eq 0)
+    $first = '\$\{1:?-[^}]*\}'
+    $assign = '^(\w+)="' + $first + '"\s*(#.*)?$'
     $names = New-Object System.Collections.Generic.List[string]
-    for ($i = 0; $i -lt $setAt; $i++) {
-        if ($lines[$i] -match $assign) { $names.Add([regex]::Escape($Matches[1])) }
+    if (-not $none) {
+        foreach ($l in $lines) { if ($l -match $assign) { $names.Add([regex]::Escape($Matches[1])) } }
     }
-    $selectors = @('\$\{1:-[^}]*\}') + @($names | ForEach-Object { '\$' + $_ })
+    $selectors = @($(if ($none) { '(?!)' } else { $first })) + @($names | ForEach-Object { '\$' + $_ })
     $sel = '"(' + ($selectors -join '|') + ')"'
-    $quotedName = '"\$(?:' + ($names -join '|') + ')"'
-    $refs ='\$\{?(' + ((@('1') + @($names)) -join '|') + ')\b'
+    $nameRef = '\$\{?(?:' + ((@('(?!)') + @($names)) -join '|') + ')\b'
+    $argRef = '\$\{?[1@*]|\$[@*]'
     $label = '^"?([\w-]+)"?(\|"?[\w-]+"?)*\)'
     $add = {
         param($text)
@@ -59,7 +64,8 @@ function Get-VmDispatchedModes([string]$Path) {
         }
     }
     $heredoc = $null
-    $inSingle = $false     # inside a single-quoted string that spans lines (a python snippet): text for another program
+    $inSingle = $false     # inside a single-quoted string that spans lines (a python snippet)
+    $funcIndent = -1       # the indentation of the function whose body we are in; -1: top level
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $l = $lines[$i]
         # a here-document is text for another program (a shim, a python script), not this script's dispatch
@@ -81,8 +87,21 @@ function Get-VmDispatchedModes([string]$Path) {
         $q = $left.IndexOf("'")
         # (an apostrophe inside a word, "don't", opens nothing; a string opens after a space, `=` or `(`)
         if ($q -ge 0 -and ($q -eq 0 -or $left[$q - 1] -match '[\s=(]')) { $inSingle = $true; $left = $left.Substring(0, $q) }
-        if ($tail) { continue }
-        if ($l -match "^(\s*)case $sel in\s*(.*)$") {
+        # function bodies: from `name() {` to the `}` at the same indentation
+        $inFunc = $funcIndent -ne -1
+        if ($inFunc) {
+            if (-not $tail) {
+                if ($funcIndent -eq -2) { if ($l -match '\}\s*$') { $funcIndent = -1 } }
+                elseif ($l -match '^(\s*)\}' -and $Matches[1].Length -eq $funcIndent) { $funcIndent = -1; continue }
+            }
+        } elseif (-not $tail -and $left -match '^(\s*)(function\s+)?[\w-]+\(\)\s*\{(.*)$') {
+            $inFunc = $true
+            # `name() {` closes at a `}` at its own indentation; `name() { cmd ...` at the first line ending in `}`
+            if ($Matches[3] -notmatch '\}\s*$') { $funcIndent = $(if ($Matches[3].Trim()) { -2 } else { $Matches[1].Length }) }
+        }
+        $top = -not $inFunc
+        $canon = $top -and -not $tail     # a string's tail is the end of a command, not a dispatch line
+        if ($canon -and $l -match "^(\s*)case $sel in\s*(.*)$") {
             $left = $left -replace "^\s*case $sel in", ''
             $indent = $Matches[1].Length
             $rest = $Matches[3]
@@ -97,21 +116,21 @@ function Get-VmDispatchedModes([string]$Path) {
                 if ($ci -eq $labelIndent -and $c.TrimStart() -match $label) { & $add $Matches[0] }
             }
         }
-        # the mode a bare call runs: ${1:-check}
-        foreach ($t in [regex]::Matches($l, '\$\{1:-([A-Za-z][\w-]*)\}')) { [void]$found.Add($t.Groups[1].Value) }
-        $test = "\[ $sel ==? `"?(-{0,2}[A-Za-z][\w-]*)`"? \]"
-        foreach ($t in [regex]::Matches($l, $test)) { [void]$found.Add($t.Groups[2].Value) }
-        $left = [regex]::Replace($left, $test, '')
-        if ($l -match $assign) { $left = '' }
-        # any top-level mention of $1 (or of a name assigned from it) the canonical forms did not consume
-        # (a one-line function is a function body; a name may be passed on as a plain `"$name"` argument
-        # of a command, which is not a dispatch)
-        if ($l -match '^\S' -and $l -notmatch '^\w+\(\) \{' -and $i -lt $setAt) {
-            if ($left -match '^\w[\w.-]* ' -and $left -notmatch '\b(case|if|elif|while|until|test)\b|\[|&&|\|\|') {
-                $left = $left -replace $quotedName, ''
-            }
-            if ($left -match $refs) { $unreadable.Add("line $($i + 1): $($l.Trim())") }
+        if ($canon) {
+            # the mode a bare call runs, and the tests of the canonical forms
+            if (-not $none) { foreach ($t in [regex]::Matches($l, '\$\{1:?-([A-Za-z][\w-]*)\}')) { [void]$found.Add($t.Groups[1].Value) } }
+            $test = "\[ $sel ==? `"?(-{0,2}[A-Za-z][\w-]*)`"? \]"
+            foreach ($t in [regex]::Matches($l, $test)) { [void]$found.Add($t.Groups[2].Value) }
+            $left = [regex]::Replace($left, $test, '')
+            if (-not $none -and $l -match $assign) { $left = '' }
+            if ($left -match '^\s*set -- \S') { $unreadable.Add("line $($i + 1): $($l.Trim())"); continue }
         }
+        # the selector variable inside a plain command line (`echo "mode $mode"`, `run "$mode"`, with
+        # optional `VAR=value` prefixes) is not a dispatch
+        if ($left -match '^\s*(\w+=\S* +)*\w[\w.-]* ' -and $left -notmatch '\b(case|if|elif|while|until|test)\b|\[|&&|\|\|') {
+            $left = $left -replace $nameRef, ''
+        }
+        if (($top -and $left -match $argRef) -or $left -match $nameRef) { $unreadable.Add("line $($i + 1): $($l.Trim())") }
     }
     return @{ modes = @($found | Sort-Object); unreadable = @($unreadable) }
 }
