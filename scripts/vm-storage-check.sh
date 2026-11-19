@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: baseline busy eject format gone meject mformat mplugged plugged scan security watch
 # Checks Devices1.Storage (udisks2, T-174) inside a running VM. Normally driven from the host by
 # scripts/vm-storage-check.ps1, which hot-plugs a USB stick through the QEMU monitor
 # (device_add usb-storage) between these steps. Run as root in the guest:

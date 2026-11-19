@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: check clean security
 # Checks ruya-store (org.ruyaos.Store1, T-134) inside a running VM, as root. It builds a tiny signed
 # Flatpak repository (one runtime, one app, no download), adds it through the service and drives
 # install / uninstall over the system bus. Copy and run:

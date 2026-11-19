@@ -442,8 +442,7 @@ for t in r4 r5 r6 r7 a2 a3 a4 p2; do expect_contains "$t fails" "$out" "FAIL: $t
 for t in r1 r2 r3 a1 p1; do expect_lacks "$t does not fail" "$out" "FAIL: $t"; done
 printf '%s
 '     'ruya-compositor: app  RuyaOS X11 test uid 1001 pid 4321 profile p1'     'ruya-compositor: app org.x.Y title uid 1002 pid 99 profile p2'     'ruya-compositor: refused window of uid 1001 pid 77 (other-user)'     'ruya-compositor: app x uid 1001 pid 555 profile (shell)'     'ruya-compositor: app org.a.B Some game uid 1001 pid 4400 profile p1'     'ruya-compositor: app gone app:x' > "$tmp/shell.log"
-got="$( (export VM_CHECK_LIB_ONLY=1; . "$here/vm-x11-check.sh"; window_pids 1001 p1 < "$tmp/shell.log") | tr '
-' ' ')"
+got="$( (export VM_CHECK_LIB_ONLY=1; . "$here/vm-x11-check.sh"; window_pids 1001 p1 < "$tmp/shell.log") | tr '\n' ' ')"
 [ "$got" = "4321 4400 " ] && pass "window_pids: the windows of one uid and profile, an empty title included" || fail "window_pids gave '$got'"
 echo "vm-x11-client.py: against a fake X server"
 out="$(python3 "$here/test-vm-x11-client.py" 2>&1)"; rc=$?
@@ -1648,6 +1647,24 @@ grep -q 'play_pkg_id "\$play_id"' "$here/vm-library-check.sh" && pass "vm-librar
 n="$(grep -c 'with_id "\$zip"' "$here/vm-play-check.sh")"; m="$(grep 'with_id "\$zip"' "$here/vm-play-check.sh" | grep -c 'bad "with_id.*exit 1')"
 [ "$n" = 3 ] && [ "$m" = 3 ] && pass "vm-play-check.sh: a failed with_id ends the mode with one FAIL (RUY-878)" || fail "vm-play-check.sh: with_id calls $n, ending the mode $m"
 grep -q 'play_clean$' "$here/vm-library-check.sh" && grep -q 'rm -f "$play_state/incoming/vm-library-check.play.zip"' "$here/vm-library-check.sh" && pass "vm-library-check.sh play removes the sample and the incoming file" || fail "vm-library-check.sh play: no clean-up"
+
+echo "== .play VM files (RUY-860) =="
+# lib-samples.sh's clean-up removes the build outputs of the named samples only, and
+# scripts/ci-samples-linux.sh and scripts/play-vm-files.sh both use it (no second copy).
+source "$here/lib-samples.sh"
+root="$tmp/samples-root"
+for s in hello-play-native hello-play-wine; do
+    mkdir -p "$root/samples/$s/package/payload"
+    touch "$root/samples/$s/package/play.json" "$root/samples/$s/package/play.files" "$root/samples/$s/package/play.sig" "$root/samples/$s/$s.play.zip" "$root/samples/$s/package/payload/game"
+done
+samples_clean_outputs "$root" hello-play-native
+left="$(cd "$root" && find samples -type f | sort | tr '\n' ' ')"
+expect_contains "samples_clean_outputs: the named sample keeps its sources" "$left" "samples/hello-play-native/package/play.json"
+[ "$(cd "$root" && find samples/hello-play-native -type f | wc -l)" = 1 ] && pass "samples_clean_outputs: payload, play.files, play.sig and the zip of the named sample are gone" || fail "samples_clean_outputs: left $left"
+expect_contains "samples_clean_outputs: another sample is untouched" "$left" "samples/hello-play-wine/hello-play-wine.play.zip"
+[ "$(grep -c 'samples_clean_outputs' "$here/ci-samples-linux.sh" "$here/play-vm-files.sh" | tr '\n' ' ')" = "$here/ci-samples-linux.sh:1 $here/play-vm-files.sh:1 " ] && pass "ci-samples-linux.sh and play-vm-files.sh share samples_clean_outputs" || fail "the sample clean-up is not shared"
+! grep -q 'rm -rf "\$p/package' "$here/ci-samples-linux.sh" "$here/play-vm-files.sh" && pass "no copy of the sample clean-up outside lib-samples.sh" || fail "a copy of the sample clean-up"
+grep -q 'trap .samples_clean_outputs' "$here/play-vm-files.sh" && grep -q 'output/play-vm' "$here/play-vm-files.sh" && pass "play-vm-files.sh cleans up on exit and writes output/play-vm" || fail "play-vm-files.sh: no clean-up trap or wrong folder"
 
 echo "== build stage names (RUY-771) =="
 source "$here/lib-stages.sh"

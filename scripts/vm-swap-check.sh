@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: check
 # Checks the image's swap (T-465, docs/specs/01-platform.md 1.4) inside a running VM, as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-swap-check.sh root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-swap-check.sh [check]

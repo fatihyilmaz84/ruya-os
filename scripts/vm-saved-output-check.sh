@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: choose verify
 # The saved output survives a reboot (T-360). Two steps around a reboot, run as root in the VM
 # (vm-reboot-check.ps1 -SavedOutput copies and runs this file):
 #   vm-saved-output-check.sh choose   picks an output (a non-default usable one when there is one,

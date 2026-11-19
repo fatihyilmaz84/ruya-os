@@ -3,7 +3,10 @@
 #   .\scripts\vm-queue.ps1 [-Checks "vm-session-check.sh check","vm-devices-check.sh bluetooth",...] [-NoFresh]
 # A check is "<script> [mode]". *.sh scripts run in the guest over SSH (all vm-* helper files are
 # copied to /root first); vm-reboot-check.ps1 and vm-storage-check.ps1 run on the host against the
-# VM. A check whose script or mode does not exist is SKIPPED (the reason is in the summary).
+# VM. A check whose script does not exist, or whose mode is not in the script's `# modes:` line, is
+# SKIPPED (the reason is in the summary). The .play checks (vm-play-check.sh check|helper|verify|perms,
+# vm-library-check.sh play) need output\play-vm\hello-play-native.play.zip and ruya-pack, copied to /root
+# when both exist (build them: bash scripts/play-vm-files.sh in WSL); otherwise they are SKIPPED with that command.
 # Output: output\vm-queue\<script>-<mode>.log (full), output\vm-queue\summary.txt (at most 16 lines: every FAIL or SKIPPED line, passes counted when there are many).
 # Exits 0 when nothing FAILED. Run it only when no other QEMU is running; never builds an image.
 param(
@@ -21,6 +24,7 @@ param(
     [string]$Key = (Join-Path $env:USERPROFILE ".ssh\ruyaos_dev")
 )
 $ErrorActionPreference = "Continue"
+. (Join-Path $PSScriptRoot "vm-queue-lib.ps1")
 $Repo = Split-Path -Parent $PSScriptRoot
 Set-Location $Repo
 $outDir = Join-Path $Repo "output\vm-queue"
@@ -71,6 +75,10 @@ $lines.Add("PASS boot ($secs s): $bootRes")
 $scp = @($o + @("-P", "2222"))
 $files = Get-ChildItem $PSScriptRoot -Include "vm-*.sh", "vm-*.qml", "vm-*.py" -Recurse | ForEach-Object { $_.FullName }
 $files += (Join-Path $Repo "image\security-baseline.json")   # vm-security-check.sh reads it next to itself
+# The .play checks find the sample package and ruya-pack in /root (scripts/play-vm-files.sh builds them);
+# without both, those checks are SKIPPED below.
+$play = Get-PlayVmFiles $Repo
+if ($play.ready) { $files += $play.files }
 & scp @scp @files "root@127.0.0.1:/root/" 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { $lines.Add("FAIL copy helper files to the guest (scp exit $LASTEXITCODE)"); $failed++ }
 
@@ -94,15 +102,11 @@ foreach ($c in $Checks) {
     $logName = (($script -replace "\.(sh|ps1)$", "") + $(if ($rest) { "-" + ($rest -join "-") } else { "" })) -replace "[^\w.-]", ""
     $log = Join-Path $outDir "$logName.log"
     $path = Join-Path $PSScriptRoot $script
-    if (-not (Test-Path $path)) { $lines.Add("SKIPPED $name : $script does not exist"); continue }
     $isSh = $script.EndsWith(".sh")
-    # A mode is a `case` label (`a|b)`, also `case "$mode" in a|b) ;;` on one line, lead-20) or an
-    # `if [ "${1:-}" = mode ]` test (vm-boot-check.sh watchdog was SKIPPED for that, lead-23).
-    $m = [regex]::Escape($rest[0])
-    $modePattern = "(^\s*|\bin\s+)([\w-]+\|)*" + $m + "(\|[\w-]+)*\)" + "|\`$\{?1[^\s\]]*\s*==?\s*`"?" + $m + "`"?\s*\]"
-    if ($isSh -and $rest.Count -ge 1 -and -not (Select-String -Path $path -Quiet -Pattern $modePattern)) {
-        $lines.Add("SKIPPED $name : mode '$($rest[0])' not in $script"); continue
-    }
+    # A mode must be in the script's `# modes:` line; the .play checks need the sample and ruya-pack
+    # (vm-queue-lib.ps1, RUY-860).
+    $skip = Get-CheckSkip $c $PSScriptRoot $Repo
+    if ($skip) { $lines.Add("SKIPPED $name : $skip"); continue }
     $ts = Get-Date
     Write-Host "== $name"
     if ($isSh) {

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: create guests introspect lifecycle security state
 # Looks at the Profiles service inside a running VM (T-120). Copy it over and run it as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-profiles-check.sh root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-profiles-check.sh [introspect|state|security|create|lifecycle|guests]

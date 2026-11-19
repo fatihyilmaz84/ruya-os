@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: check state
 # Checks ruya-notifications (org.ruyaos.Notifications1, RUY-730) inside a running VM, as root over busctl.
 # Copy it (and image/security-baseline.json) over and run it as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-notifications-check.sh image/security-baseline.json root@127.0.0.1:/root/
