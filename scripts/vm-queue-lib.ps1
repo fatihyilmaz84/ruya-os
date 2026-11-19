@@ -26,24 +26,30 @@ function Get-VmModes([string]$Path) {
 
 # What a script dispatches (the lint's side of the `# modes:` line; the queue never guesses):
 # @{ modes = <sorted modes>; unreadable = <lines it could not read> }.
-# Modes: the default of `${1:-x}`, the labels of a `case <selector> in` block (the labels at the
-# block's first indentation, so a nested case does not count) and the `[ <selector> = mode ]` tests.
-# A selector is `${1...}`, `$1` (top level only) or a variable the script assigns from them at its top level
-# (`mode="${1:-check}"`, `what=$1`). A top-level `case`/`if`/`elif`/`while`/`[` that uses `$1` in
-# any other way is `unreadable`: the lint fails on it instead of treating the script as having
-# only the default mode (RUY-890).
+# One way to dispatch, enforced (RUY-890). The canonical forms, the only ones read:
+#   case "${1:-default}" in            labels at one indentation, `esac` at the case's
+#   [ "${1:-default}" = mode ]         also `==`
+#   name="${1:-default}"               at the top level; then `case "$name" in` and `[ "$name" = mode ]`
+# Any OTHER top-level (unindented) reference to `$1`, `${1...}` or to such a name (`$name`,
+# `${name}`, `!=`, `[[ ]]`, unquoted, `mode=${1-x}`, an echo of it, ...) is `unreadable`: the lint
+# fails on it, never guessing a single mode. Indented lines are function bodies, where `$1` is that
+# function's own argument, and here-documents are text for another program: both are skipped.
 function Get-VmDispatchedModes([string]$Path) {
     $lines = [IO.File]::ReadAllLines($Path)
     $found = New-Object System.Collections.Generic.HashSet[string]
     $unreadable = New-Object System.Collections.Generic.List[string]
+    $assign = '^(\w+)="\$\{1:-[^}]*\}"\s*(#.*)?$'
+    # A top-level `set --` rebinds $1: from there on `$1` is not the script's mode.
+    $setAt = $lines.Count
+    for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match '^set --( |$)') { $setAt = $i; break } }
     $names = New-Object System.Collections.Generic.List[string]
-    foreach ($l in $lines) {
-        if ($l -match '^(\w+)="?\$(\{1(:-[^}]*)?\}|1)"?\s*(#.*)?$') { $names.Add([regex]::Escape('$' + $Matches[1])) }
+    for ($i = 0; $i -lt $setAt; $i++) {
+        if ($lines[$i] -match $assign) { $names.Add([regex]::Escape($Matches[1])) }
     }
-    # `$1` alone is a selector only at the top level: inside a function it is that function's argument.
-    $selectors = @('\$\{1(?::-[^}]*)?\}') + $names
-    $selNested = '"(' + ($selectors -join '|') + ')"'
-    $selTop = '"(' + ((@($selectors) + '\$1') -join '|') + ')"'
+    $selectors = @('\$\{1:-[^}]*\}') + @($names | ForEach-Object { '\$' + $_ })
+    $sel = '"(' + ($selectors -join '|') + ')"'
+    $quotedName = '"\$(?:' + ($names -join '|') + ')"'
+    $refs ='\$\{?(' + ((@('1') + @($names)) -join '|') + ')\b'
     $label = '^"?([\w-]+)"?(\|"?[\w-]+"?)*\)'
     $add = {
         param($text)
@@ -53,16 +59,31 @@ function Get-VmDispatchedModes([string]$Path) {
         }
     }
     $heredoc = $null
+    $inSingle = $false     # inside a single-quoted string that spans lines (a python snippet): text for another program
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $l = $lines[$i]
         # a here-document is text for another program (a shim, a python script), not this script's dispatch
         if ($heredoc) { if ($l.Trim() -eq $heredoc) { $heredoc = $null }; continue }
         if ($l -match '(?<!<)<<-?\s*[''"]?([A-Za-z_]\w*)[''"]?') { $heredoc = $Matches[1] }
-        if ($l -match '^\s*#') { continue }
-        $read = $false
-        $sel = if ($l -match '^\S') { $selTop } else { $selNested }
+        if (-not $inSingle -and $l -match '^\s*#') { continue }
+        # $left: the line without its single-quoted parts and its trailing comment. A quote left open
+        # starts a string that spans lines; the line that closes it is the tail of that command.
+        $tail = $inSingle
+        $left = $l
+        if ($inSingle) {
+            $q = $left.IndexOf("'")
+            if ($q -lt 0) { continue }
+            $left = $left.Substring($q + 1)
+            $inSingle = $false
+        }
+        $left = $left -replace "'[^']*'", ''
+        $left = $left -replace '(^|\s)#.*$', ''
+        $q = $left.IndexOf("'")
+        # (an apostrophe inside a word, "don't", opens nothing; a string opens after a space, `=` or `(`)
+        if ($q -ge 0 -and ($q -eq 0 -or $left[$q - 1] -match '[\s=(]')) { $inSingle = $true; $left = $left.Substring(0, $q) }
+        if ($tail) { continue }
         if ($l -match "^(\s*)case $sel in\s*(.*)$") {
-            $read = $true
+            $left = $left -replace "^\s*case $sel in", ''
             $indent = $Matches[1].Length
             $rest = $Matches[3]
             if ($rest -match $label) { & $add $Matches[0]; continue }   # `case .. in a|b) ;; *) ..` on one line
@@ -78,10 +99,18 @@ function Get-VmDispatchedModes([string]$Path) {
         }
         # the mode a bare call runs: ${1:-check}
         foreach ($t in [regex]::Matches($l, '\$\{1:-([A-Za-z][\w-]*)\}')) { [void]$found.Add($t.Groups[1].Value) }
-        foreach ($t in [regex]::Matches($l, "\[ $sel ==? `"?(-{0,2}[A-Za-z][\w-]*)`"? \]")) { [void]$found.Add($t.Groups[2].Value); $read = $true }
-        # a top-level dispatch on $1 that no rule above read
-        if (-not $read -and $l -match '^(case|if|elif|while|\[)\b' -and ($l -replace "'[^']*'", '') -match '\$\{?1\b') {
-            $unreadable.Add("line $($i + 1): $($l.Trim())")
+        $test = "\[ $sel ==? `"?(-{0,2}[A-Za-z][\w-]*)`"? \]"
+        foreach ($t in [regex]::Matches($l, $test)) { [void]$found.Add($t.Groups[2].Value) }
+        $left = [regex]::Replace($left, $test, '')
+        if ($l -match $assign) { $left = '' }
+        # any top-level mention of $1 (or of a name assigned from it) the canonical forms did not consume
+        # (a one-line function is a function body; a name may be passed on as a plain `"$name"` argument
+        # of a command, which is not a dispatch)
+        if ($l -match '^\S' -and $l -notmatch '^\w+\(\) \{' -and $i -lt $setAt) {
+            if ($left -match '^\w[\w.-]* ' -and $left -notmatch '\b(case|if|elif|while|until|test)\b|\[|&&|\|\|') {
+                $left = $left -replace $quotedName, ''
+            }
+            if ($left -match $refs) { $unreadable.Add("line $($i + 1): $($l.Trim())") }
         }
     }
     return @{ modes = @($found | Sort-Object); unreadable = @($unreadable) }

@@ -412,5 +412,5 @@ eject) eject ;;
 security) as_shell systemd-analyze --user security ruya-devices --no-pager | tail -15 ;;
 *) echo "usage: $0 baseline|format|gone|watch|plugged|scan|busy|eject|mformat|mplugged|meject|security" >&2; exit 2 ;;
 esac
-[ "$fail" = 0 ] && echo "STEP OK: ${1:-}" || echo "STEP FAILED: ${1:-}"
+[ "$fail" = 0 ] && echo "STEP OK: $*" || echo "STEP FAILED: $*"
 exit "$fail"

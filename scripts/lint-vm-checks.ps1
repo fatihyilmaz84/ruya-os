@@ -97,21 +97,33 @@ try {
     [IO.File]::WriteAllText((Join-Path $qs "vm-b-check.sh"), "#!/usr/bin/env bash`n")
     [IO.File]::WriteAllText((Join-Path $qs "vm-play-check.sh"), "#!/usr/bin/env bash`n# modes: check helper verify perms parse`n")
     [IO.File]::WriteAllText((Join-Path $qs "vm-library-check.sh"), "#!/usr/bin/env bash`n# modes: check play`n")
-    # The dispatch reader on one fixture per shape (RUY-890): a script it cannot read must fail, never
-    # count as single-mode.
+    # The dispatch reader on one fixture per shape (RUY-890): the canonical forms are read, every other
+    # top-level mention of $1 (or of a name assigned from it) fails, never counts as single-mode.
+    # Lines are single-quoted PowerShell strings, so the shell text needs no escaping.
     $shapes = @(
-        @{ name = "known";    body = "mode=`"`${1:-check}`"`ncase `"`$mode`" in`n    check) ;;`n    extra) ;;`nesac`n"; modes = "check extra"; unreadable = 0 },
-        @{ name = "inline";   body = "case `"`${1:-check}`" in`n    check) ;;`n    other) ;;`nesac`n"; modes = "check other"; unreadable = 0 },
-        @{ name = "assigned"; body = "what=`"`${1:-check}`"`ncase `"`$what`" in`n    check) ;;`n    extra) ;;`nesac`n"; modes = "check extra"; unreadable = 0 },
-        @{ name = "assigned-test"; body = "sel=`$1`nif [ `"`$sel`" = extra ]; then :; fi`n"; modes = "extra"; unreadable = 0 },
-        @{ name = "unreadable-unquoted"; body = "case `${1:-check} in`n    check) ;;`nesac`n"; modes = "check"; unreadable = 1 },
-        @{ name = "unreadable-test"; body = "case `"`$1`$2`" in`n    extra) ;;`nesac`n"; modes = ""; unreadable = 1 }
+        @{ name = "canonical-assigned"; modes = "check extra"; unreadable = 0; lines = @('mode="${1:-check}"', 'case "$mode" in', '    check) ;;', '    extra) ;;', 'esac') },
+        @{ name = "canonical-case"; modes = "check other"; unreadable = 0; lines = @('case "${1:-check}" in', '    check) ;;', '    other) ;;', 'esac') },
+        @{ name = "canonical-test"; modes = "check extra"; unreadable = 0; lines = @('if [ "${1:-check}" = extra ]; then :; fi') },
+        @{ name = "canonical-assigned-test"; modes = "check extra"; unreadable = 0; lines = @('mode="${1:-check}"', 'if [ "$mode" == extra ]; then :; fi', 'run_it "$mode"') },
+        @{ name = "function-argument"; modes = ""; unreadable = 0; lines = @('f() { echo "$1"; }', 'g() {', '    local x="$1"', '}') },
+        @{ name = "rebound-by-set"; modes = ""; unreadable = 0; lines = @('set -- $other', 'out="${1:-}"', 'if [ -z "$out" ]; then :; fi') },
+        @{ name = "heredoc-and-python"; modes = ""; unreadable = 0; lines = @('python3 -c ''', 'print("$1")', ''' "$1"', 'cat <<EOF', '[ "$1" = x ]', 'EOF') },
+        @{ name = "unquoted-case"; unreadable = 1; lines = @('case ${1:-check} in', '    check) ;;', 'esac') },
+        @{ name = "case-on-positional"; unreadable = 1; lines = @('case "$1$2" in', '    extra) ;;', 'esac') },
+        @{ name = "assigned-unquoted-case"; unreadable = 1; lines = @('mode="${1:-check}"', 'case $mode in', '    extra) ;;', 'esac') },
+        @{ name = "assigned-braced-case"; unreadable = 1; lines = @('mode="${1:-check}"', 'case "${mode}" in', '    extra) ;;', 'esac') },
+        @{ name = "assigned-not-equal"; unreadable = 1; lines = @('mode="${1:-check}"', 'if [ "$mode" != extra ]; then :; fi') },
+        @{ name = "assigned-no-colon"; unreadable = 1; lines = @('mode=${1-check}', 'case "$mode" in', '    extra) ;;', 'esac') },
+        @{ name = "toplevel-not-equal"; unreadable = 1; lines = @('[ "$1" != extra ] && exit 2') },
+        @{ name = "toplevel-double-bracket"; unreadable = 1; lines = @('[[ $1 == extra ]] && exit 2') },
+        @{ name = "toplevel-plain-positional"; unreadable = 1; lines = @('if [ "$1" = extra ]; then :; fi') },
+        @{ name = "toplevel-echo"; unreadable = 1; lines = @('echo "mode: ${1:-check}"') }
     )
     foreach ($s in $shapes) {
         $sp = Join-Path $qs "shape-$($s.name).sh"
-        [IO.File]::WriteAllText($sp, "#!/usr/bin/env bash`n$($s.body)")
+        [IO.File]::WriteAllText($sp, "#!/usr/bin/env bash`n" + ($s.lines -join "`n") + "`n")
         $d = Get-VmDispatchedModes $sp
-        if (($d.modes -join " ") -ne $s.modes) { $problems.Add("mode dispatch fixture '$($s.name)': read modes '$($d.modes -join ' ')', want '$($s.modes)'") }
+        if ($s.unreadable -eq 0 -and ($d.modes -join " ") -ne $s.modes) { $problems.Add("mode dispatch fixture '$($s.name)': read modes '$($d.modes -join ' ')', want '$($s.modes)'") }
         if ($d.unreadable.Count -ne $s.unreadable) { $problems.Add("mode dispatch fixture '$($s.name)': $($d.unreadable.Count) unreadable lines, want $($s.unreadable)") }
     }
     $rules = @(
