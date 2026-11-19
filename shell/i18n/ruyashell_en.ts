@@ -293,7 +293,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+208"/>
+        <location filename="../qml/AppDetailPage.qml" line="+211"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -4286,7 +4286,12 @@ This can&apos;t be undone.</translation>
         <translation>It can&apos;t be installed. Get a fresh copy from the developer.</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+5"/>
+        <source>This game is not signed, so it may not ask for %1. Ask the developer for a signed version.</source>
+        <translation>This game is not signed, so it may not ask for %1. Ask the developer for a signed version.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Installed</source>
         <comment>Toast: the install finished</comment>
         <translation>Installed</translation>

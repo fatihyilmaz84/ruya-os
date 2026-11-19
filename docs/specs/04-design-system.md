@@ -392,6 +392,8 @@ One focused `SecondaryButton` "Close" / "Kapat"; B closes too; focus returns to 
 | `disk-full` | There isn't enough space. Free %1, then try again. | Yeterli alan yok. %1 yer açıp yeniden deneyin. |
 | `failed` | The install didn't finish. Try again. | Kurulum tamamlanmadı. Yeniden deneyin. |
 
+The package page's line under a dimmed Install (`PlayCopy.blockReason`) is the status sentence, with one exception: a package refused for a permission above its tier's ceiling (verdict `invalid-package`, first problem `ceiling.refused`, 05 §8) is not damaged, so it says "This game is not signed, so it may not ask for %1. Ask the developer for a signed version." / "Bu oyun imzalı değil, bu yüzden %1 isteyemez. Geliştiriciden imzalı bir sürüm isteyin." (%1 = the permission's words, `PlayTrust.permissionWords`, from the problem's path `/permissions/<key>`).
+
 Method statuses become an error toast: `forbidden` "Only an admin can install from USB." / "USB'den yalnızca bir yönetici kurabilir."; `busy` "Another install is running. Try again when it ends." / "Başka bir kurulum sürüyor. Bitince yeniden deneyin."; `unknown-source` "The USB drive was removed. Plug it in, then try again." / "USB bellek çıkarıldı. Takıp yeniden deneyin."; `too-late` "It's too late to cancel. The install is finishing." / "İptal için çok geç. Kurulum bitiyor."; `unknown-app`, `unknown-job`, `invalid`, `failed` "Something went wrong. Try again." / "Bir sorun oluştu. Yeniden deneyin.".
 
 ## 6. Writing

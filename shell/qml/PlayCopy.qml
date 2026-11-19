@@ -112,6 +112,12 @@ QtObject {
             return info.requirement === "unsupported" ? jobStatusText("unsupported") : ""
         if (verdict === "bad-signature")
             return qsTr("It can't be installed. Get a fresh copy from the developer.")
+        // A package refused for a permission above its tier's ceiling is not damaged: the first problem names
+        // the permission (`/permissions/<key>`), and the advice is a signed version (05 §8, RUY-884).
+        const first = info.problems && info.problems.length > 0 ? info.problems[0] : null
+        if (verdict === "invalid-package" && first && first.code === "ceiling.refused")
+            return qsTr("This game is not signed, so it may not ask for %1. Ask the developer for a signed version.")
+                .arg(PlayTrust.permissionWords(first.path.substring(first.path.lastIndexOf("/") + 1), ""))
         return jobStatusText(verdict)
     }
 

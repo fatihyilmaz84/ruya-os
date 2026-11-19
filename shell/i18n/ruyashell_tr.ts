@@ -291,7 +291,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+208"/>
+        <location filename="../qml/AppDetailPage.qml" line="+211"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -4273,7 +4273,12 @@ Bu geri alınamaz.</translation>
         <translation>Kurulamaz. Geliştiriciden yeni bir kopya alın.</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+5"/>
+        <source>This game is not signed, so it may not ask for %1. Ask the developer for a signed version.</source>
+        <translation>Bu oyun imzalı değil, bu yüzden %1 isteyemez. Geliştiriciden imzalı bir sürüm isteyin.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
         <source>Installed</source>
         <comment>Toast: the install finished</comment>
         <translation>Kuruldu</translation>

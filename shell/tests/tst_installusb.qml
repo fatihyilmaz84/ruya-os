@@ -262,6 +262,17 @@ Item {
             compare(find("installBlocked").text, "This game needs a newer RuyaOS. Update the system, then try again.")
         }
 
+        function test_a_package_above_its_ceiling_is_not_called_damaged() {
+            start("admin")
+            openPackage("rawunverified")
+            verify(find("installButton").dimmed, "Install is dimmed")
+            compare(find("installBlocked").text,
+                    "This game is not signed, so it may not ask for Can inspect other programs. Ask the developer for a signed version.")
+            closePackage()
+            openPackage("broken")
+            compare(find("installBlocked").text, "This package is damaged or incomplete. Copy it to the USB drive again.")
+        }
+
         function test_the_unverified_package_is_blocked_until_developer_mode_is_on() {
             start("admin")
             openPackage("homebrew")
