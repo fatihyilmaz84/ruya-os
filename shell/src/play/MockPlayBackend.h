@@ -6,7 +6,7 @@
 #include <QTimer>
 
 // In-memory ruya-play (the service is RUY-100, not built yet): follows api/dbus/org.ruyaos.Play1.xml,
-// method statuses and job statuses included. One drive ("vol-stick", "STICK") with 11 packages, each
+// method statuses and job statuses included. One drive ("vol-stick", "STICK") with 13 packages, each
 // a fixture for one outcome:
 //   starhopper    a Wine game with a full permission set, developer tier, key new      -> ok
 //   pixelforest   a native game, official tier, key same, build 3 (build 2 installed) -> ok
@@ -14,6 +14,8 @@
 //   oldbad        developer tier, on the block list                                    -> revoked
 //   broken        hash mismatch and a missing file (05 §4.5)                           -> invalid-package
 //   rawaccess     high-risk permissions (all devices, devel)                           -> ok
+//   rawofficial   the same requests, official tier: gate admin-pin                           -> ok
+//   rawunverified unverified with a high-risk request: no gate, ceiling.refused           -> invalid-package
 //   impostor      the id is installed under another key                                -> different-developer
 //   tampered      changed after it was signed                                          -> bad-signature
 //   future        format.too_new                                                       -> unsupported
