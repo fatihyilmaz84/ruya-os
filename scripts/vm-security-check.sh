@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: check measure signals
 # Security posture of a booted image against image/security-baseline.json (T-424). Runs in the VM as
 # root, like the other vm-*-check.sh (the lead's queue copies it to /root together with the baseline):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-security-check.sh image/security-baseline.json root@127.0.0.1:/root/

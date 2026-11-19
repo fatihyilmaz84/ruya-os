@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: check clean display display-clean kill restart security
 # Checks ruya-session (org.ruyaos.Session1, T-162) inside a running VM, as root. It builds a tiny
 # local Flatpak repository (one runtime made of the guest's own bash and sleep, two command-line
 # apps: one that sleeps, one that exits 3), installs it system-wide,

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: check switch
 # Checks the Display part of the Devices service (T-198, org.ruyaos.Devices1.Display) inside a running VM. Copy and run as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-display-check.sh root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-display-check.sh [check|switch]

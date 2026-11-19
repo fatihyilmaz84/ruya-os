@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: all audio inhibit padactive service timeline
 # Checks the power-saving parts of T-202 inside a running VM, as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-power-saving-check.sh scripts/vm-inject-key.py root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-power-saving-check.sh [service|audio|timeline|inhibit|padactive|all]

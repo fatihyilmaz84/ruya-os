@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: --power-off
 # Checks the power-action policy (T-107) inside a running VM. Copy it over and run it as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-power-check.sh root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-power-check.sh [--power-off]

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: none
 # Looks at the audio path inside a running VM (T-121). Copy it over and run it as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-audio-check.sh root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-audio-check.sh

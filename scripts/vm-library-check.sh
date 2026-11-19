@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: check clean play playid playjudge security seed
 # Checks ruya-library (org.ruyaos.Library1, T-112 / T-163 / T-183) inside a running VM, as root. It builds a
 # tiny signed Flatpak repository (one runtime, a game and an app, no download, like
 # vm-store-check.sh), adds it through Store1, installs and uninstalls through Store1 and watches

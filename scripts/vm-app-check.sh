@@ -1,4 +1,5 @@
 #!/bin/bash
+# modes: client flow kill log reachable recreate state
 # A Wayland test app in the VM (T-130), run in the guest as root. ruya-shell is the compositor of
 # the default session (ruya-compositor@tty1); this starts the key-logging test client
 # (vm-key-client.qml, copied next to this script) as ruya-shell, so the shell shows it fullscreen

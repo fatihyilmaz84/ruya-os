@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: caps check close confirm coop fallback forget guide hold join nodes owner players profiles restart seathold security shell signals start startpad twopads useractive
 # Checks Ruya Input (ruya-inputd, org.ruyaos.Input1, RUY-3 / T-367) inside a running VM, as root:
 # the service runs as ruya-input, a uinput "physical" pad gets a virtual Xbox 360-style pad for
 # the routed profile whose ACL names only that profile's user, other users are refused, the route

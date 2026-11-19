@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: check reboot security settings
 # Checks ruya-update (org.ruyaos.Update1, T-151) inside a running VM, as root. Prepare: the VM
 # tracks <wsl-ip>:5000/ruyaos:stable (bootc switch, then reboot) and the registry holds a NEWER
 # image under that tag (docs/dev-setup.md, "Update check"). Copy and run:

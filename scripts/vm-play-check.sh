@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: check helper parse perms restart runid verify withid
 # Checks ruya-play (org.ruyaos.Play1, RUY-829, the lead's run under RUY-100) inside a running VM,
 # as root. Modes:
 #   check  (default) every step below

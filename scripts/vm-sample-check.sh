@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: check clean
 # Checks the sample game (samples/hello-game, T-214) inside a running VM, as root: it follows
 # docs/developers/ from the other side. It installs the sample from a local repository, starts it
 # for a profile through Session1.Launch, and checks that it saves under the profile's

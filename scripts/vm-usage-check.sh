@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: check clean security
 # Checks the play ledger of ruya-session (org.ruyaos.Session1: ReportPresence, ListSessions,
 # GetTotals, ClearHistory, UsageChanged; T-247) inside a running VM, as root, over the system bus
 # as ruya-shell. Like vm-session-check.sh it builds a tiny local Flatpak repository (a runtime made

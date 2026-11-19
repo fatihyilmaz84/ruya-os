@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: check flatpak
 # Checks the image's gaming kernel settings (RUY-525 ntsync, RUY-527 sysctls, RUY-737 the drivetemp module; docs/specs/01-platform.md 1.5)
 # inside a running VM, as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-gaming-check.sh root@127.0.0.1:/root/

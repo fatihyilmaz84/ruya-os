@@ -12,24 +12,18 @@
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-target=${CARGO_TARGET_DIR:-$root/services/target-samples}
-export CARGO_TARGET_DIR="$target"
+. "$root/scripts/lib-samples.sh"
 
-(cd "$root/services" && cargo build -p ruya-pack --locked --release)
-export RUYA_PACK="$target/release/ruya-pack"
-[ -x "$RUYA_PACK" ] || { echo "ci-samples: $RUYA_PACK was not built" >&2; exit 1; }
+samples_build_pack "$root" || exit 1
 
 # Warnings fail here; a developer's plain ./build.sh keeps its defaults.
 export CC="${CC:-cc} -Werror"
 # The Wine build.sh quotes $MINGW_CC as one word, so -Werror goes in a tiny wrapper.
 wrap=$(mktemp -d)
-# The build outputs (all git-ignored) go on exit: left in place they fail ruya-pack's samples test.
+# The build outputs go on exit (lib-samples.sh).
 clean() {
     rm -rf "$wrap"
-    for s in hello-play-native hello-play-wine; do
-        p="$root/samples/$s"
-        rm -rf "$p/package/payload" "$p/package/play.files" "$p/package/play.sig" "$p/$s.play.zip"
-    done
+    samples_clean_outputs "$root" hello-play-native hello-play-wine
 }
 trap clean EXIT
 printf '#!/bin/sh

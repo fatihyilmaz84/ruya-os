@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: batteries bluetooth check events gamepads inputd security state storage system thermal thermal-fake time twopads
 # Checks the Devices service (audio T-128, network T-132, controller batteries T-161, Bluetooth T-173) inside a running VM booted with sound. Copy and run as root:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-devices-check.sh root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-devices-check.sh [check|events|security|state|batteries|bluetooth|gamepads|storage|thermal|thermal-fake|time|system|inputd]

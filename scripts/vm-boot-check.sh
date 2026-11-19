@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: watchdog
 # Checks the boot experience (T-269) inside a booted VM, as root. Copy and run:
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-boot-check.sh root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-boot-check.sh

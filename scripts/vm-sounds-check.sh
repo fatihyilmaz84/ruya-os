@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# modes: none
 # Checks the sound themes inside a running VM, as root (T-227; a lead run, not part of dev.ps1 test):
 #   - the bundled theme is installed where the shell looks for it (/usr/share/ruyaos/sounds/dreamglass),
 #     owned by root and not writable by the shell's user, with the manifest, the 13 cues and the ambient;

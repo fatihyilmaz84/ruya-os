@@ -7,12 +7,16 @@
 #     early failure);
 #   - vm-iso-check.ps1 refuses the development disks as -Disk (Windows only: the script is Windows-only).
 # Used by dev.ps1 (test) and by the CI workflow. Works on Windows PowerShell 5.1 and on pwsh.
+#   - every scripts\vm-*.sh has the `# modes:` line vm-queue.ps1 reads, and it lists exactly the modes the
+#     script dispatches (RUY-860); the queue's skip rules (a mode not listed, the .play files missing) are
+#     tested on temporary folders.
 # Exit code 0 = fine, 1 = findings.
 #
 #   .\scripts\lint-vm-checks.ps1
 $Repo = Split-Path -Parent $PSScriptRoot
 $Scripts = Join-Path $Repo "scripts"
 $problems = New-Object System.Collections.Generic.List[string]
+. (Join-Path $Scripts "vm-queue-lib.ps1")
 
 function Find-Bash {
     foreach ($p in "$env:ProgramFiles\Git\bin\bash.exe", "$env:ProgramFiles\Git\usr\bin\bash.exe") {
@@ -38,11 +42,11 @@ function Run-Native([string]$exe, [string[]]$arguments) {
 
 $bash = Find-Bash
 if (-not $bash) { Write-Host "    bash was not found: the VM check scripts cannot be checked" -ForegroundColor Yellow; exit 1 }
-$bashScripts = @(Get-ChildItem $Scripts -Filter "vm-*.sh") + @(Get-Item (Join-Path $Scripts "test-vm-checks.sh"))
+$bashScripts = @(Get-ChildItem $Scripts -Filter "vm-*.sh") + @(Get-Item (Join-Path $Scripts "test-vm-checks.sh"), (Join-Path $Scripts "play-vm-files.sh"), (Join-Path $Scripts "lib-samples.sh"))
 
 # 1. syntax and exec bit
 $modes = @{}
-foreach ($line in @(git -C $Repo ls-files -s -- "scripts/vm-*.sh" "scripts/test-vm-checks.sh")) {
+foreach ($line in @(git -C $Repo ls-files -s -- "scripts/vm-*.sh" "scripts/test-vm-checks.sh" "scripts/play-vm-files.sh" "scripts/lib-samples.sh")) {
     if ($line -match '^(\d+) [0-9a-f]+ \d+\t(.+)$') { $modes[$Matches[2]] = $Matches[1] }
 }
 foreach ($f in $bashScripts) {
@@ -67,6 +71,57 @@ foreach ($f in Get-ChildItem $Scripts -Filter "vm-*.ps1") {
     [void][System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errors)
     if ($errors -and $errors.Count -gt 0) { $problems.Add("scripts/$($f.Name): does not parse: $($errors[0].Message)") }
 }
+
+# 1c. The modes line (RUY-860): the queue reads it, so it must say what the script dispatches.
+foreach ($f in Get-ChildItem $Scripts -Filter "vm-*.sh") {
+    $listed = Get-VmModes $f.FullName
+    if ($null -eq $listed) { $problems.Add("scripts/$($f.Name): no '# modes: <mode> ...' line ('# modes: none' when it takes no mode)"); continue }
+    $dispatched = @(Get-VmDispatchedModes $f.FullName)
+    $missing = @($dispatched | Where-Object { $_ -notin $listed })
+    $extra = @($listed | Where-Object { $_ -notin $dispatched })
+    if ($missing) { $problems.Add("scripts/$($f.Name): dispatches but does not list in '# modes:': $($missing -join ' ')") }
+    if ($extra) { $problems.Add("scripts/$($f.Name): lists in '# modes:' but does not dispatch: $($extra -join ' ')") }
+}
+
+# 1d. The queue's skip rules on a temporary tree: a mode not listed, no modes line, a missing script,
+# the .play checks without the package and ruya-pack (and with them).
+$qt = Join-Path ([IO.Path]::GetTempPath()) ("ruya-queue-lint-" + [guid]::NewGuid().ToString("N"))
+try {
+    $qs = Join-Path $qt "scripts"
+    New-Item -ItemType Directory -Force $qs | Out-Null
+    [IO.File]::WriteAllText((Join-Path $qs "vm-a-check.sh"), "#!/usr/bin/env bash`n# modes: check other`n")
+    [IO.File]::WriteAllText((Join-Path $qs "vm-b-check.sh"), "#!/usr/bin/env bash`n")
+    [IO.File]::WriteAllText((Join-Path $qs "vm-play-check.sh"), "#!/usr/bin/env bash`n# modes: check helper verify perms parse`n")
+    [IO.File]::WriteAllText((Join-Path $qs "vm-library-check.sh"), "#!/usr/bin/env bash`n# modes: check play`n")
+    $rules = @(
+        @{ check = "vm-a-check.sh"; skip = $false },
+        @{ check = "vm-a-check.sh other"; skip = $false },
+        @{ check = "vm-a-check.sh nope"; skip = $true; why = "mode 'nope' not in vm-a-check.sh" },
+        @{ check = "vm-b-check.sh check"; skip = $true; why = "no '# modes:' line" },
+        @{ check = "vm-missing-check.sh"; skip = $true; why = "does not exist" },
+        @{ check = "vm-play-check.sh parse"; skip = $false },
+        @{ check = "vm-library-check.sh check"; skip = $false }
+    )
+    foreach ($c in @("vm-play-check.sh", "vm-play-check.sh check", "vm-play-check.sh helper", "vm-play-check.sh verify", "vm-play-check.sh perms", "vm-library-check.sh play")) {
+        $rules += @{ check = $c; skip = $true; why = "scripts/play-vm-files.sh" }
+    }
+    foreach ($r in $rules) {
+        $got = Get-CheckSkip $r.check $qs $qt
+        if ($r.skip -and (-not $got -or $got -notlike "*$($r.why)*")) { $problems.Add("vm-queue rules: '$($r.check)' should be SKIPPED ($($r.why)), got: $got") }
+        if (-not $r.skip -and $got) { $problems.Add("vm-queue rules: '$($r.check)' should run, got: $got") }
+    }
+    # one of the two files is not enough; both are
+    $pd = Join-Path $qt "output\play-vm"
+    New-Item -ItemType Directory -Force $pd | Out-Null
+    [IO.File]::WriteAllText((Join-Path $pd "ruya-pack"), "x")
+    if (-not (Get-CheckSkip "vm-play-check.sh verify" $qs $qt)) { $problems.Add("vm-queue rules: ruya-pack alone must not be enough for the .play checks") }
+    [IO.File]::WriteAllText((Join-Path $pd "hello-play-native.play.zip"), "x")
+    foreach ($c in @("vm-play-check.sh", "vm-play-check.sh helper", "vm-library-check.sh play")) {
+        $got = Get-CheckSkip $c $qs $qt
+        if ($got) { $problems.Add("vm-queue rules: '$c' should run with both files, got: $got") }
+    }
+    if ((Get-PlayVmFiles $qt).files.Count -ne 2) { $problems.Add("vm-queue rules: Get-PlayVmFiles does not list both files") }
+} finally { Remove-Item -Recurse -Force $qt -ErrorAction SilentlyContinue }
 
 # 2. the host tests on canned data
 $r = Run-Native $bash @((Join-Path $Scripts "test-vm-checks.sh") -replace '\\', '/')
