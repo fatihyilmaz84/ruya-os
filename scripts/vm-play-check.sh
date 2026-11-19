@@ -19,11 +19,15 @@
 #          equals exactly the set 05 section 8 maps those to (no filesystem, no other bus name),
 #          and the deployment's share/ruyaos/play/trust.json says format 1, unverified, no signer,
 #          no store signature
-#   Every mode that installs uses its own package id (RUY-877): the sample's id for check (its
-#   signed-A/B steps need one id on purpose), "<id>.verify" for verify and "<id>.perms" for perms,
-#   written into a copy of the sample's play.json. ruya-play keeps a signer's trust record for an
-#   id after an uninstall (05 section 9), so one shared id made a later unsigned install
-#   different-developer. The modes therefore pass in any order on one VM.
+#   runid  host fixtures only: `runid <id>` prints the id check would use for <id>
+#   Every mode that installs uses its own package id (RUY-877): "<id>.c<run>" for check (one
+#   fresh id per run, RUY-879; its signed-A/B steps need one id within the run, on purpose),
+#   "<id>.verify" for verify and "<id>.perms" for perms, written into a copy of the sample's
+#   play.json. ruya-play keeps a signer's trust record for an id after an uninstall (05 section
+#   9), so a shared id made a later install different-developer. verify and perms install
+#   unsigned, so no key record can block their fixed ids; check signs with a new key A each run,
+#   so it takes a new id each run and leaves one small trust record behind, by design. The modes
+#   pass in any order, and check any number of times, on one VM.
 #   parse  host fixtures only (scripts/test-vm-checks.sh): reads busctl --json=short on stdin;
 #          `parse status` prints a call's first string, `parse job <id>` the job's state and
 #          status, `parse sources` the listed paths, `parse items` Library1's ids; `parse perms`
@@ -179,6 +183,10 @@ with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
 PY
 }
 
+# run_id <id>: check's package id for this run. The extra part starts with a letter (a part may
+# not start with a digit, ruya-play-format check_id) and the pid keeps two runs in one second apart.
+run_id() { echo "$1.c$(date +%s)x$$"; }
+
 if [ "$mode" = parse ]; then
     shift
     if [ "${1:-}" = perms ]; then
@@ -194,6 +202,10 @@ if [ "$mode" = restart ]; then
 fi
 if [ "$mode" = withid ]; then
     with_id "${2:?in.zip}" "${3:?out.zip}" "${4:?id}"
+    exit $?
+fi
+if [ "$mode" = runid ]; then
+    run_id "${2:?id}"
     exit $?
 fi
 
@@ -387,7 +399,7 @@ mkdir -p "$work" "$usb" "$loose"
 if [ "$mode" = verify ]; then
     dev_mode true >/dev/null
     appid="$appid.verify"
-    with_id "$zip" "$work/verify.play.zip" "$appid" || bad "with_id"
+    with_id "$zip" "$work/verify.play.zip" "$appid" || { bad "with_id: no copy of the sample with the id $appid"; exit 1; }
     mkdir -p "$state/incoming"
     install -m 0600 "$work/verify.play.zip" "$state/incoming/vm-play-check.play.zip"
     got="$(install_wait "$state/incoming/vm-play-check.play.zip")"
@@ -400,7 +412,7 @@ fi
 if [ "$mode" = perms ]; then
     dev_mode true >/dev/null
     appid="$appid.perms"
-    with_id "$zip" "$work/id.play.zip" "$appid" || bad "with_id"
+    with_id "$zip" "$work/id.play.zip" "$appid" || { bad "with_id: no copy of the sample with the id $appid"; exit 1; }
     python3 - "$work/id.play.zip" "$work/perms.play.zip" <<'PY'
 import json, sys, zipfile
 src, out = sys.argv[1:3]
@@ -436,11 +448,13 @@ print(r.get("format"), r.get("tier"), r.get("signer_id"), r.get("signer_name"), 
     exit "$fail"
 fi
 
-# The packages.
-cp "$zip" "$work/unsigned.play.zip"
+# The packages: all made from one copy with this run's id, before anything is signed (RUY-879).
+appid="$(run_id "$appid")"
+with_id "$zip" "$work/run.play.zip" "$appid" || { bad "with_id: no copy of the sample with the id $appid"; exit 1; }
+cp "$work/run.play.zip" "$work/unsigned.play.zip"
 (cd "$work" && "$pack" keygen a >/dev/null && "$pack" keygen b >/dev/null) || bad "ruya-pack keygen"
 for k in a b; do
-    cp "$zip" "$work/signed-$k.play.zip"
+    cp "$work/run.play.zip" "$work/signed-$k.play.zip"
     "$pack" sign "$work/signed-$k.play.zip" --key "$work/$k.key" >/dev/null || bad "ruya-pack sign with key $k"
 done
 python3 - "$work/signed-a.play.zip" "$work/tampered.play.zip" "$work/bomb.play.zip" <<'PY'
