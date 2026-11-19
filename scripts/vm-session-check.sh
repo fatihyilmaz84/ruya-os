@@ -355,6 +355,20 @@ judge_clean_end() {
 # --- judge_clean_end end
 # The unit name out of 'ss "ok" "ruya-app-..."'.
 unit_of() { sed -n 's/^ss "ok" "\(.*\)"$/\1/p'; }
+# sign_in <profile>: SwitchTo with no PIN, then the dev PIN 1234 when a PIN is asked; prints the reply.
+sign_in() {
+    local out
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$1" "" 2>&1)"
+    case "$out" in *'"wrong-pin"'*|*'"pin-required"'*) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$1" 1234 2>&1)";; esac
+    echo "$out"
+}
+# start_monitor: a fresh $work/signals.log fed by busctl monitor of Session1; sets $mon.
+start_monitor() {
+    : > "$work/signals.log"
+    busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &
+    mon=$!
+    sleep 2
+}
 # Waits for a line of the signal log (an extended-regex pattern), up to $2 seconds; $3 is an optional label.
 wait_sig() {
     n=0
@@ -481,10 +495,7 @@ restart)
     mkdir -p "$work"
     systemctl --user -M "$user@.host" stop 'ruya-app-*.service' </dev/null 2>&1 | cat >/dev/null
     pkill -u "$user" -f "sleep 3000" 2>/dev/null
-    : > "$work/signals.log"
-    busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &
-    mon=$!
-    sleep 2
+    start_monitor
 
     echo "--- Launch, then restart ruya-session while the app runs"
     out="$(launch "$sleeper" "$pid")"; echo "$out"
@@ -505,10 +516,7 @@ restart)
     journalctl -u ruya-session -b --no-pager | grep -a -q "adopted $inst" && ok "the journal says it was adopted" || bad "no 'adopted' line in the journal"
     case "$(launch "$sleeper" "$pid")" in 'ss "already-running" ""') ok "a relaunch: already-running";; *) bad "relaunch after the restart";; esac
 
-    : > "$work/signals.log"
-    busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &
-    mon=$!
-    sleep 2
+    start_monitor
     echo "--- Stop an adopted app"
     t0="$(date +%s)"
     case "$(stop_app "$inst")" in 's "ok"') ok "Stop answered ok";; *) bad "Stop after the restart";; esac
@@ -548,11 +556,8 @@ restart)
     trestart="$(date +%s)"
     systemctl restart ruya-session; n=0
     until running >/dev/null 2>&1 || [ "$n" -ge 60 ]; do sleep 1; n=$((n + 1)); done
-    : > "$work/signals.log"
     kill "$mon" 2>/dev/null
-    busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &
-    mon=$!
-    sleep 2
+    start_monitor
     # While the adopted app runs, the service follows it over its connection to the user manager
     # and starts no `systemctl` for it (T-340; before it was one per unit every 2 s). The follower
     # runs `systemctl show` only while that connection is down, and says so in the journal ("no
@@ -635,10 +640,7 @@ display)
     flatpak install --system -y --noninteractive "$remote" "$rt" "$wclient" >/dev/null 2>&1 \
         && ok "test app $wclient installed" || { bad "flatpak install of $wclient failed"; exit 1; }
     for u in "$user" "$ouser"; do systemctl --user -M "$u@.host" stop 'ruya-app-*.service' </dev/null 2>&1 | cat >/dev/null; done
-    : > "$work/signals.log"
-    busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &
-    mon=$!
-    sleep 2
+    start_monitor
 
     echo "--- nobody signed in: the profile's own client is refused"
     busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null
@@ -654,8 +656,7 @@ display)
     journalctl -b _UID="$muid" --since "@$t0" --no-pager -o cat | grep -a "test-wayland-client:" | head -1
 
     echo "--- $me signed in: its window is in the app layer"
-    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$me" "")"
-    case "$out" in 'suu "ok"'*) ;; *) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$me" 1234)";; esac
+    out="$(sign_in "$me")"
     case "$out" in 'suu "ok"'*) ok "$me signed in";; *) bad "SwitchTo $me: $out"; exit 1;; esac
     sleep 3
     : > "$work/signals.log"
@@ -747,13 +748,9 @@ kill)
     systemctl --user -M "$user@.host" stop 'ruya-app-*.service' </dev/null 2>&1 | cat >/dev/null
     pkill -KILL -u "$user" -f "sleep 300[56]" 2>/dev/null
     # Kill is for the signed-in profile's app.
-    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" "" 2>&1)"
-    case "$out" in 'suu "ok"'*) ;; *'"wrong-pin"'*|*'"pin-required"'*) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" 1234 2>&1)";; esac
+    out="$(sign_in "$pid")"
     case "$out" in 'suu "ok"'*) ok "$pid signed in";; *) bad "SwitchTo $pid: $out"; exit 1;; esac
-    : > "$work/signals.log"
-    busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &
-    mon=$!
-    sleep 2
+    start_monitor
     # start_stubborn: Launch the stubborn app, wait for AppStarted and its scope; sets $inst.
     start_stubborn() {
         local out n0 n
@@ -795,8 +792,7 @@ kill)
     sleep 1
     case "$(kill_app "$inst")" in 's "not-allowed"') ok "Kill while nobody is signed in: not-allowed";; *) bad "Kill while locked was not refused";; esac
     pgrep -u "$user" -f "sleep 3006" >/dev/null 2>&1 && ok "the refused Kill killed nothing" || bad "the app ended after a refused Kill"
-    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" "" 2>&1)"
-    case "$out" in 'suu "ok"'*) ;; *'"wrong-pin"'*|*'"pin-required"'*) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" 1234 2>&1)";; esac
+    out="$(sign_in "$pid")"
     case "$out" in 'suu "ok"'*) ok "$pid signed in again";; *) bad "SwitchTo $pid after the Lock: $out";; esac
     tk="$(date +%s)"
     case "$(kill_app "$inst")" in 's "ok"') ok "Kill answered ok";; *) bad "Kill";; esac
@@ -853,13 +849,9 @@ shutdown)
     [ "$delay" = "t 40000000" ] && ok "logind waits up to 40 s (InhibitDelayMaxSec)" || bad "InhibitDelayMaxUSec is '$delay', not 40 s (logind.conf.d/50-ruyaos-inhibit-delay.conf)"
 
     echo "--- a game that saves at quit, frozen, its profile signed out"
-    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" "" 2>&1)"
-    case "$out" in 'suu "ok"'*) ;; *'"wrong-pin"'*|*'"pin-required"'*) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" 1234 2>&1)";; esac
+    out="$(sign_in "$pid")"
     case "$out" in 'suu "ok"'*) ok "$pid signed in";; *) bad "SwitchTo $pid: $out"; exit 1;; esac
-    : > "$work/signals.log"
-    busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &
-    mon=$!
-    sleep 2
+    start_monitor
     out="$(launch "$saver" "$pid")"; inst="$(echo "$out" | unit_of)"
     [ -n "$inst" ] && ok "Launch: $inst" || { bad "Launch of $saver: $out"; kill "$mon" 2>/dev/null; exit 1; }
     wait_sig "\"member\":\"AppStarted\".*$saver" 30 && ok "AppStarted arrived" || bad "no AppStarted within 30 s"
@@ -951,10 +943,7 @@ check)
     # Apps left running by an earlier run (the service takes them over when it restarts, T-290, but
     # this check starts from a clean slate).
     systemctl --user -M "$user@.host" stop 'ruya-app-*.service' </dev/null 2>&1 | cat >/dev/null
-    : > "$work/signals.log"
-    busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &
-    mon=$!
-    sleep 2
+    start_monitor
 
     echo "--- Launch"
     out="$(launch "$sleeper" "$pid")"; echo "$out"
@@ -1019,8 +1008,7 @@ check)
     # T-457: the Ruya Hub pauses the game. Freeze/Thaw of a running app of the signed-in profile:
     # the cgroup freezer of its unit and of both of its scopes (the run's and the second one above).
     echo "--- Freeze / Thaw (T-457)"
-    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" "")"
-    case "$out" in 'suu "ok"'*) ;; *) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" 1234)";; esac
+    out="$(sign_in "$pid")"
     case "$out" in 'suu "ok"'*) ok "$pid signed in (Freeze is for the signed-in profile)";; *) bad "SwitchTo $pid: $out";; esac
     scopes="$(app_scope_names "$user")"
     [ "$(echo "$scopes" | grep -c .)" -ge 2 ] && ok "the app has two active scopes: $(echo $scopes)" || bad "expected two active scopes, found: $scopes"
@@ -1216,8 +1204,7 @@ check)
     [ "$(fstate "$user" "$inst")" = frozen ] && ok "and it stays frozen" || bad "$inst: FreezerState $(fstate "$user" "$inst") after the refused Thaw"
     # The reply status decides, not busctl's exit code: a wrong or missing PIN is a successful call
     # (RUY-441). An empty PIN on a PIN profile answers "pin-required" (0.0.78), a stale one "wrong-pin".
-    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" "" 2>&1)"
-    case "$out" in 'suu "ok"'*) ;; *'"wrong-pin"'*|*'"pin-required"'*) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" 1234 2>&1)";; esac
+    out="$(sign_in "$pid")"
     case "$out" in 'suu "ok"'*) ok "$pid signed in again";; *) bad "SwitchTo $pid after the Lock: $out";; esac
     # The service thaws nothing at a sign-in: the shell's sweep does (it is stopped here), so a Thaw from
     # the check stands in for it.
@@ -1282,8 +1269,7 @@ check)
     [ "$(fstate "$user" "$instl")" = frozen ] && ok "$instl is frozen (FreezerState)" || bad "$instl: FreezerState $(fstate "$user" "$instl") after the early Lock"
     journalctl -u ruya-session -b --no-pager -o cat --since "@$tlock2" 2>/dev/null | grep -a -q "froze $instl: its profile is not signed in" \
         && ok "journal: froze $instl: its profile is not signed in" || bad "no 'froze $instl' line in the journal"
-    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" "" 2>&1)"
-    case "$out" in 'suu "ok"'*) ;; *'"wrong-pin"'*|*'"pin-required"'*) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" 1234 2>&1)";; esac
+    out="$(sign_in "$pid")"
     case "$out" in 'suu "ok"'*) ok "$pid signed in again";; *) bad "SwitchTo $pid after the early Lock: $out";; esac
     case "$(stop_app "$instl")" in 's "ok"') ok "Stop of the frozen app answered ok";; *) bad "Stop of $instl";; esac
     wait_sig "\"member\":\"AppExited\".*$sleeper" 20 && ok "AppExited arrived" || bad "no AppExited after the Stop"
