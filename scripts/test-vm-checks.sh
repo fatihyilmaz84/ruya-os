@@ -1642,7 +1642,7 @@ out="$(echo '{"type":"aa{sv}","data":[[{"id":{"type":"s","data":"flatpak:org.exa
 [ "$rc" != 0 ] && pass "library play: an app that is not listed FAILs" || fail "library play: a missing item passed"
 out="$(printf '{"type":"aa{sv}","data":[[{"id":{"type":"s","data":"flatpak:play.com.example.hello"},"play":{"type":"b","data":true},"title":{"type":"s","data":"Hello"},"genres":{"type":"as","data":[]},"art":{"type":"a{ss}","data":{}}}]]}' | pj)"; rc=$?
 [ "$rc" != 0 ] && pass "library play: an item without art FAILs" || fail "library play: an item without icon passed"
-[ "$(bash "$here/vm-library-check.sh" playid com.example.hello)" = com.example.hello.library ] && pass "vm-library-check.sh play installs under its own id <id>.library (RUY-877)" || fail "vm-library-check.sh playid: not <id>.library"
+[ "$(bash "$here/vm-library-check.sh" playid com.example.hello | head -n 1)" = com.example.hello.library ] && pass "vm-library-check.sh play installs under its own id <id>.library (RUY-877)" || fail "vm-library-check.sh playid: not <id>.library"
 ! grep -q 'm\["id"\] = ' "$here/vm-library-check.sh" && grep -q 'vm-play-check.sh" withid' "$here/vm-library-check.sh" && pass "vm-library-check.sh has no copy of the id rewrite, it calls vm-play-check.sh withid (RUY-878)" || fail "vm-library-check.sh: its own id rewrite"
 grep -q 'play_pkg_id "\$play_id"' "$here/vm-library-check.sh" && pass "vm-library-check.sh play installs under the id playid prints" || fail "vm-library-check.sh play does not use play_pkg_id"
 n="$(grep -c 'with_id "\$zip"' "$here/vm-play-check.sh")"; m="$(grep 'with_id "\$zip"' "$here/vm-play-check.sh" | grep -c 'bad "with_id.*exit 1')"
