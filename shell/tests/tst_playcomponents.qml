@@ -332,6 +332,13 @@ Item {
             compare(findChild(unsigned.sheet, "signerNote").text, "Nobody signed this package, so nothing shows who made it or whether it was changed.")
         }
 
+        function test_an_installed_apps_key_shows_without_a_seen_before_row() {
+            // Library1 gives the key id but no key state (an install-time comparison).
+            const installed = openSheet(record({ tier: "developer", signerName: "Pixel Forest", signerKeyId: host.key32, keyState: "" }))
+            verify(findChild(installed.sheet, "signerRowKey").visible)
+            verify(!findChild(installed.sheet, "signerRowSeen").visible, "no key state: no Seen before row")
+        }
+
         function test_the_sheet_is_1100_wide_and_inside_the_screen() {
             const o = openSheet(official())
             const card = findChild(o.sheet, "signerSheet")

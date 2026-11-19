@@ -16,7 +16,7 @@ const MAX_JSON_BYTES: u64 = 1024 * 1024;
 const ART_DIR: &str = "share/ruyaos/play/art";
 
 /// The `.play` fields of a library item (Library1 keys `genres`, `players`, `controller`,
-/// `age_rating`, `play_tier`, `play_signer`).
+/// `age_rating`, `play_tier`, `play_signer`, `play_signer_key_id`, `play_screenshots`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PlayInfo {
     pub genres: Vec<String>,
@@ -28,6 +28,11 @@ pub struct PlayInfo {
     pub tier: Option<String>,
     /// The signer's name (else its id); none when unsigned or unknown.
     pub signer: Option<String>,
+    /// The signer's key id exactly as `trust.json` holds it (`signer_id`); none with no tier or
+    /// no signer. Never computed here.
+    pub signer_key_id: Option<String>,
+    /// The 1080p screenshots in order, at most `MAX_SCREENSHOTS`; empty when there are none.
+    pub screenshots: Vec<String>,
 }
 
 fn read_json(path: &Path) -> Option<serde_json::Value> {
@@ -123,9 +128,9 @@ fn regular_files(dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-/// The art roles of the vetted art folder: its files, and the files of each `logo-<n>` folder
-/// with the language the manifest gives that number.
-fn art(art_dir: &Path, manifest: &serde_json::Value) -> Vec<(String, String)> {
+/// The art roles of the vetted art folder and its screenshots: its files, and the files of each
+/// `logo-<n>` folder with the language the manifest gives that number.
+fn art(art_dir: &Path, manifest: &serde_json::Value) -> (Vec<(String, String)>, Vec<String>) {
     let langs = logo_langs(manifest);
     let mut slots: Vec<(Option<String>, Vec<PathBuf>)> = vec![(None, regular_files(art_dir))];
     if let Ok(entries) = std::fs::read_dir(art_dir) {
@@ -147,17 +152,24 @@ fn art(art_dir: &Path, manifest: &serde_json::Value) -> Vec<(String, String)> {
             slots.push((langs.get(n).cloned(), regular_files(&dir)));
         }
     }
-    let (roles, _) = ruya_play_art::art_roles(
+    let (roles, screenshots) = ruya_play_art::art_roles(
         slots
             .iter()
             .map(|(lang, files)| (lang.as_deref(), files.as_slice())),
     );
-    // The library lists the roles the shell draws; the trailer's poster and the screenshots
-    // belong to the store page (Play1).
-    roles
-        .into_iter()
-        .filter(|(role, _)| role != "poster")
-        .collect()
+    // The roles are what the shell draws on a card; the trailer's poster belongs to the store
+    // page (Play1). An installed app has no Play1 record, so the game page gets its screenshots
+    // from here.
+    (
+        roles
+            .into_iter()
+            .filter(|(role, _)| role != "poster")
+            .collect(),
+        screenshots
+            .into_iter()
+            .take(usize::from(ruya_play_art::MAX_SCREENSHOTS))
+            .collect(),
+    )
 }
 
 /// Reads the deployment of `play.<id>` below `root` into `item`: the title and the `.play`
@@ -184,7 +196,8 @@ pub fn enrich(item: &mut Item, flatpak_id: &str, root: &Path) {
     if let Some(t) = title(&manifest) {
         item.title = t;
     }
-    item.art = art(&files.join(ART_DIR), &manifest);
+    let (roles, screenshots) = art(&files.join(ART_DIR), &manifest);
+    item.art = roles;
     let trust = read_json(&files.join("share/ruyaos/play/trust.json"))
         .filter(|t| t.get("format").and_then(serde_json::Value::as_u64) == Some(1));
     let tier = trust
@@ -197,6 +210,9 @@ pub fn enrich(item: &mut Item, flatpak_id: &str, root: &Path) {
             .as_ref()
             .and_then(|t| text(t, "signer_name").or_else(|| text(t, "signer_id"))),
     );
+    let signer_key_id = tier
+        .as_ref()
+        .and(trust.as_ref().and_then(|t| text(t, "signer_id")));
     item.play = Some(PlayInfo {
         genres: manifest
             .get("genres")
@@ -213,5 +229,7 @@ pub fn enrich(item: &mut Item, flatpak_id: &str, root: &Path) {
         age_rating: age_rating(&manifest),
         tier,
         signer,
+        signer_key_id,
+        screenshots,
     });
 }

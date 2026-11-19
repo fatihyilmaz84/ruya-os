@@ -166,7 +166,7 @@ FocusScope {
         }
         FactRow {
             objectName: "signerRowSeen"
-            visible: sheet.keyId !== ""
+            visible: sheet.keyId !== "" && sheet.keyState !== ""   // an install-time comparison: an installed app has none
             label: qsTr("Seen before")
             value: PlayTrust.keyStateText(sheet.keyState)
             error: sheet.keyState === "different"
