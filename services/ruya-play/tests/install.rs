@@ -6,6 +6,7 @@ mod common;
 
 use common::*;
 use ruya_play::core::fakes::{FnFreeSpace, StaticBlocklists};
+use ruya_play::core::helper::Mode;
 use ruya_play::core::installed::MemoryInstalled;
 use ruya_play::core::staging::Kind;
 use ruya_play::{CommitError, JobState, JobStatus, MethodStatus, Phase};
@@ -663,6 +664,73 @@ fn a_path_that_vanishes_during_the_run_is_still_unknown_source() {
     }));
     let h = setup.build();
     assert_eq!(h.importer.inspect(&there).0, MethodStatus::UnknownSource);
+}
+
+/// A helper that lets the inspect run through and sends the install run to a path nothing opens,
+/// so the helper answers `missing` as it would for a denied `OpenFile=...:graceful`.
+struct MissesOnInstall {
+    real: Box<dyn ruya_play::Helper>,
+    during: Box<dyn Fn() + Send + Sync>,
+}
+
+impl ruya_play::Helper for MissesOnInstall {
+    fn run(
+        &self,
+        request: &ruya_play::Request,
+        cancel: &std::sync::atomic::AtomicBool,
+        on_output: &mut dyn FnMut(&[u8]) -> bool,
+    ) -> ruya_play::Exit {
+        let mut request = request.clone();
+        if request.mode == Mode::Install {
+            (self.during)();
+            request.source = "/nowhere/else.play".to_string();
+        }
+        self.real.run(&request, cancel, on_output)
+    }
+}
+
+fn install_that_misses(remove_during: bool) -> ruya_play::JobResult {
+    let dir = tempfile::tempdir().unwrap();
+    let there = dir.path().join("there.play");
+    std::fs::write(&there, b"x").unwrap();
+    let mut setup = Setup {
+        packages: vec![(there.clone(), Pkg::signed(&game()))],
+        ..Setup::default()
+    };
+    let doomed = there.clone();
+    setup.wrap_helper = Some(Box::new(move |real| {
+        let doomed = doomed.clone();
+        Box::new(MissesOnInstall {
+            real,
+            during: Box::new(move || {
+                if remove_during {
+                    let _ = std::fs::remove_file(&doomed);
+                }
+            }),
+        })
+    }));
+    let mut h = setup.build();
+    let r = h.install_at(&there);
+    h.assert_nothing_left();
+    r
+}
+
+#[test]
+fn an_unpack_run_that_gets_no_descriptor_for_a_path_that_is_there_is_a_read_failure() {
+    let r = install_that_misses(false);
+    assert_eq!(
+        (r.status, codes(&r)),
+        (JobStatus::Failed, vec!["source.unreadable".to_string()])
+    );
+}
+
+#[test]
+fn a_path_that_vanishes_during_the_unpack_run_is_still_source_missing() {
+    let r = install_that_misses(true);
+    assert_eq!(
+        (r.status, codes(&r)),
+        (JobStatus::Failed, vec!["source.missing".to_string()])
+    );
 }
 
 #[test]
