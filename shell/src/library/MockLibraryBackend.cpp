@@ -127,6 +127,18 @@ void MockLibraryBackend::reset(const QString &scenario)
         // update state, RUY-524).
         if (scenario == QLatin1String("chess"))
             m_items.append(item("flatpak:org.example.Chess", "game", "Open Chess", 1761900000));
+        // "artroles:<dir>": two Flatpak games that carry one art role besides the icon, a card and a cover
+        // (RUY-873: every surface must show them, not the generated art). Newest first, so Home's hero starts on them.
+        if (scenario.startsWith(QLatin1String("artroles:"))) {
+            const QString dir = scenario.mid(9);
+            auto at = [&](const char *name) { return dir + QLatin1Char('/') + QLatin1String(name) + QStringLiteral(".png"); };
+            LibraryItem cardOnly = item("flatpak:org.example.CardOnly", "game", "Card Only", 1762300000);
+            cardOnly.art = {{QStringLiteral("icon"), at("pastel")}, {QStringLiteral("card"), at("playcard")}};
+            LibraryItem coverOnly = item("flatpak:org.example.CoverOnly", "game", "Cover Only", 1762200000);
+            coverOnly.art = {{QStringLiteral("icon"), at("pastel")}, {QStringLiteral("cover"), at("playcover")}};
+            m_items.append(cardOnly);
+            m_items.append(coverOnly);
+        }
         if (withArt) {
             const QString dir = scenario.mid(4);
             for (int i = 0; i < m_items.size(); ++i) {

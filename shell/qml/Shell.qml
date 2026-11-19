@@ -815,7 +815,7 @@ FocusScope {
                 return
             }
             const item = Library.item(id)
-            root.launchApp(appId, item.title ?? id, item.art ? (item.art.hero ?? item.art.tile ?? "") : "")
+            root.launchApp(appId, item.title ?? id, ArtRoles.wide(item.art))
         }
     }
 
@@ -981,7 +981,7 @@ FocusScope {
         const found = Library.items.find(i => appId !== "" && Library.sessionAppId(i.id) === appId)
         return { appId: appId,
                  title: appId !== "" ? titleOfApp(appId) : qsTr("Running app"),
-                 picture: found && found.art ? (found.art.hero ?? found.art.tile ?? "") : "",
+                 picture: found ? ArtRoles.wide(found.art) : "",
                  started: run ? run.started : Date.now() / 1000,
                  instance: run ? run.instance : "",
                  frozen: run ? (run.frozen ?? false) : false }
@@ -1007,11 +1007,11 @@ FocusScope {
         }
         return rows
     }
-    // A running app's picture in the Hub's strip: its Library card's art (the tile, else the hero), "" when
+    // A running app's picture in the Hub's strip: its Library card's art (the tile role, ArtRoles), "" when
     // the Library does not know it (the strip shows the tint and the initial).
     function cardArtOfApp(appId) {
         const found = Library.items.find(i => appId !== "" && Library.sessionAppId(i.id) === appId)
-        return found && found.art ? (found.art.tile ?? found.art.card ?? found.art.cover ?? found.art.hero ?? "") : ""
+        return found ? ArtRoles.tile(found.art) : ""
     }
 
     // Home from the quick menu: the apps keep running behind it and lose the focus; Home shows the
@@ -1534,7 +1534,7 @@ FocusScope {
                 const known = item && item.id
                 to.appId = known ? item.id : ""
                 to.appName = known ? (item.title ?? "") : ""
-                to.picture = known && item.art ? (item.art.hero ?? item.art.card ?? item.art.cover ?? item.art.tile ?? "") : ""
+                to.picture = known ? ArtRoles.wide(item.art) : ""
                 showB = !showB
             }
 
@@ -1930,7 +1930,7 @@ FocusScope {
                 y: (ListView.view.height - height) / 2
                 itemId: modelData
                 title: entry.title ?? ""
-                picture: entry.art ? (entry.art.tile ?? entry.art.card ?? entry.art.cover ?? "") : ""
+                picture: ArtRoles.tile(entry.art)
                 focused: ListView.isCurrentItem && ListView.view.activeFocus
                 anchored: ListView.isCurrentItem && root.optionsOn && root.optionsSurface === "recent"
                 holdShown: ListView.isCurrentItem && recentHold.ringShown
@@ -2137,7 +2137,7 @@ FocusScope {
             Library.launch(id)
             break
         case "close":
-            closeCardApp(appId, item.title, item.art ? (item.art.hero ?? item.art.tile ?? "") : "")
+            closeCardApp(appId, item.title, ArtRoles.wide(item.art))
             break
         case "details":
             openPage("appDetail", { id: id })

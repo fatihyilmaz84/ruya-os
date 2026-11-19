@@ -24,7 +24,7 @@ Item {
     readonly property bool dark: stage === "off" || stage === "sleep"
     // The art: the installed apps that have a picture, else every installed app (their generated art).
     readonly property var pool: {
-        const withArt = Library.items.filter(i => (i.art ?? {}).hero || (i.art ?? {}).tile)
+        const withArt = Library.items.filter(i => ArtRoles.wide(i.art) !== "")
         return withArt.length > 0 ? withArt : Library.items
     }
     readonly property bool showArt: !dark && DeviceSettings.effectsQuality !== "performance" && pool.length > 0
@@ -85,7 +85,7 @@ Item {
                 y: 0
                 appId: entry.id ?? ""
                 appName: entry.title ?? ""
-                picture: (entry.art ?? {}).hero ?? (entry.art ?? {}).tile ?? ""
+                picture: ArtRoles.wide(entry.art)
                 monogram: false
                 shimmer: false
                 radius: 0
