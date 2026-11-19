@@ -353,6 +353,21 @@ judge_clean_end() {
     ok "$1: no SIGKILL and no 'Cannot stop frozen unit' in the journal"
 }
 # --- judge_clean_end end
+# --- judge_limits begin (test-vm-checks.sh sources these lines)
+# judge_limits <what> (RUY-855), `systemctl show -p MemoryMax -p TasksMax <unit>` on stdin: the app unit
+# has the platform's limits, MemoryMax=90% of RAM as a byte count (not "infinity": the user manager
+# must delegate memory) and TasksMax=8192. $2 is MemTotal in kB when the caller knows it.
+judge_limits() {
+    local out mem tasks
+    out="$(cat)"
+    mem="$(printf '%s\n' "$out" | sed -n 's/^MemoryMax=//p')"
+    tasks="$(printf '%s\n' "$out" | sed -n 's/^TasksMax=//p')"
+    case "$mem" in ''|*[!0-9]*) bad "$1: MemoryMax is '$mem', not a byte count"; return 1;; esac
+    if [ -n "${2:-}" ] && [ "$mem" -ne $(( $2 * 1024 * 90 / 100 )) ]         && [ "$mem" -ge $(( $2 * 1024 )) ]; then bad "$1: MemoryMax=$mem is not below MemTotal ${2} kB"; return 1; fi
+    if [ "$tasks" != 8192 ]; then bad "$1: TasksMax is '$tasks', not 8192"; return 1; fi
+    ok "$1: MemoryMax=$mem bytes, TasksMax=8192"
+}
+# --- judge_limits end
 # The unit name out of 'ss "ok" "ruya-app-..."'.
 unit_of() { sed -n 's/^ss "ok" "\(.*\)"$/\1/p'; }
 # sign_in <profile>: SwitchTo with no PIN, then the dev PIN 1234 when a PIN is asked; prints the reply.
@@ -959,6 +974,8 @@ check)
     # 2>&1 into a pipe: a call over -M hands its stderr to PID 1, which SELinux lets write a pipe
     # of this shell but not the log file this script's output goes to (the call would hang).
     systemctl --user -M "$user@.host" is-active "$inst" </dev/null 2>&1 | grep -q '^active$' && ok "the unit is active in $user's manager" || bad "unit not active in the user manager"
+    # RUY-855 (limits): every app unit carries MemoryMax=90% and TasksMax=8192 (ADR-019 memory pressure).
+    systemctl --user -M "$user@.host" show -p MemoryMax -p TasksMax "$inst" </dev/null 2>&1 | cat         | judge_limits "the app unit's limits" "$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)"
     loginctl show-user "$user" -p Linger | grep -q yes && ok "the manager of $user lingers" || bad "no linger"
     if pgrep -u "$user" 'pipewire|wireplumber' >/dev/null; then bad "$user runs PipeWire or WirePlumber (ADR-010)"; ps -u "$user" -o args | head; else ok "$user runs no PipeWire or WirePlumber"; fi
 
