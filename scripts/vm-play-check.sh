@@ -2,6 +2,8 @@
 # Checks ruya-play (org.ruyaos.Play1, RUY-829, the lead's run under RUY-100) inside a running VM,
 # as root. Modes:
 #   check  (default) every step below
+#   withid host fixtures only: `withid <in.zip> <out.zip> <id>` copies a package with the id of its
+#          play.json changed (the helper verify and perms use)
 #   helper the helper's sandbox only: systemd-analyze security of ruya-play.service and of a probe
 #          unit started with the helper's own properties (ruya-play --helper-argv), no network and
 #          no write outside its state folder from inside it, reading a USB source and an incoming/
@@ -15,6 +17,11 @@
 #          equals exactly the set 05 section 8 maps those to (no filesystem, no other bus name),
 #          and the deployment's share/ruyaos/play/trust.json says format 1, unverified, no signer,
 #          no store signature
+#   Every mode that installs uses its own package id (RUY-877): the sample's id for check (its
+#   signed-A/B steps need one id on purpose), "<id>.verify" for verify and "<id>.perms" for perms,
+#   written into a copy of the sample's play.json. ruya-play keeps a signer's trust record for an
+#   id after an uninstall (05 section 9), so one shared id made a later unsigned install
+#   different-developer. The modes therefore pass in any order on one VM.
 #   parse  host fixtures only (scripts/test-vm-checks.sh): reads busctl --json=short on stdin;
 #          `parse status` prints a call's first string, `parse job <id>` the job's state and
 #          status, `parse sources` the listed paths, `parse items` Library1's ids; `parse perms`
@@ -35,7 +42,9 @@
 # mounted at /run/media/ruya-shell/PLAYCHECK nosuid,nodev,noexec (as ruya-devices mounts drives).
 # The steps: an unsigned package without developer mode is needs-developer-mode; the tampered one
 # is bad-signature; the bomb is refused and the service keeps its PID; the A package installs
-# (flatpak list --system, Library1.ListItems, Session1.Launch when a profile exists); the B
+# (flatpak list --system, Library1.ListItems, Session1.Launch when a profile exists; the check
+creates none: without one that step is a SKIP with its reason, so create a profile in the shell
+first, or the launch goes uncovered); the B
 # package is different-developer; after every refusal staging/ is empty and no new play.* app is
 # installed; ListSources lists the drive's packages; a drive mounted without noexec is
 # unknown-source; a download in incoming/ inspects. At exit everything is removed again and the
@@ -142,6 +151,25 @@ PERMS_WANT='[Context] devices=dri
 [Context] sockets=wayland
 [Session Bus Policy] com.feralinteractive.GameMode=talk'
 
+# with_id <in.zip> <out.zip> <id>: a copy of a package whose top-level play.json carries <id>
+# (RUY-877). The sample is unsigned and play.files does not list play.json, so nothing else names
+# the id; a signed package would need signing again.
+with_id() {
+    python3 - "$1" "$2" "$3" <<'PY'
+import json, sys, zipfile
+src, out, new_id = sys.argv[1:4]
+sample = zipfile.ZipFile(src)
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+    for i in sample.infolist():
+        b = sample.read(i.filename)
+        if i.filename.endswith("play.json") and i.filename.count("/") <= 1:
+            m = json.loads(b)
+            m["id"] = new_id
+            b = json.dumps(m, indent=2).encode()
+        z.writestr(i, b)
+PY
+}
+
 if [ "$mode" = parse ]; then
     shift
     if [ "${1:-}" = perms ]; then
@@ -149,6 +177,10 @@ if [ "$mode" = parse ]; then
         exit $?
     fi
     parse "$@"
+    exit $?
+fi
+if [ "$mode" = withid ]; then
+    with_id "${2:?in.zip}" "${3:?out.zip}" "${4:?id}"
     exit $?
 fi
 
@@ -335,8 +367,10 @@ mkdir -p "$work" "$usb" "$loose"
 
 if [ "$mode" = verify ]; then
     dev_mode true >/dev/null
+    appid="$appid.verify"
+    with_id "$zip" "$work/verify.play.zip" "$appid" || bad "with_id"
     mkdir -p "$state/incoming"
-    install -m 0600 "$zip" "$state/incoming/vm-play-check.play.zip"
+    install -m 0600 "$work/verify.play.zip" "$state/incoming/vm-play-check.play.zip"
     got="$(install_wait "$state/incoming/vm-play-check.play.zip")"
     [ "$got" = ok ] && ok "the sample installs (developer mode)" || bad "the sample: $got"
     [ "$got" = ok ] && verify_checks
@@ -346,7 +380,9 @@ fi
 
 if [ "$mode" = perms ]; then
     dev_mode true >/dev/null
-    python3 - "$zip" "$work/perms.play.zip" <<'PY'
+    appid="$appid.perms"
+    with_id "$zip" "$work/id.play.zip" "$appid" || bad "with_id"
+    python3 - "$work/id.play.zip" "$work/perms.play.zip" <<'PY'
 import json, sys, zipfile
 src, out = sys.argv[1:3]
 sample = zipfile.ZipFile(src)
@@ -359,10 +395,6 @@ with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
             b = json.dumps(m, indent=2).encode()
         z.writestr(i, b)
 PY
-    # RUY-865: `check` installs the same id and its record would refuse this build again, so
-    # uninstall it first and restart the service (its start-up reconcile forgets the build).
-    flatpak uninstall --system -y --noninteractive "play.$appid" >/dev/null 2>&1
-    systemctl restart ruya-play.service
     mkdir -p "$state/incoming"
     install -m 0600 "$work/perms.play.zip" "$state/incoming/vm-play-check.play.zip"
     got="$(install_wait "$state/incoming/vm-play-check.play.zip")"
@@ -462,16 +494,16 @@ flatpak info --system --show-metadata "play.$appid" 2>/dev/null | grep -q '^comm
 n=0; listed=""
 while [ "$n" -lt 20 ]; do
     listed="$(as_shell busctl --system --json=short call org.ruyaos.Library1 /org/ruyaos/Library1 org.ruyaos.Library1 ListItems | parse items)"
-    echo "$listed" | grep -qx "play.$appid" && break
+    echo "$listed" | grep -qx "flatpak:play.$appid" && break
     sleep 1; n=$((n + 1))
 done
-echo "$listed" | grep -qx "play.$appid" && ok "Library1 lists play.$appid" || bad "Library1 does not list play.$appid"
+echo "$listed" | grep -qx "flatpak:play.$appid" && ok "Library1 lists flatpak:play.$appid" || bad "Library1 does not list flatpak:play.$appid (RUY-876: its item ids are flatpak:<id>)"
 profile="$(busctl --system call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ListProfiles | grep -o '"p[0-9]*"' | head -1 | tr -d '"')"
 if [ -n "$profile" ]; then
     st="$(as_shell busctl --system --json=short call org.ruyaos.Session1 /org/ruyaos/Session1 org.ruyaos.Session1 Launch ss "play.$appid" "$profile" | parse status)"
     [ "$st" = ok ] && ok "Session1.Launch starts play.$appid" || bad "Session1.Launch: $st"
 else
-    bad "no profile to launch play.$appid for (create one first)"
+    echo "SKIP: no profile on this VM: Session1.Launch of play.$appid not run (create one in the shell first; this check creates none)"
 fi
 refused "the same id signed by another key" signed-b different-developer
 
