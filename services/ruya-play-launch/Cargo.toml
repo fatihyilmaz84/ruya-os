@@ -1,0 +1,22 @@
+[package]
+name = "ruya-play-launch"
+description = "RuyaOS .play launcher: re-reads /app/play.json, resolves the runner, prepares the prefix and runs the game inside its sandbox (ADR-037, docs/specs/05-play-packages.md section 6.3)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "ruya_play_launch"
+
+[[bin]]
+name = "ruya-play-launch"
+path = "src/main.rs"
+
+# Few dependencies: the binary is built as a static x86_64-unknown-linux-musl program (RUY-34).
+[dependencies]
+ruya-play-format = { path = "../ruya-play-format" }  # the one parser, resolve(), prefix_dir and the env deny table
+serde_json = "1"  # the status file (already in the tree)
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"  # kill(-pgid) for a setup step that ran out of time, O_NOFOLLOW (already in the tree)

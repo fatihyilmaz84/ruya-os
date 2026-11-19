@@ -85,10 +85,7 @@ impl Package {
     /// The family of each bundled copy, by component id: what [`resolve::resolve`] takes as
     /// `bundled_families`.
     pub fn bundled_families(&self) -> BTreeMap<String, String> {
-        self.runners
-            .iter()
-            .map(|(id, r)| (id.clone(), r.family.clone()))
-            .collect()
+        runner::bundled_families(&self.runners)
     }
 }
 

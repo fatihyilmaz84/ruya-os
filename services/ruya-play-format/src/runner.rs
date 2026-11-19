@@ -596,6 +596,16 @@ pub fn bundled_runners(
     out
 }
 
+/// The family of each bundled copy, by component id: what [`crate::resolve::resolve`] takes as
+/// `bundled_families`, from the result of [`bundled_runners`] (the validator's
+/// `Package::bundled_families` and the launcher both ask this).
+pub fn bundled_families(runners: &BTreeMap<String, BundledRunner>) -> BTreeMap<String, String> {
+    runners
+        .iter()
+        .map(|(id, r)| (id.clone(), r.family.clone()))
+        .collect()
+}
+
 /// Where `${prefix}` is for a runner of `kind`, below the game's data folder `data` (ADR-037):
 /// wine `<data>/prefix`, proton `<data>/proton/pfx`; `None` for a kind without a prefix. The
 /// launcher, ruya-library and the saves of `prefix:` paths all ask this one function. Pure string
