@@ -81,6 +81,11 @@ const FIXES: &[(&str, &str)] = &[
     ("resolve.system_too_old", "Lower min if the older runner works, or bundle a copy and use source prefer-system or newest."),
     ("resolve.system_too_new", "Raise max_major once you tested the newer runner, or bundle a copy so the fence has a fallback."),
     ("resolve.no_bundled", "Add the bundled block (path, version, licence) and the files under components/, or choose source system."),
+    // runner.json of a bundled copy (05 section 6.2.1)
+    ("runner.format_too_new", "Install a newer ruya-pack; the bundled runner's runner.json uses a newer format than the tool knows."),
+    ("runner.kind_mismatch", "Set kind in runner.json to the component's type, or bundle the runner under a component of its own type."),
+    ("runner.entry_missing", "Put the program named in runner.json's entry into the runner's folder, or correct the path in entry."),
+    ("runner.not_a_file", "Make runner.json a regular file in the runner's folder; a link or a folder of that name is refused."),
     // format
     ("format.too_new", "Install a newer ruya-pack; this package uses a newer format than the tool knows."),
     ("package.no_manifest", "Add play.json at the root of the package (ruya-pack init writes a skeleton)."),
@@ -175,6 +180,7 @@ const FIXES: &[(&str, &str)] = &[
     ("blocklist.", "The console's blocklist is not the tool's business; update the console."),
     ("state.", "The console's trust state is damaged; this is not a package problem."),
     ("resolve.", "Check the components block against the runners the console has."),
+    ("runner.", "Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json."),
     ("licence.", "Fix the licence duty of the bundled component (05 section 6.2)."),
     ("build.", "Fix the source folder as the message says, then build again."),
     ("key.", "Check the key file or RUYA_PACK_KEY."),

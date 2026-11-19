@@ -193,7 +193,8 @@ fn a_bundled_valve_proton_is_not_replaced_by_the_system_ge_proton_but_a_ge_copy_
     put(
         &b,
         "components/proton/runner.json",
-        br#"{"family": "proton-ge", "version": "GE-Proton9-20"}"#,
+        br#"{"format": 1, "family": "proton-ge", "kind": "proton", "version": "GE-Proton9-20",
+            "arch": "x86_64", "entry": {"proton": "bin/proton"}}"#,
     );
     put(&b, "licences/proton-BSD-3-Clause.txt", b"x");
     assert_ok(&build(&b, &[]).0);
@@ -201,6 +202,27 @@ fn a_bundled_valve_proton_is_not_replaced_by_the_system_ge_proton_but_a_ge_copy_
     assert_ok(&o);
     assert_eq!(o.json["resolution"][0]["runner"], json!("system"));
     assert_eq!(o.json["resolution"][0]["family"], json!("proton-ge"));
+    // A runner.json that only names its family (what the tool read before ADR-037) is refused, not
+    // read leniently: the launcher and the importer parse the same file the same way.
+    let c = t.path().join("c");
+    wine_with(&c, edit, true, true);
+    put(&c, "components/proton/bin/proton", b"x");
+    put(
+        &c,
+        "components/proton/runner.json",
+        br#"{"family": "proton-ge", "version": "GE-Proton9-20"}"#,
+    );
+    put(&c, "licences/proton-BSD-3-Clause.txt", b"x");
+    let o = build(&c, &[]).0;
+    assert_eq!(problem_codes(&o), vec!["runner.missing_field"]);
+    assert_eq!(
+        o.json["problems"][0]["path"],
+        json!("components/proton/runner.json#/format")
+    );
+    assert!(o.json["problems"][0]["fix"]
+        .as_str()
+        .unwrap()
+        .contains("runner.json"));
 }
 
 #[test]

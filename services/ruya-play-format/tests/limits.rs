@@ -494,6 +494,27 @@ fn problems_are_capped_and_say_so() {
 // ----- the values of the spec, written out ---------------------------------------------------
 
 #[test]
+fn runner_json_bytes_family_and_version() {
+    // A bundled copy's runner.json (05 section 6.2.1): its listed size, then its fields.
+    let runner = |edit: &dyn Fn(&mut Value), pad_to: usize| {
+        let mut r = wine_runner_json();
+        edit(&mut r);
+        let mut text = serde_json::to_vec(&r).unwrap();
+        text.resize(text.len().max(pad_to), b' ');
+        Fx::wine_with_runner(&text)
+    };
+    bound(MAX_RUNNER_JSON_BYTES as usize, "runner.too_big", |n| {
+        runner(&|_| {}, n)
+    });
+    bound(MAX_RUNNER_FAMILY_BYTES, "runner.family_invalid", |n| {
+        runner(&|r| r["family"] = json!(a(n)), 0)
+    });
+    bound(MAX_COMPONENT_VERSION_BYTES, "runner.version_invalid", |n| {
+        runner(&|r| r["version"] = json!("9".repeat(n)), 0)
+    });
+}
+
+#[test]
 fn the_constants_are_the_numbers_of_the_spec() {
     // docs/specs/05-play-packages.md 4.4. A boundary test above moves with its constant, so the
     // numbers themselves are pinned here.
@@ -551,4 +572,14 @@ fn the_constants_are_the_numbers_of_the_spec() {
     );
     assert_eq!(MAX_PROBLEMS, 100);
     assert_eq!(SUPPORTED_FORMAT, 1);
+    assert_eq!(
+        (
+            SUPPORTED_RUNNER_FORMAT,
+            MAX_RUNNER_JSON_BYTES,
+            MAX_RUNNER_FAMILY_BYTES
+        ),
+        (1, 64 * 1024, 64)
+    );
+    // ADR-037: the launcher's own variables are RUYA_*, so a package cannot set one.
+    assert!(ENV_DENY_PREFIX.contains(&"RUYA_"));
 }

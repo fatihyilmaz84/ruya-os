@@ -20,6 +20,7 @@ pub mod manifest;
 pub mod path;
 pub mod problem;
 pub mod resolve;
+pub mod runner;
 pub mod source;
 pub mod table;
 pub mod text;
@@ -28,13 +29,14 @@ pub mod zip;
 pub use folder::FolderSource;
 pub use manifest::Manifest;
 pub use problem::{codes, Problem};
+pub use runner::BundledRunner;
 pub use source::{Entry, EntryKind, MemorySource, ReadFault, Source};
 pub use table::FileEntry;
 pub use zip::ZipSource;
 
 use problem::Problems;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::io::{self, Read};
 use table::TableIndex;
 
@@ -42,7 +44,8 @@ use table::TableIndex;
 #[derive(Debug, Clone)]
 pub struct ValidateOptions {
     /// Read every file and check its size and SHA-256 against the table (default true). Without
-    /// it only names, kinds, listed sizes and the two metadata files are checked.
+    /// it only names, kinds, listed sizes, the two metadata files and each bundled copy's
+    /// `runner.json` are checked.
     pub verify_content: bool,
     /// The package is for the Official tier: ids under `org.ruyaos.` or `play.` and system-like
     /// names are allowed (default false).
@@ -68,12 +71,24 @@ pub struct Package {
     /// Sum of all file sizes: what the package takes once installed. `requirements.installed_mb`
     /// is this, never a declared value.
     pub installed_bytes: u64,
+    /// The runner of each bundled component, by component id: its checked `runner.json`, or the
+    /// defaults of its type when the copy has none (05 §6.2.1).
+    pub runners: BTreeMap<String, BundledRunner>,
 }
 
 impl Package {
     /// [`Self::installed_bytes`] in MB (10^6 bytes), rounded up.
     pub fn installed_mb(&self) -> u64 {
         self.installed_bytes.div_ceil(1_000_000)
+    }
+
+    /// The family of each bundled copy, by component id: what [`resolve::resolve`] takes as
+    /// `bundled_families`.
+    pub fn bundled_families(&self) -> BTreeMap<String, String> {
+        self.runners
+            .iter()
+            .map(|(id, r)| (id.clone(), r.family.clone()))
+            .collect()
     }
 }
 
@@ -98,8 +113,10 @@ fn io_problem(path: &str, err: &io::Error) -> Problem {
     }
 }
 
-/// Read a whole metadata file, at most `limit` bytes (more is an error the caller reports).
-fn read_small(source: &dyn Source, path: &str, limit: u64) -> Result<Vec<u8>, Problem> {
+/// Read a whole small file of the package (a metadata file, a `runner.json`): at most `limit + 1`
+/// bytes, so a caller sees that a file is longer than `limit` without reading it all (the caller
+/// reports that). The one bounded reader of package files outside the content pass.
+pub fn read_small(source: &dyn Source, path: &str, limit: u64) -> Result<Vec<u8>, Problem> {
     let reader = source.open(path).map_err(|e| io_problem(path, &e))?;
     let mut buf = Vec::new();
     reader
@@ -111,8 +128,8 @@ fn read_small(source: &dyn Source, path: &str, limit: u64) -> Result<Vec<u8>, Pr
 
 /// Validate the package in `source`: the `format` of a small regular `play.json` (step 0, the only
 /// read before the names pass), then the names and kinds, then `play.files`, then
-/// `play.json`, then how the table matches the entries, then (unless disabled) every file's size
-/// and hash. A package that fails an earlier step is not read further.
+/// `play.json`, then how the table matches the entries, then each bundled copy's `runner.json`,
+/// then (unless disabled) every file's size and hash. A package that fails an earlier step is not read further.
 pub fn validate(source: &dyn Source, opts: &ValidateOptions) -> Result<Package, Vec<Problem>> {
     let entries = source.entries()?;
     let mut problems = Problems::new();
@@ -263,6 +280,12 @@ pub fn validate(source: &dyn Source, opts: &ValidateOptions) -> Result<Package, 
         return Err(problems.finish());
     };
 
+    // 4b. The runner.json of each bundled copy (ADR-037): a present file must be valid.
+    let runners = runner::bundled_runners(source, &manifest, &index, &mut problems);
+    if !problems.is_empty() {
+        return Err(problems.finish());
+    }
+
     // 5. Content.
     if opts.verify_content {
         verify_content(source, &files, &mut problems);
@@ -284,6 +307,7 @@ pub fn validate(source: &dyn Source, opts: &ValidateOptions) -> Result<Package, 
         manifest,
         files,
         installed_bytes,
+        runners,
     })
 }
 

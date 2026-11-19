@@ -168,6 +168,15 @@ impl Fx {
         fx
     }
 
+    /// [`Fx::wine_full`] whose bundled Wine carries `runner_json` (and the `bin/wineserver` its
+    /// default entry names).
+    pub fn wine_with_runner(runner_json: &[u8]) -> Fx {
+        let mut fx = Fx::wine_full();
+        fx.file("components/wine/bin/wineserver", b"elf");
+        fx.file("components/wine/runner.json", runner_json);
+        fx
+    }
+
     pub fn file(&mut self, path: &str, data: &[u8]) -> &mut Self {
         self.files.push((path.to_string(), data.to_vec()));
         self
@@ -268,6 +277,21 @@ impl Fx {
     pub fn zip(&self) -> Vec<u8> {
         write_zip(&self.zip_entries())
     }
+}
+
+/// A valid `runner.json` for [`Fx::wine_full`]'s bundled Wine, with every optional key.
+pub fn wine_runner_json() -> Value {
+    json!({
+        "format": 1,
+        "family": "wine",
+        "kind": "wine",
+        "version": "9.20",
+        "arch": "x86_64",
+        "entry": {"wine": "bin/wine", "wineserver": "bin/wineserver"},
+        "capabilities": ["multiarch", "dxvk"],
+        "licence": "LGPL-2.1-or-later",
+        "source_url": "https://dl.winehq.org/wine/source/"
+    })
 }
 
 /// Validate a package value.

@@ -27,10 +27,18 @@ fn codes_are_unique_dotted_lower_case() {
 
 #[test]
 fn every_code_is_asserted_by_a_test() {
-    let tests: String = ["hostile", "limits", "forms", "schema", "hardening"]
-        .iter()
-        .map(|t| read(&format!("tests/{t}.rs")))
-        .collect();
+    let tests: String = [
+        "hostile",
+        "limits",
+        "forms",
+        "schema",
+        "hardening",
+        "runner",
+        "runner_schema",
+    ]
+    .iter()
+    .map(|t| read(&format!("tests/{t}.rs")))
+    .collect();
     let unasserted: Vec<&&str> = codes::ALL
         .iter()
         .filter(|c| !tests.contains(&format!("\"{c}\"")))

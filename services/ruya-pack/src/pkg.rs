@@ -2,7 +2,6 @@
 
 use crate::report::{items, Item, Stop};
 use ruya_play_format::{FolderSource, Source, ZipSource};
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
 /// Why a package could not be opened.
@@ -53,14 +52,10 @@ pub fn open(path: &str) -> Result<Opened, OpenError> {
     })
 }
 
-/// Read a package file of at most `limit` bytes; `None` when it is absent or not readable.
+/// Read a package file of at most `limit` bytes through the format's bounded reader; `None` when
+/// it is absent, not readable or longer.
 pub fn read_small(source: &dyn Source, name: &str, limit: u64) -> Option<Vec<u8>> {
-    let mut buf = Vec::new();
-    source
-        .open(name)
-        .ok()?
-        .take(limit + 1)
-        .read_to_end(&mut buf)
-        .ok()?;
-    (buf.len() as u64 <= limit).then_some(buf)
+    ruya_play_format::read_small(source, name, limit)
+        .ok()
+        .filter(|b| b.len() as u64 <= limit)
 }

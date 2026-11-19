@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ruyaos:schema:runner-json:1",
+  "title": "RuyaOS runner.json, format 1",
+  "description": "The file at the root of every runner's folder: a bundled copy under components/ in a .play package, or a runner the OS provides (ADR-037, docs/specs/05-play-packages.md section 6.2.1). A draft until the first release. One UTF-8 JSON object of at most 64 KiB; every key is known and none is named twice. The crate ruya-play-format (module runner) is the only parser and applies more rules than a schema can state: the size and the repeated-key rule, the full path rules of section 4.2 for entry, that each entry is a regular file in the runner's folder, that kind equals the component's type, and byte limits. tests/runner_schema.rs in that crate keeps the numbers and vocabularies below equal to its constants. A bundled copy without runner.json gets the defaults of its type; a present but invalid file refuses the package.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "family", "kind", "version", "arch"],
+  "properties": {
+    "format": { "description": "Major version of runner.json; a console that does not know it refuses the runner.", "type": "integer", "minimum": 1, "maximum": 1 },
+    "family": { "description": "Versions compare only inside one family (wine, proton, proton-ge, an emulator's or engine's own name).", "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{0,63}$" },
+    "kind": { "description": "The component type it serves; must equal the component's type.", "enum": ["wine", "proton", "emulator", "engine"] },
+    "version": { "description": "At most 32 characters holding a number; versions compare as the numbers in the text (GE-Proton10-9 is 10, 9).", "type": "string", "maxLength": 32, "pattern": "^[A-Za-z0-9._+-]*[0-9][A-Za-z0-9._+-]*$" },
+    "arch": { "const": "x86_64" },
+    "entry": { "description": "The programs the runner is started through, relative to its folder: wine {wine, wineserver}, proton {proton}; none for an emulator or engine (run.command names ${component:<id>} itself).", "type": "object" },
+    "capabilities": {
+      "description": "Informational in format 1.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "enum": ["multiarch", "dxvk", "vkd3d", "ntsync"] }
+    },
+    "licence": { "description": "SPDX licence expression of the runner.", "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9.+() :-]+$" },
+    "source_url": { "description": "Where the runner's source is.", "$ref": "#/$defs/httpsUrl" }
+  },
+  "allOf": [
+    {
+      "if": { "required": ["kind"], "properties": { "kind": { "const": "wine" } } },
+      "then": {
+        "required": ["entry"],
+        "properties": {
+          "entry": {
+            "additionalProperties": false,
+            "required": ["wine", "wineserver"],
+            "properties": { "wine": { "$ref": "#/$defs/entryPath" }, "wineserver": { "$ref": "#/$defs/entryPath" } }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["kind"], "properties": { "kind": { "const": "proton" } } },
+      "then": {
+        "required": ["entry"],
+        "properties": {
+          "entry": {
+            "additionalProperties": false,
+            "required": ["proton"],
+            "properties": { "proton": { "$ref": "#/$defs/entryPath" } }
+          }
+        }
+      }
+    },
+    {
+      "if": { "required": ["kind"], "properties": { "kind": { "enum": ["emulator", "engine"] } } },
+      "then": { "not": { "required": ["entry"] } }
+    }
+  ],
+  "$defs": {
+    "entryPath": {
+      "description": "A plain relative path inside the runner's folder: / separators, no leading /, no empty, . or .. parts, no backslash or colon.",
+      "type": "string",
+      "pattern": "^[^/\\\\:\\u0000-\\u001F][^\\\\:\\u0000-\\u001F]*$",
+      "not": { "pattern": "(^|/)\\.\\.?(/|$)|//|/$" }
+    },
+    "httpsUrl": {
+      "description": "https only; no user name or password, no spaces.",
+      "type": "string",
+      "maxLength": 2048,
+      "pattern": "^[Hh][Tt][Tt][Pp][Ss]://[^/?#@\\s]+([/?#]\\S*)?$"
+    }
+  }
+}
