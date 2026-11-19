@@ -1,44 +1,11 @@
 //! RUY-852: what a `.play` app adds to its Library1 item, read from a fixture deployment folder.
 
-use std::collections::HashMap;
 use std::path::Path;
 
-use ruya_library::catalog::{scan, Item};
-use ruya_library::flatpak::FixtureLister;
+use ruya_library::catalog::Item;
 
-const PLAY_JSON: &str = r#"{
-  "format": 1, "id": "com.example.starhopper", "build": 3,
-  "name": { "tr": "Yildiz Atlayici", "en": "Star Hopper" },
-  "genres": ["platformer", "adventure"],
-  "players": { "min": 1, "max": 2, "modes": ["single", "local"] },
-  "controller": "full",
-  "age_rating": { "scheme": "oars-1.1", "content": { "violence-cartoon": "mild", "social-chat": "none" } },
-  "art": { "icon": "a.png", "logo": { "en": "l.png", "de": "d.png" } }
-}"#;
-
-const TRUST_JSON: &str = r#"{ "format": 1, "tier": "developer", "signer_id": "0123456789abcdef0123456789abcdef",
-  "signer_name": "Example Games", "store_signed": false }"#;
-
-fn files(root: &Path, id: &str) -> std::path::PathBuf {
-    let f = root
-        .join("app")
-        .join(format!("play.{id}"))
-        .join("current/active/files");
-    std::fs::create_dir_all(f.join("share/ruyaos/play/art")).unwrap();
-    f
-}
-
-fn put(path: &Path, bytes: &[u8]) {
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(path, bytes).unwrap();
-}
-
-fn list(root: &Path, rows: &str) -> HashMap<String, Item> {
-    scan(&[], &FixtureLister::new(rows), root)
-        .into_iter()
-        .map(|i| (i.id.clone(), i))
-        .collect()
-}
+mod common;
+use common::{files, full_deployment, list, put, FULL_ROW, PLAY_JSON};
 
 fn art_of(item: &Item, role: &str) -> Option<String> {
     item.art
@@ -50,35 +17,8 @@ fn art_of(item: &Item, role: &str) -> Option<String> {
 #[test]
 fn a_full_art_play_app_lists_every_role_and_field() {
     let dir = tempfile::tempdir().unwrap();
-    let f = files(dir.path(), "com.example.starhopper");
-    put(&f.join("play.json"), PLAY_JSON.as_bytes());
-    put(
-        &f.join("share/ruyaos/play/trust.json"),
-        TRUST_JSON.as_bytes(),
-    );
-    let art = f.join("share/ruyaos/play/art");
-    for name in [
-        "icon-512.webp",
-        "icon-128.webp",
-        "hero-2160.webp",
-        "card-540.webp",
-        "cover-900.webp",
-        "trailer-poster-1080.webp",
-        "screenshot-0-1080.webp",
-        "screenshot-2-1080.webp",
-        "screenshot-1-1080.webp",
-        "screenshot-0-thumb.webp",
-        "trailer.webm",
-        "preview.webm",
-        "logo-0/logo.webp",
-        "logo-1/logo.webp",
-    ] {
-        put(&art.join(name), b"x");
-    }
-    let items = list(
-        dir.path(),
-        "play.com.example.starhopper\tstarhopper\truyaos-play-local\n",
-    );
+    full_deployment(dir.path());
+    let items = list(dir.path(), FULL_ROW);
     let item = &items["flatpak:play.com.example.starhopper"];
     assert_eq!(item.title, "Star Hopper");
     for role in [

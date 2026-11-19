@@ -14,7 +14,7 @@ use crate::flatpak::AppLister;
 pub const BUS_NAME: &str = "org.ruyaos.Library1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Library1";
 
-type Dict = HashMap<String, OwnedValue>;
+pub type Dict = HashMap<String, OwnedValue>;
 
 /// What a scan needs; shared with the thread that runs it.
 pub struct Sources {
@@ -74,7 +74,8 @@ impl LibraryIface {
     }
 }
 
-fn record(item: &Item) -> Dict {
+/// The `a{sv}` record `ListItems` serves for one item (public for the contract test).
+pub fn record(item: &Item) -> Dict {
     let art: HashMap<String, String> = item.art.iter().cloned().collect();
     let entries = vec![
         ("id", Value::from(item.id.clone())),
@@ -167,32 +168,26 @@ mod tests {
         }
     }
 
+    /// Which keys exist is the contract test's (tests/contract.rs); this is what it cannot see:
+    /// the extra keys are absent for a plain item and for the fields a .play app does not have.
     #[test]
-    fn a_play_record_has_the_contracts_keys_and_others_none_of_them() {
+    fn the_extra_keys_are_absent_for_a_plain_item_and_for_what_a_play_app_lacks() {
         let plain = record(&item(None));
         assert!(["play", "genres", "players", "play_tier"]
             .iter()
             .all(|k| !plain.contains_key(*k)));
-        let rec = record(&item(Some(PlayInfo {
-            genres: vec!["platformer".into()],
-            players: Some((1, 4)),
-            controller: Some("full".into()),
-            age_rating: vec![("violence-cartoon".into(), "mild".into())],
-            tier: Some("official".into()),
-            signer: Some("Example".into()),
-            signer_key_id: Some("0123456789abcdef0123456789abcdef".into()),
-            screenshots: vec!["/a/screenshot-0-1080.webp".into()],
-        })));
-        assert!(bool::try_from(rec["play"].try_clone().unwrap()).unwrap());
-        assert_eq!(rec["players"].value_signature().to_string(), "(uu)");
-        assert_eq!(rec["age_rating"].value_signature().to_string(), "a{ss}");
-        assert_eq!(rec["genres"].value_signature().to_string(), "as");
-        let tier: String = rec["play_tier"].try_clone().unwrap().try_into().unwrap();
-        assert_eq!(tier, "official");
-        assert!(rec.contains_key("controller") && rec.contains_key("play_signer"));
-        assert_eq!(rec["play_signer_key_id"].value_signature().to_string(), "s");
-        assert_eq!(rec["play_screenshots"].value_signature().to_string(), "as");
         let bare = record(&item(Some(PlayInfo::default())));
-        assert!(!bare.contains_key("play_signer_key_id") && !bare.contains_key("play_screenshots"));
+        assert!(bool::try_from(bare["play"].try_clone().unwrap()).unwrap());
+        for key in [
+            "players",
+            "controller",
+            "age_rating",
+            "play_tier",
+            "play_signer",
+            "play_signer_key_id",
+            "play_screenshots",
+        ] {
+            assert!(!bare.contains_key(key), "{key}");
+        }
     }
 }

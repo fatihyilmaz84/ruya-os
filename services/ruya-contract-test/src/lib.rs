@@ -16,6 +16,7 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
@@ -258,6 +259,162 @@ pub fn assert_interfaces_are(file: &str, tested: &[&str]) {
     );
 }
 
+/// One key of an `a{sv}` record: its D-Bus signature and whether it may be absent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordKey {
+    pub signature: String,
+    pub optional: bool,
+}
+
+/// The keys of one record, by name.
+pub type Record = BTreeMap<String, RecordKey>;
+
+const RECORD_MARK: &str = " record (a{sv}), ";
+
+/// The block being read by [`parse_records`].
+struct OpenBlock {
+    name: String,
+    heading_indent: usize,
+    key_indent: Option<usize>,
+    /// The heading says "absent": every key of the block is optional.
+    all_optional: bool,
+    last_key: Option<String>,
+}
+
+/// The `a{sv}` records a contract file documents in its comments (RUY-885), by record name.
+///
+/// A block is a heading line `<Name> record (a{sv}), keys...` (or `..., extra keys of ...`)
+/// followed by lines indented deeper than the heading, one per key: `key  signature  description`.
+/// A line indented deeper than the first key line continues the description of the key before it.
+/// The block ends at a blank line or at a line not indented deeper than its heading. Blocks of the
+/// same name merge. One rule makes a key optional: the word "absent" (the contracts' own words:
+/// "Optional keys are absent when unknown"). In a key's description it applies to that key; in a
+/// block's heading (`..., extra keys of a .play app (... absent for any other item)`) to every key
+/// of the block.
+pub fn parse_records(xml: &str) -> Result<BTreeMap<String, Record>, String> {
+    let mut records: BTreeMap<String, Record> = BTreeMap::new();
+    let mut errors: Vec<String> = Vec::new();
+    let mut open: Option<OpenBlock> = None;
+
+    for (n, raw) in xml.lines().enumerate() {
+        let line = raw.trim_end().trim_end_matches("-->").trim_end();
+        let indent = line.len() - line.trim_start().len();
+        if line.trim().is_empty() {
+            open = None;
+            continue;
+        }
+        if let Some(at) = line.find(RECORD_MARK) {
+            let rest = &line[at + RECORD_MARK.len()..];
+            if rest.contains("keys") {
+                let name = line[..at].trim().to_owned();
+                records.entry(name.clone()).or_default();
+                open = Some(OpenBlock {
+                    name,
+                    heading_indent: indent,
+                    key_indent: None,
+                    all_optional: rest.to_ascii_lowercase().contains("absent"),
+                    last_key: None,
+                });
+                continue;
+            }
+        }
+        let Some(block) = open.as_mut() else { continue };
+        if indent <= block.heading_indent {
+            open = None;
+            continue;
+        }
+        let name = block.name.clone();
+        let key_indent = *block.key_indent.get_or_insert(indent);
+        let words: Vec<&str> = line.split_whitespace().collect();
+        let record = records.entry(name.clone()).or_default();
+        if indent == key_indent {
+            let (Some(key), Some(sig)) = (words.first(), words.get(1)) else {
+                errors.push(format!("line {}: {name}: a key without a signature", n + 1));
+                continue;
+            };
+            if zbus::zvariant::Signature::from_str(sig).is_err() {
+                errors.push(format!(
+                    "line {}: {name}.{key}: unknown signature {sig}",
+                    n + 1
+                ));
+                continue;
+            }
+            let new = RecordKey {
+                signature: (*sig).to_owned(),
+                optional: block.all_optional,
+            };
+            if record.insert((*key).to_owned(), new).is_some() {
+                errors.push(format!("line {}: {name}.{key} is written twice", n + 1));
+            }
+            block.last_key = Some((*key).to_owned());
+        }
+        if line.to_ascii_lowercase().contains("absent") {
+            if let Some(key) = block.last_key.as_ref().and_then(|k| record.get_mut(k)) {
+                key.optional = true;
+            }
+        }
+    }
+    if errors.is_empty() {
+        Ok(records)
+    } else {
+        Err(errors.join("\n"))
+    }
+}
+
+/// The problems of one served `a{sv}` record against its contract: `served` is key -> signature.
+/// A served key the contract does not list, a different signature and a missing always-present
+/// key are each one problem.
+pub fn compare_record(want: &Record, served: &BTreeMap<String, String>) -> Vec<String> {
+    let mut problems = Vec::new();
+    for (key, sig) in served {
+        match want.get(key) {
+            None => problems.push(format!("{key} ({sig}) is served, not in the contract")),
+            Some(k) if &k.signature != sig => problems.push(format!(
+                "{key}: the contract says {}, the service serves {sig}",
+                k.signature
+            )),
+            Some(_) => {}
+        }
+    }
+    for (key, k) in want {
+        if !k.optional && !served.contains_key(key) {
+            problems.push(format!(
+                "{key} is always present in the contract, not served"
+            ));
+        }
+    }
+    problems
+}
+
+/// The test of served records: panics, listing every difference, when a record in `served`
+/// (a label and key -> signature) does not match the record `name` of `file`, or when a key of
+/// the contract is served by none of them (so the samples must cover every key, optional ones
+/// included).
+pub fn assert_record_served(file: &str, name: &str, served: &[(&str, BTreeMap<String, String>)]) {
+    let records = parse_records(&read_contract(file)).unwrap_or_else(|e| panic!("{file}: {e}"));
+    let want = records
+        .get(name)
+        .unwrap_or_else(|| panic!("{file} has no \"{name} record (a{{sv}})\" block"));
+    let mut problems: Vec<String> = Vec::new();
+    for (label, record) in served {
+        problems.extend(
+            compare_record(want, record)
+                .into_iter()
+                .map(|p| format!("{label}: {p}")),
+        );
+    }
+    for key in want.keys() {
+        if !served.iter().any(|(_, r)| r.contains_key(key)) {
+            problems.push(format!("{key} is in the contract, no sample serves it"));
+        }
+    }
+    assert!(
+        problems.is_empty(),
+        "{file}, {name} record, and the served keys differ.\n  {}",
+        problems.join("\n  ")
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -421,5 +578,100 @@ mod tests {
             "<method name=\"Ping\"/><method name=\"Ping\"/>",
         );
         assert!(parse(&twice).is_err());
+    }
+
+    const RECORDS: &str = "<!--
+  Thing record (a{sv}), keys:
+    id    s    the id
+    size  t    bytes; absent when unknown
+    tags  as   first line
+               continued, deeper
+    note  s    last, and
+               absent for most
+
+  Thing record (a{sv}), extra keys of a special thing (RUY-0; absent for any other thing):
+    extra  b   true
+  Other record (a{sv}), keys. Words here
+    one  u   1 -->
+-->";
+
+    #[test]
+    fn record_blocks_give_keys_signatures_and_optional() {
+        let r = parse_records(RECORDS).unwrap();
+        let thing = &r["Thing"];
+        let sig = |k: &str| thing[k].signature.as_str();
+        assert_eq!((sig("id"), sig("size"), sig("tags")), ("s", "t", "as"));
+        let optional: Vec<&str> = thing
+            .iter()
+            .filter(|(_, k)| k.optional)
+            .map(|(k, _)| k.as_str())
+            .collect();
+        // A continuation line belongs to the key before it, and "absent" in a heading makes every
+        // key of that block optional; "Other"'s heading has no "absent", so `one` stays required.
+        assert_eq!(optional, ["extra", "note", "size"]);
+        assert_eq!(r["Other"]["one"].signature, "u");
+    }
+
+    #[test]
+    fn a_record_key_with_a_bad_signature_or_written_twice_is_an_error() {
+        let bad = RECORDS.replace("size  t ", "size  z ");
+        assert!(parse_records(&bad).unwrap_err().contains("Thing.size"));
+        let twice = RECORDS.replace("extra  b", "id     b");
+        assert!(parse_records(&twice).unwrap_err().contains("written twice"));
+    }
+
+    fn served(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, s)| ((*k).to_owned(), (*s).to_owned()))
+            .collect()
+    }
+
+    #[test]
+    fn a_served_record_must_match_the_documented_keys() {
+        let want = &parse_records(RECORDS).unwrap()["Thing"];
+        let ok = served(&[("id", "s"), ("tags", "as")]);
+        assert!(compare_record(want, &ok).is_empty());
+        let extra = served(&[("id", "s"), ("tags", "as"), ("colour", "s")]);
+        assert!(compare_record(want, &extra)[0].contains("colour"));
+        let missing = served(&[("id", "s")]);
+        assert!(compare_record(want, &missing)[0].contains("tags is always present"));
+        let wrong = served(&[("id", "s"), ("tags", "s")]);
+        assert!(compare_record(want, &wrong)[0].contains("contract says as"));
+    }
+
+    /// Every record block of every contract parses, so a service can adopt the check (RUY-885).
+    #[test]
+    fn every_record_block_of_every_contract_parses() {
+        let mut found: Vec<String> = Vec::new();
+        for entry in std::fs::read_dir(contract_dir()).unwrap() {
+            let name = entry.unwrap().file_name().to_string_lossy().into_owned();
+            if name.ends_with(".xml") {
+                for (record, keys) in
+                    parse_records(&read_contract(&name)).unwrap_or_else(|e| panic!("{name}: {e}"))
+                {
+                    assert!(!keys.is_empty(), "{name}: {record} has no keys");
+                    found.push(format!("{name} {record}"));
+                }
+            }
+        }
+        found.sort();
+        let short: Vec<&str> = found
+            .iter()
+            .map(|f| f.trim_start_matches("org.ruyaos."))
+            .collect();
+        assert_eq!(
+            short,
+            [
+                "Input1.xml Device",
+                "Input1.xml Player",
+                "Library1.xml Item",
+                "Play1.xml Inspect",
+                "Session1.xml Running",
+                "Session1.xml Session",
+                "Store1.xml App"
+            ],
+            "a new record block is listed here; a missing one is not in the shape the parser reads"
+        );
     }
 }
