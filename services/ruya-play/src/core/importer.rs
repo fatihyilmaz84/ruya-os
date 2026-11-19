@@ -760,23 +760,6 @@ impl Importer {
             };
             inspect(source, &ctx).map_err(|r| Box::new((r.problems(), None)))?
         };
-        // Flatpak's deploy writes an empty top-level `.ref` into every app and `flatpak run` locks
-        // it: a package that lists its own could never verify. A nested `a/.ref` is just a file.
-        if let Some(e) = inspection
-            .package
-            .files
-            .iter()
-            .find(|e| e.path().split('/').next() == Some(".ref"))
-        {
-            return Err(Box::new((
-                one(
-                    codes::PACKAGE_RESERVED_REF,
-                    e.path(),
-                    "A top-level .ref is Flatpak's own: remove it from the package.",
-                ),
-                Some(inspection.clone()),
-            )));
-        }
         let id = inspection.package.manifest.id.clone();
         let build = inspection.package.manifest.build;
         let held = self.held_all().or_else(|| {

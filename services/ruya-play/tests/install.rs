@@ -574,32 +574,48 @@ fn inspect_reads_only_data() {
 }
 
 #[test]
-fn a_top_level_ref_is_refused_before_the_commit_but_a_nested_one_is_allowed() {
-    // Flatpak writes /app/.ref itself (RUY-848).
-    let mut fx = game();
-    fx.file(".ref", b"");
-    let mut h = Setup::with(Pkg::signed(&fx)).build();
-    let (_, report) = h.importer.inspect(&pkg_path("game.play"));
-    let report = report.unwrap();
-    assert_eq!(report.verdict, JobStatus::InvalidPackage);
-    assert_eq!(report.problems[0].code, "package.reserved_ref");
-    assert_eq!(report.problems[0].path, ".ref");
-    let r = h.install();
-    assert_eq!(
-        (r.status, codes(&r)),
-        (
-            JobStatus::InvalidPackage,
-            vec!["package.reserved_ref".to_string()]
-        )
-    );
-    assert!(h.commit.calls().is_empty());
-    h.assert_nothing_left();
+fn a_reserved_top_level_name_is_refused_before_the_unpack_but_a_nested_one_is_allowed() {
+    // Flatpak writes /app/.ref itself (RUY-848); `launcher` and `share` are the console's (RUY-870).
+    // The format refuses all three as `table.reserved_top_level`, the folder and anything below.
+    for path in [
+        ".ref",
+        ".ref/x",
+        "launcher/bin/a",
+        "share/x",
+        "share/applications/evil.desktop",
+    ] {
+        let mut fx = game();
+        fx.file(path, b"data");
+        let mut h = Setup::with(Pkg::signed(&fx)).build();
+        let (_, report) = h.importer.inspect(&pkg_path("game.play"));
+        let report = report.unwrap();
+        assert_eq!(report.verdict, JobStatus::InvalidPackage, "{path}");
+        assert_eq!(
+            report.problems[0].code, "table.reserved_top_level",
+            "{path}"
+        );
+        assert_eq!(report.problems[0].path, path);
+        let r = h.install();
+        assert_eq!(
+            (r.status, codes(&r)),
+            (
+                JobStatus::InvalidPackage,
+                vec!["table.reserved_top_level".to_string()]
+            ),
+            "{path}"
+        );
+        // Never reached the helper's unpack nor the commit.
+        assert!(h.commit.calls().is_empty(), "{path}");
+        h.assert_nothing_left();
+    }
 
-    let mut fx = game();
-    fx.file("payload/.ref", b"data");
-    let mut h = Setup::with(Pkg::signed(&fx)).build();
-    let r = h.install();
-    assert_eq!(r.status, JobStatus::Ok, "{:?}", r.problems);
+    for path in ["payload/.ref", "payload/share/x", "payload/launcher/x"] {
+        let mut fx = game();
+        fx.file(path, b"data");
+        let mut h = Setup::with(Pkg::signed(&fx)).build();
+        let r = h.install();
+        assert_eq!(r.status, JobStatus::Ok, "{path}: {:?}", r.problems);
+    }
 }
 
 /// A helper that runs the real one after `before` (a path that changes under the service).

@@ -159,6 +159,7 @@ const FIXES: &[(&str, &str)] = &[
     ("data.", "Use a prefix:, data: or config: path inside the package's own data."),
     ("path.", "Rename the file or folder so its path follows 05 section 4.2."),
     ("entry.", "Remove the entry; a package holds only regular files and folders."),
+    ("table.reserved_top_level", "Move the contents below another folder (for example payload/): .ref, launcher and share at the top of a package belong to the console."),
     ("table.", "Run ruya-pack build to write play.files again; do not edit it by hand."),
     ("link.", "Fix the link: relative target, inside the same top-level folder, at most 8 hops, no loop."),
     ("package.", "Run ruya-pack build to write play.files again."),

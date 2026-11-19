@@ -217,34 +217,43 @@ fn the_build_folder_gets_the_modes_of_play_files() {
 }
 
 #[test]
-fn a_package_with_a_reserved_top_level_folder_is_not_committed() {
-    let state = tempfile::tempdir().unwrap();
-    let runner = Arc::new(FakeRunner::default());
-    let seen: Seen = Arc::default();
-    let s2 = seen.clone();
-    let st = state.path().to_path_buf();
-    let mut fx = game();
-    fx.file("share/applications/evil.desktop", b"[Desktop Entry]\n");
-    let mut setup = Setup::with(Pkg::signed(&fx));
-    setup.commit_hook = Some(Box::new(move |req: &CommitRequest<'_>| {
-        let fc = FlatpakCommit::new(&st, Box::new(runner.clone())).keeping_owner();
-        s2.lock().unwrap().push(
-            commit::lay_out(req)
-                .map(|_| ())
-                .map_err(|e| format!("{e:?}")),
-        );
-        let _ = fc;
-    }));
-    let mut h = setup.build();
-    let _ = h.install();
-    let seen = seen.lock().unwrap();
-    assert_eq!(seen.len(), 1);
-    assert!(
-        seen[0].as_ref().unwrap_err().contains("top-level")
-            && seen[0].as_ref().unwrap_err().contains("share"),
-        "{:?}",
-        seen[0]
-    );
+fn the_layout_still_refuses_a_reserved_top_level_name_in_the_tree() {
+    // A package cannot get this far (`table.reserved_top_level`); the layout keeps its own check
+    // as an invariant, so a tree that has one anyway is `commit.failed`, never merged.
+    for name in ["launcher", "share"] {
+        let state = tempfile::tempdir().unwrap();
+        let seen: Seen = Arc::default();
+        let s2 = seen.clone();
+        let base = state.path().to_path_buf();
+        let mut setup = Setup::with(Pkg::signed(&game()));
+        setup.commit_hook = Some(Box::new(move |req: &CommitRequest<'_>| {
+            let copy = base.join(req.job);
+            copy_tree(req.tree.parent().unwrap(), &copy);
+            let (tree, art, meta) = (copy.join("tree"), copy.join("art"), copy.join("meta"));
+            std::fs::create_dir_all(tree.join(name)).unwrap();
+            let request = CommitRequest {
+                job: req.job,
+                tree: &tree,
+                art: &art,
+                meta: &meta,
+                manifest: req.manifest,
+                tier: req.tier,
+                assessment: req.assessment,
+                signatures: req.signatures,
+            };
+            s2.lock().unwrap().push(
+                commit::lay_out(&request)
+                    .map(|_| ())
+                    .map_err(|e| format!("{e:?}")),
+            );
+        }));
+        let mut h = setup.build();
+        let _ = h.install();
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.len(), 1);
+        let err = seen[0].as_ref().unwrap_err();
+        assert!(err.contains("top-level") && err.contains(name), "{err}");
+    }
 }
 
 #[test]

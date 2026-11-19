@@ -233,6 +233,19 @@ impl<'a> TableIndex<'a> {
     }
 }
 
+/// The top-level names a package may not use, the folder itself or anything below it: the
+/// console writes them into the installed app. `.ref` is Flatpak's own empty file in every
+/// deployment (`flatpak run` locks it, RUY-848); `launcher` is the launcher extension's mount and
+/// `share` holds the console's art and desktop entry (05 section 4.2). A nested `a/.ref` or
+/// `a/share` is an ordinary name.
+pub const RESERVED_TOP_LEVEL: &[&str] = &[".ref", "launcher", "share"];
+
+/// The reserved top-level name `path` is, or is below.
+pub fn reserved_top_level(path: &str) -> Option<&'static str> {
+    let top = path.split('/').next()?;
+    RESERVED_TOP_LEVEL.iter().copied().find(|r| *r == top)
+}
+
 /// Apply the per-path and whole-table rules to `entries` (already in table order).
 pub fn check_table(entries: &[FileEntry], problems: &mut Problems) {
     for e in entries {
@@ -244,6 +257,12 @@ pub fn check_table(entries: &[FileEntry], problems: &mut Problems) {
                 codes::TABLE_RESERVED_PATH,
                 p,
                 "play.json, play.files, play.sig and store.sig are not listed in the table.",
+            );
+        } else if let Some(name) = reserved_top_level(p) {
+            problems.add(
+                codes::TABLE_RESERVED_TOP_LEVEL,
+                p,
+                format!("A top-level {name} is the console's own: move the contents below another folder."),
             );
         }
     }

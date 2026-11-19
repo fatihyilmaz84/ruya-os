@@ -323,3 +323,30 @@ fn licence_files_match_by_whole_words_not_by_substring() {
     put(&c, "licences/LGPL-2.1-or-later.txt", b"x");
     assert_ok(&build(&c, &[]).0);
 }
+
+#[test]
+fn a_reserved_top_level_name_is_refused_with_its_own_fix_but_a_nested_one_is_not() {
+    // The console writes .ref, launcher and share into the installed app (RUY-870).
+    for rel in [".ref/x", "launcher/bin/a", "share/x"] {
+        let t = tempfile::tempdir().unwrap();
+        let dir = t.path().join("game");
+        native(&dir);
+        put(&dir, rel, b"x");
+        let (built, _) = build(&dir, &[]);
+        assert_eq!(built.exit, 1, "{rel}: {}", built.text);
+        let p = built.json["problems"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["code"] == json!("table.reserved_top_level"))
+            .unwrap_or_else(|| panic!("{rel}: {}", built.json));
+        assert_eq!(p["path"], json!(rel));
+        assert!(p["fix"].as_str().unwrap().contains("another folder"), "{p}");
+    }
+    let t = tempfile::tempdir().unwrap();
+    let dir = t.path().join("game");
+    native(&dir);
+    put(&dir, "payload/share/x", b"x");
+    put(&dir, "payload/.ref/x", b"x");
+    assert_ok(&build(&dir, &[]).0);
+}

@@ -616,6 +616,32 @@ fn table_rules() {
     assert_rejected(check(&fx), "table.reserved_path");
 }
 
+#[test]
+fn reserved_top_level_names_are_refused_at_the_top_and_below_but_not_nested() {
+    use ruya_play_format::table::RESERVED_TOP_LEVEL;
+    assert_eq!(RESERVED_TOP_LEVEL, &[".ref", "launcher", "share"]);
+    for name in RESERVED_TOP_LEVEL {
+        // The name as a file, below it, and as an empty folder.
+        let mut fx = Fx::minimal();
+        fx.file(name, b"x");
+        assert_rejected_at(check(&fx), "table.reserved_top_level", name);
+        let below = format!("{name}/x");
+        let mut fx = Fx::minimal();
+        fx.file(&below, b"x");
+        assert_rejected_at(check(&fx), "table.reserved_top_level", &below);
+        let mut fx = Fx::minimal();
+        fx.dirs.push(name.to_string());
+        assert_rejected_at(check(&fx), "table.reserved_top_level", name);
+        // Nested elsewhere, and a longer name that only starts the same, stay legal.
+        let nested = format!("payload/{name}/x");
+        let longer = format!("{name}s/x");
+        let mut fx = Fx::minimal();
+        fx.file(&nested, b"x");
+        fx.file(&longer, b"x");
+        assert!(check(&fx).is_ok(), "{nested} and {longer} are ordinary");
+    }
+}
+
 // ----- manifest rules ------------------------------------------------------------------------
 
 #[test]

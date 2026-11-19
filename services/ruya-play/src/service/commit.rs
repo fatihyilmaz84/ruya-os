@@ -23,6 +23,7 @@ use crate::core::deps::{Commit, CommitError, CommitRequest};
 use crate::core::status::Phase;
 use ruya_play_format::limits::ROOT_FILES;
 use ruya_play_format::manifest::Manifest;
+use ruya_play_format::table::RESERVED_TOP_LEVEL;
 use ruya_play_trust::{grants, metadata_sections, Assessment, Gate, TrustRecord};
 use std::path::{Path, PathBuf};
 
@@ -42,8 +43,6 @@ pub const LAUNCHER_EXTENSION: &str = "org.ruyaos.Play.Launcher";
 pub const LAUNCH_COMMAND: &str = "/app/launcher/bin/ruya-play-launch";
 /// The mount folder of every extension point the generated app declares.
 pub const EXTENSION_DIRS: &[&str] = &["launcher"];
-/// Top-level names in `/app` the importer writes itself: a package tree that has one is refused.
-pub const RESERVED_TOP_LEVEL: &[&str] = &["launcher", "share"];
 /// The vetted art inside `/app`.
 pub const ART_IN_APP: &str = "share/ruyaos/play/art";
 /// The trust record inside `/app` (`ruya_play_trust::TrustRecord`, 05 §7.1): written by the commit
@@ -461,6 +460,9 @@ pub fn lay_out(request: &CommitRequest<'_>) -> Result<PathBuf, CommitError> {
         .tree
         .parent()
         .ok_or_else(|| CommitError::Failed("the staged tree has no job folder".into()))?;
+    // The format refuses these names in the file table before anything is unpacked
+    // (`table.reserved_top_level`), so this cannot trigger from a package that passed
+    // `inspect`: it stays as an internal invariant of the layout (`commit.failed`).
     for name in RESERVED_TOP_LEVEL {
         if std::fs::symlink_metadata(request.tree.join(name)).is_ok() {
             return Err(CommitError::Failed(format!(

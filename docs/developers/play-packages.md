@@ -75,6 +75,7 @@ Star Hopper.play/
 ```
 
 - A package holds **only regular files and folders**. A symlink, hard link, device or FIFO makes it invalid (USB sticks formatted exFAT or FAT have none). If your game needs links, `ruya-pack build --links-as-data` records a relative link that stays inside the same top-level folder as data, and the console recreates it.
+- The top-level names `.ref`, `launcher` and `share` are the console's: a package may not have them at its top (the folder or anything below it; `table.reserved_top_level`). `payload/share/` is fine.
 - Names are relative, use `/`, and must stay unique even when letter case is ignored (exFAT and Wine). `build` tells you which two files collide.
 - A file of 4 GiB or more cannot be copied to a FAT32 stick. `build` warns (`size.fat32`); tell your players to use exFAT.
 - The executable bit is recorded in `play.files`. On Windows, `build` marks a file that starts with `#!` or an ELF header, or one you name with `--exec payload/start`.
@@ -571,6 +572,7 @@ Common ones first:
 | `table.not_utf8` | Run ruya-pack build to write play.files again; do not edit it by hand. |
 | `table.parent_not_dir` | Run ruya-pack build to write play.files again; do not edit it by hand. |
 | `table.reserved_path` | Run ruya-pack build to write play.files again; do not edit it by hand. |
+| `table.reserved_top_level` | Move the contents below another folder (for example payload/): .ref, launcher and share at the top of a package belong to the console. |
 | `table.too_big` | Run ruya-pack build to write play.files again; do not edit it by hand. |
 | `table.too_many` | Run ruya-pack build to write play.files again; do not edit it by hand. |
 | `text.bidi` | Write plain text: no markup, no links, no control or invisible characters. |
