@@ -64,7 +64,7 @@ checks: test <ALL GREEN: N QML + M skips, R Rust | failed: what>, shots <n/a | N
 revert: <each new test file: the change undone with revert-check.ps1 -> CAUGHT | none: no new test>   (never "not run": run it)
 vm: <n/a | pending lead run: <check> | this task: <version tag>, RUYA_BOOT_OK, <check> results>
 deviations: <none | one line each, with why>
-reuse: <existing code reused; each new helper: what you searched for and why none fitted>
+reuse: <existing code reused; each new helper: what you searched for and why none fitted; "could be shared: <what>, now in <file>" when another area will want it (the lead decides whether it moves)>
 possibly public: <none | what an app could now reach, tagged experimental>
 unverified: <none | one line each>
 paper plane: <claim, move, comment ok | what failed>

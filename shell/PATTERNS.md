@@ -2,6 +2,10 @@
 
 Read this when your task adds a page, a settings row, a modal, text input or a translated string. The rules every shell change must follow are in `shell/CLAUDE.md`; this file is the how-to and the component catalogue (moved out of `CLAUDE.md` in the 2026-10-27 docs slimming, so the rules file stays short).
 
+## Shared homes (look here before writing a helper)
+
+One home per kind of thing; grep it before writing your own: sizes, colours and timings in `Theme.qml`; settings rows and controls in `qml/controls/`; the words for a domain in its singleton (`PlayTrust`, `PlayCopy`, `DisplayText`, `BluetoothText`, `DurationText`, `ThermalText`, `SoundThemeText`, `DriveHealth`); which picture an item shows in `ArtRoles`; glyphs and button hints in `Glyphs`/`GameControls`; Back handling in `BackKey`. A helper a second page will need becomes (or joins) such a singleton, registered in `shell/CMakeLists.txt`, never a copy in each page.
+
 ## How to add a page
 
 1. Create `XxxPage.qml` as a `Page { id: page; title: qsTr("Xxx") … }` (see `Page.qml`, `ComingSoon.qml`). Put one `focus: true` element in it; size from `page.u`.

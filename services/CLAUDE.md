@@ -24,6 +24,10 @@ Cargo workspace. Each service is a crate named `ruya-<name>` that serves `org.ru
 - **Secrets** (PIN hashes, tokens) never appear in D-Bus replies, logs or errors.
 - `Cargo.lock` is committed and builds use `--locked`. A new dependency needs a one-line justification in the commit message. Prefer pure-Rust crates: they must build on Windows **and** in the Fedora image.
 
+## Shared homes (look here before writing a helper)
+
+A rule two crates need lives in one library crate, never copied into both: the `.play` format (manifest, file table, paths, limits, problem codes) in `ruya-play-format`; art and video vetting and the art roles in `ruya-play-art`; signatures, keys, tiers and the trust record in `ruya-play-trust`; the served-interface check in `ruya-contract-test`. Inside a service, one module owns each rule (`ruya-play`'s `reconcile::open_ours` is the one origin check). A new rule a second crate will need goes into the library crate in the same branch.
+
 ## Integrating a new service into the OS (all three are needed)
 
 1. A systemd unit in `image/rootfs/usr/lib/systemd/system/ruya-<name>.service`. Copy the hardening block from `ruya-profiles.service` (`Type=dbus`, `ProtectSystem=strict`, `NoNewPrivileges`, a minimal `CapabilityBoundingSet`, `SystemCallFilter=@system-service`, `UMask=0077`, …) and open only the paths it needs. Check it in the VM with `systemd-analyze security ruya-<name>`; aim for "OK" (`ruya-profiles` is 1.6).
