@@ -7,7 +7,7 @@
 # hash covers each window of MinTokens tokens, and equal windows are merged into runs. A window made only of
 # a few distinct tokens (a run of closing braces, a table of zeros) is not a copy. The scanner is C# compiled
 # with Add-Type (PowerShell 5.1 and pwsh both have it; no install): a PowerShell loop over a million tokens
-# takes minutes. Left out: tests (shell/tests, services tests), generated files, *.ts translations,
+# takes minutes. Inline #[cfg(test)] modules in services/*/src ARE scanned. Left out: test folders (shell/tests, tests dirs), generated files, *.ts translations,
 # api/**/*.xml and Cargo.lock (generated or data, not logic), docs, and everything outside the four areas.
 #
 # Baseline: one line per pair of files with duplicated tokens:   fileA | fileB | tokens   # reason
@@ -72,7 +72,7 @@ public static class DupScan
             if (lang != "c" && c == '#')
             {
                 char p = i == 0 ? ' ' : s[i - 1];
-                if (char.IsWhiteSpace(p) || p == ';' || p == '(' || p == '{' || p == '|' || p == '&') { while (i < n && s[i] != '\n') i++; continue; }
+                if (char.IsWhiteSpace(p) || p == ';' || p == '|' || p == '&') { while (i < n && s[i] != '\n') i++; continue; }
             }
             int start = i, startLine = line;
             string tok;
@@ -209,7 +209,11 @@ function Get-SourceFiles([string]$base) {
             }
         }
     }
-    return @($found | Sort-Object -Unique -CaseSensitive)
+    # Ordinal, never culture-aware: PowerShell 5.1 (NLS) ignores '-' when sorting, pwsh/ICU does not, and the
+    # order decides each pair's key (A before B) and which copy a window chains to.
+    $sorted = [string[]]@($found | Select-Object -Unique)
+    [Array]::Sort($sorted, [StringComparer]::Ordinal)
+    return $sorted
 }
 
 # Pairs of files with their duplicated token counts and the regions behind them.
@@ -277,6 +281,7 @@ function Invoke-SelfTest {
     New-Item -ItemType Directory -Path (Join-Path $fx "shell/qml") | Out-Null
     $min = 40
     $failed = @()
+    $savedAreas = $script:areas
     try {
         $block = { param($k) (1..$k | ForEach-Object { "w$_" }) -join " " }
         $emptyBl = Join-Path $fx "empty.txt"; Set-Content -LiteralPath $emptyBl -Value "# none" -Encoding UTF8
@@ -285,7 +290,7 @@ function Invoke-SelfTest {
             Set-Content -LiteralPath (Join-Path $fx "shell/qml/A.qml") -Value ("onlyA1 onlyA2`n// a comment`n" + (& $block $k) + "`nonlyA3 onlyA4") -Encoding UTF8
             Set-Content -LiteralPath (Join-Path $fx "shell/qml/B.qml") -Value ("onlyB1 onlyB2 onlyB3`n" + ((& $block $k) -replace ' ', "   `n/* c */ ") + "`nonlyB4") -Encoding UTF8
         }
-        $savedAreas = $script:areas; $script:areas = @("shell/qml")
+        $script:areas = @("shell/qml")
         $out = $null
 
         & $write $min          # a planted copy of exactly MinTokens tokens (whitespace and comments differ)
@@ -304,13 +309,24 @@ function Invoke-SelfTest {
         Set-Content -LiteralPath $bl -Value "shell/qml/A.qml | shell/qml/B.qml | $($min + 5)" -Encoding UTF8
         $n = @(Invoke-Lint $fx $bl $min 0 6>&1 | Where-Object { $_ -is [int] }) | Select-Object -Last 1
         if ($n -ne 1) { $failed += "a baseline entry above the real count did not fail" }
+        Set-Content -LiteralPath $bl -Value "shell/qml/A.qml | shell/qml/B.qml | $($min - 1)" -Encoding UTF8
+        $out = Invoke-Lint $fx $bl $min 0 6>&1 | Out-String
+        if ($out -notmatch 'grew from') { $failed += "a pair above its baseline count (a new copy) did not fail" }
+        # file names that differ only around a '-': the pair key must be ordinal ('-' sorts before '.'), the same
+        # on PowerShell 5.1 and pwsh, or a baseline written on one host fails on the other
+        Remove-Item (Join-Path $fx "shell/qml/A.qml"), (Join-Path $fx "shell/qml/B.qml")
+        $same = & $block $min
+        Set-Content -LiteralPath (Join-Path $fx "shell/qml/p.qml") -Value "onlyP1 $same onlyP2" -Encoding UTF8
+        Set-Content -LiteralPath (Join-Path $fx "shell/qml/p-q.qml") -Value "onlyQ1 $same onlyQ2" -Encoding UTF8
+        $out = Invoke-Lint $fx $emptyBl $min 0 6>&1 | Out-String
+        if ($out -notmatch 'shell/qml/p-q\.qml \| shell/qml/p\.qml') { $failed += "the pair key is not in ordinal file order ($out)" }
+        Remove-Item (Join-Path $fx "shell/qml/p.qml"), (Join-Path $fx "shell/qml/p-q.qml")
         & $write ($min - 1)    # the copy is gone: the entry is stale
         Set-Content -LiteralPath $bl -Value "shell/qml/A.qml | shell/qml/B.qml | $min" -Encoding UTF8
         $n = @(Invoke-Lint $fx $bl $min 0 6>&1 | Where-Object { $_ -is [int] }) | Select-Object -Last 1
         if ($n -ne 1) { $failed += "a stale baseline entry did not fail" }
-        $script:areas = $savedAreas
     }
-    finally { Remove-Item -Recurse -Force $fx }
+    finally { $script:areas = $savedAreas; Remove-Item -Recurse -Force $fx }
     foreach ($f in $failed) { Write-Host "    self-test: $f" }
     return $failed.Count
 }
