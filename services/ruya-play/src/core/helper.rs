@@ -894,7 +894,7 @@ fn install_mode(
         Ok(f) => f,
         Err(e) => return refuse(em, &[staging_problem("", &e)]),
     };
-    if let Err(p) = unpack::check_tree(&package.files, &found) {
+    if let Err(p) = unpack::check_tree(&package.files, &found, unpack::Compare::StructureAndSize) {
         return refuse(em, &[p]);
     }
     em.progress(Phase::Verifying, 1, 1);

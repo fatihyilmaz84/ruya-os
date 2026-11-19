@@ -1372,7 +1372,7 @@ impl Importer {
             Ok(f) => f,
             Err(e) => return fail(vec![staging_problem("", &e)]),
         };
-        if let Err(p) = unpack::check_tree(files, &found) {
+        if let Err(p) = unpack::check_tree(files, &found, unpack::Compare::StructureAndSize) {
             return fail(vec![p]);
         }
         let rehashed = match unpack::rehash(&tree, files) {
