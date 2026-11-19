@@ -1524,8 +1524,11 @@ got="$(echo '{"type":"ss","data":["ok","job-7"]}' | pc second)"
 srcs='{"type":"aa{sv}","data":[[{"size":{"type":"t","data":5},"path":{"type":"s","data":"/run/media/ruya-shell/A/x.play.zip"},"kind":{"type":"s","data":"zip"}},{"path":{"type":"s","data":"/run/media/ruya-shell/A/Game"}}]]}'
 got="$(echo "$srcs" | pc sources | tr -d '\r' | tr '\n' ' ')"
 [ "$got" = "/run/media/ruya-shell/A/x.play.zip /run/media/ruya-shell/A/Game " ] && pass "play: ListSources paths by key" || fail "play: sources read as '$got'"
-got="$(echo '{"type":"aa{sv}","data":[[{"name":{"type":"s","data":"Hello"},"id":{"type":"s","data":"play.com.example.hello"}}]]}' | pc items)"
-[ "$got" = play.com.example.hello ] && pass "play: Library1 ids by key" || fail "play: items read as '$got'"
+got="$(echo '{"type":"aa{sv}","data":[[{"name":{"type":"s","data":"Hello"},"id":{"type":"s","data":"flatpak:play.com.example.hello"}}]]}' | pc items)"
+[ "$got" = flatpak:play.com.example.hello ] && pass "play: Library1 ids by key" || fail "play: items read as '$got'"
+# RUY-876: Library1 item ids are flatpak:<id>; the check's greps must match that form.
+appid=com.example.hello
+echo "$got" | grep -qx "flatpak:play.$appid" && [ "$(grep -c 'grep -qx "flatpak:play.\$appid"' "$here/vm-play-check.sh")" = 2 ] && ! grep -q 'listed" | grep -qx "play\.' "$here/vm-play-check.sh" && pass "vm-play-check.sh matches Library1's flatpak:play.<id> item ids (RUY-876)" || fail "vm-play-check.sh: the Library1 greps do not match flatpak:play.<id>"
 # RUY-866: an Inspect record's problem codes, one per line (inspect_clean looks for staging.*/helper.*).
 insp='{"type":"sa{sv}","data":["ok",{"problems":{"type":"a(sss)","data":[["trust.unsigned","","x"],["staging.io","","Not a directory"]]},"verdict":{"type":"s","data":"needs-developer-mode"}}]}'
 got="$(echo "$insp" | pc codes | tr -d '\r' | tr '\n' ' ')"
@@ -1567,11 +1570,25 @@ extra="$(printf '%s\n[Context]\nfilesystems=host;\n' "$shown" | pp)"
 bus="$(printf '%s%s\n' "$shown" 'org.freedesktop.Flatpak=talk' | pp)"
 [ "$bus" != "$want" ] && pass "play perms: another bus name differs" || fail "play perms: an extra bus name went unseen"
 grep -q 'if \[ "\$mode" = perms \]' "$here/vm-play-check.sh" && grep -q -- '--show-permissions' "$here/vm-play-check.sh" && pass "vm-play-check.sh has a perms mode that reads --show-permissions" || fail "vm-play-check.sh: no perms mode"
-perms_body="$(sed -n '/^if \[ "\$mode" = perms \]/,/^fi$/p' "$here/vm-play-check.sh")"
-un="$(echo "$perms_body" | grep -n 'flatpak uninstall --system -y --noninteractive "play.\$appid"' | head -1 | cut -d: -f1)"
-rs="$(echo "$perms_body" | grep -n 'systemctl restart ruya-play.service' | head -1 | cut -d: -f1)"
-ins="$(echo "$perms_body" | grep -n 'install_wait' | head -1 | cut -d: -f1)"
-[ -n "$un" ] && [ -n "$rs" ] && [ -n "$ins" ] && [ "$un" -lt "$rs" ] && [ "$rs" -lt "$ins" ] && pass "vm-play-check.sh perms uninstalls the sample and restarts the service before installing (RUY-865)" || fail "vm-play-check.sh perms: no uninstall-and-restart before its install ($un $rs $ins)"
+# RUY-877: each installing mode has its own id, so no mode meets another's trust record.
+wi="$tmp/withid"; mkdir -p "$wi"
+python3 - "$wi/in.zip" <<'PY'
+import json, sys, zipfile
+with zipfile.ZipFile(sys.argv[1], "w") as z:
+    z.writestr("play.json", json.dumps({"id": "org.example.hello", "title": "Hello"}))
+    z.writestr("art/icon.png", b"png")
+PY
+bash "$here/vm-play-check.sh" withid "$wi/in.zip" "$wi/out.zip" org.example.hello.verify
+got="$(python3 -c '
+import json, sys, zipfile
+a, b = zipfile.ZipFile(sys.argv[1]), zipfile.ZipFile(sys.argv[2])
+print(json.loads(b.read("play.json"))["id"], json.loads(b.read("play.json"))["title"], a.read("art/icon.png") == b.read("art/icon.png"), a.namelist() == b.namelist())
+' "$wi/in.zip" "$wi/out.zip")"
+[ "$got" = "org.example.hello.verify Hello True True" ] && pass "vm-play-check.sh withid changes only the id" || fail "vm-play-check.sh withid: '$got'"
+ids="$(grep -o 'appid="\$appid\.[a-z]*"' "$here/vm-play-check.sh" | sort | tr '\n' ' ')"
+[ "$ids" = 'appid="$appid.perms" appid="$appid.verify" ' ] && pass "vm-play-check.sh: verify and perms install under their own ids (RUY-877)" || fail "vm-play-check.sh: mode ids '$ids'"
+! grep -q 'systemctl restart ruya-play.service' <(sed -n '/^if \[ "\$mode" = perms \]/,/^fi$/p' "$here/vm-play-check.sh") && pass "vm-play-check.sh perms no longer uninstalls the check's id and restarts (RUY-865 workaround gone)" || fail "vm-play-check.sh perms still restarts the service"
+grep -q 'SKIP: no profile on this VM' "$here/vm-play-check.sh" && ! grep -q 'bad "no profile' "$here/vm-play-check.sh" && pass "vm-play-check.sh: no profile is a SKIP, not a FAIL (RUY-877)" || fail "vm-play-check.sh: no profile is not a SKIP"
 grep -q 'share/ruyaos/play/trust.json' "$here/vm-play-check.sh" && grep -q '"1 unverified None None False"' "$here/vm-play-check.sh" && pass "vm-play-check.sh checks the trust record" || fail "vm-play-check.sh: the trust record is not checked"
 [ "$(grep -c '^zin = zipfile.ZipFile(src)' "$here/vm-play-check.sh")" = 2 ] && pass "vm-play-check.sh re-opens the source before the bomb" || fail "vm-play-check.sh: the bomb reuses the tampered zip's ZipInfo objects"
 
@@ -1598,6 +1615,7 @@ out="$(echo '{"type":"aa{sv}","data":[[{"id":{"type":"s","data":"flatpak:org.exa
 [ "$rc" != 0 ] && pass "library play: an app that is not listed FAILs" || fail "library play: a missing item passed"
 out="$(printf '{"type":"aa{sv}","data":[[{"id":{"type":"s","data":"flatpak:play.com.example.hello"},"play":{"type":"b","data":true},"title":{"type":"s","data":"Hello"},"genres":{"type":"as","data":[]},"art":{"type":"a{ss}","data":{}}}]]}' | pj)"; rc=$?
 [ "$rc" != 0 ] && pass "library play: an item without art FAILs" || fail "library play: an item without icon passed"
+grep -q 'm\["id"\] = ' "$here/vm-library-check.sh" && grep -q '\.library' "$here/vm-library-check.sh" && pass "vm-library-check.sh play installs under its own id <id>.library (RUY-877)" || fail "vm-library-check.sh play: no own id"
 grep -q 'play_clean$' "$here/vm-library-check.sh" && grep -q 'rm -f "$play_state/incoming/vm-library-check.play.zip"' "$here/vm-library-check.sh" && pass "vm-library-check.sh play removes the sample and the incoming file" || fail "vm-library-check.sh play: no clean-up"
 
 echo "== build stage names (RUY-771) =="

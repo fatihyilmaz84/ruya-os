@@ -13,7 +13,9 @@
 #   play      RUY-852: installs the .play sample through Play1 (developer mode, from incoming/),
 #             then Library1 must list it with play true, its title, the art of its package as
 #             paths ruya-shell can read, genres, and a tier when ruya-play wrote trust.json;
-#             removes the sample and puts developer mode back (also on a failure).
+#             removes the sample and puts developer mode back (also on a failure). The sample is
+#             installed as "<its id>.library" (RUY-877), so this passes after vm-play-check.sh in
+#             any order.
 #             vm-library-check.sh play [/root/hello-play-native.play.zip]  (the sample as for
 #             vm-play-check.sh); `playjudge <id>` reads ListItems as busctl --json=short on stdin
 #             (host fixtures, scripts/test-vm-checks.sh)
@@ -200,7 +202,23 @@ PY
     play_dev="$(busctl --system --json=short call "$play_svc" "$play_obj" "$play_svc" GetDeveloperMode | python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; print("true" if d and d[0]=="ok" and d[1] else "false")')"
     busctl --system call "$play_svc" "$play_obj" "$play_svc" SetDeveloperMode 'ba{sv}' true 1 admin_approved b true >/dev/null || { bad "cannot turn developer mode on"; return; }
     mkdir -p "$play_state/incoming"
-    install -m 0600 "$zip" "$play_state/incoming/vm-library-check.play.zip"
+    # RUY-877: its own id ("<id>.library"), so vm-play-check.sh's records for the sample's id never
+    # meet this unsigned install (ruya-play keeps a signer's trust record after an uninstall).
+    play_id="$play_id.library"
+    python3 - "$zip" "$play_state/incoming/vm-library-check.play.zip" "$play_id" <<'PY'
+import json, sys, zipfile
+src, out, new_id = sys.argv[1:4]
+sample = zipfile.ZipFile(src)
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+    for i in sample.infolist():
+        b = sample.read(i.filename)
+        if i.filename.endswith("play.json") and i.filename.count("/") <= 1:
+            m = json.loads(b)
+            m["id"] = new_id
+            b = json.dumps(m, indent=2).encode()
+        z.writestr(i, b)
+PY
+    chmod 0600 "$play_state/incoming/vm-library-check.play.zip"
     out="$(busctl --system --json=short call "$play_svc" "$play_obj" "$play_svc" Install 'sa{sv}' "$play_state/incoming/vm-library-check.play.zip" 1 admin_approved b true)"         || { bad "Play1.Install failed"; return; }
     job="$(echo "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; print(d[1] if len(d)>1 else "")')"
     n=0
