@@ -9,12 +9,19 @@
 # output is the default again (scripts/vm-saved-output-check.sh, AUDIO_REBOOT_SAVED_OUTPUT_OK).
 # -Audio restarts the VM with a sound card (implied by -SavedOutput: without one the saved output
 # cannot come back and the default is auto_null).
+# -Shutdown (RUY-888): before the reboot `vm-session-check.sh shutdown` (a frozen test game that
+# saves at quit, its profile locked; ruya-session's shutdown delay lock), after it
+# `vm-session-check.sh shutdown-verify` (the game was stopped and saved before the shutdown, and the
+# previous boot's journal has no SIGKILL of its user manager). Needs a profile (run
+# `vm-session-check.sh check` once on an empty store first).
 # Exits with smoke-test.ps1's result (0 = the shell became ready on the new boot); with
-# -SavedOutput also 1 when the saved output is not the default again.
+# -SavedOutput also 1 when the saved output is not the default again, with -Shutdown also 1 when
+# either half printed a FAIL line.
 param(
     [string]$Disk = "output\qcow2\drill.qcow2",
     [int]$TimeoutSec = 600,
     [switch]$SavedOutput,
+    [switch]$Shutdown,
     [switch]$Audio,
     [string]$Key = (Join-Path $env:USERPROFILE ".ssh\ruyaos_dev")
 )
@@ -30,6 +37,14 @@ if ($SavedOutput) {
     $scp = @($o[0..($o.Count - 3)] + @("-P", "2222"))
     scp @scp (Join-Path $PSScriptRoot "vm-saved-output-check.sh") root@127.0.0.1:/root/ 2>$null | Out-Null
     ssh @o root@127.0.0.1 "bash /root/vm-saved-output-check.sh choose" 2>$null
+}
+$shutdownFailed = $false
+if ($Shutdown) {
+    $scp = @($o[0..($o.Count - 3)] + @("-P", "2222"))
+    scp @scp (Join-Path $PSScriptRoot "vm-session-check.sh") root@127.0.0.1:/root/ 2>$null | Out-Null
+    $before = ssh @o root@127.0.0.1 "bash /root/vm-session-check.sh shutdown" 2>$null
+    $before
+    if (($before | Out-String) -match "(?m)^FAIL:") { $shutdownFailed = $true }
 }
 ssh @o root@127.0.0.1 "systemctl reboot" 2>$null | Out-Null
 Write-Host "guest reboot requested; waiting for QEMU to exit"
@@ -48,5 +63,10 @@ if ($SavedOutput) {
     $saved = ssh @o root@127.0.0.1 "bash /root/vm-saved-output-check.sh verify" 2>$null
     $saved
     if (($saved | Out-String) -notmatch "AUDIO_REBOOT_SAVED_OUTPUT_OK") { $code = 1 }
+}
+if ($Shutdown) {
+    $after = ssh @o root@127.0.0.1 "bash /root/vm-session-check.sh shutdown-verify" 2>$null
+    $after
+    if ($shutdownFailed -or (($after | Out-String) -match "(?m)^FAIL:") -or (($after | Out-String) -notmatch "PASS:")) { $code = 1 }
 }
 exit $code

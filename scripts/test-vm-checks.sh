@@ -637,12 +637,41 @@ out="$(rundrop 'fstate() { echo frozen; }; wait_fstate u unit running 1; echo "r
 expect_contains "wait_fstate: a stuck frozen unit fails, naming the value tested" "$out" "FAIL: unit: FreezerState frozen, not running"
 expect_contains "wait_fstate: a stuck frozen unit returns 1" "$out" "rc=1"
 # restart/check/kill clean up the display check's app too: it needs the runtime they remove. RUY-736:
-# and the stubborn app of `kill` (installed from the same remote).
+# and the stubborn app of `kill` (installed from the same remote). RUY-888: and the saver of `shutdown`.
 for c in 'vm-session-check.sh'; do
-    [ "$(grep -c 'drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$rt"' "$here/$c")" -ge 5 ]         && pass "$c: every full cleanup also removes the display check's app and the stubborn app (RUY-708, RUY-736)" || fail "$c: a cleanup leaves $wclient or $stubborn, which keeps the runtime installed"
+    [ "$(grep -c 'drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$saver" "$rt"' "$here/$c")" -ge 6 ]         && pass "$c: every full cleanup also removes the display check's app, the stubborn app and the saver (RUY-708, RUY-736, RUY-888)" || fail "$c: a cleanup leaves $wclient, $stubborn or $saver, which keeps the runtime installed"
 done
 [ "$(grep -c 'drop_test_apps "$wclient" "$sleeper" "$crasher" "$rt"' "$here/vm-session-check.sh")" -eq 0 ] \
     && pass "vm-session-check.sh: no cleanup without the stubborn app (RUY-736)" || fail "vm-session-check.sh: a cleanup leaves the stubborn app installed"
+[ "$(grep -c 'drop_test_apps .*"$stubborn" "$rt"' "$here/vm-session-check.sh")" -eq 0 ] \
+    && pass "vm-session-check.sh: no cleanup without the saver (RUY-888)" || fail "vm-session-check.sh: a cleanup leaves the saver installed"
+
+# --- vm-session-check.sh shutdown: a clean end (RUY-888) -------------------------------------------
+# The verdict on the journal after StopAll and the user manager's stop: the Dell's two kill lines FAIL.
+cleansrc="$tmp/clean.sh"
+sed -n '/^# --- judge_clean_end begin/,/^# --- judge_clean_end end/p' "$here/vm-session-check.sh" > "$cleansrc"
+[ -s "$cleansrc" ] && pass "vm-session-check.sh has the judge_clean_end block" || fail "no judge_clean_end block in vm-session-check.sh"
+runclean() { # <journal text> <uid>
+    printf '%s\n' "$1" | bash -c "ok() { echo \"PASS: \$*\"; }; bad() { echo \"FAIL: \$*\"; }; . '$cleansrc'; judge_clean_end 'the stops' '$2'; echo \"rc=\$?\"" 2>&1
+}
+out="$(runclean 'ruya-session: every app has ended (StopAll)
+Stopped user@1001.service - User Manager for UID 1001.' 1001)"
+expect_contains "judge_clean_end: a clean end passes" "$out" "PASS: the stops: no SIGKILL"
+expect_contains "judge_clean_end: a clean end returns 0" "$out" "rc=0"
+out="$(runclean 'user@1001.service: Killing process 4242 (ironwail) with signal SIGKILL.' 1001)"
+expect_contains "judge_clean_end: the manager's SIGKILL fails" "$out" "FAIL: the stops: the journal shows a kill: user@1001.service: Killing process 4242"
+expect_contains "judge_clean_end: the manager's SIGKILL returns 1" "$out" "rc=1"
+out="$(runclean 'Cannot stop frozen unit ruya-app-ruya-p1-io.github.lavenderdotpet.LibreQuake.service.' 1001)"
+expect_contains "judge_clean_end: a frozen unit that cannot stop fails" "$out" "FAIL: the stops: the journal shows a kill: Cannot stop frozen unit"
+out="$(runclean 'user@1002.service: Killing process 7 (sleep) with signal SIGKILL.' 1001)"
+expect_contains "judge_clean_end: another user's manager does not count" "$out" "rc=0"
+grep -q 'printf .%s\\n. "$prev" | judge_clean_end "the shutdown" "$puid"' "$here/vm-session-check.sh" \
+    && pass "vm-session-check.sh shutdown-verify judges the previous boot's journal" || fail "vm-session-check.sh shutdown-verify: the journal is not judged"
+grep -q 'prev="$(journalctl -b -1 ' "$here/vm-session-check.sh" \
+    && pass "vm-session-check.sh shutdown-verify reads the boot that went down" || fail "vm-session-check.sh shutdown-verify: not the previous boot"
+grep -q 'bash /root/vm-session-check.sh shutdown"' "$here/vm-reboot-check.ps1" \
+    && grep -q 'bash /root/vm-session-check.sh shutdown-verify"' "$here/vm-reboot-check.ps1" \
+    && pass "vm-reboot-check.ps1 -Shutdown runs both halves around the reboot" || fail "vm-reboot-check.ps1: the shutdown halves are not run"
 
 # --- vm-session-check.sh kill: the timing windows (RUY-736) ---------------------------------------
 # Kill must end the app within 2 s, the backstop 29-33 s after the Stop; judge_secs is the verdict.

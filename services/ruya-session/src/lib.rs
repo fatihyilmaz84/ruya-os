@@ -14,6 +14,7 @@ pub mod directory;
 pub mod follow;
 pub mod scope;
 pub mod session;
+pub mod shutdown;
 pub mod spawner;
 #[cfg(target_os = "linux")]
 pub mod systemd;

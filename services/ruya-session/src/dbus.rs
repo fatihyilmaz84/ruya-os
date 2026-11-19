@@ -44,22 +44,150 @@ fn lock(shared: &Shared) -> MutexGuard<'_, Session<DynSpawner, ProfileSnapshot>>
 /// the 30 s backstop (RUY-736) outlasts it: the answer is then "already-running".
 pub const LAUNCH_WAIT: Duration = Duration::from_secs(8);
 
-/// Waits (without holding the lock) until no instance of `app_id` of `profile` is on its way out,
-/// for at most `bound`. True when it is gone: the unit name is free and a launch can go on.
-pub async fn wait_while_stopping(
+/// Waits (without holding the lock between looks) while `busy` holds, for at most `bound`. True
+/// when it stopped holding in time.
+async fn wait_while(
     session: &Shared,
-    app_id: &str,
-    profile: &str,
     bound: Duration,
+    busy: impl Fn(&Session<DynSpawner, ProfileSnapshot>) -> bool,
 ) -> bool {
     let start = Instant::now();
-    while lock(session).is_stopping(app_id, profile) {
+    while busy(&lock(session)) {
         if start.elapsed() >= bound {
             return false;
         }
         async_io::Timer::after(Duration::from_millis(50)).await;
     }
     true
+}
+
+/// Waits until no instance of `app_id` of `profile` is on its way out, for at most `bound`. True
+/// when it is gone: the unit name is free and a launch can go on.
+pub async fn wait_while_stopping(
+    session: &Shared,
+    app_id: &str,
+    profile: &str,
+    bound: Duration,
+) -> bool {
+    wait_while(session, bound, |s| s.is_stopping(app_id, profile)).await
+}
+
+/// The system goes down (RUY-888, `shutdown.rs`): every app is stopped through the core's
+/// `stop_all` (a frozen one thawed right before its SIGTERM), the thaws are handed to `emit`
+/// (`FrozenChanged`), and this waits until those apps have ended (`forward` takes their ends in),
+/// for at most `bound`. True when they all ended in time.
+#[cfg(any(target_os = "linux", test))]
+async fn stop_all_and_wait<E, EFut>(session: &Shared, bound: Duration, emit: E) -> bool
+where
+    E: FnOnce(Vec<FrozenChange>) -> EFut,
+    EFut: std::future::Future<Output = ()>,
+{
+    let (asked, changes) = {
+        let mut session = lock(session);
+        let asked = session.stop_all(Instant::now);
+        (asked, session.take_frozen_changes())
+    };
+    emit(changes).await;
+    eprintln!(
+        "ruya-session: the system goes down, stopping every app first: {} running",
+        asked.len()
+    );
+    for (unit, status) in &asked {
+        if *status != Status::Ok {
+            eprintln!(
+                "ruya-session: stopping {unit} before the shutdown: {}",
+                status.as_str()
+            );
+        }
+    }
+    let units: Vec<String> = asked.into_iter().map(|(unit, _)| unit).collect();
+    let ended = wait_while(session, bound, |s| s.any_left(&units)).await;
+    if ended {
+        eprintln!("ruya-session: every app has ended, the shutdown may go on");
+    } else {
+        eprintln!(
+            "ruya-session: an app is still there after {} s, the shutdown goes on",
+            bound.as_secs()
+        );
+    }
+    ended
+}
+
+/// The system goes down (RUY-888): `shutdown::follow_shutdowns` over logind. A delay inhibitor
+/// lock ("shutdown", "delay") makes logind wait, after `PrepareForShutdown(true)` and before it
+/// queues the shutdown, until this service has stopped every app (`stop_all_and_wait`) and closed
+/// the lock's file descriptor (at most `InhibitDelayMaxSec`, 40 s in the image's
+/// `logind.conf.d/50-ruyaos-inhibit-delay.conf`). Nothing has stopped yet then: the compositor,
+/// the profiles' user managers and the `--machine=` bridges to them still run, and new jobs are
+/// still allowed. Runs until the bus closes.
+#[cfg(target_os = "linux")]
+pub async fn watch_shutdown(connection: Connection, session: Shared) {
+    use crate::shutdown::{follow_shutdowns, INHIBIT_WHO, INHIBIT_WHY, STOP_ALL_WAIT};
+    const LOGIND_NAME: &str = "org.freedesktop.login1";
+    const LOGIND_PATH: &str = "/org/freedesktop/login1";
+    const LOGIND_MANAGER: &str = "org.freedesktop.login1.Manager";
+    let rule = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender(LOGIND_NAME)
+        .and_then(|b| b.path(LOGIND_PATH))
+        .and_then(|b| b.interface(LOGIND_MANAGER))
+        .and_then(|b| b.member("PrepareForShutdown"))
+        .map(|b| b.build());
+    // Subscribed before the lock is taken, so a shutdown that starts in between is not missed.
+    let stream = match rule {
+        Ok(rule) => MessageStream::for_match_rule(rule, &connection, None).await,
+        Err(err) => Err(err),
+    };
+    let stream = match stream {
+        Ok(s) => s,
+        Err(err) => {
+            return eprintln!("ruya-session: cannot follow logind's PrepareForShutdown: {err}");
+        }
+    };
+    let signals = futures_lite::StreamExt::filter_map(stream, |msg| {
+        match msg.and_then(|m| m.body().deserialize::<bool>()) {
+            Ok(start) => Some(start),
+            Err(err) => {
+                eprintln!("ruya-session: unreadable PrepareForShutdown: {err}");
+                None
+            }
+        }
+    });
+    let take = || async {
+        let reply = connection
+            .call_method(
+                Some(LOGIND_NAME),
+                LOGIND_PATH,
+                Some(LOGIND_MANAGER),
+                "Inhibit",
+                &("shutdown", INHIBIT_WHO, INHIBIT_WHY, "delay"),
+            )
+            .await;
+        match reply.and_then(|m| m.body().deserialize::<zbus::zvariant::OwnedFd>()) {
+            Ok(fd) => {
+                eprintln!("ruya-session: holding logind's shutdown delay lock");
+                Some(fd)
+            }
+            Err(err) => {
+                eprintln!("ruya-session: no shutdown delay lock from logind: {err}");
+                None
+            }
+        }
+    };
+    let stop_all = || async {
+        let emit = |changes: Vec<FrozenChange>| async {
+            if let Ok(iface) = connection
+                .object_server()
+                .interface::<_, SessionIface>(OBJECT_PATH)
+                .await
+            {
+                emit_frozen(iface.signal_emitter(), changes).await;
+            }
+        };
+        stop_all_and_wait(&session, STOP_ALL_WAIT, emit).await;
+    };
+    follow_shutdowns(take, signals, stop_all).await;
+    eprintln!("ruya-session: the bus closed, shutdowns are not followed");
 }
 
 fn unix_now() -> i64 {
@@ -1029,6 +1157,88 @@ mod tests {
         )));
         let (status, instance) = lock(&shared).launch(APP, "p1", 2);
         assert_eq!((status, instance.as_str()), (Status::AlreadyRunning, ""));
+    }
+
+    // ---- StopAll: the system goes down (RUY-888) ---------------------------------------------
+
+    /// p1's Racer, frozen (its profile left).
+    fn frozen_session() -> (Shared, String) {
+        let (shared, unit, _) = signed_in_session();
+        lock(&shared).profile_changed(Some("p1"), "", Instant::now());
+        lock(&shared).take_frozen_changes();
+        (shared, unit)
+    }
+
+    /// `stop_all_and_wait` with an `emit` that collects what would be announced.
+    fn stop_all_collecting(shared: &Shared, bound: Duration) -> (bool, Vec<FrozenChange>) {
+        let out = Mutex::new(Vec::new());
+        let ended = futures_lite::future::block_on(stop_all_and_wait(shared, bound, |c| async {
+            *out.lock().unwrap_or_else(|e| e.into_inner()) = c;
+        }));
+        (ended, out.into_inner().unwrap_or_else(|e| e.into_inner()))
+    }
+
+    #[test]
+    fn stop_all_answers_when_the_thawed_app_has_quit() {
+        let (shared, unit) = frozen_session();
+        let ender = shared.clone();
+        let gone = unit.clone();
+        let t = std::thread::spawn(move || {
+            // The app quits on the SIGTERM a moment after the thaw and the stop (never asked to
+            // stop within 5 s: it ends anyway, and the asserts below say what went wrong).
+            let asked = Instant::now();
+            while !lock(&ender).is_stopping(APP, "p1") && asked.elapsed() < Duration::from_secs(5) {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            std::thread::sleep(Duration::from_millis(150));
+            lock(&ender).on_event(UnitEvent::Exited {
+                unit: gone,
+                code: 0,
+                signaled: false,
+            });
+        });
+        let t0 = Instant::now();
+        let (ended, changes) = stop_all_collecting(&shared, Duration::from_secs(5));
+        // Read before the ender is joined: the answer came after the end, not before it.
+        let left_at_answer = !lock(&shared).list().is_empty();
+        t.join().unwrap();
+        assert!(ended, "StopAll did not see the app end");
+        assert!(!left_at_answer, "it answered before the app had ended");
+        assert!(
+            t0.elapsed() < Duration::from_secs(4),
+            "it waited the whole bound"
+        );
+        // The thaw before the stop is announced.
+        assert_eq!(
+            changes,
+            [FrozenChange {
+                instance: unit,
+                frozen: false
+            }]
+        );
+        assert!(lock(&shared).list().is_empty());
+    }
+
+    #[test]
+    fn stop_all_gives_up_at_its_bound_when_an_app_does_not_end() {
+        let (shared, unit) = frozen_session();
+        let (ended, _) = stop_all_collecting(&shared, Duration::from_millis(120));
+        assert!(!ended);
+        // It is still there, stopping: the backstop (`tick`) ends it.
+        assert!(lock(&shared).any_left(&[unit]));
+        assert!(lock(&shared).is_stopping(APP, "p1"));
+    }
+
+    #[test]
+    fn stop_all_with_nothing_running_answers_at_once() {
+        let spawner: DynSpawner = Box::new(FakeSpawner::new().with_app(APP));
+        let shared: Shared = Arc::new(Mutex::new(Session::new(
+            spawner,
+            ProfileSnapshot::default(),
+            Vec::new(),
+        )));
+        let (ended, changes) = stop_all_collecting(&shared, Duration::from_secs(5));
+        assert!(ended && changes.is_empty());
     }
 
     // ---- The freeze of a profile that leaves (T-165) -----------------------------------------
