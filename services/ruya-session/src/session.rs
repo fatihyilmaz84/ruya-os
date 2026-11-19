@@ -363,6 +363,27 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         status
     }
 
+    /// The system goes down (RUY-888, `StopAll`): every app of every profile, frozen or not,
+    /// starting, running or hidden, is stopped through `stop`, one after the other, so a frozen
+    /// one is thawed right before its own SIGTERM and `tick` kills only what outlives the grace.
+    /// Returns each instance asked, with the outcome; an app already stopping is `Ok` and keeps
+    /// its grace.
+    pub fn stop_all(&mut self, clock: impl Clock + Copy) -> Vec<(String, Status)> {
+        let units: Vec<String> = self.instances.iter().map(|i| i.unit.clone()).collect();
+        units
+            .into_iter()
+            .map(|unit| {
+                let status = self.stop(&unit, clock);
+                (unit, status)
+            })
+            .collect()
+    }
+
+    /// Is any of `units` still known (not ended yet)? What `StopAll` waits on.
+    pub fn any_left(&self, units: &[String]) -> bool {
+        self.instances.iter().any(|i| units.contains(&i.unit))
+    }
+
     /// Ends the app at once (RUY-736, the closing screen's Force quit): SIGKILL to the unit, if it
     /// is still loaded, and every scope of the app (`Spawner::kill`). A starting, running, stopping
     /// or frozen app of the signed-in profile (`active`; `None` in development mode, no check); a
@@ -2568,5 +2589,101 @@ mod tests {
         assert_eq!(s.list()[0].state, State::Running);
         // Its end is what it would have been without the Kill.
         assert_eq!(reason(s.on_event(exited(&unit, 0, false))), (0, "quit"));
+    }
+
+    // ---- The system goes down: StopAll (RUY-888) ---------------------------------------------
+
+    #[test]
+    fn stop_all_thaws_each_frozen_app_of_every_profile_before_its_stop_and_kills_nothing_early() {
+        // A game frozen behind a profile switch and one frozen by the Hub (the Dell, 2026-11-18:
+        // the user manager's stop at power-off killed such games, and they lost their settings).
+        let mut s = session();
+        let t0 = Instant::now();
+        let racer = run_as(&mut s, APP, "p1");
+        let puzzle = run_as(&mut s, PUZZLE, "p1");
+        let theirs = run_as(&mut s, APP, "p2");
+        s.profile_changed(Some("p1"), "p2", t0);
+        assert_eq!(s.freeze(&theirs, Some("p2"), t0), Status::Ok);
+        assert!(frozen_of(&s, &racer) && frozen_of(&s, &puzzle) && frozen_of(&s, &theirs));
+        s.take_frozen_changes();
+        let before = s.spawner.calls().len();
+
+        let t1 = t0 + Duration::from_secs(5);
+        let asked = s.stop_all(t1);
+        assert_eq!(
+            asked,
+            [
+                (racer.clone(), Status::Ok),
+                (puzzle.clone(), Status::Ok),
+                (theirs.clone(), Status::Ok)
+            ]
+        );
+        // Each app is thawed right before its own SIGTERM; nothing is killed.
+        assert_eq!(
+            s.spawner.calls()[before..],
+            [
+                format!("thaw {racer}"),
+                format!("stop {racer}"),
+                format!("thaw {puzzle}"),
+                format!("stop {puzzle}"),
+                format!("thaw {theirs}"),
+                format!("stop {theirs}"),
+            ]
+        );
+        assert!(s
+            .list()
+            .iter()
+            .all(|a| !a.frozen && a.state == State::Stopping));
+        let thawed: Vec<FrozenChange> = [&racer, &puzzle, &theirs]
+            .into_iter()
+            .map(|u| FrozenChange {
+                instance: u.clone(),
+                frozen: false,
+            })
+            .collect();
+        assert_eq!(s.take_frozen_changes(), thawed);
+
+        // The grace counts from each stop: no kill before it is over.
+        let units = [racer.clone(), puzzle.clone(), theirs.clone()];
+        s.tick(t1 + STOP_GRACE - Duration::from_millis(1));
+        assert_eq!(kills(&s), 0);
+        assert!(s.any_left(&units));
+        // They quit on the SIGTERM: a clean end, and nothing is left to wait for.
+        for unit in &units {
+            assert_eq!(reason(s.on_event(exited(unit, 0, false))), (0, "quit"));
+        }
+        assert!(!s.any_left(&units));
+        assert_eq!(kills(&s), 0);
+    }
+
+    #[test]
+    fn stop_all_leaves_an_app_already_stopping_alone_and_the_backstop_still_ends_it() {
+        let mut s = session();
+        let t0 = Instant::now();
+        let closing = run_as(&mut s, APP, "p1");
+        let playing = run_as(&mut s, PUZZLE, "p1");
+        assert_eq!(s.stop(&closing, t0), Status::Ok);
+        let before = s.spawner.calls().len();
+        let t1 = t0 + Duration::from_secs(20);
+        assert_eq!(
+            s.stop_all(t1),
+            [(closing.clone(), Status::Ok), (playing.clone(), Status::Ok)]
+        );
+        // A running app is stopped without a thaw; the one already closing is not asked again.
+        assert_eq!(s.spawner.calls()[before..], [format!("stop {playing}")]);
+        // Its grace still counts from its own Stop.
+        s.tick(t0 + STOP_GRACE);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("kill {closing}")));
+        assert_eq!(kills(&s), 1);
+        s.tick(t1 + STOP_GRACE);
+        assert_eq!(kills(&s), 2);
+    }
+
+    #[test]
+    fn stop_all_with_nothing_running_has_nothing_to_wait_for() {
+        let mut s = session();
+        assert!(s.stop_all(Instant::now()).is_empty());
+        assert!(!s.any_left(&[]));
+        assert!(s.spawner.calls().is_empty());
     }
 }

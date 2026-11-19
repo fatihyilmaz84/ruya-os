@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use async_channel::{Receiver, Sender};
 use ruya_session::dbus::{
-    adopt_late, adopt_running, forward, watch_active_profile, DynSpawner, SessionIface,
+    adopt_late, adopt_running, forward, watch_active_profile, DynSpawner, SessionIface, Shared,
     SharedUsage, BUS_NAME, OBJECT_PATH,
 };
 use ruya_session::directory::ProfileSnapshot;
@@ -66,6 +66,17 @@ fn x11_subcommand(verb: &str, _app_id: &str, _app_args: &[String]) -> ! {
     eprintln!("ruya-session: {verb} needs Linux");
     std::process::exit(ruya_session::x11::EXIT_LAUNCH_FAILED)
 }
+
+#[cfg(target_os = "linux")]
+async fn follow_shutdowns_of(connection: &zbus::Connection, session: &Shared, system: bool) {
+    if system {
+        ruya_session::dbus::watch_shutdown(connection.clone(), session.clone()).await;
+    }
+}
+
+/// logind is Linux's; off Linux only `--session` runs, where nothing goes down before the apps.
+#[cfg(not(target_os = "linux"))]
+async fn follow_shutdowns_of(_connection: &zbus::Connection, _session: &Shared, _system: bool) {}
 
 #[cfg(target_os = "linux")]
 fn system_spawner(events: Sender<UnitEvent>) -> Result<DynSpawner, Box<dyn Error>> {
@@ -156,7 +167,11 @@ fn run() -> Result<(), Box<dyn Error>> {
                 ),
                 adopt_late(&connection, &session, &usage, !dev, settled),
             ),
-            watch_active_profile(connection.clone(), session.clone(), turn),
+            futures_lite::future::zip(
+                watch_active_profile(connection.clone(), session.clone(), turn),
+                // Before the system goes down, every app quits (RUY-888; logind, system mode).
+                follow_shutdowns_of(&connection, &session, !dev),
+            ),
         )
         .await;
         Ok::<(), Box<dyn Error>>(())

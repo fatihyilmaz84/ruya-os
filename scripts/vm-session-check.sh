@@ -1,12 +1,19 @@
 #!/usr/bin/env bash
-# modes: check clean display display-clean kill restart security
+# modes: check clean display display-clean kill restart security shutdown shutdown-verify
 # Checks ruya-session (org.ruyaos.Session1, T-162) inside a running VM, as root. It builds a tiny
 # local Flatpak repository (one runtime made of the guest's own bash and sleep, two command-line
 # apps: one that sleeps, one that exits 3), installs it system-wide,
 # creates a profile through Profiles1 if there is none, and drives Launch / Stop over the system
 # bus as ruya-shell. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-session-check.sh scripts/vm-session-probe.qml root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-session-check.sh [check|restart|kill|security|display|display-clean|clean]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-session-check.sh [check|restart|kill|shutdown|shutdown-verify|security|display|display-clean|clean]
+# `shutdown` and `shutdown-verify` (RUY-888) are the two halves of `vm-reboot-check.ps1 -Shutdown` (the queue
+# cannot reboot): `shutdown` checks ruya-session's shutdown delay lock (systemd-inhibit --list) and logind's
+# 40 s InhibitDelayMaxSec, then launches a test game that saves at quit (its SIGTERM trap writes a file),
+# freezes it and locks the console; the reboot follows. `shutdown-verify`, on the next boot, reads the
+# previous boot's journal: ruya-session stopped the game before the shutdown and saw it end, the game
+# wrote its file, and there is no SIGKILL of the profile's manager and no "Cannot stop frozen unit".
+# Like `restart` they need a profile; `shutdown` installs the test apps, `shutdown-verify` removes them.
 # `kill` (RUY-736) runs a test app that ignores SIGTERM (it and a child it forks): Stop leaves it running,
 # Kill ends it within 2 s with AppExited "killed" (no "Failed to kill unit" line: the gone unit is not
 # named), Kill is refused while nobody is signed in, and without Kill the 30 s backstop ends it (about
@@ -49,6 +56,8 @@ sleeper_re='org[.]ruyaos[.]Test[\]x2dSleeper'
 crasher=org.ruyaos.TestCrasher
 # RUY-736: a game that does not close (it and its child ignore SIGTERM).
 stubborn=org.ruyaos.TestStubborn
+# RUY-888: a game that saves at quit (its SIGTERM trap writes $XDG_DATA_HOME/saved and exits 0).
+saver=org.ruyaos.TestSaver
 wclient=org.ruyaos.TestWaylandClient
 remote=ruyaos-session-test
 work=/var/lib/ruya-session-test
@@ -333,6 +342,17 @@ judge_secs() {
     return 1
 }
 # --- judge_secs end
+# --- judge_clean_end begin (test-vm-checks.sh sources these lines)
+# judge_clean_end <what> <uid> (RUY-888), the journal on stdin: a FAIL when it shows that systemd had to
+# kill an app of that user's manager ("user@<uid>.service: Killing process ... with signal SIGKILL") or
+# could not stop a frozen one ("Cannot stop frozen unit ruya-app-..."); else a PASS.
+judge_clean_end() {
+    local hit
+    hit="$(grep -a -E "user@$2[.]service: Killing process .* with signal SIGKILL|Cannot stop frozen unit" | head -3)"
+    if [ -n "$hit" ]; then bad "$1: the journal shows a kill: $hit"; return 1; fi
+    ok "$1: no SIGKILL and no 'Cannot stop frozen unit' in the journal"
+}
+# --- judge_clean_end end
 # The unit name out of 'ss "ok" "ruya-app-..."'.
 unit_of() { sed -n 's/^ss "ok" "\(.*\)"$/\1/p'; }
 # Waits for a line of the signal log (an extended-regex pattern), up to $2 seconds; $3 is an optional label.
@@ -384,10 +404,12 @@ build_repo() {
     # The sleeper burns a little CPU before it sleeps (RUY-23): the run's scope then has CPU to
     # read, which proves CPUUsageNSec works on a user scope (the journal's "scope gone, cpu N ms").
     # The stubborn app (RUY-736) ignores SIGTERM, and so does the child it forks (an ignored signal stays
-    # ignored across fork and exec): a game that does not close.
+    # ignored across fork and exec): a game that does not close. The saver (RUY-888) is a game that
+    # saves at quit: it says it is up, and its SIGTERM trap writes "saved" and exits 0.
     for spec in "$sleeper|i=0; while [ \$i -lt 50000 ]; do i=\$((i + 1)); done; exec sleep 3000" \
                 "$crasher|sleep 1; exit 3" \
-                "$stubborn|trap '' TERM; sleep 3005 & exec sleep 3006"; do
+                "$stubborn|trap '' TERM; sleep 3005 & exec sleep 3006" \
+                "$saver|trap 'echo saved > \"\$XDG_DATA_HOME/saved\"; exit 0' TERM; echo up > \"\$XDG_DATA_HOME/started\"; sleep 3007 & wait"; do
         id="${spec%%|*}"; body="${spec#*|}"
         mkdir -p "$work/$id/files/bin" "$work/$id/var"
         printf '#!/bin/sh\n%s\n' "$body" > "$work/$id/files/bin/run"; chmod 755 "$work/$id/files/bin/run"
@@ -557,7 +579,7 @@ restart)
     echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
     ls -Zd /var/lib/ruya-session /var/lib/ruya-session/usage 2>&1
     kill "$mon" 2>/dev/null
-    drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$saver" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
     rm -rf "$work"
     journalctl -u ruya-session -b --no-pager -p warning | tail -5
     ;;
@@ -607,7 +629,7 @@ display)
     out="$(probe_connect "$user" "/run/user/$uid/ruya-0")"; case "$out" in PermissionError*) ok "$user cannot reach the shell's own socket ruya-0";; *) bad "$user -> ruya-0: $out";; esac
 
     echo "--- the Wayland test app"
-    drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$rt"
+    drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$saver" "$rt"
     build_repo && ok "repository built" || { bad "cannot build the test repository"; exit 1; }
     flatpak remote-add --system --if-not-exists --no-gpg-verify "$remote" "file://$work/repo" || { bad "remote-add"; exit 1; }
     flatpak install --system -y --noninteractive "$remote" "$rt" "$wclient" >/dev/null 2>&1 \
@@ -802,7 +824,74 @@ kill)
     echo "$line" | grep -q '"killed"' && ok "reason killed" || bad "the backstop's AppExited is not killed: $line"
     gone "sleep 3006" && gone "sleep 3005" && ok "the app and its child are gone" || bad "the app or its child survived the backstop"
     kill "$mon" 2>/dev/null
-    drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$saver" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    ;;
+shutdown)
+    # RUY-888: a frozen game whose profile left must quit cleanly when the system goes down. This
+    # half sets it up and checks the lock; vm-reboot-check.ps1 -Shutdown then reboots the VM and runs
+    # `shutdown-verify` on the next boot (the queue cannot reboot).
+    echo "--- a profile and the test apps (RUY-888)"
+    pid="$(busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | grep -o '"p[0-9]*"' | tail -1 | tr -d '"')"
+    [ -n "$pid" ] && ok "profile $pid" || { bad "no profile: run 'check' on an empty store first"; exit 1; }
+    user="ruya-$pid"
+    if ! flatpak info --system "$saver" >/dev/null 2>&1; then
+        build_repo && ok "repository built" || { bad "cannot build the test repository"; exit 1; }
+        flatpak remote-add --system --if-not-exists --no-gpg-verify "$remote" "file://$work/repo" || { bad "remote-add"; exit 1; }
+        flatpak install --system -y --noninteractive --or-update "$remote" "$rt" "$sleeper" "$crasher" "$stubborn" "$saver" >/tmp/ruya-flatpak-install.log 2>&1 \
+            && ok "test apps installed" || { tail -n 5 /tmp/ruya-flatpak-install.log; bad "flatpak install of the test apps failed"; exit 1; }
+    fi
+    mkdir -p "$work"
+    data="$(getent passwd "$user" | cut -d: -f6)/.var/app/$saver/data"
+    rm -f "$data/saved" "$data/started"
+
+    echo "--- logind holds the shutdown for ruya-session"
+    inh="$(systemd-inhibit --list --no-pager 2>&1)"
+    echo "$inh" | grep -a "RuyaOS session" | sed 's/^/    /'
+    echo "$inh" | grep -a "RuyaOS session" | grep -q "shutdown" && echo "$inh" | grep -a "RuyaOS session" | grep -q "delay" \
+        && ok "ruya-session holds a shutdown delay lock" || bad "no 'RuyaOS session' shutdown delay lock in systemd-inhibit --list"
+    delay="$(busctl --system get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager InhibitDelayMaxUSec 2>&1)"
+    [ "$delay" = "t 40000000" ] && ok "logind waits up to 40 s (InhibitDelayMaxSec)" || bad "InhibitDelayMaxUSec is '$delay', not 40 s (logind.conf.d/50-ruyaos-inhibit-delay.conf)"
+
+    echo "--- a game that saves at quit, frozen, its profile signed out"
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" "" 2>&1)"
+    case "$out" in 'suu "ok"'*) ;; *'"wrong-pin"'*|*'"pin-required"'*) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$pid" 1234 2>&1)";; esac
+    case "$out" in 'suu "ok"'*) ok "$pid signed in";; *) bad "SwitchTo $pid: $out"; exit 1;; esac
+    : > "$work/signals.log"
+    busctl --system --json=short monitor "$svc" >> "$work/signals.log" 2>&1 &
+    mon=$!
+    sleep 2
+    out="$(launch "$saver" "$pid")"; inst="$(echo "$out" | unit_of)"
+    [ -n "$inst" ] && ok "Launch: $inst" || { bad "Launch of $saver: $out"; kill "$mon" 2>/dev/null; exit 1; }
+    wait_sig "\"member\":\"AppStarted\".*$saver" 30 && ok "AppStarted arrived" || bad "no AppStarted within 30 s"
+    kill "$mon" 2>/dev/null
+    n=0; until [ -f "$data/started" ] || [ "$n" -ge 20 ]; do sleep 1; n=$((n + 1)); done
+    [ -f "$data/started" ] && ok "the game is up (its SIGTERM trap is set)" || bad "the game never wrote $data/started"
+    case "$(freeze_app "$inst")" in 's "ok"') ok "Freeze answered ok";; *) bad "Freeze";; esac
+    wait_fstate "$user" "$inst" frozen 5
+    busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null && ok "the console locked (the profile left)" || bad "Lock"
+    sleep 1
+    wait_fstate "$user" "$inst" frozen 5
+    echo "Ready: reboot now (systemctl reboot, through logind) and run '$0 shutdown-verify' on the next boot."
+    ;;
+shutdown-verify)
+    # RUY-888, after the reboot `shutdown` prepared: the previous boot's journal and the game's file.
+    pid="$(busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | grep -o '"p[0-9]*"' | tail -1 | tr -d '"')"
+    [ -n "$pid" ] && ok "profile $pid" || { bad "no profile"; exit 1; }
+    user="ruya-$pid"
+    puid="$(id -u "$user")"
+    data="$(getent passwd "$user" | cut -d: -f6)/.var/app/$saver/data"
+    prev="$(journalctl -b -1 --no-pager -o cat 2>/dev/null)"
+    [ -n "$prev" ] && ok "the previous boot's journal is there" || { bad "no journal of the previous boot (journalctl -b -1)"; exit 1; }
+    echo "$prev" | grep -a -E "ruya-session: (the system goes down|every app has ended|an app is still there|thawing|stopping .* before the shutdown)|PrepareForShutdown|delay lock" | tail -6 | sed 's/^/    /'
+    echo "$prev" | grep -a -q "ruya-session: the system goes down, stopping every app first: 1 running" \
+        && ok "ruya-session stopped the frozen game before the shutdown" || bad "no 'the system goes down, stopping every app first: 1 running' line"
+    echo "$prev" | grep -a -q "ruya-session: every app has ended, the shutdown may go on" \
+        && ok "every app had ended before the shutdown went on" || bad "no 'every app has ended, the shutdown may go on' line"
+    [ "$(cat "$data/saved" 2>/dev/null)" = saved ] && ok "the game ran its quit path (it wrote $data/saved)" || bad "the game did not save at quit ($data/saved missing): it was killed, not stopped"
+    printf '%s\n' "$prev" | judge_clean_end "the shutdown" "$puid"
+    rm -f "$data/saved" "$data/started"
+    drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$saver" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    rm -rf "$work"
     ;;
 display-clean)
     inst="$(cat /root/vm-display-instance 2>/dev/null)"
@@ -818,7 +907,7 @@ display-clean)
     rm -rf "$work" /root/vm-display-instance /root/vm-display-other
     ;;
 clean)
-    drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$saver" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
     rm -rf "$work"
     ;;
 check)
@@ -1268,7 +1357,7 @@ check)
     fi
     kill "$mon" 2>/dev/null
     pkill -f "probe[.]qml" 2>/dev/null
-    drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
+    drop_test_apps "$wclient" "$sleeper" "$crasher" "$stubborn" "$saver" "$rt" && flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
     echo "--- journal of the service (warnings)"
     journalctl -u ruya-session -b --no-pager -p warning | tail -5
     ;;

@@ -300,6 +300,8 @@ Shell icons come from Google's **Material Symbols Rounded** (Apache-2.0), bundle
 
 **Consequences.** New contract surface in Session1 (states, `Switch`, `SetBackgroundReason`), compositor snapshots, a policy in `ruya-session`, developer-guide rules. Epic T-273, tasks T-274..T-279; everything is gated by T-164.
 
+**Shutdown (RUY-888, lead, 2026-11-19; an implementation rule of this ADR, no new decision):** a frozen app is never left to systemd's own stop. The one that froze it, `ruya-session`, thaws and stops every app (the path of `Stop`: thaw, SIGTERM, 30 s, SIGKILL) before power off or restart, holding logind's shutdown delay lock until they have ended, so it runs before anything stops, while the compositor and the profiles' user managers still run; otherwise the user manager cannot stop the frozen unit and kills it, and a game that saves at quit loses its settings (the Dell, 2026-11-18). Details: `03` §4.1, "Power off and restart".
+
 ### ADR-020 — The game data hub (service `ruya-gamedata`, `GameData1`; renamed by the owner 2026-11-10: "Ruya Hub" is the overlay over a running game): one OS API for ROM folders, save and capture paths, and now-playing metadata — *Accepted (owner, 2026-11-08); behind `Platform1` per ADR-022*
 **Question.** The owner wants RuyaOS to be a hub between game apps: an emulator asks the OS where the SNES ROMs are and where saves, states, configs, screenshots and recordings go; the OS learns from the app what is played (game, emulator, settings, who) and exposes it to the shell and to permitted apps. Today each app invents its own folders (03 §4.5a only recommends a layout), the emulator frontend would scan on its own (T-259), and nothing knows what is running beyond the app id.
 
