@@ -678,7 +678,7 @@ limsrc="$tmp/limits.sh"
 sed -n '/^# --- judge_limits begin/,/^# --- judge_limits end/p' "$here/vm-session-check.sh" > "$limsrc"
 [ -s "$limsrc" ] && pass "vm-session-check.sh has the judge_limits block" || fail "no judge_limits block in vm-session-check.sh"
 runlimits() { # <show output> [MemTotal kB]
-    printf '%s\n' "$1" | bash -c "ok() { echo \"PASS: \$*\"; }; bad() { echo \"FAIL: \$*\"; }; . '$limsrc'; judge_limits 'limits' $2; echo \"rc=\$?\"" 2>&1
+    printf '%s\n' "$1" | bash -c "ok() { echo \"PASS: \$*\"; }; bad() { echo \"FAIL: \$*\"; }; . '$limsrc'; judge_limits 'limits' ${2:-}; echo \"rc=\$?\"" 2>&1
 }
 out="$(runlimits 'MemoryMax=15461882265
 TasksMax=8192' 17179869)"
