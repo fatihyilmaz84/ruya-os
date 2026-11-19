@@ -344,6 +344,11 @@ cleanup() {
 
 [ -f "$zip" ] || { echo "FAIL: no package at $zip (build it as scripts/ci-samples-linux.sh does)"; exit 1; }
 systemctl is-active -q ruya-play.service && ok "ruya-play.service is active" || bad "ruya-play.service is not active"
+# RUY-867: RUY-866 moved staging/ and inspect/ to ruya-play-work; tmpfiles.d/ruya-play.conf removes the
+# old folders at boot, so an upgraded console has none.
+for old in staging inspect; do
+    [ ! -e "$state/$old" ] && ok "the old $state/$old is gone" || bad "the old $state/$old still exists (tmpfiles R line)"
+done
 
 if [ "$mode" = helper ]; then
     mkdir -p "$state/incoming"
