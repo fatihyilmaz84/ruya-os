@@ -879,7 +879,7 @@ Page {
                     u: page.u
                     appId: page.appId !== "" ? page.appId : (page.item.id ?? "")
                     appName: page.title
-                    picture: page.app.hero || (page.item.art ? (page.item.art.hero || page.item.art.card || page.item.art.cover || page.item.art.tile || "") : "")
+                    picture: page.app.hero || ArtRoles.wide(page.item.art)
                 }
             }
 

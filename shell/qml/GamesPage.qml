@@ -166,7 +166,7 @@ Page {
                 width: page.cardWidth
                 itemId: modelData
                 title: game.title ?? ""
-                picture: game.art ? (game.art.tile ?? game.art.card ?? game.art.cover ?? "") : ""
+                picture: ArtRoles.tile(game.art)
                 focused: GridView.isCurrentItem && GridView.view.activeFocus
                 anchored: GridView.isCurrentItem && page.optionsOpenFor === modelData
                 holdShown: GridView.isCurrentItem && hold.ringShown
