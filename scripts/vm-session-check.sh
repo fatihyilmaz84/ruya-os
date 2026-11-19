@@ -353,6 +353,33 @@ judge_clean_end() {
     ok "$1: no SIGKILL and no 'Cannot stop frozen unit' in the journal"
 }
 # --- judge_clean_end end
+# --- judge_limits begin (test-vm-checks.sh sources these lines)
+# judge_limits <what> <MemTotal kB> [cgroup root] (RUY-855), `systemctl show -p MemoryMax -p TasksMax
+# -p ControlGroup <unit>` on stdin. `show` reports what was configured even when the user manager does
+# not delegate memory and pids, so the kernel's own files decide: <root><ControlGroup>/memory.max must
+# equal MemoryMax (about 90% of RAM, 85-95% here: systemd counts physical memory, MemTotal leaves the
+# kernel's share out) and pids.max must be 8192. A missing file or "max" is a FAIL.
+judge_limits() {
+    local out mem tasks cg root dir kmem kpids
+    root="${3:-/sys/fs/cgroup}"
+    out="$(cat)"
+    mem="$(printf '%s\n' "$out" | sed -n 's/^MemoryMax=//p')"
+    tasks="$(printf '%s\n' "$out" | sed -n 's/^TasksMax=//p')"
+    cg="$(printf '%s\n' "$out" | sed -n 's/^ControlGroup=//p')"
+    case "$mem" in ''|*[!0-9]*) bad "$1: MemoryMax is '$mem', not a byte count"; return 1;; esac
+    if [ "$mem" -lt $(( $2 * 1024 * 85 / 100 )) ] || [ "$mem" -gt $(( $2 * 1024 * 95 / 100 )) ]; then
+        bad "$1: MemoryMax=$mem is not about 90% of MemTotal ${2} kB"; return 1
+    fi
+    if [ "$tasks" != 8192 ]; then bad "$1: TasksMax is '$tasks', not 8192"; return 1; fi
+    dir="$root$cg"
+    if [ -z "$cg" ] || [ ! -d "$dir" ]; then bad "$1: no cgroup directory '$dir'"; return 1; fi
+    kmem="$(cat "$dir/memory.max" 2>/dev/null)"
+    kpids="$(cat "$dir/pids.max" 2>/dev/null)"
+    if [ "$kmem" != "$mem" ]; then bad "$1: the kernel's memory.max is '${kmem:-missing}', not $mem (memory not delegated?)"; return 1; fi
+    if [ "$kpids" != 8192 ]; then bad "$1: the kernel's pids.max is '${kpids:-missing}', not 8192 (pids not delegated?)"; return 1; fi
+    ok "$1: memory.max=$mem bytes and pids.max=8192 in the kernel"
+}
+# --- judge_limits end
 # The unit name out of 'ss "ok" "ruya-app-..."'.
 unit_of() { sed -n 's/^ss "ok" "\(.*\)"$/\1/p'; }
 # sign_in <profile>: SwitchTo with no PIN, then the dev PIN 1234 when a PIN is asked; prints the reply.
@@ -959,6 +986,9 @@ check)
     # 2>&1 into a pipe: a call over -M hands its stderr to PID 1, which SELinux lets write a pipe
     # of this shell but not the log file this script's output goes to (the call would hang).
     systemctl --user -M "$user@.host" is-active "$inst" </dev/null 2>&1 | grep -q '^active$' && ok "the unit is active in $user's manager" || bad "unit not active in the user manager"
+    # RUY-855 (limits): every app unit carries MemoryMax=90% and TasksMax=8192 (ADR-019 memory pressure).
+    systemctl --user -M "$user@.host" show -p MemoryMax -p TasksMax -p ControlGroup "$inst" </dev/null 2>&1 \
+        | judge_limits "the app unit's limits" "$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)"
     loginctl show-user "$user" -p Linger | grep -q yes && ok "the manager of $user lingers" || bad "no linger"
     if pgrep -u "$user" 'pipewire|wireplumber' >/dev/null; then bad "$user runs PipeWire or WirePlumber (ADR-010)"; ps -u "$user" -o args | head; else ok "$user runs no PipeWire or WirePlumber"; fi
 

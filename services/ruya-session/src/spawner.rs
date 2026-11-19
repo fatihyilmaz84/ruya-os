@@ -989,6 +989,13 @@ pub const SESSION_PROGRAM: &str = "/usr/bin/ruya-session";
 /// Flatpak 1.15.6 or newer (the image has 1.18).
 pub const DEVICE_INPUT: &str = "--device=input";
 
+/// Memory limit of every app unit (Flatpak, `.play`, Steam): systemd reads a percentage as
+/// relative to physical memory, which the service cannot read itself (`ProcSubset=pid`). A
+/// leaking game is killed by the kernel before it takes the shell down (ADR-019 memory pressure).
+pub const APP_MEMORY_MAX: &str = "90%";
+/// Task limit of every app unit: a fork bomb stops at this many, the shell keeps its own.
+pub const APP_TASKS_MAX: u32 = 8192;
+
 /// `launch_command` for either display mode. In X11 mode the unit runs
 /// `ruya-session x11-run <app_id>` (which starts the X server and then `flatpak run`) and cleans
 /// up with `ruya-session x11-cleanup <app_id>` after any end, a Stop included. `app_args`
@@ -1020,6 +1027,8 @@ pub fn launch_command_in(
     .into_iter()
     .map(str::to_owned)
     .collect();
+    args.push(format!("--property=MemoryMax={APP_MEMORY_MAX}"));
+    args.push(format!("--property=TasksMax={APP_TASKS_MAX}"));
     args.push(format!("--machine={user}@.host"));
     args.push(format!("--unit={}", unit_name(user, app_id)));
     for (key, value) in env {
@@ -1856,6 +1865,8 @@ mod tests {
                 "--collect",
                 "--property=Type=exec",
                 "--property=KillMode=control-group",
+                "--property=MemoryMax=90%",
+                "--property=TasksMax=8192",
                 "--machine=ruya-p1@.host",
                 "--unit=ruya-app-ruya-p1-org.ruyaos.Racer.service",
                 "--setenv=WAYLAND_DISPLAY=wayland-0",
@@ -1866,6 +1877,21 @@ mod tests {
                 "org.ruyaos.Racer",
             ]
         );
+    }
+
+    #[test]
+    fn every_app_unit_is_limited_once_in_both_display_modes() {
+        for mode in [DisplayMode::Wayland, DisplayMode::X11] {
+            let args =
+                launch_command_in("ruya-p1", "org.ruyaos.Racer", &env(), mode, &[]).expect("valid");
+            for want in ["--property=MemoryMax=90%", "--property=TasksMax=8192"] {
+                assert_eq!(
+                    args.iter().filter(|a| *a == want).count(),
+                    1,
+                    "{want} {mode:?}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -1881,6 +1907,8 @@ mod tests {
                 "--collect",
                 "--property=Type=exec",
                 "--property=KillMode=control-group",
+                "--property=MemoryMax=90%",
+                "--property=TasksMax=8192",
                 "--machine=ruya-p1@.host",
                 "--unit=ruya-app-ruya-p1-io.github.divVerent.aaaaxy.service",
                 "--setenv=WAYLAND_DISPLAY=wayland-0",

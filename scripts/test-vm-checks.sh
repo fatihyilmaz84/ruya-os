@@ -673,6 +673,37 @@ grep -q 'bash /root/vm-session-check.sh shutdown"' "$here/vm-reboot-check.ps1" \
     && grep -q 'bash /root/vm-session-check.sh shutdown-verify"' "$here/vm-reboot-check.ps1" \
     && pass "vm-reboot-check.ps1 -Shutdown runs both halves around the reboot" || fail "vm-reboot-check.ps1: the shutdown halves are not run"
 
+# --- vm-session-check.sh check: the app unit's limits (RUY-855) ------------------------------------
+limsrc="$tmp/limits.sh"
+sed -n '/^# --- judge_limits begin/,/^# --- judge_limits end/p' "$here/vm-session-check.sh" > "$limsrc"
+[ -s "$limsrc" ] && pass "vm-session-check.sh has the judge_limits block" || fail "no judge_limits block in vm-session-check.sh"
+runlimits() { # <show output> <MemTotal kB> <cgroup root>
+    printf '%s\n' "$1" | bash -c "ok() { echo \"PASS: \$*\"; }; bad() { echo \"FAIL: \$*\"; }; . '$limsrc'; judge_limits 'limits' $2 '$3'; echo \"rc=\$?\"" 2>&1
+}
+cgroot="$tmp/cgroot"
+mkdir -p "$cgroot/u/a" "$cgroot/u/b" "$cgroot/u/c"
+printf '15461882265\n' > "$cgroot/u/a/memory.max"; printf '8192\n' > "$cgroot/u/a/pids.max"
+printf 'max\n' > "$cgroot/u/b/memory.max"; printf '8192\n' > "$cgroot/u/b/pids.max"
+printf '15461882265\n' > "$cgroot/u/c/memory.max"
+showfor() { printf 'MemoryMax=%s\nTasksMax=%s\nControlGroup=/u/%s\n' "$1" "$2" "$3"; }
+out="$(runlimits "$(showfor 15461882265 8192 a)" 16777216 "$cgroot")"
+expect_contains "judge_limits: 90% of 16 GiB, 8192 and the kernel's files pass" "$out" "PASS: limits: memory.max=15461882265 bytes and pids.max=8192 in the kernel"
+expect_contains "judge_limits: a good unit returns 0" "$out" "rc=0"
+out="$(runlimits "$(showfor infinity 8192 a)" 16777216 "$cgroot")"
+expect_contains "judge_limits: no memory limit fails" "$out" "FAIL: limits: MemoryMax is 'infinity'"
+out="$(runlimits "$(showfor 15461882265 15000 a)" 16777216 "$cgroot")"
+expect_contains "judge_limits: another TasksMax fails" "$out" "FAIL: limits: TasksMax is '15000'"
+expect_contains "judge_limits: another TasksMax returns 1" "$out" "rc=1"
+out="$(runlimits "$(showfor 1000 8192 a)" 16777216 "$cgroot")"
+expect_contains "judge_limits: a value far from 90% of RAM fails" "$out" "FAIL: limits: MemoryMax=1000 is not about 90%"
+out="$(runlimits "$(showfor 15461882265 8192 b)" 16777216 "$cgroot")"
+expect_contains "judge_limits: memory.max 'max' in the kernel (not delegated) fails" "$out" "the kernel's memory.max is 'max'"
+out="$(runlimits "$(showfor 15461882265 8192 c)" 16777216 "$cgroot")"
+expect_contains "judge_limits: a missing pids.max (not delegated) fails" "$out" "the kernel's pids.max is 'missing'"
+out="$(runlimits "$(showfor 15461882265 8192 gone)" 16777216 "$cgroot")"
+expect_contains "judge_limits: no cgroup directory fails" "$out" "FAIL: limits: no cgroup directory"
+grep -q '| judge_limits "the app unit' "$here/vm-session-check.sh"     && pass "vm-session-check.sh check judges the running unit's limits" || fail "vm-session-check.sh: limits not judged"
+
 # --- vm-session-check.sh kill: the timing windows (RUY-736) ---------------------------------------
 # Kill must end the app within 2 s, the backstop 29-33 s after the Stop; judge_secs is the verdict.
 judgesrc="$tmp/judge.sh"
