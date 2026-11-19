@@ -805,6 +805,11 @@ Item {
                 shot("127-install-package-changed-" + lang)
                 closePackage()
 
+                openPackage("rawunverified")
+                settle()
+                shot("127b-install-package-refused-" + lang)
+                closePackage()
+
                 openPackage("flaky")
                 keyClick(Qt.Key_Return)
                 tryVerify(() => find("installConfirm").shown, 2000)
