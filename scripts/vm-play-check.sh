@@ -85,6 +85,7 @@ bad() { echo "FAIL: $*"; fail=1; }
 restart_service() {
     systemctl restart ruya-play.service && return 0
     bad "ruya-play.service did not restart after the check"
+    return 1
 }
 
 # --- JSON (busctl --json=short), by key ---------------------------------------------------------

@@ -17,11 +17,11 @@
 //! The service reconciles before it takes its bus name, so no install runs against unreconciled
 //! records.
 
+use crate::core::staging::Dir;
 use ruya_play_format::limits::{INPUT_MODES, REMOVABLE_MEDIA};
 use ruya_play_format::manifest::Permissions;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
-use crate::core::staging::Dir;
 use std::path::Path;
 
 /// The most bytes read of a committed app's `play.json` (the format's own limit for it).
