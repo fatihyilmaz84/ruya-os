@@ -260,13 +260,13 @@ fn runner_examples(doc: &str) -> Vec<String> {
         let Some(end) = body.find("```") else { break };
         let block = &body[..end];
         rest = &body[end + 3..];
-        if let Ok(Value::Object(o)) = serde_json::from_str::<Value>(block) {
-            if ["format", "family", "kind"]
-                .iter()
-                .all(|k| o.contains_key(*k))
-            {
-                out.push(block.to_string());
-            }
+        // Chosen by its text, not by parsing: a broken example must reach the parser and fail
+        // the test, never be skipped as "not a runner.json".
+        if ["\"family\"", "\"kind\"", "\"arch\""]
+            .iter()
+            .all(|k| block.contains(k))
+        {
+            out.push(block.to_string());
         }
     }
     out

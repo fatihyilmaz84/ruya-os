@@ -114,11 +114,7 @@ fn read_root(
     if e.kind != EntryKind::File || e.size > limit {
         return Ok(None);
     }
-    match ruya_play_format::read_small(source, name, limit) {
-        Ok(buf) if buf.len() as u64 <= limit => Ok(Some(buf)),
-        Ok(_) => Ok(None),
-        Err(p) => Err(Refusal::Format(vec![p])),
-    }
+    ruya_play_format::read_within(source, name, limit).map_err(|p| Refusal::Format(vec![p]))
 }
 
 /// Inspect a package. See the module text for the order.

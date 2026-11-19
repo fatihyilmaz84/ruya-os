@@ -126,6 +126,17 @@ pub fn read_small(source: &dyn Source, path: &str, limit: u64) -> Result<Vec<u8>
     Ok(buf)
 }
 
+/// [`read_small`] for a caller that treats a longer file like an absent one: `Ok(None)` when the
+/// file is longer than `limit`, the problem when it cannot be read.
+pub fn read_within(
+    source: &dyn Source,
+    path: &str,
+    limit: u64,
+) -> Result<Option<Vec<u8>>, Problem> {
+    let buf = read_small(source, path, limit)?;
+    Ok((buf.len() as u64 <= limit).then_some(buf))
+}
+
 /// Validate the package in `source`: the `format` of a small regular `play.json` (step 0, the only
 /// read before the names pass), then the names and kinds, then `play.files`, then
 /// `play.json`, then how the table matches the entries, then each bundled copy's `runner.json`,
