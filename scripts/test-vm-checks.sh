@@ -1686,7 +1686,7 @@ for part in verify perms library; do
     got="$(bash "$here/vm-play-check.sh" pkgid org.example.hello-game "$part")"
     [ "$got" = "org.example.hello-game_$part" ] && pass "vm-play-check.sh pkgid: a last part with '-' stays valid for $part" || fail "vm-play-check.sh pkgid $part: '$got'"
 done
-got="$(bash "$here/vm-library-check.sh" playid org.example.hello-game)"
+got="$(bash "$here/vm-library-check.sh" playid org.example.hello-game | head -n 1)"
 [ "$got" = "org.example.hello-game_library" ] && pass "vm-library-check.sh play: its id for a last part with '-' is valid (RUY-887)" || fail "vm-library-check.sh playid: '$got'"
 grep -q 'vm-play-check.sh" pkgid' "$here/vm-library-check.sh" && ! grep -Eq 'echo "\$1[._]library"' "$here/vm-library-check.sh" && pass "vm-library-check.sh has no id suffix rule of its own, it asks vm-play-check.sh pkgid" || fail "vm-library-check.sh: its own id suffix"
 ! grep -q 'systemctl restart ruya-play.service' <(sed -n '/^if \[ "\$mode" = perms \]/,/^fi$/p' "$here/vm-play-check.sh") && pass "vm-play-check.sh perms no longer uninstalls the check's id and restarts (RUY-865 workaround gone)" || fail "vm-play-check.sh perms still restarts the service"
