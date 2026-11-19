@@ -6,6 +6,7 @@ mod common;
 
 use common::*;
 use ruya_play::core::fakes::{FnFreeSpace, StaticBlocklists};
+use ruya_play::core::helper::Mode;
 use ruya_play::core::installed::MemoryInstalled;
 use ruya_play::core::staging::Kind;
 use ruya_play::{CommitError, JobState, JobStatus, MethodStatus, Phase};
@@ -680,7 +681,7 @@ impl ruya_play::Helper for MissesOnInstall {
         on_output: &mut dyn FnMut(&[u8]) -> bool,
     ) -> ruya_play::Exit {
         let mut request = request.clone();
-        if format!("{:?}", request.mode) == "Install" {
+        if request.mode == Mode::Install {
             (self.during)();
             request.source = "/nowhere/else.play".to_string();
         }
