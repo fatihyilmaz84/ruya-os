@@ -161,10 +161,10 @@ fn a_bundled_valve_proton_is_not_replaced_by_the_system_ge_proton_but_a_ge_copy_
             "bundled": {"path": "components/proton", "version": "9.0", "licence": "BSD-3-Clause"}}]);
         m["run"] = json!({"runner": "proton", "component": "proton", "command": ["${payload}/StarHopper.exe"]});
     };
-    // No runner.json: the copy is Valve's proton.
+    // No runner.json: the copy is Valve's proton, started through its default entry `proton`.
     let a = t.path().join("a");
     wine_with(&a, edit, true, true);
-    put(&a, "components/proton/bin/proton", b"x");
+    put(&a, "components/proton/proton", b"x");
     put(&a, "licences/proton-BSD-3-Clause.txt", b"x");
     assert_ok(&build(&a, &[]).0);
     let o = resolution(&a, &["--system-proton-ge", "GE-Proton10-9"]);

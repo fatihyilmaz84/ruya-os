@@ -51,11 +51,3 @@ pub fn open(path: &str) -> Result<Opened, OpenError> {
         source: Box::new(source),
     })
 }
-
-/// Read a package file of at most `limit` bytes through the format's bounded reader; `None` when
-/// it is absent, not readable or longer.
-pub fn read_small(source: &dyn Source, name: &str, limit: u64) -> Option<Vec<u8>> {
-    ruya_play_format::read_small(source, name, limit)
-        .ok()
-        .filter(|b| b.len() as u64 <= limit)
-}

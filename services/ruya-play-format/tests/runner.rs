@@ -156,7 +156,14 @@ fn format_comes_first() {
         "runner.missing_field",
         "/format",
     );
-    for bad in [json!(0), json!(1.5), json!("1"), json!(-1), json!(null)] {
+    for bad in [
+        json!(0),
+        json!(1.0),
+        json!(1.5),
+        json!("1"),
+        json!(-1),
+        json!(null),
+    ] {
         let mut r = wine_runner_json();
         r["format"] = bad.clone();
         refused(parse(&r), "runner.format_invalid", "/format");
@@ -529,4 +536,36 @@ fn runner_json_must_be_a_regular_file() {
     let mut fx = Fx::wine_full();
     fx.dirs.push("components/wine/runner.json".into());
     assert_rejected_at(check(&fx), "runner.not_a_file", FILE);
+}
+
+#[test]
+fn a_copy_without_runner_json_still_needs_its_default_entries() {
+    // The launcher starts the defaults just the same, so they must exist (lead ruling, round 2).
+    let mut fx = Fx::wine_full();
+    fx.files
+        .retain(|(p, _)| p != "components/wine/bin/wineserver");
+    assert_rejected_at(
+        check(&fx),
+        "runner.entry_missing",
+        "components/wine/bin/wineserver",
+    );
+    // A link at the default path is not a regular file either.
+    let mut fx = Fx::wine_full();
+    fx.files
+        .retain(|(p, _)| p != "components/wine/bin/wineserver");
+    fx.links
+        .push(("components/wine/bin/wineserver".into(), "wine".into()));
+    assert_rejected_at(
+        check(&fx),
+        "runner.entry_missing",
+        "components/wine/bin/wineserver",
+    );
+    // Proton: the default entry is `proton` at the copy's root.
+    let mut fx = Fx::wine_full();
+    fx.manifest["components"][0]["type"] = json!("proton");
+    fx.manifest["run"]["runner"] = json!("proton");
+    assert_rejected_at(check(&fx), "runner.entry_missing", "components/wine/proton");
+    fx.file("components/wine/proton", b"#!/usr/bin/env python3");
+    let p = assert_valid(check(&fx));
+    assert_eq!(p.runners["wine"].family, "proton");
 }

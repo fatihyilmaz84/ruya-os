@@ -138,6 +138,7 @@ impl Fx {
                 b"[boot]",
             ),
             ("components/wine/bin/wine", b"elf"),
+            ("components/wine/bin/wineserver", b"elf server"),
             ("components/wine/lib/libwine.so.1.2.3", b"so"),
             ("licences/LGPL-2.1.txt", b"licence text"),
             ("README.txt", b"read me"),
@@ -145,10 +146,14 @@ impl Fx {
         .into_iter()
         .map(|(p, d)| (p.to_string(), d.to_vec()))
         .collect();
-        fx.exec = ["payload/StarHopper.exe", "components/wine/bin/wine"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
+        fx.exec = [
+            "payload/StarHopper.exe",
+            "components/wine/bin/wine",
+            "components/wine/bin/wineserver",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
         fx.dirs = vec!["payload/saves".into()];
         // A legal 3-hop chain: libwine.so -> libwine.so.1 -> libwine.so.1.2 -> libwine.so.1.2.3.
         fx.links = vec![
@@ -168,11 +173,9 @@ impl Fx {
         fx
     }
 
-    /// [`Fx::wine_full`] whose bundled Wine carries `runner_json` (and the `bin/wineserver` its
-    /// default entry names).
+    /// [`Fx::wine_full`] whose bundled Wine carries `runner_json`.
     pub fn wine_with_runner(runner_json: &[u8]) -> Fx {
         let mut fx = Fx::wine_full();
-        fx.file("components/wine/bin/wineserver", b"elf");
         fx.file("components/wine/runner.json", runner_json);
         fx
     }

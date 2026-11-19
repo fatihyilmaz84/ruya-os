@@ -334,9 +334,9 @@ The Wine sample uses `source: system` so that no Wine has to be committed to git
 }
 ```
 
-- `kind` must be the component's `type`. `entry` names files of the runner's folder, as regular files and not links: `wine` and `wineserver` for Wine, `proton` for Proton (`{"proton": "proton"}`), and nothing for an emulator or engine, whose `run.command` names `${component:<id>}` itself.
+- `format` is the integer `1`: write `1`, not `1.0`. `kind` must be the component's `type`. `entry` names files of the runner's folder, as regular files and not links: `wine` and `wineserver` for Wine, `proton` for Proton (`{"proton": "proton"}`), and nothing for an emulator or engine, whose `run.command` names `${component:<id>}` itself.
 - `version` holds a number, compared like the versions in `components` (`GE-Proton10-9` is 10, 9). `capabilities` (`multiarch`, `dxvk`, `vkd3d`, `ntsync`) are informational for now.
-- **Leave the file out** and the console uses the defaults of the type: family `wine` or `proton` (an emulator's or engine's family is its component id), entries `bin/wine` and `bin/wineserver`, or `proton`. A bundled Proton without the file is Valve's `proton`, so the OS's GE-Proton never replaces it; declare `"family": "proton-ge"` if you bundle GE-Proton.
+- **Leave the file out** and the console uses the defaults of the type: family `wine` or `proton` (an emulator's or engine's family is its component id), entries `bin/wine` and `bin/wineserver`, or `proton`, and those files must be in the runner's folder (`runner.entry_missing` otherwise), because the console starts them. A bundled Proton without the file is Valve's `proton`, so the OS's GE-Proton never replaces it; declare `"family": "proton-ge"` if you bundle GE-Proton.
 - **A file that is there must be valid.** `ruya-pack validate` and the console refuse the package with a `runner.*` code (listed in the catalogue below) instead of falling back to the defaults. Every key must be one of the nine above.
 
 ## Wine prefix and saves
@@ -575,21 +575,21 @@ Common ones first:
 | `run.unknown_key` | Fix the run block of play.json (05 section 6.3). |
 | `runner.arch_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
 | `runner.capability_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
-| `runner.entry_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
-| `runner.entry_missing` | Put the program named in runner.json's entry into the runner's folder, or correct the path in entry. |
+| `runner.entry_invalid` | Write each entry as a plain relative path inside the runner's folder, such as bin/wine: no .. and no leading /. |
+| `runner.entry_missing` | Put the program the runner is started through into its folder (runner.json's entry; without runner.json bin/wine and bin/wineserver for Wine, proton for Proton), or correct the path in entry. |
 | `runner.family_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
 | `runner.format_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
 | `runner.format_too_new` | Install a newer ruya-pack; the bundled runner's runner.json uses a newer format than the tool knows. |
-| `runner.invalid_json` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
+| `runner.invalid_json` | Fix the JSON syntax of runner.json; check commas and quotes. |
 | `runner.kind_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
 | `runner.kind_mismatch` | Set kind in runner.json to the component's type, or bundle the runner under a component of its own type. |
 | `runner.licence_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
-| `runner.missing_field` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
+| `runner.missing_field` | Add the key the message names; runner.json needs format, family, kind, version and arch, and entry for Wine and Proton. |
 | `runner.not_a_file` | Make runner.json a regular file in the runner's folder; a link or a folder of that name is refused. |
-| `runner.not_utf8` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
-| `runner.too_big` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
+| `runner.not_utf8` | Save runner.json as UTF-8. |
+| `runner.too_big` | runner.json holds metadata only; keep it under 64 KiB. |
 | `runner.type` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
-| `runner.unknown_key` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
+| `runner.unknown_key` | Remove the key; runner.json accepts only format, family, kind, version, arch, entry, capabilities, licence and source_url. |
 | `runner.url_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
 | `runner.version_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
 | `sig.bad_signature` | Run ruya-pack sign again with your key; do not edit play.sig by hand. |

@@ -200,6 +200,7 @@ fn the_schema_states_the_same_limits_as_the_crate() {
         strs(at("/allOf/1/then/properties/entry/required")),
         sorted(&RUNNER_ENTRY_PROTON)
     );
+    assert_eq!(at("/$defs/entryPath/maxLength"), json!(MAX_PATH_BYTES));
     assert_eq!(at("/allOf/0/if/properties/kind/const"), json!("wine"));
     assert_eq!(at("/allOf/1/if/properties/kind/const"), json!("proton"));
     // The https rule and the licence rule are the manifest's.

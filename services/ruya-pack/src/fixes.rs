@@ -84,8 +84,14 @@ const FIXES: &[(&str, &str)] = &[
     // runner.json of a bundled copy (05 section 6.2.1)
     ("runner.format_too_new", "Install a newer ruya-pack; the bundled runner's runner.json uses a newer format than the tool knows."),
     ("runner.kind_mismatch", "Set kind in runner.json to the component's type, or bundle the runner under a component of its own type."),
-    ("runner.entry_missing", "Put the program named in runner.json's entry into the runner's folder, or correct the path in entry."),
+    ("runner.entry_missing", "Put the program the runner is started through into its folder (runner.json's entry; without runner.json bin/wine and bin/wineserver for Wine, proton for Proton), or correct the path in entry."),
+    ("runner.entry_invalid", "Write each entry as a plain relative path inside the runner's folder, such as bin/wine: no .. and no leading /."),
     ("runner.not_a_file", "Make runner.json a regular file in the runner's folder; a link or a folder of that name is refused."),
+    ("runner.too_big", "runner.json holds metadata only; keep it under 64 KiB."),
+    ("runner.not_utf8", "Save runner.json as UTF-8."),
+    ("runner.invalid_json", "Fix the JSON syntax of runner.json; check commas and quotes."),
+    ("runner.missing_field", "Add the key the message names; runner.json needs format, family, kind, version and arch, and entry for Wine and Proton."),
+    ("runner.unknown_key", "Remove the key; runner.json accepts only format, family, kind, version, arch, entry, capabilities, licence and source_url."),
     // format
     ("format.too_new", "Install a newer ruya-pack; this package uses a newer format than the tool knows."),
     ("package.no_manifest", "Add play.json at the root of the package (ruya-pack init writes a skeleton)."),

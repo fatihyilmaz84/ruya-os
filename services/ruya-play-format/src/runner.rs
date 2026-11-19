@@ -317,14 +317,10 @@ impl Check<'_> {
 /// `entry` with exactly that kind's keys, each a plain relative path; an emulator or engine has
 /// no `entry`; the optional `capabilities` (closed list, no repeats), `licence` (SPDX) and
 /// `source_url` (https). Whether the entry files exist is the caller's question
-/// ([`check_bundled`] for a package).
+/// ([`check_entries`] for a package).
 pub fn parse_runner(bytes: &[u8], file: &str, problems: &mut Problems) -> Option<RunnerJson> {
     if bytes.len() as u64 > MAX_RUNNER_JSON_BYTES {
-        problems.add(
-            codes::RUNNER_TOO_BIG,
-            file,
-            format!("runner.json is larger than {MAX_RUNNER_JSON_BYTES} bytes."),
-        );
+        too_big(file, problems);
         return None;
     }
     if std::str::from_utf8(bytes).is_err() {
@@ -477,23 +473,19 @@ pub fn parse_runner(bytes: &[u8], file: &str, problems: &mut Problems) -> Option
     })
 }
 
-/// Check a bundled copy's `runner` against its component and the package: the `kind` is the
-/// component's `type` (`runner.kind_mismatch`) and every entry is a regular file in the table below
-/// the copy's folder (`runner.entry_missing`).
-pub fn check_bundled(
-    c: &Component,
-    root: &str,
-    runner: &RunnerJson,
-    table: &TableIndex<'_>,
-    problems: &mut Problems,
-) {
-    let file = format!("{root}/{FILE_NAME}");
-    let mut ch = Check {
-        file: &file,
-        p: problems,
-    };
+/// `runner.too_big` for `file`: the one message, whether the size was listed or read.
+fn too_big(file: &str, problems: &mut Problems) {
+    problems.add(
+        codes::RUNNER_TOO_BIG,
+        file,
+        format!("runner.json is larger than {MAX_RUNNER_JSON_BYTES} bytes."),
+    );
+}
+
+/// A declared runner's `kind` is its component's `type` (`runner.kind_mismatch`).
+fn check_kind(c: &Component, file: &str, runner: &RunnerJson, problems: &mut Problems) {
     if runner.kind != c.kind {
-        ch.add(
+        Check { file, p: problems }.add(
             codes::RUNNER_KIND_MISMATCH,
             "/kind",
             format!(
@@ -503,13 +495,45 @@ pub fn check_bundled(
             ),
         );
     }
+}
+
+/// Every entry the launcher will start of the bundled copy under `root` is a regular file in the
+/// table below that folder, not a link or a folder (`runner.entry_missing`), whether `runner`
+/// came from its `runner.json` or is the type's defaults. A declared entry is located in the file
+/// (`<root>/runner.json#/entry/<key>`); a default entry at the path that should hold it
+/// (`<root>/bin/wineserver`), since there is no file to point into.
+pub fn check_entries(
+    root: &str,
+    runner: &BundledRunner,
+    table: &TableIndex<'_>,
+    problems: &mut Problems,
+) {
+    let file = format!("{root}/{FILE_NAME}");
     for (key, rel) in runner.entry.paths() {
-        if !table.is_file(&format!("{root}/{rel}")) {
-            ch.add(
+        let path = format!("{root}/{rel}");
+        if table.is_file(&path) {
+            continue;
+        }
+        if runner.declared.is_some() {
+            Check {
+                file: &file,
+                p: problems,
+            }
+            .add(
                 codes::RUNNER_ENTRY_MISSING,
                 &pointer_join("/entry", key),
                 format!(
                     "{} is not a regular file in the runner's folder (play.files).",
+                    quote(rel)
+                ),
+            );
+        } else {
+            problems.add(
+                codes::RUNNER_ENTRY_MISSING,
+                &path,
+                format!(
+                    "The runner has no runner.json, so it is started through its default {} {}; that is not a regular file in its folder (play.files). Add the file, or a runner.json whose entry names the right one.",
+                    quote(key),
                     quote(rel)
                 ),
             );
@@ -519,9 +543,10 @@ pub fn check_bundled(
 
 /// The runner of each bundled component of `manifest`, by component id (05 §6.2.1). A copy whose
 /// folder holds a `runner.json` gets the checked file (read through [`crate::read_small`], at most
-/// [`MAX_RUNNER_JSON_BYTES`]); a copy without one gets [`BundledRunner::defaults`]. A
-/// `runner.json` that is not a regular file, is invalid, names another kind or names an entry the
-/// package lacks adds its problems and no runner. Run it on a package whose table matched.
+/// [`MAX_RUNNER_JSON_BYTES`]); a copy without one gets [`BundledRunner::defaults`]. Either way
+/// every entry must be a regular file of the copy ([`check_entries`]). A `runner.json` that is not
+/// a regular file, is invalid or names another kind, or an entry the package lacks, adds its
+/// problems and no runner. Run it on a package whose table matched.
 pub fn bundled_runners(
     source: &dyn Source,
     manifest: &Manifest,
@@ -533,17 +558,12 @@ pub fn bundled_runners(
         let Some(b) = &c.bundled else { continue };
         let root = b.path.trim_end_matches('/');
         let file = format!("{root}/{FILE_NAME}");
-        match table.get(&file) {
-            None => {
-                out.insert(c.id.clone(), BundledRunner::defaults(c));
-            }
+        let before = problems.len();
+        let runner = match table.get(&file) {
+            None => BundledRunner::defaults(c),
             Some(FileEntry::File { size, .. }) => {
                 if *size > MAX_RUNNER_JSON_BYTES {
-                    problems.add(
-                        codes::RUNNER_TOO_BIG,
-                        &file,
-                        format!("runner.json is larger than {MAX_RUNNER_JSON_BYTES} bytes."),
-                    );
+                    too_big(&file, problems);
                     continue;
                 }
                 let bytes = match crate::read_small(source, &file, MAX_RUNNER_JSON_BYTES) {
@@ -553,20 +573,24 @@ pub fn bundled_runners(
                         continue;
                     }
                 };
-                let before = problems.len();
                 let Some(r) = parse_runner(&bytes, &file, problems) else {
                     continue;
                 };
-                check_bundled(c, root, &r, table, problems);
-                if problems.len() == before && !problems.is_full() {
-                    out.insert(c.id.clone(), BundledRunner::declared(r));
-                }
+                check_kind(c, &file, &r, problems);
+                BundledRunner::declared(r)
             }
-            Some(FileEntry::Link { .. } | FileEntry::Dir { .. }) => problems.add(
-                codes::RUNNER_NOT_A_FILE,
-                &file,
-                "runner.json must be a regular file, not a link or a folder.",
-            ),
+            Some(FileEntry::Link { .. } | FileEntry::Dir { .. }) => {
+                problems.add(
+                    codes::RUNNER_NOT_A_FILE,
+                    &file,
+                    "runner.json must be a regular file, not a link or a folder.",
+                );
+                continue;
+            }
+        };
+        check_entries(root, &runner, table, problems);
+        if problems.len() == before && !problems.is_full() {
+            out.insert(c.id.clone(), runner);
         }
     }
     out

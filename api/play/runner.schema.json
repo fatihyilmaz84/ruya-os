@@ -58,6 +58,7 @@
     "entryPath": {
       "description": "A plain relative path inside the runner's folder: / separators, no leading /, no empty, . or .. parts, no backslash or colon.",
       "type": "string",
+      "maxLength": 1024,
       "pattern": "^[^/\\\\:\\u0000-\\u001F][^\\\\:\\u0000-\\u001F]*$",
       "not": { "pattern": "(^|/)\\.\\.?(/|$)|//|/$" }
     },
