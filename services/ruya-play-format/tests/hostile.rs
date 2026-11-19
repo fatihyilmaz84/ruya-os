@@ -849,6 +849,16 @@ fn env_steam_compat() {
 }
 
 #[test]
+fn env_ruya() {
+    // The launcher's own variables (ADR-037) are not the package's to set.
+    assert_rejected_at(
+        check(&with_env("RUYA_RUNNER", "system")),
+        "env.reserved",
+        "/run/env/RUYA_RUNNER",
+    );
+}
+
+#[test]
 fn env_bad_name() {
     assert_rejected(
         check(&with_env("__GLX_VENDOR_LIBRARY_NAME", "mesa")),

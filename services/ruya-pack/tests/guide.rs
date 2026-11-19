@@ -249,3 +249,48 @@ fn the_run_env_and_cwd_rows_name_every_rule_of_the_schema() {
         );
     }
 }
+
+/// The `runner.json` examples (a `json` block with `format`, `family` and `kind`) of `doc`, as
+/// written.
+fn runner_examples(doc: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = doc;
+    while let Some(start) = rest.find("```json\n") {
+        let body = &rest[start + 8..];
+        let Some(end) = body.find("```") else { break };
+        let block = &body[..end];
+        rest = &body[end + 3..];
+        // Chosen by its text, not by parsing: a broken example must reach the parser and fail
+        // the test, never be skipped as "not a runner.json".
+        if ["\"family\"", "\"kind\"", "\"arch\""]
+            .iter()
+            .all(|k| block.contains(k))
+        {
+            out.push(block.to_string());
+        }
+    }
+    out
+}
+
+#[test]
+fn the_runner_json_examples_are_what_the_parser_accepts() {
+    use ruya_play_format::problem::Problems;
+    use ruya_play_format::runner::parse_runner;
+    for doc in [
+        "docs/developers/play-packages.md",
+        "docs/specs/05-play-packages.md",
+    ] {
+        let text = std::fs::read_to_string(repo(doc)).expect(doc);
+        let examples = runner_examples(&text);
+        assert!(!examples.is_empty(), "{doc} has no runner.json example");
+        for e in examples {
+            let mut p = Problems::new();
+            let parsed = parse_runner(e.as_bytes(), "runner.json", &mut p);
+            assert!(
+                parsed.is_some(),
+                "{doc}: the parser refuses the example: {:#?}\n{e}",
+                p.finish()
+            );
+        }
+    }
+}

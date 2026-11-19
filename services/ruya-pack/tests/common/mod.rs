@@ -94,6 +94,7 @@ pub fn wine_with(dir: &Path, edit: impl FnOnce(&mut Value), licence_text: bool, 
     put(dir, "art/icon.png", &icon());
     put(dir, "payload/StarHopper.exe", b"MZ not really");
     put(dir, "components/wine/bin/wine", b"\x7fELF not really");
+    put(dir, "components/wine/bin/wineserver", b"\x7fELF server");
     if licence_text {
         put(
             dir,

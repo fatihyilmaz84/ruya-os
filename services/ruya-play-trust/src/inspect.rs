@@ -13,7 +13,6 @@ use crate::store::TrustStore;
 use crate::tier::{check_ceiling, decide_tier, Assessment, TierDecision};
 use ruya_play_format::limits::{MAX_MANIFEST_BYTES, MAX_TABLE_BYTES};
 use ruya_play_format::{validate, EntryKind, Package, Problem, Source, ValidateOptions};
-use std::io::Read;
 
 /// What the inspect step needs besides the package.
 pub struct Context<'a> {
@@ -115,19 +114,7 @@ fn read_root(
     if e.kind != EntryKind::File || e.size > limit {
         return Ok(None);
     }
-    let mut buf = Vec::new();
-    let read = source
-        .open(name)
-        .and_then(|r| r.take(limit + 1).read_to_end(&mut buf));
-    match read {
-        Ok(_) if buf.len() as u64 <= limit => Ok(Some(buf)),
-        Ok(_) => Ok(None),
-        Err(err) => Err(Refusal::Format(vec![Problem::new(
-            ruya_play_format::codes::PACKAGE_READ_FAILED,
-            name,
-            format!("The file could not be read ({err})."),
-        )])),
-    }
+    ruya_play_format::read_within(source, name, limit).map_err(|p| Refusal::Format(vec![p]))
 }
 
 /// Inspect a package. See the module text for the order.

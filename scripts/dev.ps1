@@ -885,6 +885,7 @@ Checked 2026-11-06.
     )
     # RUY-105: a json block that is a whole play.json must satisfy api/play/play.schema.json.
     $playSchema = '{"type":"object","required":["format","id","run"],"additionalProperties":true,"properties":{"format":{"const":1},"id":{"type":"string","pattern":"^[a-z]+(\\.[a-z]+){2,}$"},"build":{"$ref":"#/$defs/build"},"run":{"type":"object","additionalProperties":false,"required":["runner"],"properties":{"runner":{"enum":["native","wine"]}}}},"$defs":{"build":{"type":"integer","minimum":1}}}'
+    $runnerSchema = '{"type":"object","additionalProperties":false,"required":["format","family","kind"],"properties":{"format":{"const":1},"family":{"type":"string"},"kind":{"enum":["wine","proton"]}}}'
     $manifestBlock = { param($m) $chapter + "`n${fence}json`n$m`n${fence}`n" }
     $cases += @(
         @{ name = "a play.json block that satisfies the schema"; a = (& $manifestBlock '{"format":1,"id":"com.example.game","build":3,"run":{"runner":"wine"}}'); other = $other;
@@ -900,7 +901,12 @@ Checked 2026-11-06.
         @{ name = "a play.json block with a fractional integer"; a = (& $manifestBlock '{"format":1,"id":"com.example.game","build":1.5,"run":{"runner":"wine"}}'); other = $other;
            files = @{ "api/play/play.schema.json" = $playSchema }; expect = 1; text = "/build: not a integer" },
         @{ name = "a json block that is not a play.json is only parsed"; a = (& $manifestBlock '{"format":1,"other":true}'); other = $other;
-           files = @{ "api/play/play.schema.json" = $playSchema }; expect = 0; text = "" }
+           files = @{ "api/play/play.schema.json" = $playSchema }; expect = 0; text = "" },
+        # RUY-898: a whole runner.json (format, family and kind) is checked against its own schema.
+        @{ name = "a runner.json block that satisfies its schema"; a = (& $manifestBlock '{"format":1,"family":"wine","kind":"wine"}'); other = $other;
+           files = @{ "api/play/play.schema.json" = $playSchema; "api/play/runner.schema.json" = $runnerSchema }; expect = 0; text = "" },
+        @{ name = "a runner.json block with a kind outside the enum"; a = (& $manifestBlock '{"format":1,"family":"wine","kind":"native"}'); other = $other;
+           files = @{ "api/play/play.schema.json" = $playSchema; "api/play/runner.schema.json" = $runnerSchema }; expect = 1; text = "runner.json block does not satisfy runner.schema.json: /kind: not one of the allowed values" }
     )
     # RUY-656: apis.json carries the normalised argument signature of each element.
     $sigXml = $xmlHead + "<method name=`"Do`"><arg name=`"a`" type=`"s`" direction=`"in`"/><arg name=`"b`" type=`"i`"/><arg name=`"r`" type=`"b`" direction=`"out`"/>$stabOk$sinceOk</method>" +

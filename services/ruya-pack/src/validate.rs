@@ -96,7 +96,7 @@ pub fn check(source: &dyn Source, runners: &[SystemRunner], zip_bytes: u64) -> C
     vet_art(source, &package.manifest, &mut out);
     licence_duty(&package, &mut out.problems);
     fat32(&package, zip_bytes, &mut out.warnings);
-    let families = bundled_families(source, &package.manifest);
+    let families = package.bundled_families();
     dry_run(&package.manifest, runners, &families, &mut out);
     out.package = Some(package);
     out
@@ -280,23 +280,6 @@ pub fn fat32(p: &Package, zip_bytes: u64, warnings: &mut Vec<Item>) {
             format!("The zip file is {zip_bytes} bytes; a FAT32 drive holds files below 4 GiB. Use exFAT for the USB drive."),
         ));
     }
-}
-
-/// The family each bundled copy declares in its `runner.json` (`family`); a copy without one has the
-/// default family of its type (`resolve::default_bundled_family`).
-pub fn bundled_families(source: &dyn Source, m: &Manifest) -> BTreeMap<String, String> {
-    let mut out = BTreeMap::new();
-    for c in &m.components {
-        let Some(b) = &c.bundled else { continue };
-        let path = format!("{}/runner.json", b.path.trim_end_matches('/'));
-        let family = pkg::read_small(source, &path, 64 * 1024)
-            .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-            .and_then(|v| v.get("family").and_then(Value::as_str).map(str::to_string));
-        if let Some(f) = family {
-            out.insert(c.id.clone(), f);
-        }
-    }
-    out
 }
 
 /// Dry-run the resolution for the components whose family has a runner named on the command line.

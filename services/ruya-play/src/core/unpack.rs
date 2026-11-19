@@ -12,6 +12,7 @@ use crate::core::codes;
 use crate::core::deps::Step;
 use crate::core::staging::{self, is_changed, is_no_space, Dir, Found, Kind};
 use ruya_play_format::manifest::Manifest;
+use ruya_play_format::runner::{RunnerEntry, RunnerHasher};
 use ruya_play_format::table::TableIndex;
 use ruya_play_format::{FileEntry, Problem, ReadFault, Source};
 use sha2::{Digest, Sha256};
@@ -353,12 +354,11 @@ pub fn check_tree(
     Ok(())
 }
 
-/// The `runner` hash of each bundled component (05 §9.2), computed from the staged copy: the
-/// SHA-256 of one line per entry below the component's `bundled.path`, in table order, with the
-/// path relative to that folder: `f NUL path NUL sha256 NUL x-or-dash LF` for a file (its hash as
-/// it was written into staging), `l NUL path NUL target LF` for a link and `d NUL path LF` for an
-/// empty folder (both as the re-walk confirmed). T-239's runner resolution reports the same value
-/// for a bundled runner.
+/// The `runner` hash of each bundled component (05 §7.3), computed from the staged copy with the
+/// format's one formula ([`RunnerHasher`]): every table entry below the component's `bundled.path`,
+/// in table order, with its path relative to that folder; a file with its hash as it was written
+/// into staging, a link and an empty folder as the re-walk confirmed. T-239's runner resolution
+/// reports the same value for a bundled runner.
 pub fn runner_hashes(manifest: &Manifest, files: &[FileEntry], unpacked: &Unpacked) -> Vec<String> {
     let mut out = Vec::new();
     for c in &manifest.components {
@@ -366,23 +366,22 @@ pub fn runner_hashes(manifest: &Manifest, files: &[FileEntry], unpacked: &Unpack
             continue;
         };
         let prefix = format!("{}/", bundled.path.trim_end_matches('/'));
-        let mut h = Sha256::new();
+        let mut h = RunnerHasher::new();
         for e in files {
             let Some(rel) = e.path().strip_prefix(&prefix) else {
                 continue;
             };
-            let line = match e {
-                FileEntry::File { executable, .. } => {
-                    let sha = unpacked.hashes.get(e.path()).map_or("", String::as_str);
-                    let x = if *executable { "x" } else { "-" };
-                    format!("f\0{rel}\0{sha}\0{x}\n")
-                }
-                FileEntry::Link { to, .. } => format!("l\0{rel}\0{to}\n"),
-                FileEntry::Dir { .. } => format!("d\0{rel}\n"),
-            };
-            h.update(line.as_bytes());
+            h.add(&match e {
+                FileEntry::File { executable, .. } => RunnerEntry::File {
+                    rel,
+                    sha256: unpacked.hashes.get(e.path()).map_or("", String::as_str),
+                    exec: *executable,
+                },
+                FileEntry::Link { to, .. } => RunnerEntry::Link { rel, to },
+                FileEntry::Dir { .. } => RunnerEntry::Dir { rel },
+            });
         }
-        out.push(hex(&h.finalize()));
+        out.push(h.finish());
     }
     out
 }
