@@ -141,9 +141,10 @@ fn a_package_cannot_ship_its_own_record() {
         "share/ruyaos/play/trust.json",
         br#"{"format":1,"tier":"official","signer_id":null,"signer_name":"RuyaOS","store_signed":true}"#,
     );
-    let (_, laid) = install_and_read(Setup::with(Pkg::signed(&fx)));
-    let err = laid[0].as_ref().unwrap_err();
-    assert!(err.contains("top-level") && err.contains("share"), "{err}");
+    // Refused with the file table's check (RUY-870), so the layout is never reached.
+    let (status, laid) = install_and_read(Setup::with(Pkg::signed(&fx)));
+    assert_eq!(status, JobStatus::InvalidPackage);
+    assert!(laid.is_empty(), "{laid:?}");
 }
 
 #[test]

@@ -250,6 +250,7 @@ codes! {
     TABLE_NOT_SORTED = "table.not_sorted",
     TABLE_DUPLICATE = "table.duplicate",
     TABLE_RESERVED_PATH = "table.reserved_path",
+    TABLE_RESERVED_TOP_LEVEL = "table.reserved_top_level",
     TABLE_PARENT_NOT_DIR = "table.parent_not_dir",
     LINK_ABSOLUTE = "link.absolute",
     LINK_TARGET_INVALID = "link.target_invalid",

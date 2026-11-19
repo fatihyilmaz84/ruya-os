@@ -4,17 +4,17 @@
 //!
 //! What the console itself writes into `/app` is not in `play.files` and is left out of the
 //! comparison: the root files ([`ROOT_FILES`]) and the reserved top-level names
-//! ([`RESERVED_TOP_LEVEL`]: the launcher mount and `share/`, art and desktop entry).
+//! ([`RESERVED_TOP_LEVEL`]: the launcher mount and `share/`, art and desktop entry; Flatpak's own empty `.ref` too).
 //!
 //! Nothing here writes. The tree is read without following links (a link is compared as a link).
 
 use crate::core::codes;
 use crate::core::staging::{Dir, Found, Kind};
 use crate::core::unpack::{self, staging_problem, Stop};
-use crate::service::commit::RESERVED_TOP_LEVEL;
 use ruya_play_format::limits::{MAX_TABLE_BYTES, ROOT_FILES};
 use ruya_play_format::problem::{codes as format_codes, Problems};
 use ruya_play_format::table::parse_table;
+use ruya_play_format::table::RESERVED_TOP_LEVEL;
 use ruya_play_format::{FileEntry, Problem};
 use std::collections::BTreeMap;
 use std::io::{self, Read};
@@ -53,7 +53,11 @@ fn flatpak_ref(path: &str, f: &Found) -> bool {
 
 fn console_written(path: &str, f: &Found) -> bool {
     let top = path.split('/').next().unwrap_or("");
-    RESERVED_TOP_LEVEL.contains(&top) || ROOT_FILES.contains(&path) || flatpak_ref(path, f)
+    // `.ref` is in the format's list too, but only Flatpak's own empty file is left out (below):
+    // a `.ref` that is not that is compared like any other entry.
+    (top != ".ref" && RESERVED_TOP_LEVEL.contains(&top))
+        || ROOT_FILES.contains(&path)
+        || flatpak_ref(path, f)
 }
 
 fn read_table(files: &Dir) -> Result<Vec<FileEntry>, Problem> {

@@ -19,9 +19,6 @@ pub const SOURCE_MISSING: &str = "source.missing";
 /// descriptor for it: PID 1 could not open it (a denied open under `OpenFile=...:graceful` looks
 /// like a missing file). `Inspect` reports it as a refusal with this code, not `unknown-source`.
 pub const SOURCE_UNREADABLE: &str = "source.unreadable";
-/// `play.files` lists a top-level `.ref` (or something below one): Flatpak's deploy writes its own
-/// empty `.ref` there and `flatpak run` locks it (RUY-848). Refused before the payload is unpacked.
-pub const PACKAGE_RESERVED_REF: &str = "package.reserved_ref";
 /// The installed-builds state cannot be read as written (never reset silently).
 pub const INSTALLED_CORRUPT: &str = "installed.corrupt";
 /// The installed-builds state could not be read or written.
@@ -56,7 +53,6 @@ pub const ALL: &[&str] = &[
     STAGING_IO,
     SOURCE_MISSING,
     SOURCE_UNREADABLE,
-    PACKAGE_RESERVED_REF,
     INSTALLED_CORRUPT,
     INSTALLED_IO,
     COMMIT_FAILED,
