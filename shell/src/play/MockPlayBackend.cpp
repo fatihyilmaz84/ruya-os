@@ -135,6 +135,19 @@ const QList<MockPlayBackend::Fixture> &MockPlayBackend::fixtures()
                                 perm("devel", "Can inspect other programs", "high")};
         add("rawaccess.play.zip", "zip", "ok", raw);
 
+        // The same requests as rawaccess under the official tier: the gate is admin-pin, without the warning.
+        PlayInfo rawOfficial = base("com.example.rawofficial", "Raw Access Official", "Reviewed, and wants the whole machine.",
+                                    "Tiny Studio", 5, "official", "full", "all", 200);
+        rawOfficial.permissions = raw.permissions;
+        add("rawofficial.play.zip", "zip", "ok", rawOfficial);
+
+        // An unverified package with a high-risk request is above its ceiling: no gate, ceiling.refused (infoOf).
+        PlayInfo rawUnverified = base("com.example.rawunverified", "Raw Homebrew", "A stranger asks for too much.",
+                                      "Unknown", 1, "unverified", "partial", "", 80);
+        rawUnverified.permissions = {perm("input:controllers", "Uses controllers", "low"),
+                                     perm("devel", "Can inspect other programs", "high")};
+        add("rawunverified", "folder", "invalid-package", rawUnverified);
+
         PlayInfo imp = base("com.example.impostor", "Pixel Forest 2", "Claims an id another key owns.", "Mallory Games",
                             4, "developer", "full", "all", 150);
         imp.keyState = QStringLiteral("different");
@@ -220,8 +233,9 @@ PlayInfo MockPlayBackend::infoOf(const Fixture &f) const
     PlayInfo i = f.info;
     i.verdict = verdictOf(f);
     i.installedBuild = m_installed.value(i.id, 0u);
-    // The gate the service derives from the tier's ceiling (05 §8); an unverified package with a
-    // high-risk request has none (the service refuses it with ceiling.refused).
+    // The gate the service derives from the tier's ceiling (05 §8). A request above the ceiling (an unverified
+    // package with a high-risk one) has none: it is the problem ceiling.refused, naming the first such request,
+    // and the verdict is invalid-package whatever developer mode says.
     // The pair of 05 §8 / services/ruya-play-trust (HIGH_RISK_PAIRS): network with removable media counts as high
     // risk together, and the service lists it as a request of its own, last.
     auto asks = [&i](const char *key) {
@@ -239,7 +253,14 @@ PlayInfo MockPlayBackend::infoOf(const Fixture &f) const
     bool high = false;
     for (const PlayPermission &p : i.permissions)
         high = high || p.risk == QLatin1String("high");
-    if (!high)
+    if (high && i.tier == QLatin1String("unverified")) {
+        const auto first = std::find_if(i.permissions.cbegin(), i.permissions.cend(),
+                                        [](const PlayPermission &p) { return p.risk == QLatin1String("high"); });
+        i.problems.append({QStringLiteral("ceiling.refused"), QStringLiteral("/permissions/") + first->key,
+                           QStringLiteral("A package of the unverified tier may not ask for \"%1\": it cannot be installed.")
+                               .arg(first->key)});
+        i.verdict = QStringLiteral("invalid-package");
+    } else if (!high)
         i.gate = QStringLiteral("allowed");
     else if (i.tier == QLatin1String("official"))
         i.gate = QStringLiteral("admin-pin");

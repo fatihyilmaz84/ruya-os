@@ -45,7 +45,7 @@ Item {
             Profiles.resetMockForTests("seeded")
             tryVerify(() => Profiles.profiles.length === 3)
             tryCompare(Profiles, "activeProfile", "")
-            tryVerify(() => Play.sources.length === 11)
+            tryVerify(() => Play.sources.length === 13)
             host.infos = []
         }
 
@@ -128,17 +128,58 @@ Item {
                    "the list is cut at four rows")
         }
 
-        function test_the_admin_pin_gate_has_no_warning_line() {
+        // ---- RUY-875: every tier x risk, through the mock, the page and the sheet ----
+
+        function test_official_low_is_allowed() {
+            compare(gateOf("pixelforest.play.zip"), "allowed")
             start("ada")
-            openPackage("starhopper")
-            const record = JSON.parse(JSON.stringify(page().info))
-            record.gate = "admin-pin"
-            find("installConfirm").open(record, find("installButton"))
-            tryVerify(() => find("installConfirm").opacity === 1, 2000, "the sheet has faded in")
+            openSheet("pixelforest.play.zip")
+            verify(!find("installConfirmWarning").visible)
+            compare(find("installConfirmPin").text, "An admin's PIN is needed to install this app.")
+        }
+
+        function test_official_high_is_admin_pin_without_the_warning() {
+            compare(gateOf("rawofficial.play.zip"), "admin-pin")
+            start("ada")
+            openSheet("rawofficial.play.zip")
             verify(!find("installConfirmWarning").visible, "admin-pin has no warning")
             compare(find("installConfirmPin").text, "A high-risk permission needs an admin's PIN.")
-            keyClick(Qt.Key_Escape)
-            tryVerify(() => !find("installConfirm").shown, 2000)
+        }
+
+        function test_developer_low_is_allowed() {
+            compare(gateOf("flaky"), "allowed")
+            start("ada")
+            openSheet("flaky")
+            verify(!find("installConfirmWarning").visible)
+            compare(find("installConfirmPin").text, "An admin's PIN is needed to install this app.")
+        }
+
+        function test_developer_high_is_admin_pin_warning() {
+            compare(gateOf("rawaccess.play.zip"), "admin-pin-warning")
+            start("ada")
+            openSheet("rawaccess.play.zip")
+            verify(find("installConfirmWarning").visible, "the warning")
+            compare(find("installConfirmPin").text, "A high-risk permission needs an admin's PIN.")
+        }
+
+        function test_unverified_low_is_allowed_but_waits_for_developer_mode() {
+            compare(gateOf("homebrew"), "allowed")
+            start("admin")
+            openPackage("homebrew")
+            verify(find("installButton").dimmed, "unverified needs developer mode")
+        }
+
+        function test_unverified_high_has_no_gate_and_cannot_be_installed() {
+            compare(gateOf("rawunverified"), "", "no gate: it is above the ceiling")
+            const info = host.infos[0].info
+            compare(info.verdict, "invalid-package")
+            verify(info.problems.some(p => p.code === "ceiling.refused"), "ceiling.refused")
+            start("admin")
+            openPackage("rawunverified")
+            verify(find("installButton").dimmed, "Install is dimmed")
+            verify(find("installBlocked").visible)
+            keyClick(Qt.Key_Return)
+            verify(!find("installConfirm").shown, "nothing to confirm")
         }
 
         function test_an_allowed_gate_names_the_admin_pin_all_the_same_for_a_standard_profile() {

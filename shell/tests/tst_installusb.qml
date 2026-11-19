@@ -54,7 +54,7 @@ Item {
             Profiles.resetMockForTests("seeded")
             tryVerify(() => Profiles.profiles.length === 3)
             tryCompare(Profiles, "activeProfile", "")
-            tryVerify(() => Play.sources.length === 11)
+            tryVerify(() => Play.sources.length === 13)
         }
 
         function cleanup() {
@@ -111,7 +111,7 @@ Item {
             tc.shell.openPage("installSources", {})
             tryCompare(tc.shell, "currentPage", "installSources")
             const list = find("sourcesList")
-            tryVerify(() => list.count === 11, 2000)
+            tryVerify(() => list.count === 13, 2000)
             tryVerify(() => list.activeFocus, 2000, "the list has the focus")
             compare(list.currentIndex, 0)
             compare(find("sourcesDrive").text.indexOf("STICK"), 0, "the drive's label heads its rows")
@@ -146,7 +146,7 @@ Item {
             tryVerify(() => find("sourcesEmpty").visible, 2000)
             compare(find("sourcesEmptyHelp").text, "Copy a .play folder, or a .zip of one, to a USB drive, then plug it in.")
             Play.mockSetDriveMounted(true)
-            tryVerify(() => find("sourcesList").visible && find("sourcesList").count === 11, 2000, "the list fills in")
+            tryVerify(() => find("sourcesList").visible && find("sourcesList").count === 13, 2000, "the list fills in")
             tryVerify(() => find("sourcesList").activeFocus, 2000, "and takes the focus")
         }
 
@@ -183,7 +183,7 @@ Item {
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "installSources")
             compare(find("page_installSources").drive, "vol-stick", "only that drive")
-            tryVerify(() => find("sourcesList").count === 11, 2000)
+            tryVerify(() => find("sourcesList").count === 13, 2000)
         }
 
         // ---- The package page ----
@@ -751,7 +751,7 @@ Item {
                 start("admin")
                 tc.shell.openPage("installSources", {})
                 tryCompare(tc.shell, "currentPage", "installSources")
-                tryVerify(() => find("sourcesList").count === 11, 2000)
+                tryVerify(() => find("sourcesList").count === 13, 2000)
                 clearToasts()
                 settle()
                 shot("120-install-sources-" + lang)

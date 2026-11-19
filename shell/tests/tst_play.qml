@@ -47,7 +47,7 @@ Item {
             verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             Play.mockReset()
             tryCompare(Play, "available", true)
-            tryVerify(() => Play.sources.length === 11)
+            tryVerify(() => Play.sources.length === 13)
             host.answers = []
             host.finished = []
             host.progress = []
@@ -90,7 +90,7 @@ Item {
 
         function test_sources_are_data_only() {
             const names = Play.sources.map(s => s.name).sort()
-            compare(names.length, 11)
+            compare(names.length, 13)
             verify(names.indexOf("starhopper") >= 0 && names.indexOf("pixelforest.play.zip") >= 0)
             const s = Play.sources.find(x => x.name === "pixelforest.play.zip")
             compare(s.kind, "zip")
@@ -108,7 +108,7 @@ Item {
             tryVerify(() => Play.sources.length === 0, 2000, "unmounted: no candidates")
             compare(runCall("inspect", p("starhopper"), () => Play.inspect(p("starhopper"))), "unknown-source")
             Play.mockSetDriveMounted(true)
-            tryVerify(() => Play.sources.length === 11, 2000, "mounted again")
+            tryVerify(() => Play.sources.length === 13, 2000, "mounted again")
         }
 
         function test_inspect_wine_game_has_every_field() {
@@ -197,6 +197,19 @@ Item {
             Play.mockSetDeveloperMode(true)
             compare(inspect("homebrew").verdict, "ok")
             compare(installFixture("homebrew"), "ok")
+        }
+
+        function test_an_unverified_package_with_a_high_request_is_refused_whatever_developer_mode_says() {
+            for (const mode of [false, true]) {
+                Play.mockSetDeveloperMode(mode)
+                const i = inspect("rawunverified")
+                compare(i.verdict, "invalid-package", "developer mode " + mode)
+                compare(i.gate, "", "no gate above the ceiling")
+                const refused = i.problems.filter(x => x.code === "ceiling.refused")
+                compare(refused.length, 1)
+                compare(refused[0].path, "/permissions/devel", "it names the request")
+                compare(installFixture("rawunverified"), "invalid-package", "developer mode " + mode)
+            }
         }
 
         function test_install_runs_to_ok_with_monotonic_progress() {
