@@ -267,7 +267,7 @@ Item {
             openPackage("rawunverified")
             verify(find("installButton").dimmed, "Install is dimmed")
             compare(find("installBlocked").text,
-                    "This game is not signed, so it may not ask for Can inspect other programs. Ask the developer for a signed version.")
+                    "This game is not signed, so it may not have this permission: Can inspect other programs. Ask the developer for a signed version.")
             closePackage()
             openPackage("broken")
             compare(find("installBlocked").text, "This package is damaged or incomplete. Copy it to the USB drive again.")

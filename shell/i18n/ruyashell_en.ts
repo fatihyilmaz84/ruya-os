@@ -4287,8 +4287,8 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+5"/>
-        <source>This game is not signed, so it may not ask for %1. Ask the developer for a signed version.</source>
-        <translation>This game is not signed, so it may not ask for %1. Ask the developer for a signed version.</translation>
+        <source>This game is not signed, so it may not have this permission: %1. Ask the developer for a signed version.</source>
+        <translation>This game is not signed, so it may not have this permission: %1. Ask the developer for a signed version.</translation>
     </message>
     <message>
         <location line="+7"/>

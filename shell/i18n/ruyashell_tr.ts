@@ -4274,8 +4274,8 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+5"/>
-        <source>This game is not signed, so it may not ask for %1. Ask the developer for a signed version.</source>
-        <translation>Bu oyun imzalı değil, bu yüzden %1 isteyemez. Geliştiriciden imzalı bir sürüm isteyin.</translation>
+        <source>This game is not signed, so it may not have this permission: %1. Ask the developer for a signed version.</source>
+        <translation>Bu oyun imzalı değil, bu yüzden şu izni alamaz: %1. Geliştiriciden imzalı bir sürüm isteyin.</translation>
     </message>
     <message>
         <location line="+7"/>
