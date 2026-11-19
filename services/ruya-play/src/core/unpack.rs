@@ -287,9 +287,25 @@ fn changed(path: &str, what: impl Into<String>) -> Problem {
     Problem::new(codes::STAGING_CHANGED, path, what.into())
 }
 
-/// Hold the walked tree against the table: every entry there with its kind, size, mode (Unix)
-/// and link target, and nothing that is not listed or a folder that holds something listed.
-pub fn check_tree(files: &[FileEntry], found: &BTreeMap<String, Found>) -> Result<(), Problem> {
+/// What [`check_tree`] holds a file's content to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Compare {
+    /// Kind, mode (Unix) and link target only: a file's content is left to [`rehash_with`], which
+    /// names a changed size or hash `package.hash_mismatch` (re-verification, 05 §7.3).
+    Structure,
+    /// Structure and each file's size: the staging guard right after an unpack, where a size that
+    /// differs from the table is `staging.changed`.
+    StructureAndSize,
+}
+
+/// Hold the walked tree against the table: every entry there with its kind, mode (Unix), link
+/// target and, with [`Compare::StructureAndSize`], size, and nothing that is not listed or a folder
+/// that holds something listed.
+pub fn check_tree(
+    files: &[FileEntry],
+    found: &BTreeMap<String, Found>,
+    compare: Compare,
+) -> Result<(), Problem> {
     let index = TableIndex::new(files);
     let modes = cfg!(unix);
     for entry in files {
@@ -305,7 +321,9 @@ pub fn check_tree(files: &[FileEntry], found: &BTreeMap<String, Found>) -> Resul
                 size, executable, ..
             } => {
                 let mode = if *executable { EXEC_MODE } else { FILE_MODE };
-                f.kind == Kind::File && f.size == *size && (!modes || f.mode == mode)
+                f.kind == Kind::File
+                    && (compare == Compare::Structure || f.size == *size)
+                    && (!modes || f.mode == mode)
             }
             FileEntry::Dir { .. } => f.kind == Kind::Dir && (!modes || f.mode == EXEC_MODE),
             FileEntry::Link { to, .. } => f.kind == Kind::Link && f.target.as_deref() == Some(to),

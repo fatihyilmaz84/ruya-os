@@ -104,7 +104,7 @@ pub fn verify_files(files: &Dir, tick: &mut dyn FnMut(Tick) -> bool) -> Verdict 
             .collect(),
         Err(e) => return Verdict::Differs(vec![staging_problem("", &e)]),
     };
-    if let Err(p) = unpack::check_tree(&table, &found) {
+    if let Err(p) = unpack::check_tree(&table, &found, unpack::Compare::Structure) {
         return Verdict::Differs(vec![p]);
     }
     let (mut files_total, mut bytes_total) = (0usize, 0u64);

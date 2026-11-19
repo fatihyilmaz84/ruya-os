@@ -145,6 +145,51 @@ fn one_changed_byte_is_a_hash_mismatch_naming_the_file() {
 }
 
 #[test]
+fn a_longer_file_is_a_hash_mismatch_not_a_staging_change() {
+    let (mut h, fx) = harness();
+    let files = deploy(&h, ID, &fx);
+    let mut bytes = std::fs::read(files.join("payload/data.bin")).unwrap();
+    bytes.push(0);
+    std::fs::write(files.join("payload/data.bin"), bytes).unwrap();
+    let r = verify(&mut h, ID);
+    assert_eq!(r.status, JobStatus::InvalidPackage);
+    assert_eq!(codes(&r), ["package.hash_mismatch"]);
+    assert_eq!(r.problems[0].path, "payload/data.bin");
+    assert_eq!(
+        h.importer.list_jobs().pop().unwrap().error,
+        "package.hash_mismatch"
+    );
+}
+
+#[test]
+fn a_shorter_file_is_a_hash_mismatch() {
+    let (mut h, fx) = harness();
+    let files = deploy(&h, ID, &fx);
+    let mut bytes = std::fs::read(files.join("payload/data.bin")).unwrap();
+    bytes.pop();
+    std::fs::write(files.join("payload/data.bin"), bytes).unwrap();
+    let r = verify(&mut h, ID);
+    assert_eq!(codes(&r), ["package.hash_mismatch"]);
+    assert_eq!(r.problems[0].path, "payload/data.bin");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_changed_mode_is_still_a_staging_change() {
+    let (mut h, fx) = harness();
+    let files = deploy(&h, ID, &fx);
+    mode(&files.join("payload/data.bin"), 0o755);
+    let r = verify(&mut h, ID);
+    assert_eq!(r.status, JobStatus::InvalidPackage);
+    assert_eq!(codes(&r), ["staging.changed"]);
+    assert_eq!(r.problems[0].path, "payload/data.bin");
+    assert_eq!(
+        h.importer.list_jobs().pop().unwrap().error,
+        "staging.changed"
+    );
+}
+
+#[test]
 fn a_missing_file_is_invalid_package() {
     let (mut h, fx) = harness();
     let files = deploy(&h, ID, &fx);
