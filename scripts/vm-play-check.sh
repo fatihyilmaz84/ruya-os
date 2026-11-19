@@ -4,6 +4,8 @@
 #   check  (default) every step below
 #   withid host fixtures only: `withid <in.zip> <out.zip> <id>` copies a package with the id of its
 #          play.json changed (the helper verify and perms use)
+#   restart host fixtures only: `restart_service`, the cleanup's last step, exits 1 with a FAIL line
+#          when `systemctl restart ruya-play.service` fails
 #   helper the helper's sandbox only: systemd-analyze security of ruya-play.service and of a probe
 #          unit started with the helper's own properties (ruya-play --helper-argv), no network and
 #          no write outside its state folder from inside it, reading a USB source and an incoming/
@@ -78,6 +80,12 @@ avc_checks() {
 }
 ok() { echo "PASS: $*"; }
 bad() { echo "FAIL: $*"; fail=1; }
+# The check's last step restarts the service (its start-up reconcile forgets the uninstalled build).
+# A service that does not come back would leave the VM without it, so that is a failure of the check.
+restart_service() {
+    systemctl restart ruya-play.service && return 0
+    bad "ruya-play.service did not restart after the check"
+}
 
 # --- JSON (busctl --json=short), by key ---------------------------------------------------------
 parse() { # <what> [arg]
@@ -177,6 +185,10 @@ if [ "$mode" = parse ]; then
         exit $?
     fi
     parse "$@"
+    exit $?
+fi
+if [ "$mode" = restart ]; then
+    restart_service
     exit $?
 fi
 if [ "$mode" = withid ]; then
@@ -339,7 +351,8 @@ cleanup() {
     umount "$usb" "$loose" 2>/dev/null
     rmdir "$usb" "$loose" 2>/dev/null
     rm -rf "$work" "$state/incoming/vm-play-check.play.zip"
-    systemctl restart ruya-play.service
+    # An exit inside the EXIT trap sets the script's status.
+    restart_service || exit 1
 }
 
 [ -f "$zip" ] || { echo "FAIL: no package at $zip (build it as scripts/ci-samples-linux.sh does)"; exit 1; }

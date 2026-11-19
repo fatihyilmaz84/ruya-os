@@ -209,6 +209,22 @@ fn the_methods_statuses() {
 }
 
 #[test]
+fn an_app_that_turns_foreign_between_queue_and_run_is_refused() {
+    let (mut h, fx) = harness();
+    deploy(&h, ID, &fx);
+    let (status, job) = h.importer.queue_verify(ID);
+    assert_eq!(status, MethodStatus::Ok);
+    // Another remote now owns the deployment (a Flathub app named `play.<id>`).
+    write_deploy(&h.cfg.flatpak, ID, "flathub");
+    let r = h.importer.run_next(&mut |_| {}).expect("ran");
+    assert_eq!(r.job, job);
+    assert_eq!(r.status, JobStatus::Failed);
+    assert_eq!(codes(&r), ["staging.io"]);
+    // And a verify asked now is not even queued.
+    assert_eq!(h.importer.queue_verify(ID).0, MethodStatus::UnknownApp);
+}
+
+#[test]
 fn cancelling_a_queued_verify_finishes_cancelled() {
     let (h, fx) = harness();
     let files = deploy(&h, ID, &fx);

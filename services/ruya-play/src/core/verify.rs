@@ -4,7 +4,8 @@
 //!
 //! What the console itself writes into `/app` is not in `play.files` and is left out of the
 //! comparison: the root files ([`ROOT_FILES`]) and the reserved top-level names
-//! ([`RESERVED_TOP_LEVEL`]: the launcher mount and `share/`, art and desktop entry; Flatpak's own empty `.ref` too).
+//! ([`RESERVED_TOP_LEVEL`]: the launcher mount and `share/`, art and desktop entry; Flatpak's own
+//! empty `.ref` too).
 //!
 //! Nothing here writes. The tree is read without following links (a link is compared as a link).
 

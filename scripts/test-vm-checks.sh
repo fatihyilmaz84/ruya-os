@@ -1537,6 +1537,19 @@ got="$(echo "$insp" | pc key verdict)"
 [ "$got" = needs-developer-mode ] && pass "play: an Inspect record's verdict" || fail "play: verdict read as '$got'"
 got="$(echo '{"type":"sa{sv}","data":["ok",{"verdict":{"type":"s","data":"ok"}}]}' | pc codes)"
 [ -z "$got" ] && pass "play: a record without problems has no codes" || fail "play: codes of a clean record read as '$got'"
+# RUY-871: the cleanup's restart of the service reports a FAIL and the script exits non-zero when it fails.
+rs="$tmp/restart-shims"; mkdir -p "$rs"
+printf '#!/bin/sh
+echo "$*" >> "%s/restart.log"
+exit "${FAKE_RESTART:-0}"
+' "$tmp" > "$rs/systemctl"; chmod +x "$rs/systemctl"
+out="$(PATH="$rs:$PATH" bash "$here/vm-play-check.sh" restart 2>&1)"; rc=$?
+[ "$rc" = 0 ] && ! echo "$out" | grep -q FAIL && pass "play: a restart that works is silent and exit 0" || fail "play: a working restart: exit $rc, '$out'"
+grep -qx "restart ruya-play.service" "$tmp/restart.log" && pass "play: the restart is of ruya-play.service" || fail "play: the restart log is '$(cat "$tmp/restart.log" 2>/dev/null)'"
+out="$(FAKE_RESTART=1 PATH="$rs:$PATH" bash "$here/vm-play-check.sh" restart 2>&1)"; rc=$?
+expect_contains "play: a failed restart is a FAIL line" "$out" "FAIL: ruya-play.service did not restart after the check"
+[ "$rc" != 0 ] && pass "play: a failed restart exits non-zero" || fail "play: a failed restart exited 0"
+grep -q 'restart_service || exit 1' "$here/vm-play-check.sh" && pass "play: the cleanup's restart sets the exit status" || fail "play: the cleanup ignores a failed restart"
 grep -q 'no-gpg-verify' "$here/vm-play-check.sh" && fail "vm-play-check.sh mentions --no-gpg-verify" || pass "vm-play-check.sh never turns signature checks off"
 grep -q 'trap cleanup EXIT' "$here/vm-play-check.sh" && pass "vm-play-check.sh cleans up on exit" || fail "vm-play-check.sh: no EXIT trap"
 grep -q 'mount -o loop,nosuid,nodev,noexec' "$here/vm-play-check.sh" && pass "vm-play-check.sh mounts its drive as ruya-devices does" || fail "vm-play-check.sh: the check drive is not mounted nosuid,nodev,noexec"
