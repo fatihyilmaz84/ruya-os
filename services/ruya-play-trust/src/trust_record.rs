@@ -63,7 +63,13 @@ impl TrustRecord {
             return None;
         }
         let r: TrustRecord = serde_json::from_slice(bytes).ok()?;
-        let tiers = [Tier::Official, Tier::Developer, Tier::Unverified];
-        (r.format == TRUST_RECORD_FORMAT && tiers.iter().any(|t| t.as_str() == r.tier)).then_some(r)
+        (r.format == TRUST_RECORD_FORMAT && r.tier().is_some()).then_some(r)
+    }
+
+    /// The tier the record names; `None` for a name that is not a tier.
+    pub fn tier(&self) -> Option<Tier> {
+        [Tier::Official, Tier::Developer, Tier::Unverified]
+            .into_iter()
+            .find(|t| t.as_str() == self.tier)
     }
 }

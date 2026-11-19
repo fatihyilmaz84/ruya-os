@@ -12,7 +12,8 @@ use ruya_play::core::deps::{ArtVetter, NoHooks, RuyaPlayArt};
 use ruya_play::core::fakes::{
     CommitHook, FixedClock, FixedFreeSpace, FnOpener, RecordingCommit, StaticBlocklists,
 };
-use ruya_play::core::installed::MemoryInstalled;
+use ruya_play::core::installed::{Installed, MemoryInstalled};
+use ruya_play::service::commit::Runner;
 use ruya_play::{
     Config, Deps, Event, FreeSpace, Helper, HelperDeps, Hooks, Importer, InProcessHelper,
     JobResult, MethodStatus,
@@ -537,8 +538,8 @@ fn installed_io() -> Problem {
 }
 
 impl ruya_play::InstalledBuilds for SharedInstalled {
-    fn build_of(&self, id: &str) -> Result<Option<u64>, Problem> {
-        self.inner.lock().unwrap().build_of(id)
+    fn get(&self, id: &str) -> Result<Option<Installed>, Problem> {
+        self.inner.lock().unwrap().get(id)
     }
     fn record(&mut self, id: &str, build: u64) -> Result<(), Problem> {
         if on(&self.faults.record) {
@@ -546,13 +547,138 @@ impl ruya_play::InstalledBuilds for SharedInstalled {
         }
         self.inner.lock().unwrap().record(id, build)
     }
+    fn stamp(&mut self, id: &str, generation: u32) -> Result<(), Problem> {
+        if on(&self.faults.record) {
+            return Err(installed_io());
+        }
+        self.inner.lock().unwrap().stamp(id, generation)
+    }
     fn forget(&mut self, id: &str) -> Result<(), Problem> {
         if on(&self.faults.forget) {
             return Err(installed_io());
         }
         self.inner.lock().unwrap().forget(id)
     }
-    fn all(&self) -> Result<std::collections::BTreeMap<String, u64>, Problem> {
+    fn all(&self) -> Result<std::collections::BTreeMap<String, Installed>, Problem> {
         self.inner.lock().unwrap().all()
     }
+}
+
+/// The fingerprint [`FakeRunner`]'s GPG answers with.
+pub const FPR: &str = "0123456789ABCDEF0123456789ABCDEF01234567";
+
+/// Runs nothing: records each command line, answers gpg like a fresh GPG home, writes the
+/// exported key, and keeps the listing and the `metadata` of the build folder `build-finish`
+/// gets.
+#[derive(Default)]
+pub struct FakeRunner {
+    pub calls: std::sync::Mutex<Vec<Vec<String>>>,
+    pub generated: std::sync::atomic::AtomicBool,
+    pub layout: std::sync::Mutex<Vec<String>>,
+    pub metadata: std::sync::Mutex<String>,
+}
+
+impl Runner for FakeRunner {
+    fn run(&self, argv: &[String]) -> Result<String, String> {
+        use std::sync::atomic::Ordering;
+        self.calls.lock().unwrap().push(argv.to_vec());
+        let has = |a: &str| argv.iter().any(|x| x == a);
+        if argv[0] == "gpg" && has("--list-secret-keys") {
+            if self.generated.load(Ordering::SeqCst) {
+                return Ok(format!(
+                    "sec:u:255:22:X:1::::::scESC:\nfpr:::::::::{FPR}:\n"
+                ));
+            }
+            return Ok(String::new());
+        }
+        if argv[0] == "gpg" && has("--quick-gen-key") {
+            self.generated.store(true, Ordering::SeqCst);
+        }
+        if argv[0] == "gpg" && has("--export") {
+            let out = argv.iter().position(|a| a == "--output").unwrap() + 1;
+            std::fs::write(&argv[out], b"public key").unwrap();
+        }
+        if argv[0] == "ostree" {
+            let repo = argv[2].strip_prefix("--repo=").unwrap();
+            std::fs::create_dir_all(repo).unwrap();
+            std::fs::write(Path::new(repo).join("config"), b"[core]\n").unwrap();
+        }
+        if argv.get(1).map(String::as_str) == Some("build-finish") {
+            let app = Path::new(&argv[2]);
+            *self.layout.lock().unwrap() = listing(app);
+            *self.metadata.lock().unwrap() =
+                std::fs::read_to_string(app.join("metadata")).unwrap_or_default();
+        }
+        Ok(String::new())
+    }
+}
+
+/// The deployed `/app` folder of `play.<id>` in the harness's Flatpak installation.
+pub fn files_dir(h: &Harness, id: &str) -> PathBuf {
+    h.cfg
+        .flatpak
+        .join("app")
+        .join(format!("play.{id}"))
+        .join("current")
+        .join("active")
+        .join("files")
+}
+
+/// Set the permission bits of `path` (Unix; nothing elsewhere).
+#[cfg(unix)]
+pub fn mode(path: &Path, bits: u32) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(bits)).unwrap();
+}
+
+/// Set the permission bits of `path` (Unix; nothing elsewhere).
+#[cfg(not(unix))]
+pub fn mode(_path: &Path, _bits: u32) {}
+
+/// The deployment of the unsigned `fx` as the commit lays it out: the tree with the modes of
+/// `play.files`, the root files, and what the console adds (the mount folder of each of its
+/// runner's extension points, the desktop entry, the art, the trust record), with Flatpak's empty
+/// `.ref`.
+pub fn deploy(h: &Harness, id: &str, fx: &Fx) -> PathBuf {
+    let files = files_dir(h, id);
+    std::fs::create_dir_all(&files).unwrap();
+    write_deploy(&h.cfg.flatpak, id, ruya_play_art::PLAY_REMOTE);
+    for (p, d) in &fx.files {
+        let full = files.join(p);
+        std::fs::create_dir_all(full.parent().unwrap()).unwrap();
+        std::fs::write(&full, d).unwrap();
+        mode(&full, if fx.exec.contains(p) { 0o755 } else { 0o644 });
+    }
+    for d in &fx.dirs {
+        std::fs::create_dir_all(files.join(d)).unwrap();
+    }
+    std::fs::write(files.join("play.files"), fx.table()).unwrap();
+    std::fs::write(files.join("play.json"), fx.manifest_bytes()).unwrap();
+    std::fs::write(files.join(".ref"), b"").unwrap();
+    let runner = fx.manifest["run"]["runner"].as_str().unwrap_or("native");
+    for point in ruya_play::service::commit::extension_points(runner) {
+        std::fs::create_dir_all(files.join(point.directory)).unwrap();
+    }
+    std::fs::create_dir_all(files.join("share/applications")).unwrap();
+    std::fs::write(
+        files.join(format!("share/applications/play.{id}.desktop")),
+        b"[Desktop Entry]\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(files.join("share/ruyaos/play/art")).unwrap();
+    std::fs::write(files.join("share/ruyaos/play/art/icon.png"), b"art").unwrap();
+    std::fs::write(
+        files.join(ruya_play::service::commit::TRUST_RECORD_IN_APP),
+        br#"{"format":1,"tier":"unverified","signer_id":null,"signer_name":null,"store_signed":false}"#,
+    )
+    .unwrap();
+    // Every folder is 0755 (Unix), as the commit's canonical modes make them.
+    for e in listing(&files) {
+        let p = files.join(&e);
+        if !e.contains(" -> ") && p.is_dir() {
+            mode(&p, 0o755);
+        }
+    }
+    mode(&files, 0o755);
+    files
 }

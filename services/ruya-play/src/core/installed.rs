@@ -1,7 +1,11 @@
 //! The build installed per id, for the downgrade rule (05 §11: `build` only increases; lead-29,
-//! step 3). Ids are compared by their ASCII lower case, like the trust records. The file
-//! (`<state>/installed.json`) is written atomically with mode 0600; a file that cannot be read as
-//! written is `installed.corrupt` and is never reset silently (the `ruya-profiles` rule).
+//! step 3), and the generation of the Flatpak metadata its commit generated (ADR-038: the
+//! start-up reconcile re-commits an app whose generation is older than
+//! `service::commit::METADATA_GENERATION`). Ids are compared by their ASCII lower case, like the
+//! trust records. The file (`<state>/installed.json`) is written atomically with mode 0600; a file
+//! that cannot be read as written is `installed.corrupt` and is never reset silently (the
+//! `ruya-profiles` rule). An entry without `generation` (written before generations existed)
+//! reads as generation 0.
 
 use crate::core::codes;
 use crate::core::jobs::write_atomic;
@@ -16,26 +20,71 @@ pub const INSTALLED_FORMAT: u64 = 1;
 /// Most bytes of the file.
 pub const MAX_INSTALLED_BYTES: u64 = 8 * 1024 * 1024;
 
+/// What is recorded for one installed id.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Installed {
+    /// The installed build.
+    pub build: u64,
+    /// The generation of the metadata its commit generated; 0 when it is not known (a record
+    /// from before generations, or one the reconcile made for an app it found).
+    pub generation: u32,
+}
+
 /// The builds installed per id.
 pub trait InstalledBuilds {
-    /// The build installed for `id`, if any.
-    fn build_of(&self, id: &str) -> Result<Option<u64>, Problem>;
-    /// `id` is now installed at `build`.
+    /// What is recorded for `id`, if anything.
+    fn get(&self, id: &str) -> Result<Option<Installed>, Problem>;
+    /// `id` is now installed at `build`. A recorded id keeps its generation (the commit that
+    /// follows stamps a new one, [`Self::stamp`]); a new one starts at generation 0.
     fn record(&mut self, id: &str, build: u64) -> Result<(), Problem>;
+    /// The commit of the recorded `id` generated metadata of `generation`. Nothing happens for an
+    /// id without a record.
+    fn stamp(&mut self, id: &str, generation: u32) -> Result<(), Problem>;
     /// `id` was uninstalled (RUY-100's uninstall).
     fn forget(&mut self, id: &str) -> Result<(), Problem>;
-    /// Every id (lower case) and its build, for the start-up reconcile (RUY-829).
-    fn all(&self) -> Result<BTreeMap<String, u64>, Problem>;
+    /// Every id (lower case) and its record, for the start-up reconcile (RUY-829).
+    fn all(&self) -> Result<BTreeMap<String, Installed>, Problem>;
+
+    /// The build installed for `id`, if any.
+    fn build_of(&self, id: &str) -> Result<Option<u64>, Problem> {
+        Ok(self.get(id)?.map(|e| e.build))
+    }
 }
 
 fn fold(id: &str) -> String {
     id.to_ascii_lowercase()
 }
 
+/// `records` with `id` at `build`, keeping its generation ([`InstalledBuilds::record`]).
+fn with_build(
+    records: &BTreeMap<String, Installed>,
+    id: &str,
+    build: u64,
+) -> BTreeMap<String, Installed> {
+    let mut next = records.clone();
+    next.entry(fold(id)).or_default().build = build;
+    next
+}
+
+/// `records` with the recorded `id` at `generation`; `None` when there is nothing to change.
+fn with_generation(
+    records: &BTreeMap<String, Installed>,
+    id: &str,
+    generation: u32,
+) -> Option<BTreeMap<String, Installed>> {
+    let mut next = records.clone();
+    let entry = next.get_mut(&fold(id))?;
+    if entry.generation == generation {
+        return None;
+    }
+    entry.generation = generation;
+    Some(next)
+}
+
 /// In memory, for tests and the off-Linux mock.
 #[derive(Debug, Default, Clone)]
 pub struct MemoryInstalled {
-    builds: BTreeMap<String, u64>,
+    records: BTreeMap<String, Installed>,
 }
 
 impl MemoryInstalled {
@@ -44,27 +93,33 @@ impl MemoryInstalled {
         Self::default()
     }
 
-    /// With `id` installed at `build`.
+    /// With `id` installed at `build`, generation 0 (recorded before generations).
     pub fn with(mut self, id: &str, build: u64) -> Self {
-        self.builds.insert(fold(id), build);
+        self.records = with_build(&self.records, id, build);
         self
     }
 }
 
 impl InstalledBuilds for MemoryInstalled {
-    fn build_of(&self, id: &str) -> Result<Option<u64>, Problem> {
-        Ok(self.builds.get(&fold(id)).copied())
+    fn get(&self, id: &str) -> Result<Option<Installed>, Problem> {
+        Ok(self.records.get(&fold(id)).copied())
     }
     fn record(&mut self, id: &str, build: u64) -> Result<(), Problem> {
-        self.builds.insert(fold(id), build);
+        self.records = with_build(&self.records, id, build);
+        Ok(())
+    }
+    fn stamp(&mut self, id: &str, generation: u32) -> Result<(), Problem> {
+        if let Some(next) = with_generation(&self.records, id, generation) {
+            self.records = next;
+        }
         Ok(())
     }
     fn forget(&mut self, id: &str) -> Result<(), Problem> {
-        self.builds.remove(&fold(id));
+        self.records.remove(&fold(id));
         Ok(())
     }
-    fn all(&self) -> Result<BTreeMap<String, u64>, Problem> {
-        Ok(self.builds.clone())
+    fn all(&self) -> Result<BTreeMap<String, Installed>, Problem> {
+        Ok(self.records.clone())
     }
 }
 
@@ -80,6 +135,8 @@ struct RawFile {
 struct RawEntry {
     id: String,
     build: u64,
+    #[serde(default)]
+    generation: u32,
 }
 
 fn corrupt(detail: impl Into<String>) -> Problem {
@@ -102,7 +159,7 @@ fn io_problem(e: &io::Error) -> Problem {
 }
 
 /// Decode the file's bytes.
-pub fn decode(bytes: &[u8]) -> Result<BTreeMap<String, u64>, Problem> {
+pub fn decode(bytes: &[u8]) -> Result<BTreeMap<String, Installed>, Problem> {
     let raw: RawFile = serde_json::from_slice(bytes).map_err(|e| corrupt(e.to_string()))?;
     if raw.format != INSTALLED_FORMAT {
         return Err(corrupt(format!("format {} is not known", raw.format)));
@@ -115,22 +172,27 @@ pub fn decode(bytes: &[u8]) -> Result<BTreeMap<String, u64>, Problem> {
         if !ok {
             return Err(corrupt("an id is not valid"));
         }
-        if out.insert(fold(&e.id), e.build).is_some() {
+        let entry = Installed {
+            build: e.build,
+            generation: e.generation,
+        };
+        if out.insert(fold(&e.id), entry).is_some() {
             return Err(corrupt("an id is listed twice"));
         }
     }
     Ok(out)
 }
 
-/// Encode the builds.
-pub fn encode(builds: &BTreeMap<String, u64>) -> Vec<u8> {
+/// Encode the records.
+pub fn encode(records: &BTreeMap<String, Installed>) -> Vec<u8> {
     let raw = RawFile {
         format: INSTALLED_FORMAT,
-        installed: builds
+        installed: records
             .iter()
-            .map(|(id, build)| RawEntry {
+            .map(|(id, e)| RawEntry {
                 id: id.clone(),
-                build: *build,
+                build: e.build,
+                generation: e.generation,
             })
             .collect(),
     };
@@ -143,14 +205,14 @@ pub fn encode(builds: &BTreeMap<String, u64>) -> Vec<u8> {
 #[derive(Debug)]
 pub struct FileInstalled {
     path: PathBuf,
-    builds: BTreeMap<String, u64>,
+    records: BTreeMap<String, Installed>,
 }
 
 impl FileInstalled {
     /// Open the file at `path` (absent: nothing installed).
     pub fn open(path: impl Into<PathBuf>) -> Result<FileInstalled, Problem> {
         let path = path.into();
-        let builds = match std::fs::File::open(&path) {
+        let records = match std::fs::File::open(&path) {
             Err(e) if e.kind() == io::ErrorKind::NotFound => BTreeMap::new(),
             Err(e) => return Err(io_problem(&e)),
             Ok(f) => {
@@ -164,36 +226,39 @@ impl FileInstalled {
                 decode(&bytes)?
             }
         };
-        Ok(FileInstalled { path, builds })
+        Ok(FileInstalled { path, records })
     }
 
-    fn save(&self, builds: &BTreeMap<String, u64>) -> Result<(), Problem> {
-        write_atomic(&self.path, &encode(builds)).map_err(|e| io_problem(&e))
+    /// Save `next` and keep it.
+    fn save(&mut self, next: BTreeMap<String, Installed>) -> Result<(), Problem> {
+        write_atomic(&self.path, &encode(&next)).map_err(|e| io_problem(&e))?;
+        self.records = next;
+        Ok(())
     }
 }
 
 impl InstalledBuilds for FileInstalled {
-    fn build_of(&self, id: &str) -> Result<Option<u64>, Problem> {
-        Ok(self.builds.get(&fold(id)).copied())
+    fn get(&self, id: &str) -> Result<Option<Installed>, Problem> {
+        Ok(self.records.get(&fold(id)).copied())
     }
-    fn all(&self) -> Result<BTreeMap<String, u64>, Problem> {
-        Ok(self.builds.clone())
+    fn all(&self) -> Result<BTreeMap<String, Installed>, Problem> {
+        Ok(self.records.clone())
     }
     fn record(&mut self, id: &str, build: u64) -> Result<(), Problem> {
-        let mut next = self.builds.clone();
-        next.insert(fold(id), build);
-        self.save(&next)?;
-        self.builds = next;
-        Ok(())
+        self.save(with_build(&self.records, id, build))
+    }
+    fn stamp(&mut self, id: &str, generation: u32) -> Result<(), Problem> {
+        match with_generation(&self.records, id, generation) {
+            Some(next) => self.save(next),
+            None => Ok(()),
+        }
     }
     fn forget(&mut self, id: &str) -> Result<(), Problem> {
-        let mut next = self.builds.clone();
+        let mut next = self.records.clone();
         if next.remove(&fold(id)).is_none() {
             return Ok(());
         }
-        self.save(&next)?;
-        self.builds = next;
-        Ok(())
+        self.save(next)
     }
 }
 
@@ -218,6 +283,53 @@ mod tests {
                 .build_of("com.example.game")
                 .unwrap(),
             None
+        );
+    }
+
+    #[test]
+    fn the_generation_is_stamped_kept_by_an_update_and_absent_reads_zero() {
+        let t = tempfile::tempdir().unwrap();
+        let path = t.path().join("installed.json");
+        // A file written before generations: no `generation` key.
+        std::fs::write(
+            &path,
+            br#"{"format":1,"installed":[{"id":"com.example.old","build":3}]}"#,
+        )
+        .unwrap();
+        let mut f = FileInstalled::open(&path).unwrap();
+        let old = Installed {
+            build: 3,
+            generation: 0,
+        };
+        assert_eq!(f.get("com.example.old").unwrap(), Some(old));
+        f.stamp("COM.EXAMPLE.OLD", 4).unwrap();
+        // Stamping an id without a record writes nothing.
+        f.stamp("com.example.none", 4).unwrap();
+        let mut f = FileInstalled::open(&path).unwrap();
+        assert_eq!(f.get("com.example.old").unwrap().unwrap().generation, 4);
+        assert_eq!(f.get("com.example.none").unwrap(), None);
+        // An update keeps the generation until its own commit stamps one; a new id starts at 0.
+        f.record("com.example.old", 5).unwrap();
+        f.record("com.example.new", 1).unwrap();
+        let all = FileInstalled::open(&path).unwrap().all().unwrap();
+        assert_eq!(
+            all.get("com.example.old"),
+            Some(&Installed {
+                build: 5,
+                generation: 4
+            })
+        );
+        assert_eq!(all.get("com.example.new").unwrap().generation, 0);
+        // The memory implementation follows the same rules.
+        let mut m = MemoryInstalled::new().with("a", 1);
+        m.stamp("a", 2).unwrap();
+        m.record("a", 2).unwrap();
+        assert_eq!(
+            m.get("A").unwrap(),
+            Some(Installed {
+                build: 2,
+                generation: 2
+            })
         );
     }
 

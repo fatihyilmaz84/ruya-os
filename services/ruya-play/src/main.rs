@@ -19,7 +19,9 @@ use ruya_play::core::helper::{self, HelperDeps};
 use ruya_play::core::reconcile;
 use ruya_play::dbus::{forward, PlayIface, Signal, BUS_NAME, OBJECT_PATH};
 use ruya_play::service::{gates, sources, Environment, SystemEnvironment};
-use ruya_play::{Commit, CommitError, CommitRequest, Config, Deps, Helper, Importer, Phase};
+use ruya_play::{
+    Commit, CommitError, CommitRequest, Config, Deps, Helper, Importer, Phase, RecommitRequest,
+};
 use ruya_play_trust::{FileTrustStore, StoreKeys};
 
 /// The service's state (05 §7.1).
@@ -139,6 +141,15 @@ impl Commit for LoggedCommit {
         progress(Phase::Installing, 1.0);
         Ok(())
     }
+
+    fn recommit(&self, request: &RecommitRequest<'_>) -> Result<(), CommitError> {
+        eprintln!(
+            "ruya-play --session: would commit play.{} again from {}",
+            request.manifest.id,
+            request.files.display()
+        );
+        Ok(())
+    }
 }
 
 /// The image's blocklist; `--session` may point `RUYA_PLAY_BLOCKLIST` at a copy.
@@ -199,29 +210,61 @@ fn free_space() -> Box<dyn ruya_play::FreeSpace> {
 }
 
 /// Start-up (05 §7.3, RUY-829): the journal's failed rollbacks go to the log, and the committed
-/// `play.*` apps are reconciled with the records before any install can run.
-fn start_up(importer: &Importer, cfg: &Config, session: bool) {
+/// `play.*` apps are reconciled with the records before any install can run. Returns the ids the
+/// reconcile wants committed again ([`recommit`]).
+fn start_up(importer: &Importer, cfg: &Config, session: bool) -> Vec<String> {
     if let Ok(journal) = std::fs::read_to_string(cfg.journal_file()) {
         for line in reconcile::rollback_failures(&journal) {
             eprintln!("ruya-play: {line}");
         }
     }
     if session {
-        return;
+        return Vec::new();
     }
     // Fail closed: when the installed apps cannot be listed or the records cannot be read, every
     // install is refused (installed.unreconciled) until a restart reconciles them.
     match importer.reconcile_listed(reconcile::deployed_apps(Path::new(FLATPAK))) {
         Ok(actions) => {
-            for a in actions {
+            for a in &actions {
                 eprintln!("ruya-play: reconcile: {a:?}");
             }
+            actions
+                .into_iter()
+                .filter_map(|a| match a {
+                    reconcile::Action::Recommit { id } => Some(id),
+                    _ => None,
+                })
+                .collect()
         }
-        Err(p) => eprintln!(
-            "ruya-play: reconcile failed ({}); every install is refused until the service restarts",
-            p.message
-        ),
+        Err(p) => {
+            eprintln!(
+                "ruya-play: reconcile failed ({}); every install is refused until the service restarts",
+                p.message
+            );
+            Vec::new()
+        }
     }
+}
+
+/// The reconcile's re-commits (ADR-038), on a thread of their own once the bus name is taken: each
+/// can take as long as a commit, and they wait for a running job (and a job for one of them
+/// waits) like any job. A failure is logged and tried again at the next start.
+fn recommit(importer: Arc<Importer>, ids: Vec<String>) {
+    if ids.is_empty() {
+        return;
+    }
+    std::thread::spawn(move || {
+        for id in ids {
+            match importer.recommit(&id) {
+                Ok(true) => eprintln!("ruya-play: recommitted play.{id}"),
+                Ok(false) => eprintln!("ruya-play: play.{id} needed no recommit"),
+                Err(p) => eprintln!(
+                    "ruya-play: play.{id} could not be recommitted ({}: {}); it stays as it was",
+                    p.code, p.message
+                ),
+            }
+        }
+    });
 }
 
 /// Sends `SourcesChanged` when the set of safe removable mounts changes.
@@ -273,8 +316,9 @@ fn run(session: bool) -> Result<(), Box<dyn Error>> {
         hooks: Box::new(NoHooks),
     };
     let importer = Importer::open(cfg.clone(), deps).map_err(|p| p.message)?;
-    start_up(&importer, &cfg, session);
+    let recommits = start_up(&importer, &cfg, session);
     let importer = Arc::new(importer);
+    let recommitter = importer.clone();
     let (events, receiver) = async_channel::unbounded();
     watch_mounts(env.clone(), events.clone());
     futures_lite::future::block_on(async {
@@ -289,6 +333,7 @@ fn run(session: bool) -> Result<(), Box<dyn Error>> {
             .build()
             .await?;
         eprintln!("ruya-play: serving {BUS_NAME}");
+        recommit(recommitter, recommits);
         forward(connection, receiver).await;
         Ok::<(), Box<dyn Error>>(())
     })

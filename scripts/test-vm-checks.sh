@@ -1610,6 +1610,19 @@ expect_contains "play: a failed restart is a FAIL line" "$out" "FAIL: ruya-play.
 [ "$rc" != 0 ] && pass "play: a failed restart exits non-zero" || fail "play: a failed restart exited 0"
 grep -q 'restart_service || exit 1' "$here/vm-play-check.sh" && pass "play: the cleanup's restart sets the exit status" || fail "play: the cleanup ignores a failed restart"
 grep -q 'no-gpg-verify' "$here/vm-play-check.sh" && fail "vm-play-check.sh mentions --no-gpg-verify" || pass "vm-play-check.sh never turns signature checks off"
+# RUY-900: the metadata generation in installed.json, read and set as the service writes the file.
+gj="$tmp/installed.json"
+printf '{\n  "format": 1,\n  "installed": [\n    {\n      "id": "com.example.old",\n      "build": 3\n    },\n    {\n      "id": "com.example.new",\n      "build": 1,\n      "generation": 1\n    }\n  ]\n}\n' > "$gj"
+gen() { bash "$here/vm-play-check.sh" generation "$@"; }
+[ "$(gen "$gj" com.example.old)" = 0 ] && pass "play: an entry without a generation reads 0" || fail "play: an entry without a generation reads '$(gen "$gj" com.example.old)'"
+[ "$(gen "$gj" COM.Example.New)" = 1 ] && pass "play: a generation is read by the id in any case" || fail "play: the generation of com.example.new reads '$(gen "$gj" COM.Example.New)'"
+[ "$(gen "$gj" com.example.none)" = none ] && pass "play: an id without an entry is none" || fail "play: an id without an entry reads '$(gen "$gj" com.example.none)'"
+gen "$gj" com.example.new 0 >/dev/null
+[ "$(gen "$gj" com.example.new)" = 0 ] && [ "$(gen "$gj" com.example.old)" = 0 ] && grep -q '"build": 3' "$gj" && pass "play: setting a generation keeps the other entries" || fail "play: setting a generation: $(cat "$gj")"
+# The log lines the recommit check waits for are the service's own.
+main_rs="$here/../services/ruya-play/src/main.rs"
+grep -q 'eprintln!("ruya-play: recommitted play.{id}")' "$main_rs" && grep -q 'grep -qx "ruya-play: recommitted play.$id"' "$here/vm-play-check.sh" && pass "play: the recommit check waits for the service's own log line" || fail "play: vm-play-check.sh and main.rs disagree on the recommit log line"
+grep -q 'eprintln!("ruya-play: serving {BUS_NAME}")' "$main_rs" && grep -q 'eprintln!("ruya-play: reconcile: {a:?}")' "$main_rs" && grep -q 'Recommit { id: \\"$id\\" }' "$here/vm-play-check.sh" && pass "play: the second start's check reads the reconcile's own log lines" || fail "play: vm-play-check.sh and main.rs disagree on the reconcile log lines"
 grep -q 'trap cleanup EXIT' "$here/vm-play-check.sh" && pass "vm-play-check.sh cleans up on exit" || fail "vm-play-check.sh: no EXIT trap"
 grep -q 'mount -o loop,nosuid,nodev,noexec' "$here/vm-play-check.sh" && pass "vm-play-check.sh mounts its drive as ruya-devices does" || fail "vm-play-check.sh: the check drive is not mounted nosuid,nodev,noexec"
 # RUY-839: the probe is the product's own way (files the manager opens), and the script's old slips.

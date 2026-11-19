@@ -5,17 +5,19 @@
 //! What the console itself writes into `/app` is not in `play.files` and is left out of the
 //! comparison: the root files ([`ROOT_FILES`]) and the reserved top-level names
 //! ([`RESERVED_TOP_LEVEL`]: the launcher mount and `share/`, art and desktop entry; Flatpak's own
-//! empty `.ref` too).
+//! empty `.ref` too), and the empty mount folders of the other extension points with their parents
+//! when the table does not list them (ADR-038: `runners/`, `lib/i386-linux-gnu/`).
 //!
 //! Nothing here writes. The tree is read without following links (a link is compared as a link).
 
 use crate::core::codes;
 use crate::core::staging::{Dir, Found, Kind};
 use crate::core::unpack::{self, staging_problem, Stop};
+use crate::service::commit::EXTENSION_DIRS;
 use ruya_play_format::limits::{MAX_TABLE_BYTES, ROOT_FILES};
 use ruya_play_format::problem::{codes as format_codes, Problems};
 use ruya_play_format::table::parse_table;
-use ruya_play_format::table::RESERVED_TOP_LEVEL;
+use ruya_play_format::table::{TableIndex, RESERVED_TOP_LEVEL};
 use ruya_play_format::{FileEntry, Problem};
 use std::collections::BTreeMap;
 use std::io::{self, Read};
@@ -48,7 +50,7 @@ pub struct Tick {
 /// Flatpak's deploy writes an empty regular `.ref` at the top of `files/` (`flatpak run` locks
 /// it); it is the only entry of Flatpak's own that is left out. A non-empty or nested one is
 /// compared like any other entry.
-fn flatpak_ref(path: &str, f: &Found) -> bool {
+pub(crate) fn flatpak_ref(path: &str, f: &Found) -> bool {
     path == ".ref" && f.kind == Kind::File && f.size == 0
 }
 
@@ -61,7 +63,19 @@ fn console_written(path: &str, f: &Found) -> bool {
         || flatpak_ref(path, f)
 }
 
-fn read_table(files: &Dir) -> Result<Vec<FileEntry>, Problem> {
+/// A folder the commit made as an extension point's mount folder ([`EXTENSION_DIRS`], ADR-038:
+/// `runners`, `lib/i386-linux-gnu`, ...) or as a parent of one, which the table neither lists nor
+/// implies. Anything inside such a folder is compared like any other entry.
+fn mount_folder(path: &str, f: &Found, index: &TableIndex<'_>) -> bool {
+    f.kind == Kind::Dir
+        && !index.exists(path)
+        && EXTENSION_DIRS
+            .iter()
+            .any(|d| *d == path || d.strip_prefix(path).is_some_and(|r| r.starts_with('/')))
+}
+
+/// The `play.files` stored in a deployed `files/` folder, parsed (bounded by the format's limit).
+pub(crate) fn read_table(files: &Dir) -> Result<Vec<FileEntry>, Problem> {
     let missing = |what: &str| Problem::new(codes::STAGING_CHANGED, "play.files", what);
     let mut file = files.open_file("play.files").map_err(|e| {
         if e.kind() == io::ErrorKind::NotFound {
@@ -97,10 +111,11 @@ pub fn verify_files(files: &Dir, tick: &mut dyn FnMut(Tick) -> bool) -> Verdict 
         Ok(t) => t,
         Err(p) => return Verdict::Differs(vec![p]),
     };
+    let index = TableIndex::new(&table);
     let found: BTreeMap<String, Found> = match unpack::walk(files) {
         Ok(f) => f
             .into_iter()
-            .filter(|(p, f)| !console_written(p, f))
+            .filter(|(p, f)| !console_written(p, f) && !mount_folder(p, f, &index))
             .collect(),
         Err(e) => return Verdict::Differs(vec![staging_problem("", &e)]),
     };

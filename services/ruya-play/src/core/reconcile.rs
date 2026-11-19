@@ -12,14 +12,29 @@
 //!   record, or one that has no record, gets that build recorded (the downgrade guard);
 //! - a committed app whose build cannot be read, or that is signed (`play.sig` in `/app`) but has
 //!   no key record, is **held**: installs of its id are refused with `installed.unreconciled`
-//!   until it is uninstalled (a first sight would let any key take it over).
+//!   until it is uninstalled (a first sight would let any key take it over);
+//! - a committed app that is not held and whose record has an older metadata generation than the
+//!   commit generates now (ADR-038; none recorded is generation 0) is **re-committed**: its
+//!   deployed `/app` goes through the commit again with freshly generated metadata
+//!   ([`installed_app`], `Importer::recommit`).
 //!
 //! The service reconciles before it takes its bus name, so no install runs against unreconciled
-//! records.
+//! records. The re-commits run after it took the name (each can take as long as a commit), one job
+//! at a time with the installs.
 
+use crate::core::codes;
+use crate::core::installed::Installed;
 use crate::core::staging::Dir;
+use crate::core::unpack::staging_problem;
+use crate::core::verify;
+use crate::service::commit::TRUST_RECORD_IN_APP;
 use ruya_play_format::limits::{INPUT_MODES, REMOVABLE_MEDIA};
-use ruya_play_format::manifest::Permissions;
+use ruya_play_format::manifest::{parse_manifest, Manifest, Permissions};
+use ruya_play_format::problem::Problems;
+use ruya_play_format::table::TableIndex;
+use ruya_play_format::Problem;
+use ruya_play_trust::trust_record::MAX_TRUST_RECORD_BYTES;
+use ruya_play_trust::{check_ceiling, Assessment, Tier, TrustRecord};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::path::Path;
@@ -58,14 +73,35 @@ pub enum Action {
         /// Why, for the log.
         reason: String,
     },
+    /// Commit the app of `id` again with the metadata generated now (ADR-038): its recorded
+    /// generation is older than the current one. The service runs it after it took its bus name
+    /// (`Importer::recommit`).
+    Recommit {
+        /// The id (lower case).
+        id: String,
+    },
 }
 
-/// The reconcile steps for the committed apps `deployed`, the recorded builds `recorded` and the
-/// ids with a key record `trusted` (all ids lower case), in id order.
+impl Action {
+    /// The id the step is about.
+    pub fn id(&self) -> &str {
+        match self {
+            Action::ForgetBuild { id }
+            | Action::RecordBuild { id, .. }
+            | Action::Hold { id, .. }
+            | Action::Recommit { id } => id,
+        }
+    }
+}
+
+/// The reconcile steps for the committed apps `deployed`, the records `recorded` and the ids with
+/// a key record `trusted` (all ids lower case), in id order; `generation` is the generation of the
+/// metadata the commit generates now. A held app is never re-committed.
 pub fn plan(
     deployed: &BTreeMap<String, Deployed>,
-    recorded: &BTreeMap<String, u64>,
+    recorded: &BTreeMap<String, Installed>,
     trusted: &BTreeSet<String>,
+    generation: u32,
 ) -> Vec<Action> {
     let mut out = Vec::new();
     for id in recorded.keys() {
@@ -80,7 +116,8 @@ pub fn plan(
                 reason: "its play.json cannot be read".into(),
             }),
             Some(build) => {
-                if recorded.get(id) != Some(&build) {
+                let record = recorded.get(id);
+                if record.map(|r| r.build) != Some(build) {
                     out.push(Action::RecordBuild {
                         id: id.clone(),
                         build,
@@ -91,6 +128,8 @@ pub fn plan(
                         id: id.clone(),
                         reason: "it is signed but its key record is missing".into(),
                     });
+                } else if record.map_or(0, |r| r.generation) < generation {
+                    out.push(Action::Recommit { id: id.clone() });
                 }
             }
         }
@@ -166,11 +205,68 @@ pub fn our_files(installation: &Path, id: &str) -> Option<Dir> {
 }
 
 fn read_bounded(file: std::fs::File) -> Option<Vec<u8>> {
+    read_at_most(file, MAX_PLAY_JSON_BYTES)
+}
+
+/// The bytes of `file`, `None` when it cannot be read or is longer than `limit`.
+fn read_at_most(file: std::fs::File, limit: u64) -> Option<Vec<u8>> {
     let mut bytes = Vec::new();
-    file.take(MAX_PLAY_JSON_BYTES + 1)
-        .read_to_end(&mut bytes)
-        .ok()?;
-    (bytes.len() as u64 <= MAX_PLAY_JSON_BYTES).then_some(bytes)
+    file.take(limit + 1).read_to_end(&mut bytes).ok()?;
+    (bytes.len() as u64 <= limit).then_some(bytes)
+}
+
+/// What the commit of an app that is [`ours`] was generated from, read back from its deployed
+/// `/app` folder `files` (opened through [`open_ours`]), for a re-commit (ADR-038): the manifest,
+/// parsed by the format's own parser against the stored `play.files` (with the official rules
+/// when the trust record says `official`), and its assessment under the tier of the trust record
+/// the commit wrote, with the ceiling an install applies. An app that cannot be read back so, or
+/// whose requests the ceiling now refuses, is an `installed.unreconciled` problem that says why:
+/// it is left as it is.
+pub fn installed_app(files: &Dir) -> Result<(Manifest, Assessment), Problem> {
+    let unreadable = |what: &str| {
+        Problem::new(
+            codes::INSTALLED_UNRECONCILED,
+            "",
+            format!("The installed app cannot be committed again: {what}."),
+        )
+    };
+    let mut trust_dir = files.try_clone().map_err(|e| staging_problem("", &e))?;
+    let (folders, name) = TRUST_RECORD_IN_APP
+        .rsplit_once('/')
+        .unwrap_or(("", TRUST_RECORD_IN_APP));
+    for folder in folders.split('/').filter(|f| !f.is_empty()) {
+        trust_dir = trust_dir
+            .open_dir(folder)
+            .map_err(|_| unreadable("its trust record is missing"))?;
+    }
+    let tier = trust_dir
+        .open_file(name)
+        .ok()
+        .and_then(|f| read_at_most(f, MAX_TRUST_RECORD_BYTES as u64))
+        .and_then(|b| TrustRecord::parse(&b))
+        .and_then(|r| r.tier())
+        .ok_or_else(|| unreadable("its trust record cannot be read"))?;
+    let table = verify::read_table(files)?;
+    let bytes = files
+        .open_file("play.json")
+        .ok()
+        .and_then(read_bounded)
+        .ok_or_else(|| unreadable("its play.json cannot be read"))?;
+    let mut problems = Problems::new();
+    let manifest = parse_manifest(
+        &bytes,
+        &table,
+        &TableIndex::new(&table),
+        tier == Tier::Official,
+        &mut problems,
+    );
+    let manifest = match (manifest, problems.finish().into_iter().next()) {
+        (Some(m), None) => m,
+        (_, Some(p)) => return Err(p),
+        (None, None) => return Err(unreadable("its play.json does not parse")),
+    };
+    let assessment = check_ceiling(tier, &manifest.permissions).map_err(|e| e.to_problem())?;
+    Ok((manifest, assessment))
 }
 
 /// The `permissions` of a committed app's `play.json` bytes, when its `id` is `id` (case folded):
@@ -300,6 +396,10 @@ mod tests {
         Deployed { build, signed }
     }
 
+    fn rec(build: u64, generation: u32) -> Installed {
+        Installed { build, generation }
+    }
+
     #[test]
     fn the_rules() {
         let deployed: BTreeMap<String, Deployed> = [
@@ -308,14 +408,16 @@ mod tests {
             ("unrecorded".to_string(), d(Some(2), false)),
             ("unreadable".to_string(), d(None, true)),
             ("keyless".to_string(), d(Some(1), true)),
+            ("stale".to_string(), d(Some(6), false)),
         ]
         .into_iter()
         .collect();
-        let recorded: BTreeMap<String, u64> = [
-            ("same".to_string(), 3),
-            ("newer".to_string(), 4),
-            ("gone".to_string(), 7),
-            ("keyless".to_string(), 1),
+        let recorded: BTreeMap<String, Installed> = [
+            ("same".to_string(), rec(3, 2)),
+            ("newer".to_string(), rec(4, 2)),
+            ("gone".to_string(), rec(7, 0)),
+            ("keyless".to_string(), rec(1, 0)),
+            ("stale".to_string(), rec(6, 1)),
         ]
         .into_iter()
         .collect();
@@ -323,11 +425,12 @@ mod tests {
             .iter()
             .map(|s| s.to_string())
             .collect();
-        let actions = plan(&deployed, &recorded, &trusted);
+        let actions = plan(&deployed, &recorded, &trusted, 2);
         assert_eq!(
             actions,
             vec![
                 Action::ForgetBuild { id: "gone".into() },
+                // Held: never re-committed, whatever its generation.
                 Action::Hold {
                     id: "keyless".into(),
                     reason: "it is signed but its key record is missing".into()
@@ -336,13 +439,19 @@ mod tests {
                     id: "newer".into(),
                     build: 5
                 },
+                // Generation 1 of 2: committed again.
+                Action::Recommit { id: "stale".into() },
                 Action::Hold {
                     id: "unreadable".into(),
                     reason: "its play.json cannot be read".into()
                 },
+                // No record is generation 0.
                 Action::RecordBuild {
                     id: "unrecorded".into(),
                     build: 2
+                },
+                Action::Recommit {
+                    id: "unrecorded".into()
                 },
             ]
         );
@@ -350,8 +459,18 @@ mod tests {
         let one: BTreeMap<String, Deployed> = [("same".to_string(), d(Some(3), true))]
             .into_iter()
             .collect();
-        let rec: BTreeMap<String, u64> = [("same".to_string(), 3)].into_iter().collect();
-        assert!(plan(&one, &rec, &trusted).is_empty());
+        let at = |generation| -> BTreeMap<String, Installed> {
+            [("same".to_string(), rec(3, generation))]
+                .into_iter()
+                .collect()
+        };
+        assert!(plan(&one, &at(2), &trusted, 2).is_empty());
+        // A newer generation than the commit's (an OS rollback) is left alone too.
+        assert!(plan(&one, &at(3), &trusted, 2).is_empty());
+        assert_eq!(
+            plan(&one, &at(1), &trusted, 2),
+            vec![Action::Recommit { id: "same".into() }]
+        );
     }
 
     #[test]

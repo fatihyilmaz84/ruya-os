@@ -8,7 +8,7 @@ use common::*;
 use ruya_play::core::helper::{Ending, Session};
 use ruya_play::core::reconcile::Deployed;
 use ruya_play::dbus::{art_roles, inspect_record, job_record};
-use ruya_play::service::commit::{self, FlatpakCommit, Runner};
+use ruya_play::service::commit::{self, FlatpakCommit};
 use ruya_play::service::{Environment, GatedHelper};
 use ruya_play::{CommitRequest, Exit, Helper, JobStatus, MethodStatus, Request};
 use std::collections::BTreeMap;
@@ -16,48 +16,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use zbus::zvariant::Value;
-
-const FPR: &str = "0123456789ABCDEF0123456789ABCDEF01234567";
-
-/// Runs nothing: records each command line, answers gpg like a fresh GPG home, writes the
-/// exported key, and lists the build folder `build-finish` gets.
-#[derive(Default)]
-struct FakeRunner {
-    calls: Mutex<Vec<Vec<String>>>,
-    generated: AtomicBool,
-    layout: Mutex<Vec<String>>,
-}
-
-impl Runner for FakeRunner {
-    fn run(&self, argv: &[String]) -> Result<String, String> {
-        self.calls.lock().unwrap().push(argv.to_vec());
-        let has = |a: &str| argv.iter().any(|x| x == a);
-        if argv[0] == "gpg" && has("--list-secret-keys") {
-            if self.generated.load(Ordering::SeqCst) {
-                return Ok(format!(
-                    "sec:u:255:22:X:1::::::scESC:\nfpr:::::::::{FPR}:\n"
-                ));
-            }
-            return Ok(String::new());
-        }
-        if argv[0] == "gpg" && has("--quick-gen-key") {
-            self.generated.store(true, Ordering::SeqCst);
-        }
-        if argv[0] == "gpg" && has("--export") {
-            let out = argv.iter().position(|a| a == "--output").unwrap() + 1;
-            std::fs::write(&argv[out], b"public key").unwrap();
-        }
-        if argv[0] == "ostree" {
-            let repo = argv[2].strip_prefix("--repo=").unwrap();
-            std::fs::create_dir_all(repo).unwrap();
-            std::fs::write(Path::new(repo).join("config"), b"[core]\n").unwrap();
-        }
-        if argv.get(1).map(String::as_str) == Some("build-finish") {
-            *self.layout.lock().unwrap() = listing(Path::new(&argv[2]));
-        }
-        Ok(String::new())
-    }
-}
 
 fn copy_tree(from: &Path, to: &Path) {
     std::fs::create_dir_all(to).unwrap();
@@ -136,6 +94,20 @@ fn the_flatpak_commit_lays_out_signs_and_installs() {
         assert!(
             layout.iter().any(|l| l.starts_with(&want)),
             "missing {want}: {layout:?}"
+        );
+    }
+    // Every mount folder the generated metadata declares is there (ADR-038: Flatpak needs each
+    // one in `/app`), the runners' too.
+    let metadata = runner.metadata.lock().unwrap().clone();
+    let dirs: Vec<&str> = metadata
+        .lines()
+        .filter_map(|l| l.strip_prefix("directory="))
+        .collect();
+    assert!(dirs.contains(&commit::RUNNER_DIR), "{metadata}");
+    for d in dirs {
+        assert!(
+            layout.contains(&format!("files/{d}")),
+            "no mount folder {d}: {layout:?}"
         );
     }
 
