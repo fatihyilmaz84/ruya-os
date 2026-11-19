@@ -72,8 +72,10 @@
     size            t    bytes on disk (a folder: the sum of its files, at most as far as it was
                          cheap to know; 0 = unknown)
 
-  Inspect record (a{sv}), keys. Everything comes from the unprivileged helper's result (05 §7.3
-  step 2); no payload byte was copied.
+  Everything in the Inspect record comes from the unprivileged helper's result (05 §7.3 step 2); no
+  payload byte was copied.
+
+  Inspect record (a{sv}), keys:
     id              s    the manifest id, e.g. "com.example.starhopper" (the installed app is
                          "play." + id)
     name            s    display name in the player's language, else English

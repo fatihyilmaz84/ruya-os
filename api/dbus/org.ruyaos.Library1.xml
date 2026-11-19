@@ -18,7 +18,7 @@
     kind         s    "game" or "app". Steam items are always "game". A Flatpak item is a "game" when
                       "Game" is in the Categories of the [Desktop Entry] group of its exported
                       desktop entry (system installation), else "app" (also without such a file)
-    title        s    display name
+    title        s    display name (a .play app: the name in play.json, English else the first language)
     source       s    "steam" or "flatpak"
     launch       s    opaque launch spec for the session service: "steam://rungameid/<appid>"
                       for Steam, "flatpak:<application id>" for Flatpak
@@ -27,16 +27,17 @@
                       video) and "trailer" (a video); each is present only when the package has it
     last_played  x    unix seconds, 0 if unknown
 
-  Extra keys of a .play app (RUY-852; non-breaking, absent for every other item). A .play app is a
-  Flatpak app "play.<id>" that ruya-play installed; ruya-library reads them from its deployment
+  A .play app (RUY-852) is a Flatpak app "play.<id>" that ruya-play installed; ruya-library reads its
+  extra keys from its deployment
   (/var/lib/flatpak/app/play.<id>/current/active/files/: play.json, share/ruyaos/play/art/ and
   share/ruyaos/play/trust.json). Nothing is verified here (the tier and signer are what ruya-play
   recorded at install). Only apps installed from the console's own Flatpak remote
   ("ruyaos-play-local", ruya_play_art::PLAY_REMOTE) are read: a "play.*" app from any other remote
   (".play" is a real top-level domain) is a plain item, so it cannot claim a tier. Text is cut at 120
-  characters and genres at four. A deployment without a readable play.json is a plain item:
-    play         b    true. Present only for a .play app
-    title        s    (the key above) the name in play.json, English else the first language
+  characters and genres at four. A deployment without a readable play.json is a plain item.
+
+  Item record (a{sv}), extra keys of a .play app (non-breaking; every one is absent for any other item):
+    play         b    true
     genres       as   play.json genres (up to four); may be empty
     players      (uu) fewest and most players; absent when play.json has none
     controller   s    "full", "partial" or "none"; absent when play.json has none
