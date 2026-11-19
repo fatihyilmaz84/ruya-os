@@ -276,8 +276,8 @@ struct OpenBlock {
     name: String,
     heading_indent: usize,
     key_indent: Option<usize>,
-    /// An `extra keys` block: every key is optional.
-    extra: bool,
+    /// The heading says "absent": every key of the block is optional.
+    all_optional: bool,
     last_key: Option<String>,
 }
 
@@ -287,9 +287,10 @@ struct OpenBlock {
 /// followed by lines indented deeper than the heading, one per key: `key  signature  description`.
 /// A line indented deeper than the first key line continues the description of the key before it.
 /// The block ends at a blank line or at a line not indented deeper than its heading. Blocks of the
-/// same name merge. A key is optional when its description says "absent" (the contracts' own
-/// words: "Optional keys are absent when unknown"), and every key of an `extra keys` block is
-/// optional: those keys exist only for the kind of item the heading names.
+/// same name merge. One rule makes a key optional: the word "absent" (the contracts' own words:
+/// "Optional keys are absent when unknown"). In a key's description it applies to that key; in a
+/// block's heading (`..., extra keys of a .play app (... absent for any other item)`) to every key
+/// of the block.
 pub fn parse_records(xml: &str) -> Result<BTreeMap<String, Record>, String> {
     let mut records: BTreeMap<String, Record> = BTreeMap::new();
     let mut errors: Vec<String> = Vec::new();
@@ -311,7 +312,7 @@ pub fn parse_records(xml: &str) -> Result<BTreeMap<String, Record>, String> {
                     name,
                     heading_indent: indent,
                     key_indent: None,
-                    extra: rest.starts_with("extra keys"),
+                    all_optional: rest.to_ascii_lowercase().contains("absent"),
                     last_key: None,
                 });
                 continue;
@@ -340,7 +341,7 @@ pub fn parse_records(xml: &str) -> Result<BTreeMap<String, Record>, String> {
             }
             let new = RecordKey {
                 signature: (*sig).to_owned(),
-                optional: block.extra,
+                optional: block.all_optional,
             };
             if record.insert((*key).to_owned(), new).is_some() {
                 errors.push(format!("line {}: {name}.{key} is written twice", n + 1));
@@ -588,7 +589,7 @@ mod tests {
     note  s    last, and
                absent for most
 
-  Thing record (a{sv}), extra keys of a special thing (RUY-0):
+  Thing record (a{sv}), extra keys of a special thing (RUY-0; absent for any other thing):
     extra  b   true
   Other record (a{sv}), keys. Words here
     one  u   1 -->
@@ -605,7 +606,8 @@ mod tests {
             .filter(|(_, k)| k.optional)
             .map(|(k, _)| k.as_str())
             .collect();
-        // A continuation line belongs to the key before it, and an extra key is optional.
+        // A continuation line belongs to the key before it, and "absent" in a heading makes every
+        // key of that block optional; "Other"'s heading has no "absent", so `one` stays required.
         assert_eq!(optional, ["extra", "note", "size"]);
         assert_eq!(r["Other"]["one"].signature, "u");
     }
