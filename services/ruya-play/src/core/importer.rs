@@ -318,6 +318,19 @@ fn one(code: &str, path: &str, message: impl Into<String>) -> Vec<Problem> {
     vec![Problem::new(code, path, message)]
 }
 
+/// A helper run that ends `Missing` for a path that was there before the run and still is after it
+/// is a read failure, not a missing package: `OpenFile=...:graceful` makes a path PID 1 may not open
+/// look like a missing one. Both helper runs (inspect and install) apply this one rule.
+fn unreadable_if_there(seen_before: bool, path: &Path) -> Option<Problem> {
+    (seen_before && std::fs::symlink_metadata(path).is_ok()).then(|| {
+        Problem::new(
+            codes::SOURCE_UNREADABLE,
+            "",
+            "The package is there but the console could not read it.",
+        )
+    })
+}
+
 fn refused(job: &str, problems: Vec<Problem>, inspection: Option<Inspection>) -> JobResult {
     JobResult {
         job: job.to_string(),
@@ -891,22 +904,15 @@ impl Importer {
             ));
         };
         request.art = art;
-        // `OpenFile=...:graceful` makes a path PID 1 may not open look like a missing one: a path
-        // that is there before and after the run, and still reported missing, is a read failure.
         let seen = std::fs::symlink_metadata(path).is_ok();
         let (art_lines, art_problems, art_refuses) =
             match self.run_helper(&request, cancel, &mut |_| {}) {
-                Ending::Missing if seen && std::fs::symlink_metadata(path).is_ok() => {
-                    return Front::Refused(Box::new((
-                        vec![Problem::new(
-                            codes::SOURCE_UNREADABLE,
-                            "",
-                            "The package is there but the console could not read it.",
-                        )],
-                        None,
-                    )))
+                Ending::Missing => {
+                    return match unreadable_if_there(seen, path) {
+                        Some(p) => Front::Refused(Box::new((vec![p], None))),
+                        None => Front::Missing,
+                    }
                 }
-                Ending::Missing => return Front::Missing,
                 Ending::Refused(p) => return Front::Refused(Box::new((p, None))),
                 Ending::Cancelled => return Front::Cancelled,
                 Ending::Failed(p) => return Front::Failed(p),
@@ -1344,6 +1350,7 @@ impl Importer {
         };
         request.official = insp.tier.tier == Tier::Official;
         request.expect = meta.digests();
+        let seen = std::fs::symlink_metadata(path).is_ok();
         let ending = self.run_helper(&request, cancel, &mut |p| reporter.helper(p));
         let (problems, art_lines) = match ending {
             Ending::Ok { problems, art, .. } => match art_only(problems) {
@@ -1353,11 +1360,14 @@ impl Importer {
             Ending::Cancelled => return cancelled(job, Some(insp.clone())),
             Ending::Refused(p) => return fail(p),
             Ending::Missing => {
-                return fail(one(
-                    codes::SOURCE_MISSING,
-                    "",
-                    "The package is not there any more.",
-                ))
+                return fail(match unreadable_if_there(seen, path) {
+                    Some(p) => vec![p],
+                    None => one(
+                        codes::SOURCE_MISSING,
+                        "",
+                        "The package is not there any more.",
+                    ),
+                })
             }
             Ending::Failed(p) => return fail(vec![p]),
         };
