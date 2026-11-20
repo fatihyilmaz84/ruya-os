@@ -2,7 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use ruya_contract_test::{assert_interfaces_are, assert_record_served, assert_serves};
+use ruya_contract_test::{
+    assert_interfaces_are, assert_record_served, assert_serves, record_signatures,
+};
 use ruya_library::catalog::scan;
 use ruya_library::dbus::{record, LibraryIface, Sources};
 use ruya_library::flatpak::FixtureLister;
@@ -38,11 +40,7 @@ fn library1_item_records_have_the_documented_keys() {
                 items.iter().map(|i| &i.id).collect::<Vec<_>>()
             )
         });
-        let keys: BTreeMap<String, String> = record(item)
-            .iter()
-            .map(|(k, v)| (k.clone(), v.value_signature().to_string()))
-            .collect();
-        (item.id.clone(), keys)
+        (item.id.clone(), record_signatures(&record(item)))
     };
     let samples: Vec<(String, BTreeMap<String, String>)> = [
         "flatpak:org.example.App",

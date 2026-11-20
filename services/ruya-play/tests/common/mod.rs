@@ -682,3 +682,30 @@ pub fn deploy(h: &Harness, id: &str, fx: &Fx) -> PathBuf {
     mode(&files, 0o755);
     files
 }
+
+/// `game()` with its manifest asking for `perms` as build `build`.
+pub fn asking(perms: serde_json::Value, build: u64) -> Fx {
+    let mut fx = game();
+    fx.manifest["permissions"] = perms;
+    fx.manifest["build"] = serde_json::json!(build);
+    fx
+}
+
+/// The installed app of `game()`'s id, build 1, asking for `perms` in its own `play.json`.
+pub fn installed_with(perms: serde_json::Value, new: Fx) -> Harness {
+    let setup = Setup {
+        installed: ruya_play::core::installed::MemoryInstalled::new().with("com.example.mini", 1),
+        ..Setup::with(Pkg::signed(&new))
+    };
+    let h = setup.build();
+    let files = ruya_play::core::reconcile::deployment_files(&h.cfg.flatpak, "com.example.mini");
+    std::fs::create_dir_all(&files).unwrap();
+    write_deploy(
+        &h.cfg.flatpak,
+        "com.example.mini",
+        ruya_play_art::PLAY_REMOTE,
+    );
+    let play_json = serde_json::json!({"format": 1, "id": "com.example.mini", "build": 1, "permissions": perms});
+    std::fs::write(files.join("play.json"), play_json.to_string()).unwrap();
+    h
+}

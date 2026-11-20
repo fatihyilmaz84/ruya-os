@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use ruya_library::catalog::Item;
+use ruya_library::dbus::record;
 
 mod common;
 use common::{files, full_deployment, list, put, FULL_ROW, PLAY_JSON};
@@ -63,6 +64,23 @@ fn a_full_art_play_app_lists_every_role_and_field() {
             "screenshot-1-1080.webp",
             "screenshot-2-1080.webp"
         ]
+    );
+}
+
+/// RUY-908: trust.json's tier, signer name and signer id reach the served record's `play_tier`,
+/// `play_signer` and `play_signer_key_id` (the contract test sees the signatures, not the values).
+#[test]
+fn the_served_record_carries_trust_jsons_tier_and_signer() {
+    let dir = tempfile::tempdir().unwrap();
+    full_deployment(dir.path());
+    let items = list(dir.path(), FULL_ROW);
+    let served = record(&items["flatpak:play.com.example.starhopper"]);
+    let text = |key: &str| String::try_from(served[key].try_clone().unwrap()).unwrap();
+    assert_eq!(text("play_tier"), "developer");
+    assert_eq!(text("play_signer"), "Example Games");
+    assert_eq!(
+        text("play_signer_key_id"),
+        "0123456789abcdef0123456789abcdef"
     );
 }
 

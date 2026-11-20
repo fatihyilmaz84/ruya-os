@@ -73,21 +73,20 @@
                          cheap to know; 0 = unknown)
 
   Everything in the Inspect record comes from the unprivileged helper's result (05 §7.3 step 2); no
-  payload byte was copied.
+  payload byte was copied. The record has no age_label (the manifest carries an OARS map, not a
+  label) and no signer_name (a signature carries a key, not a name): a client reads both as absent.
 
   Inspect record (a{sv}), keys:
     id              s    the manifest id, e.g. "com.example.starhopper" (the installed app is
                          "play." + id)
     name            s    display name in the player's language, else English
-    summary         s    one line, same rule
+    summary         s    one line, same rule; absent when the manifest has none
     version         s    version text
     build           u    the integer that orders versions
-    developer       s    developer name
+    developer       s    developer name; absent when the manifest names none
     genres          as   raw genre keys
-    players         s    "1", "1-2", "2-4", ...
-    controller      s    "full" | "partial" | "none"
-    age_label       s    the age label the package declares ("all" | "7+" | "12+" | "16+" | "18+"); absent
-                         when it declares none (not "all")
+    players         s    "1", "1-2", "2-4", ...; absent when the manifest declares none
+    controller      s    "full" | "partial" | "none"; absent when the manifest declares none
     size            t    bytes the installed package will take
     requirement     s    "ok" | "unsupported" (format too new or another architecture)
     verdict         s    what Install would finish with if an admin started it now: "ok" or a
@@ -96,7 +95,6 @@
                          A hint for the page; Install repeats every check.
     tier            s    "official" | "developer" | "unverified"
     signer_key_id   s    32 hex characters (05 §9.2); absent for "unverified" without a signature
-    signer_name     s    the name in the signature; absent as above
     key_state       s    "new" (this id was never installed) | "same" (installed under this key) |
                          "different" (installed or kept under another key). Absent for an
                          unsigned package

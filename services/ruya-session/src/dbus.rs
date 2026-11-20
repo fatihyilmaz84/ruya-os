@@ -196,7 +196,7 @@ fn unix_now() -> i64 {
         .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(i64::MAX))
 }
 
-fn running_dict(app: RunningApp) -> Dict {
+pub fn running_dict(app: RunningApp) -> Dict {
     [
         ("instance", Value::from(app.instance)),
         ("app_id", Value::from(app.app_id)),
@@ -414,7 +414,7 @@ fn dict_of<const N: usize>(pairs: [(&str, Value<'_>); N]) -> Dict {
         .collect()
 }
 
-fn session_dict(s: SessionRecord) -> Dict {
+pub fn session_dict(s: SessionRecord) -> Dict {
     // The local day it began on, for the shell's grouping by day.
     let day = s
         .days

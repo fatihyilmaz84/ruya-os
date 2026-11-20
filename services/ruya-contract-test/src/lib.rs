@@ -386,6 +386,17 @@ pub fn compare_record(want: &Record, served: &BTreeMap<String, String>) -> Vec<S
     problems
 }
 
+/// The key -> signature map of a served `a{sv}` record, the shape `assert_record_served` takes.
+pub fn record_signatures<'a, I>(record: I) -> BTreeMap<String, String>
+where
+    I: IntoIterator<Item = (&'a String, &'a zbus::zvariant::OwnedValue)>,
+{
+    record
+        .into_iter()
+        .map(|(k, v)| (k.clone(), v.value_signature().to_string()))
+        .collect()
+}
+
 /// The test of served records: panics, listing every difference, when a record in `served`
 /// (a label and key -> signature) does not match the record `name` of `file`, or when a key of
 /// the contract is served by none of them (so the samples must cover every key, optional ones
