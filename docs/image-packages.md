@@ -236,7 +236,7 @@ GStreamer (LGPL), DXVK and FAudio (zlib), wine-mono (MIT) and its fonts (OFL-1.1
 `source_url`, and Settings → About shows both. The owner's ask to mirror the exact sources of every shipped release
 (ADR-025) is not done yet: About links the upstream release.
 
-**Another runner** (RUY-37: Wine, Wine-GE, UMU-Proton; or a second GE-Proton major) is a new folder in
+**Another runner** (RUY-37: Wine stable, the only other family per RUY-915; or a second GE-Proton major, at most two) is a new folder in
 `image/play/runners/` with its `pin` and `runner.json`, its `L+` line in `ruya-play-platform.conf`
 (`services/ruya-play/tests/platform.rs` holds the two together) and a row in the table above.
 
