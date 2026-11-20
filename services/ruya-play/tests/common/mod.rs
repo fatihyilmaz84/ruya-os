@@ -680,6 +680,16 @@ pub fn deploy(h: &Harness, id: &str, fx: &Fx) -> PathBuf {
         }
     }
     mode(&files, 0o755);
+    // Flatpak's `metadata` beside `files/`, generated as the commit does from what the app asks.
+    let (manifest, assessment) = ruya_play::core::reconcile::installed_app(
+        &ruya_play::core::staging::Dir::open_root(&files).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        files.parent().unwrap().join("metadata"),
+        ruya_play::service::commit::metadata(&manifest, &assessment),
+    )
+    .unwrap();
     files
 }
 

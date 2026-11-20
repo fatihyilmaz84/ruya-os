@@ -46,9 +46,9 @@ use ruya_play_format::manifest::english;
 use ruya_play_format::Problem;
 use ruya_play_trust::revocation::Selected;
 use ruya_play_trust::{
-    assess, diff, inspect, is_revoked, record_install, record_uninstall, select_blocklist, Context,
-    Continuity, IdRecord, Inspection, ListCheck, PermissionDiff, StoreKeys, Tier, TrustError,
-    TrustStore,
+    added_to, assess, diff, grants, inspect, is_revoked, record_install, record_uninstall,
+    select_blocklist, Context, Continuity, IdRecord, Inspection, ListCheck, PermissionDiff,
+    StoreKeys, Tier, TrustError, TrustStore,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::io::Write;
@@ -548,6 +548,21 @@ fn check_art(art_dir: &Dir, lines: &[ArtLine]) -> Result<Vec<VettedArt>, Problem
     Ok(out)
 }
 
+/// What [`Importer::recommit`] did with an app (ADR-038).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Recommitted {
+    /// Committed again; the generation is stamped.
+    Done,
+    /// Nothing to do: current, held, not ours, or no record.
+    NotNeeded,
+    /// Refused: the new metadata would add these grants (`recommit.widens` is logged with them).
+    /// The app stays as deployed, at its older generation.
+    Widens(Vec<String>),
+    /// Refused: the deployed metadata cannot be compared safely (missing, unreadable, or it says
+    /// something the generator never writes). The app stays as deployed.
+    MetadataUnreadable,
+}
+
 impl Importer {
     /// Open the importer: create the folders, remove every staging and inspect folder a crash left
     /// (and the helper's own leftovers), and settle the jobs a previous run left queued or running
@@ -767,11 +782,11 @@ impl Importer {
     /// `staging/recommit-<id>/files` without Flatpak's `.ref`, what
     /// the metadata is generated from is read back from it ([`reconcile::installed_app`]), the
     /// copy goes through [`Commit::recommit`], the staging folder is removed and the generation is
-    /// stamped into `installed.json`. Returns false when there was nothing to do: the record
+    /// stamped into `installed.json`. Returns [`Recommitted`]: `NotNeeded` when there was nothing to do: the record
     /// already has the current generation (an install committed it meanwhile), the id is held or
     /// has no record, or the app is not ours. A failure leaves the installed app as it was and is
     /// tried again at the next start.
-    pub fn recommit(&self, id: &str) -> Result<bool, Problem> {
+    pub fn recommit(&self, id: &str) -> Result<Recommitted, Problem> {
         let _one = self.running.lock().unwrap_or_else(|e| e.into_inner());
         let id = id.to_ascii_lowercase();
         let held = self.held_all().is_some() || self.held().contains(&id);
@@ -780,12 +795,24 @@ impl Importer {
             None => false,
         };
         if held || !stale {
-            return Ok(false);
+            return Ok(Recommitted::NotNeeded);
         }
-        let Some(files) = reconcile::our_files(&self.cfg.flatpak, &id) else {
-            return Ok(false);
+        let Some((files, deployed)) = reconcile::our_files_and_grants(&self.cfg.flatpak, &id)
+        else {
+            return Ok(Recommitted::NotNeeded);
         };
         let (manifest, assessment) = reconcile::installed_app(&files)?;
+        // A re-commit runs without the admin gate and the update diff, so it may only keep or
+        // narrow what the app has (ADR-038): anything added leaves the app as deployed, at its
+        // older generation, and the image keeps that launcher branch.
+        let Some(deployed) = deployed else {
+            return Ok(Recommitted::MetadataUnreadable);
+        };
+        let added = added_to(&deployed, &grants(&manifest.run.runner, &assessment));
+        if !added.is_empty() {
+            self.log_widening(&id, &added);
+            return Ok(Recommitted::Widens(added));
+        }
         // The copy is a reflink on XFS, but a full copy elsewhere: ask as an install does.
         let bytes = unpack::walk(&files)
             .map_err(|e| staging_problem("", &e))?
@@ -822,7 +849,18 @@ impl Importer {
         committed?;
         self.installed().stamp(&id, METADATA_GENERATION)?;
         removed?;
-        Ok(true)
+        Ok(Recommitted::Done)
+    }
+
+    /// `recommit.widens`: a re-commit of `id` would add `added` to what the app has.
+    fn log_widening(&self, id: &str, added: &[String]) {
+        let line = serde_json::json!({
+            "time": self.clock.now(),
+            "id": id,
+            "event": "recommit.widens",
+            "added": added,
+        });
+        eprintln!("ruya-play: {line}");
     }
 
     /// Steps 2 and 3 over the root files the service read back (a source that is read once).

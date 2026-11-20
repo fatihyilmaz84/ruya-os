@@ -279,6 +279,163 @@ pub fn metadata_sections(grants: &[Grant]) -> String {
     out
 }
 
+/// One grant read back from a metadata file: [`Grant`] with owned text, as [`parse_sections`]
+/// finds it.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Granted {
+    /// The section.
+    pub section: Section,
+    /// The key.
+    pub key: String,
+    /// One value.
+    pub value: String,
+}
+
+impl Granted {
+    /// `[Context] shared=network`, as [`Grant::text`].
+    pub fn text(&self) -> String {
+        format!("[{}] {}={}", self.section.name(), self.key, self.value)
+    }
+}
+
+impl From<&Grant> for Granted {
+    fn from(g: &Grant) -> Self {
+        Granted {
+            section: g.section,
+            key: g.key.to_string(),
+            value: g.value.to_string(),
+        }
+    }
+}
+
+/// The grants of the permission sections of a Flatpak metadata file: the inverse of
+/// [`metadata_sections`] (`tests/permissions_golden.rs` holds the round trip). `[Context]` list
+/// keys give one grant per entry, `[Session Bus Policy]` one per key; every other section and
+/// every `[Context]` key outside [`CONTEXT_KEYS`] is not a permission this table can grant and is
+/// skipped. `None` when the file says something the generator never writes and the comparison
+/// cannot read safely (fail closed, ADR-038): a `!` entry in a list (Flatpak's removal), or a
+/// permission section or a key in it that appears twice (the key file keeps only the last one, so
+/// a union would invent grants).
+pub fn parse_sections(text: &str) -> Option<Vec<Granted>> {
+    let mut out = Vec::new();
+    let mut section = None;
+    let mut seen_sections: Vec<Section> = Vec::new();
+    let mut seen_keys: Vec<(Section, String)> = Vec::new();
+    for line in text.lines().map(str::trim) {
+        if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
+            section = [Section::Context, Section::SessionBusPolicy]
+                .into_iter()
+                .find(|s| s.name() == name);
+            if let Some(s) = section {
+                if seen_sections.contains(&s) {
+                    return None;
+                }
+                seen_sections.push(s);
+            }
+            continue;
+        }
+        let (Some(section), Some((key, value))) = (section, line.split_once('=')) else {
+            continue;
+        };
+        let (key, value) = (key.trim(), value.trim());
+        if section == Section::Context && !CONTEXT_KEYS.contains(&key) {
+            continue;
+        }
+        if seen_keys.iter().any(|(s, k)| *s == section && k == key) {
+            return None;
+        }
+        seen_keys.push((section, key.to_string()));
+        match section {
+            Section::Context => {
+                for v in value.split(';').filter(|v| !v.is_empty()) {
+                    if v.starts_with('!') {
+                        return None;
+                    }
+                    out.push(Granted {
+                        section,
+                        key: key.to_string(),
+                        value: v.to_string(),
+                    });
+                }
+            }
+            Section::SessionBusPolicy => out.push(Granted {
+                section,
+                key: key.to_string(),
+                value: value.to_string(),
+            }),
+        }
+    }
+    Some(out)
+}
+
+/// Does `have` already allow everything `want` asks for? An equal grant does; so does a broader
+/// one of the same key: a device `all` covers any device, a bus policy `own` covers `talk`
+/// covers `see`, a filesystem entry without a mode (read-write) covers the same path `:ro`. A
+/// value this table does not know (a policy `none`, a mode `bogus`) is covered by an equal grant
+/// only and covers nothing else.
+fn covers(have: &Granted, want: &Granted) -> bool {
+    if have == want {
+        return true;
+    }
+    if have.section != want.section || have.key != want.key {
+        return false;
+    }
+    match (have.section, have.key.as_str()) {
+        (Section::Context, "devices") => have.value == "all",
+        (Section::Context, "filesystems") => {
+            let (path, mode) = split_mode(&want.value);
+            let (have_path, have_mode) = split_mode(&have.value);
+            path == have_path && at_least(fs_rank(have_mode), fs_rank(mode))
+        }
+        (Section::SessionBusPolicy, _) => at_least(bus_rank(&have.value), bus_rank(&want.value)),
+        _ => false,
+    }
+}
+
+/// `have >= want`, false when either rank is unknown.
+fn at_least(have: Option<u8>, want: Option<u8>) -> bool {
+    matches!((have, want), (Some(h), Some(w)) if h >= w)
+}
+
+fn split_mode(entry: &str) -> (&str, &str) {
+    entry.rsplit_once(':').unwrap_or((entry, "rw"))
+}
+
+fn fs_rank(mode: &str) -> Option<u8> {
+    match mode {
+        "ro" => Some(1),
+        "rw" => Some(2),
+        "create" => Some(3),
+        _ => None,
+    }
+}
+
+fn bus_rank(policy: &str) -> Option<u8> {
+    match policy {
+        "see" => Some(1),
+        "talk" => Some(2),
+        "own" => Some(3),
+        _ => None,
+    }
+}
+
+/// The grants of `new` that `have` does not already allow, as [`Grant::text`] lines, in `new`'s
+/// order. Empty: `new` keeps or narrows `have`.
+pub fn added_to(have: &[Granted], new: &[Grant]) -> Vec<String> {
+    new.iter()
+        .map(Granted::from)
+        .filter(|w| !have.iter().any(|h| covers(h, w)))
+        .map(|w| w.text())
+        .collect()
+}
+
+/// [`added_to`] the permission sections of `deployed`, a metadata file's text. Empty:
+/// re-committing with `new` keeps or narrows what the app has (ADR-038, "a generation bump never
+/// widens a grant"). `None` when the file cannot be read safely ([`parse_sections`]).
+pub fn widened(deployed: &str, new: &[Grant]) -> Option<Vec<String>> {
+    Some(added_to(&parse_sections(deployed)?, new))
+}
+
 /// What an update changes in the requests (05 §8: "The update adds: ..."; a high-risk addition
 /// needs the admin's PIN).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

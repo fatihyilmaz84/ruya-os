@@ -34,7 +34,7 @@ use ruya_play_format::problem::Problems;
 use ruya_play_format::table::TableIndex;
 use ruya_play_format::Problem;
 use ruya_play_trust::trust_record::MAX_TRUST_RECORD_BYTES;
-use ruya_play_trust::{check_ceiling, Assessment, Tier, TrustRecord};
+use ruya_play_trust::{check_ceiling, parse_sections, Assessment, Granted, Tier, TrustRecord};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::path::Path;
@@ -217,6 +217,23 @@ pub fn ours(installation: &Path, id: &str) -> bool {
 /// checked; `None` when it is not ours or has no such folder.
 pub fn our_files(installation: &Path, id: &str) -> Option<Dir> {
     open_ours(installation, id)?.open_dir("files").ok()
+}
+
+/// An app that is [`ours`], opened once for a re-commit (ADR-038): its `/app` folder (`files`)
+/// and the permission sections of its deployed `metadata` file, both read through the folder
+/// [`open_ours`] checked. `None` when it is not ours or has no `files`; the grants are `None` when
+/// the metadata cannot be read safely ([`parse_sections`]: missing, too long, not UTF-8, a `!` entry,
+/// a repeated key or section), which makes the re-commit refuse.
+pub fn our_files_and_grants(installation: &Path, id: &str) -> Option<(Dir, Option<Vec<Granted>>)> {
+    let active = open_ours(installation, id)?;
+    let files = active.open_dir("files").ok()?;
+    let grants = active
+        .open_file("metadata")
+        .ok()
+        .and_then(|f| read_at_most(f, MAX_PLAY_JSON_BYTES))
+        .and_then(|b| String::from_utf8(b).ok())
+        .and_then(|text| parse_sections(&text));
+    Some((files, grants))
 }
 
 fn read_bounded(file: std::fs::File) -> Option<Vec<u8>> {

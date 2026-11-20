@@ -12,7 +12,7 @@ use ruya_play::core::staging::{self, Dir};
 use ruya_play::service::commit::{
     extension_points, metadata, FlatpakCommit, COMPAT_I386_DIR, METADATA_GENERATION, RUNNER_DIR,
 };
-use ruya_play::{Commit, CommitError, InstalledBuilds, JobStatus, RecommitRequest};
+use ruya_play::{Commit, CommitError, InstalledBuilds, JobStatus, RecommitRequest, Recommitted};
 
 const ID: &str = "com.example.mini";
 
@@ -63,7 +63,7 @@ fn an_app_of_an_older_generation_is_committed_again_once() {
     let (h, installed) = deployed(&Fx::minimal(), 0);
     let before = listing(&h.cfg.flatpak);
     assert_eq!(recommits_planned(&h), vec![ID.to_string()]);
-    assert_eq!(h.importer.recommit(ID), Ok(true));
+    assert_eq!(h.importer.recommit(ID), Ok(Recommitted::Done));
     let calls: Vec<RecommitCall> = h.commit.recommits();
     assert_eq!(calls.len(), 1);
     let call = &calls[0];
@@ -90,7 +90,7 @@ fn an_app_of_an_older_generation_is_committed_again_once() {
     assert!(h.staging().is_empty(), "{:?}", h.staging());
     // Idempotent: the next start plans nothing, and a second call does nothing.
     assert!(recommits_planned(&h).is_empty());
-    assert_eq!(h.importer.recommit(ID), Ok(false));
+    assert_eq!(h.importer.recommit(ID), Ok(Recommitted::NotNeeded));
     assert_eq!(h.commit.recommits().len(), 1);
 }
 
@@ -98,13 +98,13 @@ fn an_app_of_an_older_generation_is_committed_again_once() {
 fn a_current_or_held_app_is_left_alone() {
     let (h, _) = deployed(&Fx::minimal(), METADATA_GENERATION);
     assert!(recommits_planned(&h).is_empty());
-    assert_eq!(h.importer.recommit(ID), Ok(false));
+    assert_eq!(h.importer.recommit(ID), Ok(Recommitted::NotNeeded));
     // Signed without a key record: held, never committed again.
     let (h, installed) = deployed(&Fx::minimal(), 0);
     std::fs::write(files_dir(&h, ID).join("play.sig"), b"sig").unwrap();
     assert!(recommits_planned(&h).is_empty());
     assert_eq!(h.importer.held(), vec![ID.to_string()]);
-    assert_eq!(h.importer.recommit(ID), Ok(false));
+    assert_eq!(h.importer.recommit(ID), Ok(Recommitted::NotNeeded));
     assert!(h.commit.recommits().is_empty());
     assert_eq!(generation(&installed), 0);
 }
@@ -118,7 +118,7 @@ fn a_failed_recommit_keeps_the_generation_and_is_tried_again() {
     assert_eq!(generation(&installed), 0);
     assert!(h.staging().is_empty(), "{:?}", h.staging());
     assert_eq!(recommits_planned(&h), vec![ID.to_string()]);
-    assert_eq!(h.importer.recommit(ID), Ok(true));
+    assert_eq!(h.importer.recommit(ID), Ok(Recommitted::Done));
     assert_eq!(generation(&installed), METADATA_GENERATION);
 }
 
@@ -135,7 +135,7 @@ fn a_recommit_asks_for_space_as_an_install_does() {
     assert!(h.staging().is_empty(), "{:?}", h.staging());
     assert_eq!(generation(&installed), 0);
     h.free.bytes.store(u64::MAX, Ordering::SeqCst);
-    assert_eq!(h.importer.recommit(ID), Ok(true));
+    assert_eq!(h.importer.recommit(ID), Ok(Recommitted::Done));
 }
 
 #[test]
@@ -147,6 +147,118 @@ fn an_app_that_cannot_be_read_back_is_not_committed() {
     assert!(err.message.contains("trust record"), "{}", err.message);
     assert!(h.commit.recommits().is_empty());
     assert_eq!(generation(&installed), 0);
+}
+
+/// The deployed app's `metadata` file (beside `files/`).
+fn deployed_metadata(h: &Harness) -> std::path::PathBuf {
+    files_dir(h, ID).parent().unwrap().join("metadata")
+}
+
+/// Nothing a re-commit would add may be missing from the deployed metadata: `edit` changes the
+/// text the commit wrote, and the re-commit is refused when the new set is not within it.
+fn refused_after(fx: &Fx, edit: impl Fn(&str) -> String, added: &[&str]) {
+    let (h, installed) = deployed(fx, 0);
+    let path = deployed_metadata(&h);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let edited = edit(&text);
+    assert_ne!(edited, text, "the edit changed nothing");
+    std::fs::write(&path, &edited).unwrap();
+    let before = listing(&h.cfg.flatpak);
+    assert_eq!(recommits_planned(&h), vec![ID.to_string()]);
+    assert_eq!(
+        h.importer.recommit(ID),
+        Ok(Recommitted::Widens(
+            added.iter().map(|a| a.to_string()).collect()
+        ))
+    );
+    // Nothing was committed, the app is as deployed, the generation is the old one and the
+    // staging folder was never made; the next start plans it again.
+    assert!(h.commit.recommits().is_empty());
+    assert_eq!(generation(&installed), 0);
+    assert_eq!(listing(&h.cfg.flatpak), before);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), edited);
+    assert!(h.staging().is_empty(), "{:?}", h.staging());
+    assert_eq!(recommits_planned(&h), vec![ID.to_string()]);
+}
+
+#[test]
+fn a_recommit_that_adds_a_context_entry_is_refused() {
+    refused_after(
+        &Fx::minimal(),
+        |t| t.replace("shared=ipc;", ""),
+        &["[Context] shared=ipc"],
+    );
+}
+
+#[test]
+fn a_recommit_that_adds_a_bus_name_is_refused() {
+    let fx = asking(
+        serde_json::json!({"input": "controllers", "gamemode": true}),
+        1,
+    );
+    refused_after(
+        &fx,
+        |t| {
+            t.replace(
+                "com.feralinteractive.GameMode=talk
+",
+                "",
+            )
+        },
+        &["[Session Bus Policy] com.feralinteractive.GameMode=talk"],
+    );
+}
+
+#[test]
+fn a_recommit_that_equals_or_narrows_the_deployed_grants_goes_ahead() {
+    // Equal: the fixture's own metadata (an_app_of_an_older_generation... covers it too).
+    let (h, installed) = deployed(&Fx::minimal(), 0);
+    let path = deployed_metadata(&h);
+    // Narrower than deployed: the app used to have the network, a bus name and more devices.
+    let text = std::fs::read_to_string(&path).unwrap();
+    let broader = text
+        .replace("shared=ipc;", "shared=ipc;network;")
+        .replace("devices=dri;", "devices=all;")
+        + "[Session Bus Policy]
+com.example.Old=talk
+
+";
+    std::fs::write(&path, broader).unwrap();
+    assert_eq!(h.importer.recommit(ID), Ok(Recommitted::Done));
+    assert_eq!(h.commit.recommits().len(), 1);
+    assert_eq!(generation(&installed), METADATA_GENERATION);
+}
+
+/// A deployed `metadata` that cannot be compared safely: the app is left as deployed.
+fn unreadable_after(edit: impl Fn(&str) -> Option<String>) {
+    let (h, installed) = deployed(&Fx::minimal(), 0);
+    let path = deployed_metadata(&h);
+    match edit(&std::fs::read_to_string(&path).unwrap()) {
+        Some(text) => std::fs::write(&path, text).unwrap(),
+        None => std::fs::remove_file(&path).unwrap(),
+    }
+    assert_eq!(h.importer.recommit(ID), Ok(Recommitted::MetadataUnreadable));
+    assert!(h.commit.recommits().is_empty());
+    assert_eq!(generation(&installed), 0);
+    assert!(h.staging().is_empty(), "{:?}", h.staging());
+}
+
+#[test]
+fn an_app_without_metadata_is_not_committed() {
+    unreadable_after(|_| None);
+}
+
+#[test]
+fn an_app_whose_metadata_has_a_removal_or_a_repeated_key_is_not_committed() {
+    unreadable_after(|t| Some(t.replace("shared=ipc;", "shared=ipc;!network;")));
+    unreadable_after(|t| {
+        Some(format!(
+            "{t}
+[Context]
+shared=ipc;
+"
+        ))
+    });
 }
 
 #[test]
