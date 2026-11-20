@@ -3,8 +3,10 @@
 mod common;
 
 use common::*;
-use ruya_contract_test::{assert_interfaces_are, assert_serves};
-use ruya_play::dbus::PlayIface;
+use ruya_contract_test::{
+    assert_interfaces_are, assert_record_served, assert_serves, record_signatures,
+};
+use ruya_play::dbus::{inspect_record, PlayIface};
 use ruya_play::service::Environment;
 use std::sync::Arc;
 
@@ -27,4 +29,32 @@ fn play1_matches_the_contract() {
     assert_serves("org.ruyaos.Play1.xml", &iface, &[]);
     assert_interfaces_are("org.ruyaos.Play1.xml", &["org.ruyaos.Play1"]);
     drop(root);
+}
+
+/// RUY-907: the keys of the Inspect record, with their signatures, are the ones the contract
+/// documents. A first install, an update that adds and drops permissions, and a package the
+/// inspection refuses go through the same `inspect_record()` the service serves; between them they
+/// serve every documented key.
+#[test]
+fn play1_inspect_records_have_the_documented_keys() {
+    let sample = |h: &Harness| {
+        let (_, report) = h.importer.inspect(&pkg_path("game.play"));
+        record_signatures(&inspect_record(&report.unwrap()))
+    };
+    // A manifest that declares the optional facts, so the first sample serves them all.
+    let mut declared = game();
+    declared.manifest["summary"] = serde_json::json!({"en": "A small game."});
+    declared.manifest["developer"] = serde_json::json!({"name": "Example Games"});
+    declared.manifest["players"] = serde_json::json!({"min": 1, "max": 2});
+    declared.manifest["controller"] = serde_json::json!("full");
+    let first = Setup::with(Pkg::signed(&declared)).build();
+    let update = installed_with(
+        serde_json::json!({"multiarch": true}),
+        asking(serde_json::json!({"network": true}), 2),
+    );
+    let samples = [
+        ("a first install", sample(&first)),
+        ("an update", sample(&update)),
+    ];
+    assert_record_served("org.ruyaos.Play1.xml", "Inspect", &samples);
 }

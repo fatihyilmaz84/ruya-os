@@ -181,7 +181,7 @@ fn dict(entries: Vec<(&str, Value<'_>)>) -> Dict {
         .collect()
 }
 
-fn record(app: &App, detail: bool) -> Dict {
+pub fn record(app: &App, detail: bool) -> Dict {
     let mut entries = vec![
         ("id", Value::from(app.id.clone())),
         ("name", Value::from(app.name.clone())),

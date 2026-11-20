@@ -148,7 +148,8 @@ impl Shared {
     }
 }
 
-fn record(d: &DeviceRecord) -> Dict {
+/// A device record of `ListDevices` and the device signals (the keys of the XML header).
+pub fn record(d: &DeviceRecord) -> Dict {
     let entries = vec![
         ("id", Value::from(d.id.clone())),
         ("instance", Value::from(d.instance.clone())),
@@ -172,7 +173,7 @@ fn record(d: &DeviceRecord) -> Dict {
 
 /// A player record of `ListPlayers` and `PlayersChanged` (the keys of the XML); `held_secs` is
 /// what the hold has left at `now` (RUY-627).
-fn player(p: &Player, now: Instant) -> Dict {
+pub fn player(p: &Player, now: Instant) -> Dict {
     let entries = vec![
         ("slot", Value::from(p.slot)),
         ("profile", Value::from(p.profile.clone())),

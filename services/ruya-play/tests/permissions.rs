@@ -23,13 +23,6 @@ fn record_of(h: &Harness) -> std::collections::BTreeMap<String, OwnedValue> {
     inspect_record(&report.unwrap())
 }
 
-fn asking(perms: serde_json::Value, build: u64) -> Fx {
-    let mut fx = game();
-    fx.manifest["permissions"] = perms;
-    fx.manifest["build"] = json!(build);
-    fx
-}
-
 #[test]
 fn inspect_reports_the_gate_of_the_tier() {
     let h = Setup::with(Pkg::signed(&asking(json!({"network": true}), 1))).build();
@@ -59,26 +52,6 @@ fn install_needs_admin_approval_for_every_package_gated_or_not() {
         let r = h.install();
         assert_eq!(r.status, JobStatus::Ok, "{perms}: {:?}", r.problems);
     }
-}
-
-/// The installed app of `game()`'s id, build 1, asking for `perms` in its own `play.json`.
-fn installed_with(perms: serde_json::Value, new: Fx) -> Harness {
-    let setup = Setup {
-        installed: ruya_play::core::installed::MemoryInstalled::new().with("com.example.mini", 1),
-        ..Setup::with(Pkg::signed(&new))
-    };
-    let h = setup.build();
-    let files = ruya_play::core::reconcile::deployment_files(&h.cfg.flatpak, "com.example.mini");
-    std::fs::create_dir_all(&files).unwrap();
-    write_deploy(
-        &h.cfg.flatpak,
-        "com.example.mini",
-        ruya_play_art::PLAY_REMOTE,
-    );
-    let play_json =
-        json!({"format": 1, "id": "com.example.mini", "build": 1, "permissions": perms});
-    std::fs::write(files.join("play.json"), play_json.to_string()).unwrap();
-    h
 }
 
 #[test]
