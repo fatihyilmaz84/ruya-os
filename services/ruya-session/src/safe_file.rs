@@ -157,35 +157,33 @@ mod tests {
             assert_eq!(mode(&tmp.path().join("a/b")), 0o700);
         }
 
-        #[test]
-        fn a_planted_link_as_the_temporary_file_is_not_written_through() {
+        /// A link named `planted` (in `base`) to a victim file; then `f` is written. The victim
+        /// is untouched and `f` is a plain file with the new bytes.
+        fn writes_over_a_planted_link(planted: &str) {
             let tmp = tempfile::tempdir().expect("tmp");
-            let outside = tmp.path().join("victim");
-            fs::write(&outside, "keep").expect("victim");
+            let victim = tmp.path().join("victim");
+            fs::write(&victim, "keep").expect("victim");
             let base = tmp.path().join("base");
             fs::create_dir(&base).expect("base");
-            symlink(&outside, base.join("f.tmp")).expect("link");
+            symlink(&victim, base.join(planted)).expect("link");
             write_below(&base, Path::new("f"), b"new").expect("write");
-            assert_eq!(fs::read_to_string(&outside).expect("read"), "keep");
-            assert_eq!(fs::read(base.join("f")).expect("read"), b"new");
-            assert!(!base.join("f.tmp").exists());
-        }
-
-        #[test]
-        fn a_planted_link_as_the_file_is_replaced_not_followed() {
-            let tmp = tempfile::tempdir().expect("tmp");
-            let outside = tmp.path().join("victim");
-            fs::write(&outside, "keep").expect("victim");
-            let base = tmp.path().join("base");
-            fs::create_dir(&base).expect("base");
-            symlink(&outside, base.join("f")).expect("link");
-            write_below(&base, Path::new("f"), b"new").expect("write");
-            assert_eq!(fs::read_to_string(&outside).expect("read"), "keep");
+            assert_eq!(fs::read_to_string(&victim).expect("read"), "keep");
             assert_eq!(fs::read(base.join("f")).expect("read"), b"new");
             assert!(!fs::symlink_metadata(base.join("f"))
                 .expect("meta")
                 .file_type()
                 .is_symlink());
+            assert!(!base.join("f.tmp").exists());
+        }
+
+        #[test]
+        fn a_planted_link_as_the_temporary_file_is_not_written_through() {
+            writes_over_a_planted_link("f.tmp");
+        }
+
+        #[test]
+        fn a_planted_link_as_the_file_is_replaced_not_followed() {
+            writes_over_a_planted_link("f");
         }
 
         #[test]
