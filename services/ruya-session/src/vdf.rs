@@ -115,12 +115,19 @@ pub fn parse(text: &str) -> Result<Vec<Entry>, String> {
     }
 }
 
+/// A backslash is doubled only where the reader would take it as an escape (before `n`, `t`,
+/// `\` or `"`, or at the end): the reader keeps an unknown escape such as `\x` as written, so
+/// the writer writes it back as it was read.
 fn quote(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('"');
-    for c in s.chars() {
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
         match c {
-            '\\' => out.push_str("\\\\"),
+            '\\' if matches!(chars.peek(), None | Some('n' | 't' | '\\' | '"')) => {
+                out.push_str("\\\\")
+            }
+            '\\' => out.push('\\'),
             '"' => out.push_str("\\\""),
             '\n' => out.push_str("\\n"),
             '\t' => out.push_str("\\t"),
@@ -187,6 +194,18 @@ mod tests {
         let text = "\"A\"\n{\n\t\"k\"\t\t\"v \\\"q\\\" \\\\\"\n\t\"B\"\n\t{\n\t}\n}\n";
         let parsed = parse(text).expect("valid");
         assert_eq!(write(&parsed), text);
+    }
+
+    #[test]
+    fn an_unknown_escape_is_written_back_as_it_was_read() {
+        for text in ["\"a\"\t\t\"C:\\x\\dir\"\n", "\"a\"\t\t\"\\q\"\n"] {
+            let parsed = parse(text).expect("valid");
+            assert_eq!(write(&parsed), text, "{text:?}");
+        }
+        // A known escape before a plain letter may be written shorter; the value is the same.
+        let odd = "\"a\"\t\t\"\\\\x\\y\\\\\"\n";
+        let parsed = parse(odd).expect("valid");
+        assert_eq!(parse(&write(&parsed)).expect("valid"), parsed);
     }
 
     #[test]

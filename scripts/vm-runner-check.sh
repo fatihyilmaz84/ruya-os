@@ -16,9 +16,11 @@
 #   5. every Proton runner is linked into Steam's extension point
 #      (com.valvesoftware.Steam.CompatibilityTool.<Name>/x86_64/stable) and carries its
 #      compatibilitytool.vdf, so Steam lists the tool
-#   6. the Steam Flatpak is installed, and in each profile that started it Steam's default
-#      compatibility tool (config.vdf, CompatToolMapping "0") is the newest runner's tool, or
-#      another one the player chose (reported, not a failure)
+#   6. the Steam Flatpak is installed, and in each profile that started Steam, Steam's own files
+#      (steam.sh or ubuntu12_32) are in the root that holds config.vdf, and the default
+#      compatibility tool (CompatToolMapping "0") is the newest Proton runner's tool (newest by
+#      runner.json version): anything else FAILs, so it catches Steam replacing our entry on its
+#      first run and a wrong config path
 # Running a game inside a .play sandbox (the extension mounts, the 32-bit points) is
 # vm-play-check.sh launch and launch-windows (RUY-902).
 #
@@ -45,25 +47,62 @@ bad() { echo "FAIL $*"; fail=1; }
 if [ "$mode" = steam ]; then
     steam_ext="$root/var/lib/flatpak/extension"
     echo "--- Steam sees the runners"
-    last=""
+    # The newest Proton runner by its runner.json version (the rule of resolve::compare_versions:
+    # the numbers in the version, compared in order) and its tool name through Steam's link.
+    newest="$(python3 -I - "$play/runners" <<'PYEOF'
+import json, os, re, sys
+best = None
+for name in sorted(os.listdir(sys.argv[1])):
+    try:
+        with open(os.path.join(sys.argv[1], name, "runner.json"), encoding="utf-8") as f:
+            r = json.load(f)
+    except (OSError, ValueError):
+        continue
+    if r.get("kind") != "proton":
+        continue
+    key = [int(n) for n in re.findall(r"[0-9]+", str(r.get("version", "")))]
+    if best is None or key > best[0]:
+        best = (key, name)
+if best:
+    print(best[1])
+PYEOF
+)"
+    want=""
     for tree in "$play"/runners/*/; do
         name="$(basename "$tree")"
         [ -f "$tree/compatibilitytool.vdf" ] || continue
         link="$steam_ext/com.valvesoftware.Steam.CompatibilityTool.$name/x86_64/stable"
         tool="$(grep -A3 '"compat_tools"' "$link/compatibilitytool.vdf" 2>/dev/null | grep -o '"[^"]*"' | sed -n 2p | tr -d '"')"
-        if [ -n "$tool" ]; then ok "$name: Steam's extension point has the tool $tool"; last="$tool"; else bad "$name: no compatibilitytool.vdf through $link"; fi
+        if [ -n "$tool" ]; then ok "$name: Steam's extension point has the tool $tool"; [ "$name" = "$newest" ] && want="$tool"; else bad "$name: no compatibilitytool.vdf through $link"; fi
     done
-    [ -n "$last" ] || bad "no Proton runner is linked for Steam"
+    [ -n "$want" ] && ok "the newest Proton runner is $newest, tool $want" || bad "no tool for the newest Proton runner '${newest:-none}'"
     echo "--- the default tool of each profile that started Steam"
     if [ -d "$root/var/lib/flatpak/app/com.valvesoftware.Steam" ]; then ok "the Steam Flatpak is installed"; else bad "the Steam Flatpak is not installed (install it from the Store first)"; fi
     seen=0
     while IFS=: read -r user _ _ _ _ home _; do
         case "$user" in ruya-p*) ;; *) continue ;; esac
-        cfg="$root$home/.var/app/com.valvesoftware.Steam/.local/share/Steam/config/config.vdf"
+        steamdir="$root$home/.var/app/com.valvesoftware.Steam/.local/share/Steam"
+        cfg="$steamdir/config/config.vdf"
         [ -f "$cfg" ] || continue
         seen=$((seen + 1))
-        got="$(awk '/"CompatToolMapping"/ {m=1} m && /^[[:space:]]*"0"[[:space:]]*$/ {z=1} z && /"name"/ {gsub(/.*"name"[[:space:]]*"|".*/, ""); print; exit}' "$cfg")"
-        if [ "$got" = "$last" ]; then ok "$user: the default is $got"; elif [ -n "$got" ]; then echo "note $user: the default is $got (chosen by the player, or by a Steam update)"; else bad "$user: no default compatibility tool in $cfg"; fi
+        # Steam's own files in the same root prove Steam ran there and kept (or wrote) this config,
+        # not only that our step wrote it.
+        if [ -e "$steamdir/steam.sh" ] || [ -e "$steamdir/ubuntu12_32" ]; then
+            ok "$user: Steam's own files are in $steamdir"
+        else
+            bad "$user: no steam.sh or ubuntu12_32 in $steamdir: Steam has not run there, or the path is not Steam's"
+            continue
+        fi
+        # The entry "0" of the CompatToolMapping block only (the block is read to its closing brace).
+        got="$(awk '
+            /"CompatToolMapping"/ { m = 1; d = 0; next }
+            m {
+                if (index($0, "{")) d++
+                else if (index($0, "}")) { d--; if (d <= 0) exit; if (d == 1) z = 0 }
+                else if (d == 1 && $1 == "\"0\"") z = 1
+                else if (d == 2 && z && $1 == "\"name\"") { n = $2; gsub(/"/, "", n); print n; exit }
+            }' "$cfg")"
+        if [ "$got" = "$want" ]; then ok "$user: the default is $got, the newest runner's tool"; else bad "$user: the default is '${got:-none}', not $want (Steam replaced our entry, the player chose another, or there is none)"; fi
     done < <(getent passwd)
     [ "$seen" -ge 1 ] && ok "$seen profile(s) with a Steam config" || bad "no profile has started Steam yet (start Steam once, then re-run)"
     [ "$fail" = 0 ] && echo "vm-runner-check: all passed" || echo "vm-runner-check: FAILED"

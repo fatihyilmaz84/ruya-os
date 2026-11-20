@@ -1138,6 +1138,8 @@ dependencies = [
  "futures-lite",
  "libc",
  "ruya-contract-test",
+ "ruya-play-format",
+ "ruya-play-launch",
  "tempfile",
  "zbus",
 ]

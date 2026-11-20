@@ -2,21 +2,37 @@
 //!
 //! The image links every Proton runner of `/usr/lib/ruyaos/play/runners` into the Steam Flatpak's
 //! `com.valvesoftware.Steam.CompatibilityTool` extension point (tmpfiles.d), so Steam lists it. This
-//! module makes it the default: Steam's `CompatToolMapping` entry `"0"` is the tool used for every
-//! game without a mapping of its own.
+//! module makes the newest one the default: Steam's `CompatToolMapping` entry `"0"` is the tool
+//! used for every game without a mapping of its own.
 //!
 //! It runs once per profile, as the profile user, as `ExecStartPre` of the Steam unit
 //! (`spawner::launch_command_in`, subcommand `steam-default-tool`), so Steam is not running while
-//! its file is edited. Root never writes into a profile (RUY-35 plan audit). The first run records a
-//! marker in the profile's Steam data; after that nothing is touched again, so a tool the player
-//! picks later stays. Steam always starts: the step is `ExecStartPre=-`, it only reads and writes
-//! two small files, and every failure is a message on stderr and a missing marker (tried again at
-//! the next start).
+//! its file is edited. Root never writes into a profile (RUY-35 plan audit). The first run records
+//! a marker; with it there, nothing is touched, so a tool the player picks later stays.
+//!
+//! **The Steam folder belongs to a sandbox.** The Flatpak persists all of
+//! `~/.var/app/com.valvesoftware.Steam`, so a game inside Steam can write there: the marker, the
+//! config and every folder on the way. A game may delete the marker; the step then runs again,
+//! which is harmless only because an existing default is never replaced. And a game may plant
+//! links, so every read and write goes through `safe_file`, which refuses a link on the path and
+//! never follows one.
+//!
+//! Which runner: the one the launcher's scan (`ruya_play_launch::runners::scan_in`, the same code
+//! ruya-library uses) finds with `kind` `proton` (the ones `platform.rs` links for Steam), the
+//! newest by `resolve::compare_versions`, and the tool name is the one in that runner's own
+//! `compatibilitytool.vdf`.
+//!
+//! Steam always starts: the step is `ExecStartPre=-`, it only reads and writes two small files,
+//! and every failure is a message on stderr and a missing marker (tried again at the next start).
 
-use std::fs;
-use std::io::{self, Write as _};
+use std::io::{self, Read as _};
 use std::path::{Path, PathBuf};
 
+use ruya_play_format::resolve::compare_versions;
+use ruya_play_launch::os::LaunchOs;
+use ruya_play_launch::runners::scan_in;
+
+use crate::safe_file::{read_below, write_below};
 use crate::vdf::{self, Entry, Value};
 
 /// The Steam Flatpak (the only app this step belongs to).
@@ -28,10 +44,12 @@ pub const SUBCOMMAND: &str = "steam-default-tool";
 /// What Steam reads from a tool's folder.
 pub const TOOL_FILE: &str = "compatibilitytool.vdf";
 
-/// Steam's data in the Flatpak's per-user folder (`$HOME` is the profile's).
-const STEAM_DATA: &str = ".var/app/com.valvesoftware.Steam/.local/share/Steam";
-/// Written next to Steam's own data (outside what the sandbox sees) when the step is settled.
+/// Below the profile's home: Steam's config, and the marker next to Steam's data. Both are inside
+/// the sandbox's persistent folder.
+const CONFIG: &str = ".var/app/com.valvesoftware.Steam/.local/share/Steam/config/config.vdf";
 const MARKER: &str = ".var/app/com.valvesoftware.Steam/.ruyaos-default-tool";
+/// A `compatibilitytool.vdf` is a few hundred bytes.
+const MAX_TOOL_FILE: u64 = 64 * 1024;
 
 /// The unit property that runs the step before Steam (the `-` ignores a failure).
 pub fn exec_start_pre(session_program: &str) -> String {
@@ -54,34 +72,21 @@ pub fn tool_name(vdf_text: &str) -> Option<String> {
         .map(|t| t.key.clone())
 }
 
-/// Which runner folder is the newest: the biggest number at the end of its name
-/// (`ProtonGE11` over `ProtonGE10`), then the name.
-fn rank(folder: &str) -> (u64, &str) {
-    let digits = folder.len() - folder.trim_end_matches(|c: char| c.is_ascii_digit()).len();
-    let major = folder[folder.len() - digits..].parse().unwrap_or(0);
-    (major, folder)
-}
-
-/// The tool to make the default: of the runners that carry a `compatibilitytool.vdf`, the newest.
-pub fn default_tool(runners: &Path) -> Result<String, String> {
-    let mut found: Vec<(String, String)> = Vec::new();
-    let dir = fs::read_dir(runners).map_err(|e| format!("{}: {e}", runners.display()))?;
-    for entry in dir.flatten() {
-        let Ok(folder) = entry.file_name().into_string() else {
-            continue;
-        };
-        let Ok(text) = fs::read_to_string(entry.path().join(TOOL_FILE)) else {
-            continue;
-        };
-        if let Some(tool) = tool_name(&text) {
-            found.push((folder, tool));
-        }
-    }
-    found
-        .into_iter()
-        .max_by(|a, b| rank(&a.0).cmp(&rank(&b.0)))
-        .map(|(_, tool)| tool)
-        .ok_or_else(|| format!("no runner in {} has a {TOOL_FILE}", runners.display()))
+/// The tool to make the default: the newest `proton` runner of `runners`, by its `runner.json`
+/// version, and the name in that runner's `compatibilitytool.vdf`. A runner that is the newest but
+/// has no readable tool file is an error, never a fall back to an older one.
+pub fn default_tool(os: &dyn LaunchOs, runners: &str) -> Result<String, String> {
+    let found = scan_in(os, runners);
+    let newest = found
+        .iter()
+        .filter(|f| f.runner.kind == "proton")
+        .max_by(|a, b| compare_versions(&a.runner.version, &b.runner.version))
+        .ok_or_else(|| format!("no Proton runner in {runners}"))?;
+    let mut text = String::new();
+    os.open(&newest.root, TOOL_FILE)
+        .and_then(|r| r.take(MAX_TOOL_FILE).read_to_string(&mut text))
+        .map_err(|e| format!("{}/{TOOL_FILE}: {e}", newest.root))?;
+    tool_name(&text).ok_or_else(|| format!("{}/{TOOL_FILE} names no tool", newest.root))
 }
 
 /// `config.vdf` with `tool` as the default (`CompatToolMapping` entry `"0"`). `None` text is a
@@ -113,21 +118,6 @@ pub fn with_default(config: Option<&str>, tool: &str) -> Result<Option<String>, 
     Ok(Some(vdf::write(&root)))
 }
 
-/// Writes `text` to `path` through a temporary file next to it, so Steam never reads half a file.
-fn replace_file(path: &Path, text: &str) -> io::Result<()> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| io::Error::other("no parent folder"))?;
-    fs::create_dir_all(parent)?;
-    let tmp = parent.join(".ruyaos-config.tmp");
-    let mut file = fs::File::create(&tmp)?;
-    file.write_all(text.as_bytes())?;
-    file.sync_all()?;
-    fs::rename(&tmp, path).inspect_err(|_| {
-        let _ = fs::remove_file(&tmp);
-    })
-}
-
 /// What `run` did, for the log.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Done {
@@ -141,28 +131,27 @@ pub enum Done {
 
 /// The whole step for the profile whose home is `home`. An `Err` writes no marker, so the next
 /// start tries again; a config that is not valid is never overwritten.
-pub fn run(home: &Path, runners: &Path) -> Result<Done, String> {
-    let marker: PathBuf = home.join(MARKER);
-    if marker.exists() {
+pub fn run(home: &Path, os: &dyn LaunchOs, runners: &str) -> Result<Done, String> {
+    let (config, marker) = (Path::new(CONFIG), Path::new(MARKER));
+    if std::fs::symlink_metadata(home.join(marker)).is_ok() {
         return Ok(Done::AlreadySettled);
     }
-    let tool = default_tool(runners)?;
-    let config = home.join(STEAM_DATA).join("config/config.vdf");
-    let current = match fs::read_to_string(&config) {
+    let tool = default_tool(os, runners)?;
+    let current = match read_below(home, config) {
         Ok(text) => Some(text),
         Err(e) if e.kind() == io::ErrorKind::NotFound => None,
-        Err(e) => return Err(format!("{}: {e}", config.display())),
+        Err(e) => return Err(format!("{CONFIG}: {e}")),
     };
     let done = match with_default(current.as_deref(), &tool)
-        .map_err(|e| format!("{} is left as it is: {e}", config.display()))?
+        .map_err(|e| format!("{CONFIG} is left as it is: {e}"))?
     {
         Some(text) => {
-            replace_file(&config, &text).map_err(|e| format!("{}: {e}", config.display()))?;
+            write_below(home, config, text.as_bytes()).map_err(|e| format!("{CONFIG}: {e}"))?;
             Done::Set(tool)
         }
         None => Done::KeptExisting,
     };
-    replace_file(&marker, "done\n").map_err(|e| format!("{}: {e}", marker.display()))?;
+    write_below(home, marker, b"done\n").map_err(|e| format!("{MARKER}: {e}"))?;
     Ok(done)
 }
 
@@ -172,7 +161,11 @@ pub fn main_step() {
         eprintln!("ruya-session: {SUBCOMMAND}: HOME is not set");
         return;
     };
-    match run(&home, Path::new(RUNNERS_DIR)) {
+    #[cfg(target_os = "linux")]
+    let result = run(&home, &ruya_play_launch::linux::LinuxOs, RUNNERS_DIR);
+    #[cfg(not(target_os = "linux"))]
+    let result: Result<Done, String> = Err(format!("{}: needs Linux", home.display()));
+    match result {
         Ok(Done::Set(tool)) => eprintln!("ruya-session: Steam's default tool is now {tool}"),
         Ok(done) => eprintln!("ruya-session: {SUBCOMMAND}: {done:?}"),
         Err(e) => eprintln!("ruya-session: {SUBCOMMAND}: {e}"),
@@ -182,6 +175,8 @@ pub fn main_step() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ruya_play_launch::fake::FakeOs;
+    use std::fs;
 
     const GE_VDF: &str = "\"compatibilitytools\"\n{\n  \"compat_tools\"\n  {\n    \"GE-Proton11-12\"\n    {\n      \"install_path\" \".\"\n      \"display_name\" \"GE-Proton11-12\"\n      \"from_oslist\" \"windows\"\n      \"to_oslist\" \"linux\"\n    }\n  }\n}\n";
     const TOOL: &str = "GE-Proton11-12";
@@ -267,86 +262,134 @@ mod tests {
         }
     }
 
-    #[test]
-    fn the_newest_runner_wins() {
-        assert!(rank("ProtonGE11") > rank("ProtonGE10"));
-        assert!(rank("ProtonGE10") > rank("ProtonGE9"));
-        assert!(rank("ProtonGE9") > rank("Wine"));
+    const RUNNER_JSON: &str = include_str!("../../../image/play/runners/ProtonGE11/runner.json");
+    const RUNNERS: &str = "/runners";
+
+    /// A fake image: (folder, version, tool name) per Proton runner, with the real runner.json of
+    /// the image as the template.
+    fn image(runners: &[(&str, &str, &str)]) -> FakeOs {
+        let mut os = FakeOs::new();
+        for (folder, version, tool) in runners {
+            let root = format!("{RUNNERS}/{folder}");
+            os.file(
+                &format!("{root}/runner.json"),
+                RUNNER_JSON.replace("GE-Proton11-12", version),
+            );
+            os.file(&format!("{root}/proton"), "#!/bin/sh\n");
+            os.file(&format!("{root}/{TOOL_FILE}"), GE_VDF.replace(TOOL, tool));
+        }
+        os
     }
 
-    fn image(root: &Path, runners: &[(&str, &str)]) -> PathBuf {
-        let dir = root.join("runners");
-        for (folder, tool) in runners {
-            fs::create_dir_all(dir.join(folder)).expect("folder");
-            fs::write(dir.join(folder).join(TOOL_FILE), GE_VDF.replace(TOOL, tool)).expect("vdf");
+    #[test]
+    fn the_newest_proton_runner_by_its_version_wins_not_the_folder_name() {
+        let os = image(&[
+            ("ProtonGE11", "GE-Proton10-34", "GE-Proton10-34"),
+            ("ProtonGE9", "GE-Proton11-12", TOOL),
+        ]);
+        assert_eq!(default_tool(&os, RUNNERS), Ok(TOOL.to_owned()));
+    }
+
+    #[test]
+    fn only_proton_runners_count() {
+        let mut os = image(&[("ProtonGE10", "GE-Proton10-34", "GE-Proton10-34")]);
+        os.file(
+            "/runners/Other/runner.json",
+            RUNNER_JSON
+                .replace("GE-Proton11-12", "GE-Proton12-1")
+                .replace("\"kind\": \"proton\"", "\"kind\": \"emulator\"")
+                .replace("\"entry\": { \"proton\": \"proton\" },", ""),
+        );
+        os.file("/runners/Other/compatibilitytool.vdf", GE_VDF);
+        let found = scan_in(&os, RUNNERS);
+        assert_eq!(
+            found.len(),
+            2,
+            "the emulator runner is found: {:?}",
+            os.lines
+        );
+        assert_eq!(default_tool(&os, RUNNERS), Ok("GE-Proton10-34".to_owned()));
+    }
+
+    #[test]
+    fn a_newest_runner_without_a_readable_tool_file_is_an_error() {
+        let mut os = image(&[
+            ("ProtonGE10", "GE-Proton10-34", "GE-Proton10-34"),
+            ("ProtonGE11", "GE-Proton11-12", TOOL),
+        ]);
+        os.nodes.remove("/runners/ProtonGE11/compatibilitytool.vdf");
+        assert!(default_tool(&os, RUNNERS).is_err());
+        os.file("/runners/ProtonGE11/compatibilitytool.vdf", "garbage");
+        assert!(default_tool(&os, RUNNERS).is_err());
+        assert!(default_tool(&FakeOs::new(), RUNNERS).is_err());
+    }
+
+    /// A home whose Steam already wrote `config` (when given); the step runs once. Returns the
+    /// home, the result and the config as it is afterwards.
+    fn start_with(
+        tmp: &Path,
+        config: Option<&str>,
+    ) -> (PathBuf, Result<Done, String>, Option<String>) {
+        let os = image(&[("ProtonGE11", "GE-Proton11-12", TOOL)]);
+        let home = tmp.join("home");
+        let file = home.join(CONFIG);
+        fs::create_dir_all(file.parent().expect("parent")).expect("dirs");
+        if let Some(text) = config {
+            fs::write(&file, text).expect("config");
         }
-        dir
+        let result = run(&home, &os, RUNNERS);
+        let after = fs::read_to_string(&file).ok();
+        (home, result, after)
     }
 
     #[test]
     fn the_default_is_set_once_and_a_later_choice_stays() {
         let tmp = tempfile::tempdir().expect("tmp");
-        let runners = image(
-            tmp.path(),
-            &[("ProtonGE10", "GE-Proton10-34"), ("ProtonGE11", TOOL)],
-        );
-        fs::create_dir_all(runners.join("WineStable")).expect("a runner with no vdf");
-        let home = tmp.path().join("home");
-        let config = home.join(STEAM_DATA).join("config/config.vdf");
-
-        assert_eq!(run(&home, &runners), Ok(Done::Set(TOOL.to_owned())));
-        let first = fs::read_to_string(&config).expect("written");
+        let (home, result, first) = start_with(tmp.path(), None);
+        assert_eq!(result, Ok(Done::Set(TOOL.to_owned())));
+        let first = first.expect("written");
         assert_eq!(name_of(&mapping_of(&first)[0]), TOOL);
         assert!(home.join(MARKER).exists());
 
         // The player picks another tool in Steam; the next start leaves it.
         let chosen = first.replace(TOOL, "proton_9");
-        fs::write(&config, &chosen).expect("player's choice");
-        assert_eq!(run(&home, &runners), Ok(Done::AlreadySettled));
-        assert_eq!(fs::read_to_string(&config).expect("read"), chosen);
-    }
+        fs::write(home.join(CONFIG), &chosen).expect("player's choice");
+        let os = image(&[("ProtonGE11", "GE-Proton11-12", TOOL)]);
+        assert_eq!(run(&home, &os, RUNNERS), Ok(Done::AlreadySettled));
+        assert_eq!(fs::read_to_string(home.join(CONFIG)).expect("read"), chosen);
 
-    /// A profile whose Steam already wrote `config`; the step runs once. Returns the result, the
-    /// config as it is afterwards and whether the marker is there.
-    fn start_with(config: &str) -> (Result<Done, String>, String, bool) {
-        let tmp = tempfile::tempdir().expect("tmp");
-        let runners = image(tmp.path(), &[("ProtonGE11", TOOL)]);
-        let home = tmp.path().join("home");
-        let file = home.join(STEAM_DATA).join("config/config.vdf");
-        fs::create_dir_all(file.parent().expect("parent")).expect("dirs");
-        fs::write(&file, config).expect("config");
-        let result = run(&home, &runners);
-        let after = fs::read_to_string(&file).expect("read");
-        (result, after, home.join(MARKER).exists())
+        // A game deletes the marker: the step runs again and keeps what is there.
+        fs::remove_file(home.join(MARKER)).expect("marker");
+        assert_eq!(run(&home, &os, RUNNERS), Ok(Done::KeptExisting));
+        assert_eq!(fs::read_to_string(home.join(CONFIG)).expect("read"), chosen);
     }
 
     #[test]
     fn an_existing_default_is_kept_and_settled() {
+        let tmp = tempfile::tempdir().expect("tmp");
         let theirs = with_default(None, "proton_9").expect("ok").expect("text");
-        let (result, after, marker) = start_with(&theirs);
+        let (home, result, after) = start_with(tmp.path(), Some(&theirs));
         assert_eq!(result, Ok(Done::KeptExisting));
-        assert_eq!(after, theirs);
-        assert!(marker);
+        assert_eq!(after.as_deref(), Some(theirs.as_str()));
+        assert!(home.join(MARKER).exists());
     }
 
     #[test]
     fn a_malformed_config_is_left_as_it_is_and_tried_again_later() {
+        let tmp = tempfile::tempdir().expect("tmp");
         let bad = "\"InstallConfigStore\" {";
-        let (result, after, marker) = start_with(bad);
+        let (home, result, after) = start_with(tmp.path(), Some(bad));
         let err = result.expect_err("refused");
         assert!(err.contains("is left as it is"), "{err}");
-        assert_eq!(after, bad);
-        assert!(!marker);
+        assert_eq!(after.as_deref(), Some(bad));
+        assert!(!home.join(MARKER).exists());
     }
 
     #[test]
-    fn no_runner_with_a_tool_file_is_an_error_and_writes_nothing() {
+    fn no_runner_is_an_error_and_writes_nothing() {
         let tmp = tempfile::tempdir().expect("tmp");
-        let runners = tmp.path().join("runners");
-        fs::create_dir_all(runners.join("WineStable")).expect("runner");
         let home = tmp.path().join("home");
-        assert!(run(&home, &runners).is_err());
-        assert!(run(&home, &tmp.path().join("missing")).is_err());
+        assert!(run(&home, &FakeOs::new(), RUNNERS).is_err());
         assert!(!home.exists());
     }
 
@@ -356,5 +399,65 @@ mod tests {
             exec_start_pre("/usr/bin/ruya-session"),
             "--property=ExecStartPre=-/usr/bin/ruya-session steam-default-tool"
         );
+    }
+
+    /// What a game inside Steam can plant: links where the step reads and writes (RUY-35 review).
+    #[cfg(unix)]
+    mod planted {
+        use super::*;
+        use std::os::unix::fs::symlink;
+
+        /// A home with Steam's folders, a victim file and a folder outside the home.
+        fn home_with_victim(tmp: &Path) -> (PathBuf, PathBuf, PathBuf) {
+            let home = tmp.join("home");
+            fs::create_dir_all(home.join(CONFIG).parent().expect("parent")).expect("dirs");
+            let victim = tmp.join("other-app-save");
+            fs::write(&victim, "precious").expect("victim");
+            let outside = tmp.join("outside");
+            fs::create_dir(&outside).expect("outside");
+            (home, victim, outside)
+        }
+
+        fn step(home: &Path) -> Result<Done, String> {
+            run(
+                home,
+                &image(&[("ProtonGE11", "GE-Proton11-12", TOOL)]),
+                RUNNERS,
+            )
+        }
+
+        #[test]
+        fn a_link_as_the_temporary_file_is_not_written_through() {
+            let tmp = tempfile::tempdir().expect("tmp");
+            let (home, victim, _) = home_with_victim(tmp.path());
+            symlink(&victim, home.join(CONFIG).with_extension("tmp")).expect("link");
+            symlink(&victim, home.join(MARKER).with_extension("tmp")).expect("link");
+            assert_eq!(step(&home), Ok(Done::Set(TOOL.to_owned())));
+            assert_eq!(fs::read_to_string(&victim).expect("read"), "precious");
+        }
+
+        #[test]
+        fn a_link_as_the_config_is_refused() {
+            let tmp = tempfile::tempdir().expect("tmp");
+            let (home, victim, _) = home_with_victim(tmp.path());
+            symlink(&victim, home.join(CONFIG)).expect("link");
+            assert!(step(&home).is_err());
+            assert_eq!(fs::read_to_string(&victim).expect("read"), "precious");
+            assert!(!home.join(MARKER).exists());
+        }
+
+        #[test]
+        fn a_linked_folder_below_the_steam_folder_is_refused() {
+            let tmp = tempfile::tempdir().expect("tmp");
+            let (home, victim, outside) = home_with_victim(tmp.path());
+            let steam_data = home.join(".var/app/com.valvesoftware.Steam/.local/share");
+            fs::remove_dir_all(&steam_data).expect("remove");
+            fs::create_dir_all(steam_data.parent().expect("parent")).expect("dirs");
+            symlink(&outside, &steam_data).expect("link");
+            let err = step(&home).expect_err("refused");
+            assert!(err.contains("is a link"), "{err}");
+            assert_eq!(fs::read_dir(&outside).expect("list").count(), 0);
+            assert_eq!(fs::read_to_string(&victim).expect("read"), "precious");
+        }
     }
 }
