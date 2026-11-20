@@ -22,7 +22,7 @@
 #          no store signature
 #   runid  host fixtures only: `runid <id>` prints the id check would use for <id>
 #   pkgid  host fixtures only: `pkgid <id> <part>` prints "<id>_<part>" (the one id-suffix rule,
-#          RUY-887; vm-library-check.sh asks it for its own id), FAIL when it passes 120 bytes
+#          RUY-887; vm-library-check.sh asks it for its own id), FAIL when it passes 120 bytes (PLAY_MAX_ID_BYTES)
 #   Every mode that installs uses its own package id (RUY-877): "<id>_c<run>" for check (one
 #   fresh id per run, RUY-879; its signed-A/B steps need one id within the run, on purpose),
 #   "<id>_verify" for verify and "<id>_perms" for perms (pkg_id), written into a copy of the sample's

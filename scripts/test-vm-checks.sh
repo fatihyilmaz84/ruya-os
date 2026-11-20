@@ -1671,10 +1671,10 @@ done
 r3="$(bash "$here/vm-play-check.sh" runid org.example.hello-game)"
 echo "$r3" | grep -Eq '^org\.example\.hello-game_c[0-9]+x[0-9]+$' && pass "vm-play-check.sh runid: a last part with '-' keeps no '-' outside the last part" || fail "vm-play-check.sh runid: '$r3' for a last part with '-'"
 # An id that would pass the limit is refused with a FAIL line, no id printed (the limit, not 255).
-long="org.example.$(printf 'a%.0s' $(seq 1 100))"
+long="org.example.$(printf 'a%.0s' $(seq 1 $(( rust_max - 12 ))))"
 out="$(bash "$here/vm-play-check.sh" runid "$long" 2>&1)"; rc=$?
 [ "$rc" != 0 ] && expect_contains "vm-play-check.sh runid: an id that would pass $rust_max bytes FAILs" "$out" "FAIL: the package id" || fail "vm-play-check.sh runid: a $(( ${#long} + 20 ))-byte id passed (rc $rc)"
-short="org.example.$(printf 'a%.0s' $(seq 1 85))"
+short="org.example.$(printf 'a%.0s' $(seq 1 $(( rust_max - 12 - 25 ))))"
 out="$(bash "$here/vm-play-check.sh" runid "$short" 2>&1)"; rc=$?
 [ "$rc" = 0 ] && [ "${#out}" -le "$rust_max" ] && pass "vm-play-check.sh runid: an id that fits the limit passes" || fail "vm-play-check.sh runid: '$out' (rc $rc)"
 grep -q 'appid="\$(run_id "\$appid")"' "$here/vm-play-check.sh" && grep -q 'with_id "\$zip" "\$work/run.play.zip"' "$here/vm-play-check.sh" && pass "vm-play-check.sh check builds every package from the run-id copy (RUY-879)" || fail "vm-play-check.sh check: not built from the run-id copy"
@@ -1747,7 +1747,8 @@ out="$(play_rec true "$tier,\"play_signer_key_id\":{\"type\":\"s\",\"data\":\"$k
 [ "$rc" = 0 ] && expect_contains "library play: a signed run's key id passes" "$out" "play_signer_key_id is the signer's key id" || fail "library play: the expected key id failed: $out"
 out="$(play_rec true "$tier" "$plroot/icon-512.webp" | pj 0 "$kid")"; rc=$?
 [ "$rc" != 0 ] && pass "library play: a missing key id FAILs when the run signs" || fail "library play: a missing key id passed"
-grep -q 'judge_screenshots "\$1" "\$f" "\${2:-0}"' "$here/vm-library-check.sh" && grep -q 'play_judge "\$play_id" "\$shots" ""' "$here/vm-library-check.sh" && # The missing-script FAIL names the full path it looked for (RUY-887).
+grep -q 'judge_screenshots "\$1" "\$f" "\${2:-0}"' "$here/vm-library-check.sh" && grep -q 'play_judge "\$play_id" "\$shots" ""' "$here/vm-library-check.sh" && pass "vm-library-check.sh play judges the screenshots and the key id of the sample it installs (RUY-886)" || fail "vm-library-check.sh play: play_judge is not given the sample's screenshots"
+# The missing-script FAIL names the full path it looked for (RUY-887).
 nopc="$tmp/nopc"; mkdir -p "$nopc"; cp "$here/vm-library-check.sh" "$nopc/"; : > "$nopc/sample.zip"
 out="$(PATH="$shims:$PATH" bash "$nopc/vm-library-check.sh" play "$nopc/sample.zip" 2>&1)"
 expect_contains "library play: a missing vm-play-check.sh FAIL names its path" "$out" "FAIL: no $nopc/vm-play-check.sh: copy vm-play-check.sh next to this script"
