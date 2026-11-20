@@ -397,7 +397,8 @@ meject() {
 # scripts/lint-vm-checks.ps1 sources this file with the variable set to run its helpers on canned data.
 if [ "${VM_CHECK_LIB_ONLY:-0}" = 1 ]; then return 0 2>/dev/null || exit 0; fi
 
-case "${1:-}" in
+step="${1:-}"
+case "$step" in
 baseline) baseline ;;
 mformat) mformat ;;
 mplugged) mplugged ;;
@@ -412,5 +413,9 @@ eject) eject ;;
 security) as_shell systemd-analyze --user security ruya-devices --no-pager | tail -15 ;;
 *) echo "usage: $0 baseline|format|gone|watch|plugged|scan|busy|eject|mformat|mplugged|meject|security" >&2; exit 2 ;;
 esac
-[ "$fail" = 0 ] && echo "STEP OK: ${1:-}" || echo "STEP FAILED: ${1:-}"
+if [ "$fail" = 0 ]; then
+    echo "STEP OK: $step"
+else
+    echo "STEP FAILED: $step"
+fi
 exit "$fail"

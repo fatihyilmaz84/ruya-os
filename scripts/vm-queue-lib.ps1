@@ -8,7 +8,9 @@
 # The .play files. vm-play-check.sh and vm-library-check.sh play need the sample package and
 # ruya-pack on the guest (scripts/play-vm-files.sh builds both into output\play-vm).
 
-$script:PlayCommand = "bash scripts/play-vm-files.sh   (WSL: wsl -d FedoraLinux-44 -- bash scripts/play-vm-files.sh)"
+# The one command that builds them (root: its podman and dnf steps need it). docs/dev-setup.md quotes
+# this string, and lint-vm-checks.ps1 checks that it does.
+$script:PlayCommand = "wsl -d FedoraLinux-44 -u root bash /mnt/d/dev/RuyaOS/scripts/play-vm-files.sh"
 
 # The modes a script lists in its `# modes:` line; $null when it has no such line.
 function Get-VmModes([string]$Path) {
@@ -22,14 +24,37 @@ function Get-VmModes([string]$Path) {
     return $null
 }
 
-# The modes a script dispatches: the default of `${1:-x}`, the labels of a `case "${1:-..}" in` / `case "$mode" in` block (also `$part`; the
-# labels at the block's first indentation, so a nested case does not count) and the
-# `[ "${1:-..}" = mode ]` / `[ "$mode" = mode ]` tests. This is the lint's side of the line
-# above; the queue never guesses.
+# What a script dispatches (the lint's side of the `# modes:` line; the queue never guesses):
+# @{ modes = <sorted modes>; unreadable = <lines it could not read> }.
+#
+# One way to dispatch, enforced (RUY-890). A script whose `# modes:` is not `none` reads its mode
+# with exactly one of
+#   case "${1:-default}" in            (or ${1-default}; `[ "${1:-default}" = mode ]` is read too)
+#   mode="${1:-default}"               at the top level, then `case "$mode" in` / `[ "$mode" = mode ]`
+# and the lint reads the labels of that case (at the block's first indentation) and the tested modes.
+# Outside function bodies (`name() {` ... `}` at the same indentation) ANY other reference to `$1`,
+# `${1...}`, `$@`, `$*`, or to the selector variable in a test or branch, at any indent, is
+# `unreadable`, and so is `set -- args`: the lint fails on it, never guessing a single mode. Inside a
+# function `$1`, `$@` and `$*` are its own arguments; only the selector variable in a test or branch
+# is still refused. The selector variable may be used inside a plain command line (`echo "mode $mode"`, `run "$mode"`).
+# A `# modes: none` script has no canonical form: it may not use `$1`/`$@`/`$*` outside functions.
+# Here-documents and multi-line single-quoted strings are text for another program: skipped.
 function Get-VmDispatchedModes([string]$Path) {
     $lines = [IO.File]::ReadAllLines($Path)
     $found = New-Object System.Collections.Generic.HashSet[string]
-    $sel = '"(\$\{1(?::-[^}]*)?\}|\$mode|\$part)"'
+    $unreadable = New-Object System.Collections.Generic.List[string]
+    $listed = Get-VmModes $Path
+    $none = ($null -ne $listed -and $listed.Count -eq 0)
+    $first = '\$\{1:?-[^}]*\}'
+    $assign = '^(\w+)="' + $first + '"\s*(#.*)?$'
+    $names = New-Object System.Collections.Generic.List[string]
+    if (-not $none) {
+        foreach ($l in $lines) { if ($l -match $assign) { $names.Add([regex]::Escape($Matches[1])) } }
+    }
+    $selectors = @($(if ($none) { '(?!)' } else { $first })) + @($names | ForEach-Object { '\$' + $_ })
+    $sel = '"(' + ($selectors -join '|') + ')"'
+    $nameRef = '\$\{?(?:' + ((@('(?!)') + @($names)) -join '|') + ')\b'
+    $argRef = '\$\{?[1@*]|\$[@*]'
     $label = '^"?([\w-]+)"?(\|"?[\w-]+"?)*\)'
     $add = {
         param($text)
@@ -38,10 +63,63 @@ function Get-VmDispatchedModes([string]$Path) {
             if ($p -and $p -ne '*') { [void]$found.Add($p) }
         }
     }
+    # the script's own functions that branch on their first argument (`case "$1"`, `[ "$1" ...`):
+    # calling one with the selector is a dispatch, not a plain command
+    $ownFuncs = @{}
+    $fname = $null
+    $branchOn1 = '\bcase\s+"?\$\{?1\b|\[\[?\s+"?\$\{?1\b'
+    foreach ($fl in $lines) {
+        if ($fl -match '^\s*(?:function\s+)?([\w-]+)\(\)\s*\{(.*)$') {
+            $fname = $Matches[1]
+            if ($Matches[2] -match $branchOn1) { $ownFuncs[$fname] = $true }
+            if ($Matches[2] -match '\}\s*$') { $fname = $null }
+            continue
+        }
+        if ($fname) {
+            if ($fl -match $branchOn1) { $ownFuncs[$fname] = $true }
+            if ($fl -match '^\}') { $fname = $null }
+        }
+    }
+    $heredoc = $null
+    $inSingle = $false     # inside a single-quoted string that spans lines (a python snippet)
+    $funcIndent = -1       # the indentation of the function whose body we are in; -1: top level
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $l = $lines[$i]
-        if ($l -match '^\s*#') { continue }
-        if ($l -match "^(\s*)case $sel in\s*(.*)$") {
+        # a here-document is text for another program (a shim, a python script), not this script's dispatch
+        if ($heredoc) { if ($l.Trim() -eq $heredoc) { $heredoc = $null }; continue }
+        if ($l -match '(?<!<)<<-?\s*[''"]?([A-Za-z_]\w*)[''"]?') { $heredoc = $Matches[1] }
+        if (-not $inSingle -and $l -match '^\s*#') { continue }
+        # $left: the line without its single-quoted parts and its trailing comment. A quote left open
+        # starts a string that spans lines; the line that closes it is the tail of that command.
+        $tail = $inSingle
+        $left = $l
+        if ($inSingle) {
+            $q = $left.IndexOf("'")
+            if ($q -lt 0) { continue }
+            $left = $left.Substring($q + 1)
+            $inSingle = $false
+        }
+        $left = $left -replace "'[^']*'", ''
+        $left = $left -replace '(^|\s)#.*$', ''
+        $q = $left.IndexOf("'")
+        # (an apostrophe inside a word, "don't", opens nothing; a string opens after a space, `=` or `(`)
+        if ($q -ge 0 -and ($q -eq 0 -or $left[$q - 1] -match '[\s=(]')) { $inSingle = $true; $left = $left.Substring(0, $q) }
+        # function bodies: from `name() {` to the `}` at the same indentation
+        $inFunc = $funcIndent -ne -1
+        if ($inFunc) {
+            if (-not $tail) {
+                if ($funcIndent -eq -2) { if ($l -match '\}\s*$') { $funcIndent = -1 } }
+                elseif ($l -match '^(\s*)\}' -and $Matches[1].Length -eq $funcIndent) { $funcIndent = -1; continue }
+            }
+        } elseif (-not $tail -and $left -match '^(\s*)(function\s+)?[\w-]+\(\)\s*\{(.*)$') {
+            $inFunc = $true
+            # `name() {` closes at a `}` at its own indentation; `name() { cmd ...` at the first line ending in `}`
+            if ($Matches[3] -notmatch '\}\s*$') { $funcIndent = $(if ($Matches[3].Trim()) { -2 } else { $Matches[1].Length }) }
+        }
+        $top = -not $inFunc
+        $canon = $top -and -not $tail     # a string's tail is the end of a command, not a dispatch line
+        if ($canon -and $l -match "^(\s*)case $sel in\s*(.*)$") {
+            $left = $left -replace "^\s*case $sel in", ''
             $indent = $Matches[1].Length
             $rest = $Matches[3]
             if ($rest -match $label) { & $add $Matches[0]; continue }   # `case .. in a|b) ;; *) ..` on one line
@@ -55,11 +133,26 @@ function Get-VmDispatchedModes([string]$Path) {
                 if ($ci -eq $labelIndent -and $c.TrimStart() -match $label) { & $add $Matches[0] }
             }
         }
-        # the mode a bare call runs: ${1:-check}
-        foreach ($t in [regex]::Matches($l, '\$\{1:-([A-Za-z][\w-]*)\}')) { [void]$found.Add($t.Groups[1].Value) }
-        foreach ($t in [regex]::Matches($l, "\[ $sel ==? `"?(-{0,2}[A-Za-z][\w-]*)`"? \]")) { [void]$found.Add($t.Groups[2].Value) }
+        if ($canon) {
+            # the mode a bare call runs, and the tests of the canonical forms
+            if (-not $none) { foreach ($t in [regex]::Matches($l, '\$\{1:?-([A-Za-z][\w-]*)\}')) { [void]$found.Add($t.Groups[1].Value) } }
+            $test = "\[ $sel ==? `"?(-{0,2}[A-Za-z][\w-]*)`"? \]"
+            foreach ($t in [regex]::Matches($l, $test)) { [void]$found.Add($t.Groups[2].Value) }
+            $left = [regex]::Replace($left, $test, '')
+            if (-not $none -and $l -match $assign) { $left = '' }
+            if ($left -match '^\s*set -- \S') { $unreadable.Add("line $($i + 1): $($l.Trim())"); continue }
+        }
+        # the selector variable inside a plain command line (`echo "mode $mode"`, `python3 x "$mode"`,
+        # with optional `VAR=value` prefixes) is not a dispatch; a call of the script's own function or
+        # eval/exec/source with it is one (it dispatches on the value), so it stays refused
+        if ($left -match '^\s*(\w+=\S* +)*(\w[\w.-]*) ' -and -not $ownFuncs.ContainsKey($Matches[2]) -and
+            $Matches[2] -notin @('eval', 'exec', 'source') -and
+            $left -notmatch '\b(case|if|elif|while|until|test)\b|\[|&&|\|\|') {
+            $left = $left -replace $nameRef, ''
+        }
+        if (($top -and $left -match $argRef) -or $left -match $nameRef) { $unreadable.Add("line $($i + 1): $($l.Trim())") }
     }
-    return @($found | Sort-Object)
+    return @{ modes = @($found | Sort-Object); unreadable = @($unreadable) }
 }
 
 # The package and ruya-pack the .play checks copy: @{ files = <paths>; ready = <both exist> }.

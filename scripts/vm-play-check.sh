@@ -253,12 +253,11 @@ recommit_check() { # <id>
 }
 
 if [ "$mode" = parse ]; then
-    shift
-    if [ "${1:-}" = perms ]; then
+    if [ "${2:-}" = perms ]; then
         perm_lines
         exit $?
     fi
-    parse "$@"
+    parse "${2:-}" "${3:-}"
     exit $?
 fi
 if [ "$mode" = restart ]; then
