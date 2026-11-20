@@ -11,7 +11,7 @@ use crate::zipw::{self, FileSrc};
 use crate::Context;
 use flate2::Crc;
 use ruya_play_format::limits::ROOT_FILES;
-use ruya_play_format::{codes as fcodes, EntryKind, FolderSource, Source};
+use ruya_play_format::{codes as fcodes, Entry, EntryKind, FolderSource, Source};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
@@ -30,7 +30,8 @@ const SPEC: Spec = Spec {
     positionals: (1, 1),
 };
 
-enum Planned {
+/// One line of the file table [`plan`] makes of a folder.
+pub(crate) enum Planned {
     File {
         path: String,
         size: u64,
@@ -48,7 +49,7 @@ enum Planned {
 }
 
 impl Planned {
-    fn path(&self) -> &str {
+    pub(crate) fn path(&self) -> &str {
         match self {
             Planned::File { path, .. } | Planned::Link { path, .. } | Planned::Dir { path } => path,
         }
@@ -142,6 +143,90 @@ fn link_target(link: &str, full: &Path) -> Result<String, String> {
     Ok(text)
 }
 
+/// The file table of the folder `dir`, in `play.files` order (the bytes of the paths), from its
+/// listing `listed` (`FolderSource::entries`): every entry `keep` accepts, a file with its size,
+/// SHA-256 and executable bit (or named in `execs`), a real link only with `links_as_data` and
+/// only when it is relative and stays inside the folder, a folder only when nothing is below it.
+/// What a table cannot hold (a link without the flag or leaving the folder, a hard link, a device
+/// or special file) is added to `problems`. `build` writes this table; `runner-check` hashes it
+/// (05 section 7.3), so a runner folder hashes as the importer hashes the same tree in a package.
+pub(crate) fn plan(
+    dir: &Path,
+    listed: &[Entry],
+    keep: &dyn Fn(&Entry) -> bool,
+    links_as_data: bool,
+    execs: &BTreeSet<&str>,
+    problems: &mut Vec<Item>,
+) -> Result<Vec<Planned>, Stop> {
+    let mut planned: Vec<Planned> = Vec::new();
+    let mut dirs: Vec<String> = Vec::new();
+    for e in listed.iter().filter(|e| keep(e)) {
+        let full = e.path.split('/').fold(dir.to_path_buf(), |a, c| a.join(c));
+        match e.kind {
+            EntryKind::Dir => dirs.push(e.path.clone()),
+            EntryKind::File => {
+                let (size, sha256, crc, head) =
+                    digest(&full).map_err(|er| Stop::io("cannot read", &full, &er))?;
+                let executable = mode_executable(&full, &head) || execs.contains(e.path.as_str());
+                planned.push(Planned::File {
+                    path: e.path.clone(),
+                    size,
+                    sha256,
+                    crc,
+                    executable,
+                });
+            }
+            EntryKind::Symlink if links_as_data => match link_target(&e.path, &full) {
+                Ok(to) => planned.push(Planned::Link {
+                    path: e.path.clone(),
+                    to,
+                }),
+                Err(why) => problems.push(Item::new(
+                    codes::BUILD_SYMLINK_UNSUPPORTED,
+                    e.path.clone(),
+                    why,
+                )),
+            },
+            EntryKind::Symlink => problems.push(Item::new(
+                codes::BUILD_SYMLINK,
+                e.path.clone(),
+                "This is a real symbolic link; a package holds only regular files and folders.",
+            )),
+            EntryKind::HardLink => problems.push(Item::new(
+                fcodes::ENTRY_HARDLINK,
+                e.path.clone(),
+                "This is a hard link; copy the file instead.",
+            )),
+            EntryKind::Device => problems.push(Item::new(
+                fcodes::ENTRY_DEVICE,
+                e.path.clone(),
+                "This is a device file.",
+            )),
+            EntryKind::Other => problems.push(Item::new(
+                fcodes::ENTRY_SPECIAL,
+                e.path.clone(),
+                "This is a special file.",
+            )),
+        }
+    }
+    // A folder is listed only when nothing is below it.
+    let empty: Vec<String> = {
+        let occupied: BTreeSet<&str> = planned
+            .iter()
+            .map(Planned::path)
+            .chain(dirs.iter().map(String::as_str))
+            .filter_map(|p| p.rsplit_once('/').map(|(parent, _)| parent))
+            .collect();
+        dirs.iter()
+            .filter(|d| !occupied.contains(d.as_str()))
+            .cloned()
+            .collect()
+    };
+    planned.extend(empty.into_iter().map(|path| Planned::Dir { path }));
+    planned.sort_by(|a, b| a.path().as_bytes().cmp(b.path().as_bytes()));
+    Ok(planned)
+}
+
 /// `build`.
 pub fn run(args: &[String], ctx: &Context) -> Result<Reply, Stop> {
     let _ = ctx;
@@ -165,90 +250,34 @@ pub fn run(args: &[String], ctx: &Context) -> Result<Reply, Stop> {
     let execs: BTreeSet<&str> = p.all("exec").iter().map(String::as_str).collect();
     let links_as_data = p.has("links-as-data");
 
-    let mut planned: Vec<Planned> = Vec::new();
-    let mut dirs: Vec<String> = Vec::new();
-    for e in &listed {
-        if e.path == "play.files" {
-            continue; // rewritten below
-        }
-        if e.path == "play.sig" || e.path == "store.sig" {
-            reply.warnings.push(Item::new(
-                codes::BUILD_SIGNATURE_DROPPED,
-                e.path.clone(),
-                format!(
-                    "{} is not part of the build: play.files is rewritten, so an old signature would no longer match.",
-                    e.path
-                ),
-            ));
-            continue;
-        }
-        let full = e.path.split('/').fold(dir.clone(), |a, c| a.join(c));
-        match e.kind {
-            EntryKind::Dir => dirs.push(e.path.clone()),
-            EntryKind::File if ROOT_FILES.contains(&e.path.as_str()) => {}
-            EntryKind::File => {
-                let (size, sha256, crc, head) =
-                    digest(&full).map_err(|er| Stop::io("cannot read", &full, &er))?;
-                let executable = mode_executable(&full, &head) || execs.contains(e.path.as_str());
-                planned.push(Planned::File {
-                    path: e.path.clone(),
-                    size,
-                    sha256,
-                    crc,
-                    executable,
-                });
-            }
-            EntryKind::Symlink if links_as_data => match link_target(&e.path, &full) {
-                Ok(to) => planned.push(Planned::Link {
-                    path: e.path.clone(),
-                    to,
-                }),
-                Err(why) => reply.problems.push(Item::new(
-                    codes::BUILD_SYMLINK_UNSUPPORTED,
-                    e.path.clone(),
-                    why,
-                )),
-            },
-            EntryKind::Symlink => reply.problems.push(Item::new(
-                codes::BUILD_SYMLINK,
-                e.path.clone(),
-                "This is a real symbolic link; a package holds only regular files and folders.",
-            )),
-            EntryKind::HardLink => reply.problems.push(Item::new(
-                fcodes::ENTRY_HARDLINK,
-                e.path.clone(),
-                "This is a hard link; copy the file instead.",
-            )),
-            EntryKind::Device => reply.problems.push(Item::new(
-                fcodes::ENTRY_DEVICE,
-                e.path.clone(),
-                "This is a device file.",
-            )),
-            EntryKind::Other => reply.problems.push(Item::new(
-                fcodes::ENTRY_SPECIAL,
-                e.path.clone(),
-                "This is a special file.",
-            )),
-        }
+    let signature = |path: &str| path == "play.sig" || path == "store.sig";
+    for e in listed.iter().filter(|e| signature(&e.path)) {
+        reply.warnings.push(Item::new(
+            codes::BUILD_SIGNATURE_DROPPED,
+            e.path.clone(),
+            format!(
+                "{} is not part of the build: play.files is rewritten, so an old signature would no longer match.",
+                e.path
+            ),
+        ));
     }
+    // play.files is rewritten below; the other root files are not table lines.
+    let keep = |e: &Entry| {
+        !(e.path == "play.files"
+            || signature(&e.path)
+            || (e.kind == EntryKind::File && ROOT_FILES.contains(&e.path.as_str())))
+    };
+    let planned = plan(
+        &dir,
+        &listed,
+        &keep,
+        links_as_data,
+        &execs,
+        &mut reply.problems,
+    )?;
     if !reply.problems.is_empty() {
         return Ok(reply);
     }
-    // A folder is listed only when nothing is below it.
-    let empty: Vec<String> = {
-        let occupied: BTreeSet<&str> = planned
-            .iter()
-            .map(Planned::path)
-            .chain(dirs.iter().map(String::as_str))
-            .filter_map(|p| p.rsplit_once('/').map(|(parent, _)| parent))
-            .collect();
-        dirs.iter()
-            .filter(|d| !occupied.contains(d.as_str()))
-            .cloned()
-            .collect()
-    };
-    planned.extend(empty.into_iter().map(|path| Planned::Dir { path }));
-    planned.sort_by(|a, b| a.path().as_bytes().cmp(b.path().as_bytes()));
     let table: String = planned.iter().map(Planned::line).collect();
 
     // Where the zip goes.
@@ -400,11 +429,15 @@ fn inside(dir: &Path, out: &Path) -> bool {
         .is_ok_and(|p| p.join(out.file_name().unwrap_or_default()).starts_with(&d))
 }
 
-fn write_if_changed(path: &Path, bytes: &[u8]) -> Result<(), Stop> {
+/// Write `bytes` to `path` through a temporary file next to it (`<name>.tmp`, renamed over it),
+/// unless the file already holds them.
+pub(crate) fn write_if_changed(path: &Path, bytes: &[u8]) -> Result<(), Stop> {
     if std::fs::read(path).is_ok_and(|old| old == bytes) {
         return Ok(());
     }
-    let tmp = path.with_extension("files.tmp");
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".tmp");
+    let tmp = path.with_file_name(name);
     std::fs::write(&tmp, bytes).map_err(|e| Stop::io("cannot write", &tmp, &e))?;
     std::fs::rename(&tmp, path).map_err(|e| Stop::io("cannot write", path, &e))
 }

@@ -4,7 +4,7 @@
 <context>
     <name>AboutPane</name>
     <message>
-        <location filename="../qml/AboutPane.qml" line="+18"/>
+        <location filename="../qml/AboutPane.qml" line="+19"/>
         <source>Image version</source>
         <translation>Image version</translation>
     </message>
@@ -44,7 +44,18 @@
         <translation>Icon font: Apache-2.0. Inter typeface: OFL-1.1.</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+9"/>
+        <source>Windows compatibility</source>
+        <translation>Windows compatibility</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>%1: %2. Source: %3</source>
+        <extracomment>%1 is a runner&apos;s version (GE-Proton11-12), %2 its licences (SPDX), %3 the web address of its source.</extracomment>
+        <translation>%1: %2. Source: %3</translation>
+    </message>
+    <message>
+        <location line="+8"/>
         <source>System information</source>
         <translation>System information</translation>
     </message>

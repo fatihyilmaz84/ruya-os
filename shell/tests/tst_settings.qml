@@ -1246,6 +1246,14 @@ Item {
             compare(find("aboutLicence").value, "GPL-3.0-or-later")
             compare(findChild(find("aboutLicence"), "value").truncated, false, "the licence is not elided (RUY-589)")
             compare(find("aboutLicenceNote").text, "Icon font: Apache-2.0. Inter typeface: OFL-1.1.")
+            // RUY-34: the image's Windows runner (the mock's sample of the pinned GE-Proton) and its notice.
+            verify(find("aboutWindowsRunner").visible)
+            compare(find("aboutWindowsRunner").kind, "info")
+            compare(find("aboutWindowsRunner").label, "Windows compatibility")
+            compare(find("aboutWindowsRunner").value, "GE-Proton11-12")
+            verify(find("aboutRunnerNote0").visible)
+            compare(find("aboutRunnerNote0").text, "GE-Proton11-12: BSD-3-Clause AND LGPL-2.1-or-later AND LGPL-2.0-or-later AND Zlib AND MIT AND OFL-1.1. Source: https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12")
+            verify(find("aboutRunnerNote0").y > find("aboutWindowsRunner").y, "the notice is under its row")
 
             keyClick(Qt.Key_Right)
             tryVerify(() => find("aboutVersion").activeFocus)
@@ -1255,11 +1263,54 @@ Item {
             keyClick(Qt.Key_Down)
             verify(find("aboutLicence").activeFocus)
             keyClick(Qt.Key_Down)
+            verify(find("aboutWindowsRunner").activeFocus, "the notes are skipped: Windows compatibility is next")
+            keyClick(Qt.Key_Down)
             verify(find("aboutSystemInfo").activeFocus, "the last row opens System information (T-226)")
+            keyClick(Qt.Key_Up)
+            verify(find("aboutWindowsRunner").activeFocus, "Up comes back over the runner's notice")
+            keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Down)
             verify(find("aboutSystemInfo").activeFocus, "clamps at the last row")
             keyClick(Qt.Key_Left)
             tryVerify(() => find("categoryList").activeFocus)
+        }
+
+        // RUY-34: About in Turkish names the Windows runner and its notice in Turkish; Back leaves to the list.
+        function test_about_windows_runner_in_turkish() {
+            DeviceSettings.language = "tr"
+            openSettings()
+            selectCategory("about")
+            compare(find("aboutWindowsRunner").label, "Windows uyumluluğu")
+            compare(find("aboutWindowsRunner").value, "GE-Proton11-12")
+            compare(find("aboutRunnerNote0").text, "GE-Proton11-12: BSD-3-Clause AND LGPL-2.1-or-later AND LGPL-2.0-or-later AND Zlib AND MIT AND OFL-1.1. Kaynak: https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12")
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("aboutVersion").activeFocus)
+            for (let i = 0; i < 4; ++i)
+                keyClick(Qt.Key_Down)
+            verify(find("aboutWindowsRunner").activeFocus)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000, "Back leaves About for the category list")
+        }
+
+        // RUY-34: the runners.list lines About takes: six tab-separated fields, a Windows kind, a version.
+        function test_about_reads_the_windows_runners_of_the_image_list() {
+            const list = "ProtonGE11\tproton-ge\tproton\tGE-Proton11-12\tBSD-3-Clause\thttps://example.org/ge\n"
+                + "Wine11\twine\twine\t11.0\t\t\n"
+                + "Dosbox\tdosbox\temulator\t0.74\tGPL-2.0-only\thttps://example.org/d\n"
+                + "Short\tproton-ge\tproton\tGE-Proton9-1\n"
+                + "NoVersion\tproton-ge\tproton\t\tMIT\thttps://example.org/n\n"
+                + "\n"
+            const got = SystemInfo.windowsRunnersIn(list)
+            compare(got.length, 2, JSON.stringify(got))
+            compare(got[0].name, "ProtonGE11")
+            compare(got[0].family, "proton-ge")
+            compare(got[0].kind, "proton")
+            compare(got[0].version, "GE-Proton11-12")
+            compare(got[0].licence, "BSD-3-Clause")
+            compare(got[0].sourceUrl, "https://example.org/ge")
+            compare(got[1].version, "11.0")
+            compare(got[1].licence, "")
+            compare(SystemInfo.windowsRunnersIn("").length, 0)
         }
 
         function test_guide_overlay_over_settings_pane() {
@@ -1296,6 +1347,23 @@ Item {
             tryVerify(() => find("categoryList").activeFocus)
             wait(600)
             grabImage(tc.shell).save(shotsDir + "/8b-settings-about-category.png")
+
+            // RUY-34: the Windows runner row focused, with its notice under it, in English and Turkish.
+            for (const language of ["en", "tr"]) {
+                DeviceSettings.language = language
+                keyClick(Qt.Key_Right)                   // the pane re-enters at its last row
+                tryVerify(() => find("paneAbout").activeFocus)
+                for (let i = 0; i < 8; ++i)
+                    keyClick(Qt.Key_Up)
+                tryVerify(() => find("aboutVersion").activeFocus)
+                for (let i = 0; i < 4; ++i)
+                    keyClick(Qt.Key_Down)
+                tryVerify(() => find("aboutWindowsRunner").activeFocus)
+                wait(600)
+                grabImage(tc.shell).save(shotsDir + "/8c-settings-about-windows-" + language + ".png")
+                keyClick(Qt.Key_Escape)
+                tryVerify(() => find("categoryList").activeFocus)
+            }
         }
 
         // A pane longer than the screen at the top, in the middle and at the end (T-185).

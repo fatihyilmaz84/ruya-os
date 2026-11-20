@@ -6,14 +6,17 @@
 //! points (`org.freedesktop.Platform.Compat.i386`, `GL32`) come from the runtime's remote, not
 //! from `/usr`, and are not checked here.
 //!
-//! The file is RUY-34's: until it lands, `the_tmpfiles_links_every_point` is ignored and
-//! `the_expected_lines` holds the derivation. RUY-34's builder removes the `ignore`.
+//! The image's runners are data (RUY-34): one folder per runner in `image/play/runners/` (its pin
+//! and its `runner.json`), and one `L+` line per folder; `the_image_runners_are_valid_and_linked`
+//! holds the folders and the lines together, both ways.
 
 mod common;
 
 use common::fx::check;
 use common::Fx;
 use ruya_play::service::commit::{metadata, ARCH, LAUNCH_COMMAND};
+use ruya_play_format::problem::Problems;
+use ruya_play_format::runner::{is_system_runner_name, parse_runner, FILE_NAME};
 use ruya_play_trust::{check_ceiling, Tier};
 use std::path::PathBuf;
 
@@ -128,13 +131,23 @@ fn links(conf: &str) -> Vec<(String, String)> {
         .collect()
 }
 
-#[test]
-#[ignore = "RUY-34 adds image/rootfs/usr/lib/tmpfiles.d/ruya-play-platform.conf; its builder removes this ignore"]
-fn the_tmpfiles_links_every_point() {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../image/rootfs/usr/lib/tmpfiles.d/ruya-play-platform.conf");
+fn repo(rel: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(rel)
+}
+
+/// The real tmpfiles.d file of the image.
+fn conf() -> (PathBuf, String) {
+    let path = repo("image/rootfs/usr/lib/tmpfiles.d/ruya-play-platform.conf");
     let conf = std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("{} cannot be read: {e}", path.display()));
+    (path, conf)
+}
+
+#[test]
+fn the_tmpfiles_links_every_point() {
+    let (path, conf) = conf();
     let have = links(&conf);
     let mut missing = Vec::new();
     for e in expected() {
@@ -171,4 +184,71 @@ fn the_link_parser_reads_tmpfiles_lines() {
             "/usr/lib/ruyaos/play/launcher".to_string()
         )]
     );
+}
+
+/// The value of the one `key=value` line of a pin file.
+fn pin_value<'a>(pin: &'a str, key: &str) -> Option<&'a str> {
+    let mut values = pin
+        .lines()
+        .filter_map(|l| l.strip_prefix(key)?.strip_prefix('='));
+    let v = values.next();
+    v.filter(|_| values.next().is_none())
+}
+
+/// Every runner folder of `image/play/runners/` (`image/play/install-runners.sh` installs each one)
+/// has a pin of the release (an https URL, a SHA-256, the archive's folder), a `runner.json` the one
+/// parser accepts, a name that can be the last part of `org.ruyaos.Play.Runner.<Name>`, and its `L+`
+/// line; and every runner line of the tmpfiles.d file has its folder.
+#[test]
+fn the_image_runners_are_valid_and_linked() {
+    let runners = repo("image/play/runners");
+    let mut names: Vec<String> = std::fs::read_dir(&runners)
+        .unwrap_or_else(|e| panic!("{} cannot be read: {e}", runners.display()))
+        .map(|e| e.unwrap())
+        .filter(|e| e.file_type().unwrap().is_dir())
+        .map(|e| e.file_name().into_string().unwrap())
+        .collect();
+    names.sort();
+    assert!(!names.is_empty(), "the image ships no runner");
+    let (_, conf) = conf();
+    let have = links(&conf);
+    for name in &names {
+        assert!(is_system_runner_name(name), "{name}: not a runner name");
+        let dir = runners.join(name);
+        let pin = std::fs::read_to_string(dir.join("pin")).expect("a pin file");
+        let url = pin_value(&pin, "url").unwrap_or_else(|| panic!("{name}: one url= line"));
+        assert!(url.starts_with("https://"), "{name}: {url}");
+        let sha = pin_value(&pin, "sha256").unwrap_or_else(|| panic!("{name}: one sha256= line"));
+        assert!(
+            sha.len() == 64 && sha.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')),
+            "{name}: {sha}"
+        );
+        let root = pin_value(&pin, "root").unwrap_or_else(|| panic!("{name}: one root= line"));
+        assert!(
+            !root.is_empty() && !root.contains('/') && root != "..",
+            "{name}: {root}"
+        );
+        let bytes = std::fs::read(dir.join(FILE_NAME)).expect("a runner.json");
+        let mut problems = Problems::new();
+        let parsed = parse_runner(&bytes, &format!("{name}/{FILE_NAME}"), &mut problems);
+        let parsed = parsed.unwrap_or_else(|| panic!("{name}: {:?}", problems.finish()));
+        // Settings > About shows each runner's licences and source (ADR-025's notice duty).
+        assert!(
+            parsed.licence.is_some() && parsed.source_url.is_some(),
+            "{name}: runner.json needs licence and source_url"
+        );
+        let link = (
+            format!("{EXTENSION_ROOT}/org.ruyaos.Play.Runner.{name}/{ARCH}/1"),
+            format!("{USR_TREES}/runners/{name}"),
+        );
+        assert!(have.contains(&link), "{name}: no line {link:?}");
+    }
+    let prefix = format!("{EXTENSION_ROOT}/org.ruyaos.Play.Runner.");
+    for (path, _) in have.iter().filter(|(p, _)| p.starts_with(&prefix)) {
+        let name = path[prefix.len()..].split('/').next().unwrap_or("");
+        assert!(
+            names.iter().any(|n| n == name),
+            "{path} links a runner image/play/runners/ does not have"
+        );
+    }
 }
