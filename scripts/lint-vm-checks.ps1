@@ -122,6 +122,7 @@ try {
         @{ name = "toplevel-plain-positional"; unreadable = 1; lines = @('if [ "$1" = extra ]; then :; fi') },
         @{ name = "toplevel-echo"; unreadable = 1; lines = @('echo "mode: ${1:-check}"') },
         @{ name = "toplevel-multiline-string-tail"; unreadable = 1; lines = @('python3 -c ''import sys', 'print(1)'' "$1"') },
+        @{ name = "multiline-single-quote-then-case"; unreadable = 2; lines = @('python3 -c ''import sys', 'print(1)'' "$1"', 'case "$1" in', '  extra) ;;', 'esac') },
         @{ name = "indented-block"; unreadable = 1; lines = @('if true; then', '    case "$1" in', '      check) ;;', '      extra) ;;', '    esac', 'fi') },
         @{ name = "main-function-and-all-args"; unreadable = 1; lines = @('main() {', '    case "$1" in', '      check) ;;', '    esac', '}', 'main "$@"') },
         @{ name = "case-on-all-args"; unreadable = 1; lines = @('case "$*" in', '  check) ;;', '  extra) ;;', 'esac') },
