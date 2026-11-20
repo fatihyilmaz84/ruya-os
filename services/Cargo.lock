@@ -1089,6 +1089,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruya-play-launch"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "ruya-play-format",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "ruya-play-trust"
 version = "0.1.0"
 dependencies = [
