@@ -179,7 +179,7 @@
     <!--
       Remove an installed .play app (RUY-816): the one owner of its removal, so the shell never
       sends a "play.*" app to Store1.Uninstall. A job (kind "remove", phase "removing") that runs
-      "flatpak uninstall --system --noninteractive -y play.<id>" in the same queue as the installs,
+      flatpak uninstall for play.<id> (system installation, no questions) in the same queue as the installs,
       then records the uninstall (05 §9.2 record_uninstall) and forgets the installed build.
       What Remove KEEPS, as Store1.Uninstall(id, delete_data = false) does: the player's data
       (~/.var/app/play.<id> of every profile) and the key record of the id (key continuity: a package

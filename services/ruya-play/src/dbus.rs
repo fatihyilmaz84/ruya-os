@@ -321,6 +321,44 @@ impl PlayIface {
         gates::admin_counts(approved, caller, self.env.shell_uid(), false)
     }
 
+    /// The `admin_approved` option of an admin's call: `invalid` when it is not a bool,
+    /// `forbidden` when it does not count ([`Self::admin`]).
+    async fn admin_gate(
+        &self,
+        options: &HashMap<String, OwnedValue>,
+        header: &Header<'_>,
+        connection: &Connection,
+    ) -> Result<(), MethodStatus> {
+        let approved = bool_option(options, "admin_approved").ok_or(MethodStatus::Invalid)?;
+        if self.admin(approved, header, connection).await {
+            Ok(())
+        } else {
+            Err(MethodStatus::Forbidden)
+        }
+    }
+
+    /// Verify and Remove: `queue` the job for the manifest id in `app_id`, start the queue when it
+    /// accepted. Answers (status, job).
+    fn queue_for_app(
+        &self,
+        app_id: &str,
+        queue: fn(&Importer, &str) -> (MethodStatus, String),
+    ) -> (String, String) {
+        let id = match package_id(app_id) {
+            Ok(id) => id,
+            Err(s) => return (s.as_str().to_string(), String::new()),
+        };
+        self.started(queue(&self.importer, id))
+    }
+
+    /// The answer (status, job) of a call that queued a job: the queue runs when it accepted.
+    fn started(&self, (status, job): (MethodStatus, String)) -> (String, String) {
+        if status == MethodStatus::Ok {
+            self.kick();
+        }
+        (status.as_str().to_string(), job)
+    }
+
     fn send(&self, signal: Signal) {
         let _ = self.events.try_send(signal);
     }
@@ -370,11 +408,8 @@ impl PlayIface {
         #[zbus(header)] header: Header<'_>,
         #[zbus(connection)] connection: &Connection,
     ) -> (String, String) {
-        let Some(approved) = bool_option(&options, "admin_approved") else {
-            return (MethodStatus::Invalid.as_str().to_string(), String::new());
-        };
-        if !self.admin(approved, &header, connection).await {
-            return (MethodStatus::Forbidden.as_str().to_string(), String::new());
+        if let Err(s) = self.admin_gate(&options, &header, connection).await {
+            return (s.as_str().to_string(), String::new());
         }
         let gated = {
             let env = self.env.clone();
@@ -385,51 +420,28 @@ impl PlayIface {
             Ok(p) => p,
             Err(s) => return (s.as_str().to_string(), String::new()),
         };
-        let (status, job) = self.importer.queue_install(&p, true);
-        if status == MethodStatus::Ok {
-            self.kick();
-        }
-        (status.as_str().to_string(), job)
+        self.started(self.importer.queue_install(&p, true))
     }
 
     /// Queue a re-hash of an installed package against its `play.files`.
     #[zbus(out_args("status", "job"))]
     async fn verify(&self, app_id: String) -> (String, String) {
-        let id = match package_id(&app_id) {
-            Ok(id) => id,
-            Err(s) => return (s.as_str().to_string(), String::new()),
-        };
-        let (status, job) = self.importer.queue_verify(id);
-        if status == MethodStatus::Ok {
-            self.kick();
-        }
-        (status.as_str().to_string(), job)
+        self.queue_for_app(&app_id, Importer::queue_verify)
     }
 
     /// Queue the removal of an installed package (RUY-816).
     #[zbus(out_args("status", "job"))]
     async fn remove(
         &self,
-        app_id: String,
-        options: HashMap<String, OwnedValue>,
         #[zbus(header)] header: Header<'_>,
         #[zbus(connection)] connection: &Connection,
+        app_id: String,
+        options: HashMap<String, OwnedValue>,
     ) -> (String, String) {
-        let Some(approved) = bool_option(&options, "admin_approved") else {
-            return (MethodStatus::Invalid.as_str().to_string(), String::new());
-        };
-        if !self.admin(approved, &header, connection).await {
-            return (MethodStatus::Forbidden.as_str().to_string(), String::new());
+        if let Err(s) = self.admin_gate(&options, &header, connection).await {
+            return (s.as_str().to_string(), String::new());
         }
-        let id = match package_id(&app_id) {
-            Ok(id) => id,
-            Err(s) => return (s.as_str().to_string(), String::new()),
-        };
-        let (status, job) = self.importer.queue_remove(id);
-        if status == MethodStatus::Ok {
-            self.kick();
-        }
-        (status.as_str().to_string(), job)
+        self.queue_for_app(&app_id, Importer::queue_remove)
     }
 
     /// Stop a queued or running job.
@@ -450,11 +462,8 @@ impl PlayIface {
         #[zbus(header)] header: Header<'_>,
         #[zbus(connection)] connection: &Connection,
     ) -> String {
-        let Some(approved) = bool_option(&options, "admin_approved") else {
-            return MethodStatus::Invalid.as_str().to_string();
-        };
-        if !self.admin(approved, &header, connection).await {
-            return MethodStatus::Forbidden.as_str().to_string();
+        if let Err(s) = self.admin_gate(&options, &header, connection).await {
+            return s.as_str().to_string();
         }
         let before = self.importer.developer_mode().ok();
         match self.importer.set_developer_mode(on) {

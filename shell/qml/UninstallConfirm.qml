@@ -263,7 +263,7 @@ FocusScope {
                 width: dialog.stacked ? dialog.contentWidth : dialog.cancelWidth
                 text: qsTr("Cancel")
                 onActivated: dialog.cancel()
-                Keys.onUpPressed: if (deleteData.visible) { Sfx.navigate(); deleteData.forceActiveFocus() }
+                Keys.onUpPressed: if (!dialog.keepsData) { Sfx.navigate(); deleteData.forceActiveFocus() }
                 Keys.onRightPressed: if (!dialog.stacked) { Sfx.navigate(); goButton.forceActiveFocus() }
                 Keys.onDownPressed: if (dialog.stacked) { Sfx.navigate(); goButton.forceActiveFocus() }
             }
@@ -275,13 +275,7 @@ FocusScope {
                 danger: true
                 text: dialog.goLabel
                 onActivated: dialog.confirm()
-                Keys.onUpPressed: {
-                    const above = dialog.stacked ? cancelButton : deleteData
-                    if (above.visible) {
-                        Sfx.navigate()
-                        above.forceActiveFocus()
-                    }
-                }
+                Keys.onUpPressed: if (dialog.stacked || !dialog.keepsData) { Sfx.navigate(); (dialog.stacked ? cancelButton : deleteData).forceActiveFocus() }
                 Keys.onLeftPressed: if (!dialog.stacked) { Sfx.navigate(); cancelButton.forceActiveFocus() }
             }
         }

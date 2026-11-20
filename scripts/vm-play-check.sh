@@ -404,12 +404,13 @@ helper_checks() {
     rm -f /var/lib/ruya-play-helper-probe
 }
 
-# Verify <id> and wait for the job; prints "<method status> <job status or ->" (RUY-834).
-verify_wait() {
-    out="$(call Verify s "$1")" || { echo "call-failed -"; return; }
-    st="$(echo "$out" | parse status)"
+# Wait for the job a Verify or Remove call named (its busctl output is $1, or empty when the call
+# failed); prints "<method status> <job status or ->" and, once accepted, the job.
+job_wait() {
+    [ -n "$1" ] || { echo "call-failed -"; return; }
+    st="$(echo "$1" | parse status)"
     [ "$st" = ok ] || { echo "$st -"; return; }
-    job="$(echo "$out" | parse second)"
+    job="$(echo "$1" | parse second)"
     n=0
     while [ "$n" -lt 300 ]; do
         line="$(call ListJobs | parse job "$job")"
@@ -418,6 +419,9 @@ verify_wait() {
     done
     echo "ok timeout $job"
 }
+
+# Verify <id> and wait for the job (RUY-834).
+verify_wait() { job_wait "$(call Verify s "$1")"; }
 
 verify_checks() {
     app="/var/lib/flatpak/app/play.$appid/current/active/files"
@@ -453,20 +457,8 @@ PY
     [ "$1" = invalid ] && ok "Verify of an empty id is invalid" || bad "Verify of an empty id: $*"
 }
 
-# Remove <app id> as an admin and wait for the job; prints "<method status> <job status or ->".
-remove_wait() {
-    out="$(call Remove 'sa{sv}' "$1" 1 admin_approved b true)" || { echo "call-failed -"; return; }
-    st="$(echo "$out" | parse status)"
-    [ "$st" = ok ] || { echo "$st -"; return; }
-    job="$(echo "$out" | parse second)"
-    n=0
-    while [ "$n" -lt 300 ]; do
-        line="$(call ListJobs | parse job "$job")"
-        case "$line" in finished\ *) echo "ok ${line#finished } $job"; return ;; esac
-        sleep 1; n=$((n + 1))
-    done
-    echo "ok timeout $job"
-}
+# Remove <app id> as an admin and wait for the job (RUY-816).
+remove_wait() { job_wait "$(call Remove 'sa{sv}' "$1" 1 admin_approved b true)"; }
 
 remove_checks() {
     app="/var/lib/flatpak/app/play.$appid"

@@ -1172,14 +1172,27 @@ impl Importer {
         if reconcile::our_files(&self.cfg.flatpak, id).is_none() {
             return (MethodStatus::UnknownApp, String::new());
         }
+        // Busy: a verify of it, or the running install (a queued install of it waits its turn).
+        self.queue_app_job(JobKind::Verify, id, |j| {
+            j.kind == JobKind::Verify || j.state == JobState::Running
+        })
+    }
+
+    /// Queue a job of `kind` for the installed app `play.<id>`, `busy` when an active job of that
+    /// app is one `in_the_way` names. The caller checked the app.
+    fn queue_app_job(
+        &self,
+        kind: JobKind,
+        id: &str,
+        in_the_way: impl Fn(&JobRecord) -> bool,
+    ) -> (MethodStatus, String) {
         let app = format!("play.{id}");
         let mut st = self.shared.lock();
-        let same = |j: &&JobRecord| {
-            j.is_active()
-                && j.app.eq_ignore_ascii_case(&app)
-                && (j.kind == JobKind::Verify || j.state == JobState::Running)
-        };
-        if st.jobs.iter().any(|j| same(&j)) {
+        if st
+            .jobs
+            .iter()
+            .any(|j| j.is_active() && j.app.eq_ignore_ascii_case(&app) && in_the_way(j))
+        {
             return (MethodStatus::Busy, String::new());
         }
         let Some(next) = st.counter.checked_add(1) else {
@@ -1187,7 +1200,7 @@ impl Importer {
         };
         st.counter = next;
         let job = format!("job-{next}");
-        let mut record = JobRecord::queued(&job, JobKind::Verify, "");
+        let mut record = JobRecord::queued(&job, kind, "");
         record.app = app;
         record.name = self.installed_name(id);
         st.jobs.push(record);
@@ -1214,26 +1227,7 @@ impl Importer {
         if !reconcile::ours(&self.cfg.flatpak, id) {
             return (MethodStatus::UnknownApp, String::new());
         }
-        let app = format!("play.{id}");
-        let mut st = self.shared.lock();
-        if st
-            .jobs
-            .iter()
-            .any(|j| j.is_active() && j.app.eq_ignore_ascii_case(&app))
-        {
-            return (MethodStatus::Busy, String::new());
-        }
-        let Some(next) = st.counter.checked_add(1) else {
-            return (MethodStatus::Failed, String::new());
-        };
-        st.counter = next;
-        let job = format!("job-{next}");
-        let mut record = JobRecord::queued(&job, JobKind::Remove, "");
-        record.app = app;
-        record.name = self.installed_name(id);
-        st.jobs.push(record);
-        self.shared.save(&mut st);
-        (MethodStatus::Ok, job)
+        self.queue_app_job(JobKind::Remove, id, |_| true)
     }
 
     /// The pipeline of one remove job: Flatpak uninstalls the app, then the uninstall is recorded

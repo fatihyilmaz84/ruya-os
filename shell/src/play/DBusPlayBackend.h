@@ -21,8 +21,8 @@ public:
     void inspect(const QString &path) override;
     void install(const QString &path, bool adminApproved) override;
     void verify(const QString &appId) override;
-    void remove(const QString &appId, bool adminApproved) override;
     void cancel(const QString &key) override;
+    void remove(const QString &appId, bool adminApproved) override;
     void readDeveloperMode() override;
     void requestDeveloperMode(bool on, bool adminApproved) override;
     void listJobs() override;
