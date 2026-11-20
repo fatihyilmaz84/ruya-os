@@ -65,7 +65,8 @@ Page {
                                : qsTr("Takes effect next time you open it."))
         return parts.join(" ")
     }
-    // The second line of a fact row: the risk ("High risk" first, set in warningText, 04 §5), and why it stays.
+    // The second line of a fact row: the risk ("High risk" first, in the detail's own colour, 04 §5), and why it
+    // stays.
     function factDetail(key) {
         const reason = withdrawable.indexOf(key) >= 0 ? "" : PermissionText.fixedReason(key)
         if (!PermissionText.isHighRisk(key))
@@ -203,7 +204,6 @@ Page {
                         visible: page.canSwitch(key)
                         label: PermissionText.rowLabel(key)
                         detail: PermissionText.isHighRisk(key) ? qsTr("High risk") : ""
-                        detailTone: PermissionText.isHighRisk(key) ? "warning" : ""
                         checked: page.withdrawn.indexOf(key) < 0
                         onToggled: on => page.change(key, on)
                         Connections {
@@ -223,7 +223,6 @@ Page {
                         label: PermissionText.rowLabel(key)
                         value: page.withdrawn.indexOf(key) >= 0 ? qsTr("Withdrawn") : qsTr("Allowed")
                         detail: page.factDetail(key)
-                        detailTone: PermissionText.isHighRisk(key) ? "warning" : ""
                     }
                 }
                 DelegateChoice {

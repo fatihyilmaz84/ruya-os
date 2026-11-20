@@ -172,37 +172,51 @@ Item {
             compare(row("permFact_gamepad").detail, "Always allowed: a console needs its controllers")
         }
 
-        // The detail's colour, and whether it is the warning colour (a tone that is not set keeps `text`).
+        // The colour the detail line is drawn in.
         function detailColour(control) { return findChild(control, "detail").color }
 
-        function test_a_risk_mark_is_the_words_in_the_warning_colour() {
-            verify(!Qt.colorEqual(Theme.warningText, Theme.text), "the two colours differ, so the check means something")
-            // A switch (an admin): "High risk" as its detail, in warningText; the note says what stays.
+        // 04 §5: a settings row carries no badge; its risk mark is the words "High risk" leading its detail, in
+        // the detail's own colour (warningText misses 4.5:1 for a caption on glass and on focusFill).
+        function test_a_risk_mark_is_the_words_leading_the_detail() {
+            // A switch (an admin): "High risk" is its detail; the note says what stays.
             signInAdmin()
             installStream()
             openApp(stream)
             const devices = row("permSwitch_all-devices")
             compare(devices.detail, "High risk")
-            compare(devices.detailTone, "warning")
-            verify(Qt.colorEqual(detailColour(devices), Theme.warningText), String(detailColour(devices)))
+            verify(Qt.colorEqual(detailColour(devices), Theme.text), String(detailColour(devices)))
             compare(row("permNote_all-devices").text, "Controllers and graphics stay available.")
-            compare(row("permSwitch_network").detailTone, "", "a key that is not high risk has no mark")
+            compare(row("permSwitch_network").detail, "", "a key that is not high risk has no mark")
             verify(!row("permNote_network").visible, "and no note before a change")
-            // A fact (not an admin): the same mark.
+            // A fact (not an admin): the words lead, the reason follows.
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "settings")
+            Store.install("org.example.Tools")
+            tryVerify(() => Store.installed.some(a => a.id === "org.example.Tools"), 5000, "Dev Tools installed")
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")
             signIn("p2", "")
-            openApp(stream)
+            openApp("org.example.Tools")
+            const bus = row("permFact_session-bus")
+            verify(bus.visible)
+            compare(bus.detail, "High risk · Can't be withdrawn yet: apps break without it")
+            verify(Qt.colorEqual(detailColour(bus), Theme.text), String(detailColour(bus)))
+            compare(row("permFact_network").detail, "", "a key that is not high risk has no mark")
+            // Back to the list (Dev Tools comes before Game Streamer), then to Game Streamer's page with the keys.
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => appRow("org.example.Tools").activeFocus, 2000)
+            for (let i = 0; i < 8 && !appRow(tc.stream).activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(appRow(tc.stream).activeFocus, "on Game Streamer's row")
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "appPermissions")
+            tryVerify(() => find("page_appPermissions").answered && find("page_appPermissions").appId === tc.stream, 2000)
             const fact = row("permFact_all-devices")
             verify(fact.visible)
             compare(fact.detail, "High risk")
-            verify(Qt.colorEqual(detailColour(fact), Theme.warningText), String(detailColour(fact)))
+            verify(Qt.colorEqual(detailColour(fact), Theme.text), String(detailColour(fact)))
             verify(!row("permNote_all-devices").visible, "the switch's note goes with the switch")
-            const network = row("permFact_network")
-            compare(network.detailTone, "")
-            verify(Qt.colorEqual(detailColour(network), Theme.text))
         }
 
         function test_what_cannot_be_withdrawn_says_why() {

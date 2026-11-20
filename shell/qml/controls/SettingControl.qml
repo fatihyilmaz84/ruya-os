@@ -58,9 +58,6 @@ FocusScope {
     // A second line a kind supplies when `detail` is empty (an action's status, RUY-512).
     property string detailFallback
     readonly property string detailShown: detail !== "" ? detail : detailFallback
-    // The detail's tone (RUY-744, 04 §5): "" plain `text`; "warning" `warningText`, for a risk mark ("High
-    // risk" at the start of the detail: the words carry it, the colour never alone). A row carries no badge.
-    property string detailTone: ""
     property real trailingWidth: 0
     readonly property bool hasDetail: detailShown !== ""
 
@@ -272,8 +269,7 @@ FocusScope {
         elide: Text.ElideRight
         textFormat: Text.PlainText      // a device's battery and connection: plain words
         text: control.detailShown
-        color: Qt.alpha(control.detailTone === "warning" ? Theme.warningText : control.labelColor,
-                        control.dimmed ? Theme.disabledOpacity : 1)
+        color: Qt.alpha(control.labelColor, control.dimmed ? Theme.disabledOpacity : 1)
         font.pixelSize: Theme.typeCaption * control.u
     }
 }
