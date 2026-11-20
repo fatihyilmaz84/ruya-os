@@ -10,6 +10,12 @@ The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand 
 - **Lead work:** RUY-100 closed (all but launch proven; launch moves to RUY-101). Architect audit of RUY-101 led to ADR-037 (runner.json v1, the launch protocol) and ADR-038 (launcher and runners as /usr files, shown to Flatpak as unmaintained extensions), both committed. RUY-899 proved ADR-038 in the VM (`scripts/spikes/play/q5-unmaintained-ext.sh`, ALL PASS; the Dell's SSH timed out). RUY-906 docs done.
 - **Owner decisions (2026-11-19):** RUY-897: GE-Proton is always in the OS image and updates with it; packagers may bundle another version. Then: **every Windows runner ships in the image** (GE-Proton, Wine stable and staging, Wine-GE, UMU-Proton), and an app picks its own runner (RUY-37 rescoped; ADR-025 amended). No Store channel for runners.
 
+## Between sessions (owner session, 2026-11-20): read first
+- **Labels cleaned on RUY:** seven stray labels deleted (``area:` ``, `area:cmakelists.txt`, `area:new`, `area:no`, `area:ruya`, ``area:ruya` ``, `area:the`); RUY-175 got `area:apps`, RUY-160 `area:tools`. Left for you: `size:L` on RUY-117 (not in the template).
+- **New label `spike`** on the 18 real spikes (not RUY-58, RUY-157 or the cancelled RUY-32/843). Every new spike carries it; `PLANNING.md` step 4 and step 2 (read the label list each pass) say so.
+- **Paper Plane 0.27.0** is in production: Telegram messages for a session waiting on a permission or an answer, and a daily digest of what waits on the owner. Paper Plane has no ADR or spike type and needs none: ADRs stay in `00-overview.md`, their tickets name `(ADR-n)` in the title.
+- **Blueprint:** this way of working is written up for other projects in `D:\dev\Synsi_Flow\WORK-PLAN.md` (outside this repo). A process change here that would help any project goes there too.
+
 ## In flight
 - Nothing. No builder worktrees (only the old `.claude/worktrees/design-pad-silhouettes-559410`). The owner stopped new work at the plan limit (2026-11-20).
 
