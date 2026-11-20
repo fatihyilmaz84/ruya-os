@@ -32,6 +32,11 @@ struct LibraryItem
     QString playSigner;
     QString playSignerKeyId;               // trust.json's signer_id (32 hex); "" when unsigned
     QStringList playScreenshots;           // 1080p screenshot paths in order; empty when none
+    // The launcher's own runner resolution for the package's default choice (RUY-903); all "" for a native game.
+    QString playRunner;                    // "<family> <version>" the launch would use, e.g. "wine 10.2"
+    QString playRunnerSource;              // "bundled" | "system" (with playRunner)
+    QString playRunnerTested;              // the version the developer tested with; "" when none
+    QString playResolveError;              // one sentence: why the launch would refuse; "" when it can start
 
     // The record as QML sees it (camelCase keys).
     QVariantMap toVariant() const
@@ -62,6 +67,10 @@ struct LibraryItem
             out.insert(QStringLiteral("playSigner"), playSigner);
             out.insert(QStringLiteral("playSignerKeyId"), playSignerKeyId);
             out.insert(QStringLiteral("playScreenshots"), playScreenshots);
+            out.insert(QStringLiteral("playRunner"), playRunner);
+            out.insert(QStringLiteral("playRunnerSource"), playRunnerSource);
+            out.insert(QStringLiteral("playRunnerTested"), playRunnerTested);
+            out.insert(QStringLiteral("playResolveError"), playResolveError);
         }
         return out;
     }

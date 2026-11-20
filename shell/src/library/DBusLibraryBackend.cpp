@@ -84,6 +84,10 @@ LibraryItem toItem(const QVariantMap &d)
         i.playSigner = d.value(QStringLiteral("play_signer")).toString();
         i.playSignerKeyId = d.value(QStringLiteral("play_signer_key_id")).toString();
         i.playScreenshots = d.value(QStringLiteral("play_screenshots")).toStringList();
+        i.playRunner = d.value(QStringLiteral("play_runner")).toString();
+        i.playRunnerSource = d.value(QStringLiteral("play_runner_source")).toString();
+        i.playRunnerTested = d.value(QStringLiteral("play_runner_tested")).toString();
+        i.playResolveError = d.value(QStringLiteral("play_resolve_error")).toString();
     }
     return i;
 }

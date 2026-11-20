@@ -56,6 +56,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         steam_roots: home.as_deref().map(steam_roots).unwrap_or_default(),
         lister: lister(session),
         play_root: root.clone(),
+        play_runners: PathBuf::from(ruya_library::play::RUNNERS_DIR),
     };
     let iface = LibraryIface::new(sources);
 

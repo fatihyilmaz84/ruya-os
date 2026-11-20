@@ -1005,6 +1005,8 @@ dependencies = [
  "futures-lite",
  "ruya-contract-test",
  "ruya-play-art",
+ "ruya-play-format",
+ "ruya-play-launch",
  "serde_json",
  "tempfile",
  "zbus",

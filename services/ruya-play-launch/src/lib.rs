@@ -113,7 +113,13 @@ fn damaged(problems: Problems) -> Failure {
 /// does), then each bundled copy's `runner.json`. Packages are checked for their tier at install;
 /// here the reserved-id rule is lifted (`official`), since an official package is installed too.
 pub fn load(os: &dyn LaunchOs) -> Result<Loaded, Failure> {
-    let src = AppSource::new(os, plan::APP);
+    load_from(os, plan::APP)
+}
+
+/// [`load`] for the package tree at `root`: `/app` for the launcher, a deployment's `files/` for
+/// the library's dry run ([`dry_run`]).
+pub fn load_from(os: &dyn LaunchOs, root: &str) -> Result<Loaded, Failure> {
+    let src = AppSource::new(os, root);
     let mut problems = Problems::new();
     let read = |path: &str, limit: u64| {
         ruya_play_format::read_small(&src, path, limit).map_err(|p| {
@@ -151,6 +157,37 @@ pub fn load(os: &dyn LaunchOs) -> Result<Loaded, Failure> {
         return Err(damaged(problems));
     }
     Ok(Loaded { manifest, bundled })
+}
+
+/// What the launcher would run the game with, decided without starting anything.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DryRun {
+    /// The runner of `run.component`; none for a native game.
+    pub runner: Option<plan::Root>,
+}
+
+/// The launcher's own resolution with other roots (RUY-903): the package tree at `package` (a
+/// deployment's `files/` instead of `/app`) and the OS's runners under `runners` (the image's
+/// `/usr/lib/ruyaos/play/runners` instead of `/app/runners`), the package's default choice. The
+/// same [`load_from`], [`runners::scan_in`] and [`plan::pick_runners`] the launch runs, so the
+/// library tells the player what the launch will say. A failure is the sentence the launch would
+/// show.
+pub fn dry_run(os: &dyn LaunchOs, package: &str, runners: &str) -> Result<DryRun, Failure> {
+    let loaded = load_from(os, package)?;
+    let system = runners::scan_in(os, runners);
+    let (mut roots, _notes) = plan::pick_runners(
+        &loaded.manifest,
+        &loaded.bundled,
+        &system,
+        Override::PackageDefault,
+    )?;
+    let runner = loaded
+        .manifest
+        .run
+        .component
+        .as_ref()
+        .and_then(|id| roots.remove(id));
+    Ok(DryRun { runner })
 }
 
 /// Everything before the `exec`: load, find runners, plan, prepare the prefix, run the setup

@@ -298,3 +298,109 @@ fn null_signer_fields_are_absent() {
     assert_eq!(play("both").signer, None);
     assert_eq!(play("name").signer.as_deref(), Some("k1"));
 }
+
+/// RUY-903 (Linux only: the launcher's real file system): a package the launcher can read, laid
+/// out as `ruya-play` commits it, and the image's runners folder.
+#[cfg(target_os = "linux")]
+mod runner_keys {
+    use super::*;
+
+    const ROW: &str = "play.com.example.hop\thop\truyaos-play-local\n";
+
+    /// The wine game of ruya-play-launch's tests, with the component's `source`.
+    fn deployment(root: &Path, source: &str) {
+        let f = files(root, "com.example.hop");
+        let manifest = serde_json::json!({
+            "format": 1, "id": "com.example.hop", "name": {"en": "Hop"},
+            "version": "1.0", "build": 1, "art": {"icon": "art/icon.png"},
+            "components": [{
+                "id": "wine", "type": "wine", "source": source, "min": "9.0", "tested": "9.20",
+                "bundled": {"path": "components/wine", "version": "9.20",
+                            "licence": "LGPL-2.1-or-later"}
+            }],
+            "run": {"runner": "wine", "component": "wine", "command": ["${payload}/Hop.exe"]}
+        });
+        put(&f.join("play.json"), manifest.to_string().as_bytes());
+        let mut table = String::new();
+        for (path, data) in [
+            ("art/icon.png", "icon"),
+            ("components/wine/bin/wine", "elf"),
+            ("components/wine/bin/wineserver", "elf"),
+            ("licences/LGPL-2.1.txt", "text"),
+            ("payload/Hop.exe", "MZ"),
+        ] {
+            put(&f.join(path), data.as_bytes());
+            table.push_str(&format!(
+                "{{\"h\":\"{}\",\"p\":\"{path}\",\"s\":{},\"t\":\"f\"}}\n",
+                "0".repeat(64),
+                data.len()
+            ));
+        }
+        put(&f.join("play.files"), table.as_bytes());
+    }
+
+    fn image_runner(root: &Path, version: &str) {
+        let dir = root.join("runners").join(format!("wine-{version}"));
+        put(
+            &dir.join("runner.json"),
+            format!(
+                r#"{{"format":1,"family":"wine","kind":"wine","version":"{version}","arch":"x86_64","entry":{{"wine":"bin/wine","wineserver":"bin/wineserver"}}}}"#
+            )
+            .as_bytes(),
+        );
+        put(&dir.join("bin/wine"), b"elf");
+        put(&dir.join("bin/wineserver"), b"elf");
+    }
+
+    #[test]
+    fn the_image_runner_is_what_the_item_says_will_run() {
+        let dir = tempfile::tempdir().unwrap();
+        deployment(dir.path(), "system");
+        image_runner(dir.path(), "10.2");
+        let item = &list(dir.path(), ROW)["flatpak:play.com.example.hop"];
+        let play = item.play.as_ref().unwrap();
+        assert_eq!(play.runner.as_deref(), Some("wine 10.2"));
+        assert_eq!(play.runner_source.as_deref(), Some("system"));
+        assert_eq!(play.runner_tested.as_deref(), Some("9.20"));
+        assert_eq!(play.resolve_error, None);
+        let rec = record(item);
+        assert!(rec.contains_key("play_runner") && !rec.contains_key("play_resolve_error"));
+    }
+
+    #[test]
+    fn without_the_image_runner_the_item_says_why() {
+        let dir = tempfile::tempdir().unwrap();
+        deployment(dir.path(), "system");
+        let item = &list(dir.path(), ROW)["flatpak:play.com.example.hop"];
+        let play = item.play.as_ref().unwrap();
+        assert_eq!(play.runner, None);
+        assert!(play
+            .resolve_error
+            .as_deref()
+            .is_some_and(|s| s.contains("no runner of family wine")));
+    }
+
+    #[test]
+    fn a_runner_older_than_the_package_needs_gives_the_sentence() {
+        let dir = tempfile::tempdir().unwrap();
+        deployment(dir.path(), "system");
+        image_runner(dir.path(), "8.0");
+        let item = &list(dir.path(), ROW)["flatpak:play.com.example.hop"];
+        assert_eq!(
+            item.play.as_ref().unwrap().resolve_error.as_deref(),
+            Some("The OS runner is 8.0, older than the required 9.0.")
+        );
+    }
+
+    #[test]
+    fn a_package_the_launcher_cannot_read_is_a_sentence_not_a_broken_item() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = files(dir.path(), "com.example.hop");
+        put(&f.join("play.json"), br#"{ "name": { "en": "Hop" } }"#);
+        let item = &list(dir.path(), ROW)["flatpak:play.com.example.hop"];
+        assert_eq!(item.title, "Hop");
+        let play = item.play.as_ref().unwrap();
+        assert_eq!(play.runner, None);
+        assert!(play.resolve_error.is_some());
+    }
+}

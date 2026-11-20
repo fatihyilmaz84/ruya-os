@@ -27,6 +27,10 @@ Item {
             compare(p.playSigner, "Example Games")
             compare(p.playSignerKeyId, "0123456789abcdef0123456789abcdef")
             compare(p.playScreenshots.length, 0, "no screenshot path to a file the mock does not have (RUY-886)")
+            compare(p.playRunner, "wine 10.2")
+            compare(p.playRunnerSource, "system")
+            compare(p.playRunnerTested, "9.20")
+            compare(p.playResolveError, "")
             for (const role of ["icon", "logo", "card", "cover", "hero"])
                 verify(p.art[role], role)
         }
@@ -55,6 +59,18 @@ Item {
                 }
                 verify(ok && xhr.responseText.length > 100, "the mock serves a path that is not a file: " + path)
             }
+        }
+
+        // RUY-903: a refusal is one sentence and no runner; Star Hopper keeps its runner.
+        function test_a_refused_item_has_its_sentence_and_no_runner() {
+            Library.resetMockForTests("playart:" + artFixtures)
+            tryVerify(() => Library.item("flatpak:play.com.example.quiet").play === true)
+            const q = Library.item("flatpak:play.com.example.quiet")
+            compare(q.playResolveError, "The OS runner is 8.0, older than the required 9.0.")
+            compare(q.playRunner, "")
+            compare(q.playRunnerSource, "")
+            compare(Library.item("flatpak:play.com.example.starhopper").playRunner, "wine 10.2")
+            Library.resetMockForTests("")
         }
 
         function test_other_items_have_no_play_keys() {
