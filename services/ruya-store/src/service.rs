@@ -617,26 +617,34 @@ impl<F: Flatpak> Store<F> {
         }
     }
 
-    /// The app asks for `key` and the console withdraws it: the sandbox read, or why not. The
-    /// caller holds the override lock.
-    fn withdrawable_sandbox(
+    /// A change of one key the app asks for and the console withdraws (an admin's): `change` runs
+    /// on the sandbox read under the override lock, which is held until it returns. Otherwise why
+    /// not: `forbidden` first, then the installed check, the reading, and the key.
+    fn change_key(
         &self,
         id: &str,
         key: &str,
         is_admin: bool,
         emit: &mut dyn FnMut(Event),
-    ) -> Result<Sandbox, Status> {
+        change: impl FnOnce(Sandbox) -> Status,
+    ) -> Status {
         if !is_admin {
-            return Err(Status::Forbidden);
+            return Status::Forbidden;
         }
-        self.installed_app(id, emit)?;
-        let sandbox = self.sandbox(id)?;
+        let _held = self.overrides_held();
+        let read = self.installed_app(id, emit).and_then(|()| self.sandbox(id));
+        let sandbox = match read {
+            Ok(sandbox) => sandbox,
+            Err(status) => return status,
+        };
         if !sandbox.app.keys().iter().any(|k| k == key) {
             // An unknown key, or one the app does not ask for: an override never grants.
-            return Err(Status::Invalid);
+            return Status::Invalid;
         }
-        overrides::withdraw_args(&sandbox.app, key, self.device_input()).map_err(refused)?;
-        Ok(sandbox)
+        if let Err(refusal) = overrides::withdraw_args(&sandbox.app, key, self.device_input()) {
+            return refused(refusal);
+        }
+        change(sandbox)
     }
 
     /// `WithdrawPermission` (admin): adds the key's withdrawal to the app's override. A key that
@@ -648,26 +656,23 @@ impl<F: Flatpak> Store<F> {
         is_admin: bool,
         emit: &mut dyn FnMut(Event),
     ) -> Status {
-        let _held = self.overrides_held();
-        let sandbox = match self.withdrawable_sandbox(id, key, is_admin, emit) {
-            Ok(sandbox) => sandbox,
-            Err(status) => return status,
-        };
-        if !sandbox.permissions.effective.iter().any(|k| k == key) {
-            return Status::Ok;
-        }
-        // From what the app has now, so a path an earlier override added goes as well.
-        let args = match overrides::withdraw_args(&sandbox.now, key, self.device_input()) {
-            Ok(args) => args,
-            Err(refusal) => return refused(refusal),
-        };
-        match self.flatpak.add_override(id, &args) {
-            Ok(()) => Status::Ok,
-            Err(err) => {
-                eprintln!("ruya-store: withdrawing {key} from {id} failed: {err}");
-                Status::Failed
+        self.change_key(id, key, is_admin, emit, |sandbox| {
+            if !sandbox.permissions.effective.iter().any(|k| k == key) {
+                return Status::Ok;
             }
-        }
+            // From what the app has now, so a path an earlier override added goes as well.
+            let args = match overrides::withdraw_args(&sandbox.now, key, self.device_input()) {
+                Ok(args) => args,
+                Err(refusal) => return refused(refusal),
+            };
+            match self.flatpak.add_override(id, &args) {
+                Ok(()) => Status::Ok,
+                Err(err) => {
+                    eprintln!("ruya-store: withdrawing {key} from {id} failed: {err}");
+                    Status::Failed
+                }
+            }
+        })
     }
 
     /// `RestorePermission` (admin): gives the key back. `flatpak override` cannot take back one
@@ -682,11 +687,13 @@ impl<F: Flatpak> Store<F> {
         is_admin: bool,
         emit: &mut dyn FnMut(Event),
     ) -> Status {
-        let _held = self.overrides_held();
-        let sandbox = match self.withdrawable_sandbox(id, key, is_admin, emit) {
-            Ok(sandbox) => sandbox,
-            Err(status) => return status,
-        };
+        self.change_key(id, key, is_admin, emit, |sandbox| {
+            self.restore_in(id, key, sandbox)
+        })
+    }
+
+    /// `restore_permission`'s change, under the override lock.
+    fn restore_in(&self, id: &str, key: &str, sandbox: Sandbox) -> Status {
         if !sandbox.permissions.withdrawn.iter().any(|k| k == key) {
             return Status::Ok;
         }
@@ -722,7 +729,8 @@ impl<F: Flatpak> Store<F> {
         }
     }
 
-    /// `ResetPermissions` (admin): removes the app's override, ours or one written by hand.
+    /// `ResetPermissions` (admin): removes the app's override, ours or one written by hand. Under
+    /// the override lock, like the other changes.
     pub fn reset_permissions(
         &self,
         id: &str,
