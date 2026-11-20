@@ -63,6 +63,23 @@ function Get-VmDispatchedModes([string]$Path) {
             if ($p -and $p -ne '*') { [void]$found.Add($p) }
         }
     }
+    # the script's own functions that branch on their first argument (`case "$1"`, `[ "$1" ...`):
+    # calling one with the selector is a dispatch, not a plain command
+    $ownFuncs = @{}
+    $fname = $null
+    $branchOn1 = '\bcase\s+"?\$\{?1\b|\[\[?\s+"?\$\{?1\b'
+    foreach ($fl in $lines) {
+        if ($fl -match '^\s*(?:function\s+)?([\w-]+)\(\)\s*\{(.*)$') {
+            $fname = $Matches[1]
+            if ($Matches[2] -match $branchOn1) { $ownFuncs[$fname] = $true }
+            if ($Matches[2] -match '\}\s*$') { $fname = $null }
+            continue
+        }
+        if ($fname) {
+            if ($fl -match $branchOn1) { $ownFuncs[$fname] = $true }
+            if ($fl -match '^\}') { $fname = $null }
+        }
+    }
     $heredoc = $null
     $inSingle = $false     # inside a single-quoted string that spans lines (a python snippet)
     $funcIndent = -1       # the indentation of the function whose body we are in; -1: top level
@@ -125,9 +142,12 @@ function Get-VmDispatchedModes([string]$Path) {
             if (-not $none -and $l -match $assign) { $left = '' }
             if ($left -match '^\s*set -- \S') { $unreadable.Add("line $($i + 1): $($l.Trim())"); continue }
         }
-        # the selector variable inside a plain command line (`echo "mode $mode"`, `run "$mode"`, with
-        # optional `VAR=value` prefixes) is not a dispatch
-        if ($left -match '^\s*(\w+=\S* +)*\w[\w.-]* ' -and $left -notmatch '\b(case|if|elif|while|until|test)\b|\[|&&|\|\|') {
+        # the selector variable inside a plain command line (`echo "mode $mode"`, `python3 x "$mode"`,
+        # with optional `VAR=value` prefixes) is not a dispatch; a call of the script's own function or
+        # eval/exec/source with it is one (it dispatches on the value), so it stays refused
+        if ($left -match '^\s*(\w+=\S* +)*(\w[\w.-]*) ' -and -not $ownFuncs.ContainsKey($Matches[2]) -and
+            $Matches[2] -notin @('eval', 'exec', 'source') -and
+            $left -notmatch '\b(case|if|elif|while|until|test)\b|\[|&&|\|\|') {
             $left = $left -replace $nameRef, ''
         }
         if (($top -and $left -match $argRef) -or $left -match $nameRef) { $unreadable.Add("line $($i + 1): $($l.Trim())") }

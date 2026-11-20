@@ -146,7 +146,6 @@ except Exception: print("?")' | tr -d '\r'
     if [ "$now" = "$admin" ]; then pass "ActiveProfile is still $admin"; else fail "VerifyPin changed ActiveProfile to '$now'"; fi
     call VerifyPin ss "$admin" "$admin_pin" >/dev/null # a right PIN resets the failure counter
 
-    # shellcheck disable=SC2086 # the ids are words on purpose
     read -r first _ <<< "$ids"
     out="$(call RemoveGuest s "$first")"
     if [ "$(echo "$out" | field 0)" = ok ]; then pass "RemoveGuest $first"; else fail "RemoveGuest $first: $out"; fi

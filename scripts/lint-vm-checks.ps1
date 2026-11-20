@@ -131,7 +131,9 @@ try {
         @{ name = "function-uses-selector"; unreadable = 1; lines = @('mode="${1:-check}"', 'run() { case "$mode" in', '  extra) echo ;;', '  esac; }', 'run') },
         @{ name = "for-all-args"; unreadable = 1; lines = @('for m in "$@"; do', '  case "$m" in', '    extra) ;;', '  esac', 'done') },
         @{ name = "none-uses-positional"; unreadable = 1; lines = @('# modes: none', 'echo "$1"') },
-        @{ name = "none-with-canonical-dispatch"; unreadable = 1; lines = @('# modes: none', 'mode="${1:-check}"', 'case "$mode" in', '  check) ;;', 'esac') }
+        @{ name = "none-with-canonical-dispatch"; unreadable = 1; lines = @('# modes: none', 'mode="${1:-check}"', 'case "$mode" in', '  check) ;;', 'esac') },
+        @{ name = "selector-into-own-function"; unreadable = 1; lines = @('mode="${1:-check}"', 'run() { case "$1" in check) ;; extra) ;; esac; }', 'run "$mode"') },
+        @{ name = "selector-into-eval"; unreadable = 1; lines = @('mode="${1:-check}"', 'do_check() { :; }', 'do_extra() { :; }', 'eval "do_$mode"') }
     )
     foreach ($s in $shapes) {
         $sp = Join-Path $qs "shape-$($s.name).sh"
