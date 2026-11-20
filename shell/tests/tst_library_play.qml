@@ -26,10 +26,35 @@ Item {
             compare(p.playTier, "developer")
             compare(p.playSigner, "Example Games")
             compare(p.playSignerKeyId, "0123456789abcdef0123456789abcdef")
-            compare(p.playScreenshots.length, 3)
-            verify(p.playScreenshots[0].endsWith("screenshot-0-1080.webp"))
-            for (const role of ["logo", "card", "cover", "preview", "trailer"])
+            compare(p.playScreenshots.length, 0, "no screenshot path to a file the mock does not have (RUY-886)")
+            for (const role of ["icon", "logo", "card", "cover", "hero"])
                 verify(p.art[role], role)
+        }
+
+        // RUY-886: a path the mock serves must name a file that is there (the pictures the shell ships), or
+        // every surface that shows the plain .play scenario draws "cannot load". Every art role and screenshot of
+        // every item is read like a resource would be.
+        function test_every_path_the_plain_mock_serves_exists() {
+            Library.resetMockForTests("play")
+            tryVerify(() => Library.item("flatpak:play.com.example.starhopper").play === true)
+            let paths = []
+            for (const it of Library.items) {
+                for (const role in (it.art ?? {}))
+                    paths.push(it.art[role])
+                paths = paths.concat(it.playScreenshots ?? [])
+            }
+            verify(paths.length >= 5, "the .play item brings its pictures: " + paths.length)
+            for (const path of paths) {
+                const xhr = new XMLHttpRequest()
+                xhr.open("GET", path, false)
+                let ok = true
+                try {
+                    xhr.send()
+                } catch (e) {
+                    ok = false
+                }
+                verify(ok && xhr.responseText.length > 100, "the mock serves a path that is not a file: " + path)
+            }
         }
 
         function test_other_items_have_no_play_keys() {

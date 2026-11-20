@@ -79,7 +79,9 @@ void MockLibraryBackend::reset(const QString &scenario)
         // "unlisted": one more Flatpak app that the Store's catalogue does not know (RUY-16: no Details row).
         if (scenario == QLatin1String("unlisted"))
             m_items.append(item("flatpak:org.example.Unlisted", "app", "Unlisted App", 1762000000));
-        // "play": one .play app with every field and role (RUY-852; the real art is on the VM).
+        // "play": one .play app with every field and the image roles (RUY-852; the real art is on the VM). It
+        // has no screenshots, preview or trailer: the mock ships no image or video for them (RUY-886); "playart:<dir>"
+        // has them.
         // "playart:<dir>": the same app with real pictures from <dir> (tests and screenshots, RUY-856: logo.png,
         // card/cover/hero/icon from the glow fixtures, the trailer's file does not exist so the trailer cannot play),
         // plus an icon-only .play app and a Flatpak that is not a .play but carries a logo and a trailer key
@@ -87,13 +89,14 @@ void MockLibraryBackend::reset(const QString &scenario)
         const bool playArt = scenario.startsWith(QLatin1String("playart:"));
         if (scenario == QLatin1String("play") || playArt) {
             LibraryItem p = item("flatpak:play.com.example.starhopper", "game", "Star Hopper", 1762100000);
-            p.art = {{QStringLiteral("icon"), QStringLiteral("/mock/play/icon-512.webp")},
-                     {QStringLiteral("logo"), QStringLiteral("/mock/play/logo.webp")},
-                     {QStringLiteral("card"), QStringLiteral("/mock/play/card-540.webp")},
-                     {QStringLiteral("cover"), QStringLiteral("/mock/play/cover-900.webp")},
-                     {QStringLiteral("hero"), QStringLiteral("/mock/play/hero-2160.webp")},
-                     {QStringLiteral("preview"), QStringLiteral("/mock/play/preview.webm")},
-                     {QStringLiteral("trailer"), QStringLiteral("/mock/play/trailer.webm")}};
+            // Pictures the shell ships (the bundled wallpapers): a mock path must name a file that exists, or the
+            // item draws "cannot load" (RUY-886). No preview or trailer: the mock ships no video.
+            const QString bundled = QStringLiteral("qrc:/qt/qml/RuyaShell/assets/wallpapers/");
+            p.art = {{QStringLiteral("icon"), bundled + QStringLiteral("ember.jpg")},
+                     {QStringLiteral("logo"), bundled + QStringLiteral("orchid.jpg")},
+                     {QStringLiteral("card"), bundled + QStringLiteral("dusk.jpg")},
+                     {QStringLiteral("cover"), bundled + QStringLiteral("lagoon.jpg")},
+                     {QStringLiteral("hero"), bundled + QStringLiteral("aurora.jpg")}};
             p.play = true;
             p.genres = {QStringLiteral("platformer"), QStringLiteral("adventure")};
             p.playersMin = 1;
@@ -103,9 +106,6 @@ void MockLibraryBackend::reset(const QString &scenario)
             p.playTier = QStringLiteral("developer");
             p.playSigner = QStringLiteral("Example Games");
             p.playSignerKeyId = QStringLiteral("0123456789abcdef0123456789abcdef");
-            p.playScreenshots = {QStringLiteral("/mock/play/screenshot-0-1080.webp"),
-                                 QStringLiteral("/mock/play/screenshot-1-1080.webp"),
-                                 QStringLiteral("/mock/play/screenshot-2-1080.webp")};
             if (playArt) {
                 const QString dir = scenario.mid(8);
                 auto at = [&](const char *name) { return dir + QLatin1Char('/') + QLatin1String(name) + QStringLiteral(".png"); };

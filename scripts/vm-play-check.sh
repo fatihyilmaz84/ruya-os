@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: check generation helper parse perms restart runid verify withid
+# modes: check generation helper parse perms pkgid restart runid verify withid
 # Checks ruya-play (org.ruyaos.Play1, RUY-829, the lead's run under RUY-100) inside a running VM,
 # as root. Modes:
 #   check  (default) every step below
@@ -21,15 +21,17 @@
 #          and the deployment's share/ruyaos/play/trust.json says format 1, unverified, no signer,
 #          no store signature
 #   runid  host fixtures only: `runid <id>` prints the id check would use for <id>
+#   pkgid  host fixtures only: `pkgid <id> <part>` prints "<id>_<part>" (the one id-suffix rule,
+#          RUY-887; vm-library-check.sh asks it for its own id), FAIL when it passes 120 bytes (PLAY_MAX_ID_BYTES)
 #   generation host fixtures only: `generation <installed.json> <id> [<n>]` prints the metadata
 #          generation recorded for <id> (0 when the entry has none, "none" without an entry), after
 #          setting it to <n>. `check` uses it (RUY-900, ADR-038): the install stamps a generation;
 #          set back to 0 with the service stopped, the next start commits the app again (log line
 #          "recommitted play.<id>", a new commit, the generation stamped, the runners' point in the
 #          metadata), and the start after that plans no recommit for it
-#   Every mode that installs uses its own package id (RUY-877): "<id>.c<run>" for check (one
+#   Every mode that installs uses its own package id (RUY-877): "<id>_c<run>" for check (one
 #   fresh id per run, RUY-879; its signed-A/B steps need one id within the run, on purpose),
-#   "<id>.verify" for verify and "<id>.perms" for perms, written into a copy of the sample's
+#   "<id>_verify" for verify and "<id>_perms" for perms (pkg_id), written into a copy of the sample's
 #   play.json. ruya-play keeps a signer's trust record for an id after an uninstall (05 section
 #   9), so a shared id made a later install different-developer. verify and perms install
 #   unsigned, so no key record can block their fixed ids; check signs with a new key A each run,
@@ -190,9 +192,24 @@ with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
 PY
 }
 
-# run_id <id>: check's package id for this run. The extra part starts with a letter (a part may
-# not start with a digit, ruya-play-format check_id) and the pid keeps two runs in one second apart.
-run_id() { echo "$1.c$(date +%s)x$$"; }
+# The format's longest id (MAX_ID_BYTES in services/ruya-play-format/src/limits.rs; the host fixtures
+# check the two agree). ruya-play refuses a longer id, so pkg_id must not make one.
+PLAY_MAX_ID_BYTES=120
+
+# pkg_id <id> <part>: the package id a mode installs under, "<id>_<part>": the part is joined to the
+# last id part with "_", so the id stays valid whatever that part holds (a "-" is allowed in the last
+# part only, so a new dotted part after it would break the id). The one id-suffix rule: every mode
+# (check, verify, perms) and vm-library-check.sh (`pkgid` mode) go through it. Prints nothing and
+# returns 1 when the result would pass PLAY_MAX_ID_BYTES.
+pkg_id() {
+    local r="$1_$2"
+    [ "${#r}" -le "$PLAY_MAX_ID_BYTES" ] || { echo "FAIL: the package id '$r' is longer than $PLAY_MAX_ID_BYTES bytes; the sample's id is too long for this check" >&2; return 1; }
+    echo "$r"
+}
+
+# run_id <id>: check's package id for this run: the part "c<time>x<pid>" starts with a letter (a part
+# may not start with a digit, ruya-play-format check_id) and the pid keeps two runs in one second apart.
+run_id() { pkg_id "$1" "c$(date +%s)x$$"; }
 
 # generation <installed.json> <id> [<n>]: the metadata generation recorded for <id> (RUY-900; an
 # entry without one reads 0, no entry prints "none"), after setting it to <n> when given.
@@ -268,13 +285,16 @@ if [ "$mode" = withid ]; then
     with_id "${2:?in.zip}" "${3:?out.zip}" "${4:?id}"
     exit $?
 fi
+if [ "$mode" = pkgid ]; then
+    pkg_id "${2:?id}" "${3:?part}"
+    exit $?
+fi
 if [ "$mode" = runid ]; then
     run_id "${2:?id}"
     exit $?
 fi
 if [ "$mode" = generation ]; then
-    shift
-    generation "$@"
+    generation "${2:?installed.json}" "${3:?id}" ${4:+"$4"}
     exit $?
 fi
 
@@ -467,7 +487,7 @@ mkdir -p "$work" "$usb" "$loose"
 
 if [ "$mode" = verify ]; then
     dev_mode true >/dev/null
-    appid="$appid.verify"
+    appid="$(pkg_id "$appid" verify)" || { bad "no verify id for $appid"; exit 1; }
     with_id "$zip" "$work/verify.play.zip" "$appid" || { bad "with_id: no copy of the sample with the id $appid"; exit 1; }
     mkdir -p "$state/incoming"
     install -m 0600 "$work/verify.play.zip" "$state/incoming/vm-play-check.play.zip"
@@ -480,7 +500,7 @@ fi
 
 if [ "$mode" = perms ]; then
     dev_mode true >/dev/null
-    appid="$appid.perms"
+    appid="$(pkg_id "$appid" perms)" || { bad "no perms id for $appid"; exit 1; }
     with_id "$zip" "$work/id.play.zip" "$appid" || { bad "with_id: no copy of the sample with the id $appid"; exit 1; }
     python3 - "$work/id.play.zip" "$work/perms.play.zip" <<'PY'
 import json, sys, zipfile
@@ -518,7 +538,7 @@ print(r.get("format"), r.get("tier"), r.get("signer_id"), r.get("signer_name"), 
 fi
 
 # The packages: all made from one copy with this run's id, before anything is signed (RUY-879).
-appid="$(run_id "$appid")"
+appid="$(run_id "$appid")" || { bad "no run id for $appid"; exit 1; }
 with_id "$zip" "$work/run.play.zip" "$appid" || { bad "with_id: no copy of the sample with the id $appid"; exit 1; }
 cp "$work/run.play.zip" "$work/unsigned.play.zip"
 (cd "$work" && "$pack" keygen a >/dev/null && "$pack" keygen b >/dev/null) || bad "ruya-pack keygen"
