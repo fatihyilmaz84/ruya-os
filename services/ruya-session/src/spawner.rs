@@ -11,6 +11,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::steam_tool::{exec_start_pre, STEAM_APP_ID};
 use async_channel::Sender;
 
 /// What the OS tells us about a unit. The adapter drains these from a channel into the core.
@@ -1047,6 +1048,10 @@ pub fn launch_command_in(
         }
         args.push(format!("--setenv={key}={value}"));
     }
+    if app_id == STEAM_APP_ID {
+        // Steam's default compatibility tool, once per profile (RUY-35); never blocks the start.
+        args.push(exec_start_pre(SESSION_PROGRAM));
+    }
     match mode {
         DisplayMode::Wayland => {
             args.extend(["--", "flatpak", "run", DEVICE_INPUT].map(str::to_owned))
@@ -1966,6 +1971,22 @@ mod tests {
                 )
                 .is_err(),
                 "{bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn only_steam_runs_the_default_tool_step_before_it_starts() {
+        let step = "--property=ExecStartPre=-/usr/bin/ruya-session steam-default-tool";
+        for mode in [DisplayMode::Wayland, DisplayMode::X11] {
+            let steam = launch_command_in("ruya-p1", "com.valvesoftware.Steam", &env(), mode, &[])
+                .expect("valid");
+            assert!(steam.contains(&step.to_owned()), "{mode:?}");
+            let other =
+                launch_command_in("ruya-p1", "org.other.App", &env(), mode, &[]).expect("valid");
+            assert!(
+                !other.iter().any(|a| a.contains("ExecStartPre")),
+                "{mode:?}"
             );
         }
     }

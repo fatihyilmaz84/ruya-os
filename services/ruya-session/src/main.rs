@@ -22,6 +22,11 @@ fn main() {
     // `x11-run <app id> [launch args]` / `x11-cleanup <app id>`: the main process and the
     // ExecStopPost of an X11-mode app unit, as the profile user (ADR-034, `ruya_session::x11`).
     let args: Vec<String> = std::env::args().collect();
+    // `steam-default-tool`: the ExecStartPre of the Steam unit, as the profile user (RUY-35).
+    if args.get(1).map(String::as_str) == Some(ruya_session::steam_tool::SUBCOMMAND) {
+        ruya_session::steam_tool::main_step();
+        return;
+    }
     match ruya_session::x11::subcommand(&args) {
         ruya_session::x11::Subcommand::Run { app_id, app_args } => {
             x11_subcommand("x11-run", &app_id, &app_args)

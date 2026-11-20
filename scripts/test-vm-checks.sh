@@ -1901,6 +1901,48 @@ out="$(rc_ "$tmp/links.good" FAKE_BUSCTL_OUT='as 0')"; rc=$?
 [ "$rc" = 0 ] && expect_contains "runner: without a profile the program step is a SKIP" "$out" "SKIP: no profile on this VM" || fail "runner: no profile: exit $rc, $out"
 grep -q 'unshare -n runuser -u "$user"' "$here/vm-runner-check.sh" && pass "vm-runner-check.sh runs the program offline as the profile user" || fail "vm-runner-check.sh: the program does not run under unshare -n as the profile user"
 
+echo "== vm-runner-check.sh steam: GE-Proton in Steam (RUY-35) =="
+# The runner tree carries GE-Proton's own compatibilitytool.vdf; Steam's extension point links to it.
+cat > "$rt/compatibilitytool.vdf" <<'VDFEOF'
+"compatibilitytools"
+{
+  "compat_tools"
+  {
+    "GE-Proton11-12"
+    {
+      "install_path" "."
+    }
+  }
+}
+VDFEOF
+sx="$rr/var/lib/flatpak/extension/com.valvesoftware.Steam.CompatibilityTool.ProtonGE11/x86_64"
+mkdir -p "$sx" "$rr/var/lib/flatpak/app/com.valvesoftware.Steam" "$rr/home/ruya-p1/.var/app/com.valvesoftware.Steam/.local/share/Steam/config"
+ln -s "$rt" "$sx/stable"
+printf '#!/bin/sh\necho "ruya-p1:x:1001:1001::/home/ruya-p1:/bin/sh"\n' > "$rsh/getent"; chmod +x "$rsh/getent"
+steam_cfg="$rr/home/ruya-p1/.var/app/com.valvesoftware.Steam/.local/share/Steam/config/config.vdf"
+steam_config() { # <tool name>: a config.vdf whose default is that tool
+    printf '"InstallConfigStore"\n{\n\t"Software"\n\t{\n\t\t"Valve"\n\t\t{\n\t\t\t"Steam"\n\t\t\t{\n\t\t\t\t"CompatToolMapping"\n\t\t\t\t{\n\t\t\t\t\t"0"\n\t\t\t\t\t{\n\t\t\t\t\t\t"name"\t\t"%s"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n' "$1" > "$steam_cfg"
+}
+sc_() { env RUYA_ROOT="$rr" PATH="$rsh:$PATH" bash "$here/vm-runner-check.sh" steam 2>&1; }
+steam_config GE-Proton11-12
+out="$(sc_)"; rc=$?
+[ "$rc" = 0 ] && expect_contains "runner steam: a good image passes" "$out" "vm-runner-check: all passed" || fail "runner steam: a good image: exit $rc, $out"
+expect_contains "runner steam: the tool is listed" "$out" "ProtonGE11: Steam's extension point has the tool GE-Proton11-12"
+expect_contains "runner steam: the default reads GE-Proton" "$out" "ruya-p1: the default is GE-Proton11-12"
+steam_config proton_9
+out="$(sc_)"; rc=$?
+[ "$rc" = 0 ] && expect_contains "runner steam: a tool the player chose is a note, not a failure" "$out" "note ruya-p1: the default is proton_9" || fail "runner steam: a player's choice: exit $rc, $out"
+: > "$steam_cfg"
+out="$(sc_)"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner steam: no default FAILs" "$out" "FAIL ruya-p1: no default compatibility tool" || fail "runner steam: no default: exit $rc"
+rm -f "$steam_cfg"
+out="$(sc_)"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner steam: no profile that started Steam FAILs" "$out" "FAIL no profile has started Steam yet" || fail "runner steam: no config: exit $rc"
+steam_config GE-Proton11-12
+rm "$sx/stable"
+out="$(sc_)"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner steam: a runner not linked for Steam FAILs" "$out" "FAIL ProtonGE11: no compatibilitytool.vdf" || fail "runner steam: no link: exit $rc"
+
 echo "== install-runners.sh: the image build's runner step (RUY-34) =="
 ir="$tmp/install-runners"; ish="$tmp/install-shims"; mkdir -p "$ir/runners/ProtonGE11" "$ir/rel/GE-X/files" "$ish"
 printf '#!/bin/sh\necho proton\n' > "$ir/rel/GE-X/proton"; chmod 0755 "$ir/rel/GE-X/proton"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: check
+# modes: check, steam
 # Checks the Play platform on /usr (ADR-038, RUY-34) inside a running VM, as root, offline:
 #   1. links: every L+ line of /usr/lib/tmpfiles.d/ruya-play-platform.conf is a link under
 #      /var/lib/flatpak/extension to its folder on /usr, and that folder is there
@@ -12,6 +12,13 @@
 #      runner's own cmd.exe through `proton waitforexitandrun` (ADR-037's argv, the
 #      STEAM_COMPAT_* folders in a scratch data folder) prints a marker, under `unshare -n`.
 #      Without a profile on the VM this step is a SKIP with its reason (the check creates none).
+# Mode `steam` (RUY-35, after the Steam Flatpak is installed and was started once as a profile):
+#   5. every Proton runner is linked into Steam's extension point
+#      (com.valvesoftware.Steam.CompatibilityTool.<Name>/x86_64/stable) and carries its
+#      compatibilitytool.vdf, so Steam lists the tool
+#   6. the Steam Flatpak is installed, and in each profile that started it Steam's default
+#      compatibility tool (config.vdf, CompatToolMapping "0") is the newest runner's tool, or
+#      another one the player chose (reported, not a failure)
 # Running a game inside a .play sandbox (the extension mounts, the 32-bit points) is
 # vm-play-check.sh launch and launch-windows (RUY-902).
 #
@@ -33,7 +40,35 @@ fail=0
 ok() { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
 
-[ "$mode" = check ] || { echo "usage: vm-runner-check.sh [check] [ruya-pack]"; exit 2; }
+case "$mode" in check | steam) ;; *) echo "usage: vm-runner-check.sh [check|steam] [ruya-pack]"; exit 2 ;; esac
+
+if [ "$mode" = steam ]; then
+    steam_ext="$root/var/lib/flatpak/extension"
+    echo "--- Steam sees the runners"
+    last=""
+    for tree in "$play"/runners/*/; do
+        name="$(basename "$tree")"
+        [ -f "$tree/compatibilitytool.vdf" ] || continue
+        link="$steam_ext/com.valvesoftware.Steam.CompatibilityTool.$name/x86_64/stable"
+        tool="$(grep -A3 '"compat_tools"' "$link/compatibilitytool.vdf" 2>/dev/null | grep -o '"[^"]*"' | sed -n 2p | tr -d '"')"
+        if [ -n "$tool" ]; then ok "$name: Steam's extension point has the tool $tool"; last="$tool"; else bad "$name: no compatibilitytool.vdf through $link"; fi
+    done
+    [ -n "$last" ] || bad "no Proton runner is linked for Steam"
+    echo "--- the default tool of each profile that started Steam"
+    if [ -d "$root/var/lib/flatpak/app/com.valvesoftware.Steam" ]; then ok "the Steam Flatpak is installed"; else bad "the Steam Flatpak is not installed (install it from the Store first)"; fi
+    seen=0
+    while IFS=: read -r user _ _ _ _ home _; do
+        case "$user" in ruya-p*) ;; *) continue ;; esac
+        cfg="$root$home/.var/app/com.valvesoftware.Steam/.local/share/Steam/config/config.vdf"
+        [ -f "$cfg" ] || continue
+        seen=$((seen + 1))
+        got="$(awk '/"CompatToolMapping"/ {m=1} m && /^[[:space:]]*"0"[[:space:]]*$/ {z=1} z && /"name"/ {gsub(/.*"name"[[:space:]]*"|".*/, ""); print; exit}' "$cfg")"
+        if [ "$got" = "$last" ]; then ok "$user: the default is $got"; elif [ -n "$got" ]; then echo "note $user: the default is $got (chosen by the player, or by a Steam update)"; else bad "$user: no default compatibility tool in $cfg"; fi
+    done < <(getent passwd)
+    [ "$seen" -ge 1 ] && ok "$seen profile(s) with a Steam config" || bad "no profile has started Steam yet (start Steam once, then re-run)"
+    [ "$fail" = 0 ] && echo "vm-runner-check: all passed" || echo "vm-runner-check: FAILED"
+    exit "$fail"
+fi
 
 echo "--- links"
 n=0

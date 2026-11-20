@@ -16,9 +16,11 @@ pub mod scope;
 pub mod session;
 pub mod shutdown;
 pub mod spawner;
+pub mod steam_tool;
 #[cfg(target_os = "linux")]
 pub mod systemd;
 pub mod usage;
 pub mod usage_store;
 pub mod usage_tracker;
+pub mod vdf;
 pub mod x11;
