@@ -7,7 +7,13 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
+use ruya_play_launch::{DryRun, Failure};
+
 use crate::catalog::Item;
+
+/// The runners the image ships; the launcher sees them as `/app/runners` (ADR-038). Read-only
+/// image data, so the unit's `ProtectSystem=strict` leaves it readable.
+pub const RUNNERS_DIR: &str = "/usr/lib/ruyaos/play/runners";
 
 /// More than this in `play.json` or `trust.json` is read as garbled (05 limits `play.json` far
 /// below it).
@@ -16,7 +22,8 @@ const MAX_JSON_BYTES: u64 = 1024 * 1024;
 const ART_DIR: &str = "share/ruyaos/play/art";
 
 /// The `.play` fields of a library item (Library1 keys `genres`, `players`, `controller`,
-/// `age_rating`, `play_tier`, `play_signer`, `play_signer_key_id`, `play_screenshots`).
+/// `age_rating`, `play_tier`, `play_signer`, `play_signer_key_id`, `play_screenshots`,
+/// `play_runner`, `play_runner_source`, `play_runner_tested`, `play_resolve_error`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PlayInfo {
     pub genres: Vec<String>,
@@ -33,6 +40,48 @@ pub struct PlayInfo {
     pub signer_key_id: Option<String>,
     /// The 1080p screenshots in order, at most `MAX_SCREENSHOTS`; empty when there are none.
     pub screenshots: Vec<String>,
+    /// `<family> <version>` of the runner the launch would use; none for a native game and when
+    /// [`Self::resolve_error`] is set.
+    pub runner: Option<String>,
+    /// `bundled` or `system`, with [`Self::runner`].
+    pub runner_source: Option<String>,
+    /// The version the developer tested the component with.
+    pub runner_tested: Option<String>,
+    /// One sentence: why the launch would refuse (no runner, a runner too old, damaged files).
+    pub resolve_error: Option<String>,
+}
+
+impl PlayInfo {
+    /// Records what the launcher's own resolution said (`ruya_play_launch::dry_run`).
+    pub fn set_resolution(&mut self, result: Result<DryRun, Failure>) {
+        match result {
+            Ok(DryRun { runner: Some(r) }) => {
+                self.runner = Some(format!("{} {}", r.in_use.family, r.in_use.version));
+                self.runner_source = Some(r.in_use.source);
+                self.runner_tested = r.tested;
+            }
+            Ok(DryRun { runner: None }) => {}
+            Err(failure) => self.resolve_error = Some(failure.message),
+        }
+    }
+}
+
+/// The launcher's resolution of the deployment at `files` against the image's `runners`. Only
+/// Linux has the launcher's real file system; elsewhere (the Windows test host) nothing is
+/// resolved and the item has none of the runner keys.
+#[cfg(target_os = "linux")]
+fn resolve_in_place(files: &Path, runners: &Path) -> Option<Result<DryRun, Failure>> {
+    let (files, runners) = (files.to_str()?, runners.to_str()?);
+    Some(ruya_play_launch::dry_run(
+        &ruya_play_launch::linux::LinuxOs,
+        files,
+        runners,
+    ))
+}
+
+#[cfg(not(target_os = "linux"))]
+fn resolve_in_place(_files: &Path, _runners: &Path) -> Option<Result<DryRun, Failure>> {
+    None
 }
 
 fn read_json(path: &Path) -> Option<serde_json::Value> {
@@ -173,9 +222,10 @@ fn art(art_dir: &Path, manifest: &serde_json::Value) -> (Vec<(String, String)>, 
 }
 
 /// Reads the deployment of `play.<id>` below `root` into `item`: the title and the `.play`
-/// fields from `play.json`, the art, the tier and signer from `trust.json`. An app that has no
+/// fields from `play.json`, the art, the tier and signer from `trust.json`, and the runner the
+/// launch would use against the image's `runners`. An app that has no
 /// readable `play.json` (not deployed, missing, garbled) is left as it is: a plain item.
-pub fn enrich(item: &mut Item, flatpak_id: &str, root: &Path) {
+pub fn enrich(item: &mut Item, flatpak_id: &str, root: &Path, runners: &Path) {
     if !flatpak_id.starts_with("play.")
         || flatpak_id.len() == "play.".len()
         || flatpak_id.contains(['/', '\\'])
@@ -213,7 +263,7 @@ pub fn enrich(item: &mut Item, flatpak_id: &str, root: &Path) {
     let signer_key_id = tier
         .as_ref()
         .and(trust.as_ref().and_then(|t| text(t, "signer_id")));
-    item.play = Some(PlayInfo {
+    let mut info = PlayInfo {
         genres: manifest
             .get("genres")
             .and_then(serde_json::Value::as_array)
@@ -231,5 +281,61 @@ pub fn enrich(item: &mut Item, flatpak_id: &str, root: &Path) {
         signer,
         signer_key_id,
         screenshots,
-    });
+        ..PlayInfo::default()
+    };
+    if let Some(result) = resolve_in_place(&files, runners) {
+        info.set_resolution(result);
+    }
+    item.play = Some(info);
+}
+
+#[cfg(test)]
+mod tests {
+    use ruya_play_format::runner::Entry;
+    use ruya_play_launch::plan::Root;
+    use ruya_play_launch::state::RunnerInUse;
+
+    use super::*;
+
+    fn runner(source: &str, tested: Option<&str>) -> DryRun {
+        DryRun {
+            runner: Some(Root {
+                path: "/r".into(),
+                entry: Entry::default_for("wine"),
+                in_use: RunnerInUse {
+                    component: "wine".into(),
+                    family: "wine".into(),
+                    version: "10.2".into(),
+                    source: source.into(),
+                    hash: None,
+                },
+                tested: tested.map(str::to_owned),
+            }),
+        }
+    }
+
+    #[test]
+    fn a_resolved_runner_fills_the_three_runner_fields() {
+        let mut info = PlayInfo::default();
+        info.set_resolution(Ok(runner("system", Some("9.20"))));
+        assert_eq!(info.runner.as_deref(), Some("wine 10.2"));
+        assert_eq!(info.runner_source.as_deref(), Some("system"));
+        assert_eq!(info.runner_tested.as_deref(), Some("9.20"));
+        assert_eq!(info.resolve_error, None);
+    }
+
+    #[test]
+    fn a_native_game_has_no_runner_fields() {
+        let mut info = PlayInfo::default();
+        info.set_resolution(Ok(DryRun { runner: None }));
+        assert_eq!(info, PlayInfo::default());
+    }
+
+    #[test]
+    fn a_refusal_is_its_sentence_and_nothing_else() {
+        let mut info = PlayInfo::default();
+        info.set_resolution(Err(Failure::new("resolve.system_too_old", "Too old.")));
+        assert_eq!(info.resolve_error.as_deref(), Some("Too old."));
+        assert_eq!(info.runner, None);
+    }
 }

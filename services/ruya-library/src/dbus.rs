@@ -23,6 +23,8 @@ pub struct Sources {
     /// The Flatpak installation whose `play.*` deployments carry the art and `play.json`
     /// (`/var/lib/flatpak`; a fixture folder in tests).
     pub play_root: PathBuf,
+    /// The image's `.play` runners (`play::RUNNERS_DIR`; a fixture folder in tests).
+    pub play_runners: PathBuf,
 }
 
 pub struct LibraryIface {
@@ -37,6 +39,7 @@ impl LibraryIface {
             &sources.steam_roots,
             sources.lister.as_ref(),
             &sources.play_root,
+            &sources.play_runners,
         );
         LibraryIface {
             sources: Arc::new(sources),
@@ -63,6 +66,7 @@ impl LibraryIface {
             &self.sources.steam_roots,
             self.sources.lister.as_ref(),
             &self.sources.play_root,
+            &self.sources.play_runners,
         ))
     }
 
@@ -113,6 +117,16 @@ pub fn record(item: &Item) -> Dict {
         if !play.screenshots.is_empty() {
             entries.push(("play_screenshots", Value::from(play.screenshots.clone())));
         }
+        for (key, value) in [
+            ("play_runner", &play.runner),
+            ("play_runner_source", &play.runner_source),
+            ("play_runner_tested", &play.runner_tested),
+            ("play_resolve_error", &play.resolve_error),
+        ] {
+            if let Some(value) = value {
+                entries.push((key, Value::from(value.clone())));
+            }
+        }
     }
     entries
         .into_iter()
@@ -137,6 +151,7 @@ impl LibraryIface {
                 &sources.steam_roots,
                 sources.lister.as_ref(),
                 &sources.play_root,
+                &sources.play_runners,
             )
         })
         .await;
@@ -186,6 +201,10 @@ mod tests {
             "play_signer",
             "play_signer_key_id",
             "play_screenshots",
+            "play_runner",
+            "play_runner_source",
+            "play_runner_tested",
+            "play_resolve_error",
         ] {
             assert!(!bare.contains_key(key), "{key}");
         }

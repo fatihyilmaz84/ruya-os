@@ -1760,6 +1760,13 @@ out="$(play_rec true "$tier,\"play_signer_key_id\":{\"type\":\"s\",\"data\":\"$k
 [ "$rc" = 0 ] && expect_contains "library play: a signed run's key id passes" "$out" "play_signer_key_id is the signer's key id" || fail "library play: the expected key id failed: $out"
 out="$(play_rec true "$tier" "$plroot/icon-512.webp" | pj 0 "$kid")"; rc=$?
 [ "$rc" != 0 ] && pass "library play: a missing key id FAILs when the run signs" || fail "library play: a missing key id passed"
+# RUY-903: the native sample has no play_runner keys and the launcher's resolution does not refuse it.
+out="$(play_rec true "$tier" "$plroot/icon-512.webp" | pj)"; rc=$?
+[ "$rc" = 0 ] && expect_contains "library play: a native sample with no runner keys passes" "$out" "a native sample has no play_runner keys" || fail "library play: no runner keys failed: $out"
+out="$(play_rec true "$tier,\"play_resolve_error\":{\"type\":\"s\",\"data\":\"This game's files are damaged\"}" "$plroot/icon-512.webp" | pj)"; rc=$?
+[ "$rc" != 0 ] && expect_contains "library play: a refusal the sample should not have FAILs" "$out" "play_resolve_error for the sample: This game's files are damaged" || fail "library play: a resolve error passed"
+out="$(play_rec true "$tier,\"play_runner\":{\"type\":\"s\",\"data\":\"wine 10.2\"}" "$plroot/icon-512.webp" | pj)"; rc=$?
+[ "$rc" != 0 ] && expect_contains "library play: a runner on a native sample FAILs" "$out" "a native sample has a play_runner key" || fail "library play: a runner on a native sample passed"
 grep -q 'judge_screenshots "\$1" "\$f" "\${2:-0}"' "$here/vm-library-check.sh" && grep -q 'play_judge "\$play_id" "\$shots" ""' "$here/vm-library-check.sh" && pass "vm-library-check.sh play judges the screenshots and the key id of the sample it installs (RUY-886)" || fail "vm-library-check.sh play: play_judge is not given the sample's screenshots"
 # The missing-script FAIL names the full path it looked for (RUY-887).
 nopc="$tmp/nopc"; mkdir -p "$nopc"; cp "$here/vm-library-check.sh" "$nopc/"; : > "$nopc/sample.zip"
