@@ -39,7 +39,8 @@
 #                          line and GetAll, the shell's Post, keyed replace, Withdraw, a switched-off source,
 #                          nobody's Post) can FAIL; the exit trap locks again and puts the setting back
 #   - vm-store-check.sh    the `perms` mode (RUY-744): the sandbox probe counts the interfaces other than lo, so
-#                          lo alone reads as no network; the test app asks for all devices and not dri
+#                          lo alone reads as no network; the test app asks for all devices and not dri; the
+#                          probe looks at /dev/bus/usb; the override's devices entries are read in any order
 # Needs bash and python3 (python on Windows). Exit 0 = all pass.
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -751,9 +752,14 @@ sed "s#/proc/net/dev#$tmp/netdev-eth#" "$tmp/perms-probe.sh" > "$tmp/perms-probe
 expect_contains "vm-store-check.sh perms: lo alone is no network" "$(bash "$tmp/perms-probe-lo.sh")" "net=0"
 expect_contains "vm-store-check.sh perms: lo and eth0 is one interface" "$(bash "$tmp/perms-probe-eth.sh")" "net=1"
 grep -q 'flatpak build-finish --command=probe --share=network --device=all --socket=pulseaudio' "$here/vm-store-check.sh" \
-    && ! grep -q 'device=dri' "$here/vm-store-check.sh" \
-    && pass "vm-store-check.sh perms: the test app asks for all devices and not dri (so /dev/dri must go)" \
+    && ! grep -q 'build-finish.*device=dri' "$here/vm-store-check.sh" \
+    && pass "vm-store-check.sh perms: the test app asks for all devices and not dri (so /dev/dri stays only through the override)" \
     || fail "vm-store-check.sh perms: the test app's devices do not test the withdrawal"
+grep -q 'usb=yes' "$tmp/perms-probe.sh" && pass "vm-store-check.sh perms: the probe reports /dev/bus/usb (the node a device withdrawal takes)" || fail "vm-store-check.sh perms: the probe does not look at /dev/bus/usb"
+# The override's devices entries in whatever order Flatpak writes them: one sorted line.
+eval "$(grep '^perms_devices_of()' "$here/vm-store-check.sh")"
+expect_contains "vm-store-check.sh perms: Flatpak's order of the devices entries does not matter" \
+    "[$(printf '[Context]\nshared=!network;\ndevices=dri;!all;input;\n' | perms_devices_of)]" '[!all dri input]'
 
 # --- vm-profiles-check.sh guests (RUY-125): each assertion can fail ---------------------------------
 # A fake Profiles1 (busctl --json=short) and getent over one JSON state file; FAKE_BUG breaks one rule.

@@ -124,6 +124,7 @@ done < /proc/net/dev
 echo "net=$n"
 [ -e /dev/input ] && echo "input=yes" || echo "input=no"
 [ -e /dev/dri ] && echo "dri=yes" || echo "dri=no"
+[ -e /dev/bus/usb ] && echo "usb=yes" || echo "usb=no"
 EOF
     chmod 755 "$pwork/app/files/bin/probe"
     printf '[Application]\nname=%s\nruntime=%s/x86_64/stable\nsdk=%s/x86_64/stable\ncommand=probe\n' "$papp" "$prt" "$prt" > "$pwork/app/metadata"
@@ -141,8 +142,12 @@ EOF
     } > "$pwork/perms.flatpakrepo"
 }
 
-# What the app's sandbox has now: "net=N input=yes|no dri=yes|no" (a new sandbox each time).
+# What the app's sandbox has now: "net=N input=yes|no dri=yes|no usb=yes|no" (a new sandbox each time).
 perms_probe() { flatpak run --system "$papp" 2>/dev/null | tr '\n' ' '; }
+# The devices entries of an override keyfile on stdin, sorted, on one line ("!all dri input"): Flatpak
+# writes them in its own order.
+perms_devices_of() { sed -n 's/^devices=//p' | tr ';' '\n' | sed '/^$/d' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//'; }
+perms_devices() { flatpak override --system --show "$papp" | perms_devices_of; }
 perms_call() { busctl --system call "$svc" "$path" "$ifc" "$@" 2>&1; }
 perms_clean() {
     flatpak uninstall --system -y --noninteractive "$papp" "$prt" >/dev/null 2>&1
@@ -166,8 +171,9 @@ clean)
     ;;
 perms)
     # RUY-744: (a) a withdrawn network is gone inside the sandbox, (b) withdrawn devices keep /dev/input and
-    # lose /dev/dri, (c) a reset brings both back, (d) a caller that is not an admin is refused; and the keys
-    # the console leaves alone are refused, and an uninstall drops the override.
+    # /dev/dri and lose the other device nodes (/dev/bus/usb), (c) a reset brings both back, (d) a caller that
+    # is not an admin is refused; and the keys the console leaves alone are refused, and an uninstall drops
+    # the override.
     echo "flatpak: $(flatpak --version)"
     perms_clean
     perms_repo && ok "permissions test repository built" || { bad "cannot build the permissions test repository"; exit 1; }
@@ -189,7 +195,8 @@ perms)
         *) bad "GetPermissions before any change: $got";; esac
     [ -e /dev/dri ] && host_dri=yes || host_dri=no
     [ -e /dev/input ] && host_input=yes || host_input=no
-    echo "this VM: /dev/dri $host_dri, /dev/input $host_input"
+    [ -e /dev/bus/usb ] && host_usb=yes || host_usb=no
+    echo "this VM: /dev/dri $host_dri, /dev/input $host_input, /dev/bus/usb $host_usb"
     before="$(perms_probe)"
     echo "sandbox before: $before"
     case "$before" in *"net=0 "*|"") bad "the sandbox has no network before any withdrawal: '$before'";; *) ok "the sandbox has a network interface before any withdrawal";; esac
@@ -203,7 +210,7 @@ perms)
 
     echo "--- (b) all devices"
     case "$(perms_call WithdrawPermission ss "$papp" all-devices)" in 's "ok"') ok "WithdrawPermission all-devices by root";; *) bad "WithdrawPermission all-devices";; esac
-    flatpak override --system --show "$papp" | grep -q '^devices=!all;input;' && ok "the override says devices=!all;input;" || bad "override: $(flatpak override --system --show "$papp" | tr '\n' ' ')"
+    [ "$(perms_devices)" = '!all dri input' ] && ok "the override's devices are !all, input and dri" || bad "override: $(flatpak override --system --show "$papp" | tr '\n' ' ')"
     now="$(perms_probe)"; echo "sandbox: $now"
     if [ "$host_input" = yes ]; then
         case "$now" in *"input=yes"*) ok "(b) /dev/input is still reachable";; *) bad "(b) the controllers went with the devices: '$now'";; esac
@@ -211,9 +218,14 @@ perms)
         echo "UNVERIFIED: (b) this VM has no /dev/input"
     fi
     if [ "$host_dri" = yes ]; then
-        case "$now" in *"dri=no"*) ok "(b) /dev/dri is not reachable";; *) bad "(b) /dev/dri is still there: '$now'";; esac
+        case "$now" in *"dri=yes"*) ok "(b) /dev/dri is still reachable";; *) bad "(b) the GPU went with the devices: '$now'";; esac
     else
         echo "UNVERIFIED: (b) this VM has no /dev/dri"
+    fi
+    if [ "$host_usb" = yes ]; then
+        case "$now" in *"usb=no"*) ok "(b) /dev/bus/usb is not reachable";; *) bad "(b) /dev/bus/usb is still there: '$now'";; esac
+    else
+        echo "UNVERIFIED: (b) this VM has no /dev/bus/usb"
     fi
 
     echo "--- refused keys"
@@ -224,16 +236,19 @@ perms)
     echo "--- RestorePermission keeps the other withdrawal"
     case "$(perms_call RestorePermission ss "$papp" network)" in 's "ok"') ok "RestorePermission network";; *) bad "RestorePermission network";; esac
     shown="$(flatpak override --system --show "$papp" | tr '\n' ' ')"
-    case "$shown" in *'devices=!all;input;'*) case "$shown" in *network*) bad "the restore left a network entry: $shown";; *) ok "the override holds only the device withdrawal";; esac;;
-        *) bad "the restore lost the device withdrawal: $shown";; esac
+    if [ "$(perms_devices)" = '!all dri input' ]; then
+        case "$shown" in *network*) bad "the restore left a network entry: $shown";; *) ok "the override holds only the device withdrawal";; esac
+    else
+        bad "the restore lost the device withdrawal: $shown"
+    fi
 
     echo "--- (c) reset"
     case "$(perms_call ResetPermissions s "$papp")" in 's "ok"') ok "ResetPermissions";; *) bad "ResetPermissions";; esac
     [ -z "$(flatpak override --system --show "$papp")" ] && ok "no override left" || bad "an override is left: $(flatpak override --system --show "$papp" | tr '\n' ' ')"
     now="$(perms_probe)"; echo "sandbox: $now"
     case "$now" in *"net=0 "*) bad "(c) the network did not come back: '$now'";; *) ok "(c) the network is back";; esac
-    if [ "$host_dri" = yes ]; then
-        case "$now" in *"dri=yes"*) ok "(c) /dev/dri is back";; *) bad "(c) /dev/dri did not come back: '$now'";; esac
+    if [ "$host_usb" = yes ]; then
+        case "$now" in *"usb=yes"*) ok "(c) /dev/bus/usb is back";; *) bad "(c) /dev/bus/usb did not come back: '$now'";; esac
     fi
 
     echo "--- (d) a caller that is not an admin"

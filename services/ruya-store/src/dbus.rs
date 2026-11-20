@@ -67,6 +67,9 @@ impl Flatpak for DynFlatpak {
     fn reset_override(&self, id: &str) -> Result<(), String> {
         (**self).reset_override(id)
     }
+    fn write_override(&self, id: &str, keyfile: &str) -> Result<(), String> {
+        (**self).write_override(id, keyfile)
+    }
 }
 
 pub type Shared = Arc<Store<DynFlatpak>>;
@@ -614,6 +617,9 @@ mod tests {
         }
         fn reset_override(&self, id: &str) -> Result<(), String> {
             self.0.reset_override(id)
+        }
+        fn write_override(&self, id: &str, keyfile: &str) -> Result<(), String> {
+            self.0.write_override(id, keyfile)
         }
     }
 

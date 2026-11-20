@@ -151,6 +151,10 @@ pub trait Flatpak: Send + Sync {
     fn add_override(&self, id: &str, args: &[String]) -> Result<(), String>;
     /// Removes the app's override, whoever wrote it (`flatpak override --reset`).
     fn reset_override(&self, id: &str) -> Result<(), String>;
+    /// Puts back an override `show_override` printed (a restore whose second step failed, so it
+    /// never ends wider than it began); "" removes it. `flatpak override` cannot write a whole
+    /// keyfile, so this writes Flatpak's file itself.
+    fn write_override(&self, id: &str, keyfile: &str) -> Result<(), String>;
 }
 
 /// Maps the error text of `flatpak` to what the user can do about it. The first match wins, the
@@ -462,6 +466,10 @@ struct FakeState {
     /// Every `flatpak override` command line, in order (`overrides::override_command`, ...).
     override_runs: Vec<Vec<String>>,
     override_fails: bool,
+    /// The next `add_override` fails (once), the commands before it work.
+    add_override_fails_once: bool,
+    /// Runs once, right after the next `show_override` read, with the state unlocked.
+    after_show_override: Option<Box<dyn FnOnce() + Send>>,
 }
 
 impl Default for FakeFlatpak {
@@ -662,6 +670,18 @@ impl FakeFlatpak {
     pub fn set_override_fails(&self, fails: bool) {
         self.state().override_fails = fails;
     }
+
+    /// The next `add_override` fails, once (a restore whose reset worked and whose second step
+    /// did not).
+    pub fn fail_next_add_override(&self) {
+        self.state().add_override_fails_once = true;
+    }
+
+    /// Runs `hook` once after the next `show_override` returned: lets a test play out a call that
+    /// comes in between a change's read of the override and its write.
+    pub fn after_next_show_override(&self, hook: impl FnOnce() + Send + 'static) {
+        self.state().after_show_override = Some(Box::new(hook));
+    }
 }
 
 /// What `flatpak override <args>` makes of an override keyfile: each option replaces the entry
@@ -829,12 +849,19 @@ impl Flatpak for FakeFlatpak {
     }
 
     fn show_override(&self, id: &str) -> Result<String, String> {
-        let mut state = self.state();
-        state.override_runs.push(crate::overrides::show_command(id));
-        if state.override_fails {
-            return Err("flatpak override failed".to_owned());
+        let (shown, hook) = {
+            let mut state = self.state();
+            state.override_runs.push(crate::overrides::show_command(id));
+            if state.override_fails {
+                return Err("flatpak override failed".to_owned());
+            }
+            let shown = state.overrides.get(id).cloned().unwrap_or_default();
+            (shown, state.after_show_override.take())
+        };
+        if let Some(hook) = hook {
+            hook();
         }
-        Ok(state.overrides.get(id).cloned().unwrap_or_default())
+        Ok(shown)
     }
 
     fn add_override(&self, id: &str, args: &[String]) -> Result<(), String> {
@@ -842,7 +869,7 @@ impl Flatpak for FakeFlatpak {
         state
             .override_runs
             .push(crate::overrides::override_command(id, args));
-        if state.override_fails {
+        if state.override_fails || std::mem::take(&mut state.add_override_fails_once) {
             return Err("flatpak override failed".to_owned());
         }
         let now = fake_override(state.overrides.get(id).map_or("", String::as_str), args);
@@ -859,6 +886,19 @@ impl Flatpak for FakeFlatpak {
             return Err("flatpak override failed".to_owned());
         }
         state.overrides.remove(id);
+        Ok(())
+    }
+
+    fn write_override(&self, id: &str, keyfile: &str) -> Result<(), String> {
+        let mut state = self.state();
+        if state.override_fails {
+            return Err("writing the override failed".to_owned());
+        }
+        if keyfile.is_empty() {
+            state.overrides.remove(id);
+        } else {
+            state.overrides.insert(id.to_owned(), keyfile.to_owned());
+        }
         Ok(())
     }
 

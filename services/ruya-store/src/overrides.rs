@@ -131,8 +131,9 @@ fn filesystem_path(entry: &str) -> &str {
 }
 
 /// Which key a filesystem path belongs to: the whole system (`host`, `host-os`, `host-etc`, an
-/// absolute path) is `host-files`; the home folder and what lies in it (`home`, `~/...`,
-/// `xdg-...`) is `home-files`; anything else (`xdg-run/...` is under xdg- too) none.
+/// absolute path) is `host-files`; the home folder and what lies in it (`home`, `~/...`, every
+/// `xdg-...` entry) is `home-files`, `xdg-run/...` included (the runtime folder, counted with the
+/// home files); anything else none.
 fn filesystem_key(path: &str) -> Option<&'static str> {
     if matches!(path, "host" | "host-os" | "host-etc") || path.starts_with('/') {
         Some("host-files")
@@ -142,6 +143,10 @@ fn filesystem_key(path: &str) -> Option<&'static str> {
         None
     }
 }
+
+/// The parts of all devices an app keeps when all devices are withdrawn: its controllers and its
+/// GPU.
+const KEPT_DEVICES: [&str; 2] = ["input", "dri"];
 
 /// Why a key cannot be withdrawn or restored.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -200,9 +205,12 @@ fn withdrawable(key: &str, device_input: bool) -> Result<(), Refusal> {
 
 /// The arguments of `flatpak override --system <args> <id>` that withdraw `key` from an app whose
 /// permissions are `current` (its metadata, with any override on top), or why it cannot be.
-/// Only negations, except `--device=input` with `--nodevice=all`: input is a part of all devices,
-/// so the app keeps its controllers and gains nothing. A file key takes every path that makes it
-/// up (`home` and `xdg-download` are both home files), so the key is really gone afterwards.
+/// Only negations, except `--device=input` and `--device=dri` with `--nodevice=all`: both are a
+/// part of all devices, so the app keeps its controllers and its GPU (a game without it is broken)
+/// and gains nothing. Each is written only when `current` names it nowhere: an app that asks for
+/// it on its own keeps it without the override, and one an override negated stays negated. A file
+/// key takes every path that makes it up (`home` and `xdg-download` are both home files), so the
+/// key is really gone afterwards.
 pub fn withdraw_args(
     current: &Context,
     key: &str,
@@ -211,7 +219,14 @@ pub fn withdraw_args(
     withdrawable(key, device_input)?;
     let args = match key {
         "network" => vec!["--unshare=network".to_owned()],
-        "all-devices" => vec!["--nodevice=all".to_owned(), "--device=input".to_owned()],
+        "all-devices" => std::iter::once("--nodevice=all".to_owned())
+            .chain(
+                KEPT_DEVICES
+                    .iter()
+                    .filter(|d| !current.devices.contains_key(**d))
+                    .map(|d| format!("--device={d}")),
+            )
+            .collect(),
         _ => current
             .granted_paths(key)
             .map(|path| format!("--nofilesystem={path}"))
@@ -335,7 +350,7 @@ mod tests {
         );
         assert_eq!(
             withdraw_args(&app, "all-devices", true),
-            Ok(args(&["--nodevice=all", "--device=input"]))
+            Ok(args(&["--nodevice=all", "--device=input", "--device=dri"]))
         );
         assert_eq!(
             withdraw_args(&app, "host-files", true),
@@ -400,6 +415,29 @@ mod tests {
         assert!(withdraw_args(&app, "all-devices", true)
             .unwrap()
             .contains(&"--device=input".to_owned()));
+    }
+
+    #[test]
+    fn withdrawing_all_devices_keeps_only_the_input_and_gpu_that_came_with_them() {
+        // Asked for on their own, input and dri stay without the override writing them.
+        let own = Context::parse("[Context]\ndevices=all;input;dri;\n");
+        assert_eq!(
+            withdraw_args(&own, "all-devices", true),
+            Ok(args(&["--nodevice=all"]))
+        );
+        // An override that negated the GPU keeps it negated: the withdrawal never grants it back.
+        let app = Context::parse(RACER);
+        let now = app.merged(&Context::parse("[Context]\ndevices=!dri;\n"));
+        assert_eq!(
+            withdraw_args(&now, "all-devices", true),
+            Ok(args(&["--nodevice=all", "--device=input"]))
+        );
+        // What the override then grants is no key beyond the controllers.
+        let over = "[Context]\ndevices=!all;input;dri;\n";
+        assert_eq!(
+            perms(RACER, over, true).effective,
+            keys(&["network", "home-files", "host-files", "audio", "gamepad"])
+        );
     }
 
     #[test]
@@ -477,7 +515,12 @@ mod tests {
         // audio is skipped: the console does not withdraw it.
         assert_eq!(
             rest,
-            args(&["--unshare=network", "--nodevice=all", "--device=input"])
+            args(&[
+                "--unshare=network",
+                "--nodevice=all",
+                "--device=input",
+                "--device=dri"
+            ])
         );
         assert!(rewithdraw_args(&app, &[], true).is_empty());
     }

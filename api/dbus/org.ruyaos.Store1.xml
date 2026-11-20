@@ -190,17 +190,20 @@
       Permissions of an installed app (RUY-744, spec 03 §4.4), per console, not per profile. The
       keys are those of the App record's permissions, read from the installed version's Flatpak
       metadata. The console withdraws a permission with a system-wide Flatpak override
-      (/var/lib/flatpak/overrides/<id>, written only through the `flatpak override` command, system
-      installation); the override is the only record, re-read on every call, and it only ever
-      withdraws. The options it writes (each with two leading dashes, which an XML comment cannot
+      (/var/lib/flatpak/overrides/<id>, written through the `flatpak override` command, system
+      installation; the one exception is a RestorePermission that fails halfway, see there); the
+      override is the only record, re-read on every call, and it only ever withdraws. The calls
+      that change an override run one at a time, from their read to their last write, also
+      against the drop after an uninstall. The options it writes (each with two leading dashes, which an XML comment cannot
       hold):
         network      unshare=network
         home-files   nofilesystem=<path> for every path that makes it up (home, ~/..., xdg-...)
         host-files   nofilesystem=<path> for every path that makes it up (host, host-os,
                      host-etc, an absolute path)
-        all-devices  nodevice=all and device=input: the app keeps its controllers (input is a part
-                     of all devices); not-withdrawable on a Flatpak without device=input (before
-                     1.15.6)
+        all-devices  nodevice=all, device=input and device=dri: the app keeps its controllers
+                     and its GPU (both are a part of all devices); each of the two only when the
+                     app names it nowhere else (its own entry keeps it, a negated one stays);
+                     not-withdrawable on a Flatpak without device=input (before 1.15.6)
         audio        not-withdrawable: output and microphone share the one PulseAudio socket
         session-bus  not-withdrawable: apps break unpredictably without it
         gamepad      not-withdrawable: a console keeps its controllers
@@ -239,7 +242,9 @@
 
     <!-- Gives a withdrawn key back. Flatpak cannot take back one option of an override, so the
          override is reset and the keys that stay withdrawn are withdrawn again: what else an
-         override written outside the Store held goes with it. "ok" also when it is not withdrawn. -->
+         override written outside the Store held goes with it. "ok" also when it is not withdrawn.
+         It never fails open: when the second step fails after the reset, the service writes the
+         override it read at the start back to its file and answers "failed". -->
     <method name="RestorePermission">
       <arg name="app_id" type="s" direction="in"/>
       <arg name="key" type="s" direction="in"/>

@@ -96,6 +96,10 @@ pub struct Store<F: Flatpak> {
     api_level: u32,
     /// Whether this console's Flatpak has `--device=input` (read once, `flatpak --version`).
     device_input: OnceLock<bool>,
+    /// Held across every read-modify-write of an override (withdraw, restore, reset, the drop
+    /// after an uninstall), from the installed check to the last write: the calls run on separate
+    /// threads, and a restore resets the override before it writes the rest back.
+    overrides_lock: Mutex<()>,
 }
 
 /// An installed app's permissions as the permission calls read them: its metadata, the same with
@@ -104,6 +108,8 @@ struct Sandbox {
     app: Context,
     now: Context,
     permissions: Permissions,
+    /// The override as `flatpak override --show` printed it ("" without one).
+    over_text: String,
 }
 
 fn refused(refusal: Refusal) -> Status {
@@ -121,6 +127,7 @@ impl<F: Flatpak> Store<F> {
             jobs_file: None,
             api_level: crate::level::api_level(),
             device_input: OnceLock::new(),
+            overrides_lock: Mutex::new(()),
         }
     }
 
@@ -151,12 +158,20 @@ impl<F: Flatpak> Store<F> {
             jobs_file: Some(path),
             api_level: crate::level::api_level(),
             device_input: OnceLock::new(),
+            overrides_lock: Mutex::new(()),
         }
     }
 
     fn state(&self) -> MutexGuard<'_, State> {
         // A poisoned lock only means another call panicked; the state is plain data.
         self.state.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// The override lock (`overrides_lock`). Taken before `state`, never while holding it.
+    fn overrides_held(&self) -> MutexGuard<'_, ()> {
+        self.overrides_lock
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
     }
 
     /// Reads Flatpak again and rebuilds the catalogue. Returns whether the installed set or an
@@ -580,24 +595,30 @@ impl<F: Flatpak> Store<F> {
             Status::Failed
         })?;
         let app = Context::parse(&metadata);
-        let over = Context::parse(&over);
+        let parsed = Context::parse(&over);
         Ok(Sandbox {
-            permissions: overrides::permissions(&app, &over, self.device_input()),
-            now: app.merged(&over),
+            permissions: overrides::permissions(&app, &parsed, self.device_input()),
+            now: app.merged(&parsed),
             app,
+            over_text: over,
         })
     }
 
-    /// `GetPermissions`: open to every caller (a Standard profile sees them read-only).
+    /// `GetPermissions`: open to every caller (a Standard profile sees them read-only). The
+    /// override is read under the lock, so a restore is never seen half done.
     pub fn get_permissions(&self, id: &str, emit: &mut dyn FnMut(Event)) -> (Status, Permissions) {
-        let result = self.installed_app(id, emit).and_then(|()| self.sandbox(id));
+        let result = self.installed_app(id, emit).and_then(|()| {
+            let _held = self.overrides_held();
+            self.sandbox(id)
+        });
         match result {
             Ok(sandbox) => (Status::Ok, sandbox.permissions),
             Err(status) => (status, Permissions::default()),
         }
     }
 
-    /// The app asks for `key` and the console withdraws it: the sandbox read, or why not.
+    /// The app asks for `key` and the console withdraws it: the sandbox read, or why not. The
+    /// caller holds the override lock.
     fn withdrawable_sandbox(
         &self,
         id: &str,
@@ -627,6 +648,7 @@ impl<F: Flatpak> Store<F> {
         is_admin: bool,
         emit: &mut dyn FnMut(Event),
     ) -> Status {
+        let _held = self.overrides_held();
         let sandbox = match self.withdrawable_sandbox(id, key, is_admin, emit) {
             Ok(sandbox) => sandbox,
             Err(status) => return status,
@@ -651,7 +673,8 @@ impl<F: Flatpak> Store<F> {
     /// `RestorePermission` (admin): gives the key back. `flatpak override` cannot take back one
     /// option, so the override is reset and the keys that stay withdrawn are withdrawn again; what
     /// else an override written outside the Store held goes with it. A key that is not withdrawn
-    /// is `ok` with nothing run.
+    /// is `ok` with nothing run. It never fails open: when the second step fails, the override
+    /// read at the start is written back and the answer is `failed`.
     pub fn restore_permission(
         &self,
         id: &str,
@@ -659,6 +682,7 @@ impl<F: Flatpak> Store<F> {
         is_admin: bool,
         emit: &mut dyn FnMut(Event),
     ) -> Status {
+        let _held = self.overrides_held();
         let sandbox = match self.withdrawable_sandbox(id, key, is_admin, emit) {
             Ok(sandbox) => sandbox,
             Err(status) => return status,
@@ -674,17 +698,25 @@ impl<F: Flatpak> Store<F> {
             .cloned()
             .collect();
         let args = overrides::rewithdraw_args(&sandbox.app, &rest, self.device_input());
-        let written = self.flatpak.reset_override(id).and_then(|()| {
-            if args.is_empty() {
-                Ok(())
-            } else {
-                self.flatpak.add_override(id, &args)
-            }
-        });
-        match written {
+        if let Err(err) = self.flatpak.reset_override(id) {
+            eprintln!("ruya-store: restoring {key} of {id} failed: {err}");
+            return Status::Failed;
+        }
+        if args.is_empty() {
+            return Status::Ok;
+        }
+        match self.flatpak.add_override(id, &args) {
             Ok(()) => Status::Ok,
             Err(err) => {
-                eprintln!("ruya-store: restoring {key} of {id} failed: {err}");
+                eprintln!("ruya-store: restoring {key} of {id} failed after the reset: {err}");
+                // The reset gave every key back: the override read at the start goes back, so
+                // nothing is widened.
+                if let Err(err) = self.flatpak.write_override(id, &sandbox.over_text) {
+                    eprintln!(
+                        "ruya-store: writing the override of {id} back failed, its withdrawals \
+                         are gone: {err}"
+                    );
+                }
                 Status::Failed
             }
         }
@@ -700,6 +732,7 @@ impl<F: Flatpak> Store<F> {
         if !is_admin {
             return Status::Forbidden;
         }
+        let _held = self.overrides_held();
         if let Err(status) = self.installed_app(id, emit) {
             return status;
         }
@@ -715,7 +748,9 @@ impl<F: Flatpak> Store<F> {
     /// Drops the override of an app that was uninstalled. Every uninstall of the Store ends here
     /// (`run_next`); a withdrawal must not wait for an app installed again under the same id. A
     /// failure is logged: the app is gone either way.
+    /// Under the override lock, so a change that saw the app installed writes before the drop.
     fn drop_override(&self, id: &str) {
+        let _held = self.overrides_held();
         if let Err(err) = self.flatpak.reset_override(id) {
             eprintln!("ruya-store: dropping the override of {id} failed: {err}");
         }
@@ -784,11 +819,7 @@ impl<F: Flatpak> Store<F> {
             return;
         };
         let text = jobs::encode(state.queue.counter(), &state.jobs);
-        let tmp = path.with_extension("tmp");
-        // Synced before the rename: after a power cut the name must never point at a file whose
-        // data did not reach the disk (the rename can be persisted before the data).
-        let written = write_synced(&tmp, &text).and_then(|()| std::fs::rename(&tmp, path));
-        if let Err(err) = written {
+        if let Err(err) = replace_file(path, &text) {
             eprintln!("ruya-store: writing {} failed: {err}", path.display());
         }
     }
@@ -853,6 +884,16 @@ impl<F: Flatpak> Store<F> {
         });
         true
     }
+}
+
+/// Replaces the file at `path` with `text` whole: written to a hidden file beside it, synced, then
+/// renamed over it. Synced before the rename: after a power cut the name must never point at a
+/// file whose data did not reach the disk (the rename can be persisted before the data). The job
+/// table and an override written back (`flatpak_cli`) go through it.
+pub(crate) fn replace_file(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let tmp = path.with_file_name(format!(".{name}.tmp"));
+    write_synced(&tmp, text).and_then(|()| std::fs::rename(&tmp, path))
 }
 
 fn write_synced(path: &std::path::Path, text: &str) -> std::io::Result<()> {
@@ -2027,6 +2068,7 @@ mod tests {
                     "--system",
                     "--nodevice=all",
                     "--device=input",
+                    "--device=dri",
                     STREAM
                 ]),
                 strings(&["override", "--system", "--nofilesystem=home", STREAM]),
@@ -2183,7 +2225,7 @@ mod tests {
         // The override holds the remaining withdrawal only: nothing positive was written for network.
         assert_eq!(
             s.flatpak.override_of(STREAM),
-            "[Context]\ndevices=!all;input;\n"
+            "[Context]\ndevices=!all;input;dri;\n"
         );
         // Not withdrawn: ok, and nothing is written.
         let before = s.flatpak.override_of(STREAM);
@@ -2196,6 +2238,89 @@ mod tests {
         s.restore_permission(STREAM, "all-devices", true, &mut none);
         assert_eq!(s.flatpak.override_of(STREAM), "");
         assert!(s.get_permissions(STREAM, &mut none).1.withdrawn.is_empty());
+    }
+
+    /// Runs `call` on a thread of its own and gives it up to half a second: long enough for an
+    /// unlocked call to finish, so a missing lock shows. Returns the thread, to be joined.
+    fn meanwhile<T: Send + 'static>(
+        call: impl FnOnce() -> T + Send + 'static,
+    ) -> std::thread::JoinHandle<T> {
+        let (done, finished) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            let result = call();
+            let _ = done.send(());
+            result
+        });
+        let _ = finished.recv_timeout(std::time::Duration::from_millis(500));
+        thread
+    }
+
+    #[test]
+    fn a_change_that_comes_during_a_restore_waits_for_it() {
+        let s = std::sync::Arc::new(perm_store(fake()));
+        s.withdraw_permission(STREAM, "network", true, &mut none);
+        s.withdraw_permission(STREAM, "home-files", true, &mut none);
+        // Between the restore's read of the override and its reset, the devices are withdrawn
+        // from another thread (a second page, or root).
+        let (other, (send, receive)) = (s.clone(), std::sync::mpsc::channel());
+        s.flatpak.after_next_show_override(move || {
+            let _ = send.send(meanwhile(move || {
+                other.withdraw_permission(STREAM, "all-devices", true, &mut none)
+            }));
+        });
+        assert_eq!(
+            s.restore_permission(STREAM, "network", true, &mut none),
+            Status::Ok
+        );
+        let withdrawal = receive.recv().unwrap();
+        assert_eq!(withdrawal.join().unwrap(), Status::Ok);
+        // Both answered ok, so both hold: the reset did not take the devices' withdrawal away.
+        let (_, p) = s.get_permissions(STREAM, &mut none);
+        assert_eq!(p.withdrawn, strings(&["home-files", "all-devices"]));
+        assert!(p.effective.contains(&"network".to_owned()));
+    }
+
+    #[test]
+    fn a_withdrawal_that_saw_the_app_installed_goes_with_its_uninstall() {
+        let s = std::sync::Arc::new(perm_store(fake()));
+        assert_eq!(s.uninstall(STREAM, false, &mut none).0, Status::Ok);
+        // The withdrawal has read the installed list; the uninstall runs to its end now.
+        let (jobs, (send, receive)) = (s.clone(), std::sync::mpsc::channel());
+        s.flatpak.after_next_installed(move || {
+            let _ = send.send(meanwhile(move || jobs.run_next(&mut none)));
+        });
+        assert_eq!(
+            s.withdraw_permission(STREAM, "network", true, &mut none),
+            Status::Ok
+        );
+        assert!(receive.recv().unwrap().join().unwrap(), "the uninstall ran");
+        assert_eq!(
+            s.flatpak.override_of(STREAM),
+            "",
+            "no withdrawal outlives the app"
+        );
+    }
+
+    #[test]
+    fn a_restore_whose_second_step_fails_puts_the_override_back() {
+        // With an entry written by hand, so "back" means the very text.
+        let before =
+            "[Context]\nshared=!network;\ndevices=!all;input;dri;\n[Environment]\nFOO=bar\n";
+        let s = perm_store(fake().with_override(STREAM, before));
+        s.flatpak.fail_next_add_override();
+        assert_eq!(
+            s.restore_permission(STREAM, "network", true, &mut none),
+            Status::Failed
+        );
+        assert!(s
+            .flatpak
+            .override_runs()
+            .contains(&strings(&["override", "--system", "--reset", STREAM])));
+        assert_eq!(s.flatpak.override_of(STREAM), before, "nothing is widened");
+        assert_eq!(
+            s.get_permissions(STREAM, &mut none).1.withdrawn,
+            strings(&["network", "all-devices"])
+        );
     }
 
     #[test]

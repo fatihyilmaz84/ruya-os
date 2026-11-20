@@ -20,6 +20,8 @@ pub struct FlatpakCli {
     appstream_root: PathBuf,
     /// `/var/home`: where the profiles' home directories are.
     homes: PathBuf,
+    /// `/var/lib/flatpak/overrides`: the system installation's overrides, one keyfile per app.
+    overrides_dir: PathBuf,
 }
 
 impl FlatpakCli {
@@ -27,6 +29,7 @@ impl FlatpakCli {
         FlatpakCli {
             appstream_root: PathBuf::from("/var/lib/flatpak/appstream"),
             homes: PathBuf::from("/var/home"),
+            overrides_dir: PathBuf::from("/var/lib/flatpak/overrides"),
         }
     }
 }
@@ -239,6 +242,19 @@ impl Flatpak for FlatpakCli {
 
     fn reset_override(&self, id: &str) -> Result<(), String> {
         reset_override(id)
+    }
+
+    fn write_override(&self, id: &str, keyfile: &str) -> Result<(), String> {
+        if !valid_app_id(id) {
+            return Err("refused argument".to_owned());
+        }
+        if keyfile.is_empty() {
+            return reset_override(id);
+        }
+        // Where `flatpak override --system` keeps it; replaced whole, never half written.
+        fs::create_dir_all(&self.overrides_dir)
+            .and_then(|()| crate::service::replace_file(&self.overrides_dir.join(id), keyfile))
+            .map_err(|e| format!("{}: {e}", self.overrides_dir.join(id).display()))
     }
 
     fn add_remote(&self, name: &str, url: &str) -> Result<(), FlatpakError> {
