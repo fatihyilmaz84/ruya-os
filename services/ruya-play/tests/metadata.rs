@@ -269,3 +269,15 @@ fn a_request_without_a_row_grants_nothing() {
         metadata(&m, &assess(Tier::Official, &m.permissions))
     );
 }
+
+/// GL32's mount folder sits inside Compat.i386's (Flatpak mounts GL32 into it); the second
+/// constant repeats the first's text because `concat!` cannot take a const, so pin the prefix.
+#[test]
+fn the_gl32_folder_is_inside_the_compat_i386_folder() {
+    use ruya_play::service::commit::{COMPAT_I386_DIR, GL32_DIR};
+    assert_eq!(
+        GL32_DIR.strip_prefix(COMPAT_I386_DIR),
+        Some("/GL"),
+        "GL32_DIR must be COMPAT_I386_DIR + \"/GL\""
+    );
+}
