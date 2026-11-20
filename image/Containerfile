@@ -17,9 +17,9 @@ RUN cmake -S /src/shell -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_IN
 
 # ---- Rust services ------------------------------------------------------------------
 FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION} AS services-build
-# Fedora's musl target of the same Rust for the .play launcher below; binutils for its check.
-RUN dnf -y install --setopt=install_weak_deps=False cargo rust \
-        rust-std-static-x86_64-unknown-linux-musl musl-gcc musl-libc-static binutils \
+# glibc-static for the static .play launcher below (Fedora ships no musl Rust std); binutils for
+# its check.
+RUN dnf -y install --setopt=install_weak_deps=False cargo rust glibc-static binutils \
     && dnf clean all
 COPY services /src/services
 # ruya-pack is not shipped (/tools is not copied into the image): the play-runners-check stage
@@ -36,15 +36,17 @@ RUN cd /src/services \
     && install -Dm755 target/release/ruya-update /out/usr/bin/ruya-update \
     && install -Dm755 target/release/ruya-notifications /out/usr/bin/ruya-notifications \
     && install -Dm755 target/release/ruya-play /out/usr/bin/ruya-play
-# The .play launcher (ADR-038): a static x86_64-unknown-linux-musl program, so the freedesktop
-# runtime branch an app runs on does not matter. It runs inside every .play app's sandbox from
+# The .play launcher (ADR-038): a static program (glibc with crt-static, static-pie), so the
+# freedesktop runtime branch an app runs on does not matter. It must not use NSS, iconv or dlopen
+# (none of which a static glibc can load). The explicit --target keeps crt-static off build
+# scripts. It runs inside every .play app's sandbox from
 # /usr/lib/ruyaos/play/launcher, mounted as the org.ruyaos.Play.Launcher extension (tmpfiles.d
 # ruya-play-platform.conf). The build fails when the binary asks for a program interpreter or a
 # shared library (readelf, not ldd: ldd of a static-pie binary is not a reliable answer).
 RUN cd /src/services \
-    && CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
-       cargo build --release --locked --target x86_64-unknown-linux-musl -p ruya-play-launch \
-    && bin=target/x86_64-unknown-linux-musl/release/ruya-play-launch \
+    && RUSTFLAGS='-C target-feature=+crt-static' \
+       cargo build --release --locked --target x86_64-unknown-linux-gnu -p ruya-play-launch \
+    && bin=target/x86_64-unknown-linux-gnu/release/ruya-play-launch \
     && if readelf -lW "$bin" | grep -q 'program interpreter' || readelf -dW "$bin" | grep -q '(NEEDED)'; then \
            echo "ruya-play-launch is not statically linked:" >&2; readelf -lW "$bin" >&2; readelf -dW "$bin" >&2; exit 1; \
        fi \

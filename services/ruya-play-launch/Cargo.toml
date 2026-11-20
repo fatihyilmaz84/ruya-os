@@ -13,7 +13,8 @@ name = "ruya_play_launch"
 name = "ruya-play-launch"
 path = "src/main.rs"
 
-# Few dependencies: the binary is built as a static x86_64-unknown-linux-musl program (RUY-34).
+# Few dependencies: the binary is built as a static program (glibc crt-static, RUY-34); nothing
+# here may use NSS, iconv or dlopen.
 [dependencies]
 ruya-play-format = { path = "../ruya-play-format" }  # the one parser, resolve(), prefix_dir and the env deny table
 serde_json = "1"  # the status file (already in the tree)

@@ -220,7 +220,7 @@ row here.
 
 | In the image | What | From | Size |
 |---|---|---|---|
-| `ruya-play-launch` (`/usr/lib/ruyaos/play/launcher/bin/`) | the launcher every `.play` app runs (`org.ruyaos.Play.Launcher//1`), static `x86_64-unknown-linux-musl` | `services/ruya-play-launch`, the `services-build` stage (Fedora's `rust-std-static-x86_64-unknown-linux-musl`, `musl-gcc`, `musl-libc-static`; build stage only) | a few MB |
+| `ruya-play-launch` (`/usr/lib/ruyaos/play/launcher/bin/`) | the launcher every `.play` app runs (`org.ruyaos.Play.Launcher//1`), static (glibc `crt-static`, static-pie; `glibc-static` in the build stage only) | `services/ruya-play-launch`, the `services-build` stage (Fedora's `rust-std-static-x86_64-unknown-linux-musl`, `musl-gcc`, `musl-libc-static`; build stage only) | a few MB |
 | `ProtonGE11` (`/usr/lib/ruyaos/play/runners/ProtonGE11/`) | GE-Proton11-12, the default Windows runner (ADR-025; `org.ruyaos.Play.Runner.ProtonGE11//1`, family `proton-ge`) | the upstream release tarball pinned in `image/play/runners/ProtonGE11/pin` (SHA-256 `0595159e...5d70`), unpacked by `image/play/install-runners.sh`, plus our `runner.json` | **1528 MiB** unpacked (6167 files, 1953 links, 887 folders; measured from the tarball's listing, RUY-34); the tarball is 541 MiB |
 
 **Size.** The runner tree is the largest single addition to the image so far: the deployed `/usr` grows by about
