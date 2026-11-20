@@ -1,0 +1,16 @@
+# The golden of 05 §8's permission table (ADR-038, RUY-909): what each vocabulary word grants,
+# as `key=value => [Section] key=value | ...`. A re-commit never widens a grant, so a row of
+# `PERMISSIONS` may grant at most what its line here lists (equal or narrower); a word with no line
+# is new and passes. Narrowing a row means updating its line here in the same commit. A broader
+# grant is a new vocabulary word, never an edit of a row.
+(always) => [Context] shared=ipc | [Context] sockets=pulseaudio | [Context] devices=dri | [Context] sockets=wayland | [Context] sockets=x11
+input=controllers =>
+input=controllers+keyboard-mouse =>
+input=all-devices => [Context] devices=all
+network=true => [Context] shared=network
+removable_media=read => [Context] filesystems=/run/media:ro
+removable_media=write => [Context] filesystems=/run/media
+multiarch=true => [Context] features=multiarch
+gamemode=true => [Session Bus Policy] com.feralinteractive.GameMode=talk
+realtime=true =>
+devel=true => [Context] features=devel

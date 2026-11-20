@@ -46,9 +46,9 @@ use ruya_play_format::manifest::english;
 use ruya_play_format::Problem;
 use ruya_play_trust::revocation::Selected;
 use ruya_play_trust::{
-    assess, diff, inspect, is_revoked, record_install, record_uninstall, select_blocklist, Context,
-    Continuity, IdRecord, Inspection, ListCheck, PermissionDiff, StoreKeys, Tier, TrustError,
-    TrustStore,
+    added_to, assess, diff, grants, inspect, is_revoked, record_install, record_uninstall,
+    select_blocklist, Context, Continuity, IdRecord, Inspection, ListCheck, PermissionDiff,
+    StoreKeys, Tier, TrustError, TrustStore,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::io::Write;
@@ -782,10 +782,27 @@ impl Importer {
         if held || !stale {
             return Ok(false);
         }
-        let Some(files) = reconcile::our_files(&self.cfg.flatpak, &id) else {
+        let Some((files, deployed)) = reconcile::our_files_and_grants(&self.cfg.flatpak, &id)
+        else {
             return Ok(false);
         };
         let (manifest, assessment) = reconcile::installed_app(&files)?;
+        // A re-commit runs without the admin gate and the update diff, so it may only keep or
+        // narrow what the app has (ADR-038): anything added leaves the app as deployed, at its
+        // older generation, and the image keeps that launcher branch.
+        let deployed = deployed.ok_or_else(|| {
+            Problem::new(
+                codes::INSTALLED_UNRECONCILED,
+                "",
+                "The installed app cannot be committed again: its metadata cannot be read."
+                    .to_string(),
+            )
+        })?;
+        let added = added_to(&deployed, &grants(&manifest.run.runner, &assessment));
+        if !added.is_empty() {
+            self.log_widening(&id, &added);
+            return Ok(false);
+        }
         // The copy is a reflink on XFS, but a full copy elsewhere: ask as an install does.
         let bytes = unpack::walk(&files)
             .map_err(|e| staging_problem("", &e))?
@@ -823,6 +840,17 @@ impl Importer {
         self.installed().stamp(&id, METADATA_GENERATION)?;
         removed?;
         Ok(true)
+    }
+
+    /// `recommit.widens`: a re-commit of `id` would add `added` to what the app has.
+    fn log_widening(&self, id: &str, added: &[String]) {
+        let line = serde_json::json!({
+            "time": self.clock.now(),
+            "id": id,
+            "event": "recommit.widens",
+            "added": added,
+        });
+        eprintln!("ruya-play: {line}");
     }
 
     /// Steps 2 and 3 over the root files the service read back (a source that is read once).

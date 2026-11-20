@@ -149,6 +149,92 @@ fn an_app_that_cannot_be_read_back_is_not_committed() {
     assert_eq!(generation(&installed), 0);
 }
 
+/// The deployed app's `metadata` file (beside `files/`).
+fn deployed_metadata(h: &Harness) -> std::path::PathBuf {
+    files_dir(h, ID).parent().unwrap().join("metadata")
+}
+
+/// Nothing a re-commit would add may be missing from the deployed metadata: `edit` changes the
+/// text the commit wrote, and the re-commit is refused when the new set is not within it.
+fn refused_after(fx: &Fx, edit: impl Fn(&str) -> String, added: &str) {
+    let (h, installed) = deployed(fx, 0);
+    let path = deployed_metadata(&h);
+    let text = std::fs::read_to_string(&path).unwrap();
+    let edited = edit(&text);
+    assert_ne!(edited, text, "the edit changed nothing");
+    std::fs::write(&path, &edited).unwrap();
+    let before = listing(&h.cfg.flatpak);
+    assert_eq!(recommits_planned(&h), vec![ID.to_string()]);
+    assert_eq!(h.importer.recommit(ID), Ok(false), "{added}");
+    // Nothing was committed, the app is as deployed, the generation is the old one and the
+    // staging folder was never made; the next start plans it again.
+    assert!(h.commit.recommits().is_empty(), "{added}");
+    assert_eq!(generation(&installed), 0);
+    assert_eq!(listing(&h.cfg.flatpak), before);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), edited);
+    assert!(h.staging().is_empty(), "{:?}", h.staging());
+    assert_eq!(recommits_planned(&h), vec![ID.to_string()]);
+}
+
+#[test]
+fn a_recommit_that_adds_a_context_entry_is_refused() {
+    refused_after(
+        &Fx::minimal(),
+        |t| t.replace("shared=ipc;", ""),
+        "[Context] shared=ipc",
+    );
+}
+
+#[test]
+fn a_recommit_that_adds_a_bus_name_is_refused() {
+    let fx = asking(
+        serde_json::json!({"input": "controllers", "gamemode": true}),
+        1,
+    );
+    refused_after(
+        &fx,
+        |t| {
+            t.replace(
+                "com.feralinteractive.GameMode=talk
+",
+                "",
+            )
+        },
+        "[Session Bus Policy] com.feralinteractive.GameMode",
+    );
+}
+
+#[test]
+fn a_recommit_that_equals_or_narrows_the_deployed_grants_goes_ahead() {
+    // Equal: the fixture's own metadata (an_app_of_an_older_generation... covers it too).
+    let (h, installed) = deployed(&Fx::minimal(), 0);
+    let path = deployed_metadata(&h);
+    // Narrower than deployed: the app used to have the network, a bus name and more devices.
+    let text = std::fs::read_to_string(&path).unwrap();
+    let broader = text
+        .replace("shared=ipc;", "shared=ipc;network;")
+        .replace("devices=dri;", "devices=all;")
+        + "[Session Bus Policy]
+com.example.Old=talk
+
+";
+    std::fs::write(&path, broader).unwrap();
+    assert_eq!(h.importer.recommit(ID), Ok(true));
+    assert_eq!(h.commit.recommits().len(), 1);
+    assert_eq!(generation(&installed), METADATA_GENERATION);
+}
+
+#[test]
+fn an_app_whose_metadata_cannot_be_read_is_not_committed() {
+    let (h, installed) = deployed(&Fx::minimal(), 0);
+    std::fs::remove_file(deployed_metadata(&h)).unwrap();
+    let err = h.importer.recommit(ID).unwrap_err();
+    assert_eq!(err.code, "installed.unreconciled");
+    assert!(err.message.contains("metadata"), "{}", err.message);
+    assert!(h.commit.recommits().is_empty());
+    assert_eq!(generation(&installed), 0);
+}
+
 #[test]
 fn an_install_stamps_the_current_generation() {
     let installed = SharedInstalled::default();

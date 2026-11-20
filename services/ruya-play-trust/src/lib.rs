@@ -40,8 +40,8 @@ pub use error::{codes, RevokedBy, TrustError};
 pub use inspect::{inspect, Context, Inspection, Refusal};
 pub use keys::{generate_key, PublicKey, SecretKey};
 pub use permissions::{
-    diff, grants, metadata_sections, words, Grant, Permission, PermissionDiff, Section,
-    HIGH_RISK_PAIRS, PERMISSIONS,
+    added_to, diff, grants, metadata_sections, parse_sections, widened, words, Grant, Granted,
+    Permission, PermissionDiff, Section, HIGH_RISK_PAIRS, PERMISSIONS,
 };
 pub use revocation::{
     is_revoked, select_blocklist, sign_blocklist, verify_downloaded, Blocklist, ListCheck,
