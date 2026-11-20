@@ -779,6 +779,49 @@ Item {
             wait(300)
             compare(page().mode, "remove", "still installed")
             verify(find("installRemove").visible)
+            tryVerify(() => toastTexts().indexOf("Could not uninstall Old Bad Game. Try again.") >= 0, 2000, "the failure is told")
+            compare(Notifications.model.get(0).kind, "error")
+            tryVerify(() => find("installRemove").activeFocus, 2000, "the focus is back on Remove")
+            verify(tc.shell.uninstallRuns["play.com.example.oldbad"] === undefined, "the run is over")
+        }
+
+        function test_a_refused_remove_ends_like_a_failed_one() {
+            start("admin")
+            Play.mockSetInstalled("com.example.oldbad", 7)
+            Play.mockPauseJobs(true)
+            Play.verify("play.com.example.oldbad")             // a job of the same app: Remove is busy
+            tryVerify(() => Object.keys(host.finishedJobs).length === 0)
+            find("uninstallConfirm").open("play.com.example.oldbad", "Old Bad Game", { itemId: "x", surface: "hero", title: "Old Bad Game", index: 0 })
+            confirmUninstall()
+            tryVerify(() => host.removeAnswers.length === 1, 2000)
+            compare(host.removeAnswers[0].status, "busy")
+            tryVerify(() => toastTexts().indexOf("Could not uninstall Old Bad Game. Try again.") >= 0, 2000)
+            verify(tc.shell.uninstallRuns["play.com.example.oldbad"] === undefined)
+            Play.mockPauseJobs(false)
+            tryVerify(() => host.finishedJobs.some(j => j.kind === "verify"), 15000)
+            compare(host.finishedJobs[0].kind, "verify", "the running verify kept its own kind")
+        }
+
+        // The card's Uninstall… row for a .play app is Play's, not the Store's (RUY-816).
+        function test_the_options_menu_of_an_installed_play_card_removes_through_play() {
+            Library.resetMockForTests("play")
+            start("admin")
+            const id = "flatpak:play.com.example.starhopper"
+            tryVerify(() => Library.items.some(i => i.id === id))
+            Play.mockSetInstalled("com.example.starhopper", 142)
+            verify(tc.shell.openOptions("hero", id, find("homePlay"), "pill", null))
+            const menu = find("optionsMenu")
+            tryVerify(() => menu.shown && menu.activeFocus, 2000)
+            const ids = menu.rows.map(r => r.id)
+            verify(ids.indexOf("uninstall") >= 0, "Uninstall… is offered: " + ids)
+            for (let i = 0; i < ids.indexOf("uninstall"); ++i)
+                keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            confirmUninstall()
+            tryVerify(() => host.removeAnswers.length === 1, 2000)
+            compare(host.removeAnswers[0], { key: "play.com.example.starhopper", status: "ok" })
+            tryVerify(() => toastTexts().indexOf("Star Hopper was uninstalled.") >= 0, 15000)
+            Library.resetMockForTests("")
         }
 
         function test_the_dialog_asks_play_for_a_play_app_and_the_store_for_any_other() {

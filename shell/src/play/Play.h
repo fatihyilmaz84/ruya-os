@@ -114,7 +114,8 @@ private:
     JobInfo infoOf(const QString &key) const;
 
     std::unique_ptr<PlayBackend> m_backend;
-    QHash<QString, QString> m_requested; // key -> kind, for a job this session asked for
+    QHash<QString, QString> m_pending;   // key -> kind of a call not answered yet
+    QHash<QString, QString> m_requested; // key -> kind, for a job this session asked for and the service accepted
     QHash<QString, JobInfo> m_listed;
     QVariantList m_sources;
     QVariantMap m_jobs;

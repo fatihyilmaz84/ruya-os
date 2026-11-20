@@ -97,6 +97,8 @@ private:
     static QString phaseAt(int percent);
     // The phase a job reports at its percent: a verify only "verifying", a remove only "removing".
     static QString phaseOf(const Job &job);
+    // "play.<id>" -> "<id>" (an id without the prefix stays as it is).
+    static QString manifestIdOf(const QString &appId);
     const Fixture *fixtureOf(const QString &manifestId) const;
     QList<StoreJob> jobTable() const;
 

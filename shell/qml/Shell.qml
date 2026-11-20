@@ -2080,15 +2080,17 @@ FocusScope {
         // Uninstall…: an installed Flatpak app the Store knows, that does not run and has no Store job
         // on its card (a row that would start a job is hidden while one runs; one of ours counts from the moment
         // it was asked, the Store lists a job only once it has made progress).
-        if (appId !== "" && item.source === "flatpak" && !running && !closing && Store.available
-                && Store.app(appId).id !== undefined && Store.jobs[appId] === undefined && uninstallRuns[appId] === undefined)
+        // A .play app belongs to Play (the Store has no record of it): the same test on Play's jobs and reach.
+        const owned = Play.isPlayApp(appId) ? Play.available && Play.jobs[appId] === undefined
+                                            : Store.available && Store.app(appId).id !== undefined && Store.jobs[appId] === undefined
+        if (appId !== "" && item.source === "flatpak" && !running && !closing && owned && uninstallRuns[appId] === undefined)
             rows.push({ id: "uninstall", label: qsTr("Uninstall…"), icon: "delete", divider: rows.length > 0 })
         return rows
     }
 
     // The note that ends a card's menu when the Store does not answer: its rows were left out.
     function gameNote(id) {
-        return Library.sessionAppId(id) !== "" && !Store.available ? qsTr("Store options are unavailable right now.") : ""
+        return Library.sessionAppId(id) !== "" && !Play.isPlayApp(Library.sessionAppId(id)) && !Store.available ? qsTr("Store options are unavailable right now.") : ""
     }
 
     function optionRows(surface, id) {
@@ -2172,6 +2174,11 @@ FocusScope {
             const known = root.playInspected
             known[path] = { name: record.name ?? "", size: record.size ?? 0 }
             root.playInspected = known
+        }
+        // A refused Remove (busy, forbidden, unknown-app, failed) never becomes a job: it ends like a failed one.
+        function onAnswered(op, key, status) {
+            if (op === "remove" && status !== "ok")
+                root.uninstallFinished(key, status)
         }
         function onJobFinished(key, status, kind, name) {
             if (kind === "remove") {

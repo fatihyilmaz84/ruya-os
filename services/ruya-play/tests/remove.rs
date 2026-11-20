@@ -272,3 +272,39 @@ fn removing_one_app_leaves_the_record_of_another() {
     );
     assert_eq!(h.importer.installed_build(ID).unwrap(), None);
 }
+
+#[test]
+fn a_running_install_of_the_same_id_makes_a_remove_busy() {
+    use ruya_play::core::fakes::FnHooks;
+    use ruya_play::Step;
+    use std::sync::{mpsc, Mutex};
+    let (reached_tx, reached) = mpsc::channel::<()>();
+    let (go, go_rx) = mpsc::channel::<()>();
+    let (reached_tx, go_rx) = (Mutex::new(reached_tx), Mutex::new(go_rx));
+    let fx = game();
+    let mut setup = Setup::with(Pkg::signed(&fx));
+    // The install stands still before it unpacks: its app name is on the job by then.
+    setup.hooks = Box::new(FnHooks(move |_job: &str, step: &Step<'_>| {
+        if *step == Step::BeforeUnpack {
+            reached_tx.lock().unwrap().send(()).unwrap();
+            go_rx.lock().unwrap().recv().unwrap();
+        }
+    }));
+    let h = setup.build();
+    deploy(&h, ID, &fx);
+    let (status, _) = h.importer.queue_install(&pkg_path("game.play"), true);
+    assert_eq!(status, MethodStatus::Ok);
+    std::thread::scope(|s| {
+        let runner = s.spawn(|| h.importer.run_next(&mut |_| {}));
+        reached.recv().unwrap();
+        let while_running = h.importer.queue_remove(ID).0;
+        go.send(()).unwrap(); // before any assertion: a panic must not leave the install waiting
+        runner.join().unwrap();
+        assert_eq!(while_running, MethodStatus::Busy);
+    });
+    assert_eq!(
+        h.importer.queue_remove(ID).0,
+        MethodStatus::Ok,
+        "once it is over"
+    );
+}

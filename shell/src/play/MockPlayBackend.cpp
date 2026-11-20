@@ -387,7 +387,7 @@ void MockPlayBackend::startJob(const QString &op, const QString &key, const QStr
     job.kind = kind;
     job.jobId = QStringLiteral("play-mock-%1").arg(++m_jobCounter);
     job.app = app;
-    if (const Fixture *f = fixtureOf(app.startsWith(QLatin1String("play.")) ? app.mid(5) : app))
+    if (const Fixture *f = fixtureOf(manifestIdOf(app)))
         job.name = f->info.name;
     job.path = path;
     job.failAt = failAt;
@@ -433,8 +433,7 @@ void MockPlayBackend::verify(const QString &appId)
         answerLater(op, appId, QStringLiteral("invalid"));
         return;
     }
-    const QString id = appId.startsWith(QLatin1String("play.")) ? appId.mid(5) : appId;
-    if (!m_installed.contains(id)) {
+    if (!m_installed.contains(manifestIdOf(appId))) {
         answerLater(op, appId, QStringLiteral("unknown-app"));
         return;
     }
@@ -449,16 +448,16 @@ void MockPlayBackend::remove(const QString &appId, bool adminApproved)
     const QString op = QStringLiteral("remove");
     if (failing(op, appId))
         return;
-    if (appId.isEmpty()) {
-        answerLater(op, appId, QStringLiteral("invalid"));
-        return;
-    }
+    // The service's order: the admin gate first, then the id.
     if (!adminApproved) {
         answerLater(op, appId, QStringLiteral("forbidden"));
         return;
     }
-    const QString id = appId.startsWith(QLatin1String("play.")) ? appId.mid(5) : QString();
-    if (id.isEmpty() || !m_installed.contains(id)) {
+    if (appId.isEmpty()) {
+        answerLater(op, appId, QStringLiteral("invalid"));
+        return;
+    }
+    if (!appId.startsWith(QLatin1String("play.")) || !m_installed.contains(manifestIdOf(appId))) {
         answerLater(op, appId, QStringLiteral("unknown-app"));
         return;
     }
@@ -488,6 +487,11 @@ void MockPlayBackend::cancel(const QString &key)
         return;
     }
     answerLater(op, key, QStringLiteral("unknown-job"));
+}
+
+QString MockPlayBackend::manifestIdOf(const QString &appId)
+{
+    return appId.startsWith(QLatin1String("play.")) ? appId.mid(5) : appId;
 }
 
 QString MockPlayBackend::phaseOf(const Job &job)
@@ -538,7 +542,7 @@ void MockPlayBackend::step()
             if (f)
                 m_installed.insert(f->info.id, f->info.build);
         } else if (done.kind == QLatin1String("remove")) {
-            m_installed.remove(done.app.mid(5)); // "play." + the manifest id
+            m_installed.remove(manifestIdOf(done.app));
         }
         finish(done, QStringLiteral("ok"));
     }

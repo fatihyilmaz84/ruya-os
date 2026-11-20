@@ -31,7 +31,13 @@ Play::Play(std::unique_ptr<PlayBackend> backend, QObject *parent)
         emit developerModeChanged();
     });
     connect(m_backend.get(), &PlayBackend::answered, this,
-            [this](const QString &op, const QString &key, const QString &status) { emit answered(op, key, status); });
+            [this](const QString &op, const QString &key, const QString &status) {
+        // A job is the caller's only once the service accepted it; a refused call (busy, forbidden, ...) is none.
+        const QString kind = m_pending.take(key);
+        if (!kind.isEmpty() && op == kind && status == QLatin1String("ok"))
+            m_requested.insert(key, kind);
+        emit answered(op, key, status);
+    });
     connect(m_backend.get(), &PlayBackend::jobProgress, this, [this](const QString &key, int percent, const QString &phase) {
         m_lost.remove(key); // a job after the lost one: the lost one is history
         m_jobs.insert(key, QVariantMap{{QStringLiteral("percent"), percent}, {QStringLiteral("phase"), phase}});
@@ -142,19 +148,19 @@ void Play::inspect(const QString &path)
 
 void Play::install(const QString &path, bool adminApproved)
 {
-    m_requested.insert(path, QStringLiteral("install"));
+    m_pending.insert(path, QStringLiteral("install"));
     m_backend->install(path, adminApproved);
 }
 
 void Play::verify(const QString &appId)
 {
-    m_requested.insert(appId, QStringLiteral("verify"));
+    m_pending.insert(appId, QStringLiteral("verify"));
     m_backend->verify(appId);
 }
 
 void Play::remove(const QString &appId, bool adminApproved)
 {
-    m_requested.insert(appId, QStringLiteral("remove"));
+    m_pending.insert(appId, QStringLiteral("remove"));
     m_backend->remove(appId, adminApproved);
 }
 

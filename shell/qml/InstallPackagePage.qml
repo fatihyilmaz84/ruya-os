@@ -35,7 +35,7 @@ Page {
     // Installed, then put on the block list: it will not start; Remove takes the place of Play.
     readonly property bool revokedInstalled: installed && info.revoked === true
     // The Library item that starts the installed game (Play); absent until the Library has listed it.
-    readonly property var libraryItem: info ? (Library.items.find(i => Library.sessionAppId(i.id) === "play." + info.id) ?? null) : null
+    readonly property var libraryItem: info ? (Library.items.find(i => Library.sessionAppId(i.id) === appId) ?? null) : null
 
     // The job: a request of this page that is not finished, or a job the service runs for this path (also one
     // started by an earlier visit to this page: closing the page does not cancel).
