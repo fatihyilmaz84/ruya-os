@@ -1633,6 +1633,11 @@ grep -q 'chmod +x "\$pack"' "$here/vm-play-check.sh" && pass "vm-play-check.sh m
 # RUY-834: the verify mode installs the sample, damages one deployed file and expects the job to say so.
 grep -q 'if \[ "\$mode" = verify \]' "$here/vm-play-check.sh" && pass "vm-play-check.sh has a verify mode" || fail "vm-play-check.sh: no verify mode"
 grep -q 'call Verify s' "$here/vm-play-check.sh" && pass "vm-play-check.sh calls Play1.Verify" || fail "vm-play-check.sh never calls Verify"
+# RUY-816: the remove mode calls Play1.Remove with and without admin_approved, waits for the job and expects the
+# records and the deployment gone; its busctl call has the contract's signature (s, a{sv}).
+grep -q 'if \[ "\$mode" = remove \]' "$here/vm-play-check.sh" && pass "vm-play-check.sh has a remove mode" || fail "vm-play-check.sh: no remove mode"
+grep -c "call Remove 'sa{sv}'" "$here/vm-play-check.sh" | grep -qx 3 && grep -A4 'name="Remove"' "$here/../api/dbus/org.ruyaos.Play1.xml" | grep -q 'name="options" type="a{sv}"' && pass "vm-play-check.sh calls Play1.Remove as (s, a{sv}), the signature of Play1.xml" || fail "vm-play-check.sh: its Remove calls do not match Play1.xml"
+grep -q '"remove", "removing", "ok"' "$here/vm-play-check.sh" && pass "vm-play-check.sh expects kind remove, phase removing in the job table" || fail "vm-play-check.sh: the remove job is not checked in state/jobs"
 grep -q 'printf x >> "\$app/\$victim"' "$here/vm-play-check.sh" && pass "vm-play-check.sh damages a deployed file as root" || fail "vm-play-check.sh: no damaged file"
 grep -q '"ok invalid-package"' "$here/vm-play-check.sh" && grep -q 'package.hash_mismatch' "$here/vm-play-check.sh" && pass "vm-play-check.sh expects invalid-package with package.hash_mismatch" || fail "vm-play-check.sh: the damaged file is not expected to be reported"
 grep -q 'truncate -s "\$size"' "$here/vm-play-check.sh" && pass "vm-play-check.sh undoes the damage" || fail "vm-play-check.sh leaves the damaged file"

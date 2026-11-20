@@ -123,6 +123,8 @@ pub enum Phase {
     Committing,
     /// The Store's Flatpak transaction.
     Installing,
+    /// A remove job: Flatpak uninstalls the app (RUY-816).
+    Removing,
 }
 
 impl Phase {
@@ -135,6 +137,7 @@ impl Phase {
             Phase::VettingArt => "vetting-art",
             Phase::Committing => "committing",
             Phase::Installing => "installing",
+            Phase::Removing => "removing",
         }
     }
 
@@ -147,6 +150,7 @@ impl Phase {
             Phase::VettingArt,
             Phase::Committing,
             Phase::Installing,
+            Phase::Removing,
         ]
         .into_iter()
         .find(|p| p.as_str() == word)
@@ -173,6 +177,7 @@ fn status_of_code(code: &str) -> JobStatus {
         | codes::INSTALLED_CORRUPT
         | codes::INSTALLED_IO
         | codes::COMMIT_FAILED
+        | codes::UNINSTALL_FAILED
         | codes::ROLLBACK_FAILED
         | codes::JOB_INTERRUPTED
         | codes::HELPER_FAILED

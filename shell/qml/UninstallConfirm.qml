@@ -9,11 +9,14 @@ import "controls"
 // toggle, and Cancel (where the focus starts) next to the danger pill, or above it when the two do not
 // fit one row (Turkish at a big UI size). A profile that is not an admin then enters an admin's PIN (the
 // PIN pad's own admin mode: the attempts message, the lockout and its countdown), and the dialog asks
-// the Store to uninstall (`Store.uninstall(appId, deleteData)`); the owner follows the job.
+// the service that owns the app to uninstall it: the Store (`Store.uninstall(appId, deleteData)`), or Play for
+// a .play app (`Play.remove(appId)`, RUY-816: the service that built the app removes it and records the
+// removal; it keeps the saved data, so there is no toggle for it). This is the one place that decides which.
+// The owner follows the job.
 //
 //   open(appId, name, context)   opens it; the focus returns to the item that had it when it closes;
 //                        `context` is the caller's own note, handed back by started()
-//   started(appId, deleteData, context)   Store.uninstall was asked (the dialog has closed)
+//   started(appId, deleteData, context)   the removal was asked (the dialog has closed)
 //   closed()             it closed, for any reason
 //
 // Modal: it accepts every key. Back is Cancel, on the PIN pad too (which cancels everything).
@@ -29,6 +32,8 @@ FocusScope {
     // "confirm" | "pin": the PIN pad is up (the card is hidden behind its own scrim).
     property string step: "confirm"
     property bool pendingWipe: false
+    // A .play app: Play removes it and keeps its saved data, so the dialog offers no toggle.
+    readonly property bool keepsData: Play.isPlayApp(appId)
 
     // What the hint bar says while this is open (Shell.modalHintsOf).
     readonly property var modalHints: [{ action: "accept", text: qsTr("Select") }, { action: "back", text: qsTr("Cancel") }]
@@ -111,9 +116,13 @@ FocusScope {
 
     function start(wipe) {
         const id = appId
+        const play = keepsData
         close()
-        Store.uninstall(id, wipe)
-        started(id, wipe, context)
+        if (play)
+            Play.remove(id, true)               // the dialog has made sure an admin asked
+        else
+            Store.uninstall(id, wipe)
+        started(id, play ? false : wipe, context)
     }
 
     visible: opacity > 0
@@ -233,6 +242,7 @@ FocusScope {
         ToggleRow {
             id: deleteData
             objectName: "uninstallDeleteData"
+            visible: !dialog.keepsData
             width: parent.width
             u: dialog.u
             label: qsTr("Also delete saved data")
@@ -253,7 +263,7 @@ FocusScope {
                 width: dialog.stacked ? dialog.contentWidth : dialog.cancelWidth
                 text: qsTr("Cancel")
                 onActivated: dialog.cancel()
-                Keys.onUpPressed: { Sfx.navigate(); deleteData.forceActiveFocus() }
+                Keys.onUpPressed: if (deleteData.visible) { Sfx.navigate(); deleteData.forceActiveFocus() }
                 Keys.onRightPressed: if (!dialog.stacked) { Sfx.navigate(); goButton.forceActiveFocus() }
                 Keys.onDownPressed: if (dialog.stacked) { Sfx.navigate(); goButton.forceActiveFocus() }
             }
@@ -265,7 +275,13 @@ FocusScope {
                 danger: true
                 text: dialog.goLabel
                 onActivated: dialog.confirm()
-                Keys.onUpPressed: { Sfx.navigate(); (dialog.stacked ? cancelButton : deleteData).forceActiveFocus() }
+                Keys.onUpPressed: {
+                    const above = dialog.stacked ? cancelButton : deleteData
+                    if (above.visible) {
+                        Sfx.navigate()
+                        above.forceActiveFocus()
+                    }
+                }
                 Keys.onLeftPressed: if (!dialog.stacked) { Sfx.navigate(); cancelButton.forceActiveFocus() }
             }
         }

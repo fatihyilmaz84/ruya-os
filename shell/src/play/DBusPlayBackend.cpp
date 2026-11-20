@@ -140,7 +140,7 @@ PlaySource toSource(const QVariantMap &d)
     return s;
 }
 
-// The job record: the facade's key is the package path of an install and the app id of a verify.
+// The job record: the facade's key is the package path of an install and the app id of a verify or a remove.
 StoreJob toJob(const QVariantMap &d)
 {
     StoreJob j;
@@ -153,6 +153,7 @@ StoreJob toJob(const QVariantMap &d)
     j.reason = d.value(QStringLiteral("reason")).toString();
     j.percent = d.value(QStringLiteral("percent")).toUInt();
     j.phase = d.value(QStringLiteral("phase")).toString();
+    j.name = d.value(QStringLiteral("name")).toString();
     return j;
 }
 
@@ -266,6 +267,12 @@ void DBusPlayBackend::install(const QString &path, bool adminApproved)
 void DBusPlayBackend::verify(const QString &appId)
 {
     startJob(QStringLiteral("verify"), QStringLiteral("Verify"), appId, {appId});
+}
+
+void DBusPlayBackend::remove(const QString &appId, bool adminApproved)
+{
+    const QVariantMap options{{QStringLiteral("admin_approved"), adminApproved}}; // a{sv}
+    startJob(QStringLiteral("remove"), QStringLiteral("Remove"), appId, {appId, options});
 }
 
 void DBusPlayBackend::cancel(const QString &key)

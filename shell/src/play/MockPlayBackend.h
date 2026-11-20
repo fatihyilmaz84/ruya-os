@@ -21,6 +21,8 @@
 //   future        format.too_new                                                       -> unsupported
 //   hugegame      bigger than the free space                                           -> disk-full
 //   flaky         fails while committing                                               -> failed
+// A remove (RUY-816) of an installed app is a job of the same queue, phase "removing"; it forgets the
+// installed build.
 // A job is one queue entry: the first runs, in 5 percent steps every 100 ms (10 ms with
 // RUYA_MOCK_FAST=1), through the phases staging (0-19), verifying (20-39), vetting-art (40-54),
 // committing (55-69) and installing (70-100); a failing fixture ends in the phase its cause belongs
@@ -38,6 +40,7 @@ public:
     void inspect(const QString &path) override;
     void install(const QString &path, bool adminApproved) override;
     void verify(const QString &appId) override;
+    void remove(const QString &appId, bool adminApproved) override;
     void cancel(const QString &key) override;
     void readDeveloperMode() override;
     void requestDeveloperMode(bool on, bool adminApproved) override;
@@ -61,6 +64,9 @@ public:
     void loseService();
     // The service is back: read the sources and the job table again.
     void regainService();
+    // The shell restarted: its own bookkeeping of jobs is gone, the service's jobs run on, and the
+    // job table is read again.
+    void restartShell();
     static QString pathOf(const QString &fixture);
 
 private:
@@ -68,9 +74,10 @@ private:
     struct Job
     {
         QString key;
-        QString kind; // "install" | "verify"
+        QString kind; // "install" | "verify" | "remove"
         QString jobId;
         QString app;
+        QString name; // the app's display name, "" when no fixture has the id
         QString path;
         int percent = 0;
         int failAt = 101;     // percent at which it ends with failStatus
@@ -88,6 +95,9 @@ private:
     void step();
     void finish(const Job &job, const QString &status, const QString &reason = QString());
     static QString phaseAt(int percent);
+    // The phase a job reports at its percent: a verify only "verifying", a remove only "removing".
+    static QString phaseOf(const Job &job);
+    const Fixture *fixtureOf(const QString &manifestId) const;
     QList<StoreJob> jobTable() const;
 
     QList<Job> m_jobs; // the first runs

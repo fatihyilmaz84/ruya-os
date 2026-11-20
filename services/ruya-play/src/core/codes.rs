@@ -28,6 +28,8 @@ pub const COMMIT_FAILED: &str = "commit.failed";
 /// The commit failed and the key record or installed build written before it could not be undone
 /// (journalled in `state/journal`; the stale record can only refuse another key).
 pub const ROLLBACK_FAILED: &str = "rollback.failed";
+/// Flatpak could not uninstall the app of a `Remove` job (RUY-816); every record is left as it was.
+pub const UNINSTALL_FAILED: &str = "uninstall.failed";
 /// The service stopped while the job was queued or running.
 pub const JOB_INTERRUPTED: &str = "job.interrupted";
 
@@ -56,6 +58,7 @@ pub const ALL: &[&str] = &[
     INSTALLED_CORRUPT,
     INSTALLED_IO,
     COMMIT_FAILED,
+    UNINSTALL_FAILED,
     ROLLBACK_FAILED,
     JOB_INTERRUPTED,
     HELPER_FAILED,

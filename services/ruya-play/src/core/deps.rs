@@ -107,6 +107,10 @@ pub trait Commit: Send + Sync {
     /// reconcile): the same layout of the generated parts, signing and install as [`Self::commit`],
     /// over a copy of the deployed `/app`.
     fn recommit(&self, request: &RecommitRequest<'_>) -> Result<(), CommitError>;
+
+    /// Uninstall the installed app `play.<id>` (RUY-816, `Play1.Remove`) with the same Flatpak
+    /// runner. The player's data stays. The caller checked that the app is ours.
+    fn uninstall(&self, id: &str) -> Result<(), CommitError>;
 }
 
 /// What a re-commit gets: a staged copy of an installed app's deployed `/app` folder (made
@@ -334,6 +338,9 @@ impl<T: Commit + ?Sized> Commit for std::sync::Arc<T> {
     }
     fn recommit(&self, request: &RecommitRequest<'_>) -> Result<(), CommitError> {
         (**self).recommit(request)
+    }
+    fn uninstall(&self, id: &str) -> Result<(), CommitError> {
+        (**self).uninstall(id)
     }
 }
 

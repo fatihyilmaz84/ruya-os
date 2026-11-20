@@ -13,7 +13,7 @@ Item {
 
     // Everything the singleton said, in order.
     property var answers: []    // { op, key, status }
-    property var finished: []   // { key, status }
+    property var finished: []   // { key, status, kind, name }
     property var progress: []   // { key, percent, phase }
     property var infos: []      // { path, info }
     property var methodSeen: [] // statuses of answered()
@@ -26,8 +26,8 @@ Item {
             if (host.methodSeen.indexOf(status) < 0)
                 host.methodSeen = host.methodSeen.concat([status])
         }
-        function onJobFinished(key, status) {
-            host.finished = host.finished.concat([{ key: key, status: status }])
+        function onJobFinished(key, status, kind, name) {
+            host.finished = host.finished.concat([{ key: key, status: status, kind: kind, name: name }])
             if (host.jobSeen.indexOf(status) < 0)
                 host.jobSeen = host.jobSeen.concat([status])
         }
@@ -309,6 +309,56 @@ Item {
             compare(runCall("verify", app, () => Play.verify(app)), "ok")
             tryVerify(() => finishFor(app) !== undefined, 5000)
             compare(finishFor(app).status, "invalid-package")
+        }
+
+        // RUY-816: Remove is a job of the same queue; the kind and the name come with its end.
+        function test_remove() {
+            const app = "play.com.example.pixelforest"
+            compare(runCall("remove", "", () => Play.remove("", true)), "invalid")
+            compare(runCall("remove", app, () => Play.remove(app, false)), "forbidden", "an admin's call only")
+            compare(runCall("remove", "play.com.example.nothing", () => Play.remove("play.com.example.nothing", true)), "unknown-app")
+            compare(runCall("remove", "org.example.Puzzle", () => Play.remove("org.example.Puzzle", true)), "unknown-app", "not a play.* app")
+            compare(host.finished.length, 0, "a refused remove is not a job")
+            compare(inspect("pixelforest.play.zip").installedBuild, 2, "and removed nothing")
+
+            Play.mockPauseJobs(true)
+            compare(runCall("remove", app, () => Play.remove(app, true)), "ok")
+            compare(runCall("remove", app, () => Play.remove(app, true)), "busy", "the same app twice")
+            Play.mockPauseJobs(false)
+            tryVerify(() => finishFor(app) !== undefined, 5000)
+            compare(finishFor(app).status, "ok")
+            compare(finishFor(app).kind, "remove")
+            for (const e of progressOf(app))
+                compare(e.phase, "removing", "a remove job only reports removing")
+            compare(inspect("pixelforest.play.zip").installedBuild, 0, "the installed build is gone")
+            compare(runCall("remove", app, () => Play.remove(app, true)), "unknown-app", "a second remove")
+            compare(runCall("verify", app, () => Play.verify(app)), "unknown-app", "and nothing to verify")
+        }
+
+        function test_a_remove_cannot_be_cancelled_once_it_started() {
+            const app = "play.com.example.pixelforest"
+            Play.mockPauseAtPercent(25)
+            Play.remove(app, true)
+            tryVerify(() => progressOf(app).some(e => e.percent >= 25), 5000)
+            compare(runCall("cancel", app, () => Play.cancel(app)), "too-late")
+            Play.mockPauseJobs(false)
+            tryVerify(() => finishFor(app) !== undefined, 5000)
+            compare(finishFor(app).status, "ok")
+        }
+
+        function test_a_restarted_shell_learns_kind_and_name_from_the_job_table() {
+            const path = p("starhopper")
+            Play.mockPauseAtPercent(30)
+            Play.install(path, true)
+            tryVerify(() => Play.jobs[path] !== undefined && Play.jobs[path].percent >= 30, 5000)
+            compare(finishFor(path), undefined)
+            Play.mockRestartShell()
+            tryVerify(() => Play.jobs[path] !== undefined, 3000, "the table brings the running job back")
+            Play.mockPauseJobs(false)
+            tryVerify(() => finishFor(path) !== undefined, 5000)
+            compare(finishFor(path).status, "ok")
+            compare(finishFor(path).kind, "install")
+            compare(finishFor(path).name, "Star Hopper")
         }
 
         function test_a_job_survives_the_page_closing() {

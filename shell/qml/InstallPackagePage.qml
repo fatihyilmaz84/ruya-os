@@ -123,10 +123,15 @@ Page {
             Library.launch(libraryItem.id)
     }
 
-    // Remove an installed game that was revoked: the Shell's Uninstall dialog (it asks an admin's PIN itself).
+    // The Flatpak id of the installed app (the key of its Remove job).
+    readonly property string appId: info ? "play." + info.id : ""
+
+    // Remove an installed game that was revoked: the Shell's Uninstall dialog (it asks an admin's PIN itself,
+    // and asks Play to remove it). The context makes the Shell toast how it ended; this page re-inspects when
+    // the job is over (`onJobFinished`).
     function removeGame() {
         if (info)
-            uninstallConfirm?.open("play." + info.id, title)
+            uninstallConfirm?.open(appId, title, { itemId: "", surface: "package", title: title })
     }
 
     function press(which) {
@@ -175,7 +180,12 @@ Page {
                 Notifications.show(PlayCopy.methodStatusText(status), "error")
             }
         }
-        function onJobFinished(key, status) {
+        function onJobFinished(key, status, kind) {
+            if (kind === "remove" && key === page.appId) {
+                // The app is gone (or still there, when Flatpak failed): what the page offers follows Inspect.
+                page.inspect()
+                return
+            }
             if (key !== page.path)
                 return
             page.requested = false

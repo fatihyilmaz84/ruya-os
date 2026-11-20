@@ -147,6 +147,21 @@ pub fn build_in(play_json: &[u8], id: &str) -> Option<u64> {
     v.get("build")?.as_u64()
 }
 
+/// The display name in a committed app's `play.json` bytes, when its `id` is `id` (case
+/// folded): English, else the first language. `None` when there is none or it is not plain text
+/// of at most [`crate::core::jobs::MAX_NAME_BYTES`] bytes.
+pub fn name_in(play_json: &[u8], id: &str) -> Option<String> {
+    let v: serde_json::Value = serde_json::from_slice(play_json).ok()?;
+    if !v.get("id")?.as_str()?.eq_ignore_ascii_case(id) {
+        return None;
+    }
+    let names: ruya_play_format::manifest::Localized =
+        serde_json::from_value(v.get("name")?.clone()).ok()?;
+    let name = ruya_play_format::manifest::english(&names)?;
+    (name.len() <= crate::core::jobs::MAX_NAME_BYTES && !name.chars().any(char::is_control))
+        .then(|| name.to_string())
+}
+
 /// A committed app's own `play.json` bytes (at most [`MAX_PLAY_JSON_BYTES`]), `None` when it
 /// cannot be read or is longer, when `id` is not a [`plain_id`], or when the deployment is not
 /// [`ours`].

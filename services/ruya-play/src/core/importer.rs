@@ -42,11 +42,13 @@ use crate::core::unpack::{self, staging_problem};
 use crate::core::verify;
 use crate::service::commit::METADATA_GENERATION;
 use ruya_play_format::limits::ROOT_FILES;
+use ruya_play_format::manifest::english;
 use ruya_play_format::Problem;
 use ruya_play_trust::revocation::Selected;
 use ruya_play_trust::{
-    assess, diff, inspect, is_revoked, record_install, select_blocklist, Context, Continuity,
-    IdRecord, Inspection, ListCheck, PermissionDiff, StoreKeys, Tier, TrustError, TrustStore,
+    assess, diff, inspect, is_revoked, record_install, record_uninstall, select_blocklist, Context,
+    Continuity, IdRecord, Inspection, ListCheck, PermissionDiff, StoreKeys, Tier, TrustError,
+    TrustStore,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::io::Write;
@@ -1187,9 +1189,96 @@ impl Importer {
         let job = format!("job-{next}");
         let mut record = JobRecord::queued(&job, JobKind::Verify, "");
         record.app = app;
+        record.name = self.installed_name(id);
         st.jobs.push(record);
         self.shared.save(&mut st);
         (MethodStatus::Ok, job)
+    }
+
+    /// The display name of the installed app `play.<id>`, `""` when it cannot be read.
+    fn installed_name(&self, id: &str) -> String {
+        reconcile::deployed_play_json(&self.cfg.flatpak, id)
+            .and_then(|bytes| reconcile::name_in(&bytes, id))
+            .unwrap_or_default()
+    }
+
+    /// `Remove(app_id)`: queue the removal of the installed app `play.<id>` (RUY-816). `invalid`
+    /// for an id that is not a plain name, `unknown-app` when the app is not one this service
+    /// installed (its deployment is not [`reconcile::ours`]), `busy` while any job of the same app
+    /// is queued or running (an install of it that is still queued has no app name yet and waits
+    /// its turn, as for [`Self::queue_verify`]). The caller checked that an admin asked.
+    pub fn queue_remove(&self, id: &str) -> (MethodStatus, String) {
+        if !reconcile::plain_id(id) || id.len() > MAX_PATH_BYTES {
+            return (MethodStatus::Invalid, String::new());
+        }
+        if !reconcile::ours(&self.cfg.flatpak, id) {
+            return (MethodStatus::UnknownApp, String::new());
+        }
+        let app = format!("play.{id}");
+        let mut st = self.shared.lock();
+        if st
+            .jobs
+            .iter()
+            .any(|j| j.is_active() && j.app.eq_ignore_ascii_case(&app))
+        {
+            return (MethodStatus::Busy, String::new());
+        }
+        let Some(next) = st.counter.checked_add(1) else {
+            return (MethodStatus::Failed, String::new());
+        };
+        st.counter = next;
+        let job = format!("job-{next}");
+        let mut record = JobRecord::queued(&job, JobKind::Remove, "");
+        record.app = app;
+        record.name = self.installed_name(id);
+        st.jobs.push(record);
+        self.shared.save(&mut st);
+        (MethodStatus::Ok, job)
+    }
+
+    /// The pipeline of one remove job: Flatpak uninstalls the app, then the uninstall is recorded
+    /// (`record_uninstall`: the key record stays, the player's data is kept) and the installed
+    /// build is forgotten. A failed uninstall leaves every record as it was; a failed record after
+    /// a successful uninstall fails the job and is corrected by the next start's reconcile.
+    fn remove(&self, job: &str, app: &str, cancel: &AtomicBool) -> JobResult {
+        let id = app.strip_prefix("play.").unwrap_or(app);
+        let fail = |problem: Problem| refused(job, vec![problem], None);
+        // The origin is checked again: a deployment that turned foreign since it was queued is
+        // never uninstalled.
+        if !reconcile::ours(&self.cfg.flatpak, id) {
+            return fail(Problem::new(
+                codes::UNINSTALL_FAILED,
+                "",
+                "The app is not one this service installed any more.",
+            ));
+        }
+        if cancel.load(Ordering::SeqCst) {
+            return cancelled(job, None);
+        }
+        // Flatpak cannot be stopped half way.
+        self.shared.lock().no_return.insert(job.to_string());
+        if let Err(e) = self.commit.uninstall(id) {
+            let (CommitError::NoSpace(m) | CommitError::Failed(m)) = e;
+            return fail(Problem::new(codes::UNINSTALL_FAILED, "", m));
+        }
+        // Removal keeps the player's data, so the key record stays (05 §9.2).
+        let recorded = record_uninstall(&mut **self.trust(), id, true)
+            .map_err(|e| e.to_problem())
+            .and_then(|()| self.installed().forget(id));
+        self.held
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&id.to_ascii_lowercase());
+        match recorded {
+            Ok(()) => JobResult {
+                job: job.to_string(),
+                status: JobStatus::Ok,
+                problems: Vec::new(),
+                art: Vec::new(),
+                inspection: None,
+            },
+            Err(p) => fail(p),
+        }
     }
 
     /// The pipeline of one verify job: the deployed files against their stored `play.files`.
@@ -1283,6 +1372,13 @@ impl Importer {
             } else if kind == JobKind::Verify {
                 reporter.at(Phase::Verifying, 0);
                 self.verify(&job, &app, &flag, &mut reporter)
+            } else if kind == JobKind::Remove {
+                reporter.at(Phase::Removing, 0);
+                let result = self.remove(&job, &app, &flag);
+                if result.status == JobStatus::Ok {
+                    reporter.at(Phase::Removing, 100);
+                }
+                result
             } else {
                 reporter.at(Phase::Staging, 0);
                 self.install(&job, Path::new(&path), &flag, &mut reporter)
@@ -1342,8 +1438,12 @@ impl Importer {
         let total = insp.package.installed_bytes;
         reporter.bytes_total = total;
         let app = format!("play.{}", insp.package.manifest.id);
+        let name = english(&insp.package.manifest.name)
+            .unwrap_or_default()
+            .to_string();
         self.shared.update(job, true, |r| {
             r.app = app;
+            r.name = name;
             r.bytes_total = total;
         });
         if cancel.load(Ordering::SeqCst) {

@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_channel::{Receiver, Sender};
+use ruya_play_format::manifest::english;
 use ruya_play_trust::{words, Continuity, Request, Risk};
 use zbus::message::Header;
 use zbus::object_server::SignalEmitter;
@@ -96,16 +97,13 @@ pub fn job_record(r: &JobRecord) -> Dict {
         ("kind", Value::from(r.kind.as_str().to_string())),
         ("path", Value::from(r.path.clone())),
         ("app", Value::from(r.app.clone())),
+        ("name", Value::from(r.name.clone())),
         ("state", Value::from(r.state.as_str().to_string())),
         ("status", Value::from(status.to_string())),
         ("reason", Value::from(r.reason().to_string())),
         ("percent", Value::from(r.percent.min(100))),
         ("phase", Value::from(r.phase.as_str().to_string())),
     ])
-}
-
-fn english(map: &BTreeMap<String, String>) -> Option<String> {
-    map.get("en").or_else(|| map.values().next()).cloned()
 }
 
 fn risk_word(r: Risk) -> &'static str {
@@ -179,10 +177,10 @@ pub fn inspect_record(report: &InspectReport) -> Dict {
         let m = &insp.package.manifest;
         e.push(("id", Value::from(m.id.clone())));
         if let Some(n) = english(&m.name) {
-            e.push(("name", Value::from(n)));
+            e.push(("name", Value::from(n.to_string())));
         }
         if let Some(s) = m.summary.as_ref().and_then(english) {
-            e.push(("summary", Value::from(s)));
+            e.push(("summary", Value::from(s.to_string())));
         }
         e.push(("version", Value::from(m.version.clone())));
         e.push((
@@ -397,15 +395,37 @@ impl PlayIface {
     /// Queue a re-hash of an installed package against its `play.files`.
     #[zbus(out_args("status", "job"))]
     async fn verify(&self, app_id: String) -> (String, String) {
-        let Some(id) = app_id.strip_prefix("play.").filter(|id| !id.is_empty()) else {
-            let s = if app_id.is_empty() {
-                MethodStatus::Invalid
-            } else {
-                MethodStatus::UnknownApp
-            };
-            return (s.as_str().to_string(), String::new());
+        let id = match package_id(&app_id) {
+            Ok(id) => id,
+            Err(s) => return (s.as_str().to_string(), String::new()),
         };
         let (status, job) = self.importer.queue_verify(id);
+        if status == MethodStatus::Ok {
+            self.kick();
+        }
+        (status.as_str().to_string(), job)
+    }
+
+    /// Queue the removal of an installed package (RUY-816).
+    #[zbus(out_args("status", "job"))]
+    async fn remove(
+        &self,
+        app_id: String,
+        options: HashMap<String, OwnedValue>,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+    ) -> (String, String) {
+        let Some(approved) = bool_option(&options, "admin_approved") else {
+            return (MethodStatus::Invalid.as_str().to_string(), String::new());
+        };
+        if !self.admin(approved, &header, connection).await {
+            return (MethodStatus::Forbidden.as_str().to_string(), String::new());
+        }
+        let id = match package_id(&app_id) {
+            Ok(id) => id,
+            Err(s) => return (s.as_str().to_string(), String::new()),
+        };
+        let (status, job) = self.importer.queue_remove(id);
         if status == MethodStatus::Ok {
             self.kick();
         }
@@ -476,6 +496,16 @@ impl PlayIface {
 
     #[zbus(signal)]
     async fn sources_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+}
+
+/// The manifest id in a Flatpak app id of Verify and Remove: `invalid` for an empty one,
+/// `unknown-app` for one that is not `play.<id>`.
+fn package_id(app_id: &str) -> Result<&str, MethodStatus> {
+    match app_id.strip_prefix("play.") {
+        _ if app_id.is_empty() => Err(MethodStatus::Invalid),
+        Some(id) if !id.is_empty() => Ok(id),
+        _ => Err(MethodStatus::UnknownApp),
+    }
 }
 
 /// The source gate (RUY-829): a plain absolute path that `ListSources` lists now (or a download in
