@@ -619,7 +619,10 @@ fn table_rules() {
 #[test]
 fn reserved_top_level_names_are_refused_at_the_top_and_below_but_not_nested() {
     use ruya_play_format::table::RESERVED_TOP_LEVEL;
-    assert_eq!(RESERVED_TOP_LEVEL, &[".ref", "launcher", "share"]);
+    assert_eq!(
+        RESERVED_TOP_LEVEL,
+        &[".ref", "launcher", "runners", "share"]
+    );
     for name in RESERVED_TOP_LEVEL {
         // The name as a file, below it, and as an empty folder.
         let mut fx = Fx::minimal();
@@ -640,6 +643,43 @@ fn reserved_top_level_names_are_refused_at_the_top_and_below_but_not_nested() {
         fx.file(&longer, b"x");
         assert!(check(&fx).is_ok(), "{nested} and {longer} are ordinary");
     }
+}
+
+#[test]
+fn a_windows_package_has_nothing_where_the_32_bit_libraries_mount() {
+    // RUY-900 (ADR-038): wine and proton get the runtime's 32-bit libraries at lib/i386-linux-gnu.
+    for runner in ["wine", "proton"] {
+        let windows = |fx: &mut Fx| {
+            fx.manifest["run"]["runner"] = json!(runner);
+            fx.manifest["components"][0]["type"] = json!(runner);
+            if runner == "proton" {
+                // A bundled Proton without runner.json starts through its `proton` script.
+                fx.file("components/wine/proton", b"#!/bin/sh\n");
+            }
+        };
+        for entry in ["lib/i386-linux-gnu/libfoo.so", "lib/i386-linux-gnu/GL/x"] {
+            let mut fx = Fx::wine_full();
+            windows(&mut fx);
+            fx.file(entry, b"x");
+            assert_rejected_at(check(&fx), "run.lib_i386_reserved", "lib/i386-linux-gnu");
+        }
+        // The folder alone, empty.
+        let mut fx = Fx::wine_full();
+        windows(&mut fx);
+        fx.dirs.push("lib/i386-linux-gnu".to_string());
+        assert_rejected_at(check(&fx), "run.lib_i386_reserved", "lib/i386-linux-gnu");
+        // A neighbour, and the same path nested elsewhere, stay legal.
+        let mut fx = Fx::wine_full();
+        windows(&mut fx);
+        fx.file("lib/x86_64-linux-gnu/libfoo.so", b"x");
+        fx.file("payload/lib/i386-linux-gnu/libfoo.so", b"x");
+        let r = check(&fx);
+        assert!(r.is_ok(), "{runner}: neighbours are ordinary: {r:?}");
+    }
+    // A native package may ship its own 32-bit libraries there: nothing is mounted over them.
+    let mut fx = Fx::minimal();
+    fx.file("lib/i386-linux-gnu/libfoo.so", b"x");
+    assert!(check(&fx).is_ok());
 }
 
 // ----- manifest rules ------------------------------------------------------------------------
@@ -845,6 +885,16 @@ fn env_steam_compat() {
         check(&with_env("STEAM_COMPAT_DATA_PATH", "/x")),
         "env.reserved",
         "/run/env/STEAM_COMPAT_DATA_PATH",
+    );
+}
+
+#[test]
+fn env_ruya() {
+    // The launcher's own variables (ADR-037) are not the package's to set.
+    assert_rejected_at(
+        check(&with_env("RUYA_RUNNER", "system")),
+        "env.reserved",
+        "/run/env/RUYA_RUNNER",
     );
 }
 

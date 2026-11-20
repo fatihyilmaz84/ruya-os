@@ -6,7 +6,7 @@
 # VM. A check whose script does not exist, or whose mode is not in the script's `# modes:` line, is
 # SKIPPED (the reason is in the summary). The .play checks (vm-play-check.sh check|helper|verify|perms,
 # vm-library-check.sh play) need output\play-vm\hello-play-native.play.zip and ruya-pack, copied to /root
-# when both exist (build them: bash scripts/play-vm-files.sh in WSL); otherwise they are SKIPPED with that command.
+# when both exist (build them with `$script:PlayCommand in vm-queue-lib.ps1); otherwise they are SKIPPED with that command.
 # Output: output\vm-queue\<script>-<mode>.log (full), output\vm-queue\summary.txt (at most 16 lines: every FAIL or SKIPPED line, passes counted when there are many).
 # Exits 0 when nothing FAILED. Run it only when no other QEMU is running; never builds an image.
 param(

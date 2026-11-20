@@ -75,7 +75,8 @@ Star Hopper.play/
 ```
 
 - A package holds **only regular files and folders**. A symlink, hard link, device or FIFO makes it invalid (USB sticks formatted exFAT or FAT have none). If your game needs links, `ruya-pack build --links-as-data` records a relative link that stays inside the same top-level folder as data, and the console recreates it.
-- The top-level names `.ref`, `launcher` and `share` are the console's: a package may not have them at its top (the folder or anything below it; `table.reserved_top_level`). `payload/share/` is fine.
+- The top-level names `.ref`, `launcher`, `runners` and `share` are the console's: a package may not have them at its top (the folder or anything below it; `table.reserved_top_level`). `payload/share/` is fine. A `wine` or `proton` package may also have nothing in `lib/i386-linux-gnu/`, where the console mounts the runtime's 32-bit libraries (`run.lib_i386_reserved`); a native package may use that folder. An update that switches a game from `native` to `wine` or `proton` must not carry `lib/i386-linux-gnu/` over.
+- `/app/runners/` exists in every installed game, may be empty and is read-only. The console's system runners are mounted there (**planned**, RUY-34), but its folder names and contents are not an API: the launcher picks the runner (05 section 6.2), and a package must not use a path into `/app/runners/`.
 - Names are relative, use `/`, and must stay unique even when letter case is ignored (exFAT and Wine). `build` tells you which two files collide.
 - A file of 4 GiB or more cannot be copied to a FAT32 stick. `build` warns (`size.fat32`); tell your players to use exFAT.
 - The executable bit is recorded in `play.files`. On Windows, `build` marks a file that starts with `#!` or an ELF header, or one you name with `--exec payload/start`.
@@ -189,7 +190,7 @@ Required: `format`, `id`, `name`, `version`, `build`, `art` and `run` (with `art
 | `run.component` | The `id` of the component that runs it (not for `native`). |
 | `run.command` | An **argument list**, never a shell string. Placeholders: `${payload}`, `${component:<id>}`, `${data}`, `${config}`, `${prefix}`, `${disc}`. |
 | `run.cwd` | Working directory, usually `${payload}`. Must start with a placeholder (`${payload}`, `${data}`, `${config}`, `${prefix}` or `${component:<id>}`), optionally followed by `/` and a path without `..`. |
-| `run.env` | Extra environment variables. A deny list applies: the variables the platform sets (`PATH`, `HOME`, `WINEPREFIX`, `LD_*`, `XDG_*`, `SDL_*`, ...) are refused with `env.reserved`; `WINEDLLOVERRIDES`, `DXVK_*` and `PROTON_*` pass. Names match `[A-Z][A-Z0-9_]*` (at most 64 characters), values are at most 1024 bytes without control characters, at most 64 variables. The full deny list is `PATH`, `HOME`, `DISPLAY`, `XAUTHORITY`, `WINEPREFIX`, `WINESERVER`, `WINELOADER`, `WINEDLLPATH`, `WINEARCH`, `TMPDIR`, `GCONV_PATH`, `LOCPATH`, `NLSPATH` and every name starting `LD_`, `XDG_`, `FLATPAK_`, `DBUS_`, `WAYLAND_`, `PULSE_`, `PIPEWIRE_`, `SDL_`, `STEAM_COMPAT_`, `PRESSURE_VESSEL_`, `VK_`, `MESA_`, `LIBGL_`, `GST_`, `QT_`, `GTK_`, `GDK_` or `GIO_`. |
+| `run.env` | Extra environment variables. A deny list applies: the variables the platform sets (`PATH`, `HOME`, `WINEPREFIX`, `LD_*`, `XDG_*`, `SDL_*`, ...) are refused with `env.reserved`; `WINEDLLOVERRIDES`, `DXVK_*` and `PROTON_*` pass. Names match `[A-Z][A-Z0-9_]*` (at most 64 characters), values are at most 1024 bytes without control characters, at most 64 variables. The full deny list is `PATH`, `HOME`, `DISPLAY`, `XAUTHORITY`, `WINEPREFIX`, `WINESERVER`, `WINELOADER`, `WINEDLLPATH`, `WINEARCH`, `TMPDIR`, `GCONV_PATH`, `LOCPATH`, `NLSPATH` and every name starting `LD_`, `XDG_`, `FLATPAK_`, `DBUS_`, `WAYLAND_`, `PULSE_`, `PIPEWIRE_`, `SDL_`, `STEAM_COMPAT_`, `PRESSURE_VESSEL_`, `VK_`, `MESA_`, `LIBGL_`, `GST_`, `QT_`, `GTK_`, `GDK_`, `GIO_` or `RUYA_`. |
 | `run.launch_mode` | `fullscreen` (default), `gamescope` or `default`. |
 | `run.prefix` | The Wine prefix settings (Windows runners). |
 | `run.prefix.arch` | `win32` or `win64`. |
@@ -316,15 +317,38 @@ The Wine sample uses `source: system` so that no Wine has to be committed to git
 }
 ```
 
+### The bundled runner's `runner.json`
+
+*Experimental (ADR-037): the format may change before the first release.* A bundled runner may carry a `runner.json` at the root of its folder, here `components/wine/runner.json`. It tells the console the runner's family (versions are compared only inside one family), its version and the programs it is started through. It is checked against [`api/play/runner.schema.json`](../../api/play/runner.schema.json):
+
+```json
+{
+  "format": 1,
+  "family": "wine",
+  "kind": "wine",
+  "version": "9.20",
+  "arch": "x86_64",
+  "entry": { "wine": "bin/wine", "wineserver": "bin/wineserver" },
+  "capabilities": ["multiarch", "dxvk"],
+  "licence": "LGPL-2.1-or-later",
+  "source_url": "https://dl.winehq.org/wine/source/"
+}
+```
+
+- `format` is the integer `1`: write `1`, not `1.0`. `kind` must be the component's `type`. `entry` names files of the runner's folder, as regular files and not links: `wine` and `wineserver` for Wine, `proton` for Proton (`{"proton": "proton"}`), and nothing for an emulator or engine, whose `run.command` names `${component:<id>}` itself.
+- `version` holds a number, compared like the versions in `components` (`GE-Proton10-9` is 10, 9). `capabilities` (`multiarch`, `dxvk`, `vkd3d`, `ntsync`) are informational for now.
+- **Leave the file out** and the console uses the defaults of the type: family `wine` or `proton` (an emulator's or engine's family is its component id), entries `bin/wine` and `bin/wineserver`, or `proton`, and those files must be in the runner's folder (`runner.entry_missing` otherwise), because the console starts them. A bundled Proton without the file is Valve's `proton`, so the OS's GE-Proton never replaces it; declare `"family": "proton-ge"` if you bundle GE-Proton.
+- **A file that is there must be valid.** `ruya-pack validate` and the console refuse the package with a `runner.*` code (listed in the catalogue below) instead of falling back to the defaults. Every key must be one of the nine above.
+
 ## Wine prefix and saves
 
-A Windows game keeps its saves in a Wine **prefix**, a fake `C:` drive. The console creates one **per profile and per game** in the player's data directory (`~/.var/app/play.<id>/data/prefix`), from `run.prefix.template` if you ship one, else fresh. **The console owns `WINEPREFIX`**: setting it in `run.env` is refused, because a prefix put in `/tmp` would vanish when the game exits, saves included.
+A Windows game keeps its saves in a Wine **prefix**, a fake `C:` drive. The console creates one **per profile and per game** in the player's data directory (`~/.var/app/play.<id>/data/prefix`; for a Proton runner `~/.var/app/play.<id>/data/proton/pfx`), from `run.prefix.template` if you ship one, else fresh. **The console owns `WINEPREFIX`**: setting it in `run.env` is refused, because a prefix put in `/tmp` would vanish when the game exits, saves included.
 
 - **Saves paths** in `data.saves` start with a root name. For a Windows game write `prefix:` and the path inside the prefix, for example `prefix:drive_c/users/steamuser/Documents/Hello Play`. The sample's program writes to `Documents\Hello Play` and the manifest lists that folder, so the console can back it up and keep it across a prefix rebuild. The user folder is `steamuser` for the Proton-style runners; check the folder your runner creates when you can run the game on a console (**planned**, RUY-101). A native game writes to `$XDG_DATA_HOME` and lists `data:saves` ([Saves and data](saves-and-data.md)).
 - **`run.prefix.epoch`** is a whole number. When an update raises it, the first launch backs up `data.saves`, recreates the prefix, and restores them. Raise it only when a new runner or a new redistributable needs a clean prefix.
 - **First-run setup** (`run.setup[]`) runs commands such as a Visual C++ redistributable **once per prefix, at the first launch, inside the sandbox with the game's own permissions**; never at install time and never as root. They show on the launch splash and time out after 10 minutes; a failed step is reported, not ignored. There is **no network** at setup (no `winetricks` downloads): ship the redistributable in the package. The sample's step, `setup.exe`, does nothing and exits `0`, to show the field.
 - Under Wine the `Z:` drive is the sandbox's root, not the host's. The Flatpak sandbox limits files, not Wine's drive mapping.
-- **32-bit Windows programs** need `"multiarch": true` (below); without it the sandbox kills them.
+- **32-bit Windows programs** need `"multiarch": true` (below); without it the sandbox kills them. The console mounts the runtime's 32-bit libraries (`org.freedesktop.Platform.Compat.i386` and `GL32`) for every `wine` and `proton` package; the permission is what lets 32-bit code run (the folder is reserved, see [Layout](#layout)). *The generated metadata is verified on the host; the mounts on a console are pending (`vm-play-check.sh launch-windows`).*
 - Windows packages show through X11 on the console's compositor; you do not need to do anything for it.
 
 ## Permissions and what each costs the player
@@ -548,8 +572,28 @@ Common ones first:
 | `run.disc_not_in_table` | Fix the run block of play.json (05 section 6.3). |
 | `run.disc_path` | Fix the run block of play.json (05 section 6.3). |
 | `run.disc_placeholder_without_discs` | Fix the run block of play.json (05 section 6.3). |
+| `run.lib_i386_reserved` | Move the files out of lib/i386-linux-gnu/ (for example below payload/): a wine or proton package gets the runtime's 32-bit libraries mounted there. |
 | `run.placeholder_component` | Fix the run block of play.json (05 section 6.3). |
 | `run.unknown_key` | Fix the run block of play.json (05 section 6.3). |
+| `runner.arch_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
+| `runner.capability_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
+| `runner.entry_invalid` | Write each entry as a plain relative path inside the runner's folder, such as bin/wine: no .. and no leading /. |
+| `runner.entry_missing` | Put the program the runner is started through into its folder (runner.json's entry; without runner.json bin/wine and bin/wineserver for Wine, proton for Proton), or correct the path in entry. |
+| `runner.family_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
+| `runner.format_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
+| `runner.format_too_new` | Install a newer ruya-pack; the bundled runner's runner.json uses a newer format than the tool knows. |
+| `runner.invalid_json` | Fix the JSON syntax of runner.json; check commas and quotes. |
+| `runner.kind_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
+| `runner.kind_mismatch` | Set kind in runner.json to the component's type, or bundle the runner under a component of its own type. |
+| `runner.licence_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
+| `runner.missing_field` | Add the key the message names; runner.json needs format, family, kind, version and arch, and entry for Wine and Proton. |
+| `runner.not_a_file` | Make runner.json a regular file in the runner's folder; a link or a folder of that name is refused. |
+| `runner.not_utf8` | Save runner.json as UTF-8. |
+| `runner.too_big` | runner.json holds metadata only; keep it under 64 KiB. |
+| `runner.type` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
+| `runner.unknown_key` | Remove the key; runner.json accepts only format, family, kind, version, arch, entry, capabilities, licence and source_url. |
+| `runner.url_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
+| `runner.version_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
 | `sig.bad_signature` | Run ruya-pack sign again with your key; do not edit play.sig by hand. |
 | `sig.duplicate_key` | Run ruya-pack sign again. |
 | `sig.format_too_new` | Run ruya-pack sign again. |
@@ -572,7 +616,7 @@ Common ones first:
 | `table.not_utf8` | Run ruya-pack build to write play.files again; do not edit it by hand. |
 | `table.parent_not_dir` | Run ruya-pack build to write play.files again; do not edit it by hand. |
 | `table.reserved_path` | Run ruya-pack build to write play.files again; do not edit it by hand. |
-| `table.reserved_top_level` | Move the contents below another folder (for example payload/): .ref, launcher and share at the top of a package belong to the console. |
+| `table.reserved_top_level` | Move the contents below another folder (for example payload/): .ref, launcher, runners and share at the top of a package belong to the console. |
 | `table.too_big` | Run ruya-pack build to write play.files again; do not edit it by hand. |
 | `table.too_many` | Run ruya-pack build to write play.files again; do not edit it by hand. |
 | `text.bidi` | Write plain text: no markup, no links, no control or invisible characters. |

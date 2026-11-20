@@ -2,7 +2,7 @@
 
 use crate::core::deps::{
     Blocklists, Clock, Commit, CommitError, CommitRequest, FreeSpace, Hooks, OpenError, Opener,
-    Step,
+    RecommitRequest, Step,
 };
 use crate::core::staging::{Dir, Kind};
 use crate::core::status::Phase;
@@ -151,6 +151,19 @@ pub struct CommitCall {
     pub meta: Vec<String>,
 }
 
+/// One call of [`RecordingCommit::recommit`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecommitCall {
+    /// The manifest id read back from the installed app.
+    pub id: String,
+    /// Its build.
+    pub build: u64,
+    /// The requests of its assessment, `key=value`.
+    pub requests: Vec<String>,
+    /// Everything in the copy of its `/app`, sorted.
+    pub files: Vec<String>,
+}
+
 /// Runs inside [`RecordingCommit::commit`] (a test cancels or looks at the disk there).
 pub type CommitHook = Box<dyn Fn(&CommitRequest<'_>) + Send + Sync>;
 
@@ -165,6 +178,8 @@ pub struct RecordingCommit {
     pub fail: Mutex<Option<CommitError>>,
     /// Runs at the start of each call.
     pub hook: Option<CommitHook>,
+    /// Every re-commit.
+    pub recommits: Mutex<Vec<RecommitCall>>,
 }
 
 impl RecordingCommit {
@@ -175,12 +190,21 @@ impl RecordingCommit {
             target,
             fail: Mutex::new(None),
             hook: None,
+            recommits: Mutex::new(Vec::new()),
         }
     }
 
     /// The calls so far.
     pub fn calls(&self) -> Vec<CommitCall> {
         self.calls.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    /// The re-commits so far.
+    pub fn recommits(&self) -> Vec<RecommitCall> {
+        self.recommits
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 }
 
@@ -261,6 +285,29 @@ impl Commit for RecordingCommit {
         }
         progress(Phase::Installing, 1.0);
         Ok(())
+    }
+
+    /// Records the call; the error of [`Self::fail`] is returned after it.
+    fn recommit(&self, request: &RecommitRequest<'_>) -> Result<(), CommitError> {
+        let call = RecommitCall {
+            id: request.manifest.id.clone(),
+            build: request.manifest.build,
+            requests: request
+                .assessment
+                .requests
+                .iter()
+                .map(|r| format!("{}={}", r.key, r.value))
+                .collect(),
+            files: names_below(request.files),
+        };
+        self.recommits
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(call);
+        match self.fail.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            Some(err) => Err(err),
+            None => Ok(()),
+        }
     }
 }
 

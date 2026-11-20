@@ -76,7 +76,11 @@ foreach ($f in Get-ChildItem $Scripts -Filter "vm-*.ps1") {
 foreach ($f in Get-ChildItem $Scripts -Filter "vm-*.sh") {
     $listed = Get-VmModes $f.FullName
     if ($null -eq $listed) { $problems.Add("scripts/$($f.Name): no '# modes: <mode> ...' line ('# modes: none' when it takes no mode)"); continue }
-    $dispatched = @(Get-VmDispatchedModes $f.FullName)
+    $dispatch = Get-VmDispatchedModes $f.FullName
+    foreach ($u in $dispatch.unreadable) {
+        $problems.Add("scripts/$($f.Name): cannot read the mode dispatch ($u); use mode=`"`${1:-...}`" + case `"`$mode`" (see Get-VmDispatchedModes), or '# modes: none' and no `$1`/`$@`/`$*` outside functions")
+    }
+    $dispatched = @($dispatch.modes)
     $missing = @($dispatched | Where-Object { $_ -notin $listed })
     $extra = @($listed | Where-Object { $_ -notin $dispatched })
     if ($missing) { $problems.Add("scripts/$($f.Name): dispatches but does not list in '# modes:': $($missing -join ' ')") }
@@ -93,6 +97,51 @@ try {
     [IO.File]::WriteAllText((Join-Path $qs "vm-b-check.sh"), "#!/usr/bin/env bash`n")
     [IO.File]::WriteAllText((Join-Path $qs "vm-play-check.sh"), "#!/usr/bin/env bash`n# modes: check helper verify perms parse`n")
     [IO.File]::WriteAllText((Join-Path $qs "vm-library-check.sh"), "#!/usr/bin/env bash`n# modes: check play`n")
+    # The dispatch reader on one fixture per shape (RUY-890): the canonical forms are read, every other
+    # top-level mention of $1 (or of a name assigned from it) fails, never counts as single-mode.
+    # Lines are single-quoted PowerShell strings, so the shell text needs no escaping.
+    $shapes = @(
+        # PASS: the canonical forms, and function bodies
+        @{ name = "canonical-assigned"; modes = "check extra"; unreadable = 0; lines = @('mode="${1:-check}"', 'case "$mode" in', '    check) ;;', '    extra) ;;', 'esac') },
+        @{ name = "canonical-assigned-no-colon"; modes = "check extra"; unreadable = 0; lines = @('mode="${1-check}"', 'case "$mode" in', '    check) ;;', '    extra) ;;', 'esac') },
+        @{ name = "canonical-case"; modes = "check other"; unreadable = 0; lines = @('case "${1:-check}" in', '    check) ;;', '    other) ;;', 'esac') },
+        @{ name = "canonical-test"; modes = "check extra"; unreadable = 0; lines = @('if [ "${1:-check}" = extra ]; then :; fi') },
+        @{ name = "canonical-assigned-test"; modes = "check extra"; unreadable = 0; lines = @('mode="${1:-check}"', 'if [ "$mode" == extra ]; then :; fi', 'run_it "$mode"', 'echo "the mode is $mode"') },
+        @{ name = "function-bodies"; modes = ""; unreadable = 0; lines = @('f() { echo "$1" "$@"; }', 'g() {', '    local x="$1"', '    case "$x" in a) ;; esac', '    set -- "$@" more', '}', 'h() { for a in "$@"; do :; done', '}') },
+        @{ name = "heredoc-and-python"; modes = ""; unreadable = 0; lines = @('f() {', '    python3 -c ''', 'print("$1")', ''' "$1"', '}', 'cat <<EOF', '[ "$1" = x ]', 'EOF') },
+        @{ name = "none-with-function"; modes = ""; unreadable = 0; lines = @('# modes: none', 'f() { echo "$1"; }', 'f a') },
+        # FAIL: the reviewer's shapes (round 1 a-f, round 2 g-l) and the rest
+        @{ name = "unquoted-case"; unreadable = 1; lines = @('case ${1:-check} in', '    check) ;;', 'esac') },
+        @{ name = "case-on-positional"; unreadable = 1; lines = @('case "$1$2" in', '    extra) ;;', 'esac') },
+        @{ name = "assigned-unquoted-case"; unreadable = 1; lines = @('mode="${1:-check}"', 'case $mode in', '    extra) ;;', 'esac') },
+        @{ name = "assigned-braced-case"; unreadable = 1; lines = @('mode="${1:-check}"', 'case "${mode}" in', '    extra) ;;', 'esac') },
+        @{ name = "assigned-not-equal"; unreadable = 1; lines = @('mode="${1:-check}"', 'if [ "$mode" != extra ]; then :; fi') },
+        @{ name = "assigned-via-unquoted-no-colon"; unreadable = 1; lines = @('mode=${1-check}', 'case "$mode" in', '    extra) ;;', 'esac') },
+        @{ name = "toplevel-not-equal"; unreadable = 1; lines = @('[ "$1" != extra ] && exit 2') },
+        @{ name = "toplevel-double-bracket"; unreadable = 1; lines = @('[[ $1 == extra ]] && exit 2') },
+        @{ name = "toplevel-plain-positional"; unreadable = 1; lines = @('if [ "$1" = extra ]; then :; fi') },
+        @{ name = "toplevel-echo"; unreadable = 1; lines = @('echo "mode: ${1:-check}"') },
+        @{ name = "toplevel-multiline-string-tail"; unreadable = 1; lines = @('python3 -c ''import sys', 'print(1)'' "$1"') },
+        @{ name = "multiline-single-quote-then-case"; unreadable = 2; lines = @('python3 -c ''import sys', 'print(1)'' "$1"', 'case "$1" in', '  extra) ;;', 'esac') },
+        @{ name = "indented-block"; unreadable = 1; lines = @('if true; then', '    case "$1" in', '      check) ;;', '      extra) ;;', '    esac', 'fi') },
+        @{ name = "main-function-and-all-args"; unreadable = 1; lines = @('main() {', '    case "$1" in', '      check) ;;', '    esac', '}', 'main "$@"') },
+        @{ name = "case-on-all-args"; unreadable = 1; lines = @('case "$*" in', '  check) ;;', '  extra) ;;', 'esac') },
+        @{ name = "set-rebinds"; unreadable = 2; lines = @('set -- "${1:-check}"', 'case "$1" in', '  check) ;;', 'esac') },
+        @{ name = "set-with-positionals"; unreadable = 1; lines = @('set -- $other', 'echo done') },
+        @{ name = "function-uses-selector"; unreadable = 1; lines = @('mode="${1:-check}"', 'run() { case "$mode" in', '  extra) echo ;;', '  esac; }', 'run') },
+        @{ name = "for-all-args"; unreadable = 1; lines = @('for m in "$@"; do', '  case "$m" in', '    extra) ;;', '  esac', 'done') },
+        @{ name = "none-uses-positional"; unreadable = 1; lines = @('# modes: none', 'echo "$1"') },
+        @{ name = "none-with-canonical-dispatch"; unreadable = 1; lines = @('# modes: none', 'mode="${1:-check}"', 'case "$mode" in', '  check) ;;', 'esac') },
+        @{ name = "selector-into-own-function"; unreadable = 1; lines = @('mode="${1:-check}"', 'run() { case "$1" in check) ;; extra) ;; esac; }', 'run "$mode"') },
+        @{ name = "selector-into-eval"; unreadable = 1; lines = @('mode="${1:-check}"', 'do_check() { :; }', 'do_extra() { :; }', 'eval "do_$mode"') }
+    )
+    foreach ($s in $shapes) {
+        $sp = Join-Path $qs "shape-$($s.name).sh"
+        [IO.File]::WriteAllText($sp, "#!/usr/bin/env bash`n" + ($s.lines -join "`n") + "`n")
+        $d = Get-VmDispatchedModes $sp
+        if ($s.unreadable -eq 0 -and ($d.modes -join " ") -ne $s.modes) { $problems.Add("mode dispatch fixture '$($s.name)': read modes '$($d.modes -join ' ')', want '$($s.modes)'") }
+        if ($d.unreadable.Count -ne $s.unreadable) { $problems.Add("mode dispatch fixture '$($s.name)': $($d.unreadable.Count) unreadable lines, want $($s.unreadable)") }
+    }
     $rules = @(
         @{ check = "vm-a-check.sh"; skip = $false },
         @{ check = "vm-a-check.sh other"; skip = $false },
@@ -122,6 +171,12 @@ try {
     }
     if ((Get-PlayVmFiles $qt).files.Count -ne 2) { $problems.Add("vm-queue rules: Get-PlayVmFiles does not list both files") }
 } finally { Remove-Item -Recurse -Force $qt -ErrorAction SilentlyContinue }
+
+# 1e. One WSL command builds the .play files (RUY-890): dev-setup.md quotes the very string the queue's
+# SKIP text prints.
+$devSetup = [IO.File]::ReadAllText((Join-Path $Repo "docs\dev-setup.md"))
+if (-not $devSetup.Contains($script:PlayCommand)) { $problems.Add("docs/dev-setup.md does not quote the queue's play-vm-files command: $($script:PlayCommand)") }
+if (@([regex]::Matches($devSetup, 'wsl -d FedoraLinux-44[^\r\n`]*play-vm-files\.sh') | ForEach-Object { $_.Value } | Sort-Object -Unique).Count -gt 1) { $problems.Add("docs/dev-setup.md gives more than one WSL command for play-vm-files.sh") }
 
 # 2. the host tests on canned data
 $r = Run-Native $bash @((Join-Path $Scripts "test-vm-checks.sh") -replace '\\', '/')

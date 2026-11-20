@@ -8,7 +8,7 @@ use crate::report::{items, Item, Reply, Stop};
 use crate::zipw::{self, FileSrc};
 use crate::Context;
 use ruya_play_format::limits::{MAX_MANIFEST_BYTES, MAX_TABLE_BYTES};
-use ruya_play_format::{validate, EntryKind, FileEntry, ValidateOptions};
+use ruya_play_format::{read_within, validate, EntryKind, FileEntry, ValidateOptions};
 use ruya_play_trust::time::{format_utc, parse_utc};
 use ruya_play_trust::{
     bind_to_manifest, sign_package, sign_rotation, verify_signatures, PackageBytes, SecretKey,
@@ -131,11 +131,11 @@ pub fn run(args: &[String], ctx: &Context) -> Result<Reply, Stop> {
         }
     };
     let unreadable = |name: &str| Stop::Io(format!("cannot read {name} of the package"));
-    let play_json = pkg::read_small(&*opened.source, "play.json", MAX_MANIFEST_BYTES)
-        .ok_or_else(|| unreadable("play.json"))?;
-    let play_files = pkg::read_small(&*opened.source, "play.files", MAX_TABLE_BYTES)
-        .ok_or_else(|| unreadable("play.files"))?;
-    let carried = pkg::read_small(&*opened.source, "play.sig", 64 * 1024)
+    // The format's one bounded reader; `None` when a file is absent, unreadable or longer.
+    let read = |name: &str, limit: u64| read_within(&*opened.source, name, limit).ok().flatten();
+    let play_json = read("play.json", MAX_MANIFEST_BYTES).ok_or_else(|| unreadable("play.json"))?;
+    let play_files = read("play.files", MAX_TABLE_BYTES).ok_or_else(|| unreadable("play.files"))?;
+    let carried = read("play.sig", 64 * 1024)
         .map(|s| carried_rotations(&s))
         .unwrap_or_default();
     let sig = sign_bytes(&SignInput {

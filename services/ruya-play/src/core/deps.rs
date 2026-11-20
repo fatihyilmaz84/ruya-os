@@ -102,6 +102,24 @@ pub trait Commit: Send + Sync {
         request: &CommitRequest<'_>,
         progress: &mut dyn FnMut(Phase, f32),
     ) -> Result<(), CommitError>;
+
+    /// Commit an installed app again with the metadata generated now (ADR-038, the start-up
+    /// reconcile): the same layout of the generated parts, signing and install as [`Self::commit`],
+    /// over a copy of the deployed `/app`.
+    fn recommit(&self, request: &RecommitRequest<'_>) -> Result<(), CommitError>;
+}
+
+/// What a re-commit gets: a staged copy of an installed app's deployed `/app` folder (made
+/// through the folder the origin check opened, `core::reconcile::open_ours`; the commit may move
+/// and change it) and what its metadata is generated from, read back from that app
+/// (`core::reconcile::installed_app`).
+pub struct RecommitRequest<'a> {
+    /// The copy of the deployed `files/` folder, alone in its staging folder.
+    pub files: &'a Path,
+    /// The installed app's manifest.
+    pub manifest: &'a Manifest,
+    /// Its requests under its tier's ceiling.
+    pub assessment: &'a Assessment,
 }
 
 /// A point in the pipeline, for tests that act between two steps (a cancel, a planted link).
@@ -313,6 +331,9 @@ impl<T: Commit + ?Sized> Commit for std::sync::Arc<T> {
         progress: &mut dyn FnMut(Phase, f32),
     ) -> Result<(), CommitError> {
         (**self).commit(request, progress)
+    }
+    fn recommit(&self, request: &RecommitRequest<'_>) -> Result<(), CommitError> {
+        (**self).recommit(request)
     }
 }
 
