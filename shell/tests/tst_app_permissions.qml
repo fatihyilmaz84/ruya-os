@@ -172,6 +172,39 @@ Item {
             compare(row("permFact_gamepad").detail, "Always allowed: a console needs its controllers")
         }
 
+        // The detail's colour, and whether it is the warning colour (a tone that is not set keeps `text`).
+        function detailColour(control) { return findChild(control, "detail").color }
+
+        function test_a_risk_mark_is_the_words_in_the_warning_colour() {
+            verify(!Qt.colorEqual(Theme.warningText, Theme.text), "the two colours differ, so the check means something")
+            // A switch (an admin): "High risk" as its detail, in warningText; the note says what stays.
+            signInAdmin()
+            installStream()
+            openApp(stream)
+            const devices = row("permSwitch_all-devices")
+            compare(devices.detail, "High risk")
+            compare(devices.detailTone, "warning")
+            verify(Qt.colorEqual(detailColour(devices), Theme.warningText), String(detailColour(devices)))
+            compare(row("permNote_all-devices").text, "Controllers and graphics stay available.")
+            compare(row("permSwitch_network").detailTone, "", "a key that is not high risk has no mark")
+            verify(!row("permNote_network").visible, "and no note before a change")
+            // A fact (not an admin): the same mark.
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "settings")
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            signIn("p2", "")
+            openApp(stream)
+            const fact = row("permFact_all-devices")
+            verify(fact.visible)
+            compare(fact.detail, "High risk")
+            verify(Qt.colorEqual(detailColour(fact), Theme.warningText), String(detailColour(fact)))
+            verify(!row("permNote_all-devices").visible, "the switch's note goes with the switch")
+            const network = row("permFact_network")
+            compare(network.detailTone, "")
+            verify(Qt.colorEqual(detailColour(network), Theme.text))
+        }
+
         function test_what_cannot_be_withdrawn_says_why() {
             signInAdmin()
             const page = openApp(puzzle)
@@ -181,7 +214,7 @@ Item {
             verify(audio.visible)
             compare(audio.label, "Sound and microphone")
             compare(audio.value, "Allowed")
-            compare(audio.detail, "Not controllable yet (they share one connection)")
+            compare(audio.detail, "Not controllable yet: sound and microphone share one connection")
             tryVerify(() => audio.activeFocus, 2000, "a fact takes the focus so its reason can be read")
             compare(page.hints.map(h => h.action), ["back"], "nothing to select")
             verify(!row("permReset").visible, "nothing withdrawn: no reset")

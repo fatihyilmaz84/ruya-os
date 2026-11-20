@@ -60,7 +60,7 @@ QtObject {
         if (language === undefined)
             return ""
         switch (key) {
-        case "audio": return qsTr("Not controllable yet (they share one connection)")
+        case "audio": return qsTr("Not controllable yet: sound and microphone share one connection")
         case "gamepad": return qsTr("Always allowed: a console needs its controllers")
         case "session-bus": return qsTr("Can't be withdrawn yet: apps break without it")
         }

@@ -754,9 +754,14 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AppPermissionsPage</name>
     <message>
-        <location filename="../qml/AppPermissionsPage.qml" line="+59"/>
+        <location filename="../qml/AppPermissionsPage.qml" line="+60"/>
         <source>The app may lose its saves or settings outside its own folder.</source>
         <translation>Uygulama, kendi klasörü dışındaki kayıtlarını veya ayarlarını kaybedebilir.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Controllers and graphics stay available.</source>
+        <translation>Kontrolcüler ve grafik kullanılabilir kalır.</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -821,7 +826,7 @@ Bu geri alınamaz.</translation>
         <translation>Bu uygulama özel bir izin istemiyor.</translation>
     </message>
     <message>
-        <location line="+34"/>
+        <location line="+35"/>
         <source>Withdrawn</source>
         <translation>Geri alındı</translation>
     </message>
@@ -831,7 +836,7 @@ Bu geri alınamaz.</translation>
         <translation>İzin verildi</translation>
     </message>
     <message>
-        <location line="+22"/>
+        <location line="+23"/>
         <source>Reset to the app&apos;s defaults</source>
         <translation>Uygulamanın varsayılanlarına sıfırla</translation>
     </message>
@@ -4171,8 +4176,8 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+10"/>
-        <source>Not controllable yet (they share one connection)</source>
-        <translation>Henüz denetlenemiyor (ikisi aynı bağlantıyı kullanıyor)</translation>
+        <source>Not controllable yet: sound and microphone share one connection</source>
+        <translation>Henüz denetlenemiyor: ses ve mikrofon aynı bağlantıyı kullanıyor</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -5498,7 +5503,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SettingControl</name>
     <message>
-        <location filename="../qml/controls/SettingControl.qml" line="+82"/>
+        <location filename="../qml/controls/SettingControl.qml" line="+85"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>

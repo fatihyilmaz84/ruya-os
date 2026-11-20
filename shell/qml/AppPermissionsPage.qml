@@ -52,17 +52,20 @@ Page {
     function pending(key) {
         return openedWithdrawn !== null && (openedWithdrawn.indexOf(key) >= 0) !== (withdrawn.indexOf(key) >= 0)
     }
-    // The note under a key's row: the warning of a file key's switch, and when a change applies.
+    // The note under a key's row: what a switch's withdrawal does (a file key's warning, the devices the app
+    // keeps), and when a change applies.
     function noteFor(key) {
         const parts = []
         if (canSwitch(key) && PermissionText.fileKeys.indexOf(key) >= 0)
             parts.push(qsTr("The app may lose its saves or settings outside its own folder."))
+        if (canSwitch(key) && key === "all-devices")
+            parts.push(qsTr("Controllers and graphics stay available."))
         if (pending(key))
             parts.push(running ? qsTr("Takes effect after the app is closed and opened again.")
                                : qsTr("Takes effect next time you open it."))
         return parts.join(" ")
     }
-    // The second line of a fact row: the risk, and why it stays.
+    // The second line of a fact row: the risk ("High risk" first, set in warningText, 04 §5), and why it stays.
     function factDetail(key) {
         const reason = withdrawable.indexOf(key) >= 0 ? "" : PermissionText.fixedReason(key)
         if (!PermissionText.isHighRisk(key))
@@ -200,6 +203,7 @@ Page {
                         visible: page.canSwitch(key)
                         label: PermissionText.rowLabel(key)
                         detail: PermissionText.isHighRisk(key) ? qsTr("High risk") : ""
+                        detailTone: PermissionText.isHighRisk(key) ? "warning" : ""
                         checked: page.withdrawn.indexOf(key) < 0
                         onToggled: on => page.change(key, on)
                         Connections {
@@ -219,6 +223,7 @@ Page {
                         label: PermissionText.rowLabel(key)
                         value: page.withdrawn.indexOf(key) >= 0 ? qsTr("Withdrawn") : qsTr("Allowed")
                         detail: page.factDetail(key)
+                        detailTone: PermissionText.isHighRisk(key) ? "warning" : ""
                     }
                 }
                 DelegateChoice {
