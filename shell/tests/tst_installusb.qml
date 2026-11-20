@@ -853,7 +853,9 @@ Item {
             verify(find("storagePackages_vol-stick") === null, "Settings -> Storage")
             Play.mockServiceRegained()
             tryCompare(Play, "available", true)
-            tryVerify(() => find("storagePackages_vol-stick") !== null, 3000, "and it is back with the service")
+            // The pane re-syncs on installFromUsbAllowedChanged itself, in the turn the service came back (no
+            // other signal needed: a scan or a volume change would hide a missing handler).
+            verify(find("storagePackages_vol-stick") !== null, "and it is back with the service")
         }
 
         // ---- Screenshots (dev.ps1 shots) ----
