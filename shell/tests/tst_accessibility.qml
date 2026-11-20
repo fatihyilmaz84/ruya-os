@@ -168,7 +168,7 @@ Item {
                 keyClick(Qt.Key_Escape)
                 tryVerify(() => list.activeFocus, 2000, "pane " + c + " returns to the categories")
             }
-            compare(paneCount, 11, "every category but Accessibility has a pane")
+            compare(paneCount, 12, "every category but Accessibility has a pane")   // Privacy since RUY-744
         }
 
         function test_games_grid() {

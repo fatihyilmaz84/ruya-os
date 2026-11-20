@@ -25,7 +25,7 @@ Page {
         const keys = ["myprofile"]
         if (withManage)
             keys.push("profiles")
-        keys.push("network", "bluetooth", "controllers", "display", "audio", "notifications", "storage", "accessibility", "power", "system", "about")
+        keys.push("network", "bluetooth", "controllers", "display", "audio", "notifications", "privacy", "storage", "accessibility", "power", "system", "about")
         return keys.map(k => ({ key: k }))
     }
     // The signed-in profile became (or stopped being) an admin, or Settings just opened: rebuild
@@ -54,6 +54,7 @@ Page {
         case "display": return qsTr("Display & motion")
         case "audio": return qsTr("Audio")
         case "notifications": return qsTr("Notifications")
+        case "privacy": return qsTr("Privacy")
         case "storage": return qsTr("Storage")
         case "accessibility": return qsTr("Accessibility")
         case "power": return qsTr("Power saving")
@@ -74,6 +75,7 @@ Page {
                                                : current.key === "controllers" ? controllersSlot.item
                                                : current.key === "audio" ? audioSlot.item
                                                : current.key === "notifications" ? notificationsSlot.item
+                                               : current.key === "privacy" ? privacySlot.item
                                                : current.key === "storage" ? storageSlot.item
                                                : current.key === "power" ? powerSlot.item
                                                : current.key === "system" ? systemSlot.item
@@ -328,6 +330,19 @@ Page {
                     anchors.fill: parent
                     u: page.u
                     overlay: page.overlay
+                    onExitRequested: page.leavePane()
+                }
+            }
+        }
+        PaneSlot {
+            id: privacySlot
+            selected: page.ready && page.current.key === "privacy"
+            sourceComponent: Component {
+                PrivacyPane {
+                    objectName: "panePrivacy"
+                    anchors.fill: parent
+                    u: page.u
+                    onAppRequested: appId => page.openRequested("appPermissions", ({ appId: appId }))
                     onExitRequested: page.leavePane()
                 }
             }

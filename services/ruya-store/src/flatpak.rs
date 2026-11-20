@@ -143,6 +143,14 @@ pub trait Flatpak: Send + Sync {
     /// Fetches the remote's AppStream data again (names, summaries, icons). A failure (no
     /// network) leaves the data flatpak already has.
     fn update_appstream(&self, remote: &str) -> Result<(), String>;
+    /// What `flatpak --version` prints ("Flatpak 1.18.4"); `None` when it cannot be run.
+    fn version(&self) -> Option<String>;
+    /// The app's system-wide override as a keyfile (`flatpak override --show`); "" without one.
+    fn show_override(&self, id: &str) -> Result<String, String>;
+    /// Adds `args` (`overrides::withdraw_args`) to the app's override.
+    fn add_override(&self, id: &str, args: &[String]) -> Result<(), String>;
+    /// Removes the app's override, whoever wrote it (`flatpak override --reset`).
+    fn reset_override(&self, id: &str) -> Result<(), String>;
 }
 
 /// Maps the error text of `flatpak` to what the user can do about it. The first match wins, the
@@ -447,12 +455,22 @@ struct FakeState {
     progress: Vec<u32>,
     ran: Vec<Operation>,
     added: Vec<(String, String)>,
+    /// `flatpak --version`; `None`: the command cannot be run.
+    version: Option<String>,
+    /// Override keyfiles by app id, as `flatpak override` writes them.
+    overrides: HashMap<String, String>,
+    /// Every `flatpak override` command line, in order (`overrides::override_command`, ...).
+    override_runs: Vec<Vec<String>>,
+    override_fails: bool,
 }
 
 impl Default for FakeFlatpak {
     fn default() -> Self {
         FakeFlatpak {
-            state: Mutex::new(FakeState::default()),
+            state: Mutex::new(FakeState {
+                version: Some("Flatpak 1.18.4".to_owned()),
+                ..FakeState::default()
+            }),
         }
     }
 }
@@ -615,6 +633,97 @@ impl FakeFlatpak {
     pub fn added(&self) -> Vec<(String, String)> {
         self.state().added.clone()
     }
+
+    /// What `flatpak --version` prints (`None`: it cannot be run).
+    pub fn with_version(self, version: Option<&str>) -> Self {
+        self.state().version = version.map(str::to_owned);
+        self
+    }
+
+    /// An override that is there already (written by hand, or by an earlier run).
+    pub fn with_override(self, id: &str, keyfile: &str) -> Self {
+        self.state()
+            .overrides
+            .insert(id.to_owned(), keyfile.to_owned());
+        self
+    }
+
+    /// The app's override as `flatpak override --show` prints it.
+    pub fn override_of(&self, id: &str) -> String {
+        self.state().overrides.get(id).cloned().unwrap_or_default()
+    }
+
+    /// The `flatpak override` command lines run so far.
+    pub fn override_runs(&self) -> Vec<Vec<String>> {
+        self.state().override_runs.clone()
+    }
+
+    /// Whether `flatpak override` fails from now on.
+    pub fn set_override_fails(&self, fails: bool) {
+        self.state().override_fails = fails;
+    }
+}
+
+/// What `flatpak override <args>` makes of an override keyfile: each option replaces the entry
+/// of the same name in its `[Context]` list (`--unshare=network` writes `shared=!network;`).
+/// Other groups and keys stay as they are. Enough of Flatpak for the tests.
+fn fake_override(keyfile: &str, args: &[String]) -> String {
+    let mut groups: Vec<(String, Vec<(String, String)>)> = Vec::new();
+    for line in keyfile.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
+            groups.push((name.to_owned(), Vec::new()));
+        } else if let (Some((key, value)), Some(group)) = (line.split_once('='), groups.last_mut())
+        {
+            group.1.push((key.to_owned(), value.to_owned()));
+        }
+    }
+    if !groups.iter().any(|(g, _)| g == "Context") {
+        groups.insert(0, ("Context".to_owned(), Vec::new()));
+    }
+    for arg in args {
+        let Some((option, name)) = arg.split_once('=') else {
+            continue;
+        };
+        let (key, negated) = match option {
+            "--share" => ("shared", false),
+            "--unshare" => ("shared", true),
+            "--socket" => ("sockets", false),
+            "--nosocket" => ("sockets", true),
+            "--device" => ("devices", false),
+            "--nodevice" => ("devices", true),
+            "--filesystem" => ("filesystems", false),
+            "--nofilesystem" => ("filesystems", true),
+            _ => continue,
+        };
+        let Some((_, context)) = groups.iter_mut().find(|(g, _)| g == "Context") else {
+            continue;
+        };
+        if !context.iter().any(|(k, _)| k == key) {
+            context.push((key.to_owned(), String::new()));
+        }
+        let Some((_, value)) = context.iter_mut().find(|(k, _)| k == key) else {
+            continue;
+        };
+        let mut items: Vec<String> = value
+            .split(';')
+            .filter(|i| !i.is_empty() && i.trim_start_matches('!') != name)
+            .map(str::to_owned)
+            .collect();
+        items.push(if negated {
+            format!("!{name}")
+        } else {
+            name.to_owned()
+        });
+        *value = items.iter().map(|i| format!("{i};")).collect();
+    }
+    let mut out = String::new();
+    for (name, entries) in groups.iter().filter(|(_, e)| !e.is_empty()) {
+        out.push_str(&format!("[{name}]\n"));
+        for (key, value) in entries {
+            out.push_str(&format!("{key}={value}\n"));
+        }
+    }
+    out
 }
 
 impl Flatpak for FakeFlatpak {
@@ -712,6 +821,44 @@ impl Flatpak for FakeFlatpak {
                 state.updates.retain(|u| u != id);
             }
         }
+        Ok(())
+    }
+
+    fn version(&self) -> Option<String> {
+        self.state().version.clone()
+    }
+
+    fn show_override(&self, id: &str) -> Result<String, String> {
+        let mut state = self.state();
+        state.override_runs.push(crate::overrides::show_command(id));
+        if state.override_fails {
+            return Err("flatpak override failed".to_owned());
+        }
+        Ok(state.overrides.get(id).cloned().unwrap_or_default())
+    }
+
+    fn add_override(&self, id: &str, args: &[String]) -> Result<(), String> {
+        let mut state = self.state();
+        state
+            .override_runs
+            .push(crate::overrides::override_command(id, args));
+        if state.override_fails {
+            return Err("flatpak override failed".to_owned());
+        }
+        let now = fake_override(state.overrides.get(id).map_or("", String::as_str), args);
+        state.overrides.insert(id.to_owned(), now);
+        Ok(())
+    }
+
+    fn reset_override(&self, id: &str) -> Result<(), String> {
+        let mut state = self.state();
+        state
+            .override_runs
+            .push(crate::overrides::reset_command(id));
+        if state.override_fails {
+            return Err("flatpak override failed".to_owned());
+        }
+        state.overrides.remove(id);
         Ok(())
     }
 

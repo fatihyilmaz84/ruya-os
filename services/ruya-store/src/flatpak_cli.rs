@@ -53,6 +53,22 @@ fn output(args: &[&str]) -> Result<String, String> {
     }
 }
 
+/// `output` of an argument list built as owned strings (`overrides::*_command`).
+fn output_of(args: &[String]) -> Result<String, String> {
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    output(&args)
+}
+
+/// Removes the system-wide override of an installed or removed app (`flatpak override --system
+/// --reset <id>`, as root). `Store::drop_override` calls it after every uninstall; a service that
+/// removes a Flatpak app by another path calls it too, so no withdrawal outlives its app.
+pub fn reset_override(id: &str) -> Result<(), String> {
+    if !valid_app_id(id) {
+        return Err("refused argument".to_owned());
+    }
+    output_of(&crate::overrides::reset_command(id)).map(|_| ())
+}
+
 fn arch() -> &'static str {
     match std::env::consts::ARCH {
         "aarch64" => "aarch64",
@@ -199,6 +215,30 @@ impl Flatpak for FlatpakCli {
             remote,
         ])
         .map(|_| ())
+    }
+
+    fn version(&self) -> Option<String> {
+        output(&["--version"]).ok()
+    }
+
+    fn show_override(&self, id: &str) -> Result<String, String> {
+        if !valid_app_id(id) {
+            return Err("refused argument".to_owned());
+        }
+        output_of(&crate::overrides::show_command(id))
+    }
+
+    fn add_override(&self, id: &str, args: &[String]) -> Result<(), String> {
+        // The arguments come from `overrides::withdraw_args` (fixed options, paths from the app's
+        // own metadata), each one argument of its own: no shell sees them.
+        if !valid_app_id(id) || !args.iter().all(|a| a.starts_with("--")) {
+            return Err("refused argument".to_owned());
+        }
+        output_of(&crate::overrides::override_command(id, args)).map(|_| ())
+    }
+
+    fn reset_override(&self, id: &str) -> Result<(), String> {
+        reset_override(id)
     }
 
     fn add_remote(&self, name: &str, url: &str) -> Result<(), FlatpakError> {

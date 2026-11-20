@@ -113,6 +113,9 @@ void MockStoreBackend::initState()
     AppInfo &puzzle = m_apps[indexOf(QStringLiteral("org.example.Puzzle"))];
     puzzle.description.clear();
     puzzle.license.clear();
+    // The console's override (RUY-744): Text Editor's home folder is withdrawn; Block Puzzle and Open Chess
+    // have only what cannot be withdrawn (sound, controllers).
+    m_withdrawn = {{QStringLiteral("org.example.Editor"), {QStringLiteral("home-files")}}};
 }
 
 void MockStoreBackend::applyLevel()
@@ -189,6 +192,8 @@ void MockStoreBackend::reset()
     m_finishedJobs.clear();
     m_dataDeleted.clear();
     m_searchReplyMs = 0;
+    m_permissionsAdmin = true;
+    m_permissionsDelayMs = 0;
     initState();
     emit installedChanged();
 }
@@ -236,6 +241,97 @@ void MockStoreBackend::getApp(const QString &id)
                 a.permissions.append(p);
         }
         emit appLoaded(a);
+    });
+}
+
+namespace {
+// What the service withdraws (overrides.rs): the rest stays whatever an admin does.
+bool withdrawable(const QString &key)
+{
+    static const QStringList keys = {QStringLiteral("network"), QStringLiteral("home-files"),
+                                     QStringLiteral("host-files"), QStringLiteral("all-devices")};
+    return keys.contains(key);
+}
+} // namespace
+
+void MockStoreBackend::getPermissions(const QString &id)
+{
+    // Read now, delivered later (a slow service answers with what it read then), through the same guard as
+    // the D-Bus client's replies.
+    const quint64 request = beginPermissionsRequest(id);
+    const int i = indexOf(id);
+    QString status = QStringLiteral("ok");
+    QStringList effective;
+    QStringList withdrawn;
+    QStringList withdrawable;
+    if (i < 0 || !m_apps.at(i).installed) {
+        status = QStringLiteral("unknown-app");
+    } else {
+        const QStringList taken = m_withdrawn.value(id);
+        for (const QString &key : m_apps.at(i).permissions) {
+            if (taken.contains(key))
+                withdrawn.append(key);
+            else
+                effective.append(key);
+            if (::withdrawable(key))
+                withdrawable.append(key);
+        }
+        // The controllers stay when all devices are withdrawn (--device=input).
+        if (withdrawn.contains(QStringLiteral("all-devices")) && !effective.contains(QStringLiteral("gamepad")))
+            effective.append(QStringLiteral("gamepad"));
+    }
+    const int delay = m_permissionsDelayMs;
+    m_permissionsDelayMs = 0;
+    ++m_pendingPermissions;
+    QTimer::singleShot(delay, this, [=] {
+        --m_pendingPermissions;
+        deliverPermissions(id, request, status, effective, withdrawn, withdrawable);
+    });
+}
+
+void MockStoreBackend::withdrawPermission(const QString &id, const QString &key)
+{
+    changePermission(id, key, true);
+}
+
+void MockStoreBackend::restorePermission(const QString &id, const QString &key)
+{
+    changePermission(id, key, false);
+}
+
+void MockStoreBackend::changePermission(const QString &id, const QString &key, bool withdraw)
+{
+    QTimer::singleShot(0, this, [this, id, key, withdraw] {
+        const int i = indexOf(id);
+        QString status = QStringLiteral("ok");
+        if (!m_permissionsAdmin)
+            status = QStringLiteral("forbidden");
+        else if (i < 0 || !m_apps.at(i).installed)
+            status = QStringLiteral("unknown-app");
+        else if (!m_apps.at(i).permissions.contains(key))
+            status = QStringLiteral("invalid"); // an override never grants
+        else if (!::withdrawable(key))
+            status = QStringLiteral("not-withdrawable");
+        else if (!withdraw)
+            m_withdrawn[id].removeAll(key);
+        else if (!m_withdrawn.value(id).contains(key))
+            m_withdrawn[id].append(key);
+        emit permissionChanged(id, key, status);
+    });
+}
+
+void MockStoreBackend::resetPermissions(const QString &id)
+{
+    QTimer::singleShot(0, this, [this, id] {
+        const int i = indexOf(id);
+        QString status = QStringLiteral("ok");
+        if (!m_permissionsAdmin)
+            status = QStringLiteral("forbidden");
+        else if (i < 0 || !m_apps.at(i).installed)
+            status = QStringLiteral("unknown-app");
+        else
+            m_withdrawn.remove(id);
+        emit permissionChanged(id, QString(), status);
     });
 }
 
@@ -390,8 +486,10 @@ void MockStoreBackend::step()
         }
         a.newPermissions.clear();
         a.updateAvailable = false;
-        if (done.kind == Job::Uninstall)
+        if (done.kind == Job::Uninstall) {
             MockLibraryBackend::flatpakUninstalled(done.id);
+            m_withdrawn.remove(done.id); // as the service: the override goes with the app
+        }
         emit installedChanged();
         finish(done, QStringLiteral("ok"));
     }

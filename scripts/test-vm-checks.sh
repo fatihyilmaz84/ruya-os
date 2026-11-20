@@ -38,6 +38,8 @@
 #                          Added, MarkRead, a restart that loses items, ids or the setting, the shell's journal
 #                          line and GetAll, the shell's Post, keyed replace, Withdraw, a switched-off source,
 #                          nobody's Post) can FAIL; the exit trap locks again and puts the setting back
+#   - vm-store-check.sh    the `perms` mode (RUY-744): the sandbox probe counts the interfaces other than lo, so
+#                          lo alone reads as no network; the test app asks for all devices and not dri
 # Needs bash and python3 (python on Windows). Exit 0 = all pass.
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -738,6 +740,20 @@ grep -q 'ReadWritePaths=%s.*"\$shim" "\$shim"' "$here/vm-store-check.sh" \
     && pass "vm-store-check.sh: the drop-in grants write access to the marker's directory (RUY-708)" || fail "vm-store-check.sh: the shim cannot write its marker under ProtectSystem=strict"
 grep -q 'trap unhold EXIT' "$here/vm-store-check.sh" \
     && pass "vm-store-check.sh: an EXIT trap removes the hold (RUY-708)" || fail "vm-store-check.sh: a FAIL leaves the blocking PATH"
+# RUY-744 perms: the sandbox probe counts the interfaces other than lo in /proc/net/dev. It runs here on a
+# canned file in its place: lo alone is no network (a withdrawal shows), lo and one more is one.
+sed -n '/cat > "\$pwork\/app\/files\/bin\/probe" <<.EOF./,/^EOF$/p' "$here/vm-store-check.sh" | sed '1d;$d' > "$tmp/perms-probe.sh"
+grep -q '/proc/net/dev' "$tmp/perms-probe.sh" && pass "vm-store-check.sh perms: the probe is found and reads /proc/net/dev" || fail "vm-store-check.sh perms: no probe found"
+printf 'Inter-|   Receive\n face |bytes packets\n    lo: 100 1 0 0 0 0 0 0 100 1 0 0 0 0 0 0\n' > "$tmp/netdev-lo"
+printf 'Inter-|   Receive\n face |bytes packets\n    lo: 100 1 0 0 0 0 0 0 100 1 0 0 0 0 0 0\n  eth0: 900 9 0 0 0 0 0 0 900 9 0 0 0 0 0 0\n' > "$tmp/netdev-eth"
+sed "s#/proc/net/dev#$tmp/netdev-lo#" "$tmp/perms-probe.sh" > "$tmp/perms-probe-lo.sh"
+sed "s#/proc/net/dev#$tmp/netdev-eth#" "$tmp/perms-probe.sh" > "$tmp/perms-probe-eth.sh"
+expect_contains "vm-store-check.sh perms: lo alone is no network" "$(bash "$tmp/perms-probe-lo.sh")" "net=0"
+expect_contains "vm-store-check.sh perms: lo and eth0 is one interface" "$(bash "$tmp/perms-probe-eth.sh")" "net=1"
+grep -q 'flatpak build-finish --command=probe --share=network --device=all --socket=pulseaudio' "$here/vm-store-check.sh" \
+    && ! grep -q 'device=dri' "$here/vm-store-check.sh" \
+    && pass "vm-store-check.sh perms: the test app asks for all devices and not dri (so /dev/dri must go)" \
+    || fail "vm-store-check.sh perms: the test app's devices do not test the withdrawal"
 
 # --- vm-profiles-check.sh guests (RUY-125): each assertion can fail ---------------------------------
 # A fake Profiles1 (busctl --json=short) and getent over one JSON state file; FAKE_BUG breaks one rule.

@@ -438,65 +438,11 @@ pub fn added_permissions(installed: &[String], update: &[String]) -> Vec<String>
 }
 
 /// The permission keys of an app from its Flatpak `metadata` (a keyfile), in the order the
-/// contract lists them. Negated entries (`!x`) grant nothing.
+/// contract lists them. Negated entries (`!x`) grant nothing. The reading is the one the
+/// overrides use (`overrides::Context`), so what an app asks for and what is withdrawn from it are
+/// named alike.
 pub fn permissions(metadata: &str) -> Vec<String> {
-    let mut section = "";
-    let (mut network, mut audio, mut gamepad) = (false, false, false);
-    let (mut home, mut host, mut devices, mut session_bus) = (false, false, false, false);
-    for line in metadata.lines() {
-        let line = line.trim();
-        if let Some(name) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
-            section = name;
-            continue;
-        }
-        let Some((key, value)) = line.split_once('=') else {
-            continue;
-        };
-        let items = || {
-            value
-                .split(';')
-                .map(str::trim)
-                .filter(|i| !i.is_empty() && !i.starts_with('!'))
-        };
-        match (section, key.trim()) {
-            ("Context", "shared") => network |= items().any(|i| i == "network"),
-            ("Context", "sockets") => {
-                audio |= items().any(|i| i == "pulseaudio");
-                session_bus |= items().any(|i| i == "session-bus");
-            }
-            ("Context", "devices") => {
-                devices |= items().any(|i| i == "all");
-                gamepad |= items().any(|i| i == "input");
-            }
-            ("Context", "filesystems") => {
-                for item in items() {
-                    let path = item.split(':').next().unwrap_or(item);
-                    if matches!(path, "host" | "host-os" | "host-etc") || path.starts_with('/') {
-                        host = true;
-                    } else if path == "home" || path.starts_with('~') || path.starts_with("xdg-") {
-                        home = true;
-                    }
-                }
-            }
-            ("Session Bus Policy", "org.freedesktop.Flatpak") => {
-                session_bus |= matches!(value.trim(), "talk" | "own");
-            }
-            _ => {}
-        }
-    }
-    [
-        (network, "network"),
-        (home, "home-files"),
-        (host, "host-files"),
-        (devices, "all-devices"),
-        (audio, "audio"),
-        (gamepad, "gamepad"),
-        (session_bus, "session-bus"),
-    ]
-    .into_iter()
-    .filter(|(on, _)| *on)
-    .map(|(_, key)| key.to_owned())
-    .collect()
+    crate::overrides::Context::parse(metadata).keys()
 }
 
 #[cfg(test)]

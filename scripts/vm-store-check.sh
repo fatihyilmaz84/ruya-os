@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: check clean security
+# modes: check clean security perms
 # Checks ruya-store (org.ruyaos.Store1, T-134) inside a running VM, as root. It builds a tiny signed
 # Flatpak repository (one runtime, one app, no download), adds it through the service and drives
 # install / uninstall over the system bus. Copy and run:
@@ -23,6 +23,15 @@ bad() { echo "FAIL: $*"; fail=1; }
 
 # A call as another user over the system bus.
 as_shell() { runuser -u ruya-shell -- "$@"; }
+
+# The signed-in profile and its role, as Profiles1 has them: sets $active and $role ("" for none). The
+# service asks the same to decide whether the shell's call comes from an admin.
+active_role() {
+    active="$(busctl --system get-property org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ActiveProfile 2>/dev/null | sed -n 's/^s "\(.*\)"$/\1/p')"
+    plist="$(busctl --system call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ListProfiles 2>/dev/null)"
+    role=""
+    [ -n "$active" ] && role="$(echo "$plist" | grep -o "\"$active\" \"[^\"]*\" \"[^\"]*\" \"[a-z]*\"" | grep -o '"[a-z]*"$' | tr -d '"')"
+}
 
 build_repo() {
     rm -rf "$work"; mkdir -p "$work/gpg" "$work/rt/usr/share/ruya-test" "$work/app/files/bin" "$work/app/files/share/metainfo"
@@ -83,6 +92,65 @@ wait_job() { # job-id, seconds -> prints the JobFinished status or nothing
     return 1
 }
 
+# --- perms (RUY-744): the console's permission overrides, seen from inside a real sandbox
+papp=org.ruyaos.TestPerms
+prt=org.ruyaos.TestPermsRuntime
+premote=ruyaos-perms-test
+pwork=/var/lib/ruya-store-perms-test
+
+# A signed repository with a runtime that has bash (and the libraries it loads) and one app that asks for
+# the network, all devices and sound. Its command prints what the sandbox has, one fact per line.
+perms_repo() {
+    rm -rf "$pwork"; mkdir -p "$pwork/gpg" "$pwork/rt/usr/bin" "$pwork/rt/usr/lib64" "$pwork/rt/files" "$pwork/rt/var" \
+        "$pwork/app/files/bin" "$pwork/app/var"
+    chmod 700 "$pwork/gpg"
+    gpg --homedir "$pwork/gpg" --batch --pinentry-mode loopback --passphrase '' \
+        --quick-generate-key "ruya-store-perms-test <test@example.org>" default default never >/dev/null 2>&1 || return 1
+    pkey="$(gpg --homedir "$pwork/gpg" --list-keys --with-colons | awk -F: '/^pub/ {k=$5} END {print k}')"
+    cp /usr/bin/bash "$pwork/rt/usr/bin/bash" && cp /usr/bin/bash "$pwork/rt/usr/bin/sh" || return 1
+    for lib in $(ldd /usr/bin/bash | awk '/=> \//{print $3} /ld-linux/{print $1}' | sort -u); do
+        cp "$lib" "$pwork/rt/usr/lib64/" || return 1
+    done
+    printf '[Runtime]\nname=%s\nruntime=%s/x86_64/stable\nsdk=%s/x86_64/stable\n' "$prt" "$prt" "$prt" > "$pwork/rt/metadata"
+    cat > "$pwork/app/files/bin/probe" <<'EOF'
+#!/bin/sh
+# Network interfaces other than lo: /proc/net is the sandbox's own network namespace.
+n=0
+while read -r line; do
+    case "$line" in
+        *:*) name="${line%%:*}"; name="${name// /}"; [ "$name" != lo ] && n=$((n + 1)) ;;
+    esac
+done < /proc/net/dev
+echo "net=$n"
+[ -e /dev/input ] && echo "input=yes" || echo "input=no"
+[ -e /dev/dri ] && echo "dri=yes" || echo "dri=no"
+EOF
+    chmod 755 "$pwork/app/files/bin/probe"
+    printf '[Application]\nname=%s\nruntime=%s/x86_64/stable\nsdk=%s/x86_64/stable\ncommand=probe\n' "$papp" "$prt" "$prt" > "$pwork/app/metadata"
+    psign="--gpg-sign=$pkey --gpg-homedir=$pwork/gpg"
+    # shellcheck disable=SC2086
+    flatpak build-export --runtime $psign "$pwork/repo" "$pwork/rt" stable >/dev/null 2>&1 || return 1
+    flatpak build-finish --command=probe --share=network --device=all --socket=pulseaudio "$pwork/app" >/dev/null 2>&1 || return 1
+    # shellcheck disable=SC2086
+    flatpak build-export $psign "$pwork/repo" "$pwork/app" stable >/dev/null 2>&1 || return 1
+    # shellcheck disable=SC2086
+    flatpak build-update-repo $psign "$pwork/repo" >/dev/null 2>&1 || true
+    {
+        printf '[Flatpak Repo]\nTitle=Permissions check\nUrl=file://%s/repo\n' "$pwork"
+        printf 'GPGKey=%s\n' "$(gpg --homedir "$pwork/gpg" --export "$pkey" | base64 -w0)"
+    } > "$pwork/perms.flatpakrepo"
+}
+
+# What the app's sandbox has now: "net=N input=yes|no dri=yes|no" (a new sandbox each time).
+perms_probe() { flatpak run --system "$papp" 2>/dev/null | tr '\n' ' '; }
+perms_call() { busctl --system call "$svc" "$path" "$ifc" "$@" 2>&1; }
+perms_clean() {
+    flatpak uninstall --system -y --noninteractive "$papp" "$prt" >/dev/null 2>&1
+    flatpak override --system --reset "$papp" >/dev/null 2>&1
+    flatpak remote-delete --system --force "$premote" >/dev/null 2>&1
+    rm -rf "$pwork"
+}
+
 case "${1:-check}" in
 security)
     echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
@@ -94,6 +162,103 @@ clean)
     flatpak uninstall --system -y "$app" "$rt" >/dev/null 2>&1
     flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
     rm -rf "$work"
+    perms_clean
+    ;;
+perms)
+    # RUY-744: (a) a withdrawn network is gone inside the sandbox, (b) withdrawn devices keep /dev/input and
+    # lose /dev/dri, (c) a reset brings both back, (d) a caller that is not an admin is refused; and the keys
+    # the console leaves alone are refused, and an uninstall drops the override.
+    echo "flatpak: $(flatpak --version)"
+    perms_clean
+    perms_repo && ok "permissions test repository built" || { bad "cannot build the permissions test repository"; exit 1; }
+    case "$(perms_call AddRemote ss "$premote" "file://$pwork/perms.flatpakrepo")" in
+        's "ok"') ok "AddRemote of the permissions repository";;
+        *) bad "AddRemote of the permissions repository failed"; perms_clean; exit 1;;
+    esac
+    n=0
+    until perms_call Search sa{sv} "TestPerms" 0 | grep -q "$papp" || [ "$n" -ge 120 ]; do sleep 1; n=$((n + 1)); done
+    out="$(perms_call Install s "$papp")"
+    case "$out" in 'ss "ok"'*) ok "Install queued";; *) bad "Install: $out";; esac
+    n=0
+    until perms_call ListInstalled | grep -q "$papp" || [ "$n" -ge 180 ]; do sleep 1; n=$((n + 1)); done
+    perms_call ListInstalled | grep -q "$papp" && ok "the test app is installed" || { bad "the test app was not installed"; perms_clean; exit 1; }
+
+    got="$(perms_call GetPermissions s "$papp")"
+    echo "GetPermissions: $got"
+    case "$got" in 'sasasas "ok" 3 "network" "all-devices" "audio" 0 2 "network" "all-devices"') ok "GetPermissions: effective network, all-devices, audio; nothing withdrawn; network and all-devices withdrawable";;
+        *) bad "GetPermissions before any change: $got";; esac
+    [ -e /dev/dri ] && host_dri=yes || host_dri=no
+    [ -e /dev/input ] && host_input=yes || host_input=no
+    echo "this VM: /dev/dri $host_dri, /dev/input $host_input"
+    before="$(perms_probe)"
+    echo "sandbox before: $before"
+    case "$before" in *"net=0 "*|"") bad "the sandbox has no network before any withdrawal: '$before'";; *) ok "the sandbox has a network interface before any withdrawal";; esac
+
+    echo "--- (a) network"
+    case "$(perms_call WithdrawPermission ss "$papp" network)" in 's "ok"') ok "WithdrawPermission network by root";; *) bad "WithdrawPermission network";; esac
+    flatpak override --system --show "$papp" | grep -q '^shared=!network;' && ok "the override says shared=!network" || bad "override: $(flatpak override --system --show "$papp" | tr '\n' ' ')"
+    perms_call GetPermissions s "$papp" | grep -q '^sasasas "ok" 2 "all-devices" "audio" 1 "network" ' && ok "GetPermissions reports network withdrawn" || bad "GetPermissions after the withdrawal: $(perms_call GetPermissions s "$papp")"
+    now="$(perms_probe)"; echo "sandbox: $now"
+    case "$now" in *"net=0 "*) ok "(a) no network inside the sandbox";; *) bad "(a) the sandbox still has a network: '$now'";; esac
+
+    echo "--- (b) all devices"
+    case "$(perms_call WithdrawPermission ss "$papp" all-devices)" in 's "ok"') ok "WithdrawPermission all-devices by root";; *) bad "WithdrawPermission all-devices";; esac
+    flatpak override --system --show "$papp" | grep -q '^devices=!all;input;' && ok "the override says devices=!all;input;" || bad "override: $(flatpak override --system --show "$papp" | tr '\n' ' ')"
+    now="$(perms_probe)"; echo "sandbox: $now"
+    if [ "$host_input" = yes ]; then
+        case "$now" in *"input=yes"*) ok "(b) /dev/input is still reachable";; *) bad "(b) the controllers went with the devices: '$now'";; esac
+    else
+        echo "UNVERIFIED: (b) this VM has no /dev/input"
+    fi
+    if [ "$host_dri" = yes ]; then
+        case "$now" in *"dri=no"*) ok "(b) /dev/dri is not reachable";; *) bad "(b) /dev/dri is still there: '$now'";; esac
+    else
+        echo "UNVERIFIED: (b) this VM has no /dev/dri"
+    fi
+
+    echo "--- refused keys"
+    case "$(perms_call WithdrawPermission ss "$papp" audio)" in 's "not-withdrawable"') ok "audio is not-withdrawable";; *) bad "WithdrawPermission audio";; esac
+    case "$(perms_call WithdrawPermission ss "$papp" host-files)" in 's "invalid"') ok "a key the app does not ask for is invalid (an override never grants)";; *) bad "WithdrawPermission host-files";; esac
+    case "$(perms_call WithdrawPermission ss "$papp" camera)" in 's "invalid"') ok "an unknown key is invalid";; *) bad "WithdrawPermission camera";; esac
+
+    echo "--- RestorePermission keeps the other withdrawal"
+    case "$(perms_call RestorePermission ss "$papp" network)" in 's "ok"') ok "RestorePermission network";; *) bad "RestorePermission network";; esac
+    shown="$(flatpak override --system --show "$papp" | tr '\n' ' ')"
+    case "$shown" in *'devices=!all;input;'*) case "$shown" in *network*) bad "the restore left a network entry: $shown";; *) ok "the override holds only the device withdrawal";; esac;;
+        *) bad "the restore lost the device withdrawal: $shown";; esac
+
+    echo "--- (c) reset"
+    case "$(perms_call ResetPermissions s "$papp")" in 's "ok"') ok "ResetPermissions";; *) bad "ResetPermissions";; esac
+    [ -z "$(flatpak override --system --show "$papp")" ] && ok "no override left" || bad "an override is left: $(flatpak override --system --show "$papp" | tr '\n' ' ')"
+    now="$(perms_probe)"; echo "sandbox: $now"
+    case "$now" in *"net=0 "*) bad "(c) the network did not come back: '$now'";; *) ok "(c) the network is back";; esac
+    if [ "$host_dri" = yes ]; then
+        case "$now" in *"dri=yes"*) ok "(c) /dev/dri is back";; *) bad "(c) /dev/dri did not come back: '$now'";; esac
+    fi
+
+    echo "--- (d) a caller that is not an admin"
+    active_role
+    out="$(as_shell busctl --system call "$svc" "$path" "$ifc" WithdrawPermission ss "$papp" network 2>&1)"
+    echo "as ruya-shell (active '${active:-none}', role '${role:-none}'): $out"
+    if [ "$role" = admin ]; then
+        case "$out" in 's "ok"') ok "(d) the shell may withdraw while the admin $active is signed in (not testable as a refusal now)";; *) bad "(d) the shell with an admin signed in: $out";; esac
+        echo "UNVERIFIED: (d) the refusal needs no admin signed in; sign out and run perms again"
+        perms_call ResetPermissions s "$papp" >/dev/null
+    else
+        case "$out" in 's "forbidden"') ok "(d) a caller that is not an admin is refused";; *) bad "(d) a caller that is not an admin: $out";; esac
+    fi
+    as_shell busctl --system call "$svc" "$path" "$ifc" GetPermissions s "$papp" | grep -q '^sasasas "ok"' && ok "GetPermissions is open to the shell" || bad "GetPermissions as ruya-shell"
+    [ -z "$(flatpak override --system --show "$papp")" ] && ok "the refused call wrote nothing" || bad "an override appeared: $(flatpak override --system --show "$papp" | tr '\n' ' ')"
+
+    echo "--- an uninstall drops the override"
+    perms_call WithdrawPermission ss "$papp" network >/dev/null
+    [ -e "/var/lib/flatpak/overrides/$papp" ] && ok "the override file is there" || bad "no override file after a withdrawal"
+    out="$(perms_call Uninstall sb "$papp" false)"
+    case "$out" in 'ss "ok"'*) ok "Uninstall queued";; *) bad "Uninstall: $out";; esac
+    n=0
+    while perms_call ListInstalled | grep -q "$papp" && [ "$n" -lt 120 ]; do sleep 1; n=$((n + 1)); done
+    [ -e "/var/lib/flatpak/overrides/$papp" ] && bad "the override outlived the app" || ok "the uninstall dropped the override"
+    perms_clean
     ;;
 check)
     echo "--- unit"
@@ -120,10 +285,7 @@ check)
     echo "--- AddRemote"
     out="$(as_shell busctl --system call "$svc" "$path" "$ifc" AddRemote ss x "file://$work/test.flatpakrepo")"
     echo "as ruya-shell: $out"
-    active="$(busctl --system get-property org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ActiveProfile 2>/dev/null | sed -n 's/^s "\(.*\)"$/\1/p')"
-    plist="$(busctl --system call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ListProfiles 2>/dev/null)"
-    role=""
-    [ -n "$active" ] && role="$(echo "$plist" | grep -o "\"$active\" \"[^\"]*\" \"[^\"]*\" \"[a-z]*\"" | grep -o '"[a-z]*"$' | tr -d '"')"
+    active_role
     echo "active profile: '$active', role: '$role'"
     case "$out" in
         's "forbidden"') [ -z "$active" ] || [ "$role" != admin ] && ok "AddRemote by the shell is forbidden (active '${active:-none}', role '${role:-none}')" || bad "AddRemote by the shell was forbidden although the admin $active is signed in: $out";;

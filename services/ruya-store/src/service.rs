@@ -4,12 +4,13 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use crate::app::{valid_app_id, valid_commit, valid_remote_name, App, JobStatus, Status};
 use crate::appstream::{self, Component};
 use crate::flatpak::{Flatpak, FlatpakError, Operation, Phase, Progress, RemoteInfo};
 use crate::jobs::{self, JobInfo, JobKind, JobState};
+use crate::overrides::{self, Context, Permissions, Refusal};
 use crate::queue::{Monotone, Queue};
 
 /// What a running job tells the outside world, in the order it must be sent.
@@ -93,6 +94,23 @@ pub struct Store<F: Flatpak> {
     jobs_file: Option<PathBuf>,
     /// This console's API level (`RUYA_API_LEVEL`); an app asking for more is not `compatible`.
     api_level: u32,
+    /// Whether this console's Flatpak has `--device=input` (read once, `flatpak --version`).
+    device_input: OnceLock<bool>,
+}
+
+/// An installed app's permissions as the permission calls read them: its metadata, the same with
+/// the override on top, and what that makes of the contract's keys.
+struct Sandbox {
+    app: Context,
+    now: Context,
+    permissions: Permissions,
+}
+
+fn refused(refusal: Refusal) -> Status {
+    match refusal {
+        Refusal::Invalid => Status::Invalid,
+        Refusal::NotWithdrawable => Status::NotWithdrawable,
+    }
 }
 
 impl<F: Flatpak> Store<F> {
@@ -102,6 +120,7 @@ impl<F: Flatpak> Store<F> {
             state: Mutex::new(State::default()),
             jobs_file: None,
             api_level: crate::level::api_level(),
+            device_input: OnceLock::new(),
         }
     }
 
@@ -131,6 +150,7 @@ impl<F: Flatpak> Store<F> {
             }),
             jobs_file: Some(path),
             api_level: crate::level::api_level(),
+            device_input: OnceLock::new(),
         }
     }
 
@@ -517,6 +537,190 @@ impl<F: Flatpak> Store<F> {
         }
     }
 
+    // ---- Permissions (RUY-744, 03 §4.4): the override withdraws, it never grants ----
+
+    /// Whether this console's Flatpak can keep the controllers of an app whose devices are
+    /// withdrawn (`--device=input`). Asked once.
+    fn device_input(&self) -> bool {
+        *self.device_input.get_or_init(|| {
+            self.flatpak
+                .version()
+                .is_some_and(|v| overrides::device_input_supported(&v))
+        })
+    }
+
+    /// Checks that `id` names an app installed now (Flatpak is read first, a correction is
+    /// announced through `emit`).
+    fn installed_app(&self, id: &str, emit: &mut dyn FnMut(Event)) -> Result<(), Status> {
+        if !valid_app_id(id) {
+            return Err(Status::Invalid);
+        }
+        self.sync_and_announce(emit);
+        let installed = self
+            .state()
+            .catalogue
+            .iter()
+            .any(|a| a.id == id && a.installed);
+        if installed {
+            Ok(())
+        } else {
+            Err(Status::UnknownApp)
+        }
+    }
+
+    /// The installed app's metadata and its override, read now (the override is the only record:
+    /// what someone wrote by hand is read the same way).
+    fn sandbox(&self, id: &str) -> Result<Sandbox, Status> {
+        let Some(metadata) = self.flatpak.installed_metadata(id) else {
+            eprintln!("ruya-store: the metadata of {id} cannot be read");
+            return Err(Status::Failed);
+        };
+        let over = self.flatpak.show_override(id).map_err(|err| {
+            eprintln!("ruya-store: the override of {id} cannot be read: {err}");
+            Status::Failed
+        })?;
+        let app = Context::parse(&metadata);
+        let over = Context::parse(&over);
+        Ok(Sandbox {
+            permissions: overrides::permissions(&app, &over, self.device_input()),
+            now: app.merged(&over),
+            app,
+        })
+    }
+
+    /// `GetPermissions`: open to every caller (a Standard profile sees them read-only).
+    pub fn get_permissions(&self, id: &str, emit: &mut dyn FnMut(Event)) -> (Status, Permissions) {
+        let result = self.installed_app(id, emit).and_then(|()| self.sandbox(id));
+        match result {
+            Ok(sandbox) => (Status::Ok, sandbox.permissions),
+            Err(status) => (status, Permissions::default()),
+        }
+    }
+
+    /// The app asks for `key` and the console withdraws it: the sandbox read, or why not.
+    fn withdrawable_sandbox(
+        &self,
+        id: &str,
+        key: &str,
+        is_admin: bool,
+        emit: &mut dyn FnMut(Event),
+    ) -> Result<Sandbox, Status> {
+        if !is_admin {
+            return Err(Status::Forbidden);
+        }
+        self.installed_app(id, emit)?;
+        let sandbox = self.sandbox(id)?;
+        if !sandbox.app.keys().iter().any(|k| k == key) {
+            // An unknown key, or one the app does not ask for: an override never grants.
+            return Err(Status::Invalid);
+        }
+        overrides::withdraw_args(&sandbox.app, key, self.device_input()).map_err(refused)?;
+        Ok(sandbox)
+    }
+
+    /// `WithdrawPermission` (admin): adds the key's withdrawal to the app's override. A key that
+    /// is withdrawn already is `ok` with nothing run.
+    pub fn withdraw_permission(
+        &self,
+        id: &str,
+        key: &str,
+        is_admin: bool,
+        emit: &mut dyn FnMut(Event),
+    ) -> Status {
+        let sandbox = match self.withdrawable_sandbox(id, key, is_admin, emit) {
+            Ok(sandbox) => sandbox,
+            Err(status) => return status,
+        };
+        if !sandbox.permissions.effective.iter().any(|k| k == key) {
+            return Status::Ok;
+        }
+        // From what the app has now, so a path an earlier override added goes as well.
+        let args = match overrides::withdraw_args(&sandbox.now, key, self.device_input()) {
+            Ok(args) => args,
+            Err(refusal) => return refused(refusal),
+        };
+        match self.flatpak.add_override(id, &args) {
+            Ok(()) => Status::Ok,
+            Err(err) => {
+                eprintln!("ruya-store: withdrawing {key} from {id} failed: {err}");
+                Status::Failed
+            }
+        }
+    }
+
+    /// `RestorePermission` (admin): gives the key back. `flatpak override` cannot take back one
+    /// option, so the override is reset and the keys that stay withdrawn are withdrawn again; what
+    /// else an override written outside the Store held goes with it. A key that is not withdrawn
+    /// is `ok` with nothing run.
+    pub fn restore_permission(
+        &self,
+        id: &str,
+        key: &str,
+        is_admin: bool,
+        emit: &mut dyn FnMut(Event),
+    ) -> Status {
+        let sandbox = match self.withdrawable_sandbox(id, key, is_admin, emit) {
+            Ok(sandbox) => sandbox,
+            Err(status) => return status,
+        };
+        if !sandbox.permissions.withdrawn.iter().any(|k| k == key) {
+            return Status::Ok;
+        }
+        let rest: Vec<String> = sandbox
+            .permissions
+            .withdrawn
+            .iter()
+            .filter(|k| *k != key)
+            .cloned()
+            .collect();
+        let args = overrides::rewithdraw_args(&sandbox.app, &rest, self.device_input());
+        let written = self.flatpak.reset_override(id).and_then(|()| {
+            if args.is_empty() {
+                Ok(())
+            } else {
+                self.flatpak.add_override(id, &args)
+            }
+        });
+        match written {
+            Ok(()) => Status::Ok,
+            Err(err) => {
+                eprintln!("ruya-store: restoring {key} of {id} failed: {err}");
+                Status::Failed
+            }
+        }
+    }
+
+    /// `ResetPermissions` (admin): removes the app's override, ours or one written by hand.
+    pub fn reset_permissions(
+        &self,
+        id: &str,
+        is_admin: bool,
+        emit: &mut dyn FnMut(Event),
+    ) -> Status {
+        if !is_admin {
+            return Status::Forbidden;
+        }
+        if let Err(status) = self.installed_app(id, emit) {
+            return status;
+        }
+        match self.flatpak.reset_override(id) {
+            Ok(()) => Status::Ok,
+            Err(err) => {
+                eprintln!("ruya-store: resetting the permissions of {id} failed: {err}");
+                Status::Failed
+            }
+        }
+    }
+
+    /// Drops the override of an app that was uninstalled. Every uninstall of the Store ends here
+    /// (`run_next`); a withdrawal must not wait for an app installed again under the same id. A
+    /// failure is logged: the app is gone either way.
+    fn drop_override(&self, id: &str) {
+        if let Err(err) = self.flatpak.reset_override(id) {
+            eprintln!("ruya-store: dropping the override of {id} failed: {err}");
+        }
+    }
+
     /// The job table for `ListJobs`, oldest first. A job a previous run left unfinished is settled
     /// first (`recover`), so a reply never claims the service is working on something it is not.
     pub fn list_jobs(&self) -> Vec<JobInfo> {
@@ -613,6 +817,9 @@ impl<F: Flatpak> Store<F> {
             .run(&job.op, &mut |p: Progress| report(p.percent, p.phase, emit));
         let status = match &result {
             Ok(()) => {
+                if let Operation::Uninstall { id, .. } = &job.op {
+                    self.drop_override(id);
+                }
                 report(100, job.op.phase(), emit);
                 JobStatus::Ok
             }
@@ -1741,6 +1948,347 @@ mod tests {
         assert_eq!(
             app.installed_version, "",
             "no stale version after an outside removal"
+        );
+    }
+
+    // ---- Permissions (RUY-744) ----
+
+    const STREAM: &str = "org.ruya.Stream";
+    const STREAM_META: &str = "[Application]\nname=org.ruya.Stream\n\n[Context]\nshared=network;\nsockets=wayland;pulseaudio;\ndevices=all;\nfilesystems=home;\n";
+
+    fn perm_store(f: FakeFlatpak) -> Store<FakeFlatpak> {
+        store(
+            f.with_app("ruyaos", STREAM, 1)
+                .with_installed("ruyaos", STREAM, 1)
+                .with_metadata(STREAM, STREAM_META),
+        )
+    }
+
+    fn strings(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    fn none(_: Event) {}
+
+    #[test]
+    fn get_permissions_without_and_with_an_override() {
+        let s = perm_store(fake());
+        let (status, p) = s.get_permissions(STREAM, &mut none);
+        assert_eq!(status, Status::Ok);
+        assert_eq!(
+            p.effective,
+            strings(&["network", "home-files", "all-devices", "audio"])
+        );
+        assert!(p.withdrawn.is_empty());
+        assert_eq!(
+            p.withdrawable,
+            strings(&["network", "home-files", "all-devices"])
+        );
+
+        assert_eq!(
+            s.withdraw_permission(STREAM, "network", true, &mut none),
+            Status::Ok
+        );
+        // Re-read from the override flatpak wrote.
+        assert_eq!(
+            s.flatpak.override_of(STREAM),
+            "[Context]\nshared=!network;\n"
+        );
+        let (_, p) = s.get_permissions(STREAM, &mut none);
+        assert_eq!(
+            p.effective,
+            strings(&["home-files", "all-devices", "audio"])
+        );
+        assert_eq!(p.withdrawn, strings(&["network"]));
+    }
+
+    #[test]
+    fn each_withdrawal_runs_its_argument_list() {
+        let s = perm_store(fake());
+        for key in ["network", "all-devices", "home-files"] {
+            assert_eq!(
+                s.withdraw_permission(STREAM, key, true, &mut none),
+                Status::Ok,
+                "{key}"
+            );
+        }
+        let writes: Vec<_> = s
+            .flatpak
+            .override_runs()
+            .into_iter()
+            .filter(|r| !r.contains(&"--show".to_owned()))
+            .collect();
+        assert_eq!(
+            writes,
+            [
+                strings(&["override", "--system", "--unshare=network", STREAM]),
+                strings(&[
+                    "override",
+                    "--system",
+                    "--nodevice=all",
+                    "--device=input",
+                    STREAM
+                ]),
+                strings(&["override", "--system", "--nofilesystem=home", STREAM]),
+            ]
+        );
+        let (_, p) = s.get_permissions(STREAM, &mut none);
+        // The controllers stay with the app.
+        assert_eq!(p.effective, strings(&["audio", "gamepad"]));
+        assert_eq!(
+            p.withdrawn,
+            strings(&["network", "home-files", "all-devices"])
+        );
+        // Withdrawn already: nothing runs again.
+        let before = s.flatpak.override_runs().len();
+        assert_eq!(
+            s.withdraw_permission(STREAM, "network", true, &mut none),
+            Status::Ok
+        );
+        let after: Vec<_> = s.flatpak.override_runs()[before..].to_vec();
+        assert!(
+            after.iter().all(|r| r.contains(&"--show".to_owned())),
+            "{after:?}"
+        );
+    }
+
+    #[test]
+    fn a_withdrawal_never_grants() {
+        let s = perm_store(fake());
+        // The app does not ask for these: an override could only add them.
+        for key in ["host-files", "session-bus", "gamepad"] {
+            assert_eq!(
+                s.withdraw_permission(STREAM, key, true, &mut none),
+                Status::Invalid,
+                "{key}"
+            );
+            assert_eq!(
+                s.restore_permission(STREAM, key, true, &mut none),
+                Status::Invalid,
+                "{key}"
+            );
+        }
+        assert_eq!(
+            s.withdraw_permission(STREAM, "camera", true, &mut none),
+            Status::Invalid
+        );
+        assert_eq!(s.flatpak.override_of(STREAM), "", "nothing was written");
+    }
+
+    #[test]
+    fn audio_session_bus_and_gamepad_are_not_withdrawable() {
+        let id = "org.ruya.Everything";
+        let s = store(
+            fake()
+                .with_app("ruyaos", id, 1)
+                .with_installed("ruyaos", id, 1)
+                .with_metadata(
+                    id,
+                    "[Context]\nsockets=pulseaudio;session-bus;\ndevices=input;\n",
+                ),
+        );
+        for key in ["audio", "session-bus", "gamepad"] {
+            assert_eq!(
+                s.withdraw_permission(id, key, true, &mut none),
+                Status::NotWithdrawable,
+                "{key}"
+            );
+        }
+        assert!(s.get_permissions(id, &mut none).1.withdrawable.is_empty());
+        assert_eq!(s.flatpak.override_of(id), "");
+    }
+
+    #[test]
+    fn all_devices_is_not_withdrawable_without_device_input() {
+        let s = perm_store(fake().with_version(Some("Flatpak 1.14.10")));
+        assert_eq!(
+            s.withdraw_permission(STREAM, "all-devices", true, &mut none),
+            Status::NotWithdrawable
+        );
+        assert!(!s
+            .get_permissions(STREAM, &mut none)
+            .1
+            .withdrawable
+            .contains(&"all-devices".to_owned()));
+        let unknown = perm_store(fake().with_version(None));
+        assert_eq!(
+            unknown.withdraw_permission(STREAM, "all-devices", true, &mut none),
+            Status::NotWithdrawable
+        );
+    }
+
+    #[test]
+    fn changes_are_for_admins_and_reading_is_for_everyone() {
+        let s = perm_store(fake());
+        assert_eq!(
+            s.withdraw_permission(STREAM, "network", false, &mut none),
+            Status::Forbidden
+        );
+        assert_eq!(
+            s.restore_permission(STREAM, "network", false, &mut none),
+            Status::Forbidden
+        );
+        assert_eq!(
+            s.reset_permissions(STREAM, false, &mut none),
+            Status::Forbidden
+        );
+        assert_eq!(s.flatpak.override_of(STREAM), "");
+        assert!(s
+            .flatpak
+            .override_runs()
+            .iter()
+            .all(|r| r.contains(&"--show".to_owned())));
+        assert_eq!(s.get_permissions(STREAM, &mut none).0, Status::Ok);
+    }
+
+    #[test]
+    fn only_installed_apps_with_valid_ids() {
+        let s = perm_store(fake());
+        // In the catalogue, not installed.
+        assert_eq!(
+            s.get_permissions("org.ruya.Puzzle", &mut none).0,
+            Status::UnknownApp
+        );
+        assert_eq!(
+            s.withdraw_permission("org.ruya.Puzzle", "network", true, &mut none),
+            Status::UnknownApp
+        );
+        assert_eq!(
+            s.reset_permissions("org.nope.Missing", true, &mut none),
+            Status::UnknownApp
+        );
+        assert_eq!(s.get_permissions("--user", &mut none).0, Status::Invalid);
+        // Removed outside the Store: Flatpak is read first, and the correction is announced.
+        s.flatpak.remove_installed(STREAM);
+        let mut events = Vec::new();
+        assert_eq!(
+            s.get_permissions(STREAM, &mut |e| events.push(e)).0,
+            Status::UnknownApp
+        );
+        assert_eq!(events, [Event::InstalledChanged]);
+    }
+
+    #[test]
+    fn restore_gives_one_key_back_and_keeps_the_others() {
+        let s = perm_store(fake());
+        s.withdraw_permission(STREAM, "network", true, &mut none);
+        s.withdraw_permission(STREAM, "all-devices", true, &mut none);
+        assert_eq!(
+            s.restore_permission(STREAM, "network", true, &mut none),
+            Status::Ok
+        );
+        let (_, p) = s.get_permissions(STREAM, &mut none);
+        assert_eq!(p.withdrawn, strings(&["all-devices"]));
+        assert!(p.effective.contains(&"network".to_owned()));
+        // The override holds the remaining withdrawal only: nothing positive was written for network.
+        assert_eq!(
+            s.flatpak.override_of(STREAM),
+            "[Context]\ndevices=!all;input;\n"
+        );
+        // Not withdrawn: ok, and nothing is written.
+        let before = s.flatpak.override_of(STREAM);
+        assert_eq!(
+            s.restore_permission(STREAM, "home-files", true, &mut none),
+            Status::Ok
+        );
+        assert_eq!(s.flatpak.override_of(STREAM), before);
+        // The last one: no override left.
+        s.restore_permission(STREAM, "all-devices", true, &mut none);
+        assert_eq!(s.flatpak.override_of(STREAM), "");
+        assert!(s.get_permissions(STREAM, &mut none).1.withdrawn.is_empty());
+    }
+
+    #[test]
+    fn reset_removes_any_override() {
+        let s = perm_store(fake());
+        s.withdraw_permission(STREAM, "network", true, &mut none);
+        s.withdraw_permission(STREAM, "home-files", true, &mut none);
+        assert_eq!(s.reset_permissions(STREAM, true, &mut none), Status::Ok);
+        assert_eq!(s.flatpak.override_of(STREAM), "");
+        let (_, p) = s.get_permissions(STREAM, &mut none);
+        assert!(p.withdrawn.is_empty());
+        assert_eq!(
+            p.effective,
+            strings(&["network", "home-files", "all-devices", "audio"])
+        );
+        assert_eq!(
+            s.flatpak.override_runs().last(),
+            Some(&strings(&["override", "--system", "--show", STREAM]))
+        );
+        assert!(s
+            .flatpak
+            .override_runs()
+            .contains(&strings(&["override", "--system", "--reset", STREAM])));
+        // Without an override: ok all the same.
+        assert_eq!(s.reset_permissions(STREAM, true, &mut none), Status::Ok);
+    }
+
+    #[test]
+    fn a_foreign_override_is_reported_and_reset() {
+        // Written by hand: sound taken, an extra folder, the network given back explicitly.
+        let foreign =
+            "[Context]\nsockets=!pulseaudio;\nfilesystems=/srv;\n[Environment]\nFOO=bar\n";
+        let s = perm_store(fake().with_override(STREAM, foreign));
+        let (status, p) = s.get_permissions(STREAM, &mut none);
+        assert_eq!(status, Status::Ok);
+        assert_eq!(p.withdrawn, strings(&["audio"]));
+        assert!(
+            p.effective.contains(&"host-files".to_owned()),
+            "an added key is reported as it is: {:?}",
+            p.effective
+        );
+        // A withdrawal adds to it, the rest stays.
+        s.withdraw_permission(STREAM, "network", true, &mut none);
+        assert!(s.flatpak.override_of(STREAM).contains("FOO=bar"));
+        assert_eq!(
+            s.get_permissions(STREAM, &mut none).1.withdrawn,
+            strings(&["network", "audio"])
+        );
+        assert_eq!(s.reset_permissions(STREAM, true, &mut none), Status::Ok);
+        assert_eq!(s.flatpak.override_of(STREAM), "");
+    }
+
+    #[test]
+    fn a_failing_override_is_failed() {
+        let s = perm_store(fake());
+        s.flatpak.set_override_fails(true);
+        assert_eq!(s.get_permissions(STREAM, &mut none).0, Status::Failed);
+        assert_eq!(
+            s.withdraw_permission(STREAM, "network", true, &mut none),
+            Status::Failed
+        );
+        assert_eq!(s.reset_permissions(STREAM, true, &mut none), Status::Failed);
+    }
+
+    #[test]
+    fn uninstall_drops_the_override() {
+        let s = perm_store(fake());
+        s.withdraw_permission(STREAM, "network", true, &mut none);
+        assert_ne!(s.flatpak.override_of(STREAM), "");
+        let (status, _) = s.uninstall(STREAM, false, &mut none);
+        assert_eq!(status, Status::Ok);
+        drain(&s);
+        assert_eq!(
+            s.flatpak.override_of(STREAM),
+            "",
+            "no withdrawal outlives the app"
+        );
+        assert_eq!(
+            s.flatpak.override_runs().last(),
+            Some(&strings(&["override", "--system", "--reset", STREAM]))
+        );
+    }
+
+    #[test]
+    fn a_failed_uninstall_keeps_the_override() {
+        let s = perm_store(fake());
+        s.withdraw_permission(STREAM, "network", true, &mut none);
+        s.uninstall(STREAM, false, &mut none);
+        s.flatpak.fail_next(FlatpakError::Other("busy".into()));
+        drain(&s);
+        assert_eq!(
+            s.flatpak.override_of(STREAM),
+            "[Context]\nshared=!network;\n"
         );
     }
 }

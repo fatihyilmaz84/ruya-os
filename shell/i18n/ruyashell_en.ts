@@ -293,18 +293,18 @@ This can&apos;t be undone.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+211"/>
+        <location filename="../qml/AppDetailPage.qml" line="+210"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+94"/>
+        <location line="+81"/>
         <source>Developer</source>
         <translation>Developer</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-81"/>
         <source>Community</source>
         <translation>Community</translation>
     </message>
@@ -339,42 +339,7 @@ This can&apos;t be undone.</translation>
         <translation>Not rated</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Plays sound</source>
-        <translation>Plays sound</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Uses game controllers</source>
-        <translation>Uses game controllers</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Uses the network</source>
-        <translation>Uses the network</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reads and writes files in your home folder</source>
-        <translation>Reads and writes files in your home folder</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reads and writes all files on this device</source>
-        <translation>Reads and writes all files on this device</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Accesses all devices</source>
-        <translation>Accesses all devices</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Can control other programs on this device</source>
-        <translation>Can control other programs on this device</translation>
-    </message>
-    <message>
-        <location line="+8"/>
+        <location line="+6"/>
         <source>Action</source>
         <translation>Action</translation>
     </message>
@@ -521,12 +486,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="-7"/>
-        <location line="+351"/>
+        <location line="+353"/>
         <source>Steam</source>
         <translation>Steam</translation>
     </message>
     <message>
-        <location line="-350"/>
+        <location line="-352"/>
         <source>Steam app ID</source>
         <translation>Steam app ID</translation>
     </message>
@@ -596,7 +561,7 @@ This can&apos;t be undone.</translation>
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+219"/>
+        <location line="+221"/>
         <source>Read</source>
         <translation>Read</translation>
     </message>
@@ -626,7 +591,12 @@ This can&apos;t be undone.</translation>
         <translation>Manage</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
+        <source>Permissions</source>
+        <translation>Permissions</translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>Uninstall…</source>
         <translation>Uninstall…</translation>
     </message>
@@ -641,7 +611,7 @@ This can&apos;t be undone.</translation>
         <translation>Close the game to uninstall it.</translation>
     </message>
     <message>
-        <location line="-907"/>
+        <location line="-909"/>
         <source>Install</source>
         <translation>Install</translation>
     </message>
@@ -652,7 +622,7 @@ This can&apos;t be undone.</translation>
         <translation>Update</translation>
     </message>
     <message>
-        <location line="+672"/>
+        <location line="+661"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Needs a newer RuyaOS than this console has. It stays installed.</translation>
     </message>
@@ -678,7 +648,7 @@ This can&apos;t be undone.</translation>
         <translation>The update adds: %1</translation>
     </message>
     <message>
-        <location line="-700"/>
+        <location line="-689"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Open</translation>
@@ -716,7 +686,7 @@ This can&apos;t be undone.</translation>
         <translation>Try again</translation>
     </message>
     <message>
-        <location line="+391"/>
+        <location line="+380"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -781,6 +751,101 @@ This can&apos;t be undone.</translation>
         <location line="+1"/>
         <source>An admin&apos;s PIN is needed to install this app.</source>
         <translation>An admin&apos;s PIN is needed to install this app.</translation>
+    </message>
+</context>
+<context>
+    <name>AppPermissionsPage</name>
+    <message>
+        <location filename="../qml/AppPermissionsPage.qml" line="+59"/>
+        <source>The app may lose its saves or settings outside its own folder.</source>
+        <translation>The app may lose its saves or settings outside its own folder.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Takes effect after the app is closed and opened again.</source>
+        <translation>Takes effect after the app is closed and opened again.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Takes effect next time you open it.</source>
+        <translation>Takes effect next time you open it.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>High risk · %1</source>
+        <translation>High risk · %1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+132"/>
+        <source>High risk</source>
+        <translation>High risk</translation>
+    </message>
+    <message>
+        <location line="-128"/>
+        <source>Only an admin can change this.</source>
+        <translation>Only an admin can change this.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This permission can&apos;t be withdrawn.</source>
+        <translation>This permission can&apos;t be withdrawn.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+93"/>
+        <source>This app is not installed any more.</source>
+        <translation>This app is not installed any more.</translation>
+    </message>
+    <message>
+        <location line="-91"/>
+        <source>The permission could not be changed. Try again.</source>
+        <translation>The permission could not be changed. Try again.</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <source>Loading…</source>
+        <translation>Loading…</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Permissions can&apos;t be read right now.</source>
+        <translation>Permissions can&apos;t be read right now.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Try again</source>
+        <translation>Try again</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>This app asks for no special permissions.</source>
+        <translation>This app asks for no special permissions.</translation>
+    </message>
+    <message>
+        <location line="+34"/>
+        <source>Withdrawn</source>
+        <translation>Withdrawn</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Allowed</source>
+        <translation>Allowed</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Reset to the app&apos;s defaults</source>
+        <translation>Reset to the app&apos;s defaults</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Only an admin can change these.</source>
+        <translation>Only an admin can change these.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Apps can&apos;t reach the console&apos;s own services.</source>
+        <translation>Apps can&apos;t reach the console&apos;s own services.</translation>
     </message>
 </context>
 <context>
@@ -4075,6 +4140,69 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>PermissionText</name>
+    <message>
+        <location filename="../qml/PermissionText.qml" line="+38"/>
+        <source>Plays sound</source>
+        <translation>Plays sound</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Uses game controllers</source>
+        <translation>Uses game controllers</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Uses the network</source>
+        <translation>Uses the network</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reads and writes files in your home folder</source>
+        <translation>Reads and writes files in your home folder</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reads and writes all files on this device</source>
+        <translation>Reads and writes all files on this device</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Accesses all devices</source>
+        <translation>Accesses all devices</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Can control other programs on this device</source>
+        <translation>Can control other programs on this device</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Sound and microphone</source>
+        <translation>Sound and microphone</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Not controllable yet (they share one connection)</source>
+        <translation>Not controllable yet (they share one connection)</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Always allowed: a console needs its controllers</source>
+        <translation>Always allowed: a console needs its controllers</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Can&apos;t be withdrawn yet: apps break without it</source>
+        <translation>Can&apos;t be withdrawn yet: apps break without it</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Can&apos;t be withdrawn on this console</source>
+        <translation>Can&apos;t be withdrawn on this console</translation>
+    </message>
+</context>
+<context>
     <name>PinPad</name>
     <message>
         <location filename="../qml/PinPad.qml" line="+50"/>
@@ -4694,6 +4822,32 @@ This can&apos;t be undone.</translation>
         <location line="+1"/>
         <source>Nothing</source>
         <translation>Nothing</translation>
+    </message>
+</context>
+<context>
+    <name>PrivacyPane</name>
+    <message>
+        <location filename="../qml/PrivacyPane.qml" line="+44"/>
+        <source>App permissions</source>
+        <translation>App permissions</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No apps are installed.</source>
+        <translation>No apps are installed.</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+11"/>
+        <source>%n withdrawn</source>
+        <translation>
+            <numerusform>%n withdrawn</numerusform>
+            <numerusform>%n withdrawn</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>What each app may do on this console, for every profile. An admin can withdraw an app&apos;s network, devices and files.</source>
+        <translation>What each app may do on this console, for every profile. An admin can withdraw an app&apos;s network, devices and files.</translation>
     </message>
 </context>
 <context>
@@ -5402,12 +5556,12 @@ This can&apos;t be undone.</translation>
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+13"/>
-        <location line="+123"/>
+        <location line="+125"/>
         <source>Settings</source>
         <translation>Settings</translation>
     </message>
     <message>
-        <location line="-87"/>
+        <location line="-89"/>
         <source>My profile</source>
         <translation>My profile</translation>
     </message>
@@ -5448,6 +5602,11 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>Privacy</source>
+        <translation>Privacy</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Storage</source>
         <translation>Storage</translation>
     </message>
@@ -5472,7 +5631,7 @@ This can&apos;t be undone.</translation>
         <translation>About</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+24"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -5482,7 +5641,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+314"/>
+        <location line="+327"/>
         <source>Coming soon</source>
         <translation>Coming soon</translation>
     </message>
@@ -5765,7 +5924,7 @@ This can&apos;t be undone.</translation>
         <translation>The screen did not answer, so the previous resolution is back.</translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+65"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Wallpaper could not be loaded</translation>
     </message>
@@ -5861,7 +6020,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 was uninstalled.</translation>
     </message>
     <message>
-        <location line="+532"/>
+        <location line="+533"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -5883,7 +6042,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1940"/>
+        <location line="-1942"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -5914,7 +6073,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1671"/>
+        <location line="+1673"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
