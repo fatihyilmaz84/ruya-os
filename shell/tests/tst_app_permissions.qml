@@ -336,7 +336,7 @@ Item {
             wait(400)
         }
 
-        function shots(lang) {
+        function shots(dir, lang) {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             DeviceSettings.language = lang
@@ -344,7 +344,7 @@ Item {
             installStream()
             openPane()
             settle()
-            grabImage(tc.shell).save(shotsDir + "/privacy-pane-" + lang + ".png")
+            grabImage(tc.shell).save(dir + "privacy-pane-" + lang + ".png")
             keyClick(Qt.Key_Down)
             keyClick(Qt.Key_Return)                      // Game Streamer
             tryCompare(tc.shell, "currentPage", "appPermissions")
@@ -352,7 +352,7 @@ Item {
             keyClick(Qt.Key_Return)                      // withdraw the network: its note
             tryVerify(() => row("permNote_network").visible, 2000)
             settle()
-            grabImage(tc.shell).save(shotsDir + "/app-permissions-admin-" + lang + ".png")
+            grabImage(tc.shell).save(dir + "app-permissions-admin-" + lang + ".png")
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => appRow(tc.stream).activeFocus, 2000)
@@ -360,11 +360,12 @@ Item {
             keyClick(Qt.Key_Return)                      // Block Puzzle: only what stays
             tryCompare(tc.shell, "currentPage", "appPermissions")
             settle()
-            grabImage(tc.shell).save(shotsDir + "/app-permissions-fixed-" + lang + ".png")
+            grabImage(tc.shell).save(dir + "app-permissions-fixed-" + lang + ".png")
         }
 
-        function test_zz_screenshots() { shots("en") }
-        function test_zz_screenshots_tr() { shots("tr") }
+        // The shots runner picks the functions that save to `shotsDir + "/` themselves (dev.ps1).
+        function test_zz_screenshots() { shots(shotsDir + "/", "en") }
+        function test_zz_screenshots_tr() { shots(shotsDir + "/", "tr") }
 
         function test_zz_screenshots_read_only() {
             if (!shotsDir)
