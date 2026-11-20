@@ -150,6 +150,11 @@ impl Commit for LoggedCommit {
         );
         Ok(())
     }
+
+    fn uninstall(&self, id: &str) -> Result<(), CommitError> {
+        eprintln!("ruya-play --session: would uninstall play.{id}");
+        Ok(())
+    }
 }
 
 /// The image's blocklist; `--session` may point `RUYA_PLAY_BLOCKLIST` at a copy.

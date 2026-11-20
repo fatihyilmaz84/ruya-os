@@ -3026,7 +3026,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>InstallPackagePage</name>
     <message>
-        <location filename="../qml/InstallPackagePage.qml" line="+68"/>
+        <location filename="../qml/InstallPackagePage.qml" line="+72"/>
         <source>Developer</source>
         <translation>Developer</translation>
     </message>
@@ -3061,7 +3061,7 @@ This can&apos;t be undone.</translation>
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+324"/>
+        <location line="+334"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
@@ -4215,6 +4215,11 @@ This can&apos;t be undone.</translation>
         <location line="+1"/>
         <source>Checking the pictures</source>
         <translation>Checking the pictures</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Uninstalling</source>
+        <translation>Uninstalling</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -5852,7 +5857,7 @@ This can&apos;t be undone.</translation>
         <translation>Your activity</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Uninstall…</source>
         <translation>Uninstall…</translation>
     </message>
@@ -5862,7 +5867,7 @@ This can&apos;t be undone.</translation>
         <translation>Store options are unavailable right now.</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+136"/>
         <source>Could not uninstall %1. Try again.</source>
         <translation>Could not uninstall %1. Try again.</translation>
     </message>
@@ -5894,7 +5899,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1940"/>
+        <location line="-1955"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -5925,7 +5930,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1671"/>
+        <location line="+1686"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
@@ -7452,13 +7457,13 @@ This can&apos;t be undone.</translation>
 <context>
     <name>UninstallConfirm</name>
     <message>
-        <location filename="../qml/UninstallConfirm.qml" line="+34"/>
-        <location line="+220"/>
+        <location filename="../qml/UninstallConfirm.qml" line="+39"/>
+        <location line="+225"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-220"/>
+        <location line="-225"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -7478,7 +7483,7 @@ This can&apos;t be undone.</translation>
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+48"/>
         <location line="+25"/>
         <location line="+5"/>
         <source>Uninstall %1?</source>
@@ -7495,7 +7500,7 @@ This can&apos;t be undone.</translation>
         <translation>Saved data of every profile is deleted too. This can&apos;t be undone.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+13"/>
         <source>Also delete saved data</source>
         <translation>Also delete saved data</translation>
     </message>

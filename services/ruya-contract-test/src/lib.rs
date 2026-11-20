@@ -678,6 +678,7 @@ mod tests {
                 "Input1.xml Player",
                 "Library1.xml Item",
                 "Play1.xml Inspect",
+                "Play1.xml Job",
                 "Session1.xml Running",
                 "Session1.xml Session",
                 "Store1.xml App"

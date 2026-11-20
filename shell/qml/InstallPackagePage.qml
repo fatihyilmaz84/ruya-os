@@ -35,16 +35,20 @@ Page {
     // Installed, then put on the block list: it will not start; Remove takes the place of Play.
     readonly property bool revokedInstalled: installed && info.revoked === true
     // The Library item that starts the installed game (Play); absent until the Library has listed it.
-    readonly property var libraryItem: info ? (Library.items.find(i => Library.sessionAppId(i.id) === "play." + info.id) ?? null) : null
+    readonly property var libraryItem: info ? (Library.items.find(i => Library.sessionAppId(i.id) === appId) ?? null) : null
 
     // The job: a request of this page that is not finished, or a job the service runs for this path (also one
     // started by an earlier visit to this page: closing the page does not cancel).
     property bool requested: false
     readonly property var job: Play.jobs[path] ?? null
-    readonly property bool working: requested || job !== null
-    readonly property string phase: job ? (job.phase ?? "") : "staging"
-    readonly property int percent: job ? job.percent : 0
-    readonly property bool cancelShown: working && PlayCopy.cancelAllowed(phase)
+    // The installed app's Remove (keyed by its app id): from the call on (Play.inFlight), or a job the service
+    // runs for it. Remove is not offered again while it runs, and it has no Cancel.
+    readonly property var removeJob: appId !== "" ? (Play.jobs[appId] ?? null) : null
+    readonly property bool removing: appId !== "" && (removeJob !== null || Play.inFlight.indexOf(appId) >= 0)
+    readonly property bool working: requested || job !== null || removing
+    readonly property string phase: job ? (job.phase ?? "") : removing ? "removing" : "staging"
+    readonly property int percent: job ? job.percent : removeJob ? removeJob.percent : 0
+    readonly property bool cancelShown: working && !removing && PlayCopy.cancelAllowed(phase)
     readonly property bool anyModal: confirmSheet.shown || signerSheet.shown || resultDialog.shown || pad.shown
 
     // "loading" | "install" | "play" | "busy" | "none": which buttons there are (keys only, so a progress tick
@@ -123,10 +127,15 @@ Page {
             Library.launch(libraryItem.id)
     }
 
-    // Remove an installed game that was revoked: the Shell's Uninstall dialog (it asks an admin's PIN itself).
+    // The Flatpak id of the installed app (the key of its Remove job).
+    readonly property string appId: info ? "play." + info.id : ""
+
+    // Remove an installed game that was revoked: the Shell's Uninstall dialog (it asks an admin's PIN itself,
+    // and asks Play to remove it). The context makes the Shell toast how it ended; this page re-inspects when
+    // the job is over (`onJobFinished`).
     function removeGame() {
         if (info)
-            uninstallConfirm?.open("play." + info.id, title)
+            uninstallConfirm?.open(appId, title, { itemId: "", surface: "package", title: title })
     }
 
     function press(which) {
@@ -173,9 +182,19 @@ Page {
             } else if (op === "cancel" && key === page.path) {
                 Sfx.error()
                 Notifications.show(PlayCopy.methodStatusText(status), "error")
+            } else if (op === "remove" && key === page.appId) {
+                // Refused: the Shell toasts it (uninstallFinished); the page is no longer busy, so Remove is back.
+                Qt.callLater(page.focusMain)
             }
         }
-        function onJobFinished(key, status) {
+        function onJobFinished(key, status, kind) {
+            if (kind === "remove" && key === page.appId) {
+                // The app is gone (or still there, when Flatpak failed): what the page offers follows Inspect;
+                // the busy page had no button, so the focus goes back to the main one.
+                page.inspect()
+                Qt.callLater(page.focusMain)
+                return
+            }
             if (key !== page.path)
                 return
             page.requested = false

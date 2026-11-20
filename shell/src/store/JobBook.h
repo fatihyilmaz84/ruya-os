@@ -18,6 +18,7 @@ struct StoreJob
     QString reason; // "" or "interrupted" (the service died while it ran)
     uint percent = 0;
     QString phase;
+    QString name;   // Play1 only: the app's display name ("" = not known)
 };
 
 // The shell's bookkeeping of the service's jobs, shared by the D-Bus client and the mock so that a

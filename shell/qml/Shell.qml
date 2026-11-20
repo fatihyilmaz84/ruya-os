@@ -2080,15 +2080,17 @@ FocusScope {
         // Uninstall…: an installed Flatpak app the Store knows, that does not run and has no Store job
         // on its card (a row that would start a job is hidden while one runs; one of ours counts from the moment
         // it was asked, the Store lists a job only once it has made progress).
-        if (appId !== "" && item.source === "flatpak" && !running && !closing && Store.available
-                && Store.app(appId).id !== undefined && Store.jobs[appId] === undefined && uninstallRuns[appId] === undefined)
+        // A .play app belongs to Play (the Store has no record of it): the same test on Play's jobs and reach.
+        const owned = Play.isPlayApp(appId) ? Play.available && Play.jobs[appId] === undefined
+                                            : Store.available && Store.app(appId).id !== undefined && Store.jobs[appId] === undefined
+        if (appId !== "" && item.source === "flatpak" && !running && !closing && owned && uninstallRuns[appId] === undefined)
             rows.push({ id: "uninstall", label: qsTr("Uninstall…"), icon: "delete", divider: rows.length > 0 })
         return rows
     }
 
     // The note that ends a card's menu when the Store does not answer: its rows were left out.
     function gameNote(id) {
-        return Library.sessionAppId(id) !== "" && !Store.available ? qsTr("Store options are unavailable right now.") : ""
+        return Library.sessionAppId(id) !== "" && !Play.isPlayApp(Library.sessionAppId(id)) && !Store.available ? qsTr("Store options are unavailable right now.") : ""
     }
 
     function optionRows(surface, id) {
@@ -2158,7 +2160,8 @@ FocusScope {
     // ---- An install ends while its package page is closed (04 §5.4 Result, RUY-809) ----
     // The package page reports its own job. When none is open for the path, the Shell does, so a player who
     // went Back mid-install still learns how it ended: success and failure toast, cancelled says nothing.
-    // The name and size come from the last Inspect of that path (the page that started the job asked it).
+    // The name and size come from the last Inspect of that path (the page that started the job asked it), the
+    // name else from the service's job table. Verify jobs never toast; a remove ends in `uninstallFinished`.
     property var playInspected: ({})            // path -> { name, size }
 
     function packagePageOpen(path) {
@@ -2172,12 +2175,24 @@ FocusScope {
             known[path] = { name: record.name ?? "", size: record.size ?? 0 }
             root.playInspected = known
         }
-        function onJobFinished(key, status) {
-            if (status === "cancelled" || root.packagePageOpen(key))
+        // A refused Remove (busy, forbidden, unknown-app, failed) never becomes a job: it ends like a failed one.
+        function onAnswered(op, key, status) {
+            if (op === "remove" && status !== "ok")
+                root.uninstallFinished(key, status)
+        }
+        function onJobFinished(key, status, kind, name) {
+            if (kind === "remove") {
+                root.uninstallFinished(key, status)     // its own toast; a card's removal moves the focus
+                return
+            }
+            // Only an install says "Installed"; a verify has its own page, and an unknown job says nothing.
+            if (kind !== "install" || status === "cancelled" || root.packagePageOpen(key))
                 return
             const known = root.playInspected[key] ?? null
             if (status === "ok") {
-                Notifications.show(PlayCopy.installedToast(), "success", "", "", known ? known.name : "")
+                // The name: from the last Inspect of the path, else the service's job table (a shell that
+                // restarted mid-install never inspected it).
+                Notifications.show(PlayCopy.installedToast(), "success", "", "", known ? known.name : name)
                 return
             }
             const free = Storage.internal.valid ? Storage.internal.freeBytes : -1
@@ -2188,8 +2203,8 @@ FocusScope {
     }
 
     // ---- Uninstall from a card (02 §1.7, RUY-499) ----
-    // The dialog (UninstallConfirm, also the app page's) asks the Store; the Shell follows the job of the
-    // apps it started: success toasts and moves the focus once the card has left the list (the Library
+    // The dialog (UninstallConfirm, also the app page's) asks the service that owns the app (the Store, or Play
+    // for a .play app); the Shell follows the job of the apps it started: success toasts and moves the focus once the card has left the list (the Library
     // service sees the removal a little later than the job's end), failure toasts and leaves the focus.
     property var uninstallRuns: ({})            // appId -> { itemId, surface, page, title, index }
     property var uninstallGone: []              // the runs that finished well and wait for their card to leave

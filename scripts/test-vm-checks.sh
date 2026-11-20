@@ -1633,6 +1633,11 @@ grep -q 'chmod +x "\$pack"' "$here/vm-play-check.sh" && pass "vm-play-check.sh m
 # RUY-834: the verify mode installs the sample, damages one deployed file and expects the job to say so.
 grep -q 'if \[ "\$mode" = verify \]' "$here/vm-play-check.sh" && pass "vm-play-check.sh has a verify mode" || fail "vm-play-check.sh: no verify mode"
 grep -q 'call Verify s' "$here/vm-play-check.sh" && pass "vm-play-check.sh calls Play1.Verify" || fail "vm-play-check.sh never calls Verify"
+# RUY-816: the remove mode calls Play1.Remove with and without admin_approved, waits for the job and expects the
+# records and the deployment gone; its busctl call has the contract's signature (s, a{sv}).
+grep -q 'if \[ "\$mode" = remove \]' "$here/vm-play-check.sh" && pass "vm-play-check.sh has a remove mode" || fail "vm-play-check.sh: no remove mode"
+grep -c "call Remove 'sa{sv}'" "$here/vm-play-check.sh" | grep -qx 3 && grep -A4 'name="Remove"' "$here/../api/dbus/org.ruyaos.Play1.xml" | grep -q 'name="options" type="a{sv}"' && pass "vm-play-check.sh calls Play1.Remove as (s, a{sv}), the signature of Play1.xml" || fail "vm-play-check.sh: its Remove calls do not match Play1.xml"
+grep -q '"remove", "removing", "ok"' "$here/vm-play-check.sh" && pass "vm-play-check.sh expects kind remove, phase removing in the job table" || fail "vm-play-check.sh: the remove job is not checked in state/jobs"
 grep -q 'printf x >> "\$app/\$victim"' "$here/vm-play-check.sh" && pass "vm-play-check.sh damages a deployed file as root" || fail "vm-play-check.sh: no damaged file"
 grep -q '"ok invalid-package"' "$here/vm-play-check.sh" && grep -q 'package.hash_mismatch' "$here/vm-play-check.sh" && pass "vm-play-check.sh expects invalid-package with package.hash_mismatch" || fail "vm-play-check.sh: the damaged file is not expected to be reported"
 grep -q 'truncate -s "\$size"' "$here/vm-play-check.sh" && pass "vm-play-check.sh undoes the damage" || fail "vm-play-check.sh leaves the damaged file"
@@ -1692,7 +1697,7 @@ out="$(bash "$here/vm-play-check.sh" runid "$short" 2>&1)"; rc=$?
 [ "$rc" = 0 ] && [ "${#out}" -le "$rust_max" ] && pass "vm-play-check.sh runid: an id that fits the limit passes" || fail "vm-play-check.sh runid: '$out' (rc $rc)"
 grep -q 'appid="\$(run_id "\$appid")"' "$here/vm-play-check.sh" && grep -q 'with_id "\$zip" "\$work/run.play.zip"' "$here/vm-play-check.sh" && pass "vm-play-check.sh check builds every package from the run-id copy (RUY-879)" || fail "vm-play-check.sh check: not built from the run-id copy"
 ids="$(grep -o 'appid="\$(pkg_id "\$appid" [a-z]*)"' "$here/vm-play-check.sh" | sort | tr '\n' ' ')"
-[ "$ids" = 'appid="$(pkg_id "$appid" perms)" appid="$(pkg_id "$appid" verify)" ' ] && pass "vm-play-check.sh: verify and perms install under their own ids, through pkg_id (RUY-877, RUY-887)" || fail "vm-play-check.sh: mode ids '$ids'"
+[ "$ids" = 'appid="$(pkg_id "$appid" perms)" appid="$(pkg_id "$appid" remove)" appid="$(pkg_id "$appid" verify)" ' ] && pass "vm-play-check.sh: remove, verify and perms install under their own ids, through pkg_id (RUY-877, RUY-887)" || fail "vm-play-check.sh: mode ids '$ids'"
 ! grep -Eq 'appid="\$appid\.|run_id\(\) \{ echo' "$here/vm-play-check.sh" && pass "vm-play-check.sh: no id is made by appending a dotted part (RUY-887)" || fail "vm-play-check.sh: an id with an appended dotted part"
 # RUY-887: every mode's id keeps a last part with '-' valid (verify, perms, the library check, check).
 for part in verify perms library; do
@@ -1776,7 +1781,7 @@ expect_contains "library play: a missing vm-play-check.sh FAIL names its path" "
 ! grep -q 'm\["id"\] = ' "$here/vm-library-check.sh" && grep -q '"\$playcheck" withid' "$here/vm-library-check.sh" && pass "vm-library-check.sh has no copy of the id rewrite, it calls vm-play-check.sh withid (RUY-878)" || fail "vm-library-check.sh: its own id rewrite"
 grep -q 'play_pkg_id "\$play_id"' "$here/vm-library-check.sh" && pass "vm-library-check.sh play installs under the id playid prints" || fail "vm-library-check.sh play does not use play_pkg_id"
 n="$(grep -c 'with_id "\$zip"' "$here/vm-play-check.sh")"; m="$(grep 'with_id "\$zip"' "$here/vm-play-check.sh" | grep -c 'bad "with_id.*exit 1')"
-[ "$n" = 3 ] && [ "$m" = 3 ] && pass "vm-play-check.sh: a failed with_id ends the mode with one FAIL (RUY-878)" || fail "vm-play-check.sh: with_id calls $n, ending the mode $m"
+[ "$n" = 4 ] && [ "$m" = 4 ] && pass "vm-play-check.sh: a failed with_id ends the mode with one FAIL (RUY-878)" || fail "vm-play-check.sh: with_id calls $n, ending the mode $m"
 grep -q 'play_clean$' "$here/vm-library-check.sh" && grep -q 'rm -f "$play_state/incoming/vm-library-check.play.zip"' "$here/vm-library-check.sh" && pass "vm-library-check.sh play removes the sample and the incoming file" || fail "vm-library-check.sh play: no clean-up"
 
 echo "== .play VM files (RUY-860) =="

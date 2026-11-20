@@ -441,7 +441,7 @@ fn the_job_record_has_the_contracts_keys() {
     let keys: Vec<&str> = rec.keys().map(String::as_str).collect();
     assert_eq!(
         keys,
-        vec!["app", "id", "kind", "path", "percent", "phase", "reason", "state", "status"]
+        vec!["app", "id", "kind", "name", "path", "percent", "phase", "reason", "state", "status"]
     );
     assert_eq!(&*rec["status"], &Value::from("ok"));
     assert_eq!(&*rec["percent"], &Value::from(100u32));

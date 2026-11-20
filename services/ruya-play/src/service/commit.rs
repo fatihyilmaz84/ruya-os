@@ -27,7 +27,7 @@
 use crate::core::deps::{Commit, CommitError, CommitRequest, RecommitRequest};
 use crate::core::status::Phase;
 use ruya_play_format::limits::{windows_runner, I386_LIB_DIR, ROOT_FILES};
-use ruya_play_format::manifest::Manifest;
+use ruya_play_format::manifest::{english, Manifest};
 use ruya_play_format::table::RESERVED_TOP_LEVEL;
 use ruya_play_trust::{grants, metadata_sections, Assessment, Gate, TrustRecord};
 use std::path::{Path, PathBuf};
@@ -100,14 +100,6 @@ fn keyfile_value(text: &str) -> String {
         .filter(|c| !c.is_control())
         .collect::<String>()
         .replace('\\', "\\\\")
-}
-
-/// The English text of a localized map, else its first entry.
-fn english(map: &std::collections::BTreeMap<String, String>) -> String {
-    map.get("en")
-        .or_else(|| map.values().next())
-        .cloned()
-        .unwrap_or_default()
 }
 
 /// One `[Extension <id>]` point of the generated metadata: its mount folder in `/app` and its
@@ -213,10 +205,13 @@ pub fn desktop_entry(manifest: &Manifest) -> String {
     let mut out = String::from("[Desktop Entry]\nType=Application\n");
     out.push_str(&format!(
         "Name={}\n",
-        keyfile_value(&english(&manifest.name))
+        keyfile_value(english(&manifest.name).unwrap_or_default())
     ));
     if let Some(summary) = &manifest.summary {
-        out.push_str(&format!("Comment={}\n", keyfile_value(&english(summary))));
+        out.push_str(&format!(
+            "Comment={}\n",
+            keyfile_value(english(summary).unwrap_or_default())
+        ));
     }
     out.push_str(&format!("Exec={LAUNCH_COMMAND}\n"));
     out.push_str("Categories=Game;\n");
@@ -393,6 +388,20 @@ pub fn install(id: &str) -> Vec<String> {
         "-y",
         REMOTE,
         &app_ref(id),
+    ])
+}
+
+/// Uninstall the app `play.<id>` from the system installation (RUY-816). The player's data
+/// (`~/.var/app/play.<id>`) is not touched: there is no `--delete-data`, as `ruya-store`'s
+/// uninstall without `delete_data`.
+pub fn uninstall(id: &str) -> Vec<String> {
+    v(&[
+        "flatpak",
+        "uninstall",
+        "--system",
+        "--noninteractive",
+        "-y",
+        &app_id(id),
     ])
 }
 
@@ -742,5 +751,9 @@ impl Commit for FlatpakCommit {
         self.ensure_repo()?;
         let app = lay_out_installed(request)?;
         self.publish(&app, &request.manifest.id, &key, &mut |_, _| {})
+    }
+
+    fn uninstall(&self, id: &str) -> Result<(), CommitError> {
+        self.run(uninstall(id)).map(|_| ())
     }
 }

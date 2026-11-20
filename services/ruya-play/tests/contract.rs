@@ -6,7 +6,7 @@ use common::*;
 use ruya_contract_test::{
     assert_interfaces_are, assert_record_served, assert_serves, record_signatures,
 };
-use ruya_play::dbus::{inspect_record, PlayIface};
+use ruya_play::dbus::{inspect_record, job_record, PlayIface};
 use ruya_play::service::Environment;
 use std::sync::Arc;
 
@@ -57,4 +57,24 @@ fn play1_inspect_records_have_the_documented_keys() {
         ("an update", sample(&update)),
     ];
     assert_record_served("org.ruyaos.Play1.xml", "Inspect", &samples);
+}
+
+/// RUY-816: the keys of the ListJobs record are the ones the contract documents, for an install
+/// (with its name once the manifest was read) and for a remove.
+#[test]
+fn play1_job_records_have_the_documented_keys() {
+    let mut h = Setup::with(Pkg::signed(&game())).build();
+    assert_eq!(h.install().status, ruya_play::JobStatus::Ok);
+    deploy(&h, "com.example.mini", &game());
+    let (status, _) = h.importer.queue_remove("com.example.mini");
+    assert_eq!(status, ruya_play::MethodStatus::Ok);
+    h.importer.run_next(&mut |_| {});
+    let samples: Vec<_> = h
+        .importer
+        .list_jobs()
+        .iter()
+        .map(|j| (j.kind.as_str(), record_signatures(&job_record(j))))
+        .collect();
+    assert_eq!(samples.len(), 2);
+    assert_record_served("org.ruyaos.Play1.xml", "Job", &samples);
 }

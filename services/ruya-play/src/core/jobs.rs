@@ -30,6 +30,8 @@ pub const JOBS_FORMAT: u64 = 1;
 pub const MAX_JOBS_FILE_BYTES: u64 = 1024 * 1024;
 /// Most bytes of a package path in a record.
 pub const MAX_PATH_BYTES: usize = 4096;
+/// Most bytes of an app's display name in a record.
+pub const MAX_NAME_BYTES: usize = 1024;
 
 /// What a job does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,6 +40,8 @@ pub enum JobKind {
     Install,
     /// Re-hash an installed package (RUY-100).
     Verify,
+    /// Uninstall an installed package (RUY-816).
+    Remove,
 }
 
 impl JobKind {
@@ -46,6 +50,7 @@ impl JobKind {
         match self {
             JobKind::Install => "install",
             JobKind::Verify => "verify",
+            JobKind::Remove => "remove",
         }
     }
 
@@ -53,6 +58,7 @@ impl JobKind {
         match word {
             "install" => Some(JobKind::Install),
             "verify" => Some(JobKind::Verify),
+            "remove" => Some(JobKind::Remove),
             _ => None,
         }
     }
@@ -100,6 +106,9 @@ pub struct JobRecord {
     pub path: String,
     /// `play.<id>` once the manifest is read, else `""`.
     pub app: String,
+    /// The app's display name (English, else the first language) once known, else `""`
+    /// (RUY-816: a toast after a restart says what the job was about).
+    pub name: String,
     /// Where it is.
     pub state: JobState,
     /// Set once finished.
@@ -130,6 +139,7 @@ impl JobRecord {
             kind,
             path: path.to_string(),
             app: String::new(),
+            name: String::new(),
             state: JobState::Queued,
             status: None,
             interrupted: false,
@@ -221,6 +231,9 @@ struct RawJob {
     kind: String,
     path: String,
     app: String,
+    /// Added by RUY-816: a file written before it has no name.
+    #[serde(default)]
+    name: String,
     state: String,
     status: String,
     reason: String,
@@ -261,6 +274,7 @@ impl RawJob {
             kind: j.kind.as_str().into(),
             path: j.path.clone(),
             app: j.app.clone(),
+            name: j.name.clone(),
             state: j.state.as_str().into(),
             status: j.status.map_or("", JobStatus::as_str).into(),
             reason: j.reason().into(),
@@ -293,6 +307,7 @@ impl RawJob {
             && (state == JobState::Finished) == status.is_some()
             && plain_text(&self.path, MAX_PATH_BYTES)
             && valid_app(&self.app)
+            && plain_text(&self.name, MAX_NAME_BYTES)
             && valid_code(&self.error)
             && self.percent <= 100
             && self.started >= 0
@@ -302,6 +317,7 @@ impl RawJob {
             kind,
             path: self.path,
             app: self.app,
+            name: self.name,
             state,
             status,
             interrupted,

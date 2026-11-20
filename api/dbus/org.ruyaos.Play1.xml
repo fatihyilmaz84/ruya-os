@@ -3,7 +3,8 @@
 <!--
   org.ruyaos.Play1 — install .play packages (docs/specs/05-play-packages.md) from a drive: list the
   candidate packages on mounted drives, look inside one, install it as ONE job, re-verify an
-  installed one. Updates and feeds arrive later (T-241) and extend this file.
+  installed one, remove an installed one (RUY-816). Updates and feeds arrive later (T-241) and extend
+  this file.
   Served by ruya-play on the system bus at /org/ruyaos/Play1 (RUY-829; services/ruya-play,
   tests/contract.rs holds it to this file). The shell's mock backend, shell/src/play, follows the
   same contract off Linux. Verify (RUY-834) re-hashes the deployed
@@ -14,15 +15,18 @@
 
   Method statuses (stable API once released; the names of Store1 are reused where the meaning is
   the same):
-    "ok"                success (Install/Verify: the job was queued, its result arrives with
+    "ok"                success (Install/Verify/Remove: the job was queued, its result arrives with
                         JobFinished)
     "unknown-source"    the path is not one of the candidates ListSources lists (Inspect, Install):
                         a drive that was unplugged, or a path that was never offered
-    "unknown-app"       Verify of an app that is not installed from a .play
+    "unknown-app"       Verify or Remove of an app that is not installed from a .play: not a
+                        "play.<id>" id, not installed, or not made by this service (a Flathub app
+                        named play.<x> is never touched)
     "unknown-job"       Cancel of a job the service does not know
     "too-late"          Cancel of a job that passed the point of no return (phase "committing")
-    "busy"              a job for that package or app is already queued or running
-    "forbidden"         Install without options "admin_approved" = true. Sideloading needs an admin
+    "busy"              a job for that package or app is already queued or running (Remove: any
+                        queued or running job of the same app, an install or a verify of it)
+    "forbidden"         Install, Remove or SetDeveloperMode without options "admin_approved" = true. Sideloading needs an admin
                         or an admin's PIN (05 §18 item 4); the shell checks the PIN through
                         Profiles1, as for the Store (PINs never leave the shell's path to
                         Profiles1). Trust boundary, enforced by ruya-play: the option counts only
@@ -35,7 +39,8 @@
     "failed"            internal error
 
   JobFinished statuses (one job covers a package from the first byte read to "installed"):
-    "ok"                done (for Verify: every file matches play.files)
+    "ok"                done (for Verify: every file matches play.files; for Remove: the app is
+                        uninstalled and its build record forgotten)
     "invalid-package"   a rule of §4 was broken or a hash did not match (Inspect shows the problems;
                         for Verify: the installed payload no longer matches play.files)
     "bad-signature"     the package was changed after it was signed (05 §9.2: never downgraded to
@@ -47,7 +52,8 @@
     "unsupported"       format.too_new, or an architecture other than x86_64
     "disk-full"         not enough space
     "cancelled"         Cancel reached the job in time
-    "failed"            internal error
+    "failed"            internal error (Remove: Flatpak could not uninstall the app; every record is
+                        then left as it was)
 
   Jobs are named by an opaque string returned from Install/Verify. The shell sees ONE job from
   import to installed. The Flatpak transaction itself runs in ruya-store's one queue (05 §18 item 2)
@@ -55,7 +61,9 @@
   JobProgress phases, in this order (a phase may be skipped, never repeated): "staging" (copy into
   the staging directory, hashing as it goes), "verifying" (signature, key continuity, file table),
   "vetting-art" (decode and re-encode art and video), "committing" (the root part builds the OSTree
-  commit), "installing" (the Store's Flatpak transaction). A Verify job only reports "verifying".
+  commit), "installing" (the Store's Flatpak transaction). A Verify job only reports "verifying"; a Remove job only
+  "removing" (0, then 100 when Flatpak is done; it cannot be cancelled once Flatpak started, Cancel
+  answers "too-late").
   percent is 0-100 for the whole job and never decreases.
 
   Every list is a plain array and every record an a{sv} dictionary, so fields can be added later
@@ -168,6 +176,26 @@
       <arg name="job" type="s" direction="out"/>
     </method>
 
+    <!--
+      Remove an installed .play app (RUY-816): the one owner of its removal, so the shell never
+      sends a "play.*" app to Store1.Uninstall. A job (kind "remove", phase "removing") that runs
+      flatpak uninstall for play.<id> (system installation, no questions) in the same queue as the installs,
+      then records the uninstall (05 §9.2 record_uninstall) and forgets the installed build.
+      What Remove KEEPS, as Store1.Uninstall(id, delete_data = false) does: the player's data
+      (~/.var/app/play.<id> of every profile) and the key record of the id (key continuity: a package
+      for the same id under another key is still refused afterwards, so it cannot inherit the saves;
+      the admin's "forget this game's data and key", 05 §18 item 17, is the way out and is not built
+      yet). A failed uninstall leaves every record as it was. job is "" unless status is "ok".
+      options (a{sv}, unknown keys are ignored):
+        admin_approved  b   as for Install. Required (without it: "forbidden").
+    -->
+    <method name="Remove">
+      <arg name="app_id" type="s" direction="in"/>
+      <arg name="options" type="a{sv}" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="job" type="s" direction="out"/>
+    </method>
+
     <!-- Stop a queued or running job. status "ok" means the job will finish with "cancelled". -->
     <method name="Cancel">
       <arg name="job" type="s" direction="in"/>
@@ -193,12 +221,17 @@
     <!--
       The service's job table: the jobs queued or running and the last finished ones (the 20 most
       recent), oldest first. The shell calls it when it (re)connects and replaces what it shows by
-      the answer (same rules as Store1.ListJobs). One dictionary per job:
-        id       s   the job name returned by Install/Verify
-        kind     s   "install" | "verify"
-        path     s   install: the package path; verify: ""
-        app      s   the Flatpak id play.<id>, the key Verify takes (install: once the manifest
-                     is read, else "")
+      the answer (same rules as Store1.ListJobs).
+
+      Job record (a{sv}), keys:
+        id       s   the job name returned by Install/Verify/Remove
+        kind     s   "install" | "verify" | "remove"
+        path     s   install: the package path; verify, remove: ""
+        app      s   the Flatpak id play.<id>, the key Verify and Remove take (install: once the
+                     manifest is read, else "")
+        name     s   the app's display name in English (else its first language), so a toast after
+                     a shell restart can say what it is about; "" until known (install: once the
+                     manifest is read; verify, remove: from the installed app)
         state    s   "queued" | "running" | "finished"
         status   s   "" unless state is "finished", then the JobFinished status
         reason   s   "" or "interrupted" (the service died while the job ran; status "failed")

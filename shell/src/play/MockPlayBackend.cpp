@@ -210,6 +210,15 @@ void MockPlayBackend::reset()
     jobBook().forgetAll();
 }
 
+const MockPlayBackend::Fixture *MockPlayBackend::fixtureOf(const QString &manifestId) const
+{
+    for (const Fixture &f : fixtures()) {
+        if (f.info.id == manifestId)
+            return &f;
+    }
+    return nullptr;
+}
+
 const MockPlayBackend::Fixture *MockPlayBackend::fixtureAt(const QString &path) const
 {
     if (!m_mounted)
@@ -378,6 +387,8 @@ void MockPlayBackend::startJob(const QString &op, const QString &key, const QStr
     job.kind = kind;
     job.jobId = QStringLiteral("play-mock-%1").arg(++m_jobCounter);
     job.app = app;
+    if (const Fixture *f = fixtureOf(manifestIdOf(app)))
+        job.name = f->info.name;
     job.path = path;
     job.failAt = failAt;
     job.failStatus = failStatus;
@@ -422,8 +433,7 @@ void MockPlayBackend::verify(const QString &appId)
         answerLater(op, appId, QStringLiteral("invalid"));
         return;
     }
-    const QString id = appId.startsWith(QLatin1String("play.")) ? appId.mid(5) : appId;
-    if (!m_installed.contains(id)) {
+    if (!m_installed.contains(manifestIdOf(appId))) {
         answerLater(op, appId, QStringLiteral("unknown-app"));
         return;
     }
@@ -431,6 +441,27 @@ void MockPlayBackend::verify(const QString &appId)
     // A verify only ever reports "verifying": the whole 0-100 range is one phase.
     startJob(op, appId, QStringLiteral("verify"), appId, QString(), bad ? 60 : 101,
              bad ? QStringLiteral("invalid-package") : QString());
+}
+
+void MockPlayBackend::remove(const QString &appId, bool adminApproved)
+{
+    const QString op = QStringLiteral("remove");
+    if (failing(op, appId))
+        return;
+    // The service's order: the admin gate first, then the id.
+    if (!adminApproved) {
+        answerLater(op, appId, QStringLiteral("forbidden"));
+        return;
+    }
+    if (appId.isEmpty()) {
+        answerLater(op, appId, QStringLiteral("invalid"));
+        return;
+    }
+    if (!appId.startsWith(QLatin1String("play.")) || !m_installed.contains(manifestIdOf(appId))) {
+        answerLater(op, appId, QStringLiteral("unknown-app"));
+        return;
+    }
+    startJob(op, appId, QStringLiteral("remove"), appId, QString(), 101, QString());
 }
 
 void MockPlayBackend::cancel(const QString &key)
@@ -442,7 +473,9 @@ void MockPlayBackend::cancel(const QString &key)
         const Job &j = m_jobs.at(i);
         if (j.jobId != key && j.key != key)
             continue;
-        if (j.kind == QLatin1String("install") && j.percent >= 55) {
+        // An install passes the point of no return when it commits, a remove when Flatpak starts.
+        if ((j.kind == QLatin1String("install") && j.percent >= 55)
+            || (j.kind == QLatin1String("remove") && j.percent > 0)) {
             answerLater(op, key, QStringLiteral("too-late"));
             return;
         }
@@ -454,6 +487,20 @@ void MockPlayBackend::cancel(const QString &key)
         return;
     }
     answerLater(op, key, QStringLiteral("unknown-job"));
+}
+
+QString MockPlayBackend::manifestIdOf(const QString &appId)
+{
+    return appId.startsWith(QLatin1String("play.")) ? appId.mid(5) : appId;
+}
+
+QString MockPlayBackend::phaseOf(const Job &job)
+{
+    if (job.kind == QLatin1String("verify"))
+        return QStringLiteral("verifying");
+    if (job.kind == QLatin1String("remove"))
+        return QStringLiteral("removing");
+    return phaseAt(job.percent);
 }
 
 QString MockPlayBackend::phaseAt(int percent)
@@ -477,8 +524,7 @@ void MockPlayBackend::step()
     }
     Job &job = m_jobs.first();
     job.percent = std::min(100, job.percent + 5);
-    const QString phase = job.kind == QLatin1String("verify") ? QStringLiteral("verifying") : phaseAt(job.percent);
-    jobBook().onProgress(job.jobId, uint(job.percent), phase);
+    jobBook().onProgress(job.jobId, uint(job.percent), phaseOf(job));
     if (m_pauseAt > 0 && job.percent >= m_pauseAt && job.percent < job.failAt && job.percent < 100) {
         m_pauseAt = 0;
         m_paused = true;
@@ -495,6 +541,8 @@ void MockPlayBackend::step()
             const Fixture *f = fixtureAt(done.path);
             if (f)
                 m_installed.insert(f->info.id, f->info.build);
+        } else if (done.kind == QLatin1String("remove")) {
+            m_installed.remove(manifestIdOf(done.app));
         }
         finish(done, QStringLiteral("ok"));
     }
@@ -505,7 +553,7 @@ void MockPlayBackend::step()
 void MockPlayBackend::finish(const Job &job, const QString &status, const QString &reason)
 {
     m_finishedJobs.append({job.jobId, job.key, job.kind, QStringLiteral("finished"), status, reason,
-                           status == QLatin1String("ok") ? 100u : uint(job.percent), QString()});
+                           status == QLatin1String("ok") ? 100u : uint(job.percent), QString(), job.name});
     while (m_finishedJobs.size() > 20)
         m_finishedJobs.removeFirst();
     jobBook().onFinished(job.jobId, status);
@@ -519,9 +567,7 @@ QList<StoreJob> MockPlayBackend::jobTable() const
         const bool running = i == 0 && !m_paused;
         const bool started = j.percent > 0;
         out.append({j.jobId, j.key, j.kind, running || started ? QStringLiteral("running") : QStringLiteral("queued"),
-                    QString(), QString(), uint(j.percent),
-                    started ? (j.kind == QLatin1String("verify") ? QStringLiteral("verifying") : phaseAt(j.percent))
-                            : QString()});
+                    QString(), QString(), uint(j.percent), started ? phaseOf(j) : QString(), j.name});
     }
     return out;
 }
@@ -547,11 +593,17 @@ void MockPlayBackend::loseService()
     for (const Job &j : std::as_const(m_jobs)) {
         // The service cannot resume: the job ends as failed, interrupted.
         m_finishedJobs.append({j.jobId, j.key, j.kind, QStringLiteral("finished"), QStringLiteral("failed"),
-                               QStringLiteral("interrupted"), uint(j.percent), QString()});
+                               QStringLiteral("interrupted"), uint(j.percent), QString(), j.name});
     }
     m_timer.stop();
     m_jobs.clear();
     emit serviceLost(jobBook().lose());
+}
+
+void MockPlayBackend::restartShell()
+{
+    jobBook().forgetAll();
+    listJobs();
 }
 
 void MockPlayBackend::regainService()
