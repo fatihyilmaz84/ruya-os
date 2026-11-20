@@ -1867,7 +1867,7 @@ printf '#!/bin/sh\n[ "$1" = -n ] && shift\nexec "$@"\n' > "$rsh/unshare"
 printf '#!/bin/sh\nexit 0\n' > "$rsh/chown"
 chmod +x "$rsh"/*
 printf '%s %s\n' "$rr/var/lib/flatpak/extension/org.ruyaos.Play.Launcher/x86_64/1" /usr/lib/ruyaos/play/launcher \
-    "$rr/var/lib/flatpak/extension/org.ruyaos.Play.Runner.ProtonGE11/x86_64/1" /usr/lib/ruyaos/play/runners/ProtonGE11 > "$tmp/links.good"
+    "$rr/var/lib/flatpak/extension/org.ruyaos.Play.Runner.ProtonGE11/x86_64/1" /usr/lib/ruyaos/play/runners/ProtonGE11     "$rr/var/lib/flatpak/extension/com.valvesoftware.Steam.CompatibilityTool.ProtonGE11/x86_64/stable" /usr/lib/ruyaos/play/runners/ProtonGE11 > "$tmp/links.good"
 grep -v Launcher "$tmp/links.good" > "$tmp/links.nolauncher"
 sed 's#/usr/lib/ruyaos/play/runners/ProtonGE11$#/usr/lib/ruyaos/play/runners/Other#' "$tmp/links.good" > "$tmp/links.elsewhere"
 rc_() { # <links file> [VAR=value ...]: the check against the fake image
@@ -1939,7 +1939,7 @@ rm -f "$steam_cfg"
 out="$(sc_)"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner steam: no profile that started Steam FAILs" "$out" "FAIL no profile has started Steam yet" || fail "runner steam: no config: exit $rc"
 steam_config GE-Proton11-12
-rm "$sx/stable"
+rm -rf "$sx/stable"
 out="$(sc_)"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner steam: a runner not linked for Steam FAILs" "$out" "FAIL ProtonGE11: no compatibilitytool.vdf" || fail "runner steam: no link: exit $rc"
 
