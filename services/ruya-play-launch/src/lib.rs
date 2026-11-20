@@ -328,12 +328,11 @@ fn setup(
     state: &mut State,
 ) -> Result<(), Failure> {
     os.log(&format!("setup step {}", step.id));
-    let mut outcome = os.run(&step.command, SETUP_TIMEOUT);
-    if let (Some(then), Ok((Exit::Code(0), took))) = (&step.then, &outcome) {
-        outcome = os
-            .run(then, SETUP_TIMEOUT.saturating_sub(*took))
-            .map(|(e, t)| (e, t + *took));
-    }
+    let cmds: Vec<Command> = std::iter::once(&step.command)
+        .chain(&step.then)
+        .cloned()
+        .collect();
+    let outcome = os.run(&cmds, SETUP_TIMEOUT);
     let why = match outcome {
         Ok((Exit::Code(0), _)) => None,
         Ok((exit, _)) => Some(exit_text(exit)),

@@ -74,6 +74,17 @@ impl NotFollowed {
     }
 }
 
+/// The deepest folder level a copy goes (a prefix template, a save); deeper is refused.
+pub const MAX_COPY_DEPTH: usize = 64;
+
+/// The error of a copy whose tree is deeper than [`MAX_COPY_DEPTH`].
+pub fn too_deep(path: &str) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidInput,
+        format!("{path} is more than {MAX_COPY_DEPTH} folders deep"),
+    )
+}
+
 /// The error of a path where a folder should be but a file is.
 pub fn not_a_folder(path: &str) -> io::Error {
     io::Error::new(
@@ -89,8 +100,9 @@ pub trait LaunchOs {
     /// The names and kinds in the folder `path` (links not followed). A name that is not UTF-8 is
     /// left out.
     fn list(&self, path: &str) -> io::Result<Vec<(String, Kind)>>;
-    /// Open the regular file `path`; a link at its end is refused.
-    fn open(&self, path: &str) -> io::Result<Box<dyn Read + '_>>;
+    /// Open the regular file `base/rel`; a link at its end or among its folders below `base` is
+    /// refused ([`NotFollowed`]), like a write.
+    fn open(&self, base: &str, rel: &str) -> io::Result<Box<dyn Read + '_>>;
     /// Create the folders of `rel` below `base` that are missing.
     fn make_dirs(&mut self, base: &str, rel: &str) -> io::Result<()>;
     /// Copy `src_base/src_rel` (a file, a folder with everything in it, or a link) to
@@ -115,8 +127,10 @@ pub trait LaunchOs {
     fn symlink(&mut self, target: &str, base: &str, rel: &str) -> io::Result<()>;
     /// Write `base/rel` atomically: a temporary file next to it, flushed, then renamed.
     fn write_atomic(&mut self, base: &str, rel: &str, bytes: &[u8]) -> io::Result<()>;
-    /// Run `cmd` and wait for it, at most `timeout`; returns how it ended and how long it took.
-    fn run(&mut self, cmd: &Command, timeout: Duration) -> io::Result<(Exit, Duration)>;
+    /// Run `cmds` one after the other while each exits 0, all of them within `timeout`; returns
+    /// how the last one run ended and how long they took. Each runs in its own process group; on
+    /// the timeout every group started is killed.
+    fn run(&mut self, cmds: &[Command], timeout: Duration) -> io::Result<(Exit, Duration)>;
     /// One line for the journal (stderr).
     fn log(&self, line: &str);
 }
@@ -158,7 +172,7 @@ impl Source for AppSource<'_> {
     }
 
     fn open(&self, path: &str) -> io::Result<Box<dyn Read + '_>> {
-        self.os.open(&join(self.root, path))
+        self.os.open(self.root, path)
     }
 }
 

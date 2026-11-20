@@ -29,10 +29,6 @@ use std::collections::BTreeMap;
 pub const APP: &str = "/app";
 /// `${payload}`.
 pub const PAYLOAD: &str = "/app/payload";
-/// The proton data folder below `${data}` (`STEAM_COMPAT_DATA_PATH`, ADR-037).
-pub const PROTON_DATA: &str = "proton";
-/// The proton client folder below `${data}` (`STEAM_COMPAT_CLIENT_INSTALL_PATH`).
-pub const PROTON_CLIENT: &str = "proton/client";
 
 /// Everything [`plan`] decides from.
 pub struct Inputs<'a> {
@@ -191,6 +187,11 @@ fn substitute_all(args: &[String], places: &Places) -> Result<Vec<String>, Failu
     args.iter().map(|a| substitute(a, places)).collect()
 }
 
+/// `path` relative to `data`, when it is below it.
+fn below(data: &str, path: &str) -> Option<String> {
+    path.strip_prefix(&format!("{data}/")).map(str::to_string)
+}
+
 /// An absolute folder from the environment (`XDG_DATA_HOME`, `XDG_CONFIG_HOME`).
 pub fn env_dir(env: &BTreeMap<String, String>, name: &str) -> Result<String, Failure> {
     match env.get(name) {
@@ -307,10 +308,7 @@ pub fn plan(inp: &Inputs<'_>) -> Result<Plan, Failure> {
 
     // The prefix, for the kinds that have one.
     let prefix_path = runner::prefix_dir(&run.runner, &data);
-    let prefix_rel = prefix_path
-        .as_ref()
-        .and_then(|p| p.strip_prefix(&format!("{data}/")))
-        .map(str::to_string);
+    let prefix_rel = prefix_path.as_ref().and_then(|p| below(&data, p));
     let prefix = prefix_rel.as_ref().map(|rel| PrefixPlan {
         rel: rel.clone(),
         template: run
@@ -336,10 +334,13 @@ pub fn plan(inp: &Inputs<'_>) -> Result<Plan, Failure> {
     let mut fresh = false;
     if prefix.is_some() {
         if run.runner == "proton" {
-            actions.push(Action::MakeDirs(vec![
-                PROTON_DATA.into(),
-                PROTON_CLIENT.into(),
-            ]));
+            let dirs = runner::proton_dirs(&data);
+            actions.push(Action::MakeDirs(
+                [dirs.compat_data, dirs.client]
+                    .iter()
+                    .filter_map(|d| below(&data, d))
+                    .collect(),
+            ));
         }
         if !inp.prefix_exists {
             actions.push(Action::Create { epoch });
@@ -388,11 +389,12 @@ pub fn plan(inp: &Inputs<'_>) -> Result<Plan, Failure> {
         }
         ("proton", Some((root, Entry::Proton { proton }))) => {
             let proton = join(root, proton);
-            env.insert("STEAM_COMPAT_DATA_PATH".into(), join(&data, PROTON_DATA));
-            env.insert(
-                "STEAM_COMPAT_CLIENT_INSTALL_PATH".into(),
-                join(&data, PROTON_CLIENT),
-            );
+            let dirs = runner::proton_dirs(&data);
+            env.insert("STEAM_COMPAT_DATA_PATH".into(), dirs.compat_data);
+            env.insert("STEAM_COMPAT_CLIENT_INSTALL_PATH".into(), dirs.client);
+            // WINEPREFIX is the platform's (05 §6.3): Proton derives its own from
+            // STEAM_COMPAT_DATA_PATH, so an inherited one is not passed on.
+            env.remove("WINEPREFIX");
             wrapper = vec![proton.clone(), "waitforexitandrun".into()];
             setup_wrapper = vec![proton, "run".into()];
         }

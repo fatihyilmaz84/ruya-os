@@ -6,7 +6,7 @@ mod common;
 
 use common::*;
 use ruya_play_launch::fake::{FakeOs, Node};
-use ruya_play_launch::os::{Exit, LaunchOs};
+use ruya_play_launch::os::{Exit, LaunchOs, MAX_COPY_DEPTH};
 use ruya_play_launch::plan::{substitute, Places};
 use ruya_play_launch::runners::{scan, MAX_RUNNER_DIRS};
 use ruya_play_launch::state::{RunnerInUse, State};
@@ -211,6 +211,11 @@ fn proton_runs_waitforexitandrun_with_its_compat_folders() {
             "-fullscreen"
         ]
     );
+    assert_eq!(
+        cmd.env.get("WINEPREFIX"),
+        None,
+        "Proton derives its own prefix"
+    );
     assert_eq!(cmd.env["STEAM_COMPAT_DATA_PATH"], format!("{DATA}/proton"));
     assert_eq!(
         cmd.env["STEAM_COMPAT_CLIENT_INSTALL_PATH"],
@@ -400,6 +405,16 @@ fn a_setup_step_that_runs_too_long_is_a_failure() {
     let err = launch(&mut os, &[]).unwrap_err();
     assert_eq!(err.code, "launch.setup_failed");
     assert!(err.message.contains("10 minutes"), "{}", err.message);
+    assert_eq!(os.runs.len(), 2, "the step and its wait share one deadline");
+}
+
+#[test]
+fn a_wait_that_runs_too_long_fails_the_step() {
+    let mut os = Game::wine().install();
+    os.on_run("wineserver", Exit::Code(0), Duration::from_secs(11 * 60));
+    let err = launch(&mut os, &[]).unwrap_err();
+    assert_eq!(err.code, "launch.setup_failed");
+    assert_eq!(state(&os).setup_done, Vec::<String>::new());
 }
 
 // ---- the epoch rebuild ----
@@ -531,15 +546,42 @@ fn an_epoch_rebuild_never_follows_a_planted_link() {
 fn the_status_file_is_not_followed_when_it_is_a_link() {
     let mut os = Game::native().install();
     os.file("/srv/p/notes.txt", "mine");
+    let planted = State {
+        epoch: 9,
+        ..State::default()
+    };
+    os.file("/srv/p/state.json", planted.to_bytes());
     os.link(&format!("{DATA}/.ruya-play"), "/srv/p");
     let err = launch(&mut os, &[]).unwrap_err();
     assert_eq!(err.code, "launch.state");
+    // Not read through the link either.
+    assert!(
+        os.lines
+            .borrow()
+            .iter()
+            .any(|l| l.contains("status file cannot be read") && l.contains("not followed")),
+        "{:?}",
+        os.lines.borrow()
+    );
     assert_eq!(os.read("/srv/p/notes.txt"), Some(&b"mine"[..]));
+    assert_eq!(os.read("/srv/p/state.json"), Some(&planted.to_bytes()[..]));
     assert_eq!(
         os.below("/srv/p").len(),
-        2,
+        3,
         "nothing written behind the link"
     );
+}
+
+#[test]
+fn a_template_deeper_than_the_cap_is_a_prefix_failure() {
+    let mut g = Game::wine();
+    let deep = vec!["d"; MAX_COPY_DEPTH + 1].join("/");
+    g.files
+        .push((format!("payload/prefix-template/{deep}/f"), b"x".to_vec()));
+    let mut os = g.install();
+    let err = launch(&mut os, &[]).unwrap_err();
+    assert_eq!(err.code, "launch.prefix");
+    assert!(err.message.contains("folders deep"), "{}", err.message);
 }
 
 #[test]

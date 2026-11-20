@@ -1095,6 +1095,7 @@ dependencies = [
  "libc",
  "ruya-play-format",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

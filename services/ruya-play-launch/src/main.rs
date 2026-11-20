@@ -9,7 +9,7 @@ fn main() -> ExitCode {
     use ruya_play_launch::os::LaunchOs;
     use std::collections::BTreeMap;
 
-    let mut os = LinuxOs::default();
+    let mut os = LinuxOs;
     let args: Vec<String> = match std::env::args_os()
         .skip(1)
         .map(|a| a.into_string())

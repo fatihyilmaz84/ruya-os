@@ -2,7 +2,7 @@
 //! record of the programs run. It keeps the real one's rules: a link is never followed by a read,
 //! a write or a copy.
 
-use crate::os::{join, Command, Exit, Kind, LaunchOs, NotFollowed};
+use crate::os::{join, too_deep, Command, Exit, Kind, LaunchOs, NotFollowed, MAX_COPY_DEPTH};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::io::{self, Read};
@@ -199,14 +199,16 @@ impl LaunchOs for FakeOs {
             .collect())
     }
 
-    fn open(&self, path: &str) -> io::Result<Box<dyn Read + '_>> {
-        match self.nodes.get(&self.resolve(path, false)) {
+    fn open(&self, base: &str, rel: &str) -> io::Result<Box<dyn Read + '_>> {
+        self.check(base, rel, false)?;
+        let path = join(base, rel);
+        match self.nodes.get(&self.resolve(&path, false)) {
             Some(Node::File(b)) => Ok(Box::new(io::Cursor::new(b.as_slice()))),
             Some(_) => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "not a regular file",
             )),
-            None => Err(io::Error::new(io::ErrorKind::NotFound, path.to_string())),
+            None => Err(io::Error::new(io::ErrorKind::NotFound, path)),
         }
     }
 
@@ -231,6 +233,13 @@ impl LaunchOs for FakeOs {
         let src = join(src_base, src_rel);
         if !self.nodes.contains_key(&src) {
             return Ok(false);
+        }
+        if let Some(deep) = self
+            .below(&src)
+            .iter()
+            .find(|k| k[src.len()..].matches('/').count() > MAX_COPY_DEPTH)
+        {
+            return Err(too_deep(deep));
         }
         let dst = self.make_parent(dst_base, dst_rel)?;
         let copied: Vec<(String, Node)> = self
@@ -276,20 +285,28 @@ impl LaunchOs for FakeOs {
         Ok(())
     }
 
-    fn run(&mut self, cmd: &Command, timeout: Duration) -> io::Result<(Exit, Duration)> {
-        self.runs.push(cmd.clone());
-        let line = cmd.argv.join(" ");
-        let (exit, took) = self
-            .rules
-            .iter()
-            .find(|r| line.contains(&r.needle))
-            .map_or((Exit::Code(0), Duration::from_secs(1)), |r| {
-                (r.exit, r.took)
-            });
-        if took > timeout {
-            return Ok((Exit::TimedOut, timeout));
+    fn run(&mut self, cmds: &[Command], timeout: Duration) -> io::Result<(Exit, Duration)> {
+        let (mut exit, mut total) = (Exit::Code(0), Duration::ZERO);
+        for cmd in cmds {
+            self.runs.push(cmd.clone());
+            let line = cmd.argv.join(" ");
+            let (e, took) = self
+                .rules
+                .iter()
+                .find(|r| line.contains(&r.needle))
+                .map_or((Exit::Code(0), Duration::from_secs(1)), |r| {
+                    (r.exit, r.took)
+                });
+            total += took;
+            if total > timeout {
+                return Ok((Exit::TimedOut, timeout));
+            }
+            exit = e;
+            if exit != Exit::Code(0) {
+                break;
+            }
         }
-        Ok((exit, took))
+        Ok((exit, total))
     }
 
     fn log(&self, line: &str) {
@@ -333,7 +350,7 @@ mod tests {
             env: BTreeMap::new(),
             cwd: "/".into(),
         };
-        let (exit, _) = os.run(&cmd, Duration::from_secs(600)).unwrap();
+        let (exit, _) = os.run(&[cmd], Duration::from_secs(600)).unwrap();
         assert_eq!(exit, Exit::TimedOut);
     }
 }

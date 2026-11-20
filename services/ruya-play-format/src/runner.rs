@@ -611,11 +611,32 @@ pub fn bundled_families(runners: &BTreeMap<String, BundledRunner>) -> BTreeMap<S
 /// launcher, ruya-library and the saves of `prefix:` paths all ask this one function. Pure string
 /// work; `data` may be a placeholder such as `${data}`.
 pub fn prefix_dir(kind: &str, data: &str) -> Option<String> {
-    let data = data.trim_end_matches('/');
     match kind {
-        "wine" => Some(format!("{data}/prefix")),
-        "proton" => Some(format!("{data}/proton/pfx")),
+        "wine" => Some(format!("{}/prefix", data.trim_end_matches('/'))),
+        "proton" => Some(proton_dirs(data).prefix),
         _ => None,
+    }
+}
+
+/// The folders a Proton runner uses below the game's data folder (ADR-037).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProtonDirs {
+    /// `STEAM_COMPAT_DATA_PATH`: `<data>/proton`.
+    pub compat_data: String,
+    /// `STEAM_COMPAT_CLIENT_INSTALL_PATH`: `<data>/proton/client`.
+    pub client: String,
+    /// The prefix Proton makes inside its compat data: `<data>/proton/pfx`.
+    pub prefix: String,
+}
+
+/// The Proton layout below `data`: the one place it is written ([`prefix_dir`] derives from it).
+/// Pure string work; `data` may be a placeholder such as `${data}`.
+pub fn proton_dirs(data: &str) -> ProtonDirs {
+    let compat_data = format!("{}/proton", data.trim_end_matches('/'));
+    ProtonDirs {
+        client: format!("{compat_data}/client"),
+        prefix: format!("{compat_data}/pfx"),
+        compat_data,
     }
 }
 
@@ -739,6 +760,18 @@ mod tests {
         for k in ["native", "emulator", "engine", ""] {
             assert_eq!(prefix_dir(k, "/d"), None, "{k}");
         }
+    }
+
+    #[test]
+    fn proton_dirs_are_below_data() {
+        let d = proton_dirs("/d/");
+        assert_eq!(d.compat_data, "/d/proton");
+        assert_eq!(d.client, "/d/proton/client");
+        assert_eq!(d.prefix, "/d/proton/pfx");
+        assert_eq!(
+            prefix_dir("proton", "/d").as_deref(),
+            Some(d.prefix.as_str())
+        );
     }
 
     #[test]
