@@ -9,5 +9,6 @@ pub mod flatpak;
 pub mod flatpak_cli;
 pub mod jobs;
 pub mod level;
+pub mod overrides;
 pub mod queue;
 pub mod service;

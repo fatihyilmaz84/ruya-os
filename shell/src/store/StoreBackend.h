@@ -108,6 +108,14 @@ public:
     // first). Called at start and whenever the service's name has a new owner; answers with
     // jobsListed. A reply older than one already reported is dropped.
     virtual void listJobs() = 0;
+    // The permissions of an installed app (GetPermissions, RUY-744). Answers with permissionsLoaded; a
+    // reply older than one already reported for the same app is dropped.
+    virtual void getPermissions(const QString &id) = 0;
+    // Admin only (the service checks the caller). Each answers with permissionChanged(id, key, status);
+    // resetPermissions with key "".
+    virtual void withdrawPermission(const QString &id, const QString &key) = 0;
+    virtual void restorePermission(const QString &id, const QString &key) = 0;
+    virtual void resetPermissions(const QString &id) = 0;
 
 signals:
     void appLoaded(const AppInfo &app);
@@ -131,6 +139,12 @@ signals:
     // for (JobBook.h). The facade shows its running jobs and nothing else, and corrects the apps
     // whose jobs it had given up on when the service was lost.
     void jobsListed(const QList<StoreJob> &jobs);
+    // status: see the XML ("ok", "unknown-app", "failed", ...; a failed call is "failed"). effective: what
+    // the app gets now; withdrawn: what the console's override takes away; withdrawable: what an admin can
+    // withdraw on this console. The lists are empty unless status is "ok".
+    void permissionsLoaded(const QString &id, const QString &status, const QStringList &effective,
+                           const QStringList &withdrawn, const QStringList &withdrawable);
+    void permissionChanged(const QString &id, const QString &key, const QString &status);
 
 protected:
     // Replies can arrive out of order: number each request when it is sent and report a reply only
@@ -158,6 +172,14 @@ protected:
             emit searchFinished(query, gamepadOnly, apps);
     }
     JobBook &jobBook() { return m_jobs; }
+    // One sequence per app: a slow answer about one app never drops a newer one about another.
+    quint64 beginPermissionsRequest(const QString &id) { return m_permissionsSeq[id].begin(); }
+    void deliverPermissions(const QString &id, quint64 request, const QString &status, const QStringList &effective,
+                            const QStringList &withdrawn, const QStringList &withdrawable)
+    {
+        if (m_permissionsSeq[id].accept(request))
+            emit permissionsLoaded(id, status, effective, withdrawn, withdrawable);
+    }
 
 private:
     static QString searchKey(const QString &query, bool gamepadOnly)
@@ -167,5 +189,6 @@ private:
 
     RequestSequence m_installedSeq;
     QHash<QString, RequestSequence> m_searchSeq;
+    QHash<QString, RequestSequence> m_permissionsSeq;
     JobBook m_jobs;
 };

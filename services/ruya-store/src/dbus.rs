@@ -55,9 +55,28 @@ impl Flatpak for DynFlatpak {
     fn update_appstream(&self, remote: &str) -> Result<(), String> {
         (**self).update_appstream(remote)
     }
+    fn version(&self) -> Option<String> {
+        (**self).version()
+    }
+    fn show_override(&self, id: &str) -> Result<String, String> {
+        (**self).show_override(id)
+    }
+    fn add_override(&self, id: &str, args: &[String]) -> Result<(), String> {
+        (**self).add_override(id, args)
+    }
+    fn reset_override(&self, id: &str) -> Result<(), String> {
+        (**self).reset_override(id)
+    }
+    fn write_override(&self, id: &str, keyfile: &str) -> Result<(), String> {
+        (**self).write_override(id, keyfile)
+    }
 }
 
 pub type Shared = Arc<Store<DynFlatpak>>;
+
+/// `Store::withdraw_permission` or `Store::restore_permission`: a change of one key of one app.
+type KeyChange =
+    fn(&Store<DynFlatpak>, &str, &str, bool, &mut dyn FnMut(Event)) -> crate::app::Status;
 
 /// A job starts this long after its method returned, so the reply is on the wire before the
 /// first `JobProgress` (a client maps job ids to apps from the reply).
@@ -120,6 +139,39 @@ impl StoreIface {
         .await
     }
 
+    /// A permission change (RUY-744): whether the caller is an admin, then the Store's call on the
+    /// blocking pool (it runs `flatpak override`); the reply is its status.
+    async fn change_permission(
+        &self,
+        header: &Header<'_>,
+        connection: &Connection,
+        change: impl FnOnce(&Store<DynFlatpak>, bool, &mut dyn FnMut(Event)) -> crate::app::Status
+            + Send
+            + 'static,
+    ) -> String {
+        let admin = self.caller_is_admin(header, connection).await;
+        self.off_executor(move |store, emit| change(store, admin, emit))
+            .await
+            .as_str()
+            .to_owned()
+    }
+
+    /// `change_permission` of one key of one app (WithdrawPermission, RestorePermission).
+    async fn change_key(
+        &self,
+        header: &Header<'_>,
+        connection: &Connection,
+        app_id: &str,
+        key: &str,
+        change: KeyChange,
+    ) -> String {
+        let (id, key) = (app_id.to_owned(), key.to_owned());
+        self.change_permission(header, connection, move |store, admin, emit| {
+            change(store, &id, &key, admin, emit)
+        })
+        .await
+    }
+
     fn started(&self, (status, job): (crate::app::Status, String)) -> (String, String) {
         if status == crate::app::Status::Ok {
             self.kick();
@@ -128,7 +180,7 @@ impl StoreIface {
     }
 
     /// root, or the shell while the active profile is an admin (spec 03 §4.2: adding a source is
-    /// an admin's decision).
+    /// an admin's decision; §4.4: so is withdrawing an app's permissions).
     async fn caller_is_admin(&self, header: &Header<'_>, connection: &Connection) -> bool {
         if self.everyone_admin {
             return true;
@@ -402,6 +454,59 @@ impl StoreIface {
         status.as_str().to_owned()
     }
 
+    async fn get_permissions(
+        &self,
+        app_id: &str,
+    ) -> (String, Vec<String>, Vec<String>, Vec<String>) {
+        let id = app_id.to_owned();
+        let (status, p) = self
+            .off_executor(move |store, emit| store.get_permissions(&id, emit))
+            .await;
+        (
+            status.as_str().to_owned(),
+            p.effective,
+            p.withdrawn,
+            p.withdrawable,
+        )
+    }
+
+    async fn withdraw_permission(
+        &self,
+        app_id: &str,
+        key: &str,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+    ) -> String {
+        let change: KeyChange = Store::withdraw_permission;
+        self.change_key(&header, connection, app_id, key, change)
+            .await
+    }
+
+    async fn restore_permission(
+        &self,
+        app_id: &str,
+        key: &str,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+    ) -> String {
+        let change: KeyChange = Store::restore_permission;
+        self.change_key(&header, connection, app_id, key, change)
+            .await
+    }
+
+    async fn reset_permissions(
+        &self,
+        app_id: &str,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+    ) -> String {
+        let id = app_id.to_owned();
+        self.change_permission(&header, connection, move |store, admin, emit| {
+            store.reset_permissions(&id, admin, emit)
+        })
+        .await
+    }
+
     #[zbus(signal)]
     async fn job_progress(
         emitter: &SignalEmitter<'_>,
@@ -500,6 +605,21 @@ mod tests {
         }
         fn update_appstream(&self, remote: &str) -> Result<(), String> {
             self.0.update_appstream(remote)
+        }
+        fn version(&self) -> Option<String> {
+            self.0.version()
+        }
+        fn show_override(&self, id: &str) -> Result<String, String> {
+            self.0.show_override(id)
+        }
+        fn add_override(&self, id: &str, args: &[String]) -> Result<(), String> {
+            self.0.add_override(id, args)
+        }
+        fn reset_override(&self, id: &str) -> Result<(), String> {
+            self.0.reset_override(id)
+        }
+        fn write_override(&self, id: &str, keyfile: &str) -> Result<(), String> {
+            self.0.write_override(id, keyfile)
         }
     }
 

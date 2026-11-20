@@ -851,7 +851,7 @@ Item {
             const keys = categoryKeys()
             compare(keys[0], "category_myprofile", "My profile is first")
             compare(keys[1], "category_profiles", "Manage profiles is second")
-            compare(find("categoryList").count, 13)
+            compare(find("categoryList").count, 14)   // Privacy since RUY-744
             compare(find("categoryList").currentItem.Accessible.name, "My profile")
             keyClick(Qt.Key_Down)
             compare(find("categoryList").currentItem.Accessible.name, "Manage profiles")
@@ -878,7 +878,7 @@ Item {
             signIn("p2", "")
             openSettingsList()
             verify(find("category_profiles") === null, "no Manage profiles")
-            compare(find("categoryList").count, 12)
+            compare(find("categoryList").count, 13)   // Privacy since RUY-744
             compare(categoryKeys()[0], "category_myprofile")
             compare(categoryKeys()[1], "category_network", "the next category follows My profile at once")
             compare(rowNames(find("paneMyProfile")), ["rowWho", "rowRenameMe", "rowChangePin", "rowActivity"])

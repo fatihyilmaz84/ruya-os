@@ -44,7 +44,17 @@
         <translation>Simge yazı tipi: Apache-2.0. Inter yazı tipi: OFL-1.1.</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+29"/>
+        <source>System information</source>
+        <translation>Sistem bilgisi</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Processor, memory, graphics, storage…</source>
+        <translation>İşlemci, bellek, grafik, depolama…</translation>
+    </message>
+    <message>
+        <location line="-21"/>
         <source>Windows compatibility</source>
         <translation>Windows uyumluluğu</translation>
     </message>
@@ -53,16 +63,6 @@
         <source>%1: %2. Source: %3</source>
         <extracomment>%1 is a runner&apos;s version (GE-Proton11-12), %2 its licences (SPDX), %3 the web address of its source.</extracomment>
         <translation>%1: %2. Kaynak: %3</translation>
-    </message>
-    <message>
-        <location line="+8"/>
-        <source>System information</source>
-        <translation>Sistem bilgisi</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Processor, memory, graphics, storage…</source>
-        <translation>İşlemci, bellek, grafik, depolama…</translation>
     </message>
 </context>
 <context>
@@ -302,18 +302,18 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+211"/>
+        <location filename="../qml/AppDetailPage.qml" line="+210"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+94"/>
+        <location line="+81"/>
         <source>Developer</source>
         <translation>Geliştirici</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-81"/>
         <source>Community</source>
         <translation>Topluluk</translation>
     </message>
@@ -348,42 +348,7 @@ Bu geri alınamaz.</translation>
         <translation>Derecelendirilmemiş</translation>
     </message>
     <message>
-        <location line="+5"/>
-        <source>Plays sound</source>
-        <translation>Ses çalar</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Uses game controllers</source>
-        <translation>Oyun kontrolcülerini kullanır</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Uses the network</source>
-        <translation>Ağı kullanır</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reads and writes files in your home folder</source>
-        <translation>Ana klasörünüzdeki dosyaları okur ve yazar</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Reads and writes all files on this device</source>
-        <translation>Bu cihazdaki tüm dosyaları okur ve yazar</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Accesses all devices</source>
-        <translation>Tüm cihazlara erişir</translation>
-    </message>
-    <message>
-        <location line="+1"/>
-        <source>Can control other programs on this device</source>
-        <translation>Bu cihazdaki diğer programları denetleyebilir</translation>
-    </message>
-    <message>
-        <location line="+8"/>
+        <location line="+6"/>
         <source>Action</source>
         <translation>Aksiyon</translation>
     </message>
@@ -530,12 +495,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-7"/>
-        <location line="+351"/>
+        <location line="+353"/>
         <source>Steam</source>
         <translation>Steam</translation>
     </message>
     <message>
-        <location line="-350"/>
+        <location line="-352"/>
         <source>Steam app ID</source>
         <translation>Steam uygulama kimliği</translation>
     </message>
@@ -605,7 +570,7 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+219"/>
+        <location line="+221"/>
         <source>Read</source>
         <translation>Oku</translation>
     </message>
@@ -635,7 +600,12 @@ Bu geri alınamaz.</translation>
         <translation>Yönet</translation>
     </message>
     <message>
-        <location line="+9"/>
+        <location line="+10"/>
+        <source>Permissions</source>
+        <translation>İzinler</translation>
+    </message>
+    <message>
+        <location line="+12"/>
         <source>Uninstall…</source>
         <translation>Kaldır…</translation>
     </message>
@@ -650,7 +620,7 @@ Bu geri alınamaz.</translation>
         <translation>Kaldırmak için önce oyunu kapatın.</translation>
     </message>
     <message>
-        <location line="-907"/>
+        <location line="-909"/>
         <source>Install</source>
         <translation>Kur</translation>
     </message>
@@ -661,7 +631,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelle</translation>
     </message>
     <message>
-        <location line="+672"/>
+        <location line="+661"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Bu konsoldakinden daha yeni bir RuyaOS gerekiyor. Yüklü kalır.</translation>
     </message>
@@ -687,7 +657,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelleme şunları ekliyor: %1</translation>
     </message>
     <message>
-        <location line="-700"/>
+        <location line="-689"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Aç</translation>
@@ -725,7 +695,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+391"/>
+        <location line="+380"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -790,6 +760,106 @@ Bu geri alınamaz.</translation>
         <location line="+1"/>
         <source>An admin&apos;s PIN is needed to install this app.</source>
         <translation>Bu uygulamayı yüklemek için bir yöneticinin PIN&apos;i gerekir.</translation>
+    </message>
+</context>
+<context>
+    <name>AppPermissionsPage</name>
+    <message>
+        <location filename="../qml/AppPermissionsPage.qml" line="+60"/>
+        <source>The app may lose its saves or settings outside its own folder.</source>
+        <translation>Uygulama, kendi klasörü dışındaki kayıtlarını veya ayarlarını kaybedebilir.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Controllers and graphics stay available.</source>
+        <translation>Kontrolcüler ve grafik kullanılabilir kalır.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Takes effect after the app is closed and opened again.</source>
+        <translation>Uygulama kapatılıp yeniden açıldığında geçerli olur.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Takes effect next time you open it.</source>
+        <translation>Uygulamayı bir sonraki açışınızda geçerli olur.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>High risk · %1</source>
+        <translation>Yüksek risk · %1</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <location line="+132"/>
+        <source>High risk</source>
+        <translation>Yüksek risk</translation>
+    </message>
+    <message>
+        <location line="-128"/>
+        <source>Only an admin can change this.</source>
+        <translation>Bunu yalnızca bir yönetici değiştirebilir.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This permission can&apos;t be withdrawn.</source>
+        <translation>Bu izin geri alınamaz.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+93"/>
+        <source>This app is not installed any more.</source>
+        <translation>Bu uygulama artık yüklü değil.</translation>
+    </message>
+    <message>
+        <location line="-91"/>
+        <source>The permission could not be changed. Try again.</source>
+        <translation>İzin değiştirilemedi. Yeniden deneyin.</translation>
+    </message>
+    <message>
+        <location line="+83"/>
+        <source>Loading…</source>
+        <translation>Yükleniyor…</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Permissions can&apos;t be read right now.</source>
+        <translation>İzinler şu anda okunamıyor.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Try again</source>
+        <translation>Yeniden dene</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>This app asks for no special permissions.</source>
+        <translation>Bu uygulama özel bir izin istemiyor.</translation>
+    </message>
+    <message>
+        <location line="+34"/>
+        <source>Withdrawn</source>
+        <translation>Geri alındı</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>Allowed</source>
+        <translation>İzin verildi</translation>
+    </message>
+    <message>
+        <location line="+22"/>
+        <source>Reset to the app&apos;s defaults</source>
+        <translation>Uygulamanın varsayılanlarına sıfırla</translation>
+    </message>
+    <message>
+        <location line="+14"/>
+        <source>Only an admin can change these.</source>
+        <translation>Bunları yalnızca bir yönetici değiştirebilir.</translation>
+    </message>
+    <message>
+        <location line="+6"/>
+        <source>Apps can&apos;t reach the console&apos;s own services.</source>
+        <translation>Uygulamalar konsolun kendi hizmetlerine erişemez.</translation>
     </message>
 </context>
 <context>
@@ -3056,7 +3126,7 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+334"/>
+        <location line="+339"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
@@ -4074,6 +4144,69 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>PermissionText</name>
+    <message>
+        <location filename="../qml/PermissionText.qml" line="+38"/>
+        <source>Plays sound</source>
+        <translation>Ses çalar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Uses game controllers</source>
+        <translation>Oyun kontrolcülerini kullanır</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Uses the network</source>
+        <translation>Ağı kullanır</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reads and writes files in your home folder</source>
+        <translation>Ana klasörünüzdeki dosyaları okur ve yazar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Reads and writes all files on this device</source>
+        <translation>Bu cihazdaki tüm dosyaları okur ve yazar</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Accesses all devices</source>
+        <translation>Tüm cihazlara erişir</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Can control other programs on this device</source>
+        <translation>Bu cihazdaki diğer programları denetleyebilir</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Sound and microphone</source>
+        <translation>Ses ve mikrofon</translation>
+    </message>
+    <message>
+        <location line="+10"/>
+        <source>Not controllable yet: sound and microphone share one connection</source>
+        <translation>Henüz denetlenemiyor: ses ve mikrofon aynı bağlantıyı kullanıyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Always allowed: a console needs its controllers</source>
+        <translation>Her zaman izinli: bir konsolun kontrolcülerine ihtiyacı var</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Can&apos;t be withdrawn yet: apps break without it</source>
+        <translation>Henüz geri alınamaz: uygulamalar onsuz bozulur</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Can&apos;t be withdrawn on this console</source>
+        <translation>Bu konsolda geri alınamaz</translation>
+    </message>
+</context>
+<context>
     <name>PinPad</name>
     <message>
         <location filename="../qml/PinPad.qml" line="+50"/>
@@ -4694,6 +4827,31 @@ Bu geri alınamaz.</translation>
         <location line="+1"/>
         <source>Nothing</source>
         <translation>Hiçbir şey</translation>
+    </message>
+</context>
+<context>
+    <name>PrivacyPane</name>
+    <message>
+        <location filename="../qml/PrivacyPane.qml" line="+44"/>
+        <source>App permissions</source>
+        <translation>Uygulama izinleri</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>No apps are installed.</source>
+        <translation>Yüklü uygulama yok.</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+11"/>
+        <source>%n withdrawn</source>
+        <translation>
+            <numerusform>%n izin geri alındı</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>What each app may do on this console, for every profile. An admin can withdraw an app&apos;s network, devices and files.</source>
+        <translation>Her uygulamanın bu konsolda, tüm profiller için neler yapabileceği. Bir yönetici bir uygulamanın ağ, cihaz ve dosya erişimini geri alabilir.</translation>
     </message>
 </context>
 <context>
@@ -5400,12 +5558,12 @@ Bu geri alınamaz.</translation>
     <name>SettingsPage</name>
     <message>
         <location filename="../qml/SettingsPage.qml" line="+13"/>
-        <location line="+123"/>
+        <location line="+125"/>
         <source>Settings</source>
         <translation>Ayarlar</translation>
     </message>
     <message>
-        <location line="-87"/>
+        <location line="-89"/>
         <source>My profile</source>
         <translation>Profilim</translation>
     </message>
@@ -5446,6 +5604,11 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
+        <source>Privacy</source>
+        <translation>Gizlilik</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Storage</source>
         <translation>Depolama</translation>
     </message>
@@ -5470,7 +5633,7 @@ Bu geri alınamaz.</translation>
         <translation>Hakkında</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+24"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -5480,7 +5643,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+314"/>
+        <location line="+327"/>
         <source>Coming soon</source>
         <translation>Yakında</translation>
     </message>
@@ -5763,7 +5926,7 @@ Bu geri alınamaz.</translation>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
     <message>
-        <location line="+64"/>
+        <location line="+65"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
@@ -5859,7 +6022,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kaldırıldı.</translation>
     </message>
     <message>
-        <location line="+532"/>
+        <location line="+533"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -5881,7 +6044,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1955"/>
+        <location line="-1957"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -5912,7 +6075,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1686"/>
+        <location line="+1688"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>

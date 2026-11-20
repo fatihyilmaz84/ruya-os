@@ -273,6 +273,62 @@ void DBusStoreBackend::update(const QString &id)
     startJob(QStringLiteral("Update"), id, {id});
 }
 
+void DBusStoreBackend::getPermissions(const QString &id)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("GetPermissions"));
+    msg << id;
+    const quint64 request = beginPermissionsRequest(id);
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, id, request](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        // (status s, effective as, withdrawn as, withdrawable as)
+        QDBusPendingReply<QString, QStringList, QStringList, QStringList> reply = *w;
+        if (!reply.isValid()) {
+            qWarning("ruya-shell: Store1 GetPermissions %s failed: %s", qPrintable(id),
+                     qPrintable(reply.error().message()));
+            // A failure is an outcome too: an older reply after it is stale.
+            deliverPermissions(id, request, QStringLiteral("failed"), {}, {}, {});
+            return;
+        }
+        deliverPermissions(id, request, reply.argumentAt<0>(), reply.argumentAt<1>(), reply.argumentAt<2>(),
+                           reply.argumentAt<3>());
+    });
+}
+
+void DBusStoreBackend::changePermission(const QString &method, const QString &id, const QString &key,
+                                        const QVariantList &args)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, method);
+    msg.setArguments(args);
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, method, id, key](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QString> reply = *w;
+        if (!reply.isValid()) {
+            qWarning("ruya-shell: Store1 %s %s failed: %s", qPrintable(method), qPrintable(id),
+                     qPrintable(reply.error().message()));
+            emit permissionChanged(id, key, QStringLiteral("failed"));
+            return;
+        }
+        emit permissionChanged(id, key, reply.argumentAt<0>());
+    });
+}
+
+void DBusStoreBackend::withdrawPermission(const QString &id, const QString &key)
+{
+    changePermission(QStringLiteral("WithdrawPermission"), id, key, {id, key});
+}
+
+void DBusStoreBackend::restorePermission(const QString &id, const QString &key)
+{
+    changePermission(QStringLiteral("RestorePermission"), id, key, {id, key});
+}
+
+void DBusStoreBackend::resetPermissions(const QString &id)
+{
+    changePermission(QStringLiteral("ResetPermissions"), id, QString(), {id});
+}
+
 void DBusStoreBackend::onJobProgress(const QString &job, uint percent, const QString &phase)
 {
     jobBook().onProgress(job, percent, phase);

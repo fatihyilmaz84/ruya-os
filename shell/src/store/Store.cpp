@@ -121,6 +121,20 @@ Store::Store(std::unique_ptr<StoreBackend> backend, QObject *parent)
         }
         emit jobsReconciled();
     });
+    connect(m_backend.get(), &StoreBackend::permissionsLoaded, this,
+            [this](const QString &id, const QString &status, const QStringList &effective, const QStringList &withdrawn,
+                   const QStringList &withdrawable) {
+        m_permissions.insert(id, QVariantMap{{QStringLiteral("status"), status},
+                                             {QStringLiteral("effective"), effective},
+                                             {QStringLiteral("withdrawn"), withdrawn},
+                                             {QStringLiteral("withdrawable"), withdrawable}});
+        emit permissionsLoaded(id);
+    });
+    connect(m_backend.get(), &StoreBackend::permissionChanged, this, [this](const QString &id, const QString &key, const QString &status) {
+        emit permissionChanged(id, key, status);
+        // The override is the record: read it again, whatever the answer was (a failure may have written half).
+        m_backend->getPermissions(id);
+    });
     m_backend->refresh();
     m_backend->search(QString(), false, 0);
     m_backend->listJobs();
@@ -265,6 +279,31 @@ void Store::loadApp(const QString &appId)
     m_backend->getApp(appId);
 }
 
+void Store::loadPermissions(const QString &appId)
+{
+    m_backend->getPermissions(appId);
+}
+
+QVariantMap Store::permissions(const QString &appId) const
+{
+    return m_permissions.value(appId);
+}
+
+void Store::withdrawPermission(const QString &appId, const QString &key)
+{
+    m_backend->withdrawPermission(appId, key);
+}
+
+void Store::restorePermission(const QString &appId, const QString &key)
+{
+    m_backend->restorePermission(appId, key);
+}
+
+void Store::resetPermissions(const QString &appId)
+{
+    m_backend->resetPermissions(appId);
+}
+
 QVariantMap Store::app(const QString &appId) const
 {
     const auto it = m_catalogueIndex.constFind(appId);
@@ -329,6 +368,7 @@ void Store::mockReset()
     mock->reset();
     m_lost.clear();
     m_getOnly.clear();
+    m_permissions.clear();
     // The reset drops the mock's running jobs without a JobFinished, so the jobs this facade
     // already saw progress for would stay in `jobs` for ever (T-167).
     if (!m_jobs.isEmpty()) {
@@ -450,4 +490,22 @@ void Store::mockCatalogChanged()
 {
     if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
         mock->announceCatalogChanged();
+}
+
+void Store::mockPermissionsCallerAdmin(bool admin)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->setPermissionsCallerAdmin(admin);
+}
+
+void Store::mockPermissionsDelayed(int ms)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->permissionsDelayed(ms);
+}
+
+int Store::mockPendingPermissionReplies() const
+{
+    auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get());
+    return mock ? mock->pendingPermissionReplies() : 0;
 }

@@ -24,6 +24,10 @@ public:
     void update(const QString &id) override;
     void getApp(const QString &id) override;
     void listJobs() override;
+    void getPermissions(const QString &id) override;
+    void withdrawPermission(const QString &id, const QString &key) override;
+    void restorePermission(const QString &id, const QString &key) override;
+    void resetPermissions(const QString &id) override;
 
 private slots:
     void onJobProgress(const QString &job, uint percent, const QString &phase);
@@ -32,6 +36,8 @@ private slots:
 private:
     // Install, Uninstall and Update all answer (status, job).
     void startJob(const QString &method, const QString &id, const QVariantList &args);
+    // WithdrawPermission, RestorePermission and ResetPermissions all answer (status).
+    void changePermission(const QString &method, const QString &id, const QString &key, const QVariantList &args);
 
     QDBusConnection m_bus;
     QDBusServiceWatcher m_watcher;

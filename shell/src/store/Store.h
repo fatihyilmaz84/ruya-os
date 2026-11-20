@@ -85,6 +85,18 @@ public:
     // calls it while the results are still those of the other filter.
     Q_INVOKABLE QVariantMap rowIds(bool gamepadOnly) const;
 
+    // ---- Permissions of an installed app (RUY-744, GetPermissions and the three changes) ----
+    // Reads them from the service; answers with permissionsLoaded(appId), then permissions(appId) holds them.
+    Q_INVOKABLE void loadPermissions(const QString &appId);
+    // { status, effective, withdrawn, withdrawable } as last read ({} before the first answer): the keys of
+    // the App record's permissions; status "ok" or the service's refusal ("unknown-app", "failed", ...).
+    Q_INVOKABLE QVariantMap permissions(const QString &appId) const;
+    // Admin only (the service refuses anyone else with "forbidden"). Each ends with permissionChanged(appId,
+    // key, status) (key "" for the reset) and reads the permissions again, so permissionsLoaded follows.
+    Q_INVOKABLE void withdrawPermission(const QString &appId, const QString &key);
+    Q_INVOKABLE void restorePermission(const QString &appId, const QString &key);
+    Q_INVOKABLE void resetPermissions(const QString &appId);
+
     // Tests only, and only with the mock backend (otherwise false / no-op).
     Q_INVOKABLE bool mockDataDeleted(const QString &appId) const;
     Q_INVOKABLE void mockReset();
@@ -128,6 +140,12 @@ public:
     // How often `catalogue` was read (the whole list, converted for QML each time): the Store page
     // reads it never, its cards look their records up with app() (T-377).
     Q_INVOKABLE int mockCatalogueReads() const { return m_catalogueReads; }
+    // Whether the caller of the permission changes is an admin (true until mockReset): otherwise the mock
+    // answers "forbidden", as the service does.
+    Q_INVOKABLE void mockPermissionsCallerAdmin(bool admin);
+    // The next permission read answers after ms with what it read when asked, and how many are still due.
+    Q_INVOKABLE void mockPermissionsDelayed(int ms);
+    Q_INVOKABLE int mockPendingPermissionReplies() const;
 
 signals:
     void catalogueChanged();
@@ -143,6 +161,9 @@ signals:
     void appLoadFailed(const QString &appId);
     // The service's job table was applied (after a start or a restart of the service).
     void jobsReconciled();
+    void permissionsLoaded(const QString &appId);
+    // status: see api/dbus/org.ruyaos.Store1.xml ("ok", "forbidden", "not-withdrawable", ...).
+    void permissionChanged(const QString &appId, const QString &key, const QString &status);
 
 private:
     void setAvailable(bool available);
@@ -166,6 +187,7 @@ private:
     QHash<QString, QString> m_lost;
     QHash<QString, QStringList> m_added; // app id -> what its update adds, from loadApp
     QHash<QString, QVariantMap> m_getOnly; // app id -> screenshots and releaseNotes, from loadApp (lists carry none)
+    QHash<QString, QVariantMap> m_permissions; // app id -> the last GetPermissions answer (permissions())
     QString m_lastQuery;
     bool m_gamepadOnly = false;
     bool m_available = false;

@@ -1451,6 +1451,7 @@ FocusScope {
         systemInfo: systemInfoPage,
         controller: controllerPage,
         managedProfile: managedProfilePage,
+        appPermissions: appPermissionsPage,
         buttonTest: buttonTestPage,
         controls: controlsPage,
         controlsRemap: controlsRemapPage,
@@ -2357,6 +2358,7 @@ FocusScope {
     Component { id: systemInfoPage; SystemInfoPage {} }
     Component { id: controllerPage; ControllerPage {} }
     Component { id: managedProfilePage; ManagedProfilePage {} }
+    Component { id: appPermissionsPage; AppPermissionsPage {} }
     Component { id: buttonTestPage; ButtonTestPage {} }
     Component { id: controlsPage; ControlsPage {} }
     Component { id: controlsRemapPage; RemapPage {} }

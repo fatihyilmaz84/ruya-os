@@ -79,6 +79,22 @@ public:
     // compatible when its minimum level is at or below it. Then InstalledChanged and CatalogChanged (RUY-636).
     void setApiLevel(int level);
 
+    // The console's override, as the service keeps it (RUY-744): network, home-files, host-files and
+    // all-devices can be withdrawn from an installed app that asks for them, all-devices keeping the
+    // controllers (gamepad); audio, session-bus and gamepad cannot. Text Editor starts with home-files
+    // withdrawn. An uninstall drops the app's withdrawals.
+    void getPermissions(const QString &id) override;
+    void withdrawPermission(const QString &id, const QString &key) override;
+    void restorePermission(const QString &id, const QString &key) override;
+    void resetPermissions(const QString &id) override;
+
+    // Tests only: whether the caller of the permission changes is an admin (true until reset());
+    // otherwise they answer "forbidden", as the service does for a Standard profile.
+    void setPermissionsCallerAdmin(bool admin) { m_permissionsAdmin = admin; }
+    // Tests only: the next getPermissions answers after ms with what it reads now (a slow service).
+    void permissionsDelayed(int ms) { m_permissionsDelayMs = ms; }
+    int pendingPermissionReplies() const { return m_pendingPermissions; }
+
 private:
     struct Job
     {
@@ -97,6 +113,7 @@ private:
     void refreshAfter(int ms);
     void searchAfter(const QString &query, bool gamepadOnly, uint limit, int ms);
     void reject(const QString &id, const QString &status);
+    void changePermission(const QString &id, const QString &key, bool withdraw);
     QList<AppInfo> installedApps() const;
     QList<StoreJob> jobTable() const;
     static QString kindName(Job::Kind kind);
@@ -115,4 +132,8 @@ private:
     int m_searchReplyMs = 0;
     bool m_paused = false;
     int m_level = 0;
+    QHash<QString, QStringList> m_withdrawn; // app id -> keys withdrawn by the console's override
+    bool m_permissionsAdmin = true;
+    int m_permissionsDelayMs = 0;
+    int m_pendingPermissions = 0;
 };

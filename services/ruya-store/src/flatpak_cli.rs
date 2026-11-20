@@ -20,6 +20,8 @@ pub struct FlatpakCli {
     appstream_root: PathBuf,
     /// `/var/home`: where the profiles' home directories are.
     homes: PathBuf,
+    /// `/var/lib/flatpak/overrides`: the system installation's overrides, one keyfile per app.
+    overrides_dir: PathBuf,
 }
 
 impl FlatpakCli {
@@ -27,6 +29,7 @@ impl FlatpakCli {
         FlatpakCli {
             appstream_root: PathBuf::from("/var/lib/flatpak/appstream"),
             homes: PathBuf::from("/var/home"),
+            overrides_dir: PathBuf::from("/var/lib/flatpak/overrides"),
         }
     }
 }
@@ -51,6 +54,22 @@ fn output(args: &[&str]) -> Result<String, String> {
     } else {
         Err(String::from_utf8_lossy(&out.stderr).trim().to_owned())
     }
+}
+
+/// `output` of an argument list built as owned strings (`overrides::*_command`).
+fn output_of(args: &[String]) -> Result<String, String> {
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    output(&args)
+}
+
+/// Removes the system-wide override of an installed or removed app (`flatpak override --system
+/// --reset <id>`, as root). `Store::drop_override` calls it after every uninstall; a service that
+/// removes a Flatpak app by another path calls it too, so no withdrawal outlives its app.
+pub fn reset_override(id: &str) -> Result<(), String> {
+    if !valid_app_id(id) {
+        return Err("refused argument".to_owned());
+    }
+    output_of(&crate::overrides::reset_command(id)).map(|_| ())
 }
 
 fn arch() -> &'static str {
@@ -199,6 +218,43 @@ impl Flatpak for FlatpakCli {
             remote,
         ])
         .map(|_| ())
+    }
+
+    fn version(&self) -> Option<String> {
+        output(&["--version"]).ok()
+    }
+
+    fn show_override(&self, id: &str) -> Result<String, String> {
+        if !valid_app_id(id) {
+            return Err("refused argument".to_owned());
+        }
+        output_of(&crate::overrides::show_command(id))
+    }
+
+    fn add_override(&self, id: &str, args: &[String]) -> Result<(), String> {
+        // The arguments come from `overrides::withdraw_args` (fixed options, paths from the app's
+        // own metadata), each one argument of its own: no shell sees them.
+        if !valid_app_id(id) || !args.iter().all(|a| a.starts_with("--")) {
+            return Err("refused argument".to_owned());
+        }
+        output_of(&crate::overrides::override_command(id, args)).map(|_| ())
+    }
+
+    fn reset_override(&self, id: &str) -> Result<(), String> {
+        reset_override(id)
+    }
+
+    fn write_override(&self, id: &str, keyfile: &str) -> Result<(), String> {
+        if !valid_app_id(id) {
+            return Err("refused argument".to_owned());
+        }
+        if keyfile.is_empty() {
+            return reset_override(id);
+        }
+        // Where `flatpak override --system` keeps it; replaced whole, never half written.
+        fs::create_dir_all(&self.overrides_dir)
+            .and_then(|()| crate::service::replace_file(&self.overrides_dir.join(id), keyfile))
+            .map_err(|e| format!("{}: {e}", self.overrides_dir.join(id).display()))
     }
 
     fn add_remote(&self, name: &str, url: &str) -> Result<(), FlatpakError> {

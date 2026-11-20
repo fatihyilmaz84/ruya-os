@@ -48,13 +48,12 @@ Page {
     readonly property bool hasUpdate: hasRecord && installed && (app.updateAvailable ?? false)
     // False: the app needs a newer API level than this console has (RUY-156). An older service does not say.
     readonly property bool compatible: app.compatible ?? true
-    readonly property var highRisk: ["all-devices", "host-files", "session-bus"]
 
     // A Standard profile needs an admin's PIN to install an app with a high-risk permission, and to
     // update one whose update adds a high-risk permission (03 §4.4).
     readonly property var newPermissions: installed && hasUpdate ? (app.newPermissions ?? []) : []
-    readonly property bool hasHighRisk: (app.permissions ?? []).some(p => highRisk.indexOf(p) >= 0)
-    readonly property bool addsHighRisk: newPermissions.some(p => highRisk.indexOf(p) >= 0)
+    readonly property bool hasHighRisk: (app.permissions ?? []).some(p => PermissionText.isHighRisk(p))
+    readonly property bool addsHighRisk: newPermissions.some(p => PermissionText.isHighRisk(p))
     readonly property bool needsAdminPin: (installed ? addsHighRisk : hasHighRisk) && (Profiles.active.role ?? "") !== "admin"
 
     // The state of the item's game, from the rows of its Options menu (the Shell knows the sessions):
@@ -220,19 +219,6 @@ Page {
     function ageText(rating) {
         // No rating in the metadata is not "all ages": the contract sends an empty rating.
         return rating === "all" ? qsTr("All ages") : !rating ? qsTr("Not rated") : qsTr("Ages %1").arg(rating)
-    }
-
-    function permissionText(id) {
-        switch (id) {
-        case "audio": return qsTr("Plays sound")
-        case "gamepad": return qsTr("Uses game controllers")
-        case "network": return qsTr("Uses the network")
-        case "home-files": return qsTr("Reads and writes files in your home folder")
-        case "host-files": return qsTr("Reads and writes all files on this device")
-        case "all-devices": return qsTr("Accesses all devices")
-        case "session-bus": return qsTr("Can control other programs on this device")
-        }
-        return id
     }
 
     // The words for a Freedesktop category; "" for one we do not show.
@@ -493,6 +479,8 @@ Page {
             rows.push([permsBlock])
         for (let i = 0; i < factRepeater.count; i += 2)
             rows.push([factRepeater.itemAt(i), factRepeater.itemAt(i + 1)].filter(f => f))
+        if (manageShown)
+            rows.push([permissionsRow])
         if (uninstallShown)
             rows.push([uninstallRow])
         return rows.filter(r => r.length > 0)
@@ -514,7 +502,7 @@ Page {
         rows[0][0].focus = true
     }
 
-    readonly property string stopKey: primaryKind + "#" + secondaryKeys + "#" + factKeys + "#" + trustShown + "#" + activityStop + "#" + screenshotsStop + "#" + aboutShown + "#" + permsListed + "#" + uninstallShown
+    readonly property string stopKey: primaryKind + "#" + secondaryKeys + "#" + factKeys + "#" + trustShown + "#" + activityStop + "#" + screenshotsStop + "#" + aboutShown + "#" + permsListed + "#" + manageShown + "#" + uninstallShown
     onStopKeyChanged: Qt.callLater(ensureFocus)
 
     function moveFocus(dx, dy) {
@@ -849,7 +837,7 @@ Page {
                         Status {
                             objectName: "detailUpdateAdds"
                             visible: page.newPermissions.length > 0
-                            text: qsTr("The update adds: %1").arg(page.newPermissions.map(p => page.permissionText(p)).join(", "))
+                            text: qsTr("The update adds: %1").arg(page.newPermissions.map(p => PermissionText.words(p)).join(", "))
                             color: page.addsHighRisk ? Theme.warningText : Theme.text
                         }
                         Status {
@@ -950,7 +938,7 @@ Page {
                     flat: true
                     cornerRadius: Theme.radiusL * page.u
                     hintKind: "info"
-                    accessibleValue: (page.app.permissions ?? []).map(p => page.permissionText(p)).join(", ")
+                    accessibleValue: (page.app.permissions ?? []).map(p => PermissionText.words(p)).join(", ")
                     onActiveFocusChanged: if (activeFocus) page.stopFocused(permsSection, true)
 
                     PermissionList {
@@ -960,10 +948,10 @@ Page {
                         width: permsBlock.width - 2 * Theme.spaceL * page.u
                         u: page.u
                         columns: 2
-                        shellWords: false       // the Store's words (permissionText), not the .play table
+                        shellWords: false       // the Store's words (PermissionText), not the .play table
                         entries: (page.app.permissions ?? []).map(id => ({
-                            key: id, words: page.permissionText(id),
-                            risk: page.highRisk.indexOf(id) >= 0 ? "high" : "low" }))
+                            key: id, words: PermissionText.words(id),
+                            risk: PermissionText.isHighRisk(id) ? "high" : "low" }))
                     }
                 }
 
@@ -1034,6 +1022,19 @@ Page {
                 visible: page.manageShown
 
                 Heading { text: qsTr("Manage") }
+
+                // What the app may do on this console (RUY-744): the page Settings -> Privacy opens too.
+                SettingRow {
+                    id: permissionsRow
+                    objectName: "detailPermissionsRow"
+                    visible: page.manageShown
+                    width: parent.width
+                    u: page.u
+                    kind: "page"
+                    label: qsTr("Permissions")
+                    onActivated: page.openRequested("appPermissions", ({ appId: page.appId }))
+                    onActiveFocusChanged: if (activeFocus) page.stopFocused(manageSection, false)
+                }
 
                 SettingRow {
                     id: uninstallRow

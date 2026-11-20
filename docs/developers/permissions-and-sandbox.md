@@ -51,8 +51,11 @@ Everything not in the table (Wayland, DRI, `--share=ipc`, `--talk-name=` for oth
 
 - **Refused:** an app from a remote whose signature does not verify (the Store reports `signature`), and an unsigned remote at all: `AddRemote` never passes `--no-gpg-verify`, and removes a remote that ended up unsigned. Publishing needs a signed repository ([Publishing](publishing.md)).
 - **Never allowed by the platform:** third-party apps outside Flatpak, apps run as root or as the shell's user, and anything that starts by itself from removable media. These are not options in the manifest; they are the console's rules.
-- **Not refused:** a permission is never *refused* by the console in v1; it is shown and, if high risk, gated by the PIN. The review you will go through when you publish (**planned**, Flathub-style, see [Publishing](publishing.md)) is where an unreasonable list gets questioned.
-- **Planned:** admins reviewing and overriding an app's permissions one by one (a Flatseal-like view, spec 03 section 4.4). Not built.
+- **Not refused:** a permission is never *refused* by the console at install; it is shown and, if high risk, gated by the PIN. The review you will go through when you publish (**planned**, Flathub-style, see [Publishing](publishing.md)) is where an unreasonable list gets questioned.
+
+## The player can withdraw permissions
+
+An admin can **withdraw** some of your app's permissions after install, for every profile on the console (Settings > Privacy > App permissions, and the Permissions row on your app's page; spec 03 section 4.4, RUY-744): the **network**, **all devices** (your app keeps `--device=input` and `--device=dri`, so controllers and the GPU still work, and any narrower device it asks for itself; the rest of `/dev`, such as `/dev/bus/usb`, goes) and **broad file access** (the home folder and whole-system paths: every path of your list that makes them up, the `xdg-*` entries such as `xdg-download` or `xdg-run/...` counted as home files). The console does this with a system-wide Flatpak override (`flatpak override --system`, only ever negations), which takes effect the **next time your app starts**; a running app keeps what it started with, and uninstalling the app drops the override. So cope with it: start without the network and say so instead of hanging or crashing; keep your saves in your own data directory (`$XDG_DATA_HOME`, which no withdrawal touches) rather than in the home folder; ask for the devices you use by name rather than through `--device=all`. Sound, the session bus and controllers cannot be withdrawn. Per-profile grants of the console's own capabilities (now playing, captures) are a later step through `ruya-platform` (planned).
 
 ## Files: use the data directory and portals
 

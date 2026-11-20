@@ -14,9 +14,12 @@
     "not-installed"     Uninstall/Update/Rollback of an app that is not installed
     "no-update"         Update of an app with no update available
     "busy"              a job for that app is already queued or running
-    "forbidden"         the caller is not allowed (AddRemote needs an admin; high-risk
-                        permissions need the admin PIN, which the shell checks via Profiles1)
-    "invalid"           malformed argument
+    "forbidden"         the caller is not allowed (AddRemote and the permission changes need an
+                        admin; high-risk permissions need the admin PIN at install, which the shell
+                        checks via Profiles1)
+    "invalid"           malformed argument (for the permission calls also: an unknown key, or a
+                        key the app does not ask for: an override never grants)
+    "not-withdrawable"  WithdrawPermission/RestorePermission of a key the console leaves alone
     "failed"            internal error
 
   JobFinished statuses (a job is a queued transaction; there is one transaction queue):
@@ -116,7 +119,8 @@
       <arg name="job" type="s" direction="out"/>
     </method>
 
-    <!-- Queue an uninstall; delete_data also removes ~/.var/app/<id> of every profile. -->
+    <!-- Queue an uninstall; delete_data also removes ~/.var/app/<id> of every profile. A successful
+         uninstall also drops the app's permission override (see GetPermissions). -->
     <method name="Uninstall">
       <arg name="id" type="s" direction="in"/>
       <arg name="delete_data" type="b" direction="in"/>
@@ -182,6 +186,78 @@
       <arg name="status" type="s" direction="out"/>
     </method>
 
+    <!--
+      Permissions of an installed app (RUY-744, spec 03 §4.4), per console, not per profile. The
+      keys are those of the App record's permissions, read from the installed version's Flatpak
+      metadata. The console withdraws a permission with a system-wide Flatpak override
+      (/var/lib/flatpak/overrides/<id>, written through the `flatpak override` command, system
+      installation; the one exception is a RestorePermission that fails halfway, see there); the
+      override is the only record, re-read on every call, and it only ever withdraws. The calls
+      that change an override run one at a time, from their read to their last write, also
+      against the drop after an uninstall. The options it writes (each with two leading dashes, which an XML comment cannot
+      hold):
+        network      unshare=network
+        home-files   nofilesystem=<path> for every path that makes it up (home, ~/..., xdg-...)
+        host-files   nofilesystem=<path> for every path that makes it up (host, host-os,
+                     host-etc, an absolute path)
+        all-devices  nodevice=all, device=input and device=dri: the app keeps its controllers
+                     and its GPU (both are a part of all devices); each of the two only when the
+                     app names it nowhere else (its own entry keeps it, a negated one stays);
+                     not-withdrawable on a Flatpak without device=input (before 1.15.6)
+        audio        not-withdrawable: output and microphone share the one PulseAudio socket
+        session-bus  not-withdrawable: apps break unpredictably without it
+        gamepad      not-withdrawable: a console keeps its controllers
+      A change applies the next time the app starts; a running app keeps what it started with.
+      An override written outside the Store (an admin with a shell) is reported as it is, also
+      when it adds a key; ResetPermissions removes it, and RestorePermission rewrites the override
+      (see there). Uninstall drops the app's override. No app reaches a Ruya service whatever its
+      permissions: every org.ruyaos.* policy admits only ruya-shell and root.
+
+      GetPermissions is open to the shell for every profile (a Standard profile sees them
+      read-only); the other three need an admin (root, or the shell while the active profile is
+      an admin). Statuses: "ok", "invalid" (a malformed id, see above for a key), "unknown-app" (no
+      installed app with that id), "not-withdrawable", "forbidden", "failed" (the metadata or the
+      override could not be read or written). Each reads Flatpak's installed set first, like
+      Install (InstalledChanged).
+    -->
+
+    <!-- effective: what the app gets now (its metadata with the override on top), in contract order.
+         withdrawn: the keys of its metadata the override takes away. withdrawable: the keys of its
+         metadata WithdrawPermission accepts on this console, withdrawn now or not. All empty unless
+         status is "ok". -->
+    <method name="GetPermissions">
+      <arg name="app_id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="effective" type="as" direction="out"/>
+      <arg name="withdrawn" type="as" direction="out"/>
+      <arg name="withdrawable" type="as" direction="out"/>
+    </method>
+
+    <!-- Adds the key's withdrawal to the app's override. "ok" also when it is withdrawn already. -->
+    <method name="WithdrawPermission">
+      <arg name="app_id" type="s" direction="in"/>
+      <arg name="key" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Gives a withdrawn key back. Flatpak cannot take back one option of an override, so the
+         override is reset and the keys that stay withdrawn are withdrawn again: what else an
+         override written outside the Store held goes with it. "ok" also when it is not withdrawn.
+         It never fails open: when the second step fails after the reset, the service writes the
+         override it read at the start back to its file and answers "failed". -->
+    <method name="RestorePermission">
+      <arg name="app_id" type="s" direction="in"/>
+      <arg name="key" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Removes the app's override (the reset option of flatpak override), whoever wrote it: the app has what
+         its metadata asks for again. "ok" also without one. -->
+    <method name="ResetPermissions">
+      <arg name="app_id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
     <!-- phase: "download" | "install" | "update" | "remove"; percent 0-100, never decreasing within a job. -->
     <signal name="JobProgress">
       <arg name="job" type="s"/>
@@ -198,7 +274,7 @@
     <!-- The set of installed apps, or an app's update flag, changed: call ListInstalled again (the
          installed and update_available flags of apps already held change with it). Not sent for a
          catalogue re-read that changed no installed state. Also sent when a call that reads Flatpak
-         (Install, Uninstall, Update, Rollback, ListInstalled) finds the installed set changed outside
+         (Install, Uninstall, Update, Rollback, ListInstalled, the permission calls) finds the installed set changed outside
          the Store (flatpak uninstall by hand), once per change; it may arrive before that call's reply. -->
     <signal name="InstalledChanged"/>
 

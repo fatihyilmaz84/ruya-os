@@ -13,6 +13,8 @@ pub enum Status {
     Busy,
     Forbidden,
     Invalid,
+    /// A permission the console does not withdraw (WithdrawPermission, RestorePermission).
+    NotWithdrawable,
     Failed,
 }
 
@@ -27,6 +29,7 @@ impl Status {
             Status::Busy => "busy",
             Status::Forbidden => "forbidden",
             Status::Invalid => "invalid",
+            Status::NotWithdrawable => "not-withdrawable",
             Status::Failed => "failed",
         }
     }
