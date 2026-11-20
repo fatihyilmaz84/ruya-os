@@ -170,11 +170,13 @@ pub const ALWAYS: [Grant; 3] = [
     ctx("devices", "dri"),
 ];
 
-/// The display socket of a runner: Windows programs run on X11 (05 §6.3), the rest on Wayland.
+/// The display socket of a runner: Windows programs
+/// (`ruya_play_format::limits::windows_runner`) run on X11 (05 §6.3), the rest on Wayland.
 pub fn display_socket(runner: &str) -> Grant {
-    match runner {
-        "wine" | "proton" => ctx("sockets", "x11"),
-        _ => ctx("sockets", "wayland"),
+    if ruya_play_format::limits::windows_runner(runner) {
+        ctx("sockets", "x11")
+    } else {
+        ctx("sockets", "wayland")
     }
 }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: check helper parse perms restart runid verify withid
+# modes: check generation helper parse perms restart runid verify withid
 # Checks ruya-play (org.ruyaos.Play1, RUY-829, the lead's run under RUY-100) inside a running VM,
 # as root. Modes:
 #   check  (default) every step below
@@ -21,6 +21,12 @@
 #          and the deployment's share/ruyaos/play/trust.json says format 1, unverified, no signer,
 #          no store signature
 #   runid  host fixtures only: `runid <id>` prints the id check would use for <id>
+#   generation host fixtures only: `generation <installed.json> <id> [<n>]` prints the metadata
+#          generation recorded for <id> (0 when the entry has none, "none" without an entry), after
+#          setting it to <n>. `check` uses it (RUY-900, ADR-038): the install stamps a generation;
+#          set back to 0 with the service stopped, the next start commits the app again (log line
+#          "recommitted play.<id>", a new commit, the generation stamped, the runners' point in the
+#          metadata), and the start after that plans no recommit for it
 #   Every mode that installs uses its own package id (RUY-877): "<id>.c<run>" for check (one
 #   fresh id per run, RUY-879; its signed-A/B steps need one id within the run, on purpose),
 #   "<id>.verify" for verify and "<id>.perms" for perms, written into a copy of the sample's
@@ -188,6 +194,64 @@ PY
 # not start with a digit, ruya-play-format check_id) and the pid keeps two runs in one second apart.
 run_id() { echo "$1.c$(date +%s)x$$"; }
 
+# generation <installed.json> <id> [<n>]: the metadata generation recorded for <id> (RUY-900; an
+# entry without one reads 0, no entry prints "none"), after setting it to <n> when given.
+generation() {
+    python3 - "$@" <<'PY'
+import json, sys
+path, ident = sys.argv[1], sys.argv[2].lower()
+with open(path) as f:
+    doc = json.load(f)
+entry = next((e for e in doc["installed"] if e["id"].lower() == ident), None)
+if entry is None:
+    print("none")
+    sys.exit(0)
+if len(sys.argv) > 3:
+    entry["generation"] = int(sys.argv[3])
+    with open(path, "w") as f:
+        json.dump(doc, f, indent=2)
+        f.write("\n")
+print(entry.get("generation", 0))
+PY
+}
+
+# ADR-038 (RUY-900): an app recorded with an older metadata generation is committed again at the
+# next start, once. The service is stopped while installed.json is edited (it keeps the file in
+# memory), and the second start must plan nothing for the app.
+recommit_check() { # <id>
+    local id="$1" before t n
+    before="$(flatpak info --system --show-commit "play.$id" 2>/dev/null)"
+    systemctl stop ruya-play.service
+    generation "$state/state/installed.json" "$id" 0 >/dev/null
+    t="$(date '+%Y-%m-%d %H:%M:%S')"
+    systemctl start ruya-play.service || { bad "ruya-play.service did not start for the recommit"; return; }
+    n=0
+    while [ "$n" -lt 120 ]; do
+        journalctl -u ruya-play.service --since "$t" -o cat | grep -qx "ruya-play: recommitted play.$id" && break
+        sleep 1; n=$((n + 1))
+    done
+    journalctl -u ruya-play.service --since "$t" -o cat | grep -qx "ruya-play: recommitted play.$id" \
+        && ok "play.$id of generation 0 is committed again at start" \
+        || bad "play.$id of generation 0 was not committed again: $(journalctl -u ruya-play.service --since "$t" -o cat | grep "play.$id" | tail -3)"
+    [ "$(generation "$state/state/installed.json" "$id")" -ge 1 ] 2>/dev/null \
+        && ok "its generation is stamped again" \
+        || bad "installed.json has generation $(generation "$state/state/installed.json" "$id") for $id"
+    [ "$(flatpak info --system --show-commit "play.$id" 2>/dev/null)" != "$before" ] \
+        && ok "a new commit of play.$id is installed" || bad "play.$id still has commit $before"
+    flatpak info --system --show-metadata "play.$id" 2>/dev/null | grep -qx '\[Extension org.ruyaos.Play.Runner\]' \
+        && ok "the new metadata declares the runners' point" || bad "the new metadata has no org.ruyaos.Play.Runner point"
+    t="$(date '+%Y-%m-%d %H:%M:%S')"
+    systemctl restart ruya-play.service
+    n=0
+    while [ "$n" -lt 30 ]; do
+        journalctl -u ruya-play.service --since "$t" -o cat | grep -q '^ruya-play: serving' && break
+        sleep 1; n=$((n + 1))
+    done
+    journalctl -u ruya-play.service --since "$t" -o cat | grep -q "Recommit { id: \"$id\" }" \
+        && bad "play.$id is planned for a recommit again on an unchanged generation" \
+        || ok "a second start plans no recommit for play.$id"
+}
+
 if [ "$mode" = parse ]; then
     shift
     if [ "${1:-}" = perms ]; then
@@ -207,6 +271,11 @@ if [ "$mode" = withid ]; then
 fi
 if [ "$mode" = runid ]; then
     run_id "${2:?id}"
+    exit $?
+fi
+if [ "$mode" = generation ]; then
+    shift
+    generation "$@"
     exit $?
 fi
 
@@ -525,6 +594,8 @@ got="$(install_wait "$usb/signed-a.play.zip")"
 [ "$got" = ok ] && ok "the signed sample installs" || bad "the signed sample: $got"
 flatpak list --system --app --columns=application | grep -qx "play.$appid" && ok "flatpak list --system has play.$appid" || bad "play.$appid is not in flatpak list --system"
 flatpak info --system --show-metadata "play.$appid" 2>/dev/null | grep -q '^command=/app/launcher/bin/ruya-play-launch' && ok "the generated metadata runs the launcher" || bad "the generated metadata has no launcher command"
+[ "$(generation "$state/state/installed.json" "$appid")" -ge 1 ] 2>/dev/null && ok "the install stamped a metadata generation" || bad "installed.json has no metadata generation for $appid"
+recommit_check "$appid"
 n=0; listed=""
 while [ "$n" -lt 20 ]; do
     listed="$(as_shell busctl --system --json=short call org.ruyaos.Library1 /org/ruyaos/Library1 org.ruyaos.Library1 ListItems | parse items)"

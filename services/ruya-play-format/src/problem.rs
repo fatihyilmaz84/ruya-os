@@ -206,6 +206,7 @@ codes! {
     RUN_COMPONENT_UNKNOWN = "run.component_unknown",
     RUN_COMPONENT_TYPE = "run.component_type",
     RUN_COMPONENT_UNEXPECTED = "run.component_unexpected",
+    RUN_LIB_I386_RESERVED = "run.lib_i386_reserved",
     RUN_PLACEHOLDER_COMPONENT = "run.placeholder_component",
     RUN_DISC_PLACEHOLDER_WITHOUT_DISCS = "run.disc_placeholder_without_discs",
     RUN_DISC_NOT_IN_TABLE = "run.disc_not_in_table",

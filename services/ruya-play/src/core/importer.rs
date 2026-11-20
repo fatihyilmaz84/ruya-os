@@ -29,7 +29,7 @@ use crate::core::art::{self, VettedArt};
 use crate::core::codes;
 use crate::core::deps::{
     Blocklists, Clock, Commit, CommitError, CommitRequest, Deps, FreeSpace, Helper, Hooks,
-    InstalledBuilds, Step,
+    InstalledBuilds, RecommitRequest, Step,
 };
 use crate::core::helper::{self, ArtLine, Ending, Mode, Progress, Request, Session};
 use crate::core::jobs::{self, JobKind, JobRecord, JobState, MAX_PATH_BYTES};
@@ -40,6 +40,7 @@ use crate::core::staging::{self, Dir, Kind};
 use crate::core::status::{status_of, JobStatus, MethodStatus, Phase};
 use crate::core::unpack::{self, staging_problem};
 use crate::core::verify;
+use crate::service::commit::METADATA_GENERATION;
 use ruya_play_format::limits::ROOT_FILES;
 use ruya_play_format::Problem;
 use ruya_play_trust::revocation::Selected;
@@ -338,6 +339,14 @@ fn refused(job: &str, problems: Vec<Problem>, inspection: Option<Inspection>) ->
         problems,
         art: Vec::new(),
         inspection,
+    }
+}
+
+/// The problem of a failed commit: `space.not_enough` for a full disk, else `commit.failed`.
+fn commit_problem(e: CommitError) -> Problem {
+    match e {
+        CommitError::NoSpace(m) => Problem::new(codes::SPACE_NOT_ENOUGH, "", m),
+        CommitError::Failed(m) => Problem::new(codes::COMMIT_FAILED, "", m),
     }
 }
 
@@ -709,7 +718,7 @@ impl Importer {
                 trusted.insert(id.clone());
             }
         }
-        let actions = reconcile::plan(deployed, &recorded, &trusted);
+        let actions = reconcile::plan(deployed, &recorded, &trusted, METADATA_GENERATION);
         for a in &actions {
             let done = match a {
                 reconcile::Action::ForgetBuild { id } => self.installed().forget(id),
@@ -718,20 +727,100 @@ impl Importer {
                     self.hold(id, reason);
                     Ok(())
                 }
+                // Run by the service once it took its bus name ([`Self::recommit`]).
+                reconcile::Action::Recommit { .. } => Ok(()),
             };
             if let Err(p) = done {
-                let id = match a {
-                    reconcile::Action::ForgetBuild { id }
-                    | reconcile::Action::RecordBuild { id, .. }
-                    | reconcile::Action::Hold { id, .. } => id,
-                };
                 self.hold(
-                    id,
+                    a.id(),
                     &format!("its record could not be corrected ({})", p.message),
                 );
             }
         }
         Ok(actions)
+    }
+
+    /// The staging filesystem has room for `bytes` of files: their size plus 10 % (the spike
+    /// measured a 1.03x peak), asked before anything is written. `space.not_enough` when not, a
+    /// staging problem when the question fails. Installs and re-commits ask the same.
+    fn space_for(&self, bytes: u64) -> Result<(), Problem> {
+        let needed = bytes.saturating_add(bytes.div_ceil(10));
+        match self.free_space.available(&self.cfg.staging) {
+            Err(e) => Err(staging_problem("", &e)),
+            Ok(free) if free < needed => Err(Problem::new(
+                codes::SPACE_NOT_ENOUGH,
+                "",
+                format!(
+                    "The package needs {needed} bytes free (its size plus 10 %); {free} are free."
+                ),
+            )),
+            Ok(_) => Ok(()),
+        }
+    }
+
+    /// Commit the installed app `play.<id>` again with the metadata generated now (ADR-038; the
+    /// reconcile's [`reconcile::Action::Recommit`]), one job at a time with the installs: its
+    /// deployed `/app` (only when it is [`reconcile::open_ours`], read through the folder that
+    /// check opened) is copied, after the same free-space question as an install, into
+    /// `staging/recommit-<id>/files` without Flatpak's `.ref`, what
+    /// the metadata is generated from is read back from it ([`reconcile::installed_app`]), the
+    /// copy goes through [`Commit::recommit`], the staging folder is removed and the generation is
+    /// stamped into `installed.json`. Returns false when there was nothing to do: the record
+    /// already has the current generation (an install committed it meanwhile), the id is held or
+    /// has no record, or the app is not ours. A failure leaves the installed app as it was and is
+    /// tried again at the next start.
+    pub fn recommit(&self, id: &str) -> Result<bool, Problem> {
+        let _one = self.running.lock().unwrap_or_else(|e| e.into_inner());
+        let id = id.to_ascii_lowercase();
+        let held = self.held_all().is_some() || self.held().contains(&id);
+        let stale = match self.installed().get(&id)? {
+            Some(r) => r.generation < METADATA_GENERATION,
+            None => false,
+        };
+        if held || !stale {
+            return Ok(false);
+        }
+        let Some(files) = reconcile::our_files(&self.cfg.flatpak, &id) else {
+            return Ok(false);
+        };
+        let (manifest, assessment) = reconcile::installed_app(&files)?;
+        // The copy is a reflink on XFS, but a full copy elsewhere: ask as an install does.
+        let bytes = unpack::walk(&files)
+            .map_err(|e| staging_problem("", &e))?
+            .values()
+            .map(|f| f.size)
+            .fold(0u64, u64::saturating_add);
+        self.space_for(bytes)?;
+        let name = format!("recommit-{id}");
+        let job_dir = self
+            .staging
+            .create_dir(&name, 0o700)
+            .map_err(|e| staging_problem("", &e))?;
+        let committed = job_dir
+            .create_dir("files", 0o755)
+            .and_then(|copy| {
+                staging::copy_tree(&files, &copy, &|p: &str, f: &staging::Found| {
+                    verify::flatpak_ref(p, f)
+                })
+            })
+            .map_err(|e| staging_problem("", &e))
+            .and_then(|_| {
+                let request = RecommitRequest {
+                    files: &job_dir.path().join("files"),
+                    manifest: &manifest,
+                    assessment: &assessment,
+                };
+                self.commit.recommit(&request).map_err(commit_problem)
+            });
+        drop(job_dir);
+        let removed = self
+            .staging
+            .remove_entry(&name)
+            .map_err(|e| staging_problem("", &e));
+        committed?;
+        self.installed().stamp(&id, METADATA_GENERATION)?;
+        removed?;
+        Ok(true)
     }
 
     /// Steps 2 and 3 over the root files the service read back (a source that is read once).
@@ -1262,21 +1351,8 @@ impl Importer {
         }
 
         // 4. Space, before the first write: the installed size plus 10 %.
-        let needed = total.saturating_add(total.div_ceil(10));
-        match self.free_space.available(&self.cfg.staging) {
-            Err(e) => return refused(job, vec![staging_problem("", &e)], Some(insp)),
-            Ok(free) if free < needed => {
-                return refused(
-                    job,
-                    one(
-                        codes::SPACE_NOT_ENOUGH,
-                        "",
-                        format!("The package needs {needed} bytes free (its size plus 10 %); {free} are free."),
-                    ),
-                    Some(insp),
-                )
-            }
-            Ok(_) => {}
+        if let Err(p) = self.space_for(total) {
+            return refused(job, vec![p], Some(insp));
         }
         self.hooks.step(job, &Step::BeforeUnpack);
         if cancel.load(Ordering::SeqCst) {
@@ -1448,17 +1524,17 @@ impl Importer {
             let pct = from + ((to - from) as f32 * frac) as u32;
             reporter.at(phase.max(Phase::Committing), pct);
         });
-        let failure = match committed {
-            Ok(()) => None,
-            Err(CommitError::NoSpace(m)) => Some(Problem::new(codes::SPACE_NOT_ENOUGH, "", m)),
-            Err(CommitError::Failed(m)) => Some(Problem::new(codes::COMMIT_FAILED, "", m)),
-        };
-        if let Some(p) = failure {
-            let mut result = fail(vec![p]);
+        if let Err(e) = committed {
+            let mut result = fail(vec![commit_problem(e)]);
             // The status stays the commit's; a failed rollback is journalled and listed.
             result.problems.extend(self.roll_back(job, insp, prior));
             return result;
         }
+        // The app now has this generation's metadata. A stamp that cannot be written costs one
+        // re-commit at the next start, nothing else, so it does not fail the install.
+        let _ = self
+            .installed()
+            .stamp(&insp.package.manifest.id, METADATA_GENERATION);
         reporter.at(Phase::Installing, 100);
         JobResult {
             job: job.to_string(),

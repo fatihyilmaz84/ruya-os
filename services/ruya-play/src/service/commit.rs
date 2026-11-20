@@ -16,12 +16,17 @@
 //! 3. `flatpak install --or-update --system` from the local remote [`REMOTE`], which was added with
 //!    that key, so Flatpak checks the signature as for any remote (never `--no-gpg-verify`).
 //!
+//! A **re-commit** (ADR-038, RUY-900: the start-up reconcile found an app whose
+//! [`METADATA_GENERATION`] is older) takes a copy of the deployed `/app` instead of a staged
+//! package ([`lay_out_installed`]): the generated parts are written again over it and the same
+//! three steps follow.
+//!
 //! The command lines are pure functions with host tests; [`FlatpakCommit`] runs them through a
 //! [`Runner`] (the real one on Linux; a recording one in the tests).
 
-use crate::core::deps::{Commit, CommitError, CommitRequest};
+use crate::core::deps::{Commit, CommitError, CommitRequest, RecommitRequest};
 use crate::core::status::Phase;
-use ruya_play_format::limits::ROOT_FILES;
+use ruya_play_format::limits::{windows_runner, I386_LIB_DIR, ROOT_FILES};
 use ruya_play_format::manifest::Manifest;
 use ruya_play_format::table::RESERVED_TOP_LEVEL;
 use ruya_play_trust::{grants, metadata_sections, Assessment, Gate, TrustRecord};
@@ -37,12 +42,41 @@ pub const ARCH: &str = "x86_64";
 pub const RUNTIME: &str = "org.freedesktop.Platform";
 /// Its branch (the runtime of the developer guide's samples; the spike used 25.08).
 pub const RUNTIME_BRANCH: &str = "26.08";
-/// The launcher extension (05 §6.4) and its mount folder in `/app`.
+/// The generation of the generated metadata and desktop entry ([`metadata`], [`desktop_entry`]).
+/// Raise it with every change of either that installed apps need: the importer stamps it into
+/// `installed.json` after each commit, and the start-up reconcile commits every app of ours whose
+/// recorded generation is older again (ADR-038). 0 is an app recorded before generations; 1 adds
+/// the runner and 32-bit extension points.
+pub const METADATA_GENERATION: u32 = 1;
+/// The branch of the console's own extension points: their ABI (ADR-038).
+pub const PLAY_EXTENSION_BRANCH: &str = "1";
+/// The launcher extension (05 §6.4).
 pub const LAUNCHER_EXTENSION: &str = "org.ruyaos.Play.Launcher";
-/// The launcher's command inside the sandbox (the extension mounts at `/app/launcher`).
+/// Its mount folder in `/app`.
+pub const LAUNCHER_DIR: &str = "launcher";
+/// The launcher's command inside the sandbox (in [`LAUNCHER_DIR`]).
 pub const LAUNCH_COMMAND: &str = "/app/launcher/bin/ruya-play-launch";
-/// The mount folder of every extension point the generated app declares.
-pub const EXTENSION_DIRS: &[&str] = &["launcher"];
+/// The point every system runner `org.ruyaos.Play.Runner.<Name>` mounts under, one subfolder each
+/// (ADR-038, 05 §6.4).
+pub const RUNNER_EXTENSION: &str = "org.ruyaos.Play.Runner";
+/// Its mount folder in `/app`.
+pub const RUNNER_DIR: &str = "runners";
+/// The freedesktop runtime's 32-bit libraries, for Windows runners (05 §16 Q3).
+pub const COMPAT_I386_EXTENSION: &str = "org.freedesktop.Platform.Compat.i386";
+/// Its mount folder in `/app`.
+pub const COMPAT_I386_DIR: &str = I386_LIB_DIR;
+/// The 32-bit GL drivers, for Windows runners.
+pub const GL32_EXTENSION: &str = "org.freedesktop.Platform.GL32";
+/// Its mount folder in `/app` (inside the Compat.i386 mount).
+pub const GL32_DIR: &str = "lib/i386-linux-gnu/GL";
+/// The GL32 branch the GL drivers carry besides the runtime's branch.
+pub const GL32_BRANCH: &str = "1.4";
+/// The folders of the GL32 extensions merged into one (as the freedesktop runtime declares it;
+/// `scripts/spikes/play/q3-proton.sh`).
+pub const GL32_MERGE_DIRS: &str = "vulkan/icd.d;glvnd/egl_vendor.d;egl/egl_external_platform.d;\
+                                   lib/dri;lib/gbm;vulkan/explicit_layer.d;vulkan/implicit_layer.d";
+/// The mount folder of every extension point a generated app may declare ([`extension_points`]).
+pub const EXTENSION_DIRS: &[&str] = &[LAUNCHER_DIR, RUNNER_DIR, COMPAT_I386_DIR, GL32_DIR];
 /// The vetted art inside `/app`.
 pub const ART_IN_APP: &str = "share/ruyaos/play/art";
 /// The trust record inside `/app` (`ruya_play_trust::TrustRecord`, 05 §7.1): written by the commit
@@ -76,15 +110,91 @@ fn english(map: &std::collections::BTreeMap<String, String>) -> String {
         .unwrap_or_default()
 }
 
+/// One `[Extension <id>]` point of the generated metadata: its mount folder in `/app` and its
+/// other keys in order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtensionPoint {
+    /// The extension id.
+    pub id: &'static str,
+    /// Its mount folder in `/app` (one of [`EXTENSION_DIRS`]).
+    pub directory: &'static str,
+    /// The keys after `directory`, in order.
+    pub keys: Vec<(&'static str, String)>,
+}
+
+/// The extension points of an app of `runner` (ADR-038): the launcher and the system runners
+/// (`org.ruyaos.Play.Runner.<Name>` under `/app/runners/<Name>`) for every app, never fetched by
+/// Flatpak (the image links them in, `no-autodownload`), and for a Windows runner the freedesktop
+/// runtime's 32-bit points as the spike declared them (`scripts/spikes/play/q3-proton.sh`), also
+/// `no-autodownload` (offline first: the image preinstalls them, RUY-34). Those
+/// are inert unless the package asks for `multiarch`, which is a permission
+/// (`ruya_play_trust::permissions`), not something the runner grants.
+pub fn extension_points(runner: &str) -> Vec<ExtensionPoint> {
+    let s = |v: &str| v.to_string();
+    let mut out = vec![
+        ExtensionPoint {
+            id: LAUNCHER_EXTENSION,
+            directory: LAUNCHER_DIR,
+            keys: vec![
+                ("version", s(PLAY_EXTENSION_BRANCH)),
+                ("no-autodownload", s("true")),
+            ],
+        },
+        ExtensionPoint {
+            id: RUNNER_EXTENSION,
+            directory: RUNNER_DIR,
+            keys: vec![
+                ("subdirectories", s("true")),
+                ("version", s(PLAY_EXTENSION_BRANCH)),
+                ("no-autodownload", s("true")),
+                ("autodelete", s("false")),
+            ],
+        },
+    ];
+    if windows_runner(runner) {
+        out.push(ExtensionPoint {
+            id: COMPAT_I386_EXTENSION,
+            directory: COMPAT_I386_DIR,
+            keys: vec![
+                ("version", s(RUNTIME_BRANCH)),
+                ("no-autodownload", s("true")),
+            ],
+        });
+        out.push(ExtensionPoint {
+            id: GL32_EXTENSION,
+            directory: GL32_DIR,
+            keys: vec![
+                ("version", s(GL32_BRANCH)),
+                ("versions", format!("{RUNTIME_BRANCH};{GL32_BRANCH}")),
+                ("subdirectories", s("true")),
+                ("add-ld-path", s("lib")),
+                ("merge-dirs", s(GL32_MERGE_DIRS)),
+                ("no-autodownload", s("true")),
+            ],
+        });
+    }
+    out
+}
+
 /// The generated Flatpak metadata, built from the manifest and its assessment (05 §8, RUY-851):
 /// what every app gets (IPC, the display socket its runner needs, sound, the GPU) and exactly the
-/// lines of `ruya_play_trust::permissions::PERMISSIONS` for each request the assessment holds.
-/// Nothing else: no key or value comes from the package (its `env`, `reasons` or field names
-/// never reach this file), a request without a row grants nothing, and the launcher extension is
-/// the importer's own.
+/// lines of `ruya_play_trust::permissions::PERMISSIONS` for each request the assessment holds,
+/// then the [`extension_points`] of its runner. Nothing else: no key or value comes from the
+/// package (its `env`, `reasons` or field names never reach this file), a request without a row
+/// grants nothing, and the extension points are the importer's own.
 pub fn metadata(manifest: &Manifest, assessment: &Assessment) -> String {
     let app = app_id(&manifest.id);
     let permissions = metadata_sections(&grants(&manifest.run.runner, assessment));
+    let points: Vec<String> = extension_points(&manifest.run.runner)
+        .iter()
+        .map(|p| {
+            let mut section = format!("[Extension {}]\ndirectory={}\n", p.id, p.directory);
+            for (key, value) in &p.keys {
+                section.push_str(&format!("{key}={value}\n"));
+            }
+            section
+        })
+        .collect();
     format!(
         "[Application]\n\
          name={app}\n\
@@ -92,10 +202,8 @@ pub fn metadata(manifest: &Manifest, assessment: &Assessment) -> String {
          command={LAUNCH_COMMAND}\n\
          \n\
          {permissions}\
-         [Extension {LAUNCHER_EXTENSION}]\n\
-         directory=launcher\n\
-         version=1\n\
-         no-autodownload=false\n"
+         {}",
+        points.join("\n")
     )
 }
 
@@ -491,17 +599,81 @@ pub fn lay_out(request: &CommitRequest<'_>) -> Result<PathBuf, CommitError> {
     let record = TrustRecord::of(request.tier, request.signatures, manifest);
     std::fs::write(files.join(TRUST_RECORD_IN_APP), record.to_json())
         .map_err(|e| io_fail("the trust record", &e))?;
-    for dir in EXTENSION_DIRS {
-        std::fs::create_dir(files.join(dir)).map_err(|e| io_fail(dir, &e))?;
+    write_generated(&app, manifest, request.assessment)?;
+    Ok(app)
+}
+
+/// Lay out the Flatpak build folder for a re-commit (ADR-038) next to the copy of an installed
+/// app's `/app`, `<staging>/app` with the copy as `app/files`, and return it: the console's own
+/// files in the copy (root files, art, trust record) stay as they are; what is generated is
+/// written again ([`write_generated`]).
+pub fn lay_out_installed(request: &RecommitRequest<'_>) -> Result<PathBuf, CommitError> {
+    let job_dir = request
+        .files
+        .parent()
+        .ok_or_else(|| CommitError::Failed("the copy has no staging folder".into()))?;
+    let app = job_dir.join("app");
+    std::fs::create_dir(&app).map_err(|e| io_fail("the build folder", &e))?;
+    std::fs::rename(request.files, app.join("files"))
+        .map_err(|e| io_fail("moving the copy", &e))?;
+    write_generated(&app, request.manifest, request.assessment)?;
+    Ok(app)
+}
+
+/// What a commit and a re-commit generate into the build folder `app` from the manifest and its
+/// assessment: the mount folder of each of the runner's [`extension_points`] in `files/`, the
+/// app's desktop entry and `metadata`.
+fn write_generated(
+    app: &Path,
+    manifest: &Manifest,
+    assessment: &Assessment,
+) -> Result<(), CommitError> {
+    let files = app.join("files");
+    let points = extension_points(&manifest.run.runner);
+    let dirs: Vec<&str> = points.iter().map(|p| p.directory).collect();
+    for p in &points {
+        make_mount_folder(&files, p.directory, &dirs).map_err(|why| {
+            CommitError::Failed(format!(
+                "the app's {} cannot be the mount folder of {}: {why}",
+                p.directory, p.id
+            ))
+        })?;
     }
     let apps = files.join("share/applications");
-    std::fs::create_dir(&apps).map_err(|e| io_fail("share/applications", &e))?;
+    std::fs::create_dir_all(&apps).map_err(|e| io_fail("share/applications", &e))?;
     let desktop = apps.join(format!("{}.desktop", app_id(&manifest.id)));
     std::fs::write(&desktop, desktop_entry(manifest))
         .map_err(|e| io_fail("the desktop entry", &e))?;
-    std::fs::write(app.join("metadata"), metadata(manifest, request.assessment))
+    std::fs::write(app.join("metadata"), metadata(manifest, assessment))
         .map_err(|e| io_fail("the metadata", &e))?;
-    Ok(app)
+    Ok(())
+}
+
+/// Make the mount folder `rel` (`/` separated) below `files`, folder by folder, never through a
+/// link (a package's own `lib` may be one). A folder that is already there may hold nothing but
+/// other mount folders of `mounts`, so a mount never hides a file of the package.
+fn make_mount_folder(files: &Path, rel: &str, mounts: &[&str]) -> Result<(), String> {
+    let mut at = files.to_path_buf();
+    for c in rel.split('/') {
+        at.push(c);
+        match std::fs::symlink_metadata(&at) {
+            Ok(m) if m.is_dir() => {}
+            Ok(_) => return Err(format!("{c} is not a folder")),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                std::fs::create_dir(&at).map_err(|e| e.to_string())?
+            }
+            Err(e) => return Err(e.to_string()),
+        }
+    }
+    for e in std::fs::read_dir(&at).map_err(|e| e.to_string())? {
+        let e = e.map_err(|e| e.to_string())?;
+        let inner = format!("{rel}/{}", e.file_name().to_string_lossy());
+        let folder = e.file_type().is_ok_and(|t| t.is_dir());
+        if !folder || !mounts.contains(&inner.as_str()) {
+            return Err(format!("it holds {inner}"));
+        }
+    }
+    Ok(())
 }
 
 /// Root owns everything below `dir`, with [`canonical_mode`] (links keep theirs and are never
@@ -529,6 +701,29 @@ pub fn canonicalise(dir: &Path, owner_root: bool) -> std::io::Result<()> {
     Ok(())
 }
 
+impl FlatpakCommit {
+    /// The part of a commit after the layout: root owns the build folder `app`, it is finished,
+    /// exported signed with the device key `key`, and the app `play.<id>` is installed from it.
+    fn publish(
+        &self,
+        app: &Path,
+        id: &str,
+        key: &str,
+        progress: &mut dyn FnMut(Phase, f32),
+    ) -> Result<(), CommitError> {
+        #[cfg(unix)]
+        canonicalise(app, self.owner_root).map_err(|e| io_fail("making root the owner", &e))?;
+        self.run(build_finish(app))?;
+        progress(Phase::Committing, 0.3);
+        self.run(build_export(&self.paths, app, key))?;
+        progress(Phase::Committing, 1.0);
+        progress(Phase::Installing, 0.0);
+        self.run(install(id))?;
+        progress(Phase::Installing, 1.0);
+        Ok(())
+    }
+}
+
 impl Commit for FlatpakCommit {
     fn commit(
         &self,
@@ -539,15 +734,13 @@ impl Commit for FlatpakCommit {
         let key = self.device_key()?;
         self.ensure_repo()?;
         let app = lay_out(request)?;
-        #[cfg(unix)]
-        canonicalise(&app, self.owner_root).map_err(|e| io_fail("making root the owner", &e))?;
-        self.run(build_finish(&app))?;
-        progress(Phase::Committing, 0.3);
-        self.run(build_export(&self.paths, &app, &key))?;
-        progress(Phase::Committing, 1.0);
-        progress(Phase::Installing, 0.0);
-        self.run(install(&request.manifest.id))?;
-        progress(Phase::Installing, 1.0);
-        Ok(())
+        self.publish(&app, &request.manifest.id, &key, progress)
+    }
+
+    fn recommit(&self, request: &RecommitRequest<'_>) -> Result<(), CommitError> {
+        let key = self.device_key()?;
+        self.ensure_repo()?;
+        let app = lay_out_installed(request)?;
+        self.publish(&app, &request.manifest.id, &key, &mut |_, _| {})
     }
 }

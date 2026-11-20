@@ -18,7 +18,7 @@ pub mod service;
 pub use crate::core::codes;
 pub use crate::core::deps::{
     ArtVetter, Blocklists, Clock, Commit, CommitError, CommitRequest, Deps, Exit, FreeSpace,
-    Helper, Hooks, InstalledBuilds, OpenError, Opener, Step,
+    Helper, Hooks, InstalledBuilds, OpenError, Opener, RecommitRequest, Step,
 };
 pub use crate::core::helper::{HelperDeps, InProcessHelper, Request};
 pub use crate::core::importer::{Canceller, Config, Event, Importer, InspectReport, JobResult};

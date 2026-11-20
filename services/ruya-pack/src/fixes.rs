@@ -152,6 +152,7 @@ const FIXES: &[(&str, &str)] = &[
     // groups
     ("format.", "Fix play.json as described; the schema is in api/play/play.schema.json."),
     ("json.", "Remove the repeated key from the JSON."),
+    ("run.lib_i386_reserved", "Move the files out of lib/i386-linux-gnu/ (for example below payload/): a wine or proton package gets the runtime's 32-bit libraries mounted there."),
     ("run.", "Fix the run block of play.json (05 section 6.3)."),
     ("manifest.", "Fix play.json: it must be one UTF-8 JSON object of at most 1 MiB, nested at most 12 deep."),
     ("value.", "Use one of the values the message lists."),
@@ -170,7 +171,7 @@ const FIXES: &[(&str, &str)] = &[
     ("data.", "Use a prefix:, data: or config: path inside the package's own data."),
     ("path.", "Rename the file or folder so its path follows 05 section 4.2."),
     ("entry.", "Remove the entry; a package holds only regular files and folders."),
-    ("table.reserved_top_level", "Move the contents below another folder (for example payload/): .ref, launcher and share at the top of a package belong to the console."),
+    ("table.reserved_top_level", "Move the contents below another folder (for example payload/): .ref, launcher, runners and share at the top of a package belong to the console."),
     ("table.", "Run ruya-pack build to write play.files again; do not edit it by hand."),
     ("link.", "Fix the link: relative target, inside the same top-level folder, at most 8 hops, no loop."),
     ("package.", "Run ruya-pack build to write play.files again."),

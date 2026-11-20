@@ -13,6 +13,7 @@
 //!   creates files with `CREATE_NEW` and `FILE_FLAG_OPEN_REPARSE_POINT`. It checks before it acts,
 //!   so it is not race-free; the service only runs on Linux.
 
+use crate::service::commit::canonical_mode;
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -517,9 +518,68 @@ pub fn clear(root: &Dir) -> io::Result<usize> {
     Ok(n)
 }
 
+/// Copy everything in the folder `from` into the folder `to`, through both handles and without
+/// following a link: the commit's modes ([`canonical_mode`]: folders 0755, files 0755 when any
+/// execute bit is set and 0644 otherwise), links recreated with their targets as stored. An entry of another kind is an error. `skip`
+/// gets each entry's path below `from` (`/` separated) and leaves it out (a folder with everything
+/// in it). The bytes go through `std::io::copy`, which on Linux uses `copy_file_range`: a reflink
+/// where the filesystem has them (XFS, 05 §7.1). Returns the bytes copied.
+pub fn copy_tree(from: &Dir, to: &Dir, skip: &dyn Fn(&str, &Found) -> bool) -> io::Result<u64> {
+    let mut bytes = 0u64;
+    let mut pending = vec![(String::new(), from.try_clone()?, to.try_clone()?)];
+    while let Some((prefix, src, dst)) = pending.pop() {
+        for f in src.entries()? {
+            let path = format!("{prefix}{}", f.name);
+            if skip(&path, &f) {
+                continue;
+            }
+            match f.kind {
+                Kind::Dir => {
+                    let inner = dst.create_dir(&f.name, canonical_mode(true, f.mode))?;
+                    pending.push((format!("{path}/"), src.open_dir(&f.name)?, inner));
+                }
+                Kind::File => {
+                    let mut out = dst.create_file(&f.name, canonical_mode(false, f.mode))?;
+                    bytes += io::copy(&mut src.open_file(&f.name)?, &mut out)?;
+                }
+                Kind::Link => {
+                    let target = f.target.as_deref().unwrap_or_default();
+                    dst.symlink(&f.name, target, false)?;
+                }
+                Kind::Other => return Err(changed(format!("{path:?} cannot be copied"))),
+            }
+        }
+    }
+    Ok(bytes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_tree_is_copied_with_canonical_modes_and_skips() {
+        let t = tempfile::tempdir().unwrap();
+        let root = Dir::open_root(t.path()).unwrap();
+        let from = root.create_dir("from", 0o755).unwrap();
+        let sub = from.create_dir("sub", 0o700).unwrap();
+        io::Write::write_all(&mut sub.create_file("a", 0o600).unwrap(), b"abc").unwrap();
+        io::Write::write_all(&mut from.create_file("run", 0o700).unwrap(), b"x").unwrap();
+        drop(from.create_file(".ref", 0o644).unwrap());
+        let to = root.create_dir("to", 0o755).unwrap();
+        let skip = |p: &str, _: &Found| p == ".ref";
+        assert_eq!(copy_tree(&from, &to, &skip).unwrap(), 4);
+        let names: Vec<String> = to.entries().unwrap().into_iter().map(|f| f.name).collect();
+        assert_eq!(names, ["run", "sub"]);
+        let inner = to.open_dir("sub").unwrap().entries().unwrap();
+        assert_eq!((inner[0].name.as_str(), inner[0].size), ("a", 3));
+        #[cfg(unix)]
+        {
+            assert_eq!(inner[0].mode, 0o644);
+            let run = to.entries().unwrap();
+            assert_eq!((run[0].mode, run[1].mode), (0o755, 0o755));
+        }
+    }
 
     #[test]
     fn a_component_is_one_plain_name() {

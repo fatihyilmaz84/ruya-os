@@ -1757,6 +1757,16 @@ impl<'a> Checker<'a> {
                 },
                 (None, None) => {}
             }
+            if windows_runner(runner) && self.table.exists(I386_LIB_DIR) {
+                self.p.add(
+                    codes::RUN_LIB_I386_RESERVED,
+                    I386_LIB_DIR,
+                    format!(
+                        "Runner \"{runner}\" gets the runtime's 32-bit libraries mounted at \
+                         {I386_LIB_DIR}/; the package may have nothing there."
+                    ),
+                );
+            }
         }
         // Discs first: the placeholder checks need to know whether there are any.
         let mut discs: Vec<String> = Vec::new();

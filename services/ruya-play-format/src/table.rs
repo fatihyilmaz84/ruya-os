@@ -235,10 +235,11 @@ impl<'a> TableIndex<'a> {
 
 /// The top-level names a package may not use, the folder itself or anything below it: the
 /// console writes them into the installed app. `.ref` is Flatpak's own empty file in every
-/// deployment (`flatpak run` locks it, RUY-848); `launcher` is the launcher extension's mount and
-/// `share` holds the console's art and desktop entry (05 section 4.2). A nested `a/.ref` or
-/// `a/share` is an ordinary name.
-pub const RESERVED_TOP_LEVEL: &[&str] = &[".ref", "launcher", "share"];
+/// deployment (`flatpak run` locks it, RUY-848); `launcher` and `runners` are the mounts of the
+/// launcher and the system runners (ADR-038, RUY-900) and `share` holds the console's art and
+/// desktop entry (05 section 4.2). A nested `a/.ref` or `a/share` is an ordinary name. The 32-bit
+/// mount of a Windows runner is not top-level: see [`crate::limits::I386_LIB_DIR`].
+pub const RESERVED_TOP_LEVEL: &[&str] = &[".ref", "launcher", "runners", "share"];
 
 /// The reserved top-level name `path` is, or is below.
 pub fn reserved_top_level(path: &str) -> Option<&'static str> {

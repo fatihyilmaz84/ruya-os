@@ -8,66 +8,9 @@ mod common;
 use common::*;
 use ruya_play::core::installed::MemoryInstalled;
 use ruya_play::{Event, JobKind, JobResult, JobState, JobStatus, MethodStatus, Phase};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 const ID: &str = "com.example.mini";
-
-fn files_dir(h: &Harness, id: &str) -> PathBuf {
-    h.cfg
-        .flatpak
-        .join("app")
-        .join(format!("play.{id}"))
-        .join("current")
-        .join("active")
-        .join("files")
-}
-
-#[cfg(unix)]
-fn mode(path: &Path, bits: u32) {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(bits)).unwrap();
-}
-
-#[cfg(not(unix))]
-fn mode(_path: &Path, _bits: u32) {}
-
-/// The deployment of `fx` as the commit lays it out: the tree with the modes of `play.files`, the
-/// root files, and what the console adds (`launcher/`, the desktop entry, the art).
-fn deploy(h: &Harness, id: &str, fx: &Fx) -> PathBuf {
-    let files = files_dir(h, id);
-    std::fs::create_dir_all(&files).unwrap();
-    write_deploy(&h.cfg.flatpak, id, ruya_play_art::PLAY_REMOTE);
-    for (p, d) in &fx.files {
-        let full = files.join(p);
-        std::fs::create_dir_all(full.parent().unwrap()).unwrap();
-        std::fs::write(&full, d).unwrap();
-        mode(&full, if fx.exec.contains(p) { 0o755 } else { 0o644 });
-    }
-    for d in &fx.dirs {
-        std::fs::create_dir_all(files.join(d)).unwrap();
-    }
-    std::fs::write(files.join("play.files"), fx.table()).unwrap();
-    std::fs::write(files.join("play.json"), fx.manifest_bytes()).unwrap();
-    std::fs::write(files.join(".ref"), b"").unwrap();
-    std::fs::create_dir_all(files.join("launcher")).unwrap();
-    std::fs::create_dir_all(files.join("share/applications")).unwrap();
-    std::fs::write(
-        files.join(format!("share/applications/play.{id}.desktop")),
-        b"[Desktop Entry]\n",
-    )
-    .unwrap();
-    std::fs::create_dir_all(files.join("share/ruyaos/play/art")).unwrap();
-    std::fs::write(files.join("share/ruyaos/play/art/icon.png"), b"art").unwrap();
-    // Every folder is 0755 (Unix), as the commit's canonical modes make them.
-    for e in listing(&files) {
-        let p = files.join(&e);
-        if !e.contains(" -> ") && p.is_dir() {
-            mode(&p, 0o755);
-        }
-    }
-    mode(&files, 0o755);
-    files
-}
 
 fn harness() -> (Harness, Fx) {
     let h = Setup {
@@ -209,6 +152,30 @@ fn an_extra_file_is_invalid_package() {
     assert_eq!(r.status, JobStatus::InvalidPackage);
     assert_eq!(codes(&r), ["staging.changed"]);
     assert_eq!(r.problems[0].path, "payload/extra.bin");
+}
+
+#[test]
+fn the_empty_mount_folders_are_left_out_but_not_what_is_put_in_them() {
+    // A Windows app: `runners/`, `lib/` and `lib/i386-linux-gnu/GL` are the commit's own (ADR-038).
+    let mut fx = Fx::wine_full();
+    fx.manifest["id"] = serde_json::json!(ID);
+    fx.links.clear(); // `deploy` writes no links
+    let (mut h, _) = harness();
+    let files = deploy(&h, ID, &fx);
+    assert!(files.join("lib/i386-linux-gnu/GL").is_dir());
+    let r = verify(&mut h, ID);
+    assert_eq!(r.status, JobStatus::Ok, "{:?}", r.problems);
+    for planted in [
+        "launcher/extra.bin",
+        "runners/extra.bin",
+        "lib/i386-linux-gnu/GL/extra.bin",
+    ] {
+        std::fs::write(files.join(planted), b"x").unwrap();
+        let r = verify(&mut h, ID);
+        assert_eq!(codes(&r), ["staging.changed"], "{planted}");
+        assert_eq!(r.problems[0].path, planted);
+        std::fs::remove_file(files.join(planted)).unwrap();
+    }
 }
 
 #[test]
