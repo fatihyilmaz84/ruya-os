@@ -306,35 +306,37 @@ mod tests {
         assert_eq!(fs::read_to_string(&config).expect("read"), chosen);
     }
 
-    #[test]
-    fn an_existing_default_is_kept_and_settled() {
+    /// A profile whose Steam already wrote `config`; the step runs once. Returns the result, the
+    /// config as it is afterwards and whether the marker is there.
+    fn start_with(config: &str) -> (Result<Done, String>, String, bool) {
         let tmp = tempfile::tempdir().expect("tmp");
         let runners = image(tmp.path(), &[("ProtonGE11", TOOL)]);
         let home = tmp.path().join("home");
-        let config = home.join(STEAM_DATA).join("config/config.vdf");
-        fs::create_dir_all(config.parent().expect("parent")).expect("dirs");
+        let file = home.join(STEAM_DATA).join("config/config.vdf");
+        fs::create_dir_all(file.parent().expect("parent")).expect("dirs");
+        fs::write(&file, config).expect("config");
+        let result = run(&home, &runners);
+        let after = fs::read_to_string(&file).expect("read");
+        (result, after, home.join(MARKER).exists())
+    }
+
+    #[test]
+    fn an_existing_default_is_kept_and_settled() {
         let theirs = with_default(None, "proton_9").expect("ok").expect("text");
-        fs::write(&config, &theirs).expect("config");
-        assert_eq!(run(&home, &runners), Ok(Done::KeptExisting));
-        assert_eq!(fs::read_to_string(&config).expect("read"), theirs);
-        assert!(home.join(MARKER).exists());
+        let (result, after, marker) = start_with(&theirs);
+        assert_eq!(result, Ok(Done::KeptExisting));
+        assert_eq!(after, theirs);
+        assert!(marker);
     }
 
     #[test]
     fn a_malformed_config_is_left_as_it_is_and_tried_again_later() {
-        let tmp = tempfile::tempdir().expect("tmp");
-        let runners = image(tmp.path(), &[("ProtonGE11", TOOL)]);
-        let home = tmp.path().join("home");
-        let config = home.join(STEAM_DATA).join("config/config.vdf");
-        fs::create_dir_all(config.parent().expect("parent")).expect("dirs");
-        fs::write(&config, "\"InstallConfigStore\" {").expect("config");
-        let err = run(&home, &runners).expect_err("refused");
+        let bad = "\"InstallConfigStore\" {";
+        let (result, after, marker) = start_with(bad);
+        let err = result.expect_err("refused");
         assert!(err.contains("is left as it is"), "{err}");
-        assert_eq!(
-            fs::read_to_string(&config).expect("read"),
-            "\"InstallConfigStore\" {"
-        );
-        assert!(!home.join(MARKER).exists());
+        assert_eq!(after, bad);
+        assert!(!marker);
     }
 
     #[test]
