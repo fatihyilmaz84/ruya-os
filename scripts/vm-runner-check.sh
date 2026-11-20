@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: check, steam
+# modes: check steam
 # Checks the Play platform on /usr (ADR-038, RUY-34) inside a running VM, as root, offline:
 #   1. links: every L+ line of /usr/lib/tmpfiles.d/ruya-play-platform.conf is a link under
 #      /var/lib/flatpak/extension to its folder on /usr, and that folder is there
@@ -40,7 +40,7 @@ fail=0
 ok() { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
 
-case "$mode" in check | steam) ;; *) echo "usage: vm-runner-check.sh [check|steam] [ruya-pack]"; exit 2 ;; esac
+[ "$mode" = check ] || [ "$mode" = steam ] || { echo "usage: vm-runner-check.sh [check|steam] [ruya-pack]"; exit 2; }
 
 if [ "$mode" = steam ]; then
     steam_ext="$root/var/lib/flatpak/extension"
