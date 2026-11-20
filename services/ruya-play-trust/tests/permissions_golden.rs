@@ -40,6 +40,11 @@ fn golden() -> Vec<(String, Vec<Granted>)> {
         .collect()
 }
 
+/// What `new` adds to a deployed `metadata` text that reads safely.
+fn added(deployed: &str, new: &[Grant]) -> Vec<String> {
+    widened(deployed, new).expect("the metadata reads")
+}
+
 fn listed(word: &str) -> Vec<Granted> {
     golden()
         .into_iter()
@@ -113,13 +118,13 @@ fn the_parser_reads_what_metadata_sections_writes() {
         }
     }
     let text = metadata_sections(&all);
-    let mut read = parse_sections(&text);
+    let mut read = parse_sections(&text).unwrap();
     let mut want: Vec<Granted> = all.iter().map(Granted::from).collect();
     read.sort();
     want.sort();
     assert_eq!(read, want, "{text}");
-    assert!(widened(&text, &all).is_empty());
-    assert!(parse_sections(&metadata_sections(&[])).is_empty());
+    assert!(added(&text, &all).is_empty());
+    assert!(parse_sections(&metadata_sections(&[])).unwrap().is_empty());
 }
 
 #[test]
@@ -137,39 +142,131 @@ fn widened_finds_an_added_entry_or_bus_name_and_accepts_equal_and_narrower() {
         key,
         value,
     };
-    assert!(widened(base, &[ctx("shared", "ipc"), ctx("sockets", "wayland")]).is_empty());
-    assert!(widened(base, &[]).is_empty());
+    assert!(added(base, &[ctx("shared", "ipc"), ctx("sockets", "wayland")]).is_empty());
+    assert!(added(base, &[]).is_empty());
     assert_eq!(
-        widened(base, &[ctx("shared", "network")]),
+        added(base, &[ctx("shared", "network")]),
         vec!["[Context] shared=network".to_string()]
     );
     assert_eq!(
-        widened(base, &[bus("org.other.Bus", "talk")]),
+        added(base, &[bus("org.other.Bus", "talk")]),
         vec!["[Session Bus Policy] org.other.Bus=talk".to_string()]
     );
     // A broader policy of the same name is a widening, a narrower one is not.
-    assert_eq!(widened(base, &[bus("com.example.Bus", "own")]).len(), 1);
-    assert!(widened(base, &[bus("com.example.Bus", "see")]).is_empty());
+    assert_eq!(added(base, &[bus("com.example.Bus", "own")]).len(), 1);
+    assert!(added(base, &[bus("com.example.Bus", "see")]).is_empty());
     // A device `all` covers `dri`; a read-write path covers its `:ro`; not the other way round.
     let wide = "[Context]\ndevices=all;\nfilesystems=/run/media;\n";
-    assert!(widened(
+    assert!(added(
         wide,
         &[ctx("devices", "dri"), ctx("filesystems", "/run/media:ro")]
     )
     .is_empty());
     let narrow = "[Context]\ndevices=dri;\nfilesystems=/run/media:ro;\n";
-    assert_eq!(widened(narrow, &[ctx("devices", "all")]).len(), 1);
-    assert_eq!(
-        widened(narrow, &[ctx("filesystems", "/run/media")]).len(),
-        1
-    );
+    assert_eq!(added(narrow, &[ctx("devices", "all")]).len(), 1);
+    assert_eq!(added(narrow, &[ctx("filesystems", "/run/media")]).len(), 1);
     // A section the table cannot grant is not read: a key there is no grant.
     assert_eq!(
-        widened(
+        added(
             "[Environment]\nshared=network\n",
             &[ctx("shared", "network")]
         )
         .len(),
         1
     );
+}
+
+// Fail closed (ADR-038): a deployed value the generator never writes is covered by an equal grant
+// only, and a file that a union would misread is not read at all.
+
+fn ctx(key: &'static str, value: &'static str) -> Grant {
+    Grant {
+        section: Section::Context,
+        key,
+        value,
+    }
+}
+
+#[test]
+fn a_deployed_bus_policy_none_does_not_cover_talk() {
+    let talk = Grant {
+        section: Section::SessionBusPolicy,
+        key: "com.feralinteractive.GameMode",
+        value: "talk",
+    };
+    let none = "[Session Bus Policy]
+com.feralinteractive.GameMode=none
+";
+    assert_eq!(added(none, &[talk]).len(), 1);
+}
+
+#[test]
+fn a_deployed_unknown_filesystem_mode_covers_only_itself() {
+    let bogus = "[Context]
+filesystems=/run/media:bogus;
+";
+    assert_eq!(added(bogus, &[ctx("filesystems", "/run/media")]).len(), 1);
+    assert_eq!(
+        added(bogus, &[ctx("filesystems", "/run/media:ro")]).len(),
+        1
+    );
+    assert!(added(bogus, &[ctx("filesystems", "/run/media:bogus")]).is_empty());
+}
+
+#[test]
+fn a_removal_entry_in_a_deployed_list_is_not_read() {
+    let text = "[Context]
+shared=network;!network;
+";
+    assert_eq!(widened(text, &[ctx("shared", "network")]), None);
+    assert_eq!(parse_sections(text), None);
+}
+
+#[test]
+fn a_repeated_key_or_permission_section_is_not_read() {
+    assert_eq!(
+        widened(
+            "[Context]
+shared=network;
+shared=ipc;
+",
+            &[ctx("shared", "ipc")]
+        ),
+        None
+    );
+    assert_eq!(
+        widened(
+            "[Context]
+shared=network;
+[Context]
+sockets=x11;
+",
+            &[]
+        ),
+        None
+    );
+    let bus = Grant {
+        section: Section::SessionBusPolicy,
+        key: "a.B",
+        value: "see",
+    };
+    assert_eq!(
+        widened(
+            "[Session Bus Policy]
+a.B=talk
+a.B=see
+",
+            &[bus]
+        ),
+        None
+    );
+    // The same name in other sections, or an unrelated section twice, is fine.
+    let ok = "[Context]
+shared=ipc;
+[Environment]
+A=1
+[Environment]
+B=2
+";
+    assert_eq!(widened(ok, &[ctx("shared", "ipc")]), Some(vec![]));
 }

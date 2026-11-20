@@ -222,7 +222,8 @@ pub fn our_files(installation: &Path, id: &str) -> Option<Dir> {
 /// An app that is [`ours`], opened once for a re-commit (ADR-038): its `/app` folder (`files`)
 /// and the permission sections of its deployed `metadata` file, both read through the folder
 /// [`open_ours`] checked. `None` when it is not ours or has no `files`; the grants are `None` when
-/// the metadata cannot be read, which a re-commit treats as nothing to compare with.
+/// the metadata cannot be read safely ([`parse_sections`]: missing, too long, not UTF-8, a `!` entry,
+/// a repeated key or section), which makes the re-commit refuse.
 pub fn our_files_and_grants(installation: &Path, id: &str) -> Option<(Dir, Option<Vec<Granted>>)> {
     let active = open_ours(installation, id)?;
     let files = active.open_dir("files").ok()?;
@@ -231,7 +232,7 @@ pub fn our_files_and_grants(installation: &Path, id: &str) -> Option<(Dir, Optio
         .ok()
         .and_then(|f| read_at_most(f, MAX_PLAY_JSON_BYTES))
         .and_then(|b| String::from_utf8(b).ok())
-        .map(|text| parse_sections(&text));
+        .and_then(|text| parse_sections(&text));
     Some((files, grants))
 }
 

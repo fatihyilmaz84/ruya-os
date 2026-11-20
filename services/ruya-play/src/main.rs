@@ -21,6 +21,7 @@ use ruya_play::dbus::{forward, PlayIface, Signal, BUS_NAME, OBJECT_PATH};
 use ruya_play::service::{gates, sources, Environment, SystemEnvironment};
 use ruya_play::{
     Commit, CommitError, CommitRequest, Config, Deps, Helper, Importer, Phase, RecommitRequest,
+    Recommitted,
 };
 use ruya_play_trust::{FileTrustStore, StoreKeys};
 
@@ -261,8 +262,14 @@ fn recommit(importer: Arc<Importer>, ids: Vec<String>) {
     std::thread::spawn(move || {
         for id in ids {
             match importer.recommit(&id) {
-                Ok(true) => eprintln!("ruya-play: recommitted play.{id}"),
-                Ok(false) => eprintln!("ruya-play: play.{id} needed no recommit"),
+                Ok(Recommitted::Done) => eprintln!("ruya-play: recommitted play.{id}"),
+                Ok(Recommitted::NotNeeded) => eprintln!("ruya-play: play.{id} needed no recommit"),
+                Ok(Recommitted::Widens(added)) => eprintln!(
+                    "ruya-play: play.{id} not recommitted: it would add {added:?} to the app's grants"
+                ),
+                Ok(Recommitted::MetadataUnreadable) => eprintln!(
+                    "ruya-play: play.{id} not recommitted: its deployed metadata cannot be read safely"
+                ),
                 Err(p) => eprintln!(
                     "ruya-play: play.{id} could not be recommitted ({}: {}); it stays as it was",
                     p.code, p.message

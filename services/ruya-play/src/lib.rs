@@ -21,6 +21,8 @@ pub use crate::core::deps::{
     Helper, Hooks, InstalledBuilds, OpenError, Opener, RecommitRequest, Step,
 };
 pub use crate::core::helper::{HelperDeps, InProcessHelper, Request};
-pub use crate::core::importer::{Canceller, Config, Event, Importer, InspectReport, JobResult};
+pub use crate::core::importer::{
+    Canceller, Config, Event, Importer, InspectReport, JobResult, Recommitted,
+};
 pub use crate::core::jobs::{JobKind, JobRecord, JobState};
 pub use crate::core::status::{status_of, JobStatus, MethodStatus, Phase};
