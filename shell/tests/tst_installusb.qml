@@ -785,6 +785,28 @@ Item {
             verify(tc.shell.uninstallRuns["play.com.example.oldbad"] === undefined, "the run is over")
         }
 
+        // A running Remove (its key is the app id, not the page's path) makes the page busy: no second Remove, no
+        // Cancel, and only the one success toast at the end (RUY-816 review, round 2).
+        function test_a_running_removal_offers_no_second_remove() {
+            start("admin")
+            Play.mockSetInstalled("com.example.oldbad", 7)
+            openPackage("oldbad")
+            tryCompare(page(), "mode", "remove")
+            Play.mockPauseJobs(true)
+            keyClick(Qt.Key_Return)
+            confirmUninstall()
+            tryCompare(page(), "mode", "busy", 2000, "the removal holds the page")
+            compare(page().phase, "removing")
+            verify(!find("installRemove").visible, "no second Remove")
+            keyClick(Qt.Key_Return)
+            wait(Theme.pageMs + 50)
+            verify(!find("uninstallConfirm").shown, "a press during the removal opens no dialog")
+            Play.mockPauseJobs(false)
+            tryCompare(page(), "mode", "install", 15000)
+            tryVerify(() => toastTexts().length > 0, 2000)
+            compare(toastTexts(), ["Old Bad Game was uninstalled."], "the success toast alone, no 'Could not uninstall'")
+        }
+
         function test_a_refused_remove_ends_like_a_failed_one() {
             start("admin")
             Play.mockSetInstalled("com.example.oldbad", 7)

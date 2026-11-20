@@ -41,10 +41,14 @@ Page {
     // started by an earlier visit to this page: closing the page does not cancel).
     property bool requested: false
     readonly property var job: Play.jobs[path] ?? null
-    readonly property bool working: requested || job !== null
-    readonly property string phase: job ? (job.phase ?? "") : "staging"
-    readonly property int percent: job ? job.percent : 0
-    readonly property bool cancelShown: working && PlayCopy.cancelAllowed(phase)
+    // The installed app's Remove (keyed by its app id): from the call on (Play.inFlight), or a job the service
+    // runs for it. Remove is not offered again while it runs, and it has no Cancel.
+    readonly property var removeJob: appId !== "" ? (Play.jobs[appId] ?? null) : null
+    readonly property bool removing: appId !== "" && (removeJob !== null || Play.inFlight.indexOf(appId) >= 0)
+    readonly property bool working: requested || job !== null || removing
+    readonly property string phase: job ? (job.phase ?? "") : removing ? "removing" : "staging"
+    readonly property int percent: job ? job.percent : removeJob ? removeJob.percent : 0
+    readonly property bool cancelShown: working && !removing && PlayCopy.cancelAllowed(phase)
     readonly property bool anyModal: confirmSheet.shown || signerSheet.shown || resultDialog.shown || pad.shown
 
     // "loading" | "install" | "play" | "busy" | "none": which buttons there are (keys only, so a progress tick
@@ -178,12 +182,17 @@ Page {
             } else if (op === "cancel" && key === page.path) {
                 Sfx.error()
                 Notifications.show(PlayCopy.methodStatusText(status), "error")
+            } else if (op === "remove" && key === page.appId) {
+                // Refused: the Shell toasts it (uninstallFinished); the page is no longer busy, so Remove is back.
+                Qt.callLater(page.focusMain)
             }
         }
         function onJobFinished(key, status, kind) {
             if (kind === "remove" && key === page.appId) {
-                // The app is gone (or still there, when Flatpak failed): what the page offers follows Inspect.
+                // The app is gone (or still there, when Flatpak failed): what the page offers follows Inspect;
+                // the busy page had no button, so the focus goes back to the main one.
                 page.inspect()
+                Qt.callLater(page.focusMain)
                 return
             }
             if (key !== page.path)

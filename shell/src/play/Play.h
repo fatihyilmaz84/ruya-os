@@ -31,6 +31,9 @@ class Play : public QObject
     // jobFinished(key, "failed"); when it is back, its job table replaces this map and a job that
     // ended otherwise gets a second jobFinished with the real result (as the Store does).
     Q_PROPERTY(QVariantMap jobs READ jobs NOTIFY jobsChanged)
+    // The keys (path or app id) of this session's calls that are not over: sent and not answered yet, or accepted
+    // and their job not finished. A page offers no second call for a key in it (a job reports progress only later).
+    Q_PROPERTY(QStringList inFlight READ inFlight NOTIFY inFlightChanged)
     // True once the service has answered a list, false again when it is lost.
     Q_PROPERTY(bool available READ isAvailable NOTIFY availableChanged)
     // Developer mode (05 7.2): unsigned packages may be installed. An admin's setting, off until the service says.
@@ -45,6 +48,7 @@ public:
 
     QVariantList sources() const { return m_sources; }
     QVariantMap jobs() const { return m_jobs; }
+    QStringList inFlight() const;
     bool isAvailable() const { return m_available; }
     bool isMock() const { return m_backend->isMock(); }
     bool developerMode() const { return m_developerMode; }
@@ -90,6 +94,7 @@ public:
 signals:
     void sourcesChanged();
     void jobsChanged();
+    void inFlightChanged();
     void availableChanged();
     void developerModeChanged();
     void inspected(const QString &path, const QVariantMap &info);

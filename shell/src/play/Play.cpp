@@ -33,9 +33,15 @@ Play::Play(std::unique_ptr<PlayBackend> backend, QObject *parent)
     connect(m_backend.get(), &PlayBackend::answered, this,
             [this](const QString &op, const QString &key, const QString &status) {
         // A job is the caller's only once the service accepted it; a refused call (busy, forbidden, ...) is none.
-        const QString kind = m_pending.take(key);
-        if (!kind.isEmpty() && op == kind && status == QLatin1String("ok"))
-            m_requested.insert(key, kind);
+        // Only the answer to the pending call itself settles it: an Inspect answered while an Install of the same
+        // path waits (they share the key) leaves the Install pending.
+        const auto pending = m_pending.constFind(key);
+        if (pending != m_pending.cend() && pending.value() == op) {
+            m_pending.erase(pending);
+            if (status == QLatin1String("ok"))
+                m_requested.insert(key, op);
+            emit inFlightChanged();
+        }
         emit answered(op, key, status);
     });
     connect(m_backend.get(), &PlayBackend::jobProgress, this, [this](const QString &key, int percent, const QString &phase) {
@@ -136,7 +142,8 @@ Play::JobInfo Play::infoOf(const QString &key) const
 void Play::finishJob(const QString &key, const QString &status)
 {
     const JobInfo info = infoOf(key);
-    m_requested.remove(key);
+    if (m_requested.remove(key))
+        emit inFlightChanged();
     m_listed.remove(key);
     emit jobFinished(key, status, info.kind, info.name);
 }
@@ -149,19 +156,33 @@ void Play::inspect(const QString &path)
 void Play::install(const QString &path, bool adminApproved)
 {
     m_pending.insert(path, QStringLiteral("install"));
+    emit inFlightChanged();
     m_backend->install(path, adminApproved);
 }
 
 void Play::verify(const QString &appId)
 {
     m_pending.insert(appId, QStringLiteral("verify"));
+    emit inFlightChanged();
     m_backend->verify(appId);
 }
 
 void Play::remove(const QString &appId, bool adminApproved)
 {
     m_pending.insert(appId, QStringLiteral("remove"));
+    emit inFlightChanged();
     m_backend->remove(appId, adminApproved);
+}
+
+QStringList Play::inFlight() const
+{
+    QStringList keys = m_pending.keys();
+    for (auto it = m_requested.cbegin(); it != m_requested.cend(); ++it) {
+        if (!keys.contains(it.key()))
+            keys.append(it.key());
+    }
+    keys.sort();
+    return keys;
 }
 
 bool Play::isPlayApp(const QString &appId) const
@@ -190,9 +211,11 @@ void Play::mockReset()
         mock->reset();
         m_jobs.clear();
         m_lost.clear();
+        m_pending.clear();
         m_requested.clear();
         m_listed.clear();
         emit jobsChanged();
+        emit inFlightChanged();
         if (m_developerMode) {
             m_developerMode = false;
             emit developerModeChanged();
@@ -258,7 +281,9 @@ void Play::mockServiceRegained()
 void Play::mockRestartShell()
 {
     if (auto *mock = qobject_cast<MockPlayBackend *>(m_backend.get())) {
+        m_pending.clear();
         m_requested.clear();
+        emit inFlightChanged();
         m_listed.clear();
         m_lost.clear();
         if (!m_jobs.isEmpty()) {

@@ -3010,7 +3010,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>InstallPackagePage</name>
     <message>
-        <location filename="../qml/InstallPackagePage.qml" line="+68"/>
+        <location filename="../qml/InstallPackagePage.qml" line="+72"/>
         <source>Developer</source>
         <translation>Geliştirici</translation>
     </message>
@@ -3045,7 +3045,7 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+324"/>
+        <location line="+334"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
@@ -4191,6 +4191,11 @@ Bu geri alınamaz.</translation>
         <location line="+1"/>
         <source>Checking the pictures</source>
         <translation>Görseller denetleniyor</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Uninstalling</source>
+        <translation>Kaldırılıyor</translation>
     </message>
     <message>
         <location line="+2"/>
@@ -5823,7 +5828,7 @@ Bu geri alınamaz.</translation>
         <translation>Etkinliğiniz</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Uninstall…</source>
         <translation>Kaldır…</translation>
     </message>
@@ -5833,7 +5838,7 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza seçenekleri şu anda kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+136"/>
         <source>Could not uninstall %1. Try again.</source>
         <translation>%1 kaldırılamadı. Yeniden deneyin.</translation>
     </message>
@@ -5865,7 +5870,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1940"/>
+        <location line="-1955"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -5896,7 +5901,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1671"/>
+        <location line="+1686"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
@@ -7419,13 +7424,13 @@ Bu geri alınamaz.</translation>
 <context>
     <name>UninstallConfirm</name>
     <message>
-        <location filename="../qml/UninstallConfirm.qml" line="+34"/>
-        <location line="+220"/>
+        <location filename="../qml/UninstallConfirm.qml" line="+39"/>
+        <location line="+225"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-220"/>
+        <location line="-225"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -7445,7 +7450,7 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+48"/>
         <location line="+25"/>
         <location line="+5"/>
         <source>Uninstall %1?</source>
@@ -7462,7 +7467,7 @@ Bu geri alınamaz.</translation>
         <translation>Tüm profillerin kayıtlı verileri de silinir. Bu geri alınamaz.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+13"/>
         <source>Also delete saved data</source>
         <translation>Kayıtlı verileri de sil</translation>
     </message>

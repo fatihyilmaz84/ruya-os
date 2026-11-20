@@ -57,6 +57,7 @@ QtObject {
         case "staging": return qsTr("Copying from the USB drive")
         case "verifying": return qsTr("Checking the signature")
         case "vetting-art": return qsTr("Checking the pictures")
+        case "removing": return qsTr("Uninstalling")
         }
         return qsTr("Installing")
     }
