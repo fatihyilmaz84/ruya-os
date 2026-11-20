@@ -17,10 +17,16 @@ RUN cmake -S /src/shell -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_IN
 
 # ---- Rust services ------------------------------------------------------------------
 FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION} AS services-build
-RUN dnf -y install --setopt=install_weak_deps=False cargo rust && dnf clean all
+# Fedora's musl target of the same Rust for the .play launcher below; binutils for its check.
+RUN dnf -y install --setopt=install_weak_deps=False cargo rust \
+        rust-std-static-x86_64-unknown-linux-musl musl-gcc musl-libc-static binutils \
+    && dnf clean all
 COPY services /src/services
+# ruya-pack is not shipped (/tools is not copied into the image): the play-runners-check stage
+# runs its runner-check on the image's runners.
 RUN cd /src/services \
     && cargo build --release --locked \
+    && install -Dm755 target/release/ruya-pack /tools/ruya-pack \
     && install -Dm755 target/release/ruya-inputd /out/usr/bin/ruya-inputd \
     && install -Dm755 target/release/ruya-profiles /out/usr/bin/ruya-profiles \
     && install -Dm755 target/release/ruya-devices /out/usr/bin/ruya-devices \
@@ -30,6 +36,19 @@ RUN cd /src/services \
     && install -Dm755 target/release/ruya-update /out/usr/bin/ruya-update \
     && install -Dm755 target/release/ruya-notifications /out/usr/bin/ruya-notifications \
     && install -Dm755 target/release/ruya-play /out/usr/bin/ruya-play
+# The .play launcher (ADR-038): a static x86_64-unknown-linux-musl program, so the freedesktop
+# runtime branch an app runs on does not matter. It runs inside every .play app's sandbox from
+# /usr/lib/ruyaos/play/launcher, mounted as the org.ruyaos.Play.Launcher extension (tmpfiles.d
+# ruya-play-platform.conf). The build fails when the binary asks for a program interpreter or a
+# shared library (readelf, not ldd: ldd of a static-pie binary is not a reliable answer).
+RUN cd /src/services \
+    && CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER=musl-gcc \
+       cargo build --release --locked --target x86_64-unknown-linux-musl -p ruya-play-launch \
+    && bin=target/x86_64-unknown-linux-musl/release/ruya-play-launch \
+    && if readelf -lW "$bin" | grep -q 'program interpreter' || readelf -dW "$bin" | grep -q '(NEEDED)'; then \
+           echo "ruya-play-launch is not statically linked:" >&2; readelf -lW "$bin" >&2; readelf -dW "$bin" >&2; exit 1; \
+       fi \
+    && install -Dm755 "$bin" /out/usr/lib/ruyaos/play/launcher/bin/ruya-play-launch
 
 # ---- Qt Wayland compositor: linux-dmabuf v4 (T-358) ---------------------------------
 # Apps get GPU buffers only through zwp_linux_dmabuf_v1 v4 feedback (Mesa 26 has no wl_drm).
@@ -98,6 +117,22 @@ RUN set -eux; \
     printf 'xwayland-satellite-%s\n' "$ver" > /out/usr/share/ruyaos/xwayland-satellite-built-against; \
     dnf clean all
 
+# ---- The image's system runners (ADR-038, RUY-34) -----------------------------------
+# One folder per runner in image/play/runners/ (a pinned upstream release and its runner.json):
+# another runner is another folder, not another line here (image/play/install-runners.sh).
+# `fetch` downloads, verifies and unpacks; its layer changes only when image/play does, and the OS
+# stage copies it as a layer of its own, so an OS update that keeps the pins does not download the
+# runners again. `check` runs ruya-pack runner-check (the format's parser and runner hash) and puts
+# only what it writes (each .ruya-runner-hash, runners.list) into /meta, a small layer.
+FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION} AS play-runners
+RUN dnf -y install --setopt=install_weak_deps=False tar gzip && dnf clean all
+COPY image/play /src/play
+RUN bash /src/play/install-runners.sh fetch /src/play/runners /out/usr/lib/ruyaos/play
+
+FROM play-runners AS play-runners-check
+COPY --from=services-build /tools/ruya-pack /tools/ruya-pack
+RUN bash /src/play/install-runners.sh check /tools/ruya-pack /out/usr/lib/ruyaos/play /meta/usr/lib/ruyaos/play
+
 # ---- OS image -----------------------------------------------------------------------
 FROM quay.io/fedora/fedora-bootc:${FEDORA_VERSION}
 # ARG RUYA_VERSION is declared further down, just before its first use: buildah puts a declared
@@ -117,6 +152,8 @@ RUN --mount=type=bind,source=image/build,target=/ctx/build \
 RUN --mount=type=bind,source=image/build,target=/ctx/build \
     /ctx/build/50-slim.sh
 
+# The system runners' trees (1.5 GB) first, a layer that stays the same while the pins do.
+COPY --from=play-runners /out/ /
 COPY --from=shell-build /out/ /
 COPY --from=services-build /out/ /
 COPY --from=qt-dmabuf /out/ /
@@ -129,6 +166,12 @@ COPY --from=xwayland-satellite /out/ /
 RUN cat /usr/share/ruyaos/xwayland-satellite-built-against \
     && test -x /usr/bin/Xwayland \
     && if ldd /usr/bin/xwayland-satellite | grep 'not found'; then echo "xwayland-satellite: missing libraries" >&2; exit 1; fi
+# The Play platform (ADR-038): each runner's hash and the list of the image's runners, then the
+# check that every runner has its hash and the launcher is there.
+COPY --from=play-runners-check /meta/ /
+RUN test -x /usr/lib/ruyaos/play/launcher/bin/ruya-play-launch \
+    && for d in /usr/lib/ruyaos/play/runners/*/; do test -s "${d}.ruya-runner-hash" && test -f "${d}runner.json" || exit 1; done \
+    && cat /usr/lib/ruyaos/play/runners.list
 
 # image/rootfs is installed with cp, not COPY: a checkout on Windows has every file and directory
 # at mode 0777, COPY keeps that, and for a directory that a layer introduces (/usr/libexec/ruyaos)

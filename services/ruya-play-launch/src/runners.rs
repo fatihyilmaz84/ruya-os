@@ -17,7 +17,7 @@ pub const RUNNERS_DIR: &str = "/app/runners";
 /// The most runner folders looked at.
 pub const MAX_RUNNER_DIRS: usize = 32;
 /// The file the image build writes at a system runner's root: its runner hash (05 §7.3).
-pub const HASH_FILE: &str = ".ruya-runner-hash";
+pub use ruya_play_format::runner::HASH_FILE;
 
 /// A runner of the OS, found in the sandbox.
 #[derive(Debug, Clone, PartialEq, Eq)]

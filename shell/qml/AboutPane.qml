@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import RuyaShell
 
@@ -43,6 +44,28 @@ SettingsPane {
         objectName: "aboutLicenceNote"
         u: pane.u
         text: qsTr("Icon font: Apache-2.0. Inter typeface: OFL-1.1.")
+    }
+    // The Windows runners the image carries (ADR-025, ADR-038): their versions, then one licence and
+    // source note each. They update with the OS.
+    SettingRow {
+        objectName: "aboutWindowsRunner"
+        kind: "info"
+        u: pane.u
+        visible: SystemInfo.windowsRunners.length > 0
+        label: qsTr("Windows compatibility")
+        value: SystemInfo.windowsRunners.map(r => r.version).join(", ")
+    }
+    Repeater {
+        model: SystemInfo.windowsRunners
+        SettingNote {
+            required property var modelData
+            required property int index
+            objectName: "aboutRunnerNote" + index
+            u: pane.u
+            visible: modelData.licence !== "" && modelData.sourceUrl !== ""
+            //: %1 is a runner's version (GE-Proton11-12), %2 its licences (SPDX), %3 the web address of its source.
+            text: qsTr("%1: %2. Source: %3").arg(modelData.version).arg(modelData.licence).arg(modelData.sourceUrl)
+        }
     }
     SettingRow {
         id: systemInfoRow

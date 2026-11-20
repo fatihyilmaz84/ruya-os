@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "family": "proton-ge",
+  "kind": "proton",
+  "version": "GE-Proton11-12",
+  "arch": "x86_64",
+  "entry": { "proton": "proton" },
+  "capabilities": ["multiarch", "dxvk", "vkd3d"],
+  "licence": "BSD-3-Clause AND LGPL-2.1-or-later AND LGPL-2.0-or-later AND Zlib AND MIT AND OFL-1.1",
+  "source_url": "https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12"
+}
