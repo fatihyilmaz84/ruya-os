@@ -75,9 +75,19 @@ fn is_folder(path: &str) -> io::Result<bool> {
 }
 
 /// Remove whatever is at `path` (a link itself, never its target).
+///
+/// A folder is walked here rather than by `fs::remove_dir_all`: each one is made 0700 before its
+/// entries are removed, so a read-only folder (a template's, kept by [`copy_node`], or a save's)
+/// does not make a rebuild fail with EACCES at every launch. Links are removed as links.
 fn clear(path: &Path) -> io::Result<()> {
     match fs::symlink_metadata(path) {
-        Ok(m) if m.file_type().is_dir() => fs::remove_dir_all(path),
+        Ok(m) if m.file_type().is_dir() => {
+            fs::set_permissions(path, fs::Permissions::from_mode(0o700))?;
+            for item in fs::read_dir(path)? {
+                clear(&item?.path())?;
+            }
+            fs::remove_dir(path)
+        }
         Ok(_) => fs::remove_file(path),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(e),
@@ -321,10 +331,31 @@ mod tests {
         assert_eq!(fs::read_to_string(format!("{base}/c/ro/f")).unwrap(), "x");
         let mode = fs::metadata(format!("{base}/c/ro")).unwrap().mode() & 0o777;
         assert_eq!(mode, 0o555);
-        // Let the temporary folder be removed.
-        for p in ["t/ro", "c/ro"] {
-            fs::set_permissions(format!("{base}/{p}"), fs::Permissions::from_mode(0o755)).unwrap();
-        }
+        // A later rebuild removes the copy, read-only folder and all; so does the source.
+        os.remove(&base, "c").unwrap();
+        os.remove(&base, "t").unwrap();
+        assert!(!Path::new(&format!("{base}/c")).exists());
+        assert!(!Path::new(&format!("{base}/t")).exists());
+    }
+
+    #[test]
+    fn remove_takes_a_link_away_not_its_target() {
+        let (_d, base) = tmp();
+        let mut os = LinuxOs;
+        fs::create_dir_all(format!("{base}/keep/ro")).unwrap();
+        fs::write(format!("{base}/keep/ro/f"), "x").unwrap();
+        fs::set_permissions(format!("{base}/keep/ro"), fs::Permissions::from_mode(0o555)).unwrap();
+        fs::create_dir_all(format!("{base}/p")).unwrap();
+        std::os::unix::fs::symlink(format!("{base}/keep"), format!("{base}/p/l")).unwrap();
+        os.remove(&base, "p").unwrap();
+        assert!(!Path::new(&format!("{base}/p")).exists());
+        assert_eq!(
+            fs::read_to_string(format!("{base}/keep/ro/f")).unwrap(),
+            "x"
+        );
+        let mode = fs::metadata(format!("{base}/keep/ro")).unwrap().mode() & 0o777;
+        assert_eq!(mode, 0o555, "the target's mode is untouched");
+        fs::set_permissions(format!("{base}/keep/ro"), fs::Permissions::from_mode(0o755)).unwrap();
     }
 
     #[test]
