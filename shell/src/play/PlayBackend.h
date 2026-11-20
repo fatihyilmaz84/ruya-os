@@ -136,7 +136,8 @@ struct PlayInfo
 };
 
 // Transport behind the Play QML singleton: org.ruyaos.Play1 over D-Bus, or an in-memory mock.
-// Jobs are named for the facade by a key: the package path for an install, the app id for a verify.
+// Jobs are named for the facade by a key: the package path for an install, the app id for a verify
+// and a remove.
 // The job book (shared with the Store, JobBook.h) maps the service's job ids to those keys.
 class PlayBackend : public QObject
 {
@@ -157,6 +158,8 @@ public:
     virtual void inspect(const QString &path) = 0;   // answers with answered("inspect", ...) and inspected
     virtual void install(const QString &path, bool adminApproved) = 0; // answered("install", path, status)
     virtual void verify(const QString &appId) = 0;   // answered("verify", appId, status)
+    // Remove an installed .play app (RUY-816); adminApproved as for install. answered("remove", appId, status)
+    virtual void remove(const QString &appId, bool adminApproved) = 0;
     virtual void cancel(const QString &key) = 0;     // answered("cancel", key, status)
     // Developer mode (05 7.2): read it (answers with developerModeChanged) and set it (answered("developer-mode",
     // "", status); the new value follows as developerModeChanged).
@@ -171,7 +174,7 @@ signals:
     // The drives changed (SourcesChanged): the facade lists again.
     void sourcesChanged();
     void inspected(const QString &path, const PlayInfo &info);
-    // A method call was answered: op is "inspect" | "install" | "verify" | "cancel", key the path,
+    // A method call was answered: op is "inspect" | "install" | "verify" | "remove" | "cancel", key the path,
     // app id or job key it was about, status the method status of the XML ("ok" = accepted).
     // A transport failure is "failed".
     void answered(const QString &op, const QString &key, const QString &status);

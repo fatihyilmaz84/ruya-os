@@ -68,7 +68,12 @@ pub fn merge(steam: Vec<Item>, flatpak: Vec<Item>) -> Vec<Item> {
 
 /// Reads every Steam root and the Flatpak list. A failing part contributes nothing (and is
 /// logged): the library of the other source still shows.
-pub fn scan(steam_roots: &[PathBuf], lister: &dyn AppLister, play_root: &Path) -> Vec<Item> {
+pub fn scan(
+    steam_roots: &[PathBuf],
+    lister: &dyn AppLister,
+    play_root: &Path,
+    runners_dir: &Path,
+) -> Vec<Item> {
     let mut steam_items: Vec<Item> = Vec::new();
     for root in steam_roots {
         for item in steam::scan_root(root) {
@@ -87,7 +92,7 @@ pub fn scan(steam_roots: &[PathBuf], lister: &dyn AppLister, play_root: &Path) -
                 if let Some(id) = item.id.strip_prefix("flatpak:") {
                     if ours.contains(id) {
                         let id = id.to_owned();
-                        play::enrich(item, &id, play_root);
+                        play::enrich(item, &id, play_root, runners_dir);
                     }
                 }
             }
@@ -176,7 +181,12 @@ mod tests {
         let roots = vec![root.clone(), root];
         let lister = FixtureLister::new("a.b.C\tCee\tflathub\nd.e.Game\tTux\tflathub\n")
             .with_desktop("d.e.Game", "[Desktop Entry]\nCategories=Game;\n");
-        let both = scan(&roots, &lister, Path::new("/nonexistent"));
+        let both = scan(
+            &roots,
+            &lister,
+            Path::new("/nonexistent"),
+            Path::new("/nonexistent"),
+        );
         assert_eq!(
             both.len(),
             3,
@@ -188,7 +198,16 @@ mod tests {
             "{kinds:?}"
         );
         assert!(kinds.contains(&("flatpak:a.b.C", Kind::App)), "{kinds:?}");
-        assert_eq!(scan(&roots, &Broken, Path::new("/nonexistent")).len(), 1);
+        assert_eq!(
+            scan(
+                &roots,
+                &Broken,
+                Path::new("/nonexistent"),
+                Path::new("/nonexistent")
+            )
+            .len(),
+            1
+        );
     }
 
     #[test]

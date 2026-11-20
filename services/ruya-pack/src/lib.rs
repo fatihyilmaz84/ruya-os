@@ -23,6 +23,7 @@ pub mod keys;
 pub mod pkg;
 pub mod png;
 pub mod report;
+pub mod runner_check;
 pub mod sign;
 pub mod validate;
 pub mod zipw;
@@ -92,6 +93,9 @@ usage: ruya-pack <command> [options]   (every command takes --json)
         write play.sig
   inspect <pkg> [--system-wine V] ...
         show what the console will show
+  runner-check <dir> [--write-hash] [--record FILE]
+        check a runner folder's runner.json and entries and print its runner hash;
+        --write-hash writes .ruya-runner-hash, --record adds its line to FILE (image build)
 
 exit codes: 0 ok, 1 problems found, 2 usage, 3 I/O
 
@@ -143,6 +147,7 @@ pub fn run(args: &[String], ctx: &Context) -> Outcome {
         "keygen" => keys::keygen(&tail, ctx),
         "sign" => sign::run(&tail, ctx),
         "inspect" => inspect::run(&tail, ctx),
+        "runner-check" => runner_check::run(&tail, ctx),
         other => Err(Stop::Usage(format!(
             "unknown command {}; try --help",
             report::redact(other)

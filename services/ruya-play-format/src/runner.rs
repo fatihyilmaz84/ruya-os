@@ -38,6 +38,11 @@ use std::collections::BTreeMap;
 /// The file's name at the root of a runner's folder.
 pub const FILE_NAME: &str = "runner.json";
 
+/// The file at a system runner's root that holds its runner hash ([`RunnerHasher`] over the tree
+/// without this file) and a line feed: the image build writes it (`ruya-pack runner-check
+/// --write-hash`), the launcher reports it (ADR-037).
+pub const HASH_FILE: &str = ".ruya-runner-hash";
+
 /// The programs a runner is started through, as paths below its root folder.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Entry {
@@ -143,6 +148,16 @@ pub fn is_family(s: &str) -> bool {
         && (b[0].is_ascii_lowercase() || b[0].is_ascii_digit())
         && b.iter()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, b'.' | b'-'))
+}
+
+/// True for a system runner's folder name (ADR-038), the last part of its extension id
+/// `org.ruyaos.Play.Runner.<Name>` and its mount `/app/runners/<Name>`: ASCII letters, digits and
+/// `_`, not starting with a digit (`ProtonGE11`).
+pub fn is_system_runner_name(name: &str) -> bool {
+    let b = name.as_bytes();
+    !b.is_empty()
+        && !b[0].is_ascii_digit()
+        && b.iter().all(|c| c.is_ascii_alphanumeric() || *c == b'_')
 }
 
 type Obj = Map<String, Value>;
@@ -772,6 +787,23 @@ mod tests {
             prefix_dir("proton", "/d").as_deref(),
             Some(d.prefix.as_str())
         );
+    }
+
+    #[test]
+    fn system_runner_name_grammar() {
+        for ok in ["ProtonGE11", "Wine_Staging", "_x", "W"] {
+            assert!(is_system_runner_name(ok), "{ok}");
+        }
+        for bad in [
+            "",
+            "11Proton",
+            "Proton-GE",
+            "Proton.GE",
+            "Proton GE",
+            "Wine/11",
+        ] {
+            assert!(!is_system_runner_name(bad), "{bad}");
+        }
     }
 
     #[test]

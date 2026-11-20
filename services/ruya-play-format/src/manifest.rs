@@ -15,6 +15,14 @@ use std::collections::{BTreeMap, BTreeSet};
 /// A text in several languages: language tag to text. `"en"` is always present.
 pub type Localized = BTreeMap<String, String>;
 
+/// The English text of a localized map, else its first entry (the one rule for "the name to show
+/// when the language is not known").
+pub fn english(map: &Localized) -> Option<&str> {
+    map.get("en")
+        .or_else(|| map.values().next())
+        .map(String::as_str)
+}
+
 /// A developer or publisher.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Credit {

@@ -106,6 +106,10 @@ void MockLibraryBackend::reset(const QString &scenario)
             p.playTier = QStringLiteral("developer");
             p.playSigner = QStringLiteral("Example Games");
             p.playSignerKeyId = QStringLiteral("0123456789abcdef0123456789abcdef");
+            // The OS's wine runs it, newer than the 9.20 the developer tested with (RUY-903).
+            p.playRunner = QStringLiteral("wine 10.2");
+            p.playRunnerSource = QStringLiteral("system");
+            p.playRunnerTested = QStringLiteral("9.20");
             if (playArt) {
                 const QString dir = scenario.mid(8);
                 auto at = [&](const char *name) { return dir + QLatin1Char('/') + QLatin1String(name) + QStringLiteral(".png"); };
@@ -119,6 +123,7 @@ void MockLibraryBackend::reset(const QString &scenario)
                 LibraryItem quiet = item("flatpak:play.com.example.quiet", "game", "Quiet Quest", 1762050000);
                 quiet.art = {{QStringLiteral("icon"), at("pastel")}};
                 quiet.play = true;
+                quiet.playResolveError = QStringLiteral("The OS runner is 8.0, older than the required 9.0.");
                 m_items.append(quiet);
                 LibraryItem odd = item("flatpak:org.example.Oddity", "game", "Oddity", 1762000000);
                 odd.art = {{QStringLiteral("logo"), at("logo")}, {QStringLiteral("trailer"), QStringLiteral("/mock/play/trailer.webm")}};

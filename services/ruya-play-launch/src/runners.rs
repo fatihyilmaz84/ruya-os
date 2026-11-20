@@ -17,7 +17,7 @@ pub const RUNNERS_DIR: &str = "/app/runners";
 /// The most runner folders looked at.
 pub const MAX_RUNNER_DIRS: usize = 32;
 /// The file the image build writes at a system runner's root: its runner hash (05 §7.3).
-pub const HASH_FILE: &str = ".ruya-runner-hash";
+pub use ruya_play_format::runner::HASH_FILE;
 
 /// A runner of the OS, found in the sandbox.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,16 +93,20 @@ fn read_runner(os: &dyn LaunchOs, root: &str) -> Option<RunnerJson> {
     Some(r)
 }
 
-/// Every usable runner under [`RUNNERS_DIR`], in folder name order. Two folders with the same
-/// family and version keep the first.
+/// Every usable runner under [`RUNNERS_DIR`] ([`scan_in`]).
 pub fn scan(os: &dyn LaunchOs) -> Vec<FoundRunner> {
-    let mut entries = match os.list(RUNNERS_DIR) {
+    scan_in(os, RUNNERS_DIR)
+}
+
+/// Every usable runner under `dir`, in folder name order. Two folders with the same family and
+/// version keep the first. The launcher scans [`RUNNERS_DIR`]; the library's dry run
+/// ([`crate::dry_run`]) scans the image's own folder with the same code.
+pub fn scan_in(os: &dyn LaunchOs, dir: &str) -> Vec<FoundRunner> {
+    let mut entries = match os.list(dir) {
         Ok(e) => e,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
         Err(e) => {
-            os.log(&format!(
-                "{RUNNERS_DIR} cannot be listed ({e}); no system runners"
-            ));
+            os.log(&format!("{dir} cannot be listed ({e}); no system runners"));
             return Vec::new();
         }
     };
@@ -113,7 +117,7 @@ pub fn scan(os: &dyn LaunchOs) -> Vec<FoundRunner> {
         match kind {
             Kind::Dir => {}
             Kind::Link => {
-                os.log(&format!("{RUNNERS_DIR}/{name} is a link; not followed"));
+                os.log(&format!("{dir}/{name} is a link; not followed"));
                 continue;
             }
             _ => continue,
@@ -125,7 +129,7 @@ pub fn scan(os: &dyn LaunchOs) -> Vec<FoundRunner> {
             ));
             break;
         }
-        let root = join(RUNNERS_DIR, &name);
+        let root = join(dir, &name);
         let Some(runner) = read_runner(os, &root) else {
             continue;
         };

@@ -180,6 +180,8 @@ pub struct RecordingCommit {
     pub hook: Option<CommitHook>,
     /// Every re-commit.
     pub recommits: Mutex<Vec<RecommitCall>>,
+    /// The id of every uninstall.
+    pub uninstalls: Mutex<Vec<String>>,
 }
 
 impl RecordingCommit {
@@ -191,7 +193,16 @@ impl RecordingCommit {
             fail: Mutex::new(None),
             hook: None,
             recommits: Mutex::new(Vec::new()),
+            uninstalls: Mutex::new(Vec::new()),
         }
+    }
+
+    /// The ids uninstalled so far.
+    pub fn uninstalls(&self) -> Vec<String> {
+        self.uninstalls
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     /// The calls so far.
@@ -308,6 +319,22 @@ impl Commit for RecordingCommit {
             Some(err) => Err(err),
             None => Ok(()),
         }
+    }
+
+    /// Records the id; the error of [`Self::fail`] is returned after it. With a `target`, the
+    /// installed copy of the app goes.
+    fn uninstall(&self, id: &str) -> Result<(), CommitError> {
+        self.uninstalls
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(id.to_string());
+        if let Some(err) = self.fail.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            return Err(err);
+        }
+        if let Some(target) = &self.target {
+            let _ = std::fs::remove_dir_all(target.join(format!("play.{id}")));
+        }
+        Ok(())
     }
 }
 

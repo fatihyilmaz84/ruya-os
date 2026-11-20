@@ -138,7 +138,7 @@ Item {
             tryVerify(() => find("paneAbout").activeFocus, 2000, "About took focus")
             compare(tc.shown(), "back Back", "a fact row of About does nothing on A")
             // RUY-514: the rows state their kind, and A on a fact makes no sound.
-            for (const n of ["aboutVersion", "aboutQt", "aboutServices", "aboutLicence"])
+            for (const n of ["aboutVersion", "aboutQt", "aboutServices", "aboutLicence", "aboutWindowsRunner"])
                 compare(find(n).kind, "info", n)
             compare(find("aboutSystemInfo").kind, "page")
             const selects = Sfx.selectCount
@@ -146,9 +146,12 @@ Item {
             wait(100)
             compare(Sfx.selectCount, selects, "Accept on Image version changes no Sfx count")
             verify(find("aboutVersion").activeFocus, "and focus stays")
-            // The last row opens System information (T-226): that one row offers A.
-            for (let i = 0; i < 3; ++i)
+            // The Windows compatibility fact (RUY-34) offers no A either.
+            for (let i = 0; i < 4; ++i)
                 keyClick(Qt.Key_Down)
+            tryVerify(() => find("aboutWindowsRunner").activeFocus, 2000)
+            compare(tc.shown(), "back Back", "the Windows compatibility row is a fact")
+            // The last row opens System information (T-226): that one row offers A.
             keyClick(Qt.Key_Down)
             tryVerify(() => find("aboutSystemInfo").activeFocus, 2000)
             compare(tc.shown(), "accept Open|back Back", "the System information row")

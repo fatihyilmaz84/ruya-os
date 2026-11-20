@@ -16,7 +16,7 @@
 // Store. The service (ruya-play, RUY-100) does not exist yet, so on Linux the facade stays
 // unavailable until it does.
 //
-// A job's key is the package path for install() and the app id for verify(). Source records:
+// A job's key is the package path for install() and the app id for verify() and remove(). Source records:
 // { drive, driveLabel, path, name, kind, size }. Inspect records: see PlayInfo::toVariant.
 class Play : public QObject
 {
@@ -31,6 +31,9 @@ class Play : public QObject
     // jobFinished(key, "failed"); when it is back, its job table replaces this map and a job that
     // ended otherwise gets a second jobFinished with the real result (as the Store does).
     Q_PROPERTY(QVariantMap jobs READ jobs NOTIFY jobsChanged)
+    // The keys (path or app id) of this session's calls that are not over: sent and not answered yet, or accepted
+    // and their job not finished. A page offers no second call for a key in it (a job reports progress only later).
+    Q_PROPERTY(QStringList inFlight READ inFlight NOTIFY inFlightChanged)
     // True once the service has answered a list, false again when it is lost.
     Q_PROPERTY(bool available READ isAvailable NOTIFY availableChanged)
     // Developer mode (05 7.2): unsigned packages may be installed. An admin's setting, off until the service says.
@@ -45,6 +48,7 @@ public:
 
     QVariantList sources() const { return m_sources; }
     QVariantMap jobs() const { return m_jobs; }
+    QStringList inFlight() const;
     bool isAvailable() const { return m_available; }
     bool isMock() const { return m_backend->isMock(); }
     bool developerMode() const { return m_developerMode; }
@@ -55,6 +59,14 @@ public:
     // answered("install", path, status) says whether a job was queued; its end is jobFinished.
     Q_INVOKABLE void install(const QString &path, bool adminApproved);
     Q_INVOKABLE void verify(const QString &appId);
+    // Remove an installed .play app (RUY-816): the one way the shell removes one (never Store.uninstall).
+    // adminApproved as for install(). answered("remove", appId, status); the job's end is jobFinished with
+    // kind "remove". The player's data stays (05 §10).
+    Q_INVOKABLE void remove(const QString &appId, bool adminApproved);
+    // Is `appId` ("play.<id>") a .play app, so that Remove (not the Store) uninstalls it? The one place that
+    // decides which service removes an app; the service itself answers unknown-app for a Flatpak that is
+    // only named play.<x>.
+    Q_INVOKABLE bool isPlayApp(const QString &appId) const;
     Q_INVOKABLE void cancel(const QString &key);
     Q_INVOKABLE void refreshSources();
     // answered("developer-mode", "", status): "ok", "forbidden" (adminApproved false) or "failed".
@@ -74,25 +86,42 @@ public:
     Q_INVOKABLE void mockFailNext();
     Q_INVOKABLE void mockServiceLost();
     Q_INVOKABLE void mockServiceRegained();
+    // The shell restarted while jobs ran: the facade forgets which job is whose and reads the service's table.
+    Q_INVOKABLE void mockRestartShell();
     // The mock drive's path of a fixture ("starhopper", "pixelforest.play.zip", ...).
     Q_INVOKABLE QString mockPath(const QString &fixture) const;
 
 signals:
     void sourcesChanged();
     void jobsChanged();
+    void inFlightChanged();
     void availableChanged();
     void developerModeChanged();
     void inspected(const QString &path, const QVariantMap &info);
-    // op "inspect" | "install" | "verify" | "cancel" | "developer-mode"; status: a method status of the XML.
+    // op "inspect" | "install" | "verify" | "remove" | "cancel" | "developer-mode"; status: a method status of the XML.
     void answered(const QString &op, const QString &key, const QString &status);
-    // status: a JobFinished status of the XML.
-    void jobFinished(const QString &key, const QString &status);
+    // status: a JobFinished status of the XML. kind: "install" | "verify" | "remove" ("" when the shell cannot tell);
+    // name: the app's display name when the shell knows it (from the service's job table after a restart), else "".
+    void jobFinished(const QString &key, const QString &status, const QString &kind, const QString &name);
     void jobsReconciled();
 
 private:
     void setAvailable(bool available);
 
+    // What kind of job a key names and whose it is: from the calls of this session, and from the service's job table
+    // (which a restarted shell reads).
+    struct JobInfo
+    {
+        QString kind;
+        QString name;
+    };
+    void finishJob(const QString &key, const QString &status);
+    JobInfo infoOf(const QString &key) const;
+
     std::unique_ptr<PlayBackend> m_backend;
+    QHash<QString, QString> m_pending;   // key -> kind of a call not answered yet
+    QHash<QString, QString> m_requested; // key -> kind, for a job this session asked for and the service accepted
+    QHash<QString, JobInfo> m_listed;
     QVariantList m_sources;
     QVariantMap m_jobs;
     // Keys whose job was given up as failed when the service was lost -> the service's job id.

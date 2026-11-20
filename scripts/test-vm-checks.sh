@@ -1655,6 +1655,11 @@ grep -q 'chmod +x "\$pack"' "$here/vm-play-check.sh" && pass "vm-play-check.sh m
 # RUY-834: the verify mode installs the sample, damages one deployed file and expects the job to say so.
 grep -q 'if \[ "\$mode" = verify \]' "$here/vm-play-check.sh" && pass "vm-play-check.sh has a verify mode" || fail "vm-play-check.sh: no verify mode"
 grep -q 'call Verify s' "$here/vm-play-check.sh" && pass "vm-play-check.sh calls Play1.Verify" || fail "vm-play-check.sh never calls Verify"
+# RUY-816: the remove mode calls Play1.Remove with and without admin_approved, waits for the job and expects the
+# records and the deployment gone; its busctl call has the contract's signature (s, a{sv}).
+grep -q 'if \[ "\$mode" = remove \]' "$here/vm-play-check.sh" && pass "vm-play-check.sh has a remove mode" || fail "vm-play-check.sh: no remove mode"
+grep -c "call Remove 'sa{sv}'" "$here/vm-play-check.sh" | grep -qx 3 && grep -A4 'name="Remove"' "$here/../api/dbus/org.ruyaos.Play1.xml" | grep -q 'name="options" type="a{sv}"' && pass "vm-play-check.sh calls Play1.Remove as (s, a{sv}), the signature of Play1.xml" || fail "vm-play-check.sh: its Remove calls do not match Play1.xml"
+grep -q '"remove", "removing", "ok"' "$here/vm-play-check.sh" && pass "vm-play-check.sh expects kind remove, phase removing in the job table" || fail "vm-play-check.sh: the remove job is not checked in state/jobs"
 grep -q 'printf x >> "\$app/\$victim"' "$here/vm-play-check.sh" && pass "vm-play-check.sh damages a deployed file as root" || fail "vm-play-check.sh: no damaged file"
 grep -q '"ok invalid-package"' "$here/vm-play-check.sh" && grep -q 'package.hash_mismatch' "$here/vm-play-check.sh" && pass "vm-play-check.sh expects invalid-package with package.hash_mismatch" || fail "vm-play-check.sh: the damaged file is not expected to be reported"
 grep -q 'truncate -s "\$size"' "$here/vm-play-check.sh" && pass "vm-play-check.sh undoes the damage" || fail "vm-play-check.sh leaves the damaged file"
@@ -1714,7 +1719,7 @@ out="$(bash "$here/vm-play-check.sh" runid "$short" 2>&1)"; rc=$?
 [ "$rc" = 0 ] && [ "${#out}" -le "$rust_max" ] && pass "vm-play-check.sh runid: an id that fits the limit passes" || fail "vm-play-check.sh runid: '$out' (rc $rc)"
 grep -q 'appid="\$(run_id "\$appid")"' "$here/vm-play-check.sh" && grep -q 'with_id "\$zip" "\$work/run.play.zip"' "$here/vm-play-check.sh" && pass "vm-play-check.sh check builds every package from the run-id copy (RUY-879)" || fail "vm-play-check.sh check: not built from the run-id copy"
 ids="$(grep -o 'appid="\$(pkg_id "\$appid" [a-z]*)"' "$here/vm-play-check.sh" | sort | tr '\n' ' ')"
-[ "$ids" = 'appid="$(pkg_id "$appid" perms)" appid="$(pkg_id "$appid" verify)" ' ] && pass "vm-play-check.sh: verify and perms install under their own ids, through pkg_id (RUY-877, RUY-887)" || fail "vm-play-check.sh: mode ids '$ids'"
+[ "$ids" = 'appid="$(pkg_id "$appid" perms)" appid="$(pkg_id "$appid" remove)" appid="$(pkg_id "$appid" verify)" ' ] && pass "vm-play-check.sh: remove, verify and perms install under their own ids, through pkg_id (RUY-877, RUY-887)" || fail "vm-play-check.sh: mode ids '$ids'"
 ! grep -Eq 'appid="\$appid\.|run_id\(\) \{ echo' "$here/vm-play-check.sh" && pass "vm-play-check.sh: no id is made by appending a dotted part (RUY-887)" || fail "vm-play-check.sh: an id with an appended dotted part"
 # RUY-887: every mode's id keeps a last part with '-' valid (verify, perms, the library check, check).
 for part in verify perms library; do
@@ -1782,6 +1787,13 @@ out="$(play_rec true "$tier,\"play_signer_key_id\":{\"type\":\"s\",\"data\":\"$k
 [ "$rc" = 0 ] && expect_contains "library play: a signed run's key id passes" "$out" "play_signer_key_id is the signer's key id" || fail "library play: the expected key id failed: $out"
 out="$(play_rec true "$tier" "$plroot/icon-512.webp" | pj 0 "$kid")"; rc=$?
 [ "$rc" != 0 ] && pass "library play: a missing key id FAILs when the run signs" || fail "library play: a missing key id passed"
+# RUY-903: the native sample has no play_runner keys and the launcher's resolution does not refuse it.
+out="$(play_rec true "$tier" "$plroot/icon-512.webp" | pj)"; rc=$?
+[ "$rc" = 0 ] && expect_contains "library play: a native sample with no runner keys passes" "$out" "a native sample has no play_runner keys" || fail "library play: no runner keys failed: $out"
+out="$(play_rec true "$tier,\"play_resolve_error\":{\"type\":\"s\",\"data\":\"This game's files are damaged\"}" "$plroot/icon-512.webp" | pj)"; rc=$?
+[ "$rc" != 0 ] && expect_contains "library play: a refusal the sample should not have FAILs" "$out" "play_resolve_error for the sample: This game's files are damaged" || fail "library play: a resolve error passed"
+out="$(play_rec true "$tier,\"play_runner\":{\"type\":\"s\",\"data\":\"wine 10.2\"}" "$plroot/icon-512.webp" | pj)"; rc=$?
+[ "$rc" != 0 ] && expect_contains "library play: a runner on a native sample FAILs" "$out" "a native sample has a play_runner key" || fail "library play: a runner on a native sample passed"
 grep -q 'judge_screenshots "\$1" "\$f" "\${2:-0}"' "$here/vm-library-check.sh" && grep -q 'play_judge "\$play_id" "\$shots" ""' "$here/vm-library-check.sh" && pass "vm-library-check.sh play judges the screenshots and the key id of the sample it installs (RUY-886)" || fail "vm-library-check.sh play: play_judge is not given the sample's screenshots"
 # The missing-script FAIL names the full path it looked for (RUY-887).
 nopc="$tmp/nopc"; mkdir -p "$nopc"; cp "$here/vm-library-check.sh" "$nopc/"; : > "$nopc/sample.zip"
@@ -1791,7 +1803,7 @@ expect_contains "library play: a missing vm-play-check.sh FAIL names its path" "
 ! grep -q 'm\["id"\] = ' "$here/vm-library-check.sh" && grep -q '"\$playcheck" withid' "$here/vm-library-check.sh" && pass "vm-library-check.sh has no copy of the id rewrite, it calls vm-play-check.sh withid (RUY-878)" || fail "vm-library-check.sh: its own id rewrite"
 grep -q 'play_pkg_id "\$play_id"' "$here/vm-library-check.sh" && pass "vm-library-check.sh play installs under the id playid prints" || fail "vm-library-check.sh play does not use play_pkg_id"
 n="$(grep -c 'with_id "\$zip"' "$here/vm-play-check.sh")"; m="$(grep 'with_id "\$zip"' "$here/vm-play-check.sh" | grep -c 'bad "with_id.*exit 1')"
-[ "$n" = 3 ] && [ "$m" = 3 ] && pass "vm-play-check.sh: a failed with_id ends the mode with one FAIL (RUY-878)" || fail "vm-play-check.sh: with_id calls $n, ending the mode $m"
+[ "$n" = 4 ] && [ "$m" = 4 ] && pass "vm-play-check.sh: a failed with_id ends the mode with one FAIL (RUY-878)" || fail "vm-play-check.sh: with_id calls $n, ending the mode $m"
 grep -q 'play_clean$' "$here/vm-library-check.sh" && grep -q 'rm -f "$play_state/incoming/vm-library-check.play.zip"' "$here/vm-library-check.sh" && pass "vm-library-check.sh play removes the sample and the incoming file" || fail "vm-library-check.sh play: no clean-up"
 
 echo "== .play VM files (RUY-860) =="
@@ -1812,13 +1824,150 @@ expect_contains "samples_clean_outputs: another sample is untouched" "$left" "sa
 ! grep -q 'rm -rf "\$p/package' "$here/ci-samples-linux.sh" "$here/play-vm-files.sh" && pass "no copy of the sample clean-up outside lib-samples.sh" || fail "a copy of the sample clean-up"
 grep -q 'trap .samples_clean_outputs' "$here/play-vm-files.sh" && grep -q 'output/play-vm' "$here/play-vm-files.sh" && pass "play-vm-files.sh cleans up on exit and writes output/play-vm" || fail "play-vm-files.sh: no clean-up trap or wrong folder"
 
+echo "== vm-runner-check.sh: the Play platform on /usr (RUY-34) =="
+# A fake image under $rr: the real tmpfiles file, a launcher, one Proton runner, ruya-pack and readlink fakes.
+rr="$tmp/runner-root"; rsh="$tmp/runner-shims"; mkdir -p "$rsh" "$rr/usr/lib/tmpfiles.d" "$rr/var/tmp"
+cp "$here/../image/rootfs/usr/lib/tmpfiles.d/ruya-play-platform.conf" "$rr/usr/lib/tmpfiles.d/"
+rp="$rr/usr/lib/ruyaos/play"; rt="$rp/runners/ProtonGE11"
+mkdir -p "$rp/launcher/bin" "$rt/files/lib/wine/x86_64-windows"
+cat > "$rp/launcher/bin/ruya-play-launch" <<'SHIMEOF'
+#!/bin/sh
+echo "ruya-play-launch: ${FAKE_LAUNCH_SAYS:-This game's play.files cannot be read (no file); reinstall it. [package.read_failed]}" >&2
+exit 1
+SHIMEOF
+chmod +x "$rp/launcher/bin/ruya-play-launch"
+hash_ok="$(printf 'ab%.0s' $(seq 32))"
+printf '%s\n' "$hash_ok" > "$rt/.ruya-runner-hash"
+printf 'ProtonGE11\tproton-ge\tproton\tGE-Proton11-12\tBSD-3-Clause\thttps://example.org/\n' > "$rp/runners.list"
+# proton: prints the words after waitforexitandrun's program and /c echo (CR LF, as cmd.exe does) when
+# both STEAM_COMPAT_* folders are set, and nothing when the file "silent" is next to it.
+cat > "$rt/proton" <<'PYEOF'
+import os, sys
+here = os.path.dirname(os.path.abspath(__file__))
+if os.path.exists(os.path.join(here, "silent")):
+    sys.exit(0)
+assert sys.argv[1] == "waitforexitandrun" and sys.argv[2].endswith("cmd.exe"), sys.argv
+assert os.environ.get("STEAM_COMPAT_DATA_PATH"), os.environ
+assert os.path.isdir(os.environ.get("STEAM_COMPAT_CLIENT_INSTALL_PATH", "")), os.environ
+sys.stdout.write(" ".join(sys.argv[5:]) + "\r\n")
+PYEOF
+# readlink: the links of $FAKE_LINKS ("<path> <target>" lines).
+cat > "$rsh/readlink" <<'SHIMEOF'
+#!/bin/sh
+while read -r p t; do [ "$p" = "$1" ] && { echo "$t"; exit 0; }; done < "$FAKE_LINKS"
+exit 1
+SHIMEOF
+# ruya-pack runner-check: ok with $FAKE_PACK_HASH, or refused.
+cat > "$rsh/ruya-pack" <<'SHIMEOF'
+#!/bin/sh
+if [ -n "${FAKE_PACK_REFUSE:-}" ]; then echo '{"ok": false, "problems": [{"code": "runner.unknown_key"}]}'; exit 1; fi
+echo "{\"hash\": \"$FAKE_PACK_HASH\", \"runner\": {\"version\": \"GE-Proton11-12\", \"kind\": \"proton\"}, \"ok\": true}"
+SHIMEOF
+printf '#!/bin/sh\n[ "$1" = -n ] && shift\nexec "$@"\n' > "$rsh/unshare"
+printf '#!/bin/sh\nexit 0\n' > "$rsh/chown"
+chmod +x "$rsh"/*
+printf '%s %s\n' "$rr/var/lib/flatpak/extension/org.ruyaos.Play.Launcher/x86_64/1" /usr/lib/ruyaos/play/launcher \
+    "$rr/var/lib/flatpak/extension/org.ruyaos.Play.Runner.ProtonGE11/x86_64/1" /usr/lib/ruyaos/play/runners/ProtonGE11 > "$tmp/links.good"
+grep -v Launcher "$tmp/links.good" > "$tmp/links.nolauncher"
+sed 's#/usr/lib/ruyaos/play/runners/ProtonGE11$#/usr/lib/ruyaos/play/runners/Other#' "$tmp/links.good" > "$tmp/links.elsewhere"
+rc_() { # <links file> [VAR=value ...]: the check against the fake image
+    local links="$1"; shift
+    env FAKE_LINKS="$links" FAKE_PACK_HASH="$hash_ok" FAKE_BUSCTL_OUT='as 1 "p1"' RUYA_ROOT="$rr" "$@" \
+        PATH="$rsh:$PATH" bash "$here/vm-runner-check.sh" check "$rsh/ruya-pack" 2>&1
+}
+out="$(rc_ "$tmp/links.good")"; rc=$?
+[ "$rc" = 0 ] && expect_contains "runner: a good image passes" "$out" "vm-runner-check: all passed" || fail "runner: a good image: exit $rc, $out"
+expect_contains "runner: the Windows program ran as the profile user" "$out" "ProtonGE11: cmd.exe printed RUYA_RUNNER_OK as ruya-p1 without network"
+expect_contains "runner: the hash is compared" "$out" "hash $hash_ok as recorded"
+out="$(rc_ "$tmp/links.nolauncher")"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner: a missing launcher link FAILs" "$out" "FAIL /var/lib/flatpak/extension/org.ruyaos.Play.Launcher/x86_64/1 is 'no link'" || fail "runner: a missing link: exit $rc"
+out="$(rc_ "$tmp/links.elsewhere")"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner: a link to another folder FAILs" "$out" "is '/usr/lib/ruyaos/play/runners/Other', not a link to the folder" || fail "runner: a wrong link: exit $rc"
+out="$(rc_ "$tmp/links.good" FAKE_PACK_HASH="$(printf 'cd%.0s' $(seq 32))")"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner: a hash that is not the recorded one FAILs" "$out" "FAIL ProtonGE11: runner-check ok=yes" || fail "runner: a hash mismatch: exit $rc"
+out="$(rc_ "$tmp/links.good" FAKE_PACK_REFUSE=1)"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner: a refused runner.json FAILs" "$out" "FAIL ProtonGE11: runner-check ok=no" || fail "runner: a refused runner: exit $rc"
+out="$(rc_ "$tmp/links.good" FAKE_LAUNCH_SAYS="something else")"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner: a launcher that does not refuse in its own words FAILs" "$out" "FAIL the launcher outside a sandbox" || fail "runner: the launcher's answer: exit $rc"
+mv "$rp/runners.list" "$tmp/runners.list.keep"; : > "$rp/runners.list"
+out="$(rc_ "$tmp/links.good")"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner: a runner missing from runners.list FAILs" "$out" "FAIL ProtonGE11 is not in" || fail "runner: runners.list: exit $rc"
+mv "$tmp/runners.list.keep" "$rp/runners.list"
+: > "$rt/silent"
+out="$(rc_ "$tmp/links.good")"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner: no marker from the Windows program FAILs" "$out" "FAIL ProtonGE11: cmd.exe through proton as ruya-p1" || fail "runner: the marker: exit $rc"
+rm -f "$rt/silent"
+out="$(rc_ "$tmp/links.good" FAKE_BUSCTL_OUT='as 0')"; rc=$?
+[ "$rc" = 0 ] && expect_contains "runner: without a profile the program step is a SKIP" "$out" "SKIP: no profile on this VM" || fail "runner: no profile: exit $rc, $out"
+grep -q 'unshare -n runuser -u "$user"' "$here/vm-runner-check.sh" && pass "vm-runner-check.sh runs the program offline as the profile user" || fail "vm-runner-check.sh: the program does not run under unshare -n as the profile user"
+
+echo "== install-runners.sh: the image build's runner step (RUY-34) =="
+ir="$tmp/install-runners"; ish="$tmp/install-shims"; mkdir -p "$ir/runners/ProtonGE11" "$ir/rel/GE-X/files" "$ish"
+printf '#!/bin/sh\necho proton\n' > "$ir/rel/GE-X/proton"; chmod 0755 "$ir/rel/GE-X/proton"
+echo data > "$ir/rel/GE-X/files/open.dll"; chmod 0666 "$ir/rel/GE-X/files/open.dll"
+(cd "$ir/rel" && tar -czf "$ir/release.tar.gz" GE-X)
+rsha="$(sha256sum "$ir/release.tar.gz" | cut -d' ' -f1)"
+printf '# a comment\nurl=https://example.org/release.tar.gz\nsha256=%s\nroot=GE-X\n' "$rsha" > "$ir/runners/ProtonGE11/pin"
+echo '{"format": 1}' > "$ir/runners/ProtonGE11/runner.json"
+# curl -o <file> <url>: copies $FAKE_RELEASE. ruya-pack runner-check <dir> --write-hash --record <list>.
+cat > "$ish/curl" <<'SHIMEOF'
+#!/bin/sh
+while [ "$#" -gt 0 ]; do [ "$1" = -o ] && { cp "$FAKE_RELEASE" "$2"; exit 0; }; shift; done
+exit 1
+SHIMEOF
+cat > "$ish/ruya-pack" <<'SHIMEOF'
+#!/bin/sh
+[ "$1" = runner-check ] && [ "$3" = --write-hash ] && [ "$4" = --record ] || exit 2
+[ -f "$2/runner.json" ] || exit 1
+printf 'ab\n' > "$2/.ruya-runner-hash"
+printf '%s\tproton-ge\n' "$(basename "$2")" >> "$5"
+SHIMEOF
+chmod +x "$ish"/*
+ir_() { env FAKE_RELEASE="$ir/release.tar.gz" PATH="$ish:$PATH" bash "$here/../image/play/install-runners.sh" "$@" 2>&1; }
+out="$(ir_ fetch "$ir/runners" "$ir/play")"; rc=$?
+[ "$rc" = 0 ] && [ -f "$ir/play/runners/ProtonGE11/proton" ] && [ -f "$ir/play/runners/ProtonGE11/runner.json" ] && pass "install-runners: fetch unpacks the pinned release with its runner.json" || fail "install-runners: fetch: exit $rc, $out"
+[ -z "$(find "$ir/play/runners/ProtonGE11" ! -type l -perm /022)" ] && pass "install-runners: nothing it unpacks is group- or world-writable" || fail "install-runners: writable files left: $(find "$ir/play/runners/ProtonGE11" ! -type l -perm /022)"
+out="$(ir_ check "$ish/ruya-pack" "$ir/play" "$ir/meta")"; rc=$?
+[ "$rc" = 0 ] && [ "$(cat "$ir/meta/runners/ProtonGE11/.ruya-runner-hash")" = ab ] && pass "install-runners: check puts each runner's hash into the meta tree" || fail "install-runners: check: exit $rc, $out"
+[ "$(cut -f1 "$ir/meta/runners.list")" = ProtonGE11 ] && pass "install-runners: check writes runners.list from ruya-pack" || fail "install-runners: runners.list is '$(cat "$ir/meta/runners.list")'"
+rm -rf "$ir/play"
+printf 'url=https://example.org/r\nsha256=%s\nroot=GE-X\n' "$(printf '0%.0s' $(seq 64))" > "$ir/runners/ProtonGE11/pin"
+out="$(ir_ fetch "$ir/runners" "$ir/play")"; rc=$?
+[ "$rc" != 0 ] && expect_contains "install-runners: another SHA-256 fails the build" "$out" "is not the pinned release" || fail "install-runners: a wrong hash: exit $rc"
+[ ! -e "$ir/play/runners/ProtonGE11" ] && pass "install-runners: nothing is unpacked from a release that is not the pinned one" || fail "install-runners: a wrong release was unpacked"
+printf 'url=https://example.org/r\nsha256=%s\nroot=GE-X\nmirror=x\n' "$rsha" > "$ir/runners/ProtonGE11/pin"
+out="$(ir_ fetch "$ir/runners" "$ir/play")"; rc=$?
+[ "$rc" != 0 ] && expect_contains "install-runners: an unknown pin line fails the build" "$out" "unknown line: mirror=x" || fail "install-runners: an unknown pin line: exit $rc"
+printf 'url=http://example.org/r\nsha256=%s\nroot=GE-X\n' "$rsha" > "$ir/runners/ProtonGE11/pin"
+out="$(ir_ fetch "$ir/runners" "$ir/play")"; rc=$?
+[ "$rc" != 0 ] && expect_contains "install-runners: a URL that is not https fails the build" "$out" "url is not https" || fail "install-runners: an http URL: exit $rc"
+
+echo "== check-image-manifest.sh: the Play platform's files have rows (RUY-34) =="
+msh="$tmp/manifest-shims"; mkdir -p "$msh"
+# podman run --rm <image> bash -c <script>: a documented leaf for dnf leaves, $FAKE_PLATFORM for the platform.
+cat > "$msh/podman" <<'SHIMEOF'
+#!/bin/sh
+case "$*" in
+*"dnf leaves"*) echo bootc ;;
+*ruyaos/play*) printf '%b' "$FAKE_PLATFORM" ;;
+*) exit 1 ;;
+esac
+SHIMEOF
+chmod +x "$msh/podman"
+out="$(FAKE_PLATFORM='ruya-play-launch\nProtonGE11\n' PATH="$msh:$PATH" bash "$here/check-image-manifest.sh" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && expect_contains "manifest: the launcher and ProtonGE11 are documented" "$out" "1 runner(s) and the launcher" || fail "manifest: a documented platform: exit $rc, $out"
+out="$(FAKE_PLATFORM='ruya-play-launch\nProtonGE11\nWine99\n' PATH="$msh:$PATH" bash "$here/check-image-manifest.sh" 2>&1)"; rc=$?
+[ "$rc" = 1 ] && expect_contains "manifest: a runner without a row FAILs" "$out" "not in docs/image-packages.md: Wine99" || fail "manifest: an undocumented runner: exit $rc, $out"
+out="$(FAKE_PLATFORM='ProtonGE11\n' PATH="$msh:$PATH" bash "$here/check-image-manifest.sh" 2>&1)"; rc=$?
+[ "$rc" = 1 ] && expect_contains "manifest: an image without the launcher FAILs" "$out" "has no /usr/lib/ruyaos/play/launcher/bin/ruya-play-launch" || fail "manifest: no launcher: exit $rc, $out"
+
 echo "== build stage names (RUY-771) =="
 source "$here/lib-stages.sh"
 printf '%s\n' 'ARG X=1' 'FROM a/b:${X} AS one' 'RUN true' 'FROM c as Two' 'FROM d AS three-3' 'FROM quay.io/final:${X}' > "$tmp/Containerfile.stages"
 got="$(ruya_stage_names "$tmp/Containerfile.stages" | tr '\n' ' ')"
 [ "$got" = "one Two three-3 " ] && pass "stage names: 3 named, the final FROM skipped" || fail "stage names: '$got'"
 real="$(ruya_stage_names "$here/../image/Containerfile" | tr '\n' ' ')"
-expect_contains "stage names: real Containerfile" "$real" "shell-build services-build qt-dmabuf xwayland-satellite"
+expect_contains "stage names: real Containerfile" "$real" "shell-build services-build qt-dmabuf xwayland-satellite play-runners play-runners-check"
 
 echo
 if [ "$fails" = 0 ]; then echo "vm-check tests: all passed"; else echo "vm-check tests: $fails failed"; fi

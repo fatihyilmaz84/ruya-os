@@ -4,7 +4,7 @@
 <context>
     <name>AboutPane</name>
     <message>
-        <location filename="../qml/AboutPane.qml" line="+18"/>
+        <location filename="../qml/AboutPane.qml" line="+19"/>
         <source>Image version</source>
         <translation>Image version</translation>
     </message>
@@ -44,7 +44,7 @@
         <translation>Icon font: Apache-2.0. Inter typeface: OFL-1.1.</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+29"/>
         <source>System information</source>
         <translation>System information</translation>
     </message>
@@ -52,6 +52,17 @@
         <location line="+1"/>
         <source>Processor, memory, graphics, storage…</source>
         <translation>Processor, memory, graphics, storage…</translation>
+    </message>
+    <message>
+        <location line="-21"/>
+        <source>Windows compatibility</source>
+        <translation>Windows compatibility</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>%1: %2. Source: %3</source>
+        <extracomment>%1 is a runner&apos;s version (GE-Proton11-12), %2 its licences (SPDX), %3 the web address of its source.</extracomment>
+        <translation>%1: %2. Source: %3</translation>
     </message>
 </context>
 <context>
@@ -776,7 +787,7 @@ This can&apos;t be undone.</translation>
         <translation>Takes effect next time you open it.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>High risk · %1</source>
         <translation>High risk · %1</translation>
     </message>
@@ -828,7 +839,7 @@ This can&apos;t be undone.</translation>
         <translation>This app asks for no special permissions.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+34"/>
         <source>Withdrawn</source>
         <translation>Withdrawn</translation>
     </message>
@@ -838,7 +849,7 @@ This can&apos;t be undone.</translation>
         <translation>Allowed</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+22"/>
         <source>Reset to the app&apos;s defaults</source>
         <translation>Reset to the app&apos;s defaults</translation>
     </message>
@@ -3085,7 +3096,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>InstallPackagePage</name>
     <message>
-        <location filename="../qml/InstallPackagePage.qml" line="+68"/>
+        <location filename="../qml/InstallPackagePage.qml" line="+72"/>
         <source>Developer</source>
         <translation>Developer</translation>
     </message>
@@ -3120,7 +3131,7 @@ This can&apos;t be undone.</translation>
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+324"/>
+        <location line="+339"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
@@ -4339,6 +4350,11 @@ This can&apos;t be undone.</translation>
         <translation>Checking the pictures</translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Uninstalling</source>
+        <translation>Uninstalling</translation>
+    </message>
+    <message>
         <location line="+2"/>
         <source>Installing</source>
         <translation>Installing</translation>
@@ -5522,7 +5538,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>SettingControl</name>
     <message>
-        <location filename="../qml/controls/SettingControl.qml" line="+85"/>
+        <location filename="../qml/controls/SettingControl.qml" line="+82"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -6005,7 +6021,7 @@ This can&apos;t be undone.</translation>
         <translation>Your activity</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Uninstall…</source>
         <translation>Uninstall…</translation>
     </message>
@@ -6015,7 +6031,7 @@ This can&apos;t be undone.</translation>
         <translation>Store options are unavailable right now.</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+136"/>
         <source>Could not uninstall %1. Try again.</source>
         <translation>Could not uninstall %1. Try again.</translation>
     </message>
@@ -6047,7 +6063,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1942"/>
+        <location line="-1957"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -6078,7 +6094,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1673"/>
+        <location line="+1688"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
@@ -7605,13 +7621,13 @@ This can&apos;t be undone.</translation>
 <context>
     <name>UninstallConfirm</name>
     <message>
-        <location filename="../qml/UninstallConfirm.qml" line="+34"/>
-        <location line="+220"/>
+        <location filename="../qml/UninstallConfirm.qml" line="+39"/>
+        <location line="+225"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-220"/>
+        <location line="-225"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -7631,7 +7647,7 @@ This can&apos;t be undone.</translation>
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+48"/>
         <location line="+25"/>
         <location line="+5"/>
         <source>Uninstall %1?</source>
@@ -7648,7 +7664,7 @@ This can&apos;t be undone.</translation>
         <translation>Saved data of every profile is deleted too. This can&apos;t be undone.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+13"/>
         <source>Also delete saved data</source>
         <translation>Also delete saved data</translation>
     </message>

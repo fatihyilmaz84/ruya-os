@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: check generation helper parse perms pkgid restart runid verify withid
+# modes: check generation helper parse perms pkgid remove restart runid verify withid
 # Checks ruya-play (org.ruyaos.Play1, RUY-829, the lead's run under RUY-100) inside a running VM,
 # as root. Modes:
 #   check  (default) every step below
@@ -20,6 +20,12 @@
 #          equals exactly the set 05 section 8 maps those to (no filesystem, no other bus name),
 #          and the deployment's share/ruyaos/play/trust.json says format 1, unverified, no signer,
 #          no store signature
+#   remove RUY-816: install the sample (developer mode, from incoming/), Play1.Remove without
+#          admin_approved is forbidden, of "" invalid, of an app that is not play.<id> or not
+#          installed unknown-app; with admin_approved a job that finishes ok (kind remove, phase
+#          removing in state/jobs): the deployment is gone, Flatpak no longer lists the app, the
+#          installed build is forgotten (state/installed.json), a second Remove is unknown-app, the
+#          package installs again, and the shell-less cleanup leaves nothing behind
 #   runid  host fixtures only: `runid <id>` prints the id check would use for <id>
 #   pkgid  host fixtures only: `pkgid <id> <part>` prints "<id>_<part>" (the one id-suffix rule,
 #          RUY-887; vm-library-check.sh asks it for its own id), FAIL when it passes 120 bytes (PLAY_MAX_ID_BYTES)
@@ -398,12 +404,13 @@ helper_checks() {
     rm -f /var/lib/ruya-play-helper-probe
 }
 
-# Verify <id> and wait for the job; prints "<method status> <job status or ->" (RUY-834).
-verify_wait() {
-    out="$(call Verify s "$1")" || { echo "call-failed -"; return; }
-    st="$(echo "$out" | parse status)"
+# Wait for the job a Verify or Remove call named (its busctl output is $1, or empty when the call
+# failed); prints "<method status> <job status or ->" and, once accepted, the job.
+job_wait() {
+    [ -n "$1" ] || { echo "call-failed -"; return; }
+    st="$(echo "$1" | parse status)"
     [ "$st" = ok ] || { echo "$st -"; return; }
-    job="$(echo "$out" | parse second)"
+    job="$(echo "$1" | parse second)"
     n=0
     while [ "$n" -lt 300 ]; do
         line="$(call ListJobs | parse job "$job")"
@@ -412,6 +419,9 @@ verify_wait() {
     done
     echo "ok timeout $job"
 }
+
+# Verify <id> and wait for the job (RUY-834).
+verify_wait() { job_wait "$(call Verify s "$1")"; }
 
 verify_checks() {
     app="/var/lib/flatpak/app/play.$appid/current/active/files"
@@ -445,6 +455,44 @@ PY
     [ "$1" = unknown-app ] && ok "Verify of an app that is not installed is unknown-app" || bad "Verify of an unknown app: $*"
     set -- $(verify_wait "")
     [ "$1" = invalid ] && ok "Verify of an empty id is invalid" || bad "Verify of an empty id: $*"
+}
+
+# Remove <app id> as an admin and wait for the job (RUY-816).
+remove_wait() { job_wait "$(call Remove 'sa{sv}' "$1" 1 admin_approved b true)"; }
+
+remove_checks() {
+    app="/var/lib/flatpak/app/play.$appid"
+    [ -d "$app" ] || { bad "no deployment at $app"; return; }
+    grep -q "\"$appid\"" "$state/state/installed.json" && ok "the install recorded the build" || bad "state/installed.json has no entry for $appid"
+    # The refusals first: nothing may be removed by them.
+    set -- $(call Remove 'sa{sv}' "play.$appid" 0 | parse status)
+    [ "$1" = forbidden ] && ok "Remove without admin_approved is forbidden" || bad "Remove without admin_approved: $*"
+    set -- $(call Remove 'sa{sv}' "" 1 admin_approved b true | parse status)
+    [ "$1" = invalid ] && ok "Remove of an empty id is invalid" || bad "Remove of an empty id: $*"
+    set -- $(remove_wait "org.example.NotPlay")
+    [ "$1" = unknown-app ] && ok "Remove of an app that is not play.<id> is unknown-app" || bad "Remove of a non-play app: $*"
+    set -- $(remove_wait "play.com.example.not-installed")
+    [ "$1" = unknown-app ] && ok "Remove of an app that is not installed is unknown-app" || bad "Remove of an unknown app: $*"
+    [ -d "$app" ] && ok "the refusals removed nothing" || bad "a refused Remove removed $app"
+    # The removal.
+    set -- $(remove_wait "play.$appid")
+    [ "$1 $2" = "ok ok" ] && ok "Remove of the installed sample finishes ok" || bad "Remove of the installed sample: $*"
+    [ ! -e "$app" ] && ok "the deployment is gone" || bad "$app is still there after Remove"
+    flatpak list --system --app --columns=application 2>/dev/null | grep -qx "play.$appid" && bad "flatpak still lists play.$appid" || ok "flatpak no longer lists play.$appid"
+    grep -q "\"$appid\"" "$state/state/installed.json" && bad "state/installed.json still has $appid" || ok "the installed build is forgotten"
+    python3 - "$state/state/jobs" "$3" <<'PY' && ok "the job table records kind remove, phase removing, ok" || bad "state/jobs has no finished remove job $3"
+import json, sys
+for line in open(sys.argv[1], encoding="utf-8"):
+    j = json.loads(line)
+    if j.get("job") == sys.argv[2] and (j.get("kind"), j.get("phase"), j.get("status")) == ("remove", "removing", "ok"):
+        sys.exit(0)
+sys.exit(1)
+PY
+    set -- $(remove_wait "play.$appid")
+    [ "$1" = unknown-app ] && ok "a second Remove is unknown-app" || bad "the second Remove: $*"
+    # What was removed installs again.
+    got="$(install_wait "$state/incoming/vm-play-check.play.zip")"
+    [ "$got" = ok ] && ok "the package installs again after Remove" || bad "the reinstall: $got"
 }
 
 cleanup() {
@@ -495,6 +543,19 @@ if [ "$mode" = verify ]; then
     [ "$got" = ok ] && ok "the sample installs (developer mode)" || bad "the sample: $got"
     [ "$got" = ok ] && verify_checks
     [ "$fail" = 0 ] && echo "vm-play-check verify: PASS" || echo "vm-play-check verify: FAIL"
+    exit "$fail"
+fi
+
+if [ "$mode" = remove ]; then
+    dev_mode true >/dev/null
+    appid="$(pkg_id "$appid" remove)" || { bad "no remove id for $appid"; exit 1; }
+    with_id "$zip" "$work/remove.play.zip" "$appid" || { bad "with_id: no copy of the sample with the id $appid"; exit 1; }
+    mkdir -p "$state/incoming"
+    install -m 0600 "$work/remove.play.zip" "$state/incoming/vm-play-check.play.zip"
+    got="$(install_wait "$state/incoming/vm-play-check.play.zip")"
+    [ "$got" = ok ] && ok "the sample installs (developer mode)" || bad "the sample: $got"
+    [ "$got" = ok ] && remove_checks
+    [ "$fail" = 0 ] && echo "vm-play-check remove: PASS" || echo "vm-play-check remove: FAIL"
     exit "$fail"
 fi
 

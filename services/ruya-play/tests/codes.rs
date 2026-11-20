@@ -42,6 +42,7 @@ fn every_code_is_asserted_by_a_test() {
         "tests/jobs.rs",
         "tests/toctou.rs",
         "tests/modes.rs",
+        "tests/remove.rs",
         "tests/helper.rs",
         "tests/service.rs",
         "src/core/installed.rs",

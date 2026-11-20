@@ -17,13 +17,21 @@ Item {
         Shell { anchors.fill: parent; version: "test"; focus: true }
     }
 
-    // The status the service last gave the developer-mode call.
+    // The status the service last gave the developer-mode call, every remove call it answered, and every job
+    // the facade saw end: { key, status, kind, name }.
     property string devAnswer: ""
+    property var removeAnswers: []
+    property var finishedJobs: []
     Connections {
         target: Play
         function onAnswered(op, key, status) {
             if (op === "developer-mode")
                 host.devAnswer = status
+            else if (op === "remove")
+                host.removeAnswers = host.removeAnswers.concat([{ key: key, status: status }])
+        }
+        function onJobFinished(key, status, kind, name) {
+            host.finishedJobs = host.finishedJobs.concat([{ key: key, status: status, kind: kind, name: name }])
         }
     }
 
@@ -48,6 +56,8 @@ Item {
             while (Notifications.model.count > 0)
                 Notifications.dismiss(Notifications.model.get(0).toastId)
             Notifications.pending = []
+            host.removeAnswers = []
+            host.finishedJobs = []
             Play.mockReset()
             Store.mockReset()
             Profiles.lock()
@@ -712,6 +722,183 @@ Item {
             verify(find("installButton").visible && !find("installRemove").visible)
         }
 
+        // ---- Removing an installed game (RUY-816) ----
+
+        // Pick Uninstall in the open dialog: Cancel has the focus, Right reaches the danger pill.
+        function confirmUninstall() {
+            tryVerify(() => find("uninstallConfirm").shown, 2000, "the Uninstall dialog")
+            tryVerify(() => find("uninstallCancel").activeFocus, 2000, "it starts on Cancel")
+            keyClick(Qt.Key_Right)
+            verify(find("uninstallGo").activeFocus)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !find("uninstallConfirm").shown, 2000)
+        }
+
+        function test_removing_an_installed_game_asks_play_and_the_page_inspects_again() {
+            start("admin")
+            Play.mockSetInstalled("com.example.oldbad", 7)
+            openPackage("oldbad")
+            tryCompare(page(), "mode", "remove")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("uninstallConfirm").shown, 2000)
+            tryVerify(() => find("uninstallLine").visible, 2000, "the card is drawn")
+            verify(!find("uninstallDeleteData").visible, "Play keeps the saved data: no toggle")
+            compare(find("uninstallLine").text, "Saved data stays on this console.")
+            keyClick(Qt.Key_Up)
+            verify(find("uninstallCancel").activeFocus, "Up has nowhere to go without the toggle")
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Up)
+            verify(find("uninstallGo").activeFocus, "nor from the danger pill")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !find("uninstallConfirm").shown, 2000)
+            tryVerify(() => host.removeAnswers.length === 1, 2000)
+            compare(host.removeAnswers[0], { key: "play.com.example.oldbad", status: "ok" })
+            // The job ends; the page asks Inspect again: no Remove, no "won't start" line, Install is back.
+            tryCompare(page(), "mode", "install", 15000)
+            verify(!find("installRemove").visible)
+            verify(find("installButton").visible)
+            tryVerify(() => page().mainButton() !== null && page().mainButton().activeFocus, 3000, "the focus is on the page's main button")
+            const ended = host.finishedJobs.filter(j => j.kind === "remove")
+            compare(ended.length, 1)
+            compare(ended[0].status, "ok")
+            tryVerify(() => toastTexts().length > 0, 2000)
+            compare(toastTexts(), ["Old Bad Game was uninstalled."], "the Shell's removal toast, and no Installed")
+            compare(Play.jobs["play.com.example.oldbad"], undefined)
+        }
+
+        function test_a_failed_removal_keeps_the_page_as_it_was() {
+            start("admin")
+            Play.mockSetInstalled("com.example.oldbad", 7)
+            openPackage("oldbad")
+            tryCompare(page(), "mode", "remove")
+            keyClick(Qt.Key_Return)
+            Play.mockFailNext()
+            confirmUninstall()
+            tryVerify(() => host.removeAnswers.length === 1, 2000)
+            compare(host.removeAnswers[0].status, "failed")
+            wait(300)
+            compare(page().mode, "remove", "still installed")
+            verify(find("installRemove").visible)
+            tryVerify(() => toastTexts().indexOf("Could not uninstall Old Bad Game. Try again.") >= 0, 2000, "the failure is told")
+            compare(Notifications.model.get(0).kind, "error")
+            tryVerify(() => find("installRemove").activeFocus, 2000, "the focus is back on Remove")
+            verify(tc.shell.uninstallRuns["play.com.example.oldbad"] === undefined, "the run is over")
+        }
+
+        // A running Remove (its key is the app id, not the page's path) makes the page busy: no second Remove, no
+        // Cancel, and only the one success toast at the end (RUY-816 review, round 2).
+        function test_a_running_removal_offers_no_second_remove() {
+            start("admin")
+            Play.mockSetInstalled("com.example.oldbad", 7)
+            openPackage("oldbad")
+            tryCompare(page(), "mode", "remove")
+            Play.mockPauseJobs(true)
+            keyClick(Qt.Key_Return)
+            confirmUninstall()
+            tryCompare(page(), "mode", "busy", 2000, "the removal holds the page")
+            compare(page().phase, "removing")
+            verify(!find("installRemove").visible, "no second Remove")
+            keyClick(Qt.Key_Return)
+            wait(Theme.pageMs + 50)
+            verify(!find("uninstallConfirm").shown, "a press during the removal opens no dialog")
+            Play.mockPauseJobs(false)
+            tryCompare(page(), "mode", "install", 15000)
+            tryVerify(() => toastTexts().length > 0, 2000)
+            compare(toastTexts(), ["Old Bad Game was uninstalled."], "the success toast alone, no 'Could not uninstall'")
+        }
+
+        function test_a_refused_remove_ends_like_a_failed_one() {
+            start("admin")
+            Play.mockSetInstalled("com.example.oldbad", 7)
+            Play.mockPauseJobs(true)
+            Play.verify("play.com.example.oldbad")             // a job of the same app: Remove is busy
+            tryVerify(() => Object.keys(host.finishedJobs).length === 0)
+            find("uninstallConfirm").open("play.com.example.oldbad", "Old Bad Game", { itemId: "x", surface: "hero", title: "Old Bad Game", index: 0 })
+            confirmUninstall()
+            tryVerify(() => host.removeAnswers.length === 1, 2000)
+            compare(host.removeAnswers[0].status, "busy")
+            tryVerify(() => toastTexts().indexOf("Could not uninstall Old Bad Game. Try again.") >= 0, 2000)
+            verify(tc.shell.uninstallRuns["play.com.example.oldbad"] === undefined)
+            Play.mockPauseJobs(false)
+            tryVerify(() => host.finishedJobs.some(j => j.kind === "verify"), 15000)
+            compare(host.finishedJobs[0].kind, "verify", "the running verify kept its own kind")
+        }
+
+        // The card's Uninstall… row for a .play app is Play's, not the Store's (RUY-816).
+        function test_the_options_menu_of_an_installed_play_card_removes_through_play() {
+            Library.resetMockForTests("play")
+            start("admin")
+            const id = "flatpak:play.com.example.starhopper"
+            tryVerify(() => Library.items.some(i => i.id === id))
+            Play.mockSetInstalled("com.example.starhopper", 142)
+            verify(tc.shell.openOptions("hero", id, find("homePlay"), "pill", null))
+            const menu = find("optionsMenu")
+            tryVerify(() => menu.shown && menu.activeFocus, 2000)
+            const ids = menu.rows.map(r => r.id)
+            verify(ids.indexOf("uninstall") >= 0, "Uninstall… is offered: " + ids)
+            for (let i = 0; i < ids.indexOf("uninstall"); ++i)
+                keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            confirmUninstall()
+            tryVerify(() => host.removeAnswers.length === 1, 2000)
+            compare(host.removeAnswers[0], { key: "play.com.example.starhopper", status: "ok" })
+            tryVerify(() => toastTexts().indexOf("Star Hopper was uninstalled.") >= 0, 15000)
+            Library.resetMockForTests("")
+        }
+
+        function test_the_dialog_asks_play_for_a_play_app_and_the_store_for_any_other() {
+            start("admin")
+            const dialog = find("uninstallConfirm")
+            verify(!Play.isPlayApp("org.example.Puzzle"))
+            verify(!Play.isPlayApp("play."), "no id")
+            verify(Play.isPlayApp("play.com.example.oldbad"))
+            // A Flatpak of the Store.
+            dialog.open("org.example.Puzzle", "Block Puzzle")
+            tryVerify(() => find("uninstallDeleteData").visible, 2000, "the Store's toggle")
+            compare(dialog.keepsData, false)
+            tryVerify(() => find("uninstallCancel").activeFocus, 2000)
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !dialog.shown, 2000)
+            wait(300)
+            compare(host.removeAnswers.length, 0, "Play was not asked")
+            // A .play app, from a card's options (Home), with the Shell's own context.
+            Play.mockSetInstalled("com.example.oldbad", 7)
+            dialog.open("play.com.example.oldbad", "Old Bad Game", { itemId: "none", surface: "hero", title: "Old Bad Game", index: 0 })
+            compare(dialog.keepsData, true)
+            confirmUninstall()
+            tryVerify(() => host.removeAnswers.length === 1, 2000)
+            compare(host.removeAnswers[0], { key: "play.com.example.oldbad", status: "ok" })
+            tryVerify(() => host.finishedJobs.some(j => j.kind === "remove" && j.status === "ok"), 15000)
+            tryVerify(() => toastTexts().indexOf("Old Bad Game was uninstalled.") >= 0, 2000)
+        }
+
+        function test_a_verify_job_does_not_toast_installed() {
+            start("admin")
+            Play.mockSetInstalled("com.example.oldbad", 7)
+            Play.verify("play.com.example.oldbad")
+            tryVerify(() => host.finishedJobs.some(j => j.kind === "verify"), 15000)
+            compare(host.finishedJobs[0].kind, "verify")
+            compare(host.finishedJobs[0].status, "ok")
+            wait(300)
+            compare(toastTexts().length, 0, "a verify has no toast of the Shell's")
+        }
+
+        function test_a_toast_after_a_shell_restart_carries_the_name_from_the_job_table() {
+            start("admin")
+            const key = installAndLeave("starhopper", 30)
+            // The shell restarts mid-install: it knows nothing of the job but what the service's table says.
+            tc.shell.playInspected = ({})
+            Play.mockRestartShell()
+            tryVerify(() => Play.jobs[key] !== undefined, 3000, "the table brings the running job back")
+            Play.mockPauseJobs(false)
+            tryVerify(() => toastTexts().length > 0, 15000)
+            compare(toastTexts(), ["Installed: Star Hopper"])
+            const ended = host.finishedJobs.filter(j => j.key === key)
+            compare(ended[ended.length - 1].kind, "install")
+            compare(ended[ended.length - 1].name, "Star Hopper")
+        }
+
         function test_install_from_usb_is_hidden_without_ruya_play() {
             start("admin")
             tc.shell.openPage("store")
@@ -731,7 +918,9 @@ Item {
             verify(find("storagePackages_vol-stick") === null, "Settings -> Storage")
             Play.mockServiceRegained()
             tryCompare(Play, "available", true)
-            tryVerify(() => find("storagePackages_vol-stick") !== null, 3000, "and it is back with the service")
+            // The pane re-syncs on installFromUsbAllowedChanged itself, in the turn the service came back (no
+            // other signal needed: a scan or a volume change would hide a missing handler).
+            verify(find("storagePackages_vol-stick") !== null, "and it is back with the service")
         }
 
         // ---- Screenshots (dev.ps1 shots) ----
@@ -847,6 +1036,19 @@ Item {
                 clearToasts()
                 settle()
                 shot("131-install-revoked-installed-" + lang)
+                // Remove: the Uninstall dialog of a .play app has no data toggle (Play keeps the saved data), and
+                // the page after the job: Remove and its line are gone.
+                keyClick(Qt.Key_Return)
+                tryVerify(() => find("uninstallConfirm").shown && find("uninstallLine").visible, 2000)
+                settle()
+                shot("131a-uninstall-play-app-" + lang)
+                keyClick(Qt.Key_Right)
+                keyClick(Qt.Key_Return)
+                tryCompare(page(), "mode", "install", 15000)
+                tryVerify(() => page().mainButton() !== null && page().mainButton().activeFocus, 3000)
+                clearToasts()
+                settle()
+                shot("131b-install-after-remove-" + lang)
                 closePackage()
 
                 // An update of an installed build that adds two high-risk requests (RUY-853): the page's line, then the sheet.

@@ -152,7 +152,8 @@ for rec in (doc.get("data") or [[]])[0]:
     if val(rec.get("id")) != want:
         continue
     print("found=yes")
-    for k in ("play", "title", "controller", "play_tier", "play_signer", "play_signer_key_id"):
+    for k in ("play", "title", "controller", "play_tier", "play_signer", "play_signer_key_id",
+              "play_runner", "play_runner_source", "play_runner_tested", "play_resolve_error"):
         if k in rec:
             v = val(rec[k])
             print("%s=%s" % (k, str(v).lower() if isinstance(v, bool) else v))
@@ -209,6 +210,17 @@ judge_screenshots() {
     [ "$ordered" = yes ] && ok "the screenshots are the 1080p files in order" || bad "the screenshots are not screenshot-<n>-1080 files in rising order"
 }
 
+# judge_runner <fields>: the sample is a native game, so the launcher's own resolution
+# (ruya-library's dry run, RUY-903) has no runner for it and nothing to refuse. A play_resolve_error
+# here means ruya-library could not read the deployment the way the launcher will (the sentence is
+# printed), a play_runner* key that the resolution invented a runner.
+judge_runner() {
+    local err
+    err="$(echo "$1" | sed -n 's/^play_resolve_error=//p')"
+    [ -z "$err" ] && ok "the launch would not refuse the sample (no play_resolve_error)" || bad "play_resolve_error for the sample: $err"
+    echo "$1" | grep -q '^play_runner' && bad "a native sample has a play_runner key" || ok "a native sample has no play_runner keys"
+}
+
 # play_judge <app id> [screenshots in the sample] [expected signer key id]: ListItems on stdin;
 # PASS/FAIL lines, sets $fail
 play_judge() {
@@ -226,6 +238,7 @@ play_judge() {
     done < <(echo "$f" | grep '^art\.')
     judge_signer_key_id "$f" "${3:-}"
     judge_screenshots "$1" "$f" "${2:-0}"
+    judge_runner "$f"
     # A tier is present only when ruya-play wrote trust.json; when it is there it is a known one.
     if echo "$f" | grep -q '^play_tier='; then
         echo "$f" | grep -Eq '^play_tier=(official|developer|unverified)$' && ok "the tier is a known one" || bad "unknown tier"

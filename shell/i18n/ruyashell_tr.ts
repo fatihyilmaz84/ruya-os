@@ -4,7 +4,7 @@
 <context>
     <name>AboutPane</name>
     <message>
-        <location filename="../qml/AboutPane.qml" line="+18"/>
+        <location filename="../qml/AboutPane.qml" line="+19"/>
         <source>Image version</source>
         <translation>Sistem sürümü</translation>
     </message>
@@ -44,7 +44,7 @@
         <translation>Simge yazı tipi: Apache-2.0. Inter yazı tipi: OFL-1.1.</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+29"/>
         <source>System information</source>
         <translation>Sistem bilgisi</translation>
     </message>
@@ -52,6 +52,17 @@
         <location line="+1"/>
         <source>Processor, memory, graphics, storage…</source>
         <translation>İşlemci, bellek, grafik, depolama…</translation>
+    </message>
+    <message>
+        <location line="-21"/>
+        <source>Windows compatibility</source>
+        <translation>Windows uyumluluğu</translation>
+    </message>
+    <message>
+        <location line="+12"/>
+        <source>%1: %2. Source: %3</source>
+        <extracomment>%1 is a runner&apos;s version (GE-Proton11-12), %2 its licences (SPDX), %3 the web address of its source.</extracomment>
+        <translation>%1: %2. Kaynak: %3</translation>
     </message>
 </context>
 <context>
@@ -774,7 +785,7 @@ Bu geri alınamaz.</translation>
         <translation>Uygulamayı bir sonraki açışınızda geçerli olur.</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+9"/>
         <source>High risk · %1</source>
         <translation>Yüksek risk · %1</translation>
     </message>
@@ -826,7 +837,7 @@ Bu geri alınamaz.</translation>
         <translation>Bu uygulama özel bir izin istemiyor.</translation>
     </message>
     <message>
-        <location line="+35"/>
+        <location line="+34"/>
         <source>Withdrawn</source>
         <translation>Geri alındı</translation>
     </message>
@@ -836,7 +847,7 @@ Bu geri alınamaz.</translation>
         <translation>İzin verildi</translation>
     </message>
     <message>
-        <location line="+23"/>
+        <location line="+22"/>
         <source>Reset to the app&apos;s defaults</source>
         <translation>Uygulamanın varsayılanlarına sıfırla</translation>
     </message>
@@ -3080,7 +3091,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>InstallPackagePage</name>
     <message>
-        <location filename="../qml/InstallPackagePage.qml" line="+68"/>
+        <location filename="../qml/InstallPackagePage.qml" line="+72"/>
         <source>Developer</source>
         <translation>Geliştirici</translation>
     </message>
@@ -3115,7 +3126,7 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+324"/>
+        <location line="+339"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
@@ -4326,6 +4337,11 @@ Bu geri alınamaz.</translation>
         <translation>Görseller denetleniyor</translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>Uninstalling</source>
+        <translation>Kaldırılıyor</translation>
+    </message>
+    <message>
         <location line="+2"/>
         <source>Installing</source>
         <translation>Kuruluyor</translation>
@@ -5503,7 +5519,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SettingControl</name>
     <message>
-        <location filename="../qml/controls/SettingControl.qml" line="+85"/>
+        <location filename="../qml/controls/SettingControl.qml" line="+82"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -5986,7 +6002,7 @@ Bu geri alınamaz.</translation>
         <translation>Etkinliğiniz</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+8"/>
         <source>Uninstall…</source>
         <translation>Kaldır…</translation>
     </message>
@@ -5996,7 +6012,7 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza seçenekleri şu anda kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+123"/>
+        <location line="+136"/>
         <source>Could not uninstall %1. Try again.</source>
         <translation>%1 kaldırılamadı. Yeniden deneyin.</translation>
     </message>
@@ -6028,7 +6044,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1942"/>
+        <location line="-1957"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -6059,7 +6075,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1673"/>
+        <location line="+1688"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
@@ -7582,13 +7598,13 @@ Bu geri alınamaz.</translation>
 <context>
     <name>UninstallConfirm</name>
     <message>
-        <location filename="../qml/UninstallConfirm.qml" line="+34"/>
-        <location line="+220"/>
+        <location filename="../qml/UninstallConfirm.qml" line="+39"/>
+        <location line="+225"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-220"/>
+        <location line="-225"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -7608,7 +7624,7 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+44"/>
+        <location line="+48"/>
         <location line="+25"/>
         <location line="+5"/>
         <source>Uninstall %1?</source>
@@ -7625,7 +7641,7 @@ Bu geri alınamaz.</translation>
         <translation>Tüm profillerin kayıtlı verileri de silinir. Bu geri alınamaz.</translation>
     </message>
     <message>
-        <location line="+12"/>
+        <location line="+13"/>
         <source>Also delete saved data</source>
         <translation>Kayıtlı verileri de sil</translation>
     </message>

@@ -113,10 +113,16 @@ pub struct Plan {
 }
 
 /// A chosen runner on disk.
-struct Root {
-    path: String,
-    entry: Entry,
-    in_use: RunnerInUse,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Root {
+    /// Its folder.
+    pub path: String,
+    /// Its programs.
+    pub entry: Entry,
+    /// What the status file records.
+    pub in_use: RunnerInUse,
+    /// The version the developer tested the component with, for "Tested with 9.20".
+    pub tested: Option<String>,
 }
 
 /// The values of the placeholders of 05 §6.3.
@@ -233,6 +239,7 @@ fn root_of(
                     source: "bundled".into(),
                     hash: None,
                 },
+                tested: None,
             })
         }
         Chosen::System { family, version } => {
@@ -264,6 +271,7 @@ fn root_of(
                     source: "system".into(),
                     hash: found.hash.clone(),
                 },
+                tested: None,
             })
         }
     }
@@ -283,6 +291,33 @@ fn note_text(id: &str, n: &Note) -> String {
     }
 }
 
+/// The runner of every component, by id, and the notes on how they were decided: the one place
+/// that calls `resolve::resolve` and finds the chosen runner on disk. [`plan`] and the library's
+/// dry run ([`crate::dry_run`]) both start here.
+pub fn pick_runners(
+    manifest: &Manifest,
+    bundled: &BTreeMap<String, BundledRunner>,
+    system: &[FoundRunner],
+    over: Override,
+) -> Result<(BTreeMap<String, Root>, Vec<String>), Failure> {
+    let families = runner::bundled_families(bundled);
+    let found: Vec<_> = system.iter().map(FoundRunner::system_runner).collect();
+    let resolution = resolve::resolve(&manifest.components, &found, &families, over);
+    let mut notes = Vec::new();
+    let mut roots: BTreeMap<String, Root> = BTreeMap::new();
+    for (c, r) in manifest.components.iter().zip(&resolution.components) {
+        notes.extend(r.notes.iter().map(|n| note_text(&c.id, n)));
+        let chosen = r
+            .outcome
+            .as_ref()
+            .map_err(|why| Failure::new(why.code(), why.message()))?;
+        let mut root = root_of(c, chosen, bundled, system)?;
+        root.tested = r.tested.clone();
+        roots.insert(c.id.clone(), root);
+    }
+    Ok((roots, notes))
+}
+
 /// Decide how the game starts (see the module docs).
 pub fn plan(inp: &Inputs<'_>) -> Result<Plan, Failure> {
     let m = inp.manifest;
@@ -291,19 +326,7 @@ pub fn plan(inp: &Inputs<'_>) -> Result<Plan, Failure> {
     let config = env_dir(inp.base_env, "XDG_CONFIG_HOME")?;
 
     // Every component gets its runner from the one resolver.
-    let families = runner::bundled_families(inp.bundled);
-    let system: Vec<_> = inp.system.iter().map(FoundRunner::system_runner).collect();
-    let resolution = resolve::resolve(&m.components, &system, &families, inp.over);
-    let mut notes = Vec::new();
-    let mut roots: BTreeMap<String, Root> = BTreeMap::new();
-    for (c, r) in m.components.iter().zip(&resolution.components) {
-        notes.extend(r.notes.iter().map(|n| note_text(&c.id, n)));
-        let chosen = r
-            .outcome
-            .as_ref()
-            .map_err(|why| Failure::new(why.code(), why.message()))?;
-        roots.insert(c.id.clone(), root_of(c, chosen, inp.bundled, inp.system)?);
-    }
+    let (roots, notes) = pick_runners(m, inp.bundled, inp.system, inp.over)?;
     let main = run.component.as_ref().and_then(|id| roots.get(id));
 
     // The prefix, for the kinds that have one.

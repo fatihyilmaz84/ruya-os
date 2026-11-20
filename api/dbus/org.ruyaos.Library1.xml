@@ -49,6 +49,19 @@
                       computed here); absent with no tier or no signer
     play_screenshots as  the 1080p screenshots in order (paths the shell can read, at most 20);
                       absent when there are none
+    play_runner  s    the runner the launch would use for the game's run.component, "<family> <version>"
+                      ("wine 10.2": the family has no space, the version may); absent for a native
+                      game and when play_resolve_error is present
+    play_runner_source s  "bundled" (the copy in the package) or "system" (the image's runner,
+                      /usr/lib/ruyaos/play/runners); present with play_runner
+    play_runner_tested s  the version the developer tested the component with (play.json
+                      "tested"); absent when the package names none or play_runner is absent
+    play_resolve_error s  one English sentence saying why the launch would refuse (no runner of the
+                      family in the image, the image's runner older than the package needs, or the
+                      package's files cannot be read); absent when the game can start or is native.
+                      These four are the launcher's own resolution (ruya-play-launch, ADR-037)
+                      run against the deployment and the image's runners, the package's default
+                      choice; they say nothing of a per-game choice
 
   Order: last_played descending, then title (case-insensitive), then id.
 -->

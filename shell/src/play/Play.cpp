@@ -31,7 +31,19 @@ Play::Play(std::unique_ptr<PlayBackend> backend, QObject *parent)
         emit developerModeChanged();
     });
     connect(m_backend.get(), &PlayBackend::answered, this,
-            [this](const QString &op, const QString &key, const QString &status) { emit answered(op, key, status); });
+            [this](const QString &op, const QString &key, const QString &status) {
+        // A job is the caller's only once the service accepted it; a refused call (busy, forbidden, ...) is none.
+        // Only the answer to the pending call itself settles it: an Inspect answered while an Install of the same
+        // path waits (they share the key) leaves the Install pending.
+        const auto pending = m_pending.constFind(key);
+        if (pending != m_pending.cend() && pending.value() == op) {
+            m_pending.erase(pending);
+            if (status == QLatin1String("ok"))
+                m_requested.insert(key, op);
+            emit inFlightChanged();
+        }
+        emit answered(op, key, status);
+    });
     connect(m_backend.get(), &PlayBackend::jobProgress, this, [this](const QString &key, int percent, const QString &phase) {
         m_lost.remove(key); // a job after the lost one: the lost one is history
         m_jobs.insert(key, QVariantMap{{QStringLiteral("percent"), percent}, {QStringLiteral("phase"), phase}});
@@ -41,7 +53,7 @@ Play::Play(std::unique_ptr<PlayBackend> backend, QObject *parent)
         m_lost.remove(key);
         if (m_jobs.remove(key))
             emit jobsChanged();
-        emit jobFinished(key, status);
+        finishJob(key, status);
     });
     connect(m_backend.get(), &PlayBackend::serviceLost, this, [this](const QHash<QString, QString> &jobKeys) {
         setAvailable(false);
@@ -59,13 +71,15 @@ Play::Play(std::unique_ptr<PlayBackend> backend, QObject *parent)
         for (const QString &key : keys)
             m_lost.insert(key, jobKeys.key(key));
         for (const QString &key : keys)
-            emit jobFinished(key, QStringLiteral("failed"));
+            finishJob(key, QStringLiteral("failed"));
     });
     connect(m_backend.get(), &PlayBackend::jobsListed, this, [this](const QList<StoreJob> &jobs) {
         setAvailable(true);
         // The table is the truth: it replaces what was shown, which may be stale.
         QVariantMap running;
+        m_listed.clear();
         for (const StoreJob &j : jobs) {
+            m_listed.insert(j.appId, {j.kind, j.name});
             if (j.state == QLatin1String("running"))
                 running.insert(j.appId, QVariantMap{{QStringLiteral("percent"), int(j.percent)}, {QStringLiteral("phase"), j.phase}});
         }
@@ -80,7 +94,7 @@ Play::Play(std::unique_ptr<PlayBackend> backend, QObject *parent)
                 continue;
             const auto job = std::find_if(jobs.cbegin(), jobs.cend(), [&it](const StoreJob &j) { return j.id == it.value(); });
             if (job != jobs.cend() && job->state == QLatin1String("finished") && job->status != QLatin1String("failed"))
-                emit jobFinished(it.key(), job->status);
+                finishJob(it.key(), job->status);
         }
         emit jobsReconciled();
     });
@@ -116,6 +130,24 @@ void Play::setAvailable(bool available)
     emit availableChanged();
 }
 
+Play::JobInfo Play::infoOf(const QString &key) const
+{
+    JobInfo info = m_listed.value(key);
+    const auto asked = m_requested.constFind(key);
+    if (asked != m_requested.cend())
+        info.kind = asked.value();
+    return info;
+}
+
+void Play::finishJob(const QString &key, const QString &status)
+{
+    const JobInfo info = infoOf(key);
+    if (m_requested.remove(key))
+        emit inFlightChanged();
+    m_listed.remove(key);
+    emit jobFinished(key, status, info.kind, info.name);
+}
+
 void Play::inspect(const QString &path)
 {
     m_backend->inspect(path);
@@ -123,12 +155,39 @@ void Play::inspect(const QString &path)
 
 void Play::install(const QString &path, bool adminApproved)
 {
+    m_pending.insert(path, QStringLiteral("install"));
+    emit inFlightChanged();
     m_backend->install(path, adminApproved);
 }
 
 void Play::verify(const QString &appId)
 {
+    m_pending.insert(appId, QStringLiteral("verify"));
+    emit inFlightChanged();
     m_backend->verify(appId);
+}
+
+void Play::remove(const QString &appId, bool adminApproved)
+{
+    m_pending.insert(appId, QStringLiteral("remove"));
+    emit inFlightChanged();
+    m_backend->remove(appId, adminApproved);
+}
+
+QStringList Play::inFlight() const
+{
+    QStringList keys = m_pending.keys();
+    for (auto it = m_requested.cbegin(); it != m_requested.cend(); ++it) {
+        if (!keys.contains(it.key()))
+            keys.append(it.key());
+    }
+    keys.sort();
+    return keys;
+}
+
+bool Play::isPlayApp(const QString &appId) const
+{
+    return appId.startsWith(QLatin1String("play.")) && appId.size() > 5;
 }
 
 void Play::cancel(const QString &key)
@@ -152,7 +211,11 @@ void Play::mockReset()
         mock->reset();
         m_jobs.clear();
         m_lost.clear();
+        m_pending.clear();
+        m_requested.clear();
+        m_listed.clear();
         emit jobsChanged();
+        emit inFlightChanged();
         if (m_developerMode) {
             m_developerMode = false;
             emit developerModeChanged();
@@ -213,6 +276,22 @@ void Play::mockServiceRegained()
 {
     if (auto *mock = qobject_cast<MockPlayBackend *>(m_backend.get()))
         mock->regainService();
+}
+
+void Play::mockRestartShell()
+{
+    if (auto *mock = qobject_cast<MockPlayBackend *>(m_backend.get())) {
+        m_pending.clear();
+        m_requested.clear();
+        emit inFlightChanged();
+        m_listed.clear();
+        m_lost.clear();
+        if (!m_jobs.isEmpty()) {
+            m_jobs.clear();
+            emit jobsChanged();
+        }
+        mock->restartShell();
+    }
 }
 
 QString Play::mockPath(const QString &fixture) const

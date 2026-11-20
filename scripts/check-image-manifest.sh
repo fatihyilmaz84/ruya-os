@@ -4,6 +4,8 @@
 # `dnf leaves` lists the packages nothing else depends on: if a package group is added to the image,
 # it shows up here until the manifest gives its reason. Exit 1 lists the unlisted leaves. (The NVIDIA
 # kernel module package has the kernel version in its name: the manifest lists it as kmod-nvidia.)
+# The Play platform's files are not packages (ADR-038, RUY-34): the launcher and every folder of
+# /usr/lib/ruyaos/play/runners must have their row too ("The Play platform" section).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 image="${1:-localhost/ruyaos:dev}"
@@ -14,14 +16,19 @@ leaves="$(podman run --rm "$image" bash -c \
 
 documented="$(grep -oE '`[A-Za-z0-9_.+-]+`' docs/image-packages.md | tr -d '`' | sort -u)"
 
+platform="$(podman run --rm "$image" bash -c \
+    'test -x /usr/lib/ruyaos/play/launcher/bin/ruya-play-launch && echo ruya-play-launch; ls /usr/lib/ruyaos/play/runners' | sort -u)"
+grep -qx ruya-play-launch <<<"$platform" || { echo "check-image-manifest: $image has no /usr/lib/ruyaos/play/launcher/bin/ruya-play-launch"; exit 1; }
+[ "$(wc -l <<<"$platform")" -ge 2 ] || { echo "check-image-manifest: $image has no runner in /usr/lib/ruyaos/play/runners"; exit 1; }
+
 missing=0
 while read -r name; do
     if ! grep -qxF "$name" <<<"$documented"; then
         echo "not in docs/image-packages.md: $name"
         missing=1
     fi
-done <<<"$leaves"
+done < <(printf '%s\n%s\n' "$leaves" "$platform")
 
-echo "check-image-manifest: $(wc -l <<<"$leaves") leaves in $image"
+echo "check-image-manifest: $(wc -l <<<"$leaves") leaves, $(($(wc -l <<<"$platform") - 1)) runner(s) and the launcher in $image"
 [ "$missing" = 0 ] || exit 1
 echo "check-image-manifest: ok"
