@@ -294,8 +294,7 @@ if [ "$mode" = runid ]; then
     exit $?
 fi
 if [ "$mode" = generation ]; then
-    shift
-    generation "$@"
+    generation "${2:?installed.json}" "${3:?id}" ${4:+"$4"}
     exit $?
 fi
 
