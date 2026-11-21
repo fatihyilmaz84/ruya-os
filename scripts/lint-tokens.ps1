@@ -22,7 +22,7 @@ $colourNames = 'white|black|red|green|blue|yellow|orange|purple|violet|pink|brow
 $patterns = 'duration\s*:\s*\d*[1-9]', '["'']#[0-9a-fA-F]{3,8}["'']', "[`"']($colourNames)[`"']", 'Qt\.(rgba|hsla|hsva)\(', 'font\.pixelSize\s*:\s*\(?\s*\d', 'Font\.All(Upper|Lower)case', '\.toUpperCase\('
 # Theme.qml and the theme sets are where colours are defined.
 # "themes" counts only as a directory directly under the scanned root, not anywhere in the path.
-function Test-Skipped($f) { return ($f.Name -eq "Theme.qml") -or ($f.Name -eq "CapsText.qml") -or ($f.FullName.Substring($QmlDir.Length) -match '^[\\/]themes[\\/]') }
+function Test-Skipped($f) { return ($f.Name -eq "Theme.qml") -or ($f.FullName.Substring($QmlDir.Length) -match '^[\\/]themes[\\/]') }
 $hits = @(Get-ChildItem $QmlDir -Recurse -Filter *.qml |
     Where-Object { -not (Test-Skipped $_) } |
     Select-String -Pattern $patterns -CaseSensitive |

@@ -134,11 +134,11 @@ FocusScope {
     // widths are 10 units on every page, so the columns line up across rows.
     //
     // Letters per language: a language is one data entry (add one for each in DeviceSettings.isValidLanguage).
-    // Rows with more keys than fit are narrowed so every row stays 10 units; `upper` lists the
-    // shift mappings that toUpperCase() gets wrong (Turkish dotted/dotless i).
+    // Rows with more keys than fit are narrowed so every row stays 10 units. Shifted letters come
+    // from CapsText (the one owner of caps text, RUY-804), so Turkish i and ı give İ and I.
     readonly property var letterSets: ({
-        en: { top: "qwertyuiop", home: "asdfghjkl", bottom: "zxcvbnm", upper: {} },
-        tr: { top: "qwertyuıopğü", home: "asdfghjklşi", bottom: "zxcvbnmöç", upper: { "i": "İ", "ı": "I" } },
+        en: { top: "qwertyuiop", home: "asdfghjkl", bottom: "zxcvbnm" },
+        tr: { top: "qwertyuıopğü", home: "asdfghjklşi", bottom: "zxcvbnmöç" },
     })
 
     function layoutFor(onSymbols, kind, lang) {
@@ -192,10 +192,7 @@ FocusScope {
         })
     }
 
-    function upper(c) {
-        const set = letterSets[DeviceSettings.language] ?? letterSets.en
-        return set.upper[c] ?? c.toUpperCase()     // token-ok: the key table above is the language rule
-    }
+    function upper(c) { return CapsText.upper(c) }
 
     function labelFor(key) {
         return key.kind === "char" && shift && key.label.length === 1 ? upper(key.label) : key.label
