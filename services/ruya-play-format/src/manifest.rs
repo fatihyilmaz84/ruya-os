@@ -356,30 +356,29 @@ pub fn check_id(id: &str, official: bool) -> Result<(), (&'static str, String)> 
     if id.len() > MAX_ID_BYTES {
         return bad(format!("The id is longer than {MAX_ID_BYTES} bytes."));
     }
+    // LeadingDash is left to the rule below, which names the part; TooLong cannot happen under the
+    // 120 cap above.
+    if let Err(fault) = ruya_flatpak::check_app_id(id) {
+        use ruya_flatpak::AppIdFault::*;
+        match fault {
+            TooFewParts => return bad(format!("The id needs at least {MIN_ID_ELEMENTS} parts separated by dots, like com.example.game.")),
+            EmptyPart => return bad("The id has an empty part between dots.".into()),
+            LeadingDigit(e) => {
+                return bad(format!(
+                    "The id part {eq} starts with a digit.",
+                    eq = crate::problem::quote(&e)
+                ))
+            }
+            BadChar(e) => {
+                return bad(format!(
+                    "The id part {eq} may only contain letters, digits, _ and -.",
+                    eq = crate::problem::quote(&e)
+                ))
+            }
+            TooLong | LeadingDash => {}
+        }
+    }
     let elements: Vec<&str> = id.split('.').collect();
-    if elements.len() < MIN_ID_ELEMENTS {
-        return bad(format!("The id needs at least {MIN_ID_ELEMENTS} parts separated by dots, like com.example.game."));
-    }
-    for e in &elements {
-        if e.is_empty() {
-            return bad("The id has an empty part between dots.".into());
-        }
-        if e.as_bytes()[0].is_ascii_digit() {
-            return bad(format!(
-                "The id part {eq} starts with a digit.",
-                eq = crate::problem::quote(e)
-            ));
-        }
-        if !e
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-        {
-            return bad(format!(
-                "The id part {eq} may only contain letters, digits, _ and -.",
-                eq = crate::problem::quote(e)
-            ));
-        }
-    }
     let last = elements.len() - 1;
     if let Some(e) = elements[..last].iter().find(|e| e.contains('-')) {
         return Err((
