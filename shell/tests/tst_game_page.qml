@@ -562,6 +562,24 @@ Item {
             tryVerify(() => find("homePlay").activeFocus, 2000, "the focus is back on the item that opened the page")
         }
 
+        // The page is keyed on the app id: when the Library drops the item under it, it is still a .play page (RUY-989).
+        function test_a_play_page_whose_item_leaves_stays_a_play_page() {
+            installedHopper()
+            openPage({ id: tc.hopper })
+            const name = page().title
+            verify(name !== "" && name !== "starhopper", "the title is the package's name: " + name)
+            Library.mockRemoveItem(tc.hopper)
+            tryVerify(() => Library.items.find(i => i.id === tc.hopper) === undefined, 2000)
+            compare(tc.shell.currentPage, "appDetail", "the page is still open")
+            compare(page().title, name, "the name it had, not the id's last part")
+            verify(!page().storeDown, "a .play page is never Store-down")
+            verify(!find("detailStoreDown").visible)
+            verify(find("detail_retry") === null || !find("detail_retry").visible, "no Retry")
+            verify(find("fact_source") === null || !find("fact_source").visible, "no Source: Flatpak")
+            verify(!find("detailPrimary") || !find("detailPrimary").visible || !find("detailPrimary").text, "nothing to start")
+            tryVerify(() => find("fact_appId").activeFocus, 2000, "the focus stays on the page, on its first stop")
+        }
+
         // A standard profile asks an admin's PIN, as for a Flatpak (RUY-499).
         function test_a_standard_profile_enters_an_admin_pin_to_remove_a_play_game() {
             Library.resetMockForTests("play")
