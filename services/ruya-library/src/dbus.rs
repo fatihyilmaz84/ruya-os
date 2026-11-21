@@ -1,4 +1,5 @@
-//! org.ruyaos.Library1 on D-Bus. Thin adapter: the rules live in `catalog.rs`.
+//! org.ruyaos.Library1 on D-Bus. Thin adapter: the rules live in `catalog.rs`, `runners.rs` and
+//! `choices.rs`.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -8,8 +9,13 @@ use zbus::interface;
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
 
+use ruya_play_format::resolve::Override;
+
 use crate::catalog::{self, Item};
+use crate::choices::{self, Choices, Status};
 use crate::flatpak::AppLister;
+use crate::play;
+use crate::runners::{self, Resolution, Runner};
 
 pub const BUS_NAME: &str = "org.ruyaos.Library1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Library1";
@@ -25,11 +31,15 @@ pub struct Sources {
     pub play_root: PathBuf,
     /// The image's `.play` runners (`play::RUNNERS_DIR`; a fixture folder in tests).
     pub play_runners: PathBuf,
+    /// Where each profile's runner choices are kept (`/var/lib/ruyaos/library`; a temporary
+    /// folder in tests and with `--session`).
+    pub choices_dir: PathBuf,
 }
 
 pub struct LibraryIface {
     sources: Arc<Sources>,
     items: Mutex<Vec<Item>>,
+    choices: Choices,
 }
 
 impl LibraryIface {
@@ -42,9 +52,60 @@ impl LibraryIface {
             &sources.play_runners,
         );
         LibraryIface {
+            choices: Choices::new(sources.choices_dir.clone()),
             sources: Arc::new(sources),
             items: Mutex::new(items),
         }
+    }
+
+    /// The Flatpak id of the `.play` item `id` (`choices::play_app` on the current list).
+    fn play_app(&self, id: &str) -> Result<String, Status> {
+        match self.items.lock() {
+            Ok(items) => choices::play_app(&items, id),
+            Err(_) => Err(Status::Failed),
+        }
+    }
+
+    /// `GetRunnerChoice`'s rule.
+    pub fn runner_choice(&self, profile: &str, id: &str) -> Result<String, Status> {
+        if !choices::valid_profile_id(profile) {
+            return Err(Status::Invalid);
+        }
+        let app = self.play_app(id)?;
+        self.choices.get(profile, &app)
+    }
+
+    /// `SetRunnerChoice`'s rule: true when the choice changed.
+    pub fn store_runner_choice(
+        &self,
+        profile: &str,
+        id: &str,
+        choice: &str,
+    ) -> Result<bool, Status> {
+        if !choices::valid_profile_id(profile) || !choices::valid_choice(choice) {
+            return Err(Status::Invalid);
+        }
+        let app = self.play_app(id)?;
+        self.choices.set(profile, &app, choice)
+    }
+
+    /// What `ResolveRunner` resolves: the item's deployment, the image's runners and the choice.
+    fn resolution_inputs(
+        &self,
+        id: &str,
+        choice: &str,
+    ) -> Result<(PathBuf, PathBuf, Override), Status> {
+        let over = ruya_play_launch::parse_choice(choice).ok_or(Status::Invalid)?;
+        let app = self.play_app(id)?;
+        let files = play::deployment_files(&self.sources.play_root, &app).ok_or(Status::NotPlay)?;
+        Ok((files, self.sources.play_runners.clone(), over))
+    }
+
+    /// `ResolveRunner`'s rule: the launcher's own dry run with that choice (the code `ListItems`
+    /// gives the package's default to). Off Linux nothing is resolved: an empty resolution.
+    pub fn runner_resolution(&self, id: &str, choice: &str) -> Result<Resolution, Status> {
+        let (files, runners, over) = self.resolution_inputs(id, choice)?;
+        Ok(runners::resolve_in_place(&files, &runners, over).unwrap_or_default())
     }
 
     /// Replaces the list; true when it differs from the one before.
@@ -117,21 +178,50 @@ pub fn record(item: &Item) -> Dict {
         if !play.screenshots.is_empty() {
             entries.push(("play_screenshots", Value::from(play.screenshots.clone())));
         }
-        for (key, value) in [
-            ("play_runner", &play.runner),
-            ("play_runner_source", &play.runner_source),
-            ("play_runner_tested", &play.runner_tested),
-            ("play_resolve_error", &play.resolve_error),
-        ] {
-            if let Some(value) = value {
-                entries.push((key, Value::from(value.clone())));
-            }
-        }
+        entries.extend(resolution_entries(&play.resolution));
     }
+    dict(entries)
+}
+
+fn dict(entries: Vec<(&str, Value<'static>)>) -> Dict {
     entries
         .into_iter()
         .filter_map(|(k, v)| OwnedValue::try_from(v).ok().map(|v| (k.to_owned(), v)))
         .collect()
+}
+
+/// The runner keys of a resolution: the item record's and `ResolveRunner`'s, one code path.
+fn resolution_entries(r: &Resolution) -> Vec<(&'static str, Value<'static>)> {
+    [
+        ("play_runner", &r.runner),
+        ("play_runner_source", &r.runner_source),
+        ("play_runner_tested", &r.runner_tested),
+        ("play_resolve_error", &r.resolve_error),
+    ]
+    .into_iter()
+    .filter_map(|(key, value)| value.as_ref().map(|v| (key, Value::from(v.clone()))))
+    .collect()
+}
+
+/// The `a{sv}` record `ResolveRunner` serves (public for the contract test).
+pub fn resolution_record(r: &Resolution) -> Dict {
+    dict(resolution_entries(r))
+}
+
+/// The `a{sv}` record `ListRunners` serves for one runner (public for the contract test).
+pub fn runner_record(r: &Runner) -> Dict {
+    let mut entries = vec![
+        ("family", Value::from(r.family.clone())),
+        ("kind", Value::from(r.kind.clone())),
+        ("version", Value::from(r.version.clone())),
+    ];
+    if let Some(licence) = &r.licence {
+        entries.push(("licence", Value::from(licence.clone())));
+    }
+    if let Some(url) = &r.source_url {
+        entries.push(("source_url", Value::from(url.clone())));
+    }
+    dict(entries)
 }
 
 #[interface(name = "org.ruyaos.Library1")]
@@ -162,6 +252,69 @@ impl LibraryIface {
 
     #[zbus(signal)]
     async fn items_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
+    async fn list_runners(&self) -> Vec<Dict> {
+        let dir = self.sources.play_runners.clone();
+        // File I/O: not on the executor.
+        let found = blocking::unblock(move || runners::list_in_place(&dir)).await;
+        found.iter().map(runner_record).collect()
+    }
+
+    fn get_runner_choice(&self, profile: &str, id: &str) -> (String, String) {
+        match self.runner_choice(profile, id) {
+            Ok(choice) => (Status::Ok.as_str().to_owned(), choice),
+            Err(status) => (status.as_str().to_owned(), String::new()),
+        }
+    }
+
+    async fn set_runner_choice(
+        &self,
+        profile: &str,
+        id: &str,
+        choice: &str,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        match self.store_runner_choice(profile, id, choice) {
+            Ok(changed) => {
+                if changed {
+                    if let Err(err) =
+                        Self::runner_choice_changed(&emitter, profile, id, choice).await
+                    {
+                        eprintln!("ruya-library: emitting RunnerChoiceChanged failed: {err}");
+                    }
+                }
+                Status::Ok.as_str().to_owned()
+            }
+            Err(status) => {
+                eprintln!(
+                    "ruya-library: SetRunnerChoice {choice:?} for {id:?} of {profile:?} answered {}",
+                    status.as_str()
+                );
+                status.as_str().to_owned()
+            }
+        }
+    }
+
+    async fn resolve_runner(&self, id: &str, choice: &str) -> (String, Dict) {
+        let (files, runners, over) = match self.resolution_inputs(id, choice) {
+            Ok(inputs) => inputs,
+            Err(status) => return (status.as_str().to_owned(), Dict::new()),
+        };
+        // The dry run reads the package and the runners folder: not on the executor.
+        let r = blocking::unblock(move || {
+            runners::resolve_in_place(&files, &runners, over).unwrap_or_default()
+        })
+        .await;
+        (Status::Ok.as_str().to_owned(), resolution_record(&r))
+    }
+
+    #[zbus(signal)]
+    async fn runner_choice_changed(
+        emitter: &SignalEmitter<'_>,
+        profile: &str,
+        id: &str,
+        choice: &str,
+    ) -> zbus::Result<()>;
 }
 
 #[cfg(test)]

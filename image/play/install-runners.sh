@@ -13,8 +13,8 @@
 #                      or world write bits, put runner.json at its root. Needs the network.
 #   install-runners.sh check <ruya-pack> <play> <meta>  `ruya-pack runner-check` on each runner (the
 #                      format's own parser and runner hash, never jq or a shell hash): writes
-#                      <meta>/runners/<Name>/.ruya-runner-hash and the image's list <meta>/runners.list
-#                      (name, family, kind, version, licence, source URL; the About pane reads it)
+#                      <meta>/runners/<Name>/.ruya-runner-hash. The shell lists the runners through
+#                      Library1 ListRunners (RUY-959), which scans the folders themselves
 # Folders are taken in name order. Run by the play-runners stages of image/Containerfile.
 set -euo pipefail
 
@@ -72,18 +72,18 @@ fetch() {
 }
 
 check() {
-    local pack="$1" play="$2" meta="$3" tree name
+    local pack="$1" play="$2" meta="$3" tree name checked=0
     mkdir -p "$meta/runners"
-    : > "$meta/runners.list"
     for tree in "$play"/runners/*/; do
+        [ -d "$tree" ] || continue
         tree="${tree%/}"
         name="$(basename "$tree")"
-        "$pack" runner-check "$tree" --write-hash --record "$meta/runners.list" || die "$name: runner-check refused it"
+        "$pack" runner-check "$tree" --write-hash || die "$name: runner-check refused it"
         install -D -m 0644 "$tree/.ruya-runner-hash" "$meta/runners/$name/.ruya-runner-hash"
+        checked=$((checked + 1))
     done
-    [ -s "$meta/runners.list" ] || die "no runner in $play/runners"
-    chmod 0644 "$meta/runners.list"
-    cat "$meta/runners.list"
+    [ "$checked" -gt 0 ] || die "no runner in $play/runners"
+    echo "install-runners: $checked runner(s) checked"
 }
 
 case "${1:-}" in

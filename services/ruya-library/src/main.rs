@@ -2,7 +2,9 @@
 //! serves on the session bus and, off Linux or without Flatpak, lists a few demo apps.
 //!
 //! The Steam roots come from the home directory in `RUYA_LIBRARY_HOME` (else `HOME`). Pointing
-//! that at the active profile's user is a follow-up (needs the session service, T-130).
+//! that at the active profile's user is a follow-up (needs the session service, T-130). The
+//! profiles' runner choices are kept in `RUYA_LIBRARY_STATE` (else /var/lib/ruyaos/library, or a
+//! folder in the temporary directory with `--session`).
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -57,6 +59,16 @@ fn run() -> Result<(), Box<dyn Error>> {
         lister: lister(session),
         play_root: root.clone(),
         play_runners: PathBuf::from(ruya_library::play::RUNNERS_DIR),
+        choices_dir: std::env::var_os("RUYA_LIBRARY_STATE").map_or_else(
+            || {
+                if session {
+                    std::env::temp_dir().join("ruya-library")
+                } else {
+                    PathBuf::from(STATE_DIR)
+                }
+            },
+            PathBuf::from,
+        ),
     };
     let iface = LibraryIface::new(sources);
 
@@ -82,6 +94,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     })
 }
 
+/// Each profile's runner choices (the unit's StateDirectory, RUY-959).
+const STATE_DIR: &str = "/var/lib/ruyaos/library";
 /// The system Flatpak installation the image serves (spec 03 §5).
 const FLATPAK_ROOT: &str = "/var/lib/flatpak";
 const POLL: Duration = Duration::from_secs(2);

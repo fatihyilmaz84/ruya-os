@@ -76,6 +76,27 @@ struct LibraryItem
     }
 };
 
+// One runner of the image (Library1 "Runner record", ListRunners, RUY-959).
+struct LibraryRunner
+{
+    QString family;  // "proton-ge", "wine"
+    QString kind;    // "wine" | "proton" | "emulator" | "engine"
+    QString version; // "GE-Proton11-12"
+    QString licence; // SPDX; "" when runner.json names none
+    QString sourceUrl;
+
+    QVariantMap toVariant() const
+    {
+        return {
+            {QStringLiteral("family"), family},
+            {QStringLiteral("kind"), kind},
+            {QStringLiteral("version"), version},
+            {QStringLiteral("licence"), licence},
+            {QStringLiteral("sourceUrl"), sourceUrl},
+        };
+    }
+};
+
 // Transport behind the Library QML singleton: org.ruyaos.Library1 over D-Bus, or a mock.
 // Results arrive asynchronously through signals.
 class LibraryBackend : public QObject
@@ -88,12 +109,25 @@ public:
     virtual bool isMock() const = 0;
     virtual void listItems() = 0; // answers with itemsListed
     virtual void rescan() = 0;    // answers with rescanFinished
+    // RUY-959. listRunners answers with runnersListed; the choice calls with their own signals.
+    // `status` is a Library1 status string ("ok", "unknown", "not_play", "invalid", "failed").
+    virtual void listRunners() = 0;
+    virtual void getRunnerChoice(const QString &profile, const QString &id) = 0;
+    virtual void setRunnerChoice(const QString &profile, const QString &id, const QString &choice) = 0;
+    virtual void resolveRunner(const QString &id, const QString &choice) = 0;
 
 signals:
     void itemsListed(const QList<LibraryItem> &items);
     // The list changed in the service: the facade lists again.
     void itemsChanged();
     void rescanFinished();
+    void runnersListed(const QList<LibraryRunner> &runners);
+    void runnerChoiceAnswered(const QString &profile, const QString &id, const QString &status, const QString &choice);
+    void runnerChoiceSet(const QString &profile, const QString &id, const QString &choice, const QString &status);
+    // resolution: playRunner, playRunnerSource, playRunnerTested, playResolveError (each "" when absent).
+    void runnerResolved(const QString &id, const QString &choice, const QString &status, const QVariantMap &resolution);
+    // Library1 RunnerChoiceChanged.
+    void runnerChoiceChanged(const QString &profile, const QString &id, const QString &choice);
 
 protected:
     // Replies can arrive out of order: number each ListItems request when it is sent and report a
@@ -105,7 +139,16 @@ protected:
         if (acceptList(request))
             emit itemsListed(items);
     }
+    // ListRunners replies, the same way.
+    quint64 beginRunnersRequest() { return m_runnersSeq.begin(); }
+    bool acceptRunners(quint64 request) { return m_runnersSeq.accept(request); }
+    void deliverRunners(quint64 request, const QList<LibraryRunner> &runners)
+    {
+        if (acceptRunners(request))
+            emit runnersListed(runners);
+    }
 
 private:
     RequestSequence m_listSeq;
+    RequestSequence m_runnersSeq;
 };

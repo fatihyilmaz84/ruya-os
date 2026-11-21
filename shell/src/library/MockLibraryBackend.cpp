@@ -3,6 +3,7 @@
 
 #include <algorithm>
 
+#include <QRegularExpression>
 #include <QTimer>
 
 namespace {
@@ -49,6 +50,18 @@ void MockLibraryBackend::flatpakUninstalled(const QString &appId)
         b->removeItem(QStringLiteral("flatpak:") + appId);
 }
 
+// The runner image/play/runners/ProtonGE11 pins, as Library1 ListRunners lists it.
+LibraryRunner pinnedProton()
+{
+    LibraryRunner r;
+    r.family = QStringLiteral("proton-ge");
+    r.kind = QStringLiteral("proton");
+    r.version = QStringLiteral("GE-Proton11-12");
+    r.licence = QStringLiteral("BSD-3-Clause AND LGPL-2.1-or-later AND LGPL-2.0-or-later AND Zlib AND MIT AND OFL-1.1");
+    r.sourceUrl = QStringLiteral("https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12");
+    return r;
+}
+
 MockLibraryBackend::MockLibraryBackend(QObject *parent)
     : LibraryBackend(parent)
 {
@@ -56,9 +69,99 @@ MockLibraryBackend::MockLibraryBackend(QObject *parent)
     reset(QString());
 }
 
+void MockLibraryBackend::listRunners()
+{
+    listRunnersDelayed(0);
+}
+
+void MockLibraryBackend::listRunnersDelayed(int ms)
+{
+    const quint64 request = beginRunnersRequest();
+    ++m_pending;
+    QTimer::singleShot(ms, this, [this, request, snapshot = m_runners] {
+        --m_pending;
+        deliverRunners(request, snapshot);
+    });
+}
+
+QString MockLibraryBackend::choiceStatus(const QString &profile, const QString &id) const
+{
+    static const QRegularExpression profileId(QStringLiteral("^[A-Za-z0-9_-]{1,32}$"));
+    if (!profileId.match(profile).hasMatch())
+        return QStringLiteral("invalid");
+    for (const LibraryItem &i : m_items) {
+        if (i.id == id)
+            return i.play ? QStringLiteral("ok") : QStringLiteral("not_play");
+    }
+    return QStringLiteral("unknown");
+}
+
+namespace {
+bool knownChoice(const QString &choice)
+{
+    return choice == QLatin1String("package") || choice == QLatin1String("bundled") || choice == QLatin1String("system");
+}
+} // namespace
+
+void MockLibraryBackend::getRunnerChoice(const QString &profile, const QString &id)
+{
+    const QString status = choiceStatus(profile, id);
+    const QString choice = status == QLatin1String("ok") ? m_choices.value(profile).value(id, QStringLiteral("package")) : QString();
+    QTimer::singleShot(0, this, [this, profile, id, status, choice] { emit runnerChoiceAnswered(profile, id, status, choice); });
+}
+
+void MockLibraryBackend::setRunnerChoice(const QString &profile, const QString &id, const QString &choice)
+{
+    const QString status = knownChoice(choice) ? choiceStatus(profile, id) : QStringLiteral("invalid");
+    bool changed = false;
+    if (status == QLatin1String("ok")) {
+        const QString before = m_choices.value(profile).value(id, QStringLiteral("package"));
+        changed = before != choice;
+        if (choice == QLatin1String("package")) {
+            m_choices[profile].remove(id);
+            if (m_choices.value(profile).isEmpty())
+                m_choices.remove(profile);
+        } else {
+            m_choices[profile].insert(id, choice);
+        }
+    }
+    QTimer::singleShot(0, this, [this, profile, id, choice, status, changed] {
+        if (changed)
+            emit runnerChoiceChanged(profile, id, choice);
+        emit runnerChoiceSet(profile, id, choice, status);
+    });
+}
+
+void MockLibraryBackend::resolveRunner(const QString &id, const QString &choice)
+{
+    // Profile-free: a valid stand-in profile id, so only the id and the choice decide.
+    const QString status = knownChoice(choice) ? choiceStatus(QStringLiteral("mock"), id) : QStringLiteral("invalid");
+    QVariantMap resolution = {
+        {QStringLiteral("playRunner"), QString()},
+        {QStringLiteral("playRunnerSource"), QString()},
+        {QStringLiteral("playRunnerTested"), QString()},
+        {QStringLiteral("playResolveError"), QString()},
+    };
+    if (status == QLatin1String("ok")) {
+        for (const LibraryItem &i : std::as_const(m_items)) {
+            if (i.id != id)
+                continue;
+            resolution.insert(QStringLiteral("playRunner"), i.playRunner);
+            resolution.insert(QStringLiteral("playRunnerSource"), i.playRunnerSource);
+            resolution.insert(QStringLiteral("playRunnerTested"), i.playRunnerTested);
+            resolution.insert(QStringLiteral("playResolveError"), i.playResolveError);
+        }
+    }
+    QTimer::singleShot(0, this, [this, id, choice, status, resolution] { emit runnerResolved(id, choice, status, resolution); });
+}
+
 void MockLibraryBackend::reset(const QString &scenario)
 {
     m_items.clear();
+    // Every scenario has the image's pinned runner and no stored runner choice (RUY-959).
+    m_runners = {pinnedProton()};
+    m_choices.clear();
+    listRunners();
     // "art:<dir>": the default library, each item with a picture from <dir> (tests only, T-281).
     const bool withArt = scenario.startsWith(QLatin1String("art:"));
     if (scenario != QLatin1String("empty")) {

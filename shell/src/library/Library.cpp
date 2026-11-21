@@ -37,7 +37,18 @@ Library::Library(std::unique_ptr<LibraryBackend> backend, QObject *parent)
     });
     connect(m_backend.get(), &LibraryBackend::itemsChanged, this, [this] { m_backend->listItems(); });
     connect(m_backend.get(), &LibraryBackend::rescanFinished, this, &Library::rescanned);
+    connect(m_backend.get(), &LibraryBackend::runnersListed, this, [this](const QList<LibraryRunner> &runners) {
+        m_runners.clear();
+        for (const LibraryRunner &r : runners)
+            m_runners.append(r.toVariant());
+        emit runnersChanged();
+    });
+    connect(m_backend.get(), &LibraryBackend::runnerChoiceAnswered, this, &Library::runnerChoiceAnswered);
+    connect(m_backend.get(), &LibraryBackend::runnerChoiceSet, this, &Library::runnerChoiceSet);
+    connect(m_backend.get(), &LibraryBackend::runnerResolved, this, &Library::runnerResolved);
+    connect(m_backend.get(), &LibraryBackend::runnerChoiceChanged, this, &Library::runnerChoiceChanged);
     m_backend->listItems();
+    m_backend->listRunners();
 }
 
 Library::~Library() = default;
@@ -62,6 +73,41 @@ Library *Library::create(QQmlEngine *, QJSEngine *)
 void Library::rescan()
 {
     m_backend->rescan();
+}
+
+void Library::requestRunnerChoice(const QString &profile, const QString &id)
+{
+    m_backend->getRunnerChoice(profile, id);
+}
+
+void Library::setRunnerChoice(const QString &profile, const QString &id, const QString &choice)
+{
+    m_backend->setRunnerChoice(profile, id, choice);
+}
+
+void Library::resolveRunner(const QString &id, const QString &choice)
+{
+    m_backend->resolveRunner(id, choice);
+}
+
+void Library::mockSetRunners(const QVariantList &runners, int ms)
+{
+    auto *mock = qobject_cast<MockLibraryBackend *>(m_backend.get());
+    if (!mock)
+        return;
+    QList<LibraryRunner> list;
+    for (const QVariant &v : runners) {
+        const QVariantMap m = v.toMap();
+        LibraryRunner r;
+        r.family = m.value(QStringLiteral("family")).toString();
+        r.kind = m.value(QStringLiteral("kind")).toString();
+        r.version = m.value(QStringLiteral("version")).toString();
+        r.licence = m.value(QStringLiteral("licence")).toString();
+        r.sourceUrl = m.value(QStringLiteral("sourceUrl")).toString();
+        list.append(r);
+    }
+    mock->setRunners(list);
+    mock->listRunnersDelayed(ms);
 }
 
 void Library::launch(const QString &id)

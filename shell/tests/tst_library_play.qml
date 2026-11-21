@@ -82,5 +82,87 @@ Item {
             Library.resetMockForTests("")
             tryVerify(() => Library.items.length === 10)
         }
+
+        SignalSpy { id: answered; target: Library; signalName: "runnerChoiceAnswered" }
+        SignalSpy { id: stored; target: Library; signalName: "runnerChoiceSet" }
+        SignalSpy { id: changed; target: Library; signalName: "runnerChoiceChanged" }
+        SignalSpy { id: resolved; target: Library; signalName: "runnerResolved" }
+
+        function choiceOf(profile, id) {
+            answered.clear()
+            Library.requestRunnerChoice(profile, id)
+            tryCompare(answered, "count", 1)
+            return answered.signalArguments[0][2] + " " + answered.signalArguments[0][3]
+        }
+
+        function store(profile, id, choice) {
+            stored.clear()
+            Library.setRunnerChoice(profile, id, choice)
+            tryCompare(stored, "count", 1)
+            return stored.signalArguments[0][3]
+        }
+
+        // RUY-959: the runner choice is per profile, "package" by default and clears; a plain item,
+        // an id that is not installed and an unknown choice are refused with Library1's status strings.
+        function test_the_runner_choice_is_per_profile_and_refuses_what_library1_refuses() {
+            Library.resetMockForTests("play")
+            tryVerify(() => Library.item("flatpak:play.com.example.starhopper").play === true)
+            const hop = "flatpak:play.com.example.starhopper"
+            compare(choiceOf("p1", hop), "ok package")
+            changed.clear()
+            compare(store("p1", hop, "bundled"), "ok")
+            compare(changed.count, 1)
+            compare(changed.signalArguments[0][0], "p1")
+            compare(changed.signalArguments[0][2], "bundled")
+            compare(store("p2", hop, "system"), "ok")
+            compare(choiceOf("p1", hop), "ok bundled")
+            compare(choiceOf("p2", hop), "ok system")
+            compare(store("p1", hop, "bundled"), "ok")
+            compare(changed.count, 2, "no change, no signal")
+            compare(store("p1", hop, "package"), "ok")
+            compare(choiceOf("p1", hop), "ok package")
+            compare(store("p1", "steam:730", "system"), "not_play")
+            compare(store("p1", "flatpak:play.not.installed", "system"), "unknown")
+            compare(store("p1", hop, "proton"), "invalid")
+            compare(store("../x", hop, "system"), "invalid")
+            compare(choiceOf("p1", "steam:730"), "not_play ")
+            Library.resetMockForTests("")
+            compare(choiceOf("p2", "flatpak:play.not.installed"), "unknown ")
+        }
+
+        // RUY-959: ResolveRunner answers with the item's runner keys (the mock resolves every choice as
+        // the package's default) and refuses as the choice calls do.
+        function test_resolve_runner_answers_with_the_runner_keys() {
+            Library.resetMockForTests("play")
+            tryVerify(() => Library.item("flatpak:play.com.example.starhopper").play === true)
+            resolved.clear()
+            Library.resolveRunner("flatpak:play.com.example.starhopper", "system")
+            tryCompare(resolved, "count", 1)
+            compare(resolved.signalArguments[0][2], "ok")
+            const r = resolved.signalArguments[0][3]
+            compare(r.playRunner, "wine 10.2")
+            compare(r.playRunnerSource, "system")
+            compare(r.playRunnerTested, "9.20")
+            compare(r.playResolveError, "")
+            resolved.clear()
+            Library.resolveRunner("steam:730", "system")
+            tryCompare(resolved, "count", 1)
+            compare(resolved.signalArguments[0][2], "not_play")
+            compare(resolved.signalArguments[0][3].playRunner, "")
+            Library.resetMockForTests("")
+        }
+
+        // RUY-959: an older ListRunners reply that arrives after a newer one does not replace it.
+        function test_a_late_runners_reply_does_not_replace_a_newer_one() {
+            const wine = { family: "wine", kind: "wine", version: "10.0", licence: "", sourceUrl: "" }
+            Library.mockSetRunners([wine], 300)
+            Library.mockSetRunners([], 0)
+            tryVerify(() => Library.runners.length === 0)
+            tryVerify(() => Library.mockPendingReplies() === 0, 2000)
+            compare(Library.runners.length, 0, "the late reply of the first list was dropped")
+            Library.resetMockForTests("")
+            tryVerify(() => Library.runners.length === 1)
+            compare(Library.runners[0].version, "GE-Proton11-12")
+        }
     }
 }

@@ -1806,6 +1806,22 @@ n="$(grep -c 'with_id "\$zip"' "$here/vm-play-check.sh")"; m="$(grep 'with_id "\
 [ "$n" = 4 ] && [ "$m" = 4 ] && pass "vm-play-check.sh: a failed with_id ends the mode with one FAIL (RUY-878)" || fail "vm-play-check.sh: with_id calls $n, ending the mode $m"
 grep -q 'play_clean$' "$here/vm-library-check.sh" && grep -q 'rm -f "$play_state/incoming/vm-library-check.play.zip"' "$here/vm-library-check.sh" && pass "vm-library-check.sh play removes the sample and the incoming file" || fail "vm-library-check.sh play: no clean-up"
 
+echo "== vm-library-check.sh runners: Library1 ListRunners and the runner choice (RUY-959) =="
+rj() { printf '%s' "$1" | bash "$here/vm-library-check.sh" runnersjudge 2>&1; }
+ge='{"type":"s","data":"proton-ge"}'
+good='{"type":"aa{sv}","data":[[{"family":'"$ge"',"kind":{"type":"s","data":"proton"},"version":{"type":"s","data":"GE-Proton11-12"},"licence":{"type":"s","data":"BSD-3-Clause"}},{"family":{"type":"s","data":"wine"},"kind":{"type":"s","data":"wine"},"version":{"type":"s","data":"10.0"}}]]}'
+out="$(rj "$good")"; rc=$?
+[ "$rc" = 0 ] && expect_contains "runners: GE-Proton and Wine pass" "$out" "PASS: the image's GE-Proton is listed" || fail "runners: a good listing: exit $rc, $out"
+expect_contains "runners: the count is printed" "$out" "ListRunners lists 2 runner(s)"
+out="$(rj '{"type":"aa{sv}","data":[[{"family":{"type":"s","data":"wine"},"kind":{"type":"s","data":"wine"},"version":{"type":"s","data":"10.0"}}]]}')"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runners: no GE-Proton FAILs" "$out" "FAIL: no proton-ge runner" || fail "runners: no GE-Proton: exit $rc, $out"
+out="$(rj '{"type":"aa{sv}","data":[[]]}')"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runners: an empty list FAILs" "$out" "FAIL: ListRunners lists no runner" || fail "runners: empty: exit $rc, $out"
+out="$(rj '{"type":"aa{sv}","data":[[{"family":'"$ge"',"kind":{"type":"s","data":"proton"},"version":{"type":"s","data":"GE-Proton11-12"}},{"family":{"type":"s","data":"wine"},"kind":{"type":"s","data":"wine"}}]]}')"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runners: a runner without a version FAILs" "$out" "FAIL: a runner without a family, kind or version" || fail "runners: no version: exit $rc, $out"
+grep -q 'systemctl restart ruya-library' "$here/vm-library-check.sh" && grep -q 'set_choice "$prof" "$id" system' "$here/vm-library-check.sh" && grep -q 'play_install "$1" || return' "$here/vm-library-check.sh" && pass "vm-library-check.sh runners stores a choice for the installed sample and restarts the service" || fail "vm-library-check.sh runners: no choice across a restart"
+grep -q 'StateDirectory=ruyaos/library' "$here/../image/rootfs/usr/lib/systemd/system/ruya-library.service" && grep -q 'file=/var/lib/ruyaos/library/' "$here/vm-library-check.sh" && pass "the choice file the check looks at is the unit's StateDirectory" || fail "ruya-library.service StateDirectory and vm-library-check.sh runners disagree"
+
 echo "== .play VM files (RUY-860) =="
 # lib-samples.sh's clean-up removes the build outputs of the named samples only, and
 # scripts/ci-samples-linux.sh and scripts/play-vm-files.sh both use it (no second copy).
@@ -1838,7 +1854,6 @@ SHIMEOF
 chmod +x "$rp/launcher/bin/ruya-play-launch"
 hash_ok="$(printf 'ab%.0s' $(seq 32))"
 printf '%s\n' "$hash_ok" > "$rt/.ruya-runner-hash"
-printf 'ProtonGE11\tproton-ge\tproton\tGE-Proton11-12\tBSD-3-Clause\thttps://example.org/\n' > "$rp/runners.list"
 # proton: prints the words after waitforexitandrun's program and /c echo (CR LF, as cmd.exe does) when
 # both STEAM_COMPAT_* folders are set, and nothing when the file "silent" is next to it.
 cat > "$rt/proton" <<'PYEOF'
@@ -1889,10 +1904,7 @@ out="$(rc_ "$tmp/links.good" FAKE_PACK_REFUSE=1)"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: a refused runner.json FAILs" "$out" "FAIL ProtonGE11: runner-check ok=no" || fail "runner: a refused runner: exit $rc"
 out="$(rc_ "$tmp/links.good" FAKE_LAUNCH_SAYS="something else")"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: a launcher that does not refuse in its own words FAILs" "$out" "FAIL the launcher outside a sandbox" || fail "runner: the launcher's answer: exit $rc"
-mv "$rp/runners.list" "$tmp/runners.list.keep"; : > "$rp/runners.list"
-out="$(rc_ "$tmp/links.good")"; rc=$?
-[ "$rc" = 1 ] && expect_contains "runner: a runner missing from runners.list FAILs" "$out" "FAIL ProtonGE11 is not in" || fail "runner: runners.list: exit $rc"
-mv "$tmp/runners.list.keep" "$rp/runners.list"
+! grep -q 'runners.list' "$here/vm-runner-check.sh" && pass "vm-runner-check.sh reads no runners.list (RUY-959: Library1 ListRunners)" || fail "vm-runner-check.sh still reads runners.list"
 : > "$rt/silent"
 out="$(rc_ "$tmp/links.good")"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: no marker from the Windows program FAILs" "$out" "FAIL ProtonGE11: cmd.exe through proton as ruya-p1" || fail "runner: the marker: exit $rc"
@@ -1909,7 +1921,7 @@ echo data > "$ir/rel/GE-X/files/open.dll"; chmod 0666 "$ir/rel/GE-X/files/open.d
 rsha="$(sha256sum "$ir/release.tar.gz" | cut -d' ' -f1)"
 printf '# a comment\nurl=https://example.org/release.tar.gz\nsha256=%s\nroot=GE-X\n' "$rsha" > "$ir/runners/ProtonGE11/pin"
 echo '{"format": 1}' > "$ir/runners/ProtonGE11/runner.json"
-# curl -o <file> <url>: copies $FAKE_RELEASE. ruya-pack runner-check <dir> --write-hash --record <list>.
+# curl -o <file> <url>: copies $FAKE_RELEASE. ruya-pack runner-check <dir> --write-hash.
 cat > "$ish/curl" <<'SHIMEOF'
 #!/bin/sh
 while [ "$#" -gt 0 ]; do [ "$1" = -o ] && { cp "$FAKE_RELEASE" "$2"; exit 0; }; shift; done
@@ -1917,10 +1929,9 @@ exit 1
 SHIMEOF
 cat > "$ish/ruya-pack" <<'SHIMEOF'
 #!/bin/sh
-[ "$1" = runner-check ] && [ "$3" = --write-hash ] && [ "$4" = --record ] || exit 2
+[ "$1" = runner-check ] && [ "$3" = --write-hash ] && [ "$#" = 3 ] || exit 2
 [ -f "$2/runner.json" ] || exit 1
 printf 'ab\n' > "$2/.ruya-runner-hash"
-printf '%s\tproton-ge\n' "$(basename "$2")" >> "$5"
 SHIMEOF
 chmod +x "$ish"/*
 ir_() { env FAKE_RELEASE="$ir/release.tar.gz" PATH="$ish:$PATH" bash "$here/../image/play/install-runners.sh" "$@" 2>&1; }
@@ -1929,7 +1940,10 @@ out="$(ir_ fetch "$ir/runners" "$ir/play")"; rc=$?
 [ -z "$(find "$ir/play/runners/ProtonGE11" ! -type l -perm /022)" ] && pass "install-runners: nothing it unpacks is group- or world-writable" || fail "install-runners: writable files left: $(find "$ir/play/runners/ProtonGE11" ! -type l -perm /022)"
 out="$(ir_ check "$ish/ruya-pack" "$ir/play" "$ir/meta")"; rc=$?
 [ "$rc" = 0 ] && [ "$(cat "$ir/meta/runners/ProtonGE11/.ruya-runner-hash")" = ab ] && pass "install-runners: check puts each runner's hash into the meta tree" || fail "install-runners: check: exit $rc, $out"
-[ "$(cut -f1 "$ir/meta/runners.list")" = ProtonGE11 ] && pass "install-runners: check writes runners.list from ruya-pack" || fail "install-runners: runners.list is '$(cat "$ir/meta/runners.list")'"
+[ ! -e "$ir/meta/runners.list" ] && expect_contains "install-runners: check writes no runners.list and counts the runners (RUY-959)" "$out" "1 runner(s) checked" || fail "install-runners: check: $out"
+mkdir -p "$ir/empty/runners"
+out="$(ir_ check "$ish/ruya-pack" "$ir/empty" "$ir/meta-empty")"; rc=$?
+[ "$rc" != 0 ] && expect_contains "install-runners: check without a runner fails the build" "$out" "no runner in" || fail "install-runners: check of no runner: exit $rc, $out"
 rm -rf "$ir/play"
 printf 'url=https://example.org/r\nsha256=%s\nroot=GE-X\n' "$(printf '0%.0s' $(seq 64))" > "$ir/runners/ProtonGE11/pin"
 out="$(ir_ fetch "$ir/runners" "$ir/play")"; rc=$?

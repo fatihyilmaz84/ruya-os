@@ -46,17 +46,18 @@ SettingsPane {
         text: qsTr("Icon font: Apache-2.0. Inter typeface: OFL-1.1.")
     }
     // The Windows runners the image carries (ADR-025, ADR-038): their versions, then one licence and
-    // source note each. They update with the OS.
+    // source note each. They update with the OS; Library1 lists them (ListRunners, RUY-959).
+    readonly property var windowsRunners: Library.runners.filter(r => r.kind === "wine" || r.kind === "proton")
     SettingRow {
         objectName: "aboutWindowsRunner"
         kind: "info"
         u: pane.u
-        visible: SystemInfo.windowsRunners.length > 0
+        visible: pane.windowsRunners.length > 0
         label: qsTr("Windows compatibility")
-        value: SystemInfo.windowsRunners.map(r => r.version).join(", ")
+        value: pane.windowsRunners.map(r => r.version).join(", ")
     }
     Repeater {
-        model: SystemInfo.windowsRunners
+        model: pane.windowsRunners
         SettingNote {
             required property var modelData
             required property int index

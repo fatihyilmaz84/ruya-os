@@ -61,9 +61,48 @@
                       package's files cannot be read); absent when the game can start or is native.
                       These four are the launcher's own resolution (ruya-play-launch, ADR-037)
                       run against the deployment and the image's runners, the package's default
-                      choice; they say nothing of a per-game choice
+                      choice; they say nothing of a per-game choice (ResolveRunner below)
 
   Order: last_played descending, then title (case-insensitive), then id.
+
+  Runners (RUY-959). The image's runners are the folders of /usr/lib/ruyaos/play/runners that the
+  launcher itself would accept (ruya_play_launch::runners::scan_in, ADR-038): a folder whose
+  runner.json is missing or invalid is left out, with a line in the journal. Order: folder name.
+
+  Runner record (a{sv}), keys:
+    family       s    runner.json family ("proton-ge", "wine")
+    kind         s    "wine", "proton", "emulator" or "engine"
+    version      s    runner.json version ("GE-Proton11-12", "10.0")
+    licence      s    its SPDX licence; absent when runner.json names none
+    source_url   s    where its source is (https); absent when runner.json names none
+
+  Runner choice (RUY-959, 05 section 6.2). Each profile keeps one choice per .play game:
+    "package"    what the package says (the default; storing it removes the profile's entry)
+    "bundled"    the copy in the package
+    "system"     the image's runner
+  exactly the values ruya-play-launch takes as --runner (ADR-037). The choices are stored per profile
+  under /var/lib/ruyaos/library (one file per profile); `profile` is a Profiles1 id, which the caller
+  (the shell for the signed-in profile, ruya-session for the profile it launches for) passes. `id` is
+  a .play item's id ("flatpak:play.<id>").
+
+  Status strings (stable API):
+    "ok"         done
+    "unknown"    no item with that id is installed
+    "not_play"   the item is not a .play app (a Steam game, a plain Flatpak app, a play.* app from
+                 another remote)
+    "invalid"    a malformed profile id or a choice that is not one of the three
+    "failed"     the choice could not be stored
+
+  ResolveRunner's answer holds the four runner keys of the item record, for the choice asked for
+  instead of the package's default: the launcher's own resolution with that --runner
+  (ruya_play_launch::dry_run, the same code ListItems' keys come from).
+
+  Resolution record (a{sv}), keys (every one may be absent):
+    play_runner  s    "<family> <version>"; absent for a native game and when play_resolve_error is
+                      present
+    play_runner_source s  "bundled" or "system"; present with play_runner
+    play_runner_tested s  the version the developer tested the component with; absent when none
+    play_resolve_error s  one English sentence saying why the launch would refuse with that choice
 -->
 <node>
   <interface name="org.ruyaos.Library1">
@@ -79,6 +118,45 @@
 
     <!-- The list changed; call ListItems again. -->
     <signal name="ItemsChanged"/>
+
+    <!-- The image's runners, in the order above. -->
+    <method name="ListRunners">
+      <arg name="runners" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!-- The profile's runner choice for a .play game: "package" when it has none. `choice` is ""
+         unless the status is "ok". -->
+    <method name="GetRunnerChoice">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="choice" type="s" direction="out"/>
+    </method>
+
+    <!-- Stores the profile's runner choice for a .play game ("package" removes it).
+         RunnerChoiceChanged follows when the choice differs from before. -->
+    <method name="SetRunnerChoice">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="id" type="s" direction="in"/>
+      <arg name="choice" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- What the launch of a .play game would run with that choice (a Resolution record, empty
+         unless the status is "ok"). Nothing is stored. -->
+    <method name="ResolveRunner">
+      <arg name="id" type="s" direction="in"/>
+      <arg name="choice" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="resolution" type="a{sv}" direction="out"/>
+    </method>
+
+    <!-- A profile's choice for a game changed (SetRunnerChoice). -->
+    <signal name="RunnerChoiceChanged">
+      <arg name="profile" type="s"/>
+      <arg name="id" type="s"/>
+      <arg name="choice" type="s"/>
+    </signal>
 
   </interface>
 </node>

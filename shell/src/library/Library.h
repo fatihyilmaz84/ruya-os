@@ -28,6 +28,10 @@ class Library : public QObject
     // True once the service has answered (always, for the mock).
     Q_PROPERTY(bool available READ isAvailable NOTIFY availableChanged)
     Q_PROPERTY(bool mock READ isMock CONSTANT)
+    // The image's runners (Library1 ListRunners, RUY-959), in its order: { family, kind, version,
+    // licence, sourceUrl } ("" for an absent licence or source). Read at start and whenever the
+    // service appears; the mock lists the pinned GE-Proton.
+    Q_PROPERTY(QVariantList runners READ runners NOTIFY runnersChanged)
 
 public:
     explicit Library(std::unique_ptr<LibraryBackend> backend, QObject *parent = nullptr);
@@ -40,6 +44,15 @@ public:
     QVariantList recent() const { return m_recent; }
     bool isAvailable() const { return m_available; }
     bool isMock() const { return m_backend->isMock(); }
+    QVariantList runners() const { return m_runners; }
+
+    // A profile's runner choice for a .play item (Library1, RUY-959): "package", "bundled" or
+    // "system". Each answers with its signal; status is a Library1 status string.
+    Q_INVOKABLE void requestRunnerChoice(const QString &profile, const QString &id);
+    Q_INVOKABLE void setRunnerChoice(const QString &profile, const QString &id, const QString &choice);
+    // What the launch would run the item with for that choice: resolution has playRunner,
+    // playRunnerSource, playRunnerTested and playResolveError ("" when absent), as an item has.
+    Q_INVOKABLE void resolveRunner(const QString &id, const QString &choice);
 
     // rescanned follows when the service has read its files again.
     Q_INVOKABLE void rescan();
@@ -56,24 +69,33 @@ public:
     // items, none with a last played time) or "art:<dir>" (the default items with pictures: art.tile is
     // <dir>/<colour>.png, cycling red, blue, green, white, dark, redblue; T-281 screenshots).
     Q_INVOKABLE void resetMockForTests(const QString &scenario);
-    // A list request whose reply (a snapshot of now) arrives after ms, and how many replies are
-    // still due. No-ops with the D-Bus backend.
+    // A list request whose reply (a snapshot of now) arrives after ms, and how many replies
+    // (ListItems and ListRunners) are still due. No-ops with the D-Bus backend.
     Q_INVOKABLE void mockListDelayed(int ms);
     Q_INVOKABLE int mockPendingReplies() const;
     // The service saw an app go (an uninstall finished, RUY-499): the item leaves the list and itemsChanged
     // follows, as Library1's ItemsChanged does. A no-op with the D-Bus backend.
     Q_INVOKABLE void mockRemoveItem(const QString &id);
+    // Tests only, mock only: the runners the mock lists from now on (maps as in runners), then a
+    // ListRunners whose reply arrives after ms. No-ops with the D-Bus backend.
+    Q_INVOKABLE void mockSetRunners(const QVariantList &runners, int ms = 0);
 
 signals:
     void itemsChanged();
     void availableChanged();
     void rescanned();
     void launchRequested(const QString &id, const QString &launchSpec);
+    void runnersChanged();
+    void runnerChoiceAnswered(const QString &profile, const QString &id, const QString &status, const QString &choice);
+    void runnerChoiceSet(const QString &profile, const QString &id, const QString &choice, const QString &status);
+    void runnerResolved(const QString &id, const QString &choice, const QString &status, const QVariantMap &resolution);
+    void runnerChoiceChanged(const QString &profile, const QString &id, const QString &choice);
 
 private:
     std::unique_ptr<LibraryBackend> m_backend;
     QVariantList m_items;
     QVariantList m_games;
     QVariantList m_recent;
+    QVariantList m_runners;
     bool m_available = false;
 };

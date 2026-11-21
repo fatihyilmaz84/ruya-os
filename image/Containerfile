@@ -125,7 +125,7 @@ RUN set -eux; \
 # `fetch` downloads, verifies and unpacks; its layer changes only when image/play does, and the OS
 # stage copies it as a layer of its own, so an OS update that keeps the pins does not download the
 # runners again. `check` runs ruya-pack runner-check (the format's parser and runner hash) and puts
-# only what it writes (each .ruya-runner-hash, runners.list) into /meta, a small layer.
+# only what it writes (each .ruya-runner-hash) into /meta, a small layer.
 FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION} AS play-runners
 RUN dnf -y install --setopt=install_weak_deps=False tar gzip && dnf clean all
 COPY image/play /src/play
@@ -168,12 +168,11 @@ COPY --from=xwayland-satellite /out/ /
 RUN cat /usr/share/ruyaos/xwayland-satellite-built-against \
     && test -x /usr/bin/Xwayland \
     && if ldd /usr/bin/xwayland-satellite | grep 'not found'; then echo "xwayland-satellite: missing libraries" >&2; exit 1; fi
-# The Play platform (ADR-038): each runner's hash and the list of the image's runners, then the
-# check that every runner has its hash and the launcher is there.
+# The Play platform (ADR-038): each runner's hash, then the check that every runner has its hash
+# and the launcher is there.
 COPY --from=play-runners-check /meta/ /
 RUN test -x /usr/lib/ruyaos/play/launcher/bin/ruya-play-launch \
-    && for d in /usr/lib/ruyaos/play/runners/*/; do test -s "${d}.ruya-runner-hash" && test -f "${d}runner.json" || exit 1; done \
-    && cat /usr/lib/ruyaos/play/runners.list
+    && for d in /usr/lib/ruyaos/play/runners/*/; do test -s "${d}.ruya-runner-hash" && test -f "${d}runner.json" || exit 1; done
 
 # image/rootfs is installed with cp, not COPY: a checkout on Windows has every file and directory
 # at mode 0777, COPY keeps that, and for a directory that a layer introduces (/usr/libexec/ruyaos)
