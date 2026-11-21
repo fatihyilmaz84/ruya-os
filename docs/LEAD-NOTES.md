@@ -2,37 +2,47 @@
 
 The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand off at 50-60 % context; no no-op turns; autonomous after an hour without the owner (`scripts\lead-clock.ps1`); builders run nothing in WSL; check D: before dispatching (4b.2); clean up every merged worktree with `scripts\worktree-done.ps1`**). **Rewrite this file at the end of every lead session**; keep it under about 6 KB. Paper Plane is the source of truth (http://192.168.178.164:8687, project `RUY`). **Goals are formations** (`formation` lists them). This file is the lead's session record.
 
-## State after lead-39 (Opus, 2026-11-21, overnight; the owner asked for .play first; the Dell was offline)
+## State after lead-40 (Opus, 2026-11-21; the owner was present most of the day)
 
-- **Review range:** 6a4b709f..HEAD (all reviewed this session). **Paper Plane `changes` cursor:** 7251.
-- **Merged and Done (15):** RUY-35 (Steam uses GE-Proton), 36 (developer chapter windows-games.md + hello-runner sample + manifest lint), 854 (.play apps in the permission list), 37 (Wine11, licence texts shipped, retention test), 923 (new crate **ruya-flatpak**: Flatpak argv, app-id rule, OARS table; Play1.Remove resets the override), 959 (Library1 ListRunners, per-profile runner choice, ResolveRunner; About reads it), 969 (Proton outside Steam: SteamAppId/SteamGameId=0, PWD), 902 (vm-play-check launch, launch-windows), 904 (session passes `--runner`, asked before the session lock), 914 (Inspect serves signer_name, age_label), 925 (Uninstall on a .play page; UninstallConfirm owns the rule), 980 (Proton checks on x11-run's display, file marker), 905 (Compatibility screen; Library1 resolve codes + fallback; dimmed ChoiceRow), 911 (new crate **ruya-fs**: openat no-follow walk; launcher and session use it), 804 (CapsText: caps in the UI language). Lead fixes: RUY-891 flake, three `review:` commits, `scripts/worktree-done.ps1` (RUY-862 part 1). Last gate on main 3875b06a: **2357 passed, 0 failed**.
-- **Images:** 0.0.97 (24/28) and **0.0.98** (main eba76e75): **26 of 30 PASS**. Proven on 0.0.98: Proton through vm-runner-check on display :0 (969+980), the sample, Wine11 x86_64, launch, remove (override reset), store perms. **Failing, filed high and Ready:** RUY-999 (lead: a .play Windows game crashes on GE-Proton in `launch-windows`: the top .play problem), RUY-1000 (Wine11 i386 cmd.exe), RUY-1001 (library runners: sample install invalid-package), RUY-1002 (perms: metadata-unchanged step). `vm-runner-check steam` needs Steam installed by hand. Detail in RUY-390's comments.
-- **Lead decisions:** ruya-flatpak and ruya-fs as the shared homes (services/CLAUDE.md "Shared homes"); RUY-905's options follow 05 §6.2 (Bundled only with a bundled copy) and the shell translates resolve codes; no profile ids in QML; rustix accepted for ruya-fs; one licence limit (256 bytes) for play.json and runner.json; protonfixes stays on.
+- **Review range:** d639cdbb..HEAD (all reviewed). **Paper Plane `changes` cursor:** 7517.
+- **Merged and Done (20):** RUY-989, 995, 999 (+1000, the same cause), 1001, 1002, 1003, 973, 996, 1005, 1006, 1014, 1018, 1013, 1008, 1009, 1010, 1004; also RUY-1015 (design: ADR-040) and RUY-1020 (folded into 1018). The last gate on main is **2361 passed, 0 failed**.
+- **The .play Windows path works.** On VM 0.0.99 and again on 0.0.100: base queue 17/17 and .play queue 15/15 (launch-windows: `0 quit` twice, the save survives, no network). On the Dell (0.0.99): the sample passes, and **Unreal Tournament GOTY runs as a local .play at 60 FPS** (RUY-1007, from the owner's `C:\GOG Games`; packages stay in `output\ut-play\` and on the Dell, never the repo).
+- **Images:** 0.0.99, then **0.0.100** (main f747f15f), both all PASS. The Dell runs 0.0.100 (rollback 0.0.99): no WebP errors; `bootloader-update.service` fails (Secure Boot without the 2023 CA, RUY-24 item 1). Merged after 0.0.100 and still vm pending: 1018, 1013, 1008, 1009/1010, 1004.
+- **Decisions:**
+  - ADR-036 amended (one CIL module per concern; `ruya_play_runners.cil`).
+  - **ADR-039 Proposed** (a game asks for the player's own ROM; owner decision **RUY-1012**).
+  - **ADR-040 Accepted (architect)**: `run.writable`, the per-profile game tree.
+  - New crate **ruya-ids** (the profile-id and user-name rule).
 
 ## In flight
-Nothing. No worktrees, no running builders. D: 62 GB free. WSL vhdx 68 GB (compact not run after 0.0.98: run `wsl --manage FedoraLinux-44 --compact` when nobody needs WSL for ~2 h, RUY-957).
+- Nothing. RUY-1004 (Play1 `offline`, Try again) merged in lead-40 after a round 2 that added the shot (128b) and the **real Flatpak offline line** from the Dell (`[7] Could not connect to server`); vm pending: RUY-1023. The Dell is free, with UT installed (`play.com.example.utgotylocal`).
 
-## Next (.play path, RUY-780: 44/60 done)
-1. **RUY-999** first (lead, VM debugging: the launcher's log in `${data}/.ruya-play`, the unit's journal, PROTON_LOG; a debugging subagent with the VM worked well for RUY-980). Then 1000, 1001, 1002 (builders), image 0.0.99, VM queue.
-2. Ready .play follow-ups: RUY-995 (high: ruya-fs remove regression on a 0o000 folder), 989, 982, 968, 963, 973, 993, 996.
-3. Then the owner's next goal: **RUY-956 "Steam is first-class"** (owner 2026-11-21).
-4. The inbox holds ~190 tickets: **a planning pass is overdue** (owner wishlist 931-955 needs canvases).
+## Next
+1. **RUY-1019** (Ready, complex, Opus): the launcher's game tree (ADR-040). Then the Dell: UT keeps its settings without `INI=` (RUY-1007).
+2. **RUY-494** (xwayland-satellite wl_shm_pool panic, now seen in 3 games, Wine included): the first X11 lead ticket.
+3. Small .play items: RUY-1011, 1016, 1017, 1021, 1022, 1023, 982, 968, 963.
+4. A **planning pass is overdue** (the inbox is past 190; the owner wishlist RUY-931..955 needs canvases). Then the owner's next goal, **RUY-956 Steam first-class**.
 
 ## Concerns (ranked)
-1. A .play Windows game has never launched end to end (RUY-999).
-2. Disk: four Rust lanes filled D: to 0 twice; always `worktree-done.ps1` after a merge gate; RUY-862's dev.ps1 disk guard is still open.
-3. Long-lived branches collide in vm-*.sh, test-vm-checks.sh, dev-setup.md: have builders `git merge main` before review (done 4 times tonight).
-4. Flakes under load: RUY-880 (notifications fixture, 4 times), RUY-992, the devkitPro git crash (RUY-905 review).
+1. X11 games crash in xwayland-satellite (RUY-494): the biggest gap for real games now.
+2. A .play install needs the network once (the offline runtime set, RUY-916/974, is not built).
+3. Disk: F: had 14 GB free (I deleted the 0.0.96 OCI and the 0.0.56 ISO); the WSL vhdx is 76 GB. `free-space.ps1` compaction is slow (RUY-957).
+4. A merge gate went red once with every QML test green; the log was lost (now kept, see Process).
 
-## Process changes in lead-39
-- **Lead:** `scripts\worktree-done.ps1` replaces hand cleanup (LEAD.md 4b.6). A round past ~300k tokens went to a fresh builder with the round list on the ticket (902, 905): it worked. A stalled builder ("waiting on background work") with its round committed went straight to review (902, 904, 804). VM failures went to a debugging subagent with a booted VM (RUY-980: cause found in 30 min).
-- **Tests:** a check that SKIPs on a missing precondition can hide a failure: the runner checks now FAIL unless nobody is signed in (RUY-980 review).
-- **Paper Plane:** an `update` batch entry takes no `formation` (use `formation add`); creating a ticket without "## Acceptance criteria" in Ready is refused (fine, but the error comes after the create is attempted).
+## Process changes in lead-40
+- **Tests:** `merge-gate.ps1` keeps the whole test run in `output\merge-gate-test.log` and prints real failures, not the fixture tests' "ok ... FAIL" lines.
+- **Lead:**
+  - Linux-only crate tests run in WSL as an unprivileged user on ext4 (root ignores mode bits; drvfs ignores modes). The script is `output\fs-test.sh <worktree> <crates>`; make it a tracked script (inbox).
+  - One debugging agent with a booted VM found all four 0.0.98 failures in 16 min.
+  - A Dell agent ran the sample and a real game.
+  - Lead-checked facts on the Dell (flatpak output formats, the offline error text) caught a real gap in RUY-1004.
+- **Lesson:** a `sed` on a script with Windows paths turned `\f` into a form feed again. Write such files with Write/Edit (CLAUDE.md's rule).
+- **Paper Plane:** none new.
 
 ## Quality signals (one row per lead session)
 
 | Date | Range reviewed | Tasks | Findings (fixed / filed) | `dev.ps1 test` | VM |
 |---|---|---|---|---|---|
-| 2026-11-19/20 (lead-37) | 09c9c08..58bb188 | 11 tickets merged + 4 lead review commits; ADR-037/038 | rounds 2-3 on 855, 898, 900, 901, 890, 886/887 (all real) | 2275 passed, 0 failed | RUY-899 spike ALL PASS (0.0.96) |
 | 2026-11-20/21 (lead-38) | 58bb188..6a4b709 | 5 tickets merged + 4 lead review/docs commits | rounds 2-3 on 816, 744, 909, 35 (all real) | 2305 passed, 0 failed | 0.0.97 failed twice (musl; F: full) |
-| 2026-11-21 (lead-39) | 6a4b709..HEAD | 15 tickets merged + 3 review commits + RUY-891 + worktree-done.ps1; filed 959-1002 | round 2+ on 36, 854, 37, 969, 902, 904, 914, 925 (x2), 980, 905 (x2), 804: all real (licence texts, a lock stall, a false-green SKIP, a relaunch bug) | 2357 passed, 0 failed | 0.0.97 24/28; 0.0.98 26/30 (4 filed) |
+| 2026-11-21 (lead-39) | 6a4b709..d639cdb | 15 tickets merged + 3 review commits + RUY-891 + worktree-done.ps1 | round 2+ on 13 tickets, all real | 2357 passed, 0 failed | 0.0.97 24/28; 0.0.98 26/30 (4 filed) |
+| 2026-11-21 (lead-40) | d639cdb..HEAD | 19 tickets done + ADR-039/040 + 2 lead docs/review commits; filed 1003-1023 | round 2 on 995, 996, 1018 (case-folding, API review), 1004 (shot, real offline text): all real | 2361 passed, 0 failed | 0.0.99 32/32, 0.0.100 32/32; Dell: sample + UT |
