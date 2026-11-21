@@ -27,7 +27,7 @@ Cargo workspace. Each service is a crate named `ruya-<name>` that serves `org.ru
 
 ## Shared homes (look here before writing a helper)
 
-A rule two crates need lives in one library crate, never copied into both: the `.play` format (manifest, file table, paths, limits, problem codes, `runner.json` and the runner hash in `runner.rs`) in `ruya-play-format`; art and video vetting and the art roles in `ruya-play-art`; signatures, keys, tiers and the trust record in `ruya-play-trust`; the served-interface check in `ruya-contract-test`. Inside a service, one module owns each rule (`ruya-play`'s `reconcile::open_ours` is the one origin check). A new rule a second crate will need goes into the library crate in the same branch.
+A rule two crates need lives in one library crate, never copied into both: the `.play` format (manifest, file table, paths, limits, problem codes, `runner.json` and the runner hash in `runner.rs`) in `ruya-play-format`; art and video vetting and the art roles in `ruya-play-art`; signatures, keys, tiers and the trust record in `ruya-play-trust`; Flatpak's app-id grammar and the argument lists of the `flatpak` commands more than one service runs (`override`, `--reset`, `--show`) in `ruya-flatpak` (pure; running them stays with each service); the served-interface check in `ruya-contract-test`. Inside a service, one module owns each rule (`ruya-play`'s `reconcile::open_ours` is the one origin check). A new rule a second crate will need goes into the library crate in the same branch.
 
 ## Integrating a new service into the OS (all three are needed)
 

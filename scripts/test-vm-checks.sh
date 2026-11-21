@@ -1713,6 +1713,28 @@ storexml="$here/../api/dbus/org.ruyaos.Store1.xml"
 grep -A2 'name="GetPermissions"' "$storexml" | grep -q 'name="app_id" type="s"' && grep -A3 'name="WithdrawPermission"' "$storexml" | grep -q 'name="key" type="s"' && grep -q 'store_call GetPermissions s ' "$here/vm-play-check.sh" && grep -q 'store_call WithdrawPermission ss ' "$here/vm-play-check.sh" && grep -q 'store_call ResetPermissions s ' "$here/vm-play-check.sh" && pass "vm-play-check.sh calls Store1's permission methods with the signatures of Store1.xml" || fail "vm-play-check.sh: its Store1 calls do not match Store1.xml"
 grep -q 'permission_list_checks "play.\$appid"' "$here/vm-play-check.sh" && grep -q 'flatpak override --system --reset "play.\$appid"' "$here/vm-play-check.sh" && pass "vm-play-check.sh perms runs the permission list checks and drops the override at exit" || fail "vm-play-check.sh perms: no permission list checks or no override cleanup"
 grep -q 'connect=no' "$here/vm-play-check.sh" && grep -q 'WithdrawPermission ss "\$papp" network' "$here/vm-play-check.sh" && pass "vm-play-check.sh perms withdraws the network and expects a refused connection" || fail "vm-play-check.sh perms: the network-off case is gone"
+# RUY-923: Play1.Remove drops the app's permission override. The remove mode installs a copy of the sample that
+# asks for the network (the perms mode's copy), has an admin withdraw it, expects `flatpak override --system
+# --show` to be empty after the removal and nothing withdrawn after the reinstall.
+an="$tmp/asknet"; mkdir -p "$an"
+python3 - "$an/in.zip" <<'PY'
+import json, sys, zipfile
+with zipfile.ZipFile(sys.argv[1], "w") as z:
+    z.writestr("play.json", json.dumps({"id": "org.example.hello", "title": "Hello", "permissions": {"network": False}}))
+    z.writestr("art/icon.png", b"png")
+PY
+bash "$here/vm-play-check.sh" asknet "$an/in.zip" "$an/out.zip"
+got="$(python3 -c '
+import json, sys, zipfile
+a, b = zipfile.ZipFile(sys.argv[1]), zipfile.ZipFile(sys.argv[2])
+m = json.loads(b.read("play.json"))
+print(m["id"], m["permissions"]["network"], m["permissions"]["multiarch"], m["permissions"]["gamemode"], a.read("art/icon.png") == b.read("art/icon.png"), a.namelist() == b.namelist())
+' "$an/in.zip" "$an/out.zip")"
+[ "$got" = "org.example.hello True True True True True" ] && pass "vm-play-check.sh asknet asks for network, multiarch and gamemode and changes nothing else" || fail "vm-play-check.sh asknet: '$got'"
+grep -c 'asks_network "\$work/id.play.zip"' "$here/vm-play-check.sh" | grep -qx 2 && pass "vm-play-check.sh: perms and remove build the network-asking package with one function" || fail "vm-play-check.sh: perms and remove do not both use asks_network"
+rm_block="$(sed -n '/^remove_checks() {/,/^}/p' "$here/vm-play-check.sh")"
+echo "$rm_block" | grep -q 'WithdrawPermission ss "play.\$appid" network' && echo "$rm_block" | grep -q 'the removal left no override' && echo "$rm_block" | grep -q 'flatpak override --system --show "play.\$appid"' && echo "$rm_block" | grep -q 'the reinstall starts with nothing withdrawn' && pass "vm-play-check.sh remove withdraws the network, expects no override after Play1.Remove and nothing withdrawn after the reinstall (RUY-923)" || fail "vm-play-check.sh remove: the override is not checked after Play1.Remove"
+grep -A5 '^permission_list_checks() {' "$here/vm-play-check.sh" | grep -q 'override --system --reset' && fail "vm-play-check.sh perms resets an earlier run's override at the start again" || pass "vm-play-check.sh perms needs no reset of an earlier run's override (Play1.Remove drops it)"
 # RUY-877: each installing mode has its own id, so no mode meets another's trust record.
 wi="$tmp/withid"; mkdir -p "$wi"
 python3 - "$wi/in.zip" <<'PY'

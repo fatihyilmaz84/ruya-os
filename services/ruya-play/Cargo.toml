@@ -10,6 +10,7 @@ rust-version.workspace = true
 ruya-play-format = { path = "../ruya-play-format" }  # the one parser: Source, validate, Problem
 ruya-play-trust = { path = "../ruya-play-trust" }  # inspect, tiers, continuity, revocation
 ruya-play-art = { path = "../ruya-play-art" }  # art and video vetting
+ruya-flatpak = { path = "../ruya-flatpak" }  # the override reset command line the Store runs too
 serde = { version = "1", features = ["derive"] }  # the jobs and installed-builds state files
 serde_json = "1"
 sha2 = "0.10"  # hashing while unpacking (already in the tree)

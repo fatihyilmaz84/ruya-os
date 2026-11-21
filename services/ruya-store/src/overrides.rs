@@ -244,29 +244,6 @@ pub fn rewithdraw_args(metadata: &Context, keys: &[String], device_input: bool) 
         .collect()
 }
 
-/// `flatpak override` without `--reset` or `--show`: the arguments around the withdraw arguments.
-pub fn override_command(id: &str, args: &[String]) -> Vec<String> {
-    let mut out = vec!["override".to_owned(), "--system".to_owned()];
-    out.extend(args.iter().cloned());
-    out.push(id.to_owned());
-    out
-}
-
-/// `flatpak override --system --reset <id>`: removes the app's override, whoever wrote it. Every
-/// uninstall runs it (`Store::drop_override`), and so can another service that removes a Flatpak.
-pub fn reset_command(id: &str) -> Vec<String> {
-    ["override", "--system", "--reset", id]
-        .map(str::to_owned)
-        .to_vec()
-}
-
-/// `flatpak override --system --show <id>`: the override keyfile, empty without one.
-pub fn show_command(id: &str) -> Vec<String> {
-    ["override", "--system", "--show", id]
-        .map(str::to_owned)
-        .to_vec()
-}
-
 /// Whether the Flatpak that printed `version` (`flatpak --version`: "Flatpak 1.18.4") has
 /// `--device=input`, which came with 1.15.6. Unreadable text counts as no.
 pub fn device_input_supported(version: &str) -> bool {
@@ -368,23 +345,6 @@ mod tests {
         assert_eq!(
             withdraw_args(&host, "host-files", true),
             Ok(args(&["--nofilesystem=host"]))
-        );
-        assert_eq!(
-            override_command("org.example.Racer", &args(&["--unshare=network"])),
-            args(&[
-                "override",
-                "--system",
-                "--unshare=network",
-                "org.example.Racer"
-            ])
-        );
-        assert_eq!(
-            reset_command("org.example.Racer"),
-            args(&["override", "--system", "--reset", "org.example.Racer"])
-        );
-        assert_eq!(
-            show_command("org.example.Racer"),
-            args(&["override", "--system", "--show", "org.example.Racer"])
         );
     }
 

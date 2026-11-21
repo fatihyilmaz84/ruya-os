@@ -982,6 +982,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruya-flatpak"
+version = "0.1.0"
+
+[[package]]
 name = "ruya-inputd"
 version = "0.1.0"
 dependencies = [
@@ -1055,6 +1059,7 @@ dependencies = [
  "image",
  "rustix",
  "ruya-contract-test",
+ "ruya-flatpak",
  "ruya-play-art",
  "ruya-play-format",
  "ruya-play-trust",
@@ -1156,6 +1161,7 @@ dependencies = [
  "quick-xml",
  "rustix",
  "ruya-contract-test",
+ "ruya-flatpak",
  "tempfile",
  "zbus",
 ]
