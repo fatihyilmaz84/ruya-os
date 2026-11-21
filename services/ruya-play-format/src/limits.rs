@@ -87,6 +87,10 @@ pub const MAX_SETUP_STEPS: usize = 16;
 pub const MAX_DISCS: usize = 16;
 /// Most paths in `data.saves` and in `data.cache`, each.
 pub const MAX_DATA_PATHS: usize = 32;
+/// Most `run.writable` folders (ADR-040).
+pub const MAX_WRITABLE: usize = 16;
+/// Most table bytes under all `run.writable` folders together, 2 GiB (ADR-040; an initial value).
+pub const MAX_WRITABLE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// Most players.
 pub const MAX_PLAYERS: u64 = 64;
 /// Most OARS content attributes.
@@ -190,7 +194,7 @@ pub const PERMISSION_KEYS: [&str; 8] = [
     "reasons",
 ];
 /// Every key `run` accepts.
-pub const RUN_KEYS: [&str; 9] = [
+pub const RUN_KEYS: [&str; 10] = [
     "runner",
     "component",
     "command",
@@ -200,6 +204,7 @@ pub const RUN_KEYS: [&str; 9] = [
     "prefix",
     "setup",
     "discs",
+    "writable",
 ];
 /// Every key a `components[]` entry accepts.
 pub const COMPONENT_KEYS: [&str; 7] = [

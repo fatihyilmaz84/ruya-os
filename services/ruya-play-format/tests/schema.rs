@@ -285,6 +285,7 @@ fn the_schema_states_the_same_limits_as_the_crate() {
     );
     assert_eq!(n("/$defs/run/properties/setup/maxItems"), MAX_SETUP_STEPS);
     assert_eq!(n("/$defs/run/properties/discs/maxItems"), MAX_DISCS);
+    assert_eq!(n("/$defs/run/properties/writable/maxItems"), MAX_WRITABLE);
 
     // The env deny table, character for character.
     let exact = ENV_DENY_EXACT.join("|");
@@ -436,4 +437,38 @@ fn the_newer_env_names_are_in_the_schema() {
     ] {
         assert_schema_rejects(&with_run("env", json!({ name: "x" })), name);
     }
+}
+
+#[test]
+fn writable_and_game_are_in_the_schema() {
+    let ok = |writable: Value| {
+        let mut m = Fx::writable().manifest;
+        m["run"]["writable"] = writable;
+        m
+    };
+    assert_schema_ok(&Fx::writable().manifest);
+    assert_schema_ok(&ok(json!(["Save", "System/Cache"])));
+    assert_schema_ok(&with(
+        "data",
+        json!({"saves": ["game:System/UT.ini"], "cache": ["game:Cache"]}),
+    ));
+    for bad in [".", "", "..", "a/../b", "/abs", "a//b", "a/", r"a\b"] {
+        assert_schema_rejects(&ok(json!([bad])), "/run/writable/0");
+    }
+    assert_schema_rejects(
+        &ok(json!((0..17).map(|i| format!("w{i}")).collect::<Vec<_>>())),
+        "/run/writable",
+    );
+    assert_schema_rejects(
+        &with("data", json!({"saves": ["game:../x"]})),
+        "/data/saves/0",
+    );
+    // With writable the working folder is set and starts with ${game}.
+    let mut m = Fx::writable().manifest;
+    m["run"]["cwd"] = json!("${payload}");
+    assert_schema_rejects(&m, "/run/cwd");
+    m["run"].as_object_mut().unwrap().remove("cwd");
+    assert_schema_rejects(&m, "cwd");
+    // ${game} is a placeholder of the working folder; the schema leaves the rest to the crate.
+    assert_schema_ok(&with_run("cwd", json!("${game}/System")));
 }

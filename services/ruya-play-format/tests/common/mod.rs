@@ -62,6 +62,16 @@ impl Fx {
         }
     }
 
+    /// A native game that writes into `payload/Save` and runs from the `${game}` tree (ADR-040).
+    pub fn writable() -> Fx {
+        let mut fx = Fx::minimal();
+        fx.manifest["run"]["command"] = json!(["${game}/game"]);
+        fx.manifest["run"]["cwd"] = json!("${game}");
+        fx.manifest["run"]["writable"] = json!(["Save"]);
+        fx.file("payload/Save/a.ini", b"[a]");
+        fx
+    }
+
     pub fn wine_full() -> Fx {
         let mut fx = Fx::minimal();
         fx.manifest = json!({

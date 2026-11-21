@@ -168,7 +168,7 @@ const FIXES: &[(&str, &str)] = &[
     ("env.", "Remove or rename the environment variable; the console sets its own."),
     ("prefix.", "Fix run.prefix; the launcher creates dosdevices itself."),
     ("art.", "Fix the image as the message says."),
-    ("data.", "Use a prefix:, data: or config: path inside the package's own data."),
+    ("data.", "Use a prefix:, data:, config: or game: path inside the package's own data."),
     ("path.", "Rename the file or folder so its path follows 05 section 4.2."),
     ("entry.", "Remove the entry; a package holds only regular files and folders."),
     ("table.reserved_top_level", "Move the contents below another folder (for example payload/): .ref, launcher, runners and share at the top of a package belong to the console."),

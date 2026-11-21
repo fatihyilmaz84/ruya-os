@@ -193,6 +193,8 @@ pub struct Run {
     pub setup: Vec<SetupStep>,
     /// Disc images in order; `${disc}` is the first.
     pub discs: Vec<String>,
+    /// Payload-relative folders the game may write into (ADR-040); `${game}` is their tree.
+    pub writable: Vec<String>,
 }
 
 /// `permissions`, with the defaults filled in.
@@ -234,7 +236,7 @@ impl Default for Permissions {
 /// `data`: paths that are saves and paths that are cache.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DataPaths {
-    /// `prefix:`, `data:` or `config:` paths kept as saves.
+    /// `prefix:`, `data:`, `config:` or `game:` paths kept as saves.
     pub saves: Vec<String>,
     /// Paths that may be deleted to free space.
     pub cache: Vec<String>,
@@ -988,7 +990,7 @@ impl<'a> Checker<'a> {
 
     fn data_path(&mut self, v: &Value, at: &str) -> Option<String> {
         let s = self.string(v, at)?;
-        let rest = ["prefix:", "data:", "config:"]
+        let rest = ["prefix:", "data:", "config:", "game:"]
             .iter()
             .find_map(|p| s.strip_prefix(p));
         let ok = rest.is_some_and(|r| {
@@ -1005,7 +1007,7 @@ impl<'a> Checker<'a> {
             self.p.add(
                 codes::DATA_PATH,
                 at,
-                "Write the path as prefix:..., data:... or config:... followed by a relative path.",
+                "Write the path as prefix:..., data:..., config:... or game:... followed by a relative path.",
             );
             None
         }
@@ -1545,20 +1547,26 @@ impl<'a> Checker<'a> {
     }
 
     /// Check the placeholders in `s`, and that the program path exists when `program` is set.
-    fn placeholders(&mut self, s: &str, at: &str, components: &[Component], has_discs: bool) {
+    fn placeholders(&mut self, s: &str, at: &str, ctx: &PlaceholderContext) {
         let mut rest = s;
         while let Some(i) = rest.find("${") {
             let after = &rest[i + 2..];
             let Some(end) = after.find('}') else { break };
             let name = &after[..end];
-            if name == "disc" && !has_discs {
+            if name == "game" && !ctx.has_writable {
+                self.p.add(
+                    codes::RUN_GAME_PLACEHOLDER_WITHOUT_WRITABLE,
+                    at,
+                    "${game} is used but run.writable is missing.",
+                );
+            } else if name == "disc" && !ctx.has_discs {
                 self.p.add(
                     codes::RUN_DISC_PLACEHOLDER_WITHOUT_DISCS,
                     at,
                     "${disc} is used but run.discs is missing.",
                 );
             } else if let Some(id) = name.strip_prefix("component:") {
-                if !components.iter().any(|c| c.id == id) {
+                if !ctx.components.iter().any(|c| c.id == id) {
                     self.p.add(
                         codes::RUN_PLACEHOLDER_COMPONENT,
                         at,
@@ -1589,7 +1597,11 @@ impl<'a> Checker<'a> {
     }
 
     fn program_exists(&mut self, arg: &str, at: &str) {
-        if let Some(rel) = arg.strip_prefix("${payload}/") {
+        // `${game}` mirrors `payload/` (ADR-040), so the program is the same table entry.
+        if let Some(rel) = arg
+            .strip_prefix("${payload}/")
+            .or_else(|| arg.strip_prefix("${game}/"))
+        {
             let full = format!("payload/{rel}");
             if !self.table.is_file(&full)
                 && !matches!(self.table.get(&full), Some(FileEntry::Link { .. }))
@@ -1805,32 +1817,60 @@ impl<'a> Checker<'a> {
             let d = discs.clone();
             self.no_duplicates(&d, "/run/discs", codes::RUN_DISC_DUPLICATE);
         }
-        let has_discs = !discs.is_empty();
+        let writable = r
+            .get("writable")
+            .map(|v| self.writable(v))
+            .unwrap_or_default();
+        let ctx = PlaceholderContext {
+            components,
+            has_discs: !discs.is_empty(),
+            has_writable: !writable.is_empty(),
+        };
         let command = self
             .required(r, "command", "/run")
             .and_then(|v| self.command(v, "/run/command"));
         if let Some(cmd) = &command {
             for (i, a) in cmd.iter().enumerate() {
-                self.placeholders(a, &format!("/run/command/{i}"), components, has_discs);
+                self.placeholders(a, &format!("/run/command/{i}"), &ctx);
                 self.argument_path(a, &format!("/run/command/{i}"));
             }
             self.program_exists(&cmd[0], "/run/command/0");
         }
         let cwd = r.get("cwd").and_then(|v| {
             let s = self.string(v, "/run/cwd")?;
-            self.placeholders(s, "/run/cwd", components, has_discs);
+            self.placeholders(s, "/run/cwd", &ctx);
             let known = s.strip_prefix("${").and_then(|t| t.split_once('}')).is_some_and(|(name, rest)| {
-                (["payload", "data", "config", "prefix"].contains(&name) || name.strip_prefix("component:").is_some_and(|id| components.iter().any(|c| c.id == id)))
+                (["payload", "data", "config", "prefix", "game"].contains(&name) || name.strip_prefix("component:").is_some_and(|id| components.iter().any(|c| c.id == id)))
                     && (rest.is_empty() || rest.starts_with('/'))
                     && !rest.split('/').any(|c| c == "..")
             });
             if known {
                 Some(s.to_string())
             } else {
-                self.p.add(codes::RUN_CWD, "/run/cwd", "The working directory starts with ${payload}, ${data}, ${config}, ${prefix} or ${component:<id>} and has no .. part.");
+                self.p.add(codes::RUN_CWD, "/run/cwd", "The working directory starts with ${payload}, ${data}, ${config}, ${prefix}, ${game} or ${component:<id>} and has no .. part.");
                 None
             }
         });
+        if ctx.has_writable {
+            let starts_with_game = |s: &str| {
+                s.strip_prefix("${game}")
+                    .is_some_and(|r| r.is_empty() || r.starts_with('/'))
+            };
+            if command.as_ref().is_some_and(|c| !starts_with_game(&c[0])) {
+                self.p.add(
+                    codes::RUN_WRITABLE_NEEDS_GAME,
+                    "/run/command/0",
+                    "With run.writable the program starts with ${game}: the game runs from its own tree.",
+                );
+            }
+            if !cwd.as_deref().is_some_and(starts_with_game) {
+                self.p.add(
+                    codes::RUN_WRITABLE_NEEDS_GAME,
+                    "/run/cwd",
+                    "With run.writable the working folder is set and starts with ${game}.",
+                );
+            }
+        }
         let env = r.get("env").map(|v| self.env(v)).unwrap_or_default();
         let launch_mode = r
             .get("launch_mode")
@@ -1868,12 +1908,7 @@ impl<'a> Checker<'a> {
                         .unwrap_or(false);
                     if let Some(cmd) = &cmd {
                         for (j, a) in cmd.iter().enumerate() {
-                            self.placeholders(
-                                a,
-                                &format!("{at}/command/{j}"),
-                                components,
-                                has_discs,
-                            );
+                            self.placeholders(a, &format!("{at}/command/{j}"), &ctx);
                             self.argument_path(a, &format!("{at}/command/{j}"));
                         }
                         self.program_exists(&cmd[0], &format!("{at}/command/0"));
@@ -1904,8 +1939,104 @@ impl<'a> Checker<'a> {
             prefix,
             setup,
             discs,
+            writable,
         })
     }
+
+    /// `run.writable` (ADR-040): payload-relative folders, none inside another, with at most
+    /// [`MAX_WRITABLE_BYTES`] of table files below them.
+    fn writable(&mut self, v: &Value) -> Vec<String> {
+        let list = self.string_list(v, "/run/writable", MAX_WRITABLE, &mut |s, item, at| {
+            s.writable_folder(item, at)
+        });
+        for (i, a) in list.iter().enumerate() {
+            if list[..i]
+                .iter()
+                .any(|b| a == b || is_inside(a, b) || is_inside(b, a))
+            {
+                self.p.add(
+                    codes::RUN_WRITABLE_OVERLAP,
+                    "/run/writable",
+                    format!(
+                        "The folder {aq} is the same as, inside, or around another writable folder.",
+                        aq = crate::problem::quote(a)
+                    ),
+                );
+            }
+        }
+        let folders: Vec<String> = list.iter().map(|f| format!("payload/{f}/")).collect();
+        let bytes: u64 = self
+            .entries
+            .iter()
+            .filter_map(|e| match e {
+                FileEntry::File { path, size, .. }
+                    if folders.iter().any(|f| path.starts_with(f.as_str())) =>
+                {
+                    Some(*size)
+                }
+                _ => None,
+            })
+            .fold(0, u64::saturating_add);
+        if bytes > MAX_WRITABLE_BYTES {
+            self.p.add(
+                codes::RUN_WRITABLE_TOO_LARGE,
+                "/run/writable",
+                format!(
+                    "The writable folders hold {bytes} bytes; at most {MAX_WRITABLE_BYTES} are copied for each profile."
+                ),
+            );
+        }
+        list
+    }
+
+    /// One `run.writable` folder: the table's path rules, not the root, and nothing on the way a
+    /// link or a file.
+    fn writable_folder(&mut self, v: &Value, at: &str) -> Option<String> {
+        let s = self.string(v, at)?;
+        if s.is_empty() || s == "." {
+            self.p.add(
+                codes::RUN_WRITABLE_PATH,
+                at,
+                "The payload root cannot be writable: list the folders the game writes into.",
+            );
+            return None;
+        }
+        if let Err((_, msg)) = check_path(s) {
+            self.p.add(codes::RUN_WRITABLE_PATH, at, msg);
+            return None;
+        }
+        let mut path = String::from("payload");
+        for part in s.split('/') {
+            path.push('/');
+            path.push_str(part);
+            let what = match self.table.get(&path) {
+                Some(FileEntry::Link { .. }) => "a link; a writable folder is a real folder",
+                Some(FileEntry::File { .. }) => "a file, not a folder",
+                _ => continue,
+            };
+            self.p.add(
+                codes::RUN_WRITABLE_PATH,
+                at,
+                format!("{pq} is {what}.", pq = crate::problem::quote(&path)),
+            );
+            return None;
+        }
+        Some(s.to_string())
+    }
+}
+
+/// What a `${...}` in a command or working folder may name (05 section 6.3).
+struct PlaceholderContext<'a> {
+    components: &'a [Component],
+    has_discs: bool,
+    has_writable: bool,
+}
+
+/// True when `inner` is below `outer` (both are folder paths without a trailing `/`).
+fn is_inside(inner: &str, outer: &str) -> bool {
+    inner
+        .strip_prefix(outer)
+        .is_some_and(|rest| rest.starts_with('/'))
 }
 
 struct PartialManifest {

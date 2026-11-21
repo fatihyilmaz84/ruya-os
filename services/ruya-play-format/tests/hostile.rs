@@ -1289,3 +1289,119 @@ fn table_kinds_must_match_the_package() {
         "payload/game",
     );
 }
+
+// ----- run.writable and ${game} (ADR-040) ----------------------------------------------------
+
+#[test]
+fn writable_valid() {
+    let p = assert_valid(check(&Fx::writable()));
+    assert_eq!(p.manifest.run.writable, vec!["Save"]);
+    // A folder the table does not list is created empty; a nested one and several are fine.
+    let mut fx = Fx::writable();
+    fx.manifest["run"]["writable"] = json!(["Save", "System/Cache", "Logs"]);
+    fx.manifest["run"]["command"] = json!(["${game}/game", "${game}/Save"]);
+    fx.manifest["run"]["setup"] = json!([{"id": "init", "command": ["${game}/game"]}]);
+    fx.manifest["data"] = json!({"saves": ["game:Save/a.ini"]});
+    assert_valid(check(&fx));
+    // Without writable nothing changes.
+    assert_valid(check(&Fx::minimal()));
+}
+
+#[test]
+fn writable_path_rules() {
+    let bad = |folder: &str| {
+        let mut fx = Fx::writable();
+        fx.manifest["run"]["writable"] = json!([folder]);
+        fx
+    };
+    for folder in [
+        ".", "", "..", "../x", "a/../b", "a/./b", "/abs", "a//b", "a/", r"a\b", "a:b", "a\u{7}b",
+    ] {
+        assert_rejected_at(check(&bad(folder)), "run.writable_path", "/run/writable/0");
+    }
+    // A file is not a folder.
+    assert_rejected(check(&bad("game")), "run.writable_path");
+    assert_rejected(check(&bad("game/sub")), "run.writable_path");
+    // A link on the way, or the link itself.
+    for folder in ["lnk", "lnk/sub"] {
+        let mut fx = bad(folder);
+        fx.links.push(("payload/lnk".into(), "Save".into()));
+        assert_rejected_at(check(&fx), "run.writable_path", "/run/writable/0");
+    }
+    // A string is required.
+    assert_rejected(
+        check(&{
+            let mut fx = Fx::writable();
+            fx.manifest["run"]["writable"] = json!([1]);
+            fx
+        }),
+        "manifest.type",
+    );
+}
+
+#[test]
+fn writable_overlap() {
+    for list in [
+        json!(["Save", "Save"]),
+        json!(["Save", "Save/sub"]),
+        json!(["Save/sub", "Save"]),
+    ] {
+        let mut fx = Fx::writable();
+        fx.manifest["run"]["writable"] = list;
+        assert_rejected(check(&fx), "run.writable_overlap");
+    }
+    // A shared name prefix is not an overlap.
+    let mut fx = Fx::writable();
+    fx.manifest["run"]["writable"] = json!(["Save", "Save2", "Sav"]);
+    assert_valid(check(&fx));
+}
+
+#[test]
+fn game_placeholder_without_writable() {
+    for (key, value) in [
+        ("command", json!(["${payload}/game", "${game}/x"])),
+        ("cwd", json!("${game}")),
+    ] {
+        let mut fx = Fx::minimal();
+        fx.manifest["run"][key] = value;
+        assert_rejected(check(&fx), "run.game_placeholder_without_writable");
+    }
+    let mut fx = Fx::minimal();
+    fx.manifest["run"]["setup"] = json!([{"id": "s", "command": ["${payload}/game", "${game}"]}]);
+    assert_rejected(check(&fx), "run.game_placeholder_without_writable");
+    // An empty list is no writable folder.
+    let mut fx = Fx::writable();
+    fx.manifest["run"]["writable"] = json!([]);
+    assert_rejected(check(&fx), "run.game_placeholder_without_writable");
+}
+
+#[test]
+fn writable_needs_game() {
+    let mut fx = Fx::writable();
+    fx.manifest["run"]["command"] = json!(["${payload}/game"]);
+    assert_rejected_at(check(&fx), "run.writable_needs_game", "/run/command/0");
+    let mut fx = Fx::writable();
+    fx.manifest["run"]["command"] = json!(["${game}x/game"]);
+    assert_rejected_at(check(&fx), "run.writable_needs_game", "/run/command/0");
+    let mut fx = Fx::writable();
+    fx.manifest["run"]["cwd"] = json!("${payload}");
+    assert_rejected_at(check(&fx), "run.writable_needs_game", "/run/cwd");
+    let mut fx = Fx::writable();
+    fx.manifest["run"].as_object_mut().unwrap().remove("cwd");
+    assert_rejected_at(check(&fx), "run.writable_needs_game", "/run/cwd");
+    // The program is a table entry, as it is under ${payload}.
+    let mut fx = Fx::writable();
+    fx.manifest["run"]["command"] = json!(["${game}/nothing"]);
+    assert_rejected(check(&fx), "run.command_missing");
+}
+
+#[test]
+fn game_save_root() {
+    let mut fx = Fx::writable();
+    fx.manifest["data"] = json!({"saves": ["game:../x"]});
+    assert_rejected(check(&fx), "data.path");
+    fx.manifest["data"] = json!({"saves": ["game:"]});
+    assert_rejected(check(&fx), "data.path");
+    fx.manifest["data"] = json!({"saves": ["game:System/UT.ini"]});
+    assert_valid(check(&fx));
+}
