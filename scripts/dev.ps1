@@ -706,9 +706,14 @@ function Test-Tokens {
     Set-Content -Path $bad -Value "Item {`n    Text {`n        font.pixelSize:`n            Theme.typeTitle * u`n        font.weight: Theme.weightDemiBold`n    }`n}"
     & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture 6>&1 | Out-Null
     $acceptedTwoLine = ($LASTEXITCODE -eq 0)
+    # Capitals come from CapsText (the UI language), never from the font (RUY-804).
+    Set-Content -Path $bad -Value "Item {`n    Text {`n        font.capitalization: Font.AllUppercase`n    }`n}"
+    & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture 6>&1 | Out-Null
+    $rejectedCaps = ($LASTEXITCODE -eq 1)
     Remove-Item -Recurse -Force $fixture
     Record "token lint self-check (rejects a type step without font.weight)" ($rejectedW -and $acceptedW)
     Record "token lint self-check (weight in a child or comment, or a two-line size, is still rejected)" ($allRejected -and $acceptedTwoLine)
+    Record "token lint self-check (rejects Font.AllUppercase: capitals come from CapsText)" $rejectedCaps
 }
 
 # The lupdate project (source list for lupdate) is written by the build's lupdate target, which

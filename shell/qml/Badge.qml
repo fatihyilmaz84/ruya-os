@@ -47,10 +47,10 @@ Rectangle {
         anchors.centerIn: parent
         anchors.horizontalCenterOffset: badge.edge / 2
         textFormat: Text.PlainText
-        text: badge.text
+        objectName: "badgeLabel"
+        text: CapsText.upper(badge.text)
         color: badge.tone
         font.pixelSize: Theme.typeMicro * badge.u
         font.weight: Theme.weightDemiBold
-        font.capitalization: Font.AllUppercase
     }
 }

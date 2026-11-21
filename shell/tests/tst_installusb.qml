@@ -69,6 +69,7 @@ Item {
 
         function cleanup() {
             Play.mockPauseJobs(false)
+            DeviceSettings.language = "en"
         }
 
         function start(who) {
@@ -112,6 +113,40 @@ Item {
             for (const ch of pin)
                 keyClick(Qt.Key_0 + Number(ch))
             keyClick(Qt.Key_Enter)
+        }
+
+        // ---- Capitals follow the UI language (RUY-804) ----
+
+        // Turkish has a dotted capital I: "Geliştirici" is GELİŞTİRİCİ, "Resmi" RESMİ, "Yüksek risk" YÜKSEK RİSK.
+        function test_badges_are_capitals_in_the_ui_language() {
+            start("admin")
+            openPackage("rawaccess.play.zip")
+            const badgeText = () => findChild(find("installTrustBadge"), "badgeLabel").text
+            compare(badgeText(), "DEVELOPER")
+            DeviceSettings.language = "tr"
+            tryCompare(find("installTrustBadge"), "text", "Geliştirici")
+            compare(badgeText(), "GELİŞTİRİCİ")
+            compare(findChild(findChild(find("installPermissionList"), "riskFlag_devel"), "badgeLabel").text, "YÜKSEK RİSK")
+            closePackage()
+            openPackage("pixelforest.play.zip")
+            tryCompare(find("installTrustBadge"), "text", "Resmi")
+            compare(badgeText(), "RESMİ")
+            DeviceSettings.language = "en"
+            tryCompare(find("installTrustBadge"), "text", "Official")
+            compare(badgeText(), "OFFICIAL", "English is unchanged")
+        }
+
+        function test_the_drive_heading_is_in_capitals() {
+            start("admin")
+            tc.shell.openPage("installSources", {})
+            tryCompare(tc.shell, "currentPage", "installSources")
+            tryVerify(() => find("sourcesList").count === 13, 2000)
+            const drive = find("sourcesDrive")
+            compare(drive.text.indexOf("STICK"), 0)
+            DeviceSettings.language = "tr"
+            tryCompare(CapsText, "language", "tr")
+            compare(drive.text, CapsText.upper(drive.text), "the heading is in capitals")
+            compare(drive.text.indexOf("STICK"), 0)
         }
 
         // ---- The list of packages ----
@@ -346,6 +381,7 @@ Item {
             tryVerify(() => page().working, 3000, "the install starts at once")
             verify(!find("installPinPad").shown)
             Play.mockPauseJobs(false)
+            DeviceSettings.language = "en"
             tryVerify(() => !page().working, 10000)
             closePackage()
             Profiles.lock()
@@ -400,6 +436,7 @@ Item {
             verify(find("installPhase").text.indexOf("Checking the signature · ") === 0, find("installPhase").text)
             verify(!find("installButton").visible)
             Play.mockPauseJobs(false)
+            DeviceSettings.language = "en"
             // From committing on there is no Cancel and the line says Installing.
             tryVerify(() => find("installPhase").text.indexOf("Installing · ") === 0, 8000)
             verify(!find("installCancel").visible, "no Cancel from committing on")
@@ -446,6 +483,7 @@ Item {
             tryVerify(() => page().working, 2000)
             verify(find("installProgress").visible)
             Play.mockPauseJobs(false)
+            DeviceSettings.language = "en"
             tryVerify(() => !page().working, 10000)
             tryVerify(() => find("installInstalledBadge").visible, 3000)
         }
@@ -623,6 +661,7 @@ Item {
             const key = installAndLeave("starhopper", 30)
             compare(toastTexts().length, 0, "nothing yet")
             Play.mockPauseJobs(false)
+            DeviceSettings.language = "en"
             tryVerify(() => toastTexts().length > 0, 15000)
             compare(toastTexts(), ["Installed: Star Hopper"])
             wait(300)
@@ -634,6 +673,7 @@ Item {
             start("admin")
             installAndLeave("flaky", 30)
             Play.mockPauseJobs(false)
+            DeviceSettings.language = "en"
             tryVerify(() => toastTexts().length > 0, 15000)
             compare(toastTexts(), ["Not installed: The install didn't finish. Try again."])
             compare(Notifications.model.get(0).kind, "error")
@@ -644,6 +684,7 @@ Item {
             const key = installAndLeave("starhopper", 30)
             Play.cancel(key)
             Play.mockPauseJobs(false)
+            DeviceSettings.language = "en"
             tryVerify(() => Play.jobs[key] === undefined, 5000)
             wait(300)
             compare(toastTexts().length, 0)
@@ -697,6 +738,7 @@ Item {
             find("installPermissions").forceActiveFocus()
             compare(shown(), "back Back", "past Cancel, nothing to select")
             Play.mockPauseJobs(false)
+            DeviceSettings.language = "en"
         }
 
         function test_an_installed_game_that_was_revoked_offers_remove_not_play() {
@@ -802,6 +844,7 @@ Item {
             wait(Theme.pageMs + 50)
             verify(!find("uninstallConfirm").shown, "a press during the removal opens no dialog")
             Play.mockPauseJobs(false)
+            DeviceSettings.language = "en"
             tryCompare(page(), "mode", "install", 15000)
             tryVerify(() => toastTexts().length > 0, 2000)
             compare(toastTexts(), ["Old Bad Game was uninstalled."], "the success toast alone, no 'Could not uninstall'")
@@ -820,6 +863,7 @@ Item {
             tryVerify(() => toastTexts().indexOf("Could not uninstall Old Bad Game. Try again.") >= 0, 2000)
             verify(tc.shell.uninstallRuns["play.com.example.oldbad"] === undefined)
             Play.mockPauseJobs(false)
+            DeviceSettings.language = "en"
             tryVerify(() => host.finishedJobs.some(j => j.kind === "verify"), 15000)
             compare(host.finishedJobs[0].kind, "verify", "the running verify kept its own kind")
         }
@@ -892,6 +936,7 @@ Item {
             Play.mockRestartShell()
             tryVerify(() => Play.jobs[key] !== undefined, 3000, "the table brings the running job back")
             Play.mockPauseJobs(false)
+            DeviceSettings.language = "en"
             tryVerify(() => toastTexts().length > 0, 15000)
             compare(toastTexts(), ["Installed: Star Hopper"])
             const ended = host.finishedJobs.filter(j => j.key === key)
