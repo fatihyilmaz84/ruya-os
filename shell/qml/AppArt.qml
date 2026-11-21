@@ -83,7 +83,7 @@ Rectangle {
         visible: art.monogram
         anchors.centerIn: parent
         textFormat: Text.PlainText
-        text: art.appName.charAt(0).toUpperCase()
+        text: CapsText.initial(art.appName)
         color: Theme.text
         opacity: 0.85
         font.pixelSize: art.monogramSize * art.u

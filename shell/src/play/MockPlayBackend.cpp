@@ -4,7 +4,7 @@
 
 namespace {
 const QString DriveId = QStringLiteral("vol-stick");
-const QString DriveLabel = QStringLiteral("STICK");
+const QString DriveLabel = QStringLiteral("Game disk");
 const QString Root = QStringLiteral("/run/media/ruya/STICK/");
 const qulonglong FreeBytes = 20ull * 1024 * 1024 * 1024;
 

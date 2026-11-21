@@ -59,7 +59,7 @@ Item {
             anchors.horizontalCenterOffset: chip.showNumber ? -6 * chip.u : 0 // token-ok: component-local, 04 §5
             anchors.verticalCenterOffset: chip.showNumber ? -6 * chip.u : 0 // token-ok: component-local, 04 §5
             textFormat: Text.PlainText
-            text: (chip.displayName || "?").charAt(0).toUpperCase()
+            text: CapsText.initial(chip.displayName || "?")
             color: Theme.text
             font.pixelSize: Theme.typeCaption * chip.u
             font.weight: Theme.weightLight

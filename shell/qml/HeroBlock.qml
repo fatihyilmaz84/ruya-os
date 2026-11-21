@@ -45,7 +45,7 @@ FocusScope {
             width: parent.width
             visible: text.length > 0
             textFormat: Text.PlainText
-            text: hero.eyebrow.toUpperCase()
+            text: CapsText.upper(hero.eyebrow)
             color: Theme.text
             font.pixelSize: Theme.typeCaption * hero.u
             font.weight: Theme.weightDemiBold

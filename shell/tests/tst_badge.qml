@@ -13,7 +13,7 @@ Item {
         name: "Badge"
         when: windowShown
 
-        function init() { badge.kind = "neutral" }
+        function init() { badge.kind = "neutral"; DeviceSettings.language = "en" }
 
         function test_kinds() {
             const kinds = { success: Theme.toastSuccess, info: Theme.toastInfo, warning: Theme.toastWarning }
@@ -37,6 +37,20 @@ Item {
             compare(badge.Accessible.name, "Official")
             badge.text = "Dev"
             compare(badge.Accessible.name, "Dev")
+        }
+
+        // Capitals follow the UI language: Turkish has a dotted capital I (RUY-804).
+        function test_caps_in_turkish() {
+            compare(CapsText.upper("risk"), "RISK")
+            DeviceSettings.language = "tr"
+            tryCompare(CapsText, "language", "tr")
+            compare(CapsText.upper("risk ışık"), "RİSK IŞIK")
+            badge.text = "Yüksek risk"
+            compare(findChild(badge, "badgeLabel").text, "YÜKSEK RİSK")
+            DeviceSettings.language = "en"
+            tryCompare(findChild(badge, "badgeLabel"), "text", "YÜKSEK RISK")
+            badge.text = "Official"
+            compare(findChild(badge, "badgeLabel").text, "OFFICIAL")
         }
     }
 }

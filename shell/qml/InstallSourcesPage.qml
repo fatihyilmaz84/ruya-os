@@ -127,11 +127,10 @@ Page {
                     anchors.verticalCenter: parent.verticalCenter
                     textFormat: Text.PlainText      // the drive's own label
                     readonly property string capacity: page.capacityOf(head.section)
-                    text: (head.first.driveLabel ?? "") + (capacity !== "" ? " · " + capacity : "")
+                    text: CapsText.upper((head.first.driveLabel ?? "") + (capacity !== "" ? " · " + capacity : ""))
                     color: Theme.text
                     font.pixelSize: Theme.typeCaption * page.u
                     font.weight: Theme.weightDemiBold
-                    font.capitalization: Font.AllUppercase
                     font.letterSpacing: Theme.typeCaption * page.u * 0.06
                 }
             }

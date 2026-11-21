@@ -103,7 +103,7 @@ QtObject {
     function addressTail(id) {
         const text = String(id ?? "")
         const m = /([0-9A-Fa-f]{2}:[0-9A-Fa-f]{2})$/.exec(text)
-        return m ? m[1].toUpperCase() : text.slice(-5)
+        return m ? m[1].toUpperCase() : text.slice(-5)     // token-ok: hex digits of an address, not language text
     }
 
     // The name a list or a toast shows for the device `d` of `list` (T-334): its alias; when another

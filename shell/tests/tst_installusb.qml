@@ -5,7 +5,7 @@ import RuyaShell
 // Install from USB (05 §7.3, 04 §5.4, RUY-98): the sources list, the package page for every mock fixture (trust
 // badge, permission words, why Install is dimmed), the confirm sheet, the admin's PIN for a profile that is not
 // an admin's, the progress and the result (toast, dialog), a job that outlives its page, developer mode, the
-// entry points and the hint bar of every screen. The mock service has eleven packages on one drive ("STICK").
+// entry points and the hint bar of every screen. The mock service has eleven packages on one drive (labelled "Game disk").
 // Signs in as Player One (p1, admin, PIN 1234) unless a test says it is Ada (p2, standard, no PIN).
 Item {
     id: host
@@ -69,6 +69,7 @@ Item {
 
         function cleanup() {
             Play.mockPauseJobs(false)
+            DeviceSettings.language = "en"
         }
 
         function start(who) {
@@ -114,6 +115,39 @@ Item {
             keyClick(Qt.Key_Enter)
         }
 
+        // ---- Capitals follow the UI language (RUY-804) ----
+
+        // Turkish has a dotted capital I: "Geliştirici" is GELİŞTİRİCİ, "Resmi" RESMİ, "Yüksek risk" YÜKSEK RİSK.
+        function test_badges_are_capitals_in_the_ui_language() {
+            start("admin")
+            openPackage("rawaccess.play.zip")
+            const badgeText = () => findChild(find("installTrustBadge"), "badgeLabel").text
+            compare(badgeText(), "DEVELOPER")
+            DeviceSettings.language = "tr"
+            tryCompare(find("installTrustBadge"), "text", "Geliştirici")
+            compare(badgeText(), "GELİŞTİRİCİ")
+            compare(findChild(findChild(find("installPermissionList"), "riskFlag_devel"), "badgeLabel").text, "YÜKSEK RİSK")
+            closePackage()
+            openPackage("pixelforest.play.zip")
+            tryCompare(find("installTrustBadge"), "text", "Resmi")
+            compare(badgeText(), "RESMİ")
+            DeviceSettings.language = "en"
+            tryCompare(find("installTrustBadge"), "text", "Official")
+            compare(badgeText(), "OFFICIAL", "English is unchanged")
+        }
+
+        function test_the_drive_heading_is_in_capitals() {
+            start("admin")
+            tc.shell.openPage("installSources", {})
+            tryCompare(tc.shell, "currentPage", "installSources")
+            tryVerify(() => find("sourcesList").count === 13, 2000)
+            const drive = find("sourcesDrive")
+            compare(drive.text.indexOf("GAME DISK"), 0, "English: " + drive.text)
+            DeviceSettings.language = "tr"
+            tryCompare(CapsText, "language", "tr")
+            compare(drive.text.indexOf("GAME DİSK"), 0, "Turkish: " + drive.text)
+        }
+
         // ---- The list of packages ----
 
         function test_sources_list_focus_and_open() {
@@ -124,7 +158,7 @@ Item {
             tryVerify(() => list.count === 13, 2000)
             tryVerify(() => list.activeFocus, 2000, "the list has the focus")
             compare(list.currentIndex, 0)
-            compare(find("sourcesDrive").text.indexOf("STICK"), 0, "the drive's label heads its rows")
+            compare(find("sourcesDrive").text.indexOf("GAME DISK"), 0, "the drive's label heads its rows")
             compare(find("sourceName").text, "starhopper")
             compare(shown(), "accept Select|back Back")
             keyClick(Qt.Key_Down)
