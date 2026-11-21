@@ -179,7 +179,7 @@
       "pattern": "^[Hh][Tt][Tt][Pp][Ss]://[^/?#@\\s]+([/?#]\\S*)?$"
     },
     "artPath": { "type": "string", "pattern": "^art/[^\\\\:\\u0000-\\u001F]+$" },
-    "dataPath": { "type": "string", "maxLength": 1030, "pattern": "^(prefix|data|config):[^/\\\\\\u0000-\\u001F][^\\\\\\u0000-\\u001F]*$", "not": { "pattern": "[:/]\\.{0,2}(/|$)" } },
+    "dataPath": { "type": "string", "maxLength": 1030, "pattern": "^(prefix|data|config|game):[^/\\\\\\u0000-\\u001F][^\\\\\\u0000-\\u001F]*$", "not": { "pattern": "[:/]\\.{0,2}(/|$)" } },
     "version": { "type": "string", "minLength": 1, "maxLength": 32, "pattern": "^[A-Za-z0-9._+-]+$" },
     "localId": { "type": "string", "maxLength": 32, "pattern": "^[a-z][a-z0-9_-]*$" },
     "component": {
@@ -211,7 +211,7 @@
       ]
     },
     "command": {
-      "description": "argv, never a shell string. Placeholders: ${payload}, ${component:<id>}, ${data}, ${config}, ${prefix}, ${disc}.",
+      "description": "argv, never a shell string. Placeholders: ${payload}, ${component:<id>}, ${data}, ${config}, ${prefix}, ${disc}, ${game} (only with run.writable).",
       "type": "array", "minItems": 1, "maxItems": 64,
       "items": { "type": "string", "maxLength": 4096, "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]*$" }
     },
@@ -223,7 +223,7 @@
         "runner": { "enum": ["native", "wine", "proton", "emulator", "engine"] },
         "component": { "$ref": "#/$defs/localId" },
         "command": { "$ref": "#/$defs/command" },
-        "cwd": { "type": "string", "pattern": "^\\$\\{(payload|data|config|prefix|component:[a-z][a-z0-9_-]*)\\}(/.*)?$", "not": { "pattern": "(^|/)\\.\\.(/|$)" } },
+        "cwd": { "type": "string", "pattern": "^\\$\\{(payload|data|config|prefix|game|component:[a-z][a-z0-9_-]*)\\}(/.*)?$", "not": { "pattern": "(^|/)\\.\\.(/|$)" } },
         "env": {
           "description": "Names are [A-Z][A-Z0-9_]* and not one the platform owns (a deny table, not an allow-list). Values are at most 1024 bytes.",
           "type": "object",
@@ -257,7 +257,21 @@
           "description": "Ordered disc images, each a file under payload/ listed in play.files; ${disc} is the first.",
           "type": "array", "maxItems": 16, "uniqueItems": true,
           "items": { "type": "string", "pattern": "^payload/.+$" }
+        },
+        "writable": {
+          "description": "Folders of payload/ the game may write into (ADR-040), relative to payload/: not the root, none inside another, no link on the way; the files below them at most 2 GiB. The game then runs from ${game}: run.command[0] and run.cwd start with it (the crate checks command[0], the table and the overlaps).",
+          "type": "array", "maxItems": 16,
+          "items": {
+            "type": "string", "maxLength": 1024,
+            "pattern": "^[^/\\\\\\u0000-\\u001F][^\\\\\\u0000-\\u001F]*$",
+            "not": { "pattern": "(^|/)\\.{0,2}(/|$)" }
+          }
         }
+      },
+      "if": { "required": ["writable"], "properties": { "writable": { "minItems": 1 } } },
+      "then": {
+        "required": ["cwd"],
+        "properties": { "cwd": { "pattern": "^\\$\\{game\\}(/.*)?$" } }
       }
     },
     "permissions": {

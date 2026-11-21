@@ -189,7 +189,8 @@ Required: `format`, `id`, `name`, `version`, `build`, `art` and `run` (with `art
 | `run.runner` | `native`, `wine`, `proton`, `emulator` or `engine`. |
 | `run.component` | The `id` of the component that runs it (not for `native`). |
 | `run.command` | An **argument list**, never a shell string. Placeholders: `${payload}`, `${component:<id>}`, `${data}`, `${config}`, `${prefix}`, `${disc}`. |
-| `run.cwd` | Working directory, usually `${payload}`. Must start with a placeholder (`${payload}`, `${data}`, `${config}`, `${prefix}` or `${component:<id>}`), optionally followed by `/` and a path without `..`. |
+| `run.cwd` | Working directory, usually `${payload}`. Must start with a placeholder (`${payload}`, `${data}`, `${config}`, `${prefix}`, `${game}` or `${component:<id>}`), optionally followed by `/` and a path without `..`. |
+| `run.writable` | *Experimental (ADR-040).* Folders of `payload/` the game writes into, such as `["System", "Save"]`; see [A game that writes next to its program](windows-games.md#a-game-that-writes-next-to-its-program). It adds the placeholder `${game}` and the save root `game:`. |
 | `run.env` | Extra environment variables. A deny list applies: the variables the platform sets (`PATH`, `HOME`, `WINEPREFIX`, `LD_*`, `XDG_*`, `SDL_*`, ...) are refused with `env.reserved`; `WINEDLLOVERRIDES`, `DXVK_*` and `PROTON_*` pass. Names match `[A-Z][A-Z0-9_]*` (at most 64 characters), values are at most 1024 bytes without control characters, at most 64 variables. The full deny list is `PATH`, `HOME`, `DISPLAY`, `XAUTHORITY`, `WINEPREFIX`, `WINESERVER`, `WINELOADER`, `WINEDLLPATH`, `WINEARCH`, `TMPDIR`, `GCONV_PATH`, `LOCPATH`, `NLSPATH`, `PWD`, `UMU_ID` and every name starting `LD_`, `XDG_`, `FLATPAK_`, `DBUS_`, `WAYLAND_`, `PULSE_`, `PIPEWIRE_`, `SDL_`, `STEAM_COMPAT_`, `PRESSURE_VESSEL_`, `VK_`, `MESA_`, `LIBGL_`, `GST_`, `QT_`, `GTK_`, `GDK_`, `GIO_` or `RUYA_`. |
 | `run.launch_mode` | `fullscreen` (default), `gamescope` or `default`. |
 | `run.prefix` | The Wine prefix settings (Windows runners). |
@@ -211,7 +212,7 @@ Required: `format`, `id`, `name`, `version`, `build`, `art` and `run` (with `art
 | `permissions.devel` | `true` to allow ptrace (rare anti-tamper). High risk. |
 | `permissions.reasons` | A map of permission key to a short localized reason (at most 120 characters), shown next to it. |
 | `data` | Where your saves are, for backup. |
-| `data.saves` | Up to 32 paths with a root name: `data:` (your `$XDG_DATA_HOME`), `config:`, or `prefix:` (inside the Wine prefix). Each is at most 1030 bytes and has no `..` or `.` part and no `\`. |
+| `data.saves` | Up to 32 paths with a root name: `data:` (your `$XDG_DATA_HOME`), `config:`, `prefix:` (inside the Wine prefix) or `game:` (inside the `run.writable` folder tree, *experimental*). Each is at most 1030 bytes and has no `..` or `.` part and no `\`. |
 | `data.cache` | The same rules, for things that can be rebuilt (never backed up). |
 | `update` | (planned) A self-hosted feed; see [Updates](#updates). |
 | `update.feed` | The https address of your signed feed. |
@@ -489,7 +490,7 @@ Common ones first:
 | `component.missing_field` | Fix the components block of play.json (05 section 6.2). |
 | `component.path` | Fix the components block of play.json (05 section 6.2). |
 | `component.unknown_key` | Fix the components block of play.json (05 section 6.2). |
-| `data.path` | Use a prefix:, data: or config: path inside the package's own data. |
+| `data.path` | Use a prefix:, data:, config: or game: path inside the package's own data. |
 | `entry.device` | Remove the device file; a package holds only regular files and folders. |
 | `entry.hardlink` | Replace the hard link with a separate copy of the file. |
 | `entry.special` | Remove the special file (FIFO, socket); a package holds only regular files and folders. |
@@ -590,9 +591,14 @@ Common ones first:
 | `run.disc_not_in_table` | Fix the run block of play.json (05 section 6.3). |
 | `run.disc_path` | Fix the run block of play.json (05 section 6.3). |
 | `run.disc_placeholder_without_discs` | Fix the run block of play.json (05 section 6.3). |
+| `run.game_placeholder_without_writable` | List the folders the game writes into in run.writable, or use ${payload} and prefix:, data: or config: instead of ${game} and game:. |
 | `run.lib_i386_reserved` | Move the files out of lib/i386-linux-gnu/ (for example below payload/): a wine or proton package gets the runtime's 32-bit libraries mounted there. |
 | `run.placeholder_component` | Fix the run block of play.json (05 section 6.3). |
 | `run.unknown_key` | Fix the run block of play.json (05 section 6.3). |
+| `run.writable_needs_game` | With run.writable, start run.command[0] with ${game}/ and set run.cwd to a path that starts with ${game}. |
+| `run.writable_overlap` | List each writable folder once, and none inside another; the outer folder already covers the inner one. |
+| `run.writable_path` | Write each run.writable folder as the payload/ folder the table lists (same letter case), not the root, with no link on the way or below it. |
+| `run.writable_too_large` | Keep run.writable to the folders the game writes into: the files below them add up to at most 2 GiB. |
 | `runner.arch_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
 | `runner.capability_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
 | `runner.entry_invalid` | Write each entry as a plain relative path inside the runner's folder, such as bin/wine: no .. and no leading /. |

@@ -161,6 +161,33 @@ An OS update replaces the runners in the image, and the oldest GE-Proton major l
 - **A new major can change how a game behaves in an existing prefix.** Keep a copy of the old prefix until the game has started once on the new runner.
 - **If nothing fits**, say so in your own interface ("this console has no runner this app was tested with") and keep running. You may also bundle your own Wine or Proton, as a `.play` package does; then the licence duty is yours (see [Play packages](play-packages.md#legal-duties-for-what-you-bundle)).
 
+## A game that writes next to its program
+
+*Experimental (tier C, ADR-040): the format is checked by `ruya-pack validate` today; the console's launcher builds the folder below with RUY-1019, so a game that needs it does not run from it yet.*
+
+Many Windows games write their ini file, log or saves into their own install folder. In a `.play` package that folder, `/app/payload`, is read-only. Declare the folders the game writes into and it gets a private copy of them for each profile:
+
+```json
+{
+  "run": {
+    "runner": "wine", "component": "wine",
+    "command": ["${game}/System/UT.exe"],
+    "cwd": "${game}/System",
+    "writable": ["System", "Save"]
+  },
+  "data": { "saves": ["game:Save"] }
+}
+```
+
+- `writable` is at most 16 folders of `payload/`, written relative to it. Not the root, none inside another one, none that is a link or holds one; they may be missing from the package, then they start empty. The files below them add up to at most 2 GiB.
+- `${game}` is the game's own folder. Outside the writable folders it looks like `payload/` (the files are links, and a write there fails exactly as before); inside them the files are copies the game may change. `${payload}` stays the read-only original.
+- `run.command[0]` is `${game}/<file>` and `run.cwd` is required and starts with `${game}`; `${game}/x` is the file `payload/x`. Setup commands may use `${game}` or `${payload}`. `${game}` without `writable` is an error.
+- `game:` in `data.saves` or `data.cache` names a path inside that folder, for example `game:Save`; without `writable` it is an error.
+- Write the folders as the package lists them, with the same letter case (`System`, not `system`), and keep links out of them.
+- An update of the package keeps what the player's game wrote: a file the game changed is not replaced by the new build's file. Keep the folders to what the game writes; everything in them is copied for every profile that plays it.
+
+`ruya-pack validate` reports the mistakes with the codes `run.writable_path`, `run.writable_overlap`, `run.writable_too_large`, `run.game_placeholder_without_writable` and `run.writable_needs_game`. A game with an option for the folder of its settings can use that instead (`INI=` for Unreal Tournament); that needs no `writable` at all.
+
 ## What is experimental, and what is not public
 
 Experimental (tier C, may change before the first release): the extension point and ids (`org.ruyaos.Play.Runner`, `...<Family><major>`), the branch `1`, `runner.json` format 1 and the argv and environment above.

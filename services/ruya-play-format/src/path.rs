@@ -118,7 +118,7 @@ pub fn check_path(p: &str) -> Result<(), PathFault> {
 }
 
 /// The path with each part lower-cased, for the case-insensitive uniqueness rule.
-fn fold(s: &str) -> String {
+pub(crate) fn fold(s: &str) -> String {
     s.to_lowercase()
 }
 

@@ -583,3 +583,51 @@ fn the_constants_are_the_numbers_of_the_spec() {
     // ADR-037: the launcher's own variables are RUYA_*, so a package cannot set one.
     assert!(ENV_DENY_PREFIX.contains(&"RUYA_"));
 }
+
+#[test]
+fn writable_folders() {
+    bound(MAX_WRITABLE, "list.too_long", |n| {
+        let mut fx = Fx::writable();
+        fx.manifest["run"]["writable"] = json!((0..n).map(|i| format!("w{i}")).collect::<Vec<_>>());
+        fx
+    });
+}
+
+/// The manifest's own check of `run.writable_too_large`, on a table that adds the files `extra`
+/// (path, size) to the writable fixture (`validate` would also notice the files are not that big).
+fn writable_problems(extra: &[(&str, u64)]) -> Vec<String> {
+    use ruya_play_format::manifest::parse_manifest;
+    use ruya_play_format::problem::Problems;
+    use ruya_play_format::table::{parse_table, TableIndex};
+    let fx = Fx::writable();
+    let mut p = Problems::new();
+    let mut entries = parse_table(&fx.table(), &mut p);
+    for (path, size) in extra {
+        entries.push(ruya_play_format::FileEntry::File {
+            path: path.to_string(),
+            size: *size,
+            sha256: "0".repeat(64),
+            executable: false,
+        });
+    }
+    let index = TableIndex::new(&entries);
+    parse_manifest(&fx.manifest_bytes(), &entries, &index, false, &mut p);
+    p.finish().into_iter().map(|p| p.code).collect()
+}
+
+#[test]
+fn writable_bytes() {
+    let too_large = |extra: &[(&str, u64)]| {
+        writable_problems(extra).contains(&"run.writable_too_large".to_string())
+    };
+    let half = MAX_WRITABLE_BYTES / 2;
+    assert_eq!(MAX_WRITABLE_BYTES, 2 * 1024 * 1024 * 1024);
+    // The fixture's own file is 3 bytes: below, at and above the limit, summed over the files.
+    let (a, b) = ("payload/Save/a.bin", "payload/Save/sub/b.bin");
+    assert!(!too_large(&[(a, half - 3), (b, half)]));
+    assert!(too_large(&[(a, half - 2), (b, half)]));
+    assert!(too_large(&[(a, MAX_WRITABLE_BYTES + 1)]));
+    // Files outside the writable folders, and a folder named like it, do not count.
+    assert!(!too_large(&[("payload/Other/big", MAX_WRITABLE_BYTES * 2)]));
+    assert!(!too_large(&[("payload/Save2/big", MAX_WRITABLE_BYTES * 2)]));
+}
