@@ -585,6 +585,9 @@ Item {
             keyClick(Qt.Key_Return)
             tryCompare(find("wallpaperPicker"), "mode", "usb")
             compare(find("wallpaperPanel").layers !== undefined, true)
+            // RUY-891: the mode flips before the drive's pictures are listed (an asynchronous scan);
+            // under load the first USB tile does not exist yet when the mode reads "usb".
+            tryVerify(() => find("wallpaperTile_0") !== null, 5000, "the drive's first picture is listed")
             compare(find("wallpaperTile_0").maskRadius, Theme.radiusM * u, "the USB grid is masked too")
             compare(find("wallpaperHairline_0").radius, Theme.radiusM * u, "the USB hairline")
             checkSmoothCut(find("wallpaperTileMask_0"), "a USB tile")
