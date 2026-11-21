@@ -119,7 +119,8 @@ fn read_root(
     if e.kind != EntryKind::File || e.size > limit {
         return Ok(None);
     }
-    ruya_play_format::read_within(source, name, limit).map_err(|p| Refusal::Format(vec![p]))
+    ruya_play_format::read_within(source, name, limit)
+        .map_err(|e| Refusal::Format(vec![e.into_problem(name)]))
 }
 
 /// Inspect a package. See the module text for the order.

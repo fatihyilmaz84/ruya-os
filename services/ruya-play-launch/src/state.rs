@@ -15,6 +15,7 @@
 //! launcher before RUY-1019) means "no game tree": one is built, keeping what a tree there holds.
 
 use crate::os::{AppSource, LaunchOs};
+use ruya_play_format::ReadError;
 use serde_json::{json, Map, Value};
 
 /// Where the launcher keeps its files, below `${data}`.
@@ -186,9 +187,9 @@ impl State {
         out
     }
 
-    /// Read the status file below `data`; the default when it is absent, too big or not format 1
-    /// (logged). An error asking whether it is there (a refused link, `EACCES`, `EIO`) is the
-    /// caller's: the game's data is not to be treated as new.
+    /// Read the status file below `data`; the default when it is absent, too big, damaged or not
+    /// format 1 (logged). An error from the system, asking whether it is there or reading it (a
+    /// refused link, `EACCES`, `EIO`), is the caller's: the game's data is not to be treated as new.
     pub fn read(os: &dyn LaunchOs, data: &str) -> std::io::Result<State> {
         if os.kind(data, FILE)?.is_none() {
             return Ok(State::default());
@@ -204,13 +205,14 @@ impl State {
                     os.log("the status file is too big; starting from none");
                     State::default()
                 }
-                Err(p) => {
+                Err(ReadError::Content(p)) => {
                     os.log(&format!(
                         "the status file cannot be read ({}); starting from none",
                         p.message
                     ));
                     State::default()
                 }
+                Err(ReadError::Io(e)) => return Err(e),
             },
         )
     }

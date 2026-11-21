@@ -583,7 +583,8 @@ pub fn bundled_runners(
                 }
                 let bytes = match crate::read_small(source, &file, MAX_RUNNER_JSON_BYTES) {
                     Ok(b) => b,
-                    Err(p) => {
+                    Err(e) => {
+                        let p = e.into_problem(&file);
                         problems.add(&p.code, p.path, p.message);
                         continue;
                     }

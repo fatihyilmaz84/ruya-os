@@ -152,7 +152,8 @@ pub fn load_from(os: &dyn LaunchOs, root: &str) -> Result<Loaded, Failure> {
     let src = AppSource::new(os, root);
     let mut problems = Problems::new();
     let read = |path: &str, limit: u64| {
-        ruya_play_format::read_small(&src, path, limit).map_err(|p| {
+        ruya_play_format::read_small(&src, path, limit).map_err(|e| {
+            let p = e.into_problem(path);
             Failure::new(
                 &p.code,
                 format!(

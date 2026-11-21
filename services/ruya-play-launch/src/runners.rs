@@ -81,8 +81,11 @@ fn read_runner(os: &dyn LaunchOs, root: &str) -> Option<RunnerJson> {
     let src = AppSource::new(os, root);
     let bytes = match ruya_play_format::read_small(&src, runner::FILE_NAME, MAX_RUNNER_JSON_BYTES) {
         Ok(b) => b,
-        Err(p) => {
-            os.log(&format!("{file}: {}; runner skipped", p.message));
+        Err(e) => {
+            os.log(&format!(
+                "{file}: {}; runner skipped",
+                e.into_problem(runner::FILE_NAME).message
+            ));
             return None;
         }
     };

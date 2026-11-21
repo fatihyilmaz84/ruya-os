@@ -120,7 +120,8 @@ pub fn run(args: &[String], _ctx: &Context) -> Result<Reply, Stop> {
     let runner = if is_file {
         match ruya_play_format::read_small(&source, FILE_NAME, MAX_RUNNER_JSON_BYTES) {
             Ok(bytes) => parse_runner(&bytes, &file, &mut problems),
-            Err(pr) => {
+            Err(e) => {
+                let pr = e.into_problem(&file);
                 problems.add(&pr.code, file.clone(), pr.message);
                 None
             }
