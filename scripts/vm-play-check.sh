@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # modes: asknet bumpbuild check compat32 generation helper launch launch-windows lstate modpath offline parse perms pkgid remove removeapp runid signals sysrunner verify winpkg withid
 # Checks ruya-play (org.ruyaos.Play1, RUY-829, the lead's run under RUY-100) inside a running VM,
-# as root. Modes:
+# as root. [RUYA_PIN=<digits>] is the PIN of the profile the launch modes sign in (tried after no PIN,
+# before 1234), as for dell-hub-check.sh; it is never printed. Modes:
 #   check  (default) every step below
 #   asknet host fixtures only: `asknet <in.zip> <out.zip>` copies a package whose play.json asks
 #          for network, multiarch and gamemode (`asks_network`, the perms and remove modes use it)
@@ -841,13 +842,16 @@ launch_profile() {
     [ -n "$lprof" ] && ok "profile $lprof (made by the check: ${lcreated:-no})" || { bad "cannot find or make a profile to run the game as"; return 1; }
 }
 
-# sign_in <profile>: a profile without a PIN, else with 1234 (what vm-goto.ps1 makes).
+# sign_in <profile>: a profile without a PIN, else with RUYA_PIN when it is set (the Dell's profile),
+# else with 1234 (what vm-goto.ps1 makes), the order dell-hub-check.sh signin uses. The PIN is only
+# ever an argument of busctl: never echoed (the failure line prints the reply), and no `set -x` here.
 sign_in() {
-    local out
-    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$1" "")"
-    case "$out" in 'suu "ok"'*) return 0 ;; esac
-    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$1" 1234)"
-    case "$out" in 'suu "ok"'*) return 0 ;; *) echo "SwitchTo $1: $out"; return 1 ;; esac
+    local out pin
+    for pin in "" ${RUYA_PIN:+"$RUYA_PIN"} 1234; do
+        out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$1" "$pin")"
+        case "$out" in 'suu "ok"'*) return 0 ;; esac
+    done
+    echo "SwitchTo $1: $out"; return 1
 }
 
 # Session1's signals into $work/signals.log (read with `signals`).
