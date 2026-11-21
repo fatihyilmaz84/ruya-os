@@ -148,6 +148,12 @@ WaylandCompositor {
         onInhibitorRemoved: id => win.shell.removeInhibitor(id)
     }
 
+    // RUY-494: a console shows apps fullscreen without title bars, so server-side means none drawn. Offering the
+    // global keeps xwayland-satellite from drawing its own 25 px bar (a growing shm pool that trips libwayland).
+    XdgDecorationManagerV1 {
+        preferredMode: XdgToplevel.ServerSideDecoration
+    }
+
     XdgShell {
         onToplevelCreated: (toplevel, xdgSurface) => {
             const client = xdgSurface.surface.client

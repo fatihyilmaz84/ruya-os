@@ -14,6 +14,9 @@ isolation probe. Python's standard library only: the test Flatpak runs it with t
       refusal: a probe at the wrong place must not pass a negative test.
   vm-x11-client.py cookie <Xauthority file> [display]
       Prints the hex cookie of the first MIT-MAGIC-COOKIE-1 record (that of the display number, if given).
+  vm-x11-client.py globals <wayland socket>
+      Prints the interface of every global the compositor offers, one per line (RUY-494: the check that
+      zxdg_decoration_manager_v1 is there), or "error: <why>" (exit 2).
 
 The setup request is the only part of the protocol the isolation test needs; the window needs
 CreateWindow, ChangeProperty, MapWindow and one GetInputFocus round trip.
@@ -212,6 +215,44 @@ def window():
             return 1
 
 
+def parse_globals(data):
+    """The interfaces of the wl_registry.global events in data (Wayland wire format, little endian), up to
+    the wl_callback.done of the sync that follows get_registry. Registry is object 2, the callback 3."""
+    names = []
+    pos = 0
+    while pos + 8 <= len(data):
+        obj, word = struct.unpack_from("<II", data, pos)
+        size, opcode = word >> 16, word & 0xFFFF
+        if size < 8 or pos + size > len(data):
+            break
+        body = data[pos + 8:pos + size]
+        if obj == 3 and opcode == 0:
+            return names, True
+        if obj == 2 and opcode == 0 and len(body) >= 8:
+            (strlen,) = struct.unpack_from("<I", body, 4)
+            names.append(body[8:8 + strlen - 1].decode("ascii", "replace"))
+        pos += size
+    return names, False
+
+
+def wayland_globals(path):
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.settimeout(10)
+    sock.connect(path)
+    # wl_display.get_registry(new id 2) and wl_display.sync(new id 3), both on object 1.
+    sock.sendall(struct.pack("<IIIIII", 1, (12 << 16) | 1, 2, 1, (12 << 16) | 0, 3))
+    data = b""
+    while True:
+        names, done = parse_globals(data)
+        if done:
+            sock.close()
+            return names
+        chunk = sock.recv(65536)
+        if not chunk:
+            raise OSError("the compositor closed the connection")
+        data += chunk
+
+
 def main(argv):
     if len(argv) >= 1 and argv[0] == "window":
         return window()
@@ -225,6 +266,14 @@ def main(argv):
             print("error: no cookie in %s" % argv[1])
             return 2
         print(data.hex())
+        return 0
+    if len(argv) == 2 and argv[0] == "globals":
+        try:
+            names = wayland_globals(argv[1])
+        except (OSError, socket.timeout) as e:
+            print("error: %s" % e)
+            return 2
+        print(chr(10).join(names))
         return 0
     print(__doc__)
     return 2

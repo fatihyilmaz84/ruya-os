@@ -208,4 +208,20 @@ with tempfile.TemporaryDirectory() as tmp:
     out = subprocess.run([sys.executable, client_path, "window"], env=env, capture_output=True, text=True, timeout=20)
     check("without DISPLAY it exits 1", out.returncode == 1 and "DISPLAY is ''" in out.stdout, (out.returncode, out.stdout))
 
+# RUY-494: the registry reader, on canned wire bytes (a global event is name, string, version).
+def global_event(name, iface, version):
+    s = iface.encode() + bytes(1)
+    s += bytes(-len(s) % 4)
+    body = struct.pack("<II", name, len(iface) + 1) + s + struct.pack("<I", version)
+    return struct.pack("<II", 2, ((8 + len(body)) << 16) | 0) + body
+
+
+wire = (global_event(1, "wl_compositor", 6) + global_event(2, "zxdg_decoration_manager_v1", 1)
+        + struct.pack("<II", 3, (12 << 16) | 0) + struct.pack("<I", 0))
+names, done = client.parse_globals(wire)
+check("parse_globals lists the interfaces up to the sync's done",
+      done and names == ["wl_compositor", "zxdg_decoration_manager_v1"], (names, done))
+names, done = client.parse_globals(wire[:40])
+check("parse_globals on a cut stream is not done", not done, (names, done))
+
 sys.exit(1 if fails else 0)
