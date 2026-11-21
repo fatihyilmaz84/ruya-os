@@ -28,6 +28,8 @@ fn run_env_may_not_name_what_the_platform_owns() {
         "XDG_DATA_HOME",
         "FLATPAK_ID",
         "RUYA_RUNNER",
+        "PWD",
+        "UMU_ID",
     ] {
         let mut g = Game::native();
         g.set(
@@ -179,8 +181,8 @@ fn wine_runs_through_its_loader() {
     );
 }
 
-#[test]
-fn proton_runs_waitforexitandrun_with_its_compat_folders() {
+/// The wine game turned into a Proton one with the system GE-Proton, before the first launch.
+fn proton_os(cwd: Option<&str>) -> FakeOs {
     let mut g = Game::wine();
     g.set(
         "/components/0",
@@ -188,6 +190,9 @@ fn proton_runs_waitforexitandrun_with_its_compat_folders() {
     )
     .set("/run/component", json!("proton"))
     .set("/run/runner", json!("proton"));
+    if let Some(cwd) = cwd {
+        g.manifest["run"]["cwd"] = json!(cwd);
+    }
     g.files.retain(|(p, _)| !p.starts_with("components/"));
     let mut os = g.install();
     add_system_runner(
@@ -197,6 +202,12 @@ fn proton_runs_waitforexitandrun_with_its_compat_folders() {
         "proton",
         "GE-Proton10-9",
     );
+    os
+}
+
+#[test]
+fn proton_runs_waitforexitandrun_with_its_compat_folders() {
+    let mut os = proton_os(None);
     os.file(
         "/app/runners/ProtonGE10/.ruya-runner-hash",
         format!("{}\n", "ab".repeat(32)),
@@ -245,6 +256,74 @@ fn proton_runs_waitforexitandrun_with_its_compat_folders() {
         ("proton-ge", "system")
     );
     assert_eq!(r.hash, Some("ab".repeat(32)));
+}
+
+#[test]
+fn proton_outside_steam_has_a_game_id_of_zero_that_nothing_overrides() {
+    // protonfixes parses a game id out of STEAM_COMPAT_DATA_PATH when none of SteamAppId,
+    // SteamGameId and UMU_ID is set, and stops on a path without digits (RUY-969).
+    let mut os = proton_os(None);
+    let mut env = base_env();
+    env.insert("SteamAppId".into(), "620".into());
+    env.insert("SteamGameId".into(), "620".into());
+    let cmd = ruya_play_launch::prepare(&mut os, &[], &env).unwrap();
+    assert_eq!(cmd.env["SteamAppId"], "0", "an inherited id is replaced");
+    assert_eq!(cmd.env["SteamGameId"], "0");
+    assert!(
+        !cmd.env.contains_key("UMU_ID"),
+        "a game has no umu id: {:?}",
+        cmd.env.get("UMU_ID")
+    );
+    // The setup step runs through the same environment.
+    assert_eq!(os.runs[0].env["SteamAppId"], "0");
+    assert_eq!(os.runs[0].env["SteamGameId"], "0");
+}
+
+#[test]
+fn run_env_cannot_set_the_steam_game_id_names() {
+    // They are not names the grammar allows (capital letters only), so with PWD and UMU_ID in the
+    // deny table no package gets between the launcher and what protonfixes reads.
+    for name in ["SteamAppId", "SteamGameId"] {
+        let mut g = Game::native();
+        g.set(
+            "/run",
+            json!({"runner": "native", "command": ["${payload}/game"], "env": {name: "1"}}),
+        );
+        let mut os = g.install();
+        let err = launch(&mut os, &[]).unwrap_err();
+        assert_eq!(err.code, "env.bad_name", "{name}");
+        assert!(os.runs.is_empty(), "{name}: nothing ran");
+    }
+}
+
+#[test]
+fn every_kind_gets_the_working_folder_as_pwd() {
+    // No shell sets it before the exec; protonfixes reads it without a fallback.
+    let mut env = base_env();
+    env.insert("PWD".into(), "/somewhere/else".into());
+    let mut os = Game::native().install();
+    let cmd = ruya_play_launch::prepare(&mut os, &[], &env).unwrap();
+    assert_eq!(cmd.cwd, "/app/payload");
+    assert_eq!(cmd.env["PWD"], cmd.cwd);
+    let mut os = Game::wine().install();
+    let cmd = ruya_play_launch::prepare(&mut os, &[], &env).unwrap();
+    assert_eq!(cmd.env["PWD"], "/app/payload");
+    assert_eq!(os.runs[0].env["PWD"], os.runs[0].cwd, "a setup step too");
+    // run.cwd moves it along.
+    let mut os = proton_os(Some("${data}/work"));
+    let cmd = ruya_play_launch::prepare(&mut os, &[], &env).unwrap();
+    assert_eq!(cmd.cwd, format!("{DATA}/work"));
+    assert_eq!(cmd.env["PWD"], cmd.cwd);
+    assert_eq!(os.runs[0].env["PWD"], os.runs[0].cwd);
+}
+
+#[test]
+fn only_proton_gets_a_steam_game_id() {
+    for mut os in [Game::native().install(), Game::wine().install()] {
+        let cmd = launch(&mut os, &[]).unwrap();
+        assert!(!cmd.env.contains_key("SteamAppId"));
+        assert!(!cmd.env.contains_key("SteamGameId"));
+    }
 }
 
 #[test]

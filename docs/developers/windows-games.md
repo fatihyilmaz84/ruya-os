@@ -122,6 +122,8 @@ You start the runner's entry yourself. The argv and environment below are what t
 - `STEAM_COMPAT_DATA_PATH`: a folder in your data, `$XDG_DATA_HOME/proton`. Proton keeps its prefix in `pfx` below it.
 - `STEAM_COMPAT_CLIENT_INSTALL_PATH`: an existing folder, `$XDG_DATA_HOME/proton/client`.
 - **No `WINEPREFIX`**: Proton derives its own from `STEAM_COMPAT_DATA_PATH`; remove an inherited one.
+- `SteamAppId` and `SteamGameId` set to `0`: outside Steam the game has no Steam id. GE-Proton's `protonfixes` looks for one and, when none of `SteamAppId`, `SteamGameId` or `UMU_ID` is set, parses a number out of `STEAM_COMPAT_DATA_PATH`; a folder without digits makes Proton stop with a Python `IndexError`. `0` makes it apply its defaults only. Do not set `UMU_ID`: your game has no umu id.
+- `PWD`: the working folder you start Proton in. Proton reads it without a fallback, so a `KeyError: 'PWD'` means it was missing (a shell sets it; a launcher that starts a program directly does not). Set it to the folder you give the process (`os.getcwd()` when you do not change it).
 
 ```python
 # sample: samples/hello-runner/run-windows.py
@@ -134,6 +136,8 @@ def proton_environment(data):
     env.pop("WINEPREFIX", None)
     env["STEAM_COMPAT_DATA_PATH"] = compat
     env["STEAM_COMPAT_CLIENT_INSTALL_PATH"] = client
+    env["SteamAppId"] = env["SteamGameId"] = "0"
+    env["PWD"] = os.getcwd()
     return env
 ...
 def main(argv):

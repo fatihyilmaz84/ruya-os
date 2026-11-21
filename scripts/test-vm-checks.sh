@@ -1892,7 +1892,7 @@ SHIMEOF
 printf '#!/bin/sh\nexit 0\n' > "$rw/bin/wineserver"
 chmod +x "$rw/bin/wine" "$rw/bin/wineserver"
 # proton: prints the words after waitforexitandrun's program and /c echo (CR LF, as cmd.exe does) when
-# both STEAM_COMPAT_* folders are set, and nothing when the file "silent" is next to it.
+# both STEAM_COMPAT_* folders, SteamAppId, SteamGameId and PWD are set, and nothing when the file "silent" is next to it.
 cat > "$rt/proton" <<'PYEOF'
 import os, sys
 here = os.path.dirname(os.path.abspath(__file__))
@@ -1901,6 +1901,10 @@ if os.path.exists(os.path.join(here, "silent")):
 assert sys.argv[1] == "waitforexitandrun" and sys.argv[2].endswith("cmd.exe"), sys.argv
 assert os.environ.get("STEAM_COMPAT_DATA_PATH"), os.environ
 assert os.path.isdir(os.environ.get("STEAM_COMPAT_CLIENT_INSTALL_PATH", "")), os.environ
+# What protonfixes needs outside Steam (RUY-969): it reads PWD without a fallback and fails on a game id
+# parsed from a compat path without digits. A real run checks it for real (vm-runner-check.sh check).
+assert os.environ.get("SteamAppId") == "0" and os.environ.get("SteamGameId") == "0", os.environ
+assert os.environ.get("PWD") == os.getcwd(), (os.environ.get("PWD"), os.getcwd())
 sys.stdout.write(" ".join(sys.argv[5:]) + "\r\n")
 PYEOF
 # readlink: the links of $FAKE_LINKS ("<path> <target>" lines).

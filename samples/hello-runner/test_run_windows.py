@@ -144,6 +144,17 @@ class Main(unittest.TestCase):
         self.assertNotIn("WINEPREFIX", env)
         self.assertIn("using ProtonGE11 (GE-Proton11-12)", out)
 
+    def test_proton_gets_a_game_id_and_a_working_folder_it_can_read(self):
+        # protonfixes stops on a missing PWD, and on a compat folder without digits when no game
+        # id is set: an id or PWD inherited from the caller must not leak through either.
+        make_runner(self.root, "ProtonGE11", "GE-Proton11-12")
+        with mock.patch.dict(os.environ, {"SteamAppId": "620", "SteamGameId": "620", "PWD": "/elsewhere"}):
+            _, calls, _, _ = self.run_main(["--runners", self.root, "game.exe"])
+        env = calls[0][2]
+        self.assertEqual(env["SteamAppId"], "0")
+        self.assertEqual(env["SteamGameId"], "0")
+        self.assertEqual(env["PWD"], os.getcwd())
+
     def test_the_self_test_runs_the_runners_own_cmd(self):
         make_runner(self.root, "ProtonGE11", "GE-Proton11-12")
         _, calls, _, _ = self.run_main(["--runners", self.root, "--self-test"])

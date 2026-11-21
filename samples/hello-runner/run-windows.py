@@ -10,7 +10,7 @@ point your manifest declares). This script does what a launcher does and nothing
   3. start the program with the argv and environment ADR-037 gives Proton:
      <proton> waitforexitandrun <program.exe> ...   with STEAM_COMPAT_DATA_PATH and
      STEAM_COMPAT_CLIENT_INSTALL_PATH under your own data folder (per profile, because the data
-     folder is).
+     folder is), SteamAppId and SteamGameId set to 0, and PWD.
 
     hello-runner game.exe [arguments]    run a program
     hello-runner --self-test             run the runner's own cmd.exe: prints RUYA_HELLO_RUNNER_OK
@@ -98,6 +98,11 @@ def proton_environment(data):
     env.pop("WINEPREFIX", None)
     env["STEAM_COMPAT_DATA_PATH"] = compat
     env["STEAM_COMPAT_CLIENT_INSTALL_PATH"] = client
+    # No Steam game id outside Steam: without one protonfixes parses a number out of the compat
+    # folder's name and stops when there is none. 0 makes it apply its defaults only.
+    env["SteamAppId"] = env["SteamGameId"] = "0"
+    # protonfixes reads PWD without a fallback; a shell sets it, a direct start does not.
+    env["PWD"] = os.getcwd()
     return env
 
 
