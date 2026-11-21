@@ -1206,7 +1206,12 @@ mod tests {
                 .get(&file_in(&dir(), "satellite"))
                 .map(|f| f.0.clone());
             if let Some(end) = self.sat_dies_in_run {
-                let sat = *self.procs.iter().find(|(_, &p)| p == 1).expect("satellite").0;
+                let sat = *self
+                    .procs
+                    .iter()
+                    .find(|(_, &p)| p == 1)
+                    .expect("satellite")
+                    .0;
                 self.procs.retain(|&c, &mut p| c != sat && p != sat);
                 self.sat_end = Some(end);
             }
