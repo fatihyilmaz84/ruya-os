@@ -45,7 +45,7 @@ Item {
             Profiles.resetMockForTests("seeded")
             tryVerify(() => Profiles.profiles.length === 3)
             tryCompare(Profiles, "activeProfile", "")
-            tryVerify(() => Play.sources.length === 13)
+            tryVerify(() => Play.sources.length === 14)
             host.infos = []
         }
 

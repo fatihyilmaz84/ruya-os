@@ -65,7 +65,7 @@ FocusScope {
     Rectangle {
         objectName: "installResultPanel"
         anchors.centerIn: parent
-        width: Math.max(head.width, sentence.width, retryable ? retryButton.width : okButton.width) + 120 * dialog.u      // token-ok: PowerConfirm's card, 04 5
+        width: Math.max(head.width, sentence.width, dialog.retryable ? retryButton.width : okButton.width) + 120 * dialog.u      // token-ok: PowerConfirm's card, 04 5
         height: card.height + 96 * dialog.u                                               // token-ok: PowerConfirm's card, 04 5
         radius: Theme.radiusL * dialog.u
         color: Theme.panel
