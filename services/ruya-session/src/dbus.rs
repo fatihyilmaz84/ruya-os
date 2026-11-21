@@ -14,10 +14,11 @@ use zbus::{interface, Connection, MatchRule, MessageStream};
 use crate::directory::{profile_ids, ProfileDirectory, ProfileRow, ProfileSnapshot};
 use crate::runner_choice::runner_args_from_library;
 use crate::session::{ExitReason, FrozenChange, Notice, RunningApp, Session, Status};
-use crate::spawner::{flatpak_app_version, valid_profile_id, Listing, Spawner, UnitEvent};
+use crate::spawner::{flatpak_app_version, Listing, Spawner, UnitEvent};
 use crate::usage::{DayRow, EndReason, SessionRecord, SystemZone, MAX_LIST};
 use crate::usage_store::FileStore;
 use crate::usage_tracker::{clear_route, may_read, Attention, ClearRoute, LiveApp, Tracker};
+use ruya_ids::valid_profile_id;
 
 pub const BUS_NAME: &str = "org.ruyaos.Session1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Session1";

@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::history::Entry;
 use crate::settings::Settings;
+use ruya_ids::valid_profile_id;
 
 /// What one profile's file holds.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -31,15 +32,6 @@ pub struct ProfileData {
 pub trait Persist {
     fn save(&mut self, profile: &str, data: &ProfileData) -> io::Result<()>;
     fn remove(&mut self, profile: &str) -> io::Result<()>;
-}
-
-/// A Profiles1 id that is safe as a file name (the grammar `ruya-session` checks too).
-pub fn valid_profile_id(id: &str) -> bool {
-    !id.is_empty()
-        && id.len() <= 32
-        && id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 #[derive(Debug, Clone)]

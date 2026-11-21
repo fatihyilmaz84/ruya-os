@@ -14,7 +14,8 @@ use crate::caller;
 use crate::history::{Event, Item, NewItem, Status};
 use crate::service::{Notifications, Profiles, SetError};
 use crate::settings::{Change, Property, QuietHours};
-use crate::store::{valid_profile_id, Persist, ProfileData};
+use crate::store::{Persist, ProfileData};
+use ruya_ids::valid_profile_id;
 
 pub const BUS_NAME: &str = "org.ruyaos.Notifications1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Notifications1";

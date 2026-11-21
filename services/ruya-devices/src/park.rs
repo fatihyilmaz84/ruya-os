@@ -20,6 +20,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use ruya_ids::profile_of_user;
 use serde_json::Value;
 
 /// The null sink parked streams play into. Created when the first stream is parked, destroyed
@@ -57,16 +58,6 @@ pub enum Step {
     DropSink { id: u64 },
 }
 
-fn valid_user(user: &str) -> bool {
-    user.strip_prefix("ruya-").is_some_and(|id| {
-        !id.is_empty()
-            && id.len() <= 32
-            && id
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-    })
-}
-
 /// The list of `--frozen=a,b` (an empty value is an empty list).
 fn list(arg: &str, name: &str) -> Result<Vec<String>, String> {
     let value = arg
@@ -91,7 +82,7 @@ pub fn parse_args(args: &[String]) -> Result<Request, String> {
     let [user, frozen, running] = args else {
         return Err("usage: --park-audio ruya-<id> --frozen=<ids> --running=<ids>".to_owned());
     };
-    if !valid_user(user) {
+    if profile_of_user(user).is_none() {
         return Err(format!("not a profile user: {user:?}"));
     }
     Ok(Request {

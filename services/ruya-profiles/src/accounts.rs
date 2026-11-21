@@ -6,6 +6,8 @@
 use std::io;
 use std::ops::RangeInclusive;
 
+use ruya_ids::user_of;
+
 /// Uids (and gids) of temporary guests. Regular profiles never get one (`REGULAR_ID_MAX`).
 pub const GUEST_UIDS: RangeInclusive<u32> = 50000..=59999;
 /// The highest uid and gid useradd may pick for a regular profile.
@@ -52,16 +54,11 @@ impl<T: Accounts + ?Sized> Accounts for Box<T> {
     }
 }
 
-/// Unix user name for a profile id ("p3" -> "ruya-p3").
-pub fn unix_user(profile_id: &str) -> String {
-    format!("ruya-{profile_id}")
-}
-
 /// The `useradd` arguments for a profile user. A regular profile is kept below the guest range
 /// (`-K UID_MAX`, `-K GID_MAX`); a guest gets its uid, and its user group the same gid or
 /// useradd fails (`GID_MIN` = `GID_MAX` = uid), so a taken uid or gid is refused, never shared.
 pub fn useradd_args(profile_id: &str, kind: AccountKind) -> Vec<String> {
-    let user = unix_user(profile_id);
+    let user = user_of(profile_id);
     let mut args: Vec<String> = vec![
         "--create-home".into(),
         "--home-dir".into(),
@@ -115,7 +112,7 @@ pub fn guest_entry(passwd_line: &str, profile_id: &str, uid: u32) -> GuestEntry 
     if line.is_empty() {
         return GuestEntry::Missing;
     }
-    let user = unix_user(profile_id);
+    let user = user_of(profile_id);
     let fields: Vec<&str> = line.split(':').collect();
     if fields.len() < 7 || fields[0] != user {
         return GuestEntry::NotAGuest;
@@ -214,7 +211,7 @@ impl UnixAccounts {
 #[cfg(target_os = "linux")]
 impl Accounts for UnixAccounts {
     fn create(&self, profile_id: &str, kind: AccountKind) -> io::Result<()> {
-        let user = unix_user(profile_id);
+        let user = user_of(profile_id);
         let status = std::process::Command::new("useradd")
             .args(useradd_args(profile_id, kind))
             .status()?;
@@ -226,11 +223,11 @@ impl Accounts for UnixAccounts {
     }
 
     fn remove(&self, profile_id: &str) -> io::Result<()> {
-        Self::delete_user(&unix_user(profile_id))
+        Self::delete_user(&user_of(profile_id))
     }
 
     fn remove_guest(&self, profile_id: &str, uid: u32) -> io::Result<()> {
-        let user = unix_user(profile_id);
+        let user = user_of(profile_id);
         let line = getent("passwd", &user)?.unwrap_or_default();
         match guest_entry(&line, profile_id, uid) {
             GuestEntry::Missing => Ok(()),

@@ -10,10 +10,11 @@ use std::time::{Duration, Instant};
 
 use crate::directory::ProfileDirectory;
 use crate::spawner::{
-    app_env, is_app_scope, parse_cgroup, unit_app_id, valid_profile_id, with_pulse_server,
-    AdoptLister, Listing, Spawner, UnitEvent,
+    app_env, is_app_scope, parse_cgroup, unit_app_id, with_pulse_server, AdoptLister, Listing,
+    Spawner, UnitEvent,
 };
 use ruya_flatpak::valid_session_app_id;
+use ruya_ids::{profile_of_user, valid_profile_id};
 
 /// After `Stop`, the app has this long to quit before it is killed: the backstop (RUY-736). It
 /// counts from the stop itself, after the thaw of a frozen app (which can take up to two bounded
@@ -632,11 +633,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         let mut gained: Vec<String> = Vec::new();
         let mut units: Vec<String> = Vec::new();
         for found in listing.found {
-            let Some(profile) = found
-                .user
-                .strip_prefix("ruya-")
-                .filter(|p| valid_profile_id(p))
-            else {
+            let Some(profile) = profile_of_user(&found.user) else {
                 continue;
             };
             if !valid_session_app_id(&found.app_id)

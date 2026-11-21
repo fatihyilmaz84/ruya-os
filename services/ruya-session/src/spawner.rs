@@ -14,6 +14,7 @@ use std::time::Duration;
 use crate::steam_tool::{exec_start_pre, STEAM_APP_ID};
 use async_channel::Sender;
 use ruya_flatpak::valid_session_app_id;
+use ruya_ids::profile_of_user;
 
 /// What the OS tells us about a unit. The adapter drains these from a channel into the core.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -203,15 +204,6 @@ impl<T: Spawner + ?Sized> Spawner for Box<T> {
     }
 }
 
-/// A profile id as `ruya-profiles` makes them ("p3"): short, `[A-Za-z0-9_-]`.
-pub fn valid_profile_id(id: &str) -> bool {
-    !id.is_empty()
-        && id.len() <= 32
-        && id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-}
-
 /// The unit an app runs in: one per (user, app).
 pub fn unit_name(user: &str, app_id: &str) -> String {
     format!("ruya-app-{user}-{app_id}.service")
@@ -265,7 +257,7 @@ pub fn is_app_scope(app_id: &str, name: &str) -> bool {
 
 /// `systemctl` in `user`'s manager, the start of every list below. The user is validated again.
 fn user_systemctl(user: &str) -> Result<Vec<String>, String> {
-    if !user.strip_prefix("ruya-").is_some_and(valid_profile_id) {
+    if profile_of_user(user).is_none() {
         return Err(format!("not a profile user: {user:?}"));
     }
     let mut args: Vec<String> = ["systemctl", "--user", "--no-pager"]
@@ -489,9 +481,7 @@ pub const WAYLAND_DIR: &str = "/run/ruya-wayland";
 /// so a sandboxed app never learns where the sockets of other profiles are. `None` for anything
 /// that is not a profile user.
 pub fn wayland_display(dir: &str, user: &str) -> Option<String> {
-    user.strip_prefix("ruya-")
-        .is_some_and(valid_profile_id)
-        .then(|| format!("{dir}/{user}"))
+    profile_of_user(user).map(|_| format!("{dir}/{user}"))
 }
 
 /// Where `ruya-pulse@.service` makes each profile user's sound server socket (ADR-010, T-365):
@@ -502,9 +492,7 @@ pub const PULSE_DIR: &str = "/run/ruya-pulse";
 /// --socket=pulseaudio` binds exactly this socket into the sandbox. `None` for anything that is
 /// not a profile user.
 pub fn pulse_server(dir: &str, user: &str) -> Option<String> {
-    user.strip_prefix("ruya-")
-        .is_some_and(valid_profile_id)
-        .then(|| format!("unix:{dir}/{user}/native"))
+    profile_of_user(user).map(|_| format!("unix:{dir}/{user}/native"))
 }
 
 /// `env` with `PULSE_SERVER` set to `user`'s own sound server (one already there is replaced).
@@ -523,7 +511,7 @@ pub fn with_pulse_server(
 /// The argument list that starts `user`'s sound server in `ruya-shell`'s manager and waits until
 /// it runs. Pure; the user is validated again, so the instance name is a plain identifier.
 pub fn pulse_start_command(user: &str) -> Result<Vec<String>, String> {
-    if !user.strip_prefix("ruya-").is_some_and(valid_profile_id) {
+    if profile_of_user(user).is_none() {
         return Err(format!("not a profile user: {user:?}"));
     }
     Ok(vec![
@@ -541,7 +529,7 @@ pub fn pulse_start_command(user: &str) -> Result<Vec<String>, String> {
 pub const DEVICES_PROGRAM: &str = "/usr/bin/ruya-devices";
 
 fn checked_user(user: &str) -> Result<(), String> {
-    if user.strip_prefix("ruya-").is_some_and(valid_profile_id) {
+    if profile_of_user(user).is_some() {
         Ok(())
     } else {
         Err(format!("not a profile user: {user:?}"))
@@ -1003,7 +991,7 @@ pub fn launch_command_in(
     mode: DisplayMode,
     app_args: &[String],
 ) -> Result<Vec<String>, String> {
-    if !user.strip_prefix("ruya-").is_some_and(valid_profile_id) {
+    if profile_of_user(user).is_none() {
         return Err(format!("not a profile user: {user:?}"));
     }
     if !valid_session_app_id(app_id) {
@@ -1257,7 +1245,7 @@ pub fn parse_profile_users(output: &str) -> Vec<String> {
     output
         .lines()
         .filter_map(|line| line.split_whitespace().nth(1))
-        .filter(|name| name.strip_prefix("ruya-").is_some_and(valid_profile_id))
+        .filter(|name| profile_of_user(name).is_some())
         .map(str::to_owned)
         .collect()
 }
@@ -1858,16 +1846,6 @@ mod tests {
             "org.a.{}",
             "x".repeat(MAX_SESSION_APP_ID)
         )));
-    }
-
-    #[test]
-    fn profile_id_grammar() {
-        assert!(valid_profile_id("p3"));
-        assert!(valid_profile_id("guest"));
-        let long = "a".repeat(33);
-        for bad in ["", "p 3", "p;3", "p/3", long.as_str(), "p\u{e9}"] {
-            assert!(!valid_profile_id(bad), "{bad:?}");
-        }
     }
 
     #[test]

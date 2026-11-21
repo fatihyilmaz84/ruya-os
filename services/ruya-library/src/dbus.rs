@@ -68,7 +68,7 @@ impl LibraryIface {
 
     /// `GetRunnerChoice`'s rule.
     pub fn runner_choice(&self, profile: &str, id: &str) -> Result<String, Status> {
-        if !choices::valid_profile_id(profile) {
+        if !ruya_ids::valid_profile_id(profile) {
             return Err(Status::Invalid);
         }
         let app = self.play_app(id)?;
@@ -82,7 +82,7 @@ impl LibraryIface {
         id: &str,
         choice: &str,
     ) -> Result<bool, Status> {
-        if !choices::valid_profile_id(profile) || !choices::valid_choice(choice) {
+        if !ruya_ids::valid_profile_id(profile) || !choices::valid_choice(choice) {
             return Err(Status::Invalid);
         }
         let app = self.play_app(id)?;

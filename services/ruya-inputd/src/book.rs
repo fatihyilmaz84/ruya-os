@@ -26,11 +26,11 @@ use std::fs;
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
 
-use crate::accounts::valid_profile_id;
 use crate::engine::{Engine, Resolved, StickSettings};
 use crate::mapping::Confirm;
 use crate::profile::{self, Input, Mapping, Profile, Scope, Target};
 use crate::routing::Status;
+use ruya_ids::valid_profile_id;
 
 pub const DEFAULT_ID: &str = "default";
 pub const NINTENDO_ID: &str = "nintendo";

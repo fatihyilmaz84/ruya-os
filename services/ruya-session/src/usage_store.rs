@@ -10,9 +10,9 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use crate::spawner::valid_profile_id;
 use crate::usage::{DayRow, EndReason, Ledger, SessionRecord};
 use ruya_flatpak::valid_session_app_id;
+use ruya_ids::valid_profile_id;
 
 pub type StoreResult<T> = Result<T, String>;
 

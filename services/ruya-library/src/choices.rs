@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use crate::catalog::Item;
+use ruya_ids::valid_profile_id;
 
 /// The choice a game has when its profile stored none.
 pub const DEFAULT_CHOICE: &str = "package";
@@ -62,16 +63,6 @@ pub fn play_app(items: &[Item], id: &str) -> Result<String, Status> {
 /// A known choice name (`ruya_play_launch::parse_choice`, the launcher's own list).
 pub fn valid_choice(choice: &str) -> bool {
     ruya_play_launch::parse_choice(choice).is_some()
-}
-
-/// A Profiles1 id that is safe as a file name (the grammar ruya-session and ruya-notifications
-/// check).
-pub fn valid_profile_id(id: &str) -> bool {
-    !id.is_empty()
-        && id.len() <= 32
-        && id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 /// The store of every profile's choices.

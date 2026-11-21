@@ -2,6 +2,8 @@
 //! root, a system user or `ruya-shell`. The same naming rule as `ruya-profiles` and
 //! `ruya-session`: profile id `p3` is the Unix user `ruya-p3`.
 
+use ruya_ids::{user_of, valid_profile_id};
+
 /// Looks a profile id up. `None` when it is not a profile account.
 pub trait Accounts: Send {
     fn profile_uid(&self, profile: &str) -> Option<u32>;
@@ -9,15 +11,6 @@ pub trait Accounts: Send {
     fn is_guest(&self, _profile: &str) -> bool {
         false
     }
-}
-
-/// A profile id as `ruya-profiles` makes them ("p3"): short, `[A-Za-z0-9_-]`.
-pub fn valid_profile_id(id: &str) -> bool {
-    !id.is_empty()
-        && id.len() <= 32
-        && id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 /// The first regular uid `useradd` hands out; profile accounts are regular users.
@@ -30,7 +23,7 @@ pub fn profile_uid_in_passwd(passwd: &str, id: &str) -> Option<u32> {
     if !valid_profile_id(id) {
         return None;
     }
-    let user = format!("ruya-{id}");
+    let user = user_of(id);
     let home = format!("/var/home/{user}");
     passwd.lines().find_map(|line| {
         let fields: Vec<&str> = line.split(':').collect();
@@ -51,7 +44,7 @@ pub fn profile_is_guest_in_passwd(passwd: &str, id: &str) -> bool {
     if profile_uid_in_passwd(passwd, id).is_none() {
         return false;
     }
-    let user = format!("ruya-{id}");
+    let user = user_of(id);
     passwd.lines().any(|line| {
         let fields: Vec<&str> = line.split(':').collect();
         fields.len() >= 7 && fields[0] == user && fields[4] == GUEST_COMMENT

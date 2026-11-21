@@ -974,6 +974,7 @@ dependencies = [
  "ruya-contract-test",
  "ruya-flatpak",
  "ruya-fs",
+ "ruya-ids",
  "ruya-pads",
  "ruya-sysinfo",
  "serde",
@@ -996,6 +997,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruya-ids"
+version = "0.1.0"
+
+[[package]]
 name = "ruya-inputd"
 version = "0.1.0"
 dependencies = [
@@ -1005,6 +1010,7 @@ dependencies = [
  "libc",
  "ruya-contract-test",
  "ruya-flatpak",
+ "ruya-ids",
  "ruya-pads",
  "serde_json",
  "sha2",
@@ -1019,6 +1025,7 @@ dependencies = [
  "blocking",
  "futures-lite",
  "ruya-contract-test",
+ "ruya-ids",
  "ruya-play-art",
  "ruya-play-format",
  "ruya-play-launch",
@@ -1035,6 +1042,7 @@ dependencies = [
  "futures-lite",
  "libc",
  "ruya-contract-test",
+ "ruya-ids",
  "serde",
  "serde_json",
  "tempfile",
@@ -1140,6 +1148,7 @@ dependencies = [
  "futures-lite",
  "password-hash",
  "ruya-contract-test",
+ "ruya-ids",
  "serde",
  "tempfile",
  "toml",
@@ -1158,6 +1167,7 @@ dependencies = [
  "ruya-contract-test",
  "ruya-flatpak",
  "ruya-fs",
+ "ruya-ids",
  "ruya-play-format",
  "ruya-play-launch",
  "tempfile",

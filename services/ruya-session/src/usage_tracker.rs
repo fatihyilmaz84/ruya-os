@@ -12,11 +12,11 @@
 use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
 
-use crate::spawner::valid_profile_id;
 use crate::usage::{
     day_of, format_day, parse_day, DayRow, EndReason, Ledger, SessionRecord, Zone, MIN_SESSION_SECS,
 };
 use crate::usage_store::UsageStore;
+use ruya_ids::valid_profile_id;
 
 /// A running session is saved this often; a crash loses at most this much.
 pub const HEARTBEAT: Duration = Duration::from_secs(30);
