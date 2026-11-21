@@ -15,7 +15,14 @@
 #      ruya-play-launch sets, RUY-969), and a Wine runner's own 64-bit and
 #      32-bit cmd.exe through its runner.json `entry.wine` (WINEPREFIX in a scratch folder, Mono
 #      and Gecko off: the image ships neither) each print a marker, under `unshare -n`.
-#      Without a profile on the VM this step is a SKIP with its reason (the check creates none).
+#      Proton needs an X display (it gives every program a console window, which hangs without one), so
+#      its program runs on the display a launch gets: through `ruya-session x11-run` as the profile user
+#      (run_on_display), and cmd.exe writes the marker to a file the check reads, because that console
+#      window, not stdout, gets what cmd.exe echoes (RUY-980). It runs as the signed-in profile
+#      (Profiles1 ActiveProfile). With nobody signed in the step is a SKIP with its reason (the check
+#      signs in none; vm-queue.ps1 does it with vm-goto.ps1 home); x11-run starting no X server for the
+#      signed-in profile, a helper missing from the image, or a helper that did not run `flatpak` from the
+#      PATH is a FAIL.
 # Mode `steam` (RUY-35, after the Steam Flatpak is installed and was started once as a profile):
 #   5. every Proton runner is linked into Steam's extension point
 #      (com.valvesoftware.Steam.CompatibilityTool.<Name>/x86_64/stable) and carries its
@@ -31,7 +38,8 @@
 #      the image, starts the runner's cmd.exe through `proton waitforexitandrun` and prints its marker, and
 #      the Proton prefix is made in the profile's data folder. This is the script, not the Flatpak: the
 #      mount of an app's extension point is vm-play-check.sh's; building the sample with flatpak-builder in
-#      the VM is not done. Without a profile on the VM the step is a SKIP, as in `check`.
+#      the VM is not done. The script runs as the signed-in profile on the same display as in `check`, and
+#      with nobody signed in the step is a SKIP, as there; a missing display is a FAIL.
 # Running a game inside a .play sandbox (the extension mounts, the 32-bit points) is
 # vm-play-check.sh launch and launch-windows (RUY-902).
 # Mode `newest` (RUY-902; `newest <runners dir> <key>=<value>`, no root needed): prints the folder of the newest
@@ -55,13 +63,17 @@ root="${RUYA_ROOT:-}"
 conf="$root/usr/lib/tmpfiles.d/ruya-play-platform.conf"
 play="$root/usr/lib/ruyaos/play"
 launcher="$play/launcher/bin/ruya-play-launch"
+# The helper that starts the X server of a launch (ADR-034) and the profiles' Wayland sockets it connects to.
+session="$root/usr/bin/ruya-session"
+wayland_dir=/run/ruya-wayland
 marker=RUYA_RUNNER_OK
 fail=0
 ok() { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
-# The first profile's id on this VM ("p1"), or nothing.
-first_profile() {
-    busctl --system call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ListProfiles 2>/dev/null | grep -o '"p[0-9]*"' | head -1 | tr -d '"'
+# The id of the profile that is signed in ("p1": Profiles1's ActiveProfile), or nothing. x11-run's X server
+# connects to the signed-in profile's Wayland socket, so a program that needs a display runs as that one.
+active_profile() {
+    busctl --system get-property org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ActiveProfile 2>/dev/null | cut -d'"' -f2
 }
 
 # newest_runner <runners dir> <key>=<value>: the folder name of the newest runner.json one folder below <dir>
@@ -90,6 +102,58 @@ print(best[1])
 PYEOF
 }
 
+# win_path <file>: the Windows name of a file for the Proton prefix, whose Z: drive is the root of the file system.
+win_path() {
+    printf 'Z:%s' "$1" | tr / '\\'
+}
+
+# run_on_display <user> <data> [VAR=value ...] -- <command> [args...]: runs the command as <user>, under
+# `unshare -n`, on an X display made the way a launch makes it (RUY-980): through `ruya-session x11-run`, the
+# helper that starts xwayland-satellite for the signed-in profile and runs `flatpak run <app id>` on it
+# (DISPLAY, XAUTHORITY, no WAYLAND_DISPLAY; 05 §6.3). The helper runs nothing but `flatpak`, so a `flatpak`
+# in front of PATH is the command: it notes the display in <data>/display and execs the command. The one
+# assumption of this seam: x11-run starts `flatpak` by name through the PATH it was given (x11::app_argv),
+# not as /usr/bin/flatpak; if that changes, x11_failed says so. Proton
+# opens a console window for every program (CREATE_NEW_CONSOLE) and without a display waits for ever, so a
+# program that needs none (cmd.exe's echo) still needs this. The helper's XDG_RUNTIME_DIR is <data>/run
+# (Wine wants one it may use; the profile's own may not be there). The VAR=value are the program's
+# environment. Output: the helper's log and the command's; status: the command's. No <data>/display
+# afterwards means the command never ran: the caller reports it with x11_failed (a FAIL, never a SKIP: the
+# user is the signed-in profile).
+run_on_display() {
+    local user="$1" data="$2"; shift 2
+    local vars=()
+    while [ "$#" -gt 0 ] && [ "$1" != -- ]; do vars+=("$1"); shift; done
+    shift
+    mkdir -p "$data/bin" "$data/run"
+    chmod 700 "$data/run"
+    {
+        echo '#!/bin/bash'
+        echo 'printf %s "$DISPLAY" > "$RUYA_DISPLAY_FILE"'
+        printf 'exec'; printf ' %q' "$@"; echo
+    } > "$data/bin/flatpak"
+    chmod +x "$data/bin/flatpak"
+    chown -R "$user" "$data"
+    (cd "$data" && unshare -n runuser -u "$user" -- env -i HOME="$data" PATH="$data/bin:$PATH" \
+        XDG_RUNTIME_DIR="$data/run" WAYLAND_DISPLAY="$wayland_dir/$user" RUYA_DISPLAY_FILE="$data/display" \
+        "${vars[@]}" "$session" x11-run org.ruyaos.RunnerCheck 2>&1)
+}
+
+# x11_failed <user> <what> <output>: the FAIL for a program that run_on_display did not run (no <data>/display):
+# the helper is not on the image, or it started the X server but did not run `flatpak` from the PATH, or the
+# signed-in profile got no X server.
+x11_failed() {
+    local tail_
+    tail_="$(printf '%s' "$3" | tail -n 3 | tr '\n' ' ')"
+    if [ ! -x "$session" ]; then
+        bad "$session is missing: the image has no ruya-session x11-run helper, so $2 was not run"
+    elif printf '%s' "$3" | grep -q 'runs on display'; then
+        bad "x11-run started an X server for $1 but did not run flatpak from PATH, so $2 was not run (the seam of run_on_display no longer holds); the helper said: $tail_"
+    else
+        bad "the signed-in profile $1 got no X server from ruya-session x11-run, so $2 was not run (Proton cannot run a program without a display); the helper said: $tail_"
+    fi
+}
+
 if [ "$mode" = newest ]; then
     newest_runner "${2:?runners dir}" "${3:?key=value}"
     exit $?
@@ -100,11 +164,11 @@ fi
 if [ "$mode" = sample ]; then
     script="${2:-/root/run-windows.py}"
     echo "--- the sample script runs a Windows program through the image's runner, offline, as a profile user"
-    profile="$(first_profile)"
+    profile="$(active_profile)"
     if [ ! -f "$script" ]; then
         bad "$script (samples/hello-runner/run-windows.py) is not on the guest"
     elif [ -z "$profile" ]; then
-        echo "SKIP: no profile on this VM: the sample was not run (create one in the shell first; this check creates none)"
+        echo "SKIP: no profile is signed in: the sample was not run (sign one in first, vm-goto.ps1 home; this check signs in none)"
     else
         user="ruya-$profile"
         data="$(mktemp -d "$root/var/tmp/ruya-runner-sample.XXXXXX")" || { bad "no scratch folder in /var/tmp"; data=""; }
@@ -115,16 +179,22 @@ if [ "$mode" = sample ]; then
             # XDG_DATA_HOME is the app's data folder as a sandbox sets it; the script puts Proton's prefix below it.
             # Started from the scratch folder: the script sets PWD from its working folder, which must be one the
             # profile user can use (a console launcher gives the game /app/payload).
-            out="$(cd "$data" && unshare -n runuser -u "$user" -- env -i HOME="$data" PATH="$PATH" XDG_DATA_HOME="$data/xdg" \
-                WINEDEBUG=-all timeout 300 python3 "$data/run-windows.py" --runners "$play/runners" --self-test 2>&1)"; rc=$?
+            # The script needs a display (Proton opens a console window) and reads the marker from a file cmd.exe
+            # writes, then prints it itself (RUY-980): run_on_display gives it the display a launch gets.
+            out="$(run_on_display "$user" "$data" XDG_DATA_HOME="$data/xdg" WINEDEBUG=-all -- \
+                timeout 300 python3 "$data/run-windows.py" --runners "$play/runners" --self-test)"; rc=$?
             used="$(printf '%s\n' "$out" | sed -n 's/^hello-runner: using \([^ ]*\) (.*/\1/p' | head -1)"
-            if [ -n "$used" ] && [ -f "$play/runners/$used/runner.json" ]; then ok "the script took the runner $used from $play/runners"; else bad "the script named no runner of the image: '$used'"; fi
-            if [ "$rc" = 0 ] && printf '%s\n' "$out" | tr -d '\r' | grep -qx RUYA_HELLO_RUNNER_OK; then
-                ok "${used:-the runner}: cmd.exe printed RUYA_HELLO_RUNNER_OK as $user without network"
+            if [ ! -s "$data/display" ]; then
+                x11_failed "$user" "the sample" "$out"
             else
-                bad "the sample as $user: exit $rc; last lines: $(printf '%s' "$out" | tail -n 5 | tr '\n' ' ')"
+                if [ -n "$used" ] && [ -f "$play/runners/$used/runner.json" ]; then ok "the script took the runner $used from $play/runners"; else bad "the script named no runner of the image: '$used'"; fi
+                if [ "$rc" = 0 ] && printf '%s\n' "$out" | tr -d '\r' | grep -qx RUYA_HELLO_RUNNER_OK; then
+                    ok "${used:-the runner}: cmd.exe printed RUYA_HELLO_RUNNER_OK as $user without network, on display $(cat "$data/display")"
+                else
+                    bad "the sample as $user: exit $rc; last lines: $(printf '%s' "$out" | tail -n 5 | tr '\n' ' ')"
+                fi
+                if [ -d "$data/xdg/proton/pfx" ]; then ok "the Proton prefix is in the app's data folder (\$XDG_DATA_HOME/proton/pfx)"; else bad "no Proton prefix at \$XDG_DATA_HOME/proton/pfx"; fi
             fi
-            if [ -d "$data/xdg/proton/pfx" ]; then ok "the Proton prefix is in the app's data folder (\$XDG_DATA_HOME/proton/pfx)"; else bad "no Proton prefix at \$XDG_DATA_HOME/proton/pfx"; fi
             [ -n "$used" ] && runuser -u "$user" -- env WINEPREFIX="$data/xdg/proton/pfx" "$play/runners/$used/files/bin/wineserver" -k >/dev/null 2>&1
             rm -rf "$data"
         fi
@@ -236,11 +306,11 @@ done
 [ "$count" -ge 1 ] && ok "$count runner(s)" || bad "no runner under $play/runners"
 
 echo "--- a Windows program through the runner, offline, as a profile user"
-profile="$(first_profile)"
+profile="$(active_profile)"
 if [ -z "$protons" ]; then
     bad "no Proton runner to run a Windows program through"
 elif [ -z "$profile" ]; then
-    echo "SKIP: no profile on this VM: no Windows program was run (create one in the shell first; this check creates none)"
+    echo "SKIP: no profile is signed in: no Windows program was run (sign one in first, vm-goto.ps1 home; this check signs in none)"
 else
     user="ruya-$profile"
     for tree in $protons; do
@@ -252,14 +322,19 @@ else
         # The environment of ruya-play-launch for a Proton game (plan.rs, 05 §6.3): the compat folders, no Steam
         # game id (protonfixes parses one out of the compat path when none is set, and PWD is read unguarded)
         # and PWD = the working folder it starts the game in.
-        out="$(cd "$data" && unshare -n runuser -u "$user" -- env -i HOME="$data" PATH="$PATH" \
+        # On the display a launch gets (run_on_display), and the marker is read from a file cmd.exe writes: Proton
+        # starts the program with CREATE_NEW_CONSOLE, so what it echoes goes to a console window, not to stdout
+        # (RUY-980).
+        out="$(run_on_display "$user" "$data" \
             STEAM_COMPAT_DATA_PATH="$data/proton" STEAM_COMPAT_CLIENT_INSTALL_PATH="$data/proton/client" \
-            SteamAppId=0 SteamGameId=0 PWD="$data" \
-            WINEDEBUG=-all timeout 300 python3 "$tree/proton" waitforexitandrun "$exe" /c echo "$marker" 2>&1)"; rc=$?
-        if [ "$rc" = 0 ] && printf '%s\n' "$out" | tr -d '\r' | grep -qx "$marker"; then
-            ok "$name: cmd.exe printed $marker as $user without network"
+            SteamAppId=0 SteamGameId=0 PWD="$data" WINEDEBUG=-all -- \
+            timeout 300 python3 "$tree/proton" waitforexitandrun "$exe" /c "echo $marker>$(win_path "$data/marker.txt")")"; rc=$?
+        if [ ! -s "$data/display" ]; then
+            x11_failed "$user" "$name's cmd.exe" "$out"
+        elif [ "$rc" = 0 ] && tr -d '\r' < "$data/marker.txt" 2>/dev/null | grep -qx "$marker"; then
+            ok "$name: cmd.exe printed $marker as $user without network, on display $(cat "$data/display")"
         else
-            bad "$name: cmd.exe through proton as $user: exit $rc; last lines: $(printf '%s' "$out" | tail -n 5 | tr '\n' ' ')"
+            bad "$name: cmd.exe through proton as $user: exit $rc, marker file '$(tr -d '\r\n' < "$data/marker.txt" 2>/dev/null)'; last lines: $(printf '%s' "$out" | tail -n 5 | tr '\n' ' ')"
         fi
         runuser -u "$user" -- env WINEPREFIX="$data/proton/pfx" "$tree/files/bin/wineserver" -k >/dev/null 2>&1
         rm -rf "$data"

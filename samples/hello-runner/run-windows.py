@@ -14,11 +14,13 @@ point your manifest declares). This script does what a launcher does and nothing
 
     hello-runner game.exe [arguments]    run a program
     hello-runner --self-test             run the runner's own cmd.exe: prints RUYA_HELLO_RUNNER_OK
+                                         (needs an X display: see run_self_test)
     hello-runner --runners DIR ...       read the runners from DIR (default /app/runners)
 """
 import json
 import os
 import re
+import subprocess
 import sys
 
 # The family you ask for and the majors you tested. A major leaves the console two majors after it
@@ -31,6 +33,8 @@ MAX_MAJOR = 11
 MARKER = "RUYA_HELLO_RUNNER_OK"
 # GE-Proton keeps the Windows programs of its Wine here; only --self-test uses it.
 SELF_TEST_EXE = "files/lib/wine/x86_64-windows/cmd.exe"
+# --self-test has cmd.exe write the marker to this file in your data folder and reads it back.
+SELF_TEST_FILE = "self-test-marker.txt"
 MAX_FOLDERS = 32  # the console's own launcher reads at most this many
 
 
@@ -106,6 +110,49 @@ def proton_environment(data):
     return env
 
 
+def run_self_test(proton, env, data):
+    """Runs the runner's own cmd.exe, which writes MARKER to a file, and prints MARKER when the
+    file has it. Returns the exit status.
+
+    Not `cmd.exe /c echo MARKER` read from stdout: Proton starts the program with
+    CREATE_NEW_CONSOLE, so Wine opens a console window for it and what cmd.exe echoes goes there,
+    never to your stdout. A window needs a display, so this needs an X one: without it Wine's
+    console host waits for ever, which is why it is refused up front."""
+    if not env.get("DISPLAY"):
+        sys.stderr.write(
+            "hello-runner: --self-test needs an X display (DISPLAY is not set): Proton gives the "
+            "program a console window, and without a display it never returns\n"
+        )
+        return 1
+    marker_file = os.path.join(data, SELF_TEST_FILE)
+    try:
+        os.makedirs(data, exist_ok=True)
+        if os.path.exists(marker_file):
+            os.remove(marker_file)
+    except OSError as e:
+        sys.stderr.write("hello-runner: cannot use %s: %s\n" % (data, e))
+        return 1
+    # Wine's Z: drive is the root of the sandbox's file system.
+    windows_path = "Z:" + marker_file.replace("/", "\\")
+    exe = os.path.join(os.path.dirname(proton), SELF_TEST_EXE)
+    argv = [proton, "waitforexitandrun", exe, "/c", "echo %s>%s" % (MARKER, windows_path)]
+    status = subprocess.run(argv, env=env).returncode
+    try:
+        with open(marker_file, encoding="utf-8") as f:
+            written = f.read().strip()
+        os.remove(marker_file)
+    except OSError:
+        written = ""
+    if status != 0 or written != MARKER:
+        sys.stderr.write(
+            "hello-runner: the runner's cmd.exe ended with status %d and wrote %r to %s, "
+            "not %s\n" % (status, written, marker_file, MARKER)
+        )
+        return 1
+    print(MARKER, flush=True)
+    return 0
+
+
 def main(argv):
     root = "/app/runners"
     if argv[:1] == ["--runners"] and len(argv) >= 2:
@@ -122,11 +169,11 @@ def main(argv):
         return 1
     name, version, proton = picked
     program, args = argv[0], argv[1:]
-    if program == "--self-test":
-        program, args = os.path.join(os.path.dirname(proton), SELF_TEST_EXE), ["/c", "echo", MARKER]
     data = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
     env = proton_environment(data)
     print("hello-runner: using %s (%s)" % (name, version), flush=True)
+    if program == "--self-test":
+        return run_self_test(proton, env, data)
     try:
         os.execve(proton, [proton, "waitforexitandrun", program] + args, env)
     except OSError as e:

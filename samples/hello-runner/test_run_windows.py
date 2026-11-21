@@ -5,7 +5,7 @@
     python3 -I test_run_windows.py
 
 No Wine and no Proton are needed: the runner folders are made here and os.execve is recorded, not
-called. Run by `make test` and by scripts/test-vm-checks.sh.
+called (the self-test's subprocess.run too). Run by `make test` and by scripts/test-vm-checks.sh.
 """
 import importlib.util
 import io
@@ -155,13 +155,80 @@ class Main(unittest.TestCase):
         self.assertEqual(env["SteamGameId"], "0")
         self.assertEqual(env["PWD"], os.getcwd())
 
-    def test_the_self_test_runs_the_runners_own_cmd(self):
+    def self_test(self, writes=True, status=0, display=":0"):
+        """--self-test with subprocess.run recorded. `writes`: the fake cmd.exe does what the
+        argument says (writes the marker to the Windows path after the `>`), as a real one does."""
         make_runner(self.root, "ProtonGE11", "GE-Proton11-12")
-        _, calls, _, _ = self.run_main(["--runners", self.root, "--self-test"])
-        argv = calls[0][1]
+        calls = []
+
+        def fake_run(argv, env=None):
+            calls.append((argv, env))
+            if writes:
+                _, _, path = argv[4].partition(">")
+                with open(path[2:].replace("\\", "/"), "w", encoding="utf-8", newline="") as f:
+                    f.write(argv[4].partition(">")[0][len("echo "):] + "\r\n")
+            return mock.Mock(returncode=status)
+
+        out, err = io.StringIO(), io.StringIO()
+        env = {"DISPLAY": display} if display else {}
+        with mock.patch.dict(os.environ), mock.patch.object(run_windows.subprocess, "run", fake_run):
+            os.environ.pop("DISPLAY", None)
+            os.environ.update(env)
+            with redirect_stdout(out), redirect_stderr(err):
+                code = run_windows.main(["--runners", self.root, "--self-test"])
+        return code, calls, out.getvalue(), err.getvalue()
+
+    def test_the_self_test_runs_the_runners_own_cmd_and_reads_a_file(self):
+        # Proton starts the program with CREATE_NEW_CONSOLE: what cmd.exe echoes goes to a console
+        # window, never to stdout (RUY-980). So cmd.exe writes the marker to a file.
+        code, calls, out, _ = self.self_test()
+        self.assertEqual(code, 0)
+        self.assertEqual(len(calls), 1)
+        argv, env = calls[0]
         self.assertEqual(argv[1], "waitforexitandrun")
         self.assertEqual(argv[2], os.path.join(self.root, "ProtonGE11", "files/lib/wine/x86_64-windows/cmd.exe"))
-        self.assertEqual(argv[3:], ["/c", "echo", "RUYA_HELLO_RUNNER_OK"])
+        marker_file = os.path.join(self.data, "self-test-marker.txt")
+        self.assertEqual(argv[3:], ["/c", "echo RUYA_HELLO_RUNNER_OK>Z:" + marker_file.replace("/", "\\")])
+        self.assertEqual(env["DISPLAY"], ":0")
+        self.assertIn("\nRUYA_HELLO_RUNNER_OK\n", out)
+        self.assertFalse(os.path.exists(marker_file), "the marker file is removed after the run")
+
+    def test_the_self_test_does_not_print_a_marker_the_program_never_wrote(self):
+        code, _, out, err = self.self_test(writes=False)
+        self.assertEqual(code, 1)
+        self.assertNotIn("RUYA_HELLO_RUNNER_OK", out)
+        self.assertIn("not RUYA_HELLO_RUNNER_OK", err)
+
+    def test_the_self_test_ignores_a_marker_left_by_an_earlier_run(self):
+        # A leftover file with the marker must not pass the self-test when the runner wrote nothing.
+        os.makedirs(self.data)
+        with open(os.path.join(self.data, "self-test-marker.txt"), "w", encoding="utf-8") as f:
+            f.write("RUYA_HELLO_RUNNER_OK\r\n")
+        code, calls, out, _ = self.self_test(writes=False)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(code, 1)
+        self.assertNotIn("RUYA_HELLO_RUNNER_OK", out)
+
+    def test_the_self_test_fails_when_proton_does(self):
+        code, _, out, err = self.self_test(status=3)
+        self.assertEqual(code, 1)
+        self.assertNotIn("\nRUYA_HELLO_RUNNER_OK\n", out)
+        self.assertIn("status 3", err)
+
+    def test_the_self_test_without_a_display_starts_nothing(self):
+        # Without a display Wine's console host waits for ever: say so instead of hanging.
+        code, calls, _, err = self.self_test(display="")
+        self.assertEqual(code, 1)
+        self.assertEqual(calls, [])
+        self.assertIn("needs an X display", err)
+
+    def test_a_program_needs_no_display_check_and_is_still_exec_ed(self):
+        make_runner(self.root, "ProtonGE11", "GE-Proton11-12")
+        with mock.patch.dict(os.environ):
+            os.environ.pop("DISPLAY", None)
+            code, calls, _, _ = self.run_main(["--runners", self.root, "game.exe"])
+        self.assertIsNone(code)
+        self.assertEqual(len(calls), 1)
 
     def test_without_a_runner_it_says_so_and_starts_nothing(self):
         make_runner(self.root, "ProtonGE12", "GE-Proton12-1")

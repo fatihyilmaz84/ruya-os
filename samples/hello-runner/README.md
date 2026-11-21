@@ -20,7 +20,7 @@ test_run_windows.py           its logic on the host; `make test` (no Wine, Proto
 Makefile                      `make test`
 ```
 
-No Windows program is committed. `--self-test` runs the runner's own `cmd.exe` (`echo`), so the sample needs nothing but a console that has the runner.
+No Windows program is committed. `--self-test` runs the runner's own `cmd.exe` (`echo`, into a file it reads back), so the sample needs nothing but a console that has the runner and an X display: Proton gives every program a console window, which Wine cannot open without one. Without `DISPLAY` the script says so and stops.
 
 ## Build and run
 
@@ -35,7 +35,7 @@ flatpak --user install -y hello-local org.ruyaos.HelloRunner
 The runner exists only on a RuyaOS console: copy `repo` there and install it with `flatpak install --system` as [Hello Game](../hello-game/README.md) shows, then:
 
 ```sh
-flatpak run org.ruyaos.HelloRunner --self-test         # should print which runner it took, then RUYA_HELLO_RUNNER_OK
+flatpak run org.ruyaos.HelloRunner --self-test         # (needs a display) should print which runner it took, then RUYA_HELLO_RUNNER_OK
 cp game.exe ~/.var/app/org.ruyaos.HelloRunner/data/    # the sandbox reads its own data folder; the manifest grants no --filesystem
 flatpak run org.ruyaos.HelloRunner ~/.var/app/org.ruyaos.HelloRunner/data/game.exe
 ```
