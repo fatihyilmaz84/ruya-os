@@ -49,7 +49,6 @@ use crate::follow::{
     bridge_args, existence, parse_signal, Backoff, Follower, ManagerLink, Probe, Wake,
     BRIDGE_PROGRAM,
 };
-use crate::runner_choice::runner_args_from_library;
 use crate::scope::{RunScopes, Sweep};
 use crate::spawner::{
     active_app_scopes, any_swap, app_args_from, app_scopes, cancel_reclaim_command,
@@ -486,7 +485,13 @@ impl Spawner for SystemdSpawner {
         }
     }
 
-    fn start(&self, user: &str, app_id: &str, env: &[(String, String)]) -> Result<String, String> {
+    fn start(
+        &self,
+        user: &str,
+        app_id: &str,
+        env: &[(String, String)],
+        launch_args: &[String],
+    ) -> Result<String, String> {
         // X11-only apps get a private X server inside their unit (ADR-034, RUY-435).
         let mode = if display_mode_x11(&self.flatpak_root, app_id, Path::new(X11_OVERRIDES)) {
             eprintln!("ruya-session: {app_id} of {user} runs in X11 mode");
@@ -499,8 +504,8 @@ impl Spawner for SystemdSpawner {
             &std::fs::read_to_string(APP_ARGS).unwrap_or_default(),
             app_id,
         );
-        // A .play game's runner choice, from ruya-library (RUY-904); never fails the launch.
-        app_args.extend(runner_args_from_library(user, app_id));
+        // What this launch adds, such as a .play game's runner choice (RUY-904).
+        app_args.extend(launch_args.iter().cloned());
         let args = launch_command_in(user, app_id, env, mode, &app_args)?;
         let unit = unit_name(user, app_id);
         self.gate

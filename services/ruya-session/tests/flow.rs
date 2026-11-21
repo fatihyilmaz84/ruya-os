@@ -22,7 +22,7 @@ fn launch_started_stop_exited() {
         }
     };
 
-    let (status, instance) = session.launch(APP, "p1", 1_000);
+    let (status, instance) = session.launch(APP, "p1", 1_000, &[]);
     assert_eq!(status, Status::Ok);
     drain(&mut session);
     assert_eq!(session.list().len(), 1);

@@ -244,8 +244,15 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     }
 
     /// Returns the status and the instance name ("" unless the status is `Ok`). `unix` is the
-    /// wall clock in seconds, for the `started` field.
-    pub fn launch(&mut self, app_id: &str, profile: &str, unix: i64) -> (Status, String) {
+    /// wall clock in seconds, for the `started` field. `launch_args` follow the app id
+    /// (`Spawner::start`); the adapter asks for them before it takes the lock.
+    pub fn launch(
+        &mut self,
+        app_id: &str,
+        profile: &str,
+        unix: i64,
+        launch_args: &[String],
+    ) -> (Status, String) {
         if !valid_app_id(app_id) || !valid_profile_id(profile) {
             return (Status::Invalid, String::new());
         }
@@ -281,7 +288,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 Err(err) => eprintln!("ruya-session: no sound server for {user}: {err}"),
             }
         }
-        match self.spawner.start(&user, app_id, &env) {
+        match self.spawner.start(&user, app_id, &env, launch_args) {
             Ok(unit) => {
                 self.instances.push(Instance {
                     unit: unit.clone(),
@@ -948,7 +955,7 @@ mod tests {
     }
 
     fn running(s: &mut Session<FakeSpawner, ProfileSnapshot>) -> String {
-        let (status, unit) = s.launch(APP, "p1", 100);
+        let (status, unit) = s.launch(APP, "p1", 100, &[]);
         assert_eq!(status, Status::Ok);
         assert!(s
             .on_event(UnitEvent::Started { unit: unit.clone() })
@@ -1024,9 +1031,9 @@ mod tests {
             .with_process(60, &cgroup(1001, "app-org.gnome.Terminal@1.service"));
         let dir = ProfileSnapshot::new(["p1".to_owned(), "p2".to_owned()]);
         let mut s = Session::new(spawner, dir, Vec::new());
-        let p1 = s.launch(APP, "p1", 100).1;
-        let p2 = s.launch(APP, "p2", 100).1;
-        let puzzle = s.launch("org.ruyaos.Puzzle", "p2", 100).1;
+        let p1 = s.launch(APP, "p1", 100, &[]).1;
+        let p2 = s.launch(APP, "p2", 100, &[]).1;
+        let puzzle = s.launch("org.ruyaos.Puzzle", "p2", 100, &[]).1;
         (s, [p1, p2, puzzle])
     }
 
@@ -1068,7 +1075,7 @@ mod tests {
             .with_process(10, &cgroup(1001, &unit_name("ruya-p1", APP)));
         let dir = ProfileSnapshot::new(["p1".to_owned()]);
         let mut s = Session::new(spawner, dir, Vec::new());
-        assert_eq!(s.launch(APP, "p1", 100).0, Status::Ok);
+        assert_eq!(s.launch(APP, "p1", 100, &[]).0, Status::Ok);
         assert_eq!(s.instance_of_pid(10), (Status::NotFound, String::new()));
     }
 
@@ -1161,7 +1168,7 @@ mod tests {
             Status::NotRunning
         );
         assert_eq!(s.thaw("nope.service", Some("p1")), Status::NotRunning);
-        let (_, unit) = s.launch(APP, "p1", 0); // still starting
+        let (_, unit) = s.launch(APP, "p1", 0, &[]); // still starting
         assert_eq!(
             s.freeze(&unit, Some("p1"), Instant::now()),
             Status::NotRunning
@@ -1214,7 +1221,7 @@ mod tests {
             }]
         );
         // An app that is not frozen is stopped without a thaw.
-        let (_, other) = s.launch("org.ruyaos.Puzzle", "p1", 0);
+        let (_, other) = s.launch("org.ruyaos.Puzzle", "p1", 0, &[]);
         s.on_event(UnitEvent::Started {
             unit: other.clone(),
         });
@@ -1252,7 +1259,7 @@ mod tests {
 
     /// A running instance of `app` for `profile`.
     fn run_as(s: &mut Session<FakeSpawner, ProfileSnapshot>, app: &str, profile: &str) -> String {
-        let (status, unit) = s.launch(app, profile, 100);
+        let (status, unit) = s.launch(app, profile, 100, &[]);
         assert_eq!(status, Status::Ok, "{app} for {profile}");
         s.on_event(UnitEvent::Started { unit: unit.clone() });
         unit
@@ -1369,7 +1376,7 @@ mod tests {
     #[test]
     fn apps_that_start_or_stop_are_not_frozen_by_a_change() {
         let mut s = session();
-        let (_, starting) = s.launch(APP, "p1", 0);
+        let (_, starting) = s.launch(APP, "p1", 0, &[]);
         let stopping = run_as(&mut s, PUZZLE, "p1");
         assert_eq!(s.stop(&stopping, Instant::now()), Status::Ok);
         assert!(s
@@ -1471,7 +1478,7 @@ mod tests {
     #[test]
     fn an_app_that_reaches_running_after_its_profile_left_is_frozen_then() {
         let mut s = session();
-        let (status, unit) = s.launch(APP, "p1", 100);
+        let (status, unit) = s.launch(APP, "p1", 100, &[]);
         assert_eq!(status, Status::Ok);
         // p1 leaves while the app is still starting: nothing to freeze yet.
         assert!(s
@@ -1503,7 +1510,7 @@ mod tests {
     #[test]
     fn an_app_whose_profile_signed_in_again_before_the_check_is_not_frozen() {
         let mut s = session();
-        let (_, unit) = s.launch(APP, "p1", 100);
+        let (_, unit) = s.launch(APP, "p1", 100, &[]);
         s.profile_changed(Some("p1"), "p2", Instant::now());
         s.profile_changed(Some("p2"), "p1", Instant::now());
         started(&mut s, &unit);
@@ -1516,7 +1523,7 @@ mod tests {
     #[test]
     fn an_app_of_the_signed_in_profile_is_not_frozen_when_it_starts() {
         let mut s = session();
-        let (_, unit) = s.launch(APP, "p1", 100);
+        let (_, unit) = s.launch(APP, "p1", 100, &[]);
         started(&mut s, &unit);
         assert_eq!(s.freeze_if_away(&unit, "p1", Instant::now()), None);
         assert!(!frozen_of(&s, &unit));
@@ -1576,9 +1583,9 @@ mod tests {
         let racer = running(&mut s);
         assert_eq!(s.freeze(&racer, Some("p1"), Instant::now()), Status::Ok);
         // Another app of the profile starts: it may play, so the request says it runs.
-        let (_, puzzle) = s.launch("org.ruyaos.Puzzle", "p1", 0);
+        let (_, puzzle) = s.launch("org.ruyaos.Puzzle", "p1", 0, &[]);
         // Another profile's app changes nothing for p1 and, frozen nothing, asks nothing.
-        let (_, p2) = s.launch(APP, "p2", 0);
+        let (_, p2) = s.launch(APP, "p2", 0, &[]);
         assert!(s.on_event(exited(&p2, 0, false)).is_some());
         assert!(s.on_event(exited(&puzzle, 0, false)).is_some());
         // The frozen app is closed: thawed and stopping, so nothing of p1 is frozen or running.
@@ -1732,7 +1739,7 @@ mod tests {
     #[test]
     fn launch_goes_through_starting_to_running() {
         let mut s = session();
-        let (status, unit) = s.launch(APP, "p1", 100);
+        let (status, unit) = s.launch(APP, "p1", 100, &[]);
         assert_eq!(
             (status, unit.as_str()),
             (Status::Ok, unit_name("ruya-p1", APP).as_str())
@@ -1763,8 +1770,18 @@ mod tests {
     #[test]
     fn launch_runs_as_the_profiles_unix_user() {
         let mut s = session();
-        s.launch(APP, "p2", 0);
+        s.launch(APP, "p2", 0, &[]);
         assert_eq!(s.spawner.calls(), [format!("start ruya-p2 {APP}")]);
+    }
+
+    #[test]
+    fn the_launch_arguments_reach_the_spawner() {
+        let mut s = session();
+        let args = vec!["--runner=bundled".to_owned()];
+        assert_eq!(s.launch(APP, "p1", 0, &args).0, Status::Ok);
+        assert_eq!(s.spawner.last_launch_args(), args);
+        s.launch("org.ruyaos.Puzzle", "p1", 0, &[]);
+        assert!(s.spawner.last_launch_args().is_empty());
     }
 
     fn pulse(s: &Session<FakeSpawner, ProfileSnapshot>) -> Option<String> {
@@ -1778,7 +1795,7 @@ mod tests {
     #[test]
     fn the_pulse_server_is_started_before_the_app() {
         let mut s = session().with_pulse_dir("/run/ruya-pulse");
-        let (status, _) = s.launch(APP, "p1", 0);
+        let (status, _) = s.launch(APP, "p1", 0, &[]);
         assert_eq!(status, Status::Ok);
         assert_eq!(
             s.spawner.calls(),
@@ -1790,7 +1807,7 @@ mod tests {
         );
         // Without a pulse directory (`--session`): no server is started, no PULSE_SERVER.
         let mut dev = session();
-        dev.launch(APP, "p2", 0);
+        dev.launch(APP, "p2", 0, &[]);
         assert_eq!(dev.spawner.calls(), vec![format!("start ruya-p2 {APP}")]);
         assert_eq!(pulse(&dev), None);
     }
@@ -1800,7 +1817,7 @@ mod tests {
         let spawner = FakeSpawner::new().with_app(APP).failing_sound();
         let dir = ProfileSnapshot::new(["p1".to_owned()]);
         let mut s = Session::new(spawner, dir, Vec::new()).with_pulse_dir("/run/ruya-pulse");
-        let (status, instance) = s.launch(APP, "p1", 0);
+        let (status, instance) = s.launch(APP, "p1", 0, &[]);
         assert_eq!(status, Status::Ok);
         assert!(!instance.is_empty());
         assert_eq!(
@@ -1821,9 +1838,9 @@ mod tests {
                 .map(|(_, v)| v)
         };
         let mut s = session().with_wayland_dir("/run/ruya-wayland");
-        s.launch(APP, "p1", 0);
+        s.launch(APP, "p1", 0, &[]);
         assert_eq!(display(&s).as_deref(), Some("/run/ruya-wayland/ruya-p1"));
-        s.launch("org.ruyaos.Puzzle", "p2", 0);
+        s.launch("org.ruyaos.Puzzle", "p2", 0, &[]);
         assert_eq!(display(&s).as_deref(), Some("/run/ruya-wayland/ruya-p2"));
         // Exactly one WAYLAND_DISPLAY: the base one is replaced, not doubled.
         let count = s
@@ -1835,7 +1852,7 @@ mod tests {
         assert_eq!(count, 1);
         // Without a socket directory (development) the base environment is handed on as it is.
         let mut dev = session();
-        dev.launch(APP, "p1", 0);
+        dev.launch(APP, "p1", 0, &[]);
         assert_eq!(display(&dev).as_deref(), Some("wayland-0"));
     }
 
@@ -1851,14 +1868,14 @@ mod tests {
             "org.ruyaos.A\"B",
         ] {
             assert_eq!(
-                s.launch(app, "p1", 0),
+                s.launch(app, "p1", 0, &[]),
                 (Status::Invalid, String::new()),
                 "{app:?}"
             );
         }
         for profile in ["", "p 1", "p1;id", "../p1"] {
             assert_eq!(
-                s.launch(APP, profile, 0),
+                s.launch(APP, profile, 0, &[]),
                 (Status::Invalid, String::new()),
                 "{profile:?}"
             );
@@ -1871,7 +1888,7 @@ mod tests {
         let mut s = session();
         for profile in ["root", "ruya-shell", "ruya-p1", "nobody", "p9"] {
             assert_eq!(
-                s.launch(APP, profile, 0),
+                s.launch(APP, profile, 0, &[]),
                 (Status::UnknownProfile, String::new()),
                 "{profile}"
             );
@@ -1884,7 +1901,7 @@ mod tests {
     fn unknown_app() {
         let mut s = session();
         assert_eq!(
-            s.launch("org.ruyaos.Missing", "p1", 0),
+            s.launch("org.ruyaos.Missing", "p1", 0, &[]),
             (Status::UnknownApp, String::new())
         );
     }
@@ -1892,20 +1909,20 @@ mod tests {
     #[test]
     fn double_launch_is_already_running_per_profile() {
         let mut s = session();
-        let (_, first) = s.launch(APP, "p1", 0);
+        let (_, first) = s.launch(APP, "p1", 0, &[]);
         // Still starting counts.
         assert_eq!(
-            s.launch(APP, "p1", 1),
+            s.launch(APP, "p1", 1, &[]),
             (Status::AlreadyRunning, String::new())
         );
         s.on_event(UnitEvent::Started { unit: first });
         assert_eq!(
-            s.launch(APP, "p1", 2),
+            s.launch(APP, "p1", 2, &[]),
             (Status::AlreadyRunning, String::new())
         );
         // Another profile, or another app, is a different instance.
-        assert_eq!(s.launch(APP, "p2", 3).0, Status::Ok);
-        assert_eq!(s.launch("org.ruyaos.Puzzle", "p1", 4).0, Status::Ok);
+        assert_eq!(s.launch(APP, "p2", 3, &[]).0, Status::Ok);
+        assert_eq!(s.launch("org.ruyaos.Puzzle", "p1", 4, &[]).0, Status::Ok);
         assert_eq!(s.list().len(), 3);
     }
 
@@ -1914,7 +1931,7 @@ mod tests {
         let spawner = FakeSpawner::new().with_app(APP).failing_start();
         let dir = ProfileSnapshot::new(["p1".to_owned()]);
         let mut s = Session::new(spawner, dir, vec![]);
-        assert_eq!(s.launch(APP, "p1", 0), (Status::Failed, String::new()));
+        assert_eq!(s.launch(APP, "p1", 0, &[]), (Status::Failed, String::new()));
         assert!(s.list().is_empty());
     }
 
@@ -2042,7 +2059,7 @@ mod tests {
     fn app_that_never_ran_is_launch_failed_with_code_minus_one() {
         for (code, signaled) in [(0, false), (1, false), (9, true)] {
             let mut s = session();
-            let (_, unit) = s.launch(APP, "p1", 0);
+            let (_, unit) = s.launch(APP, "p1", 0, &[]);
             assert_eq!(
                 reason(s.on_event(exited(&unit, code, signaled))),
                 (-1, "launch-failed")
@@ -2055,7 +2072,7 @@ mod tests {
         let mut s = session();
         let unit = running(&mut s);
         s.on_event(exited(&unit, 0, false));
-        assert_eq!(s.launch(APP, "p1", 200).0, Status::Ok);
+        assert_eq!(s.launch(APP, "p1", 200, &[]).0, Status::Ok);
     }
 
     #[test]
@@ -2073,7 +2090,7 @@ mod tests {
     #[test]
     fn stop_during_starting_ends_as_quit() {
         let mut s = session();
-        let (_, unit) = s.launch(APP, "p1", 0);
+        let (_, unit) = s.launch(APP, "p1", 0, &[]);
         assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
         // The app comes up while stopping: still stopping, announced once.
         assert!(s
@@ -2150,11 +2167,11 @@ mod tests {
         let mut s = restarted();
         s.adopt(5_000, Instant::now(), true);
         assert_eq!(
-            s.launch(APP, "p1", 6_000),
+            s.launch(APP, "p1", 6_000, &[]),
             (Status::AlreadyRunning, String::new())
         );
         // The same app for another profile is another instance.
-        assert_eq!(s.launch(APP, "p2", 6_000).0, Status::Ok);
+        assert_eq!(s.launch(APP, "p2", 6_000, &[]).0, Status::Ok);
         assert!(
             s.spawner
                 .calls()
@@ -2186,7 +2203,7 @@ mod tests {
         );
         assert!(s.list().is_empty());
         // Gone, so it can be launched again.
-        assert_eq!(s.launch(APP, "p1", 7_000).0, Status::Ok);
+        assert_eq!(s.launch(APP, "p1", 7_000, &[]).0, Status::Ok);
     }
 
     #[test]
@@ -2344,7 +2361,7 @@ mod tests {
         let spawner = FakeSpawner::new().with_app(APP);
         let dir = ProfileSnapshot::new(["p1".to_owned()]);
         let mut s = Session::new(spawner, dir, vec![]);
-        let (_, unit) = s.launch(APP, "p1", 1);
+        let (_, unit) = s.launch(APP, "p1", 1, &[]);
         let listing = Listing {
             found: vec![unit_of("ruya-p1", APP)],
             complete: true,
@@ -2419,7 +2436,7 @@ mod tests {
             (203, "crashed")
         );
         // Never started at all: also launch-failed.
-        let (_, unit) = s.launch(APP, "p1", 0);
+        let (_, unit) = s.launch(APP, "p1", 0, &[]);
         assert_eq!(
             reason(s.on_event(exec_failed(&unit))),
             (-1, "launch-failed")
@@ -2440,13 +2457,13 @@ mod tests {
         let mut s = session();
         let unit = running(&mut s);
         // Running: a second launch is already-running.
-        assert_eq!(s.launch(APP, "p1", 101).0, Status::AlreadyRunning);
+        assert_eq!(s.launch(APP, "p1", 101, &[]).0, Status::AlreadyRunning);
         assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
         assert!(s.is_stopping(APP, "p1"));
         // The old unit is still around (the 30 s backstop, RUY-736): still "already-running" once
         // the adapter's wait has run out, and no second unit on its name.
         assert_eq!(
-            s.launch(APP, "p1", 102),
+            s.launch(APP, "p1", 102, &[]),
             (Status::AlreadyRunning, String::new())
         );
         assert_eq!(
@@ -2460,9 +2477,9 @@ mod tests {
         // Once the old one has ended the launch goes through.
         s.on_event(exited(&unit, 0, false));
         assert!(!s.is_stopping(APP, "p1"));
-        assert_eq!(s.launch(APP, "p1", 103).0, Status::Ok);
+        assert_eq!(s.launch(APP, "p1", 103, &[]).0, Status::Ok);
         // Another profile was never in the way.
-        assert_eq!(s.launch(APP, "p2", 104).0, Status::Ok);
+        assert_eq!(s.launch(APP, "p2", 104, &[]).0, Status::Ok);
     }
 
     // ---- Kill (RUY-736, the closing screen's Force quit) and the 30 s backstop ---------------
