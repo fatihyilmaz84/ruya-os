@@ -28,6 +28,7 @@ use crate::core::deps::{ArtVetter, Exit, Helper, Hooks, OpenError, Opener, Step}
 use crate::core::staging::{self, Dir};
 use crate::core::status::Phase;
 use crate::core::unpack::{self, staging_problem, Control, Stop};
+use ruya_play_format::hex;
 use ruya_play_format::limits::ROOT_FILES;
 use ruya_play_format::{validate, EntryKind, FileEntry, Problem, Source, ValidateOptions};
 use ruya_play_trust::revocation::MAX_BLOCKLIST_BYTES;
@@ -363,17 +364,6 @@ impl Session {
             },
         }
     }
-}
-
-/// Lowercase hex of `bytes`.
-pub fn hex(bytes: &[u8]) -> String {
-    use std::fmt::Write as _;
-    bytes
-        .iter()
-        .fold(String::with_capacity(bytes.len() * 2), |mut s, b| {
-            let _ = write!(s, "{b:02x}");
-            s
-        })
 }
 
 fn unhex(text: &str) -> Option<Vec<u8>> {

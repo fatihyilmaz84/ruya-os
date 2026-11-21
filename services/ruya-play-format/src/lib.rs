@@ -94,6 +94,17 @@ impl Package {
 /// The one streaming hasher of the format (a 256 KiB buffer): the content pass of [`validate`]
 /// and the launcher's update of a game tree (ADR-040) both use it.
 pub fn sha256_of(reader: &mut dyn Read, limit: u64) -> io::Result<Option<(String, u64)>> {
+    sha256_of_chunks(reader, limit, &mut |_| Ok(()))
+}
+
+/// [`sha256_of`] that also gives every chunk it has counted and hashed to `each` (to write it
+/// somewhere, count it or report progress): an `Err` from `each` stops the read and is returned.
+/// `each` is not called for the chunk that crosses `limit`.
+pub fn sha256_of_chunks(
+    reader: &mut dyn Read,
+    limit: u64,
+    each: &mut dyn FnMut(&[u8]) -> io::Result<()>,
+) -> io::Result<Option<(String, u64)>> {
     let mut buf = vec![0u8; 256 * 1024];
     let (mut hasher, mut total) = (Sha256::new(), 0u64);
     loop {
@@ -105,6 +116,7 @@ pub fn sha256_of(reader: &mut dyn Read, limit: u64) -> io::Result<Option<(String
                     return Ok(None);
                 }
                 hasher.update(&buf[..n]);
+                each(&buf[..n])?;
             }
             Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
             Err(e) => return Err(e),
@@ -112,7 +124,8 @@ pub fn sha256_of(reader: &mut dyn Read, limit: u64) -> io::Result<Option<(String
     }
 }
 
-fn hex(bytes: &[u8]) -> String {
+/// The lower-case hex digits of `bytes`: the one encoder of SHA-256 and key ids in the services.
+pub fn hex(bytes: &[u8]) -> String {
     use std::fmt::Write;
     bytes
         .iter()

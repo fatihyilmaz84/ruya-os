@@ -31,7 +31,7 @@ use crate::core::deps::{
     Blocklists, Clock, Commit, CommitError, CommitRequest, Deps, FreeSpace, Helper, Hooks,
     InstalledBuilds, RecommitRequest, Step,
 };
-use crate::core::helper::{self, ArtLine, Ending, Mode, Progress, Request, Session};
+use crate::core::helper::{ArtLine, Ending, Mode, Progress, Request, Session};
 use crate::core::jobs::{self, JobKind, JobRecord, JobState, MAX_PATH_BYTES};
 use crate::core::meta::MetaSource;
 use crate::core::reconcile;
@@ -945,7 +945,7 @@ impl Importer {
             now: self.clock.now(),
             // A store that cannot be read is reported by the service's own inspect.
             developer_mode: self.trust().developer_mode().unwrap_or(false),
-            blocklist: self.blocklists.image().map(|b| helper::hex(&b)),
+            blocklist: self.blocklists.image().map(|b| ruya_play_format::hex(&b)),
             art: false,
             official: false,
             expect: BTreeMap::new(),
