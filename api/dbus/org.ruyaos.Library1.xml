@@ -80,7 +80,7 @@
     "package"    what the package says (the default; storing it removes the profile's entry)
     "bundled"    the copy in the package
     "system"     the image's runner
-  exactly the values ruya-play-launch takes as --runner (ADR-037). The choices are stored per profile
+  exactly the values ruya-play-launch takes as its runner argument (ADR-037). The choices are stored per profile
   under /var/lib/ruyaos/library (one file per profile); `profile` is a Profiles1 id, which the caller
   (the shell for the signed-in profile, ruya-session for the profile it launches for) passes. `id` is
   a .play item's id ("flatpak:play.<id>").
@@ -94,7 +94,7 @@
     "failed"     the choice could not be stored
 
   ResolveRunner's answer holds the four runner keys of the item record, for the choice asked for
-  instead of the package's default: the launcher's own resolution with that --runner
+  instead of the package's default: the launcher's own resolution with that runner argument
   (ruya_play_launch::dry_run, the same code ListItems' keys come from).
 
   Resolution record (a{sv}), keys (every one may be absent):
