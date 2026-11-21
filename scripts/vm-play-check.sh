@@ -550,7 +550,15 @@ PY
     # What was removed installs again.
     got="$(install_wait "$state/incoming/vm-play-check.play.zip")"
     [ "$got" = ok ] && ok "the package installs again after Remove" || bad "the reinstall: $got"
-    echo " $(store_call GetPermissions s "play.$appid" | parse keys withdrawn) " | grep -q ' network ' && bad "the reinstall starts with the network withdrawn" || ok "the reinstall starts with nothing withdrawn"
+    # A failed call lists nothing withdrawn too: its status must be ok first (RUY-923 review).
+    out="$(store_call GetPermissions s "play.$appid")"
+    if [ "$(echo "$out" | parse status)" != ok ]; then
+        bad "GetPermissions after the reinstall: $out"
+    elif echo " $(echo "$out" | parse keys withdrawn) " | grep -q ' network '; then
+        bad "the reinstall starts with the network withdrawn"
+    else
+        ok "the reinstall starts with nothing withdrawn"
+    fi
 }
 
 cleanup() {
