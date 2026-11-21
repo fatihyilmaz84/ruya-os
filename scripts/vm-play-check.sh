@@ -902,7 +902,7 @@ launch_run() {
 launch_cleanup() {
     [ -n "$lmon" ] && kill "$lmon" 2>/dev/null
     if [ "$lrouted" = 1 ]; then
-        offline off "$work" && lrouted=0 || bad "the default routes could not be restored: put them back with ip route add"
+        offline off "$work" && lrouted=0 || bad "the default routes could not be restored: put them back with ip route replace (the saved routes are in $work)"
     fi
     if [ -n "$linst" ]; then
         as_shell busctl --system call "$sesvc" "$sepath" "$sesvc" Stop s "$linst" >/dev/null 2>&1
