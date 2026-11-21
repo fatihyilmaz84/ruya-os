@@ -1,0 +1,17 @@
+[package]
+name = "ruya-fs"
+description = "RuyaOS file access below a trusted folder that never follows a link: an openat walk, one folder handle per step (read, atomic write, private folders, remove and copy a tree)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# No other dependencies: ruya-play-launch, a static program (glibc crt-static, RUY-34), links it;
+# nothing here may use NSS, iconv or dlopen.
+[target.'cfg(target_os = "linux")'.dependencies]
+# Folder handles: openat, mkdirat, unlinkat, renameat, statat, readlinkat, symlinkat, fchmod, a
+# safe API with no libc underneath (linux_raw); already in the tree, ruya-play's staging uses it.
+rustix = { version = "1", default-features = false, features = ["std", "fs"] }
+
+[dev-dependencies]
+tempfile = "3"  # the tests' folders (already in the tree)

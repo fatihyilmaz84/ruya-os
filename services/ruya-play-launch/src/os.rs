@@ -9,7 +9,6 @@
 use ruya_play_format::problem::{codes, Problem};
 use ruya_play_format::Source;
 use std::collections::BTreeMap;
-use std::fmt;
 use std::io::{self, Read};
 use std::time::Duration;
 
@@ -48,49 +47,17 @@ pub enum Exit {
     TimedOut,
 }
 
-/// The error of a write or copy that met a link where a folder should be: the link is not
-/// followed, and the caller decides whether that is fatal.
-#[derive(Debug)]
-pub struct NotFollowed(pub String);
-
-impl fmt::Display for NotFollowed {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} is a link; it is not followed", self.0)
-    }
-}
-
-impl std::error::Error for NotFollowed {}
-
-impl NotFollowed {
-    /// The `io::Error` for `path`.
-    pub fn error(path: &str) -> io::Error {
-        io::Error::new(io::ErrorKind::InvalidInput, NotFollowed(path.to_string()))
-    }
-
-    /// True when `err` is a [`NotFollowed`].
-    pub fn is(err: &io::Error) -> bool {
-        err.get_ref()
-            .is_some_and(|e| e.downcast_ref::<NotFollowed>().is_some())
-    }
-}
+/// The error of a call that met a link where a folder should be (ruya-fs owns it, RUY-911): the
+/// link is not followed, and the caller decides whether that is fatal. Also the path of a folder
+/// that is a file ([`not_a_folder`]).
+pub use ruya_fs::{not_a_folder, NotFollowed};
 
 /// The deepest folder level a copy goes (a prefix template, a save); deeper is refused.
 pub const MAX_COPY_DEPTH: usize = 64;
 
 /// The error of a copy whose tree is deeper than [`MAX_COPY_DEPTH`].
 pub fn too_deep(path: &str) -> io::Error {
-    io::Error::new(
-        io::ErrorKind::InvalidInput,
-        format!("{path} is more than {MAX_COPY_DEPTH} folders deep"),
-    )
-}
-
-/// The error of a path where a folder should be but a file is.
-pub fn not_a_folder(path: &str) -> io::Error {
-    io::Error::new(
-        io::ErrorKind::InvalidInput,
-        format!("{path} is not a folder"),
-    )
+    ruya_fs::too_deep(path, MAX_COPY_DEPTH)
 }
 
 /// The launcher's effects. Reads take `&self`, writes and runs `&mut self`.
@@ -185,12 +152,5 @@ mod tests {
         assert_eq!(join("/d/", "/x/y"), "/d/x/y");
         assert_eq!(join("/d", ""), "/d");
         assert_eq!(join("/app", "play.json"), "/app/play.json");
-    }
-
-    #[test]
-    fn not_followed_survives_io() {
-        let e = NotFollowed::error("/d/prefix");
-        assert!(NotFollowed::is(&e));
-        assert!(!NotFollowed::is(&io::Error::other("x")));
     }
 }

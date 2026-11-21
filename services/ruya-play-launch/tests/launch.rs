@@ -549,6 +549,33 @@ fn an_epoch_rebuild_keeps_the_saves() {
     assert_eq!(os.runs.len(), 2, "setup runs again for the new prefix");
 }
 
+/// Only the newest backup is kept (05 §6.3): the rebuild from epoch 2 removes `epoch-1-backup`
+/// and an older one, a link with a backup's name goes as a link, other names stay.
+#[test]
+fn only_the_newest_epoch_backup_is_kept() {
+    let mut os = played_once();
+    update_to_epoch(&mut os, 2);
+    launch(&mut os, &[]).unwrap();
+    let dir = format!("{DATA}/.ruya-play");
+    os.file(&format!("{dir}/epoch-0-backup/old.sav"), "older");
+    os.file("/home/p/keep/f", "not the launcher's");
+    os.link(&format!("{dir}/epoch-7-backup"), "/home/p/keep");
+    os.file(&format!("{dir}/epoch-x-backup/f"), "not a backup name");
+    update_to_epoch(&mut os, 3);
+    launch(&mut os, &[]).unwrap();
+    let names: Vec<String> = os.list(&dir).unwrap().into_iter().map(|(n, _)| n).collect();
+    assert_eq!(names, ["epoch-2-backup", "epoch-x-backup", "state.json"]);
+    assert_eq!(
+        os.read(&format!(
+            "{dir}/epoch-2-backup/drive_c/users/steamuser/Documents/Hop/slot1.sav"
+        )),
+        Some(&b"level 7"[..]),
+        "the newest backup stays"
+    );
+    assert_eq!(os.read("/home/p/keep/f"), Some(&b"not the launcher's"[..]));
+    assert_eq!(state(&os).epoch, 3);
+}
+
 #[test]
 fn a_rebuild_cut_short_resumes_from_the_complete_backup() {
     let mut os = played_once();

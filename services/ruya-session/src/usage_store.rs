@@ -199,9 +199,9 @@ fn private_options() -> fs::OpenOptions {
     }
 }
 
-/// `safe_file::write_atomic` for text.
+/// `ruya_fs::write_atomic` for text.
 fn write_atomic(path: &Path, data: &str) -> io::Result<()> {
-    crate::safe_file::write_atomic(path, data.as_bytes())
+    ruya_fs::write_atomic(path, data.as_bytes())
 }
 
 fn err<T>(r: io::Result<T>) -> StoreResult<T> {

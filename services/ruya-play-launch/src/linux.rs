@@ -1,15 +1,14 @@
-//! The real [`LaunchOs`] (Linux): std file calls that never follow a link, and child processes in
-//! their own process group, so a setup step that runs out of time is killed with everything it
-//! started.
+//! The real [`LaunchOs`] (Linux): file calls through ruya-fs, which walks every path below its
+//! trusted base with one folder handle per step and never follows a link (RUY-911), and child
+//! processes in their own process group, so a setup step that runs out of time is killed with
+//! everything it started.
 
-use crate::os::{
-    join, not_a_folder, too_deep, Command, Exit, Kind, LaunchOs, NotFollowed, MAX_COPY_DEPTH,
-};
+use crate::os::{Command, Exit, Kind, LaunchOs, MAX_COPY_DEPTH};
+use ruya_fs::Dir;
 use std::fs;
-use std::io::{self, Read, Write};
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
+use std::io::{self, Read};
 use std::os::unix::process::{CommandExt, ExitStatusExt};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -45,99 +44,19 @@ fn parts(rel: &str) -> io::Result<Vec<&str>> {
     Ok(p)
 }
 
-/// Every folder of `base/rel` below `base` (the last part too when `last`) is a folder, not a link.
-fn check(base: &str, rel: &str, last: bool) -> io::Result<()> {
-    let p = parts(rel)?;
-    let n = if last {
-        p.len()
-    } else {
-        p.len().saturating_sub(1)
-    };
-    let mut cur = base.to_string();
-    for part in &p[..n] {
-        cur = join(&cur, part);
-        if !is_folder(&cur)? {
-            return Ok(());
-        }
-    }
-    Ok(())
+/// `rel` as a path for ruya-fs ([`parts`]: `.` and `..` refused, empty parts dropped).
+fn rel_path(rel: &str) -> io::Result<PathBuf> {
+    Ok(parts(rel)?.into_iter().collect())
 }
 
-/// True for a folder, false when nothing is there; a link is [`NotFollowed`], a file an error.
-fn is_folder(path: &str) -> io::Result<bool> {
-    match fs::symlink_metadata(path) {
-        Ok(m) if m.file_type().is_dir() => Ok(true),
-        Ok(m) if m.file_type().is_symlink() => Err(NotFollowed::error(path)),
-        Ok(_) => Err(not_a_folder(path)),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
-        Err(e) => Err(e),
-    }
+/// The trusted folder `base` (the data folder, `/app`); everything below it is walked by ruya-fs,
+/// one folder handle per step, so no link below it is followed (RUY-911).
+fn base_dir(base: &str) -> io::Result<Dir> {
+    Dir::open(Path::new(base))
 }
 
-/// Remove whatever is at `path` (a link itself, never its target).
-///
-/// A folder is walked here rather than by `fs::remove_dir_all`: each one is made 0700 before its
-/// entries are removed, so a read-only folder (a template's, kept by [`copy_node`], or a save's)
-/// does not make a rebuild fail with EACCES at every launch. Links are removed as links.
-fn clear(path: &Path) -> io::Result<()> {
-    match fs::symlink_metadata(path) {
-        Ok(m) if m.file_type().is_dir() => {
-            fs::set_permissions(path, fs::Permissions::from_mode(0o700))?;
-            for item in fs::read_dir(path)? {
-                clear(&item?.path())?;
-            }
-            fs::remove_dir(path)
-        }
-        Ok(_) => fs::remove_file(path),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(e),
-    }
-}
-
-/// Copy one node: a link as a link, a folder with its content, a file's bytes and mode. Devices,
-/// FIFOs and sockets are skipped. `depth` is the folder level of `src` below the copy's root; a
-/// tree deeper than [`MAX_COPY_DEPTH`] is refused.
-fn copy_node(src: &Path, dst: &Path, depth: usize) -> io::Result<()> {
-    if depth > MAX_COPY_DEPTH {
-        return Err(too_deep(&src.to_string_lossy()));
-    }
-    let meta = fs::symlink_metadata(src)?;
-    let ft = meta.file_type();
-    if ft.is_symlink() {
-        let target = fs::read_link(src)?;
-        clear(dst)?;
-        std::os::unix::fs::symlink(target, dst)
-    } else if ft.is_dir() {
-        match fs::symlink_metadata(dst) {
-            Ok(m) if m.file_type().is_dir() => {}
-            _ => {
-                clear(dst)?;
-                fs::create_dir(dst)?;
-            }
-        }
-        // Writable while it fills; the source's mode (a read-only folder too) once it is full.
-        fs::set_permissions(dst, fs::Permissions::from_mode(0o700))?;
-        for item in fs::read_dir(src)? {
-            let item = item?;
-            copy_node(&item.path(), &dst.join(item.file_name()), depth + 1)?;
-        }
-        fs::set_permissions(dst, fs::Permissions::from_mode(meta.mode() & 0o7777))
-    } else if ft.is_file() {
-        let mut from = fs::OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_NOFOLLOW)
-            .open(src)?;
-        clear(dst)?;
-        let mut to = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(meta.mode() & 0o777)
-            .open(dst)?;
-        io::copy(&mut from, &mut to)?;
-        Ok(())
-    } else {
-        Ok(())
-    }
+fn missing(e: &io::Error) -> bool {
+    e.kind() == io::ErrorKind::NotFound
 }
 
 impl LaunchOs for LinuxOs {
@@ -160,43 +79,11 @@ impl LaunchOs for LinuxOs {
     }
 
     fn open(&self, base: &str, rel: &str) -> io::Result<Box<dyn Read + '_>> {
-        check(base, rel, false)?;
-        let path = join(base, rel);
-        // A link at the end fails the open itself (ELOOP); the kind is checked on the handle.
-        let file = fs::OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_NOFOLLOW)
-            .open(&path)
-            .map_err(|e| match e.raw_os_error() {
-                Some(libc::ELOOP) => NotFollowed::error(&path),
-                _ => e,
-            })?;
-        if !file.metadata()?.is_file() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("{path} is not a regular file"),
-            ));
-        }
-        Ok(Box::new(file))
+        Ok(Box::new(base_dir(base)?.open_file(&rel_path(rel)?)?))
     }
 
     fn make_dirs(&mut self, base: &str, rel: &str) -> io::Result<()> {
-        let mut cur = base.to_string();
-        for part in parts(rel)? {
-            cur = join(&cur, part);
-            if is_folder(&cur)? {
-                continue;
-            }
-            match fs::create_dir(&cur) {
-                Ok(()) => {}
-                // Made by someone else in between: it must still be a folder.
-                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                    is_folder(&cur)?;
-                }
-                Err(e) => return Err(e),
-            }
-        }
-        Ok(())
+        base_dir(base)?.make_dirs(&rel_path(rel)?).map(drop)
     }
 
     fn copy(
@@ -206,44 +93,31 @@ impl LaunchOs for LinuxOs {
         dst_base: &str,
         dst_rel: &str,
     ) -> io::Result<bool> {
-        check(src_base, src_rel, false)?;
-        let src = join(src_base, src_rel);
-        match fs::symlink_metadata(&src) {
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(false),
-            Err(e) => return Err(e),
-            Ok(_) => {}
-        }
-        let dst = self.make_parent(dst_base, dst_rel)?;
-        copy_node(Path::new(&src), Path::new(&dst), 0)?;
-        Ok(true)
+        let src = match base_dir(src_base) {
+            Err(e) if missing(&e) => return Ok(false),
+            r => r?,
+        };
+        src.copy(
+            &rel_path(src_rel)?,
+            &base_dir(dst_base)?,
+            &rel_path(dst_rel)?,
+            MAX_COPY_DEPTH,
+        )
     }
 
     fn remove(&mut self, base: &str, rel: &str) -> io::Result<()> {
-        check(base, rel, false)?;
-        clear(Path::new(&join(base, rel)))
+        match base_dir(base) {
+            Err(e) if missing(&e) => Ok(()),
+            r => r?.remove(&rel_path(rel)?),
+        }
     }
 
     fn symlink(&mut self, target: &str, base: &str, rel: &str) -> io::Result<()> {
-        let path = self.make_parent(base, rel)?;
-        clear(Path::new(&path))?;
-        std::os::unix::fs::symlink(target, path)
+        base_dir(base)?.symlink(Path::new(target), &rel_path(rel)?)
     }
 
     fn write_atomic(&mut self, base: &str, rel: &str, bytes: &[u8]) -> io::Result<()> {
-        let path = self.make_parent(base, rel)?;
-        let tmp = format!("{path}.tmp");
-        clear(Path::new(&tmp))?;
-        let mut f = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&tmp)?;
-        f.write_all(bytes)?;
-        f.sync_all()?;
-        fs::rename(&tmp, &path)?;
-        // The rename is durable once its folder is flushed.
-        let folder = Path::new(&path).parent().unwrap_or(Path::new(base));
-        fs::File::open(folder)?.sync_all()
+        base_dir(base)?.write(&rel_path(rel)?, bytes)
     }
 
     fn run(&mut self, cmds: &[Command], timeout: Duration) -> io::Result<(Exit, Duration)> {
@@ -311,8 +185,9 @@ pub fn exec(cmd: &Command) -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::os::AppSource;
+    use crate::os::{AppSource, NotFollowed};
     use ruya_play_format::Source;
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
     fn tmp() -> (tempfile::TempDir, String) {
         let d = tempfile::tempdir().expect("a temporary folder");
