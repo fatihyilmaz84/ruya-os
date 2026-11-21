@@ -135,6 +135,11 @@ pub fn hex(bytes: &[u8]) -> String {
         })
 }
 
+/// The lower-case hex SHA-256 of `bytes`: [`hex`] over one [`Sha256`] digest, the one in-memory hash of the services.
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    hex(&Sha256::digest(bytes))
+}
+
 /// Why a small file of the package could not be read: the operating system failed
 /// ([`ReadError::Io`]: `EACCES`, `EIO`, or the file is not there) or the container found the
 /// content wrong ([`ReadError::Content`]: a zip whose declared size lies). A caller that must not

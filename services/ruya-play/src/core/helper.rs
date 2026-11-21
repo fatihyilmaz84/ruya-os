@@ -28,8 +28,8 @@ use crate::core::deps::{ArtVetter, Exit, Helper, Hooks, OpenError, Opener, Step}
 use crate::core::staging::{self, Dir};
 use crate::core::status::Phase;
 use crate::core::unpack::{self, staging_problem, Control, Stop};
-use ruya_play_format::hex;
 use ruya_play_format::limits::ROOT_FILES;
+use ruya_play_format::sha256_hex;
 use ruya_play_format::{validate, EntryKind, FileEntry, Problem, Source, ValidateOptions};
 use ruya_play_trust::revocation::MAX_BLOCKLIST_BYTES;
 use ruya_play_trust::{
@@ -37,7 +37,6 @@ use ruya_play_trust::{
     StoreKeys, TrustStore,
 };
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::cell::Cell;
 use std::collections::{BTreeMap, HashSet};
 use std::io::{self, Read, Write};
@@ -374,11 +373,6 @@ fn unhex(text: &str) -> Option<Vec<u8>> {
         .step_by(2)
         .map(|i| u8::from_str_radix(text.get(i..i + 2)?, 16).ok())
         .collect()
-}
-
-/// SHA-256 of `bytes`, lowercase hex.
-pub fn sha256_hex(bytes: &[u8]) -> String {
-    hex(&Sha256::digest(bytes))
 }
 
 /// What the helper needs from outside: it opens the package and vets the art; the service never
@@ -966,6 +960,7 @@ impl Helper for InProcessHelper {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ruya_play_format::hex;
 
     fn feed_all(lines: &[String]) -> (Session, bool) {
         let mut s = Session::new();

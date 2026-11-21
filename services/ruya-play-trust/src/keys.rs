@@ -4,16 +4,10 @@
 
 use base64ct::{Base64, Encoding};
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
-use ruya_play_format::hex;
-use sha2::{Digest, Sha256};
+use ruya_play_format::sha256_hex;
 
 /// Characters of the key id (128 bits): the first 32 hex characters of the SHA-256 of the 32 key bytes.
 pub const KEY_ID_CHARS: usize = 32;
-
-/// The lower-case hex SHA-256 of `data`.
-pub fn sha256_hex(data: &[u8]) -> String {
-    hex(&Sha256::digest(data))
-}
 
 /// True for 64 lower-case hex characters (a SHA-256 as the statements write it).
 pub fn is_sha256_hex(s: &str) -> bool {
@@ -134,6 +128,7 @@ pub fn generate_key() -> Result<SecretKey, getrandom::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ruya_play_format::hex;
 
     #[test]
     fn a_key_round_trips_through_base64_and_has_a_short_id() {

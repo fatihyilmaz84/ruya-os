@@ -5,8 +5,8 @@
 //! `format` (05 §15), not an edit of this file.
 
 use base64ct::{Base64, Encoding};
+use ruya_play_format::sha256_hex;
 use ruya_play_trust::envelope::{self, Domain};
-use ruya_play_trust::keys::sha256_hex;
 use ruya_play_trust::statement::{
     BlocklistStatement, PlayStatement, RotationStatement, StoreStatement,
 };
