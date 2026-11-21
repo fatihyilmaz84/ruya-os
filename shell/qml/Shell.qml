@@ -1376,6 +1376,12 @@ FocusScope {
         property: "profile"
         value: Profiles.activeProfile
     }
+    // So are the runner choices of .play games (RUY-905): Library's choice calls follow it.
+    Binding {
+        target: Library
+        property: "profile"
+        value: Profiles.activeProfile
+    }
 
     // An action of a notification, picked in the centre (RUY-413). An app's action (source "app") only
     // goes back to the app through the service (Invoke; the bridge of RUY-88 hands it over), whatever
@@ -1452,6 +1458,7 @@ FocusScope {
         controller: controllerPage,
         managedProfile: managedProfilePage,
         appPermissions: appPermissionsPage,
+        playCompatibility: playCompatibilityPage,
         buttonTest: buttonTestPage,
         controls: controlsPage,
         controlsRemap: controlsRemapPage,
@@ -2338,6 +2345,7 @@ FocusScope {
     Component { id: controllerPage; ControllerPage {} }
     Component { id: managedProfilePage; ManagedProfilePage {} }
     Component { id: appPermissionsPage; AppPermissionsPage {} }
+    Component { id: playCompatibilityPage; CompatibilityPage {} }
     Component { id: buttonTestPage; ButtonTestPage {} }
     Component { id: controlsPage; ControlsPage {} }
     Component { id: controlsRemapPage; RemapPage {} }

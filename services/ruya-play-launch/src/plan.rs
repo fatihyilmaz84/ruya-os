@@ -125,6 +125,10 @@ pub struct Root {
     pub in_use: RunnerInUse,
     /// The version the developer tested the component with, for "Tested with 9.20".
     pub tested: Option<String>,
+    /// The player's choice could not be honoured (no bundled copy, no usable OS runner of the
+    /// bundled copy's family), so this is the package default's runner (the resolver's
+    /// `Override*Unavailable` note; Library1 `play_fallback`, RUY-905).
+    pub fallback: bool,
 }
 
 /// The values of the placeholders of 05 §6.3.
@@ -242,6 +246,7 @@ fn root_of(
                     hash: None,
                 },
                 tested: None,
+                fallback: false,
             })
         }
         Chosen::System { family, version } => {
@@ -274,6 +279,7 @@ fn root_of(
                     hash: found.hash.clone(),
                 },
                 tested: None,
+                fallback: false,
             })
         }
     }
@@ -315,6 +321,12 @@ pub fn pick_runners(
             .map_err(|why| Failure::new(why.code(), why.message()))?;
         let mut root = root_of(c, chosen, bundled, system)?;
         root.tested = r.tested.clone();
+        root.fallback = r.notes.iter().any(|n| {
+            matches!(
+                n,
+                Note::OverrideBundledUnavailable | Note::OverrideSystemUnavailable
+            )
+        });
         roots.insert(c.id.clone(), root);
     }
     Ok((roots, notes))

@@ -5,7 +5,9 @@ import RuyaShell
 // (wrapping) and are always consumed, so they can never move focus out of the pane; Accept steps to the
 // next option. `options` is a list of { value, label }; `value` is the selected option's value.
 // edited(value) reports a change made by the user. The arrows are drawn with two or more options
-// and not while `dimmed`: otherwise the value stands alone.
+// and not while `dimmed`: otherwise the value stands alone. A dimmed row cannot be changed (04 §5): Left and
+// Right are consumed and do nothing, Accept emits blocked() so the screen can say why (a toast); the row
+// never reports edited().
 SettingControl {
     id: row
 
@@ -27,14 +29,15 @@ SettingControl {
     readonly property real circle: 48 * u
 
     signal edited(var value)
+    signal blocked()
 
     accessibleValue: currentLabel
-    hintKind: "choice"
+    hintKind: dimmed ? "item" : "choice"
     trailingWidth: valueLabel.implicitWidth + (arrowsShown ? 2 * (circle + Theme.spaceXs * u) : 0)
     Accessible.role: Accessible.ComboBox
 
     function step(delta) {
-        if (options.length === 0)
+        if (options.length === 0 || dimmed)
             return
         const from = currentIndex >= 0 ? currentIndex : 0
         const next = (from + delta + options.length) % options.length
@@ -93,8 +96,16 @@ SettingControl {
     // Accept steps to the next option. A row whose screen uses Accept for something else (the Setup wizard's
     // language step: "Press A to continue") sets this false, and Accept bubbles.
     property bool acceptSteps: true
-    Keys.onReturnPressed: event => { if (row.acceptSteps) row.step(1); else event.accepted = false }
-    Keys.onEnterPressed: event => { if (row.acceptSteps) row.step(1); else event.accepted = false }
+    function accept(event) {
+        if (!row.acceptSteps)
+            event.accepted = false
+        else if (row.dimmed)
+            row.blocked()
+        else
+            row.step(1)
+    }
+    Keys.onReturnPressed: event => row.accept(event)
+    Keys.onEnterPressed: event => row.accept(event)
     Keys.onPressed: event => {
         if (event.key === Qt.Key_Left) {
             row.step(-1)

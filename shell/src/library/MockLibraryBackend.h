@@ -19,8 +19,9 @@ public:
     void rescan() override;
     // RUY-959. The runners: the image's pinned GE-Proton and Wine until setRunners. A choice is taken for a
     // .play item only ("unknown", "not_play", "invalid" as Library1 answers), kept per profile in
-    // memory; "package" removes it. resolveRunner answers every valid choice with the item's own
-    // runner fields (the mock has no launcher to resolve with).
+    // memory; "package" removes it. resolveRunner answers a choice from the mock's table for the item
+    // (what the launcher answers for such a package against the pinned runners, RUY-905), else with the
+    // item's own runner fields (the mock has no launcher to resolve with).
     void listRunners() override;
     void getRunnerChoice(const QString &profile, const QString &id) override;
     void setRunnerChoice(const QString &profile, const QString &id, const QString &choice) override;
@@ -28,6 +29,12 @@ public:
     // Tests only: the runners ListRunners answers from now on, and a ListRunners reply after ms.
     void setRunners(const QList<LibraryRunner> &runners) { m_runners = runners; }
     void listRunnersDelayed(int ms);
+    // Tests only: what resolveRunner answers for id and choice from now on; for "package" also the item's
+    // own runner fields (and the list changes, as after a rescan).
+    void setResolution(const QString &id, const QString &choice, const LibraryResolution &resolution);
+    // Tests only: these runner calls ("get", "set", "resolve") answer "failed" (Library1 did not answer)
+    // until the list is changed or the mock is reset; an empty list ends it.
+    void setFailingRunnerCalls(const QStringList &calls) { m_failing = calls; }
 
     // Tests only. scenario: "", "empty", "unplayed" or "art:<dir>" (the default items, each with
     // art.tile and art.icon = a picture of <dir>, see mockArtPath). Every scenario lists the pinned
@@ -47,5 +54,7 @@ private:
     QList<LibraryItem> m_items;
     QList<LibraryRunner> m_runners;
     QMap<QString, QMap<QString, QString>> m_choices; // profile -> item id -> choice
+    QMap<QString, QMap<QString, LibraryResolution>> m_resolutions; // item id -> choice -> answer
+    QStringList m_failing;                           // runner calls that answer "failed"
     int m_pending = 0; // ListItems and ListRunners replies not delivered yet
 };

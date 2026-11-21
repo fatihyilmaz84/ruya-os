@@ -55,9 +55,13 @@ fn library1_item_records_have_the_documented_keys() {
     info.resolution.runner = Some("wine 10.2".into());
     info.resolution.runner_source = Some("system".into());
     info.resolution.runner_tested = Some("9.20".into());
+    // play_fallback is ResolveRunner's (a choice); the item record shares the key and the code.
+    info.resolution.fallback = true;
     let mut refused = play.clone();
     refused.id = "flatpak:play.refused".into();
-    refused.play.as_mut().unwrap().resolution.resolve_error = Some("No runner.".into());
+    let why = &mut refused.play.as_mut().unwrap().resolution;
+    why.resolve_error = Some("No runner.".into());
+    why.resolve_code = Some("resolve.no_system_runner".into());
     items.extend([resolved, refused]);
     let sample = |id: &str| {
         let item = items.iter().find(|i| i.id == id).unwrap_or_else(|| {
@@ -114,9 +118,12 @@ fn library1_runner_and_resolution_records_have_the_documented_keys() {
         runner_source: Some("system".into()),
         runner_tested: Some("9.20".into()),
         resolve_error: None,
+        resolve_code: None,
+        fallback: true,
     };
     let refused = Resolution {
         resolve_error: Some("No runner.".into()),
+        resolve_code: Some("resolve.no_system_runner".into()),
         ..Resolution::default()
     };
     assert_record_served(

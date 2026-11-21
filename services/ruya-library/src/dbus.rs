@@ -191,16 +191,22 @@ fn dict(entries: Vec<(&str, Value<'static>)>) -> Dict {
 }
 
 /// The runner keys of a resolution: the item record's and `ResolveRunner`'s, one code path.
+/// `play_fallback` is there only when true, and only with a runner (Library1 XML).
 fn resolution_entries(r: &Resolution) -> Vec<(&'static str, Value<'static>)> {
-    [
+    let mut entries: Vec<(&'static str, Value<'static>)> = [
         ("play_runner", &r.runner),
         ("play_runner_source", &r.runner_source),
         ("play_runner_tested", &r.runner_tested),
         ("play_resolve_error", &r.resolve_error),
+        ("play_resolve_code", &r.resolve_code),
     ]
     .into_iter()
     .filter_map(|(key, value)| value.as_ref().map(|v| (key, Value::from(v.clone()))))
-    .collect()
+    .collect();
+    if r.fallback && r.runner.is_some() {
+        entries.push(("play_fallback", Value::from(true)));
+    }
+    entries
 }
 
 /// The `a{sv}` record `ResolveRunner` serves (public for the contract test).
@@ -358,6 +364,8 @@ mod tests {
             "play_runner_source",
             "play_runner_tested",
             "play_resolve_error",
+            "play_resolve_code",
+            "play_fallback",
         ] {
             assert!(!bare.contains_key(key), "{key}");
         }

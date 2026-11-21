@@ -43,10 +43,27 @@ Library::Library(std::unique_ptr<LibraryBackend> backend, QObject *parent)
             m_runners.append(r.toVariant());
         emit runnersChanged();
     });
-    connect(m_backend.get(), &LibraryBackend::runnerChoiceAnswered, this, &Library::runnerChoiceAnswered);
-    connect(m_backend.get(), &LibraryBackend::runnerChoiceSet, this, &Library::runnerChoiceSet);
-    connect(m_backend.get(), &LibraryBackend::runnerResolved, this, &Library::runnerResolved);
-    connect(m_backend.get(), &LibraryBackend::runnerChoiceChanged, this, &Library::runnerChoiceChanged);
+    // The choice answers are the signed-in profile's: one asked for (or changed for) a profile that is not
+    // in front any more is dropped, as NotificationCentre drops another profile's list.
+    connect(m_backend.get(), &LibraryBackend::runnerChoiceAnswered, this,
+            [this](const QString &profile, const QString &id, const QString &status, const QString &choice) {
+                if (profile == m_profile)
+                    emit runnerChoiceAnswered(id, status, choice);
+            });
+    connect(m_backend.get(), &LibraryBackend::runnerChoiceSet, this,
+            [this](const QString &profile, const QString &id, const QString &choice, const QString &status) {
+                if (profile == m_profile)
+                    emit runnerChoiceSet(id, choice, status);
+            });
+    connect(m_backend.get(), &LibraryBackend::runnerChoiceChanged, this,
+            [this](const QString &profile, const QString &id, const QString &choice) {
+                if (profile == m_profile && !m_profile.isEmpty())
+                    emit runnerChoiceChanged(id, choice);
+            });
+    connect(m_backend.get(), &LibraryBackend::runnerResolved, this,
+            [this](const QString &id, const QString &choice, const QString &status, const LibraryResolution &r) {
+                emit runnerResolved(id, choice, status, r.toVariant());
+            });
     m_backend->listItems();
     m_backend->listRunners();
 }
@@ -75,14 +92,36 @@ void Library::rescan()
     m_backend->rescan();
 }
 
-void Library::requestRunnerChoice(const QString &profile, const QString &id)
+void Library::setProfile(const QString &profile)
 {
-    m_backend->getRunnerChoice(profile, id);
+    if (profile == m_profile)
+        return;
+    m_profile = profile;
+    emit profileChanged();
 }
 
-void Library::setRunnerChoice(const QString &profile, const QString &id, const QString &choice)
+void Library::runnerChoice(const QString &id)
 {
-    m_backend->setRunnerChoice(profile, id, choice);
+    m_backend->getRunnerChoice(m_profile, id);
+}
+
+void Library::setRunnerChoice(const QString &id, const QString &choice)
+{
+    m_backend->setRunnerChoice(m_profile, id, choice);
+}
+
+void Library::mockSetResolution(const QString &id, const QString &choice, const QVariantMap &resolution)
+{
+    auto *mock = qobject_cast<MockLibraryBackend *>(m_backend.get());
+    if (!mock)
+        return;
+    mock->setResolution(id, choice, LibraryResolution::fromVariant(resolution));
+}
+
+void Library::mockFailRunnerCalls(const QStringList &calls)
+{
+    if (auto *mock = qobject_cast<MockLibraryBackend *>(m_backend.get()))
+        mock->setFailingRunnerCalls(calls);
 }
 
 void Library::resolveRunner(const QString &id, const QString &choice)

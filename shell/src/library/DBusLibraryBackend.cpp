@@ -52,15 +52,17 @@ QVariantMap parseDict(const QDBusArgument &arg)
     return out;
 }
 
-// The Resolution record (and the runner keys of an item record), camelCase as QML sees them.
-QVariantMap toResolution(const QVariantMap &d)
+// The Resolution record (and the runner keys of an item record).
+LibraryResolution toResolution(const QVariantMap &d)
 {
-    return {
-        {QStringLiteral("playRunner"), d.value(QStringLiteral("play_runner")).toString()},
-        {QStringLiteral("playRunnerSource"), d.value(QStringLiteral("play_runner_source")).toString()},
-        {QStringLiteral("playRunnerTested"), d.value(QStringLiteral("play_runner_tested")).toString()},
-        {QStringLiteral("playResolveError"), d.value(QStringLiteral("play_resolve_error")).toString()},
-    };
+    LibraryResolution r;
+    r.runner = d.value(QStringLiteral("play_runner")).toString();
+    r.runnerSource = d.value(QStringLiteral("play_runner_source")).toString();
+    r.runnerTested = d.value(QStringLiteral("play_runner_tested")).toString();
+    r.resolveError = d.value(QStringLiteral("play_resolve_error")).toString();
+    r.resolveCode = d.value(QStringLiteral("play_resolve_code")).toString();
+    r.fallback = d.value(QStringLiteral("play_fallback")).toBool();
+    return r;
 }
 
 LibraryRunner toRunner(const QVariantMap &d)
@@ -121,11 +123,7 @@ LibraryItem toItem(const QVariantMap &d)
         i.playSigner = d.value(QStringLiteral("play_signer")).toString();
         i.playSignerKeyId = d.value(QStringLiteral("play_signer_key_id")).toString();
         i.playScreenshots = d.value(QStringLiteral("play_screenshots")).toStringList();
-        const QVariantMap r = toResolution(d);
-        i.playRunner = r.value(QStringLiteral("playRunner")).toString();
-        i.playRunnerSource = r.value(QStringLiteral("playRunnerSource")).toString();
-        i.playRunnerTested = r.value(QStringLiteral("playRunnerTested")).toString();
-        i.playResolveError = r.value(QStringLiteral("playResolveError")).toString();
+        i.resolution = toResolution(d);
     }
     return i;
 }
@@ -210,7 +208,7 @@ void DBusLibraryBackend::resolveRunner(const QString &id, const QString &choice)
             emit runnerResolved(id, choice, out.at(0).toString(),
                                 toResolution(parseDict(out.at(1).value<QDBusArgument>())));
         else
-            emit runnerResolved(id, choice, QStringLiteral("failed"), toResolution({}));
+            emit runnerResolved(id, choice, QStringLiteral("failed"), LibraryResolution());
     });
 }
 

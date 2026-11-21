@@ -27,10 +27,12 @@ Item {
             compare(p.playSigner, "Example Games")
             compare(p.playSignerKeyId, "0123456789abcdef0123456789abcdef")
             compare(p.playScreenshots.length, 0, "no screenshot path to a file the mock does not have (RUY-886)")
-            compare(p.playRunner, "wine 10.2")
+            compare(p.playRunner, "proton-ge GE-Proton11-12")
             compare(p.playRunnerSource, "system")
-            compare(p.playRunnerTested, "9.20")
+            compare(p.playRunnerTested, "GE-Proton10-9")
             compare(p.playResolveError, "")
+            compare(p.playResolveCode, "")
+            compare(p.playFallback, false)
             for (const role of ["icon", "logo", "card", "cover", "hero"])
                 verify(p.art[role], role)
         }
@@ -66,10 +68,11 @@ Item {
             Library.resetMockForTests("playart:" + artFixtures)
             tryVerify(() => Library.item("flatpak:play.com.example.quiet").play === true)
             const q = Library.item("flatpak:play.com.example.quiet")
-            compare(q.playResolveError, "The OS runner is 8.0, older than the required 9.0.")
+            compare(q.playResolveError, "The OS runner is wine-11.0, older than the required 12.0.")
+            compare(q.playResolveCode, "resolve.system_too_old", "RUY-905: the code beside the sentence")
             compare(q.playRunner, "")
             compare(q.playRunnerSource, "")
-            compare(Library.item("flatpak:play.com.example.starhopper").playRunner, "wine 10.2")
+            compare(Library.item("flatpak:play.com.example.starhopper").playRunner, "proton-ge GE-Proton11-12")
             Library.resetMockForTests("")
         }
 
@@ -101,18 +104,27 @@ Item {
         SignalSpy { id: changed; target: Library; signalName: "runnerChoiceChanged" }
         SignalSpy { id: resolved; target: Library; signalName: "runnerResolved" }
 
+        function cleanup() {
+            Library.profile = ""
+        }
+
+        // The choice calls follow Library.profile (RUY-905: QML passes no profile id; the Shell binds the
+        // signed-in one).
         function choiceOf(profile, id) {
+            Library.profile = profile
             answered.clear()
-            Library.requestRunnerChoice(profile, id)
+            Library.runnerChoice(id)
             tryCompare(answered, "count", 1)
-            return answered.signalArguments[0][2] + " " + answered.signalArguments[0][3]
+            compare(answered.signalArguments[0][0], id)
+            return answered.signalArguments[0][1] + " " + answered.signalArguments[0][2]
         }
 
         function store(profile, id, choice) {
+            Library.profile = profile
             stored.clear()
-            Library.setRunnerChoice(profile, id, choice)
+            Library.setRunnerChoice(id, choice)
             tryCompare(stored, "count", 1)
-            return stored.signalArguments[0][3]
+            return stored.signalArguments[0][2]
         }
 
         // RUY-959: the runner choice is per profile, "package" by default and clears; a plain item,
@@ -125,9 +137,10 @@ Item {
             changed.clear()
             compare(store("p1", hop, "bundled"), "ok")
             compare(changed.count, 1)
-            compare(changed.signalArguments[0][0], "p1")
-            compare(changed.signalArguments[0][2], "bundled")
+            compare(changed.signalArguments[0][0], hop)
+            compare(changed.signalArguments[0][1], "bundled")
             compare(store("p2", hop, "system"), "ok")
+            compare(changed.count, 2, "p2's own change, while p2 is in front")
             compare(choiceOf("p1", hop), "ok bundled")
             compare(choiceOf("p2", hop), "ok system")
             compare(store("p1", hop, "bundled"), "ok")
@@ -138,25 +151,69 @@ Item {
             compare(store("p1", "flatpak:play.not.installed", "system"), "unknown")
             compare(store("p1", hop, "proton"), "invalid")
             compare(store("../x", hop, "system"), "invalid")
+            compare(store("", hop, "system"), "invalid", "nobody signed in")
             compare(choiceOf("p1", "steam:730"), "not_play ")
             Library.resetMockForTests("")
             compare(choiceOf("p2", "flatpak:play.not.installed"), "unknown ")
         }
 
-        // RUY-959: ResolveRunner answers with the item's runner keys (the mock resolves every choice as
-        // the package's default) and refuses as the choice calls do.
+        // RUY-905: the facade follows the signed-in profile: an answer asked for p1 that lands after p2
+        // came to the front is dropped, and another profile's change is not reported.
+        function test_answers_for_a_profile_no_longer_in_front_are_dropped() {
+            Library.resetMockForTests("play")
+            tryVerify(() => Library.item("flatpak:play.com.example.starhopper").play === true)
+            const hop = "flatpak:play.com.example.starhopper"
+            Library.profile = "p1"
+            answered.clear()
+            stored.clear()
+            changed.clear()
+            Library.runnerChoice(hop)
+            Library.setRunnerChoice(hop, "system")
+            Library.profile = "p2"                 // before the answers land
+            wait(50)
+            compare(answered.count, 0, "p1's answer is not p2's")
+            compare(stored.count, 0)
+            compare(changed.count, 0, "p1's change is not reported to p2")
+            compare(choiceOf("p2", hop), "ok package")
+            compare(choiceOf("p1", hop), "ok system", "the change was stored for p1")
+        }
+
+        // RUY-959, RUY-905: ResolveRunner answers each choice with the launcher's answer for the package
+        // (the mock's table: Star Hopper's image GE-Proton, its bundled copy), its code and fallback flag,
+        // and refuses as the choice calls do.
         function test_resolve_runner_answers_with_the_runner_keys() {
             Library.resetMockForTests("play")
             tryVerify(() => Library.item("flatpak:play.com.example.starhopper").play === true)
+            const hop = "flatpak:play.com.example.starhopper"
             resolved.clear()
-            Library.resolveRunner("flatpak:play.com.example.starhopper", "system")
+            Library.resolveRunner(hop, "system")
             tryCompare(resolved, "count", 1)
             compare(resolved.signalArguments[0][2], "ok")
             const r = resolved.signalArguments[0][3]
-            compare(r.playRunner, "wine 10.2")
+            compare(r.playRunner, "proton-ge GE-Proton11-12")
             compare(r.playRunnerSource, "system")
-            compare(r.playRunnerTested, "9.20")
+            compare(r.playRunnerTested, "GE-Proton10-9")
             compare(r.playResolveError, "")
+            compare(r.playResolveCode, "")
+            compare(r.playFallback, false)
+            resolved.clear()
+            Library.resolveRunner(hop, "bundled")
+            tryCompare(resolved, "count", 1)
+            compare(resolved.signalArguments[0][3].playRunner, "proton-ge GE-Proton10-9")
+            compare(resolved.signalArguments[0][3].playRunnerSource, "bundled")
+            Library.mockSetResolution(hop, "system", { playRunner: "proton-ge GE-Proton10-9", playRunnerSource: "bundled",
+                                                       playFallback: true })
+            resolved.clear()
+            Library.resolveRunner(hop, "system")
+            tryCompare(resolved, "count", 1)
+            compare(resolved.signalArguments[0][3].playFallback, true)
+            Library.mockFailRunnerCalls(["resolve"])
+            resolved.clear()
+            Library.resolveRunner(hop, "system")
+            tryCompare(resolved, "count", 1)
+            compare(resolved.signalArguments[0][2], "failed")
+            compare(resolved.signalArguments[0][3].playRunner, "")
+            Library.mockFailRunnerCalls([])
             resolved.clear()
             Library.resolveRunner("steam:730", "system")
             tryCompare(resolved, "count", 1)

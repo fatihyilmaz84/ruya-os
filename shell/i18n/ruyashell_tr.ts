@@ -44,7 +44,7 @@
         <translation>Simge yazı tipi: Apache-2.0. Inter yazı tipi: OFL-1.1.</translation>
     </message>
     <message>
-        <location line="+29"/>
+        <location line="+30"/>
         <source>System information</source>
         <translation>Sistem bilgisi</translation>
     </message>
@@ -302,7 +302,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+210"/>
+        <location filename="../qml/AppDetailPage.qml" line="+238"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -495,12 +495,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-7"/>
-        <location line="+353"/>
+        <location line="+356"/>
         <source>Steam</source>
         <translation>Steam</translation>
     </message>
     <message>
-        <location line="-352"/>
+        <location line="-355"/>
         <source>Steam app ID</source>
         <translation>Steam uygulama kimliği</translation>
     </message>
@@ -570,7 +570,7 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+221"/>
+        <location line="+224"/>
         <source>Read</source>
         <translation>Oku</translation>
     </message>
@@ -601,6 +601,11 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+10"/>
+        <source>Compatibility</source>
+        <translation>Uyumluluk</translation>
+    </message>
+    <message>
+        <location line="+14"/>
         <source>Permissions</source>
         <translation>İzinler</translation>
     </message>
@@ -620,7 +625,7 @@ Bu geri alınamaz.</translation>
         <translation>Kaldırmak için önce oyunu kapatın.</translation>
     </message>
     <message>
-        <location line="-909"/>
+        <location line="-926"/>
         <source>Install</source>
         <translation>Kur</translation>
     </message>
@@ -631,7 +636,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelle</translation>
     </message>
     <message>
-        <location line="+661"/>
+        <location line="+664"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Bu konsoldakinden daha yeni bir RuyaOS gerekiyor. Yüklü kalır.</translation>
     </message>
@@ -657,7 +662,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelleme şunları ekliyor: %1</translation>
     </message>
     <message>
-        <location line="-689"/>
+        <location line="-692"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Aç</translation>
@@ -695,7 +700,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+380"/>
+        <location line="+383"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -1542,6 +1547,95 @@ Bu geri alınamaz.</translation>
         <location line="+12"/>
         <source>Placeholder</source>
         <translation>Yer tutucu</translation>
+    </message>
+</context>
+<context>
+    <name>CompatibilityPage</name>
+    <message>
+        <location filename="../qml/CompatibilityPage.qml" line="+81"/>
+        <source>Takes effect the next time the game starts.</source>
+        <translation>Oyun bir sonraki açılışında geçerli olur.</translation>
+    </message>
+    <message>
+        <location line="+35"/>
+        <source>Runner: the library isn&apos;t responding.</source>
+        <translation>Çalıştırıcı: kitaplık yanıt vermiyor.</translation>
+    </message>
+    <message>
+        <location line="+31"/>
+        <source>The choice could not be saved. Try again.</source>
+        <translation>Seçim kaydedilemedi. Yeniden dene.</translation>
+    </message>
+    <message>
+        <location line="+46"/>
+        <source>Loading…</source>
+        <translation>Yükleniyor…</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Try the bundled runner</source>
+        <translation>Oyunla gelen çalıştırıcıyı dene</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>It stopped unexpectedly last time.</source>
+        <translation>Son seferde beklenmedik şekilde durdu.</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Runner</source>
+        <translation>Çalıştırıcı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Not available</source>
+        <translation>Kullanılamıyor</translation>
+    </message>
+    <message>
+        <location line="+24"/>
+        <source>Runner details can&apos;t be read right now.</source>
+        <translation>Çalıştırıcı bilgileri şu anda okunamıyor.</translation>
+    </message>
+    <message>
+        <location line="+8"/>
+        <source>Starts with</source>
+        <translation>Kullanılacak çalıştırıcı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Can&apos;t start</source>
+        <translation>Başlatılamaz</translation>
+    </message>
+    <message>
+        <location line="+15"/>
+        <source>Tested with</source>
+        <translation>Test edildiği sürüm</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Versions</source>
+        <translation>Sürümler</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Bundled runner</source>
+        <translation>Oyunla gelen çalıştırıcı</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+8"/>
+        <source>None</source>
+        <translation>Yok</translation>
+    </message>
+    <message>
+        <location line="-1"/>
+        <source>System runner</source>
+        <translation>Sistemdeki çalıştırıcı</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>Try again</source>
+        <translation>Yeniden dene</translation>
     </message>
 </context>
 <context>
@@ -4832,7 +4926,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>PrivacyPane</name>
     <message>
-        <location filename="../qml/PrivacyPane.qml" line="+44"/>
+        <location filename="../qml/PrivacyPane.qml" line="+54"/>
         <source>App permissions</source>
         <translation>Uygulama izinleri</translation>
     </message>
@@ -5392,6 +5486,79 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>RunnerText</name>
+    <message>
+        <location filename="../qml/RunnerText.qml" line="+21"/>
+        <source>Bundled</source>
+        <translation>Oyunla gelen</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>System</source>
+        <translation>Sistemdeki</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Package default</source>
+        <translation>Paket varsayılanı</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>Bundled copy</source>
+        <translation>Oyunla gelen kopya</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>System copy</source>
+        <translation>Sistemdeki kopya</translation>
+    </message>
+    <message>
+        <location line="+9"/>
+        <source>This console has no runner for this game.</source>
+        <translation>Bu konsolda bu oyun için çalıştırıcı yok.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The system runner is older than this game needs.</source>
+        <translation>Sistemdeki çalıştırıcı bu oyunun istediğinden eski.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The system runner is newer than this game allows.</source>
+        <translation>Sistemdeki çalıştırıcı bu oyunun izin verdiğinden yeni.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>This game has no bundled runner to fall back on.</source>
+        <translation>Bu oyunla gelen, geri dönülecek bir çalıştırıcı yok.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The system runner can&apos;t be found.</source>
+        <translation>Sistemdeki çalıştırıcı bulunamıyor.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The system runner is the wrong kind for this game.</source>
+        <translation>Sistemdeki çalıştırıcı bu oyun için uygun türde değil.</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>This game&apos;s files are damaged. Reinstall it.</source>
+        <translation>Bu oyunun dosyaları bozuk. Oyunu yeniden yükle.</translation>
+    </message>
+    <message>
+        <location line="+7"/>
+        <source>This game has no bundled runner, so it uses the package default.</source>
+        <translation>Bu oyunla gelen bir çalıştırıcı yok, paket varsayılanı kullanılır.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>The system runner can&apos;t be used for this game, so it uses the package default.</source>
+        <translation>Sistemdeki çalıştırıcı bu oyunda kullanılamıyor, paket varsayılanı kullanılır.</translation>
+    </message>
+</context>
+<context>
     <name>ScreenSaver</name>
     <message>
         <location filename="../qml/ScreenSaver.qml" line="+56"/>
@@ -5921,12 +6088,12 @@ Bu geri alınamaz.</translation>
         <translation>%1 henüz bir pencere açmadı.</translation>
     </message>
     <message>
-        <location line="+81"/>
+        <location line="+87"/>
         <source>The screen did not answer, so the previous resolution is back.</source>
         <translation>Ekran yanıt vermedi, bu yüzden önceki çözünürlük geri geldi.</translation>
     </message>
     <message>
-        <location line="+65"/>
+        <location line="+66"/>
         <source>Wallpaper could not be loaded</source>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
@@ -6022,7 +6189,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kaldırıldı.</translation>
     </message>
     <message>
-        <location line="+533"/>
+        <location line="+534"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -6044,7 +6211,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1957"/>
+        <location line="-1965"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -6075,7 +6242,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1688"/>
+        <location line="+1696"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>

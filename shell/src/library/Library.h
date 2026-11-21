@@ -4,6 +4,7 @@
 
 #include <QObject>
 #include <QQmlEngine>
+#include <QStringList>
 #include <QVariantList>
 
 #include <memory>
@@ -32,6 +33,9 @@ class Library : public QObject
     // licence, sourceUrl } ("" for an absent licence or source). Read at start and whenever the
     // service appears; the mock lists the pinned GE-Proton and Wine.
     Q_PROPERTY(QVariantList runners READ runners NOTIFY runnersChanged)
+    // Whose runner choices the choice calls read and store (Shell binds the signed-in profile, as it
+    // does NotificationCentre's; "" = nobody, and Library1 refuses the calls as "invalid").
+    Q_PROPERTY(QString profile READ profile WRITE setProfile NOTIFY profileChanged)
 
 public:
     explicit Library(std::unique_ptr<LibraryBackend> backend, QObject *parent = nullptr);
@@ -45,13 +49,18 @@ public:
     bool isAvailable() const { return m_available; }
     bool isMock() const { return m_backend->isMock(); }
     QVariantList runners() const { return m_runners; }
+    QString profile() const { return m_profile; }
+    void setProfile(const QString &profile);
 
-    // A profile's runner choice for a .play item (Library1, RUY-959): "package", "bundled" or
-    // "system". Each answers with its signal; status is a Library1 status string.
-    Q_INVOKABLE void requestRunnerChoice(const QString &profile, const QString &id);
-    Q_INVOKABLE void setRunnerChoice(const QString &profile, const QString &id, const QString &choice);
+    // The signed-in profile's runner choice for a .play item (Library1, RUY-959, RUY-905): "package",
+    // "bundled" or "system". The choice calls follow `profile`, so QML never passes a profile id. Each
+    // answers with its signal (status: a Library1 status string); an answer for a profile that is no
+    // longer in front is dropped. runnerChoice asks for the stored choice (runnerChoiceAnswered).
+    Q_INVOKABLE void runnerChoice(const QString &id);
+    Q_INVOKABLE void setRunnerChoice(const QString &id, const QString &choice);
     // What the launch would run the item with for that choice: resolution has playRunner,
-    // playRunnerSource, playRunnerTested and playResolveError ("" when absent), as an item has.
+    // playRunnerSource, playRunnerTested, playResolveError, playResolveCode ("" when absent) and
+    // playFallback, as an item has. Profile-free (Library1 ResolveRunner).
     Q_INVOKABLE void resolveRunner(const QString &id, const QString &choice);
 
     // rescanned follows when the service has read its files again.
@@ -82,6 +91,11 @@ public:
     // Tests only, mock only: the runners the mock lists from now on (maps as in runners), then a
     // ListRunners whose reply arrives after ms. No-ops with the D-Bus backend.
     Q_INVOKABLE void mockSetRunners(const QVariantList &runners, int ms = 0);
+    // Tests only, mock only (RUY-905): what ResolveRunner answers for id and choice from now on
+    // (resolution keys as resolveRunner's; "package" is the item's own fields too), and which runner
+    // calls ("get", "set", "resolve") answer "failed" from now on ([] none). resetMockForTests ends both.
+    Q_INVOKABLE void mockSetResolution(const QString &id, const QString &choice, const QVariantMap &resolution);
+    Q_INVOKABLE void mockFailRunnerCalls(const QStringList &calls);
 
 signals:
     void itemsChanged();
@@ -89,10 +103,13 @@ signals:
     void rescanned();
     void launchRequested(const QString &id, const QString &launchSpec);
     void runnersChanged();
-    void runnerChoiceAnswered(const QString &profile, const QString &id, const QString &status, const QString &choice);
-    void runnerChoiceSet(const QString &profile, const QString &id, const QString &choice, const QString &status);
+    void profileChanged();
+    // The choice signals are the signed-in profile's only.
+    void runnerChoiceAnswered(const QString &id, const QString &status, const QString &choice);
+    void runnerChoiceSet(const QString &id, const QString &choice, const QString &status);
     void runnerResolved(const QString &id, const QString &choice, const QString &status, const QVariantMap &resolution);
-    void runnerChoiceChanged(const QString &profile, const QString &id, const QString &choice);
+    // Library1 RunnerChoiceChanged for the signed-in profile (from any caller, ruya-session included).
+    void runnerChoiceChanged(const QString &id, const QString &choice);
 
 private:
     std::unique_ptr<LibraryBackend> m_backend;
@@ -100,5 +117,6 @@ private:
     QVariantList m_games;
     QVariantList m_recent;
     QVariantList m_runners;
+    QString m_profile;
     bool m_available = false;
 };

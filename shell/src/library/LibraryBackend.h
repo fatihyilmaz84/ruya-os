@@ -9,6 +9,49 @@
 #include <QStringList>
 #include <QVariantMap>
 
+// The launcher's runner resolution of a .play app for one choice (Library1: the item record's runner
+// keys, which resolve the package default, and ResolveRunner's "Resolution record"; RUY-903, RUY-905).
+// Everything "" (and no fallback) for a native game.
+struct LibraryResolution
+{
+    QString runner;       // "<family> <version>" the launch would use, e.g. "proton-ge GE-Proton11-12"
+    QString runnerSource; // "bundled" | "system" (with runner)
+    QString runnerTested; // the version the developer tested with; "" when none
+    QString resolveError; // one English sentence: why the launch would refuse; "" when it can start
+    QString resolveCode;  // its stable code (resolve.*, launch.* or a format code), with resolveError
+    bool fallback = false; // the choice cannot be honoured: runner is the package default's
+
+    // As QML sees it: playRunner, playRunnerSource, playRunnerTested, playResolveError, playResolveCode,
+    // playFallback.
+    void insertInto(QVariantMap &out) const
+    {
+        out.insert(QStringLiteral("playRunner"), runner);
+        out.insert(QStringLiteral("playRunnerSource"), runnerSource);
+        out.insert(QStringLiteral("playRunnerTested"), runnerTested);
+        out.insert(QStringLiteral("playResolveError"), resolveError);
+        out.insert(QStringLiteral("playResolveCode"), resolveCode);
+        out.insert(QStringLiteral("playFallback"), fallback);
+    }
+    QVariantMap toVariant() const
+    {
+        QVariantMap out;
+        insertInto(out);
+        return out;
+    }
+    // The other way (the mock's test hook).
+    static LibraryResolution fromVariant(const QVariantMap &v)
+    {
+        LibraryResolution r;
+        r.runner = v.value(QStringLiteral("playRunner")).toString();
+        r.runnerSource = v.value(QStringLiteral("playRunnerSource")).toString();
+        r.runnerTested = v.value(QStringLiteral("playRunnerTested")).toString();
+        r.resolveError = v.value(QStringLiteral("playResolveError")).toString();
+        r.resolveCode = v.value(QStringLiteral("playResolveCode")).toString();
+        r.fallback = v.value(QStringLiteral("playFallback")).toBool();
+        return r;
+    }
+};
+
 // One item record of org.ruyaos.Library1 (api/dbus/org.ruyaos.Library1.xml, "Item record").
 struct LibraryItem
 {
@@ -32,11 +75,8 @@ struct LibraryItem
     QString playSigner;
     QString playSignerKeyId;               // trust.json's signer_id (32 hex); "" when unsigned
     QStringList playScreenshots;           // 1080p screenshot paths in order; empty when none
-    // The launcher's own runner resolution for the package's default choice (RUY-903); all "" for a native game.
-    QString playRunner;                    // "<family> <version>" the launch would use, e.g. "wine 10.2"
-    QString playRunnerSource;              // "bundled" | "system" (with playRunner)
-    QString playRunnerTested;              // the version the developer tested with; "" when none
-    QString playResolveError;              // one sentence: why the launch would refuse; "" when it can start
+    // The launcher's own runner resolution for the package's default choice (RUY-903).
+    LibraryResolution resolution;
 
     // The record as QML sees it (camelCase keys).
     QVariantMap toVariant() const
@@ -67,10 +107,7 @@ struct LibraryItem
             out.insert(QStringLiteral("playSigner"), playSigner);
             out.insert(QStringLiteral("playSignerKeyId"), playSignerKeyId);
             out.insert(QStringLiteral("playScreenshots"), playScreenshots);
-            out.insert(QStringLiteral("playRunner"), playRunner);
-            out.insert(QStringLiteral("playRunnerSource"), playRunnerSource);
-            out.insert(QStringLiteral("playRunnerTested"), playRunnerTested);
-            out.insert(QStringLiteral("playResolveError"), playResolveError);
+            resolution.insertInto(out);
         }
         return out;
     }
@@ -124,8 +161,8 @@ signals:
     void runnersListed(const QList<LibraryRunner> &runners);
     void runnerChoiceAnswered(const QString &profile, const QString &id, const QString &status, const QString &choice);
     void runnerChoiceSet(const QString &profile, const QString &id, const QString &choice, const QString &status);
-    // resolution: playRunner, playRunnerSource, playRunnerTested, playResolveError (each "" when absent).
-    void runnerResolved(const QString &id, const QString &choice, const QString &status, const QVariantMap &resolution);
+    // resolution: all "" unless status is "ok".
+    void runnerResolved(const QString &id, const QString &choice, const QString &status, const LibraryResolution &resolution);
     // Library1 RunnerChoiceChanged.
     void runnerChoiceChanged(const QString &profile, const QString &id, const QString &choice);
 
