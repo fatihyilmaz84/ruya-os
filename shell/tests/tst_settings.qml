@@ -1044,7 +1044,9 @@ Item {
             compare(edited.count, 0)
             compare(blocked.count, 2, "A reports it")
             compare(Sfx.navigateCount, navs, "silent")
+            compare(choice.hints.map(h => h.action + " " + h.text).join("|"), "accept Select|back Back", "no Change, no Next")
             choice.dimmed = false
+            compare(choice.hintKind, "choice", "undimmed: Change and Next again")
             keyClick(Qt.Key_Right)
             compare(choice.value, "b", "undimmed, it changes again")
         }

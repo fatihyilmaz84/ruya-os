@@ -32,7 +32,7 @@ SettingControl {
     signal blocked()
 
     accessibleValue: currentLabel
-    hintKind: "choice"
+    hintKind: dimmed ? "item" : "choice"
     trailingWidth: valueLabel.implicitWidth + (arrowsShown ? 2 * (circle + Theme.spaceXs * u) : 0)
     Accessible.role: Accessible.ComboBox
 

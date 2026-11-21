@@ -347,6 +347,7 @@ Item {
             keyClick(Qt.Key_Right)
             compare(runner.currentLabel, "Not available")
             verify(runner.activeFocus, "Left and Right stay on the row")
+            compare(runner.hints.map(h => h.action + " " + h.text).join("|"), "accept Select|back Back", "no Change or Next on a dimmed row")
             compare(tc.shell.currentPage, "playCompatibility")
             compare(toasts().length, before, "no notice for Left and Right")
             keyClick(Qt.Key_Return)
