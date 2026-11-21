@@ -18,6 +18,11 @@ import "controls"
 //                        `context` is the caller's own note, handed back by started()
 //   started(appId, deleteData, context)   the removal was asked (the dialog has closed)
 //   closed()             it closed, for any reason
+//   canUninstall(appId)  true when the service that owns the app can remove it now: Play for a .play app, else the
+//                        Store (it must know the app); both must answer, and neither has a job on the app
+//   jobOf(appId)         the running job of that service on the app ({ percent, phase }), else null
+//   finished(appId, status)   the owning service's job on the app ended (Store: a job of any kind; Play: a removal), or a
+//                        Remove it refused (it never became a job, and ends like a failed one)
 //
 // Modal: it accepts every key. Back is Cancel, on the PIN pad too (which cancels everything).
 FocusScope {
@@ -40,6 +45,35 @@ FocusScope {
 
     signal started(string appId, bool deleteData, var context)
     signal closed()
+    signal finished(string appId, string status)
+
+    // The one rule of which service owns an app (see above); the card row and the app page both ask it.
+    function canUninstall(id) {
+        if (Play.isPlayApp(id))
+            return Play.available && Play.jobs[id] === undefined
+        return Store.available && Store.catalogue.some(a => a.id === id) && Store.jobs[id] === undefined
+    }
+
+    function jobOf(id) {
+        return (Play.isPlayApp(id) ? Play.jobs : Store.jobs)[id] ?? null
+    }
+
+    Connections {
+        target: Store
+        function onJobFinished(id, status) { dialog.finished(id, status) }
+    }
+
+    Connections {
+        target: Play
+        function onAnswered(op, id, status) {
+            if (op === "remove" && status !== "ok")
+                dialog.finished(id, status)
+        }
+        function onJobFinished(id, status, kind) {
+            if (kind === "remove")
+                dialog.finished(id, status)
+        }
+    }
 
     // ---- geometry (pixels). The card is the widest child (the 900 u toggle row) plus 120 u, and
     // never wider than the screen minus `spaceXl` each side, so at a big UI size the texts wrap. ----

@@ -2053,17 +2053,10 @@ FocusScope {
     property string optionsItemId: ""
     property Page optionsPage: null
     property bool optionsOn: false             // from the opening until it closes (not the fade-out)
-    property int storeTick: 0                  // the Store's records changed (Store.app is a lookup, not a property)
-    Connections {
-        target: Store
-        function onCatalogueChanged() { root.storeTick += 1 }
-    }
-
     // The rows of a game or app card, in order; a false condition leaves its row out (never dimmed).
     function gameRows(id) {
-        const tick = storeTick
         const item = Library.items.find(i => i.id === id)
-        if (!item || tick < 0)
+        if (!item)
             return []
         const appId = Library.sessionAppId(id)
         const closing = appId !== "" && closingAppIds.includes(appId)
@@ -2081,10 +2074,8 @@ FocusScope {
         // Uninstall…: an installed Flatpak app the Store knows, that does not run and has no Store job
         // on its card (a row that would start a job is hidden while one runs; one of ours counts from the moment
         // it was asked, the Store lists a job only once it has made progress).
-        // A .play app belongs to Play (the Store has no record of it): the same test on Play's jobs and reach.
-        const owned = Play.isPlayApp(appId) ? Play.available && Play.jobs[appId] === undefined
-                                            : Store.available && Store.app(appId).id !== undefined && Store.jobs[appId] === undefined
-        if (appId !== "" && item.source === "flatpak" && !running && !closing && owned && uninstallRuns[appId] === undefined)
+        // Which service owns the app, and whether it answers now, is the dialog's rule (a .play app is Play's).
+        if (appId !== "" && item.source === "flatpak" && !running && !closing && uninstallConfirm.canUninstall(appId) && uninstallRuns[appId] === undefined)
             rows.push({ id: "uninstall", label: qsTr("Uninstall…"), icon: "delete", divider: rows.length > 0 })
         return rows
     }
@@ -2176,16 +2167,9 @@ FocusScope {
             known[path] = { name: record.name ?? "", size: record.size ?? 0 }
             root.playInspected = known
         }
-        // A refused Remove (busy, forbidden, unknown-app, failed) never becomes a job: it ends like a failed one.
-        function onAnswered(op, key, status) {
-            if (op === "remove" && status !== "ok")
-                root.uninstallFinished(key, status)
-        }
         function onJobFinished(key, status, kind, name) {
-            if (kind === "remove") {
-                root.uninstallFinished(key, status)     // its own toast; a card's removal moves the focus
-                return
-            }
+            if (kind === "remove")
+                return                                  // the Uninstall dialog's `finished` (below)
             // Only an install says "Installed"; a verify has its own page, and an unknown job says nothing.
             if (kind !== "install" || status === "cancelled" || root.packagePageOpen(key))
                 return
@@ -2259,11 +2243,6 @@ FocusScope {
             }
         }
         uninstallGone = waiting
-    }
-
-    Connections {
-        target: Store
-        function onJobFinished(appId, status) { root.uninstallFinished(appId, status) }
     }
 
     // The item behind the open menu is gone: close it; the surface moves its own focus.
@@ -2595,6 +2574,7 @@ FocusScope {
         height: parent ? parent.height : 0
         u: root.u
         onStarted: (appId, deleteData, context) => root.uninstallStarted(appId, context)
+        onFinished: (appId, status) => root.uninstallFinished(appId, status)
     }
     // While it is open its rows follow the item's state and the note follows the Store.
     Binding {

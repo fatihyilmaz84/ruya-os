@@ -43,7 +43,8 @@ Page {
         ? { video: playArt.trailer, poster: playArt.cover || playArt.hero || playArt.card || "", name: title, seconds: 0 } : null
     // An item the Library lists but Session1 cannot start (a Steam game).
     readonly property bool noLaunch: hasItem && Library.sessionAppId(item.id) === ""
-    readonly property var job: appId === "" ? null : (Store.jobs[appId] ?? null)
+    // The job of the service that owns the app (the Store, or Play for a .play app: the Uninstall dialog knows which).
+    readonly property var job: appId === "" ? null : (uninstallConfirm?.jobOf(appId) ?? null)
     readonly property bool installed: hasRecord ? (app.installed ?? false) : hasItem
     readonly property bool hasUpdate: hasRecord && installed && (app.updateAvailable ?? false)
     // False: the app needs a newer API level than this console has (RUY-156). An older service does not say.
@@ -104,7 +105,7 @@ Page {
     readonly property bool screenshotsStop: screenshotsShown && (screenshots.length > 0 || playTrailer !== null)
     readonly property bool permsSectionShown: hasRecord && !isSteam && !detailsFailed
     readonly property bool permsListed: permsSectionShown && (app.permissions ?? []).length > 0
-    readonly property bool manageShown: hasRecord && installed && !isSteam && !working
+    readonly property bool manageShown: (uninstallConfirm?.canUninstall(appId) ?? false) && installed && !isSteam && !working
     // What the app may do on this console (RUY-744): every installed Flatpak has it, a .play app too (RUY-854), whether or
     // not the Store lists it (the service lists an app it finds installed; the page does not wait for that).
     readonly property bool permissionsShown: installed && !isSteam && !working && (hasRecord || isPlay)
@@ -366,7 +367,7 @@ Page {
         }
     }
 
-    // The Uninstall dialog asked the Store (it closed, the focus is back on its row).
+    // The Uninstall dialog asked the Store or Play (it closed, the focus is back on its row).
     function uninstallStarted() {
         page.errorText = ""
         page.kind = "uninstall"
@@ -402,12 +403,6 @@ Page {
                 page.actionPending = false
                 page.errorText = page.describe("failed")
             }
-        }
-        function onJobFinished(id, status) {
-            if (id !== page.appId)
-                return
-            page.requested = false
-            page.errorText = status === "ok" ? "" : page.describe(status)
         }
     }
 
@@ -448,6 +443,15 @@ Page {
         }
     }
 
+    // A .play app was removed while another page covered this one.
+    property bool closeWhenShown: false
+    onEnabledChanged: {
+        if (enabled && closeWhenShown) {
+            closeWhenShown = false
+            backRequested()
+        }
+    }
+
     // The Uninstall dialog is the Shell's (the Options menu uses it too, RUY-499; `Page.uninstallConfirm`).
     // It asks for an admin's PIN itself and starts the Store job; this page then follows the job as
     // for an install.
@@ -456,6 +460,22 @@ Page {
         function onStarted(id) {
             if (id === page.appId)
                 page.uninstallStarted()
+        }
+        // The owning service's job on this app ended, or it refused the Remove.
+        function onFinished(id, status) {
+            if (id !== page.appId)
+                return
+            page.requested = false
+            page.errorText = status === "ok" ? "" : page.describe(status)
+            // A removed .play app has no Store record to fall back to: its page is over (the Flatpak page shows Install).
+            // Only the page that is on top can go: one covered by another page (Your activity, say) goes the moment it is
+            // uncovered, before the player sees it.
+            if (status === "ok" && page.kind === "uninstall" && Play.isPlayApp(id)) {
+                if (page.enabled)
+                    page.backRequested()
+                else
+                    page.closeWhenShown = true
+            }
         }
     }
 
