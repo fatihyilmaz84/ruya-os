@@ -132,6 +132,15 @@ staging=/var/lib/private/ruya-play-work/staging
 fail=0
 since="$(date '+%Y-%m-%d %H:%M:%S')"
 
+# RUY-1014: .play art is WebP (05); Qt decodes it only with qt6-qtimageformats. The plugin file is there
+# and the shell's journal since boot has no "Unsupported image format" (WEBP_PLUGIN: a host fixture's path).
+webp_checks() {
+    local plugin="${WEBP_PLUGIN:-/usr/lib64/qt6/plugins/imageformats/libqwebp.so}" bad_img
+    [ -f "$plugin" ] && ok "the Qt WebP image plugin is installed" || bad "the Qt WebP image plugin is missing: $plugin"
+    bad_img="$(journalctl -b -o cat 2>/dev/null | grep -a 'Unsupported image format' | head -3)"
+    [ -z "$bad_img" ] && ok "no Unsupported image format in the journal since boot"         || bad "the shell could not decode an image: $bad_img"
+}
+
 # ADR-036: no SELinux denial of PID 1 (init_t) while the check ran. A denied OpenFile= of the
 # source shows up only as "missing" (graceful), so the journal is the proof.
 avc_checks() {
@@ -1226,6 +1235,7 @@ else
     echo "SKIP: TESTBIN not set: the Unix-only core tests (toctou.rs, modes.rs) did not run here"
 fi
 avc_checks
+webp_checks
 
 [ "$fail" = 0 ] && echo "vm-play-check: PASS" || echo "vm-play-check: FAIL"
 exit "$fail"

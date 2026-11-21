@@ -2501,6 +2501,27 @@ got="$(ruya_stage_names "$tmp/Containerfile.stages" | tr '\n' ' ')"
 real="$(ruya_stage_names "$here/../image/Containerfile" | tr '\n' ' ')"
 expect_contains "stage names: real Containerfile" "$real" "shell-build services-build qt-dmabuf xwayland-satellite play-runners play-runners-check"
 
+# RUY-1014: webp_checks wants the plugin file and a journal without "Unsupported image format".
+echo "== vm-play-check.sh: the WebP plugin (RUY-1014) =="
+wp="$tmp/webp"; mkdir -p "$wp/bin"; : > "$wp/libqwebp.so"
+printf '#!/bin/sh
+printf "%%s" "$FAKE_JOURNAL"
+' > "$wp/bin/journalctl"; chmod +x "$wp/bin/journalctl"
+webp_run() { # <plugin path>
+    ( fail=0; ok() { echo "PASS: $*"; }; bad() { echo "FAIL: $*"; }
+      eval "$(sed -n '/^webp_checks() {/,/^}/p' "$here/vm-play-check.sh")"
+      PATH="$wp/bin:$PATH" WEBP_PLUGIN="$1" webp_checks )
+}
+out="$(FAKE_JOURNAL='shell started' webp_run "$wp/libqwebp.so")"
+expect_contains "webp: plugin and a clean journal" "$out" "PASS: the Qt WebP image plugin is installed"
+expect_contains "webp: clean journal passes" "$out" "PASS: no Unsupported image format"
+expect_lacks "webp: no FAIL when all is well" "$out" "FAIL"
+out="$(FAKE_JOURNAL='qt.gui: card-540.webp: Unsupported image format' webp_run "$wp/libqwebp.so")"
+expect_contains "webp: the journal line fails" "$out" "FAIL: the shell could not decode an image"
+out="$(FAKE_JOURNAL='' webp_run "$wp/missing.so")"
+expect_contains "webp: a missing plugin fails" "$out" "FAIL: the Qt WebP image plugin is missing"
+grep -q 'qt6-qtimageformats' "$here/../image/build/20-base.sh" && pass "20-base.sh installs qt6-qtimageformats" || fail "20-base.sh lacks qt6-qtimageformats"
+
 echo
 if [ "$fails" = 0 ]; then echo "vm-check tests: all passed"; else echo "vm-check tests: $fails failed"; fi
 exit $(( fails > 0 ))
