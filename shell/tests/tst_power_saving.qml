@@ -862,6 +862,43 @@ Item {
             compare(ScreenPower.on, false)
         }
 
+        // RUY-1013: a launch without input (Session1.Launch over SSH) must not stay under the saver.
+        function test_a_started_app_ends_the_saver_and_restarts_the_count() {
+            const lines = []
+            IdleClock.log = text => lines.push(text)
+            minutes(10)
+            compare(IdleClock.stage, "saver")
+            Session.appStarted("mock-1.org.example.Racer", "org.example.Racer")
+            compare(IdleClock.stage, "active")
+            compare(lines[lines.length - 1], "ruya-shell: screen saver off (app-started, was saver)")
+            minutes(9)
+            compare(IdleClock.stage, "active", "the count runs from the app start")
+            minutes(2)
+            compare(IdleClock.stage, "saver")
+        }
+
+        function test_a_started_app_wakes_the_dark_screen() {
+            minutes(30)
+            compare(IdleClock.stage, "off")
+            compare(ScreenPower.on, false)
+            Session.appStarted("mock-1.org.example.Racer", "org.example.Racer")
+            compare(IdleClock.stage, "active")
+            compare(ScreenPower.on, true)
+            minutes(9)
+            compare(IdleClock.stage, "active")
+        }
+
+        function test_a_started_app_while_awake_only_restarts_the_count() {
+            minutes(9)
+            Session.appStarted("mock-1.org.example.Racer", "org.example.Racer")
+            compare(IdleClock.stage, "active")
+            compare(IdleClock.idleSeconds, 0)
+            minutes(9)
+            compare(IdleClock.stage, "active", "9 min after the start, not 18 after the key")
+            minutes(2)
+            compare(IdleClock.stage, "saver")
+        }
+
         function test_input_after_1s_passes() {
             probe.forceActiveFocus()
             minutes(30)

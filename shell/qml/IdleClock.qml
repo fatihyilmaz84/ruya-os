@@ -335,6 +335,13 @@ QtObject {
         function onUserActive() { if (!clock.covered) clock.noteInput("pad") }
     }
 
+    // A newly started app is activity (RUY-1013): a launch with no input (a script, the Companion, a
+    // game another app starts, an auto-relaunch) must show the game, not run hidden under the saver.
+    readonly property Connections sessionWatch: Connections {
+        target: Session
+        function onAppStarted() { clock.noteInput("app-started") }
+    }
+
     // Ends the wake guard on time even when nothing else looks at the clock.
     readonly property Timer guardTimer: Timer {
         objectName: "idleWakeGuard"
