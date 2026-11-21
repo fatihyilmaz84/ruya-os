@@ -385,10 +385,9 @@ Item {
             wait(400)
         }
 
-        function shots(lang) {
+        function shots(dir, lang) {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
-            const dir = shotsDir + "/"
             DeviceSettings.language = lang
             Library.mockSetResolution(tc.hopper, "system", {
                 playResolveError: "The OS runner is GE-Proton11-12, a major version above the allowed 10.",
@@ -423,7 +422,7 @@ Item {
         }
 
         // The shots runner picks the functions that save to `shotsDir + "/` themselves (dev.ps1).
-        function test_zz_screenshots() { shots("en") }
-        function test_zz_screenshots_tr() { shots("tr") }
+        function test_zz_screenshots() { shots(shotsDir + "/", "en") }
+        function test_zz_screenshots_tr() { shots(shotsDir + "/", "tr") }
     }
 }
