@@ -91,6 +91,9 @@ pub const MAX_DATA_PATHS: usize = 32;
 pub const MAX_WRITABLE: usize = 16;
 /// Most table bytes under all `run.writable` folders together, 2 GiB (ADR-040; an initial value).
 pub const MAX_WRITABLE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+/// Most table files under all `run.writable` folders together: the game-base record holds one
+/// entry per copy, so more would make an untouched copy count as changed (ADR-040).
+pub const MAX_WRITABLE_FILES: usize = 16384;
 /// Most players.
 pub const MAX_PLAYERS: u64 = 64;
 /// Most OARS content attributes.

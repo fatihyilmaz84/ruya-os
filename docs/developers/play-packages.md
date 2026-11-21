@@ -599,6 +599,7 @@ Common ones first:
 | `run.writable_overlap` | List each writable folder once, and none inside another; the outer folder already covers the inner one. |
 | `run.writable_path` | Write each run.writable folder as the payload/ folder the table lists (same letter case), not the root, with no link on the way or below it. |
 | `run.writable_too_large` | Keep run.writable to the folders the game writes into: the files below them add up to at most 2 GiB. |
+| `run.writable_too_many_files` | Keep run.writable to the folders the game writes into: the files below them number at most 16384. |
 | `runner.arch_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
 | `runner.capability_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
 | `runner.entry_invalid` | Write each entry as a plain relative path inside the runner's folder, such as bin/wine: no .. and no leading /. |

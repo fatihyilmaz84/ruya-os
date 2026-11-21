@@ -157,6 +157,7 @@ const FIXES: &[(&str, &str)] = &[
     ("run.writable_path", "Write each run.writable folder as the payload/ folder the table lists (same letter case), not the root, with no link on the way or below it."),
     ("run.writable_overlap", "List each writable folder once, and none inside another; the outer folder already covers the inner one."),
     ("run.writable_too_large", "Keep run.writable to the folders the game writes into: the files below them add up to at most 2 GiB."),
+    ("run.writable_too_many_files", "Keep run.writable to the folders the game writes into: the files below them number at most 16384."),
     ("run.game_placeholder_without_writable", "List the folders the game writes into in run.writable, or use ${payload} and prefix:, data: or config: instead of ${game} and game:."),
     ("run.writable_needs_game", "With run.writable, start run.command[0] with ${game}/ and set run.cwd to a path that starts with ${game}."),
     ("run.", "Fix the run block of play.json (05 section 6.3)."),

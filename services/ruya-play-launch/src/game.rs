@@ -38,7 +38,7 @@
 use crate::os::{join, Kind, LaunchOs, MAX_COPY_DEPTH};
 use crate::state::{State, KEPT};
 use crate::Failure;
-use ruya_play_format::limits::MAX_WRITABLE_BYTES;
+use ruya_play_format::limits::{MAX_WRITABLE_BYTES, MAX_WRITABLE_FILES};
 use ruya_play_format::manifest::Manifest;
 use ruya_play_format::path::check_path;
 use ruya_play_format::table::{is_sha256_hex, FileEntry, TableIndex};
@@ -59,8 +59,8 @@ pub const BASE: &str = ".ruya-play/game-base.json";
 pub const NEW_BASE: &str = ".ruya-play/game.new.json";
 /// The format of [`BASE`] this launcher writes and reads.
 pub const BASE_FORMAT: u64 = 1;
-/// The most entries [`BASE`] holds (ADR-040).
-pub const MAX_BASE_ENTRIES: usize = 16384;
+/// The most entries [`BASE`] holds (ADR-040): one per copy, and a package has at most this many.
+pub const MAX_BASE_ENTRIES: usize = MAX_WRITABLE_FILES;
 /// The largest [`BASE`] read (ADR-040).
 pub const MAX_BASE_BYTES: u64 = 4 * 1024 * 1024;
 /// The prefix of `run.command` and `run.cwd` that names the tree.

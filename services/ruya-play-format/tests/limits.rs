@@ -631,3 +631,16 @@ fn writable_bytes() {
     assert!(!too_large(&[("payload/Other/big", MAX_WRITABLE_BYTES * 2)]));
     assert!(!too_large(&[("payload/Save2/big", MAX_WRITABLE_BYTES * 2)]));
 }
+
+#[test]
+fn writable_file_count() {
+    let too_many = |n: usize| {
+        let extra: Vec<(String, u64)> = (0..n).map(|i| (format!("payload/Save/f{i}"), 0)).collect();
+        let extra: Vec<(&str, u64)> = extra.iter().map(|(p, s)| (p.as_str(), *s)).collect();
+        writable_problems(&extra).contains(&"run.writable_too_many_files".to_string())
+    };
+    assert_eq!(MAX_WRITABLE_FILES, 16384);
+    // The fixture's own file below the folder is one: at the limit, one above it.
+    assert!(!too_many(MAX_WRITABLE_FILES - 1));
+    assert!(too_many(MAX_WRITABLE_FILES));
+}
