@@ -1,0 +1,9 @@
+[package]
+name = "ruya-flatpak"
+description = "RuyaOS Flatpak vocabulary shared by the services: app ids and the argument lists of flatpak commands (pure, no I/O)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]

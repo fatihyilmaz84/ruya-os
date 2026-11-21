@@ -109,7 +109,8 @@ pub trait Commit: Send + Sync {
     fn recommit(&self, request: &RecommitRequest<'_>) -> Result<(), CommitError>;
 
     /// Uninstall the installed app `play.<id>` (RUY-816, `Play1.Remove`) with the same Flatpak
-    /// runner. The player's data stays. The caller checked that the app is ours.
+    /// runner, then reset its permission override (a failed reset is logged, not an error). The
+    /// player's data stays. The caller checked that the app is ours.
     fn uninstall(&self, id: &str) -> Result<(), CommitError>;
 }
 

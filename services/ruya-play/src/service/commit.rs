@@ -405,6 +405,15 @@ pub fn uninstall(id: &str) -> Vec<String> {
     ])
 }
 
+/// Remove the system override of the app `play.<id>` (`flatpak override --system --reset`, the one
+/// command line of `ruya-flatpak`, as the Store runs it after its uninstalls): a withdrawal the
+/// player's admin made must not outlive the app and meet a reinstall (RUY-923, 03 §4.4).
+pub fn reset_override(id: &str) -> Vec<String> {
+    std::iter::once("flatpak".to_string())
+        .chain(ruya_flatpak::reset_command(&app_id(id)))
+        .collect()
+}
+
 /// Runs one command line.
 pub trait Runner: Send + Sync {
     /// Run `argv`; its standard output, or why it failed (its standard error).
@@ -754,6 +763,12 @@ impl Commit for FlatpakCommit {
     }
 
     fn uninstall(&self, id: &str) -> Result<(), CommitError> {
-        self.run(uninstall(id)).map(|_| ())
+        self.run(uninstall(id))?;
+        // A failed reset is logged and does not fail the removal (the Store's rule, 03 §4.4): the
+        // app is gone, and a withdrawal left behind only narrows a reinstall, never widens it.
+        if let Err(e) = self.runner.run(&reset_override(id)) {
+            eprintln!("ruya-play: resetting the override of play.{id} failed: {e}");
+        }
+        Ok(())
     }
 }

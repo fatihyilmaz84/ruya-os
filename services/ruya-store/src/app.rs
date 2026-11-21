@@ -131,21 +131,6 @@ impl App {
     }
 }
 
-/// A Flatpak application id: reverse-DNS, ASCII letters, digits, `_` and `-`, at least two dots.
-/// Everything that reaches the `flatpak` command line has passed this.
-pub fn valid_app_id(id: &str) -> bool {
-    id.len() <= 255
-        && !id.starts_with('-')
-        && id.split('.').count() >= 3
-        && id.split('.').all(|part| {
-            !part.is_empty()
-                && !part.starts_with(|c: char| c.is_ascii_digit())
-                && part
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-        })
-}
-
 /// A remote name as flatpak accepts it, and nothing that could be read as an option.
 pub fn valid_remote_name(name: &str) -> bool {
     !name.is_empty()
@@ -183,25 +168,6 @@ mod tests {
         assert!(a.matches(""));
         assert!(a.matches("  "));
         assert!(!a.matches("puzzle"));
-    }
-
-    #[test]
-    fn app_ids() {
-        assert!(valid_app_id("org.example.Racer"));
-        assert!(valid_app_id("org.ruyaos.Test_App-2"));
-        for bad in [
-            "",
-            "Racer",
-            "org.example",
-            "-org.example.Racer",
-            "org..Racer",
-            "org.1example.Racer",
-            "org.example.Racer --user",
-            "org.example.Rac/er",
-            "org.example.Racer\n",
-        ] {
-            assert!(!valid_app_id(bad), "{bad:?}");
-        }
     }
 
     #[test]

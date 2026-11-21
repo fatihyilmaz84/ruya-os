@@ -6,12 +6,13 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
-use crate::app::{valid_app_id, valid_commit, valid_remote_name, App, JobStatus, Status};
+use crate::app::{valid_commit, valid_remote_name, App, JobStatus, Status};
 use crate::appstream::{self, Component};
 use crate::flatpak::{Flatpak, FlatpakError, InstalledApp, Operation, Phase, Progress, RemoteInfo};
 use crate::jobs::{self, JobInfo, JobKind, JobState};
 use crate::overrides::{self, Context, Permissions, Refusal};
 use crate::queue::{Monotone, Queue};
+use ruya_flatpak::valid_app_id;
 
 /// What a running job tells the outside world, in the order it must be sent.
 #[derive(Debug, Clone, PartialEq, Eq)]
