@@ -8,7 +8,8 @@
 #   3. runners: for each folder of /usr/lib/ruyaos/play/runners, ruya-pack runner-check (the
 #      format's parser and runner hash) accepts its runner.json and computes the hash the image
 #      wrote into .ruya-runner-hash (Library1 ListRunners, which the About pane reads, is
-#      vm-library-check.sh runners, RUY-959)
+#      vm-library-check.sh runners, RUY-959), and its i386 ntdll.dll is labelled textrel_shlib_t
+#      (ls -Z; the image's ruya_play_runners module, RUY-999: Wine's execmod of a lib_t DLL is denied)
 #   4. a Windows program runs through each Proton and each Wine runner as a profile user, without
 #      network: a Proton runner's own cmd.exe through `proton waitforexitandrun` (ADR-037's argv,
 #      the STEAM_COMPAT_* folders in a scratch data folder, SteamAppId and SteamGameId 0, PWD: what
@@ -299,6 +300,11 @@ print("yes" if o.get("ok") is True else "no", r.get("kind") or "-", o.get("hash"
         ok "$name: runner.json accepted ($kind $version), hash $hash as recorded"
     else
         bad "$name: runner-check ok=$okk hash '$hash', .ruya-runner-hash '${want:-none}'"
+    fi
+    dll="$(find "$tree" -path '*/i386-windows/ntdll.dll' -print -quit 2>/dev/null)"
+    if [ -n "$dll" ]; then
+        label="$(ls -Z "$dll" 2>/dev/null | awk '{print $1}')"
+        case "$label" in *:textrel_shlib_t:*) ok "$name: ${dll#"$tree"/} is labelled $label" ;; *) bad "$name: ${dll#"$tree"/} is labelled '${label:-unknown}', not textrel_shlib_t (Wine's execmod is denied: the ruya_play_runners SELinux module)" ;; esac
     fi
     [ "$kind" = proton ] && protons="$protons $tree"
     [ "$kind" = wine ] && wines="$wines $tree"

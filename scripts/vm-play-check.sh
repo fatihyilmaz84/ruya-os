@@ -790,7 +790,8 @@ expect_exit() {
 }
 
 # kv <file> <key>: the value of "<key>=<value>" in a text file (a save, check.txt); empty when none.
-kv() { sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1; }
+# CR is dropped: a Windows program writes its text files with CR LF (check.exe's check.txt, RUY-999).
+kv() { sed -n "s/^$2=//p" "$1" 2>/dev/null | tr -d '\r' | head -1; }
 
 # wait_kv <file> <key> <value> <seconds>
 wait_kv() {

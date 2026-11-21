@@ -1,0 +1,9 @@
+; RuyaOS local SELinux policy (RUY-999). Installed by image/Containerfile with semodule -i.
+; The system runners (05 section 6.4) are files in the image on /usr/lib/ruyaos/play/runners and
+; get lib_t, where Fedora labels its own /usr/lib/wine textrel_shlib_t. Wine relocates its 32-bit
+; DLLs (i386 ntdll.dll) and makes them executable again; on composefs overlayfs checks that against
+; the lower file with the mounter's credentials, and kernel_t may not execmod lib_t:
+;   avc: denied { execmod } for comm="check.exe" scontext=system_u:system_r:kernel_t:s0
+;   tcontext=system_u:object_r:lib_t:s0 (measured in the VM on image 0.0.98, lead-40)
+; A file context only, no allow rule: the runner files get the type Fedora gives Wine's.
+(filecon "/usr/lib/ruyaos/play/runners(/.*)?" file (system_u object_r textrel_shlib_t ((s0) (s0))))

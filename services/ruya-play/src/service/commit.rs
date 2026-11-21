@@ -71,6 +71,12 @@ pub const GL32_EXTENSION: &str = "org.freedesktop.Platform.GL32";
 pub const GL32_DIR: &str = "lib/i386-linux-gnu/GL";
 /// The GL32 branch the GL drivers carry besides the runtime's branch.
 pub const GL32_BRANCH: &str = "1.4";
+/// The 32-bit GL drivers the commit installs into the [`GL32_EXTENSION`] point (the Mesa ones, on
+/// the runtime's branch, as `GL.default` is for the 64-bit point).
+pub const GL32_DEFAULT: &str = "org.freedesktop.Platform.GL32.default";
+/// The remote the Play platform ([`platform_refs`]) is installed from: Flathub, which
+/// `ruya-flathub-remote.service` adds (05 §6.4: there is no offline runtime set yet).
+pub const PLATFORM_REMOTE: &str = "flathub";
 /// The folders of the GL32 extensions merged into one (as the freedesktop runtime declares it;
 /// `scripts/spikes/play/q3-proton.sh`).
 pub const GL32_MERGE_DIRS: &str = "vulkan/icd.d;glvnd/egl_vendor.d;egl/egl_external_platform.d;\
@@ -118,7 +124,8 @@ pub struct ExtensionPoint {
 /// (`org.ruyaos.Play.Runner.<Name>` under `/app/runners/<Name>`) for every app, never fetched by
 /// Flatpak (the image links them in, `no-autodownload`), and for a Windows runner the freedesktop
 /// runtime's 32-bit points as the spike declared them (`scripts/spikes/play/q3-proton.sh`), also
-/// `no-autodownload` (offline first: the image preinstalls them, RUY-34). Those
+/// `no-autodownload`: Flatpak never fetches them on a launch, the commit installs them
+/// ([`platform_refs`], RUY-999; the image carries no offline runtime set yet, 05 §6.4). Those
 /// are inert unless the package asks for `multiarch`, which is a permission
 /// (`ruya_play_trust::permissions`), not something the runner grants.
 pub fn extension_points(runner: &str) -> Vec<ExtensionPoint> {
@@ -389,6 +396,38 @@ pub fn install(id: &str) -> Vec<String> {
         REMOTE,
         &app_ref(id),
     ])
+}
+
+/// What an app of `runner` needs installed besides itself (05 §6.4, RUY-999): the runtime, and for
+/// a Windows runner the 32-bit libraries and GL drivers its `no-autodownload` points
+/// ([`extension_points`]) mount. Flatpak would pull only the runtime on its own (a dependency of
+/// the app); the 32-bit refs come from Flathub too and are no related ref of an app on the local
+/// remote, so the commit names all of them.
+pub fn platform_refs(runner: &str) -> Vec<String> {
+    let mut refs = vec![format!("runtime/{RUNTIME}/{ARCH}/{RUNTIME_BRANCH}")];
+    if windows_runner(runner) {
+        refs.push(format!(
+            "runtime/{COMPAT_I386_EXTENSION}/{ARCH}/{RUNTIME_BRANCH}"
+        ));
+        refs.push(format!("runtime/{GL32_DEFAULT}/{ARCH}/{RUNTIME_BRANCH}"));
+    }
+    refs
+}
+
+/// Install the [`platform_refs`] of an app of `runner` from [`PLATFORM_REMOTE`], before the app.
+/// No `--or-update`: a ref that is installed already is skipped (updating the runtime is
+/// Flatpak's and the Store's update, not a commit's).
+pub fn install_platform(runner: &str) -> Vec<String> {
+    let mut argv = v(&[
+        "flatpak",
+        "install",
+        "--system",
+        "--noninteractive",
+        "-y",
+        PLATFORM_REMOTE,
+    ]);
+    argv.extend(platform_refs(runner));
+    argv
 }
 
 /// Uninstall the app `play.<id>` from the system installation (RUY-816). The player's data
@@ -721,11 +760,13 @@ pub fn canonicalise(dir: &Path, owner_root: bool) -> std::io::Result<()> {
 
 impl FlatpakCommit {
     /// The part of a commit after the layout: root owns the build folder `app`, it is finished,
-    /// exported signed with the device key `key`, and the app `play.<id>` is installed from it.
+    /// exported signed with the device key `key`, the [`platform_refs`] of `runner` are installed
+    /// and then the app `play.<id>` from the build.
     fn publish(
         &self,
         app: &Path,
         id: &str,
+        runner: &str,
         key: &str,
         progress: &mut dyn FnMut(Phase, f32),
     ) -> Result<(), CommitError> {
@@ -736,6 +777,8 @@ impl FlatpakCommit {
         self.run(build_export(&self.paths, app, key))?;
         progress(Phase::Committing, 1.0);
         progress(Phase::Installing, 0.0);
+        self.run(install_platform(runner))?;
+        progress(Phase::Installing, 0.5);
         self.run(install(id))?;
         progress(Phase::Installing, 1.0);
         Ok(())
@@ -752,14 +795,16 @@ impl Commit for FlatpakCommit {
         let key = self.device_key()?;
         self.ensure_repo()?;
         let app = lay_out(request)?;
-        self.publish(&app, &request.manifest.id, &key, progress)
+        let m = request.manifest;
+        self.publish(&app, &m.id, &m.run.runner, &key, progress)
     }
 
     fn recommit(&self, request: &RecommitRequest<'_>) -> Result<(), CommitError> {
         let key = self.device_key()?;
         self.ensure_repo()?;
         let app = lay_out_installed(request)?;
-        self.publish(&app, &request.manifest.id, &key, &mut |_, _| {})
+        let m = request.manifest;
+        self.publish(&app, &m.id, &m.run.runner, &key, &mut |_, _| {})
     }
 
     fn uninstall(&self, id: &str) -> Result<(), CommitError> {
