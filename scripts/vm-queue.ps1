@@ -29,6 +29,8 @@ $ErrorActionPreference = "Continue"
 $Repo = Split-Path -Parent $PSScriptRoot
 Set-Location $Repo
 $outDir = Join-Path $Repo "output\vm-queue"
+# Refuse before touching anything: a second queue started while one runs must not delete its logs (lead-41).
+if (Get-Process qemu-system-x86_64 -ErrorAction SilentlyContinue) { throw "a QEMU is already running" }
 New-Item -ItemType Directory -Force $outDir | Out-Null
 Get-ChildItem $outDir -File -ErrorAction SilentlyContinue | Remove-Item -Force
 $KnownHosts = Join-Path $Repo "output\vm-known_hosts"
@@ -39,7 +41,10 @@ $lines = New-Object System.Collections.Generic.List[string]
 $failed = 0
 $t0 = Get-Date
 
-function Stop-Vm { Get-Process qemu-system-x86_64 -ErrorAction SilentlyContinue | Stop-Process -Force }
+function Stop-Vm {   # waits for the exit, so a queue started right after this one does not meet a dying QEMU
+    $p = @(Get-Process qemu-system-x86_64 -ErrorAction SilentlyContinue)
+    if ($p) { $p | Stop-Process -Force; $p | Wait-Process -Timeout 120 -ErrorAction SilentlyContinue }   # WHPX teardown can take a minute
+}
 function Keyline([string[]]$Text) {
     $t = @($Text | ForEach-Object { "$_".Trim() } | Where-Object { $_ })
     if (-not $t) { return "(no output)" }
@@ -56,7 +61,6 @@ function Write-Summary {
 }
 
 # ---- boot
-if (Get-Process qemu-system-x86_64 -ErrorAction SilentlyContinue) { throw "a QEMU is already running" }
 if (-not $NoFresh) { Remove-Item (Join-Path $Repo $workDisk) -ErrorAction SilentlyContinue }
 $bootStart = Get-Date
 $bootOut = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "smoke-test.ps1") -Work -Audio -Keep -TimeoutSec $TimeoutSec *>&1 | ForEach-Object { "$_" }
