@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: check steam
+# modes: check steam sample
 # Checks the Play platform on /usr (ADR-038, RUY-34) inside a running VM, as root, offline:
 #   1. links: every L+ line of /usr/lib/tmpfiles.d/ruya-play-platform.conf is a link under
 #      /var/lib/flatpak/extension to its folder on /usr, and that folder is there
@@ -21,6 +21,13 @@
 #      compatibility tool (CompatToolMapping "0") is the newest Proton runner's tool (newest by
 #      runner.json version): anything else FAILs, so it catches Steam replacing our entry on its
 #      first run and a wrong config path
+# Mode `sample` (RUY-36, samples/hello-runner/run-windows.py copied to the guest by vm-queue.ps1):
+#   7. the developer guide's sample script (docs/developers/windows-games.md) runs against the image's own
+#      runners, as a profile user under `unshare -n`: it reads their runner.json, takes a Proton runner of
+#      the image, starts the runner's cmd.exe through `proton waitforexitandrun` and prints its marker, and
+#      the Proton prefix is made in the profile's data folder. This is the script, not the Flatpak: the
+#      mount of an app's extension point is vm-play-check.sh's; building the sample with flatpak-builder in
+#      the VM is not done. Without a profile on the VM the step is a SKIP, as in `check`.
 # Running a game inside a .play sandbox (the extension mounts, the 32-bit points) is
 # vm-play-check.sh launch and launch-windows (RUY-902).
 #
@@ -28,6 +35,9 @@
 # services/target-samples/release/):
 #   scp -P 2222 services/target-samples/release/ruya-pack scripts/vm-runner-check.sh root@127.0.0.1:/root/
 #   ssh -p 2222 root@127.0.0.1 bash /root/vm-runner-check.sh check /root/ruya-pack
+# and for `sample`, the script next to it (vm-queue.ps1 copies it with the others):
+#   scp -P 2222 samples/hello-runner/run-windows.py root@127.0.0.1:/root/
+#   ssh -p 2222 root@127.0.0.1 bash /root/vm-runner-check.sh sample /root/run-windows.py
 # Host fixtures (scripts/test-vm-checks.sh): RUYA_ROOT=<dir> puts every path the check reads below
 # <dir>; the link targets in the tmpfiles file stay as written. JSON is parsed by key.
 set -u
@@ -41,8 +51,46 @@ marker=RUYA_RUNNER_OK
 fail=0
 ok() { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
+# The first profile's id on this VM ("p1"), or nothing.
+first_profile() {
+    busctl --system call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ListProfiles 2>/dev/null | grep -o '"p[0-9]*"' | head -1 | tr -d '"'
+}
 
-[ "$mode" = check ] || [ "$mode" = steam ] || { echo "usage: vm-runner-check.sh [check|steam] [ruya-pack]"; exit 2; }
+[ "$mode" = check ] || [ "$mode" = steam ] || [ "$mode" = sample ] || { echo "usage: vm-runner-check.sh [check|steam|sample] [ruya-pack | run-windows.py]"; exit 2; }
+
+if [ "$mode" = sample ]; then
+    script="${2:-/root/run-windows.py}"
+    echo "--- the sample script runs a Windows program through the image's runner, offline, as a profile user"
+    profile="$(first_profile)"
+    if [ ! -f "$script" ]; then
+        bad "$script (samples/hello-runner/run-windows.py) is not on the guest"
+    elif [ -z "$profile" ]; then
+        echo "SKIP: no profile on this VM: the sample was not run (create one in the shell first; this check creates none)"
+    else
+        user="ruya-$profile"
+        data="$(mktemp -d "$root/var/tmp/ruya-runner-sample.XXXXXX")" || { bad "no scratch folder in /var/tmp"; data=""; }
+        if [ -n "$data" ]; then
+            # /root is closed to the profile user: run a copy of the script from the scratch folder.
+            cp "$script" "$data/run-windows.py"
+            chown -R "$user" "$data"
+            # XDG_DATA_HOME is the app's data folder as a sandbox sets it; the script puts Proton's prefix below it.
+            out="$(unshare -n runuser -u "$user" -- env -i HOME="$data" PATH="$PATH" XDG_DATA_HOME="$data/xdg" \
+                WINEDEBUG=-all timeout 300 python3 "$data/run-windows.py" --runners "$play/runners" --self-test 2>&1)"; rc=$?
+            used="$(printf '%s\n' "$out" | sed -n 's/^hello-runner: using \([^ ]*\) (.*/\1/p' | head -1)"
+            if [ -n "$used" ] && [ -f "$play/runners/$used/runner.json" ]; then ok "the script took the runner $used from $play/runners"; else bad "the script named no runner of the image: '$used'"; fi
+            if [ "$rc" = 0 ] && printf '%s\n' "$out" | tr -d '\r' | grep -qx RUYA_HELLO_RUNNER_OK; then
+                ok "${used:-the runner}: cmd.exe printed RUYA_HELLO_RUNNER_OK as $user without network"
+            else
+                bad "the sample as $user: exit $rc; last lines: $(printf '%s' "$out" | tail -n 5 | tr '\n' ' ')"
+            fi
+            if [ -d "$data/xdg/proton/pfx" ]; then ok "the Proton prefix is in the app's data folder (\$XDG_DATA_HOME/proton/pfx)"; else bad "no Proton prefix at \$XDG_DATA_HOME/proton/pfx"; fi
+            [ -n "$used" ] && runuser -u "$user" -- env WINEPREFIX="$data/xdg/proton/pfx" "$play/runners/$used/files/bin/wineserver" -k >/dev/null 2>&1
+            rm -rf "$data"
+        fi
+    fi
+    [ "$fail" = 0 ] && echo "vm-runner-check: all passed" || echo "vm-runner-check: FAILED"
+    exit "$fail"
+fi
 
 if [ "$mode" = steam ]; then
     steam_ext="$root/var/lib/flatpak/extension"
@@ -163,7 +211,7 @@ done
 [ "$count" -ge 1 ] && ok "$count runner(s)" || bad "no runner under $play/runners"
 
 echo "--- a Windows program through the runner, offline, as a profile user"
-profile="$(busctl --system call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ListProfiles 2>/dev/null | grep -o '"p[0-9]*"' | head -1 | tr -d '"')"
+profile="$(first_profile)"
 if [ -z "$protons" ]; then
     bad "no Proton runner to run a Windows program through"
 elif [ -z "$profile" ]; then

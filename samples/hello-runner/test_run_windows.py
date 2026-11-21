@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: CC0-1.0
+"""Tests of run-windows.py: which runner it takes and what it starts (RUY-36).
+
+    python3 -I test_run_windows.py
+
+No Wine and no Proton are needed: the runner folders are made here and os.execve is recorded, not
+called. Run by `make test` and by scripts/test-vm-checks.sh.
+"""
+import importlib.util
+import io
+import json
+import os
+import tempfile
+import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from unittest import mock
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+spec = importlib.util.spec_from_file_location("run_windows", os.path.join(HERE, "run-windows.py"))
+run_windows = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(run_windows)
+
+
+def make_runner(root, name, ver, **changes):
+    """A runner folder like GE-Proton's, with the keys of runner.json changed by `changes`."""
+    folder = os.path.join(root, name)
+    os.makedirs(folder)
+    runner = {
+        "format": 1,
+        "family": "proton-ge",
+        "kind": "proton",
+        "version": ver,
+        "arch": "x86_64",
+        "entry": {"proton": "proton"},
+    }
+    runner.update(changes)
+    with open(os.path.join(folder, "runner.json"), "w", encoding="utf-8") as f:
+        json.dump(runner, f)
+    with open(os.path.join(folder, "proton"), "w", encoding="utf-8") as f:
+        f.write("#!/usr/bin/env python3\n")
+    return folder
+
+
+def can_link():
+    with tempfile.TemporaryDirectory() as d:
+        try:
+            os.symlink(d, os.path.join(d, "l"))
+        except (OSError, NotImplementedError):
+            return False
+    return True
+
+
+class PickRunner(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = self._tmp.name
+
+    def test_takes_the_newest_major_it_supports(self):
+        make_runner(self.root, "ProtonGE10", "GE-Proton10-34")
+        make_runner(self.root, "ProtonGE11", "GE-Proton11-12")
+        make_runner(self.root, "ProtonGE12", "GE-Proton12-1")  # newer than the majors it tested
+        name, version, proton = run_windows.pick_runner(self.root)
+        self.assertEqual((name, version), ("ProtonGE11", "GE-Proton11-12"))
+        self.assertEqual(proton, os.path.join(self.root, "ProtonGE11", "proton"))
+
+    def test_compares_the_numbers_not_the_folder_names(self):
+        make_runner(self.root, "ProtonGE11", "GE-Proton10-34")
+        make_runner(self.root, "ProtonGE10", "GE-Proton11-2")
+        make_runner(self.root, "ProtonGE9", "GE-Proton11-12")
+        self.assertEqual(run_windows.pick_runner(self.root)[:2], ("ProtonGE9", "GE-Proton11-12"))
+
+    def test_skips_what_it_cannot_use(self):
+        make_runner(self.root, "format2", "GE-Proton11-99", format=2)
+        make_runner(self.root, "bool", "GE-Proton11-98", format=True)
+        make_runner(self.root, "wine", "10.2", family="wine", kind="wine")
+        make_runner(self.root, "valve", "9.0", family="proton")
+        make_runner(self.root, "arm", "GE-Proton11-97", arch="aarch64")
+        make_runner(self.root, "outside", "GE-Proton11-96", entry={"proton": "../proton"})
+        make_runner(self.root, "absolute", "GE-Proton11-95", entry={"proton": "/usr/bin/python3"})
+        make_runner(self.root, "noentry", "GE-Proton11-94", entry={})
+        make_runner(self.root, "notext", "GE-Proton11-93", version=11)
+        make_runner(self.root, "nonumber", "GE-Proton-latest")
+        make_runner(self.root, "good", "GE-Proton10-1")
+        self.assertEqual(run_windows.pick_runner(self.root)[0], "good")
+
+    def test_a_missing_entry_file_or_runner_json_is_skipped(self):
+        folder = make_runner(self.root, "gone", "GE-Proton11-12")
+        os.remove(os.path.join(folder, "proton"))
+        os.makedirs(os.path.join(self.root, "empty"))
+        with open(os.path.join(self.root, "garbage"), "w", encoding="utf-8") as f:
+            f.write("not a folder")
+        os.makedirs(os.path.join(self.root, "broken"))
+        with open(os.path.join(self.root, "broken", "runner.json"), "w", encoding="utf-8") as f:
+            f.write("{")
+        self.assertIsNone(run_windows.pick_runner(self.root))
+
+    def test_no_folder_is_no_runner(self):
+        self.assertIsNone(run_windows.pick_runner(os.path.join(self.root, "missing")))
+
+    @unittest.skipUnless(can_link(), "this host cannot make symbolic links")
+    def test_follows_no_links(self):
+        real = make_runner(self.root, "real", "GE-Proton11-12")
+        os.symlink(real, os.path.join(self.root, "link"), target_is_directory=True)
+        folder = make_runner(self.root, "plain", "GE-Proton11-50")
+        os.remove(os.path.join(folder, "proton"))
+        os.symlink(os.path.join(real, "proton"), os.path.join(folder, "proton"))
+        # `link` is a folder link and `plain` has a link as its entry: only `real` counts.
+        self.assertEqual(run_windows.pick_runner(self.root)[0], "real")
+
+
+class Main(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = os.path.join(self._tmp.name, "runners")
+        self.data = os.path.join(self._tmp.name, "data")
+        os.makedirs(self.root)
+        env = mock.patch.dict(os.environ, {"XDG_DATA_HOME": self.data, "WINEPREFIX": "/inherited"})
+        env.start()
+        self.addCleanup(env.stop)
+
+    def run_main(self, argv):
+        calls = []
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(os, "execve", lambda *a: calls.append(a)):
+            with redirect_stdout(out), redirect_stderr(err):
+                code = run_windows.main(argv)
+        return code, calls, out.getvalue(), err.getvalue()
+
+    def test_starts_proton_the_way_the_console_does(self):
+        make_runner(self.root, "ProtonGE11", "GE-Proton11-12")
+        code, calls, out, _ = self.run_main(["--runners", self.root, "game.exe", "-windowed"])
+        self.assertIsNone(code)
+        self.assertEqual(len(calls), 1)
+        path, argv, env = calls[0]
+        proton = os.path.join(self.root, "ProtonGE11", "proton")
+        self.assertEqual(path, proton)
+        self.assertEqual(argv, [proton, "waitforexitandrun", "game.exe", "-windowed"])
+        self.assertEqual(env["STEAM_COMPAT_DATA_PATH"], os.path.join(self.data, "proton"))
+        self.assertEqual(env["STEAM_COMPAT_CLIENT_INSTALL_PATH"], os.path.join(self.data, "proton", "client"))
+        self.assertTrue(os.path.isdir(env["STEAM_COMPAT_CLIENT_INSTALL_PATH"]))
+        self.assertNotIn("WINEPREFIX", env)
+        self.assertIn("using ProtonGE11 (GE-Proton11-12)", out)
+
+    def test_the_self_test_runs_the_runners_own_cmd(self):
+        make_runner(self.root, "ProtonGE11", "GE-Proton11-12")
+        _, calls, _, _ = self.run_main(["--runners", self.root, "--self-test"])
+        argv = calls[0][1]
+        self.assertEqual(argv[1], "waitforexitandrun")
+        self.assertEqual(argv[2], os.path.join(self.root, "ProtonGE11", "files/lib/wine/x86_64-windows/cmd.exe"))
+        self.assertEqual(argv[3:], ["/c", "echo", "RUYA_HELLO_RUNNER_OK"])
+
+    def test_without_a_runner_it_says_so_and_starts_nothing(self):
+        make_runner(self.root, "ProtonGE12", "GE-Proton12-1")
+        code, calls, _, err = self.run_main(["--runners", self.root, "game.exe"])
+        self.assertEqual(code, 1)
+        self.assertEqual(calls, [])
+        self.assertIn("no proton-ge runner of major 10 to 11", err)
+
+    def test_without_a_program_it_prints_the_usage(self):
+        code, calls, _, err = self.run_main(["--runners", self.root])
+        self.assertEqual(code, 2)
+        self.assertEqual(calls, [])
+        self.assertIn("usage:", err)
+
+    def test_a_runner_that_cannot_start_is_an_error_not_a_traceback(self):
+        make_runner(self.root, "ProtonGE11", "GE-Proton11-12")
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(os, "execve", side_effect=OSError("denied")):
+            with redirect_stdout(out), redirect_stderr(err):
+                code = run_windows.main(["--runners", self.root, "game.exe"])
+        self.assertEqual(code, 1)
+        self.assertIn("cannot start", err.getvalue())
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -75,6 +75,7 @@ $lines.Add("PASS boot ($secs s): $bootRes")
 $scp = @($o + @("-P", "2222"))
 $files = Get-ChildItem $PSScriptRoot -Include "vm-*.sh", "vm-*.qml", "vm-*.py" -Recurse | ForEach-Object { $_.FullName }
 $files += (Join-Path $Repo "image\security-baseline.json")   # vm-security-check.sh reads it next to itself
+$files += (Join-Path $Repo "samples\hello-runner\run-windows.py")   # vm-runner-check.sh sample runs it (RUY-36)
 # The .play checks find the sample package and ruya-pack in /root (scripts/play-vm-files.sh builds them);
 # without both, those checks are SKIPPED below.
 $play = Get-PlayVmFiles $Repo

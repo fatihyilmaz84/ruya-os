@@ -1957,6 +1957,58 @@ rm -rf "$sx/stable"
 out="$(sc_)"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner steam: a runner not linked for Steam FAILs" "$out" "FAIL ProtonGE12: no compatibilitytool.vdf" || fail "runner steam: no link: exit $rc"
 
+echo "== vm-runner-check.sh sample: the developer guide's sample on the image (RUY-36) =="
+# A stand-in for samples/hello-runner/run-windows.py (the real script execs the runner's shebang script,
+# which a Windows host cannot do; its logic is samples/hello-runner/test_run_windows.py, run below). The
+# check copies the script, runs it under `env -i` as the profile user and reads only what it prints and
+# leaves, so the stand-in is told what to do by the file `sample-mode` next to the runners.
+sample_py="$tmp/fake-run-windows.py"
+cat > "$sample_py" <<'PYEOF'
+import os, sys
+mode = ""
+try:
+    with open(os.path.join(os.path.dirname(sys.argv[2]), "sample-mode"), encoding="utf-8") as f:
+        mode = f.read().strip()
+except OSError:
+    pass
+assert sys.argv[1] == "--runners" and sys.argv[3] == "--self-test", sys.argv
+if mode != "norunner":
+    print("hello-runner: using ProtonGE11 (GE-Proton11-12)")
+if mode != "noprefix":
+    os.makedirs(os.path.join(os.environ["XDG_DATA_HOME"], "proton", "pfx"), exist_ok=True)
+if mode != "silent":
+    print("RUYA_HELLO_RUNNER_OK")
+sys.exit(1 if mode == "fail" else 0)
+PYEOF
+sm_() { # <script> [VAR=value ...]: the sample mode against the fake image
+    local script="$1"; shift
+    env FAKE_BUSCTL_OUT='as 1 "p1"' RUYA_ROOT="$rr" "$@" PATH="$rsh:$PATH" bash "$here/vm-runner-check.sh" sample "$script" 2>&1
+}
+out="$(sm_ "$sample_py")"; rc=$?
+[ "$rc" = 0 ] && expect_contains "runner sample: a good run passes" "$out" "vm-runner-check: all passed" || fail "runner sample: a good run: exit $rc, $out"
+expect_contains "runner sample: the runner is one of the image's" "$out" "the script took the runner ProtonGE11 from"
+expect_contains "runner sample: the marker came from the runner as the profile user" "$out" "ProtonGE11: cmd.exe printed RUYA_HELLO_RUNNER_OK as ruya-p1 without network"
+expect_contains "runner sample: the prefix is in the data folder" "$out" "the Proton prefix is in the app's data folder"
+for m in silent noprefix norunner fail; do
+    echo "$m" > "$rp/sample-mode"
+    out="$(sm_ "$sample_py")"; rc=$?
+    case "$m" in
+    silent) want="FAIL the sample as ruya-p1: exit 0" ;;
+    noprefix) want="FAIL no Proton prefix at" ;;
+    norunner) want="FAIL the script named no runner of the image" ;;
+    fail) want="FAIL the sample as ruya-p1: exit 1" ;;
+    esac
+    [ "$rc" = 1 ] && expect_contains "runner sample: '$m' FAILs" "$out" "$want" || fail "runner sample: $m: exit $rc, $out"
+done
+rm -f "$rp/sample-mode"
+out="$(sm_ "$tmp/no-such-script.py")"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner sample: a missing script FAILs" "$out" "is not on the guest" || fail "runner sample: no script: exit $rc"
+out="$(sm_ "$sample_py" FAKE_BUSCTL_OUT='as 0')"; rc=$?
+[ "$rc" = 0 ] && expect_contains "runner sample: without a profile it is a SKIP" "$out" "SKIP: no profile on this VM: the sample was not run" || fail "runner sample: no profile: exit $rc, $out"
+grep -q 'unshare -n runuser -u "$user" -- env -i' "$here/vm-runner-check.sh" && pass "vm-runner-check.sh runs the sample offline as the profile user" || fail "vm-runner-check.sh: the sample does not run under unshare -n as the profile user"
+# The real script's own logic (the runner choice and the Proton argv and environment) on the host.
+python3 -I "$here/../samples/hello-runner/test_run_windows.py" > "$tmp/sample-unit.log" 2>&1 && pass "samples/hello-runner/test_run_windows.py passes" || { cat "$tmp/sample-unit.log"; fail "samples/hello-runner/test_run_windows.py failed"; }
+
 echo "== install-runners.sh: the image build's runner step (RUY-34) =="
 ir="$tmp/install-runners"; ish="$tmp/install-shims"; mkdir -p "$ir/runners/ProtonGE11" "$ir/rel/GE-X/files" "$ish"
 printf '#!/bin/sh\necho proton\n' > "$ir/rel/GE-X/proton"; chmod 0755 "$ir/rel/GE-X/proton"
