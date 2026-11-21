@@ -530,6 +530,34 @@ pub fn says_no_space(err: &str) -> bool {
     err.contains("No space left on device") || err.contains("ENOSPC")
 }
 
+/// True when a command's error says the network could not be reached: the words of Flatpak,
+/// libostree, libcurl and GLib for a name that does not resolve, a refused or timed-out connection,
+/// an unreachable network, and Flatpak's own offline answer. Only the platform install asks
+/// (RUY-1004): anything else that fails stays `commit.failed`.
+pub fn says_no_network(err: &str) -> bool {
+    const WORDS: [&str; 8] = [
+        "could not resolve host",
+        "couldn't resolve host",
+        "temporary failure in name resolution",
+        "unable to connect",
+        "couldn't connect to server",
+        "network is unreachable",
+        "connection timed out",
+        "connection refused",
+    ];
+    let lower = err.to_lowercase();
+    WORDS.iter().any(|w| lower.contains(w))
+}
+
+/// The error of the platform install: no network when its text says so, else as any command.
+fn platform_fail(err: String) -> CommitError {
+    if says_no_network(&err) {
+        CommitError::NoNetwork(err)
+    } else {
+        fail(err)
+    }
+}
+
 fn fail(err: String) -> CommitError {
     if says_no_space(&err) {
         CommitError::NoSpace(err)
@@ -803,7 +831,9 @@ impl FlatpakCommit {
         let listing = self.runner.run(&list_runtimes()).unwrap_or_default();
         let missing = missing_refs(platform_refs(runner), &listing);
         if !missing.is_empty() {
-            self.run(install_platform(missing))?;
+            self.runner
+                .run(&install_platform(missing))
+                .map_err(platform_fail)?;
         }
         progress(Phase::Installing, 0.5);
         self.run(install(id))?;

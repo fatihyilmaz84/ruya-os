@@ -21,6 +21,7 @@
 //   future        format.too_new                                                       -> unsupported
 //   hugegame      bigger than the free space                                           -> disk-full
 //   flaky         fails while committing                                               -> failed
+//   offlinegame   its platform needs the network and there is none                     -> offline
 // A remove (RUY-816) of an installed app is a job of the same queue, phase "removing"; it forgets the
 // installed build.
 // A job is one queue entry: the first runs, in 5 percent steps every 100 ms (10 ms with

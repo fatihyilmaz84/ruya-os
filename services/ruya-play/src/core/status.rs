@@ -25,6 +25,8 @@ pub enum JobStatus {
     Unsupported,
     /// Not enough space.
     DiskFull,
+    /// The platform needs the internet once (`platform.offline`, RUY-1004).
+    Offline,
     /// `Cancel` reached the job in time.
     Cancelled,
     /// Internal error (including an unreadable image blocklist: `blocklist.unavailable`).
@@ -33,7 +35,7 @@ pub enum JobStatus {
 
 impl JobStatus {
     /// Every status, in the order of the contract.
-    pub const ALL: [JobStatus; 10] = [
+    pub const ALL: [JobStatus; 11] = [
         JobStatus::Ok,
         JobStatus::InvalidPackage,
         JobStatus::BadSignature,
@@ -42,6 +44,7 @@ impl JobStatus {
         JobStatus::Revoked,
         JobStatus::Unsupported,
         JobStatus::DiskFull,
+        JobStatus::Offline,
         JobStatus::Cancelled,
         JobStatus::Failed,
     ];
@@ -57,6 +60,7 @@ impl JobStatus {
             JobStatus::Revoked => "revoked",
             JobStatus::Unsupported => "unsupported",
             JobStatus::DiskFull => "disk-full",
+            JobStatus::Offline => "offline",
             JobStatus::Cancelled => "cancelled",
             JobStatus::Failed => "failed",
         }
@@ -170,6 +174,7 @@ fn status_of_code(code: &str) -> JobStatus {
         | trust::ROTATION_TO_RETIRED_KEY => JobStatus::DifferentDeveloper,
         trust::ROTATION_NOT_BY_OLD_KEY | trust::ROTATION_WRONG_ID => JobStatus::BadSignature,
         codes::SPACE_NOT_ENOUGH => JobStatus::DiskFull,
+        codes::PLATFORM_OFFLINE => JobStatus::Offline,
         codes::STAGING_CHANGED
         | codes::STAGING_IO
         | codes::SOURCE_MISSING
@@ -196,10 +201,10 @@ fn status_of_code(code: &str) -> JobStatus {
 
 /// The one status a refusal finishes with. With several problems the most specific wins, in this
 /// order: an internal fault (`failed`), `revoked`, `unsupported` (a package for another console
-/// is that whatever else is wrong with it), then the signature and key statuses, `disk-full`, and
+/// is that whatever else is wrong with it), then the signature and key statuses, `disk-full`, `offline`, and
 /// `invalid-package` for the rest. An empty list is `failed`: a refusal always names its reason.
 pub fn status_of(problems: &[Problem]) -> JobStatus {
-    const ORDER: [JobStatus; 8] = [
+    const ORDER: [JobStatus; 9] = [
         JobStatus::Failed,
         JobStatus::Revoked,
         JobStatus::Unsupported,
@@ -207,6 +212,7 @@ pub fn status_of(problems: &[Problem]) -> JobStatus {
         JobStatus::DifferentDeveloper,
         JobStatus::NeedsDeveloperMode,
         JobStatus::DiskFull,
+        JobStatus::Offline,
         JobStatus::InvalidPackage,
     ];
     if problems.is_empty() {
@@ -249,6 +255,7 @@ mod tests {
             ("requirements.arch", JobStatus::Unsupported),
             ("sig.format_too_new", JobStatus::Unsupported),
             ("space.not_enough", JobStatus::DiskFull),
+            ("platform.offline", JobStatus::Offline),
             ("blocklist.unavailable", JobStatus::Failed),
             ("state.corrupt", JobStatus::Failed),
             ("staging.changed", JobStatus::Failed),

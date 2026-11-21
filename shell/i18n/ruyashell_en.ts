@@ -304,7 +304,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+238"/>
+        <location filename="../qml/AppDetailPage.qml" line="+244"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -497,12 +497,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="-7"/>
-        <location line="+356"/>
+        <location line="+375"/>
         <source>Steam</source>
         <translation>Steam</translation>
     </message>
     <message>
-        <location line="-355"/>
+        <location line="-374"/>
         <source>Steam app ID</source>
         <translation>Steam app ID</translation>
     </message>
@@ -572,7 +572,7 @@ This can&apos;t be undone.</translation>
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+224"/>
+        <location line="+243"/>
         <source>Read</source>
         <translation>Read</translation>
     </message>
@@ -627,7 +627,7 @@ This can&apos;t be undone.</translation>
         <translation>Close the game to uninstall it.</translation>
     </message>
     <message>
-        <location line="-926"/>
+        <location line="-945"/>
         <source>Install</source>
         <translation>Install</translation>
     </message>
@@ -638,7 +638,7 @@ This can&apos;t be undone.</translation>
         <translation>Update</translation>
     </message>
     <message>
-        <location line="+664"/>
+        <location line="+683"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Needs a newer RuyaOS than this console has. It stays installed.</translation>
     </message>
@@ -664,7 +664,7 @@ This can&apos;t be undone.</translation>
         <translation>The update adds: %1</translation>
     </message>
     <message>
-        <location line="-692"/>
+        <location line="-711"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Open</translation>
@@ -702,7 +702,7 @@ This can&apos;t be undone.</translation>
         <translation>Try again</translation>
     </message>
     <message>
-        <location line="+383"/>
+        <location line="+402"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -1556,7 +1556,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>CompatibilityPage</name>
     <message>
-        <location filename="../qml/CompatibilityPage.qml" line="+81"/>
+        <location filename="../qml/CompatibilityPage.qml" line="+82"/>
         <source>Takes effect the next time the game starts.</source>
         <translation>Takes effect the next time the game starts.</translation>
     </message>
@@ -1596,7 +1596,7 @@ This can&apos;t be undone.</translation>
         <translation>Not available</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+20"/>
         <source>Runner details can&apos;t be read right now.</source>
         <translation>Runner details can&apos;t be read right now.</translation>
     </message>
@@ -3225,17 +3225,17 @@ This can&apos;t be undone.</translation>
         <translation>Enter an admin&apos;s PIN</translation>
     </message>
     <message>
-        <location line="+339"/>
+        <location line="+340"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location line="-244"/>
+        <location line="-245"/>
         <source>Install cancelled</source>
         <translation>Install cancelled</translation>
     </message>
     <message>
-        <location line="+153"/>
+        <location line="+154"/>
         <location line="+206"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
@@ -3286,13 +3286,24 @@ This can&apos;t be undone.</translation>
 <context>
     <name>InstallResultDialog</name>
     <message>
-        <location filename="../qml/InstallResultDialog.qml" line="+22"/>
-        <location line="+90"/>
+        <location filename="../qml/InstallResultDialog.qml" line="+28"/>
+        <location line="+94"/>
+        <source>Try again</source>
+        <translation>Try again</translation>
+    </message>
+    <message>
+        <location line="-94"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+107"/>
         <source>OK</source>
         <translation>OK</translation>
     </message>
     <message>
-        <location line="-63"/>
+        <location line="-78"/>
         <location line="+38"/>
         <source>Not installed</source>
         <translation>Not installed</translation>
@@ -3322,7 +3333,7 @@ This can&apos;t be undone.</translation>
         <translation>Games found on your USB drives</translation>
     </message>
     <message>
-        <location line="+189"/>
+        <location line="+188"/>
         <source>No games on USB drives</source>
         <translation>No games on USB drives</translation>
     </message>
@@ -4494,6 +4505,11 @@ This can&apos;t be undone.</translation>
         <translation>There isn&apos;t enough space. Free %1, then try again.</translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>You need the internet once to install this game. Connect, then try again.</source>
+        <translation>You need the internet once to install this game. Connect, then try again.</translation>
+    </message>
+    <message>
         <location line="+2"/>
         <source>The install didn&apos;t finish. Try again.</source>
         <translation>The install didn&apos;t finish. Try again.</translation>
@@ -4991,7 +5007,7 @@ This can&apos;t be undone.</translation>
         <translation>%1, PIN protected</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Player %1</source>
         <translation>Player %1</translation>
     </message>
@@ -6139,41 +6155,41 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+193"/>
+        <location line="+186"/>
         <source>Play</source>
         <translation>Play</translation>
     </message>
     <message>
-        <location line="-194"/>
-        <location line="+196"/>
+        <location line="-187"/>
+        <location line="+189"/>
         <source>Resume</source>
         <translation>Resume</translation>
     </message>
     <message>
-        <location line="-196"/>
+        <location line="-189"/>
         <source>Closing…</source>
         <translation>Closing…</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+193"/>
+        <location line="+186"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Open</translation>
     </message>
     <message>
-        <location line="-190"/>
-        <location line="+195"/>
+        <location line="-183"/>
+        <location line="+188"/>
         <source>Details</source>
         <translation>Details</translation>
     </message>
     <message>
-        <location line="-176"/>
+        <location line="-169"/>
         <source>Recent</source>
         <translation>Recent</translation>
     </message>
     <message>
-        <location line="+175"/>
+        <location line="+168"/>
         <source>Close game</source>
         <translation>Close game</translation>
     </message>
@@ -6188,7 +6204,7 @@ This can&apos;t be undone.</translation>
         <translation>Your activity</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+6"/>
         <source>Uninstall…</source>
         <translation>Uninstall…</translation>
     </message>
@@ -6198,7 +6214,7 @@ This can&apos;t be undone.</translation>
         <translation>Store options are unavailable right now.</translation>
     </message>
     <message>
-        <location line="+136"/>
+        <location line="+129"/>
         <source>Could not uninstall %1. Try again.</source>
         <translation>Could not uninstall %1. Try again.</translation>
     </message>
@@ -6208,7 +6224,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 was uninstalled.</translation>
     </message>
     <message>
-        <location line="+534"/>
+        <location line="+530"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -6230,7 +6246,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1965"/>
+        <location line="-1945"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -6261,7 +6277,7 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1696"/>
+        <location line="+1676"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>
@@ -7788,18 +7804,18 @@ This can&apos;t be undone.</translation>
 <context>
     <name>UninstallConfirm</name>
     <message>
-        <location filename="../qml/UninstallConfirm.qml" line="+39"/>
-        <location line="+225"/>
+        <location filename="../qml/UninstallConfirm.qml" line="+44"/>
+        <location line="+254"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-225"/>
+        <location line="-254"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+39"/>
         <source>Uninstall and delete data</source>
         <translation>Uninstall and delete data</translation>
     </message>

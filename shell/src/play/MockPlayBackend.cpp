@@ -37,6 +37,8 @@ int failPercentOf(const QString &status)
         return 15;
     if (status == QLatin1String("failed"))
         return 60;
+    if (status == QLatin1String("offline"))
+        return 75; // installing: the platform comes before the app
     return 25; // bad-signature, different-developer, revoked
 }
 } // namespace
@@ -176,6 +178,12 @@ const QList<MockPlayBackend::Fixture> &MockPlayBackend::fixtures()
                               "developer", "full", "all", 150);
         flaky.permissions = {perm("input:controllers", "Uses controllers", "low")};
         add("flaky", "folder", "failed", flaky);
+
+        // Needs a platform from Flathub and the console is offline (RUY-1004): it fails while installing.
+        PlayInfo offline = base("com.example.offlinegame", "Offline Game", "Needs the internet once.", "Example Games", 1,
+                                "developer", "full", "all", 150);
+        offline.permissions = {perm("input:controllers", "Uses controllers", "low")};
+        add("offlinegame", "folder", "offline", offline);
         return out;
     }();
     return all;

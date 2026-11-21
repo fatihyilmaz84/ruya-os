@@ -25,6 +25,8 @@ pub const INSTALLED_CORRUPT: &str = "installed.corrupt";
 pub const INSTALLED_IO: &str = "installed.io";
 /// The commit step failed.
 pub const COMMIT_FAILED: &str = "commit.failed";
+/// Flatpak could not reach Flathub to install the app's platform (RUY-1004): connect and try again.
+pub const PLATFORM_OFFLINE: &str = "platform.offline";
 /// The commit failed and the key record or installed build written before it could not be undone
 /// (journalled in `state/journal`; the stale record can only refuse another key).
 pub const ROLLBACK_FAILED: &str = "rollback.failed";
@@ -58,6 +60,7 @@ pub const ALL: &[&str] = &[
     INSTALLED_CORRUPT,
     INSTALLED_IO,
     COMMIT_FAILED,
+    PLATFORM_OFFLINE,
     UNINSTALL_FAILED,
     ROLLBACK_FAILED,
     JOB_INTERRUPTED,

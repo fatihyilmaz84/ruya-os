@@ -244,6 +244,7 @@ Page {
         height: parent ? parent.height : 0
         u: page.u
         onClosed: Qt.callLater(page.focusMain)
+        onRetryRequested: page.confirmed()      // the same start as Install's: an admin's PIN again for a Standard profile
     }
 
     PinPad {

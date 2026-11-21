@@ -64,7 +64,7 @@ Item {
             Profiles.resetMockForTests("seeded")
             tryVerify(() => Profiles.profiles.length === 3)
             tryCompare(Profiles, "activeProfile", "")
-            tryVerify(() => Play.sources.length === 13)
+            tryVerify(() => Play.sources.length === 14)
         }
 
         function cleanup() {
@@ -140,7 +140,7 @@ Item {
             start("admin")
             tc.shell.openPage("installSources", {})
             tryCompare(tc.shell, "currentPage", "installSources")
-            tryVerify(() => find("sourcesList").count === 13, 2000)
+            tryVerify(() => find("sourcesList").count === 14, 2000)
             const drive = find("sourcesDrive")
             compare(drive.text.indexOf("GAME DISK"), 0, "English: " + drive.text)
             DeviceSettings.language = "tr"
@@ -155,7 +155,7 @@ Item {
             tc.shell.openPage("installSources", {})
             tryCompare(tc.shell, "currentPage", "installSources")
             const list = find("sourcesList")
-            tryVerify(() => list.count === 13, 2000)
+            tryVerify(() => list.count === 14, 2000)
             tryVerify(() => list.activeFocus, 2000, "the list has the focus")
             compare(list.currentIndex, 0)
             compare(find("sourcesDrive").text.indexOf("GAME DISK"), 0, "the drive's label heads its rows")
@@ -190,7 +190,7 @@ Item {
             tryVerify(() => find("sourcesEmpty").visible, 2000)
             compare(find("sourcesEmptyHelp").text, "Copy a .play folder, or a .zip of one, to a USB drive, then plug it in.")
             Play.mockSetDriveMounted(true)
-            tryVerify(() => find("sourcesList").visible && find("sourcesList").count === 13, 2000, "the list fills in")
+            tryVerify(() => find("sourcesList").visible && find("sourcesList").count === 14, 2000, "the list fills in")
             tryVerify(() => find("sourcesList").activeFocus, 2000, "and takes the focus")
         }
 
@@ -227,7 +227,7 @@ Item {
             keyClick(Qt.Key_Return)
             tryCompare(tc.shell, "currentPage", "installSources")
             compare(find("page_installSources").drive, "vol-stick", "only that drive")
-            tryVerify(() => find("sourcesList").count === 13, 2000)
+            tryVerify(() => find("sourcesList").count === 14, 2000)
         }
 
         // ---- The package page ----
@@ -523,6 +523,32 @@ Item {
             }
         }
 
+        // RUY-1004: an install that needs the internet says so and offers Try again, focused; it starts the job
+        // again (here it ends the same way, so the dialog comes back); Back leaves it without a second job.
+        function test_an_offline_install_offers_try_again() {
+            start("admin")
+            openPackage("offlinegame")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installConfirm").shown, 2000)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installResult").shown, 15000, "ends in the dialog")
+            tryVerify(() => find("installResultRetry").activeFocus, 2000, "Try again has the focus")
+            verify(!find("installResultOk").visible, "no OK beside it")
+            compare(find("installResultTitle").text, "Not installed")
+            compare(find("installResultSentence").text, "You need the internet once to install this game. Connect, then try again.")
+            compare(find("installResultRetry").text, "Try again")
+            compare(shown(), "accept Try again|back Back")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !find("installResult").shown, 2000)
+            tryVerify(() => page().working, 3000, "the job started again")
+            tryVerify(() => find("installResult").shown, 15000, "and ends offline again")
+            tryVerify(() => find("installResultRetry").activeFocus, 2000)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("installResult").shown, 2000)
+            tryVerify(() => find("installButton").activeFocus, 3000, "Back returns to Install")
+            verify(!page().working, "no job after Back")
+        }
+
         function test_install_statuses_have_their_own_sentences() {
             start("admin")
             const expected = {
@@ -537,6 +563,7 @@ Item {
             for (const status of Object.keys(expected))
                 compare(PlayCopy.jobStatusText(status, ""), expected[status], status)
             compare(PlayCopy.jobStatusText("disk-full", "2.0 GB"), "There isn't enough space. Free 2.0 GB, then try again.")
+            compare(PlayCopy.jobStatusText("offline", ""), "You need the internet once to install this game. Connect, then try again.")
             const methods = {
                 "forbidden": "Only an admin can install from USB.",
                 "busy": "Another install is running. Try again when it ends.",
@@ -1033,7 +1060,7 @@ Item {
                 start("admin")
                 tc.shell.openPage("installSources", {})
                 tryCompare(tc.shell, "currentPage", "installSources")
-                tryVerify(() => find("sourcesList").count === 13, 2000)
+                tryVerify(() => find("sourcesList").count === 14, 2000)
                 clearToasts()
                 settle()
                 shot("120-install-sources-" + lang)

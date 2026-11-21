@@ -87,6 +87,10 @@ pub struct CommitRequest<'a> {
 pub enum CommitError {
     /// The target filesystem is full: `disk-full`.
     NoSpace(String),
+    /// Flatpak could not reach the remote while installing the app's platform (05 §7.1,
+    /// RUY-1004): `offline`, `platform.offline`. The platform needs the network once, until the
+    /// offline runtime set exists (05 §6.4).
+    NoNetwork(String),
     /// Anything else: `failed`, `commit.failed`.
     Failed(String),
 }

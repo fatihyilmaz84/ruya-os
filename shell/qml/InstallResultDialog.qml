@@ -4,11 +4,13 @@ import RuyaShell
 
 // "Not installed" (04 §5.4, RUY-98): the dialog a job that ended with a failure shows. PowerConfirm's card on
 // `panel`: the error icon, the title, the sentence of the status (PlayCopy.jobStatusText) and one OK button
-// that has the focus. Modal: it takes every key; Accept or Back closes it and the focus goes back to where
-// it was.
+// that has the focus. A status that connecting can fix (`offline`, RUY-1004) shows "Try again" instead of OK:
+// it takes the focus and asks the page to start the job again; Back closes the dialog. Modal: it takes every
+// key; Accept or Back closes it and the focus goes back to where it was.
 //
 //   open(status, toFree)   status: the JobFinished status; toFree: the bytes to free, already formatted (disk-full)
 //   closed()              it closed
+//   retryRequested()      "Try again" was chosen (the dialog closes first)
 FocusScope {
     id: dialog
 
@@ -18,17 +20,24 @@ FocusScope {
     property string toFree: ""
     property Item returnTo: null
 
+    // `offline`: the platform needs the internet once; connecting and trying again can fix it.
+    readonly property bool retryable: status === "offline"
+
     // What the hint bar says while this is open (Shell.modalHintsOf).
-    readonly property var modalHints: [{ action: "accept", text: qsTr("OK") }]
+    readonly property var modalHints: retryable
+        ? [{ action: "accept", text: qsTr("Try again") }, { action: "back", text: qsTr("Back") }]
+        : [{ action: "accept", text: qsTr("OK") }]
 
     signal closed()
+    signal retryRequested()
 
     function open(which, bytes) {
         returnTo = Window.activeFocusItem
         status = which
         toFree = bytes ?? ""
         shown = true
-        okButton.forceActiveFocus()
+        const focused = retryable ? retryButton : okButton
+        focused.forceActiveFocus()
     }
 
     function close() {
@@ -56,7 +65,7 @@ FocusScope {
     Rectangle {
         objectName: "installResultPanel"
         anchors.centerIn: parent
-        width: Math.max(head.width, sentence.width, okButton.width) + 120 * dialog.u      // token-ok: PowerConfirm's card, 04 5
+        width: Math.max(head.width, sentence.width, retryable ? retryButton.width : okButton.width) + 120 * dialog.u      // token-ok: PowerConfirm's card, 04 5
         height: card.height + 96 * dialog.u                                               // token-ok: PowerConfirm's card, 04 5
         radius: Theme.radiusL * dialog.u
         color: Theme.panel
@@ -105,9 +114,24 @@ FocusScope {
         }
 
         PrimaryButton {
+            id: retryButton
+            objectName: "installResultRetry"
+            visible: dialog.retryable
+            anchors.horizontalCenter: parent.horizontalCenter
+            u: dialog.u
+            text: qsTr("Try again")
+            onAccepted: {
+                Sfx.select()
+                dialog.close()
+                dialog.retryRequested()
+            }
+        }
+
+        PrimaryButton {
             id: okButton
             objectName: "installResultOk"
             anchors.horizontalCenter: parent.horizontalCenter
+            visible: !dialog.retryable
             u: dialog.u
             text: qsTr("OK")
             onAccepted: {
