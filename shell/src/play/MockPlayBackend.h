@@ -6,7 +6,7 @@
 #include <QTimer>
 
 // In-memory ruya-play (the service is RUY-100, not built yet): follows api/dbus/org.ruyaos.Play1.xml,
-// method statuses and job statuses included. One drive ("vol-stick", "STICK") with 13 packages, each
+// method statuses and job statuses included. One drive ("vol-stick", "Game disk") with 13 packages, each
 // a fixture for one outcome:
 //   starhopper    a Wine game with a full permission set, developer tier, key new      -> ok
 //   pixelforest   a native game, official tier, key same, build 3 (build 2 installed) -> ok

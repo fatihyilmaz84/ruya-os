@@ -95,7 +95,7 @@ Item {
             const s = Play.sources.find(x => x.name === "pixelforest.play.zip")
             compare(s.kind, "zip")
             compare(s.drive, "vol-stick")
-            compare(s.driveLabel, "STICK")
+            compare(s.driveLabel, "Game disk")
             compare(s.path, p("pixelforest.play.zip"))
             compare(Play.sources.find(x => x.name === "starhopper").kind, "folder")
             // Listing opened nothing: no inspection happened, no job exists.
