@@ -1,0 +1,11 @@
+{
+  "format": 1,
+  "family": "wine",
+  "kind": "wine",
+  "version": "wine-11.0",
+  "arch": "x86_64",
+  "entry": { "wine": "bin/wine", "wineserver": "bin/wineserver" },
+  "capabilities": ["multiarch"],
+  "licence": "LGPL-2.1-or-later",
+  "source_url": "https://dl.winehq.org/wine/source/11.0/wine-11.0.tar.xz"
+}
