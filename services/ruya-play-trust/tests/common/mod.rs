@@ -2,8 +2,8 @@
 //! generated when the test runs.
 #![allow(dead_code)]
 
+use ruya_play_format::sha256_hex;
 use ruya_play_format::MemorySource;
-use ruya_play_trust::keys::sha256_hex;
 use ruya_play_trust::time::parse_utc;
 use ruya_play_trust::{
     countersign, generate_key, inspect, sign_package, Context, Inspection, MemoryTrustStore,

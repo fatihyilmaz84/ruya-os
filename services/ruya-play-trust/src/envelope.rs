@@ -7,10 +7,11 @@
 //! error (the format crate's scan), unknown keys are an error, base64 is strict.
 
 use crate::error::TrustError;
-use crate::keys::{sha256_hex, KeyFault, PublicKey, SecretKey};
+use crate::keys::{KeyFault, PublicKey, SecretKey};
 use base64ct::{Base64, Encoding};
 use ruya_play_format::json::find_duplicate_key;
 use ruya_play_format::manifest::json_depth_exceeds;
+use ruya_play_format::sha256_hex;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

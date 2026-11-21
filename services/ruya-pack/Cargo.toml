@@ -23,4 +23,3 @@ base64ct = { version = "1.8", features = ["alloc"] }  # the key file's seed (alr
 tempfile = "3"  # scratch directory of the art vetting (already in the tree)
 
 [dev-dependencies]
-sha2 = "0.10"  # the tests hash the expected bytes (already in the tree)

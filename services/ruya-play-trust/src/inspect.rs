@@ -10,13 +10,13 @@
 use crate::continuity::{continuity_of, Continuity};
 use crate::envelope::MAX_SIG_FILE_BYTES;
 use crate::error::TrustError;
-use crate::keys::sha256_hex;
 use crate::read_once::ReadOnce;
 use crate::revocation::{is_revoked, ListCheck, PackageFacts};
 use crate::signing::{bind_to_manifest, verify_signatures, PackageBytes, Signatures, StoreKeys};
 use crate::store::TrustStore;
 use crate::tier::{check_ceiling, decide_tier, Assessment, TierDecision};
 use ruya_play_format::limits::{MAX_MANIFEST_BYTES, MAX_TABLE_BYTES};
+use ruya_play_format::sha256_hex;
 use ruya_play_format::{validate, EntryKind, Package, Problem, Source, ValidateOptions};
 
 /// What the inspect step needs besides the package.

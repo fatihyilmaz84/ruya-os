@@ -4,8 +4,8 @@
 mod common;
 
 use common::*;
+use ruya_play_format::sha256_hex;
 use ruya_play_trust::envelope::{self, Domain};
-use ruya_play_trust::keys::sha256_hex;
 use ruya_play_trust::statement::{PlayStatement, StoreStatement};
 use ruya_play_trust::{
     select_blocklist, sign_blocklist, verify_downloaded, Blocklist, ListSource, Tier, TierReason,

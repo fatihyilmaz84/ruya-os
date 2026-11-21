@@ -8,11 +8,11 @@
 //! these bytes alone, with the service's key records, blocklist and installed builds. The package
 //! itself is never opened here; the listing of the real container was the helper's to check.
 
-use crate::core::helper::sha256_hex;
 use crate::core::staging::Dir;
 use crate::core::unpack::staging_problem;
 use ruya_play_format::limits::{MAX_MANIFEST_BYTES, MAX_TABLE_BYTES, ROOT_FILES};
 use ruya_play_format::problem::Problems;
+use ruya_play_format::sha256_hex;
 use ruya_play_format::table::parse_table;
 use ruya_play_format::{Entry, EntryKind, FileEntry, Problem, Source};
 use ruya_play_trust::envelope::MAX_SIG_FILE_BYTES;

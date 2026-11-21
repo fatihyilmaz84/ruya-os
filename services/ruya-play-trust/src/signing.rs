@@ -4,9 +4,10 @@
 
 use crate::envelope::{self, Domain, Opened};
 use crate::error::TrustError;
-use crate::keys::{sha256_hex, PublicKey, SecretKey};
+use crate::keys::{PublicKey, SecretKey};
 use crate::statement::{signable_id, PlayStatement, RotationStatement, StoreStatement};
 use crate::time::UnixSeconds;
+use ruya_play_format::sha256_hex;
 use ruya_play_format::Manifest;
 
 /// The store's public keys the image pins (more than one while the store key is being rotated

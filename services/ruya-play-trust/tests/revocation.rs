@@ -3,7 +3,7 @@
 mod common;
 
 use common::*;
-use ruya_play_trust::keys::sha256_hex;
+use ruya_play_format::sha256_hex;
 use ruya_play_trust::revocation::{BuildRange, Entry};
 use ruya_play_trust::{
     inspect, is_revoked, select_blocklist, sign_blocklist, Blocklist, Context, ListCheck,

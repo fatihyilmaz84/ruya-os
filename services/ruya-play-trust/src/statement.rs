@@ -2,8 +2,9 @@
 
 use crate::envelope::{strict_json, MAX_SIG_DEPTH, MAX_STATEMENT_BYTES};
 use crate::error::TrustError;
-use crate::keys::{is_sha256_hex, KeyFault, PublicKey};
+use crate::keys::{KeyFault, PublicKey};
 use crate::time::{format_utc, parse_utc, UnixSeconds};
+use ruya_play_format::table::is_sha256_hex;
 use serde::{Deserialize, Serialize};
 
 fn malformed(file: &str, detail: impl Into<String>) -> TrustError {

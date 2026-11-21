@@ -6,7 +6,7 @@
 pub mod fx;
 
 #[allow(unused_imports)]
-pub use fx::{sha_hex, write_zip, Fx, ZE};
+pub use fx::{write_zip, Fx, ZE};
 
 use ruya_play::core::deps::{ArtVetter, NoHooks, RuyaPlayArt};
 use ruya_play::core::fakes::{

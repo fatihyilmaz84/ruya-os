@@ -4,29 +4,15 @@
 
 use base64ct::{Base64, Encoding};
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
-use ruya_play_format::hex;
-use sha2::{Digest, Sha256};
+use ruya_play_format::sha256_hex;
+use ruya_play_format::table::is_lower_hex;
 
 /// Characters of the key id (128 bits): the first 32 hex characters of the SHA-256 of the 32 key bytes.
 pub const KEY_ID_CHARS: usize = 32;
 
-/// The lower-case hex SHA-256 of `data`.
-pub fn sha256_hex(data: &[u8]) -> String {
-    hex(&Sha256::digest(data))
-}
-
-/// True for 64 lower-case hex characters (a SHA-256 as the statements write it).
-pub fn is_sha256_hex(s: &str) -> bool {
-    s.len() == 64
-        && s.bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-}
-
 /// True for a key id: [`KEY_ID_CHARS`] lower-case hex characters.
 pub fn is_key_id(s: &str) -> bool {
-    s.len() == KEY_ID_CHARS
-        && s.bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    is_lower_hex(s, KEY_ID_CHARS)
 }
 
 /// Why a public key could not be read.
@@ -134,6 +120,7 @@ pub fn generate_key() -> Result<SecretKey, getrandom::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ruya_play_format::hex;
 
     #[test]
     fn a_key_round_trips_through_base64_and_has_a_short_id() {

@@ -177,10 +177,16 @@ pub fn parse_table(bytes: &[u8], problems: &mut Problems) -> Vec<FileEntry> {
     entries
 }
 
-/// True when `h` is a SHA-256 as the table writes it: 64 lower-case hex digits. The one check of
-/// that form (the table, a runner hash, the launcher's records).
+/// True when `s` is exactly `len` lower-case hex digits (upper case is refused). The one check of
+/// that form: [`is_sha256_hex`] and the trust crate's key ids are built on it.
+pub fn is_lower_hex(s: &str, len: usize) -> bool {
+    s.len() == len && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+/// True when `h` is a SHA-256 as the table writes it: 64 lower-case hex digits (the table, a
+/// runner hash, the launcher's records, the trust statements).
 pub fn is_sha256_hex(h: &str) -> bool {
-    h.len() == 64 && h.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+    is_lower_hex(h, 64)
 }
 
 /// A lookup over the table: entries by path, and the folders that exist because something is in them.

@@ -4,8 +4,8 @@
 mod common;
 use common::*;
 use ruya_play_format::runner::{RunnerEntry, RunnerHasher, HASH_FILE};
+use ruya_play_format::sha256_hex;
 use serde_json::json;
-use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
 const RUNNER_JSON: &str = r#"{"format": 1, "family": "proton-ge", "kind": "proton",
@@ -16,13 +16,6 @@ const RUNNER_JSON: &str = r#"{"format": 1, "family": "proton-ge", "kind": "proto
 const PROTON: &[u8] = b"#!/usr/bin/env python3\nprint('proton')\n";
 const WINE: &[u8] = b"\x7fELF fake wine";
 const LIB: &[u8] = b"a library";
-
-fn sha(b: &[u8]) -> String {
-    Sha256::digest(b)
-        .iter()
-        .map(|x| format!("{x:02x}"))
-        .collect()
-}
 
 #[cfg(unix)]
 fn executable(path: &Path) {
@@ -50,10 +43,10 @@ fn runner(t: &Path) -> PathBuf {
 /// tool's table.
 fn expected_hash(extra: &[RunnerEntry<'_>]) -> String {
     let (rj, proton, wine, lib) = (
-        sha(RUNNER_JSON.as_bytes()),
-        sha(PROTON),
-        sha(WINE),
-        sha(LIB),
+        sha256_hex(RUNNER_JSON.as_bytes()),
+        sha256_hex(PROTON),
+        sha256_hex(WINE),
+        sha256_hex(LIB),
     );
     let mut lines = vec![
         RunnerEntry::File {
