@@ -1931,21 +1931,35 @@ ls_() { bash "$here/vm-play-check.sh" lstate "$1" | tr -d '\r'; }
 case "$(ls_ "$lp/state-bad.json")" in unreadable:*) pass "vm-play-check.sh lstate: a damaged file is unreadable, not empty" ;; *) fail "lstate (bad): '$(ls_ "$lp/state-bad.json")'" ;; esac
 case "$(ls_ "$lp/missing.json")" in unreadable:*) pass "vm-play-check.sh lstate: a missing file is unreadable" ;; *) fail "lstate (missing): '$(ls_ "$lp/missing.json")'" ;; esac
 
-# sysrunner: the newest proton-ge by the numbers in the version (GE-Proton10-9 is below GE-Proton11-12).
+# newest (vm-runner-check.sh): the newest runner of a kind or family by the numbers in the version
+# (GE-Proton10-9 is below GE-Proton11-12), the one rule steam and vm-play-check.sh's sysrunner share.
 mkdir -p "$lp/runners/ProtonGE10" "$lp/runners/ProtonGE11" "$lp/runners/WineStable" "$lp/runners/Broken"
 echo '{"family":"proton-ge","kind":"proton","version":"GE-Proton10-9"}' > "$lp/runners/ProtonGE10/runner.json"
 echo '{"family":"proton-ge","kind":"proton","version":"GE-Proton11-12"}' > "$lp/runners/ProtonGE11/runner.json"
 echo '{"family":"wine","kind":"wine","version":"99.0"}' > "$lp/runners/WineStable/runner.json"
 echo '{' > "$lp/runners/Broken/runner.json"
+nw() { bash "$here/vm-runner-check.sh" newest "$@" | tr -d '\r'; }
+[ "$(nw "$lp/runners" family=proton-ge)" = ProtonGE11 ] && pass "vm-runner-check.sh newest family=proton-ge: the highest version, not a wine runner or a broken file" || fail "newest family=proton-ge: '$(nw "$lp/runners" family=proton-ge)'"
+[ "$(nw "$lp/runners" kind=wine)" = WineStable ] && pass "vm-runner-check.sh newest kind=wine picks by the key it is given" || fail "newest kind=wine: '$(nw "$lp/runners" kind=wine)'"
+[ "$(nw "$lp/runners" kind=proton)" = ProtonGE11 ] && pass "vm-runner-check.sh newest kind=proton is the runner steam wants" || fail "newest kind=proton: '$(nw "$lp/runners" kind=proton)'"
+bash "$here/vm-runner-check.sh" newest "$lp/runners" family=nobody >/dev/null 2>&1 && fail "newest: a family without a runner passed" || pass "vm-runner-check.sh newest: no runner of the family is a failure"
+! grep -q 'findall' "$here/vm-play-check.sh" && grep -q 'newest "\$1" family=proton-ge' "$here/vm-play-check.sh" && [ "$(grep -c 'findall' "$here/vm-runner-check.sh")" = 1 ] && pass "the newest-runner rule is in vm-runner-check.sh only; vm-play-check.sh and steam ask for it" || fail "the newest-runner rule is written twice"
+grep -q 'newest_runner "\$play/runners" kind=proton' "$here/vm-runner-check.sh" && pass "vm-runner-check.sh steam asks newest_runner for its runner" || fail "vm-runner-check.sh steam has its own newest block"
+
+# sysrunner: "<family>/<version>" of that newest proton-ge, through vm-runner-check.sh next to the script.
 got="$(bash "$here/vm-play-check.sh" sysrunner "$lp/runners" | tr -d '\r')"
-[ "$got" = "proton-ge/GE-Proton11-12" ] && pass "vm-play-check.sh sysrunner: the newest proton-ge, not a wine runner or a broken file" || fail "sysrunner: '$got'"
+[ "$got" = "proton-ge/GE-Proton11-12" ] && pass "vm-play-check.sh sysrunner: the newest proton-ge as <family>/<version>" || fail "sysrunner: '$got'"
 mkdir -p "$lp/none/WineStable"; echo '{"family":"wine","version":"9.0"}' > "$lp/none/WineStable/runner.json"
 bash "$here/vm-play-check.sh" sysrunner "$lp/none" >/dev/null 2>&1 && fail "sysrunner: a tree without proton-ge passed" || pass "vm-play-check.sh sysrunner: no proton-ge runner is a failure"
+mkdir -p "$lp/alone"; cp "$here/vm-play-check.sh" "$lp/alone/"
+out="$(bash "$lp/alone/vm-play-check.sh" sysrunner "$lp/runners" 2>&1)"; rc=$?
+[ "$rc" = 1 ] && expect_contains "vm-play-check.sh sysrunner without vm-runner-check.sh next to it says so" "$out" "copy vm-runner-check.sh next to this script" || fail "sysrunner alone: exit $rc, $out"
 
 # offline: a fake `ip` with a route table per family. on takes every default route away and keeps it; off puts
-# the same routes back; a route that cannot be deleted fails the step.
+# the same routes back. The fake fails on request: FAKE_DEL_FAIL="<families>" refuses `route del` for them,
+# FAKE_REPLACE_FAIL=<text> refuses a `route replace` whose route contains the text. replace is idempotent.
 ipsh="$tmp/ip-shims"; mkdir -p "$ipsh" "$lp/off"
-cat > "$ipsh/ip" <<'EOF'
+cat > "$ipsh/ip" <<'IPEOF'
 #!/bin/sh
 fam=$1; shift
 [ "$1" = route ] || exit 2
@@ -1953,22 +1967,41 @@ shift
 t="$IP_TABLE$fam"; touch "$t"
 case "$1" in
     show) cat "$t" ;;
-    del) [ -n "${FAKE_IP_FAIL:-}" ] && exit 2; sed -i '1d' "$t" ;;
-    add) shift; echo "$*" >> "$t" ;;
+    del) case " ${FAKE_DEL_FAIL:-} " in *" $fam "*) exit 2 ;; esac; sed -i '1d' "$t" ;;
+    replace)
+        shift
+        case "$*" in *"${FAKE_REPLACE_FAIL:-@none@}"*) exit 2 ;; esac
+        { grep -vxF -- "$*" "$t" || true; } > "$t.new"; mv "$t.new" "$t"; echo "$*" >> "$t" ;;
 esac
-EOF
+IPEOF
 chmod +x "$ipsh/ip"
 off() { IP_TABLE="$lp/table" PATH="$ipsh:$PATH" bash "$here/vm-play-check.sh" offline "$@"; }
-printf 'default via 10.0.2.2 dev eth0 proto dhcp metric 100\ndefault via 10.0.2.3 dev eth0 proto dhcp metric 200\n' > "$lp/table-4"
-printf 'default via fe80::2 dev eth0 proto ra metric 1024\n' > "$lp/table-6"
+reset_routes() {
+    printf 'default via 10.0.2.2 dev eth0 proto dhcp metric 100\ndefault via 10.0.2.3 dev eth0 proto dhcp metric 200\n' > "$lp/table-4"
+    printf 'default via fe80::2 dev eth0 proto ra metric 1024\n' > "$lp/table-6"
+    rm -f "$lp/off"/routes-*
+}
+reset_routes
 cp "$lp/table-4" "$lp/want-4"; cp "$lp/table-6" "$lp/want-6"
 off on "$lp/off"; rc=$?
 [ "$rc" = 0 ] && [ ! -s "$lp/table-4" ] && [ ! -s "$lp/table-6" ] && pass "vm-play-check.sh offline on: every default route, IPv4 and IPv6, is gone" || fail "offline on: rc $rc, left: $(cat "$lp/table-4" "$lp/table-6")"
 off off "$lp/off"; rc=$?
 [ "$rc" = 0 ] && cmp -s "$lp/table-4" "$lp/want-4" && cmp -s "$lp/table-6" "$lp/want-6" && pass "vm-play-check.sh offline off: the routes are back as they were" || fail "offline off: rc $rc, have: $(cat "$lp/table-4" "$lp/table-6")"
-[ ! -e "$lp/off/routes-4" ] && pass "vm-play-check.sh offline off: the saved routes are removed, a second off adds nothing" || fail "offline off kept its saved routes"
-cp "$lp/want-4" "$lp/table-4"; cp "$lp/want-6" "$lp/table-6"
-FAKE_IP_FAIL=1 off on "$lp/off" >/dev/null 2>&1 && fail "offline on: a route that cannot be deleted passed" || pass "vm-play-check.sh offline on: a route that cannot be deleted fails the step"
+[ ! -e "$lp/off/routes-4" ] && [ ! -e "$lp/off/routes-6" ] && pass "vm-play-check.sh offline off: the saved routes are removed, a second off adds nothing" || fail "offline off kept its saved routes"
+# A step the caller must be able to undo: IPv6 cannot be deleted while IPv4 is gone already.
+reset_routes
+FAKE_DEL_FAIL="-6" off on "$lp/off" >/dev/null 2>&1; rc=$?
+[ "$rc" = 1 ] && [ ! -s "$lp/table-4" ] && pass "vm-play-check.sh offline on: a route that cannot be deleted fails the step after IPv4 is gone" || fail "offline on (IPv6 fails): rc $rc, IPv4 left: $(cat "$lp/table-4")"
+off off "$lp/off"; rc=$?
+[ "$rc" = 0 ] && cmp -s "$lp/table-4" "$lp/want-4" && cmp -s "$lp/table-6" "$lp/want-6" && pass "vm-play-check.sh offline off after a half-done on: both families are back, no route twice" || fail "offline off after a half-done on: rc $rc, have: $(cat "$lp/table-4" "$lp/table-6")"
+# A restore line that fails does not stop the others, and the retry finishes it.
+reset_routes
+off on "$lp/off"
+FAKE_REPLACE_FAIL=10.0.2.2 off off "$lp/off" >/dev/null 2>&1; rc=$?
+[ "$rc" = 1 ] && [ "$(cat "$lp/table-4")" = "$(sed -n 2p "$lp/want-4")" ] && cmp -s "$lp/table-6" "$lp/want-6" && pass "vm-play-check.sh offline off: a route that fails does not stop the others, IPv6 is back, rc 1" || fail "offline off (one route fails): rc $rc, have: $(cat "$lp/table-4" "$lp/table-6")"
+[ -s "$lp/off/routes-4" ] && [ ! -e "$lp/off/routes-6" ] && pass "vm-play-check.sh offline off: a family with a route left keeps its saved file, a restored one loses it" || fail "offline off (one route fails): saved files $(ls "$lp/off")"
+off off "$lp/off"; rc=$?
+[ "$rc" = 0 ] && [ "$(sort "$lp/table-4")" = "$(sort "$lp/want-4")" ] && [ ! -e "$lp/off/routes-4" ] && pass "vm-play-check.sh offline off: the retry (the cleanup's) puts the last route back without an error for the one already there" || fail "offline off retry: rc $rc, have: $(cat "$lp/table-4")"
 rm -f "$lp/off"/routes-*
 
 # The modes in the script: own ids through pkg_id (they differ from every other mode's), the cleanup, the calls
@@ -1982,9 +2015,25 @@ grep -A5 'signal name="AppExited"' "$here/../api/dbus/org.ruyaos.Session1.xml" |
 grep -q 'CreateProfile sssss "" "" "Check Admin" admin 1234' "$here/vm-play-check.sh" && grep -q 'DeleteProfile sss "\$ladmin" 1234 "\$lcreated"' "$here/vm-play-check.sh" && grep -q 'SwitchTo ss' "$here/vm-play-check.sh" && pass "vm-play-check.sh makes, signs in and deletes a profile with the calls vm-sample-check.sh and vm-x11-check.sh use" || fail "vm-play-check.sh: the profile calls differ from the other checks'"
 lr="$(sed -n '/^launch_checks() {/,/^launch_run() {/p' "$here/vm-play-check.sh")"
 [ "$(echo "$lr" | grep -c '^    sigsys_checks$')" = 2 ] && [ "$(echo "$lr" | grep -c '^    avc_checks$')" = 2 ] && pass "vm-play-check.sh: both launch modes end with the init_t AVC and the SIGSYS journal checks" || fail "vm-play-check.sh: a launch mode skips the journal checks"
-[ "$(grep -c 'offline on "\$work"' "$here/vm-play-check.sh")" = 1 ] && [ "$(grep -c 'offline off "\$work"' "$here/vm-play-check.sh")" = 2 ] && pass "vm-play-check.sh launch-windows takes the routes away once and gives them back (after the launches and in the cleanup)" || fail "vm-play-check.sh: the offline calls changed"
+[ "$(grep -c 'offline on "\$work"' "$here/vm-play-check.sh")" = 1 ] && [ "$(grep -B2 'offline on "\$work"' "$here/vm-play-check.sh" | grep -c '^    lrouted=1$')" = 1 ] && [ "$(grep -c 'offline off "\$work"' "$here/vm-play-check.sh")" = 2 ] && pass "vm-play-check.sh launch-windows sets its routes flag before it takes the routes away, once, and gives them back (after the launches and in the cleanup)" || fail "vm-play-check.sh: the offline calls changed"
 out="$(sed -n '/^if \[ "\$mode" = launch-windows \]/,/^fi$/p' "$here/vm-play-check.sh")"; expect_contains "vm-play-check.sh launch-windows is its own mode" "$out" "launch_run launchwindows windows_pkg launch_windows_checks"
 grep -q 'zip=/root/hello-play-wine.play.zip' "$here/vm-play-check.sh" && pass "vm-play-check.sh launch-windows defaults to the Windows sample's zip" || fail "vm-play-check.sh: launch-windows has no default zip"
+
+echo "== vm-library-check.sh runners: Library1 ListRunners and the runner choice (RUY-959) =="
+rj() { printf '%s' "$1" | bash "$here/vm-library-check.sh" runnersjudge 2>&1; }
+ge='{"type":"s","data":"proton-ge"}'
+good='{"type":"aa{sv}","data":[[{"family":'"$ge"',"kind":{"type":"s","data":"proton"},"version":{"type":"s","data":"GE-Proton11-12"},"licence":{"type":"s","data":"BSD-3-Clause"}},{"family":{"type":"s","data":"wine"},"kind":{"type":"s","data":"wine"},"version":{"type":"s","data":"10.0"}}]]}'
+out="$(rj "$good")"; rc=$?
+[ "$rc" = 0 ] && expect_contains "runners: GE-Proton and Wine pass" "$out" "PASS: the image's GE-Proton is listed" || fail "runners: a good listing: exit $rc, $out"
+expect_contains "runners: the count is printed" "$out" "ListRunners lists 2 runner(s)"
+out="$(rj '{"type":"aa{sv}","data":[[{"family":{"type":"s","data":"wine"},"kind":{"type":"s","data":"wine"},"version":{"type":"s","data":"10.0"}}]]}')"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runners: no GE-Proton FAILs" "$out" "FAIL: no proton-ge runner" || fail "runners: no GE-Proton: exit $rc, $out"
+out="$(rj '{"type":"aa{sv}","data":[[]]}')"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runners: an empty list FAILs" "$out" "FAIL: ListRunners lists no runner" || fail "runners: empty: exit $rc, $out"
+out="$(rj '{"type":"aa{sv}","data":[[{"family":'"$ge"',"kind":{"type":"s","data":"proton"},"version":{"type":"s","data":"GE-Proton11-12"}},{"family":{"type":"s","data":"wine"},"kind":{"type":"s","data":"wine"}}]]}')"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runners: a runner without a version FAILs" "$out" "FAIL: a runner without a family, kind or version" || fail "runners: no version: exit $rc, $out"
+grep -q 'systemctl restart ruya-library' "$here/vm-library-check.sh" && grep -q 'set_choice "$prof" "$id" system' "$here/vm-library-check.sh" && grep -q 'play_install "$1" || return' "$here/vm-library-check.sh" && pass "vm-library-check.sh runners stores a choice for the installed sample and restarts the service" || fail "vm-library-check.sh runners: no choice across a restart"
+grep -q 'StateDirectory=ruyaos/library' "$here/../image/rootfs/usr/lib/systemd/system/ruya-library.service" && grep -q 'file=/var/lib/ruyaos/library/' "$here/vm-library-check.sh" && pass "the choice file the check looks at is the unit's StateDirectory" || fail "ruya-library.service StateDirectory and vm-library-check.sh runners disagree"
 
 echo "== .play VM files (RUY-860) =="
 # lib-samples.sh's clean-up removes the build outputs of the named samples only, and
@@ -2019,7 +2068,6 @@ SHIMEOF
 chmod +x "$rp/launcher/bin/ruya-play-launch"
 hash_ok="$(printf 'ab%.0s' $(seq 32))"
 printf '%s\n' "$hash_ok" > "$rt/.ruya-runner-hash"
-printf 'ProtonGE11\tproton-ge\tproton\tGE-Proton11-12\tBSD-3-Clause\thttps://example.org/\n' > "$rp/runners.list"
 # The Wine runner (RUY-37): its runner.json names the loader; bin/wine prints the words after /c echo
 # (CR LF) of a 64- or 32-bit cmd.exe that is there when WINEPREFIX is set, nothing when "silent" is in
 # the runner's folder.
@@ -2028,7 +2076,6 @@ mkdir -p "$rw/bin" "$rw/lib/wine/x86_64-windows" "$rw/lib/wine/i386-windows"
 : > "$rw/lib/wine/x86_64-windows/cmd.exe"; : > "$rw/lib/wine/i386-windows/cmd.exe"
 printf '{"format": 1, "family": "wine", "kind": "wine", "version": "wine-11.0", "arch": "x86_64",\n "entry": {"wine": "bin/wine", "wineserver": "bin/wineserver"}}\n' > "$rw/runner.json"
 printf '%s\n' "$hash_ok" > "$rw/.ruya-runner-hash"
-printf 'Wine11\twine\twine\twine-11.0\tLGPL-2.1-or-later\thttps://example.org/\n' >> "$rp/runners.list"
 cat > "$rw/bin/wine" <<'SHIMEOF'
 #!/bin/sh
 [ -e "$(dirname "$0")/../silent" ] && exit 0
@@ -2041,7 +2088,7 @@ SHIMEOF
 printf '#!/bin/sh\nexit 0\n' > "$rw/bin/wineserver"
 chmod +x "$rw/bin/wine" "$rw/bin/wineserver"
 # proton: prints the words after waitforexitandrun's program and /c echo (CR LF, as cmd.exe does) when
-# both STEAM_COMPAT_* folders are set, and nothing when the file "silent" is next to it.
+# both STEAM_COMPAT_* folders, SteamAppId, SteamGameId and PWD are set, and nothing when the file "silent" is next to it.
 cat > "$rt/proton" <<'PYEOF'
 import os, sys
 here = os.path.dirname(os.path.abspath(__file__))
@@ -2050,6 +2097,10 @@ if os.path.exists(os.path.join(here, "silent")):
 assert sys.argv[1] == "waitforexitandrun" and sys.argv[2].endswith("cmd.exe"), sys.argv
 assert os.environ.get("STEAM_COMPAT_DATA_PATH"), os.environ
 assert os.path.isdir(os.environ.get("STEAM_COMPAT_CLIENT_INSTALL_PATH", "")), os.environ
+# What protonfixes needs outside Steam (RUY-969): it reads PWD without a fallback and fails on a game id
+# parsed from a compat path without digits. A real run checks it for real (vm-runner-check.sh check).
+assert os.environ.get("SteamAppId") == "0" and os.environ.get("SteamGameId") == "0", os.environ
+assert os.path.samefile(os.environ.get("PWD", "/nonexistent"), os.getcwd()), (os.environ.get("PWD"), os.getcwd())
 sys.stdout.write(" ".join(sys.argv[5:]) + "\r\n")
 PYEOF
 # readlink: the links of $FAKE_LINKS ("<path> <target>" lines).
@@ -2099,10 +2150,7 @@ out="$(rc_ "$tmp/links.good" FAKE_PACK_REFUSE=1)"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: a refused runner.json FAILs" "$out" "FAIL ProtonGE11: runner-check ok=no" || fail "runner: a refused runner: exit $rc"
 out="$(rc_ "$tmp/links.good" FAKE_LAUNCH_SAYS="something else")"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: a launcher that does not refuse in its own words FAILs" "$out" "FAIL the launcher outside a sandbox" || fail "runner: the launcher's answer: exit $rc"
-mv "$rp/runners.list" "$tmp/runners.list.keep"; : > "$rp/runners.list"
-out="$(rc_ "$tmp/links.good")"; rc=$?
-[ "$rc" = 1 ] && expect_contains "runner: a runner missing from runners.list FAILs" "$out" "FAIL ProtonGE11 is not in" || fail "runner: runners.list: exit $rc"
-mv "$tmp/runners.list.keep" "$rp/runners.list"
+! grep -q 'runners.list' "$here/vm-runner-check.sh" && pass "vm-runner-check.sh reads no runners.list (RUY-959: Library1 ListRunners)" || fail "vm-runner-check.sh still reads runners.list"
 : > "$rt/silent"
 out="$(rc_ "$tmp/links.good")"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: no marker from the Windows program FAILs" "$out" "FAIL ProtonGE11: cmd.exe through proton as ruya-p1" || fail "runner: the marker: exit $rc"
@@ -2190,6 +2238,9 @@ try:
 except OSError:
     pass
 assert sys.argv[1] == "--runners" and sys.argv[3] == "--self-test", sys.argv
+# The check starts the copy from the scratch folder it copied it to (RUY-969): the script sets PWD from
+# its working folder, and that must be one the profile user can use.
+assert os.path.samefile(os.getcwd(), os.path.dirname(os.path.abspath(__file__))), (os.getcwd(), __file__)
 if mode != "norunner":
     print("hello-runner: using ProtonGE11 (GE-Proton11-12)")
 if mode != "noprefix":
@@ -2238,7 +2289,7 @@ echo "the release's licence" > "$ir/rel/GE-X/LICENSE"
 rsha="$(sha256sum "$ir/release.tar.gz" | cut -d' ' -f1)"
 printf '# a comment\nurl=https://example.org/release.tar.gz\nsha256=%s\nroot=GE-X\n' "$rsha" > "$ir/runners/ProtonGE11/pin"
 echo '{"format": 1}' > "$ir/runners/ProtonGE11/runner.json"
-# curl -o <file> <url>: copies $FAKE_RELEASE. ruya-pack runner-check <dir> --write-hash --record <list>.
+# curl -o <file> <url>: copies $FAKE_RELEASE. ruya-pack runner-check <dir> --write-hash.
 cat > "$ish/curl" <<'SHIMEOF'
 #!/bin/sh
 while [ "$#" -gt 0 ]; do [ "$1" = -o ] && { cp "$FAKE_RELEASE" "$2"; exit 0; }; shift; done
@@ -2246,10 +2297,9 @@ exit 1
 SHIMEOF
 cat > "$ish/ruya-pack" <<'SHIMEOF'
 #!/bin/sh
-[ "$1" = runner-check ] && [ "$3" = --write-hash ] && [ "$4" = --record ] || exit 2
+[ "$1" = runner-check ] && [ "$3" = --write-hash ] && [ "$#" = 3 ] || exit 2
 [ -f "$2/runner.json" ] || exit 1
 printf 'ab\n' > "$2/.ruya-runner-hash"
-printf '%s\tproton-ge\n' "$(basename "$2")" >> "$5"
 SHIMEOF
 chmod +x "$ish"/*
 ir_() { env FAKE_RELEASE="$ir/release.tar.gz" PATH="$ish:$PATH" bash "$here/../image/play/install-runners.sh" "$@" 2>&1; }
@@ -2258,7 +2308,10 @@ out="$(ir_ fetch "$ir/runners" "$ir/play")"; rc=$?
 [ -z "$(find "$ir/play/runners/ProtonGE11" ! -type l -perm /022)" ] && pass "install-runners: nothing it unpacks is group- or world-writable" || fail "install-runners: writable files left: $(find "$ir/play/runners/ProtonGE11" ! -type l -perm /022)"
 out="$(ir_ check "$ish/ruya-pack" "$ir/play" "$ir/meta")"; rc=$?
 [ "$rc" = 0 ] && [ "$(cat "$ir/meta/runners/ProtonGE11/.ruya-runner-hash")" = ab ] && pass "install-runners: check puts each runner's hash into the meta tree" || fail "install-runners: check: exit $rc, $out"
-[ "$(cut -f1 "$ir/meta/runners.list")" = ProtonGE11 ] && pass "install-runners: check writes runners.list from ruya-pack" || fail "install-runners: runners.list is '$(cat "$ir/meta/runners.list")'"
+[ ! -e "$ir/meta/runners.list" ] && expect_contains "install-runners: check writes no runners.list and counts the runners (RUY-959)" "$out" "1 runner(s) checked" || fail "install-runners: check: $out"
+mkdir -p "$ir/empty/runners"
+out="$(ir_ check "$ish/ruya-pack" "$ir/empty" "$ir/meta-empty")"; rc=$?
+[ "$rc" != 0 ] && expect_contains "install-runners: check without a runner fails the build" "$out" "no runner in" || fail "install-runners: check of no runner: exit $rc, $out"
 rm -rf "$ir/play"
 printf 'url=https://example.org/r\nsha256=%s\nroot=GE-X\n' "$(printf '0%.0s' $(seq 64))" > "$ir/runners/ProtonGE11/pin"
 out="$(ir_ fetch "$ir/runners" "$ir/play")"; rc=$?

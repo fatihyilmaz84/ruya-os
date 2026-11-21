@@ -8,7 +8,9 @@
 //! * **Environment:** the base environment, then `run.env` (already held to the deny table of
 //!   05 §6.3 by `parse_manifest`), then the launcher's own variables: wine `WINEPREFIX`,
 //!   `WINESERVER`, `WINELOADER` and, only when this launch creates the prefix, `WINEARCH`; proton
-//!   `STEAM_COMPAT_DATA_PATH` and `STEAM_COMPAT_CLIENT_INSTALL_PATH`.
+//!   `STEAM_COMPAT_DATA_PATH` and `STEAM_COMPAT_CLIENT_INSTALL_PATH`, plus `SteamAppId=0` and
+//!   `SteamGameId=0` (no Steam game id outside Steam; protonfixes needs one); every kind gets
+//!   `PWD`, the working folder of the command.
 //! * **Prefix** (wine, proton): `runner::prefix_dir`. A missing prefix is created from
 //!   `run.prefix.template` (copied, then `dosdevices`), else by the runner; a prefix made for a
 //!   lower `run.prefix.epoch` is rebuilt with the `prefix:` saves kept.
@@ -415,6 +417,14 @@ pub fn plan(inp: &Inputs<'_>) -> Result<Plan, Failure> {
             let dirs = runner::proton_dirs(&data);
             env.insert("STEAM_COMPAT_DATA_PATH".into(), dirs.compat_data);
             env.insert("STEAM_COMPAT_CLIENT_INSTALL_PATH".into(), dirs.client);
+            // Outside Steam there is no game id. GE-Proton's protonfixes parses one out of
+            // STEAM_COMPAT_DATA_PATH when none of these is set, and fails on a path without digits;
+            // `0` makes it apply its defaults only. umu's own `UMU_ID` is refused in `run.env`, and
+            // protonfixes reads it before SteamAppId, so one inherited from the launcher's own
+            // environment would beat the 0: it is not passed on.
+            env.insert("SteamAppId".into(), "0".into());
+            env.insert("SteamGameId".into(), "0".into());
+            env.remove("UMU_ID");
             // WINEPREFIX is the platform's (05 §6.3): Proton derives its own from
             // STEAM_COMPAT_DATA_PATH, so an inherited one is not passed on.
             env.remove("WINEPREFIX");
@@ -431,6 +441,9 @@ pub fn plan(inp: &Inputs<'_>) -> Result<Plan, Failure> {
     }
 
     let cwd = substitute(run.cwd.as_deref().unwrap_or("${payload}"), &places)?;
+    // The shell that would set PWD is not here (the launcher execs the game directly), and
+    // protonfixes reads it unguarded: it is the working folder every command below gets.
+    env.insert("PWD".into(), cwd.clone());
     let command_of = |head: &[String], args: &[String]| -> Result<Command, Failure> {
         let mut argv = head.to_vec();
         argv.extend(substitute_all(args, &places)?);

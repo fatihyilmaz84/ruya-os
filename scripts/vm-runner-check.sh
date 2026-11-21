@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: check steam sample
+# modes: check newest steam sample
 # Checks the Play platform on /usr (ADR-038, RUY-34) inside a running VM, as root, offline:
 #   1. links: every L+ line of /usr/lib/tmpfiles.d/ruya-play-platform.conf is a link under
 #      /var/lib/flatpak/extension to its folder on /usr, and that folder is there
@@ -7,10 +7,12 @@
 #      outside a sandbox, refuses with its own sentence (no /app/play.files): the static binary runs
 #   3. runners: for each folder of /usr/lib/ruyaos/play/runners, ruya-pack runner-check (the
 #      format's parser and runner hash) accepts its runner.json and computes the hash the image
-#      wrote into .ruya-runner-hash, and /usr/lib/ruyaos/play/runners.list has its line
+#      wrote into .ruya-runner-hash (Library1 ListRunners, which the About pane reads, is
+#      vm-library-check.sh runners, RUY-959)
 #   4. a Windows program runs through each Proton and each Wine runner as a profile user, without
 #      network: a Proton runner's own cmd.exe through `proton waitforexitandrun` (ADR-037's argv,
-#      the STEAM_COMPAT_* folders in a scratch data folder), and a Wine runner's own 64-bit and
+#      the STEAM_COMPAT_* folders in a scratch data folder, SteamAppId and SteamGameId 0, PWD: what
+#      ruya-play-launch sets, RUY-969), and a Wine runner's own 64-bit and
 #      32-bit cmd.exe through its runner.json `entry.wine` (WINEPREFIX in a scratch folder, Mono
 #      and Gecko off: the image ships neither) each print a marker, under `unshare -n`.
 #      Without a profile on the VM this step is a SKIP with its reason (the check creates none).
@@ -32,6 +34,10 @@
 #      the VM is not done. Without a profile on the VM the step is a SKIP, as in `check`.
 # Running a game inside a .play sandbox (the extension mounts, the 32-bit points) is
 # vm-play-check.sh launch and launch-windows (RUY-902).
+# Mode `newest` (RUY-902; `newest <runners dir> <key>=<value>`, no root needed): prints the folder of the newest
+# runner.json whose key is the value (kind=proton, family=proton-ge) by the numbers in its version. `steam`
+# uses it and so does vm-play-check.sh (its launch-windows names the system runner the status file records):
+# the one copy of that rule on the VM side.
 #
 # ruya-pack: the Linux build of services/ruya-pack (scripts/ci-samples-linux.sh leaves it in
 # services/target-samples/release/):
@@ -58,7 +64,38 @@ first_profile() {
     busctl --system call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ListProfiles 2>/dev/null | grep -o '"p[0-9]*"' | head -1 | tr -d '"'
 }
 
-[ "$mode" = check ] || [ "$mode" = steam ] || [ "$mode" = sample ] || { echo "usage: vm-runner-check.sh [check|steam|sample] [ruya-pack | run-windows.py]"; exit 2; }
+# newest_runner <runners dir> <key>=<value>: the folder name of the newest runner.json one folder below <dir>
+# whose <key> is <value> (kind=proton, family=proton-ge), nothing and exit 1 when none. "Newest" is the
+# rule of resolve::compare_versions: the numbers in the version, compared in order (GE-Proton11-12 is 11, 12).
+# The one copy: `steam` uses it, and vm-play-check.sh asks for it through the `newest` mode.
+newest_runner() {
+    python3 -I - "$1" "$2" <<'PYEOF'
+import json, os, re, sys
+key, _, want = sys.argv[2].partition("=")
+best = None
+for name in sorted(os.listdir(sys.argv[1])):
+    try:
+        with open(os.path.join(sys.argv[1], name, "runner.json"), encoding="utf-8") as f:
+            r = json.load(f)
+    except (OSError, ValueError):
+        continue
+    if r.get(key) != want:
+        continue
+    k = [int(n) for n in re.findall(r"[0-9]+", str(r.get("version", "")))]
+    if best is None or k > best[0]:
+        best = (k, name)
+if best is None:
+    sys.exit(1)
+print(best[1])
+PYEOF
+}
+
+if [ "$mode" = newest ]; then
+    newest_runner "${2:?runners dir}" "${3:?key=value}"
+    exit $?
+fi
+
+[ "$mode" = check ] || [ "$mode" = steam ] || [ "$mode" = sample ] || { echo "usage: vm-runner-check.sh [check|steam|sample] [ruya-pack | run-windows.py] | newest <runners dir> <key>=<value>"; exit 2; }
 
 if [ "$mode" = sample ]; then
     script="${2:-/root/run-windows.py}"
@@ -76,7 +113,9 @@ if [ "$mode" = sample ]; then
             cp "$script" "$data/run-windows.py"
             chown -R "$user" "$data"
             # XDG_DATA_HOME is the app's data folder as a sandbox sets it; the script puts Proton's prefix below it.
-            out="$(unshare -n runuser -u "$user" -- env -i HOME="$data" PATH="$PATH" XDG_DATA_HOME="$data/xdg" \
+            # Started from the scratch folder: the script sets PWD from its working folder, which must be one the
+            # profile user can use (a console launcher gives the game /app/payload).
+            out="$(cd "$data" && unshare -n runuser -u "$user" -- env -i HOME="$data" PATH="$PATH" XDG_DATA_HOME="$data/xdg" \
                 WINEDEBUG=-all timeout 300 python3 "$data/run-windows.py" --runners "$play/runners" --self-test 2>&1)"; rc=$?
             used="$(printf '%s\n' "$out" | sed -n 's/^hello-runner: using \([^ ]*\) (.*/\1/p' | head -1)"
             if [ -n "$used" ] && [ -f "$play/runners/$used/runner.json" ]; then ok "the script took the runner $used from $play/runners"; else bad "the script named no runner of the image: '$used'"; fi
@@ -99,24 +138,7 @@ if [ "$mode" = steam ]; then
     echo "--- Steam sees the runners"
     # The newest Proton runner by its runner.json version (the rule of resolve::compare_versions:
     # the numbers in the version, compared in order) and its tool name through Steam's link.
-    newest="$(python3 -I - "$play/runners" <<'PYEOF'
-import json, os, re, sys
-best = None
-for name in sorted(os.listdir(sys.argv[1])):
-    try:
-        with open(os.path.join(sys.argv[1], name, "runner.json"), encoding="utf-8") as f:
-            r = json.load(f)
-    except (OSError, ValueError):
-        continue
-    if r.get("kind") != "proton":
-        continue
-    key = [int(n) for n in re.findall(r"[0-9]+", str(r.get("version", "")))]
-    if best is None or key > best[0]:
-        best = (key, name)
-if best:
-    print(best[1])
-PYEOF
-)"
+    newest="$(newest_runner "$play/runners" kind=proton)"
     want=""
     for tree in "$play"/runners/*/; do
         name="$(basename "$tree")"
@@ -208,7 +230,6 @@ print("yes" if o.get("ok") is True else "no", r.get("kind") or "-", o.get("hash"
     else
         bad "$name: runner-check ok=$okk hash '$hash', .ruya-runner-hash '${want:-none}'"
     fi
-    if cut -f1 "$play/runners.list" 2>/dev/null | grep -qx "$name"; then ok "$name is in runners.list"; else bad "$name is not in $play/runners.list"; fi
     [ "$kind" = proton ] && protons="$protons $tree"
     [ "$kind" = wine ] && wines="$wines $tree"
 done
@@ -228,8 +249,12 @@ else
         data="$(mktemp -d "$root/var/tmp/ruya-runner-check.XXXXXX")" || { bad "no scratch folder in /var/tmp"; continue; }
         mkdir -p "$data/proton/client"
         chown -R "$user" "$data"
-        out="$(unshare -n runuser -u "$user" -- env -i HOME="$data" PATH="$PATH" \
+        # The environment of ruya-play-launch for a Proton game (plan.rs, 05 §6.3): the compat folders, no Steam
+        # game id (protonfixes parses one out of the compat path when none is set, and PWD is read unguarded)
+        # and PWD = the working folder it starts the game in.
+        out="$(cd "$data" && unshare -n runuser -u "$user" -- env -i HOME="$data" PATH="$PATH" \
             STEAM_COMPAT_DATA_PATH="$data/proton" STEAM_COMPAT_CLIENT_INSTALL_PATH="$data/proton/client" \
+            SteamAppId=0 SteamGameId=0 PWD="$data" \
             WINEDEBUG=-all timeout 300 python3 "$tree/proton" waitforexitandrun "$exe" /c echo "$marker" 2>&1)"; rc=$?
         if [ "$rc" = 0 ] && printf '%s\n' "$out" | tr -d '\r' | grep -qx "$marker"; then
             ok "$name: cmd.exe printed $marker as $user without network"

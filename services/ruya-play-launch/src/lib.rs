@@ -63,16 +63,25 @@ impl fmt::Display for Failure {
     }
 }
 
+/// A runner choice by its name, `package`, `bundled` or `system`: what `--runner=` takes and what
+/// ruya-library stores per game (Library1 `SetRunnerChoice`). Anything else is none.
+pub fn parse_choice(name: &str) -> Option<Override> {
+    match name {
+        "package" => Some(Override::PackageDefault),
+        "bundled" => Some(Override::Bundled),
+        "system" => Some(Override::System),
+        _ => None,
+    }
+}
+
 /// The player's runner choice from the arguments: none, or one `--runner=package|bundled|system`
 /// (added by ruya-session from ruya-library's per-game choice). Anything else is refused.
 pub fn parse_args(args: &[String]) -> Result<Override, Failure> {
     let mut over = None;
     for a in args {
-        let choice = match a.strip_prefix("--runner=") {
-            Some("package") => Override::PackageDefault,
-            Some("bundled") => Override::Bundled,
-            Some("system") => Override::System,
-            _ => {
+        let choice = match a.strip_prefix("--runner=").and_then(parse_choice) {
+            Some(choice) => choice,
+            None => {
                 return Err(Failure::new(
                     "launch.argument",
                     "The launcher was started with an argument it does not know.",
@@ -168,19 +177,19 @@ pub struct DryRun {
 
 /// The launcher's own resolution with other roots (RUY-903): the package tree at `package` (a
 /// deployment's `files/` instead of `/app`) and the OS's runners under `runners` (the image's
-/// `/usr/lib/ruyaos/play/runners` instead of `/app/runners`), the package's default choice. The
-/// same [`load_from`], [`runners::scan_in`] and [`plan::pick_runners`] the launch runs, so the
-/// library tells the player what the launch will say. A failure is the sentence the launch would
-/// show.
-pub fn dry_run(os: &dyn LaunchOs, package: &str, runners: &str) -> Result<DryRun, Failure> {
+/// `/usr/lib/ruyaos/play/runners` instead of `/app/runners`), with the choice `over` the launch
+/// would get as `--runner` ([`parse_args`]; RUY-959). The same [`load_from`],
+/// [`runners::scan_in`] and [`plan::pick_runners`] the launch runs, so the library tells the
+/// player what the launch will say. A failure is the sentence the launch would show.
+pub fn dry_run(
+    os: &dyn LaunchOs,
+    package: &str,
+    runners: &str,
+    over: Override,
+) -> Result<DryRun, Failure> {
     let loaded = load_from(os, package)?;
     let system = runners::scan_in(os, runners);
-    let (mut roots, _notes) = plan::pick_runners(
-        &loaded.manifest,
-        &loaded.bundled,
-        &system,
-        Override::PackageDefault,
-    )?;
+    let (mut roots, _notes) = plan::pick_runners(&loaded.manifest, &loaded.bundled, &system, over)?;
     let runner = loaded
         .manifest
         .run

@@ -254,7 +254,7 @@ pub const RESERVED_APP_NAMES: [&str; 6] =
     ["settings", "ruyaos", "store", "home", "guide", "update"];
 
 /// `run.env` names the platform owns, matched exactly (05 §6.3, §18 item 21).
-pub const ENV_DENY_EXACT: [&str; 13] = [
+pub const ENV_DENY_EXACT: [&str; 15] = [
     "PATH",
     "HOME",
     "DISPLAY",
@@ -268,6 +268,11 @@ pub const ENV_DENY_EXACT: [&str; 13] = [
     "GCONV_PATH",
     "LOCPATH",
     "NLSPATH",
+    // The launcher sets the working folder (`PWD`); `UMU_ID` is a game id protonfixes would apply
+    // fixes for, and a package has none (RUY-969). `SteamAppId` and `SteamGameId` need no entry:
+    // their names are not `[A-Z][A-Z0-9_]*`, so `run.env` cannot carry them.
+    "PWD",
+    "UMU_ID",
 ];
 /// `run.env` name prefixes the platform owns. This is a deny table, not an allow-list: native games
 /// need variables of their own, and a package can do nothing in its own sandbox that it could not do

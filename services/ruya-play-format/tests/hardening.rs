@@ -331,6 +331,8 @@ fn more_names_the_platform_owns() {
         "GCONV_PATH",
         "LOCPATH",
         "NLSPATH",
+        "PWD",
+        "UMU_ID",
         "PRESSURE_VESSEL_FILESYSTEMS_RW",
     ] {
         assert_rejected_at(
@@ -340,7 +342,13 @@ fn more_names_the_platform_owns() {
         );
     }
     // Close neighbours stay allowed.
-    for name in ["WINEDEBUG", "TMPDIR_HINT", "LOCPATHS"] {
+    for name in [
+        "WINEDEBUG",
+        "TMPDIR_HINT",
+        "LOCPATHS",
+        "PWD_HINT",
+        "UMU_ID2",
+    ] {
         assert_valid(check(&with_env(name)));
     }
 }

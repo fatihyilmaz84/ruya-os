@@ -146,6 +146,7 @@ Item {
             DeviceSettings.effectsQuality = "high"
             DeviceSettings.overscan = 0.05
             Display.mockReset()
+            Library.resetMockForTests("")
         }
 
         function openSettings() {
@@ -1297,25 +1298,46 @@ Item {
             tryVerify(() => find("categoryList").activeFocus, 2000, "Back leaves About for the category list")
         }
 
-        // RUY-34: the runners.list lines About takes: six tab-separated fields, a Windows kind, a version.
-        function test_about_reads_the_windows_runners_of_the_image_list() {
-            const list = "ProtonGE11\tproton-ge\tproton\tGE-Proton11-12\tBSD-3-Clause\thttps://example.org/ge\n"
-                + "Wine11\twine\twine\t11.0\t\t\n"
-                + "Dosbox\tdosbox\temulator\t0.74\tGPL-2.0-only\thttps://example.org/d\n"
-                + "Short\tproton-ge\tproton\tGE-Proton9-1\n"
-                + "NoVersion\tproton-ge\tproton\t\tMIT\thttps://example.org/n\n"
-                + "\n"
-            const got = SystemInfo.windowsRunnersIn(list)
-            compare(got.length, 2, JSON.stringify(got))
-            compare(got[0].name, "ProtonGE11")
-            compare(got[0].family, "proton-ge")
-            compare(got[0].kind, "proton")
-            compare(got[0].version, "GE-Proton11-12")
-            compare(got[0].licence, "BSD-3-Clause")
-            compare(got[0].sourceUrl, "https://example.org/ge")
-            compare(got[1].version, "11.0")
-            compare(got[1].licence, "")
-            compare(SystemInfo.windowsRunnersIn("").length, 0)
+        // RUY-959: About lists the Windows runners of Library1 ListRunners (wine and proton kinds, in
+        // its order) with one note each; an emulator is not a Windows runner.
+        function test_about_lists_each_windows_runner_of_the_library_with_its_note() {
+            Library.mockSetRunners([
+                { family: "proton-ge", kind: "proton", version: "GE-Proton11-12", licence: "BSD-3-Clause", sourceUrl: "https://example.org/ge" },
+                { family: "dosbox", kind: "emulator", version: "0.74", licence: "GPL-2.0-only", sourceUrl: "https://example.org/d" },
+                { family: "wine", kind: "wine", version: "10.0", licence: "LGPL-2.1-or-later", sourceUrl: "https://example.org/wine" },
+            ])
+            tryVerify(() => Library.runners.length === 3)
+            openSettings()
+            selectCategory("about")
+            compare(find("aboutWindowsRunner").value, "GE-Proton11-12, 10.0")
+            compare(find("aboutRunnerNote0").text, "GE-Proton11-12: BSD-3-Clause. Source: https://example.org/ge")
+            compare(find("aboutRunnerNote1").text, "10.0: LGPL-2.1-or-later. Source: https://example.org/wine")
+            verify(find("aboutRunnerNote0").visible && find("aboutRunnerNote1").visible)
+            compare(find("aboutRunnerNote2"), null, "the emulator has no note")
+            verify(find("aboutRunnerNote1").y > find("aboutRunnerNote0").y, "the notes in the list's order")
+            verify(find("aboutSystemInfo").y > find("aboutRunnerNote1").y, "both notes under the row")
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("aboutVersion").activeFocus)
+            for (let i = 0; i < 4; ++i)
+                keyClick(Qt.Key_Down)
+            verify(find("aboutWindowsRunner").activeFocus)
+            keyClick(Qt.Key_Down)
+            verify(find("aboutSystemInfo").activeFocus, "both notes are skipped")
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => find("categoryList").activeFocus, 2000, "Back leaves About for the category list")
+        }
+
+        // RUY-959: without a Windows runner in the image the row is hidden, and a later list brings it back.
+        function test_about_hides_windows_compatibility_without_a_windows_runner() {
+            Library.mockSetRunners([])
+            tryVerify(() => Library.runners.length === 0)
+            openSettings()
+            selectCategory("about")
+            verify(!find("aboutWindowsRunner").visible)
+            compare(find("aboutRunnerNote0"), null)
+            Library.resetMockForTests("")
+            tryVerify(() => find("aboutWindowsRunner").visible)
+            compare(find("aboutWindowsRunner").value, "GE-Proton11-12, wine-11.0")
         }
 
         function test_guide_overlay_over_settings_pane() {

@@ -28,7 +28,7 @@ build.sh            cross-compile, then build the zip with ruya-pack
 make-art.py         draws the two PNGs
 ```
 
-No binary is committed. The tests (`services/ruya-pack/tests/samples.rs`) copy `package/` to a scratch folder, write stand-in files for the three programs and run `ruya-pack build`, `validate` (with `--system-wine`) and `inspect`, so they need no compiler.
+No binary is committed. The tests (`services/ruya-pack/tests/samples.rs`) copy `package/` to a scratch folder, write stand-in files for the three programs and run `ruya-pack build`, `validate` (with `--system-proton-ge`, the version the image ships) and `inspect`, so they need no compiler.
 
 ## Build
 

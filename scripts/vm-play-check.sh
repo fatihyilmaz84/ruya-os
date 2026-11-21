@@ -59,7 +59,8 @@
 #   lstate host fixtures only: `lstate <state.json>` prints the launcher's status file as
 #          "epoch=<n> setup_done=<ids> runner=<source>/<family>/<version>" ("none" for a native game)
 #   sysrunner host fixtures only: `sysrunner <runners dir>` prints "<family>/<version>" of the newest
-#          proton-ge runner.json below it (the OS's GE-Proton launch-windows expects in the status file)
+#          proton-ge runner.json below it (the OS's GE-Proton launch-windows expects in the status file);
+#          which folder is the newest is `vm-runner-check.sh newest`, so that script must be next to this one
 #   offline host fixtures only: `offline on|off <dir>` takes the default routes away (kept in <dir>) or
 #          puts them back; launch-windows uses it around its launches
 #   runid  host fixtures only: `runid <id>` prints the id check would use for <id>
@@ -399,49 +400,47 @@ print("epoch=%s setup_done=%s runner=%s" % (state.get("epoch"), ",".join(state.g
 PY
 }
 
-# system_runner <runners dir>: "<family>/<version>" of the newest proton-ge runner.json one folder
-# below <dir> (the OS's GE-Proton: what the status file names after a system-runner launch). Versions
-# compare as the numbers in their text, as 05 section 6.2 says (GE-Proton11-12 is 11, 12).
+# system_runner <runners dir>: "<family>/<version>" of the newest proton-ge runner.json one folder below
+# <dir> (the OS's GE-Proton: what the status file names after a system-runner launch). Which folder is the
+# newest is vm-runner-check.sh's `newest` mode (one copy of the version rule), its runner.json says the rest.
 system_runner() {
-    python3 - "$1" <<'PY'
-import glob, json, os, re, sys
-best = None
-for path in glob.glob(os.path.join(sys.argv[1], "*", "runner.json")):
-    try:
-        with open(path, encoding="utf-8") as f:
-            r = json.load(f)
-    except (OSError, ValueError):
-        continue
-    if r.get("family") != "proton-ge":
-        continue
-    key = [int(n) for n in re.findall(r"\d+", r.get("version", ""))]
-    if best is None or key > best[0]:
-        best = (key, "%s/%s" % (r["family"], r["version"]))
-if best is None:
-    sys.exit(1)
-print(best[1])
+    local rc dir
+    rc="$(dirname "$0")/vm-runner-check.sh"
+    [ -f "$rc" ] || { echo "no $rc: copy vm-runner-check.sh next to this script" >&2; return 1; }
+    dir="$(bash "$rc" newest "$1" family=proton-ge)" || return 1
+    python3 -I - "$1/$dir/runner.json" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    r = json.load(f)
+print("%s/%s" % (r["family"], r["version"]))
 PY
 }
 
 # offline <on|off> <dir>: on takes the default routes away (IPv4 and IPv6) and keeps them in <dir>; off puts
-# them back. The guest stays reachable on its own subnet, so the ssh session lives. Prints nothing; returns
-# 1 when a route is left or could not be restored.
+# them back. The guest stays reachable on its own subnet, so the ssh session lives. Prints nothing. Both
+# directions go through every route of both families, note a failure and return 1 at the end (a half-done
+# `on` is undone by `off`, whatever failed; the caller sets its "routes are away" flag before `on`). `off`
+# restores with `ip route replace`, so a route that is back already is no error, and removes a family's
+# saved file only when all its routes are back.
 offline() {
-    local act="$1" dir="$2" fam r
+    local act="$1" dir="$2" fam r failed=0 left
     for fam in -4 -6; do
         if [ "$act" = on ]; then
-            ip "$fam" route show default > "$dir/routes$fam"
+            ip "$fam" route show default >> "$dir/routes$fam"
             while [ -n "$(ip "$fam" route show default)" ]; do
-                ip "$fam" route del default || return 1
+                ip "$fam" route del default || { failed=1; break; }
             done
         else
             [ -f "$dir/routes$fam" ] || continue
+            left=0
             while read -r r; do
-                [ -n "$r" ] && { ip "$fam" route add $r || return 1; }
+                [ -n "$r" ] || continue
+                ip "$fam" route replace $r || { left=1; failed=1; }
             done < "$dir/routes$fam"
-            rm -f "$dir/routes$fam"
+            [ "$left" = 0 ] && rm -f "$dir/routes$fam"
         fi
     done
+    return "$failed"
 }
 
 if [ "$mode" = parse ]; then
@@ -853,7 +852,9 @@ launch_windows_checks() {
     sign_in "$lprof" && ok "$lprof signed in" || { bad "cannot sign in $lprof"; return; }
     start_monitor
     echo "--- offline"
-    offline on "$work" && lrouted=1 || { bad "the default routes could not be taken away"; return; }
+    # The flag first: if `on` stops half-way, the cleanup still puts back what it took.
+    lrouted=1
+    offline on "$work" || { bad "the default routes could not be taken away"; return; }
     ip route get 1.1.1.1 >/dev/null 2>&1 && bad "the guest still has a route to the internet" || ok "the guest has no route to the internet"
     echo "--- first launch: a new prefix, the setup step, check.exe"
     start_app "$app" 1 || return

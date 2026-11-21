@@ -4,6 +4,7 @@
 mod common;
 
 use common::*;
+use ruya_play_format::resolve::Override::{self, Bundled, PackageDefault, System};
 use ruya_play_launch::dry_run;
 use ruya_play_launch::fake::FakeOs;
 use serde_json::json;
@@ -27,7 +28,10 @@ fn a_system_package_uses_the_runner_the_image_has() {
     g.set("/components/0/source", json!("system"));
     let mut os = g.install();
     with_image_runner(&mut os, "wine", "10.2");
-    let runner = dry_run(&os, "/app", IMAGE_RUNNERS).unwrap().runner.unwrap();
+    let runner = dry_run(&os, "/app", IMAGE_RUNNERS, PackageDefault)
+        .unwrap()
+        .runner
+        .unwrap();
     assert_eq!(runner.in_use.source, "system");
     assert_eq!(
         (
@@ -44,7 +48,7 @@ fn a_system_package_without_the_runner_says_why() {
     let mut g = Game::wine();
     g.set("/components/0/source", json!("system"));
     let os = g.install();
-    let err = dry_run(&os, "/app", IMAGE_RUNNERS).unwrap_err();
+    let err = dry_run(&os, "/app", IMAGE_RUNNERS, PackageDefault).unwrap_err();
     assert_eq!(err.code, "resolve.no_system_runner");
     assert!(err.message.contains("wine"), "{}", err.message);
 }
@@ -55,7 +59,7 @@ fn a_runner_older_than_min_gives_the_sentence() {
     g.set("/components/0/source", json!("system"));
     let mut os = g.install();
     with_image_runner(&mut os, "wine", "8.0");
-    let err = dry_run(&os, "/app", IMAGE_RUNNERS).unwrap_err();
+    let err = dry_run(&os, "/app", IMAGE_RUNNERS, PackageDefault).unwrap_err();
     assert_eq!(err.code, "resolve.system_too_old");
     assert_eq!(
         err.message,
@@ -69,13 +73,19 @@ fn a_newest_package_prefers_the_newer_image_runner_and_keeps_its_tested_version(
     g.manifest["components"][0]["tested"] = json!("9.20");
     let mut os = g.install();
     with_image_runner(&mut os, "wine", "10.2");
-    let runner = dry_run(&os, "/app", IMAGE_RUNNERS).unwrap().runner.unwrap();
+    let runner = dry_run(&os, "/app", IMAGE_RUNNERS, PackageDefault)
+        .unwrap()
+        .runner
+        .unwrap();
     assert_eq!(runner.in_use.source, "system");
     assert_eq!(runner.tested.as_deref(), Some("9.20"));
 
     // Without the image's runner the shipped copy runs.
     let os = g.install();
-    let runner = dry_run(&os, "/app", IMAGE_RUNNERS).unwrap().runner.unwrap();
+    let runner = dry_run(&os, "/app", IMAGE_RUNNERS, PackageDefault)
+        .unwrap()
+        .runner
+        .unwrap();
     assert_eq!(runner.in_use.source, "bundled");
     assert_eq!(runner.in_use.version, "9.20");
 }
@@ -83,16 +93,74 @@ fn a_newest_package_prefers_the_newer_image_runner_and_keeps_its_tested_version(
 #[test]
 fn a_native_package_has_no_runner() {
     let os = Game::native().install();
-    assert_eq!(dry_run(&os, "/app", IMAGE_RUNNERS).unwrap().runner, None);
+    assert_eq!(
+        dry_run(&os, "/app", IMAGE_RUNNERS, PackageDefault)
+            .unwrap()
+            .runner,
+        None
+    );
 }
 
 #[test]
 fn the_package_tree_is_read_from_the_root_it_is_given() {
     let os = Game::native().install();
-    let err = dry_run(&os, "/nowhere", IMAGE_RUNNERS).unwrap_err();
+    let err = dry_run(&os, "/nowhere", IMAGE_RUNNERS, PackageDefault).unwrap_err();
     assert!(
         err.message.contains("cannot be read") || err.message.contains("damaged"),
         "{}",
         err.message
     );
+}
+
+/// RUY-959: the choice is the one `--runner` gives the launch, applied by the same resolver.
+#[test]
+fn the_choice_picks_the_runner_the_launch_would_get_with_that_runner_argument() {
+    let mut g = Game::wine();
+    g.manifest["components"][0]["tested"] = json!("9.20");
+    let mut os = g.install();
+    with_image_runner(&mut os, "wine", "10.2");
+    let source = |over: Override| {
+        dry_run(&os, "/app", IMAGE_RUNNERS, over)
+            .unwrap()
+            .runner
+            .unwrap()
+            .in_use
+            .source
+    };
+    assert_eq!(
+        source(PackageDefault),
+        "system",
+        "newest: the newer image runner"
+    );
+    assert_eq!(source(Bundled), "bundled");
+    assert_eq!(source(System), "system");
+}
+
+/// A choice the package cannot honour falls back to the package's default, as the launch does
+/// (`resolve`'s `OverrideBundledUnavailable` note); with no runner for that either, the answer is
+/// the launch's refusal.
+#[test]
+fn choosing_the_bundled_copy_of_a_package_without_one_is_the_package_default() {
+    let mut g = Game::wine();
+    g.set("/components/0/source", json!("system"));
+    g.manifest["components"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("bundled");
+    g.files.retain(|(p, _)| !p.starts_with("components/"));
+    let os = g.install();
+    let err = dry_run(&os, "/app", IMAGE_RUNNERS, Bundled).unwrap_err();
+    assert_eq!(
+        err,
+        dry_run(&os, "/app", IMAGE_RUNNERS, PackageDefault).unwrap_err()
+    );
+    assert_eq!(err.code, "resolve.no_system_runner");
+
+    let mut os = g.install();
+    with_image_runner(&mut os, "wine", "10.2");
+    let runner = dry_run(&os, "/app", IMAGE_RUNNERS, Bundled)
+        .unwrap()
+        .runner
+        .unwrap();
+    assert_eq!(runner.in_use.source, "system");
 }

@@ -359,10 +359,10 @@ mod runner_keys {
         image_runner(dir.path(), "10.2");
         let item = &list(dir.path(), ROW)["flatpak:play.com.example.hop"];
         let play = item.play.as_ref().unwrap();
-        assert_eq!(play.runner.as_deref(), Some("wine 10.2"));
-        assert_eq!(play.runner_source.as_deref(), Some("system"));
-        assert_eq!(play.runner_tested.as_deref(), Some("9.20"));
-        assert_eq!(play.resolve_error, None);
+        assert_eq!(play.resolution.runner.as_deref(), Some("wine 10.2"));
+        assert_eq!(play.resolution.runner_source.as_deref(), Some("system"));
+        assert_eq!(play.resolution.runner_tested.as_deref(), Some("9.20"));
+        assert_eq!(play.resolution.resolve_error, None);
         let rec = record(item);
         assert!(rec.contains_key("play_runner") && !rec.contains_key("play_resolve_error"));
     }
@@ -373,8 +373,9 @@ mod runner_keys {
         deployment(dir.path(), "system");
         let item = &list(dir.path(), ROW)["flatpak:play.com.example.hop"];
         let play = item.play.as_ref().unwrap();
-        assert_eq!(play.runner, None);
+        assert_eq!(play.resolution.runner, None);
         assert!(play
+            .resolution
             .resolve_error
             .as_deref()
             .is_some_and(|s| s.contains("no runner of family wine")));
@@ -387,7 +388,12 @@ mod runner_keys {
         image_runner(dir.path(), "8.0");
         let item = &list(dir.path(), ROW)["flatpak:play.com.example.hop"];
         assert_eq!(
-            item.play.as_ref().unwrap().resolve_error.as_deref(),
+            item.play
+                .as_ref()
+                .unwrap()
+                .resolution
+                .resolve_error
+                .as_deref(),
             Some("The OS runner is 8.0, older than the required 9.0.")
         );
     }
@@ -400,7 +406,7 @@ mod runner_keys {
         let item = &list(dir.path(), ROW)["flatpak:play.com.example.hop"];
         assert_eq!(item.title, "Hop");
         let play = item.play.as_ref().unwrap();
-        assert_eq!(play.runner, None);
-        assert!(play.resolve_error.is_some());
+        assert_eq!(play.resolution.runner, None);
+        assert!(play.resolution.resolve_error.is_some());
     }
 }

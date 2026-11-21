@@ -208,31 +208,21 @@ fn a_runner_without_a_valid_runner_json_or_its_entry_is_refused() {
 }
 
 #[test]
-fn record_adds_one_line_per_runner_and_needs_an_id_name() {
+fn write_hash_needs_a_system_runner_name_and_record_is_gone() {
     let t = tempfile::tempdir().unwrap();
     let dir = runner(t.path());
-    let list = t.path().join("runners.list");
-    assert_ok(&check(&dir, &["--record", list.to_str().unwrap()]));
-    let other = t.path().join("Wine11");
-    put(
-        &other,
-        "runner.json",
-        br#"{"format": 1, "family": "wine", "kind": "wine", "version": "11.0", "arch": "x86_64",
-             "entry": {"wine": "bin/wine", "wineserver": "bin/wineserver"}}"#,
-    );
-    put(&other, "bin/wine", WINE);
-    put(&other, "bin/wineserver", WINE);
-    assert_ok(&check(&other, &["--record", list.to_str().unwrap()]));
-    assert_eq!(
-        std::fs::read_to_string(&list).unwrap(),
-        "ProtonGE11\tproton-ge\tproton\tGE-Proton11-12\tBSD-3-Clause AND LGPL-2.1-or-later\thttps://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12\n\
-         Wine11\twine\twine\t11.0\t\t\n"
-    );
-
-    // The folder name becomes org.ruyaos.Play.Runner.<Name>: a name that cannot is a usage error.
+    // The folder name becomes org.ruyaos.Play.Runner.<Name>: with --write-hash (the image build) a
+    // name that cannot is a usage error, and nothing is written.
     let bad = t.path().join("Proton-GE");
     std::fs::rename(&dir, &bad).unwrap();
+    let o = check(&bad, &["--write-hash"]);
+    assert_eq!(o.exit, 2, "{}", o.text);
+    assert!(!bad.join(".ruya-runner-hash").exists());
+    // A bundled copy's folder may have any name.
+    assert_ok(&check(&bad, &[]));
+    // RUY-959: the image's list of runners is Library1's ListRunners; --record is no option.
+    let list = t.path().join("runners.list");
     let o = check(&bad, &["--record", list.to_str().unwrap()]);
     assert_eq!(o.exit, 2, "{}", o.text);
-    assert_ok(&check(&bad, &[])); // without --record any folder name is fine
+    assert!(!list.exists());
 }
