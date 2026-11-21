@@ -284,8 +284,8 @@ mod tests {
     #[test]
     fn the_newest_proton_runner_by_its_version_wins_not_the_folder_name() {
         let os = image(&[
-            ("ProtonGE11", "GE-Proton10-34", "GE-Proton10-34"),
-            ("ProtonGE9", "GE-Proton11-12", TOOL),
+            ("ProtonGE99", "GE-Proton10-34", "GE-Proton10-34"),
+            ("ProtonGE11", "GE-Proton11-12", TOOL),
         ]);
         assert_eq!(default_tool(&os, RUNNERS), Ok(TOOL.to_owned()));
     }
