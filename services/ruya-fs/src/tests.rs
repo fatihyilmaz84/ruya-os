@@ -357,6 +357,11 @@ mod linux {
         assert!(NotFollowed::is(&err), "{err}");
         let err = crate::open_file(&tmp.path().join("none")).expect_err("missing");
         assert_eq!(err.kind(), io::ErrorKind::NotFound);
+        let fifo = tmp.path().join("fifo");
+        mkfifo(&fifo);
+        let err = within_a_second(move || crate::open_file(&fifo)).expect_err("a FIFO");
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput, "{err}");
+        assert!(!NotFollowed::is(&err), "{err}");
     }
 
     #[test]

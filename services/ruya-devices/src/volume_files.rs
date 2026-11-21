@@ -279,7 +279,7 @@ mod tests {
     }
 
     #[test]
-    fn the_size_is_checked_before_reading() {
+    fn a_file_over_the_cap_is_too_large_and_one_at_it_is_read() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("big.json"), "x".repeat(65537)).unwrap();
         fs::write(dir.path().join("fits.json"), "x".repeat(65536)).unwrap();
