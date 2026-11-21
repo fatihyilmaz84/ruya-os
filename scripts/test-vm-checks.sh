@@ -1859,6 +1859,166 @@ n="$(grep -c 'with_id "\$zip"' "$here/vm-play-check.sh")"; m="$(grep 'with_id "\
 [ "$n" = 4 ] && [ "$m" = 4 ] && pass "vm-play-check.sh: a failed with_id ends the mode with one FAIL (RUY-878)" || fail "vm-play-check.sh: with_id calls $n, ending the mode $m"
 grep -q 'play_clean$' "$here/vm-library-check.sh" && grep -q 'rm -f "$play_state/incoming/vm-library-check.play.zip"' "$here/vm-library-check.sh" && pass "vm-library-check.sh play removes the sample and the incoming file" || fail "vm-library-check.sh play: no clean-up"
 
+echo "== vm-play-check.sh: launch and launch-windows (RUY-902) =="
+lp="$tmp/launch"; mkdir -p "$lp"
+# The signals of Session1 as `busctl --json=short monitor` prints them: one object per line, the arguments in
+# payload.data. Two apps, two exits of the first, a line that is no JSON and a signal of another member.
+cat > "$lp/signals.log" <<'EOF'
+{"type":"signal","interface":"org.ruyaos.Session1","member":"AppStarted","payload":{"signature":"ss","data":["ruya-app-ruya-p1-play.a.service","play.a"]}}
+Monitoring bus message stream.
+{"type":"signal","interface":"org.ruyaos.Session1","member":"AppExited","payload":{"signature":"ssis","data":["ruya-app-ruya-p1-play.b.service","play.b",7,"crashed"]}}
+{"type":"signal","interface":"org.ruyaos.Session1","member":"AppExited","payload":{"signature":"ssis","data":["ruya-app-ruya-p1-play.a.service","play.a",0,"quit"]}}
+{"type":"signal","interface":"org.ruyaos.Session1","member":"FrozenChanged","payload":{"signature":"sb","data":["ruya-app-ruya-p1-play.a.service",true]}}
+{"type":"signal","interface":"org.ruyaos.Session1","member":"AppExited","payload":{"signature":"ssis","data":["ruya-app-ruya-p1-play.a.service","play.a",139,"crashed"]}}
+EOF
+sg() { bash "$here/vm-play-check.sh" signals "$lp/signals.log" "$@" | tr -d '\r' | tr '\n' '|'; }
+got="$(sg AppExited play.a)"
+[ "$got" = "ruya-app-ruya-p1-play.a.service 0 quit|ruya-app-ruya-p1-play.a.service 139 crashed|" ] && pass "play launch: signals lists an app's exits in order with code and reason" || fail "play launch: signals read '$got'"
+got="$(sg AppStarted play.a)"
+[ "$got" = "ruya-app-ruya-p1-play.a.service|" ] && pass "play launch: signals reads AppStarted as the instance alone" || fail "play launch: AppStarted read '$got'"
+got="$(sg AppExited play.c)"
+[ -z "$got" ] && pass "play launch: another app's exits do not count" || fail "play launch: play.c read '$got'"
+got="$(sg AppExited play.b)"
+[ "$got" = "ruya-app-ruya-p1-play.b.service 7 crashed|" ] && pass "play launch: a crash reads as its code and reason" || fail "play launch: play.b read '$got'"
+
+# winpkg: the Windows sample's copy changes the id, the command and multiarch, nothing else.
+python3 - "$lp/in.zip" <<'PY'
+import json, sys, zipfile
+m = {"id": "org.example.helloplaywine", "name": {"en": "Hello"}, "components": [{"id": "proton", "type": "proton"}],
+     "run": {"runner": "proton", "component": "proton", "command": ["${payload}/hello.exe"], "cwd": "${payload}",
+             "setup": [{"id": "first-run", "command": ["${payload}/setup.exe"], "once": True}]},
+     "permissions": {"network": False, "input": "controllers+keyboard-mouse"}}
+with zipfile.ZipFile(sys.argv[1], "w") as z:
+    z.writestr("play.json", json.dumps(m))
+    z.writestr("payload/check.exe", b"MZ")
+PY
+bash "$here/vm-play-check.sh" winpkg "$lp/in.zip" "$lp/out.zip" org.example.helloplaywine_launchwindows
+got="$(python3 -c '
+import json, sys, zipfile
+a, b = zipfile.ZipFile(sys.argv[1]), zipfile.ZipFile(sys.argv[2])
+m = json.loads(b.read("play.json"))
+print(m["id"], m["run"]["command"], m["run"]["cwd"], m["run"]["runner"], m["run"]["setup"][0]["id"], m["permissions"],
+      a.read("payload/check.exe") == b.read("payload/check.exe"), a.namelist() == b.namelist())
+' "$lp/in.zip" "$lp/out.zip")"
+[ "$got" = "org.example.helloplaywine_launchwindows ['\${payload}/check.exe'] \${payload} proton first-run {'network': False, 'input': 'controllers+keyboard-mouse', 'multiarch': True} True True" ] \
+    && pass "vm-play-check.sh winpkg: the id, the command and multiarch change, the rest of the manifest and the files stay" || fail "vm-play-check.sh winpkg: '$got'"
+# The sample the copy is made from: a Proton component from the OS, and check.exe is what its build produces.
+sw="$here/../samples/hello-play-wine"
+got="$(python3 -c '
+import json, sys
+m = json.load(open(sys.argv[1], encoding="utf-8"))
+c = m["components"][0]
+print(c["type"], c["source"], m["run"]["runner"], m["run"]["component"] == c["id"], m["permissions"].get("network"), "multiarch" in m["permissions"])
+' "$sw/package/play.json")"
+[ "$got" = "proton system proton True False False" ] && pass "samples/hello-play-wine: type proton, source system, no network and no multiarch of its own (RUY-902)" || fail "samples/hello-play-wine/package/play.json: '$got'"
+grep -q 'check.exe' "$sw/build.sh" && grep -q '"\${payload}/check.exe"' "$here/vm-play-check.sh" && pass "vm-play-check.sh launch-windows runs the check.exe that build.sh compiles" || fail "launch-windows and build.sh disagree on check.exe"
+# check.txt: the keys the check reads are the ones check.c writes, in the folder data.saves keeps.
+keys_ok=1
+for key in launches pointer_bits wow64 network; do
+    grep -q "$key=" "$sw/src/check.c" && grep -q "$key=" "$here/vm-play-check.sh" || keys_ok=0
+done
+[ "$keys_ok" = 1 ] && pass "check.c writes the keys launch-windows reads from check.txt (launches, pointer_bits, wow64, network)" || fail "check.c and vm-play-check.sh disagree on the keys of check.txt"
+grep -q 'Hello Play' "$sw/src/check.c" && grep -q 'check.txt' "$sw/src/check.c" && grep -q 'Documents/Hello Play/check.txt' "$here/vm-play-check.sh" && grep -q 'prefix:drive_c/users/steamuser/Documents/Hello Play' "$sw/package/play.json" && pass "check.txt is in the folder data.saves keeps, where launch-windows looks (RUY-902)" || fail "check.txt: the path of check.c, play.json and vm-play-check.sh differ"
+grep -q 'drive_c/users/steamuser/Documents/Hello Play/check.txt' "$here/vm-play-check.sh" && grep -q 'proton/pfx' "$here/vm-play-check.sh" && pass "launch-windows reads check.txt in the Proton prefix (<data>/proton/pfx, 05 section 6.2.1)" || fail "launch-windows looks outside the Proton prefix"
+
+# lstate: the launcher's status file (05 section 6.3).
+echo '{"format":1,"epoch":1,"backup_of":null,"setup_done":["first-run"],"setup_failed":null,"runner":{"component":"proton","family":"proton-ge","version":"GE-Proton11-12","source":"system","hash":null}}' > "$lp/state-win.json"
+echo '{"format":1,"epoch":0,"backup_of":null,"setup_done":[],"setup_failed":null,"runner":null}' > "$lp/state-native.json"
+echo 'not json' > "$lp/state-bad.json"
+ls_() { bash "$here/vm-play-check.sh" lstate "$1" | tr -d '\r'; }
+[ "$(ls_ "$lp/state-win.json")" = "epoch=1 setup_done=first-run runner=system/proton-ge/GE-Proton11-12" ] && pass "vm-play-check.sh lstate: a system-runner launch" || fail "lstate (windows): '$(ls_ "$lp/state-win.json")'"
+[ "$(ls_ "$lp/state-native.json")" = "epoch=0 setup_done= runner=none" ] && pass "vm-play-check.sh lstate: a native game has no runner" || fail "lstate (native): '$(ls_ "$lp/state-native.json")'"
+case "$(ls_ "$lp/state-bad.json")" in unreadable:*) pass "vm-play-check.sh lstate: a damaged file is unreadable, not empty" ;; *) fail "lstate (bad): '$(ls_ "$lp/state-bad.json")'" ;; esac
+case "$(ls_ "$lp/missing.json")" in unreadable:*) pass "vm-play-check.sh lstate: a missing file is unreadable" ;; *) fail "lstate (missing): '$(ls_ "$lp/missing.json")'" ;; esac
+
+# newest (vm-runner-check.sh): the newest runner of a kind or family by the numbers in the version
+# (GE-Proton10-9 is below GE-Proton11-12), the one rule steam and vm-play-check.sh's sysrunner share.
+mkdir -p "$lp/runners/ProtonGE10" "$lp/runners/ProtonGE11" "$lp/runners/WineStable" "$lp/runners/Broken"
+echo '{"family":"proton-ge","kind":"proton","version":"GE-Proton10-9"}' > "$lp/runners/ProtonGE10/runner.json"
+echo '{"family":"proton-ge","kind":"proton","version":"GE-Proton11-12"}' > "$lp/runners/ProtonGE11/runner.json"
+echo '{"family":"wine","kind":"wine","version":"99.0"}' > "$lp/runners/WineStable/runner.json"
+echo '{' > "$lp/runners/Broken/runner.json"
+nw() { bash "$here/vm-runner-check.sh" newest "$@" | tr -d '\r'; }
+[ "$(nw "$lp/runners" family=proton-ge)" = ProtonGE11 ] && pass "vm-runner-check.sh newest family=proton-ge: the highest version, not a wine runner or a broken file" || fail "newest family=proton-ge: '$(nw "$lp/runners" family=proton-ge)'"
+[ "$(nw "$lp/runners" kind=wine)" = WineStable ] && pass "vm-runner-check.sh newest kind=wine picks by the key it is given" || fail "newest kind=wine: '$(nw "$lp/runners" kind=wine)'"
+[ "$(nw "$lp/runners" kind=proton)" = ProtonGE11 ] && pass "vm-runner-check.sh newest kind=proton is the runner steam wants" || fail "newest kind=proton: '$(nw "$lp/runners" kind=proton)'"
+bash "$here/vm-runner-check.sh" newest "$lp/runners" family=nobody >/dev/null 2>&1 && fail "newest: a family without a runner passed" || pass "vm-runner-check.sh newest: no runner of the family is a failure"
+! grep -q 'findall' "$here/vm-play-check.sh" && grep -q 'newest "\$1" family=proton-ge' "$here/vm-play-check.sh" && [ "$(grep -c 'findall' "$here/vm-runner-check.sh")" = 1 ] && pass "the newest-runner rule is in vm-runner-check.sh only; vm-play-check.sh and steam ask for it" || fail "the newest-runner rule is written twice"
+grep -q 'newest_runner "\$play/runners" kind=proton' "$here/vm-runner-check.sh" && pass "vm-runner-check.sh steam asks newest_runner for its runner" || fail "vm-runner-check.sh steam has its own newest block"
+
+# sysrunner: "<family>/<version>" of that newest proton-ge, through vm-runner-check.sh next to the script.
+got="$(bash "$here/vm-play-check.sh" sysrunner "$lp/runners" | tr -d '\r')"
+[ "$got" = "proton-ge/GE-Proton11-12" ] && pass "vm-play-check.sh sysrunner: the newest proton-ge as <family>/<version>" || fail "sysrunner: '$got'"
+mkdir -p "$lp/none/WineStable"; echo '{"family":"wine","version":"9.0"}' > "$lp/none/WineStable/runner.json"
+bash "$here/vm-play-check.sh" sysrunner "$lp/none" >/dev/null 2>&1 && fail "sysrunner: a tree without proton-ge passed" || pass "vm-play-check.sh sysrunner: no proton-ge runner is a failure"
+mkdir -p "$lp/alone"; cp "$here/vm-play-check.sh" "$lp/alone/"
+out="$(bash "$lp/alone/vm-play-check.sh" sysrunner "$lp/runners" 2>&1)"; rc=$?
+[ "$rc" = 1 ] && expect_contains "vm-play-check.sh sysrunner without vm-runner-check.sh next to it says so" "$out" "copy vm-runner-check.sh next to this script" || fail "sysrunner alone: exit $rc, $out"
+
+# offline: a fake `ip` with a route table per family. on takes every default route away and keeps it; off puts
+# the same routes back. The fake fails on request: FAKE_DEL_FAIL="<families>" refuses `route del` for them,
+# FAKE_REPLACE_FAIL=<text> refuses a `route replace` whose route contains the text. replace is idempotent.
+ipsh="$tmp/ip-shims"; mkdir -p "$ipsh" "$lp/off"
+cat > "$ipsh/ip" <<'IPEOF'
+#!/bin/sh
+fam=$1; shift
+[ "$1" = route ] || exit 2
+shift
+t="$IP_TABLE$fam"; touch "$t"
+case "$1" in
+    show) cat "$t" ;;
+    del) case " ${FAKE_DEL_FAIL:-} " in *" $fam "*) exit 2 ;; esac; sed -i '1d' "$t" ;;
+    replace)
+        shift
+        case "$*" in *"${FAKE_REPLACE_FAIL:-@none@}"*) exit 2 ;; esac
+        { grep -vxF -- "$*" "$t" || true; } > "$t.new"; mv "$t.new" "$t"; echo "$*" >> "$t" ;;
+esac
+IPEOF
+chmod +x "$ipsh/ip"
+off() { IP_TABLE="$lp/table" PATH="$ipsh:$PATH" bash "$here/vm-play-check.sh" offline "$@"; }
+reset_routes() {
+    printf 'default via 10.0.2.2 dev eth0 proto dhcp metric 100\ndefault via 10.0.2.3 dev eth0 proto dhcp metric 200\n' > "$lp/table-4"
+    printf 'default via fe80::2 dev eth0 proto ra metric 1024\n' > "$lp/table-6"
+    rm -f "$lp/off"/routes-*
+}
+reset_routes
+cp "$lp/table-4" "$lp/want-4"; cp "$lp/table-6" "$lp/want-6"
+off on "$lp/off"; rc=$?
+[ "$rc" = 0 ] && [ ! -s "$lp/table-4" ] && [ ! -s "$lp/table-6" ] && pass "vm-play-check.sh offline on: every default route, IPv4 and IPv6, is gone" || fail "offline on: rc $rc, left: $(cat "$lp/table-4" "$lp/table-6")"
+off off "$lp/off"; rc=$?
+[ "$rc" = 0 ] && cmp -s "$lp/table-4" "$lp/want-4" && cmp -s "$lp/table-6" "$lp/want-6" && pass "vm-play-check.sh offline off: the routes are back as they were" || fail "offline off: rc $rc, have: $(cat "$lp/table-4" "$lp/table-6")"
+[ ! -e "$lp/off/routes-4" ] && [ ! -e "$lp/off/routes-6" ] && pass "vm-play-check.sh offline off: the saved routes are removed, a second off adds nothing" || fail "offline off kept its saved routes"
+# A step the caller must be able to undo: IPv6 cannot be deleted while IPv4 is gone already.
+reset_routes
+FAKE_DEL_FAIL="-6" off on "$lp/off" >/dev/null 2>&1; rc=$?
+[ "$rc" = 1 ] && [ ! -s "$lp/table-4" ] && pass "vm-play-check.sh offline on: a route that cannot be deleted fails the step after IPv4 is gone" || fail "offline on (IPv6 fails): rc $rc, IPv4 left: $(cat "$lp/table-4")"
+off off "$lp/off"; rc=$?
+[ "$rc" = 0 ] && cmp -s "$lp/table-4" "$lp/want-4" && cmp -s "$lp/table-6" "$lp/want-6" && pass "vm-play-check.sh offline off after a half-done on: both families are back, no route twice" || fail "offline off after a half-done on: rc $rc, have: $(cat "$lp/table-4" "$lp/table-6")"
+# A restore line that fails does not stop the others, and the retry finishes it.
+reset_routes
+off on "$lp/off"
+FAKE_REPLACE_FAIL=10.0.2.2 off off "$lp/off" >/dev/null 2>&1; rc=$?
+[ "$rc" = 1 ] && [ "$(cat "$lp/table-4")" = "$(sed -n 2p "$lp/want-4")" ] && cmp -s "$lp/table-6" "$lp/want-6" && pass "vm-play-check.sh offline off: a route that fails does not stop the others, IPv6 is back, rc 1" || fail "offline off (one route fails): rc $rc, have: $(cat "$lp/table-4" "$lp/table-6")"
+[ -s "$lp/off/routes-4" ] && [ ! -e "$lp/off/routes-6" ] && pass "vm-play-check.sh offline off: a family with a route left keeps its saved file, a restored one loses it" || fail "offline off (one route fails): saved files $(ls "$lp/off")"
+off off "$lp/off"; rc=$?
+[ "$rc" = 0 ] && [ "$(sort "$lp/table-4")" = "$(sort "$lp/want-4")" ] && [ ! -e "$lp/off/routes-4" ] && pass "vm-play-check.sh offline off: the retry (the cleanup's) puts the last route back without an error for the one already there" || fail "offline off retry: rc $rc, have: $(cat "$lp/table-4")"
+rm -f "$lp/off"/routes-*
+
+# The modes in the script: own ids through pkg_id (they differ from every other mode's), the cleanup, the calls
+# against Session1.xml and the profile code the other checks use.
+ids="$(grep -o 'launch_run [a-z]* [a-z_]* [a-z_]*' "$here/vm-play-check.sh" | sort | tr '\n' ',')"
+[ "$ids" = "launch_run launch with_id launch_checks,launch_run launchwindows windows_pkg launch_windows_checks," ] && pass "vm-play-check.sh: launch and launch-windows install under their own ids (launch, launchwindows)" || fail "vm-play-check.sh launch ids: '$ids'"
+grep -q 'appid="\$(pkg_id "\$appid" "\$part")"' "$here/vm-play-check.sh" && pass "vm-play-check.sh: launch_run takes its id through pkg_id (RUY-887)" || fail "vm-play-check.sh: launch_run builds its id without pkg_id"
+[ "$(grep -c '^    launch_cleanup$' "$here/vm-play-check.sh")" = 1 ] && [ "$(sed -n '/^cleanup() {/{n;p}' "$here/vm-play-check.sh")" = "    launch_cleanup" ] && pass "vm-play-check.sh: the cleanup stops the launch and gives the routes back before it uninstalls" || fail "vm-play-check.sh: cleanup does not start with launch_cleanup"
+grep -A4 'name="Launch"' "$here/../api/dbus/org.ruyaos.Session1.xml" | grep -c 'type="s" direction="in"' | grep -qx 2 && grep -q 'Launch ss "\$1" "\$lprof"' "$here/vm-play-check.sh" && grep -q 'Stop s "\$linst"' "$here/vm-play-check.sh" && pass "vm-play-check.sh calls Session1.Launch as (ss) and Stop as (s), the signatures of Session1.xml" || fail "vm-play-check.sh: its Launch/Stop calls do not match Session1.xml"
+grep -A5 'signal name="AppExited"' "$here/../api/dbus/org.ruyaos.Session1.xml" | tr -d '\n' | grep -q 'instance.*app_id.*exit_code.*reason' && pass "vm-play-check.sh signals: AppExited carries instance, app id, exit code, reason in that order (Session1.xml)" || fail "Session1.xml: AppExited arguments changed; signals reads data[2:] as code and reason"
+grep -q 'CreateProfile sssss "" "" "Check Admin" admin 1234' "$here/vm-play-check.sh" && grep -q 'DeleteProfile sss "\$ladmin" 1234 "\$lcreated"' "$here/vm-play-check.sh" && grep -q 'SwitchTo ss' "$here/vm-play-check.sh" && pass "vm-play-check.sh makes, signs in and deletes a profile with the calls vm-sample-check.sh and vm-x11-check.sh use" || fail "vm-play-check.sh: the profile calls differ from the other checks'"
+lr="$(sed -n '/^launch_checks() {/,/^launch_run() {/p' "$here/vm-play-check.sh")"
+[ "$(echo "$lr" | grep -c '^    sigsys_checks$')" = 2 ] && [ "$(echo "$lr" | grep -c '^    avc_checks$')" = 2 ] && pass "vm-play-check.sh: both launch modes end with the init_t AVC and the SIGSYS journal checks" || fail "vm-play-check.sh: a launch mode skips the journal checks"
+[ "$(grep -c 'offline on "\$work"' "$here/vm-play-check.sh")" = 1 ] && [ "$(grep -B2 'offline on "\$work"' "$here/vm-play-check.sh" | grep -c '^    lrouted=1$')" = 1 ] && [ "$(grep -c 'offline off "\$work"' "$here/vm-play-check.sh")" = 2 ] && pass "vm-play-check.sh launch-windows sets its routes flag before it takes the routes away, once, and gives them back (after the launches and in the cleanup)" || fail "vm-play-check.sh: the offline calls changed"
+out="$(sed -n '/^if \[ "\$mode" = launch-windows \]/,/^fi$/p' "$here/vm-play-check.sh")"; expect_contains "vm-play-check.sh launch-windows is its own mode" "$out" "launch_run launchwindows windows_pkg launch_windows_checks"
+grep -q 'zip=/root/hello-play-wine.play.zip' "$here/vm-play-check.sh" && pass "vm-play-check.sh launch-windows defaults to the Windows sample's zip" || fail "vm-play-check.sh: launch-windows has no default zip"
+
 echo "== vm-library-check.sh runners: Library1 ListRunners and the runner choice (RUY-959) =="
 rj() { printf '%s' "$1" | bash "$here/vm-library-check.sh" runnersjudge 2>&1; }
 ge='{"type":"s","data":"proton-ge"}'

@@ -48,6 +48,23 @@ fn png_size(path: &Path) -> (u32, u32) {
     (be(16), be(20))
 }
 
+/// The programs `build.sh` compiles for the Windows sample (check.exe is the 32-bit one the VM check
+/// runs, RUY-902).
+const WINE_STUBS: &[&str] = &[
+    "payload/hello.exe",
+    "payload/setup.exe",
+    "payload/check.exe",
+];
+
+/// The GE-Proton the image ships (the `version` of `image/play/runners/ProtonGE11/runner.json`):
+/// the sample's `min` must be met by it, so its dry run is made against this version.
+fn pinned_ge_proton() -> String {
+    let runner = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../image/play/runners/ProtonGE11/runner.json");
+    let json: serde_json::Value = serde_json::from_slice(&std::fs::read(runner).unwrap()).unwrap();
+    json["version"].as_str().unwrap().to_owned()
+}
+
 #[test]
 fn the_native_sample_builds_validates_and_inspects() {
     let (t, dir) = staged("hello-play-native", &["payload/hello-game"]);
@@ -65,17 +82,19 @@ fn the_native_sample_builds_validates_and_inspects() {
 }
 
 #[test]
-fn the_wine_sample_builds_validates_and_inspects_with_the_system_wine() {
-    let (t, dir) = staged(
-        "hello-play-wine",
-        &["payload/hello.exe", "payload/setup.exe"],
-    );
+fn the_windows_sample_builds_validates_and_inspects_with_the_system_ge_proton() {
+    let (t, dir) = staged("hello-play-wine", WINE_STUBS);
     let (b, zip) = build(&dir, &[]);
     assert_ok(&b);
     // Without a named system runner the dry run says it did not check; with one it resolves.
     let unchecked = run_p(&["validate"], &[&zip]);
     assert_ok(&unchecked);
-    let checked = run(&["validate", zip.to_str().unwrap(), "--system-wine", "10.2"]);
+    let checked = run(&[
+        "validate",
+        zip.to_str().unwrap(),
+        "--system-proton-ge",
+        &pinned_ge_proton(),
+    ]);
     assert_ok(&checked);
     assert!(
         checked.json["warnings"]
@@ -86,22 +105,29 @@ fn the_wine_sample_builds_validates_and_inspects_with_the_system_wine() {
         "{}",
         checked.json
     );
-    let i = run(&["inspect", zip.to_str().unwrap(), "--system-wine", "10.2"]);
+    let i = run(&[
+        "inspect",
+        zip.to_str().unwrap(),
+        "--system-proton-ge",
+        &pinned_ge_proton(),
+    ]);
     assert_ok(&i);
     assert_eq!(i.json["id"], "org.example.helloplaywine");
-    assert_eq!(i.json["runner"], "wine");
+    assert_eq!(i.json["runner"], "proton");
     drop(t);
 }
 
 #[test]
-fn the_wine_sample_is_refused_by_a_system_wine_older_than_min() {
-    let (_t, dir) = staged(
-        "hello-play-wine",
-        &["payload/hello.exe", "payload/setup.exe"],
-    );
+fn the_windows_sample_is_refused_by_a_system_ge_proton_older_than_min() {
+    let (_t, dir) = staged("hello-play-wine", WINE_STUBS);
     let (b, zip) = build(&dir, &[]);
     assert_ok(&b);
-    let o = run(&["validate", zip.to_str().unwrap(), "--system-wine", "8.0"]);
+    let o = run(&[
+        "validate",
+        zip.to_str().unwrap(),
+        "--system-proton-ge",
+        "GE-Proton10-9",
+    ]);
     assert_eq!(o.exit, 1, "{}", o.json);
     assert!(problem_codes(&o).contains(&"resolve.system_too_old".to_string()));
 }

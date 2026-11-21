@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: check steam sample
+# modes: check newest steam sample
 # Checks the Play platform on /usr (ADR-038, RUY-34) inside a running VM, as root, offline:
 #   1. links: every L+ line of /usr/lib/tmpfiles.d/ruya-play-platform.conf is a link under
 #      /var/lib/flatpak/extension to its folder on /usr, and that folder is there
@@ -34,6 +34,10 @@
 #      the VM is not done. Without a profile on the VM the step is a SKIP, as in `check`.
 # Running a game inside a .play sandbox (the extension mounts, the 32-bit points) is
 # vm-play-check.sh launch and launch-windows (RUY-902).
+# Mode `newest` (RUY-902; `newest <runners dir> <key>=<value>`, no root needed): prints the folder of the newest
+# runner.json whose key is the value (kind=proton, family=proton-ge) by the numbers in its version. `steam`
+# uses it and so does vm-play-check.sh (its launch-windows names the system runner the status file records):
+# the one copy of that rule on the VM side.
 #
 # ruya-pack: the Linux build of services/ruya-pack (scripts/ci-samples-linux.sh leaves it in
 # services/target-samples/release/):
@@ -60,7 +64,38 @@ first_profile() {
     busctl --system call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ListProfiles 2>/dev/null | grep -o '"p[0-9]*"' | head -1 | tr -d '"'
 }
 
-[ "$mode" = check ] || [ "$mode" = steam ] || [ "$mode" = sample ] || { echo "usage: vm-runner-check.sh [check|steam|sample] [ruya-pack | run-windows.py]"; exit 2; }
+# newest_runner <runners dir> <key>=<value>: the folder name of the newest runner.json one folder below <dir>
+# whose <key> is <value> (kind=proton, family=proton-ge), nothing and exit 1 when none. "Newest" is the
+# rule of resolve::compare_versions: the numbers in the version, compared in order (GE-Proton11-12 is 11, 12).
+# The one copy: `steam` uses it, and vm-play-check.sh asks for it through the `newest` mode.
+newest_runner() {
+    python3 -I - "$1" "$2" <<'PYEOF'
+import json, os, re, sys
+key, _, want = sys.argv[2].partition("=")
+best = None
+for name in sorted(os.listdir(sys.argv[1])):
+    try:
+        with open(os.path.join(sys.argv[1], name, "runner.json"), encoding="utf-8") as f:
+            r = json.load(f)
+    except (OSError, ValueError):
+        continue
+    if r.get(key) != want:
+        continue
+    k = [int(n) for n in re.findall(r"[0-9]+", str(r.get("version", "")))]
+    if best is None or k > best[0]:
+        best = (k, name)
+if best is None:
+    sys.exit(1)
+print(best[1])
+PYEOF
+}
+
+if [ "$mode" = newest ]; then
+    newest_runner "${2:?runners dir}" "${3:?key=value}"
+    exit $?
+fi
+
+[ "$mode" = check ] || [ "$mode" = steam ] || [ "$mode" = sample ] || { echo "usage: vm-runner-check.sh [check|steam|sample] [ruya-pack | run-windows.py] | newest <runners dir> <key>=<value>"; exit 2; }
 
 if [ "$mode" = sample ]; then
     script="${2:-/root/run-windows.py}"
@@ -103,24 +138,7 @@ if [ "$mode" = steam ]; then
     echo "--- Steam sees the runners"
     # The newest Proton runner by its runner.json version (the rule of resolve::compare_versions:
     # the numbers in the version, compared in order) and its tool name through Steam's link.
-    newest="$(python3 -I - "$play/runners" <<'PYEOF'
-import json, os, re, sys
-best = None
-for name in sorted(os.listdir(sys.argv[1])):
-    try:
-        with open(os.path.join(sys.argv[1], name, "runner.json"), encoding="utf-8") as f:
-            r = json.load(f)
-    except (OSError, ValueError):
-        continue
-    if r.get("kind") != "proton":
-        continue
-    key = [int(n) for n in re.findall(r"[0-9]+", str(r.get("version", "")))]
-    if best is None or key > best[0]:
-        best = (key, name)
-if best:
-    print(best[1])
-PYEOF
-)"
+    newest="$(newest_runner "$play/runners" kind=proton)"
     want=""
     for tree in "$play"/runners/*/; do
         name="$(basename "$tree")"
