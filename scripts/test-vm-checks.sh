@@ -447,6 +447,16 @@ printf '%s
 '     'ruya-compositor: app  RuyaOS X11 test uid 1001 pid 4321 profile p1'     'ruya-compositor: app org.x.Y title uid 1002 pid 99 profile p2'     'ruya-compositor: refused window of uid 1001 pid 77 (other-user)'     'ruya-compositor: app x uid 1001 pid 555 profile (shell)'     'ruya-compositor: app org.a.B Some game uid 1001 pid 4400 profile p1'     'ruya-compositor: app gone app:x' > "$tmp/shell.log"
 got="$( (export VM_CHECK_LIB_ONLY=1; . "$here/vm-x11-check.sh"; window_pids 1001 p1 < "$tmp/shell.log") | tr '\n' ' ')"
 [ "$got" = "4321 4400 " ] && pass "window_pids: the windows of one uid and profile, an empty title included" || fail "window_pids gave '$got'"
+out="$(
+    export VM_CHECK_LIB_ONLY=1
+    # shellcheck disable=SC1090
+    . "$here/vm-x11-check.sh"
+    printf '%s\n' 'INFO xwayland_satellite: ready' | satellite_faults | sed 's/^/clean:/'
+    printf '%s\n' 'DEBUG created decoration subsurface' 'Protocol error 1 on object wl_shm_pool@26: invalid width' | satellite_faults
+)"
+expect_lacks "satellite_faults passes an ordinary log" "$out" "clean:"
+expect_contains "satellite_faults finds a decoration subsurface" "$out" "decoration subsurface"
+expect_contains "satellite_faults finds the wl_shm_pool error" "$out" "wl_shm_pool@26"
 echo "vm-x11-client.py: against a fake X server"
 out="$(python3 "$here/test-vm-x11-client.py" 2>&1)"; rc=$?
 echo "$out"

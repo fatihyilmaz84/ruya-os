@@ -72,6 +72,13 @@ window_pids() {
     sed -n "s/.*ruya-compositor: app .* uid $1 pid \([0-9][0-9]*\) profile $2\$/\1/p"
 }
 
+# The lines of a satellite log on stdin that show it drawing its own title bar (a decoration subsurface) or
+# meeting the wl_shm_pool protocol error (RUY-494: it only draws the bar when the compositor offers no
+# server-side decorations).
+satellite_faults() {
+    grep -a -i -E 'decoration.*subsurface|subsurface.*decoration|wl_shm_pool'
+}
+
 # Lib mode: scripts/test-vm-checks.sh sources the helpers above and below on canned data.
 if [ "${VM_CHECK_LIB_ONLY:-0}" = 1 ]; then return 0 2>/dev/null || exit 0; fi
 
@@ -344,6 +351,14 @@ check)
     ss -H -tln 2>/dev/null | awk '{print $4}' | grep -q ":$((6000 + xn))\$" && bad "something listens on TCP $((6000 + xn))" || ok "no TCP listener on $((6000 + xn))"
     run_json="$(as_shell busctl --system --json=short call "$svc" "$path" "$ifc" ListRunning)"
     echo "$run_json" | grep -q "$inst" && echo "$run_json" | grep -q '"running"' && ok "ListRunning shows $inst as running" || bad "ListRunning: $run_json"
+
+    echo "--- the compositor offers server-side decorations, so the satellite draws no title bar (RUY-494)"
+    wl_sock="$(systemctl --user -M "$user@.host" show -p Environment "$inst" </dev/null 2>&1 | cat | tr ' ' '\n' | sed -n 's/^WAYLAND_DISPLAY=//p')"
+    wl_globals="$(runuser -u "$user" -- python3 -I -c "$client_src" globals "$wl_sock" 2>&1)"
+    echo "$wl_globals" | grep -q '^zxdg_decoration_manager_v1$' && ok "the compositor offers zxdg_decoration_manager_v1" || bad "no zxdg_decoration_manager_v1 in the globals of '$wl_sock': $(echo "$wl_globals" | tr '\n' ' ')"
+    sleep 3   # the satellite's first frames: its decoration (and so its pool) comes with the first window
+    faults="$(user_log_since "$t1" "$muid" | satellite_faults)"
+    [ -z "$faults" ] && ok "the satellite's log shows no decoration subsurface and no wl_shm_pool error" || bad "satellite log: $(echo "$faults" | head -2 | tr '\n' '|')"
 
     echo "--- the window reaches the compositor and maps to its instance"
     wait_shell "ruya-compositor: app .* uid $muid pid [0-9]+ profile $me" "$t1" 60 \
