@@ -804,6 +804,15 @@ function Test-BusPolicies {
     Record "bus policy lint" ($LASTEXITCODE -eq 0)
 }
 
+# The rules live in scripts\lint-ids.ps1 (shared with CI): profile user names are built only by ruya-ids (RUY-1021).
+function Test-Ids {
+    Step "profile id lint (no hand-built ruya-<id> user name outside services/ruya-ids)"
+    & (Join-Path $PSScriptRoot "lint-ids.ps1")
+    Record "profile id lint" ($LASTEXITCODE -eq 0)
+    & (Join-Path $PSScriptRoot "lint-ids.ps1") -SelfTest
+    Record "profile id lint self-test (a hit, a marked line, a test module, tests.rs, ruya-ids)" ($LASTEXITCODE -eq 0)
+}
+
 # The rules live in scripts\lint-vm-checks.ps1 (shared with CI): the lead-run VM check scripts (T-296).
 function Test-VmChecks {
     Step "VM check lint (vm-*.sh syntax and exec bit, host tests on canned data, ISO check refusals)"
@@ -1177,6 +1186,7 @@ function Test-ScriptSelfChecks {
     Step "Shots filter and retry self-check (RUY-511)"
     Test-ShotsFilterAndRetry
     Test-Duplicates
+    Test-Ids
 }
 
 function Do-Shell {

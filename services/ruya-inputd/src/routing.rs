@@ -65,7 +65,7 @@ use crate::pad::{
 use crate::seats::{Joined, Player, Seats, SEATS};
 use crate::udev::UdevEvent;
 use ruya_flatpak::valid_session_app_id;
-use ruya_ids::valid_profile_id;
+use ruya_ids::{user_of, valid_profile_id};
 
 pub type PadKey = u64;
 pub type VirtualId = u64;
@@ -2414,7 +2414,8 @@ impl<B: Backend> Router<B> {
                 scope_id
             };
             self.journal(format!(
-                "ruya-{profile}'s {scope} controller profile for {slot} is '{profile_id}'"
+                "{}'s {scope} controller profile for {slot} is '{profile_id}'",
+                user_of(profile)
             ));
             self.profiles_changed(profile);
         }
