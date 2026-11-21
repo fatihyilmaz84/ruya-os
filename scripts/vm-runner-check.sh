@@ -305,6 +305,9 @@ print("yes" if o.get("ok") is True else "no", r.get("kind") or "-", o.get("hash"
     if [ -n "$dll" ]; then
         label="$(ls -Z "$dll" 2>/dev/null | awk '{print $1}')"
         case "$label" in *:textrel_shlib_t:*) ok "$name: ${dll#"$tree"/} is labelled $label" ;; *) bad "$name: ${dll#"$tree"/} is labelled '${label:-unknown}', not textrel_shlib_t (Wine's execmod is denied: the ruya_play_runners SELinux module)" ;; esac
+    else
+        # A Wine or Proton runner without it has nothing to carry the label this check is about: not a silent skip.
+        case "$kind" in wine | proton) bad "$name: a $kind runner with no i386-windows/ntdll.dll, so its SELinux label cannot be checked" ;; esac
     fi
     [ "$kind" = proton ] && protons="$protons $tree"
     [ "$kind" = wine ] && wines="$wines $tree"

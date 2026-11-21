@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: asknet check generation helper launch launch-windows lstate offline parse perms pkgid remove removeapp runid signals sysrunner verify winpkg withid
+# modes: asknet check compat32 generation helper launch launch-windows lstate offline parse perms pkgid remove removeapp runid signals sysrunner verify winpkg withid
 # Checks ruya-play (org.ruyaos.Play1, RUY-829, the lead's run under RUY-100) inside a running VM,
 # as root. Modes:
 #   check  (default) every step below
@@ -66,6 +66,8 @@
 #   sysrunner host fixtures only: `sysrunner <runners dir>` prints "<family>/<version>" of the newest
 #          proton-ge runner.json below it (the OS's GE-Proton launch-windows expects in the status file);
 #          which folder is the newest is `vm-runner-check.sh newest`, so that script must be next to this one
+#   compat32 host fixtures only: `compat32 <app id>` prints the Compat.i386 ref of the app's runtime and exits 1
+#          when it is not installed (launch-windows FAILs naming it: a 32-bit program needs /lib/ld-linux.so.2)
 #   offline host fixtures only: `offline on|off <dir>` takes the default routes away (kept in <dir>) or
 #          puts them back; launch-windows uses it around its launches
 #   runid  host fixtures only: `runid <id>` prints the id check would use for <id>
@@ -134,10 +136,11 @@ since="$(date '+%Y-%m-%d %H:%M:%S')"
 
 # ADR-036: no SELinux denial of PID 1 (init_t) while the check ran. A denied OpenFile= of the
 # source shows up only as "missing" (graceful), so the journal is the proof.
+module_check() { # <name>: the SELinux module is loaded
+    [ -n "$(semodule -l 2>/dev/null | grep -x "$1")" ] && ok "the SELinux module $1 is loaded" || bad "the SELinux module $1 is not loaded"
+}
 avc_checks() {
-    [ -n "$(semodule -l 2>/dev/null | grep -x ruya_play_openfile)" ] \
-        && ok "the SELinux module ruya_play_openfile is loaded" \
-        || bad "the SELinux module ruya_play_openfile is not loaded"
+    module_check ruya_play_openfile
     local denied
     denied="$(journalctl --since "$since" -o cat 2>/dev/null | grep 'avc:  denied' | grep 'scontext=system_u:system_r:init_t')"
     [ -z "$denied" ] && ok "no init_t AVC denial during the check" \
@@ -398,6 +401,15 @@ print("epoch=%s setup_done=%s runner=%s" % (state.get("epoch"), ",".join(state.g
 PY
 }
 
+# compat_i386 <app>: prints the Compat.i386 ref of the app's runtime (the 32-bit loader, /lib/ld-linux.so.2, a 32-bit
+# Windows program needs inside the sandbox, RUY-999); fails when that ref is not installed. It asks flatpak about the
+# refs instead of starting the sandbox, which needs the profile's session and a display.
+compat_i386() {
+    local rt
+    rt="$(flatpak info --system --show-runtime "$1" 2>/dev/null)" || return 1
+    echo "${rt%%/*}.Compat.i386/${rt#*/}"
+    flatpak info --system "${rt%%/*}.Compat.i386/${rt#*/}" >/dev/null 2>&1
+}
 # system_runner <runners dir>: "<family>/<version>" of the newest proton-ge runner.json one folder below
 # <dir> (the OS's GE-Proton: what the status file names after a system-runner launch). Which folder is the
 # newest is vm-runner-check.sh's `newest` mode (one copy of the version rule), its runner.json says the rest.
@@ -483,6 +495,10 @@ if [ "$mode" = lstate ]; then
 fi
 if [ "$mode" = sysrunner ]; then
     system_runner "${2:?runners dir}"
+    exit $?
+fi
+if [ "$mode" = compat32 ]; then
+    compat_i386 "${2:?app id}"
     exit $?
 fi
 if [ "$mode" = offline ]; then
@@ -845,7 +861,7 @@ launch_checks() {
 
 # launch-windows: the Windows sample, offline, with a 32-bit command-line program.
 launch_windows_checks() {
-    local app="play.$appid" user="ruya-$lprof" data report runner perms want got
+    local app="play.$appid" user="ruya-$lprof" data report runner perms want got ref
     data="/var/home/$user/.var/app/$app/data"
     # ${prefix} of a Proton runner is <data>/proton/pfx (05 section 6.2.1); check.exe saves in Documents.
     report="$data/proton/pfx/drive_c/users/steamuser/Documents/Hello Play/check.txt"
@@ -853,6 +869,9 @@ launch_windows_checks() {
     runner="$(system_runner /usr/lib/ruyaos/play/runners)" && ok "the image ships the GE-Proton runner $runner" \
         || { bad "no proton-ge runner.json under /usr/lib/ruyaos/play/runners"; return; }
     [ -x /usr/lib/ruyaos/play/launcher/bin/ruya-play-launch ] && ok "the launcher is in the image" || bad "no /usr/lib/ruyaos/play/launcher/bin/ruya-play-launch"
+    module_check ruya_play_runners
+    ref="$(compat_i386 "$app")" && ok "the 32-bit loader is installed for $app: $ref" \
+        || bad "$app's runtime has no 32-bit loader: ${ref:-no runtime} (Compat.i386) is not installed"
     perms="$(flatpak info --system --show-permissions "$app" 2>&1 | perm_lines)"
     echo "$perms" | grep -qx '\[Context\] features=multiarch' && ok "$app may run 32-bit code (features=multiarch)" || bad "$app has no multiarch permission: $perms"
     echo "$perms" | grep -q 'shared=network' && bad "$app has the network permission" || ok "$app has no network permission"
