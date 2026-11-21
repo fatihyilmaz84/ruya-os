@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: check clean play playid playjudge runners runnersjudge security seed
+# modes: check choicejudge clean play playid playjudge runners runnersjudge security seed
 # Checks ruya-library (org.ruyaos.Library1, T-112 / T-163 / T-183) inside a running VM, as root. It builds a
 # tiny signed Flatpak repository (one runtime, a game and an app, no download, like
 # vm-store-check.sh), adds it through Store1, installs and uninstalls through Store1 and watches
@@ -31,7 +31,9 @@
 #             and is cleared by "package" (no file left); an unknown choice is "invalid", an id that
 #             is not installed "unknown". Removes the sample after.
 #             vm-library-check.sh runners [/root/hello-play-native.play.zip]
-#             `runnersjudge` judges ListRunners as busctl --json=short on stdin (host fixtures)
+#             `runnersjudge` judges ListRunners as busctl --json=short on stdin (host fixtures);
+#             `choicejudge <choice>` judges a GetRunnerChoice reply (busctl's text, `ss "ok" "<choice>"`:
+#             the contract returns status and choice) on stdin, exit 0 when it is ok with that choice
 #   security  see vm-security-check.sh (unit hardening)
 # Boot the VM with plain smoke-test.ps1 -Keep (or -Work -Keep for the screenshot).
 set -u
@@ -333,6 +335,10 @@ for r in data[0]:
 }
 
 choice_of() { as_shell busctl --system call "$svc" "$path" "$ifc" GetRunnerChoice ss "$1" "$2"; }
+# choice_judge <choice>: a GetRunnerChoice reply on stdin (two strings, status and choice) is ok with <choice>.
+choice_judge() { [ "$(cat)" = "ss \"ok\" \"$1\"" ]; }
+# choice_is <profile> <id> <choice>
+choice_is() { choice_of "$1" "$2" 2>/dev/null | choice_judge "$3"; }
 set_choice() { as_shell busctl --system call "$svc" "$path" "$ifc" SetRunnerChoice sss "$1" "$2" "$3"; }
 
 # runners_check <zip>
@@ -346,14 +352,14 @@ runners_check() {
     id="flatpak:play.$play_id"
     got="$(set_choice "$prof" "$id" system)"
     [ "$got" = 's "ok"' ] && ok "SetRunnerChoice system: ok" || bad "SetRunnerChoice system: $got"
-    [ "$(choice_of "$prof" "$id")" = 's "ok" "system"' ] && ok "GetRunnerChoice: system" || bad "GetRunnerChoice: $(choice_of "$prof" "$id")"
+    choice_is "$prof" "$id" system && ok "GetRunnerChoice: system" || bad "GetRunnerChoice: $(choice_of "$prof" "$id")"
     [ "$(stat -c '%U %a' "$file" 2>/dev/null)" = "ruya-library 600" ] && ok "the choice is in $file (ruya-library, 0600)" || bad "$file: $(stat -c '%U %a' "$file" 2>&1)"
     systemctl restart ruya-library
-    until [ "$(choice_of "$prof" "$id" 2>/dev/null)" = 's "ok" "system"' ] || [ "$n" -ge 30 ]; do sleep 1; n=$((n + 1)); done
-    [ "$(choice_of "$prof" "$id")" = 's "ok" "system"' ] && ok "the choice survives a restart of ruya-library" || bad "after a restart GetRunnerChoice: $(choice_of "$prof" "$id")"
+    until choice_is "$prof" "$id" system || [ "$n" -ge 30 ]; do sleep 1; n=$((n + 1)); done
+    choice_is "$prof" "$id" system && ok "the choice survives a restart of ruya-library" || bad "after a restart GetRunnerChoice: $(choice_of "$prof" "$id")"
     [ "$(set_choice "$prof" "$id" proton)" = 's "invalid"' ] && ok "an unknown choice is invalid" || bad "SetRunnerChoice proton: $(set_choice "$prof" "$id" proton)"
     [ "$(set_choice "$prof" "flatpak:play.not.installed" system)" = 's "unknown"' ] && ok "an id that is not installed is unknown" || bad "SetRunnerChoice of no item: $(set_choice "$prof" "flatpak:play.not.installed" system)"
-    [ "$(set_choice "$prof" "$id" package)" = 's "ok"' ] && [ "$(choice_of "$prof" "$id")" = 's "ok" "package"' ] && ok "package clears the choice" || bad "SetRunnerChoice package: $(choice_of "$prof" "$id")"
+    [ "$(set_choice "$prof" "$id" package)" = 's "ok"' ] && choice_is "$prof" "$id" package && ok "package clears the choice" || bad "SetRunnerChoice package: $(choice_of "$prof" "$id")"
     [ ! -e "$file" ] && ok "no choice left, no file" || bad "$file is left"
 }
 list_items_json() { as_shell busctl --system --json=short call "$svc" "$path" "$ifc" ListItems; }
@@ -372,7 +378,9 @@ mon=""
 need_clean=0
 keep_on_success=0
 play_clean() {
-    [ -n "${play_id:-}" ] && flatpak uninstall --system -y --noninteractive "play.$play_id" >/dev/null 2>&1
+    # Through Play1.Remove (vm-play-check.sh removeapp), so ruya-play forgets the build: a bare flatpak
+    # uninstall leaves it recorded and the next install of that build is refused (RUY-1001).
+    [ -n "${play_id:-}" ] && { bash "$(dirname "$0")/vm-play-check.sh" removeapp "play.$play_id" || fail=1; }
     [ -n "${play_dev:-}" ] && busctl --system call "$play_svc" "$play_obj" "$play_svc" SetDeveloperMode 'ba{sv}' "$play_dev" 1 admin_approved b true >/dev/null 2>&1
     rm -f "$play_state/incoming/vm-library-check.play.zip"
     play_id=""
@@ -405,6 +413,9 @@ runners)
     ;;
 runnersjudge)
     runners_judge
+    ;;
+choicejudge)
+    choice_judge "${2:?choice}"
     ;;
 security)
     echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"

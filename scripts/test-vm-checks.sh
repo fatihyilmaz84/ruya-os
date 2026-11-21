@@ -1625,19 +1625,42 @@ got="$(echo "$insp" | pc key verdict)"
 [ "$got" = needs-developer-mode ] && pass "play: an Inspect record's verdict" || fail "play: verdict read as '$got'"
 got="$(echo '{"type":"sa{sv}","data":["ok",{"verdict":{"type":"s","data":"ok"}}]}' | pc codes)"
 [ -z "$got" ] && pass "play: a record without problems has no codes" || fail "play: codes of a clean record read as '$got'"
-# RUY-871: the cleanup's restart of the service reports a FAIL and the script exits non-zero when it fails.
-rs="$tmp/restart-shims"; mkdir -p "$rs"
-printf '#!/bin/sh
-echo "$*" >> "%s/restart.log"
-exit "${FAKE_RESTART:-0}"
-' "$tmp" > "$rs/systemctl"; chmod +x "$rs/systemctl"
-out="$(PATH="$rs:$PATH" bash "$here/vm-play-check.sh" restart 2>&1)"; rc=$?
-[ "$rc" = 0 ] && ! echo "$out" | grep -q FAIL && pass "play: a restart that works is silent and exit 0" || fail "play: a working restart: exit $rc, '$out'"
-grep -qx "restart ruya-play.service" "$tmp/restart.log" && pass "play: the restart is of ruya-play.service" || fail "play: the restart log is '$(cat "$tmp/restart.log" 2>/dev/null)'"
-out="$(FAKE_RESTART=1 PATH="$rs:$PATH" bash "$here/vm-play-check.sh" restart 2>&1)"; rc=$?
-expect_contains "play: a failed restart is a FAIL line" "$out" "FAIL: ruya-play.service did not restart after the check"
-[ "$rc" != 0 ] && pass "play: a failed restart exits non-zero" || fail "play: a failed restart exited 0"
-grep -q 'restart_service || exit 1' "$here/vm-play-check.sh" && pass "play: the cleanup's restart sets the exit status" || fail "play: the cleanup ignores a failed restart"
+# RUY-1001: the one way a check removes a .play app is `removeapp`: Play1.Remove as an admin, then the job's end.
+# busctl is a fake Play1: Remove answers $FAKE_REMOVE (default: ok, job-9), ListJobs says job-9 finished with $FAKE_JOB.
+rm="$tmp/removeapp"; mkdir -p "$rm"
+printf '#!/bin/sh\necho 0\n' > "$rm/id"
+printf '#!/bin/sh\nshift 3\nexec "$@"\n' > "$rm/runuser"
+cat > "$rm/busctl" <<'SHIMEOF'
+#!/bin/sh
+echo "$*" >> "$FAKE_LOG"
+case "$*" in
+    *" Remove "*) if [ -n "$FAKE_REMOVE" ]; then echo "$FAKE_REMOVE"; else echo '{"type":"ss","data":["ok","job-9"]}'; fi ;;
+    *" ListJobs"*) echo "{\"type\":\"aa{sv}\",\"data\":[[{\"id\":{\"type\":\"s\",\"data\":\"job-9\"},\"state\":{\"type\":\"s\",\"data\":\"finished\"},\"status\":{\"type\":\"s\",\"data\":\"${FAKE_JOB:-ok}\"}}]]}" ;;
+esac
+SHIMEOF
+chmod +x "$rm/id" "$rm/runuser" "$rm/busctl"
+rmrun() { FAKE_LOG="$tmp/removeapp.log" PATH="$rm:$PATH" bash "$here/vm-play-check.sh" removeapp play.com.example.hello 2>&1; }
+: > "$tmp/removeapp.log"
+out="$(rmrun)"; rc=$?
+[ "$rc" = 0 ] && ! echo "$out" | grep -q FAIL && pass "play: removeapp is silent and exit 0 when the Remove job finishes ok" || fail "play: removeapp of a finished job: exit $rc, '$out'"
+grep -q 'Remove sa{sv} play.com.example.hello 1 admin_approved b true' "$tmp/removeapp.log" && pass "play: removeapp calls Play1.Remove for the app as an admin" || fail "play: removeapp called '$(cat "$tmp/removeapp.log")'"
+grep -q ' ListJobs' "$tmp/removeapp.log" && pass "play: removeapp waits for the job (ListJobs)" || fail "play: removeapp never looked at the job"
+out="$(FAKE_JOB=failed rmrun)"; rc=$?
+[ "$rc" != 0 ] && expect_contains "play: a Remove job that ends failed is a FAIL line" "$out" "FAIL: Play1.Remove of play.com.example.hello: ok failed" || fail "play: a failed Remove job exited 0"
+out="$(FAKE_REMOVE='{"type":"ss","data":["busy",""]}' rmrun)"; rc=$?
+[ "$rc" != 0 ] && expect_contains "play: a refused Remove is a FAIL line" "$out" "FAIL: Play1.Remove of play.com.example.hello: busy -" || fail "play: a refused Remove exited 0"
+out="$(FAKE_REMOVE='{"type":"ss","data":["unknown-app",""]}' rmrun)"; rc=$?
+[ "$rc" = 0 ] && ! echo "$out" | grep -q FAIL && pass "play: removeapp of an app that is not installed is nothing to remove" || fail "play: removeapp of an unknown app: exit $rc, '$out'"
+! grep -v '^ *#' "$here/vm-play-check.sh" | grep -q 'flatpak uninstall' && pass "vm-play-check.sh removes no .play app with flatpak uninstall" || fail "vm-play-check.sh: a flatpak uninstall"
+grep -q 'remove_app "play.$appid"' "$here/vm-play-check.sh" && pass "vm-play-check.sh: the cleanup removes the app through remove_app" || fail "vm-play-check.sh: the cleanup does not use remove_app"
+! sed -n '/^play_clean() {/,/^}/p' "$here/vm-library-check.sh" | grep -q 'flatpak uninstall' && sed -n '/^play_clean() {/,/^}/p' "$here/vm-library-check.sh" | grep -q 'vm-play-check.sh" removeapp' && pass "vm-library-check.sh play_clean removes the sample through vm-play-check.sh removeapp" || fail "vm-library-check.sh play_clean: not through removeapp"
+# RUY-1001: GetRunnerChoice returns status and choice (two strings, `ss`).
+cj() { printf '%s\n' "$1" | bash "$here/vm-library-check.sh" choicejudge "$2"; }
+cj 'ss "ok" "system"' system && pass "vm-library-check.sh choicejudge: ss \"ok\" \"system\" is the system choice" || fail "choicejudge: the two-string reply is not accepted"
+cj 'ss "ok" "package"' package && pass "vm-library-check.sh choicejudge: ss \"ok\" \"package\" is the package choice" || fail "choicejudge: package is not accepted"
+! cj 's "ok" "system"' system && pass "vm-library-check.sh choicejudge: the one-string form is not the reply" || fail "choicejudge: an s reply passed"
+! cj 'ss "ok" "package"' system && pass "vm-library-check.sh choicejudge: another choice is refused" || fail "choicejudge: package passed as system"
+! cj 'ss "unknown" ""' system && pass "vm-library-check.sh choicejudge: a status that is not ok is refused" || fail "choicejudge: unknown passed"
 grep -q 'no-gpg-verify' "$here/vm-play-check.sh" && fail "vm-play-check.sh mentions --no-gpg-verify" || pass "vm-play-check.sh never turns signature checks off"
 # RUY-900: the metadata generation in installed.json, read and set as the service writes the file.
 gj="$tmp/installed.json"

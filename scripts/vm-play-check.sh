@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: asknet check generation helper launch launch-windows lstate offline parse perms pkgid remove restart runid signals sysrunner verify winpkg withid
+# modes: asknet check generation helper launch launch-windows lstate offline parse perms pkgid remove removeapp runid signals sysrunner verify winpkg withid
 # Checks ruya-play (org.ruyaos.Play1, RUY-829, the lead's run under RUY-100) inside a running VM,
 # as root. Modes:
 #   check  (default) every step below
@@ -7,8 +7,11 @@
 #          for network, multiarch and gamemode (`asks_network`, the perms and remove modes use it)
 #   withid host fixtures only: `withid <in.zip> <out.zip> <id>` copies a package with the id of its
 #          play.json changed (the helper verify and perms use)
-#   restart host fixtures only: `restart_service`, the cleanup's last step, exits 1 with a FAIL line
-#          when `systemctl restart ruya-play.service` fails
+#   removeapp `removeapp play.<id>` (RUY-1001): the one way a check removes a .play app: Play1.Remove
+#          as an admin, waiting for the job's end, so ruya-play records the uninstall (a bare
+#          `flatpak uninstall` leaves the build recorded, and the next install of that build is refused
+#          build.not_newer). Exit 0 when the job finishes ok or the app is not installed; vm-library-check.sh
+#          calls it, so copy this script next to that one. Every cleanup here goes through it too
 #   helper the helper's sandbox only: systemd-analyze security of ruya-play.service and of a probe
 #          unit started with the helper's own properties (ruya-play --helper-argv), no network and
 #          no write outside its state folder from inside it, reading a USB source and an incoming/
@@ -25,8 +28,10 @@
 #          GetPermissions (as root, an admin) answers for it right after the install with the network
 #          allowed and withdrawable, the sandbox `flatpak run` builds reaches a listener on the
 #          host's loopback, WithdrawPermission network is ok and writes `shared=!network;` into the
-#          app's override only (flatpak info still shows the generated metadata), the next sandbox
-#          cannot connect, ResetPermissions removes the override and the connection works again
+#          app's override only (`flatpak info --show-metadata`, the deployment's own, is byte for byte
+#          what it was before, also after the reset; `--show-permissions` is metadata merged with the
+#          override, so it lacks network after the withdrawal, RUY-1002), the next sandbox cannot
+#          connect, ResetPermissions removes the override and the connection works again
 #   remove RUY-816: install the sample (developer mode, from incoming/), Play1.Remove without
 #          admin_approved is forbidden, of "" invalid, of an app that is not play.<id> or not
 #          installed unknown-app; with admin_approved a job that finishes ok (kind remove, phase
@@ -105,8 +110,8 @@
 # first, or the launch goes uncovered); the B
 # package is different-developer; after every refusal staging/ is empty and no new play.* app is
 # installed; ListSources lists the drive's packages; a drive mounted without noexec is
-# unknown-source; a download in incoming/ inspects. At exit everything is removed again and the
-# service restarts (its start-up reconcile forgets the uninstalled build).
+# unknown-source; a download in incoming/ inspects. At exit everything is removed again, the app
+# through Play1.Remove (`removeapp`).
 # JSON is parsed by key, never by key order.
 set -u
 mode="${1:-check}"
@@ -140,13 +145,6 @@ avc_checks() {
 }
 ok() { echo "PASS: $*"; }
 bad() { echo "FAIL: $*"; fail=1; }
-# The check's last step restarts the service (its start-up reconcile forgets the uninstalled build).
-# A service that does not come back would leave the VM without it, so that is a failure of the check.
-restart_service() {
-    systemctl restart ruya-play.service && return 0
-    bad "ruya-play.service did not restart after the check"
-    return 1
-}
 
 # --- JSON (busctl --json=short), by key ---------------------------------------------------------
 parse() { # <what> [arg]
@@ -451,10 +449,6 @@ if [ "$mode" = parse ]; then
     parse "${2:-}" "${3:-}"
     exit $?
 fi
-if [ "$mode" = restart ]; then
-    restart_service
-    exit $?
-fi
 if [ "$mode" = asknet ]; then
     asks_network "${2:?in.zip}" "${3:?out.zip}"
     exit $?
@@ -655,6 +649,19 @@ override_text() { flatpak override --system --show "$1" 2>&1 | tr '\n' ' '; }
 
 # Remove <app id> as an admin and wait for the job (RUY-816).
 remove_wait() { job_wait "$(call Remove 'sa{sv}' "$1" 1 admin_approved b true)"; }
+
+# remove_app <flatpak app id> (RUY-1001): the one way a check removes a .play app, the `removeapp` mode:
+# through Play1.Remove and the job's end, so ruya-play forgets the build too. An app that is not
+# installed is nothing to remove.
+remove_app() {
+    local st job
+    read -r st job _ <<< "$(remove_wait "$1")"
+    case "$st $job" in
+        "ok ok" | "unknown-app -") return 0 ;;
+    esac
+    bad "Play1.Remove of $1: $st $job"
+    return 1
+}
 
 remove_checks() {
     app="/var/lib/flatpak/app/play.$appid"
@@ -920,14 +927,20 @@ cleanup() {
     launch_cleanup
     [ -n "${listener:-}" ] && kill "$listener" 2>/dev/null
     [ -n "${appid:-}" ] && flatpak override --system --reset "play.$appid" >/dev/null 2>&1
-    [ -n "${appid:-}" ] && flatpak uninstall --system -y --noninteractive "play.$appid" >/dev/null 2>&1
+    local removed=0
+    [ -n "${appid:-}" ] && { remove_app "play.$appid" || removed=1; }
     [ -n "${before_dev:-}" ] && dev_mode "$before_dev" >/dev/null 2>&1
     umount "$usb" "$loose" 2>/dev/null
     rmdir "$usb" "$loose" 2>/dev/null
     rm -rf "$work" "$state/incoming/vm-play-check.play.zip"
     # An exit inside the EXIT trap sets the script's status.
-    restart_service || exit 1
+    [ "$removed" = 0 ] || exit 1
 }
+
+if [ "$mode" = removeapp ]; then
+    remove_app "${2:?play.<id>}"
+    exit $?
+fi
 
 [ -f "$zip" ] || { echo "FAIL: no package at $zip (build it as scripts/ci-samples-linux.sh does)"; exit 1; }
 systemctl is-active -q ruya-play.service && ok "ruya-play.service is active" || bad "ruya-play.service is not active"
@@ -1009,7 +1022,7 @@ while True:
     [ -n "$port" ]
 }
 permission_list_checks() { # <flatpak app id>
-    local papp="$1" out now
+    local papp="$1" out now meta
     echo "--- RUY-854: the permission list covers the .play app"
     # No ListInstalled first: the service must know an app that ruya-play installed after it started.
     out="$(store_call GetPermissions s "$papp")"
@@ -1025,16 +1038,25 @@ permission_list_checks() { # <flatpak app id>
     echo "sandbox before: $now"
     case "$now" in *"connect=yes"*) ok "the sandbox connects to the host's listener before any withdrawal";; *) bad "the sandbox cannot connect before a withdrawal: '$now'";; esac
 
+    # The deployment's own metadata: `--show-permissions` is that merged with the override, so it
+    # lacks network after a withdrawal by design (RUY-1002).
+    meta="$(flatpak info --system --show-metadata "$papp" 2>&1)"
     [ "$(store_call WithdrawPermission ss "$papp" network | parse status)" = ok ] && ok "WithdrawPermission network by root" || bad "WithdrawPermission network"
     flatpak override --system --show "$papp" | grep -q '^shared=!network;' && ok "the override says shared=!network" || bad "override: $(override_text "$papp")"
     echo " $(store_call GetPermissions s "$papp" | parse keys withdrawn) " | grep -q ' network ' && ok "GetPermissions reports network withdrawn" || bad "GetPermissions after the withdrawal"
-    [ "$(flatpak info --system --show-permissions "$papp" 2>&1 | perm_lines)" = "$PERMS_WANT" ] && ok "the generated metadata is unchanged (the withdrawal is the override alone)" || bad "the withdrawal changed the app's metadata"
+    [ "$(flatpak info --system --show-metadata "$papp" 2>&1)" = "$meta" ] && ok "the generated metadata is unchanged (the withdrawal is the override alone)" || bad "the withdrawal changed the app's metadata"
+    if flatpak info --system --show-permissions "$papp" 2>&1 | grep -qx 'shared=.*network'; then
+        bad "the merged permissions still show network after the withdrawal"
+    else
+        ok "the merged permissions (metadata and override) no longer show network"
+    fi
     now="$(sandbox_net "$papp" "$port")"
     echo "sandbox after: $now"
     case "$now" in *"connect=no"*) ok "the next launch cannot connect: the network is withdrawn";; *) bad "the sandbox still connects after the withdrawal: '$now'";; esac
 
     [ "$(store_call ResetPermissions s "$papp" | parse status)" = ok ] && ok "ResetPermissions by root" || bad "ResetPermissions"
     [ -z "$(flatpak override --system --show "$papp")" ] && ok "the reset left no override" || bad "an override is left: $(override_text "$papp")"
+    [ "$(flatpak info --system --show-metadata "$papp" 2>&1)" = "$meta" ] && ok "the metadata is unchanged after the reset" || bad "the reset changed the app's metadata"
     now="$(sandbox_net "$papp" "$port")"
     case "$now" in *"connect=yes"*) ok "the network is back after the reset";; *) bad "the network did not come back: '$now'";; esac
     kill "$listener" 2>/dev/null
