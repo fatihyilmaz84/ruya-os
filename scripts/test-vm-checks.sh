@@ -1950,6 +1950,15 @@ done
 [ "$keys_ok" = 1 ] && pass "check.c writes the keys launch-windows reads from check.txt (launches, pointer_bits, wow64, network)" || fail "check.c and vm-play-check.sh disagree on the keys of check.txt"
 grep -q 'Hello Play' "$sw/src/check.c" && grep -q 'check.txt' "$sw/src/check.c" && grep -q 'Documents/Hello Play/check.txt' "$here/vm-play-check.sh" && grep -q 'prefix:drive_c/users/steamuser/Documents/Hello Play' "$sw/package/play.json" && pass "check.txt is in the folder data.saves keeps, where launch-windows looks (RUY-902)" || fail "check.txt: the path of check.c, play.json and vm-play-check.sh differ"
 grep -q 'drive_c/users/steamuser/Documents/Hello Play/check.txt' "$here/vm-play-check.sh" && grep -q 'proton/pfx' "$here/vm-play-check.sh" && pass "launch-windows reads check.txt in the Proton prefix (<data>/proton/pfx, 05 section 6.2.1)" || fail "launch-windows looks outside the Proton prefix"
+# kv on a check.txt as check.exe writes it, CR LF (RUY-999): the values without the CR. The script's own kv,
+# with sed in binary mode: Git Bash's sed drops CR itself (text mode), Linux's keeps it, as on the VM. Its bytes
+# are compared through od, because Git Bash's $(...) drops a trailing CR too.
+eval "$(grep '^kv() {' "$here/vm-play-check.sh")"
+sed() { command sed -b "$@"; }
+kv_bytes() { kv "$@" | od -An -c | tr -d ' \n'; }
+printf 'launches=1\r\npointer_bits=32\r\nwow64=1\r\n' > "$tmp/check-crlf.txt"
+[ "$(kv_bytes "$tmp/check-crlf.txt" launches)" = '1\n' ] && [ "$(kv_bytes "$tmp/check-crlf.txt" pointer_bits)" = '32\n' ] && [ -z "$(kv_bytes "$tmp/check-crlf.txt" network)" ] && pass "vm-play-check.sh kv reads a CR LF check.txt (launches=1, pointer_bits=32, no network key)" || fail "vm-play-check.sh kv on CR LF: launches is '$(kv_bytes "$tmp/check-crlf.txt" launches)', want '1\n'"
+unset -f kv sed kv_bytes
 
 # lstate: the launcher's status file (05 section 6.3).
 echo '{"format":1,"epoch":1,"backup_of":null,"setup_done":["first-run"],"setup_failed":null,"runner":{"component":"proton","family":"proton-ge","version":"GE-Proton11-12","source":"system","hash":null}}' > "$lp/state-win.json"
@@ -2194,7 +2203,15 @@ echo "{\"hash\": \"$FAKE_PACK_HASH\", \"runner\": {\"version\": \"$version\", \"
 SHIMEOF
 printf '#!/bin/sh\n[ "$1" = -n ] && shift\nexec "$@"\n' > "$rsh/unshare"
 printf '#!/bin/sh\nexit 0\n' > "$rsh/chown"
+# ls -Z <file>: the SELinux label the image's policy gives the runners (RUY-999); $FAKE_LABEL changes it.
+cat > "$rsh/ls" <<'SHIMEOF'
+#!/bin/sh
+[ "$1" = -Z ] && { printf '%s %s\n' "${FAKE_LABEL-system_u:object_r:textrel_shlib_t:s0}" "$2"; exit 0; }
+exec /usr/bin/ls "$@"
+SHIMEOF
 chmod +x "$rsh"/*
+mkdir -p "$rt/files/lib/wine/i386-windows"
+: > "$rt/files/lib/wine/i386-windows/ntdll.dll"; : > "$rw/lib/wine/i386-windows/ntdll.dll"
 printf '%s %s\n' "$rr/var/lib/flatpak/extension/org.ruyaos.Play.Launcher/x86_64/1" /usr/lib/ruyaos/play/launcher \
     "$rr/var/lib/flatpak/extension/org.ruyaos.Play.Runner.ProtonGE11/x86_64/1" /usr/lib/ruyaos/play/runners/ProtonGE11     "$rr/var/lib/flatpak/extension/com.valvesoftware.Steam.CompatibilityTool.ProtonGE11/x86_64/stable" /usr/lib/ruyaos/play/runners/ProtonGE11 > "$tmp/links.good"
 printf '%s %s\n' "$rr/var/lib/flatpak/extension/org.ruyaos.Play.Runner.Wine11/x86_64/1" /usr/lib/ruyaos/play/runners/Wine11 >> "$tmp/links.good"
@@ -2212,6 +2229,10 @@ expect_contains "runner: it ran on the display ruya-session x11-run made" "$out"
 expect_contains "runner: the hash is compared" "$out" "hash $hash_ok as recorded"
 expect_contains "runner: the Wine runner's 64-bit program ran" "$out" "Wine11: x86_64 cmd.exe printed RUYA_RUNNER_OK as ruya-p1 without network"
 expect_contains "runner: the Wine runner's 32-bit program ran" "$out" "Wine11: i386 cmd.exe printed RUYA_RUNNER_OK as ruya-p1 without network"
+expect_contains "runner: GE-Proton's i386 ntdll.dll is textrel_shlib_t" "$out" "ok   ProtonGE11: files/lib/wine/i386-windows/ntdll.dll is labelled system_u:object_r:textrel_shlib_t:s0"
+expect_contains "runner: Wine's i386 ntdll.dll is textrel_shlib_t" "$out" "ok   Wine11: lib/wine/i386-windows/ntdll.dll is labelled"
+out="$(rc_ "$tmp/links.good" FAKE_LABEL=system_u:object_r:lib_t:s0)"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner: a runner DLL labelled lib_t FAILs (RUY-999)" "$out" "FAIL ProtonGE11: files/lib/wine/i386-windows/ntdll.dll is labelled 'system_u:object_r:lib_t:s0', not textrel_shlib_t" || fail "runner: lib_t label: exit $rc, $out"
 out="$(rc_ "$tmp/links.nolauncher")"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: a missing launcher link FAILs" "$out" "FAIL /var/lib/flatpak/extension/org.ruyaos.Play.Launcher/x86_64/1 is 'no link'" || fail "runner: a missing link: exit $rc"
 out="$(rc_ "$tmp/links.elsewhere")"; rc=$?
@@ -2222,6 +2243,9 @@ out="$(rc_ "$tmp/links.good" FAKE_PACK_REFUSE=1)"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: a refused runner.json FAILs" "$out" "FAIL ProtonGE11: runner-check ok=no" || fail "runner: a refused runner: exit $rc"
 out="$(rc_ "$tmp/links.good" FAKE_LAUNCH_SAYS="something else")"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: a launcher that does not refuse in its own words FAILs" "$out" "FAIL the launcher outside a sandbox" || fail "runner: the launcher's answer: exit $rc"
+# The label comes from the image's policy (RUY-999): the module has the file context and the Containerfile loads it.
+grep -qF '(filecon "/usr/lib/ruyaos/play/runners(/.*)?" file (system_u object_r textrel_shlib_t ((s0) (s0))))' "$here/../image/rootfs/usr/share/selinux/packages/ruyaos/ruya_play_runners.cil" && pass "ruya_play_runners.cil labels the runner trees textrel_shlib_t" || fail "ruya_play_runners.cil has no textrel_shlib_t file context for /usr/lib/ruyaos/play/runners"
+grep -Eq '^[[:space:]]*&& semodule -i .* -i /usr/share/selinux/packages/ruyaos/ruya_play_runners\.cil' "$here/../image/Containerfile" && pass "the Containerfile loads ruya_play_runners.cil with semodule -i" || fail "the Containerfile does not load ruya_play_runners.cil"
 ! grep -q 'runners.list' "$here/vm-runner-check.sh" && pass "vm-runner-check.sh reads no runners.list (RUY-959: Library1 ListRunners)" || fail "vm-runner-check.sh still reads runners.list"
 : > "$rt/silent"
 out="$(rc_ "$tmp/links.good")"; rc=$?

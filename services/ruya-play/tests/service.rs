@@ -112,7 +112,8 @@ fn the_flatpak_commit_lays_out_signs_and_installs() {
     }
 
     // The command lines, in order: the key on first use, the repo and the remote, then finish,
-    // export (signed) and install (from the local remote, signature checked).
+    // export (signed), the platform of the runner (from Flathub) and the app (from the local
+    // remote, signature checked).
     let calls = runner.calls.lock().unwrap().clone();
     let names: Vec<String> = calls
         .iter()
@@ -142,11 +143,21 @@ fn the_flatpak_commit_lays_out_signs_and_installs() {
             "flatpak build-finish",
             "flatpak build-export",
             "flatpak install",
+            "flatpak install",
         ]
     );
     let export = &calls[8];
     assert!(export.contains(&format!("--gpg-sign={FPR}")), "{export:?}");
-    let install = &calls[9];
+    // A native app: the runtime only, no 32-bit extension (RUY-999).
+    assert_eq!(calls[9], commit::install_platform("native"));
+    assert_eq!(
+        &calls[9][calls[9].len() - 2..],
+        &[
+            commit::PLATFORM_REMOTE.to_string(),
+            "runtime/org.freedesktop.Platform/x86_64/26.08".to_string()
+        ]
+    );
+    let install = &calls[10];
     assert!(install.contains(&"--or-update".to_string()));
     assert!(install.contains(&"--system".to_string()));
     assert!(install.contains(&commit::REMOTE.to_string()));

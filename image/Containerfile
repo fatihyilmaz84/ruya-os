@@ -183,6 +183,9 @@ RUN test -x /usr/lib/ruyaos/play/launcher/bin/ruya-play-launch \
 # pkexec (polkit) and pam_timestamp_check (pam) lose their setuid bit (RUY-18): their packages stay
 # (polkitd answers the services over D-Bus, PAM logs the shell in), the helpers are unused on a
 # console; 98-guard.sh fails the build if either still has the bit.
+# The SELinux modules (ADR-036; RUY-999 labels the runner trees textrel_shlib_t) only change the
+# policy here: no file is labelled at build time. ostree labels every file of /usr from the final
+# image's policy when bootc turns the image into the deployment, so the runners copied above get it.
 ARG RUYA_VERSION=0.0.0-dev
 RUN --mount=type=bind,source=image/build,target=/ctx/build \
     --mount=type=bind,source=image/rootfs,target=/ctx/rootfs \
@@ -197,7 +200,7 @@ RUN --mount=type=bind,source=image/build,target=/ctx/build \
     && systemctl --global enable ruya-devices.service \
     && systemctl enable greenboot-healthcheck.service greenboot-set-rollback-trigger.service \
     && systemctl set-default graphical.target \
-    && semodule -i /usr/share/selinux/packages/ruyaos/ruya_play_openfile.cil \
+    && semodule -i /usr/share/selinux/packages/ruyaos/ruya_play_openfile.cil -i /usr/share/selinux/packages/ruyaos/ruya_play_runners.cil \
     && /ctx/build/96-services.sh \
     && /ctx/build/90-initramfs.sh \
     && /ctx/build/92-branding.sh \

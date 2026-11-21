@@ -10,7 +10,8 @@ use ruya_play::core::fakes::RecommitCall;
 use ruya_play::core::reconcile::{self, Action};
 use ruya_play::core::staging::{self, Dir};
 use ruya_play::service::commit::{
-    extension_points, metadata, FlatpakCommit, COMPAT_I386_DIR, METADATA_GENERATION, RUNNER_DIR,
+    self, extension_points, metadata, FlatpakCommit, COMPAT_I386_DIR, METADATA_GENERATION,
+    RUNNER_DIR,
 };
 use ruya_play::{Commit, CommitError, InstalledBuilds, JobStatus, RecommitRequest, Recommitted};
 
@@ -322,14 +323,15 @@ fn the_flatpak_recommit_regenerates_the_metadata_and_mount_folders_and_installs(
     for want in ["files/play.json", "files/share/ruyaos/play/trust.json"] {
         assert!(layout.iter().any(|l| l == want), "{want}: {layout:?}");
     }
-    let calls: Vec<String> = runner
+    let flatpak: Vec<Vec<String>> = runner
         .calls
         .lock()
         .unwrap()
         .iter()
         .filter(|c| c[0] == "flatpak")
-        .map(|c| c[1].clone())
+        .cloned()
         .collect();
+    let calls: Vec<&str> = flatpak.iter().map(|c| c[1].as_str()).collect();
     assert_eq!(
         calls,
         [
@@ -337,8 +339,30 @@ fn the_flatpak_recommit_regenerates_the_metadata_and_mount_folders_and_installs(
             "remote-modify",
             "build-finish",
             "build-export",
+            "install",
             "install"
         ]
+    );
+    // A Windows app: the runtime and the 32-bit libraries and GL drivers its points mount, from
+    // Flathub, before the app itself (RUY-999).
+    let platform = &flatpak[4];
+    let at = platform
+        .iter()
+        .position(|a| a == commit::PLATFORM_REMOTE)
+        .expect("from Flathub");
+    assert_eq!(
+        &platform[at + 1..],
+        &[
+            "runtime/org.freedesktop.Platform/x86_64/26.08".to_string(),
+            "runtime/org.freedesktop.Platform.Compat.i386/x86_64/26.08".to_string(),
+            "runtime/org.freedesktop.Platform.GL32.default/x86_64/26.08".to_string(),
+        ]
+    );
+    assert!(!platform.iter().any(|a| a == "--or-update"), "{platform:?}");
+    assert!(
+        flatpak[5].contains(&commit::REMOTE.to_string()),
+        "{:?}",
+        flatpak[5]
     );
 }
 
@@ -375,8 +399,10 @@ fn a_recommit_runs_no_command_that_drops_an_override() {
     }
     let install = calls
         .iter()
-        .find(|c| c.get(1).map(String::as_str) == Some("install"))
-        .expect("the re-commit installs");
+        .find(|c| {
+            c.get(1).map(String::as_str) == Some("install") && c.contains(&commit::REMOTE.into())
+        })
+        .expect("the re-commit installs the app");
     assert!(
         install.iter().any(|a| a == "--or-update"),
         "an update, not a new install: {install:?}"
