@@ -3,14 +3,14 @@
 //! the same shape for tools that want a schema.
 
 use crate::limits::*;
-use crate::path::check_path;
+use crate::path::{check_path, fold};
 use crate::problem::{codes, pointer_join, Problems};
 use crate::table::{FileEntry, TableIndex};
 use crate::text::{
     check_chars, check_https_url, check_plain, is_language_tag, is_reserved_app_name,
 };
 use serde_json::{Map, Value};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// A text in several languages: language tag to text. `"en"` is always present.
 pub type Localized = BTreeMap<String, String>;
@@ -1856,11 +1856,12 @@ impl<'a> Checker<'a> {
                 s.strip_prefix("${game}")
                     .is_some_and(|r| r.is_empty() || r.starts_with('/'))
             };
-            if command.as_ref().is_some_and(|c| !starts_with_game(&c[0])) {
+            let is_game_file = |s: &str| s.strip_prefix("${game}/").is_some_and(|r| !r.is_empty());
+            if command.as_ref().is_some_and(|c| !is_game_file(&c[0])) {
                 self.p.add(
                     codes::RUN_WRITABLE_NEEDS_GAME,
                     "/run/command/0",
-                    "With run.writable the program starts with ${game}: the game runs from its own tree.",
+                    "With run.writable the program is ${game}/<file>: the game runs from its own tree.",
                 );
             }
             if !cwd.as_deref().is_some_and(starts_with_game) {
@@ -1950,10 +1951,10 @@ impl<'a> Checker<'a> {
             s.writable_folder(item, at)
         });
         for (i, a) in list.iter().enumerate() {
-            if list[..i]
-                .iter()
-                .any(|b| a == b || is_inside(a, b) || is_inside(b, a))
-            {
+            if list[..i].iter().any(|b| {
+                let (a, b) = (fold(a), fold(b));
+                a == b || is_inside(&a, &b) || is_inside(&b, &a)
+            }) {
                 self.p.add(
                     codes::RUN_WRITABLE_OVERLAP,
                     "/run/writable",
@@ -1964,6 +1965,7 @@ impl<'a> Checker<'a> {
                 );
             }
         }
+        self.writable_table_rules(&list);
         let folders: Vec<String> = list.iter().map(|f| format!("payload/{f}/")).collect();
         let bytes: u64 = self
             .entries
@@ -1987,6 +1989,61 @@ impl<'a> Checker<'a> {
             );
         }
         list
+    }
+
+    /// What the table says about the writable `folders` in one pass: a folder is named as the table
+    /// names it (the format is case-insensitive, so `system` for `System` is refused, not "created
+    /// empty"), and no link is below it (the tree has no rule for a link in a copied folder).
+    fn writable_table_rules(&mut self, folders: &[String]) {
+        // Every prefix of every folder, folded: `payload/a`, `payload/a/b`.
+        let mut wanted: HashMap<String, String> = HashMap::new();
+        for f in folders {
+            let mut path = String::from("payload");
+            for part in f.split('/') {
+                path.push('/');
+                path.push_str(part);
+                wanted.insert(fold(&path), path.clone());
+            }
+        }
+        let below: Vec<String> = folders.iter().map(|f| format!("payload/{f}/")).collect();
+        let listed = self
+            .entries
+            .iter()
+            .map(FileEntry::path)
+            .chain(self.table.dirs());
+        let mut wrong_case: Vec<(String, String)> = Vec::new();
+        for p in listed {
+            if let Some(exact) = wanted.get(&fold(p)) {
+                if exact != p && !wrong_case.iter().any(|(w, _)| w == exact) {
+                    wrong_case.push((exact.clone(), p.to_string()));
+                }
+            }
+        }
+        let links: Vec<&str> = self
+            .entries
+            .iter()
+            .filter(|e| matches!(e, FileEntry::Link { .. }))
+            .map(FileEntry::path)
+            .filter(|p| below.iter().any(|b| p.starts_with(b.as_str())))
+            .collect();
+        for (written, listed) in wrong_case {
+            self.p.add(
+                codes::RUN_WRITABLE_PATH,
+                "/run/writable",
+                format!(
+                    "{wq} is written in another letter case than {lq} in play.files; the format ignores case, so write the name as the table does.",
+                    wq = crate::problem::quote(&written),
+                    lq = crate::problem::quote(&listed)
+                ),
+            );
+        }
+        for link in links {
+            self.p.add(
+                codes::RUN_WRITABLE_PATH,
+                link,
+                "A link below a writable folder is not allowed; make it a file.",
+            );
+        }
     }
 
     /// One `run.writable` folder: the table's path rules, not the root, and nothing on the way a
@@ -2022,6 +2079,24 @@ impl<'a> Checker<'a> {
             return None;
         }
         Some(s.to_string())
+    }
+}
+
+impl Checker<'_> {
+    /// `game:` in `data.saves` or `data.cache` names a path in the game tree, which only
+    /// `run.writable` makes.
+    fn game_roots_need_writable(&mut self, data: &DataPaths) {
+        for (key, list) in [("saves", &data.saves), ("cache", &data.cache)] {
+            for (i, s) in list.iter().enumerate() {
+                if s.starts_with("game:") {
+                    self.p.add(
+                        codes::RUN_GAME_PLACEHOLDER_WITHOUT_WRITABLE,
+                        format!("/data/{key}/{i}"),
+                        "The game: root is used but run.writable is missing.",
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -2176,6 +2251,9 @@ pub fn parse_manifest(
     let art = c.art(root);
     let components = c.components(root);
     let run = c.run(root, &components);
+    if run.as_ref().is_some_and(|r| r.writable.is_empty()) {
+        c.game_roots_need_writable(&m.data);
+    }
     let permissions = c.permissions(root);
     if c.p.len() > before {
         return None;

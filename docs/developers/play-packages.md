@@ -591,14 +591,14 @@ Common ones first:
 | `run.disc_not_in_table` | Fix the run block of play.json (05 section 6.3). |
 | `run.disc_path` | Fix the run block of play.json (05 section 6.3). |
 | `run.disc_placeholder_without_discs` | Fix the run block of play.json (05 section 6.3). |
-| `run.game_placeholder_without_writable` | Fix the run block of play.json (05 section 6.3). |
+| `run.game_placeholder_without_writable` | List the folders the game writes into in run.writable, or use ${payload} and prefix:, data: or config: instead of ${game} and game:. |
 | `run.lib_i386_reserved` | Move the files out of lib/i386-linux-gnu/ (for example below payload/): a wine or proton package gets the runtime's 32-bit libraries mounted there. |
 | `run.placeholder_component` | Fix the run block of play.json (05 section 6.3). |
 | `run.unknown_key` | Fix the run block of play.json (05 section 6.3). |
-| `run.writable_needs_game` | Fix the run block of play.json (05 section 6.3). |
-| `run.writable_overlap` | Fix the run block of play.json (05 section 6.3). |
-| `run.writable_path` | Fix the run block of play.json (05 section 6.3). |
-| `run.writable_too_large` | Fix the run block of play.json (05 section 6.3). |
+| `run.writable_needs_game` | With run.writable, start run.command[0] with ${game}/ and set run.cwd to a path that starts with ${game}. |
+| `run.writable_overlap` | List each writable folder once, and none inside another; the outer folder already covers the inner one. |
+| `run.writable_path` | Write each run.writable folder as the payload/ folder the table lists (same letter case), not the root, with no link on the way or below it. |
+| `run.writable_too_large` | Keep run.writable to the folders the game writes into: the files below them add up to at most 2 GiB. |
 | `runner.arch_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
 | `runner.capability_invalid` | Fix the bundled runner's runner.json as the message says (05 section 6.2.1); the schema is in api/play/runner.schema.json. |
 | `runner.entry_invalid` | Write each entry as a plain relative path inside the runner's folder, such as bin/wine: no .. and no leading /. |

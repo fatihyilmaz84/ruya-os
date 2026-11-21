@@ -179,10 +179,11 @@ Many Windows games write their ini file, log or saves into their own install fol
 }
 ```
 
-- `writable` is at most 16 folders of `payload/`, written relative to it. Not the root, none inside another one, none that is a link; they may be missing from the package, then they start empty. The files below them add up to at most 2 GiB.
+- `writable` is at most 16 folders of `payload/`, written relative to it. Not the root, none inside another one, none that is a link or holds one; they may be missing from the package, then they start empty. The files below them add up to at most 2 GiB.
 - `${game}` is the game's own folder. Outside the writable folders it looks like `payload/` (the files are links, and a write there fails exactly as before); inside them the files are copies the game may change. `${payload}` stays the read-only original.
-- `run.command[0]` and `run.cwd` start with `${game}`, and `${game}/x` is the file `payload/x`. `${game}` without `writable` is an error.
-- `game:` in `data.saves` names a path inside that folder, for example `game:Save`.
+- `run.command[0]` is `${game}/<file>` and `run.cwd` is required and starts with `${game}`; `${game}/x` is the file `payload/x`. Setup commands may use `${game}` or `${payload}`. `${game}` without `writable` is an error.
+- `game:` in `data.saves` or `data.cache` names a path inside that folder, for example `game:Save`; without `writable` it is an error.
+- Write the folders as the package lists them, with the same letter case (`System`, not `system`), and keep links out of them.
 - An update of the package keeps what the player's game wrote: a file the game changed is not replaced by the new build's file. Keep the folders to what the game writes; everything in them is copied for every profile that plays it.
 
 `ruya-pack validate` reports the mistakes with the codes `run.writable_path`, `run.writable_overlap`, `run.writable_too_large`, `run.game_placeholder_without_writable` and `run.writable_needs_game`. A game with an option for the folder of its settings can use that instead (`INI=` for Unreal Tournament); that needs no `writable` at all.
