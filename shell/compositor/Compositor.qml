@@ -75,8 +75,23 @@ WaylandCompositor {
     // The client went away: dropping the item makes the shell take the screen and the focus back
     // (Shell's guard on each app item). Connected from here, not as a handler inside the delegate:
     // there it ran with a dead context in the T-123 spike and the last frame stayed on screen.
+    //
+    // One call is one surface (one toplevel item), not one client: a Proton game opens and closes
+    // several windows (launcher, splash, the game). The line says `surface gone` while the client
+    // still has others and `app gone` for its last one; `surfaceCount` is the live items per pid.
+    property var surfaceCount: ({})
+    function surfaceAdded(item) {
+        surfaceCount[item.pid] = (surfaceCount[item.pid] || 0) + 1
+    }
     function appClosed(item) {
-        console.info("ruya-compositor: app gone", item.objectName)
+        const left = (surfaceCount[item.pid] || 1) - 1
+        if (left > 0)
+            surfaceCount[item.pid] = left
+        else
+            delete surfaceCount[item.pid]
+        console.info("ruya-compositor:", left > 0 ? "surface gone" : "app gone", item.objectName,
+                     "title", item.toplevel ? item.toplevel.title : "", "pid", item.pid,
+                     "others", left)
         item.destroy()
     }
 
@@ -144,6 +159,7 @@ WaylandCompositor {
             // Parented to the shell so it is never garbage-collected; addApp moves it into the app layer.
             const item = surfaceComponent.createObject(win.shell, { shellSurface: xdgSurface, toplevel: toplevel,
                                                                         pid: client.processId })
+            compositor.surfaceAdded(item)
             item.surfaceDestroyed.connect(() => compositor.appClosed(item))
             toplevel.sendFullscreen(Qt.size(win.width, win.height))
             // The app is shown only to its profile ("" = the shell's own: to whoever is signed in).
