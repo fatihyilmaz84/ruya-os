@@ -7,6 +7,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+ruya-ids = { path = "../ruya-ids" }  # the one profile-id rule and profile user name (RUY-1008)
 argon2 = "0.5"
 password-hash = { version = "0.5", features = ["getrandom"] }  # OsRng for salts
 serde = { version = "1", features = ["derive"] }

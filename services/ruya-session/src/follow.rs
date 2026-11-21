@@ -18,7 +18,8 @@ use std::time::Duration;
 
 use zbus::message::{Message, Type};
 
-use crate::spawner::{valid_profile_id, ShowUnit, UnitChange, UnitEvent, UnitWatch};
+use crate::spawner::{ShowUnit, UnitChange, UnitEvent, UnitWatch};
+use ruya_ids::profile_of_user;
 
 /// How often a unit is looked at while the connection is down.
 pub const WATCH_POLL: Duration = Duration::from_secs(2);
@@ -222,7 +223,7 @@ impl Follower {
 /// `--machine%3d...` reached `systemd-run` literally and the bridge ended at once ("Unexpected
 /// EOF during handshake", VM 0.0.59, lead-7).
 pub fn bridge_args(user: &str) -> Result<Vec<String>, String> {
-    if !user.strip_prefix("ruya-").is_some_and(valid_profile_id) {
+    if profile_of_user(user).is_none() {
         return Err(format!("not a profile user: {user:?}"));
     }
     Ok(vec![

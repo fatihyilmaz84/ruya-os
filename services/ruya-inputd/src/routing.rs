@@ -50,7 +50,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
-use crate::accounts::{valid_profile_id, Accounts};
+use crate::accounts::Accounts;
 use crate::acl;
 use crate::activity::ActivityGate;
 use crate::book::{Book, SaveAnswer, Summary};
@@ -65,6 +65,7 @@ use crate::pad::{
 use crate::seats::{Joined, Player, Seats, SEATS};
 use crate::udev::UdevEvent;
 use ruya_flatpak::valid_session_app_id;
+use ruya_ids::valid_profile_id;
 
 pub type PadKey = u64;
 pub type VirtualId = u64;

@@ -3,16 +3,11 @@
 
 use std::collections::HashSet;
 
-use crate::spawner::valid_profile_id;
+use ruya_ids::valid_profile_id;
 
 pub trait ProfileDirectory {
     /// The Unix user of this profile id, or `None` when it is not a RuyaOS profile.
     fn unix_user(&self, profile: &str) -> Option<String>;
-}
-
-/// Unix user name for a profile id ("p3" -> "ruya-p3"); the same rule as `ruya-profiles`.
-pub fn unix_user_of(profile_id: &str) -> String {
-    format!("ruya-{profile_id}")
 }
 
 /// A set of profile ids. The adapter refreshes it from `Profiles1.ListProfiles` before a launch
@@ -37,7 +32,9 @@ impl ProfileSnapshot {
 
 impl ProfileDirectory for ProfileSnapshot {
     fn unix_user(&self, profile: &str) -> Option<String> {
-        self.ids.contains(profile).then(|| unix_user_of(profile))
+        self.ids
+            .contains(profile)
+            .then(|| ruya_ids::user_of(profile))
     }
 }
 

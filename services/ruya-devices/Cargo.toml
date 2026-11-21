@@ -7,6 +7,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+ruya-ids = { path = "../ruya-ids" }  # the one profile-id rule and profile user name (RUY-1008)
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"  # pw-dump output (wpctl/pw-dump child processes, no PipeWire bindings)
 toml = "0.8"

@@ -7,7 +7,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::history::{Event, History, Item, NewItem, Status};
 use crate::settings::{Change, Settings};
-use crate::store::{valid_profile_id, Persist, ProfileData};
+use crate::store::{Persist, ProfileData};
+use ruya_ids::valid_profile_id;
 
 /// What the service knows about the profiles that exist.
 #[derive(Debug, Clone, PartialEq, Eq)]
