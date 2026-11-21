@@ -120,11 +120,29 @@ void Library::launch(const QString &id)
     emit launchRequested(id, found.value(QStringLiteral("launch")).toString());
 }
 
-QString Library::sessionAppId(const QString &id) const
+// The Flatpak application id an item starts ("flatpak:<id>" in its launch spec), or "".
+static QString flatpakIdOf(const QVariantMap &item)
 {
     const QString prefix = QStringLiteral("flatpak:");
-    const QString spec = item(id).value(QStringLiteral("launch")).toString();
+    const QString spec = item.value(QStringLiteral("launch")).toString();
     return spec.startsWith(prefix) ? spec.mid(prefix.size()) : QString();
+}
+
+QString Library::sessionAppId(const QString &id) const
+{
+    return flatpakIdOf(item(id));
+}
+
+QVariantMap Library::itemForApp(const QString &appId) const
+{
+    if (appId.isEmpty())
+        return {};
+    for (const QVariant &v : m_items) {
+        const QVariantMap m = v.toMap();
+        if (flatpakIdOf(m) == appId)
+            return m;
+    }
+    return {};
 }
 
 QVariantMap Library::item(const QString &id) const

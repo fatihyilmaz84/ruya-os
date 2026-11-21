@@ -55,7 +55,7 @@
     "licence": {
       "type": "object",
       "properties": {
-        "package": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9.+() :-]+$" },
+        "package": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[A-Za-z0-9.+() :-]+$" },
         "terms_url": { "$ref": "#/$defs/httpsUrl" }
       }
     },
@@ -200,7 +200,7 @@
           "properties": {
             "path": { "type": "string", "pattern": "^components/[^\\\\:\\u0000-\\u001F]+$" },
             "version": { "$ref": "#/$defs/version" },
-            "licence": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9.+() :-]+$" },
+            "licence": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[A-Za-z0-9.+() :-]+$" },
             "source_url": { "$ref": "#/$defs/httpsUrl" }
           }
         }

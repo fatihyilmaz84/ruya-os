@@ -1247,14 +1247,18 @@ Item {
             compare(find("aboutLicence").value, "GPL-3.0-or-later")
             compare(findChild(find("aboutLicence"), "value").truncated, false, "the licence is not elided (RUY-589)")
             compare(find("aboutLicenceNote").text, "Icon font: Apache-2.0. Inter typeface: OFL-1.1.")
-            // RUY-34: the image's Windows runner (the mock's sample of the pinned GE-Proton) and its notice.
+            // RUY-34, RUY-37: the image's Windows runners (the mock's sample of the pinned GE-Proton and
+            // Wine stable), one notice each.
             verify(find("aboutWindowsRunner").visible)
             compare(find("aboutWindowsRunner").kind, "info")
             compare(find("aboutWindowsRunner").label, "Windows compatibility")
-            compare(find("aboutWindowsRunner").value, "GE-Proton11-12")
+            compare(find("aboutWindowsRunner").value, "GE-Proton11-12, wine-11.0")
             verify(find("aboutRunnerNote0").visible)
             compare(find("aboutRunnerNote0").text, "GE-Proton11-12: BSD-3-Clause AND LGPL-2.1-or-later AND LGPL-2.0-or-later AND Zlib AND MIT AND OFL-1.1. Source: https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12")
             verify(find("aboutRunnerNote0").y > find("aboutWindowsRunner").y, "the notice is under its row")
+            verify(find("aboutRunnerNote1").visible)
+            compare(find("aboutRunnerNote1").text, "wine-11.0: LGPL-2.1-or-later AND LGPL-2.1-only AND BSD-3-Clause AND BSD-2-Clause AND NCSA AND MIT AND Zlib AND IJG AND libpng-2.0 AND libtiff AND OLDAP-2.8 AND TU-Berlin-1.0 AND WTFPL. Source: https://dl.winehq.org/wine/source/11.0/wine-11.0.tar.xz")
+            verify(find("aboutRunnerNote1").y > find("aboutRunnerNote0").y, "Wine's notice follows GE-Proton's")
 
             keyClick(Qt.Key_Right)
             tryVerify(() => find("aboutVersion").activeFocus)
@@ -1282,8 +1286,9 @@ Item {
             openSettings()
             selectCategory("about")
             compare(find("aboutWindowsRunner").label, "Windows uyumluluğu")
-            compare(find("aboutWindowsRunner").value, "GE-Proton11-12")
+            compare(find("aboutWindowsRunner").value, "GE-Proton11-12, wine-11.0")
             compare(find("aboutRunnerNote0").text, "GE-Proton11-12: BSD-3-Clause AND LGPL-2.1-or-later AND LGPL-2.0-or-later AND Zlib AND MIT AND OFL-1.1. Kaynak: https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12")
+            compare(find("aboutRunnerNote1").text, "wine-11.0: LGPL-2.1-or-later AND LGPL-2.1-only AND BSD-3-Clause AND BSD-2-Clause AND NCSA AND MIT AND Zlib AND IJG AND libpng-2.0 AND libtiff AND OLDAP-2.8 AND TU-Berlin-1.0 AND WTFPL. Kaynak: https://dl.winehq.org/wine/source/11.0/wine-11.0.tar.xz")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("aboutVersion").activeFocus)
             for (let i = 0; i < 4; ++i)
@@ -1332,7 +1337,7 @@ Item {
             compare(find("aboutRunnerNote0"), null)
             Library.resetMockForTests("")
             tryVerify(() => find("aboutWindowsRunner").visible)
-            compare(find("aboutWindowsRunner").value, "GE-Proton11-12")
+            compare(find("aboutWindowsRunner").value, "GE-Proton11-12, wine-11.0")
         }
 
         function test_guide_overlay_over_settings_pane() {
@@ -1371,17 +1376,6 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/8b-settings-about-category.png")
 
             // RUY-34: the Windows runner row focused, with its notice under it, in English and Turkish.
-            // RUY-959: then with two Windows runners of Library1 (the pinned GE-Proton and a Wine), two notes.
-            shootAboutWindowsRunner("8c-settings-about-windows")
-            Library.mockSetRunners([Library.runners[0], { family: "wine", kind: "wine", version: "10.0", licence: "LGPL-2.1-or-later",
-                                                          sourceUrl: "https://gitlab.winehq.org/wine/wine/-/releases/wine-10.0" }])
-            tryVerify(() => Library.runners.length === 2)
-            shootAboutWindowsRunner("8d-settings-about-windows-two")
-        }
-
-        // From the category list with About selected: the Windows compatibility row focused, shot as
-        // <name>-en.png and <name>-tr.png, back on the list after each.
-        function shootAboutWindowsRunner(name) {
             for (const language of ["en", "tr"]) {
                 DeviceSettings.language = language
                 keyClick(Qt.Key_Right)                   // the pane re-enters at its last row
@@ -1393,7 +1387,12 @@ Item {
                     keyClick(Qt.Key_Down)
                 tryVerify(() => find("aboutWindowsRunner").activeFocus)
                 wait(600)
-                grabImage(tc.shell).save(shotsDir + "/" + name + "-" + language + ".png")
+                grabImage(tc.shell).save(shotsDir + "/8c-settings-about-windows-" + language + ".png")
+                // RUY-37: the last row focused scrolls the pane to its end, where Wine's note shows in full.
+                keyClick(Qt.Key_Down)
+                tryVerify(() => find("aboutSystemInfo").activeFocus)
+                wait(600)
+                grabImage(tc.shell).save(shotsDir + "/8d-settings-about-runner-notes-" + language + ".png")
                 keyClick(Qt.Key_Escape)
                 tryVerify(() => find("categoryList").activeFocus)
             }

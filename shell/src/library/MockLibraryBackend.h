@@ -17,7 +17,7 @@ public:
     void listItemsDelayed(int ms);
     int pendingReplies() const { return m_pending; }
     void rescan() override;
-    // RUY-959. The runners: the image's pinned GE-Proton until setRunners. A choice is taken for a
+    // RUY-959. The runners: the image's pinned GE-Proton and Wine until setRunners. A choice is taken for a
     // .play item only ("unknown", "not_play", "invalid" as Library1 answers), kept per profile in
     // memory; "package" removes it. resolveRunner answers every valid choice with the item's own
     // runner fields (the mock has no launcher to resolve with).

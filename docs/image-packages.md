@@ -222,11 +222,13 @@ row here.
 |---|---|---|---|
 | `ruya-play-launch` (`/usr/lib/ruyaos/play/launcher/bin/`) | the launcher every `.play` app runs (`org.ruyaos.Play.Launcher//1`), static (glibc `crt-static`, static-pie; `glibc-static` in the build stage only) | `services/ruya-play-launch`, the `services-build` stage (Fedora's `rust-std-static-x86_64-unknown-linux-musl`, `musl-gcc`, `musl-libc-static`; build stage only) | a few MB |
 | `ProtonGE11` (`/usr/lib/ruyaos/play/runners/ProtonGE11/`) | GE-Proton11-12, the default Windows runner (ADR-025; `org.ruyaos.Play.Runner.ProtonGE11//1`, family `proton-ge`) | the upstream release tarball pinned in `image/play/runners/ProtonGE11/pin` (SHA-256 `0595159e...5d70`), unpacked by `image/play/install-runners.sh`, plus our `runner.json` | **1528 MiB** unpacked (6167 files, 1953 links, 887 folders; measured from the tarball's listing, RUY-34); the tarball is 541 MiB |
+| `Wine11` (`/usr/lib/ruyaos/play/runners/Wine11/`) | plain Wine stable 11.0 (`wine-11.0`, vanilla, not staging), the second Windows runner (ADR-025 as narrowed by RUY-915; `org.ruyaos.Play.Runner.Wine11//1`, family `wine`); the WoW64 build, which runs 32-bit Windows programs without 32-bit Linux libraries; no wine-mono or wine-gecko (a game that needs one bundles it) | the Kron4ek/Wine-Builds release `wine-11.0-amd64-wow64.tar.xz` pinned in `image/play/runners/Wine11/pin` (SHA-256 `39574efa...0314`, as GitHub lists it), unpacked by `image/play/install-runners.sh` (the `play-runners` stage installs `xz` for it), plus our `runner.json` | **684 MiB** unpacked (3979 files, 16 links, 27 folders; measured from the tarball's listing, RUY-37); the tarball is 70 MiB |
 
-**Size.** The runner tree is the largest single addition to the image so far: the deployed `/usr` grows by about
-1.5 GiB and the image as a container by about the tarball's compressed size. It is a layer of its own (the
-`play-runners` stage, copied right after the slim step), so an OS update that keeps the pins does not download it
-again; a new pin does. Its hash and the image's list of runners are a small separate layer (`play-runners-check`).
+**Size.** The runner trees are the largest single addition to the image so far: the deployed `/usr` grows by about
+2.2 GiB (GE-Proton 1.5 GiB, Wine stable 0.7 GiB) and the image as a container by about the tarballs' compressed size
+(611 MiB). They are a layer of their own (the `play-runners` stage, copied right after the slim step), so an OS update
+that keeps the pins does not download them again; a new pin does. Their hashes and the image's list of runners are a
+small separate layer (`play-runners-check`).
 
 **Codecs and licences.** GE-Proton ships as released, with its own GStreamer and FFmpeg (H.264, AAC and others), as
 the owner decided for ADR-025 (2026-11-10: "ship them as other gaming distributions do"). Its own notice
@@ -236,9 +238,37 @@ GStreamer (LGPL), DXVK and FAudio (zlib), wine-mono (MIT) and its fonts (OFL-1.1
 `source_url`, and Settings → About shows both. The owner's ask to mirror the exact sources of every shipped release
 (ADR-025) is not done yet: About links the upstream release.
 
-**Another runner** (RUY-37: Wine stable, the only other family per RUY-915; or a second GE-Proton major, at most two) is a new folder in
-`image/play/runners/` with its `pin` and `runner.json`, its `L+` line in `ruya-play-platform.conf`
-(`services/ruya-play/tests/platform.rs` holds the two together) and a row in the table above.
+Wine stable is Wine as released, LGPL-2.1-or-later, plus the libraries Wine compiles into its PE modules from its
+own source tree (the Kron4ek build uses no system copies): capstone (BSD-3-Clause, NCSA), compiler-rt (NCSA or MIT),
+FAudio and zlib (Zlib), fluidsynth and vkd3d (LGPL-2.1-or-later), gsm (TU-Berlin-1.0), jpeg (IJG), jxr
+(BSD-2-Clause), lcms2, musl, libxml2 and libxslt (MIT), ldap (OLDAP-2.8), mpg123 (LGPL-2.1-only), libpng
+(libpng-2.0), libtiff (libtiff), tomcrypt (public domain or WTFPL). `runner.json` sums it up as
+`LGPL-2.1-or-later AND LGPL-2.1-only AND BSD-3-Clause AND BSD-2-Clause AND NCSA AND MIT AND Zlib AND IJG AND
+libpng-2.0 AND libtiff AND OLDAP-2.8 AND TU-Berlin-1.0 AND WTFPL` (the format's licence limit went from 128 to 256
+bytes for it, 05 section 4.4) and points `source_url` at WineHQ's source tarball of the same release
+(`https://dl.winehq.org/wine/source/11.0/wine-11.0.tar.xz`), which the Kron4ek build compiles unpatched; Settings →
+About shows both. The archive ships no licence text, so the texts travel in the pin folder:
+`image/play/runners/Wine11/licences/` holds Wine's `COPYING.LIB` and `LICENSE` and each library's licence file,
+copied unchanged from that source tarball (`licences/README` lists them; `scripts/lint-text.ps1` allows their tabs
+and page breaks), and `install-runners.sh` lays it over the tree as `/usr/lib/ruyaos/play/runners/Wine11/licences/`.
+
+**Licence texts in every runner (RUY-37).** `install-runners.sh fetch` installs every file of a pin folder other
+than `pin` (`runner.json`, `licences/`) into the runner's tree at the same path, refuses one the release already
+has (our files never replace the release's), and fails the build when the tree has no licence text at its root (a
+`LICENSE*`, `LICENCE*` or `COPYING*` file of the release, or a file in `licences/`). The host fixtures in
+`scripts/test-vm-checks.sh` cover all three.
+
+**Another runner** is a new folder in `image/play/runners/` with its `pin` and `runner.json`, its `L+` line in
+`ruya-play-platform.conf` (`services/ruya-play/tests/platform.rs` holds the two together) and a row in the table
+above. The families are GE-Proton and Wine stable only (RUY-915); Wine staging, Wine-GE and UMU-Proton are not
+shipped, and a package that needs one bundles it.
+
+**Retention (RUY-37).** The image keeps **one or two GE-Proton majors**: the current one, and after a major bump
+the one before it (a `ProtonGE<major>` folder each, `org.ruyaos.Play.Runner.ProtonGE<major>//1`), so a game
+installed against the old major still finds it. A bump adds the new major's folder beside the old one; the major
+before that is removed in the same change. `services/ruya-play/tests/platform.rs`
+(`the_image_runners_keep_the_retention_rule`) fails on a table with no `proton-ge` runner, with a third major, or with
+two folders of one major (counted by the `runner.json` family and version). Today there is one (GE-Proton 11).
 
 ## Bundled assets that are not packages (licences)
 

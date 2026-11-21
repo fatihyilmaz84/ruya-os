@@ -127,7 +127,7 @@ RUN set -eux; \
 # runners again. `check` runs ruya-pack runner-check (the format's parser and runner hash) and puts
 # only what it writes (each .ruya-runner-hash) into /meta, a small layer.
 FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION} AS play-runners
-RUN dnf -y install --setopt=install_weak_deps=False tar gzip && dnf clean all
+RUN dnf -y install --setopt=install_weak_deps=False tar gzip xz && dnf clean all
 COPY image/play /src/play
 RUN bash /src/play/install-runners.sh fetch /src/play/runners /out/usr/lib/ruyaos/play
 
@@ -154,7 +154,7 @@ RUN --mount=type=bind,source=image/build,target=/ctx/build \
 RUN --mount=type=bind,source=image/build,target=/ctx/build \
     /ctx/build/50-slim.sh
 
-# The system runners' trees (1.5 GB) first, a layer that stays the same while the pins do.
+# The system runners' trees (about 2.2 GB) first, a layer that stays the same while the pins do.
 COPY --from=play-runners /out/ /
 COPY --from=shell-build /out/ /
 COPY --from=services-build /out/ /

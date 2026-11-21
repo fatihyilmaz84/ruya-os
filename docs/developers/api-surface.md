@@ -48,7 +48,7 @@ The list is approved, so the lead may now plan the unplanned capabilities (text 
 
 ## Never public
 
-Profiles, PINs and admin actions; update and rollback; installing, uninstalling and permission overrides; writing any system setting (display mode, network, audio routing, power); telemetry; the shell's own state. If an app needs one of these, the answer is a portal-style *request* that the shell shows to the player (the player decides in the shell), never a call that acts.
+Profiles, PINs and admin actions; running a program outside the caller's sandbox, **a Windows program included** (an app uses the console's runner by mounting it and starting it itself, [Windows games](windows-games.md); no call starts it for the app, ADR-025); update and rollback; installing, uninstalling and permission overrides; writing any system setting (display mode, network, audio routing, power); telemetry; the shell's own state. If an app needs one of these, the answer is a portal-style *request* that the shell shows to the player (the player decides in the shell), never a call that acts.
 
 ## Tier C: data-only formats
 
@@ -62,6 +62,7 @@ No code, so no bus permission, and the safest way to extend the console. The for
 | Sound themes (cues, ambient bed) | [Sound themes](sound-themes.md) | public, written, checker built |
 | Controller profiles (the player's controls in games, exported to a USB drive; schema v1, `docs/specs/schemas/input-profile-v1.json`, RUY-42) | [Controller input](controller-input.md#the-players-controls-what-your-game-sees-is-already-remapped), `samples/controller-profile-example` | experimental, written (the service applies buttons, sticks and triggers; keys, mouse, layers and macros are planned, T-372) |
 | `.play` packages | `05-play-packages.md` (epic T-228) | parked by the owner |
+| System runners: extension ids (`org.ruyaos.Play.Runner.<Family><major>`, branch `1`) and `runner.json` as an app reads them from `/app/runners` (ADR-037, ADR-038) | [Windows games](windows-games.md), `samples/hello-runner`, `api/play/runner.schema.json` | experimental, written (GE-Proton in the image; the previous major and Wine stable are planned, RUY-915, RUY-37; no D-Bus call, ADR-025) |
 | `runner.json` of a runner (format 1, ADR-037) | [Play packages](play-packages.md), `api/play/runner.schema.json`, `05` §6.2.1 | experimental, written (the parser and `ruya-pack validate` are built; the launcher that starts a runner through it is planned, RUY-901) |
 | Theme, wallpaper and icon packs | none | unplanned |
 

@@ -4,13 +4,18 @@
 #   pin          the pinned upstream release: url=, sha256= and root= (the folder of the archive
 #                that becomes the runner), comments with #
 #   runner.json  the runner's file (ADR-037), shipped as is at the runner's root
+#   anything else, such as licences/  our own files laid over the release at the same paths (the
+#                licence texts of a release that ships none); never one the release already has
+# Every runner's tree must carry a licence text at its root (LICENSE*, LICENCE*, COPYING* or
+# licences/), from the release or from its pin folder.
 # A new runner, or another major of one, is a new folder there: this script and image/Containerfile
 # stay as they are, and the tmpfiles links (image/rootfs/usr/lib/tmpfiles.d/ruya-play-platform.conf)
 # get its line (services/ruya-play/tests/platform.rs holds the folders and the lines together).
 #
 #   install-runners.sh fetch <runners> <play>         download each pinned release (any other SHA-256
 #                      fails the build), unpack its root folder to <play>/runners/<Name>/ without group
-#                      or world write bits, put runner.json at its root. Needs the network.
+#                      or world write bits, put runner.json and the pin folder's other files in it,
+#                      refuse a tree without a licence text. Needs the network.
 #   install-runners.sh check <ruya-pack> <play> <meta>  `ruya-pack runner-check` on each runner (the
 #                      format's own parser and runner hash, never jq or a shell hash): writes
 #                      <meta>/runners/<Name>/.ruya-runner-hash. The shell lists the runners through
@@ -41,6 +46,33 @@ check_pin() {
     [[ -n "$root" && "$root" != . && "$root" != .. && "$root" != */* ]] || die "$1: root is not one folder name"
 }
 
+# add_own_files <pin folder> <tree> <name>: every file of the pin folder other than pin and
+# runner.json (licence texts in licences/, for a release that ships none) goes to the same path in the
+# tree, 0644. A path the release already has fails the build (our files never replace the release's),
+# and so does anything in the pin folder that is not a plain file, or a target folder that leads out of
+# the tree.
+add_own_files() {
+    local dir="${1%/}" tree="$2" name="$3" rel parent top
+    top="$(realpath "$tree")"
+    while IFS= read -r -d '' rel; do
+        rel="${rel#./}"
+        case "$rel" in pin | runner.json) continue ;; esac
+        [ -f "$dir/$rel" ] && [ ! -L "$dir/$rel" ] || die "$name: $rel in the pin folder is not a plain file"
+        [ ! -e "$tree/$rel" ] && [ ! -L "$tree/$rel" ] || die "$name: the release already has $rel"
+        parent="$(dirname "$tree/$rel")"
+        mkdir -p "$parent"
+        case "$(realpath "$parent")/" in "$top"/*) ;; *) die "$name: $rel would leave the runner's tree" ;; esac
+        install -m 0644 "$dir/$rel" "$tree/$rel"
+    done < <(cd "$dir" && find . -mindepth 1 ! -type d -print0 | sort -z)
+}
+
+# has_licence <tree>: a licence text at the runner's root: a LICENSE*, LICENCE* or COPYING* file, or a
+# file in licences/ (ADR-025's notice duty: the text travels with the binaries).
+has_licence() {
+    [ -n "$(find "$1" -maxdepth 1 -type f \( -name 'LICENSE*' -o -name 'LICENCE*' -o -name 'COPYING*' \) -print -quit)" ] ||
+        [ -n "$(find "$1/licences" -type f -print -quit 2>/dev/null)" ]
+}
+
 fetch() {
     local runners="$1" play="$2" dir name pin url sha root work tree writable
     command -v curl >/dev/null || die "no curl"
@@ -62,6 +94,8 @@ fetch() {
         mv "$work/x/$root" "$tree"
         rm -rf "$work"
         install -m 0644 "$dir/runner.json" "$tree/runner.json"
+        add_own_files "$dir" "$tree" "$name"
+        has_licence "$tree" || die "$name: no licence text at the runner's root (LICENSE*, LICENCE*, COPYING* or a file in licences/); a release that ships none gets them from licences/ in its pin folder"
         # Nothing the image ships is group- or world-writable (the release has a few 0666 files).
         chmod -R go-w "$tree"
         writable="$(find "$tree" ! -type l -perm /022 | head -n 5)"

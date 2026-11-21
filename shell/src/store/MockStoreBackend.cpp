@@ -164,6 +164,15 @@ void MockStoreBackend::addApps(int count)
     emit catalogChanged();
 }
 
+void MockStoreBackend::installOutside(const QString &id, const QString &name, const QStringList &permissions)
+{
+    AppInfo a = app("", "", "", "", "developer", "none", "all", permissions, 9);
+    a.id = id;
+    a.name = name;
+    a.installed = true;
+    m_apps.append(a);
+}
+
 void MockStoreBackend::setAppText(const QString &id, const QString &name, const QString &summary,
                                   const QString &developer, const QStringList &permissions)
 {
@@ -194,6 +203,7 @@ void MockStoreBackend::reset()
     m_searchReplyMs = 0;
     m_permissionsAdmin = true;
     m_permissionsDelayMs = 0;
+    m_permissionReads = 0;
     initState();
     emit installedChanged();
 }
@@ -258,6 +268,7 @@ void MockStoreBackend::getPermissions(const QString &id)
 {
     // Read now, delivered later (a slow service answers with what it read then), through the same guard as
     // the D-Bus client's replies.
+    ++m_permissionReads;
     const quint64 request = beginPermissionsRequest(id);
     const int i = indexOf(id);
     QString status = QStringLiteral("ok");

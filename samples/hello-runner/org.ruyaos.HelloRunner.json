@@ -1,0 +1,35 @@
+{
+  "app-id": "org.ruyaos.HelloRunner",
+  "runtime": "org.freedesktop.Platform",
+  "runtime-version": "26.08",
+  "sdk": "org.freedesktop.Sdk",
+  "command": "hello-runner",
+  "finish-args": [
+    "--socket=x11",
+    "--share=ipc",
+    "--device=dri",
+    "--socket=pulseaudio",
+    "--allow=multiarch"
+  ],
+  "add-extensions": {
+    "org.ruyaos.Play.Runner": {
+      "directory": "runners",
+      "version": "1",
+      "subdirectories": true,
+      "no-autodownload": true,
+      "autodelete": false
+    }
+  },
+  "modules": [
+    {
+      "name": "hello-runner",
+      "buildsystem": "simple",
+      "build-commands": [
+        "install -Dm755 run-windows.py /app/bin/hello-runner"
+      ],
+      "sources": [
+        { "type": "file", "path": "run-windows.py" }
+      ]
+    }
+  ]
+}

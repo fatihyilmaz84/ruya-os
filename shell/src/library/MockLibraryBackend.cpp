@@ -50,16 +50,24 @@ void MockLibraryBackend::flatpakUninstalled(const QString &appId)
         b->removeItem(QStringLiteral("flatpak:") + appId);
 }
 
-// The runner image/play/runners/ProtonGE11 pins, as Library1 ListRunners lists it.
-LibraryRunner pinnedProton()
+// The runners image/play/runners/ pins (ProtonGE11, Wine11: their runner.json), as Library1
+// ListRunners lists them (folder name order).
+QList<LibraryRunner> pinnedRunners()
 {
-    LibraryRunner r;
-    r.family = QStringLiteral("proton-ge");
-    r.kind = QStringLiteral("proton");
-    r.version = QStringLiteral("GE-Proton11-12");
-    r.licence = QStringLiteral("BSD-3-Clause AND LGPL-2.1-or-later AND LGPL-2.0-or-later AND Zlib AND MIT AND OFL-1.1");
-    r.sourceUrl = QStringLiteral("https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12");
-    return r;
+    LibraryRunner proton;
+    proton.family = QStringLiteral("proton-ge");
+    proton.kind = QStringLiteral("proton");
+    proton.version = QStringLiteral("GE-Proton11-12");
+    proton.licence = QStringLiteral("BSD-3-Clause AND LGPL-2.1-or-later AND LGPL-2.0-or-later AND Zlib AND MIT AND OFL-1.1");
+    proton.sourceUrl = QStringLiteral("https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12");
+    LibraryRunner wine;
+    wine.family = QStringLiteral("wine");
+    wine.kind = QStringLiteral("wine");
+    wine.version = QStringLiteral("wine-11.0");
+    wine.licence = QStringLiteral("LGPL-2.1-or-later AND LGPL-2.1-only AND BSD-3-Clause AND BSD-2-Clause AND NCSA AND MIT "
+                                  "AND Zlib AND IJG AND libpng-2.0 AND libtiff AND OLDAP-2.8 AND TU-Berlin-1.0 AND WTFPL");
+    wine.sourceUrl = QStringLiteral("https://dl.winehq.org/wine/source/11.0/wine-11.0.tar.xz");
+    return {proton, wine};
 }
 
 MockLibraryBackend::MockLibraryBackend(QObject *parent)
@@ -159,7 +167,7 @@ void MockLibraryBackend::reset(const QString &scenario)
 {
     m_items.clear();
     // Every scenario has the image's pinned runner and no stored runner choice (RUY-959).
-    m_runners = {pinnedProton()};
+    m_runners = pinnedRunners();
     m_choices.clear();
     listRunners();
     // "art:<dir>": the default library, each item with a picture from <dir> (tests only, T-281).
