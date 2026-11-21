@@ -47,6 +47,8 @@ fn play1_inspect_records_have_the_documented_keys() {
     declared.manifest["developer"] = serde_json::json!({"name": "Example Games"});
     declared.manifest["players"] = serde_json::json!({"min": 1, "max": 2});
     declared.manifest["controller"] = serde_json::json!("full");
+    declared.manifest["age_rating"] =
+        serde_json::json!({"scheme": "oars-1.1", "content": {"violence-cartoon": "mild"}});
     let first = Setup::with(Pkg::signed(&declared)).build();
     let update = installed_with(
         serde_json::json!({"multiarch": true}),

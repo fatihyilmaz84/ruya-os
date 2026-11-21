@@ -7,6 +7,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+ruya-flatpak = { path = "../ruya-flatpak" }  # the OARS severity table, shared with ruya-store (RUY-914)
 serde = { version = "1", features = ["derive"] }  # Problem and the file-table lines
 serde_json = "1"  # play.json and play.files (already in the tree)
 sha2 = "0.10"  # file hashes (already in the tree)

@@ -171,7 +171,8 @@ const QList<MockPlayBackend::Fixture> &MockPlayBackend::fixtures()
         huge.permissions = {perm("input:controllers", "Uses controllers", "low")};
         add("hugegame.play.zip", "zip", "disk-full", huge);
 
-        PlayInfo flaky = base("com.example.flaky", "Flaky Game", "The install breaks half way.", "Example Games", 1,
+        // Signed by a key, but its manifest names no developer: the service serves no signer_name (RUY-914).
+        PlayInfo flaky = base("com.example.flaky", "Flaky Game", "The install breaks half way.", "", 1,
                               "developer", "full", "all", 150);
         flaky.permissions = {perm("input:controllers", "Uses controllers", "low")};
         add("flaky", "folder", "failed", flaky);

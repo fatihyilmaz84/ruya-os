@@ -1088,6 +1088,7 @@ version = "0.1.0"
 dependencies = [
  "flate2",
  "regex",
+ "ruya-flatpak",
  "serde",
  "serde_json",
  "sha2",

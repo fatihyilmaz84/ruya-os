@@ -45,9 +45,20 @@ impl TrustRecord {
             format: TRUST_RECORD_FORMAT,
             tier: tier.as_str().to_string(),
             signer_id: key.map(|k| k.key_id()),
-            signer_name: key.and(manifest.developer.as_ref()).map(|d| d.name.clone()),
+            signer_name: Self::signer_name(signatures, manifest),
             store_signed: signatures.store.is_some(),
         }
+    }
+
+    /// The name a verified signature stands behind: the manifest's `developer.name`, only for a
+    /// package with a developer key (the signature covers the manifest; the key, not the name, is
+    /// what was verified). `None` for an unsigned package or one without a `developer`. The one
+    /// rule behind this record's `signer_name` and Play1's Inspect `signer_name`.
+    pub fn signer_name(signatures: &Signatures, manifest: &Manifest) -> Option<String> {
+        signatures
+            .key()
+            .and(manifest.developer.as_ref())
+            .map(|d| d.name.clone())
     }
 
     /// The file's bytes: one line of JSON.
