@@ -62,7 +62,8 @@ pub fn write_below(base: &Path, rel: &Path, data: &[u8]) -> io::Result<()> {
 }
 
 /// Reads `base/rel` as text, refusing a link at any step (the folders and the file itself).
-/// `NotFound` when nothing is there.
+/// `NotFound` when nothing is there. Only a regular file is read: a FIFO or device planted at the
+/// path is refused without blocking (`O_NONBLOCK`; checked on the opened handle).
 pub fn read_below(base: &Path, rel: &Path) -> io::Result<String> {
     let mut at = base.to_path_buf();
     for part in rel.components() {
@@ -79,9 +80,13 @@ pub fn read_below(base: &Path, rel: &Path) -> io::Result<String> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        o.custom_flags(libc::O_NOFOLLOW);
+        o.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     }
-    io::read_to_string(o.open(&at)?)
+    let file = o.open(&at)?;
+    if !file.metadata()?.is_file() {
+        return Err(refuse(&at, "is not a regular file"));
+    }
+    io::read_to_string(file)
 }
 
 fn new_private_file(path: &Path) -> io::Result<fs::File> {
@@ -146,6 +151,18 @@ mod tests {
 
         fn mode(path: &Path) -> u32 {
             fs::metadata(path).expect("meta").permissions().mode() & 0o777
+        }
+
+        /// A FIFO planted where the file is expected is refused at once (no blocking open).
+        #[test]
+        fn a_planted_fifo_is_refused_without_blocking() {
+            let tmp = tempfile::tempdir().expect("tmp");
+            let fifo = tmp.path().join("config.vdf");
+            let c = std::ffi::CString::new(fifo.to_str().expect("utf-8")).expect("path");
+            // SAFETY: mkfifo with a valid NUL-terminated path; the result is checked.
+            assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0, "mkfifo");
+            let err = read_below(tmp.path(), Path::new("config.vdf")).expect_err("refused");
+            assert!(err.to_string().contains("not a regular file"), "{err}");
         }
 
         #[test]
