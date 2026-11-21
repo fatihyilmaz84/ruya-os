@@ -2,7 +2,7 @@
 # Flags, in shell/qml outside Theme.qml and the theme sets (qml/themes/): a literal
 # "duration: <non-zero number>", a quoted hex colour, a quoted colour name ("white", "black", ... ;
 # "transparent" is allowed), Qt.rgba(...), Qt.hsla(...), Qt.hsva(...), a literal "font.pixelSize: <digit>"
-# (use Theme.type*), Font.AllUppercase / Font.AllLowercase (they ignore the UI language: Turkish I; use CapsText.upper, RUY-804). Colours must come from Theme so every colour theme (T-209) reaches every screen.
+# (use Theme.type*), Font.AllUppercase / Font.AllLowercase (they ignore the UI language: Turkish I; use CapsText.upper, RUY-804) and .toUpperCase( (same reason; an id or address may carry token-ok). Colours must come from Theme so every colour theme (T-209) reaches every screen.
 # A line opts out with a trailing "// token-ok: <reason>". It also checks that the token list of the
 # themes (Themes.tokenNames) is exactly the `required property` list of ThemeSet.qml.
 #
@@ -19,10 +19,10 @@ if (-not $QmlDir) { $QmlDir = Join-Path (Join-Path $Repo "shell") "qml" }
 $QmlDir = (Resolve-Path $QmlDir).Path
 
 $colourNames = 'white|black|red|green|blue|yellow|orange|purple|violet|pink|brown|gray|grey|cyan|magenta|navy|teal|silver|gold|lime|maroon|olive|aqua|fuchsia|indigo|crimson|coral|salmon|tomato|khaki'
-$patterns = 'duration\s*:\s*\d*[1-9]', '["'']#[0-9a-fA-F]{3,8}["'']', "[`"']($colourNames)[`"']", 'Qt\.(rgba|hsla|hsva)\(', 'font\.pixelSize\s*:\s*\(?\s*\d', 'Font\.All(Upper|Lower)case'
+$patterns = 'duration\s*:\s*\d*[1-9]', '["'']#[0-9a-fA-F]{3,8}["'']', "[`"']($colourNames)[`"']", 'Qt\.(rgba|hsla|hsva)\(', 'font\.pixelSize\s*:\s*\(?\s*\d', 'Font\.All(Upper|Lower)case', '\.toUpperCase\('
 # Theme.qml and the theme sets are where colours are defined.
 # "themes" counts only as a directory directly under the scanned root, not anywhere in the path.
-function Test-Skipped($f) { return ($f.Name -eq "Theme.qml") -or ($f.FullName.Substring($QmlDir.Length) -match '^[\\/]themes[\\/]') }
+function Test-Skipped($f) { return ($f.Name -eq "Theme.qml") -or ($f.Name -eq "CapsText.qml") -or ($f.FullName.Substring($QmlDir.Length) -match '^[\\/]themes[\\/]') }
 $hits = @(Get-ChildItem $QmlDir -Recurse -Filter *.qml |
     Where-Object { -not (Test-Skipped $_) } |
     Select-String -Pattern $patterns -CaseSensitive |
@@ -88,7 +88,7 @@ foreach ($f in (Get-ChildItem $QmlDir -Recurse -Filter *.qml | Where-Object { -n
 foreach ($w in $weightHits) { Write-Host "    $w" -ForegroundColor Yellow }
 if ($weightHits.Count -gt 0) { Write-Host "    Add font.weight: Theme.weightLight (Hero, Display) or Theme.weightDemiBold (Title, Headline, Micro)." }
 if ($hits.Count -gt 0) {
-    Write-Host "    Move these into Theme.qml tokens (and the theme sets), or add '// token-ok: <reason>'. Capitals: CapsText.upper(text), not Font.AllUppercase."
+    Write-Host "    Move these into Theme.qml tokens (and the theme sets), or add '// token-ok: <reason>'. Capitals: CapsText.upper(text), not Font.AllUppercase or .toUpperCase()."
 }
 # Theme sets: ThemeSet.qml (required properties) and Themes.tokenNames must list the same tokens.
 $setFile = Join-Path (Join-Path $QmlDir "themes") "ThemeSet.qml"

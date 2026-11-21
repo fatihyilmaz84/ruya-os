@@ -35,9 +35,10 @@ Item {
         border.color: card.focused ? Theme.focusRing : Theme.glassBorder
 
         Text {
+            objectName: "profileCardInitial"
             anchors.centerIn: parent
             textFormat: Text.PlainText
-            text: card.shownName.charAt(0).toUpperCase()
+            text: CapsText.initial(card.shownName)
             color: Theme.text
             font.pixelSize: Theme.typeHero * card.u
             font.weight: Theme.weightLight

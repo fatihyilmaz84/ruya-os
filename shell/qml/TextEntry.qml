@@ -194,7 +194,7 @@ FocusScope {
 
     function upper(c) {
         const set = letterSets[DeviceSettings.language] ?? letterSets.en
-        return set.upper[c] ?? c.toUpperCase()
+        return set.upper[c] ?? c.toUpperCase()     // token-ok: the key table above is the language rule
     }
 
     function labelFor(key) {

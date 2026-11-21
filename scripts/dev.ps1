@@ -710,10 +710,17 @@ function Test-Tokens {
     Set-Content -Path $bad -Value "Item {`n    Text {`n        font.capitalization: Font.AllUppercase`n    }`n}"
     & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture 6>&1 | Out-Null
     $rejectedCaps = ($LASTEXITCODE -eq 1)
+    # Capitals come from CapsText, so a plain .toUpperCase( is refused too, unless it carries token-ok.
+    Set-Content -Path $bad -Value "Item {`n    Text {`n        text: name.toUpperCase()`n    }`n}"
+    & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture 6>&1 | Out-Null
+    $rejectedUpper = ($LASTEXITCODE -eq 1)
+    Set-Content -Path $bad -Value "Item {`n    Text {`n        text: id.toUpperCase()  // token-ok: an id`n    }`n}"
+    & (Join-Path $PSScriptRoot "lint-tokens.ps1") -QmlDir $fixture 6>&1 | Out-Null
+    $acceptedUpperId = ($LASTEXITCODE -eq 0)
     Remove-Item -Recurse -Force $fixture
     Record "token lint self-check (rejects a type step without font.weight)" ($rejectedW -and $acceptedW)
     Record "token lint self-check (weight in a child or comment, or a two-line size, is still rejected)" ($allRejected -and $acceptedTwoLine)
-    Record "token lint self-check (rejects Font.AllUppercase: capitals come from CapsText)" $rejectedCaps
+    Record "token lint self-check (rejects Font.AllUppercase and .toUpperCase(: capitals come from CapsText; token-ok exempts an id)" ($rejectedCaps -and $rejectedUpper -and $acceptedUpperId)
 }
 
 # The lupdate project (source list for lupdate) is written by the build's lupdate target, which

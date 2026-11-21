@@ -1150,7 +1150,7 @@ FocusScope {
                 Text {
                     anchors.centerIn: parent
                     textFormat: Text.PlainText
-                    text: prompt.chosen ? prompt.chosen.name.charAt(0).toUpperCase() : ""
+                    text: prompt.chosen ? CapsText.initial(prompt.chosen.name) : ""
                     color: Theme.text
                     font.pixelSize: Theme.typeDisplay * prompt.u
                     font.weight: Theme.weightLight
