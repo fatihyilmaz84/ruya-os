@@ -4,20 +4,11 @@
 
 use base64ct::{Base64, Encoding};
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
+use ruya_play_format::hex;
 use sha2::{Digest, Sha256};
 
 /// Characters of the key id (128 bits): the first 32 hex characters of the SHA-256 of the 32 key bytes.
 pub const KEY_ID_CHARS: usize = 32;
-
-pub(crate) fn hex(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut out = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
-        out.push(HEX[(b >> 4) as usize] as char);
-        out.push(HEX[(b & 15) as usize] as char);
-    }
-    out
-}
 
 /// The lower-case hex SHA-256 of `data`.
 pub fn sha256_hex(data: &[u8]) -> String {

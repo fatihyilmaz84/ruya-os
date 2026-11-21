@@ -11,11 +11,9 @@ use crate::zipw::{self, FileSrc};
 use crate::Context;
 use flate2::Crc;
 use ruya_play_format::limits::ROOT_FILES;
-use ruya_play_format::{codes as fcodes, Entry, EntryKind, FolderSource, Source};
+use ruya_play_format::{codes as fcodes, sha256_of_chunks, Entry, EntryKind, FolderSource, Source};
 use serde_json::json;
-use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
-use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 const SPEC: Spec = Spec {
@@ -77,32 +75,19 @@ impl Planned {
     }
 }
 
-fn hex(bytes: &[u8]) -> String {
-    use std::fmt::Write;
-    bytes.iter().fold(String::new(), |mut s, b| {
-        let _ = write!(s, "{b:02x}");
-        s
-    })
-}
-
 /// Size, SHA-256, CRC-32 and the first bytes of a file, in one read.
 fn digest(path: &Path) -> std::io::Result<(u64, String, u32, Vec<u8>)> {
     let mut f = std::fs::File::open(path)?;
-    let (mut sha, mut crc, mut total) = (Sha256::new(), Crc::new(), 0u64);
-    let (mut buf, mut head) = (vec![0u8; 256 * 1024], Vec::new());
-    loop {
-        let n = f.read(&mut buf)?;
-        if n == 0 {
-            break;
-        }
+    let (mut crc, mut head) = (Crc::new(), Vec::new());
+    let hashed = sha256_of_chunks(&mut f, u64::MAX, &mut |chunk| {
         if head.len() < 4 {
-            head.extend_from_slice(&buf[..n.min(4 - head.len())]);
+            head.extend_from_slice(&chunk[..chunk.len().min(4 - head.len())]);
         }
-        sha.update(&buf[..n]);
-        crc.update(&buf[..n]);
-        total += n as u64;
-    }
-    Ok((total, hex(&sha.finalize()), crc.sum(), head))
+        crc.update(chunk);
+        Ok(())
+    })?;
+    let (sha, total) = hashed.ok_or_else(|| std::io::Error::other("the file is too large"))?;
+    Ok((total, sha, crc.sum(), head))
 }
 
 #[cfg(unix)]

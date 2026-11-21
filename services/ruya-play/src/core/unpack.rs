@@ -14,10 +14,9 @@ use crate::core::staging::{self, is_changed, is_no_space, Dir, Found, Kind};
 use ruya_play_format::manifest::Manifest;
 use ruya_play_format::runner::{RunnerEntry, RunnerHasher};
 use ruya_play_format::table::TableIndex;
-use ruya_play_format::{FileEntry, Problem, ReadFault, Source};
-use sha2::{Digest, Sha256};
+use ruya_play_format::{sha256_of_chunks, FileEntry, Problem, ReadFault, Source};
 use std::collections::{BTreeMap, HashMap};
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 
 /// Mode of a plain file.
 pub const FILE_MODE: u32 = 0o644;
@@ -54,14 +53,6 @@ pub struct Unpacked {
     pub hashes: HashMap<String, String>,
     /// Payload bytes written.
     pub bytes: u64,
-}
-
-fn hex(bytes: &[u8]) -> String {
-    use std::fmt::Write as _;
-    bytes.iter().fold(String::with_capacity(64), |mut s, b| {
-        let _ = write!(s, "{b:02x}");
-        s
-    })
 }
 
 /// A staging failure as a problem: out of space, a changed tree, or plain I/O.
@@ -181,7 +172,6 @@ pub fn unpack(
         create: true,
     };
     let mut out = Unpacked::default();
-    let mut buf = vec![0u8; CHUNK];
     for entry in files {
         if ctl.cancelled() {
             return Err(Stop::Cancelled);
@@ -210,32 +200,37 @@ pub fn unpack(
                 let mut input = source
                     .open(path)
                     .map_err(|e| Stop::Package(read_problem(path, &e)))?;
-                let (mut hasher, mut total) = (Sha256::new(), 0u64);
-                loop {
-                    let n = match input.read(&mut buf) {
-                        Ok(0) => break,
-                        Ok(n) => n,
-                        Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                        Err(e) => return Err(Stop::Package(read_problem(path, &e))),
-                    };
-                    total += n as u64;
-                    if total > *size {
-                        return Err(Stop::Package(Problem::new(
-                            ruya_play_format::codes::PACKAGE_SIZE_MISMATCH,
-                            path,
-                            format!("play.files says {size} bytes; the content has more."),
-                        )));
+                // A write failure or a cancel inside the chunk callback stops the read; `stopped`
+                // keeps which, so a read error of the source stays a package fault.
+                let (mut stopped, mut total) = (None, 0u64);
+                let hashed = sha256_of_chunks(&mut input, *size, &mut |chunk| {
+                    total += chunk.len() as u64;
+                    if let Err(e) = file.write_all(chunk) {
+                        stopped = Some(Stop::Staging(staging_problem(path, &e)));
+                    } else {
+                        out.bytes += chunk.len() as u64;
+                        ctl.progress(out.bytes);
+                        ctl.step(&Step::Chunk { path, done: total });
+                        if ctl.cancelled() {
+                            stopped = Some(Stop::Cancelled);
+                        }
                     }
-                    hasher.update(&buf[..n]);
-                    file.write_all(&buf[..n])
-                        .map_err(|e| Stop::Staging(staging_problem(path, &e)))?;
-                    out.bytes += n as u64;
-                    ctl.progress(out.bytes);
-                    ctl.step(&Step::Chunk { path, done: total });
-                    if ctl.cancelled() {
-                        return Err(Stop::Cancelled);
+                    match stopped {
+                        None => Ok(()),
+                        Some(_) => Err(io::Error::other("stopped")),
                     }
+                });
+                if let Some(stop) = stopped {
+                    return Err(stop);
                 }
+                let Some((got, _)) = hashed.map_err(|e| Stop::Package(read_problem(path, &e)))?
+                else {
+                    return Err(Stop::Package(Problem::new(
+                        ruya_play_format::codes::PACKAGE_SIZE_MISMATCH,
+                        path,
+                        format!("play.files says {size} bytes; the content has more."),
+                    )));
+                };
                 if total != *size {
                     return Err(Stop::Package(Problem::new(
                         ruya_play_format::codes::PACKAGE_SIZE_MISMATCH,
@@ -243,7 +238,6 @@ pub fn unpack(
                         format!("play.files says {size} bytes; the content has {total}."),
                     )));
                 }
-                let got = hex(&hasher.finalize());
                 if got != *sha256 {
                     return Err(Stop::Package(Problem::new(
                         ruya_play_format::codes::PACKAGE_HASH_MISMATCH,
@@ -421,7 +415,6 @@ pub fn rehash_with(
         create: false,
     };
     let mut out = Unpacked::default();
-    let mut buf = vec![0u8; CHUNK];
     let mut done = 0usize;
     for entry in files {
         let FileEntry::File {
@@ -441,27 +434,24 @@ pub fn rehash_with(
                 Stop::Staging(staging_problem(path, &e))
             }
         })?;
-        let (mut hasher, mut total) = (Sha256::new(), 0u64);
-        loop {
-            let n = match file.read(&mut buf) {
-                Ok(0) => break,
-                Ok(n) => n,
-                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => return Err(Stop::Staging(staging_problem(path, &e))),
-            };
-            total += n as u64;
-            if total > *size {
-                break;
+        let (mut cancelled, mut seen) = (false, 0u64);
+        let hashed = sha256_of_chunks(&mut file, *size, &mut |chunk| {
+            seen += chunk.len() as u64;
+            cancelled = !tick(done, out.bytes + seen);
+            if cancelled {
+                Err(io::Error::other("cancelled"))
+            } else {
+                Ok(())
             }
-            hasher.update(&buf[..n]);
-            if !tick(done, out.bytes + total) {
-                return Err(Stop::Cancelled);
-            }
+        });
+        if cancelled {
+            return Err(Stop::Cancelled);
         }
-        let got = hex(&hasher.finalize());
-        if total != *size || got != *sha256 {
+        let hashed = hashed.map_err(|e| Stop::Staging(staging_problem(path, &e)))?;
+        let Some((got, total)) = hashed.filter(|(got, total)| total == size && got == sha256)
+        else {
             return Err(Stop::Package(mismatch(path)));
-        }
+        };
         out.bytes += total;
         out.hashes.insert(path.clone(), got);
         done += 1;
