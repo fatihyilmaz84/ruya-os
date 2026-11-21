@@ -161,7 +161,7 @@ JSON Lines, UTF-8, one object per line, sorted by `p` (bytewise), no blank lines
   - **A Wine prefix template** (`run.prefix.template`) never contains a folder named `dosdevices` (it has a colon and absolute links); the launcher creates it.
 - **Reserved top-level names:** `.ref`, `launcher`, `runners` and `share` (the folder itself or anything below it) may not be listed (`table.reserved_top_level`; `ruya_play_format::table::RESERVED_TOP_LEVEL`): the console writes them into the installed app or mounts there (`launcher`, `runners`: ADR-038, RUY-900). A package of the `wine` or `proton` runner may also list nothing at or below `lib/i386-linux-gnu` (`run.lib_i386_reserved`; `limits::I386_LIB_DIR`), where the runtime's 32-bit libraries are mounted; a native package may. A nested `a/share` is legal.
 - Paths: relative, `/` separators, NFC-normalised UTF-8, no empty, `.` or `..` components, no leading `/`, no `\`, no `:` in a component, no control characters, each component <= 255 bytes, the whole path <= 1024, **unique even when case is ignored** (exFAT and Wine games), no Windows reserved names (`CON`, `NUL`, ...) and no trailing dot or space. At most 200,000 entries.
-- The importer sets file modes itself: 0644, or 0755 with `x:1`. No setuid/setgid/sticky, no file capabilities, no xattrs, ownership root (after commit), timestamps from the manifest's build time.
+- The importer sets file modes itself: 0644, or 0755 with `x:1`. No setuid/setgid/sticky, no file capabilities, no xattrs, ownership root (after commit). The importer sets no timestamps: an OSTree content object stores only content, uid, gid, mode and xattrs, no mtime, so the commit normalises every file to the same fixed time and the staging tree's times never reach the installed app.
 
 ### 4.3 Folder versus zip, one rule set
 
@@ -564,7 +564,7 @@ One row per value that asks for something; `network: false` (the default), `remo
 
 | Group | Codes |
 |---|---|
-| Signed files | `sig.malformed`, `sig.duplicate_key`, `sig.format_too_new`, `sig.bad_signature`, `sig.weak_key`, `sig.play_json_changed`, `sig.play_files_changed`, `sig.rotations_changed`, `sig.wrong_id`, `sig.wrong_build` |
+| Signed files | `sign.id_invalid` (the signer only), `sig.malformed`, `sig.duplicate_key`, `sig.format_too_new`, `sig.bad_signature`, `sig.weak_key`, `sig.play_json_changed`, `sig.play_files_changed`, `sig.rotations_changed`, `sig.wrong_id`, `sig.wrong_build` |
 | Store countersignature | `store_sig.without_play_sig`, `store_sig.play_sig_changed` |
 | Key continuity | `rotation.not_by_old_key`, `rotation.replayed`, `rotation.to_retired_key`, `rotation.wrong_id`, `trust.needs_developer_mode`, `trust.different_developer`, `state.corrupt`, `state.io` |
 | Ceilings and revocation | `ceiling.refused`, `revoked.key`, `revoked.id`, `revoked.content`, `revoked.runner`, `blocklist.malformed`, `blocklist.unavailable`, `blocklist.not_store_key`, `blocklist.changed`, `blocklist.expired`, `blocklist.not_newer` |
@@ -697,7 +697,7 @@ Epic **T-228** and tasks T-229 to T-243 (the list is in the epic file; T-244 was
 8. **Wine prefix templates do not fit the path rules.** A prefix has `dosdevices/c:` and `z:` (a colon in a name, forbidden by §4.2) and `z:` points at `/` (an absolute link, forbidden). Rule: a template never contains `dosdevices`; the launcher creates it.
 9. **Real runner trees do not fit the link rule.** "A link must not point at another link" refuses the usual `libx.so -> libx.so.1 -> libx.so.1.2` chains of a bundled Wine or emulator. Allow chains up to 8 hops that stay inside the same top-level directory; `ruya-pack build` flattens what it can.
 10. **Emulated games have no manifest fields.** `${disc}` exists (§6.3) but nothing declares discs, their order, or a multi-disc set. Add `run.discs[]`.
-11. **"Timestamps from the manifest's build time"** (§4.2): the manifest has no such field. Use `play.sig`'s `signed_at`, or a fixed epoch for unsigned packages.
+11. **"Timestamps from the manifest's build time"** (§4.2): the manifest has no such field. *Settled in RUY-799:* the rule is gone; OSTree keeps no mtime, so the commit normalises them (§4.2).
 12. **`permissions` that have no mapping yet:** `microphone`, `camera`, `bluetooth` are "as the platform provides", and there is no portal backend (03 §4.4). Until one exists they are not in the vocabulary (an unknown key is an error, §4.1), and raw `bluetooth` is high risk, not medium.
 13. **Combinations.** `network` with `removable_media`, `microphone` or `camera` is a way out for the player's files or voice: the pair counts as high risk even though each alone is medium. (*Built in RUY-93* for `network` + `removable_media`; the other two are not in the vocabulary.)
 14. **`multiarch`** needs 32-bit runtime extensions that the console may not have offline; say where they come from (the official store) and that the install fetches them or refuses, like `source: system`.

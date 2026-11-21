@@ -10,6 +10,8 @@ pub mod codes {
     /// A signed file (`play.sig`, `store.sig`, a rotation, the blocklist signature) is not the
     /// envelope or statement of 05 §9.2: not JSON, a missing or unknown key, bad base64, a wrong length.
     pub const SIG_MALFORMED: &str = "sig.malformed";
+    /// The signer refuses an id the verifier would reject as `sig.malformed`: nothing is signed.
+    pub const SIGN_ID_INVALID: &str = "sign.id_invalid";
     /// A signed file names one JSON key twice.
     pub const SIG_DUPLICATE_KEY: &str = "sig.duplicate_key";
     /// A signed file's `format` is newer than this console knows.
@@ -74,6 +76,7 @@ pub mod codes {
     /// Every code, for the tests that keep the list, the tests and the spec in step.
     pub const ALL: &[&str] = &[
         SIG_MALFORMED,
+        SIGN_ID_INVALID,
         SIG_DUPLICATE_KEY,
         SIG_FORMAT_TOO_NEW,
         SIG_BAD_SIGNATURE,
@@ -126,6 +129,8 @@ pub enum RevokedBy {
 pub enum TrustError {
     /// See [`codes::SIG_MALFORMED`].
     Malformed { file: String, detail: String },
+    /// See [`codes::SIGN_ID_INVALID`].
+    IdNotSignable { id: String, detail: String },
     /// See [`codes::SIG_DUPLICATE_KEY`]; `pointer` is the object's JSON pointer.
     DuplicateKey { file: String, pointer: String },
     /// See [`codes::SIG_FORMAT_TOO_NEW`].
@@ -200,6 +205,7 @@ impl TrustError {
         use TrustError::*;
         match self {
             Malformed { .. } => codes::SIG_MALFORMED,
+            IdNotSignable { .. } => codes::SIGN_ID_INVALID,
             DuplicateKey { .. } => codes::SIG_DUPLICATE_KEY,
             FormatTooNew { .. } => codes::SIG_FORMAT_TOO_NEW,
             BadSignature { .. } => codes::SIG_BAD_SIGNATURE,
@@ -264,6 +270,7 @@ impl TrustError {
             NeedsDeveloperMode
             | DifferentDeveloper { .. }
             | Revoked { .. }
+            | IdNotSignable { .. }
             | StateCorrupt { .. }
             | StateIo { .. } => String::new(),
         }
@@ -274,6 +281,9 @@ impl TrustError {
         use TrustError::*;
         match self {
             Malformed { file, detail } => format!("{file} is not a valid signature file: {detail}."),
+            IdNotSignable { id, detail } => {
+                format!("Nothing was signed: the id {} cannot be signed. {detail}", quote(id))
+            }
             DuplicateKey { file, pointer } => format!(
                 "{file} names a key twice in the object at {}.",
                 quote(pointer)

@@ -419,3 +419,35 @@ fn the_image_blocklist_is_used_when_the_downloaded_copy_is_expired() {
     assert_eq!(s.list, image);
     assert_eq!(s.set_aside.unwrap().code(), "blocklist.expired");
 }
+
+#[test]
+fn the_signer_refuses_every_id_the_verifier_calls_malformed() {
+    let dev = key();
+    let hash = sha256_hex(b"x");
+    for id in [
+        "com.exämple.game",
+        "",
+        "game",
+        "com.example.1game",
+        "com..game",
+    ] {
+        let signed = ruya_play_trust::sign_package(&dev, id, 1, b"x", b"x", now(), &[]);
+        let refusal = signed.expect_err(id);
+        assert_eq!(refusal.code(), "sign.id_invalid", "{id:?}");
+        // The same id in a statement somebody else wrote is the verifier's `sig.malformed`.
+        let statement = PlayStatement {
+            id: id.to_string(),
+            build: 1,
+            play_json_sha256: hash.clone(),
+            play_files_sha256: hash.clone(),
+            signed_at: now(),
+            rotations_sha256: None,
+        };
+        let parsed = PlayStatement::parse(&statement.to_bytes());
+        assert_eq!(parsed.unwrap_err().code(), "sig.malformed", "{id:?}");
+    }
+    // Both accept the same id.
+    assert!(
+        ruya_play_trust::sign_package(&dev, "com.example.game", 1, b"x", b"x", now(), &[]).is_ok()
+    );
+}

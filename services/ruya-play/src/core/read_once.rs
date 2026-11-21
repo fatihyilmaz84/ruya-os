@@ -1,11 +1,16 @@
 //! The package source is read once and never trusted again (lead-29).
 //!
-//! `ruya_play_trust::inspect` reads `play.json` and `play.files` to verify the signatures, and then
-//! `ruya_play_format::validate` reads them again to parse them; it also lists the entries twice. A
-//! drive (or a FUSE file system) that answers the second read differently could have one set of
-//! bytes verified and another parsed. [`ReadOnce`] wraps the source so the listing and the four
-//! root files are read from it exactly once and every later read gets the same bytes; the
-//! importer writes those same bytes into staging. Payload files are passed through: the unpacker
+//! `ruya_play_trust::inspect` already reads the listing, `play.json` and `play.files` once and
+//! hands the same bytes to its verify and validate steps, so inspect needs no wrapper. This one is
+//! kept for two things inspect does not do:
+//!
+//! - the importer and the helper **write the four root files into staging** ([`ReadOnce::root`]),
+//!   and what lands there must be the bytes that were verified, not a later read of the drive;
+//! - the helper's install mode hashes the root files (`check_roots`) and then runs
+//!   `ruya_play_format::validate`, two readers of the same files that must see one version.
+//!
+//! [`ReadOnce`] wraps the source so the listing and the four root files are read from it exactly
+//! once and every later read gets the same bytes. Payload files are passed through: the unpacker
 //! opens each one once.
 
 use ruya_play_format::limits::{MAX_MANIFEST_BYTES, MAX_TABLE_BYTES};
