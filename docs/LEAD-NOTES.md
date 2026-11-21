@@ -1,32 +1,38 @@
 # Lead notes (handoff between lead sessions)
 
-The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand off at 50-60 % context; no no-op turns; autonomous after an hour without the owner (`scripts\lead-clock.ps1`); builders run nothing in WSL; check D: before dispatching (4b.2)**). **Rewrite this file at the end of every lead session**; keep it under about 6 KB. Paper Plane is the source of truth (http://192.168.178.164:8687, project `RUY`). **Goals are formations** (`formation` lists them). This file is the lead's session record.
+The procedure is in [`LEAD.md`](LEAD.md) (**Budgets and "Lead efficiency": hand off at 50-60 % context; no no-op turns; autonomous after an hour without the owner (`scripts\lead-clock.ps1`); builders run nothing in WSL; check D: before dispatching (4b.2); clean up every merged worktree with `scripts\worktree-done.ps1`**). **Rewrite this file at the end of every lead session**; keep it under about 6 KB. Paper Plane is the source of truth (http://192.168.178.164:8687, project `RUY`). **Goals are formations** (`formation` lists them). This file is the lead's session record.
 
-## State during lead-39 (Opus, 2026-11-21, overnight, owner asleep: ".play first, keep going"; the Dell is offline)
+## State after lead-39 (Opus, 2026-11-21, overnight; the owner asked for .play first; the Dell was offline)
 
-- **Review range:** 6a4b709f..HEAD (this session). **Paper Plane `changes` cursor:** 6890 at the start.
-- **Merged and Done so far (5 + 1 lead fix):** RUY-35 (Steam uses GE-Proton; Unix tests run in WSL first), RUY-36 (developer chapter `windows-games.md`, `samples/hello-runner`, runner-manifest lint; 2 rounds), RUY-854 (.play apps in the per-app permission list; ruya-store `sync_installed` listed late installs; `AppName.of`, `Library.itemForApp`; 2 rounds), RUY-37 (Wine11 = Kron4ek vanilla WoW64 wine-11.0, licence texts shipped via the pin folder's `licences/`, build fails without a licence text, GE-Proton retention test, licence limit 128 -> 256 bytes; 2 rounds). Lead fix: RUY-891 (tst_wallpaper flake: the USB tiles are listed asynchronously). Last gate on main 45cac132: **2316 passed, 0 failed**.
-- **Image 0.0.97** (at cb70497f) built (CHAIN OK, 39 + 34 min). VM queue: **24 of 28 PASS** (RUY-390 comment has the list). Real failure: GE-Proton's protonfixes crashes outside Steam (no `PWD`, no Steam game id) -> **RUY-969** (high, in flight). `vm-runner-check.sh steam` needs Steam installed by hand.
-- **Lead decisions:** RUY-37 split (image side) / **RUY-959** (Library1 ListRunners, per-profile runner choice, ResolveRunner; About reads it). **RUY-923**: a new pure crate `services/ruya-flatpak` for Flatpak argument lists (RUY-926's keyfile reader moves there next). RUY-914: Inspect serves `signer_name` (self-asserted, always beside the key) and `age_label` (same function as Library1). RUY-969's environment: `SteamAppId=0`, `SteamGameId=0`, `PWD`=cwd, protonfixes stays on. RUY-913 waits for the first splash-progress ticket.
+- **Review range:** 6a4b709f..HEAD (all reviewed this session). **Paper Plane `changes` cursor:** 7251.
+- **Merged and Done (15):** RUY-35 (Steam uses GE-Proton), 36 (developer chapter windows-games.md + hello-runner sample + manifest lint), 854 (.play apps in the permission list), 37 (Wine11, licence texts shipped, retention test), 923 (new crate **ruya-flatpak**: Flatpak argv, app-id rule, OARS table; Play1.Remove resets the override), 959 (Library1 ListRunners, per-profile runner choice, ResolveRunner; About reads it), 969 (Proton outside Steam: SteamAppId/SteamGameId=0, PWD), 902 (vm-play-check launch, launch-windows), 904 (session passes `--runner`, asked before the session lock), 914 (Inspect serves signer_name, age_label), 925 (Uninstall on a .play page; UninstallConfirm owns the rule), 980 (Proton checks on x11-run's display, file marker), 905 (Compatibility screen; Library1 resolve codes + fallback; dimmed ChoiceRow), 911 (new crate **ruya-fs**: openat no-follow walk; launcher and session use it), 804 (CapsText: caps in the UI language). Lead fixes: RUY-891 flake, three `review:` commits, `scripts/worktree-done.ps1` (RUY-862 part 1). Last gate on main 3875b06a: **2357 passed, 0 failed**.
+- **Images:** 0.0.97 (24/28) and **0.0.98** (main eba76e75): **26 of 30 PASS**. Proven on 0.0.98: Proton through vm-runner-check on display :0 (969+980), the sample, Wine11 x86_64, launch, remove (override reset), store perms. **Failing, filed high and Ready:** RUY-999 (lead: a .play Windows game crashes on GE-Proton in `launch-windows`: the top .play problem), RUY-1000 (Wine11 i386 cmd.exe), RUY-1001 (library runners: sample install invalid-package), RUY-1002 (perms: metadata-unchanged step). `vm-runner-check steam` needs Steam installed by hand. Detail in RUY-390's comments.
+- **Lead decisions:** ruya-flatpak and ruya-fs as the shared homes (services/CLAUDE.md "Shared homes"); RUY-905's options follow 05 §6.2 (Bundled only with a bundled copy) and the shell translates resolve codes; no profile ids in QML; rustix accepted for ruya-fs; one licence limit (256 bytes) for play.json and runner.json; protonfixes stays on.
 
-## In flight (worktrees under D:\dev\RuyaOS-worktrees)
-1. **RUY-959** (Opus builder): done round 1 (8282da32); asked to merge main (conflicts with 35/36/37 in install-runners.sh, vm-runner-check.sh, test-vm-checks.sh, About) before review. Then ruya-reviewer + design reviewer (About with two runners).
-2. **RUY-902** (VM launch modes; told not to work around RUY-969). **RUY-923** (ruya-flatpak). **RUY-969** (Proton env).
-3. Ready next for .play: RUY-914, RUY-925 (game page Uninstall), RUY-904 (after 959), RUY-905 (canvas first, after 959).
+## In flight
+Nothing. No worktrees, no running builders. D: 62 GB free. WSL vhdx 68 GB (compact not run after 0.0.98: run `wsl --manage FedoraLinux-44 --compact` when nobody needs WSL for ~2 h, RUY-957).
 
-## Next
-Image 0.0.98 after 959/969/902/923 merge, then the VM queue: vm-runner-check check+sample (969, Wine11), vm-play-check perms (854), launch+launch-windows (902), remove (923), vm-library-check runners (959). `free-space.ps1` and a WSL compact after the chain (RUY-957). The inbox has ~165 tickets: a planning pass is overdue (owner wishlist 931-955 needs canvases).
+## Next (.play path, RUY-780: 44/60 done)
+1. **RUY-999** first (lead, VM debugging: the launcher's log in `${data}/.ruya-play`, the unit's journal, PROTON_LOG; a debugging subagent with the VM worked well for RUY-980). Then 1000, 1001, 1002 (builders), image 0.0.99, VM queue.
+2. Ready .play follow-ups: RUY-995 (high: ruya-fs remove regression on a 0o000 folder), 989, 982, 968, 963, 973, 993, 996.
+3. Then the owner's next goal: **RUY-956 "Steam is first-class"** (owner 2026-11-21).
+4. The inbox holds ~190 tickets: **a planning pass is overdue** (owner wishlist 931-955 needs canvases).
 
 ## Concerns (ranked)
-1. Proton launches outside Steam were never run end to end in the VM by the launcher (RUY-969, RUY-902).
-2. D: fills with four Rust lanes (18 GB free twice tonight): `cargo clean` merged worktrees before removing them, and main's after a gate.
-3. F:/WSL capacity (vhdx 68 GB after compact; F: 44 GB free before 0.0.97).
-4. Duplicated helpers across crates: RUY-960 (safe_file/vdf), RUY-972 (per-profile store), RUY-926 (keyfile), RUY-961 (VM first_profile), RUY-965 (shell Library lookup).
+1. A .play Windows game has never launched end to end (RUY-999).
+2. Disk: four Rust lanes filled D: to 0 twice; always `worktree-done.ps1` after a merge gate; RUY-862's dev.ps1 disk guard is still open.
+3. Long-lived branches collide in vm-*.sh, test-vm-checks.sh, dev-setup.md: have builders `git merge main` before review (done 4 times tonight).
+4. Flakes under load: RUY-880 (notifications fixture, 4 times), RUY-992, the devkitPro git crash (RUY-905 review).
+
+## Process changes in lead-39
+- **Lead:** `scripts\worktree-done.ps1` replaces hand cleanup (LEAD.md 4b.6). A round past ~300k tokens went to a fresh builder with the round list on the ticket (902, 905): it worked. A stalled builder ("waiting on background work") with its round committed went straight to review (902, 904, 804). VM failures went to a debugging subagent with a booted VM (RUY-980: cause found in 30 min).
+- **Tests:** a check that SKIPs on a missing precondition can hide a failure: the runner checks now FAIL unless nobody is signed in (RUY-980 review).
+- **Paper Plane:** an `update` batch entry takes no `formation` (use `formation add`); creating a ticket without "## Acceptance criteria" in Ready is refused (fine, but the error comes after the create is attempted).
 
 ## Quality signals (one row per lead session)
 
 | Date | Range reviewed | Tasks | Findings (fixed / filed) | `dev.ps1 test` | VM |
 |---|---|---|---|---|---|
-| 2026-11-19/20 (lead-37) | 09c9c08..58bb188 | 11 tickets merged (8 branches) + 4 lead review commits; ADR-037/038 | rounds 2-3 on 855, 898, 900, 901, 890, 886/887 (all real) | 2275 passed, 0 failed | RUY-899 spike ALL PASS (0.0.96) |
-| 2026-11-20/21 (lead-38) | 58bb188..6a4b709 | 5 tickets merged + 4 lead review/docs commits; RUY-915 owner decision | rounds 2-3 on 816, 744, 909, 35 (all real) | 2305 passed, 0 failed | 0.0.97 failed twice (musl package; F: full) |
-| 2026-11-21 (lead-39, interim) | 6a4b709..45cac13 | 4 tickets merged + RUY-891 lead fix | round 2 on 36 (audit gaps, lint), 854 (duplicate rule), 37 (licence texts: real) | 2316 passed, 0 failed | 0.0.97: 24/28 PASS, protonfixes env (RUY-969) |
+| 2026-11-19/20 (lead-37) | 09c9c08..58bb188 | 11 tickets merged + 4 lead review commits; ADR-037/038 | rounds 2-3 on 855, 898, 900, 901, 890, 886/887 (all real) | 2275 passed, 0 failed | RUY-899 spike ALL PASS (0.0.96) |
+| 2026-11-20/21 (lead-38) | 58bb188..6a4b709 | 5 tickets merged + 4 lead review/docs commits | rounds 2-3 on 816, 744, 909, 35 (all real) | 2305 passed, 0 failed | 0.0.97 failed twice (musl; F: full) |
+| 2026-11-21 (lead-39) | 6a4b709..HEAD | 15 tickets merged + 3 review commits + RUY-891 + worktree-done.ps1; filed 959-1002 | round 2+ on 36, 854, 37, 969, 902, 904, 914, 925 (x2), 980, 905 (x2), 804: all real (licence texts, a lock stall, a false-green SKIP, a relaunch bug) | 2357 passed, 0 failed | 0.0.97 24/28; 0.0.98 26/30 (4 filed) |
