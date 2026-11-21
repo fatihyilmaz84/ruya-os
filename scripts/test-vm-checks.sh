@@ -2091,7 +2091,8 @@ chmod +x "$rw/bin/wine" "$rw/bin/wineserver"
 # runtime directory it may use and the profile's Wayland socket name, and with the file "no-display" next to it
 # it fails as the real one does when the satellite does not start (log line, exit 203). Otherwise it runs
 # `flatpak run --device=input <app id>` (the check's own `flatpak` in front of PATH) with DISPLAY and XAUTHORITY
-# and without WAYLAND_DISPLAY.
+# and without WAYLAND_DISPLAY. With the file "abs-flatpak" it starts the X server (logs "runs on display") but
+# runs something else than the PATH's flatpak, as a helper that called /usr/bin/flatpak would.
 mkdir -p "$rr/usr/bin"
 cat > "$rr/usr/bin/ruya-session" <<'SHIMEOF'
 #!/bin/sh
@@ -2101,9 +2102,18 @@ cat > "$rr/usr/bin/ruya-session" <<'SHIMEOF'
 unset WAYLAND_DISPLAY
 DISPLAY=:77; XAUTHORITY="$XDG_RUNTIME_DIR/Xauthority"; export DISPLAY XAUTHORITY
 echo "ruya-session x11: $2 runs on display $DISPLAY" >&2
+[ -e "$(dirname "$0")/abs-flatpak" ] && exec true
 exec flatpak run --device=input "$2"
 SHIMEOF
 chmod +x "$rr/usr/bin/ruya-session"
+# busctl get-property ... ActiveProfile: the signed-in profile $FAKE_ACTIVE (default p1; empty = nobody), as
+# `s "p1"`; every other call is the shared fake busctl.
+cat > "$rsh/busctl" <<'SHIMEOF'
+#!/bin/sh
+case "$*" in *get-property*ActiveProfile*) printf 's "%s"\n' "${FAKE_ACTIVE-p1}"; exit 0 ;; esac
+exec "$FAKE_SHARED_SHIMS/busctl" "$@"
+SHIMEOF
+chmod +x "$rsh/busctl"
 # proton: with a display (DISPLAY, no WAYLAND_DISPLAY: Wine's Wayland driver is refused by the compositor) and
 # both STEAM_COMPAT_* folders, SteamAppId, SteamGameId and PWD set, it does what Proton does with CREATE_NEW_CONSOLE:
 # cmd.exe's `echo <words>>Z:\path` writes the words and CR LF to the file, and nothing reaches stdout. Without
@@ -2162,7 +2172,7 @@ grep -v Launcher "$tmp/links.good" > "$tmp/links.nolauncher"
 sed 's#/usr/lib/ruyaos/play/runners/ProtonGE11$#/usr/lib/ruyaos/play/runners/Other#' "$tmp/links.good" > "$tmp/links.elsewhere"
 rc_() { # <links file> [VAR=value ...]: the check against the fake image
     local links="$1"; shift
-    env FAKE_LINKS="$links" FAKE_PACK_HASH="$hash_ok" FAKE_BUSCTL_OUT='as 1 "p1"' RUYA_ROOT="$rr" "$@" \
+    env FAKE_LINKS="$links" FAKE_PACK_HASH="$hash_ok" FAKE_SHARED_SHIMS="$shims" RUYA_ROOT="$rr" "$@" \
         PATH="$rsh:$PATH" bash "$here/vm-runner-check.sh" check "$rsh/ruya-pack" 2>&1
 }
 out="$(rc_ "$tmp/links.good")"; rc=$?
@@ -2192,18 +2202,27 @@ rm -f "$rt/silent"
 out="$(rc_ "$tmp/links.good")"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: a marker on stdout and not in the file FAILs" "$out" "FAIL ProtonGE11: cmd.exe through proton as ruya-p1: exit 0, marker file ''" || fail "runner: the marker on stdout: exit $rc, $out"
 rm -f "$rt/stdout"
-# No X server (the profile is not the signed-in one): a SKIP with the helper's words, never the wait for Proton.
+# The signed-in profile gets no X server: a FAIL with the helper's words (never a SKIP, never the wait for Proton).
 : > "$rr/usr/bin/no-display"
 out="$(rc_ "$tmp/links.good")"; rc=$?
-[ "$rc" = 0 ] && expect_contains "runner: without a display the Proton step is a SKIP" "$out" "SKIP: no display for ruya-p1: ruya-session x11-run started no X server, so ProtonGE11's cmd.exe was not run" || fail "runner: no display: exit $rc, $out"
-expect_contains "runner: the SKIP quotes the helper" "$out" "launch failed, no X server"
-expect_lacks "runner: no display is not a FAIL" "$out" "FAIL ProtonGE11"
+[ "$rc" = 1 ] && expect_contains "runner: no X server for the signed-in profile FAILs" "$out" "FAIL the signed-in profile ruya-p1 got no X server from ruya-session x11-run, so ProtonGE11's cmd.exe was not run" || fail "runner: no display: exit $rc, $out"
+expect_contains "runner: the FAIL quotes the helper" "$out" "launch failed, no X server"
+expect_lacks "runner: no display is not a SKIP" "$out" "SKIP"
 expect_contains "runner: the Wine runner's check still ran without a display" "$out" "Wine11: x86_64 cmd.exe printed RUYA_RUNNER_OK as ruya-p1 without network"
+rm -f "$rr/usr/bin/no-display"
+# The helper started the X server but did not run flatpak from the PATH: not "no X server".
+: > "$rr/usr/bin/abs-flatpak"
+out="$(rc_ "$tmp/links.good")"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner: a helper that does not run flatpak from PATH FAILs" "$out" "FAIL x11-run started an X server for ruya-p1 but did not run flatpak from PATH, so ProtonGE11's cmd.exe was not run" || fail "runner: abs flatpak: exit $rc, $out"
+rm -f "$rr/usr/bin/abs-flatpak"
+# A missing helper is a broken image.
 mv "$rr/usr/bin/ruya-session" "$rr/usr/bin/ruya-session.keep"
 out="$(rc_ "$tmp/links.good")"; rc=$?
-[ "$rc" = 0 ] && expect_contains "runner: a missing helper is a SKIP too" "$out" "SKIP: no display for ruya-p1" || fail "runner: no helper: exit $rc, $out"
+[ "$rc" = 1 ] && expect_contains "runner: a missing helper FAILs" "$out" "FAIL $rr/usr/bin/ruya-session is missing: the image has no ruya-session x11-run helper" || fail "runner: no helper: exit $rc, $out"
 mv "$rr/usr/bin/ruya-session.keep" "$rr/usr/bin/ruya-session"
-rm -f "$rr/usr/bin/no-display"
+# The program runs as the signed-in profile, not the first one listed.
+out="$(rc_ "$tmp/links.good" FAKE_ACTIVE=p2)"; rc=$?
+[ "$rc" = 0 ] && expect_contains "runner: the program runs as the signed-in profile" "$out" "ProtonGE11: cmd.exe printed RUYA_RUNNER_OK as ruya-p2 without network" || fail "runner: active profile: exit $rc, $out"
 : > "$rw/silent"
 out="$(rc_ "$tmp/links.good")"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: no marker through the Wine runner FAILs" "$out" "FAIL Wine11: x86_64 cmd.exe through bin/wine as ruya-p1" || fail "runner: the Wine marker: exit $rc"
@@ -2212,8 +2231,8 @@ mv "$rw/lib/wine/i386-windows/cmd.exe" "$tmp/cmd32.keep"
 out="$(rc_ "$tmp/links.good")"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: a Wine runner that cannot run a 32-bit program FAILs" "$out" "FAIL Wine11: i386 cmd.exe through bin/wine as ruya-p1" || fail "runner: the 32-bit program: exit $rc"
 mv "$tmp/cmd32.keep" "$rw/lib/wine/i386-windows/cmd.exe"
-out="$(rc_ "$tmp/links.good" FAKE_BUSCTL_OUT='as 0')"; rc=$?
-[ "$rc" = 0 ] && expect_contains "runner: without a profile the program step is a SKIP" "$out" "SKIP: no profile on this VM" || fail "runner: no profile: exit $rc, $out"
+out="$(rc_ "$tmp/links.good" FAKE_ACTIVE=)"; rc=$?
+[ "$rc" = 0 ] && expect_contains "runner: with nobody signed in the program step is a SKIP" "$out" "SKIP: no profile is signed in" || fail "runner: no profile: exit $rc, $out"
 [ "$(grep -c 'run_on_display "\$user"' "$here/vm-runner-check.sh")" = 2 ] && grep -q 'x11-run org.ruyaos.RunnerCheck' "$here/vm-runner-check.sh" && pass "vm-runner-check.sh runs the Proton program and the sample through run_on_display (ruya-session x11-run), one copy" || fail "vm-runner-check.sh: the Proton program and the sample do not both go through run_on_display"
 grep -q 'unshare -n runuser -u "$user"' "$here/vm-runner-check.sh" && pass "vm-runner-check.sh runs the program offline as the profile user" || fail "vm-runner-check.sh: the program does not run under unshare -n as the profile user"
 
@@ -2303,7 +2322,7 @@ sys.exit(1 if mode == "fail" else 0)
 PYEOF
 sm_() { # <script> [VAR=value ...]: the sample mode against the fake image
     local script="$1"; shift
-    env FAKE_BUSCTL_OUT='as 1 "p1"' RUYA_ROOT="$rr" "$@" PATH="$rsh:$PATH" bash "$here/vm-runner-check.sh" sample "$script" 2>&1
+    env FAKE_SHARED_SHIMS="$shims" RUYA_ROOT="$rr" "$@" PATH="$rsh:$PATH" bash "$here/vm-runner-check.sh" sample "$script" 2>&1
 }
 out="$(sm_ "$sample_py")"; rc=$?
 [ "$rc" = 0 ] && expect_contains "runner sample: a good run passes" "$out" "vm-runner-check: all passed" || fail "runner sample: a good run: exit $rc, $out"
@@ -2326,11 +2345,11 @@ out="$(sm_ "$tmp/no-such-script.py")"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner sample: a missing script FAILs" "$out" "is not on the guest" || fail "runner sample: no script: exit $rc"
 : > "$rr/usr/bin/no-display"
 out="$(sm_ "$sample_py")"; rc=$?
-[ "$rc" = 0 ] && expect_contains "runner sample: without a display it is a SKIP" "$out" "SKIP: no display for ruya-p1: ruya-session x11-run started no X server, so the sample was not run" || fail "runner sample: no display: exit $rc, $out"
-expect_lacks "runner sample: no display is not a FAIL" "$out" "FAIL"
+[ "$rc" = 1 ] && expect_contains "runner sample: no X server for the signed-in profile FAILs" "$out" "FAIL the signed-in profile ruya-p1 got no X server from ruya-session x11-run, so the sample was not run" || fail "runner sample: no display: exit $rc, $out"
+expect_lacks "runner sample: no display is not a SKIP" "$out" "SKIP"
 rm -f "$rr/usr/bin/no-display"
-out="$(sm_ "$sample_py" FAKE_BUSCTL_OUT='as 0')"; rc=$?
-[ "$rc" = 0 ] && expect_contains "runner sample: without a profile it is a SKIP" "$out" "SKIP: no profile on this VM: the sample was not run" || fail "runner sample: no profile: exit $rc, $out"
+out="$(sm_ "$sample_py" FAKE_ACTIVE=)"; rc=$?
+[ "$rc" = 0 ] && expect_contains "runner sample: with nobody signed in it is a SKIP" "$out" "SKIP: no profile is signed in: the sample was not run" || fail "runner sample: no profile: exit $rc, $out"
 grep -q 'unshare -n runuser -u "$user" -- env -i' "$here/vm-runner-check.sh" && pass "vm-runner-check.sh runs the sample offline as the profile user" || fail "vm-runner-check.sh: the sample does not run under unshare -n as the profile user"
 # The real script's own logic (the runner choice and the Proton argv and environment) on the host.
 python3 -I "$here/../samples/hello-runner/test_run_windows.py" > "$tmp/sample-unit.log" 2>&1 && pass "samples/hello-runner/test_run_windows.py passes" || { cat "$tmp/sample-unit.log"; fail "samples/hello-runner/test_run_windows.py failed"; }

@@ -18,9 +18,11 @@
 #      Proton needs an X display (it gives every program a console window, which hangs without one), so
 #      its program runs on the display a launch gets: through `ruya-session x11-run` as the profile user
 #      (run_on_display), and cmd.exe writes the marker to a file the check reads, because that console
-#      window, not stdout, gets what cmd.exe echoes (RUY-980). Without a profile on the VM, or when
-#      x11-run starts no X server (the profile is not the signed-in one), this step is a SKIP with its
-#      reason (the check creates and signs in none; vm-queue.ps1 signs one in with vm-goto.ps1 home).
+#      window, not stdout, gets what cmd.exe echoes (RUY-980). It runs as the signed-in profile
+#      (Profiles1 ActiveProfile). With nobody signed in the step is a SKIP with its reason (the check
+#      signs in none; vm-queue.ps1 does it with vm-goto.ps1 home); x11-run starting no X server for the
+#      signed-in profile, a helper missing from the image, or a helper that did not run `flatpak` from the
+#      PATH is a FAIL.
 # Mode `steam` (RUY-35, after the Steam Flatpak is installed and was started once as a profile):
 #   5. every Proton runner is linked into Steam's extension point
 #      (com.valvesoftware.Steam.CompatibilityTool.<Name>/x86_64/stable) and carries its
@@ -36,8 +38,8 @@
 #      the image, starts the runner's cmd.exe through `proton waitforexitandrun` and prints its marker, and
 #      the Proton prefix is made in the profile's data folder. This is the script, not the Flatpak: the
 #      mount of an app's extension point is vm-play-check.sh's; building the sample with flatpak-builder in
-#      the VM is not done. The script runs on the same display as in `check`, and without a profile or a
-#      display the step is a SKIP, as there.
+#      the VM is not done. The script runs as the signed-in profile on the same display as in `check`, and
+#      with nobody signed in the step is a SKIP, as there; a missing display is a FAIL.
 # Running a game inside a .play sandbox (the extension mounts, the 32-bit points) is
 # vm-play-check.sh launch and launch-windows (RUY-902).
 # Mode `newest` (RUY-902; `newest <runners dir> <key>=<value>`, no root needed): prints the folder of the newest
@@ -68,9 +70,10 @@ marker=RUYA_RUNNER_OK
 fail=0
 ok() { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
-# The first profile's id on this VM ("p1"), or nothing.
-first_profile() {
-    busctl --system call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ListProfiles 2>/dev/null | grep -o '"p[0-9]*"' | head -1 | tr -d '"'
+# The id of the profile that is signed in ("p1": Profiles1's ActiveProfile), or nothing. x11-run's X server
+# connects to the signed-in profile's Wayland socket, so a program that needs a display runs as that one.
+active_profile() {
+    busctl --system get-property org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ActiveProfile 2>/dev/null | cut -d'"' -f2
 }
 
 # newest_runner <runners dir> <key>=<value>: the folder name of the newest runner.json one folder below <dir>
@@ -108,13 +111,15 @@ win_path() {
 # `unshare -n`, on an X display made the way a launch makes it (RUY-980): through `ruya-session x11-run`, the
 # helper that starts xwayland-satellite for the signed-in profile and runs `flatpak run <app id>` on it
 # (DISPLAY, XAUTHORITY, no WAYLAND_DISPLAY; 05 §6.3). The helper runs nothing but `flatpak`, so a `flatpak`
-# in front of PATH is the command: it notes the display in <data>/display and execs the command. Proton
+# in front of PATH is the command: it notes the display in <data>/display and execs the command. The one
+# assumption of this seam: x11-run starts `flatpak` by name through the PATH it was given (x11::app_argv),
+# not as /usr/bin/flatpak; if that changes, x11_failed says so. Proton
 # opens a console window for every program (CREATE_NEW_CONSOLE) and without a display waits for ever, so a
 # program that needs none (cmd.exe's echo) still needs this. The helper's XDG_RUNTIME_DIR is <data>/run
 # (Wine wants one it may use; the profile's own may not be there). The VAR=value are the program's
 # environment. Output: the helper's log and the command's; status: the command's. No <data>/display
-# afterwards means no X server came up: the caller SKIPs (the profile is not the signed-in one, or the
-# helper is missing).
+# afterwards means the command never ran: the caller reports it with x11_failed (a FAIL, never a SKIP: the
+# user is the signed-in profile).
 run_on_display() {
     local user="$1" data="$2"; shift 2
     local vars=()
@@ -134,9 +139,19 @@ run_on_display() {
         "${vars[@]}" "$session" x11-run org.ruyaos.RunnerCheck 2>&1)
 }
 
-# no_display <user> <what> <output>: the SKIP line for a program that could not be run for want of a display.
-no_display() {
-    echo "SKIP: no display for $1: ruya-session x11-run started no X server, so $2 was not run (it needs the profile signed in: vm-goto.ps1 home; Proton cannot run a program without a display). The helper said: $(printf '%s' "$3" | tail -n 2 | tr '\n' ' ')"
+# x11_failed <user> <what> <output>: the FAIL for a program that run_on_display did not run (no <data>/display):
+# the helper is not on the image, or it started the X server but did not run `flatpak` from the PATH, or the
+# signed-in profile got no X server.
+x11_failed() {
+    local tail_
+    tail_="$(printf '%s' "$3" | tail -n 3 | tr '\n' ' ')"
+    if [ ! -x "$session" ]; then
+        bad "$session is missing: the image has no ruya-session x11-run helper, so $2 was not run"
+    elif printf '%s' "$3" | grep -q 'runs on display'; then
+        bad "x11-run started an X server for $1 but did not run flatpak from PATH, so $2 was not run (the seam of run_on_display no longer holds); the helper said: $tail_"
+    else
+        bad "the signed-in profile $1 got no X server from ruya-session x11-run, so $2 was not run (Proton cannot run a program without a display); the helper said: $tail_"
+    fi
 }
 
 if [ "$mode" = newest ]; then
@@ -149,11 +164,11 @@ fi
 if [ "$mode" = sample ]; then
     script="${2:-/root/run-windows.py}"
     echo "--- the sample script runs a Windows program through the image's runner, offline, as a profile user"
-    profile="$(first_profile)"
+    profile="$(active_profile)"
     if [ ! -f "$script" ]; then
         bad "$script (samples/hello-runner/run-windows.py) is not on the guest"
     elif [ -z "$profile" ]; then
-        echo "SKIP: no profile on this VM: the sample was not run (create one in the shell first; this check creates none)"
+        echo "SKIP: no profile is signed in: the sample was not run (sign one in first, vm-goto.ps1 home; this check signs in none)"
     else
         user="ruya-$profile"
         data="$(mktemp -d "$root/var/tmp/ruya-runner-sample.XXXXXX")" || { bad "no scratch folder in /var/tmp"; data=""; }
@@ -170,7 +185,7 @@ if [ "$mode" = sample ]; then
                 timeout 300 python3 "$data/run-windows.py" --runners "$play/runners" --self-test)"; rc=$?
             used="$(printf '%s\n' "$out" | sed -n 's/^hello-runner: using \([^ ]*\) (.*/\1/p' | head -1)"
             if [ ! -s "$data/display" ]; then
-                no_display "$user" "the sample" "$out"
+                x11_failed "$user" "the sample" "$out"
             else
                 if [ -n "$used" ] && [ -f "$play/runners/$used/runner.json" ]; then ok "the script took the runner $used from $play/runners"; else bad "the script named no runner of the image: '$used'"; fi
                 if [ "$rc" = 0 ] && printf '%s\n' "$out" | tr -d '\r' | grep -qx RUYA_HELLO_RUNNER_OK; then
@@ -291,11 +306,11 @@ done
 [ "$count" -ge 1 ] && ok "$count runner(s)" || bad "no runner under $play/runners"
 
 echo "--- a Windows program through the runner, offline, as a profile user"
-profile="$(first_profile)"
+profile="$(active_profile)"
 if [ -z "$protons" ]; then
     bad "no Proton runner to run a Windows program through"
 elif [ -z "$profile" ]; then
-    echo "SKIP: no profile on this VM: no Windows program was run (create one in the shell first; this check creates none)"
+    echo "SKIP: no profile is signed in: no Windows program was run (sign one in first, vm-goto.ps1 home; this check signs in none)"
 else
     user="ruya-$profile"
     for tree in $protons; do
@@ -315,7 +330,7 @@ else
             SteamAppId=0 SteamGameId=0 PWD="$data" WINEDEBUG=-all -- \
             timeout 300 python3 "$tree/proton" waitforexitandrun "$exe" /c "echo $marker>$(win_path "$data/marker.txt")")"; rc=$?
         if [ ! -s "$data/display" ]; then
-            no_display "$user" "$name's cmd.exe" "$out"
+            x11_failed "$user" "$name's cmd.exe" "$out"
         elif [ "$rc" = 0 ] && tr -d '\r' < "$data/marker.txt" 2>/dev/null | grep -qx "$marker"; then
             ok "$name: cmd.exe printed $marker as $user without network, on display $(cat "$data/display")"
         else

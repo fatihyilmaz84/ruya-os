@@ -199,6 +199,16 @@ class Main(unittest.TestCase):
         self.assertNotIn("RUYA_HELLO_RUNNER_OK", out)
         self.assertIn("not RUYA_HELLO_RUNNER_OK", err)
 
+    def test_the_self_test_ignores_a_marker_left_by_an_earlier_run(self):
+        # A leftover file with the marker must not pass the self-test when the runner wrote nothing.
+        os.makedirs(self.data)
+        with open(os.path.join(self.data, "self-test-marker.txt"), "w", encoding="utf-8") as f:
+            f.write("RUYA_HELLO_RUNNER_OK\r\n")
+        code, calls, out, _ = self.self_test(writes=False)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(code, 1)
+        self.assertNotIn("RUYA_HELLO_RUNNER_OK", out)
+
     def test_the_self_test_fails_when_proton_does(self):
         code, _, out, err = self.self_test(status=3)
         self.assertEqual(code, 1)
