@@ -1074,6 +1074,15 @@ fn command_and_cwd() {
     assert_rejected(check(&fx), "run.cwd");
     fx.manifest["run"]["cwd"] = json!("${payload}/sub");
     assert_valid(check(&fx));
+    // Every placeholder the format knows starts a cwd, except those cwd may not use: a new entry
+    // of PLACEHOLDERS needs no change in manifest.rs.
+    for name in ruya_play_format::limits::PLACEHOLDERS {
+        if name == "disc" || name == "game" {
+            continue; // `disc` needs discs; `game` needs run.writable (own tests)
+        }
+        fx.manifest["run"]["cwd"] = json!(format!("${{{name}}}/sub"));
+        assert_valid(check(&fx));
+    }
 }
 
 #[test]

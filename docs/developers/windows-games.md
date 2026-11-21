@@ -189,7 +189,7 @@ Many Windows games write their ini file, log or saves into their own install fol
 - The console prepares the folder before the game starts, and again only after an update (the first start after one takes a little longer). Do not write anywhere else under the game's own folder: outside the writable folders a write fails (the folders are read-only and the files are links to the read-only original), and the console never copies such a file back. `.ruya-play/` in your data folder belongs to the console; do not write it.
 - Keep the folders to what the game writes; everything in them is copied for every profile that plays it (with no extra disk on a file system that shares copies, such as btrfs).
 
-`ruya-pack validate` reports the mistakes with the codes `run.writable_path`, `run.writable_overlap`, `run.writable_too_large`, `run.game_placeholder_without_writable` and `run.writable_needs_game`. A game with an option for the folder of its settings can use that instead (`INI=` for Unreal Tournament); that needs no `writable` at all.
+`ruya-pack validate` reports the mistakes with the codes `run.writable_path`, `run.writable_overlap`, `run.writable_too_large`, `run.writable_too_many_files`, `run.game_placeholder_without_writable` and `run.writable_needs_game`. A game with an option for the folder of its settings can use that instead (`INI=` for Unreal Tournament); that needs no `writable` at all.
 
 ## What is experimental, and what is not public
 

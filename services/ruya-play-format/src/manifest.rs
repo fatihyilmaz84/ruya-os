@@ -12,6 +12,10 @@ use crate::text::{
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+/// The placeholders of [`PLACEHOLDERS`] that `run.cwd` may not start with: a disc is mounted for
+/// the game to read, never a place to run from.
+const CWD_FORBIDDEN_PLACEHOLDERS: [&str; 1] = ["disc"];
+
 /// A text in several languages: language tag to text. `"en"` is always present.
 pub type Localized = BTreeMap<String, String>;
 
@@ -1839,7 +1843,7 @@ impl<'a> Checker<'a> {
             let s = self.string(v, "/run/cwd")?;
             self.placeholders(s, "/run/cwd", &ctx);
             let known = s.strip_prefix("${").and_then(|t| t.split_once('}')).is_some_and(|(name, rest)| {
-                (["payload", "data", "config", "prefix", "game"].contains(&name) || name.strip_prefix("component:").is_some_and(|id| components.iter().any(|c| c.id == id)))
+                (PLACEHOLDERS.iter().any(|p| *p == name && !CWD_FORBIDDEN_PLACEHOLDERS.contains(p)) || name.strip_prefix("component:").is_some_and(|id| components.iter().any(|c| c.id == id)))
                     && (rest.is_empty() || rest.starts_with('/'))
                     && !rest.split('/').any(|c| c == "..")
             });
@@ -1944,7 +1948,7 @@ impl<'a> Checker<'a> {
     }
 
     /// `run.writable` (ADR-040): payload-relative folders, none inside another, with at most
-    /// [`MAX_WRITABLE_BYTES`] of table files below them.
+    /// [`MAX_WRITABLE_BYTES`] bytes and [`MAX_WRITABLE_FILES`] files of the table below them.
     fn writable(&mut self, v: &Value) -> Vec<String> {
         let list = self.string_list(v, "/run/writable", MAX_WRITABLE, &mut |s, item, at| {
             s.writable_folder(item, at)
@@ -1966,7 +1970,7 @@ impl<'a> Checker<'a> {
         }
         self.writable_table_rules(&list);
         let folders: Vec<String> = list.iter().map(|f| format!("payload/{f}/")).collect();
-        let bytes: u64 = self
+        let sizes: Vec<u64> = self
             .entries
             .iter()
             .filter_map(|e| match e {
@@ -1977,7 +1981,18 @@ impl<'a> Checker<'a> {
                 }
                 _ => None,
             })
-            .fold(0, u64::saturating_add);
+            .collect();
+        let bytes = sizes.iter().fold(0, |a, s| u64::saturating_add(a, *s));
+        if sizes.len() > MAX_WRITABLE_FILES {
+            self.p.add(
+                codes::RUN_WRITABLE_TOO_MANY_FILES,
+                "/run/writable",
+                format!(
+                    "The writable folders hold {n} files; at most {MAX_WRITABLE_FILES} are copied for each profile.",
+                    n = sizes.len()
+                ),
+            );
+        }
         if bytes > MAX_WRITABLE_BYTES {
             self.p.add(
                 codes::RUN_WRITABLE_TOO_LARGE,

@@ -217,6 +217,7 @@ codes! {
     RUN_WRITABLE_PATH = "run.writable_path",
     RUN_WRITABLE_OVERLAP = "run.writable_overlap",
     RUN_WRITABLE_TOO_LARGE = "run.writable_too_large",
+    RUN_WRITABLE_TOO_MANY_FILES = "run.writable_too_many_files",
     RUN_GAME_PLACEHOLDER_WITHOUT_WRITABLE = "run.game_placeholder_without_writable",
     RUN_WRITABLE_NEEDS_GAME = "run.writable_needs_game",
     ENV_BAD_NAME = "env.bad_name",
