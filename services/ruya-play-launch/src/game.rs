@@ -59,8 +59,10 @@ pub const BASE: &str = ".ruya-play/game-base.json";
 pub const NEW_BASE: &str = ".ruya-play/game.new.json";
 /// The format of [`BASE`] this launcher writes and reads.
 pub const BASE_FORMAT: u64 = 1;
-/// The most entries [`BASE`] holds (ADR-040): one per copy, and a package has at most this many.
-pub const MAX_BASE_ENTRIES: usize = MAX_WRITABLE_FILES;
+/// The most entries [`BASE`] holds (ADR-040): one per copy. A package has at most
+/// [`MAX_WRITABLE_FILES`] files below `run.writable`; the only copy outside them is the program
+/// (`run.command[0]`), so one more entry makes room for it and no copy counts as changed.
+pub const MAX_BASE_ENTRIES: usize = MAX_WRITABLE_FILES + 1;
 /// The largest [`BASE`] read (ADR-040).
 pub const MAX_BASE_BYTES: u64 = 4 * 1024 * 1024;
 /// The prefix of `run.command` and `run.cwd` that names the tree.
@@ -670,6 +672,24 @@ mod tests {
         let mut big = line("{}").into_bytes();
         big.resize(MAX_BASE_BYTES as usize + 1, b' ');
         assert_eq!(Base::parse(&big), None);
+    }
+
+    #[test]
+    fn a_package_at_the_file_cap_records_the_program_outside_the_writable_folders_too() {
+        // MAX_WRITABLE_FILES copies below run.writable and the program outside them: every one is
+        // recorded, so the program's copy is unchanged at the next update and gets replaced (the
+        // fake OS is quadratic in the tree size, so the update itself is tested at a small size
+        // in tests/game.rs: the program is a recorded copy).
+        let mut paths: Vec<String> = (0..MAX_WRITABLE_FILES).map(|i| format!("Save/f{i}")).collect();
+        paths.push("Game.exe".to_string());
+        let copies: Vec<(&str, &str)> = paths.iter().map(|p| (p.as_str(), H)).collect();
+        let (base, left) = Base::of(1, &copies);
+        assert_eq!(left, 0);
+        assert!(base.files.contains_key("Game.exe"));
+        assert_eq!(
+            Base::parse(&base.to_bytes()).map(|b| b.files.len()),
+            Some(MAX_WRITABLE_FILES + 1)
+        );
     }
 
     #[test]
