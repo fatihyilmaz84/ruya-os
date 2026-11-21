@@ -2087,21 +2087,52 @@ printf '%s\r\n' "$*"
 SHIMEOF
 printf '#!/bin/sh\nexit 0\n' > "$rw/bin/wineserver"
 chmod +x "$rw/bin/wine" "$rw/bin/wineserver"
-# proton: prints the words after waitforexitandrun's program and /c echo (CR LF, as cmd.exe does) when
-# both STEAM_COMPAT_* folders, SteamAppId, SteamGameId and PWD are set, and nothing when the file "silent" is next to it.
+# ruya-session x11-run <app id> (RUY-980): what the helper does for the check, without an X server: it needs a
+# runtime directory it may use and the profile's Wayland socket name, and with the file "no-display" next to it
+# it fails as the real one does when the satellite does not start (log line, exit 203). Otherwise it runs
+# `flatpak run --device=input <app id>` (the check's own `flatpak` in front of PATH) with DISPLAY and XAUTHORITY
+# and without WAYLAND_DISPLAY.
+mkdir -p "$rr/usr/bin"
+cat > "$rr/usr/bin/ruya-session" <<'SHIMEOF'
+#!/bin/sh
+[ "$1" = x11-run ] && [ "$2" = org.ruyaos.RunnerCheck ] && [ "$#" = 2 ] || { echo "ruya-session: usage: x11-run <app id>" >&2; exit 2; }
+[ -d "${XDG_RUNTIME_DIR:-/nonexistent}" ] && [ -n "${WAYLAND_DISPLAY:-}" ] || { echo "ruya-session x11: $2: launch failed, no runtime dir or Wayland display" >&2; exit 203; }
+[ -e "$(dirname "$0")/no-display" ] && { echo "ruya-session x11: $2: launch failed, no X server" >&2; exit 203; }
+unset WAYLAND_DISPLAY
+DISPLAY=:77; XAUTHORITY="$XDG_RUNTIME_DIR/Xauthority"; export DISPLAY XAUTHORITY
+echo "ruya-session x11: $2 runs on display $DISPLAY" >&2
+exec flatpak run --device=input "$2"
+SHIMEOF
+chmod +x "$rr/usr/bin/ruya-session"
+# proton: with a display (DISPLAY, no WAYLAND_DISPLAY: Wine's Wayland driver is refused by the compositor) and
+# both STEAM_COMPAT_* folders, SteamAppId, SteamGameId and PWD set, it does what Proton does with CREATE_NEW_CONSOLE:
+# cmd.exe's `echo <words>>Z:\path` writes the words and CR LF to the file, and nothing reaches stdout. Without
+# a display it waits (here: exits 124 as `timeout` does). The file "silent" next to it writes nothing; "stdout"
+# prints the words to stdout instead of the file (what the check used to read).
 cat > "$rt/proton" <<'PYEOF'
-import os, sys
+import os, subprocess, sys
 here = os.path.dirname(os.path.abspath(__file__))
 if os.path.exists(os.path.join(here, "silent")):
     sys.exit(0)
-assert sys.argv[1] == "waitforexitandrun" and sys.argv[2].endswith("cmd.exe"), sys.argv
+# (Git Bash hands a native python the argument /c as C:/)
+assert sys.argv[1] == "waitforexitandrun" and sys.argv[2].endswith("cmd.exe") and sys.argv[3] in ("/c", "C:/"), sys.argv
 assert os.environ.get("STEAM_COMPAT_DATA_PATH"), os.environ
 assert os.path.isdir(os.environ.get("STEAM_COMPAT_CLIENT_INSTALL_PATH", "")), os.environ
 # What protonfixes needs outside Steam (RUY-969): it reads PWD without a fallback and fails on a game id
 # parsed from a compat path without digits. A real run checks it for real (vm-runner-check.sh check).
 assert os.environ.get("SteamAppId") == "0" and os.environ.get("SteamGameId") == "0", os.environ
 assert os.path.samefile(os.environ.get("PWD", "/nonexistent"), os.getcwd()), (os.environ.get("PWD"), os.getcwd())
-sys.stdout.write(" ".join(sys.argv[5:]) + "\r\n")
+# What Wine needs and a console window too (RUY-980): a display, a runtime directory, no Wayland socket.
+if not os.environ.get("DISPLAY") or not os.path.isdir(os.environ.get("XDG_RUNTIME_DIR", "")) or "WAYLAND_DISPLAY" in os.environ:
+    sys.stderr.write("fake proton: no usable display, waiting for ever\n")
+    sys.exit(124)
+words, _, target = sys.argv[4].partition(">")
+assert words.startswith("echo ") and target.startswith("Z:"), sys.argv
+if os.path.exists(os.path.join(here, "stdout")):
+    sys.stdout.write(words[5:] + "\r\n")
+else:
+    # Z:\<path> is <path> with / for \ (the shell's path, which `sh` resolves on every host).
+    subprocess.run(["sh", "-c", 'printf "%s\\r\\n" "$1" > "$2"', "sh", words[5:], target[2:].replace("\\", "/")], check=True)
 PYEOF
 # readlink: the links of $FAKE_LINKS ("<path> <target>" lines).
 cat > "$rsh/readlink" <<'SHIMEOF'
@@ -2137,6 +2168,7 @@ rc_() { # <links file> [VAR=value ...]: the check against the fake image
 out="$(rc_ "$tmp/links.good")"; rc=$?
 [ "$rc" = 0 ] && expect_contains "runner: a good image passes" "$out" "vm-runner-check: all passed" || fail "runner: a good image: exit $rc, $out"
 expect_contains "runner: the Windows program ran as the profile user" "$out" "ProtonGE11: cmd.exe printed RUYA_RUNNER_OK as ruya-p1 without network"
+expect_contains "runner: it ran on the display ruya-session x11-run made" "$out" "on display :77"
 expect_contains "runner: the hash is compared" "$out" "hash $hash_ok as recorded"
 expect_contains "runner: the Wine runner's 64-bit program ran" "$out" "Wine11: x86_64 cmd.exe printed RUYA_RUNNER_OK as ruya-p1 without network"
 expect_contains "runner: the Wine runner's 32-bit program ran" "$out" "Wine11: i386 cmd.exe printed RUYA_RUNNER_OK as ruya-p1 without network"
@@ -2155,6 +2187,23 @@ out="$(rc_ "$tmp/links.good" FAKE_LAUNCH_SAYS="something else")"; rc=$?
 out="$(rc_ "$tmp/links.good")"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: no marker from the Windows program FAILs" "$out" "FAIL ProtonGE11: cmd.exe through proton as ruya-p1" || fail "runner: the marker: exit $rc"
 rm -f "$rt/silent"
+# Proton's console window gets what cmd.exe echoes, not stdout (RUY-980): a marker on stdout only does not pass.
+: > "$rt/stdout"
+out="$(rc_ "$tmp/links.good")"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner: a marker on stdout and not in the file FAILs" "$out" "FAIL ProtonGE11: cmd.exe through proton as ruya-p1: exit 0, marker file ''" || fail "runner: the marker on stdout: exit $rc, $out"
+rm -f "$rt/stdout"
+# No X server (the profile is not the signed-in one): a SKIP with the helper's words, never the wait for Proton.
+: > "$rr/usr/bin/no-display"
+out="$(rc_ "$tmp/links.good")"; rc=$?
+[ "$rc" = 0 ] && expect_contains "runner: without a display the Proton step is a SKIP" "$out" "SKIP: no display for ruya-p1: ruya-session x11-run started no X server, so ProtonGE11's cmd.exe was not run" || fail "runner: no display: exit $rc, $out"
+expect_contains "runner: the SKIP quotes the helper" "$out" "launch failed, no X server"
+expect_lacks "runner: no display is not a FAIL" "$out" "FAIL ProtonGE11"
+expect_contains "runner: the Wine runner's check still ran without a display" "$out" "Wine11: x86_64 cmd.exe printed RUYA_RUNNER_OK as ruya-p1 without network"
+mv "$rr/usr/bin/ruya-session" "$rr/usr/bin/ruya-session.keep"
+out="$(rc_ "$tmp/links.good")"; rc=$?
+[ "$rc" = 0 ] && expect_contains "runner: a missing helper is a SKIP too" "$out" "SKIP: no display for ruya-p1" || fail "runner: no helper: exit $rc, $out"
+mv "$rr/usr/bin/ruya-session.keep" "$rr/usr/bin/ruya-session"
+rm -f "$rr/usr/bin/no-display"
 : > "$rw/silent"
 out="$(rc_ "$tmp/links.good")"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: no marker through the Wine runner FAILs" "$out" "FAIL Wine11: x86_64 cmd.exe through bin/wine as ruya-p1" || fail "runner: the Wine marker: exit $rc"
@@ -2165,6 +2214,7 @@ out="$(rc_ "$tmp/links.good")"; rc=$?
 mv "$tmp/cmd32.keep" "$rw/lib/wine/i386-windows/cmd.exe"
 out="$(rc_ "$tmp/links.good" FAKE_BUSCTL_OUT='as 0')"; rc=$?
 [ "$rc" = 0 ] && expect_contains "runner: without a profile the program step is a SKIP" "$out" "SKIP: no profile on this VM" || fail "runner: no profile: exit $rc, $out"
+[ "$(grep -c 'run_on_display "\$user"' "$here/vm-runner-check.sh")" = 2 ] && grep -q 'x11-run org.ruyaos.RunnerCheck' "$here/vm-runner-check.sh" && pass "vm-runner-check.sh runs the Proton program and the sample through run_on_display (ruya-session x11-run), one copy" || fail "vm-runner-check.sh: the Proton program and the sample do not both go through run_on_display"
 grep -q 'unshare -n runuser -u "$user"' "$here/vm-runner-check.sh" && pass "vm-runner-check.sh runs the program offline as the profile user" || fail "vm-runner-check.sh: the program does not run under unshare -n as the profile user"
 
 echo "== vm-runner-check.sh steam: GE-Proton in Steam (RUY-35) =="
@@ -2238,6 +2288,8 @@ try:
 except OSError:
     pass
 assert sys.argv[1] == "--runners" and sys.argv[3] == "--self-test", sys.argv
+# Run on the display ruya-session x11-run made (RUY-980): the real script refuses to start without one.
+assert os.environ.get("DISPLAY") and "WAYLAND_DISPLAY" not in os.environ, os.environ
 # The check starts the copy from the scratch folder it copied it to (RUY-969): the script sets PWD from
 # its working folder, and that must be one the profile user can use.
 assert os.path.samefile(os.getcwd(), os.path.dirname(os.path.abspath(__file__))), (os.getcwd(), __file__)
@@ -2272,6 +2324,11 @@ done
 rm -f "$rp/sample-mode"
 out="$(sm_ "$tmp/no-such-script.py")"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner sample: a missing script FAILs" "$out" "is not on the guest" || fail "runner sample: no script: exit $rc"
+: > "$rr/usr/bin/no-display"
+out="$(sm_ "$sample_py")"; rc=$?
+[ "$rc" = 0 ] && expect_contains "runner sample: without a display it is a SKIP" "$out" "SKIP: no display for ruya-p1: ruya-session x11-run started no X server, so the sample was not run" || fail "runner sample: no display: exit $rc, $out"
+expect_lacks "runner sample: no display is not a FAIL" "$out" "FAIL"
+rm -f "$rr/usr/bin/no-display"
 out="$(sm_ "$sample_py" FAKE_BUSCTL_OUT='as 0')"; rc=$?
 [ "$rc" = 0 ] && expect_contains "runner sample: without a profile it is a SKIP" "$out" "SKIP: no profile on this VM: the sample was not run" || fail "runner sample: no profile: exit $rc, $out"
 grep -q 'unshare -n runuser -u "$user" -- env -i' "$here/vm-runner-check.sh" && pass "vm-runner-check.sh runs the sample offline as the profile user" || fail "vm-runner-check.sh: the sample does not run under unshare -n as the profile user"

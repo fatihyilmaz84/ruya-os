@@ -169,7 +169,7 @@ Not an API, so do not rely on it: the folder names below `/app/runners`, anythin
 
 ## Try the sample
 
-[`samples/hello-runner/`](../../samples/hello-runner/README.md) (CC0): a manifest that declares the point and a script that reads `runner.json` and runs a program. The script has a `--self-test` mode that runs the runner's own `cmd.exe`, so no Windows binary is needed. It is a command-line check, not a game: it needs no desktop entry and no AppStream file. **Not run yet** (neither the build nor the run below; pending the VM check). On a build machine with `flatpak` and `flatpak-builder` (see [Getting started](getting-started.md)), in `samples/hello-runner/`:
+[`samples/hello-runner/`](../../samples/hello-runner/README.md) (CC0): a manifest that declares the point and a script that reads `runner.json` and runs a program. The script has a `--self-test` mode that runs the runner's own `cmd.exe`, so no Windows binary is needed; it needs an X display (below). It is a command-line check, not a game: it needs no desktop entry and no AppStream file. **Not run yet** (neither the build nor the run below; pending the VM check). On a build machine with `flatpak` and `flatpak-builder` (see [Getting started](getting-started.md)), in `samples/hello-runner/`:
 
 ```sh
 flatpak-builder --force-clean --user --install-deps-from=flathub --repo=repo build-dir org.ruyaos.HelloRunner.json
@@ -183,7 +183,7 @@ The runner exists only on a console, so copy `repo` there and install it system-
 flatpak run org.ruyaos.HelloRunner --self-test
 ```
 
-It should print `hello-runner: using ProtonGE11 (GE-Proton11-12)` and then `RUYA_HELLO_RUNNER_OK` (from the runner's own `cmd.exe`); this output is what the script is written to produce, not something seen on an image yet. To try the script's runner choice off a console, point it at any folder of runners: `python3 run-windows.py --runners DIR --self-test` (the tests do this with made-up folders).
+It should print `hello-runner: using ProtonGE11 (GE-Proton11-12)` and then `RUYA_HELLO_RUNNER_OK` (printed by the script once the runner's own `cmd.exe` has written it to a file); this output is what the script is written to produce, not something seen on an image yet. `--self-test` needs an X display: Proton starts every program with its own console window, and Wine cannot open one without a display, so the program would never return. The script stops with `--self-test needs an X display` when `DISPLAY` is not set, and it reads the marker from a file because `cmd.exe`'s `echo` goes to that console window, never to your standard output. Flatpak gives the sandbox a `DISPLAY` (the manifest's `--socket=x11`) only when the process that runs `flatpak` has one; a login over `ssh` has none. A launcher that starts the program for a player does not have this problem: the console runs a Windows game on X11 already. To try the script's runner choice off a console, point it at any folder of runners: `python3 run-windows.py --runners DIR --self-test` (the tests do this with made-up folders).
 
 **Your own `.exe`.** The sandbox can read only what the manifest grants, and the sample grants no `--filesystem`. A launcher keeps its games under its own data folder, which is always readable, so put the program there and pass its path:
 
