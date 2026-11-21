@@ -16,7 +16,9 @@
 //!      number, a few times at most;
 //!   4. it runs `flatpak run --device=input <app id>` with `DISPLAY`, `XAUTHORITY`, `SDL_VIDEODRIVER=x11` and
 //!      `XDG_SESSION_TYPE=x11`, and without `WAYLAND_DISPLAY` (`app_env_x11`);
-//!   5. when the app ends it stops the satellite, waits for Xwayland and removes the directory and
+//!   5. when the app ends it first checks that the satellite and Xwayland still live: if one ended
+//!      under the app it logs `the X11 bridge stopped: <which>` and turns an exit 0 into 1 (the app
+//!      ends "crashed"); then it stops the satellite, waits for Xwayland and removes the directory and
 //!      a stale X socket and lock (`cleanup`). The unit's `ExecStopPost` (`x11-cleanup`) does the
 //!      same, because a Stop kills the whole unit, the helper included.
 //!
@@ -60,6 +62,8 @@ pub const COOKIE_LEN: usize = 16;
 /// Xauthority family "any address" (`FamilyWild`): Flatpak passes such an entry on into the
 /// sandbox (`FamilyLocal` would have to name this host, network families are dropped).
 pub const FAMILY_WILD: u16 = 65535;
+/// The satellite as the journal line names it.
+const SATELLITE_NAME: &str = "xwayland-satellite";
 const COOKIE_NAME: &str = "MIT-MAGIC-COOKIE-1";
 /// The files in the instance directory.
 const AUTH_FILE: &str = "Xauthority";
@@ -176,7 +180,9 @@ pub fn instance_dir(runtime_dir: &Path, app_id: &str) -> PathBuf {
     PathBuf::from(format!("{}/ruya-x11/{app_id}", runtime_dir.display()))
 }
 
-/// The satellite's argument list for `display` with the cookie file `auth`.
+/// The satellite's argument list for `display` with the cookie file `auth`. No `-terminate`:
+/// `bridge_stopped` relies on Xwayland outliving the app's end, so a normal quit never looks like a
+/// dead bridge.
 pub fn satellite_argv(display: u32, auth: &Path) -> Vec<String> {
     vec![
         SATELLITE_PROGRAM.to_owned(),
@@ -289,8 +295,8 @@ pub trait X11Os {
     fn random(&mut self, buf: &mut [u8]) -> io::Result<()>;
     /// Starts a child with these changes to the helper's environment (`None` removes); its pid.
     fn spawn(&mut self, argv: &[String], env: &[(String, Option<String>)]) -> io::Result<u32>;
-    /// Has the child ended (it is reaped then)?
-    fn child_ended(&mut self, pid: u32) -> bool;
+    /// How the child ended (it is reaped then), `None` while it runs.
+    fn child_end(&mut self, pid: u32) -> Option<End>;
     /// SIGTERM to the child, SIGKILL after `grace`, and reaps it.
     fn stop_child(&mut self, pid: u32, grace: Duration);
     /// Runs a child and waits for it.
@@ -339,7 +345,7 @@ enum Start {
 fn wait_ready(os: &mut dyn X11Os, sat: u32, display: u32) -> Start {
     let mut said_ready = false;
     for _ in 0..READY_POLLS {
-        if os.child_ended(sat) {
+        if os.child_end(sat).is_some() {
             return Start::Failed;
         }
         said_ready = os.notify_ready(sat) || said_ready;
@@ -399,6 +405,22 @@ fn end_process(os: &mut dyn X11Os, pid: u32) {
             os.sleep(READY_POLL);
         }
     }
+}
+
+/// Did the bridge end while the app ran? The satellite is our child, so its status is known; its
+/// Xwayland is not, we only see that it is gone. The line for the journal, `None` when both live.
+fn bridge_stopped(os: &mut dyn X11Os, sat: u32, xwayland: &[u32]) -> Option<String> {
+    if let Some(end) = os.child_end(sat) {
+        let how = match end {
+            End::Code(code) => format!("exited with status {code}"),
+            End::Signal(sig) => format!("was killed by signal {sig}"),
+        };
+        return Some(format!("{SATELLITE_NAME} {how}"));
+    }
+    xwayland
+        .iter()
+        .any(|&pid| !os.alive(pid))
+        .then(|| "Xwayland ended".to_owned())
 }
 
 /// The `x11-run` helper: starts a private X server, runs the app on it (with the launch
@@ -522,12 +544,24 @@ pub fn run_helper(
             fail
         }
     };
+    // Looked at before the stop below, so only a bridge that ended by itself counts. An app that
+    // lost its X server ends by itself, nonzero or not; the end is "crashed" either way.
+    let stopped = bridge_stopped(os, sat, &xwayland);
     os.stop_child(sat, STOP_GRACE);
     for pid in xwayland {
         end_process(os, pid);
     }
     cleanup(os, &dir);
-    end
+    match stopped {
+        Some(which) => {
+            os.log(&format!("the X11 bridge stopped: {which}"));
+            match end {
+                End::Code(0) => End::Code(1),
+                other => other,
+            }
+        }
+        None => end,
+    }
 }
 
 /// The `x11-cleanup` subcommand (the unit's `ExecStopPost`).
@@ -636,10 +670,15 @@ mod linux {
             self.children.insert(pid, child);
             Ok(pid)
         }
-        fn child_ended(&mut self, pid: u32) -> bool {
-            match self.children.get_mut(&pid) {
-                Some(child) => !matches!(child.try_wait(), Ok(None)),
-                None => true,
+        fn child_end(&mut self, pid: u32) -> Option<End> {
+            // A child that is not ours (never spawned, or stopped already) has no status to give.
+            let Some(child) = self.children.get_mut(&pid) else {
+                return Some(End::Code(-1));
+            };
+            match child.try_wait() {
+                Ok(None) => None,
+                Ok(Some(status)) => Some(end_of(status)),
+                Err(_) => Some(End::Code(-1)),
             }
         }
         fn stop_child(&mut self, pid: u32, grace: Duration) {
@@ -997,6 +1036,12 @@ mod tests {
         foreign: BTreeSet<PathBuf>,
         /// How the app ends.
         app_end: Option<End>,
+        /// While the app runs the satellite ends this way (its Xwayland with it).
+        sat_dies_in_run: Option<End>,
+        /// While the app runs the satellite's Xwayland ends, the satellite lives.
+        xwl_dies_in_run: bool,
+        /// How the satellite ended, once it has.
+        sat_end: Option<End>,
         /// What happened, in order.
         log: Vec<String>,
         app_env: Vec<(String, Option<String>)>,
@@ -1112,7 +1157,7 @@ mod tests {
                 .insert(file_in(&dir(), &format!("xwls-{n}")), (Vec::new(), 0o755));
             Ok(sat)
         }
-        fn child_ended(&mut self, pid: u32) -> bool {
+        fn child_end(&mut self, pid: u32) -> Option<End> {
             if let Some((sat, polls)) = self.dying {
                 if sat == pid {
                     if polls == 0 {
@@ -1126,7 +1171,11 @@ mod tests {
             if self.broken {
                 self.procs.remove(&pid);
             }
-            !self.procs.contains_key(&pid)
+            if self.procs.contains_key(&pid) {
+                None
+            } else {
+                Some(self.sat_end.unwrap_or(End::Code(0)))
+            }
         }
         fn stop_child(&mut self, pid: u32, _grace: Duration) {
             if self.procs.remove(&pid).is_some() {
@@ -1160,6 +1209,19 @@ mod tests {
                 .files
                 .get(&file_in(&dir(), "satellite"))
                 .map(|f| f.0.clone());
+            if let Some(end) = self.sat_dies_in_run {
+                let sat = *self
+                    .procs
+                    .iter()
+                    .find(|(_, &p)| p == 1)
+                    .expect("satellite")
+                    .0;
+                self.procs.retain(|&c, &mut p| c != sat && p != sat);
+                self.sat_end = Some(end);
+            }
+            if self.xwl_dies_in_run {
+                self.procs.retain(|_, &mut p| p == 1);
+            }
             self.app_end
                 .ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))
         }
@@ -1333,6 +1395,45 @@ mod tests {
         os.broken = true;
         assert_eq!(helper(&mut os), End::Code(EXIT_LAUNCH_FAILED));
         assert!(os.events("run").is_empty());
+    }
+
+    #[test]
+    fn a_bridge_that_ends_while_the_app_runs_is_logged_once() {
+        let line = |os: &Fake| os.events("log the X11 bridge stopped");
+        // The satellite exits mid-run; the app ends with an error of its own.
+        let mut os = Fake::new();
+        os.sat_dies_in_run = Some(End::Code(3));
+        os.app_end = Some(End::Code(1));
+        assert_eq!(helper(&mut os), End::Code(1));
+        assert_eq!(
+            line(&os),
+            ["log the X11 bridge stopped: xwayland-satellite exited with status 3"]
+        );
+        // Killed by a signal.
+        let mut os = Fake::new();
+        os.sat_dies_in_run = Some(End::Signal(9));
+        os.app_end = Some(End::Code(1));
+        helper(&mut os);
+        assert_eq!(
+            line(&os),
+            ["log the X11 bridge stopped: xwayland-satellite was killed by signal 9"]
+        );
+        // Xwayland exits, the satellite lives on; an app that ends 0 anyway is not a clean end.
+        let mut os = Fake::new();
+        os.xwl_dies_in_run = true;
+        assert_eq!(helper(&mut os), End::Code(1));
+        assert_eq!(line(&os), ["log the X11 bridge stopped: Xwayland ended"]);
+        assert!(!os.exists(&dir()), "the cleanup still runs");
+    }
+
+    #[test]
+    fn a_normal_app_end_logs_no_bridge_line() {
+        for app_end in [End::Code(0), End::Code(7), End::Signal(15)] {
+            let mut os = Fake::new();
+            os.app_end = Some(app_end);
+            assert_eq!(helper(&mut os), app_end);
+            assert!(os.events("log the X11 bridge").is_empty(), "{:?}", os.log);
+        }
     }
 
     #[test]

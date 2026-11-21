@@ -28,6 +28,8 @@
 #              and its Hub sweep would thaw a Freeze it did not ask for)
 #   stop       Stop ends the app, its satellite and Xwayland and leaves no socket, lock or cookie; the other app is
 #              unaffected; the second Stop leaves nothing
+#   bridge     the satellite is killed under a running app (RUY-1028): AppExited says "crashed" and the profile
+#              user's journal has one "the X11 bridge stopped: xwayland-satellite was killed by signal 9"
 # The standing form of the isolation assertions is vm-security-check.sh (x11 step). Host tests of the probe client
 # and of the helpers below: scripts/test-vm-checks.sh. A FAIL makes the exit status 1.
 set -u
@@ -493,6 +495,25 @@ check)
         n=0; while [ "$n" -lt 20 ] && { kill -0 "$xwl2" 2>/dev/null || kill -0 "$xsat2" 2>/dev/null; }; do sleep 0.5; n=$((n + 1)); done
         kill -0 "$xwl2" 2>/dev/null || kill -0 "$xsat2" 2>/dev/null && bad "the second app's X server survived Stop" || ok "the second app's X server is gone"
         [ -e "$sdir/X$xn2" ] || [ -e "/tmp/.X$xn2-lock" ] || [ -e "$xdir2" ] && bad "the second app left a socket, a lock or a cookie" || ok "the second app left no socket, lock or cookie"
+    fi
+    if [ -n "${inst2:-}" ]; then
+        echo "--- the bridge dies while the app runs (RUY-1028): one journal line, and the app ends crashed"
+        : > "$work/signals.log"
+        t4="$(date +%s)"
+        out="$(launch "$xapp2" "$me")"; inst3="$(echo "$out" | unit_of)"
+        if [ -n "$inst3" ] && x11_facts "$user" "$xapp2" "$inst3" && [ -n "$xsat" ]; then
+            ok "Launch $xapp2 again: $inst3, satellite $xsat"
+            kill -KILL "$xsat" && ok "the satellite $xsat is killed under the running app" || bad "cannot kill the satellite $xsat"
+            wait_sig "\"member\":\"AppExited\".*$xapp2" 30 && ok "AppExited for $xapp2" || bad "no AppExited for $xapp2 within 30 s"
+            line="$(grep -E "\"member\":\"AppExited\".*$xapp2" "$work/signals.log" | head -1)"
+            echo "$line" | grep -q '"crashed"' && ok "reason crashed" || bad "AppExited for $xapp2 is not 'crashed': $line"
+            wait_user_log "$t4" "$muid" "the X11 bridge stopped: xwayland-satellite was killed by signal 9" 20 \
+                && ok "the journal says the X11 bridge stopped" || bad "no 'the X11 bridge stopped' line: $(user_log_since "$t4" "$muid" | grep -a 'x11' | tail -3 | tr '\n' '|')"
+            [ "$(user_log_since "$t4" "$muid" | grep -ac 'the X11 bridge stopped')" = 1 ] && ok "the line is there once" || bad "the bridge line is not there exactly once"
+        else
+            bad "Launch $xapp2 for the bridge step: $out"
+            [ -n "$inst3" ] && stop_app "$inst3" >/dev/null
+        fi
     fi
     pgrep -u "$user" -x Xwayland >/dev/null 2>&1 && bad "an Xwayland of $user still runs" || ok "no Xwayland of $user runs"
     pgrep -u "$user" -f xwayland-satellite >/dev/null 2>&1 && bad "an xwayland-satellite of $user still runs" || ok "no xwayland-satellite of $user runs"

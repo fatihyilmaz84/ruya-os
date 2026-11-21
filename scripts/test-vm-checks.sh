@@ -458,6 +458,15 @@ out="$(
 expect_lacks "satellite_faults passes an ordinary log, a debug create_pool line included" "$out" "clean:"
 expect_contains "satellite_faults finds the wl_shm_pool protocol error" "$out" "wl_shm_pool@26: invalid width"
 expect_contains "satellite_faults finds the satellite's panic" "$out" "Failed flushing clientside events"
+# The bridge step (RUY-1028) waits for the exact journal line the helper writes, and for the reason "crashed".
+if grep -q 'the X11 bridge stopped: {which}' "$here/../services/ruya-session/src/x11.rs" \
+    && grep -q '"the X11 bridge stopped: xwayland-satellite was killed by signal 9"' "$here/vm-x11-check.sh" \
+    && grep -q 'is not .crashed.: ' "$here/vm-x11-check.sh" \
+    && grep -q 'was killed by signal {sig}' "$here/../services/ruya-session/src/x11.rs"; then
+    pass "vm-x11-check.sh bridge step: the line it waits for is the one x11.rs writes"
+else
+    fail "vm-x11-check.sh bridge step: its line differs from x11.rs's"
+fi
 echo "vm-x11-client.py: against a fake X server"
 out="$(python3 "$here/test-vm-x11-client.py" 2>&1)"; rc=$?
 echo "$out"
