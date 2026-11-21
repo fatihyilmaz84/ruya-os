@@ -8,11 +8,16 @@
 // Written by the image build (image/play/install-runners.sh, docs/specs/05-play-packages.md 6.4).
 static const char RunnerListPath[] = "/usr/lib/ruyaos/play/runners.list";
 
-// What the mock services show: the runner image/play/runners/ProtonGE11 pins, as the build records it.
+// What the mock services show: the runners image/play/runners/ pins (ProtonGE11, Wine11), as the build
+// records them (folder name order).
 static const char MockRunnerList[] =
     "ProtonGE11\tproton-ge\tproton\tGE-Proton11-12\t"
     "BSD-3-Clause AND LGPL-2.1-or-later AND LGPL-2.0-or-later AND Zlib AND MIT AND OFL-1.1\t"
-    "https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12\n";
+    "https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12\n"
+    "Wine11\twine\twine\twine-11.0\t"
+    "LGPL-2.1-or-later AND LGPL-2.1-only AND BSD-3-Clause AND BSD-2-Clause AND NCSA AND MIT AND Zlib AND IJG "
+    "AND libpng-2.0 AND libtiff AND OLDAP-2.8 AND TU-Berlin-1.0 AND WTFPL\t"
+    "https://dl.winehq.org/wine/source/11.0/wine-11.0.tar.xz\n";
 
 SystemInfo *SystemInfo::create(QQmlEngine *, QJSEngine *)
 {

@@ -8,9 +8,11 @@
 #   3. runners: for each folder of /usr/lib/ruyaos/play/runners, ruya-pack runner-check (the
 #      format's parser and runner hash) accepts its runner.json and computes the hash the image
 #      wrote into .ruya-runner-hash, and /usr/lib/ruyaos/play/runners.list has its line
-#   4. a Windows program runs through each Proton runner as a profile user, without network: the
-#      runner's own cmd.exe through `proton waitforexitandrun` (ADR-037's argv, the
-#      STEAM_COMPAT_* folders in a scratch data folder) prints a marker, under `unshare -n`.
+#   4. a Windows program runs through each Proton and each Wine runner as a profile user, without
+#      network: a Proton runner's own cmd.exe through `proton waitforexitandrun` (ADR-037's argv,
+#      the STEAM_COMPAT_* folders in a scratch data folder), and a Wine runner's own 64-bit and
+#      32-bit cmd.exe through its runner.json `entry.wine` (WINEPREFIX in a scratch folder, Mono
+#      and Gecko off: the image ships neither) each print a marker, under `unshare -n`.
 #      Without a profile on the VM this step is a SKIP with its reason (the check creates none).
 # Mode `steam` (RUY-35, after the Steam Flatpak is installed and was started once as a profile):
 #   5. every Proton runner is linked into Steam's extension point
@@ -185,6 +187,7 @@ fi
 echo "--- runners"
 chmod +x "$pack" 2>/dev/null
 protons=""
+wines=""
 count=0
 for tree in "$play"/runners/*/; do
     [ -d "$tree" ] || continue
@@ -207,6 +210,7 @@ print("yes" if o.get("ok") is True else "no", r.get("kind") or "-", o.get("hash"
     fi
     if cut -f1 "$play/runners.list" 2>/dev/null | grep -qx "$name"; then ok "$name is in runners.list"; else bad "$name is not in $play/runners.list"; fi
     [ "$kind" = proton ] && protons="$protons $tree"
+    [ "$kind" = wine ] && wines="$wines $tree"
 done
 [ "$count" -ge 1 ] && ok "$count runner(s)" || bad "no runner under $play/runners"
 
@@ -233,6 +237,33 @@ else
             bad "$name: cmd.exe through proton as $user: exit $rc; last lines: $(printf '%s' "$out" | tail -n 5 | tr '\n' ' ')"
         fi
         runuser -u "$user" -- env WINEPREFIX="$data/proton/pfx" "$tree/files/bin/wineserver" -k >/dev/null 2>&1
+        rm -rf "$data"
+    done
+    for tree in $wines; do
+        name="$(basename "$tree")"
+        # The loader and the server the runner names (runner.json entry, which runner-check accepted).
+        read -r wine wineserver <<<"$(python3 -I -c '
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        e = json.load(f).get("entry") or {}
+except (OSError, ValueError):
+    e = {}
+print(e.get("wine") or "-", e.get("wineserver") or "-")
+' "$tree/runner.json")"
+        data="$(mktemp -d "$root/var/tmp/ruya-runner-check.XXXXXX")" || { bad "no scratch folder in /var/tmp"; continue; }
+        chown -R "$user" "$data"
+        for arch in x86_64 i386; do
+            exe="$tree/lib/wine/$arch-windows/cmd.exe"
+            out="$(unshare -n runuser -u "$user" -- env -i HOME="$data" PATH="$PATH" WINEPREFIX="$data/pfx" \
+                WINEDLLOVERRIDES="mscoree,mshtml=" WINEDEBUG=-all timeout 300 "$tree/$wine" "$exe" /c echo "$marker" 2>&1)"; rc=$?
+            if [ "$rc" = 0 ] && printf '%s\n' "$out" | tr -d '\r' | grep -qx "$marker"; then
+                ok "$name: $arch cmd.exe printed $marker as $user without network"
+            else
+                bad "$name: $arch cmd.exe through $wine as $user: exit $rc; last lines: $(printf '%s' "$out" | tail -n 5 | tr '\n' ' ')"
+            fi
+        done
+        runuser -u "$user" -- env WINEPREFIX="$data/pfx" "$tree/$wineserver" -k >/dev/null 2>&1
         rm -rf "$data"
     done
 fi
