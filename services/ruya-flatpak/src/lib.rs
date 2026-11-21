@@ -9,16 +9,54 @@ pub mod oars;
 /// no empty element, none starting with a digit, at most 255 characters (Flatpak's own limit).
 /// Everything that reaches the `flatpak` command line has passed this.
 pub fn valid_app_id(id: &str) -> bool {
-    id.len() <= 255
-        && !id.starts_with('-')
-        && id.split('.').count() >= 3
-        && id.split('.').all(|part| {
-            !part.is_empty()
-                && !part.starts_with(|c: char| c.is_ascii_digit())
-                && part
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-        })
+    check_app_id(id).is_ok()
+}
+
+/// The first rule of the app-id grammar an id breaks (`check_app_id`). The parts are the dot-separated
+/// elements of the id.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AppIdFault {
+    /// More than 255 bytes.
+    TooLong,
+    /// Fewer than three parts.
+    TooFewParts,
+    /// Two dots in a row, or a dot at either end.
+    EmptyPart,
+    /// This part starts with a digit.
+    LeadingDigit(String),
+    /// This part has a character other than ASCII letters, digits, `_` and `-`.
+    BadChar(String),
+    /// The id starts with `-`, which `flatpak` would read as an option.
+    LeadingDash,
+}
+
+/// `valid_app_id` with the reason: the first rule broken, checked in the order of `AppIdFault`
+/// (the parts left to right, the leading dash last).
+pub fn check_app_id(id: &str) -> Result<(), AppIdFault> {
+    if id.len() > 255 {
+        return Err(AppIdFault::TooLong);
+    }
+    if id.split('.').count() < 3 {
+        return Err(AppIdFault::TooFewParts);
+    }
+    for part in id.split('.') {
+        if part.is_empty() {
+            return Err(AppIdFault::EmptyPart);
+        }
+        if part.starts_with(|c: char| c.is_ascii_digit()) {
+            return Err(AppIdFault::LeadingDigit(part.to_owned()));
+        }
+        if !part
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            return Err(AppIdFault::BadChar(part.to_owned()));
+        }
+    }
+    if id.starts_with('-') {
+        return Err(AppIdFault::LeadingDash);
+    }
+    Ok(())
 }
 
 /// The longest app id Session1 takes: the id is part of the unit name `ruya-app-<user>-<id>.service`
@@ -86,6 +124,29 @@ mod tests {
         }
         assert!(valid_app_id(&format!("org.a.{}", "x".repeat(249))));
         assert!(!valid_app_id(&format!("org.a.{}", "x".repeat(250))));
+    }
+
+    #[test]
+    fn each_app_id_fault() {
+        let fault = |id: &str| check_app_id(id).unwrap_err();
+        assert_eq!(check_app_id("org.example.Racer"), Ok(()));
+        assert_eq!(
+            fault(&format!("org.a.{}", "x".repeat(250))),
+            AppIdFault::TooLong
+        );
+        assert_eq!(fault("org.example"), AppIdFault::TooFewParts);
+        assert_eq!(fault(""), AppIdFault::TooFewParts);
+        assert_eq!(fault("org..Racer"), AppIdFault::EmptyPart);
+        assert_eq!(fault("org.example."), AppIdFault::EmptyPart);
+        assert_eq!(
+            fault("org.1example.Racer"),
+            AppIdFault::LeadingDigit("1example".into())
+        );
+        assert_eq!(
+            fault("org.exa mple.Racer"),
+            AppIdFault::BadChar("exa mple".into())
+        );
+        assert_eq!(fault("-org.example.Racer"), AppIdFault::LeadingDash);
     }
 
     #[test]
