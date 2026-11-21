@@ -7,7 +7,8 @@
 #      outside a sandbox, refuses with its own sentence (no /app/play.files): the static binary runs
 #   3. runners: for each folder of /usr/lib/ruyaos/play/runners, ruya-pack runner-check (the
 #      format's parser and runner hash) accepts its runner.json and computes the hash the image
-#      wrote into .ruya-runner-hash, and /usr/lib/ruyaos/play/runners.list has its line
+#      wrote into .ruya-runner-hash (Library1 ListRunners, which the About pane reads, is
+#      vm-library-check.sh runners, RUY-959)
 #   4. a Windows program runs through each Proton and each Wine runner as a profile user, without
 #      network: a Proton runner's own cmd.exe through `proton waitforexitandrun` (ADR-037's argv,
 #      the STEAM_COMPAT_* folders in a scratch data folder), and a Wine runner's own 64-bit and
@@ -208,7 +209,6 @@ print("yes" if o.get("ok") is True else "no", r.get("kind") or "-", o.get("hash"
     else
         bad "$name: runner-check ok=$okk hash '$hash', .ruya-runner-hash '${want:-none}'"
     fi
-    if cut -f1 "$play/runners.list" 2>/dev/null | grep -qx "$name"; then ok "$name is in runners.list"; else bad "$name is not in $play/runners.list"; fi
     [ "$kind" = proton ] && protons="$protons $tree"
     [ "$kind" = wine ] && wines="$wines $tree"
 done

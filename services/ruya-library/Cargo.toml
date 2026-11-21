@@ -12,9 +12,9 @@ futures-lite = "2"
 serde_json = "1"  # play.json and trust.json of a .play app; already built for ruya-play, no new download
 ruya-play-art = { path = "../ruya-play-art" }  # art_roles and PLAY_REMOTE, shared with ruya-play (it pulls in image and moxcms, which ruya-library does not call)
 ruya-play-launch = { path = "../ruya-play-launch" }  # dry_run: the launcher's own runner resolution, so the item says what the launch will say (pulls in ruya-play-format)
+ruya-play-format = { path = "../ruya-play-format" }  # Override, the runner choice dry_run takes (already built for ruya-play-launch)
 blocking = "1"  # runs the scan (file and process I/O) off the executor; already in the tree through zbus
 
 [dev-dependencies]
 ruya-contract-test = { path = "../ruya-contract-test" }  # the served interface against api/dbus (RUY-403)
-ruya-play-format = { path = "../ruya-play-format" }  # Entry, to build a resolved runner in the unit tests
 tempfile = "3"

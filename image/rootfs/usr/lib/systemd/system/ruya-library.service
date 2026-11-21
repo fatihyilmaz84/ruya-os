@@ -7,7 +7,7 @@ Type=dbus
 BusName=org.ruyaos.Library1
 ExecStart=/usr/bin/ruya-library
 Restart=on-failure
-# Its own unprivileged account (sysusers.d/ruyaos.conf). It only reads: the system Flatpak
+# Its own unprivileged account (sysusers.d/ruyaos.conf). It reads the system Flatpak
 # installation (/var/lib/flatpak, readable by everyone) and runs `flatpak list --system`.
 # Steam libraries live in the profiles' homes and are not served by the image (spec 03 §5):
 # ProtectHome hides /home and /var/home, and HOME is /tmp, so Steam finds nothing.
@@ -16,6 +16,10 @@ Group=ruya-library
 # flatpak fails with "Read-only file system" when HOME is missing (found in the first VM run);
 # /tmp is the service's own PrivateTmp.
 Environment=HOME=/tmp
+# Each profile's runner choice per .play game (RUY-959): one file per profile, the only place it
+# writes.
+StateDirectory=ruyaos/library
+StateDirectoryMode=0700
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
