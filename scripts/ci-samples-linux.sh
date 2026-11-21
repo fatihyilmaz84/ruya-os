@@ -7,7 +7,7 @@
 #     bash scripts/ci-samples-linux.sh
 #
 # It installs nothing. Packages (the same line as the `samples` job in .github/workflows/ci.yml):
-#     gcc SDL3-devel pkgconf-pkg-config mingw64-gcc cargo rust findutils
+#     gcc SDL3-devel pkgconf-pkg-config mingw64-gcc mingw32-gcc cargo rust findutils
 # CARGO_TARGET_DIR overrides where ruya-pack is built (default: services/target-samples).
 set -eu
 
@@ -18,7 +18,8 @@ samples_build_pack "$root" || exit 1
 
 # Warnings fail here; a developer's plain ./build.sh keeps its defaults.
 export CC="${CC:-cc} -Werror"
-# The Wine build.sh quotes $MINGW_CC as one word, so -Werror goes in a tiny wrapper.
+# The Windows build.sh quotes $MINGW_CC and $MINGW_CC32 as one word each, so -Werror goes in a tiny
+# wrapper per compiler.
 wrap=$(mktemp -d)
 # The build outputs go on exit (lib-samples.sh).
 clean() {
@@ -26,11 +27,13 @@ clean() {
     samples_clean_outputs "$root" hello-play-native hello-play-wine
 }
 trap clean EXIT
-printf '#!/bin/sh
+for w in "mingw-gcc:${MINGW_CC:-x86_64-w64-mingw32-gcc}" "mingw32-gcc:${MINGW_CC32:-i686-w64-mingw32-gcc}"; do
+    printf '#!/bin/sh
 exec %s -Werror "$@"
-' "${MINGW_CC:-x86_64-w64-mingw32-gcc}" > "$wrap/mingw-gcc"
-chmod +x "$wrap/mingw-gcc"
-export MINGW_CC="$wrap/mingw-gcc"
+' "${w#*:}" > "$wrap/${w%%:*}"
+    chmod +x "$wrap/${w%%:*}"
+done
+export MINGW_CC="$wrap/mingw-gcc" MINGW_CC32="$wrap/mingw32-gcc"
 
 fail=0
 summary=""

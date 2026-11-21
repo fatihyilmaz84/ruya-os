@@ -118,7 +118,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install compilers
-        run: dnf -y install --setopt=install_weak_deps=False gcc SDL3-devel pkgconf-pkg-config mingw64-gcc cargo rust findutils
+        run: dnf -y install --setopt=install_weak_deps=False gcc SDL3-devel pkgconf-pkg-config mingw64-gcc mingw32-gcc cargo rust findutils
       - name: Build and inspect the samples
         run: bash scripts/ci-samples-linux.sh
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: check generation helper parse perms pkgid remove restart runid verify withid
+# modes: check generation helper launch launch-windows lstate offline parse perms pkgid remove restart runid signals sysrunner verify winpkg withid
 # Checks ruya-play (org.ruyaos.Play1, RUY-829, the lead's run under RUY-100) inside a running VM,
 # as root. Modes:
 #   check  (default) every step below
@@ -26,6 +26,32 @@
 #          removing in state/jobs): the deployment is gone, Flatpak no longer lists the app, the
 #          installed build is forgotten (state/installed.json), a second Remove is unknown-app, the
 #          package installs again, and the shell-less cleanup leaves nothing behind
+#   launch RUY-902 (ADR-037/038): the native sample installed (developer mode, from incoming/) and started as a
+#          profile through Session1.Launch (the check makes one when the VM has none, as vm-sample-check.sh
+#          does, and removes it again): AppStarted, the save in the app's data folder (plays=1), Stop ends
+#          it with AppExited "quit", a second Launch loads the save (plays=2), the launcher wrote its
+#          status file (no runner), no init_t AVC denial and no SIGSYS in the journal. SDL runs on its
+#          dummy drivers (a flatpak override the check removes again)
+#   launch-windows RUY-902: the Windows sample (zip: /root/hello-play-wine.play.zip, built by
+#          scripts/play-vm-files.sh) installed as a copy whose command is its 32-bit console program
+#          check.exe and which asks for multiarch (nothing else); signed in as the profile, the default
+#          routes taken away (the game runs offline; the runtime is installed before that). The launch
+#          ends by itself: AppExited code 0, reason "quit"; in the prefix (${prefix}, the Proton
+#          prefix under the app's data folder) check.txt says launches=1, pointer_bits=32, wow64=1,
+#          network=closed; the launcher's status file says the OS's GE-Proton ran the setup step once;
+#          a second Launch of the same profile finds the save (launches=2); the app has no network
+#          permission; no init_t AVC denial and no SIGSYS in the journal. The routes come back at exit
+#   signals host fixtures only: `signals <monitor.log> <member> <app id>` prints one line per such
+#          Session1 signal in a `busctl --json=short monitor` log: the instance and the arguments
+#          after the app id ("inst" for AppStarted, "inst 0 quit" for AppExited)
+#   winpkg host fixtures only: `winpkg <in.zip> <out.zip> <id>` copies a package with the id changed, its
+#          command set to ${payload}/check.exe and permissions.multiarch true (what launch-windows installs)
+#   lstate host fixtures only: `lstate <state.json>` prints the launcher's status file as
+#          "epoch=<n> setup_done=<ids> runner=<source>/<family>/<version>" ("none" for a native game)
+#   sysrunner host fixtures only: `sysrunner <runners dir>` prints "<family>/<version>" of the newest
+#          proton-ge runner.json below it (the OS's GE-Proton launch-windows expects in the status file)
+#   offline host fixtures only: `offline on|off <dir>` takes the default routes away (kept in <dir>) or
+#          puts them back; launch-windows uses it around its launches
 #   runid  host fixtures only: `runid <id>` prints the id check would use for <id>
 #   pkgid  host fixtures only: `pkgid <id> <part>` prints "<id>_<part>" (the one id-suffix rule,
 #          RUY-887; vm-library-check.sh asks it for its own id), FAIL when it passes 120 bytes (PLAY_MAX_ID_BYTES)
@@ -75,6 +101,10 @@ set -u
 mode="${1:-check}"
 zip="${2:-/root/hello-play-native.play.zip}"
 pack="${3:-/root/ruya-pack}"
+# launch-windows runs the Windows sample (RUY-902); every other mode the native one.
+if [ "$mode" = launch-windows ] && [ -z "${2:-}" ]; then
+    zip=/root/hello-play-wine.play.zip
+fi
 svc=org.ruyaos.Play1
 obj=/org/ruyaos/Play1
 work=/var/lib/ruya-play-check
@@ -179,23 +209,45 @@ PERMS_WANT='[Context] devices=dri
 [Context] sockets=wayland
 [Session Bus Policy] com.feralinteractive.GameMode=talk'
 
-# with_id <in.zip> <out.zip> <id>: a copy of a package whose top-level play.json carries <id>
-# (RUY-877). The sample is unsigned and play.files does not list play.json, so nothing else names
-# the id; a signed package would need signing again.
-with_id() {
+# patch_manifest <in.zip> <out.zip> <json>: a copy of a package whose top-level play.json has the JSON
+# merge patch applied (an object merges key by key, anything else replaces; RFC 7386 without null).
+# The sample is unsigned and play.files does not list play.json, so nothing else names what changes; a
+# signed package would need signing again.
+patch_manifest() {
     python3 - "$1" "$2" "$3" <<'PY'
 import json, sys, zipfile
-src, out, new_id = sys.argv[1:4]
+src, out, patch = sys.argv[1], sys.argv[2], json.loads(sys.argv[3])
+def merge(doc, patch):
+    for key, value in patch.items():
+        if isinstance(value, dict) and isinstance(doc.get(key), dict):
+            merge(doc[key], value)
+        else:
+            doc[key] = value
 sample = zipfile.ZipFile(src)
 with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
     for i in sample.infolist():
         b = sample.read(i.filename)
         if i.filename.endswith("play.json") and i.filename.count("/") <= 1:
             m = json.loads(b)
-            m["id"] = new_id
+            merge(m, patch)
             b = json.dumps(m, indent=2).encode()
         z.writestr(i, b)
 PY
+}
+
+# with_id <in.zip> <out.zip> <id>: a copy of a package with <id> as its id (RUY-877).
+with_id() {
+    patch_manifest "$1" "$2" "$(python3 -c 'import json, sys; print(json.dumps({"id": sys.argv[1]}))' "$3")"
+}
+
+# windows_pkg <in.zip> <out.zip> <id>: what launch-windows installs: the Windows sample under <id>
+# with check.exe, its 32-bit console program, as the command, and the one permission 32-bit code
+# needs (RUY-902; the headless VM cannot play hello.exe, which waits for the arrow keys).
+windows_pkg() {
+    patch_manifest "$1" "$2" "$(python3 -c '
+import json, sys
+print(json.dumps({"id": sys.argv[1], "run": {"command": ["${payload}/check.exe"]}, "permissions": {"multiarch": True}}))
+' "$3")"
 }
 
 # The format's longest id (MAX_ID_BYTES in services/ruya-play-format/src/limits.rs; the host fixtures
@@ -275,6 +327,90 @@ recommit_check() { # <id>
         || ok "a second start plans no recommit for play.$id"
 }
 
+# --- launching the installed samples as a profile (RUY-902) -----------------------------------------
+
+# signals <monitor.log> <member> <app id>: one line per Session1 signal <member> of the app in a
+# `busctl --json=short monitor` log: the instance, then the arguments after the app id (AppStarted:
+# "inst"; AppExited: "inst 0 quit", the exit code and the reason). Other lines are skipped.
+signals() {
+    python3 - "$1" "$2" "$3" <<'PY'
+import json, sys
+log, member, app = sys.argv[1:4]
+for line in open(log, encoding="utf-8", errors="replace"):
+    try:
+        msg = json.loads(line)
+    except ValueError:
+        continue
+    if msg.get("member") != member:
+        continue
+    data = (msg.get("payload") or {}).get("data") or []
+    if len(data) > 1 and data[1] == app:
+        print(" ".join(str(x) for x in [data[0]] + data[2:]))
+PY
+}
+
+# launcher_state <state.json>: the launcher's status file (05 section 6.3, step 7) as
+# "epoch=<n> setup_done=<ids> runner=<source>/<family>/<version>" ("runner=none" for a native game).
+launcher_state() {
+    python3 - "$1" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        state = json.load(f)
+except (OSError, ValueError) as e:
+    print("unreadable: %s" % e)
+    sys.exit(0)
+r = state.get("runner")
+runner = "none" if r is None else "%s/%s/%s" % (r.get("source"), r.get("family"), r.get("version"))
+print("epoch=%s setup_done=%s runner=%s" % (state.get("epoch"), ",".join(state.get("setup_done", [])), runner))
+PY
+}
+
+# system_runner <runners dir>: "<family>/<version>" of the newest proton-ge runner.json one folder
+# below <dir> (the OS's GE-Proton: what the status file names after a system-runner launch). Versions
+# compare as the numbers in their text, as 05 section 6.2 says (GE-Proton11-12 is 11, 12).
+system_runner() {
+    python3 - "$1" <<'PY'
+import glob, json, os, re, sys
+best = None
+for path in glob.glob(os.path.join(sys.argv[1], "*", "runner.json")):
+    try:
+        with open(path, encoding="utf-8") as f:
+            r = json.load(f)
+    except (OSError, ValueError):
+        continue
+    if r.get("family") != "proton-ge":
+        continue
+    key = [int(n) for n in re.findall(r"\d+", r.get("version", ""))]
+    if best is None or key > best[0]:
+        best = (key, "%s/%s" % (r["family"], r["version"]))
+if best is None:
+    sys.exit(1)
+print(best[1])
+PY
+}
+
+# offline <on|off> <dir>: on takes the default routes away (IPv4 and IPv6) and keeps them in <dir>; off puts
+# them back. The guest stays reachable on its own subnet, so the ssh session lives. Prints nothing; returns
+# 1 when a route is left or could not be restored.
+offline() {
+    local act="$1" dir="$2" fam r
+    for fam in -4 -6; do
+        if [ "$act" = on ]; then
+            ip "$fam" route show default > "$dir/routes$fam"
+            while [ -n "$(ip "$fam" route show default)" ]; do
+                ip "$fam" route del default || return 1
+            done
+        else
+            [ -f "$dir/routes$fam" ] || continue
+            while read -r r; do
+                [ -n "$r" ] && { ip "$fam" route add $r || return 1; }
+            done < "$dir/routes$fam"
+            rm -f "$dir/routes$fam"
+        fi
+    done
+}
+
 if [ "$mode" = parse ]; then
     if [ "${2:-}" = perms ]; then
         perm_lines
@@ -301,6 +437,26 @@ if [ "$mode" = runid ]; then
 fi
 if [ "$mode" = generation ]; then
     generation "${2:?installed.json}" "${3:?id}" ${4:+"$4"}
+    exit $?
+fi
+if [ "$mode" = signals ]; then
+    signals "${2:?monitor.log}" "${3:?member}" "${4:?app id}"
+    exit $?
+fi
+if [ "$mode" = winpkg ]; then
+    windows_pkg "${2:?in.zip}" "${3:?out.zip}" "${4:?id}"
+    exit $?
+fi
+if [ "$mode" = lstate ]; then
+    launcher_state "${2:?state.json}"
+    exit $?
+fi
+if [ "$mode" = sysrunner ]; then
+    system_runner "${2:?runners dir}"
+    exit $?
+fi
+if [ "$mode" = offline ]; then
+    offline "${2:?on|off}" "${3:?dir}"
     exit $?
 fi
 
@@ -495,7 +651,218 @@ PY
     [ "$got" = ok ] && ok "the package installs again after Remove" || bad "the reinstall: $got"
 }
 
+# --- launch and launch-windows (RUY-902) ---------------------------------------------------------------
+sesvc=org.ruyaos.Session1
+sepath=/org/ruyaos/Session1
+psvc=org.ruyaos.Profiles1
+ppath=/org/ruyaos/Profiles1
+# What the cleanup undoes: the profile the check made (lcreated, with the admin ladmin that makes it
+# deletable), the monitor, the running instance, the SDL override, the removed routes.
+lprof=""; ladmin=""; lcreated=""; lmon=""; linst=""; lover=""; lrouted=0
+
+list_profiles() { busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | grep -o '"p[0-9]*"' | tr -d '"'; }
+
+# launch_profile: the profile the game runs as (lprof): the VM's first one, else an admin and a standard
+# profile made here, as vm-sample-check.sh does (the last admin cannot be deleted, so the cleanup removes
+# the standard one only).
+launch_profile() {
+    lprof="$(list_profiles | head -1)"
+    if [ -z "$lprof" ]; then
+        busctl --system call "$psvc" "$ppath" "$psvc" CreateProfile sssss "" "" "Check Admin" admin 1234 >/dev/null
+        ladmin="$(list_profiles | head -1)"
+        busctl --system call "$psvc" "$ppath" "$psvc" CreateProfile sssss "$ladmin" 1234 "Check Kid" standard "" >/dev/null
+        lprof="$(list_profiles | grep -vx "$ladmin" | head -1)"
+        lcreated="$lprof"
+    fi
+    [ -n "$lprof" ] && ok "profile $lprof (made by the check: ${lcreated:-no})" || { bad "cannot find or make a profile to run the game as"; return 1; }
+}
+
+# sign_in <profile>: a profile without a PIN, else with 1234 (what vm-goto.ps1 makes).
+sign_in() {
+    local out
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$1" "")"
+    case "$out" in 'suu "ok"'*) return 0 ;; esac
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$1" 1234)"
+    case "$out" in 'suu "ok"'*) return 0 ;; *) echo "SwitchTo $1: $out"; return 1 ;; esac
+}
+
+# Session1's signals into $work/signals.log (read with `signals`).
+start_monitor() {
+    : > "$work/signals.log"
+    busctl --system --json=short monitor "$sesvc" >> "$work/signals.log" 2>&1 &
+    lmon=$!
+    sleep 2
+}
+
+# wait_signal <member> <app id> <n> <seconds>: the fields of the n-th such signal, once it came.
+wait_signal() {
+    local i=0 line
+    while [ "$i" -lt "$4" ]; do
+        line="$(signals "$work/signals.log" "$1" "$2" | sed -n "${3}p")"
+        [ -n "$line" ] && { echo "$line"; return 0; }
+        sleep 1; i=$((i + 1))
+    done
+    return 1
+}
+
+# start_app <app id> <n>: Session1.Launch as lprof; linst is the instance once it answered ok and the
+# n-th AppStarted of the app came.
+start_app() {
+    local out
+    out="$(as_shell busctl --system call "$sesvc" "$sepath" "$sesvc" Launch ss "$1" "$lprof")"
+    linst="$(echo "$out" | sed -n 's/^ss "ok" "\(.*\)"$/\1/p')"
+    [ -n "$linst" ] && ok "Session1.Launch of $1 answered ok ($linst)" || { bad "Launch of $1: $out"; return 1; }
+    wait_signal AppStarted "$1" "$2" 60 >/dev/null && ok "AppStarted arrived (launch $2)" || { bad "no AppStarted within 60 s (launch $2)"; return 1; }
+}
+
+# stop_app: Session1.Stop of the running instance (linst).
+stop_app() {
+    case "$(as_shell busctl --system call "$sesvc" "$sepath" "$sesvc" Stop s "$linst")" in
+        's "ok"') ok "Stop answered ok" ;;
+        *) bad "Stop of $linst" ;;
+    esac
+}
+
+# expect_exit <app id> <n> <seconds> <pattern> <what>: the n-th AppExited of the app comes within
+# <seconds> and its "<exit code> <reason>" matches the glob <pattern>.
+expect_exit() {
+    local line rest
+    line="$(wait_signal AppExited "$1" "$2" "$3")" || { bad "$5: no AppExited within $3 s"; return 1; }
+    linst=""
+    rest="${line#* }"
+    case "$rest" in
+        $4) ok "$5: AppExited $rest" ;;
+        *) bad "$5: AppExited '$rest', want '$4'"; return 1 ;;
+    esac
+}
+
+# kv <file> <key>: the value of "<key>=<value>" in a text file (a save, check.txt); empty when none.
+kv() { sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1; }
+
+# wait_kv <file> <key> <value> <seconds>
+wait_kv() {
+    local i=0
+    while [ "$i" -lt "$4" ]; do
+        [ "$(kv "$1" "$2")" = "$3" ] && return 0
+        sleep 1; i=$((i + 1))
+    done
+    return 1
+}
+
+# Spike Q4: a 32-bit program in a sandbox without multiarch is killed with SIGSYS by Flatpak's seccomp
+# filter; the journal would show the signal or the audit record (sig=31).
+sigsys_checks() {
+    local hits
+    hits="$(journalctl --since "$since" -o cat 2>/dev/null | grep -aE 'SIGSYS|signal=SYS|status=31/SYS|sig=31 ' | head -3)"
+    [ -z "$hits" ] && ok "no SIGSYS (seccomp kill) in the journal during the check" || bad "SIGSYS in the journal: $hits"
+}
+
+# launch: the native sample as a profile.
+launch_checks() {
+    local app="play.$appid" user="ruya-$lprof" data slot got
+    data="/var/home/$user/.var/app/$app/data"
+    slot="$data/saves/slot1.sav"
+    rm -rf "/var/home/$user/.var/app/$app"
+    flatpak override --system --env=SDL_VIDEODRIVER=dummy --env=SDL_AUDIODRIVER=dummy "$app" && lover="$app"
+    start_monitor
+    echo "--- first launch: a new game"
+    start_app "$app" 1 || return
+    wait_kv "$slot" plays 1 60 && ok "the save exists: $slot (plays=1)" || bad "no save with plays=1 within 60 s"
+    [ "$(stat -c %U "$slot" 2>/dev/null)" = "$user" ] && ok "the save belongs to $user" || bad "owner of the save: $(stat -c %U "$slot" 2>&1)"
+    stop_app
+    expect_exit "$app" 1 60 '*quit' "Stop ends the game" || return
+    got="$(launcher_state "$data/.ruya-play/state.json")"
+    case "$got" in *" runner=none") ok "the launcher wrote its status file for a native game ($got)" ;; *) bad "the launcher's status file: $got" ;; esac
+    echo "--- second launch: it loads the save"
+    start_app "$app" 2 || return
+    wait_kv "$slot" plays 2 60 && ok "plays=2: the first save was loaded and counted on" || bad "plays is $(kv "$slot" plays), not 2"
+    stop_app
+    expect_exit "$app" 2 60 '*quit' "the second Stop ends the game" || return
+    avc_checks
+    sigsys_checks
+}
+
+# launch-windows: the Windows sample, offline, with a 32-bit command-line program.
+launch_windows_checks() {
+    local app="play.$appid" user="ruya-$lprof" data report runner perms want got
+    data="/var/home/$user/.var/app/$app/data"
+    # ${prefix} of a Proton runner is <data>/proton/pfx (05 section 6.2.1); check.exe saves in Documents.
+    report="$data/proton/pfx/drive_c/users/steamuser/Documents/Hello Play/check.txt"
+    echo "--- the platform and the sandbox"
+    runner="$(system_runner /usr/lib/ruyaos/play/runners)" && ok "the image ships the GE-Proton runner $runner" \
+        || { bad "no proton-ge runner.json under /usr/lib/ruyaos/play/runners"; return; }
+    [ -x /usr/lib/ruyaos/play/launcher/bin/ruya-play-launch ] && ok "the launcher is in the image" || bad "no /usr/lib/ruyaos/play/launcher/bin/ruya-play-launch"
+    perms="$(flatpak info --system --show-permissions "$app" 2>&1 | perm_lines)"
+    echo "$perms" | grep -qx '\[Context\] features=multiarch' && ok "$app may run 32-bit code (features=multiarch)" || bad "$app has no multiarch permission: $perms"
+    echo "$perms" | grep -q 'shared=network' && bad "$app has the network permission" || ok "$app has no network permission"
+    rm -rf "/var/home/$user/.var/app/$app"
+    sign_in "$lprof" && ok "$lprof signed in" || { bad "cannot sign in $lprof"; return; }
+    start_monitor
+    echo "--- offline"
+    offline on "$work" && lrouted=1 || { bad "the default routes could not be taken away"; return; }
+    ip route get 1.1.1.1 >/dev/null 2>&1 && bad "the guest still has a route to the internet" || ok "the guest has no route to the internet"
+    echo "--- first launch: a new prefix, the setup step, check.exe"
+    start_app "$app" 1 || return
+    # The first launch makes the prefix (GE-Proton) and runs the setup step: minutes in a VM.
+    expect_exit "$app" 1 600 '0 quit' "check.exe ends by itself" || return
+    if [ ! -f "$report" ]; then
+        bad "no $report; check.txt is at: $(find "$data" -name check.txt 2>/dev/null | head -3)"
+        return
+    fi
+    for want in launches=1 pointer_bits=32 wow64=1 network=closed; do
+        [ "$(kv "$report" "${want%%=*}")" = "${want#*=}" ] && ok "check.txt says $want" || bad "check.txt says ${want%%=*}=$(kv "$report" "${want%%=*}"), want $want"
+    done
+    want="epoch=1 setup_done=first-run runner=system/$runner"
+    got="$(launcher_state "$data/.ruya-play/state.json")"
+    [ "$got" = "$want" ] && ok "the launcher's status file: $got" || bad "the launcher's status file says '$got', want '$want'"
+    echo "--- second launch: the save in the prefix survives"
+    start_app "$app" 2 || return
+    expect_exit "$app" 2 300 '0 quit' "check.exe ends by itself again" || return
+    [ "$(kv "$report" launches)" = 2 ] && ok "launches=2: the save in the prefix survived the relaunch" || bad "launches is $(kv "$report" launches), not 2"
+    [ "$(kv "$report" network)" = closed ] && ok "the second launch had no network either" || bad "the second launch reached the network"
+    got="$(launcher_state "$data/.ruya-play/state.json")"
+    [ "$got" = "$want" ] && ok "the status file is the same after the relaunch (the setup step ran once)" || bad "the launcher's status file after the relaunch says '$got'"
+    offline off "$work" && lrouted=0 || bad "the default routes could not be restored"
+    avc_checks
+    sigsys_checks
+}
+
+# launch_run <id part> <package function> <checks function>: install the sample under its own id, with
+# the package function (with_id or windows_pkg), then run the checks as a profile.
+launch_run() {
+    local part="$1" build="$2" checks="$3" got
+    dev_mode true >/dev/null
+    appid="$(pkg_id "$appid" "$part")" || { bad "no $part id for $appid"; return 1; }
+    "$build" "$zip" "$work/$part.play.zip" "$appid" || { bad "$build: no copy of the sample with the id $appid"; return 1; }
+    mkdir -p "$state/incoming"
+    install -m 0600 "$work/$part.play.zip" "$state/incoming/vm-play-check.play.zip"
+    got="$(install_wait "$state/incoming/vm-play-check.play.zip")"
+    [ "$got" = ok ] && ok "the sample installs (developer mode)" || { bad "the sample: $got"; return 1; }
+    launch_profile || return 1
+    "$checks"
+}
+
+# The cleanup's part: stop what the modes started, give back the routes, remove the profile's data and
+# the profile the check made.
+launch_cleanup() {
+    [ -n "$lmon" ] && kill "$lmon" 2>/dev/null
+    if [ "$lrouted" = 1 ]; then
+        offline off "$work" && lrouted=0 || bad "the default routes could not be restored: put them back with ip route add"
+    fi
+    if [ -n "$linst" ]; then
+        as_shell busctl --system call "$sesvc" "$sepath" "$sesvc" Stop s "$linst" >/dev/null 2>&1
+        sleep 3
+    fi
+    [ -n "$lover" ] && flatpak override --system --reset "$lover" >/dev/null 2>&1
+    [ -n "$lprof" ] && [ -n "${appid:-}" ] && rm -rf "/var/home/ruya-$lprof/.var/app/play.$appid"
+    if [ -n "$lcreated" ]; then
+        busctl --system call "$psvc" "$ppath" "$psvc" Lock >/dev/null 2>&1
+        busctl --system call "$psvc" "$ppath" "$psvc" DeleteProfile sss "$ladmin" 1234 "$lcreated" >/dev/null 2>&1
+    fi
+}
+
 cleanup() {
+    launch_cleanup
     [ -n "${appid:-}" ] && flatpak uninstall --system -y --noninteractive "play.$appid" >/dev/null 2>&1
     [ -n "${before_dev:-}" ] && dev_mode "$before_dev" >/dev/null 2>&1
     umount "$usb" "$loose" 2>/dev/null
@@ -595,6 +962,18 @@ print(r.get("format"), r.get("tier"), r.get("signer_id"), r.get("signer_name"), 
 ' "$trust" 2>&1)"
     [ "$rec" = "1 unverified None None False" ] && ok "the trust record says format 1, unverified, no signer" || bad "trust.json: $rec"
     [ "$fail" = 0 ] && echo "vm-play-check perms: PASS" || echo "vm-play-check perms: FAIL"
+    exit "$fail"
+fi
+
+if [ "$mode" = launch ]; then
+    launch_run launch with_id launch_checks
+    [ "$fail" = 0 ] && echo "vm-play-check launch: PASS" || echo "vm-play-check launch: FAIL"
+    exit "$fail"
+fi
+
+if [ "$mode" = launch-windows ]; then
+    launch_run launchwindows windows_pkg launch_windows_checks
+    [ "$fail" = 0 ] && echo "vm-play-check launch-windows: PASS" || echo "vm-play-check launch-windows: FAIL"
     exit "$fail"
 fi
 

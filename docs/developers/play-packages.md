@@ -281,7 +281,7 @@ The two samples carry art made by a script (`make-art.py` in each sample, Python
 
 (An app that is not a `.play` and starts a Windows runner itself reads [Windows games](windows-games.md).)
 
-The Wine sample uses `source: system` so that no Wine has to be committed to git. A manifest that bundles Wine and takes the OS's when it is newer looks like this (the files under `components/wine/` are yours to add, with a licence text under `licences/`):
+The Windows sample runs on the OS's GE-Proton (`type: proton`, `source: system`, `min` the GE-Proton the image ships) so that no runner has to be committed to git. A manifest that bundles Wine and takes the OS's when it is newer looks like this (the files under `components/wine/` are yours to add, with a licence text under `licences/`):
 
 ```json
 {
@@ -351,7 +351,7 @@ A Windows game keeps its saves in a Wine **prefix**, a fake `C:` drive. The cons
 - **A new prefix** is your `run.prefix.template` copied (links as links), then the launcher adds `dosdevices` (`c:` and `z:`); without a template the runner creates the prefix on the first run, with `run.prefix.arch` as `WINEARCH`.
 - **First-run setup** (`run.setup[]`) runs commands such as a Visual C++ redistributable **once per prefix, at the first launch, inside the sandbox with the game's own permissions**; never at install time and never as root. They show on the launch splash and time out after 10 minutes; a failed step is reported, not ignored: the game does not start, the player sees which step failed, and the next launch runs it again. There is **no network** at setup (no `winetricks` downloads): ship the redistributable in the package. The sample's step, `setup.exe`, does nothing and exits `0`, to show the field.
 - Under Wine the `Z:` drive is the sandbox's root, not the host's. The Flatpak sandbox limits files, not Wine's drive mapping.
-- **32-bit Windows programs** need `"multiarch": true` (below); without it the sandbox kills them. The console mounts the runtime's 32-bit libraries (`org.freedesktop.Platform.Compat.i386` and `GL32`) for every `wine` and `proton` package; the permission is what lets 32-bit code run (the folder is reserved, see [Layout](#layout)). *The generated metadata is verified on the host; the mounts on a console are pending (`vm-play-check.sh launch-windows`).*
+- **32-bit Windows programs** need `"multiarch": true` (below); without it the sandbox kills them. The console mounts the runtime's 32-bit libraries (`org.freedesktop.Platform.Compat.i386` and `GL32`) for every `wine` and `proton` package; the permission is what lets 32-bit code run (the folder is reserved, see [Layout](#layout)). *The generated metadata is verified on the host; the mounts on a console are pending: `vm-play-check.sh launch-windows` runs a 32-bit command-line program of the sample on the console's GE-Proton, offline, and the lead's VM run has not happened yet.*
 - Windows packages show through X11 on the console's compositor; you do not need to do anything for it.
 
 ## What the launcher guarantees
@@ -689,7 +689,7 @@ Both samples are public domain (CC0) and committed **without** any binary: the f
 | Sample | What it shows | Build |
 |---|---|---|
 | [`samples/hello-play-native/`](../../samples/hello-play-native/README.md) | A native Linux game (the Hello Game sources) with a controller, saves in `data:saves` and only the input permission | `./build.sh` (a C compiler and SDL3 development files) |
-| [`samples/hello-play-wine/`](../../samples/hello-play-wine/README.md) | A Windows program cross-compiled with `x86_64-w64-mingw32-gcc`, `source: system`, a saves path inside the prefix, a no-op first-run setup step | `./build.sh` (Fedora: `sudo dnf install mingw64-gcc`) |
+| [`samples/hello-play-wine/`](../../samples/hello-play-wine/README.md) | A Windows program cross-compiled with `x86_64-w64-mingw32-gcc`, the OS's GE-Proton (`type: proton`, `source: system`), a saves path inside the prefix, a no-op first-run setup step, and `check.exe`, a 32-bit command-line program for the console's VM check | `./build.sh` (Fedora: `sudo dnf install mingw64-gcc mingw32-gcc`) |
 
 Their tests (`services/ruya-pack/tests/samples.rs`) copy the folder to a scratch directory, write a stand-in file where the compiled program goes, and run `ruya-pack build`, `validate` and `inspect` on it; the tests need no compiler. CI's `samples` job compiles both (with `-Werror`), builds each zip with the real `ruya-pack` and inspects it. The art in both is made by `make-art.py` and checked by the same vetting the console uses.
 

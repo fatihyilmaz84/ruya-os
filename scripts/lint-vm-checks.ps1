@@ -95,7 +95,7 @@ try {
     New-Item -ItemType Directory -Force $qs | Out-Null
     [IO.File]::WriteAllText((Join-Path $qs "vm-a-check.sh"), "#!/usr/bin/env bash`n# modes: check other`n")
     [IO.File]::WriteAllText((Join-Path $qs "vm-b-check.sh"), "#!/usr/bin/env bash`n")
-    [IO.File]::WriteAllText((Join-Path $qs "vm-play-check.sh"), "#!/usr/bin/env bash`n# modes: check helper verify perms parse`n")
+    [IO.File]::WriteAllText((Join-Path $qs "vm-play-check.sh"), "#!/usr/bin/env bash`n# modes: check helper verify perms launch launch-windows parse`n")
     [IO.File]::WriteAllText((Join-Path $qs "vm-library-check.sh"), "#!/usr/bin/env bash`n# modes: check play`n")
     # The dispatch reader on one fixture per shape (RUY-890): the canonical forms are read, every other
     # top-level mention of $1 (or of a name assigned from it) fails, never counts as single-mode.
@@ -151,7 +151,7 @@ try {
         @{ check = "vm-play-check.sh parse"; skip = $false },
         @{ check = "vm-library-check.sh check"; skip = $false }
     )
-    foreach ($c in @("vm-play-check.sh", "vm-play-check.sh check", "vm-play-check.sh helper", "vm-play-check.sh verify", "vm-play-check.sh perms", "vm-library-check.sh play")) {
+    foreach ($c in @("vm-play-check.sh", "vm-play-check.sh check", "vm-play-check.sh helper", "vm-play-check.sh verify", "vm-play-check.sh perms", "vm-play-check.sh launch", "vm-play-check.sh launch-windows", "vm-library-check.sh play")) {
         $rules += @{ check = $c; skip = $true; why = "scripts/play-vm-files.sh" }
     }
     foreach ($r in $rules) {
@@ -165,11 +165,18 @@ try {
     [IO.File]::WriteAllText((Join-Path $pd "ruya-pack"), "x")
     if (-not (Get-CheckSkip "vm-play-check.sh verify" $qs $qt)) { $problems.Add("vm-queue rules: ruya-pack alone must not be enough for the .play checks") }
     [IO.File]::WriteAllText((Join-Path $pd "hello-play-native.play.zip"), "x")
-    foreach ($c in @("vm-play-check.sh", "vm-play-check.sh helper", "vm-library-check.sh play")) {
+    foreach ($c in @("vm-play-check.sh", "vm-play-check.sh helper", "vm-play-check.sh launch", "vm-library-check.sh play")) {
         $got = Get-CheckSkip $c $qs $qt
         if ($got) { $problems.Add("vm-queue rules: '$c' should run with both files, got: $got") }
     }
     if ((Get-PlayVmFiles $qt).files.Count -ne 2) { $problems.Add("vm-queue rules: Get-PlayVmFiles does not list both files") }
+    # launch-windows also needs the Windows sample (RUY-902), and only it: the other checks run without it
+    $got = Get-CheckSkip "vm-play-check.sh launch-windows" $qs $qt
+    if (-not $got -or $got -notlike "*hello-play-wine.play.zip*") { $problems.Add("vm-queue rules: 'vm-play-check.sh launch-windows' should be SKIPPED without the Windows sample, got: $got") }
+    [IO.File]::WriteAllText((Join-Path $pd "hello-play-wine.play.zip"), "x")
+    $got = Get-CheckSkip "vm-play-check.sh launch-windows" $qs $qt
+    if ($got) { $problems.Add("vm-queue rules: 'vm-play-check.sh launch-windows' should run with the Windows sample, got: $got") }
+    if ((Get-PlayVmFiles $qt).files.Count -ne 3) { $problems.Add("vm-queue rules: Get-PlayVmFiles does not list the Windows sample") }
 } finally { Remove-Item -Recurse -Force $qt -ErrorAction SilentlyContinue }
 
 # 1e. One WSL command builds the .play files (RUY-890): dev-setup.md quotes the very string the queue's

@@ -155,18 +155,22 @@ function Get-VmDispatchedModes([string]$Path) {
     return @{ modes = @($found | Sort-Object); unreadable = @($unreadable) }
 }
 
-# The package and ruya-pack the .play checks copy: @{ files = <paths>; ready = <both exist> }.
+# The packages and ruya-pack the .play checks copy:
+# @{ files = <paths that exist>; ready = <native sample and ruya-pack exist>; windows = <the Windows sample exists> }.
+# The Windows sample (launch-windows, RUY-902) needs the MinGW cross compilers in WSL; without them
+# play-vm-files.sh still writes the other two, so only launch-windows is skipped.
 function Get-PlayVmFiles([string]$Repo) {
     $dir = Join-Path $Repo "output\play-vm"
-    $files = @("hello-play-native.play.zip", "ruya-pack") | ForEach-Object { Join-Path $dir $_ }
-    $have = @($files | Where-Object { Test-Path $_ })
-    return @{ files = $have; ready = ($have.Count -eq $files.Count) }
+    $need = @("hello-play-native.play.zip", "ruya-pack") | ForEach-Object { Join-Path $dir $_ }
+    $wine = Join-Path $dir "hello-play-wine.play.zip"
+    $have = @(($need + $wine) | Where-Object { Test-Path $_ })
+    return @{ files = $have; ready = (@($need | Where-Object { Test-Path $_ }).Count -eq $need.Count); windows = (Test-Path $wine) }
 }
 
 # Is this check one of the .play checks that need the package and ruya-pack on the guest?
 # (vm-runner-check.sh needs only ruya-pack, RUY-34; the two are built together.)
 function Test-PlayCheck([string]$Script, [string]$Mode) {
-    if ($Script -eq "vm-play-check.sh") { return (-not $Mode) -or ($Mode -in @("check", "helper", "verify", "perms")) }
+    if ($Script -eq "vm-play-check.sh") { return (-not $Mode) -or ($Mode -in @("check", "helper", "verify", "perms", "launch", "launch-windows")) }
     if ($Script -eq "vm-library-check.sh") { return $Mode -eq "play" }
     if ($Script -eq "vm-runner-check.sh") { return $true }
     return $false
@@ -184,8 +188,12 @@ function Get-CheckSkip([string]$Check, [string]$ScriptsDir, [string]$Repo) {
         if ($null -eq $modes) { return "$name has no '# modes:' line" }
         if ($mode -notin $modes) { return "mode '$mode' not in $name (modes: $($modes -join ' '))" }
     }
-    if ((Test-PlayCheck $name $mode) -and -not (Get-PlayVmFiles $Repo).ready) {
+    $play = Get-PlayVmFiles $Repo
+    if ((Test-PlayCheck $name $mode) -and -not $play.ready) {
         return "build the sample first (output\play-vm\hello-play-native.play.zip and ruya-pack): $($script:PlayCommand)"
+    }
+    if ($name -eq "vm-play-check.sh" -and $mode -eq "launch-windows" -and -not $play.windows) {
+        return "build the Windows sample first (output\play-vm\hello-play-wine.play.zip, needs mingw64-gcc and mingw32-gcc in WSL): $($script:PlayCommand)"
     }
     return $null
 }
