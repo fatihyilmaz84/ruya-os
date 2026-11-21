@@ -453,7 +453,7 @@ check)
     resume_shell
     [ "$paused" = 0 ] && ok "the shell runs again" || bad "cannot resume the shell"
     sleep 2
-    shell_log_since "$t1" | grep -a -q "ruya-compositor: app gone" && bad "a window was closed by the freeze: $(shell_log_since "$t1" | grep -a 'app gone' | head -1)" || ok "no window went away during the freeze"
+    shell_log_since "$t1" | grep -a -q "ruya-compositor: (app|surface) gone" && bad "a window was closed by the freeze: $(shell_log_since "$t1" | grep -aE '(app|surface) gone' | head -1)" || ok "no window went away during the freeze"
 
     echo "--- Stop ends the app and its X server and leaves nothing behind"
     t3="$(date +%s)"
