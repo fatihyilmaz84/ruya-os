@@ -801,6 +801,25 @@ fn a_bundled_runner_json_is_read_at_launch() {
 }
 
 #[test]
+fn runner_arg_is_what_parse_args_reads_back() {
+    use ruya_play_format::resolve::Override;
+    use ruya_play_launch::{parse_args, runner_arg};
+    assert_eq!(runner_arg(Override::PackageDefault), None);
+    for choice in [Override::Bundled, Override::System] {
+        let arg = runner_arg(choice).expect("a flag");
+        assert_eq!(parse_args(&[arg]).unwrap(), choice);
+    }
+    assert_eq!(
+        runner_arg(Override::Bundled).as_deref(),
+        Some("--runner=bundled")
+    );
+    assert_eq!(
+        runner_arg(Override::System).as_deref(),
+        Some("--runner=system")
+    );
+}
+
+#[test]
 fn the_runner_argument() {
     use ruya_play_format::resolve::Override;
     use ruya_play_launch::parse_args;

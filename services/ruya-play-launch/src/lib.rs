@@ -66,12 +66,30 @@ impl fmt::Display for Failure {
 /// A runner choice by its name, `package`, `bundled` or `system`: what `--runner=` takes and what
 /// ruya-library stores per game (Library1 `SetRunnerChoice`). Anything else is none.
 pub fn parse_choice(name: &str) -> Option<Override> {
-    match name {
-        "package" => Some(Override::PackageDefault),
-        "bundled" => Some(Override::Bundled),
-        "system" => Some(Override::System),
-        _ => None,
+    CHOICES.iter().find(|(n, _)| *n == name).map(|(_, o)| *o)
+}
+
+/// The three choices by name: the one list `parse_choice` and `runner_arg` read.
+const CHOICES: [(&str, Override); 3] = [
+    ("package", Override::PackageDefault),
+    ("bundled", Override::Bundled),
+    ("system", Override::System),
+];
+
+/// The launcher's argument that carries a runner choice (`--runner=<name>`).
+const RUNNER_ARG: &str = "--runner=";
+
+/// The argument that makes the launcher use `choice`, as [`parse_args`] reads it back: none for
+/// the package's default, which is also what the launcher does with no argument. What
+/// ruya-session puts after the app id (RUY-904).
+pub fn runner_arg(choice: Override) -> Option<String> {
+    if choice == Override::PackageDefault {
+        return None;
     }
+    CHOICES
+        .iter()
+        .find(|(_, o)| *o == choice)
+        .map(|(name, _)| format!("{RUNNER_ARG}{name}"))
 }
 
 /// The player's runner choice from the arguments: none, or one `--runner=package|bundled|system`
@@ -79,7 +97,7 @@ pub fn parse_choice(name: &str) -> Option<Override> {
 pub fn parse_args(args: &[String]) -> Result<Override, Failure> {
     let mut over = None;
     for a in args {
-        let choice = match a.strip_prefix("--runner=").and_then(parse_choice) {
+        let choice = match a.strip_prefix(RUNNER_ARG).and_then(parse_choice) {
             Some(choice) => choice,
             None => {
                 return Err(Failure::new(

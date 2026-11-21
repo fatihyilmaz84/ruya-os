@@ -12,6 +12,7 @@ pub mod bounded;
 pub mod dbus;
 pub mod directory;
 pub mod follow;
+pub mod runner_choice;
 pub mod safe_file;
 pub mod scope;
 pub mod session;

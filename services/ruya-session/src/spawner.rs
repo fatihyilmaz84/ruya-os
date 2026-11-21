@@ -58,8 +58,16 @@ pub type AdoptLister = Box<dyn FnOnce() -> Listing + Send>;
 pub trait Spawner {
     /// Is this Flatpak application installed?
     fn is_installed(&self, app_id: &str) -> bool;
-    /// Queues the app as `user` and returns the unit name. `UnitEvent`s follow.
-    fn start(&self, user: &str, app_id: &str, env: &[(String, String)]) -> Result<String, String>;
+    /// Queues the app as `user` and returns the unit name. `UnitEvent`s follow. `launch_args`
+    /// are the arguments this launch adds after the app id, to those the image lists for the app
+    /// (a `.play` game's runner choice, RUY-904).
+    fn start(
+        &self,
+        user: &str,
+        app_id: &str,
+        env: &[(String, String)],
+        launch_args: &[String],
+    ) -> Result<String, String>;
     /// Asks the unit to end (SIGTERM).
     fn stop(&self, unit: &str) -> Result<(), String>;
     /// Ends the unit by force (SIGKILL).
@@ -141,8 +149,14 @@ impl<T: Spawner + ?Sized> Spawner for Box<T> {
     fn is_installed(&self, app_id: &str) -> bool {
         (**self).is_installed(app_id)
     }
-    fn start(&self, user: &str, app_id: &str, env: &[(String, String)]) -> Result<String, String> {
-        (**self).start(user, app_id, env)
+    fn start(
+        &self,
+        user: &str,
+        app_id: &str,
+        env: &[(String, String)],
+        launch_args: &[String],
+    ) -> Result<String, String> {
+        (**self).start(user, app_id, env, launch_args)
     }
     fn stop(&self, unit: &str) -> Result<(), String> {
         (**self).stop(unit)
@@ -1452,6 +1466,7 @@ struct FakeState {
     /// Holds every listing of `adopt_lister` until released (RUY-621).
     adopt_gate: Option<Arc<AdoptGate>>,
     last_env: Vec<(String, String)>,
+    last_launch_args: Vec<String>,
     /// pid -> cgroup file (`process_cgroup`, T-459).
     processes: HashMap<u32, String>,
     /// uid -> user name (`user_name`).
@@ -1613,6 +1628,11 @@ impl FakeSpawner {
         self.lock().last_env.clone()
     }
 
+    /// The launch arguments the last `start` was given.
+    pub fn last_launch_args(&self) -> Vec<String> {
+        self.lock().last_launch_args.clone()
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, FakeState> {
         // A poisoned lock only means another thread panicked; the data is still usable.
         self.state.lock().unwrap_or_else(|e| e.into_inner())
@@ -1655,10 +1675,17 @@ impl Spawner for FakeSpawner {
         Ok(())
     }
 
-    fn start(&self, user: &str, app_id: &str, env: &[(String, String)]) -> Result<String, String> {
+    fn start(
+        &self,
+        user: &str,
+        app_id: &str,
+        env: &[(String, String)],
+        launch_args: &[String],
+    ) -> Result<String, String> {
         let mut state = self.lock();
         state.calls.push(format!("start {user} {app_id}"));
         state.last_env = env.to_vec();
+        state.last_launch_args = launch_args.to_vec();
         if state.fail_start {
             return Err("fake start failure".to_owned());
         }
@@ -3001,7 +3028,7 @@ app-flatpak-io.github.Foo-56.scope loaded active running app-flatpak-io.github.F
         assert!(fake.is_installed("org.ruyaos.Racer"));
         assert!(!fake.is_installed("org.ruyaos.Puzzle"));
         let unit = fake
-            .start("ruya-p1", "org.ruyaos.Racer", &[])
+            .start("ruya-p1", "org.ruyaos.Racer", &[], &[])
             .expect("start");
         fake.stop(&unit).expect("stop");
         assert_eq!(
