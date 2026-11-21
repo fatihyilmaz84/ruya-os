@@ -8,8 +8,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_channel::{Receiver, Sender};
+use ruya_flatpak::oars;
 use ruya_play_format::manifest::english;
-use ruya_play_format::oars;
 use ruya_play_trust::{words, Continuity, Request, Risk, TrustRecord};
 use zbus::message::Header;
 use zbus::object_server::SignalEmitter;
@@ -147,7 +147,7 @@ pub fn art_roles(art: &[VettedArt]) -> (BTreeMap<String, String>, Vec<String>) {
 }
 
 /// Play1's Inspect record. Optional keys are absent when unknown. `age_label` is the label of the
-/// manifest's OARS answers (`ruya_play_format::oars::age_label`, the mapping `ruya-store` rates
+/// manifest's OARS answers (`ruya_flatpak::oars::age_label`, the mapping `ruya-store` rates
 /// with too); `signer_name` is `ruya_play_trust::TrustRecord::signer_name`, the name the
 /// installed `trust.json` will carry. `gate` is the assessment's; `permissions_added`, `permissions_removed` and
 /// `adds_high_risk` are there only for an update whose installed requests could be read.

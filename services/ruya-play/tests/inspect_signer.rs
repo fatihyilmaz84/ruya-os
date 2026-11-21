@@ -1,6 +1,6 @@
 //! RUY-914: Play1's Inspect record serves `signer_name` (the manifest's developer name, only for a
 //! package with a verified developer key) and `age_label` (the label of the manifest's OARS
-//! answers, `ruya_play_format::oars::age_label`, the Store's mapping).
+//! answers, `ruya_flatpak::oars::age_label`, the Store's mapping).
 
 mod common;
 

@@ -196,9 +196,9 @@ impl Builder {
             } else {
                 "none".to_owned()
             };
-        if let Some(label) = ruya_play_format::oars::age_label(
-            self.oars.iter().map(|(i, w)| (i.as_str(), w.as_str())),
-        ) {
+        if let Some(label) =
+            ruya_flatpak::oars::age_label(self.oars.iter().map(|(i, w)| (i.as_str(), w.as_str())))
+        {
             self.c.age_rating = label.to_owned();
         }
         if self.c.icon.is_empty() {

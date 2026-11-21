@@ -1,17 +1,22 @@
 //! The age label of an OARS 1.1 answer: the one mapping from content attributes to `all`, `7+`,
-//! `12+`, `16+` or `18+` (docs/specs/05-play-packages.md section 3: the shell derives the label).
+//! `12+`, `16+` or `18+` (docs/specs/05-play-packages.md section 3: the shell derives the label),
+//! and the one table of severity words.
 //!
 //! `ruya-store` rates a Flathub app's AppStream `content_rating` with it and `ruya-play` rates a
-//! package's `age_rating`, so both show the same label for the same answers.
+//! package's `age_rating`, so both show the same label for the same answers; `ruya-play-format`
+//! validates a manifest's answers against the same [`OARS_VALUES`].
 
-/// OARS severity words, 0 (none) to 3 (intense); a word that is not one counts as none.
+/// OARS severity words in order, `none` (0) to `intense` (3): the values of `content_attribute`
+/// (AppStream) and of a manifest's `age_rating.content` (05 section 3), closed.
+pub const OARS_VALUES: [&str; 4] = ["none", "mild", "moderate", "intense"];
+
+/// A severity word's level, 0 (none) to 3 (intense); a word that is not one counts as none.
 fn severity(word: &str) -> u8 {
-    match word.trim() {
-        "mild" => 1,
-        "moderate" => 2,
-        "intense" => 3,
-        _ => 0,
-    }
+    let word = word.trim();
+    OARS_VALUES
+        .iter()
+        .position(|v| *v == word)
+        .map_or(0, |level| level as u8)
 }
 
 /// The OARS 1.1 attributes whose `intense` level means 18+ (the others top out at 16+): sex,

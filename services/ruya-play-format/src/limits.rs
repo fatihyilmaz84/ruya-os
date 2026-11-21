@@ -138,8 +138,8 @@ pub const LINK_KINDS: [&str; 10] = [
 pub const CONTROLLER: [&str; 3] = ["full", "partial", "none"];
 /// `players.modes`, closed.
 pub const PLAYER_MODES: [&str; 3] = ["single", "local", "online"];
-/// `age_rating.content` values (OARS 1.1), closed.
-pub const OARS_VALUES: [&str; 4] = ["none", "mild", "moderate", "intense"];
+/// `age_rating.content` values (OARS 1.1), closed: the table `ruya-store` rates AppStream with too.
+pub use ruya_flatpak::oars::OARS_VALUES;
 /// `requirements.gpu_api`, closed.
 pub const GPU_APIS: [&str; 2] = ["vulkan", "opengl"];
 /// `run.runner`, closed.

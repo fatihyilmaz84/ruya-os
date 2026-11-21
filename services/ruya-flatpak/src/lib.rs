@@ -3,6 +3,8 @@
 //! running a command stays with each service (`ruya-store`'s `flatpak_cli.rs`, `ruya-play`'s
 //! `Runner`). A rule two services need about Flatpak's own formats lives here, not in both.
 
+pub mod oars;
+
 /// A Flatpak application id: reverse-DNS, ASCII letters, digits, `_` and `-`, at least two dots,
 /// no empty element, none starting with a digit, at most 255 characters (Flatpak's own limit).
 /// Everything that reaches the `flatpak` command line has passed this.
