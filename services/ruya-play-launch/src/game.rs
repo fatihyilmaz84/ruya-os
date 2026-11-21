@@ -680,7 +680,9 @@ mod tests {
         // recorded, so the program's copy is unchanged at the next update and gets replaced (the
         // fake OS is quadratic in the tree size, so the update itself is tested at a small size
         // in tests/game.rs: the program is a recorded copy).
-        let mut paths: Vec<String> = (0..MAX_WRITABLE_FILES).map(|i| format!("Save/f{i}")).collect();
+        let mut paths: Vec<String> = (0..MAX_WRITABLE_FILES)
+            .map(|i| format!("Save/f{i}"))
+            .collect();
         paths.push("Game.exe".to_string());
         let copies: Vec<(&str, &str)> = paths.iter().map(|p| (p.as_str(), H)).collect();
         let (base, left) = Base::of(1, &copies);
