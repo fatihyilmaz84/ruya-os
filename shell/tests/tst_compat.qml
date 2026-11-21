@@ -489,7 +489,7 @@ Item {
             Session.launch(tc.hopperApp, "p1")
             tryVerify(() => Session.running.some(r => r.appId === tc.hopperApp), 3000)
             tryVerify(() => !find("compatTry").visible, 2000)
-            keyClick(Qt.Key_Right)                       // Package default
+            keyClick(Qt.Key_Left)                        // Bundled: not the choice the page opened with
             tryCompare(find("page_playCompatibility"), "saving", "")
             tryCompare(find("compatRunnerNote"), "text", lang === "en" ? "Takes effect the next time the game starts."
                                                                        : "Oyun bir sonraki açılışında geçerli olur.")
