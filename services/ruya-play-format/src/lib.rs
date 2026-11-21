@@ -122,37 +122,60 @@ fn hex(bytes: &[u8]) -> String {
         })
 }
 
-fn io_problem(path: &str, err: &io::Error) -> Problem {
-    match ReadFault::from_io(err) {
-        Some(p) => p.clone(),
-        None => Problem::new(
-            codes::PACKAGE_READ_FAILED,
-            path,
-            format!("The file could not be read ({err})."),
-        ),
+/// Why a small file of the package could not be read: the operating system failed
+/// ([`ReadError::Io`]: `EACCES`, `EIO`, or the file is not there) or the container found the
+/// content wrong ([`ReadError::Content`]: a zip whose declared size lies). A caller that must not
+/// mistake an unreadable file for a damaged one (the launcher's status file) matches on it; the
+/// validator turns either into a [`Problem`] ([`ReadError::into_problem`]).
+#[derive(Debug)]
+pub enum ReadError {
+    /// The read failed in the operating system.
+    Io(io::Error),
+    /// The container reported the content as wrong.
+    Content(Problem),
+}
+
+impl ReadError {
+    fn from_io(err: io::Error) -> ReadError {
+        match ReadFault::from_io(&err) {
+            Some(p) => ReadError::Content(p.clone()),
+            None => ReadError::Io(err),
+        }
+    }
+
+    /// The problem to report for the file at `path`.
+    pub fn into_problem(self, path: &str) -> Problem {
+        match self {
+            ReadError::Content(p) => p,
+            ReadError::Io(err) => Problem::new(
+                codes::PACKAGE_READ_FAILED,
+                path,
+                format!("The file could not be read ({err})."),
+            ),
+        }
     }
 }
 
 /// Read a whole small file of the package (a metadata file, a `runner.json`): at most `limit + 1`
 /// bytes, so a caller sees that a file is longer than `limit` without reading it all (the caller
 /// reports that). The one bounded reader of package files outside the content pass.
-pub fn read_small(source: &dyn Source, path: &str, limit: u64) -> Result<Vec<u8>, Problem> {
-    let reader = source.open(path).map_err(|e| io_problem(path, &e))?;
+pub fn read_small(source: &dyn Source, path: &str, limit: u64) -> Result<Vec<u8>, ReadError> {
+    let reader = source.open(path).map_err(ReadError::from_io)?;
     let mut buf = Vec::new();
     reader
         .take(limit + 1)
         .read_to_end(&mut buf)
-        .map_err(|e| io_problem(path, &e))?;
+        .map_err(ReadError::from_io)?;
     Ok(buf)
 }
 
 /// [`read_small`] for a caller that treats a longer file like an absent one: `Ok(None)` when the
-/// file is longer than `limit`, the problem when it cannot be read.
+/// file is longer than `limit`, the error when it cannot be read.
 pub fn read_within(
     source: &dyn Source,
     path: &str,
     limit: u64,
-) -> Result<Option<Vec<u8>>, Problem> {
+) -> Result<Option<Vec<u8>>, ReadError> {
     let buf = read_small(source, path, limit)?;
     Ok((buf.len() as u64 <= limit).then_some(buf))
 }
@@ -264,7 +287,7 @@ pub fn validate(source: &dyn Source, opts: &ValidateOptions) -> Result<Package, 
     // 2. The file table.
     let table_bytes = match read_small(source, "play.files", limits::MAX_TABLE_BYTES) {
         Ok(b) => b,
-        Err(p) => return Err(vec![p]),
+        Err(e) => return Err(vec![e.into_problem("play.files")]),
     };
     if table_bytes.len() as u64 > limits::MAX_TABLE_BYTES {
         problems.add(
@@ -287,7 +310,8 @@ pub fn validate(source: &dyn Source, opts: &ValidateOptions) -> Result<Package, 
     // 3. The manifest.
     let manifest_bytes = match read_small(source, "play.json", limits::MAX_MANIFEST_BYTES) {
         Ok(b) => b,
-        Err(p) => {
+        Err(e) => {
+            let p = e.into_problem("play.json");
             problems.add(&p.code, p.path, p.message);
             return Err(problems.finish());
         }
@@ -413,14 +437,14 @@ fn verify_content(source: &dyn Source, files: &[FileEntry], problems: &mut Probl
         let mut reader = match source.open(path) {
             Ok(r) => r,
             Err(e) => {
-                let p = io_problem(path, &e);
+                let p = ReadError::from_io(e).into_problem(path);
                 problems.add(&p.code, p.path, p.message);
                 continue;
             }
         };
         match sha256_of(&mut reader, u64::MAX) {
             Err(e) => {
-                let p = io_problem(path, &e);
+                let p = ReadError::from_io(e).into_problem(path);
                 problems.add(&p.code, p.path, p.message);
             }
             Ok(Some((_, total))) if total != *size => problems.add(

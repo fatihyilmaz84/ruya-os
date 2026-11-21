@@ -718,6 +718,17 @@ fn a_status_file_that_cannot_be_checked_fails_the_launch() {
 }
 
 #[test]
+fn a_status_file_that_cannot_be_read_fails_the_launch() {
+    let mut os = Game::native().install();
+    let path = format!("{DATA}/.ruya-play/state.json");
+    os.file(&path, State::default().to_bytes());
+    os.fail_open(&path, std::io::ErrorKind::PermissionDenied);
+    let err = launch(&mut os, &[]).unwrap_err();
+    assert_eq!(err.code, "launch.state");
+    assert!(os.runs.is_empty(), "the game was not started over it");
+}
+
+#[test]
 fn a_prefix_that_cannot_be_checked_fails_the_launch() {
     let mut os = Game::wine().install();
     os.fail_kind(PREFIX, std::io::ErrorKind::PermissionDenied);

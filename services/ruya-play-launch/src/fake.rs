@@ -43,6 +43,8 @@ pub struct FakeOs {
     pub lines: RefCell<Vec<String>>,
     /// Paths whose [`LaunchOs::kind`] fails with this error instead of answering (an `EACCES`).
     pub kind_errors: BTreeMap<String, io::ErrorKind>,
+    /// Paths whose [`LaunchOs::open`] fails with this error (an `EACCES` on a file that is there).
+    pub open_errors: BTreeMap<String, io::ErrorKind>,
     /// The permission bits set with [`LaunchOs::set_mode`] (or copied with a node), by path; a
     /// node without one has the mode it was made with, which the fake does not model.
     pub modes: BTreeMap<String, u32>,
@@ -97,6 +99,12 @@ impl FakeOs {
     /// Make [`LaunchOs::kind`] of `path` fail with `kind` instead of answering (an `EACCES`).
     pub fn fail_kind(&mut self, path: &str, kind: io::ErrorKind) -> &mut Self {
         self.kind_errors.insert(path.to_string(), kind);
+        self
+    }
+
+    /// Make [`LaunchOs::open`] of `path` fail with `kind` (the file is there, `kind` still answers).
+    pub fn fail_open(&mut self, path: &str, kind: io::ErrorKind) -> &mut Self {
+        self.open_errors.insert(path.to_string(), kind);
         self
     }
 
@@ -260,6 +268,9 @@ impl LaunchOs for FakeOs {
     fn open(&self, base: &str, rel: &str) -> io::Result<Box<dyn Read + '_>> {
         self.check(base, rel, false)?;
         let path = join(base, rel);
+        if let Some(kind) = self.open_errors.get(&path) {
+            return Err(io::Error::new(*kind, path));
+        }
         match self.nodes.get(&self.resolve(&path, false)) {
             Some(Node::File(b)) => Ok(Box::new(io::Cursor::new(b.as_slice()))),
             Some(_) => Err(io::Error::new(

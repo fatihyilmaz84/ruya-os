@@ -180,10 +180,12 @@ impl Base {
                 os.log("the game folder's record is too big; every file counts as changed");
                 None
             }
-            Err(p) => {
+            // ADR-040: a base that is missing, unreadable or damaged keeps the game's data, so
+            // an I/O error here (unlike for the status file) only means "every file changed".
+            Err(e) => {
                 os.log(&format!(
                     "the game folder's record cannot be read ({}); every file counts as changed",
-                    p.message
+                    e.into_problem(rel).message
                 ));
                 None
             }
@@ -606,6 +608,22 @@ mod tests {
     use super::*;
 
     const H: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+    #[test]
+    fn a_base_that_cannot_be_read_counts_as_none_so_every_file_changed() {
+        let mut os = crate::fake::FakeOs::new();
+        os.file("/d/.ruya-play/game-base.json", Base::default().to_bytes());
+        os.fail_open(
+            "/d/.ruya-play/game-base.json",
+            io::ErrorKind::PermissionDenied,
+        );
+        assert_eq!(Base::read(&os, "/d", BASE), None);
+        let lines = os.lines.borrow();
+        assert!(
+            lines.iter().any(|l| l.contains("cannot be read")),
+            "{lines:?}"
+        );
+    }
 
     #[test]
     fn a_base_round_trips() {
