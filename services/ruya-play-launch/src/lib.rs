@@ -228,13 +228,20 @@ pub fn prepare(
     let loaded = load(os)?;
     let system = runners::scan(os);
     let data = plan::env_dir(base_env, "XDG_DATA_HOME")?;
-    let mut state = State::read(os, &data);
-    let prefix_exists = ruya_play_format::runner::prefix_dir(&loaded.manifest.run.runner, &data)
-        .and_then(|p| {
-            p.strip_prefix(data.trim_end_matches('/'))
-                .map(str::to_string)
-        })
-        .is_some_and(|rel| os.kind(&data, &rel).is_some());
+    let mut state = State::read(os, &data).map_err(|e| {
+        io_failure(
+            "launch.state",
+            "The game's status file cannot be checked",
+            &e,
+        )
+    })?;
+    let prefix_exists = match ruya_play_format::runner::prefix_rel(&loaded.manifest.run.runner) {
+        Some(rel) => os
+            .kind(&data, rel)
+            .map_err(|e| io_failure("launch.prefix", "The game's prefix cannot be checked", &e))?
+            .is_some(),
+        None => false,
+    };
     let plan = plan::plan(&Inputs {
         manifest: &loaded.manifest,
         bundled: &loaded.bundled,

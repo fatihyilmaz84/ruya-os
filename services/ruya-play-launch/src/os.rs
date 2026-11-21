@@ -52,9 +52,12 @@ pub fn too_deep(path: &str) -> io::Error {
 
 /// The launcher's effects. Reads take `&self`, writes and runs `&mut self`.
 pub trait LaunchOs {
-    /// What `base/rel` is, without following a link at its end; `None` when nothing is there (or
-    /// a link is among the folders of `rel`: nothing is followed).
-    fn kind(&self, base: &str, rel: &str) -> Option<Kind>;
+    /// What `base/rel` is, without following a link at its end. `Ok(None)` only when nothing is
+    /// there (`NotFound`, a missing folder above it included). A link among the folders of `rel`
+    /// is [`NotFollowed`] and any other failure (`EACCES`, `EIO`) is its own error: neither means
+    /// "missing", so a caller never treats an error as an absent file, it fails or says why it
+    /// goes on.
+    fn kind(&self, base: &str, rel: &str) -> io::Result<Option<Kind>>;
     /// The names and kinds in the folder `base/rel` (links not followed; a link among the folders
     /// of `rel` is [`NotFollowed`]). A name that is not UTF-8 is left out.
     fn list(&self, base: &str, rel: &str) -> io::Result<Vec<(String, Kind)>>;

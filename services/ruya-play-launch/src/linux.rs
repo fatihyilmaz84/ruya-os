@@ -47,11 +47,11 @@ fn missing(e: &io::Error) -> bool {
 }
 
 impl LaunchOs for LinuxOs {
-    fn kind(&self, base: &str, rel: &str) -> Option<Kind> {
-        base_dir(base)
-            .and_then(|d| d.kind(&rel_path(rel)?))
-            .ok()
-            .flatten()
+    fn kind(&self, base: &str, rel: &str) -> io::Result<Option<Kind>> {
+        match base_dir(base).and_then(|d| d.kind(&rel_path(rel)?)) {
+            Err(e) if missing(&e) => Ok(None),
+            other => other,
+        }
     }
 
     fn list(&self, base: &str, rel: &str) -> io::Result<Vec<(String, Kind)>> {

@@ -199,11 +199,6 @@ fn substitute_all(args: &[String], places: &Places) -> Result<Vec<String>, Failu
     args.iter().map(|a| substitute(a, places)).collect()
 }
 
-/// `path` relative to `data`, when it is below it.
-fn below(data: &str, path: &str) -> Option<String> {
-    path.strip_prefix(&format!("{data}/")).map(str::to_string)
-}
-
 /// An absolute folder from the environment (`XDG_DATA_HOME`, `XDG_CONFIG_HOME`).
 pub fn env_dir(env: &BTreeMap<String, String>, name: &str) -> Result<String, Failure> {
     match env.get(name) {
@@ -345,9 +340,8 @@ pub fn plan(inp: &Inputs<'_>) -> Result<Plan, Failure> {
 
     // The prefix, for the kinds that have one.
     let prefix_path = runner::prefix_dir(&run.runner, &data);
-    let prefix_rel = prefix_path.as_ref().and_then(|p| below(&data, p));
-    let prefix = prefix_rel.as_ref().map(|rel| PrefixPlan {
-        rel: rel.clone(),
+    let prefix = runner::prefix_rel(&run.runner).map(|rel| PrefixPlan {
+        rel: rel.to_string(),
         template: run
             .prefix
             .as_ref()
@@ -371,12 +365,9 @@ pub fn plan(inp: &Inputs<'_>) -> Result<Plan, Failure> {
     let mut fresh = false;
     if prefix.is_some() {
         if run.runner == "proton" {
-            let dirs = runner::proton_dirs(&data);
+            let rel = runner::PROTON_REL;
             actions.push(Action::MakeDirs(
-                [dirs.compat_data, dirs.client]
-                    .iter()
-                    .filter_map(|d| below(&data, d))
-                    .collect(),
+                [rel.compat_data, rel.client].map(str::to_string).to_vec(),
             ));
         }
         if !inp.prefix_exists {

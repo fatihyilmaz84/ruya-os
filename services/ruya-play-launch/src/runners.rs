@@ -41,8 +41,23 @@ fn is_hash(s: &str) -> bool {
     s.len() == 64 && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
+/// Whether `root/rel` is a regular file. An error asking is logged and counts as no: a runner
+/// that cannot be checked is not used (the OS's runner folder, not the player's data).
+fn is_file(os: &dyn LaunchOs, root: &str, rel: &str) -> bool {
+    match os.kind(root, rel) {
+        Ok(kind) => kind == Some(Kind::File),
+        Err(e) => {
+            os.log(&format!(
+                "{}/{rel} cannot be checked ({e})",
+                root.trim_end_matches('/')
+            ));
+            false
+        }
+    }
+}
+
 fn read_hash(os: &dyn LaunchOs, root: &str) -> Option<String> {
-    if os.kind(root, HASH_FILE) != Some(Kind::File) {
+    if !is_file(os, root, HASH_FILE) {
         return None;
     }
     let bytes = ruya_play_format::read_within(&AppSource::new(os, root), HASH_FILE, 128)
@@ -61,7 +76,7 @@ fn read_hash(os: &dyn LaunchOs, root: &str) -> Option<String> {
 
 fn read_runner(os: &dyn LaunchOs, root: &str) -> Option<RunnerJson> {
     let file = join(root, runner::FILE_NAME);
-    if os.kind(root, runner::FILE_NAME) != Some(Kind::File) {
+    if !is_file(os, root, runner::FILE_NAME) {
         os.log(&format!(
             "{file} is missing or not a regular file; runner skipped"
         ));
@@ -83,7 +98,7 @@ fn read_runner(os: &dyn LaunchOs, root: &str) -> Option<RunnerJson> {
     }
     let r = parsed?;
     for (key, rel) in r.entry.paths() {
-        if os.kind(root, rel) != Some(Kind::File) {
+        if !is_file(os, root, rel) {
             os.log(&format!(
                 "{file}: entry {key} ({rel}) is not a regular file; runner skipped"
             ));
