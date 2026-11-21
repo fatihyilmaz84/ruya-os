@@ -49,6 +49,7 @@ use crate::follow::{
     bridge_args, existence, parse_signal, Backoff, Follower, ManagerLink, Probe, Wake,
     BRIDGE_PROGRAM,
 };
+use crate::runner_choice::runner_args_from_library;
 use crate::scope::{RunScopes, Sweep};
 use crate::spawner::{
     active_app_scopes, any_swap, app_args_from, app_scopes, cancel_reclaim_command,
@@ -494,10 +495,12 @@ impl Spawner for SystemdSpawner {
             DisplayMode::Wayland
         };
         // Per-app launch arguments from the image (Steam: Big Picture); a missing file is none.
-        let app_args = app_args_from(
+        let mut app_args = app_args_from(
             &std::fs::read_to_string(APP_ARGS).unwrap_or_default(),
             app_id,
         );
+        // A .play game's runner choice, from ruya-library (RUY-904); never fails the launch.
+        app_args.extend(runner_args_from_library(user, app_id));
         let args = launch_command_in(user, app_id, env, mode, &app_args)?;
         let unit = unit_name(user, app_id);
         self.gate
