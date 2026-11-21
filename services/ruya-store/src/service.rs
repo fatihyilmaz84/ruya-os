@@ -2496,7 +2496,7 @@ directory=launcher
         assert!(s
             .flatpak
             .override_runs()
-            .contains(&strings(&["override", "--system", "--reset", STREAM])));
+            .contains(&ruya_flatpak::reset_command(STREAM)));
         assert_eq!(s.flatpak.override_of(STREAM), before, "nothing is widened");
         assert_eq!(
             s.get_permissions(STREAM, &mut none).1.withdrawn,
@@ -2524,7 +2524,7 @@ directory=launcher
         assert!(s
             .flatpak
             .override_runs()
-            .contains(&strings(&["override", "--system", "--reset", STREAM])));
+            .contains(&ruya_flatpak::reset_command(STREAM)));
         // Without an override: ok all the same.
         assert_eq!(s.reset_permissions(STREAM, true, &mut none), Status::Ok);
     }
@@ -2581,7 +2581,7 @@ directory=launcher
         );
         assert_eq!(
             s.flatpak.override_runs().last(),
-            Some(&strings(&["override", "--system", "--reset", STREAM]))
+            Some(&ruya_flatpak::reset_command(STREAM))
         );
     }
 
