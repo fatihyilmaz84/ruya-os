@@ -233,7 +233,7 @@ fn proton_runs_waitforexitandrun_with_its_compat_folders() {
         format!("{DATA}/proton/client")
     );
     assert_eq!(
-        os.kind(&format!("{DATA}/proton/client")),
+        os.kind(DATA, "proton/client"),
         Some(ruya_play_launch::os::Kind::Dir)
     );
     // The prefix is proton's pfx, made from the template.
@@ -394,7 +394,7 @@ fn a_prefix_without_template_is_left_to_the_runner() {
     g.set("/run/prefix", json!({"arch": "win32"}));
     let mut os = g.install();
     let cmd = launch(&mut os, &[]).unwrap();
-    assert_eq!(os.kind(PREFIX), None);
+    assert_eq!(os.kind(PREFIX, ""), None);
     assert_eq!(cmd.env["WINEARCH"], "win32");
 }
 
@@ -563,7 +563,12 @@ fn only_the_newest_epoch_backup_is_kept() {
     os.file(&format!("{dir}/epoch-x-backup/f"), "not a backup name");
     update_to_epoch(&mut os, 3);
     launch(&mut os, &[]).unwrap();
-    let names: Vec<String> = os.list(&dir).unwrap().into_iter().map(|(n, _)| n).collect();
+    let names: Vec<String> = os
+        .list(&dir, "")
+        .unwrap()
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect();
     assert_eq!(names, ["epoch-2-backup", "epoch-x-backup", "state.json"]);
     assert_eq!(
         os.read(&format!(

@@ -5,11 +5,12 @@
 //! nothing is ever executed. The content is the caller's to check (Input1.ValidateProfile).
 
 use std::fs;
-use std::io::{self, Read};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 use crate::storage::{Storage, Udisks};
+use ruya_fs::{Dir, NotFollowed};
 
 /// The largest `max_bytes` of `ReadFile`.
 pub const MAX_READ: u32 = 1 << 20;
@@ -140,54 +141,24 @@ pub fn list_dir(dir: &Path, suffix: &str) -> Result<Vec<FileEntry>, FileStatus> 
     Ok(out)
 }
 
-fn open_no_follow(path: &Path) -> io::Result<fs::File> {
-    let mut options = fs::OpenOptions::new();
-    options.read(true);
-    #[cfg(target_os = "linux")]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        // No symlink as the last component (the name has no other), and a FIFO someone put
-        // there does not block the open.
-        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        if fs::symlink_metadata(path)?.file_type().is_symlink() {
-            return Err(io::Error::new(io::ErrorKind::NotFound, "a symlink"));
-        }
-    }
-    options.open(path)
-}
-
 /// Reads `name` from `dir`: at most `max_bytes`, UTF-8.
 pub fn read_in(dir: &Path, name: &str, max_bytes: u32) -> Result<String, FileStatus> {
     if !valid_name(name) || max_bytes == 0 || max_bytes > MAX_READ {
         return Err(FileStatus::Invalid);
     }
-    let file = match open_no_follow(&dir.join(name)) {
-        Ok(f) => f,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Err(FileStatus::NotFound),
-        // ELOOP: the name is a symlink (O_NOFOLLOW).
-        Err(e) if cfg!(target_os = "linux") && e.raw_os_error() == Some(40) => {
+    let bytes = match Dir::open(dir).and_then(|d| d.read(Path::new(name), u64::from(max_bytes))) {
+        Ok(b) => b,
+        // Not there, a link, or not a regular file (a FIFO, a device, a folder).
+        Err(e)
+            if e.kind() == io::ErrorKind::NotFound
+                || e.kind() == io::ErrorKind::InvalidInput
+                || NotFollowed::is(&e) =>
+        {
             return Err(FileStatus::NotFound)
         }
+        Err(e) if e.kind() == io::ErrorKind::InvalidData => return Err(FileStatus::TooLarge),
         Err(_) => return Err(FileStatus::Failed),
     };
-    let meta = file.metadata().map_err(|_| FileStatus::Failed)?;
-    if !meta.is_file() {
-        return Err(FileStatus::NotFound);
-    }
-    if meta.len() > u64::from(max_bytes) {
-        return Err(FileStatus::TooLarge);
-    }
-    let mut bytes = Vec::new();
-    file.take(u64::from(max_bytes) + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|_| FileStatus::Failed)?;
-    // It grew between the size check and the read.
-    if bytes.len() > max_bytes as usize {
-        return Err(FileStatus::TooLarge);
-    }
     String::from_utf8(bytes).map_err(|_| FileStatus::NotText)
 }
 
@@ -308,7 +279,7 @@ mod tests {
     }
 
     #[test]
-    fn the_size_is_checked_before_reading() {
+    fn a_file_over_the_cap_is_too_large_and_one_at_it_is_read() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("big.json"), "x".repeat(65537)).unwrap();
         fs::write(dir.path().join("fits.json"), "x".repeat(65536)).unwrap();

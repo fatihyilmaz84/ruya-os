@@ -173,16 +173,18 @@ impl FakeOs {
 }
 
 impl LaunchOs for FakeOs {
-    fn kind(&self, path: &str) -> Option<Kind> {
-        self.nodes.get(&self.resolve(path, false)).map(|n| match n {
-            Node::File(_) => Kind::File,
-            Node::Dir => Kind::Dir,
-            Node::Link(_) => Kind::Link,
-        })
+    fn kind(&self, base: &str, rel: &str) -> Option<Kind> {
+        self.nodes
+            .get(&self.resolve(&join(base, rel), false))
+            .map(|n| match n {
+                Node::File(_) => Kind::File,
+                Node::Dir => Kind::Dir,
+                Node::Link(_) => Kind::Link,
+            })
     }
 
-    fn list(&self, path: &str) -> io::Result<Vec<(String, Kind)>> {
-        let path = self.resolve(path, true);
+    fn list(&self, base: &str, rel: &str) -> io::Result<Vec<(String, Kind)>> {
+        let path = self.resolve(&join(base, rel), true);
         if self.nodes.get(&path) != Some(&Node::Dir) {
             return Err(io::Error::new(io::ErrorKind::NotFound, path.to_string()));
         }
@@ -194,7 +196,7 @@ impl LaunchOs for FakeOs {
             .filter(|rest| !rest.contains('/'))
             .filter_map(|name| {
                 let full = format!("{inner}{name}");
-                self.kind(&full).map(|k| (name.to_string(), k))
+                self.kind(&full, "").map(|k| (name.to_string(), k))
             })
             .collect())
     }

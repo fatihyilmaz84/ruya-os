@@ -12,18 +12,8 @@ use std::collections::BTreeMap;
 use std::io::{self, Read};
 use std::time::Duration;
 
-/// What a path is, read without following a link at its end.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Kind {
-    /// A regular file.
-    File,
-    /// A folder.
-    Dir,
-    /// A symbolic link.
-    Link,
-    /// Anything else (a device, a FIFO, a socket).
-    Other,
-}
+/// What a path is, read without following a link at its end (ruya-fs's).
+pub use ruya_fs::Kind;
 
 /// A program to start: the whole argv, the whole environment and the working folder. No shell.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,11 +52,12 @@ pub fn too_deep(path: &str) -> io::Error {
 
 /// The launcher's effects. Reads take `&self`, writes and runs `&mut self`.
 pub trait LaunchOs {
-    /// What `path` is, without following a link at its end; `None` when nothing is there.
-    fn kind(&self, path: &str) -> Option<Kind>;
-    /// The names and kinds in the folder `path` (links not followed). A name that is not UTF-8 is
-    /// left out.
-    fn list(&self, path: &str) -> io::Result<Vec<(String, Kind)>>;
+    /// What `base/rel` is, without following a link at its end; `None` when nothing is there (or
+    /// a link is among the folders of `rel`: nothing is followed).
+    fn kind(&self, base: &str, rel: &str) -> Option<Kind>;
+    /// The names and kinds in the folder `base/rel` (links not followed; a link among the folders
+    /// of `rel` is [`NotFollowed`]). A name that is not UTF-8 is left out.
+    fn list(&self, base: &str, rel: &str) -> io::Result<Vec<(String, Kind)>>;
     /// Open the regular file `base/rel`; a link at its end or among its folders below `base` is
     /// refused ([`NotFollowed`]), like a write.
     fn open(&self, base: &str, rel: &str) -> io::Result<Box<dyn Read + '_>>;

@@ -13,9 +13,9 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 moxcms = "0.8"
 # Bounded inflate of the PNG iCCP chunk (already in the tree via png).
 miniz_oxide = "0.8"
+# A file opened once, never through a link, a FIFO or a device (RUY-911).
+ruya-fs = { path = "../ruya-fs" }
 
-[target.'cfg(unix)'.dependencies]
-libc = "0.2"  # O_NOFOLLOW
 
 [dev-dependencies]
 tempfile = "3"

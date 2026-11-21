@@ -135,6 +135,31 @@ fn not_followed_survives_io() {
     assert!(!NotFollowed::is(&io::Error::other("x")));
 }
 
+#[test]
+fn kind_and_entries_report_what_is_there() {
+    let (tmp, dir) = base();
+    fs::create_dir_all(tmp.path().join("a/sub")).expect("folders");
+    fs::write(tmp.path().join("a/f"), "x").expect("file");
+    assert_eq!(dir.kind(Path::new("a/f")).expect("kind"), Some(Kind::File));
+    assert_eq!(dir.kind(Path::new("a/sub")).expect("kind"), Some(Kind::Dir));
+    assert_eq!(dir.kind(Path::new("")).expect("kind"), Some(Kind::Dir));
+    assert_eq!(dir.kind(Path::new("a/none")).expect("kind"), None);
+    assert_eq!(dir.kind(Path::new("none/deeper")).expect("kind"), None);
+    let mut found = dir.entries(Path::new("a")).expect("entries");
+    found.sort_by(|a, b| a.0.cmp(&b.0));
+    let name = |n: &str| OsString::from(n);
+    assert_eq!(
+        found,
+        [(name("f"), Kind::File), (name("sub"), Kind::Dir)]
+            .into_iter()
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(dir.entries(Path::new("")).expect("base").len(), 1);
+    let missing = dir.entries(Path::new("none")).expect_err("missing");
+    assert_eq!(missing.kind(), io::ErrorKind::NotFound);
+    assert!(dir.kind(Path::new("../x")).is_err(), "a plain path only");
+}
+
 #[cfg(target_os = "linux")]
 mod linux {
     use super::*;
@@ -276,8 +301,8 @@ mod linux {
         assert_eq!(fs::read_dir(&outside).expect("list").count(), 0);
     }
 
-    #[test]
-    fn reading_refuses_a_link_at_any_step() {
+    /// A base holding `own` and links to a folder (`dir`) and a file (`file`) outside it.
+    fn planted() -> (tempfile::TempDir, Dir) {
         let tmp = tempfile::tempdir().expect("tmp");
         let outside = tmp.path().join("elsewhere");
         fs::create_dir(&outside).expect("outside");
@@ -288,6 +313,60 @@ mod linux {
         symlink(&outside, base.join("dir")).expect("link");
         symlink(outside.join("f"), base.join("file")).expect("link");
         let dir = Dir::open(&base).expect("open");
+        (tmp, dir)
+    }
+
+    #[test]
+    fn kind_and_entries_refuse_a_link_at_a_component() {
+        let (_tmp, dir) = planted();
+        // A link at the end is reported as a link, never followed ...
+        assert_eq!(dir.kind(Path::new("dir")).expect("kind"), Some(Kind::Link));
+        assert_eq!(dir.kind(Path::new("file")).expect("kind"), Some(Kind::Link));
+        assert_eq!(dir.kind(Path::new("own")).expect("kind"), Some(Kind::File));
+        // ... and one among the folders is refused.
+        let err = dir.kind(Path::new("dir/f")).expect_err("refused");
+        assert!(NotFollowed::is(&err), "{err}");
+        let err = dir.entries(Path::new("dir")).expect_err("refused");
+        assert!(NotFollowed::is(&err), "{err}");
+        let err = dir
+            .entries(Path::new("file"))
+            .expect_err("a link to a file");
+        assert!(NotFollowed::is(&err), "{err}");
+        // The listing shows a link as a link.
+        let mut listed = dir.entries(Path::new("")).expect("entries");
+        listed.sort_by(|a, b| a.0.cmp(&b.0));
+        let name = |n: &str| OsString::from(n);
+        assert_eq!(
+            listed,
+            [
+                (name("dir"), Kind::Link),
+                (name("file"), Kind::Link),
+                (name("own"), Kind::File)
+            ]
+            .to_vec()
+        );
+    }
+
+    #[test]
+    fn open_file_by_path_refuses_a_link_and_a_fifo() {
+        let tmp = tempfile::tempdir().expect("tmp");
+        fs::write(tmp.path().join("f"), "x").expect("file");
+        symlink(tmp.path().join("f"), tmp.path().join("l")).expect("link");
+        assert!(crate::open_file(&tmp.path().join("f")).is_ok());
+        let err = crate::open_file(&tmp.path().join("l")).expect_err("a link");
+        assert!(NotFollowed::is(&err), "{err}");
+        let err = crate::open_file(&tmp.path().join("none")).expect_err("missing");
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
+        let fifo = tmp.path().join("fifo");
+        mkfifo(&fifo);
+        let err = within_a_second(move || crate::open_file(&fifo)).expect_err("a FIFO");
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput, "{err}");
+        assert!(!NotFollowed::is(&err), "{err}");
+    }
+
+    #[test]
+    fn reading_refuses_a_link_at_any_step() {
+        let (_tmp, dir) = planted();
         assert_eq!(dir.read(Path::new("own"), 64).expect("read"), b"mine");
         assert!(NotFollowed::is(
             &dir.read(Path::new("dir/f"), 64).expect_err("refused")

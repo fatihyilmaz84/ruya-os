@@ -973,6 +973,7 @@ dependencies = [
  "libc",
  "ruya-contract-test",
  "ruya-flatpak",
+ "ruya-fs",
  "ruya-pads",
  "ruya-sysinfo",
  "serde",
@@ -1086,9 +1087,9 @@ version = "0.1.0"
 dependencies = [
  "crc32fast",
  "image",
- "libc",
  "miniz_oxide 0.8.9",
  "moxcms",
+ "ruya-fs",
  "tempfile",
 ]
 

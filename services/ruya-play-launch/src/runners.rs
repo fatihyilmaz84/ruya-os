@@ -42,7 +42,7 @@ fn is_hash(s: &str) -> bool {
 }
 
 fn read_hash(os: &dyn LaunchOs, root: &str) -> Option<String> {
-    if os.kind(&join(root, HASH_FILE)) != Some(Kind::File) {
+    if os.kind(root, HASH_FILE) != Some(Kind::File) {
         return None;
     }
     let bytes = ruya_play_format::read_within(&AppSource::new(os, root), HASH_FILE, 128)
@@ -61,7 +61,7 @@ fn read_hash(os: &dyn LaunchOs, root: &str) -> Option<String> {
 
 fn read_runner(os: &dyn LaunchOs, root: &str) -> Option<RunnerJson> {
     let file = join(root, runner::FILE_NAME);
-    if os.kind(&file) != Some(Kind::File) {
+    if os.kind(root, runner::FILE_NAME) != Some(Kind::File) {
         os.log(&format!(
             "{file} is missing or not a regular file; runner skipped"
         ));
@@ -83,7 +83,7 @@ fn read_runner(os: &dyn LaunchOs, root: &str) -> Option<RunnerJson> {
     }
     let r = parsed?;
     for (key, rel) in r.entry.paths() {
-        if os.kind(&join(root, rel)) != Some(Kind::File) {
+        if os.kind(root, rel) != Some(Kind::File) {
             os.log(&format!(
                 "{file}: entry {key} ({rel}) is not a regular file; runner skipped"
             ));
@@ -102,7 +102,7 @@ pub fn scan(os: &dyn LaunchOs) -> Vec<FoundRunner> {
 /// version keep the first. The launcher scans [`RUNNERS_DIR`]; the library's dry run
 /// ([`crate::dry_run`]) scans the image's own folder with the same code.
 pub fn scan_in(os: &dyn LaunchOs, dir: &str) -> Vec<FoundRunner> {
-    let mut entries = match os.list(dir) {
+    let mut entries = match os.list(dir, "") {
         Ok(e) => e,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
         Err(e) => {

@@ -13,6 +13,7 @@ toml = "0.8"
 ruya-sysinfo = { path = "../ruya-sysinfo" }  # the System information collector (T-226)
 ruya-flatpak = { path = "../ruya-flatpak" }  # the one app-id grammar and its 120 cap (RUY-973)
 ruya-pads = { path = "../ruya-pads" }  # the controller model table (RUY-491)
+ruya-fs = { path = "../ruya-fs" }  # a volume file read once, never through a link, a FIFO or a device (RUY-911)
 zbus = { version = "5", default-features = false, features = ["async-io"] }
 futures-lite = "2"
 async-io = "2"  # timers; already in the tree through zbus
