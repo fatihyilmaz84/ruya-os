@@ -16,7 +16,9 @@
 //!      number, a few times at most;
 //!   4. it runs `flatpak run --device=input <app id>` with `DISPLAY`, `XAUTHORITY`, `SDL_VIDEODRIVER=x11` and
 //!      `XDG_SESSION_TYPE=x11`, and without `WAYLAND_DISPLAY` (`app_env_x11`);
-//!   5. when the app ends it stops the satellite, waits for Xwayland and removes the directory and
+//!   5. when the app ends it first checks that the satellite and Xwayland still live: if one ended
+//!      under the app it logs `the X11 bridge stopped: <which>` and turns an exit 0 into 1 (the app
+//!      ends "crashed"); then it stops the satellite, waits for Xwayland and removes the directory and
 //!      a stale X socket and lock (`cleanup`). The unit's `ExecStopPost` (`x11-cleanup`) does the
 //!      same, because a Stop kills the whole unit, the helper included.
 //!
@@ -178,7 +180,9 @@ pub fn instance_dir(runtime_dir: &Path, app_id: &str) -> PathBuf {
     PathBuf::from(format!("{}/ruya-x11/{app_id}", runtime_dir.display()))
 }
 
-/// The satellite's argument list for `display` with the cookie file `auth`.
+/// The satellite's argument list for `display` with the cookie file `auth`. No `-terminate`:
+/// `bridge_stopped` relies on Xwayland outliving the app's end, so a normal quit never looks like a
+/// dead bridge.
 pub fn satellite_argv(display: u32, auth: &Path) -> Vec<String> {
     vec![
         SATELLITE_PROGRAM.to_owned(),
