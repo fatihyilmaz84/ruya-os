@@ -142,22 +142,27 @@ fn the_flatpak_commit_lays_out_signs_and_installs() {
             "flatpak remote-modify",
             "flatpak build-finish",
             "flatpak build-export",
+            "flatpak list",
             "flatpak install",
             "flatpak install",
         ]
     );
+    assert_eq!(calls[9], commit::list_runtimes());
     let export = &calls[8];
     assert!(export.contains(&format!("--gpg-sign={FPR}")), "{export:?}");
     // A native app: the runtime only, no 32-bit extension (RUY-999).
-    assert_eq!(calls[9], commit::install_platform("native"));
     assert_eq!(
-        &calls[9][calls[9].len() - 2..],
+        calls[10],
+        commit::install_platform(commit::platform_refs("native"))
+    );
+    assert_eq!(
+        &calls[10][calls[10].len() - 2..],
         &[
             commit::PLATFORM_REMOTE.to_string(),
             "runtime/org.freedesktop.Platform/x86_64/26.08".to_string()
         ]
     );
-    let install = &calls[10];
+    let install = &calls[11];
     assert!(install.contains(&"--or-update".to_string()));
     assert!(install.contains(&"--system".to_string()));
     assert!(install.contains(&commit::REMOTE.to_string()));

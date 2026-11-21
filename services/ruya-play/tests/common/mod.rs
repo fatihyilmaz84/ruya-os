@@ -576,6 +576,10 @@ pub struct FakeRunner {
     pub generated: std::sync::atomic::AtomicBool,
     pub layout: std::sync::Mutex<Vec<String>>,
     pub metadata: std::sync::Mutex<String>,
+    /// What `flatpak list --runtime` answers (the installed runtimes, one ref per line).
+    pub runtimes: std::sync::Mutex<String>,
+    /// A command with this argument fails (the network is gone: a command naming Flathub).
+    pub fail_with_arg: std::sync::Mutex<Option<String>>,
 }
 
 impl Runner for FakeRunner {
@@ -583,6 +587,14 @@ impl Runner for FakeRunner {
         use std::sync::atomic::Ordering;
         self.calls.lock().unwrap().push(argv.to_vec());
         let has = |a: &str| argv.iter().any(|x| x == a);
+        if let Some(arg) = self.fail_with_arg.lock().unwrap().as_deref() {
+            if has(arg) {
+                return Err(format!("{} failed: no network", argv[1]));
+            }
+        }
+        if argv[0] == "flatpak" && argv.get(1).map(String::as_str) == Some("list") {
+            return Ok(self.runtimes.lock().unwrap().clone());
+        }
         if argv[0] == "gpg" && has("--list-secret-keys") {
             if self.generated.load(Ordering::SeqCst) {
                 return Ok(format!(
