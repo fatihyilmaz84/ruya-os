@@ -39,8 +39,9 @@ pub fn list(os: &dyn LaunchOs, dir: &str) -> Vec<Runner> {
 }
 
 /// What the launch of a game would run with (the Library1 keys `play_runner`,
-/// `play_runner_source`, `play_runner_tested`, `play_resolve_error`). All none for a native game
-/// and when nothing was resolved (off Linux).
+/// `play_runner_source`, `play_runner_tested`, `play_resolve_error`, `play_resolve_code`,
+/// `play_fallback`). All none (and no fallback) for a native game and when nothing was resolved
+/// (off Linux).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Resolution {
     /// `<family> <version>` of the runner the launch would use; none for a native game and when
@@ -52,6 +53,11 @@ pub struct Resolution {
     pub runner_tested: Option<String>,
     /// One sentence: why the launch would refuse (no runner, a runner too old, damaged files).
     pub resolve_error: Option<String>,
+    /// The launcher's code of that refusal (`resolve.*`, `launch.*` or a format problem code),
+    /// with [`Self::resolve_error`]: the shell words a refusal by it (RUY-905).
+    pub resolve_code: Option<String>,
+    /// The choice could not be honoured and [`Self::runner`] is the package default's (RUY-905).
+    pub fallback: bool,
 }
 
 impl Resolution {
@@ -63,10 +69,13 @@ impl Resolution {
                 runner_source: Some(r.in_use.source),
                 runner_tested: r.tested,
                 resolve_error: None,
+                resolve_code: None,
+                fallback: r.fallback,
             },
             Ok(DryRun { runner: None }) => Resolution::default(),
             Err(failure) => Resolution {
                 resolve_error: Some(failure.message),
+                resolve_code: Some(failure.code),
                 ..Resolution::default()
             },
         }
@@ -127,6 +136,7 @@ mod tests {
                     hash: None,
                 },
                 tested: tested.map(str::to_owned),
+                fallback: false,
             }),
         }
     }
@@ -138,6 +148,18 @@ mod tests {
         assert_eq!(r.runner_source.as_deref(), Some("system"));
         assert_eq!(r.runner_tested.as_deref(), Some("9.20"));
         assert_eq!(r.resolve_error, None);
+        assert_eq!(r.resolve_code, None);
+        assert!(!r.fallback);
+    }
+
+    /// RUY-905: the launcher's fallback flag reaches the resolution.
+    #[test]
+    fn a_choice_that_fell_back_is_flagged() {
+        let mut dry = runner("system", None);
+        dry.runner.as_mut().unwrap().fallback = true;
+        let r = Resolution::from_result(Ok(dry));
+        assert!(r.fallback);
+        assert_eq!(r.runner.as_deref(), Some("wine 10.2"));
     }
 
     #[test]
@@ -150,7 +172,9 @@ mod tests {
     fn a_refusal_is_its_sentence_and_nothing_else() {
         let r = Resolution::from_result(Err(Failure::new("resolve.system_too_old", "Too old.")));
         assert_eq!(r.resolve_error.as_deref(), Some("Too old."));
+        assert_eq!(r.resolve_code.as_deref(), Some("resolve.system_too_old"));
         assert_eq!(r.runner, None);
+        assert!(!r.fallback);
     }
 
     const DIR: &str = "/usr/lib/ruyaos/play/runners";

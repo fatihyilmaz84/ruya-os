@@ -109,6 +109,30 @@ Page {
     // not the Store lists it (the service lists an app it finds installed; the page does not wait for that).
     readonly property bool permissionsShown: installed && !isSteam && !working && (hasRecord || isPlay)
     readonly property bool uninstallShown: manageShown && !running && !closing
+    // Which runner a .play game starts with, and the signed-in profile's choice of it (RUY-905): a game the
+    // launcher resolves a runner for, or refuses one (a native game has neither).
+    readonly property bool compatShown: isPlay && installed && !working
+        && ((item.playRunner ?? "") !== "" || (item.playResolveError ?? "") !== "" || (item.playResolveCode ?? "") !== "")
+    // The stored choice ("" until Library1 answered); asked when the row shows and whenever it changes.
+    property string runnerChoice: ""
+    function askRunnerChoice() {
+        runnerChoice = ""
+        if (compatShown)
+            Library.runnerChoice(item.id)
+    }
+    onCompatShownChanged: askRunnerChoice()
+    Connections {
+        target: Library
+        function onProfileChanged() { page.askRunnerChoice() }
+        function onRunnerChoiceAnswered(id, status, choice) {
+            if (id === page.item.id)
+                page.runnerChoice = status === "ok" ? choice : ""
+        }
+        function onRunnerChoiceChanged(id, choice) {
+            if (id === page.item.id)
+                page.runnerChoice = choice
+        }
+    }
 
     // The Store does not answer about this item: GetApp failed, the service is away, or the Library lists a Flatpak the Store has no record of.
     // A .play app is never in the Store: its page has nothing to ask it, so it is never "down" (RUY-856).
@@ -377,6 +401,7 @@ Page {
         if (liveAppId !== "")
             keptAppId = liveAppId
         loadDetails()
+        askRunnerChoice()
         Usage.setWatching(page, visible)
         Qt.callLater(ensureFocus)
     }
@@ -483,6 +508,8 @@ Page {
             rows.push([permsBlock])
         for (let i = 0; i < factRepeater.count; i += 2)
             rows.push([factRepeater.itemAt(i), factRepeater.itemAt(i + 1)].filter(f => f))
+        if (compatShown)
+            rows.push([compatRow])
         if (permissionsShown)
             rows.push([permissionsRow])
         if (uninstallShown)
@@ -506,7 +533,7 @@ Page {
         rows[0][0].focus = true
     }
 
-    readonly property string stopKey: primaryKind + "#" + secondaryKeys + "#" + factKeys + "#" + trustShown + "#" + activityStop + "#" + screenshotsStop + "#" + aboutShown + "#" + permsListed + "#" + permissionsShown + "#" + manageShown + "#" + uninstallShown
+    readonly property string stopKey: primaryKind + "#" + secondaryKeys + "#" + factKeys + "#" + trustShown + "#" + activityStop + "#" + screenshotsStop + "#" + aboutShown + "#" + permsListed + "#" + compatShown + "#" + permissionsShown + "#" + manageShown + "#" + uninstallShown
     onStopKeyChanged: Qt.callLater(ensureFocus)
 
     function moveFocus(dx, dy) {
@@ -1023,9 +1050,23 @@ Page {
                 width: parent.width
                 spacing: Theme.spaceS * page.u
                 // An installed Flatpak with no job on it: the Store's own (Uninstall), a .play app too (Permissions).
-                visible: page.permissionsShown || page.manageShown
+                visible: page.compatShown || page.permissionsShown || page.manageShown
 
                 Heading { text: qsTr("Manage") }
+
+                // Which runner a .play game starts with, and the profile's choice of it (RUY-905).
+                SettingRow {
+                    id: compatRow
+                    objectName: "detailCompatRow"
+                    visible: page.compatShown
+                    width: parent.width
+                    u: page.u
+                    kind: "page"
+                    label: qsTr("Compatibility")
+                    value: page.runnerChoice !== "" ? RunnerText.choiceWord(page.runnerChoice) : ""
+                    onActivated: page.openRequested("playCompatibility", ({ id: page.item.id }))
+                    onActiveFocusChanged: if (activeFocus) page.stopFocused(manageSection, false)
+                }
 
                 // What the app may do on this console (RUY-744): the page Settings -> Privacy opens too.
                 SettingRow {

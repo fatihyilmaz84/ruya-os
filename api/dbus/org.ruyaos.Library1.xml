@@ -59,7 +59,17 @@
     play_resolve_error s  one English sentence saying why the launch would refuse (no runner of the
                       family in the image, the image's runner older than the package needs, or the
                       package's files cannot be read); absent when the game can start or is native.
-                      These four are the launcher's own resolution (ruya-play-launch, ADR-037)
+                      For developers and logs: a screen shows its own sentence for play_resolve_code
+    play_resolve_code s  the stable code of that refusal (RUY-905): a resolve.* code of 05 section
+                      4.5 (resolve.no_system_runner, resolve.system_too_old, resolve.system_too_new,
+                      resolve.no_bundled), a launch.* code of the launcher (launch.runner_missing,
+                      launch.runner_kind, launch.damaged) or the format's problem code for damaged
+                      files; present with play_resolve_error, absent otherwise
+    play_fallback b   true: the choice asked for cannot be honoured (no bundled copy, or no usable
+                      image runner of the bundled copy's family), so play_runner is the package
+                      default's runner (RUY-905); only with play_runner, absent otherwise. ListItems
+                      resolves the package default, which always can be honoured: absent there
+                      These six are the launcher's own resolution (ruya-play-launch, ADR-037)
                       run against the deployment and the image's runners, the package's default
                       choice; they say nothing of a per-game choice (ResolveRunner below)
 
@@ -93,7 +103,7 @@
     "invalid"    a malformed profile id or a choice that is not one of the three
     "failed"     the choice could not be stored
 
-  ResolveRunner's answer holds the four runner keys of the item record, for the choice asked for
+  ResolveRunner's answer holds the six runner keys of the item record, for the choice asked for
   instead of the package's default: the launcher's own resolution with that runner argument
   (ruya_play_launch::dry_run, the same code ListItems' keys come from).
 
@@ -103,6 +113,10 @@
     play_runner_source s  "bundled" or "system"; present with play_runner
     play_runner_tested s  the version the developer tested the component with; absent when none
     play_resolve_error s  one English sentence saying why the launch would refuse with that choice
+    play_resolve_code s  the stable code of that refusal (as in the item record); present with
+                      play_resolve_error
+    play_fallback b   true: that choice cannot be honoured and play_runner is the package
+                      default's runner (as in the item record); only with play_runner
 -->
 <node>
   <interface name="org.ruyaos.Library1">

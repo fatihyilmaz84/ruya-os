@@ -7,9 +7,11 @@ namespace {
 const QString Crashy = QStringLiteral("crashy");
 const QString NoLaunch = QStringLiteral("nolaunch");
 
+// The mock apps, and the .play games of the mock Library (a .play game is a Flatpak app, RUY-905).
 bool installed(const QString &appId)
 {
-    return appId == Crashy || appId == NoLaunch || appId.startsWith(QLatin1String("org.example."));
+    return appId == Crashy || appId == NoLaunch || appId.startsWith(QLatin1String("org.example."))
+           || appId.startsWith(QLatin1String("play.com.example."));
 }
 } // namespace
 

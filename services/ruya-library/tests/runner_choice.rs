@@ -144,6 +144,8 @@ fn resolving_bundled_for_a_package_without_one_gives_its_resolve_error() {
     assert_eq!(r.runner, None);
     let err = r.resolve_error.expect("the launch would refuse");
     assert!(err.contains("wine"), "{err}");
+    assert_eq!(r.resolve_code.as_deref(), Some("resolve.no_system_runner"));
+    assert!(!r.fallback, "a refusal is no runner, so no fallback");
 }
 
 /// ResolveRunner(system) holds RUY-903's keys for the same fixture: the item record's.
@@ -165,6 +167,8 @@ fn resolving_system_gives_the_keys_the_item_has() {
             runner_source: Some("system".into()),
             runner_tested: Some("9.20".into()),
             resolve_error: None,
+            resolve_code: None,
+            fallback: false,
         }
     );
     assert_eq!(
@@ -195,4 +199,70 @@ fn the_choice_picks_the_bundled_copy_or_the_image_runner() {
     let source = |over| resolve(&os, "/app", IMAGE_RUNNERS, over).runner;
     assert_eq!(source(Override::Bundled).as_deref(), Some("wine 9.20"));
     assert_eq!(source(Override::System).as_deref(), Some("wine 10.2"));
+}
+
+/// RUY-905: each refusal of the resolver carries its stable code beside the sentence, so the shell
+/// words it by the code: no image runner, one below `min`, one above `max_major`, and a package
+/// whose files are damaged.
+#[test]
+fn each_refusal_carries_its_code() {
+    let code = |os: &ruya_play_launch::fake::FakeOs| {
+        resolve(os, "/app", IMAGE_RUNNERS, Override::PackageDefault).resolve_code
+    };
+    let none = system_only().install();
+    assert_eq!(code(&none).as_deref(), Some("resolve.no_system_runner"));
+
+    let mut old = system_only().install();
+    launch::add_runner_at(
+        &mut old,
+        &format!("{IMAGE_RUNNERS}/Wine8"),
+        "wine",
+        "wine",
+        "8.0",
+    );
+    assert_eq!(code(&old).as_deref(), Some("resolve.system_too_old"));
+
+    let mut fenced = system_only();
+    fenced.manifest["components"][0]["max_major"] = serde_json::json!(10);
+    let mut fenced = fenced.install();
+    launch::add_runner_at(
+        &mut fenced,
+        &format!("{IMAGE_RUNNERS}/Wine11"),
+        "wine",
+        "wine",
+        "11.0",
+    );
+    assert_eq!(code(&fenced).as_deref(), Some("resolve.system_too_new"));
+
+    let damaged = ruya_play_launch::fake::FakeOs::new();
+    let r = resolve(&damaged, "/app", IMAGE_RUNNERS, Override::PackageDefault);
+    assert!(r.resolve_error.is_some());
+    assert!(r
+        .resolve_code
+        .is_some_and(|c| !c.is_empty() && !c.starts_with("resolve.")));
+}
+
+/// RUY-905: a choice the package cannot honour gives the package default's runner, flagged
+/// (`play_fallback`), and the record serves the flag; the package default is never flagged.
+#[test]
+fn a_choice_that_cannot_be_honoured_is_flagged() {
+    let mut os = launch::Game::wine().install();
+    launch::add_runner_at(
+        &mut os,
+        &format!("{IMAGE_RUNNERS}/Wine8"),
+        "wine",
+        "wine",
+        "8.0",
+    );
+    let system = resolve(&os, "/app", IMAGE_RUNNERS, Override::System);
+    assert_eq!(
+        system.runner.as_deref(),
+        Some("wine 9.20"),
+        "the bundled copy"
+    );
+    assert!(system.fallback);
+    assert!(resolution_record(&system).contains_key("play_fallback"));
+    let package = resolve(&os, "/app", IMAGE_RUNNERS, Override::PackageDefault);
+    assert!(!package.fallback);
+    assert!(!resolution_record(&package).contains_key("play_fallback"));
 }

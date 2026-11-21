@@ -29,6 +29,16 @@ bool before(const LibraryItem &a, const LibraryItem &b)
     const int t = a.title.compare(b.title, Qt::CaseInsensitive);
     return t != 0 ? t < 0 : a.id < b.id;
 }
+
+// A resolution that found a runner.
+LibraryResolution resolved(const char *runner, const char *source, const char *tested)
+{
+    LibraryResolution r;
+    r.runner = QString::fromLatin1(runner);
+    r.runnerSource = QString::fromLatin1(source);
+    r.runnerTested = QString::fromLatin1(tested);
+    return r;
+}
 } // namespace
 
 namespace {
@@ -113,14 +123,16 @@ bool knownChoice(const QString &choice)
 
 void MockLibraryBackend::getRunnerChoice(const QString &profile, const QString &id)
 {
-    const QString status = choiceStatus(profile, id);
+    const QString status = m_failing.contains(QLatin1String("get")) ? QStringLiteral("failed") : choiceStatus(profile, id);
     const QString choice = status == QLatin1String("ok") ? m_choices.value(profile).value(id, QStringLiteral("package")) : QString();
     QTimer::singleShot(0, this, [this, profile, id, status, choice] { emit runnerChoiceAnswered(profile, id, status, choice); });
 }
 
 void MockLibraryBackend::setRunnerChoice(const QString &profile, const QString &id, const QString &choice)
 {
-    const QString status = knownChoice(choice) ? choiceStatus(profile, id) : QStringLiteral("invalid");
+    const QString status = m_failing.contains(QLatin1String("set")) ? QStringLiteral("failed")
+                           : knownChoice(choice)                    ? choiceStatus(profile, id)
+                                                                    : QStringLiteral("invalid");
     bool changed = false;
     if (status == QLatin1String("ok")) {
         const QString before = m_choices.value(profile).value(id, QStringLiteral("package"));
@@ -143,32 +155,45 @@ void MockLibraryBackend::setRunnerChoice(const QString &profile, const QString &
 void MockLibraryBackend::resolveRunner(const QString &id, const QString &choice)
 {
     // Profile-free: a valid stand-in profile id, so only the id and the choice decide.
-    const QString status = knownChoice(choice) ? choiceStatus(QStringLiteral("mock"), id) : QStringLiteral("invalid");
-    QVariantMap resolution = {
-        {QStringLiteral("playRunner"), QString()},
-        {QStringLiteral("playRunnerSource"), QString()},
-        {QStringLiteral("playRunnerTested"), QString()},
-        {QStringLiteral("playResolveError"), QString()},
-    };
+    const QString status = m_failing.contains(QLatin1String("resolve")) ? QStringLiteral("failed")
+                           : knownChoice(choice) ? choiceStatus(QStringLiteral("mock"), id)
+                                                 : QStringLiteral("invalid");
+    LibraryResolution resolution;
     if (status == QLatin1String("ok")) {
-        for (const LibraryItem &i : std::as_const(m_items)) {
-            if (i.id != id)
-                continue;
-            resolution.insert(QStringLiteral("playRunner"), i.playRunner);
-            resolution.insert(QStringLiteral("playRunnerSource"), i.playRunnerSource);
-            resolution.insert(QStringLiteral("playRunnerTested"), i.playRunnerTested);
-            resolution.insert(QStringLiteral("playResolveError"), i.playResolveError);
+        const auto table = m_resolutions.constFind(id);
+        if (table != m_resolutions.constEnd() && table->contains(choice)) {
+            resolution = table->value(choice);
+        } else {
+            for (const LibraryItem &i : std::as_const(m_items)) {
+                if (i.id == id)
+                    resolution = i.resolution;
+            }
         }
     }
     QTimer::singleShot(0, this, [this, id, choice, status, resolution] { emit runnerResolved(id, choice, status, resolution); });
 }
 
+void MockLibraryBackend::setResolution(const QString &id, const QString &choice, const LibraryResolution &resolution)
+{
+    m_resolutions[id].insert(choice, resolution);
+    if (choice != QLatin1String("package"))
+        return;
+    for (LibraryItem &i : m_items) {
+        if (i.id == id)
+            i.resolution = resolution;
+    }
+    emit itemsChanged();
+}
+
 void MockLibraryBackend::reset(const QString &scenario)
 {
     m_items.clear();
-    // Every scenario has the image's pinned runner and no stored runner choice (RUY-959).
+    // Every scenario has the image's pinned runner and no stored runner choice (RUY-959), and every
+    // runner call answers (RUY-905).
     m_runners = pinnedRunners();
     m_choices.clear();
+    m_resolutions.clear();
+    m_failing.clear();
     listRunners();
     // "art:<dir>": the default library, each item with a picture from <dir> (tests only, T-281).
     const bool withArt = scenario.startsWith(QLatin1String("art:"));
@@ -217,10 +242,14 @@ void MockLibraryBackend::reset(const QString &scenario)
             p.playTier = QStringLiteral("developer");
             p.playSigner = QStringLiteral("Example Games");
             p.playSignerKeyId = QStringLiteral("0123456789abcdef0123456789abcdef");
-            // The OS's wine runs it, newer than the 9.20 the developer tested with (RUY-903).
-            p.playRunner = QStringLiteral("wine 10.2");
-            p.playRunnerSource = QStringLiteral("system");
-            p.playRunnerTested = QStringLiteral("9.20");
+            // A Windows game on Proton with a bundled GE-Proton10-9, the version its developer tested, and
+            // source "newest": the image's GE-Proton11-12 runs it (RUY-903). Bundled is its own copy, System
+            // the image's: what the launcher answers such a package against the pinned runners (RUY-905).
+            const LibraryResolution imageProton = resolved("proton-ge GE-Proton11-12", "system", "GE-Proton10-9");
+            p.resolution = imageProton;
+            m_resolutions[p.id] = {{QStringLiteral("package"), imageProton},
+                                   {QStringLiteral("bundled"), resolved("proton-ge GE-Proton10-9", "bundled", "GE-Proton10-9")},
+                                   {QStringLiteral("system"), imageProton}};
             if (playArt) {
                 const QString dir = scenario.mid(8);
                 auto at = [&](const char *name) { return dir + QLatin1Char('/') + QLatin1String(name) + QStringLiteral(".png"); };
@@ -234,7 +263,10 @@ void MockLibraryBackend::reset(const QString &scenario)
                 LibraryItem quiet = item("flatpak:play.com.example.quiet", "game", "Quiet Quest", 1762050000);
                 quiet.art = {{QStringLiteral("icon"), at("pastel")}};
                 quiet.play = true;
-                quiet.playResolveError = QStringLiteral("The OS runner is 8.0, older than the required 9.0.");
+                // A Wine game for the image's runner only, needing Wine 12: the pinned wine-11.0 is too old and
+                // there is no bundled copy, so every choice is the package default's refusal.
+                quiet.resolution.resolveError = QStringLiteral("The OS runner is wine-11.0, older than the required 12.0.");
+                quiet.resolution.resolveCode = QStringLiteral("resolve.system_too_old");
                 m_items.append(quiet);
                 LibraryItem odd = item("flatpak:org.example.Oddity", "game", "Oddity", 1762000000);
                 odd.art = {{QStringLiteral("logo"), at("logo")}, {QStringLiteral("trailer"), QStringLiteral("/mock/play/trailer.webm")}};

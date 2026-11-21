@@ -163,4 +163,30 @@ fn choosing_the_bundled_copy_of_a_package_without_one_is_the_package_default() {
         .runner
         .unwrap();
     assert_eq!(runner.in_use.source, "system");
+    assert!(runner.fallback, "the bundled choice could not be honoured");
+}
+
+/// RUY-905: `fallback` says the choice could not be honoured, so the runner is the package
+/// default's: the System choice with an image runner below `min` gets the bundled copy, flagged;
+/// the package default and a choice that applies are not flagged.
+#[test]
+fn a_choice_that_cannot_be_honoured_is_flagged_as_the_package_default() {
+    let mut os = Game::wine().install();
+    with_image_runner(&mut os, "wine", "8.0");
+    let runner = |over: Override| {
+        dry_run(&os, "/app", IMAGE_RUNNERS, over)
+            .unwrap()
+            .runner
+            .unwrap()
+    };
+    let system = runner(System);
+    assert_eq!(
+        system.in_use.source, "bundled",
+        "newest: the 8.0 is below min"
+    );
+    assert!(system.fallback, "the system choice could not be honoured");
+    assert!(!runner(PackageDefault).fallback);
+    let bundled = runner(Bundled);
+    assert_eq!(bundled.in_use.source, "bundled");
+    assert!(!bundled.fallback, "the bundled choice applied");
 }
