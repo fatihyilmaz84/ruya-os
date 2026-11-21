@@ -47,7 +47,7 @@ Item {
             verify(windowGuard.ensureActive() === "", windowGuard.ensureActive())
             Play.mockReset()
             tryCompare(Play, "available", true)
-            tryVerify(() => Play.sources.length === 13)
+            tryVerify(() => Play.sources.length === 14)
             host.answers = []
             host.finished = []
             host.progress = []
@@ -90,7 +90,7 @@ Item {
 
         function test_sources_are_data_only() {
             const names = Play.sources.map(s => s.name).sort()
-            compare(names.length, 13)
+            compare(names.length, 14)
             verify(names.indexOf("starhopper") >= 0 && names.indexOf("pixelforest.play.zip") >= 0)
             const s = Play.sources.find(x => x.name === "pixelforest.play.zip")
             compare(s.kind, "zip")
@@ -108,7 +108,7 @@ Item {
             tryVerify(() => Play.sources.length === 0, 2000, "unmounted: no candidates")
             compare(runCall("inspect", p("starhopper"), () => Play.inspect(p("starhopper"))), "unknown-source")
             Play.mockSetDriveMounted(true)
-            tryVerify(() => Play.sources.length === 13, 2000, "mounted again")
+            tryVerify(() => Play.sources.length === 14, 2000, "mounted again")
         }
 
         function test_inspect_wine_game_has_every_field() {
@@ -240,7 +240,8 @@ Item {
                 "tampered": "bad-signature",
                 "future": "unsupported",
                 "hugegame.play.zip": "disk-full",
-                "flaky": "failed"
+                "flaky": "failed",
+                "offlinegame": "offline"
             }
             for (const fixture of Object.keys(expected))
                 compare(installFixture(fixture), expected[fixture], fixture)
@@ -249,6 +250,7 @@ Item {
             const last = progressOf(p("flaky"))
             verify(last.length > 0 && last[last.length - 1].phase === "committing", "flaky fails while committing")
             compare(progressOf(p("tampered")).pop().phase, "verifying")
+            compare(progressOf(p("offlinegame")).pop().phase, "installing")
             compare(Object.keys(Play.jobs).length, 0)
         }
 
@@ -446,7 +448,7 @@ Item {
             Play.mockFailNext()
             runCall("inspect", path, () => Play.inspect(path))                                    // failed
             // Jobs: the failure fixtures.
-            for (const f of ["homebrew", "oldbad", "broken", "impostor", "tampered", "future", "hugegame.play.zip", "flaky"])
+            for (const f of ["homebrew", "oldbad", "broken", "impostor", "tampered", "future", "hugegame.play.zip", "flaky", "offlinegame"])
                 installFixture(f)
             const methods = headerStatuses("Method statuses", "JobFinished statuses")
             const jobs = headerStatuses("JobFinished statuses", "Jobs are named")

@@ -393,7 +393,10 @@ One focused `SecondaryButton` "Close" / "Kapat"; B closes too; focus returns to 
 | `revoked` | This game was removed for safety and can't be installed. | Bu oyun güvenlik için kaldırıldı ve kurulamaz. |
 | `unsupported` | This game needs a newer RuyaOS. Update the system, then try again. | Bu oyun daha yeni bir RuyaOS gerektiriyor. Sistemi güncelleyip yeniden deneyin. |
 | `disk-full` | There isn't enough space. Free %1, then try again. | Yeterli alan yok. %1 yer açıp yeniden deneyin. |
+| `offline` | You need the internet once to install this game. Connect, then try again. | Bu oyunu kurmak için bir kez internet gerekir. Bağlanıp yeniden deneyin. |
 | `failed` | The install didn't finish. Try again. | Kurulum tamamlanmadı. Yeniden deneyin. |
+
+`offline` (RUY-1004: the platform of the game is fetched from Flathub once) is the one status the player can fix: its dialog has "Try again" / "Yeniden dene" (`PrimaryButton`, focused) in place of OK, hints [A Try again] [B Back], and Try again starts the job again exactly as Install does (a Standard profile enters an admin's PIN again); Back closes the dialog and no job runs.
 
 The package page's line under a dimmed Install (`PlayCopy.blockReason`) is the status sentence, with one exception: a package refused for a permission above its tier's ceiling (verdict `invalid-package`, first problem `ceiling.refused`, 05 §8) is not damaged, so it says "This game is not signed, so it may not have this permission: %1. Ask the developer for a signed version." / "Bu oyun imzalı değil, bu yüzden şu izni alamaz: %1. Geliştiriciden imzalı bir sürüm isteyin." (%1 = the permission's words, `PlayTrust.permissionWords`, from the problem's path `/permissions/<key>`; a key it does not know shows the key). Permission words are the labels of the permission list, verb phrases with a capital ("Can inspect other programs"); a sentence that names one quotes it after a colon and keeps the capital, never lower-cases it (one label in every language, no locale case rules).
 

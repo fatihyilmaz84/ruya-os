@@ -51,6 +51,9 @@
     "revoked"           the package, its key or its content is on the block list (05 §9.2)
     "unsupported"       format.too_new, or an architecture other than x86_64
     "disk-full"         not enough space
+    "offline"           the package needs the internet once, to install its platform from Flathub
+                        (problem platform.offline); connect and try again. Everything else about the
+                        job was fine: nothing is left half installed
     "cancelled"         Cancel reached the job in time
     "failed"            internal error (Remove: Flatpak could not uninstall the app; every record is
                         then left as it was)

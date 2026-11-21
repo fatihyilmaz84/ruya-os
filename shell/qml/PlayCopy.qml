@@ -86,6 +86,7 @@ QtObject {
         case "revoked": return qsTr("This game was removed for safety and can't be installed.")
         case "unsupported": return qsTr("This game needs a newer RuyaOS. Update the system, then try again.")
         case "disk-full": return qsTr("There isn't enough space. Free %1, then try again.").arg(toFree ?? "")
+        case "offline": return qsTr("You need the internet once to install this game. Connect, then try again.")
         }
         return qsTr("The install didn't finish. Try again.")
     }

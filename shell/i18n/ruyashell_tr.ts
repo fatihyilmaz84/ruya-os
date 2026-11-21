@@ -302,7 +302,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+238"/>
+        <location filename="../qml/AppDetailPage.qml" line="+244"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -495,12 +495,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="-7"/>
-        <location line="+356"/>
+        <location line="+375"/>
         <source>Steam</source>
         <translation>Steam</translation>
     </message>
     <message>
-        <location line="-355"/>
+        <location line="-374"/>
         <source>Steam app ID</source>
         <translation>Steam uygulama kimliği</translation>
     </message>
@@ -570,7 +570,7 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+224"/>
+        <location line="+243"/>
         <source>Read</source>
         <translation>Oku</translation>
     </message>
@@ -625,7 +625,7 @@ Bu geri alınamaz.</translation>
         <translation>Kaldırmak için önce oyunu kapatın.</translation>
     </message>
     <message>
-        <location line="-926"/>
+        <location line="-945"/>
         <source>Install</source>
         <translation>Kur</translation>
     </message>
@@ -636,7 +636,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelle</translation>
     </message>
     <message>
-        <location line="+664"/>
+        <location line="+683"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Bu konsoldakinden daha yeni bir RuyaOS gerekiyor. Yüklü kalır.</translation>
     </message>
@@ -662,7 +662,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelleme şunları ekliyor: %1</translation>
     </message>
     <message>
-        <location line="-692"/>
+        <location line="-711"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Aç</translation>
@@ -700,7 +700,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+383"/>
+        <location line="+402"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -1552,7 +1552,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>CompatibilityPage</name>
     <message>
-        <location filename="../qml/CompatibilityPage.qml" line="+81"/>
+        <location filename="../qml/CompatibilityPage.qml" line="+82"/>
         <source>Takes effect the next time the game starts.</source>
         <translation>Oyun bir sonraki açılışında geçerli olur.</translation>
     </message>
@@ -1592,7 +1592,7 @@ Bu geri alınamaz.</translation>
         <translation>Kullanılamıyor</translation>
     </message>
     <message>
-        <location line="+24"/>
+        <location line="+20"/>
         <source>Runner details can&apos;t be read right now.</source>
         <translation>Çalıştırıcı bilgileri şu anda okunamıyor.</translation>
     </message>
@@ -3220,17 +3220,17 @@ Bu geri alınamaz.</translation>
         <translation>Bir yöneticinin PIN&apos;ini girin</translation>
     </message>
     <message>
-        <location line="+339"/>
+        <location line="+340"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
     <message>
-        <location line="-244"/>
+        <location line="-245"/>
         <source>Install cancelled</source>
         <translation>Kurulum iptal edildi</translation>
     </message>
     <message>
-        <location line="+153"/>
+        <location line="+154"/>
         <location line="+206"/>
         <source>Cancel</source>
         <translation>İptal</translation>
@@ -3281,13 +3281,24 @@ Bu geri alınamaz.</translation>
 <context>
     <name>InstallResultDialog</name>
     <message>
-        <location filename="../qml/InstallResultDialog.qml" line="+22"/>
-        <location line="+90"/>
+        <location filename="../qml/InstallResultDialog.qml" line="+28"/>
+        <location line="+94"/>
+        <source>Try again</source>
+        <translation>Yeniden dene</translation>
+    </message>
+    <message>
+        <location line="-94"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <location line="+107"/>
         <source>OK</source>
         <translation>Tamam</translation>
     </message>
     <message>
-        <location line="-63"/>
+        <location line="-78"/>
         <location line="+38"/>
         <source>Not installed</source>
         <translation>Kurulmadı</translation>
@@ -3317,7 +3328,7 @@ Bu geri alınamaz.</translation>
         <translation>USB belleklerdeki oyunlar</translation>
     </message>
     <message>
-        <location line="+189"/>
+        <location line="+188"/>
         <source>No games on USB drives</source>
         <translation>USB belleklerde oyun yok</translation>
     </message>
@@ -4481,6 +4492,11 @@ Bu geri alınamaz.</translation>
         <translation>Yeterli alan yok. %1 yer açıp yeniden deneyin.</translation>
     </message>
     <message>
+        <location line="+1"/>
+        <source>You need the internet once to install this game. Connect, then try again.</source>
+        <translation>Bu oyunu kurmak için bir kez internet gerekir. Bağlanıp yeniden deneyin.</translation>
+    </message>
+    <message>
         <location line="+2"/>
         <source>The install didn&apos;t finish. Try again.</source>
         <translation>Kurulum tamamlanmadı. Yeniden deneyin.</translation>
@@ -4974,7 +4990,7 @@ Bu geri alınamaz.</translation>
         <translation>%1, PIN korumalı</translation>
     </message>
     <message>
-        <location line="+51"/>
+        <location line="+52"/>
         <source>Player %1</source>
         <translation>Oyuncu %1</translation>
     </message>
@@ -6120,41 +6136,41 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+193"/>
+        <location line="+186"/>
         <source>Play</source>
         <translation>Oyna</translation>
     </message>
     <message>
-        <location line="-194"/>
-        <location line="+196"/>
+        <location line="-187"/>
+        <location line="+189"/>
         <source>Resume</source>
         <translation>Devam et</translation>
     </message>
     <message>
-        <location line="-196"/>
+        <location line="-189"/>
         <source>Closing…</source>
         <translation>Kapanıyor…</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+193"/>
+        <location line="+186"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Aç</translation>
     </message>
     <message>
-        <location line="-190"/>
-        <location line="+195"/>
+        <location line="-183"/>
+        <location line="+188"/>
         <source>Details</source>
         <translation>Ayrıntılar</translation>
     </message>
     <message>
-        <location line="-176"/>
+        <location line="-169"/>
         <source>Recent</source>
         <translation>Son oynananlar</translation>
     </message>
     <message>
-        <location line="+175"/>
+        <location line="+168"/>
         <source>Close game</source>
         <translation>Oyunu kapat</translation>
     </message>
@@ -6169,7 +6185,7 @@ Bu geri alınamaz.</translation>
         <translation>Etkinliğiniz</translation>
     </message>
     <message>
-        <location line="+8"/>
+        <location line="+6"/>
         <source>Uninstall…</source>
         <translation>Kaldır…</translation>
     </message>
@@ -6179,7 +6195,7 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza seçenekleri şu anda kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+136"/>
+        <location line="+129"/>
         <source>Could not uninstall %1. Try again.</source>
         <translation>%1 kaldırılamadı. Yeniden deneyin.</translation>
     </message>
@@ -6189,7 +6205,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kaldırıldı.</translation>
     </message>
     <message>
-        <location line="+534"/>
+        <location line="+530"/>
         <location line="+11"/>
         <location line="+4"/>
         <source>Select</source>
@@ -6211,7 +6227,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1965"/>
+        <location line="-1945"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -6242,7 +6258,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1696"/>
+        <location line="+1676"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>
@@ -7765,18 +7781,18 @@ Bu geri alınamaz.</translation>
 <context>
     <name>UninstallConfirm</name>
     <message>
-        <location filename="../qml/UninstallConfirm.qml" line="+39"/>
-        <location line="+225"/>
+        <location filename="../qml/UninstallConfirm.qml" line="+44"/>
+        <location line="+254"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-225"/>
+        <location line="-254"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+39"/>
         <source>Uninstall and delete data</source>
         <translation>Kaldır ve verileri sil</translation>
     </message>

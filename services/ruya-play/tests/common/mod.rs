@@ -580,6 +580,8 @@ pub struct FakeRunner {
     pub runtimes: std::sync::Mutex<String>,
     /// A command with this argument fails (the network is gone: a command naming Flathub).
     pub fail_with_arg: std::sync::Mutex<Option<String>>,
+    /// What that failing command says (default: libcurl's answer when the name does not resolve).
+    pub fail_text: std::sync::Mutex<Option<String>>,
 }
 
 impl Runner for FakeRunner {
@@ -589,7 +591,10 @@ impl Runner for FakeRunner {
         let has = |a: &str| argv.iter().any(|x| x == a);
         if let Some(arg) = self.fail_with_arg.lock().unwrap().as_deref() {
             if has(arg) {
-                return Err(format!("{} failed: no network", argv[1]));
+                let text = self.fail_text.lock().unwrap().clone().unwrap_or_else(|| {
+                    "While fetching https://dl.flathub.org/repo/summary: [6] Could not resolve host: dl.flathub.org".into()
+                });
+                return Err(format!("{} failed: {text}", argv[1]));
             }
         }
         if argv[0] == "flatpak" && argv.get(1).map(String::as_str) == Some("list") {

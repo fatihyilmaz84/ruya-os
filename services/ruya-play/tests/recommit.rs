@@ -123,6 +123,21 @@ fn a_failed_recommit_keeps_the_generation_and_is_tried_again() {
     assert_eq!(generation(&installed), METADATA_GENERATION);
 }
 
+/// RUY-1004: a start-up re-commit that cannot fetch the platform says `platform.offline` (main.rs
+/// logs the code and the text), keeps the generation, and is planned again at the next start.
+#[test]
+fn an_offline_recommit_says_platform_offline_and_is_tried_again() {
+    let (h, installed) = deployed(&Fx::minimal(), 0);
+    *h.commit.fail.lock().unwrap() = Some(CommitError::NoNetwork("Could not resolve host".into()));
+    let err = h.importer.recommit(ID).unwrap_err();
+    assert_eq!(err.code, "platform.offline");
+    assert_eq!(generation(&installed), 0);
+    assert!(h.staging().is_empty(), "{:?}", h.staging());
+    assert_eq!(recommits_planned(&h), vec![ID.to_string()]);
+    assert_eq!(h.importer.recommit(ID), Ok(Recommitted::Done));
+    assert_eq!(generation(&installed), METADATA_GENERATION);
+}
+
 #[test]
 fn a_recommit_asks_for_space_as_an_install_does() {
     use std::sync::atomic::Ordering;
@@ -530,10 +545,48 @@ fn an_offline_recommit_with_a_platform_ref_missing_fails_and_leaves_the_app() {
     let runner = std::sync::Arc::new(FakeRunner::default());
     *runner.fail_with_arg.lock().unwrap() = Some(commit::PLATFORM_REMOTE.into());
     let err = flatpak_recommit(&runner, 1).unwrap_err();
-    assert!(matches!(err, CommitError::Failed(_)), "{err:?}");
+    assert!(matches!(err, CommitError::NoNetwork(_)), "{err:?}");
     let calls = runner.calls.lock().unwrap().clone();
     assert!(
         installs_from(&calls, commit::REMOTE).is_empty(),
         "{calls:?}"
     );
+}
+
+/// RUY-1004: what Flatpak says when it cannot reach Flathub is `NoNetwork`, whatever the words; any
+/// other failure of the platform install stays `Failed`.
+#[test]
+fn the_platform_install_tells_no_network_from_other_failures() {
+    let offline = [
+        "error: Unable to load summary from remote flathub: While fetching https://dl.flathub.org/repo/summary: [6] Could not resolve host: dl.flathub.org",
+        "error: While fetching https://dl.flathub.org/repo/summary: [7] Couldn't connect to server",
+        "error: Unable to load summary from remote flathub: While fetching https://dl.flathub.org/repo/summary.idx: [7] Could not connect to server",
+        "error: Unable to connect to dl.flathub.org:443",
+        "error: Network is unreachable",
+        "error: Temporary failure in name resolution",
+        "error: Connection timed out",
+        "error: Connection refused",
+    ];
+    for text in offline {
+        let runner = std::sync::Arc::new(FakeRunner::default());
+        *runner.fail_with_arg.lock().unwrap() = Some(commit::PLATFORM_REMOTE.into());
+        *runner.fail_text.lock().unwrap() = Some(text.into());
+        let err = flatpak_recommit(&runner, 1).unwrap_err();
+        assert!(matches!(err, CommitError::NoNetwork(_)), "{text}: {err:?}");
+    }
+    for text in [
+        "error: Runtime org.freedesktop.Platform not found",
+        "error: Something else broke",
+    ] {
+        let runner = std::sync::Arc::new(FakeRunner::default());
+        *runner.fail_with_arg.lock().unwrap() = Some(commit::PLATFORM_REMOTE.into());
+        *runner.fail_text.lock().unwrap() = Some(text.into());
+        let err = flatpak_recommit(&runner, 1).unwrap_err();
+        assert!(matches!(err, CommitError::Failed(_)), "{text}: {err:?}");
+    }
+    // Only the platform install asks: the same words from the app's own install stay `commit.failed`.
+    let runner = std::sync::Arc::new(FakeRunner::default());
+    *runner.fail_with_arg.lock().unwrap() = Some(commit::REMOTE.into());
+    let err = flatpak_recommit(&runner, 1).unwrap_err();
+    assert!(matches!(err, CommitError::Failed(_)), "{err:?}");
 }

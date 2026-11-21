@@ -344,10 +344,12 @@ fn refused(job: &str, problems: Vec<Problem>, inspection: Option<Inspection>) ->
     }
 }
 
-/// The problem of a failed commit: `space.not_enough` for a full disk, else `commit.failed`.
+/// The problem of a failed commit: `space.not_enough` for a full disk, `platform.offline` for a
+/// platform that needs the network, else `commit.failed`.
 fn commit_problem(e: CommitError) -> Problem {
     match e {
         CommitError::NoSpace(m) => Problem::new(codes::SPACE_NOT_ENOUGH, "", m),
+        CommitError::NoNetwork(m) => Problem::new(codes::PLATFORM_OFFLINE, "", m),
         CommitError::Failed(m) => Problem::new(codes::COMMIT_FAILED, "", m),
     }
 }
@@ -1290,7 +1292,7 @@ impl Importer {
         // Flatpak cannot be stopped half way.
         self.shared.lock().no_return.insert(job.to_string());
         if let Err(e) = self.commit.uninstall(id) {
-            let (CommitError::NoSpace(m) | CommitError::Failed(m)) = e;
+            let (CommitError::NoSpace(m) | CommitError::NoNetwork(m) | CommitError::Failed(m)) = e;
             return fail(Problem::new(codes::UNINSTALL_FAILED, "", m));
         }
         // Removal keeps the player's data, so the key record stays (05 §9.2).

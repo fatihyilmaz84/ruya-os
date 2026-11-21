@@ -466,6 +466,16 @@ fn trust_decides_the_status_and_a_failed_commit_leaves_no_key_record() {
         (r.status, codes(&r)),
         (JobStatus::DiskFull, vec!["space.not_enough".to_string()])
     );
+
+    // A platform that cannot be fetched is `offline` (RUY-1004), and nothing is left staged.
+    let mut h = Setup::with(Pkg::signed(&game())).build();
+    *h.commit.fail.lock().unwrap() = Some(CommitError::NoNetwork("Could not resolve host".into()));
+    let r = h.install();
+    assert_eq!(
+        (r.status, codes(&r)),
+        (JobStatus::Offline, vec!["platform.offline".to_string()])
+    );
+    assert_eq!(h.staging(), Vec::<String>::new());
 }
 
 #[test]
