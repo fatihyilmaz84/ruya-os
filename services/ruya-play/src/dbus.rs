@@ -8,8 +8,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_channel::{Receiver, Sender};
+use ruya_flatpak::oars;
 use ruya_play_format::manifest::english;
-use ruya_play_trust::{words, Continuity, Request, Risk};
+use ruya_play_trust::{words, Continuity, Request, Risk, TrustRecord};
 use zbus::message::Header;
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
@@ -145,9 +146,10 @@ pub fn art_roles(art: &[VettedArt]) -> (BTreeMap<String, String>, Vec<String>) {
     ruya_play_art::art_roles(art.iter().map(|s| (s.lang.as_deref(), s.files.as_slice())))
 }
 
-/// Play1's Inspect record. Optional keys are absent when unknown (`age_label`: the manifest
-/// declares an OARS map, not a label, so it is absent; `signer_name`: a signature carries a key,
-/// not a name). `gate` is the assessment's; `permissions_added`, `permissions_removed` and
+/// Play1's Inspect record. Optional keys are absent when unknown. `age_label` is the label of the
+/// manifest's OARS answers (`ruya_flatpak::oars::age_label`, the mapping `ruya-store` rates
+/// with too); `signer_name` is `ruya_play_trust::TrustRecord::signer_name`, the name the
+/// installed `trust.json` will carry. `gate` is the assessment's; `permissions_added`, `permissions_removed` and
 /// `adds_high_risk` are there only for an update whose installed requests could be read.
 pub fn inspect_record(report: &InspectReport) -> Dict {
     let mut e: Vec<(&str, Value<'_>)> = Vec::new();
@@ -190,6 +192,15 @@ pub fn inspect_record(report: &InspectReport) -> Dict {
         if let Some(d) = &m.developer {
             e.push(("developer", Value::from(d.name.clone())));
         }
+        if let Some(label) = m.age_rating.as_ref().and_then(|a| {
+            oars::age_label(
+                a.content
+                    .iter()
+                    .map(|(id, word)| (id.as_str(), word.as_str())),
+            )
+        }) {
+            e.push(("age_label", Value::from(label.to_string())));
+        }
         e.push(("genres", Value::from(m.genres.clone())));
         if let Some(p) = &m.players {
             let text = if p.min == p.max {
@@ -206,6 +217,9 @@ pub fn inspect_record(report: &InspectReport) -> Dict {
         e.push(("tier", Value::from(insp.tier.tier.as_str().to_string())));
         if let Some(key) = insp.signatures.key() {
             e.push(("signer_key_id", Value::from(key.key_id())));
+        }
+        if let Some(name) = TrustRecord::signer_name(&insp.signatures, m) {
+            e.push(("signer_name", Value::from(name)));
         }
         let key_state = match insp.continuity {
             Continuity::FirstSight { .. } => Some("new"),

@@ -1610,6 +1610,13 @@ got="$(echo '{"type":"aa{sv}","data":[[{"name":{"type":"s","data":"Hello"},"id":
 # RUY-876: Library1 item ids are flatpak:<id>; the check's greps must match that form.
 appid=com.example.hello
 echo "$got" | grep -qx "flatpak:play.$appid" && [ "$(grep -c 'grep -qx "flatpak:play.\$appid"' "$here/vm-play-check.sh")" = 2 ] && ! grep -q 'listed" | grep -qx "play\.' "$here/vm-play-check.sh" && pass "vm-play-check.sh matches Library1's flatpak:play.<id> item ids (RUY-876)" || fail "vm-play-check.sh: the Library1 greps do not match flatpak:play.<id>"
+# RUY-914: the Inspect assertions read signer_name, developer and signer_key_id by key (absent = empty).
+insp='{"type":"sa{sv}","data":["ok",{"developer":{"type":"s","data":"Example Games"},"signer_name":{"type":"s","data":"Example Games"},"signer_key_id":{"type":"s","data":"3f9a41c07be2d6058e21b4a9d0c7f312"}}]}'
+got="$(echo "$insp" | pc key signer_name)|$(echo "$insp" | pc key developer)|$(echo "$insp" | pc key signer_key_id)"
+[ "$got" = "Example Games|Example Games|3f9a41c07be2d6058e21b4a9d0c7f312" ] && pass "play: Inspect's signer_name, developer and key by key (RUY-914)" || fail "play: Inspect keys read as '$got'"
+got="$(echo '{"type":"sa{sv}","data":["ok",{"developer":{"type":"s","data":"Example Games"}}]}' | pc key signer_name)"
+[ -z "$got" ] && pass "play: an Inspect record without signer_name reads as nothing (RUY-914)" || fail "play: absent signer_name read as '$got'"
+[ "$(grep -c 'parse key signer_name' "$here/vm-play-check.sh")" = 2 ] && pass "vm-play-check.sh asserts Inspect's signer_name, signed and unsigned (RUY-914)" || fail "vm-play-check.sh lacks a signer_name assertion (signed or unsigned)"
 # RUY-866: an Inspect record's problem codes, one per line (inspect_clean looks for staging.*/helper.*).
 insp='{"type":"sa{sv}","data":["ok",{"problems":{"type":"a(sss)","data":[["trust.unsigned","","x"],["staging.io","","Not a directory"]]},"verdict":{"type":"s","data":"needs-developer-mode"}}]}'
 got="$(echo "$insp" | pc codes | tr -d '\r' | tr '\n' ' ')"
