@@ -419,9 +419,12 @@ pub fn plan(inp: &Inputs<'_>) -> Result<Plan, Failure> {
             env.insert("STEAM_COMPAT_CLIENT_INSTALL_PATH".into(), dirs.client);
             // Outside Steam there is no game id. GE-Proton's protonfixes parses one out of
             // STEAM_COMPAT_DATA_PATH when none of these is set, and fails on a path without digits;
-            // `0` makes it apply its defaults only. umu's own `UMU_ID` is refused in `run.env`.
+            // `0` makes it apply its defaults only. umu's own `UMU_ID` is refused in `run.env`, and
+            // protonfixes reads it before SteamAppId, so one inherited from the launcher's own
+            // environment would beat the 0: it is not passed on.
             env.insert("SteamAppId".into(), "0".into());
             env.insert("SteamGameId".into(), "0".into());
+            env.remove("UMU_ID");
             // WINEPREFIX is the platform's (05 §6.3): Proton derives its own from
             // STEAM_COMPAT_DATA_PATH, so an inherited one is not passed on.
             env.remove("WINEPREFIX");

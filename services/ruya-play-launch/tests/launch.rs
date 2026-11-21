@@ -266,13 +266,18 @@ fn proton_outside_steam_has_a_game_id_of_zero_that_nothing_overrides() {
     let mut env = base_env();
     env.insert("SteamAppId".into(), "620".into());
     env.insert("SteamGameId".into(), "620".into());
+    env.insert("UMU_ID".into(), "umu-620".into());
     let cmd = ruya_play_launch::prepare(&mut os, &[], &env).unwrap();
     assert_eq!(cmd.env["SteamAppId"], "0", "an inherited id is replaced");
     assert_eq!(cmd.env["SteamGameId"], "0");
     assert!(
         !cmd.env.contains_key("UMU_ID"),
-        "a game has no umu id: {:?}",
+        "an inherited umu id would beat the 0: {:?}",
         cmd.env.get("UMU_ID")
+    );
+    assert!(
+        !os.runs[0].env.contains_key("UMU_ID"),
+        "nor in a setup step"
     );
     // The setup step runs through the same environment.
     assert_eq!(os.runs[0].env["SteamAppId"], "0");

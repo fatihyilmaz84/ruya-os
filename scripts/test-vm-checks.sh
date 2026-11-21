@@ -2045,6 +2045,9 @@ try:
 except OSError:
     pass
 assert sys.argv[1] == "--runners" and sys.argv[3] == "--self-test", sys.argv
+# The check starts the copy from the scratch folder it copied it to (RUY-969): the script sets PWD from
+# its working folder, and that must be one the profile user can use.
+assert os.path.samefile(os.getcwd(), os.path.dirname(os.path.abspath(__file__))), (os.getcwd(), __file__)
 if mode != "norunner":
     print("hello-runner: using ProtonGE11 (GE-Proton11-12)")
 if mode != "noprefix":
