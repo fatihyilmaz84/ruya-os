@@ -181,51 +181,30 @@ pub(crate) fn fail<T>(code: &'static str, message: impl Into<String>) -> Result<
     })
 }
 
-/// Open a file once and check it on the open handle (no check-then-open race): a symlink, a
-/// reparse point or anything that is not a regular file is `not_a_file`. Returns the handle and
+/// Open a file once and check it on the open handle (no check-then-open race; ruya-fs): a
+/// symlink or anything that is not a regular file is `not_a_file`. Returns the handle and
 /// its size.
 pub(crate) fn open_regular(
     path: &Path,
     not_a_file: &'static str,
     io_code: &'static str,
 ) -> Result<(std::fs::File, u64), Fail> {
-    let mut o = std::fs::OpenOptions::new();
-    o.read(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        // O_NONBLOCK: opening a FIFO must not block before the type check.
-        o.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::OpenOptionsExt;
-        o.custom_flags(0x0020_0000); // FILE_FLAG_OPEN_REPARSE_POINT: do not follow
-    }
-    let file = match o.open(path) {
+    let file = match ruya_fs::open_file(path) {
         Ok(f) => f,
-        Err(e) => {
-            return match std::fs::symlink_metadata(path) {
-                Ok(m) if !m.is_file() => fail(not_a_file, "not a regular file"),
-                _ => fail(io_code, format!("{}: {e}", path.display())),
-            }
+        // A link, a FIFO, a device or a folder.
+        Err(e) if ruya_fs::NotFollowed::is(&e) || e.kind() == std::io::ErrorKind::InvalidInput => {
+            return fail(not_a_file, "not a regular file")
         }
+        Err(e) => return fail(io_code, format!("{}: {e}", path.display())),
     };
-    let meta = file.metadata().map_err(|e| Fail {
-        code: io_code,
-        message: e.to_string(),
-    })?;
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::MetadataExt;
-        if meta.file_attributes() & 0x400 != 0 {
-            return fail(not_a_file, "a reparse point is not a regular file");
-        }
-    }
-    if !meta.is_file() {
-        return fail(not_a_file, "not a regular file");
-    }
-    Ok((file, meta.len()))
+    let size = file
+        .metadata()
+        .map_err(|e| Fail {
+            code: io_code,
+            message: e.to_string(),
+        })?
+        .len();
+    Ok((file, size))
 }
 
 /// Read at most `max` bytes from the handle; one byte more means the file is too large (it may

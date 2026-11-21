@@ -5,7 +5,6 @@
 
 use crate::os::{Command, Exit, Kind, LaunchOs, MAX_COPY_DEPTH};
 use ruya_fs::Dir;
-use std::fs;
 use std::io::{self, Read};
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::{Path, PathBuf};
@@ -19,18 +18,6 @@ const POLL: Duration = Duration::from_millis(100);
 /// The sandbox's file system and processes.
 #[derive(Debug, Default)]
 pub struct LinuxOs;
-
-fn kind_of(ft: fs::FileType) -> Kind {
-    if ft.is_symlink() {
-        Kind::Link
-    } else if ft.is_dir() {
-        Kind::Dir
-    } else if ft.is_file() {
-        Kind::File
-    } else {
-        Kind::Other
-    }
-}
 
 /// The parts of `rel`; `.` and `..` are refused.
 fn parts(rel: &str) -> io::Result<Vec<&str>> {
@@ -60,22 +47,19 @@ fn missing(e: &io::Error) -> bool {
 }
 
 impl LaunchOs for LinuxOs {
-    fn kind(&self, path: &str) -> Option<Kind> {
-        fs::symlink_metadata(path)
+    fn kind(&self, base: &str, rel: &str) -> Option<Kind> {
+        base_dir(base)
+            .and_then(|d| d.kind(&rel_path(rel)?))
             .ok()
-            .map(|m| kind_of(m.file_type()))
+            .flatten()
     }
 
-    fn list(&self, path: &str) -> io::Result<Vec<(String, Kind)>> {
-        let mut out = Vec::new();
-        for item in fs::read_dir(path)? {
-            let item = item?;
-            let Ok(name) = item.file_name().into_string() else {
-                continue;
-            };
-            out.push((name, kind_of(item.file_type()?)));
-        }
-        Ok(out)
+    fn list(&self, base: &str, rel: &str) -> io::Result<Vec<(String, Kind)>> {
+        let entries = base_dir(base)?.entries(&rel_path(rel)?)?;
+        Ok(entries
+            .into_iter()
+            .filter_map(|(name, kind)| Some((name.into_string().ok()?, kind)))
+            .collect())
     }
 
     fn open(&self, base: &str, rel: &str) -> io::Result<Box<dyn Read + '_>> {
@@ -187,6 +171,7 @@ mod tests {
     use super::*;
     use crate::os::{AppSource, NotFollowed};
     use ruya_play_format::Source;
+    use std::fs;
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
     fn tmp() -> (tempfile::TempDir, String) {

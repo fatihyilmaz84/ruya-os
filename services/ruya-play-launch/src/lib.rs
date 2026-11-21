@@ -230,7 +230,11 @@ pub fn prepare(
     let data = plan::env_dir(base_env, "XDG_DATA_HOME")?;
     let mut state = State::read(os, &data);
     let prefix_exists = ruya_play_format::runner::prefix_dir(&loaded.manifest.run.runner, &data)
-        .is_some_and(|p| os.kind(&p).is_some());
+        .and_then(|p| {
+            p.strip_prefix(data.trim_end_matches('/'))
+                .map(str::to_string)
+        })
+        .is_some_and(|rel| os.kind(&data, &rel).is_some());
     let plan = plan::plan(&Inputs {
         manifest: &loaded.manifest,
         bundled: &loaded.bundled,
@@ -378,7 +382,7 @@ fn rebuild(
 /// Remove every `epoch-<n>-backup/` but the one of `kept` (the newest, just made; 05 §6.3), each
 /// without following a link. Housekeeping: a failure is a log line and the launch goes on.
 fn prune_backups(os: &mut dyn LaunchOs, data: &str, kept: u64) {
-    let Ok(names) = os.list(&join(data, state::DIR)) else {
+    let Ok(names) = os.list(data, state::DIR) else {
         return;
     };
     for (name, _) in names {

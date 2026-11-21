@@ -15,6 +15,8 @@
 //! - [`Dir::write`]: atomic, a temporary file ([`temp_name`]) created `O_CREAT | O_EXCL |
 //!   O_NOFOLLOW` 0600 in the parent folder, flushed, renamed over the file (`renameat`), the folder
 //!   flushed; missing folders above it are made 0700;
+//! - [`Dir::kind`] and [`Dir::entries`]: what an entry is, and what a folder holds (names and
+//!   kinds), a link reported as a link;
 //! - [`Dir::make_dirs`]: private folders (0700);
 //! - [`Dir::remove`]: a tree removed entry by entry (`unlinkat`, `AT_REMOVEDIR` for a folder), each
 //!   folder made 0700 before it is emptied so a read-only one does not stop it; a link is removed,
@@ -22,6 +24,7 @@
 //! - [`Dir::copy`]: a tree copied (folders and regular files with their modes, links made again as
 //!   links with the same target, never followed; FIFOs, devices and sockets skipped), with a depth
 //!   cap;
+//! - [`open_file`]: [`Dir::open_file`] for a file whose folder is itself trusted;
 //! - [`write_atomic`]: [`Dir::write`] for a file whose folder is itself trusted.
 //!
 //! The Linux part is built on `rustix` (`linux.rs`). Off Linux (host builds and tests) the same API runs on plain
@@ -45,10 +48,14 @@ use linux as imp;
 
 /// What an entry is, read without following a link.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Kind {
+pub enum Kind {
+    /// A folder.
     Dir,
+    /// A regular file.
     File,
+    /// A symbolic link.
     Link,
+    /// Anything else (a device, a FIFO, a socket).
     Other,
 }
 
@@ -233,6 +240,35 @@ impl Dir {
             self.walk_names(parents)?
         };
         Ok((parent, last))
+    }
+
+    /// What `rel` is (a link at its end is [`Kind::Link`], not followed); `None` when nothing is
+    /// there or a folder above it is missing. A link among the folders above it is
+    /// [`NotFollowed`]. An empty `rel` is this folder: [`Kind::Dir`].
+    pub fn kind(&self, rel: &Path) -> io::Result<Option<Kind>> {
+        let names = names(rel)?;
+        let Some((last, parents)) = names.split_last() else {
+            return Ok(Some(Kind::Dir));
+        };
+        match self.walk_names(parents) {
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+            Ok(dir) => dir.inner.kind(last),
+        }
+    }
+
+    /// The names and kinds of what is in the folder `rel` (this folder when `rel` is empty), in
+    /// no order; a link is [`Kind::Link`], never followed. A link among the folders of `rel` is
+    /// [`NotFollowed`], `NotFound` when it is missing. An entry removed while listing is left out.
+    pub fn entries(&self, rel: &Path) -> io::Result<Vec<(OsString, Kind)>> {
+        let dir = self.walk(rel)?;
+        let mut out = Vec::new();
+        for name in dir.inner.entries()? {
+            if let Some(kind) = dir.inner.kind(&name)? {
+                out.push((name, kind));
+            }
+        }
+        Ok(out)
     }
 
     /// Open the regular file `rel` for reading. A link at any step is [`NotFollowed`]; a FIFO, a
@@ -437,6 +473,19 @@ impl Dir {
         dir.remove_name(name, 0, max_depth)?;
         dir.inner.symlink(target, name)
     }
+}
+
+/// Open the regular file `path` for reading ([`Dir::open_file`]) when the caller has only a path:
+/// the folder above it is the caller's to trust, a link as the file itself is [`NotFollowed`].
+pub fn open_file(path: &Path) -> io::Result<File> {
+    let Some(name) = path.file_name() else {
+        return Err(refuse(path, "names no file"));
+    };
+    let folder = match path.parent() {
+        Some(p) if !p.as_os_str().is_empty() => p,
+        _ => Path::new("."),
+    };
+    Dir::open(folder)?.open_name(name)
 }
 
 /// [`Dir::write`] for `path` in a folder that is itself trusted (a service's own state folder):

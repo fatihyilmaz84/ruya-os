@@ -159,7 +159,7 @@ impl State {
     /// Read the status file below `data`; the default when it is absent, too big or not format 1
     /// (logged).
     pub fn read(os: &dyn LaunchOs, data: &str) -> State {
-        if os.kind(&crate::os::join(data, FILE)).is_none() {
+        if os.kind(data, FILE).is_none() {
             return State::default();
         }
         let src = AppSource::new(os, data);
