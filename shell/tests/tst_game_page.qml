@@ -584,6 +584,27 @@ Item {
             tryVerify(() => find("homePlay").activeFocus, 2000)
         }
 
+        // The page was covered (Your activity) while Play removed the game: it goes when it is uncovered.
+        function test_a_covered_play_page_closes_when_it_is_uncovered() {
+            installedHopper()
+            openPage({ id: tc.hopper })
+            Play.mockPauseAtPercent(40)
+            find("detailUninstall").forceActiveFocus()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("uninstallCancel").activeFocus, 2000)
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => page().job !== null && page().job.percent >= 40, 15000)
+            page().openRequested("activityGame", { appId: "play.com.example.starhopper" })
+            tryCompare(tc.shell, "currentPage", "activityGame")
+            Play.mockPauseJobs(false)
+            tryVerify(() => Play.jobs["play.com.example.starhopper"] === undefined, 15000)
+            compare(tc.shell.currentPage, "activityGame", "the covering page stays")
+            tc.shell.closePage()
+            tryCompare(tc.shell, "currentPage", "", 5000)
+            tryVerify(() => find("homePlay").activeFocus, 2000, "the focus is back on the item that opened the game page")
+        }
+
         function test_a_running_play_removal_hides_uninstall() {
             installedHopper()
             openPage({ id: tc.hopper })

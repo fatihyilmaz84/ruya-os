@@ -443,6 +443,15 @@ Page {
         }
     }
 
+    // A .play app was removed while another page covered this one.
+    property bool closeWhenShown: false
+    onEnabledChanged: {
+        if (enabled && closeWhenShown) {
+            closeWhenShown = false
+            backRequested()
+        }
+    }
+
     // The Uninstall dialog is the Shell's (the Options menu uses it too, RUY-499; `Page.uninstallConfirm`).
     // It asks for an admin's PIN itself and starts the Store job; this page then follows the job as
     // for an install.
@@ -459,9 +468,14 @@ Page {
             page.requested = false
             page.errorText = status === "ok" ? "" : page.describe(status)
             // A removed .play app has no Store record to fall back to: its page is over (the Flatpak page shows Install).
-            // Only the page that is on top goes: one the player has left stays under the pages above it.
-            if (status === "ok" && page.kind === "uninstall" && Play.isPlayApp(id) && page.enabled)
-                page.backRequested()
+            // Only the page that is on top can go: one covered by another page (Your activity, say) goes the moment it is
+            // uncovered, before the player sees it.
+            if (status === "ok" && page.kind === "uninstall" && Play.isPlayApp(id)) {
+                if (page.enabled)
+                    page.backRequested()
+                else
+                    page.closeWhenShown = true
+            }
         }
     }
 

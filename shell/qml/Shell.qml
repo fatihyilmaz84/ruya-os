@@ -2074,7 +2074,7 @@ FocusScope {
         // Uninstall…: an installed Flatpak app the Store knows, that does not run and has no Store job
         // on its card (a row that would start a job is hidden while one runs; one of ours counts from the moment
         // it was asked, the Store lists a job only once it has made progress).
-        // A .play app belongs to Play (the Store has no record of it): the same test on Play's jobs and reach.
+        // Which service owns the app, and whether it answers now, is the dialog's rule (a .play app is Play's).
         if (appId !== "" && item.source === "flatpak" && !running && !closing && uninstallConfirm.canUninstall(appId) && uninstallRuns[appId] === undefined)
             rows.push({ id: "uninstall", label: qsTr("Uninstall…"), icon: "delete", divider: rows.length > 0 })
         return rows
