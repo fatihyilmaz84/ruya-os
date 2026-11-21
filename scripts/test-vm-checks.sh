@@ -1655,12 +1655,12 @@ out="$(FAKE_REMOVE='{"type":"ss","data":["unknown-app",""]}' rmrun)"; rc=$?
 grep -q 'remove_app "play.$appid"' "$here/vm-play-check.sh" && pass "vm-play-check.sh: the cleanup removes the app through remove_app" || fail "vm-play-check.sh: the cleanup does not use remove_app"
 ! sed -n '/^play_clean() {/,/^}/p' "$here/vm-library-check.sh" | grep -q 'flatpak uninstall' && sed -n '/^play_clean() {/,/^}/p' "$here/vm-library-check.sh" | grep -q 'vm-play-check.sh" removeapp' && pass "vm-library-check.sh play_clean removes the sample through vm-play-check.sh removeapp" || fail "vm-library-check.sh play_clean: not through removeapp"
 # RUY-1001: GetRunnerChoice returns status and choice (two strings, `ss`).
-cj() { printf '%s\n' "$1" | bash "$here/vm-library-check.sh" choicejudge "$2"; }
-cj 'ss "ok" "system"' system && pass "vm-library-check.sh choicejudge: ss \"ok\" \"system\" is the system choice" || fail "choicejudge: the two-string reply is not accepted"
-cj 'ss "ok" "package"' package && pass "vm-library-check.sh choicejudge: ss \"ok\" \"package\" is the package choice" || fail "choicejudge: package is not accepted"
-! cj 's "ok" "system"' system && pass "vm-library-check.sh choicejudge: the one-string form is not the reply" || fail "choicejudge: an s reply passed"
-! cj 'ss "ok" "package"' system && pass "vm-library-check.sh choicejudge: another choice is refused" || fail "choicejudge: package passed as system"
-! cj 'ss "unknown" ""' system && pass "vm-library-check.sh choicejudge: a status that is not ok is refused" || fail "choicejudge: unknown passed"
+cj() { printf '%s\n' "$1" | bash "$here/vm-library-check.sh" choicejudge "$2" 2>&1; }
+expect_contains "vm-library-check.sh choicejudge: ss \"ok\" \"system\" is the system choice" "$(cj 'ss "ok" "system"' system)" "PASS: the reply is ok with the choice system"
+expect_contains "vm-library-check.sh choicejudge: ss \"ok\" \"package\" is the package choice" "$(cj 'ss "ok" "package"' package)" "PASS: the reply is ok with the choice package"
+expect_contains "vm-library-check.sh choicejudge: the one-string form is not the reply" "$(cj 's "ok" "system"' system)" "FAIL: the reply is not ok with the choice system"
+expect_contains "vm-library-check.sh choicejudge: another choice is refused" "$(cj 'ss "ok" "package"' system)" "FAIL: the reply is not ok with the choice system"
+expect_contains "vm-library-check.sh choicejudge: a status that is not ok is refused" "$(cj 'ss "unknown" ""' system)" "FAIL: the reply is not ok with the choice system"
 grep -q 'no-gpg-verify' "$here/vm-play-check.sh" && fail "vm-play-check.sh mentions --no-gpg-verify" || pass "vm-play-check.sh never turns signature checks off"
 # RUY-900: the metadata generation in installed.json, read and set as the service writes the file.
 gj="$tmp/installed.json"

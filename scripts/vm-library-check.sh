@@ -33,7 +33,7 @@
 #             vm-library-check.sh runners [/root/hello-play-native.play.zip]
 #             `runnersjudge` judges ListRunners as busctl --json=short on stdin (host fixtures);
 #             `choicejudge <choice>` judges a GetRunnerChoice reply (busctl's text, `ss "ok" "<choice>"`:
-#             the contract returns status and choice) on stdin, exit 0 when it is ok with that choice
+#             the contract returns status and choice) on stdin, PASS when it is ok with that choice
 #   security  see vm-security-check.sh (unit hardening)
 # Boot the VM with plain smoke-test.ps1 -Keep (or -Work -Keep for the screenshot).
 set -u
@@ -415,7 +415,7 @@ runnersjudge)
     runners_judge
     ;;
 choicejudge)
-    choice_judge "${2:?choice}"
+    choice_judge "${2:?choice}" && ok "the reply is ok with the choice ${2}" || bad "the reply is not ok with the choice ${2}"
     ;;
 security)
     echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
