@@ -7,7 +7,7 @@ The sample of the developer guide's chapter [Windows games](../../docs/developer
 | Declare the console's runner extension point, so every runner it has is mounted under `/app/runners/<Name>` | `add-extensions` in `org.ruyaos.HelloRunner.json` |
 | The permissions a Proton game needs (X11, graphics, sound, 32-bit programs) | `finish-args` in the manifest |
 | Read `runner.json` of each runner instead of guessing a path, skip what you did not test, take the newest | `read_runner`, `pick_runner` in `run-windows.py` |
-| Start the program the way the console's own launcher does: `<proton> waitforexitandrun <exe>` with `STEAM_COMPAT_DATA_PATH` and `STEAM_COMPAT_CLIENT_INSTALL_PATH` in your data folder (one prefix per profile) | `proton_environment`, `main` |
+| Start the program the way the console's own launcher does: `<proton> waitforexitandrun <exe>` with `STEAM_COMPAT_DATA_PATH` and `STEAM_COMPAT_CLIENT_INSTALL_PATH` in your data folder (one prefix per profile), `SteamAppId` and `SteamGameId` set to `0`, and `PWD` | `proton_environment`, `main` |
 
 It is a command-line check, not a game: it has no desktop entry, so it is not listed in the Games row.
 

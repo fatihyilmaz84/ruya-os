@@ -430,6 +430,8 @@ fn the_newer_env_names_are_in_the_schema() {
         "GCONV_PATH",
         "LOCPATH",
         "NLSPATH",
+        "PWD",
+        "UMU_ID",
         "PRESSURE_VESSEL_X",
     ] {
         assert_schema_rejects(&with_run("env", json!({ name: "x" })), name);
