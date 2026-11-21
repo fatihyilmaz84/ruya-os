@@ -1548,13 +1548,16 @@ shift
 exec "$@"
 SHIMEOF
 chmod +x "$nt/bin/"*
-runnotif() { # FAKE_BUG comes from the caller's prefix
+# FAKE_BUG comes from the caller's prefix. $1 = the wait_seen bound in 0.2 s tries: the good run
+# gets the real check's 5 s (it returns as soon as the line shows, so a busy host costs nothing);
+# the bug runs are expected to FAIL and wait the whole bound, so they keep a short one.
+runnotif() {
     rm -f "$nt/state.json"; : > "$nt/bus.log"
     NOTIF_PY="$nt/fake.py" NOTIF_STATE="$nt/state.json" NOTIF_BUSLOG="$nt/bus.log" \
-        NOTIF_BASELINE="$here/../image/security-baseline.json" NOTIF_WAIT=3 PATH="$nt/bin:$shims:$PATH" \
+        NOTIF_BASELINE="$here/../image/security-baseline.json" NOTIF_WAIT="${1:-3}" PATH="$nt/bin:$shims:$PATH" \
         bash "$here/vm-notifications-check.sh" check 2>&1
 }
-out="$(runnotif)"; rc=$?
+out="$(runnotif 25)"; rc=$?
 expect_contains "notifications: a good service passes" "$out" "ALL CHECKS PASSED"
 expect_lacks "notifications: a good service: no FAIL" "$out" "FAIL"
 expect_contains "notifications: it signs a profile in when nobody is" "$out" "PASS: signed p1 in for the check"
