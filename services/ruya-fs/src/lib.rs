@@ -403,6 +403,7 @@ impl Dir {
     }
 
     /// This folder's content into `dst/dst_name` (a folder there is kept, anything else replaced).
+    /// `depth` is this folder's level, already checked by [`Self::copy_name`] (0 for the root).
     fn copy_dir_into(
         &self,
         dst: &Dir,
@@ -410,9 +411,6 @@ impl Dir {
         depth: usize,
         max: usize,
     ) -> io::Result<()> {
-        if depth > max {
-            return Err(too_deep(&self.path.display().to_string(), max));
-        }
         if dst.inner.kind(dst_name)? != Some(Kind::Dir) {
             dst.remove_name(dst_name)?;
             dst.inner.make_dir(dst_name, PRIVATE_DIR)?;
