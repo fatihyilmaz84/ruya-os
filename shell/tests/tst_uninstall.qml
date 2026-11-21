@@ -17,6 +17,7 @@ Item {
         Shell { anchors.fill: parent; version: "test"; focus: true }
     }
 
+    Component { id: spyComponent; SignalSpy { signalName: "finished" } }
     SignalSpy { id: launchedSpy; target: Session; signalName: "launchFinished" }
 
     TestCase {
@@ -37,6 +38,7 @@ Item {
             Library.resetMockForTests("")
             Session.mockReset()
             Store.mockReset()
+            Play.mockReset()
             launchedSpy.clear()
             while (Notifications.model.count > 0)
                 Notifications.dismiss(Notifications.model.get(0).toastId)
@@ -48,6 +50,7 @@ Item {
             Display.setUiScale(0)
             DeviceSettings.language = "en"
             Store.mockPauseJobs(false)
+            Play.mockPauseJobs(false)
         }
 
         // As "Ada" (p2, standard) by default; "admin" signs in as Player One (p1, PIN 1234), "guest" as Guest.
@@ -583,6 +586,68 @@ Item {
             Library.mockRemoveItem(tc.puzzle)
             tryVerify(() => grid.count === 1, 2000)
             tryVerify(() => grid.activeFocus && grid.currentItem.itemId === "steam:730", 2000, "the previous card")
+        }
+
+        // ---- the dialog owns the rule of which service removes an app (RUY-925) ----
+
+        readonly property string hopper: "play.com.example.starhopper"
+
+        function test_can_uninstall_names_the_owning_service_and_its_reach() {
+            start()
+            tryVerify(() => Store.catalogue.length > 0)
+            const d = find("uninstallConfirm")
+            verify(d.canUninstall(tc.puzzleApp), "a Flatpak the Store knows")
+            verify(!d.canUninstall("org.example.Nothing"), "a Flatpak it does not know")
+            verify(d.canUninstall(tc.hopper), "a .play app is Play's, which the Store never lists")
+            Store.mockServiceLost()
+            tryVerify(() => !Store.available)
+            verify(!d.canUninstall(tc.puzzleApp), "the Store is away")
+            verify(d.canUninstall(tc.hopper), "and Play does not need it")
+            Store.mockServiceRegained()
+            tryVerify(() => Store.available)
+            Play.mockServiceLost()
+            tryVerify(() => !Play.available)
+            verify(!d.canUninstall(tc.hopper), "Play is away")
+            verify(d.canUninstall(tc.puzzleApp), "and the Store does not need it")
+            Play.mockServiceRegained()
+            tryVerify(() => Play.available)
+        }
+
+        function test_a_play_removal_is_a_job_of_play_and_finishes_through_the_dialog() {
+            start()
+            const d = find("uninstallConfirm")
+            Play.mockSetInstalled("com.example.starhopper", 3)
+            Play.mockPauseAtPercent(30)
+            const done = createTemporaryObject(spyComponent, host, { target: d })
+            Play.remove(tc.hopper, true)
+            tryVerify(() => d.jobOf(tc.hopper) !== null && d.jobOf(tc.hopper).percent >= 30, 15000)
+            verify(!d.canUninstall(tc.hopper), "no second removal while one runs")
+            compare(d.jobOf(tc.puzzleApp), null, "no job of the Store's")
+            Play.mockPauseJobs(false)
+            tryCompare(done, "count", 1, 15000)
+            compare(done.signalArguments[0][0], tc.hopper)
+            compare(done.signalArguments[0][1], "ok")
+            compare(d.jobOf(tc.hopper), null)
+        }
+
+        function test_a_refused_remove_finishes_like_a_failed_one() {
+            start()
+            const d = find("uninstallConfirm")
+            const done = createTemporaryObject(spyComponent, host, { target: d })
+            Play.remove("play.com.example.nothing", true)
+            tryCompare(done, "count", 1, 5000)
+            compare(done.signalArguments[0][0], "play.com.example.nothing")
+            compare(done.signalArguments[0][1], "unknown-app")
+        }
+
+        function test_the_stores_jobs_finish_through_the_dialog_too() {
+            start()
+            const d = find("uninstallConfirm")
+            const done = createTemporaryObject(spyComponent, host, { target: d })
+            Store.uninstall(tc.puzzleApp, false)
+            tryCompare(done, "count", 1, 5000)
+            compare(done.signalArguments[0][0], tc.puzzleApp)
+            compare(done.signalArguments[0][1], "ok")
         }
 
         // ---- the app page uses the same dialog ----

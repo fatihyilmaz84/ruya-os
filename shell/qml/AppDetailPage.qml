@@ -43,9 +43,8 @@ Page {
         ? { video: playArt.trailer, poster: playArt.cover || playArt.hero || playArt.card || "", name: title, seconds: 0 } : null
     // An item the Library lists but Session1 cannot start (a Steam game).
     readonly property bool noLaunch: hasItem && Library.sessionAppId(item.id) === ""
-    // A .play app belongs to Play (the Store has no record of it): its job, its reach and its removal are Play's.
-    readonly property bool playOwned: Play.isPlayApp(appId)
-    readonly property var job: appId === "" ? null : ((playOwned ? Play.jobs : Store.jobs)[appId] ?? null)
+    // The job of the service that owns the app (the Store, or Play for a .play app: the Uninstall dialog knows which).
+    readonly property var job: appId === "" ? null : (uninstallConfirm?.jobOf(appId) ?? null)
     readonly property bool installed: hasRecord ? (app.installed ?? false) : hasItem
     readonly property bool hasUpdate: hasRecord && installed && (app.updateAvailable ?? false)
     // False: the app needs a newer API level than this console has (RUY-156). An older service does not say.
@@ -106,7 +105,7 @@ Page {
     readonly property bool screenshotsStop: screenshotsShown && (screenshots.length > 0 || playTrailer !== null)
     readonly property bool permsSectionShown: hasRecord && !isSteam && !detailsFailed
     readonly property bool permsListed: permsSectionShown && (app.permissions ?? []).length > 0
-    readonly property bool manageShown: (playOwned ? Play.available : hasRecord) && installed && !isSteam && !working
+    readonly property bool manageShown: (uninstallConfirm?.canUninstall(appId) ?? false) && installed && !isSteam && !working
     // What the app may do on this console (RUY-744): every installed Flatpak has it, a .play app too (RUY-854), whether or
     // not the Store lists it (the service lists an app it finds installed; the page does not wait for that).
     readonly property bool permissionsShown: installed && !isSteam && !working && (hasRecord || isPlay)
@@ -405,12 +404,6 @@ Page {
                 page.errorText = page.describe("failed")
             }
         }
-        function onJobFinished(id, status) {
-            if (id !== page.appId)
-                return
-            page.requested = false
-            page.errorText = status === "ok" ? "" : page.describe(status)
-        }
     }
 
     PinPad {
@@ -459,22 +452,16 @@ Page {
             if (id === page.appId)
                 page.uninstallStarted()
         }
-    }
-
-    // A .play app's removal: Play's job ends the page's request; a refused Remove never becomes a job.
-    Connections {
-        target: Play
-        function onJobFinished(id, status) {
+        // The owning service's job on this app ended, or it refused the Remove.
+        function onFinished(id, status) {
             if (id !== page.appId)
                 return
             page.requested = false
             page.errorText = status === "ok" ? "" : page.describe(status)
-        }
-        function onAnswered(op, id, status) {
-            if (op !== "remove" || id !== page.appId || status === "ok")
-                return
-            page.requested = false
-            page.errorText = page.describe(status)
+            // A removed .play app has no Store record to fall back to: its page is over (the Flatpak page shows Install).
+            // Only the page that is on top goes: one the player has left stays under the pages above it.
+            if (status === "ok" && page.kind === "uninstall" && Play.isPlayApp(id) && page.enabled)
+                page.backRequested()
         }
     }
 

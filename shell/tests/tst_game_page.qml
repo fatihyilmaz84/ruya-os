@@ -557,17 +557,31 @@ Item {
             keyClick(Qt.Key_Right)
             keyClick(Qt.Key_Return)
             tryVerify(() => !find("uninstallConfirm").shown, 2000)
-            tryCompare(page(), "kind", "uninstall")
-            // Play's job ends; the Library then drops the item (the mock is told, as the service tells it).
-            tryVerify(() => Play.jobs["play.com.example.starhopper"] === undefined && !page().requested, 15000)
-            Library.mockRemoveItem(tc.hopper)
-            tryVerify(() => Library.item(tc.hopper).id === undefined)
-            compare(page().installed, false, "the not-installed state")
-            verify(!find("detailUninstall").visible)
-            verify(!find("detailManage").visible)
-            tryVerify(() => find("detailError") === null || !find("detailError").visible)
-            const focused = tc.shell.Window.activeFocusItem
-            verify(focused && focused.visible, "the focus is on a visible item")
+            // A removed .play app has no Store record to fall back to: the page is over, back at its opener.
+            tryCompare(tc.shell, "currentPage", "", 15000)
+            tryVerify(() => find("homePlay").activeFocus, 2000, "the focus is back on the item that opened the page")
+        }
+
+        // A standard profile asks an admin's PIN, as for a Flatpak (RUY-499).
+        function test_a_standard_profile_enters_an_admin_pin_to_remove_a_play_game() {
+            Library.resetMockForTests("play")
+            Play.mockSetInstalled("com.example.starhopper", 3)
+            start(11)
+            openPage({ id: tc.hopper })
+            find("detailUninstall").forceActiveFocus()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("uninstallCancel").activeFocus, 2000)
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            const pad = find("uninstallPinPad")
+            tryVerify(() => pad.shown && pad.activeFocus, 2000, "the admin's PIN pad")
+            verify(Play.jobs["play.com.example.starhopper"] === undefined, "nothing runs before the PIN")
+            compare(tc.shell.currentPage, "appDetail")
+            for (const ch of "1234")
+                keyClick(Qt.Key_0 + Number(ch))
+            keyClick(Qt.Key_Enter)
+            tryCompare(tc.shell, "currentPage", "", 15000)
+            tryVerify(() => find("homePlay").activeFocus, 2000)
         }
 
         function test_a_running_play_removal_hides_uninstall() {
