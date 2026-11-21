@@ -5,6 +5,8 @@
 #include <QDBusPendingCallWatcher>
 #include <QDBusVariant>
 
+#include <utility>
+
 namespace {
 const QString Service = QStringLiteral("org.ruyaos.Library1");
 const QString Path = QStringLiteral("/org/ruyaos/Library1");
@@ -50,6 +52,41 @@ QVariantMap parseDict(const QDBusArgument &arg)
     return out;
 }
 
+// The Resolution record (and the runner keys of an item record), camelCase as QML sees them.
+QVariantMap toResolution(const QVariantMap &d)
+{
+    return {
+        {QStringLiteral("playRunner"), d.value(QStringLiteral("play_runner")).toString()},
+        {QStringLiteral("playRunnerSource"), d.value(QStringLiteral("play_runner_source")).toString()},
+        {QStringLiteral("playRunnerTested"), d.value(QStringLiteral("play_runner_tested")).toString()},
+        {QStringLiteral("playResolveError"), d.value(QStringLiteral("play_resolve_error")).toString()},
+    };
+}
+
+LibraryRunner toRunner(const QVariantMap &d)
+{
+    LibraryRunner r;
+    r.family = d.value(QStringLiteral("family")).toString();
+    r.kind = d.value(QStringLiteral("kind")).toString();
+    r.version = d.value(QStringLiteral("version")).toString();
+    r.licence = d.value(QStringLiteral("licence")).toString();
+    r.sourceUrl = d.value(QStringLiteral("source_url")).toString();
+    return r;
+}
+
+// aa{sv}, each record through convert.
+template <typename T, typename Convert>
+QList<T> records(const QVariant &v, Convert convert)
+{
+    QList<T> out;
+    const QDBusArgument arg = v.value<QDBusArgument>();
+    arg.beginArray();
+    while (!arg.atEnd())
+        out.append(convert(parseDict(arg)));
+    arg.endArray();
+    return out;
+}
+
 LibraryItem toItem(const QVariantMap &d)
 {
     LibraryItem i;
@@ -84,10 +121,11 @@ LibraryItem toItem(const QVariantMap &d)
         i.playSigner = d.value(QStringLiteral("play_signer")).toString();
         i.playSignerKeyId = d.value(QStringLiteral("play_signer_key_id")).toString();
         i.playScreenshots = d.value(QStringLiteral("play_screenshots")).toStringList();
-        i.playRunner = d.value(QStringLiteral("play_runner")).toString();
-        i.playRunnerSource = d.value(QStringLiteral("play_runner_source")).toString();
-        i.playRunnerTested = d.value(QStringLiteral("play_runner_tested")).toString();
-        i.playResolveError = d.value(QStringLiteral("play_resolve_error")).toString();
+        const QVariantMap r = toResolution(d);
+        i.playRunner = r.value(QStringLiteral("playRunner")).toString();
+        i.playRunnerSource = r.value(QStringLiteral("playRunnerSource")).toString();
+        i.playRunnerTested = r.value(QStringLiteral("playRunnerTested")).toString();
+        i.playResolveError = r.value(QStringLiteral("playResolveError")).toString();
     }
     return i;
 }
@@ -98,41 +136,85 @@ DBusLibraryBackend::DBusLibraryBackend(QObject *parent)
     , m_bus(chooseBus())
     , m_watcher(Service, m_bus, QDBusServiceWatcher::WatchForRegistration, this)
 {
-    connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] { listItems(); });
+    connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] {
+        listItems();
+        listRunners();
+    });
     m_bus.connect(Service, Path, Interface, QStringLiteral("ItemsChanged"), this, SIGNAL(itemsChanged()));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("RunnerChoiceChanged"), this,
+                  SIGNAL(runnerChoiceChanged(QString, QString, QString)));
+}
+
+void DBusLibraryBackend::call(const QString &method, const QVariantList &args, int outArgs, Answer done)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, method);
+    msg.setArguments(args);
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this,
+            [method, outArgs, done = std::move(done)](QDBusPendingCallWatcher *w) {
+                w->deleteLater();
+                const QDBusMessage reply = w->reply();
+                const bool ok = reply.type() == QDBusMessage::ReplyMessage && reply.arguments().size() >= outArgs;
+                if (!ok)
+                    qWarning("ruya-shell: Library1 %s failed: %s", qPrintable(method), qPrintable(reply.errorMessage()));
+                done(ok, reply.arguments());
+            });
 }
 
 void DBusLibraryBackend::listItems()
 {
     const quint64 request = beginListRequest();
-    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("ListItems"));
-    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
-        w->deleteLater();
-        const QDBusMessage reply = w->reply();
-        if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
-            qWarning("ruya-shell: Library1 ListItems failed: %s", qPrintable(reply.errorMessage()));
+    call(QStringLiteral("ListItems"), {}, 1, [this, request](bool ok, const QVariantList &out) {
+        if (!ok) {
             acceptList(request); // a failure is an outcome too: an older reply after it is stale
             return;
         }
-        QList<LibraryItem> items;
-        const QDBusArgument arg = reply.arguments().constFirst().value<QDBusArgument>();
-        arg.beginArray();
-        while (!arg.atEnd())
-            items.append(toItem(parseDict(arg)));
-        arg.endArray();
-        deliverList(request, items);
+        deliverList(request, records<LibraryItem>(out.constFirst(), toItem));
+    });
+}
+
+void DBusLibraryBackend::listRunners()
+{
+    const quint64 request = beginRunnersRequest();
+    call(QStringLiteral("ListRunners"), {}, 1, [this, request](bool ok, const QVariantList &out) {
+        if (!ok) {
+            acceptRunners(request);
+            return;
+        }
+        deliverRunners(request, records<LibraryRunner>(out.constFirst(), toRunner));
+    });
+}
+
+void DBusLibraryBackend::getRunnerChoice(const QString &profile, const QString &id)
+{
+    call(QStringLiteral("GetRunnerChoice"), {profile, id}, 2, [this, profile, id](bool ok, const QVariantList &out) {
+        if (ok)
+            emit runnerChoiceAnswered(profile, id, out.at(0).toString(), out.at(1).toString());
+        else
+            emit runnerChoiceAnswered(profile, id, QStringLiteral("failed"), QString());
+    });
+}
+
+void DBusLibraryBackend::setRunnerChoice(const QString &profile, const QString &id, const QString &choice)
+{
+    call(QStringLiteral("SetRunnerChoice"), {profile, id, choice}, 1,
+         [this, profile, id, choice](bool ok, const QVariantList &out) {
+             emit runnerChoiceSet(profile, id, choice, ok ? out.constFirst().toString() : QStringLiteral("failed"));
+         });
+}
+
+void DBusLibraryBackend::resolveRunner(const QString &id, const QString &choice)
+{
+    call(QStringLiteral("ResolveRunner"), {id, choice}, 2, [this, id, choice](bool ok, const QVariantList &out) {
+        if (ok)
+            emit runnerResolved(id, choice, out.at(0).toString(),
+                                toResolution(parseDict(out.at(1).value<QDBusArgument>())));
+        else
+            emit runnerResolved(id, choice, QStringLiteral("failed"), toResolution({}));
     });
 }
 
 void DBusLibraryBackend::rescan()
 {
-    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("Rescan"));
-    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
-        w->deleteLater();
-        if (w->reply().type() != QDBusMessage::ReplyMessage)
-            qWarning("ruya-shell: Library1 Rescan failed: %s", qPrintable(w->reply().errorMessage()));
-        emit rescanFinished();
-    });
+    call(QStringLiteral("Rescan"), {}, 0, [this](bool, const QVariantList &) { emit rescanFinished(); });
 }

@@ -93,9 +93,9 @@ usage: ruya-pack <command> [options]   (every command takes --json)
         write play.sig
   inspect <pkg> [--system-wine V] ...
         show what the console will show
-  runner-check <dir> [--write-hash] [--record FILE]
+  runner-check <dir> [--write-hash]
         check a runner folder's runner.json and entries and print its runner hash;
-        --write-hash writes .ruya-runner-hash, --record adds its line to FILE (image build)
+        --write-hash writes .ruya-runner-hash (image build; the folder needs a system runner's name)
 
 exit codes: 0 ok, 1 problems found, 2 usage, 3 I/O
 

@@ -1,4 +1,4 @@
-//! `runner-check <dir> [--write-hash] [--record FILE]`: check a runner folder on disk the way the
+//! `runner-check <dir> [--write-hash]`: check a runner folder on disk the way the
 //! console reads it and compute its runner hash (ADR-037, 05 sections 6.2.1 and 7.3).
 //!
 //! The folder's `runner.json` must be a regular file that [`parse_runner`] accepts, and every
@@ -7,8 +7,10 @@
 //! files with their SHA-256 and executable bit, links as written (relative, inside the folder),
 //! empty folders; a root `.ruya-runner-hash` is left out. The image build runs it on each of its
 //! system runners (`image/play/install-runners.sh`): `--write-hash` writes `.ruya-runner-hash`,
-//! which the launcher reports, and `--record` adds the runner's line to the image's list of its
-//! runners, which the shell's About pane reads. A packager can run it on a bundled copy.
+//! which the launcher reports; the folder is then a system runner's, so its name must be one
+//! (`is_system_runner_name`). The shell's About pane lists the image's runners through Library1
+//! (`ListRunners`, RUY-959), not through a file of this command. A packager can run it on a
+//! bundled copy.
 
 use crate::args::{parse, Spec};
 use crate::build::{plan, write_if_changed, Planned};
@@ -18,34 +20,19 @@ use ruya_play_format::limits::MAX_RUNNER_JSON_BYTES;
 use ruya_play_format::problem::Problems;
 use ruya_play_format::runner::{
     check_entries, is_system_runner_name, parse_runner, BundledRunner, RunnerEntry, RunnerHasher,
-    RunnerJson, FILE_NAME, HASH_FILE,
+    FILE_NAME, HASH_FILE,
 };
 use ruya_play_format::table::TableIndex;
 use ruya_play_format::{codes as fcodes, EntryKind, FileEntry, FolderSource, Source};
 use serde_json::json;
 use std::collections::BTreeSet;
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 const SPEC: Spec = Spec {
-    values: &["record"],
+    values: &[],
     switches: &["write-hash"],
     positionals: (1, 1),
 };
-
-/// The runner's line in the image's list (`--record`): name, family, kind, version, licence and
-/// source URL, separated by tabs (an absent optional value is empty). None of the values can hold
-/// a tab or a line break: the parser's grammars and [`is_system_runner_name`] leave them out.
-pub fn record_line(name: &str, r: &RunnerJson) -> String {
-    format!(
-        "{name}\t{}\t{}\t{}\t{}\t{}\n",
-        r.family,
-        r.kind,
-        r.version,
-        r.licence.as_deref().unwrap_or(""),
-        r.source_url.as_deref().unwrap_or("")
-    )
-}
 
 /// The runner hash (05 section 7.3) of a table [`plan`] made.
 fn hash(planned: &[Planned]) -> String {
@@ -111,8 +98,7 @@ pub fn run(args: &[String], _ctx: &Context) -> Result<Reply, Stop> {
         .ok()
         .and_then(|d| d.file_name().map(|n| n.to_string_lossy().into_owned()))
         .unwrap_or_default();
-    let record = p.one("record").map(PathBuf::from);
-    if record.is_some() && !is_system_runner_name(&name) {
+    if p.has("write-hash") && !is_system_runner_name(&name) {
         return Err(Stop::Usage(format!(
             "{name:?} cannot be a system runner's folder: its name is the last part of the id org.ruyaos.Play.Runner.<Name> (letters, digits and _, not starting with a digit)"
         )));
@@ -182,10 +168,6 @@ pub fn run(args: &[String], _ctx: &Context) -> Result<Reply, Stop> {
         write_if_changed(&path, format!("{h}\n").as_bytes())?;
         text.push_str(&format!("wrote {}\n", path.display()));
     }
-    if let Some(path) = &record {
-        append(path, &record_line(&name, &r))?;
-        text.push_str(&format!("recorded {name} in {}\n", path.display()));
-    }
     reply.fields.insert(
         "runner".into(),
         json!({
@@ -201,13 +183,4 @@ pub fn run(args: &[String], _ctx: &Context) -> Result<Reply, Stop> {
     reply.fields.insert("entries".into(), json!(planned.len()));
     reply.text = text;
     Ok(reply)
-}
-
-fn append(path: &Path, line: &str) -> Result<(), Stop> {
-    std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .and_then(|mut f| f.write_all(line.as_bytes()))
-        .map_err(|e| Stop::io("cannot write", path, &e))
 }

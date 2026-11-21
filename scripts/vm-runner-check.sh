@@ -7,10 +7,12 @@
 #      outside a sandbox, refuses with its own sentence (no /app/play.files): the static binary runs
 #   3. runners: for each folder of /usr/lib/ruyaos/play/runners, ruya-pack runner-check (the
 #      format's parser and runner hash) accepts its runner.json and computes the hash the image
-#      wrote into .ruya-runner-hash, and /usr/lib/ruyaos/play/runners.list has its line
+#      wrote into .ruya-runner-hash (Library1 ListRunners, which the About pane reads, is
+#      vm-library-check.sh runners, RUY-959)
 #   4. a Windows program runs through each Proton and each Wine runner as a profile user, without
 #      network: a Proton runner's own cmd.exe through `proton waitforexitandrun` (ADR-037's argv,
-#      the STEAM_COMPAT_* folders in a scratch data folder), and a Wine runner's own 64-bit and
+#      the STEAM_COMPAT_* folders in a scratch data folder, SteamAppId and SteamGameId 0, PWD: what
+#      ruya-play-launch sets, RUY-969), and a Wine runner's own 64-bit and
 #      32-bit cmd.exe through its runner.json `entry.wine` (WINEPREFIX in a scratch folder, Mono
 #      and Gecko off: the image ships neither) each print a marker, under `unshare -n`.
 #      Without a profile on the VM this step is a SKIP with its reason (the check creates none).
@@ -76,7 +78,9 @@ if [ "$mode" = sample ]; then
             cp "$script" "$data/run-windows.py"
             chown -R "$user" "$data"
             # XDG_DATA_HOME is the app's data folder as a sandbox sets it; the script puts Proton's prefix below it.
-            out="$(unshare -n runuser -u "$user" -- env -i HOME="$data" PATH="$PATH" XDG_DATA_HOME="$data/xdg" \
+            # Started from the scratch folder: the script sets PWD from its working folder, which must be one the
+            # profile user can use (a console launcher gives the game /app/payload).
+            out="$(cd "$data" && unshare -n runuser -u "$user" -- env -i HOME="$data" PATH="$PATH" XDG_DATA_HOME="$data/xdg" \
                 WINEDEBUG=-all timeout 300 python3 "$data/run-windows.py" --runners "$play/runners" --self-test 2>&1)"; rc=$?
             used="$(printf '%s\n' "$out" | sed -n 's/^hello-runner: using \([^ ]*\) (.*/\1/p' | head -1)"
             if [ -n "$used" ] && [ -f "$play/runners/$used/runner.json" ]; then ok "the script took the runner $used from $play/runners"; else bad "the script named no runner of the image: '$used'"; fi
@@ -208,7 +212,6 @@ print("yes" if o.get("ok") is True else "no", r.get("kind") or "-", o.get("hash"
     else
         bad "$name: runner-check ok=$okk hash '$hash', .ruya-runner-hash '${want:-none}'"
     fi
-    if cut -f1 "$play/runners.list" 2>/dev/null | grep -qx "$name"; then ok "$name is in runners.list"; else bad "$name is not in $play/runners.list"; fi
     [ "$kind" = proton ] && protons="$protons $tree"
     [ "$kind" = wine ] && wines="$wines $tree"
 done
@@ -228,8 +231,12 @@ else
         data="$(mktemp -d "$root/var/tmp/ruya-runner-check.XXXXXX")" || { bad "no scratch folder in /var/tmp"; continue; }
         mkdir -p "$data/proton/client"
         chown -R "$user" "$data"
-        out="$(unshare -n runuser -u "$user" -- env -i HOME="$data" PATH="$PATH" \
+        # The environment of ruya-play-launch for a Proton game (plan.rs, 05 §6.3): the compat folders, no Steam
+        # game id (protonfixes parses one out of the compat path when none is set, and PWD is read unguarded)
+        # and PWD = the working folder it starts the game in.
+        out="$(cd "$data" && unshare -n runuser -u "$user" -- env -i HOME="$data" PATH="$PATH" \
             STEAM_COMPAT_DATA_PATH="$data/proton" STEAM_COMPAT_CLIENT_INSTALL_PATH="$data/proton/client" \
+            SteamAppId=0 SteamGameId=0 PWD="$data" \
             WINEDEBUG=-all timeout 300 python3 "$tree/proton" waitforexitandrun "$exe" /c echo "$marker" 2>&1)"; rc=$?
         if [ "$rc" = 0 ] && printf '%s\n' "$out" | tr -d '\r' | grep -qx "$marker"; then
             ok "$name: cmd.exe printed $marker as $user without network"

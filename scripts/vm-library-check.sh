@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: check clean play playid playjudge security seed
+# modes: check clean play playid playjudge runners runnersjudge security seed
 # Checks ruya-library (org.ruyaos.Library1, T-112 / T-163 / T-183) inside a running VM, as root. It builds a
 # tiny signed Flatpak repository (one runtime, a game and an app, no download, like
 # vm-store-check.sh), adds it through Store1, installs and uninstalls through Store1 and watches
@@ -24,6 +24,14 @@
 #             writes the package's new id, RUY-878); `playid <id>` prints the id the play mode
 #             installs under (host fixtures); `playjudge <id> [screenshots [key id]]` reads ListItems as busctl --json=short on stdin
 #             (host fixtures, scripts/test-vm-checks.sh)
+#   runners   RUY-959: Library1 ListRunners (as ruya-shell) lists the image's GE-Proton with its
+#             kind and version; then the .play sample is installed as for `play` and a profile's
+#             runner choice for it (SetRunnerChoice "system") is stored in
+#             /var/lib/ruyaos/library/<profile>.json, survives `systemctl restart ruya-library`
+#             and is cleared by "package" (no file left); an unknown choice is "invalid", an id that
+#             is not installed "unknown". Removes the sample after.
+#             vm-library-check.sh runners [/root/hello-play-native.play.zip]
+#             `runnersjudge` judges ListRunners as busctl --json=short on stdin (host fixtures)
 #   security  see vm-security-check.sh (unit hardening)
 # Boot the VM with plain smoke-test.ps1 -Keep (or -Work -Keep for the screenshot).
 set -u
@@ -250,12 +258,13 @@ play_judge() {
 # The id the play mode installs the sample under (RUY-877): vm-play-check.sh's one id-suffix rule.
 play_pkg_id() { bash "$(dirname "$0")/vm-play-check.sh" pkgid "$1" library; }
 
-# play_check <zip>
-play_check() {
-    local zip="$1" out job n line json shots playcheck
-    [ -f "$zip" ] || { bad "no sample at $zip"; return; }
+# play_install <zip>: installs the sample through Play1 under its own id; sets $play_id and
+# $shots (the screenshots its play.json declares). Returns 1 (with a FAIL line) when it did not.
+play_install() {
+    local zip="$1" out job n line playcheck
+    [ -f "$zip" ] || { bad "no sample at $zip"; return 1; }
     playcheck="$(dirname "$0")/vm-play-check.sh"
-    [ -f "$playcheck" ] || { bad "no $playcheck: copy vm-play-check.sh next to this script"; return; }
+    [ -f "$playcheck" ] || { bad "no $playcheck: copy vm-play-check.sh next to this script"; return 1; }
     # The sample's id and the number of screenshots its play.json declares (the sample installs unsigned).
     { read -r play_id; read -r shots; } < <(python3 - "$zip" <<'PY'
 import json, sys, zipfile
@@ -267,16 +276,16 @@ print(len(m.get("art", {}).get("screenshots", [])))
 PY
 )
     play_dev="$(busctl --system --json=short call "$play_svc" "$play_obj" "$play_svc" GetDeveloperMode | python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; print("true" if d and d[0]=="ok" and d[1] else "false")')"
-    busctl --system call "$play_svc" "$play_obj" "$play_svc" SetDeveloperMode 'ba{sv}' true 1 admin_approved b true >/dev/null || { bad "cannot turn developer mode on"; return; }
+    busctl --system call "$play_svc" "$play_obj" "$play_svc" SetDeveloperMode 'ba{sv}' true 1 admin_approved b true >/dev/null || { bad "cannot turn developer mode on"; return 1; }
     mkdir -p "$play_state/incoming"
     # RUY-877: its own id ("<id>_library"), so vm-play-check.sh's records for the sample's id never
     # meet this unsigned install (ruya-play keeps a signer's trust record after an uninstall).
-    play_id="$(play_pkg_id "$play_id")" || { bad "no package id for the sample $play_id"; return; }
+    play_id="$(play_pkg_id "$play_id")" || { bad "no package id for the sample $play_id"; return 1; }
     # The one id rewrite lives in vm-play-check.sh (RUY-878), which sits next to this script.
     bash "$playcheck" withid "$zip" "$play_state/incoming/vm-library-check.play.zip" "$play_id" \
-        || { bad "$playcheck withid: no copy of the sample with the id $play_id"; return; }
+        || { bad "$playcheck withid: no copy of the sample with the id $play_id"; return 1; }
     chmod 0600 "$play_state/incoming/vm-library-check.play.zip"
-    out="$(busctl --system --json=short call "$play_svc" "$play_obj" "$play_svc" Install 'sa{sv}' "$play_state/incoming/vm-library-check.play.zip" 1 admin_approved b true)"         || { bad "Play1.Install failed"; return; }
+    out="$(busctl --system --json=short call "$play_svc" "$play_obj" "$play_svc" Install 'sa{sv}' "$play_state/incoming/vm-library-check.play.zip" 1 admin_approved b true)"         || { bad "Play1.Install failed"; return 1; }
     job="$(echo "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; print(d[1] if len(d)>1 else "")')"
     n=0
     while [ "$n" -lt 300 ]; do
@@ -291,11 +300,61 @@ for j in (json.load(sys.stdin).get("data") or [[]])[0]:
         case "$line" in finished\ *) break ;; esac
         sleep 1; n=$((n + 1))
     done
-    [ "$line" = "finished ok" ] && ok "the sample installs" || { bad "the sample install: ${line:-timeout}"; return; }
+    [ "$line" = "finished ok" ] && ok "the sample installs" || { bad "the sample install: ${line:-timeout}"; return 1; }
     n=0
     until list_items_json | play_fields "$play_id" | grep -q '^found=yes$' || [ "$n" -ge 60 ]; do sleep 1; n=$((n + 1)); done
+}
+
+# play_check <zip>
+play_check() {
+    local json
+    play_install "$1" || return
     json="$(list_items_json)"
     play_judge "$play_id" "$shots" "" <<< "$json" # not a pipe: $fail must survive
+}
+
+# runners_judge: Library1 ListRunners as busctl --json=short on stdin. Every runner has a family,
+# a kind and a version; the image's GE-Proton (family proton-ge, kind proton) is one of them.
+runners_judge() {
+    local f
+    f="$(python3 -c '
+import json, sys
+def val(v):
+    return v.get("data") if isinstance(v, dict) and "type" in v and "data" in v else v
+data = json.load(sys.stdin).get("data") or [[]]
+for r in data[0]:
+    r = {k: val(v) for k, v in r.items()}
+    print("\t".join(str(r.get(k) or "") for k in ("family", "kind", "version", "licence", "source_url")))
+')"
+    echo "$f"
+    [ -n "$f" ] && ok "ListRunners lists $(echo "$f" | wc -l) runner(s)" || { bad "ListRunners lists no runner"; return; }
+    echo "$f" | awk -F'\t' '$1 == "" || $2 == "" || $3 == "" { bad = 1 } END { exit bad }' && ok "every runner has a family, a kind and a version" || bad "a runner without a family, kind or version"
+    echo "$f" | awk -F'\t' '$1 == "proton-ge" && $2 == "proton" && $3 ~ /^GE-Proton/ { found = 1 } END { exit !found }' && ok "the image's GE-Proton is listed" || bad "no proton-ge runner of kind proton with a GE-Proton version"
+}
+
+choice_of() { as_shell busctl --system call "$svc" "$path" "$ifc" GetRunnerChoice ss "$1" "$2"; }
+set_choice() { as_shell busctl --system call "$svc" "$path" "$ifc" SetRunnerChoice sss "$1" "$2" "$3"; }
+
+# runners_check <zip>
+runners_check() {
+    local id prof=vmcheck file=/var/lib/ruyaos/library/vmcheck.json n=0 got listing
+    listing="$(mktemp)"
+    as_shell busctl --system --json=short call "$svc" "$path" "$ifc" ListRunners > "$listing" 2>&1 || bad "ListRunners failed: $(cat "$listing")"
+    runners_judge < "$listing"
+    rm -f "$listing"
+    play_install "$1" || return
+    id="flatpak:play.$play_id"
+    got="$(set_choice "$prof" "$id" system)"
+    [ "$got" = 's "ok"' ] && ok "SetRunnerChoice system: ok" || bad "SetRunnerChoice system: $got"
+    [ "$(choice_of "$prof" "$id")" = 's "ok" "system"' ] && ok "GetRunnerChoice: system" || bad "GetRunnerChoice: $(choice_of "$prof" "$id")"
+    [ "$(stat -c '%U %a' "$file" 2>/dev/null)" = "ruya-library 600" ] && ok "the choice is in $file (ruya-library, 0600)" || bad "$file: $(stat -c '%U %a' "$file" 2>&1)"
+    systemctl restart ruya-library
+    until [ "$(choice_of "$prof" "$id" 2>/dev/null)" = 's "ok" "system"' ] || [ "$n" -ge 30 ]; do sleep 1; n=$((n + 1)); done
+    [ "$(choice_of "$prof" "$id")" = 's "ok" "system"' ] && ok "the choice survives a restart of ruya-library" || bad "after a restart GetRunnerChoice: $(choice_of "$prof" "$id")"
+    [ "$(set_choice "$prof" "$id" proton)" = 's "invalid"' ] && ok "an unknown choice is invalid" || bad "SetRunnerChoice proton: $(set_choice "$prof" "$id" proton)"
+    [ "$(set_choice "$prof" "flatpak:play.not.installed" system)" = 's "unknown"' ] && ok "an id that is not installed is unknown" || bad "SetRunnerChoice of no item: $(set_choice "$prof" "flatpak:play.not.installed" system)"
+    [ "$(set_choice "$prof" "$id" package)" = 's "ok"' ] && [ "$(choice_of "$prof" "$id")" = 's "ok" "package"' ] && ok "package clears the choice" || bad "SetRunnerChoice package: $(choice_of "$prof" "$id")"
+    [ ! -e "$file" ] && ok "no choice left, no file" || bad "$file is left"
 }
 list_items_json() { as_shell busctl --system --json=short call "$svc" "$path" "$ifc" ListItems; }
 
@@ -339,6 +398,13 @@ playid)
     ;;
 playjudge)
     play_judge "${2:?app id}" "${3:-0}" "${4:-}"
+    ;;
+runners)
+    runners_check "${2:-/root/hello-play-native.play.zip}"
+    play_clean
+    ;;
+runnersjudge)
+    runners_judge
     ;;
 security)
     echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
