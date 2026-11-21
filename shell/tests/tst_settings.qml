@@ -1366,6 +1366,11 @@ Item {
                 tryVerify(() => find("aboutWindowsRunner").activeFocus)
                 wait(600)
                 grabImage(tc.shell).save(shotsDir + "/8c-settings-about-windows-" + language + ".png")
+                // RUY-37: the last row focused scrolls the pane to its end, where Wine's note shows in full.
+                keyClick(Qt.Key_Down)
+                tryVerify(() => find("aboutSystemInfo").activeFocus)
+                wait(600)
+                grabImage(tc.shell).save(shotsDir + "/8d-settings-about-runner-notes-" + language + ".png")
                 keyClick(Qt.Key_Escape)
                 tryVerify(() => find("categoryList").activeFocus)
             }
