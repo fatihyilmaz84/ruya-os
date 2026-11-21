@@ -301,32 +301,50 @@ mod linux {
         assert_eq!(fs::read_dir(&outside).expect("list").count(), 0);
     }
 
-    #[test]
-    fn kind_and_entries_refuse_a_link_at_a_component() {
+    /// A base holding `own` and links to a folder (`dir`) and a file (`file`) outside it.
+    fn planted() -> (tempfile::TempDir, Dir) {
         let tmp = tempfile::tempdir().expect("tmp");
         let outside = tmp.path().join("elsewhere");
         fs::create_dir(&outside).expect("outside");
         fs::write(outside.join("f"), "secret").expect("file");
         let base = tmp.path().join("base");
-        fs::create_dir_all(base.join("a")).expect("base");
-        symlink(&outside, base.join("a/b")).expect("link");
+        fs::create_dir(&base).expect("base");
+        fs::write(base.join("own"), "mine").expect("own");
+        symlink(&outside, base.join("dir")).expect("link");
         symlink(outside.join("f"), base.join("file")).expect("link");
         let dir = Dir::open(&base).expect("open");
+        (tmp, dir)
+    }
+
+    #[test]
+    fn kind_and_entries_refuse_a_link_at_a_component() {
+        let (_tmp, dir) = planted();
         // A link at the end is reported as a link, never followed ...
-        assert_eq!(dir.kind(Path::new("a/b")).expect("kind"), Some(Kind::Link));
+        assert_eq!(dir.kind(Path::new("dir")).expect("kind"), Some(Kind::Link));
         assert_eq!(dir.kind(Path::new("file")).expect("kind"), Some(Kind::Link));
+        assert_eq!(dir.kind(Path::new("own")).expect("kind"), Some(Kind::File));
         // ... and one among the folders is refused.
-        let err = dir.kind(Path::new("a/b/f")).expect_err("refused");
+        let err = dir.kind(Path::new("dir/f")).expect_err("refused");
         assert!(NotFollowed::is(&err), "{err}");
-        let err = dir.entries(Path::new("a/b")).expect_err("refused");
+        let err = dir.entries(Path::new("dir")).expect_err("refused");
         assert!(NotFollowed::is(&err), "{err}");
         let err = dir
             .entries(Path::new("file"))
             .expect_err("a link to a file");
         assert!(NotFollowed::is(&err), "{err}");
-        // The listing shows the link as a link.
-        let listed = dir.entries(Path::new("a")).expect("entries");
-        assert_eq!(listed, [(OsString::from("b"), Kind::Link)]);
+        // The listing shows a link as a link.
+        let mut listed = dir.entries(Path::new("")).expect("entries");
+        listed.sort_by(|a, b| a.0.cmp(&b.0));
+        let name = |n: &str| OsString::from(n);
+        assert_eq!(
+            listed,
+            [
+                (name("dir"), Kind::Link),
+                (name("file"), Kind::Link),
+                (name("own"), Kind::File)
+            ]
+            .to_vec()
+        );
     }
 
     #[test]
@@ -343,16 +361,7 @@ mod linux {
 
     #[test]
     fn reading_refuses_a_link_at_any_step() {
-        let tmp = tempfile::tempdir().expect("tmp");
-        let outside = tmp.path().join("elsewhere");
-        fs::create_dir(&outside).expect("outside");
-        fs::write(outside.join("f"), "secret").expect("file");
-        let base = tmp.path().join("base");
-        fs::create_dir(&base).expect("base");
-        fs::write(base.join("own"), "mine").expect("own");
-        symlink(&outside, base.join("dir")).expect("link");
-        symlink(outside.join("f"), base.join("file")).expect("link");
-        let dir = Dir::open(&base).expect("open");
+        let (_tmp, dir) = planted();
         assert_eq!(dir.read(Path::new("own"), 64).expect("read"), b"mine");
         assert!(NotFollowed::is(
             &dir.read(Path::new("dir/f"), 64).expect_err("refused")
