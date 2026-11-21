@@ -1682,6 +1682,37 @@ extra="$(printf '%s\n[Context]\nfilesystems=host;\n' "$shown" | pp)"
 bus="$(printf '%s%s\n' "$shown" 'org.freedesktop.Flatpak=talk' | pp)"
 [ "$bus" != "$want" ] && pass "play perms: another bus name differs" || fail "play perms: an extra bus name went unseen"
 grep -q 'if \[ "\$mode" = perms \]' "$here/vm-play-check.sh" && grep -q -- '--show-permissions' "$here/vm-play-check.sh" && pass "vm-play-check.sh has a perms mode that reads --show-permissions" || fail "vm-play-check.sh: no perms mode"
+# RUY-854: the perms mode asks Store1 (as root, an admin) for the .play app's permission list, withdraws the
+# network and tests it from inside the app's sandbox with a connection attempt.
+store_json='{"type":"sasasas","data":["ok",["network","audio"],["gamepad","all-devices"],["network"]]}'
+[ "$(echo "$store_json" | pc status)" = ok ] && pass "play perms: a GetPermissions status" || fail "play perms: status of '$store_json'"
+[ "$(echo "$store_json" | pc keys effective)" = "network audio" ] && [ "$(echo "$store_json" | pc keys withdrawn)" = "gamepad all-devices" ] && [ "$(echo "$store_json" | pc keys withdrawable)" = network ] && pass "play perms: the three lists of a GetPermissions answer" || fail "play perms: the lists read as '$(echo "$store_json" | pc keys effective)' '$(echo "$store_json" | pc keys withdrawn)' '$(echo "$store_json" | pc keys withdrawable)'"
+[ -z "$(echo '{"type":"sasasas","data":["unknown-app",[],[],[]]}' | pc keys effective)" ] && pass "play perms: an unknown app has no keys" || fail "play perms: unknown-app read with keys"
+np="$tmp/netprobe"; mkdir -p "$np"
+probe="$(sed -n "/^NET_PROBE='/,/connect=no\"; fi'\$/p" "$here/vm-play-check.sh" | sed "1s/^NET_PROBE='//; \$s/'\$//")"
+printf 'Inter-|   Receive\n face |bytes\n    lo: 1 2\n  eth0: 3 4\n' > "$np/shared"
+printf 'Inter-|   Receive\n face |bytes\n    lo: 1 2\n' > "$np/unshared"
+python3 -c '
+import socket, time
+s = socket.socket()
+s.bind(("127.0.0.1", 0))
+s.listen(4)
+print(s.getsockname()[1], flush=True)
+time.sleep(20)
+' > "$np/port" &
+lpid=$!
+n=0; while [ ! -s "$np/port" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+lport="$(cat "$np/port")"
+got="$(PROC_NET_DEV="$np/shared" bash -c "$probe" probe "$lport" | tr -d '\r' | tr '\n' ' ')"
+[ "$got" = "net=1 connect=yes " ] && pass "play perms: the sandbox probe sees an interface and reaches a listener" || fail "play perms: the probe says '$got'"
+got="$(PROC_NET_DEV="$np/unshared" bash -c "$probe" probe 1 | tr -d '\r' | tr '\n' ' ')"
+[ "$got" = "net=0 connect=no " ] && pass "play perms: the probe sees no interface and no listener" || fail "play perms: the probe says '$got'"
+kill "$lpid" 2>/dev/null; wait "$lpid" 2>/dev/null
+# The calls the mode makes are the signatures of Store1.xml.
+storexml="$here/../api/dbus/org.ruyaos.Store1.xml"
+grep -A2 'name="GetPermissions"' "$storexml" | grep -q 'name="app_id" type="s"' && grep -A3 'name="WithdrawPermission"' "$storexml" | grep -q 'name="key" type="s"' && grep -q 'store_call GetPermissions s ' "$here/vm-play-check.sh" && grep -q 'store_call WithdrawPermission ss ' "$here/vm-play-check.sh" && grep -q 'store_call ResetPermissions s ' "$here/vm-play-check.sh" && pass "vm-play-check.sh calls Store1's permission methods with the signatures of Store1.xml" || fail "vm-play-check.sh: its Store1 calls do not match Store1.xml"
+grep -q 'permission_list_checks "play.\$appid"' "$here/vm-play-check.sh" && grep -q 'flatpak override --system --reset "play.\$appid"' "$here/vm-play-check.sh" && pass "vm-play-check.sh perms runs the permission list checks and drops the override at exit" || fail "vm-play-check.sh perms: no permission list checks or no override cleanup"
+grep -q 'connect=no' "$here/vm-play-check.sh" && grep -q 'WithdrawPermission ss "\$papp" network' "$here/vm-play-check.sh" && pass "vm-play-check.sh perms withdraws the network and expects a refused connection" || fail "vm-play-check.sh perms: the network-off case is gone"
 # RUY-877: each installing mode has its own id, so no mode meets another's trust record.
 wi="$tmp/withid"; mkdir -p "$wi"
 python3 - "$wi/in.zip" <<'PY'

@@ -16,9 +16,9 @@ Page {
     id: page
 
     readonly property string appId: String((params ?? {}).appId ?? "")
-    // The installed list carries the name; an app it no longer lists keeps the last name seen.
+    // The name is AppName's; an app it no longer knows keeps the last name seen.
     property string lastName: ""
-    readonly property string shownName: (Store.installed.find(a => a.id === appId) ?? {}).name ?? ""
+    readonly property string shownName: AppName.of(appId)
     onShownNameChanged: if (shownName !== "") lastName = shownName
     title: lastName !== "" ? lastName : appId
 

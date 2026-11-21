@@ -73,6 +73,19 @@ Item {
             Library.resetMockForTests("")
         }
 
+        // RUY-854: an item is found by the Flatpak id it starts (the id Session1 and Store1 use).
+        function test_an_item_is_found_by_the_flatpak_it_starts() {
+            Library.resetMockForTests("play")
+            tryVerify(() => Library.item("flatpak:play.com.example.starhopper").play === true)
+            compare(Library.itemForApp("play.com.example.starhopper").title, "Star Hopper")
+            compare(Library.itemForApp("play.com.example.starhopper").id, "flatpak:play.com.example.starhopper")
+            compare(Library.itemForApp("org.example.Player").title, "Open Player")
+            compare(Object.keys(Library.itemForApp("org.example.Nothing")).length, 0, "no such app")
+            compare(Object.keys(Library.itemForApp("")).length, 0, "an empty id matches no item")
+            compare(Object.keys(Library.itemForApp("730")).length, 0, "a Steam item has no Flatpak id")
+            Library.resetMockForTests("")
+        }
+
         function test_other_items_have_no_play_keys() {
             Library.resetMockForTests("play")
             tryVerify(() => Library.items.length === 11)

@@ -457,7 +457,7 @@ Re-verification: "Verify files" in the app's options re-hashes the installed pay
 
 ## 8. Permissions
 
-A closed vocabulary. The manifest requests; the importer maps each entry to the Flatpak permission set of the generated app; the shell shows each in plain words before install; the effective set is the request **capped by the trust tier** (and can be reduced by an admin, 03 §4.4).
+A closed vocabulary. The manifest requests; the importer maps each entry to the Flatpak permission set of the generated app; the shell shows each in plain words before install; the effective set is the request **capped by the trust tier** (and can be reduced by an admin, 03 §4.4; built, RUY-854: a `.play` game is in Settings -> Privacy -> App permissions and has the Permissions row on its page like any Flatpak, an admin withdraws its network, all devices and file access through `Store1` (`WithdrawPermission`, the one override mechanism of RUY-744, nothing of it in `ruya-play`), it applies at the next start, and the override is a file of its own that a start-up re-commit or an update leaves alone; **not built:** `Play1.Remove` does not drop the override, so a game installed again starts withdrawn).
 
 One row per value that asks for something; `network: false` (the default), `removable_media: none` (the default) and a `false` bool ask for nothing and grant nothing. "Flatpak metadata" is every line the value adds to the generated app's metadata, exactly (`ruya_play_trust::permissions::PERMISSIONS`, RUY-851; `tests/permissions_spec_sync.rs` parses this table and fails when the code says otherwise).
 
