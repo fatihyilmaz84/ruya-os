@@ -1059,7 +1059,6 @@ dependencies = [
  "ruya-play-format",
  "ruya-play-trust",
  "serde_json",
- "sha2",
  "tempfile",
 ]
 
@@ -1084,7 +1083,6 @@ dependencies = [
  "ruya-play-trust",
  "serde",
  "serde_json",
- "sha2",
  "tempfile",
  "zbus",
 ]
@@ -1136,7 +1134,6 @@ dependencies = [
  "ruya-play-format",
  "serde",
  "serde_json",
- "sha2",
  "tempfile",
 ]
 

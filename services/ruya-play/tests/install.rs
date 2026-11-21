@@ -261,7 +261,13 @@ fn runner_hash_of(fx: &Fx, prefix: &str) -> String {
     let shas: Vec<(&str, String, bool)> = fx
         .files
         .iter()
-        .map(|(p, d)| (p.as_str(), sha_hex(d), fx.exec.contains(p)))
+        .map(|(p, d)| {
+            (
+                p.as_str(),
+                ruya_play_format::sha256_hex(d),
+                fx.exec.contains(p),
+            )
+        })
         .collect();
     let mut entries: Vec<(&str, RunnerEntry<'_>)> = Vec::new();
     for (p, sha, exec) in &shas {

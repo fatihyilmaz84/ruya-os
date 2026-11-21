@@ -20,13 +20,14 @@
 
 use crate::envelope::{self, Domain};
 use crate::error::{RevokedBy, TrustError};
-use crate::keys::{is_key_id, is_sha256_hex, KEY_ID_CHARS};
+use crate::keys::{is_key_id, KEY_ID_CHARS};
 use crate::signing::StoreKeys;
 use crate::statement::BlocklistStatement;
 use crate::time::UnixSeconds;
 use ruya_play_format::limits::MAX_ID_BYTES;
 use ruya_play_format::problem::safe_text;
 use ruya_play_format::sha256_hex;
+use ruya_play_format::table::is_sha256_hex;
 
 /// Where the image keeps its copy.
 pub const IMAGE_BLOCKLIST_PATH: &str = "/usr/share/ruyaos/store-blocklist";

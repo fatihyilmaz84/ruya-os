@@ -2,15 +2,8 @@
 
 mod common;
 use common::*;
+use ruya_play_format::sha256_hex;
 use serde_json::json;
-use sha2::{Digest, Sha256};
-
-fn sha(b: &[u8]) -> String {
-    Sha256::digest(b)
-        .iter()
-        .map(|x| format!("{x:02x}"))
-        .collect()
-}
 
 #[test]
 fn deterministic() {
@@ -46,7 +39,7 @@ fn deterministic() {
         "two builds of one directory differ"
     );
     assert_eq!(a.json["sha256"], b.json["sha256"]);
-    assert_eq!(a.json["sha256"], json!(sha(&first)));
+    assert_eq!(a.json["sha256"], json!(sha256_hex(&first)));
 
     // The same holds when deflated, and deflating is a different archive of the same package.
     let (d1, z1) = build(&dir, &["--deflate"]);
@@ -104,7 +97,7 @@ fn play_files_is_sorted_hashed_and_records_empty_folders_and_executables() {
         lines.contains(
             &format!(
                 "{{\"p\":\"payload/a.txt\",\"t\":\"f\",\"s\":2,\"h\":\"{}\",\"x\":1}}",
-                sha(b"ay")
+                sha256_hex(b"ay")
             )
             .as_str()
         ),
@@ -114,7 +107,7 @@ fn play_files_is_sorted_hashed_and_records_empty_folders_and_executables() {
         lines.contains(
             &format!(
                 "{{\"p\":\"payload/b.txt\",\"t\":\"f\",\"s\":3,\"h\":\"{}\"}}",
-                sha(b"bee")
+                sha256_hex(b"bee")
             )
             .as_str()
         ),

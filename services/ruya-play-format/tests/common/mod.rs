@@ -5,23 +5,13 @@
 use flate2::write::DeflateEncoder;
 use flate2::Compression;
 use ruya_play_format::{
-    validate, EntryKind, MemorySource, Package, Problem, Source, ValidateOptions, ZipSource,
+    sha256_hex, validate, EntryKind, MemorySource, Package, Problem, Source, ValidateOptions,
+    ZipSource,
 };
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::io::{Cursor, Write};
 use std::path::Path;
-
-pub fn sha_hex(data: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut out = String::with_capacity(64);
-    for b in Sha256::digest(data) {
-        out.push(HEX[(b >> 4) as usize] as char);
-        out.push(HEX[(b & 15) as usize] as char);
-    }
-    out
-}
 
 /// A package under construction.
 #[derive(Clone)]
@@ -212,7 +202,7 @@ impl Fx {
                 p.clone(),
                 format!(
                     "{{\"h\":\"{}\",\"p\":{},\"s\":{},\"t\":\"f\"{x}}}",
-                    sha_hex(d),
+                    sha256_hex(d),
                     q(p),
                     d.len()
                 ),
