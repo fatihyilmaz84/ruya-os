@@ -242,8 +242,16 @@ impl Dir {
         dir.open_name(name)
     }
 
+    /// The kind is read first, so a FIFO or a device is not even opened; the open itself refuses
+    /// a link (`O_NOFOLLOW`) and the kind is checked again on the handle.
     fn open_name(&self, name: &OsStr) -> io::Result<File> {
-        match self.inner.open_read(name)? {
+        let found = match self.inner.kind(name)? {
+            None => return Err(io::ErrorKind::NotFound.into()),
+            Some(Kind::File) => self.inner.open_read(name)?,
+            Some(Kind::Link) => Found::Link,
+            Some(_) => Found::Other,
+        };
+        match found {
             Found::It(file) => Ok(file),
             Found::Link => Err(NotFollowed::error(&self.shown(name))),
             Found::Other => Err(io::Error::new(

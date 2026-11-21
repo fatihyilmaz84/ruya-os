@@ -21,7 +21,7 @@ serde_json = "1"  # the status file (already in the tree)
 ruya-fs = { path = "../ruya-fs" }  # every copy, removal and write in the game's data, never through a link (RUY-911)
 
 [target.'cfg(target_os = "linux")'.dependencies]
-libc = "0.2"  # kill(-pgid) for a setup step that ran out of time, O_NOFOLLOW (already in the tree)
+libc = "0.2"  # kill(-pgid) for a setup step that ran out of time (already in the tree)
 
 [dev-dependencies]
 tempfile = "3"  # the Linux-only tests of LinuxOs (already in the tree)

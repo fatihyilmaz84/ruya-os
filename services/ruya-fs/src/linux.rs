@@ -76,16 +76,10 @@ impl Dir {
         }
     }
 
-    /// The regular file `name` for reading. `O_NONBLOCK`, so a FIFO planted there is refused at
-    /// once; the kind is checked before the open (so a device is not even opened) and again on
+    /// The regular file `name` for reading (the caller looked at its kind first).
+    /// `O_NONBLOCK`, so a FIFO swapped in since is refused at once; the kind is checked again on
     /// the handle.
     pub(crate) fn open_read(&self, name: &OsStr) -> io::Result<Found<File>> {
-        match self.kind(name)? {
-            Some(Kind::File) => {}
-            Some(Kind::Link) => return Ok(Found::Link),
-            Some(_) => return Ok(Found::Other),
-            None => return Err(io::ErrorKind::NotFound.into()),
-        }
         let flags =
             OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC | OFlags::NOCTTY;
         let fd = match rfs::openat(&self.fd, name, flags, Mode::empty()) {

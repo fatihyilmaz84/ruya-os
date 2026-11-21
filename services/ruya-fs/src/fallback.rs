@@ -65,13 +65,8 @@ impl Dir {
         }
     }
 
+    /// The regular file `name` for reading (the caller looked at its kind first).
     pub(crate) fn open_read(&self, name: &OsStr) -> io::Result<Found<File>> {
-        match self.kind(name)? {
-            Some(Kind::File) => {}
-            Some(Kind::Link) => return Ok(Found::Link),
-            Some(_) => return Ok(Found::Other),
-            None => return Err(io::ErrorKind::NotFound.into()),
-        }
         let file = File::open(self.path.join(name))?;
         if !file.metadata()?.is_file() {
             return Ok(Found::Other);
