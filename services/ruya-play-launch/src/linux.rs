@@ -96,6 +96,34 @@ impl LaunchOs for LinuxOs {
         }
     }
 
+    fn rename(
+        &mut self,
+        src_base: &str,
+        src_rel: &str,
+        dst_base: &str,
+        dst_rel: &str,
+    ) -> io::Result<()> {
+        base_dir(src_base)?.rename(
+            &rel_path(src_rel)?,
+            &base_dir(dst_base)?,
+            &rel_path(dst_rel)?,
+        )
+    }
+
+    fn set_mode(&mut self, base: &str, rel: &str, mode: u32) -> io::Result<()> {
+        base_dir(base)?.set_mode(&rel_path(rel)?, mode)
+    }
+
+    fn read_link(&self, base: &str, rel: &str) -> io::Result<String> {
+        let target = base_dir(base)?.read_link(&rel_path(rel)?)?;
+        target.into_os_string().into_string().map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("the link {rel} names a path that is not UTF-8"),
+            )
+        })
+    }
+
     fn symlink(&mut self, target: &str, base: &str, rel: &str) -> io::Result<()> {
         base_dir(base)?.symlink(Path::new(target), &rel_path(rel)?, MAX_COPY_DEPTH)
     }

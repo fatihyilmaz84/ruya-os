@@ -8,9 +8,15 @@
  *   - it is 32-bit, so it runs only when the sandbox allows 32-bit code (permissions.multiarch);
  *   - it keeps a save in Documents\Hello Play, which play.json lists in data.saves, and counts its
  *     launches in it, so a second launch shows the save survived;
+ *   - it reads a settings file next to its own program (check.ini, which the package ships) and
+ *     writes a file there (beside.txt, its own launch count), as games such as Unreal Tournament
+ *     keep their ini and saves in their install folder: the package lists that folder in
+ *     run.writable (RUY-1019), so the console gives each profile a copy it may write;
  *   - it tries to reach the internet and reports whether it could (the sample asks for no network).
- * It writes the report to Documents\Hello Play\check.txt (key=value lines) and prints it. Exit 0
- * when the report was written, 1 when it could not be.
+ * It writes the report to Documents\Hello Play\check.txt (key=value lines) and prints it: launches,
+ * pointer_bits, wow64, network, module (the path GetModuleFileNameW gives, as UTF-8), edition (the
+ * number in check.ini, 0 without one) and beside (the count it wrote to beside.txt, or "failed").
+ * Exit 0 when the report was written, 1 when it could not be.
  *
  * Build: ./build.sh (mingw-w64, i686-w64-mingw32-gcc).
  */
@@ -19,23 +25,48 @@
 #include <shlobj.h>
 #include <stdio.h>
 #include <string.h>
+#include <wchar.h>
 
-/* The number after "launches=" in the report of the last launch, 0 when there is none. */
-static int previous_launches(const char *path)
+/* The number after "<key>=" in the key=value lines of f (closed here), 0 when there is none or
+ * f is NULL (the file is not there). */
+static int number_in(FILE *f, const char *key)
 {
     int n = 0;
     char line[128];
-    FILE *f = fopen(path, "r");
+    size_t len = strlen(key);
     if (!f) {
         return 0;
     }
     while (fgets(line, sizeof line, f)) {
-        if (sscanf(line, "launches=%d", &n) == 1) {
+        if (strncmp(line, key, len) == 0 && line[len] == '='
+            && sscanf(line + len + 1, "%d", &n) == 1) {
             break;
         }
     }
     fclose(f);
     return n > 0 ? n : 0;
+}
+
+/* Write text to path through a temporary file, then replace the old one: a crash never leaves
+ * half a file. 1 when it was written. */
+static int replace_file(const wchar_t *path, const char *text)
+{
+    wchar_t tmp[MAX_PATH + 24];
+    if (wcslen(path) + 5 > sizeof tmp / sizeof tmp[0]) {
+        return 0;
+    }
+    wcscpy(tmp, path);
+    wcscat(tmp, L".tmp");
+    FILE *f = _wfopen(tmp, L"w");
+    if (!f) {
+        return 0;
+    }
+    size_t len = strlen(text);
+    size_t wrote = fwrite(text, 1, len, f);
+    if (fclose(f) != 0 || wrote != len) {
+        return 0;
+    }
+    return MoveFileExW(tmp, path, MOVEFILE_REPLACE_EXISTING) ? 1 : 0;
 }
 
 /* 1 when a TCP connection to a public address is made within three seconds, else 0. */
@@ -74,6 +105,24 @@ static int network_open(void)
 
 int main(void)
 {
+    /* This program's own path and folder, the way a Windows game finds its install folder. */
+    wchar_t module[MAX_PATH], ini[MAX_PATH + 16], beside[MAX_PATH + 16];
+    char module_utf8[4 * MAX_PATH];
+    DWORD got = GetModuleFileNameW(NULL, module, MAX_PATH);
+    wchar_t *slash = got > 0 && got < MAX_PATH ? wcsrchr(module, L'\\') : NULL;
+    if (!slash
+        || !WideCharToMultiByte(CP_UTF8, 0, module, -1, module_utf8, (int)sizeof module_utf8,
+                                NULL, NULL)) {
+        fprintf(stderr, "check: no path for this program\n");
+        return 1;
+    }
+    size_t folder = (size_t)(slash - module) + 1;
+    wmemcpy(ini, module, folder);
+    ini[folder] = L'\0';
+    wcscpy(beside, ini);
+    wcscat(ini, L"check.ini");
+    wcscat(beside, L"beside.txt");
+
     char docs[MAX_PATH];
     if (SHGetFolderPathA(NULL, CSIDL_PERSONAL, NULL, 0, docs) != S_OK) {
         fprintf(stderr, "check: no Documents folder\n");
@@ -85,14 +134,25 @@ int main(void)
     snprintf(path, sizeof path, "%s\\check.txt", dir);
     snprintf(tmp, sizeof tmp, "%s.tmp", path);
 
-    int launches = previous_launches(path) + 1;
+    int launches = number_in(fopen(path, "r"), "launches") + 1;
+    int edition = number_in(_wfopen(ini, L"r"), "edition");
+    /* Next to the program, its own count: a relaunch and an update show the file stayed. */
+    int here = number_in(_wfopen(beside, L"r"), "launches") + 1;
+    char line[32], beside_text[16];
+    snprintf(line, sizeof line, "launches=%d\n", here);
+    if (replace_file(beside, line)) {
+        snprintf(beside_text, sizeof beside_text, "%d", here);
+    } else {
+        snprintf(beside_text, sizeof beside_text, "failed");
+    }
     BOOL wow64 = FALSE;
     IsWow64Process(GetCurrentProcess(), &wow64);
-    char report[256];
+    char report[256 + sizeof module_utf8];
     int len = snprintf(report, sizeof report,
-                       "launches=%d\npointer_bits=%d\nwow64=%d\nnetwork=%s\n", launches,
-                       (int)(8 * sizeof(void *)), wow64 ? 1 : 0,
-                       network_open() ? "open" : "closed");
+                       "launches=%d\npointer_bits=%d\nwow64=%d\nnetwork=%s\nmodule=%s\n"
+                       "edition=%d\nbeside=%s\n",
+                       launches, (int)(8 * sizeof(void *)), wow64 ? 1 : 0,
+                       network_open() ? "open" : "closed", module_utf8, edition, beside_text);
 
     /* Write a temporary file, then replace the old one: a crash never leaves half a save. */
     FILE *f = fopen(tmp, "w");

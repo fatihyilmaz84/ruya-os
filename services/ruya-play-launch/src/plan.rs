@@ -16,12 +16,14 @@
 //!   lower `run.prefix.epoch` is rebuilt with the `prefix:` saves kept.
 //! * **Setup:** a `once` step runs when this prefix has not done it; a step without `once` runs at
 //!   every launch.
+//! * **Game tree** (`run.writable`, ADR-040): `${game}` is `${data}/.ruya-play/game`, which
+//!   [`crate::game`] makes before the setup steps run.
 
+use crate::game;
 use crate::os::{join, Command};
 use crate::runners::FoundRunner;
 use crate::state::{RunnerInUse, State};
 use crate::Failure;
-use ruya_play_format::limits::PLACEHOLDERS;
 use ruya_play_format::manifest::{Component, Manifest};
 use ruya_play_format::resolve::{self, Chosen, Note, Override};
 use ruya_play_format::runner::{self, BundledRunner, Entry};
@@ -143,13 +145,31 @@ pub struct Places {
     pub prefix: Option<String>,
     /// `${disc}`: the first disc.
     pub disc: Option<String>,
+    /// `${game}`: the game tree, for a package with `run.writable`.
+    pub game: Option<String>,
     /// `${component:<id>}`: each component's root.
     pub components: BTreeMap<String, String>,
 }
 
+/// The value of the placeholder `name` of `limits::PLACEHOLDERS`: `None` when `name` is none of
+/// them (it stays as written), `Some(None)` when it is one without a value for this game. One arm
+/// per name; a test holds the arms to the format's list.
+fn place<'a>(name: &str, places: &'a Places) -> Option<Option<&'a str>> {
+    Some(match name {
+        "payload" => Some(places.payload.as_str()),
+        "data" => Some(places.data.as_str()),
+        "config" => Some(places.config.as_str()),
+        "prefix" => places.prefix.as_deref(),
+        "disc" => places.disc.as_deref(),
+        "game" => places.game.as_deref(),
+        _ => return None,
+    })
+}
+
 /// Replace the placeholders of `s` (05 §6.3): `${payload}`, `${data}`, `${config}`, `${prefix}`,
-/// `${disc}` and `${component:<id>}`. Anything else, `${HOME}` or a `$` without braces, stays as
-/// written. A named placeholder with no value here (`${prefix}` for a native game) is a failure.
+/// `${disc}`, `${game}` and `${component:<id>}`. Anything else, `${HOME}` or a `$` without braces,
+/// stays as written. A named placeholder with no value here (`${prefix}` for a native game) is a
+/// failure.
 pub fn substitute(s: &str, places: &Places) -> Result<String, Failure> {
     let mut out = String::with_capacity(s.len());
     let mut rest = s;
@@ -168,20 +188,16 @@ pub fn substitute(s: &str, places: &Places) -> Result<String, Failure> {
                     format!("The game names the component {id}, which has no runner here."),
                 )
             })?)
-        } else if PLACEHOLDERS.contains(&name) {
-            let v = match name {
-                "payload" => Some(places.payload.clone()),
-                "data" => Some(places.data.clone()),
-                "config" => Some(places.config.clone()),
-                "prefix" => places.prefix.clone(),
-                _ => places.disc.clone(),
-            };
-            Some(v.ok_or_else(|| {
-                Failure::new(
-                    "launch.placeholder",
-                    format!("The game uses ${{{name}}}, which has no value for its runner."),
-                )
-            })?)
+        } else if let Some(v) = place(name, places) {
+            Some(
+                v.ok_or_else(|| {
+                    Failure::new(
+                        "launch.placeholder",
+                        format!("The game uses ${{{name}}}, which has no value for its runner."),
+                    )
+                })?
+                .to_string(),
+            )
         } else {
             None
         };
@@ -354,6 +370,7 @@ pub fn plan(inp: &Inputs<'_>) -> Result<Plan, Failure> {
         config,
         prefix: prefix_path,
         disc: run.discs.first().map(|d| join(APP, d)),
+        game: (!run.writable.is_empty()).then(|| join(&data, game::TREE)),
         components: roots
             .iter()
             .map(|(id, r)| (id.clone(), r.path.clone()))

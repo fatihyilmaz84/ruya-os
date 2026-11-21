@@ -251,8 +251,8 @@ pub const RUNNER_ENTRY_PROTON: [&str; 1] = ["proton"];
 /// The closed list of runner `capabilities` (informational in format 1).
 pub const RUNNER_CAPABILITIES: [&str; 4] = ["multiarch", "dxvk", "vkd3d", "ntsync"];
 /// The placeholders `run.command`, `run.cwd` and setup commands substitute (05 §6.3). Anything else
-/// is literal text.
-pub const PLACEHOLDERS: [&str; 5] = ["payload", "data", "config", "prefix", "disc"];
+/// is literal text. `game` is the per-profile game tree of `run.writable` (ADR-040).
+pub const PLACEHOLDERS: [&str; 6] = ["payload", "data", "config", "prefix", "disc", "game"];
 /// Names an app may not take unless the package is official (normalised: lower case, letters and
 /// digits only). Any name containing `ruyaos` is refused as well.
 pub const RESERVED_APP_NAMES: [&str; 6] =

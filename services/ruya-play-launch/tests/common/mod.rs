@@ -18,6 +18,8 @@ pub struct Game {
     pub manifest: Value,
     /// Regular files below `/app` (not the root files).
     pub files: Vec<(String, Vec<u8>)>,
+    /// The files of [`Self::files`] the table marks executable (`x:1`).
+    pub executable: Vec<String>,
 }
 
 /// A runner.json of format 1.
@@ -45,6 +47,7 @@ impl Game {
                 ("art/icon.png".into(), b"icon".to_vec()),
                 ("payload/game".into(), b"elf".to_vec()),
             ],
+            executable: Vec::new(),
         }
     }
 
@@ -93,20 +96,33 @@ impl Game {
         self
     }
 
-    /// The `play.files` text (hashes are not checked at launch).
+    /// The `play.files` text, with each file's real SHA-256 (the launch does not check them; the
+    /// game tree's update compares the files with them, ADR-040).
     pub fn table(&self) -> String {
         let mut files = self.files.clone();
         files.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
         let mut out = String::new();
         for (p, d) in &files {
+            let x = if self.executable.contains(p) {
+                ",\"x\":1"
+            } else {
+                ""
+            };
             out.push_str(&format!(
-                "{{\"h\":\"{}\",\"p\":{},\"s\":{},\"t\":\"f\"}}\n",
-                "0".repeat(64),
+                "{{\"h\":\"{}\",\"p\":{},\"s\":{},\"t\":\"f\"{x}}}\n",
+                sha256(d),
                 serde_json::to_string(p).unwrap(),
                 d.len()
             ));
         }
         out
+    }
+
+    /// Put `bytes` at `path` below `/app` (a new file, or a new content for one).
+    pub fn put(&mut self, path: &str, bytes: &[u8]) -> &mut Self {
+        self.files.retain(|(p, _)| p != path);
+        self.files.push((path.to_string(), bytes.to_vec()));
+        self
     }
 
     /// The game installed in a fresh fake.
@@ -125,6 +141,14 @@ impl Game {
             os.file(&format!("/app/{p}"), d.clone());
         }
     }
+}
+
+/// The SHA-256 of `bytes` as `play.files` writes it.
+pub fn sha256(bytes: &[u8]) -> String {
+    ruya_play_format::sha256_of(&mut &bytes[..], u64::MAX)
+        .expect("a slice reads")
+        .expect("no limit")
+        .0
 }
 
 /// A system runner folder `/app/runners/<name>` with its `runner.json` and entries.

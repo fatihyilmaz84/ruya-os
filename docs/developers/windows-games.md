@@ -163,7 +163,7 @@ An OS update replaces the runners in the image, and the oldest GE-Proton major l
 
 ## A game that writes next to its program
 
-*Experimental (tier C, ADR-040): the format is checked by `ruya-pack validate` today; the console's launcher builds the folder below with RUY-1019, so a game that needs it does not run from it yet.*
+*Experimental (tier C, ADR-040): `ruya-pack validate` checks the fields, and the console's launcher builds the folder (RUY-1019; tested on the developer machine, the run on a console is pending). The details may change before the first release.*
 
 Many Windows games write their ini file, log or saves into their own install folder. In a `.play` package that folder, `/app/payload`, is read-only. Declare the folders the game writes into and it gets a private copy of them for each profile:
 
@@ -184,7 +184,9 @@ Many Windows games write their ini file, log or saves into their own install fol
 - `run.command[0]` is `${game}/<file>` and `run.cwd` is required and starts with `${game}`; `${game}/x` is the file `payload/x`. Setup commands may use `${game}` or `${payload}`. `${game}` without `writable` is an error.
 - `game:` in `data.saves` or `data.cache` names a path inside that folder, for example `game:Save`; without `writable` it is an error.
 - Write the folders as the package lists them, with the same letter case (`System`, not `system`), and keep links out of them.
-- An update of the package keeps what the player's game wrote: a file the game changed is not replaced by the new build's file. Keep the folders to what the game writes; everything in them is copied for every profile that plays it.
+- An update of the package keeps what the player's game wrote: a file the game changed or made stays where it is, and is not replaced by the new build's file; a file it never changed is replaced by the new build's. What the game wrote in a folder your new build no longer lists as writable is kept aside for the player (in `.ruya-play/game-kept/<old build>/` of the game's data folder, the newest such set only), not deleted. So a new default setting in an ini the player's game already rewrote does not reach that player: read new defaults in your code, or name the file differently.
+- The console prepares the folder before the game starts, and again only after an update (the first start after one takes a little longer). Do not write anywhere else under the game's own folder: outside the writable folders a write fails (the folders are read-only and the files are links to the read-only original), and the console never copies such a file back. `.ruya-play/` in your data folder belongs to the console; do not write it.
+- Keep the folders to what the game writes; everything in them is copied for every profile that plays it (with no extra disk on a file system that shares copies, such as btrfs).
 
 `ruya-pack validate` reports the mistakes with the codes `run.writable_path`, `run.writable_overlap`, `run.writable_too_large`, `run.game_placeholder_without_writable` and `run.writable_needs_game`. A game with an option for the folder of its settings can use that instead (`INI=` for Unreal Tournament); that needs no `writable` at all.
 

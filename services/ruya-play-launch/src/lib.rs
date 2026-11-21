@@ -7,14 +7,15 @@
 //!    folders and a content pass would hash gigabytes at every launch),
 //! 2. finds the OS's runners under `/app/runners` ([`runners::scan`]),
 //! 3. decides the command ([`plan::plan`], pure, through `resolve::resolve`),
-//! 4. prepares the prefix and runs the setup steps ([`prepare`]), keeping the status file
-//!    ([`state`]) up to date,
+//! 4. makes or updates the game tree of `run.writable` ([`game`], ADR-040), prepares the prefix
+//!    and runs the setup steps ([`prepare`]), keeping the status file ([`state`]) up to date,
 //! 5. and `exec`s the game (the binary; no shell).
 //!
 //! Every effect goes through [`os::LaunchOs`]; a failure is one sentence ([`Failure`]) the shell
 //! shows.
 
 pub mod fake;
+pub mod game;
 #[cfg(target_os = "linux")]
 pub mod linux;
 pub mod os;
@@ -29,8 +30,8 @@ use ruya_play_format::manifest::{parse_manifest, Manifest};
 use ruya_play_format::problem::Problems;
 use ruya_play_format::resolve::Override;
 use ruya_play_format::runner::{bundled_runners, BundledRunner};
-use ruya_play_format::table::{parse_table, TableIndex};
-use state::{backup_dir, backup_epoch, SetupFailure, State};
+use ruya_play_format::table::{parse_table, FileEntry, TableIndex};
+use state::{Sets, SetupFailure, State, BACKUPS};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::time::Duration;
@@ -123,6 +124,8 @@ pub struct Loaded {
     pub manifest: Manifest,
     /// The runner of each bundled copy, by component id.
     pub bundled: BTreeMap<String, BundledRunner>,
+    /// The checked `play.files`: what the game tree of `run.writable` is made from.
+    pub files: Vec<FileEntry>,
 }
 
 fn damaged(problems: Problems) -> Failure {
@@ -183,7 +186,11 @@ pub fn load_from(os: &dyn LaunchOs, root: &str) -> Result<Loaded, Failure> {
     if !problems.is_empty() {
         return Err(damaged(problems));
     }
-    Ok(Loaded { manifest, bundled })
+    Ok(Loaded {
+        manifest,
+        bundled,
+        files,
+    })
 }
 
 /// What the launcher would run the game with, decided without starting anything.
@@ -260,13 +267,21 @@ pub fn prepare(
             r.family, r.version, r.source, r.component
         ));
     }
+    game::ensure(
+        os,
+        plan::APP,
+        &loaded.manifest,
+        &loaded.files,
+        &plan.data,
+        &mut state,
+    )?;
     apply(os, &plan, &mut state)?;
     state.runner = plan.runner.clone();
     save(os, &plan.data, &state)?;
     Ok(plan.command)
 }
 
-fn save(os: &mut dyn LaunchOs, data: &str, state: &State) -> Result<(), Failure> {
+pub(crate) fn save(os: &mut dyn LaunchOs, data: &str, state: &State) -> Result<(), Failure> {
     state.write(os, data).map_err(|e| {
         Failure::new(
             "launch.state",
@@ -351,7 +366,7 @@ fn rebuild(
             &e,
         )
     };
-    let backup = backup_dir(from);
+    let backup = BACKUPS.path(from);
     let mut kept = Vec::new();
     if state.backup_of == Some(from) {
         kept = saves.to_vec();
@@ -382,20 +397,21 @@ fn rebuild(
     state.backup_of = None;
     state.setup_done.clear();
     save(os, data, state)?;
-    prune_backups(os, data, from);
+    prune_sets(os, data, &BACKUPS, from);
     Ok(())
 }
 
-/// Remove every `epoch-<n>-backup/` but the one of `kept` (the newest, just made; 05 §6.3), each
-/// without following a link. Housekeeping: a failure is a log line and the launch goes on.
-fn prune_backups(os: &mut dyn LaunchOs, data: &str, kept: u64) {
-    let Ok(names) = os.list(data, state::DIR) else {
+/// Remove every set of `sets` but number `kept` (the newest, just made: an epoch backup, 05 §6.3,
+/// or what a game-tree update kept aside, ADR-040), each without following a link. Housekeeping: a
+/// failure is a log line and the launch goes on.
+pub(crate) fn prune_sets(os: &mut dyn LaunchOs, data: &str, sets: &Sets, kept: u64) {
+    let Ok(names) = os.list(data, sets.dir) else {
         return;
     };
     for (name, _) in names {
-        if backup_epoch(&name).is_some_and(|n| n != kept) {
-            if let Err(e) = os.remove(data, &join(state::DIR, &name)) {
-                os.log(&format!("old backup {name} not removed: {e}"));
+        if sets.number(&name).is_some_and(|n| n != kept) {
+            if let Err(e) = os.remove(data, &join(sets.dir, &name)) {
+                os.log(&format!("old set {}/{name} not removed: {e}", sets.dir));
             }
         }
     }

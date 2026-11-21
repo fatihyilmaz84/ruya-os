@@ -89,6 +89,29 @@ impl Package {
     }
 }
 
+/// The SHA-256 of what `reader` gives, as the 64 lower-case hex digits `play.files` writes, and
+/// how many bytes that was; `None` once it gives more than `limit` bytes (the rest is not read).
+/// The one streaming hasher of the format (a 256 KiB buffer): the content pass of [`validate`]
+/// and the launcher's update of a game tree (ADR-040) both use it.
+pub fn sha256_of(reader: &mut dyn Read, limit: u64) -> io::Result<Option<(String, u64)>> {
+    let mut buf = vec![0u8; 256 * 1024];
+    let (mut hasher, mut total) = (Sha256::new(), 0u64);
+    loop {
+        match reader.read(&mut buf) {
+            Ok(0) => return Ok(Some((hex(&hasher.finalize()), total))),
+            Ok(n) => {
+                total += n as u64;
+                if total > limit {
+                    return Ok(None);
+                }
+                hasher.update(&buf[..n]);
+            }
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 fn hex(bytes: &[u8]) -> String {
     use std::fmt::Write;
     bytes
@@ -377,7 +400,6 @@ fn match_table(
 }
 
 fn verify_content(source: &dyn Source, files: &[FileEntry], problems: &mut Problems) {
-    let mut buf = vec![0u8; 256 * 1024];
     for f in files {
         let FileEntry::File {
             path, size, sha256, ..
@@ -396,34 +418,22 @@ fn verify_content(source: &dyn Source, files: &[FileEntry], problems: &mut Probl
                 continue;
             }
         };
-        let (mut hasher, mut total) = (Sha256::new(), 0u64);
-        let outcome = loop {
-            match reader.read(&mut buf) {
-                Ok(0) => break Ok(()),
-                Ok(n) => {
-                    hasher.update(&buf[..n]);
-                    total += n as u64;
-                }
-                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
-                Err(e) => break Err(e),
-            }
-        };
-        match outcome {
+        match sha256_of(&mut reader, u64::MAX) {
             Err(e) => {
                 let p = io_problem(path, &e);
                 problems.add(&p.code, p.path, p.message);
             }
-            Ok(()) if total != *size => problems.add(
+            Ok(Some((_, total))) if total != *size => problems.add(
                 codes::PACKAGE_SIZE_MISMATCH,
                 path,
                 format!("play.files says {size} bytes; the content has {total}."),
             ),
-            Ok(()) if hex(&hasher.finalize()) != *sha256 => problems.add(
+            Ok(Some((hash, _))) if hash != *sha256 => problems.add(
                 codes::PACKAGE_HASH_MISMATCH,
                 path,
                 "The content does not match its SHA-256 in play.files.",
             ),
-            Ok(()) => {}
+            Ok(_) => {}
         }
     }
 }

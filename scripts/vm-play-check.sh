@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: asknet check compat32 generation helper launch launch-windows lstate offline parse perms pkgid remove removeapp runid signals sysrunner verify winpkg withid
+# modes: asknet bumpbuild check compat32 generation helper launch launch-windows lstate modpath offline parse perms pkgid remove removeapp runid signals sysrunner verify winpkg withid
 # Checks ruya-play (org.ruyaos.Play1, RUY-829, the lead's run under RUY-100) inside a running VM,
 # as root. Modes:
 #   check  (default) every step below
@@ -55,14 +55,28 @@
 #          prefix under the app's data folder) check.txt says launches=1, pointer_bits=32, wow64=1,
 #          network=closed; the launcher's status file says the OS's GE-Proton ran the setup step once;
 #          a second Launch of the same profile finds the save (launches=2); the app has no network
-#          permission; no init_t AVC denial and no SIGSYS in the journal. The routes come back at exit
+#          permission; no init_t AVC denial and no SIGSYS in the journal. The routes come back at exit.
+#          RUY-1019 (ADR-040): the sample's programs are in its run.writable folder Program/, so the
+#          launcher runs check.exe from the profile's game tree (<data>/.ruya-play/game): the path
+#          GetModuleFileNameW gives (module= in check.txt, Z: being /) is in that tree, the file
+#          check.exe writes beside itself (beside.txt) is there after each launch and survives the
+#          relaunch, the status file records game_build; then the next build of the package (build+1,
+#          its check.ini changed: bumpbuild) is installed over it and launched a third time: check.exe
+#          reads the new check.ini (edition=2: the file it never changed was replaced), beside.txt
+#          says launches=3 (what it wrote was kept) and game_build is the new build
 #   signals host fixtures only: `signals <monitor.log> <member> <app id>` prints one line per such
 #          Session1 signal in a `busctl --json=short monitor` log: the instance and the arguments
 #          after the app id ("inst" for AppStarted, "inst 0 quit" for AppExited)
 #   winpkg host fixtures only: `winpkg <in.zip> <out.zip> <id>` copies a package with the id changed, its
-#          command set to ${payload}/check.exe and permissions.multiarch true (what launch-windows installs)
+#          command set to ${game}/Program/check.exe and permissions.multiarch true (what launch-windows installs)
+#   bumpbuild host fixtures only: `bumpbuild <in.zip> <out.zip> <path> <text>` copies a package as its next
+#          build (build+1) with payload/<path> holding <text> and its play.files line updated (size, SHA-256);
+#          prints the new build (launch-windows installs it as the update)
+#   modpath host fixtures only: `modpath <check.txt>` prints the module= path of check.exe's report as the
+#          Unix path Wine maps it to (Z:\a\b is /a/b); nothing and status 1 for another drive or no line
 #   lstate host fixtures only: `lstate <state.json>` prints the launcher's status file as
-#          "epoch=<n> setup_done=<ids> runner=<source>/<family>/<version>" ("none" for a native game)
+#          "epoch=<n> setup_done=<ids> runner=<source>/<family>/<version>" ("none" for a native game),
+#          then " game=<n>" when it records the build of a game tree (game_build, RUY-1019)
 #   sysrunner host fixtures only: `sysrunner <runners dir>` prints "<family>/<version>" of the newest
 #          proton-ge runner.json below it (the OS's GE-Proton launch-windows expects in the status file);
 #          which folder is the newest is `vm-runner-check.sh newest`, so that script must be next to this one
@@ -279,13 +293,67 @@ with_id() {
 }
 
 # windows_pkg <in.zip> <out.zip> <id>: what launch-windows installs: the Windows sample under <id>
-# with check.exe, its 32-bit console program, as the command, and the one permission 32-bit code
-# needs (RUY-902; the headless VM cannot play hello.exe, which waits for the arrow keys).
+# with check.exe, its 32-bit console program in its writable folder Program/ (RUY-1019), as the
+# command, and the one permission 32-bit code needs (RUY-902; the headless VM cannot play hello.exe,
+# which waits for the arrow keys).
 windows_pkg() {
     patch_manifest "$1" "$2" "$(python3 -c '
 import json, sys
-print(json.dumps({"id": sys.argv[1], "run": {"command": ["${payload}/check.exe"]}, "permissions": {"multiarch": True}}))
+print(json.dumps({"id": sys.argv[1], "run": {"command": ["${game}/Program/check.exe"]}, "permissions": {"multiarch": True}}))
 ' "$3")"
+}
+
+# bump_build <in.zip> <out.zip> <path> <text>: the next build of a package (play.json build+1) whose
+# file payload/<path> holds <text>, its play.files line given the new size and SHA-256 (the package
+# stays unsigned, as launch-windows installs it); prints the new build. What launch-windows installs as
+# the update (RUY-1019).
+bump_build() {
+    python3 -I - "$@" <<'PY'
+import hashlib, json, sys, zipfile
+src, out, rel, text = sys.argv[1:5]
+path, data = "payload/" + rel, text.encode()
+z = zipfile.ZipFile(src)
+roots = [n[: -len("play.json")] for n in z.namelist() if n.endswith("play.json") and n.count("/") <= 1]
+if len(roots) != 1 or (roots[0] + path) not in z.namelist():
+    sys.exit("bump_build: %s has no single play.json or no %s" % (src, path))
+root, build = roots[0], None
+with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as o:
+    for i in z.infolist():
+        b, name = z.read(i.filename), i.filename[len(root):]
+        if name == "play.json":
+            m = json.loads(b)
+            m["build"] = build = m["build"] + 1
+            b = json.dumps(m, indent=2).encode()
+        elif name == "play.files":
+            lines = []
+            for line in b.decode("utf-8").splitlines():
+                e = json.loads(line)
+                if e.get("p") == path:
+                    e["s"], e["h"] = len(data), hashlib.sha256(data).hexdigest()
+                lines.append(json.dumps(e, separators=(",", ":"), ensure_ascii=False))
+            b = ("\n".join(lines) + "\n").encode("utf-8")
+        elif name == path:
+            b = data
+        o.writestr(i, b)
+print(build)
+PY
+}
+
+# module_path <check.txt>: the module= line of check.exe's report (GetModuleFileNameW's path, RUY-1019)
+# as the Unix path Wine maps it to: Z: is / (dosdevices/z:), so Z:\a\b is /a/b. Prints nothing and
+# returns 1 for another drive, no such line or no file.
+module_path() {
+    python3 -I - "$1" <<'PY'
+import sys
+try:
+    lines = open(sys.argv[1], encoding="utf-8", errors="replace").read().splitlines()
+except OSError:
+    sys.exit(1)
+m = next((l[len("module="):].strip() for l in lines if l.startswith("module=")), "")
+if len(m) < 3 or m[0] not in "zZ" or m[1:3] != ":\\":
+    sys.exit(1)
+print(m[2:].replace("\\", "/"))
+PY
 }
 
 # asks_network <in.zip> <out.zip>: a copy of a package whose play.json asks for network, multiarch
@@ -394,7 +462,8 @@ PY
 }
 
 # launcher_state <state.json>: the launcher's status file (05 section 6.3, step 7) as
-# "epoch=<n> setup_done=<ids> runner=<source>/<family>/<version>" ("runner=none" for a native game).
+# "epoch=<n> setup_done=<ids> runner=<source>/<family>/<version>" ("runner=none" for a native game),
+# then " game=<n>" when it records the build of a game tree (game_build, RUY-1019).
 launcher_state() {
     python3 - "$1" <<'PY'
 import json, sys
@@ -406,7 +475,8 @@ except (OSError, ValueError) as e:
     sys.exit(0)
 r = state.get("runner")
 runner = "none" if r is None else "%s/%s/%s" % (r.get("source"), r.get("family"), r.get("version"))
-print("epoch=%s setup_done=%s runner=%s" % (state.get("epoch"), ",".join(state.get("setup_done", [])), runner))
+game = "" if state.get("game_build") is None else " game=%s" % state.get("game_build")
+print("epoch=%s setup_done=%s runner=%s%s" % (state.get("epoch"), ",".join(state.get("setup_done", [])), runner, game))
 PY
 }
 
@@ -500,6 +570,14 @@ if [ "$mode" = winpkg ]; then
 fi
 if [ "$mode" = lstate ]; then
     launcher_state "${2:?state.json}"
+    exit $?
+fi
+if [ "$mode" = bumpbuild ]; then
+    bump_build "${2:?in.zip}" "${3:?out.zip}" "${4:?path}" "${5:?text}"
+    exit $?
+fi
+if [ "$mode" = modpath ]; then
+    module_path "${2:?check.txt}"
     exit $?
 fi
 if [ "$mode" = sysrunner ]; then
@@ -742,8 +820,9 @@ sepath=/org/ruyaos/Session1
 psvc=org.ruyaos.Profiles1
 ppath=/org/ruyaos/Profiles1
 # What the cleanup undoes: the profile the check made (lcreated, with the admin ladmin that makes it
-# deletable), the monitor, the running instance, the SDL override, the removed routes.
-lprof=""; ladmin=""; lcreated=""; lmon=""; linst=""; lover=""; lrouted=0
+# deletable), the monitor, the running instance, the SDL override, the removed routes. lzip is the
+# package launch_run installed (launch-windows makes its update from it).
+lprof=""; ladmin=""; lcreated=""; lmon=""; linst=""; lover=""; lrouted=0; lzip=""
 
 list_profiles() { busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | grep -o '"p[0-9]*"' | tr -d '"'; }
 
@@ -870,10 +949,12 @@ launch_checks() {
 
 # launch-windows: the Windows sample, offline, with a 32-bit command-line program.
 launch_windows_checks() {
-    local app="play.$appid" user="ruya-$lprof" data report runner perms want got ref
+    local app="play.$appid" user="ruya-$lprof" data report runner perms want got ref game module next
     data="/var/home/$user/.var/app/$app/data"
     # ${prefix} of a Proton runner is <data>/proton/pfx (05 section 6.2.1); check.exe saves in Documents.
     report="$data/proton/pfx/drive_c/users/steamuser/Documents/Hello Play/check.txt"
+    # ${game}, the profile's game tree of run.writable (ADR-040, RUY-1019); check.exe runs from Program/.
+    game="$data/.ruya-play/game"
     echo "--- the platform and the sandbox"
     runner="$(system_runner /usr/lib/ruyaos/play/runners)" && ok "the image ships the GE-Proton runner $runner" \
         || { bad "no proton-ge runner.json under /usr/lib/ruyaos/play/runners"; return; }
@@ -903,7 +984,16 @@ launch_windows_checks() {
     for want in launches=1 pointer_bits=32 wow64=1 network=closed; do
         [ "$(kv "$report" "${want%%=*}")" = "${want#*=}" ] && ok "check.txt says $want" || bad "check.txt says ${want%%=*}=$(kv "$report" "${want%%=*}"), want $want"
     done
-    want="epoch=1 setup_done=first-run runner=system/$runner"
+    # The game tree: check.exe runs from it, finds its folder there and writes beside itself.
+    module="$(module_path "$report")"
+    case "$module" in
+        */.var/app/"$app"/data/.ruya-play/game/Program/check.exe) ok "GetModuleFileNameW gives the program in \${game}: $module" ;;
+        *) bad "check.exe's module path is '$(kv "$report" module)' (${module:-not on Z:}), not \${game}/Program/check.exe" ;;
+    esac
+    [ "$(kv "$report" edition)" = 1 ] && ok "check.exe read check.ini beside its program (edition=1)" || bad "check.txt says edition=$(kv "$report" edition), want 1 (check.ini beside the program)"
+    [ "$(kv "$report" beside)" = 1 ] && [ "$(kv "$game/Program/beside.txt" launches)" = 1 ] && ok "check.exe wrote beside.txt next to itself, in \${game}/Program (launches=1)" \
+        || bad "beside.txt: check.txt says beside=$(kv "$report" beside), $game/Program/beside.txt says launches=$(kv "$game/Program/beside.txt" launches)"
+    want="epoch=1 setup_done=first-run runner=system/$runner game=1"
     got="$(launcher_state "$data/.ruya-play/state.json")"
     [ "$got" = "$want" ] && ok "the launcher's status file: $got" || bad "the launcher's status file says '$got', want '$want'"
     echo "--- second launch: the save in the prefix survives"
@@ -913,6 +1003,22 @@ launch_windows_checks() {
     [ "$(kv "$report" network)" = closed ] && ok "the second launch had no network either" || bad "the second launch reached the network"
     got="$(launcher_state "$data/.ruya-play/state.json")"
     [ "$got" = "$want" ] && ok "the status file is the same after the relaunch (the setup step ran once)" || bad "the launcher's status file after the relaunch says '$got'"
+    [ "$(kv "$game/Program/beside.txt" launches)" = 2 ] && [ "$(kv "$report" beside)" = 2 ] && ok "beside.txt survived the relaunch (launches=2)" || bad "beside.txt after the relaunch says launches=$(kv "$game/Program/beside.txt" launches)"
+    echo "--- an update: the next build, its check.ini changed"
+    next="$(bump_build "$lzip" "$work/launchwindows-next.play.zip" Program/check.ini 'edition=2')" || { bad "bump_build: no next build of $lzip"; return; }
+    install -m 0600 "$work/launchwindows-next.play.zip" "$state/incoming/vm-play-check.play.zip"
+    got="$(install_wait "$state/incoming/vm-play-check.play.zip")"
+    [ "$got" = ok ] && ok "build $next installs over the first (developer mode)" || { bad "the update to build $next: $got"; return; }
+    start_app "$app" 3 || return
+    expect_exit "$app" 3 300 '0 quit' "check.exe ends by itself after the update" || return
+    [ "$(kv "$report" edition)" = 2 ] && ok "edition=2: the check.ini the game never changed was replaced by build $next's" || bad "check.txt says edition=$(kv "$report" edition) after the update, want 2"
+    [ "$(kv "$report" beside)" = 3 ] && [ "$(kv "$game/Program/beside.txt" launches)" = 3 ] && ok "beside.txt survived the update (launches=3): what the game wrote is kept" \
+        || bad "beside.txt after the update: check.txt says beside=$(kv "$report" beside), the file says launches=$(kv "$game/Program/beside.txt" launches)"
+    [ "$(kv "$report" launches)" = 3 ] && ok "the save in the prefix survived the update (launches=3)" || bad "launches is $(kv "$report" launches) after the update, not 3"
+    want="epoch=1 setup_done=first-run runner=system/$runner game=$next"
+    got="$(launcher_state "$data/.ruya-play/state.json")"
+    [ "$got" = "$want" ] && ok "the status file records the new build's tree: $got" || bad "the launcher's status file after the update says '$got', want '$want'"
+    [ ! -e "$data/.ruya-play/game.new" ] && ok "no rebuild is left half-done (no game.new)" || bad "$data/.ruya-play/game.new is still there after the update"
     offline off "$work" && lrouted=0 || bad "the default routes could not be restored"
     avc_checks
     sigsys_checks
@@ -924,7 +1030,8 @@ launch_run() {
     local part="$1" build="$2" checks="$3" got
     dev_mode true >/dev/null
     appid="$(pkg_id "$appid" "$part")" || { bad "no $part id for $appid"; return 1; }
-    "$build" "$zip" "$work/$part.play.zip" "$appid" || { bad "$build: no copy of the sample with the id $appid"; return 1; }
+    lzip="$work/$part.play.zip"
+    "$build" "$zip" "$lzip" "$appid" || { bad "$build: no copy of the sample with the id $appid"; return 1; }
     mkdir -p "$state/incoming"
     install -m 0600 "$work/$part.play.zip" "$state/incoming/vm-play-check.play.zip"
     got="$(install_wait "$state/incoming/vm-play-check.play.zip")"

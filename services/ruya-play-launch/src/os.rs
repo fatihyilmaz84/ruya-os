@@ -84,6 +84,23 @@ pub trait LaunchOs {
     }
     /// Remove `base/rel` and everything in it (a link is removed, not followed).
     fn remove(&mut self, base: &str, rel: &str) -> io::Result<()>;
+    /// Move `src_base/src_rel` (a file, a folder, or a link as the link) to `dst_base/dst_rel` on
+    /// the same file system, nothing copied (`renameat`); the folders above the destination are
+    /// made when missing, a file or a link there is replaced. A link among the folders of either
+    /// `rel` is [`NotFollowed`]; `NotFound` when nothing is at the source.
+    fn rename(
+        &mut self,
+        src_base: &str,
+        src_rel: &str,
+        dst_base: &str,
+        dst_rel: &str,
+    ) -> io::Result<()>;
+    /// Set the permission bits of the folder or regular file `base/rel` (a link at its end or
+    /// among its folders is [`NotFollowed`]).
+    fn set_mode(&mut self, base: &str, rel: &str, mode: u32) -> io::Result<()>;
+    /// The target of the link `base/rel`, as written, never followed (a link among its folders is
+    /// [`NotFollowed`]; anything but a link is an error).
+    fn read_link(&self, base: &str, rel: &str) -> io::Result<String>;
     /// Make `base/rel` a link to `target`.
     fn symlink(&mut self, target: &str, base: &str, rel: &str) -> io::Result<()>;
     /// Write `base/rel` atomically: a temporary file next to it, flushed, then renamed.

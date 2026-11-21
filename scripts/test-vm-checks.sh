@@ -1915,12 +1915,12 @@ got="$(sg AppExited play.b)"
 python3 - "$lp/in.zip" <<'PY'
 import json, sys, zipfile
 m = {"id": "org.example.helloplaywine", "name": {"en": "Hello"}, "components": [{"id": "proton", "type": "proton"}],
-     "run": {"runner": "proton", "component": "proton", "command": ["${payload}/hello.exe"], "cwd": "${payload}",
-             "setup": [{"id": "first-run", "command": ["${payload}/setup.exe"], "once": True}]},
+     "run": {"runner": "proton", "component": "proton", "command": ["${game}/Program/hello.exe"], "cwd": "${game}/Program",
+             "writable": ["Program"], "setup": [{"id": "first-run", "command": ["${game}/Program/setup.exe"], "once": True}]},
      "permissions": {"network": False, "input": "controllers+keyboard-mouse"}}
 with zipfile.ZipFile(sys.argv[1], "w") as z:
     z.writestr("play.json", json.dumps(m))
-    z.writestr("payload/check.exe", b"MZ")
+    z.writestr("payload/Program/check.exe", b"MZ")
 PY
 bash "$here/vm-play-check.sh" winpkg "$lp/in.zip" "$lp/out.zip" org.example.helloplaywine_launchwindows
 got="$(python3 -c '
@@ -1928,9 +1928,9 @@ import json, sys, zipfile
 a, b = zipfile.ZipFile(sys.argv[1]), zipfile.ZipFile(sys.argv[2])
 m = json.loads(b.read("play.json"))
 print(m["id"], m["run"]["command"], m["run"]["cwd"], m["run"]["runner"], m["run"]["setup"][0]["id"], m["permissions"],
-      a.read("payload/check.exe") == b.read("payload/check.exe"), a.namelist() == b.namelist())
+      a.read("payload/Program/check.exe") == b.read("payload/Program/check.exe"), a.namelist() == b.namelist())
 ' "$lp/in.zip" "$lp/out.zip")"
-[ "$got" = "org.example.helloplaywine_launchwindows ['\${payload}/check.exe'] \${payload} proton first-run {'network': False, 'input': 'controllers+keyboard-mouse', 'multiarch': True} True True" ] \
+[ "$got" = "org.example.helloplaywine_launchwindows ['\${game}/Program/check.exe'] \${game}/Program proton first-run {'network': False, 'input': 'controllers+keyboard-mouse', 'multiarch': True} True True" ] \
     && pass "vm-play-check.sh winpkg: the id, the command and multiarch change, the rest of the manifest and the files stay" || fail "vm-play-check.sh winpkg: '$got'"
 # The sample the copy is made from: a Proton component from the OS, and check.exe is what its build produces.
 sw="$here/../samples/hello-play-wine"
@@ -1941,13 +1941,21 @@ c = m["components"][0]
 print(c["type"], c["source"], m["run"]["runner"], m["run"]["component"] == c["id"], m["permissions"].get("network"), "multiarch" in m["permissions"])
 ' "$sw/package/play.json")"
 [ "$got" = "proton system proton True False False" ] && pass "samples/hello-play-wine: type proton, source system, no network and no multiarch of its own (RUY-902)" || fail "samples/hello-play-wine/package/play.json: '$got'"
-grep -q 'check.exe' "$sw/build.sh" && grep -q '"\${payload}/check.exe"' "$here/vm-play-check.sh" && pass "vm-play-check.sh launch-windows runs the check.exe that build.sh compiles" || fail "launch-windows and build.sh disagree on check.exe"
+grep -q '^bin="\$payload/Program"$' "$sw/build.sh" && grep -q '"\$bin/check.exe"' "$sw/build.sh" && grep -q '"\${game}/Program/check.exe"' "$here/vm-play-check.sh" && pass "vm-play-check.sh launch-windows runs the check.exe that build.sh compiles into Program/" || fail "launch-windows and build.sh disagree on check.exe"
+# RUY-1019: the sample's programs are in its writable folder, check.exe reads check.ini and writes beside.txt there.
+got="$(python3 -c '
+import json, sys
+r = json.load(open(sys.argv[1], encoding="utf-8"))["run"]
+print(r["writable"], r["command"][0], r["cwd"])
+' "$sw/package/play.json")"
+[ "$got" = "['Program'] \${game}/Program/hello.exe \${game}/Program" ] && grep -q "echo 'edition=1' > \"\$bin/check.ini\"" "$sw/build.sh" && grep -q 'L"check.ini"' "$sw/src/check.c" && grep -q 'L"beside.txt"' "$sw/src/check.c" && grep -q 'Program/check.ini' "$here/vm-play-check.sh" && grep -q 'game/Program/beside.txt' "$here/vm-play-check.sh" \
+    && pass "samples/hello-play-wine: Program/ is writable, build.sh ships check.ini there, check.c reads it and writes beside.txt, launch-windows looks there (RUY-1019)" || fail "samples/hello-play-wine writable layout: '$got'"
 # check.txt: the keys the check reads are the ones check.c writes, in the folder data.saves keeps.
 keys_ok=1
-for key in launches pointer_bits wow64 network; do
+for key in launches pointer_bits wow64 network module edition beside; do
     grep -q "$key=" "$sw/src/check.c" && grep -q "$key=" "$here/vm-play-check.sh" || keys_ok=0
 done
-[ "$keys_ok" = 1 ] && pass "check.c writes the keys launch-windows reads from check.txt (launches, pointer_bits, wow64, network)" || fail "check.c and vm-play-check.sh disagree on the keys of check.txt"
+[ "$keys_ok" = 1 ] && pass "check.c writes the keys launch-windows reads from check.txt (launches, pointer_bits, wow64, network, module, edition, beside)" || fail "check.c and vm-play-check.sh disagree on the keys of check.txt"
 grep -q 'Hello Play' "$sw/src/check.c" && grep -q 'check.txt' "$sw/src/check.c" && grep -q 'Documents/Hello Play/check.txt' "$here/vm-play-check.sh" && grep -q 'prefix:drive_c/users/steamuser/Documents/Hello Play' "$sw/package/play.json" && pass "check.txt is in the folder data.saves keeps, where launch-windows looks (RUY-902)" || fail "check.txt: the path of check.c, play.json and vm-play-check.sh differ"
 grep -q 'drive_c/users/steamuser/Documents/Hello Play/check.txt' "$here/vm-play-check.sh" && grep -q 'proton/pfx' "$here/vm-play-check.sh" && pass "launch-windows reads check.txt in the Proton prefix (<data>/proton/pfx, 05 section 6.2.1)" || fail "launch-windows looks outside the Proton prefix"
 # kv on a check.txt as check.exe writes it, CR LF (RUY-999): the values without the CR. The script's own kv,
@@ -1960,11 +1968,58 @@ printf 'launches=1\r\npointer_bits=32\r\nwow64=1\r\n' > "$tmp/check-crlf.txt"
 [ "$(kv_bytes "$tmp/check-crlf.txt" launches)" = '1\n' ] && [ "$(kv_bytes "$tmp/check-crlf.txt" pointer_bits)" = '32\n' ] && [ -z "$(kv_bytes "$tmp/check-crlf.txt" network)" ] && pass "vm-play-check.sh kv reads a CR LF check.txt (launches=1, pointer_bits=32, no network key)" || fail "vm-play-check.sh kv on CR LF: launches is '$(kv_bytes "$tmp/check-crlf.txt" launches)', want '1\n'"
 unset -f kv sed kv_bytes
 
+# modpath (RUY-1019): check.exe's module= line as the Unix path Wine maps Z: to.
+printf 'launches=1\r\nmodule=Z:\\var\\home\\ruya-p1\\.var\\app\\play.a\\data\\.ruya-play\\game\\Program\\check.exe\r\nedition=1\r\n' > "$tmp/check-mod.txt"
+got="$(bash "$here/vm-play-check.sh" modpath "$tmp/check-mod.txt" | tr -d '\r')"
+[ "$got" = "/var/home/ruya-p1/.var/app/play.a/data/.ruya-play/game/Program/check.exe" ] && pass "vm-play-check.sh modpath: Z:\\a\\b is /a/b (CR LF dropped)" || fail "vm-play-check.sh modpath: '$got'"
+printf 'module=z:\\x\\y.exe\n' > "$tmp/check-mod-lower.txt"
+[ "$(bash "$here/vm-play-check.sh" modpath "$tmp/check-mod-lower.txt" | tr -d '\r')" = "/x/y.exe" ] && pass "vm-play-check.sh modpath: a lower-case z: too" || fail "vm-play-check.sh modpath: lower-case z: '$(bash "$here/vm-play-check.sh" modpath "$tmp/check-mod-lower.txt")'"
+printf 'module=C:\\Program Files\\x.exe\n' > "$tmp/check-mod-c.txt"
+printf 'launches=1\n' > "$tmp/check-mod-none.txt"
+for f in check-mod-c check-mod-none missing; do
+    if out="$(bash "$here/vm-play-check.sh" modpath "$tmp/$f.txt")" || [ -n "$out" ]; then fail "vm-play-check.sh modpath $f: '$out', want nothing and status 1"; else pass "vm-play-check.sh modpath: $f is no path in the tree (status 1)"; fi
+done
+# The pattern launch-windows matches the path against: the tree's Program/check.exe of this app only.
+eval "$(sed -n '/^launch_windows_checks() {/,/^}/p' "$here/vm-play-check.sh" | grep -m1 -A3 'case "\$module" in' | sed -n '2s/^ *\([^)]*\)).*/mp_pat() { case "$1" in \1) return 0 ;; esac; return 1; }/p')"
+app=play.a
+mp_pat "/var/home/ruya-p1/.var/app/play.a/data/.ruya-play/game/Program/check.exe" && pass "launch-windows takes a module path in \${game}/Program" || fail "launch-windows refuses the module path in \${game}/Program"
+mp_pat "/var/home/ruya-p1/.var/app/play.a/data/.ruya-play/game.new/Program/check.exe" && fail "launch-windows takes a path outside the tree" || pass "launch-windows refuses a path outside \${game} (game.new)"
+mp_pat "/app/payload/Program/check.exe" && fail "launch-windows takes the read-only original" || pass "launch-windows refuses /app/payload (the original, not the tree)"
+mp_pat "/var/home/ruya-p1/.var/app/play.b/data/.ruya-play/game/Program/check.exe" && fail "launch-windows takes another app's tree" || pass "launch-windows refuses another app's tree"
+unset -f mp_pat; unset app
+
+# bumpbuild (RUY-1019): the next build of a package with one payload file changed and its table line updated.
+python3 - "$lp/bb-in.zip" <<'PY'
+import hashlib, json, sys, zipfile
+files = {"payload/Program/check.exe": b"MZ", "payload/Program/check.ini": b"edition=1\n", "payload/x\u00e9.txt": b"e"}
+table = "".join(json.dumps({"h": hashlib.sha256(d).hexdigest(), "p": p, "s": len(d), "t": "f"}, separators=(",", ":"), ensure_ascii=False) + "\n" for p, d in sorted(files.items()))
+with zipfile.ZipFile(sys.argv[1], "w") as z:
+    z.writestr("play.json", json.dumps({"id": "a.b", "build": 4}))
+    z.writestr("play.files", table)
+    for p, d in files.items():
+        z.writestr(p, d)
+PY
+got="$(bash "$here/vm-play-check.sh" bumpbuild "$lp/bb-in.zip" "$lp/bb-out.zip" Program/check.ini 'edition=2' | tr -d '\r')"
+[ "$got" = 5 ] && pass "vm-play-check.sh bumpbuild prints the next build (5)" || fail "vm-play-check.sh bumpbuild printed '$got'"
+got="$(python3 -c '
+import hashlib, json, sys, zipfile
+a, b = zipfile.ZipFile(sys.argv[1]), zipfile.ZipFile(sys.argv[2])
+lines = {json.loads(l)["p"]: json.loads(l) for l in b.read("play.files").decode("utf-8").splitlines()}
+ini = b.read("payload/Program/check.ini")
+e = lines["payload/Program/check.ini"]
+same = [p for p in ("payload/Program/check.exe", "payload/x\u00e9.txt") if b.read(p) == a.read(p) and lines[p]["h"] == hashlib.sha256(a.read(p)).hexdigest()]
+print(json.loads(b.read("play.json"))["build"], ini.decode(), e["s"] == len(ini), e["h"] == hashlib.sha256(ini).hexdigest(), len(same), a.namelist() == b.namelist(), "\\u" not in b.read("play.files").decode("utf-8"))
+' "$lp/bb-in.zip" "$lp/bb-out.zip")"
+[ "$got" = "5 edition=2 True True 2 True True" ] && pass "vm-play-check.sh bumpbuild: build+1, the file and its table line (size, SHA-256) changed, the other files and lines as they were" || fail "vm-play-check.sh bumpbuild: '$got'"
+bash "$here/vm-play-check.sh" bumpbuild "$lp/bb-in.zip" "$lp/bb-none.zip" Program/none.ini x >/dev/null 2>&1 && fail "vm-play-check.sh bumpbuild accepts a file the package lacks" || pass "vm-play-check.sh bumpbuild refuses a file the package lacks"
+
 # lstate: the launcher's status file (05 section 6.3).
 echo '{"format":1,"epoch":1,"backup_of":null,"setup_done":["first-run"],"setup_failed":null,"runner":{"component":"proton","family":"proton-ge","version":"GE-Proton11-12","source":"system","hash":null}}' > "$lp/state-win.json"
 echo '{"format":1,"epoch":0,"backup_of":null,"setup_done":[],"setup_failed":null,"runner":null}' > "$lp/state-native.json"
 echo 'not json' > "$lp/state-bad.json"
+echo '{"format":1,"epoch":1,"backup_of":null,"setup_done":["first-run"],"setup_failed":null,"runner":{"component":"proton","family":"proton-ge","version":"GE-Proton11-12","source":"system","hash":null},"game_build":2}' > "$lp/state-game.json"
 ls_() { bash "$here/vm-play-check.sh" lstate "$1" | tr -d '\r'; }
+[ "$(ls_ "$lp/state-game.json")" = "epoch=1 setup_done=first-run runner=system/proton-ge/GE-Proton11-12 game=2" ] && pass "vm-play-check.sh lstate: the build of the game tree (game_build, RUY-1019)" || fail "lstate (game tree): '$(ls_ "$lp/state-game.json")'"
 [ "$(ls_ "$lp/state-win.json")" = "epoch=1 setup_done=first-run runner=system/proton-ge/GE-Proton11-12" ] && pass "vm-play-check.sh lstate: a system-runner launch" || fail "lstate (windows): '$(ls_ "$lp/state-win.json")'"
 [ "$(ls_ "$lp/state-native.json")" = "epoch=0 setup_done= runner=none" ] && pass "vm-play-check.sh lstate: a native game has no runner" || fail "lstate (native): '$(ls_ "$lp/state-native.json")'"
 case "$(ls_ "$lp/state-bad.json")" in unreadable:*) pass "vm-play-check.sh lstate: a damaged file is unreadable, not empty" ;; *) fail "lstate (bad): '$(ls_ "$lp/state-bad.json")'" ;; esac

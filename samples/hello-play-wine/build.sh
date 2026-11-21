@@ -1,9 +1,10 @@
 #!/bin/sh
 # SPDX-License-Identifier: CC0-1.0
 #
-# Builds the Windows sample: cross-compiles the three Windows programs into package/payload/
-# (hello.exe and setup.exe 64-bit, check.exe 32-bit), then, when ruya-pack is on the PATH (or
-# RUYA_PACK names it), writes play.files and the zip.
+# Builds the Windows sample: cross-compiles the three Windows programs into package/payload/Program/
+# (hello.exe and setup.exe 64-bit, check.exe 32-bit) and writes check.ini next to them (the settings
+# file check.exe reads beside its program), then, when ruya-pack is on the PATH (or RUYA_PACK names
+# it), writes play.files and the zip. Program/ is the package's run.writable folder (RUY-1019).
 # Needs two cross compilers: Fedora `sudo dnf install mingw64-gcc mingw32-gcc`, Debian
 # `gcc-mingw-w64-x86-64 gcc-mingw-w64-i686`.
 #
@@ -16,11 +17,13 @@ payload="$here/package/payload"
 cc=${MINGW_CC:-x86_64-w64-mingw32-gcc}
 cc32=${MINGW_CC32:-i686-w64-mingw32-gcc}
 
-mkdir -p "$payload"
-"$cc" -O2 -Wall -Wextra -mwindows -o "$payload/hello.exe" "$here/src/hello.c" -lshell32 -lgdi32 -luser32
-"$cc" -O2 -Wall -Wextra -o "$payload/setup.exe" "$here/src/setup.c"
-"$cc32" -O2 -Wall -Wextra -static -o "$payload/check.exe" "$here/src/check.c" -lws2_32 -lshell32
-echo "built $payload/hello.exe, $payload/setup.exe and $payload/check.exe"
+bin="$payload/Program"
+mkdir -p "$bin"
+"$cc" -O2 -Wall -Wextra -mwindows -o "$bin/hello.exe" "$here/src/hello.c" -lshell32 -lgdi32 -luser32
+"$cc" -O2 -Wall -Wextra -o "$bin/setup.exe" "$here/src/setup.c"
+"$cc32" -O2 -Wall -Wextra -static -o "$bin/check.exe" "$here/src/check.c" -lws2_32 -lshell32
+echo 'edition=1' > "$bin/check.ini"
+echo "built $bin/hello.exe, $bin/setup.exe and $bin/check.exe, wrote $bin/check.ini"
 
 [ "${1:-}" = "--payload-only" ] && exit 0
 

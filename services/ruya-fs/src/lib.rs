@@ -23,7 +23,12 @@
 //!   never followed;
 //! - [`Dir::copy`]: a tree copied (folders and regular files with their modes, links made again as
 //!   links with the same target, never followed; FIFOs, devices and sockets skipped), with a depth
-//!   cap;
+//!   cap; a file's bytes are shared with a reflink (`FICLONE`) where the file system can, else
+//!   copied (RUY-1019);
+//! - [`Dir::rename`]: an entry moved to another folder of the same file system (`renameat`), a
+//!   link as a link;
+//! - [`Dir::set_mode`] and [`Dir::read_link`]: a folder's or file's mode set, a link's target
+//!   read, neither through a link;
 //! - [`open_file`]: [`Dir::open_file`] for a file whose folder is itself trusted;
 //! - [`write_atomic`]: [`Dir::write`] for a file whose folder is itself trusted.
 //!
@@ -336,9 +341,11 @@ impl Dir {
             f.write_all(data)?;
             f.sync_all()?;
         }
-        self.inner.rename(&tmp, name).inspect_err(|_| {
-            let _ = self.inner.unlink(&tmp);
-        })?;
+        self.inner
+            .rename(&tmp, &self.inner, name)
+            .inspect_err(|_| {
+                let _ = self.inner.unlink(&tmp);
+            })?;
         self.inner.sync()
     }
 
@@ -437,8 +444,7 @@ impl Dir {
                 let mode = imp::file_mode(&from)? & 0o777;
                 dst.remove_name(dst_name, 0, max)?;
                 let mut to = dst.inner.create(dst_name, mode)?;
-                io::copy(&mut from, &mut to)?;
-                Ok(())
+                imp::copy_bytes(&mut from, &mut to)
             }
             Some(Kind::Other) => Ok(()),
         }
@@ -464,6 +470,54 @@ impl Dir {
             self.copy_name(&entry, &to, &entry, depth + 1, max)?;
         }
         to.inner.set_mode(self.inner.mode()?)
+    }
+
+    /// Move `rel` (a file, a folder with everything in it, or a link, moved as the link) to
+    /// `to_rel` below `to`, which must be on the same file system (`renameat`: nothing is
+    /// copied). The folders above `to_rel` are made when missing (0700); a file or a link at
+    /// `to_rel` is replaced, never followed, an empty folder by a folder only. A link among the
+    /// folders of either path is [`NotFollowed`]; `NotFound` when nothing is at `rel`.
+    pub fn rename(&self, rel: &Path, to: &Dir, to_rel: &Path) -> io::Result<()> {
+        let (src, name) = self.parent_of(rel, false)?;
+        if src.inner.kind(name)?.is_none() {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("{} is not there", src.shown(name)),
+            ));
+        }
+        let (dst, dst_name) = to.parent_of(to_rel, true)?;
+        src.inner.rename(name, &dst.inner, dst_name)
+    }
+
+    /// Set the permission bits of the folder or regular file `rel` (an empty `rel` is this
+    /// folder). A link at its end or among its folders is [`NotFollowed`]; a folder its owner
+    /// closed to itself is opened up first, as [`Self::remove`] does. Nothing off Linux.
+    pub fn set_mode(&self, rel: &Path, mode: u32) -> io::Result<()> {
+        let names = names(rel)?;
+        let Some((last, parents)) = names.split_last() else {
+            return self.inner.set_mode(mode);
+        };
+        let dir = self.walk_names(parents)?;
+        match dir.inner.kind(last)? {
+            None => Err(io::ErrorKind::NotFound.into()),
+            Some(Kind::Dir) => match dir.inner.open_dir_for_removal(last)? {
+                Found::It(inner) => inner.set_mode(mode),
+                Found::Link => Err(NotFollowed::error(&dir.shown(last))),
+                Found::Other => Err(not_a_folder(&dir.shown(last))),
+            },
+            Some(_) => imp::set_file_mode(&dir.open_name(last)?, mode),
+        }
+    }
+
+    /// The target of the link `rel`, as written (never followed). A link among its folders is
+    /// [`NotFollowed`]; something that is not a link is refused.
+    pub fn read_link(&self, rel: &Path) -> io::Result<PathBuf> {
+        let (dir, name) = self.parent_of(rel, false)?;
+        match dir.inner.kind(name)? {
+            None => Err(io::ErrorKind::NotFound.into()),
+            Some(Kind::Link) => dir.inner.read_link(name),
+            Some(_) => Err(refuse(&dir.path.join(name), "is not a link")),
+        }
     }
 
     /// Make `rel` a link to `target` (the folders above it made when missing, whatever is at
