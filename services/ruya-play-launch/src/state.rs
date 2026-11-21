@@ -65,9 +65,24 @@ pub struct State {
     pub runner: Option<RunnerInUse>,
 }
 
-/// The folder (below `${data}`) that holds the saves of the prefix of `epoch` during a rebuild.
+/// How a backup folder's name begins and ends: `epoch-<n>-backup`.
+const BACKUP_NAME: (&str, &str) = ("epoch-", "-backup");
+
+/// The folder (below `${data}`) that holds the saves of the prefix of `epoch`: made by a rebuild
+/// from that epoch and kept until a later rebuild makes a newer one (05 §6.3).
 pub fn backup_dir(epoch: u64) -> String {
-    format!("{DIR}/epoch-{epoch}-backup")
+    let (head, tail) = BACKUP_NAME;
+    format!("{DIR}/{head}{epoch}{tail}")
+}
+
+/// The epoch of the backup folder called `name` (in [`DIR`]); none for any other name.
+pub fn backup_epoch(name: &str) -> Option<u64> {
+    let (head, tail) = BACKUP_NAME;
+    let n = name.strip_prefix(head)?.strip_suffix(tail)?;
+    if n.is_empty() || !n.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    n.parse().ok()
 }
 
 fn text(v: Option<&Value>) -> Option<String> {
@@ -176,6 +191,25 @@ impl State {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_backup_folder_name_gives_its_epoch_back() {
+        for n in [0, 1, 7, u64::MAX] {
+            let dir = backup_dir(n);
+            let name = dir.strip_prefix(&format!("{DIR}/")).expect("in DIR");
+            assert_eq!(backup_epoch(name), Some(n));
+        }
+        for other in [
+            "state.json",
+            "epoch--backup",
+            "epoch-+1-backup",
+            "epoch-1-backup.tmp",
+            "epoch-x-backup",
+            "epoch-99999999999999999999-backup",
+        ] {
+            assert_eq!(backup_epoch(other), None, "{other}");
+        }
+    }
 
     #[test]
     fn round_trip() {

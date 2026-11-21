@@ -30,7 +30,7 @@ use ruya_play_format::problem::Problems;
 use ruya_play_format::resolve::Override;
 use ruya_play_format::runner::{bundled_runners, BundledRunner};
 use ruya_play_format::table::{parse_table, TableIndex};
-use state::{backup_dir, SetupFailure, State};
+use state::{backup_dir, backup_epoch, SetupFailure, State};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::time::Duration;
@@ -321,8 +321,9 @@ fn create_prefix(os: &mut dyn LaunchOs, data: &str, p: &PrefixPlan) -> Result<()
 }
 
 /// The epoch rebuild (ADR-037): saves out, prefix gone, prefix new, saves back. The backup stays
-/// in `epoch-<from>-backup/`. A save behind a planted link is not followed and not kept (what the
-/// link points at is not in the prefix, and removing the prefix removes only the link).
+/// in `epoch-<from>-backup/`, the only one kept: older ones go once the rebuild is done
+/// ([`prune_backups`]). A save behind a planted link is not followed and not kept (what the link
+/// points at is not in the prefix, and removing the prefix removes only the link).
 fn rebuild(
     os: &mut dyn LaunchOs,
     data: &str,
@@ -369,7 +370,24 @@ fn rebuild(
     state.epoch = to;
     state.backup_of = None;
     state.setup_done.clear();
-    save(os, data, state)
+    save(os, data, state)?;
+    prune_backups(os, data, from);
+    Ok(())
+}
+
+/// Remove every `epoch-<n>-backup/` but the one of `kept` (the newest, just made; 05 §6.3), each
+/// without following a link. Housekeeping: a failure is a log line and the launch goes on.
+fn prune_backups(os: &mut dyn LaunchOs, data: &str, kept: u64) {
+    let Ok(names) = os.list(&join(data, state::DIR)) else {
+        return;
+    };
+    for (name, _) in names {
+        if backup_epoch(&name).is_some_and(|n| n != kept) {
+            if let Err(e) = os.remove(data, &join(state::DIR, &name)) {
+                os.log(&format!("old backup {name} not removed: {e}"));
+            }
+        }
+    }
 }
 
 fn exit_text(exit: Exit) -> String {

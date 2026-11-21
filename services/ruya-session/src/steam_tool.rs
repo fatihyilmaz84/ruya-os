@@ -14,8 +14,8 @@
 //! `~/.var/app/com.valvesoftware.Steam`, so a game inside Steam can write there: the marker, the
 //! config and every folder on the way. A game may delete the marker; the step then runs again,
 //! which is harmless only because an existing default is never replaced. And a game may plant
-//! links, so every read and write goes through `safe_file`, which refuses a link on the path and
-//! never follows one.
+//! links, so every read and write goes through `ruya_fs` (an `openat` walk from the home's folder,
+//! RUY-911), which refuses a link at any step of the path and never follows one.
 //!
 //! Which runner: the one the launcher's scan (`ruya_play_launch::runners::scan_in`, the same code
 //! ruya-library uses) finds with `kind` `proton` (the ones `platform.rs` links for Steam), the
@@ -32,7 +32,8 @@ use ruya_play_format::resolve::compare_versions;
 use ruya_play_launch::os::LaunchOs;
 use ruya_play_launch::runners::scan_in;
 
-use crate::safe_file::{read_below, write_below};
+use ruya_fs::Dir;
+
 use crate::vdf::{self, Entry, Value};
 
 /// The Steam Flatpak (the only app this step belongs to).
@@ -50,6 +51,8 @@ const CONFIG: &str = ".var/app/com.valvesoftware.Steam/.local/share/Steam/config
 const MARKER: &str = ".var/app/com.valvesoftware.Steam/.ruyaos-default-tool";
 /// A `compatibilitytool.vdf` is a few hundred bytes.
 const MAX_TOOL_FILE: u64 = 64 * 1024;
+/// Steam's `config.vdf` holds a few kilobytes to a few hundred; more is not Steam's file.
+const MAX_CONFIG_FILE: u64 = 8 * 1024 * 1024;
 
 /// The unit property that runs the step before Steam (the `-` ignores a failure).
 pub fn exec_start_pre(session_program: &str) -> String {
@@ -137,7 +140,10 @@ pub fn run(home: &Path, os: &dyn LaunchOs, runners: &str) -> Result<Done, String
         return Ok(Done::AlreadySettled);
     }
     let tool = default_tool(os, runners)?;
-    let current = match read_below(home, config) {
+    let home_dir = Dir::open(home).map_err(|e| format!("{}: {e}", home.display()))?;
+    let current = match home_dir.read(config, MAX_CONFIG_FILE).and_then(|bytes| {
+        String::from_utf8(bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    }) {
         Ok(text) => Some(text),
         Err(e) if e.kind() == io::ErrorKind::NotFound => None,
         Err(e) => return Err(format!("{CONFIG}: {e}")),
@@ -146,12 +152,16 @@ pub fn run(home: &Path, os: &dyn LaunchOs, runners: &str) -> Result<Done, String
         .map_err(|e| format!("{CONFIG} is left as it is: {e}"))?
     {
         Some(text) => {
-            write_below(home, config, text.as_bytes()).map_err(|e| format!("{CONFIG}: {e}"))?;
+            home_dir
+                .write(config, text.as_bytes())
+                .map_err(|e| format!("{CONFIG}: {e}"))?;
             Done::Set(tool)
         }
         None => Done::KeptExisting,
     };
-    write_below(home, marker, b"done\n").map_err(|e| format!("{MARKER}: {e}"))?;
+    home_dir
+        .write(marker, b"done\n")
+        .map_err(|e| format!("{MARKER}: {e}"))?;
     Ok(done)
 }
 
@@ -405,6 +415,7 @@ mod tests {
     #[cfg(unix)]
     mod planted {
         use super::*;
+        use std::ffi::OsStr;
         use std::os::unix::fs::symlink;
 
         /// A home with Steam's folders, a victim file and a folder outside the home.
@@ -430,8 +441,10 @@ mod tests {
         fn a_link_as_the_temporary_file_is_not_written_through() {
             let tmp = tempfile::tempdir().expect("tmp");
             let (home, victim, _) = home_with_victim(tmp.path());
-            symlink(&victim, home.join(CONFIG).with_extension("tmp")).expect("link");
-            symlink(&victim, home.join(MARKER).with_extension("tmp")).expect("link");
+            for file in [CONFIG, MARKER] {
+                let tmp = ruya_fs::temp_name(OsStr::new(file));
+                symlink(&victim, home.join(tmp)).expect("link");
+            }
             assert_eq!(step(&home), Ok(Done::Set(TOOL.to_owned())));
             assert_eq!(fs::read_to_string(&victim).expect("read"), "precious");
         }

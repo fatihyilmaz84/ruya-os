@@ -986,6 +986,14 @@ name = "ruya-flatpak"
 version = "0.1.0"
 
 [[package]]
+name = "ruya-fs"
+version = "0.1.0"
+dependencies = [
+ "rustix",
+ "tempfile",
+]
+
+[[package]]
 name = "ruya-inputd"
 version = "0.1.0"
 dependencies = [
@@ -1101,6 +1109,7 @@ name = "ruya-play-launch"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "ruya-fs",
  "ruya-play-format",
  "serde_json",
  "tempfile",
@@ -1144,6 +1153,7 @@ dependencies = [
  "futures-lite",
  "libc",
  "ruya-contract-test",
+ "ruya-fs",
  "ruya-play-format",
  "ruya-play-launch",
  "tempfile",
