@@ -50,7 +50,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
-use crate::accounts::{valid_app_id, valid_profile_id, Accounts};
+use crate::accounts::{valid_profile_id, Accounts};
 use crate::acl;
 use crate::activity::ActivityGate;
 use crate::book::{Book, SaveAnswer, Summary};
@@ -64,6 +64,7 @@ use crate::pad::{
 };
 use crate::seats::{Joined, Player, Seats, SEATS};
 use crate::udev::UdevEvent;
+use ruya_flatpak::valid_session_app_id;
 
 pub type PadKey = u64;
 pub type VirtualId = u64;
@@ -1680,7 +1681,7 @@ impl<B: Backend> Router<B> {
     /// they are ready (at once when there are none). The next `SetRoute` "app" or "overlay" with
     /// this app id and profile binds them (`apply`).
     pub fn prepare_pads(&mut self, app_id: &str, profile: &str, now: Instant) -> Status {
-        if !valid_app_id(app_id) {
+        if !valid_session_app_id(app_id) {
             return Status::Invalid;
         }
         if !valid_profile_id(profile) {
@@ -1796,7 +1797,7 @@ impl<B: Backend> Router<B> {
             return Status::Invalid;
         };
         let instance_ok = instance.len() <= 255 && !instance.chars().any(char::is_control);
-        let app_ok = app_id.is_empty() || valid_app_id(app_id);
+        let app_ok = app_id.is_empty() || valid_session_app_id(app_id);
         let shape_ok = match r {
             Route::App => !instance.is_empty() && !app_id.is_empty() && !profile.is_empty(),
             Route::Overlay => !profile.is_empty() && (instance.is_empty() == app_id.is_empty()),
@@ -2431,7 +2432,7 @@ impl<B: Backend> Router<B> {
         if !self.console_ok(profile) {
             return (Status::UnknownProfile, String::new(), Vec::new());
         }
-        if !app_id.is_empty() && !valid_app_id(app_id) {
+        if !app_id.is_empty() && !valid_session_app_id(app_id) {
             return (Status::Invalid, String::new(), Vec::new());
         }
         let family = if device_id.is_empty() {

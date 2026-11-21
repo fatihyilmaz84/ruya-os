@@ -21,6 +21,18 @@ pub fn valid_app_id(id: &str) -> bool {
         })
 }
 
+/// The longest app id Session1 takes: the id is part of the unit name `ruya-app-<user>-<id>.service`
+/// and of the `ruya-session` arguments, which stay far below the unit-name limit
+/// (`api/dbus/org.ruyaos.Session1.xml`). Shorter than Flatpak's own 255.
+pub const MAX_SESSION_APP_ID: usize = 120;
+
+/// An app id a session may run: `valid_app_id` and at most `MAX_SESSION_APP_ID` characters. The
+/// check of `ruya-session` and of everything that names a running app (`ruya-inputd`'s routing,
+/// `ruya-devices`' parking list).
+pub fn valid_session_app_id(id: &str) -> bool {
+    id.len() <= MAX_SESSION_APP_ID && valid_app_id(id)
+}
+
 /// `flatpak override` without `--reset` or `--show`: the arguments around the withdraw arguments
 /// (the arguments after `flatpak`).
 pub fn override_command(id: &str, args: &[String]) -> Vec<String> {
@@ -74,6 +86,17 @@ mod tests {
         }
         assert!(valid_app_id(&format!("org.a.{}", "x".repeat(249))));
         assert!(!valid_app_id(&format!("org.a.{}", "x".repeat(250))));
+    }
+
+    #[test]
+    fn session_app_ids_stop_at_120() {
+        assert!(valid_session_app_id("org.example.Racer"));
+        assert!(!valid_session_app_id("Racer"));
+        let max = format!("org.a.{}", "x".repeat(MAX_SESSION_APP_ID - 6));
+        assert_eq!(max.len(), MAX_SESSION_APP_ID);
+        assert!(valid_session_app_id(&max));
+        assert!(!valid_session_app_id(&format!("{max}x")));
+        assert!(valid_app_id(&format!("{max}x")));
     }
 
     #[test]

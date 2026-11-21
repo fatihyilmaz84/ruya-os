@@ -67,14 +67,6 @@ fn valid_user(user: &str) -> bool {
     })
 }
 
-fn valid_app(id: &str) -> bool {
-    !id.is_empty()
-        && id.len() <= 120
-        && id
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
-}
-
 /// The list of `--frozen=a,b` (an empty value is an empty list).
 fn list(arg: &str, name: &str) -> Result<Vec<String>, String> {
     let value = arg
@@ -85,7 +77,10 @@ fn list(arg: &str, name: &str) -> Result<Vec<String>, String> {
         .filter(|s| !s.is_empty())
         .map(str::to_owned)
         .collect();
-    match ids.iter().find(|id| !valid_app(id)) {
+    match ids
+        .iter()
+        .find(|id| !ruya_flatpak::valid_session_app_id(id))
+    {
         Some(bad) => Err(format!("not an application id: {bad:?}")),
         None => Ok(ids),
     }
@@ -402,6 +397,25 @@ pub fn apply(req: &Request) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_lists_take_session_app_ids_only() {
+        assert_eq!(
+            list("--frozen=org.a.B,org.c.D", "--frozen=").unwrap(),
+            ["org.a.B", "org.c.D"]
+        );
+        // A bare name, a digit-first element and an id over the Session1 cap were accepted before.
+        for bad in [
+            "firefox",
+            "org.1x.App",
+            &format!("org.a.{}", "x".repeat(120)),
+        ] {
+            assert!(
+                list(&format!("--frozen={bad}"), "--frozen=").is_err(),
+                "{bad}"
+            );
+        }
+    }
 
     const PULSE: u64 = 900;
 

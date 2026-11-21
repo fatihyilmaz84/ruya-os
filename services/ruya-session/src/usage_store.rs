@@ -10,8 +10,9 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use crate::spawner::{valid_app_id, valid_profile_id};
+use crate::spawner::valid_profile_id;
 use crate::usage::{DayRow, EndReason, Ledger, SessionRecord};
+use ruya_flatpak::valid_session_app_id;
 
 pub type StoreResult<T> = Result<T, String>;
 
@@ -71,7 +72,7 @@ fn decode(line: &str) -> Option<Line> {
     let f: Vec<&str> = line.split('\t').collect();
     match f.as_slice() {
         ["S", app, ver, start, end, fg, reason, days] => {
-            if !valid_app_id(app) {
+            if !valid_session_app_id(app) {
                 return None;
             }
             let mut parsed = Vec::new();
@@ -93,7 +94,7 @@ fn decode(line: &str) -> Option<Line> {
             }))
         }
         ["R", app, day, secs, sessions, longest, first, last] => {
-            if !valid_app_id(app) {
+            if !valid_session_app_id(app) {
                 return None;
             }
             Some(Line::Row(DayRow {

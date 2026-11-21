@@ -19,7 +19,6 @@ services/ruya-devices/src/output_policy.rs | services/ruya-devices/src/store.rs 
 services/ruya-devices/src/performance.rs | services/ruya-devices/src/sysinfo.rs | 258  # debt
 services/ruya-devices/src/pipewire.rs | services/ruya-devices/src/pipewire.rs | 91  # debt
 services/ruya-devices/src/smart_source.rs | services/ruya-devices/src/sysinfo.rs | 217  # debt
-services/ruya-inputd/src/accounts.rs | services/ruya-session/src/spawner.rs | 141  # debt
 services/ruya-inputd/src/book.rs | services/ruya-inputd/src/owners.rs | 122  # debt
 services/ruya-inputd/src/mapping.rs | services/ruya-inputd/src/mapping.rs | 90  # debt
 services/ruya-inputd/src/pad.rs | services/ruya-inputd/src/pad.rs | 101  # debt
