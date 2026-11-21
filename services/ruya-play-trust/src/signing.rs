@@ -5,7 +5,7 @@
 use crate::envelope::{self, Domain, Opened};
 use crate::error::TrustError;
 use crate::keys::{sha256_hex, PublicKey, SecretKey};
-use crate::statement::{PlayStatement, RotationStatement, StoreStatement};
+use crate::statement::{signable_id, PlayStatement, RotationStatement, StoreStatement};
 use crate::time::UnixSeconds;
 use ruya_play_format::Manifest;
 
@@ -223,6 +223,10 @@ pub fn sign_package(
     signed_at: UnixSeconds,
     rotations: &[&[u8]],
 ) -> Result<Vec<u8>, TrustError> {
+    signable_id(id).map_err(|detail| TrustError::IdNotSignable {
+        id: id.to_string(),
+        detail,
+    })?;
     let statement = PlayStatement {
         id: id.to_string(),
         build,

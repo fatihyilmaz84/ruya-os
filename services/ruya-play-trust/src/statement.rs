@@ -4,7 +4,6 @@ use crate::envelope::{strict_json, MAX_SIG_DEPTH, MAX_STATEMENT_BYTES};
 use crate::error::TrustError;
 use crate::keys::{is_sha256_hex, KeyFault, PublicKey};
 use crate::time::{format_utc, parse_utc, UnixSeconds};
-use ruya_play_format::limits::MAX_ID_BYTES;
 use serde::{Deserialize, Serialize};
 
 fn malformed(file: &str, detail: impl Into<String>) -> TrustError {
@@ -14,11 +13,15 @@ fn malformed(file: &str, detail: impl Into<String>) -> TrustError {
     }
 }
 
+/// The one id rule for what is signed and what is verified: the manifest's (`official`, because the
+/// store signs the reserved prefixes too; whether a package may use them is the manifest check's
+/// business). The signer ([`crate::signing::sign_package`]) and the verifier both call this.
+pub(crate) fn signable_id(id: &str) -> Result<(), String> {
+    ruya_play_format::manifest::check_id(id, true).map_err(|(_, detail)| detail)
+}
+
 fn check_id(id: &str, file: &str) -> Result<(), TrustError> {
-    if id.is_empty() || id.len() > MAX_ID_BYTES || !id.is_ascii() {
-        return Err(malformed(file, "id is empty, too long or not ASCII"));
-    }
-    Ok(())
+    signable_id(id).map_err(|detail| malformed(file, format!("id: {detail}")))
 }
 
 fn check_sha(value: &str, what: &str, file: &str) -> Result<(), TrustError> {

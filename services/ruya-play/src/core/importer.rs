@@ -5,7 +5,7 @@
 //! 1. **helper, `inspect`:** open the package, read the listing and the four root files once,
 //!    `ruya_play_trust::inspect`, and stage the root files into `inspect/<name>/meta/` (and, for
 //!    `Inspect`, the vetted art into `inspect/<name>/art/`);
-//! 2. **service:** read those root files back once ([`MetaSource`], [`ReadOnce`]) and run
+//! 2. **service:** read those root files back ([`MetaSource`]) and run
 //!    `ruya_play_trust::inspect` over them with its own key records, the blocklist from
 //!    `select_blocklist` (never `ListCheck::NotChecked`) and developer mode;
 //! 3. refuse a `build` not above the installed build of the id (`build.not_newer`);
@@ -34,7 +34,6 @@ use crate::core::deps::{
 use crate::core::helper::{self, ArtLine, Ending, Mode, Progress, Request, Session};
 use crate::core::jobs::{self, JobKind, JobRecord, JobState, MAX_PATH_BYTES};
 use crate::core::meta::MetaSource;
-use crate::core::read_once::ReadOnce;
 use crate::core::reconcile;
 use crate::core::staging::{self, Dir, Kind};
 use crate::core::status::{status_of, JobStatus, MethodStatus, Phase};
@@ -44,6 +43,7 @@ use crate::service::commit::METADATA_GENERATION;
 use ruya_play_format::limits::ROOT_FILES;
 use ruya_play_format::manifest::english;
 use ruya_play_format::Problem;
+use ruya_play_format::Source;
 use ruya_play_trust::revocation::Selected;
 use ruya_play_trust::{
     added_to, assess, diff, grants, inspect, is_revoked, record_install, record_uninstall,
@@ -865,8 +865,8 @@ impl Importer {
         eprintln!("ruya-play: {line}");
     }
 
-    /// Steps 2 and 3 over the root files the service read back (a source that is read once).
-    fn check(&self, source: &ReadOnce<'_>) -> Result<Checked, Refusal> {
+    /// Steps 2 and 3 over the root files the service read back (`inspect` reads them once).
+    fn check(&self, source: &dyn Source) -> Result<Checked, Refusal> {
         let image = self.blocklists.image();
         let downloaded = self.blocklists.downloaded();
         let selected = select_blocklist(
@@ -1054,7 +1054,7 @@ impl Importer {
             Ok(m) => m,
             Err(p) => return Front::Refused(Box::new((vec![p], None))),
         };
-        let checked = match self.check(&ReadOnce::new(&meta)) {
+        let checked = match self.check(&meta) {
             Ok(c) => c,
             Err(refusal) => return Front::Refused(refusal),
         };

@@ -146,6 +146,7 @@ const FIXES: &[(&str, &str)] = &[
     ("sig.rotations_changed", "Run ruya-pack sign again; do not edit play.sig by hand."),
     ("sig.bad_signature", "Run ruya-pack sign again with your key; do not edit play.sig by hand."),
     ("sig.wrong_id", "Sign this package, not a copy of another package's play.sig."),
+    ("sign.id_invalid", "Fix the id in play.json and sign again. Use a reverse-DNS id such as com.example.mygame: three or more parts, letters, digits, _ and -, no part starting with a digit, and - only in the last part."),
     ("sig.wrong_build", "Run ruya-pack sign again after changing build."),
     ("ceiling.refused", "Remove the high-risk permission, or sign the package with a developer key."),
     ("trust.needs_developer_mode", "Sign the package (ruya-pack sign), or turn on developer mode on the console."),

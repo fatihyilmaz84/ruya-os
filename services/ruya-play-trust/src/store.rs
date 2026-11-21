@@ -9,8 +9,8 @@
 use crate::envelope::strict_json;
 use crate::error::TrustError;
 use crate::keys::{is_key_id, PublicKey};
+use crate::statement::signable_id;
 use crate::time::{format_utc, parse_utc, UnixSeconds};
-use ruya_play_format::limits::MAX_ID_BYTES;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
@@ -148,7 +148,7 @@ pub fn decode_state(bytes: &[u8]) -> Result<MemoryTrustStore, TrustError> {
     };
     for (i, r) in raw.records.into_iter().enumerate() {
         let n = i + 1;
-        if r.id.is_empty() || r.id.len() > MAX_ID_BYTES || !r.id.is_ascii() {
+        if signable_id(&r.id).is_err() {
             return Err(corrupt(format!("record {n} has a bad id")));
         }
         let key = PublicKey::from_base64(&r.key)

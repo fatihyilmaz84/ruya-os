@@ -1,16 +1,17 @@
 //! The package source is read once and never trusted again (lead-29).
 //!
-//! `ruya_play_trust::inspect` reads `play.json` and `play.files` to verify the signatures, and then
-//! `ruya_play_format::validate` reads them again to parse them; it also lists the entries twice. A
-//! drive (or a FUSE file system) that answers the second read differently could have one set of
-//! bytes verified and another parsed. [`ReadOnce`] wraps the source so the listing and the four
-//! root files are read from it exactly once and every later read gets the same bytes; the
-//! importer writes those same bytes into staging. Payload files are passed through: the unpacker
-//! opens each one once.
+//! A drive (or a FUSE file system) that answers a second read differently could have one set of
+//! bytes verified and another parsed. [`ReadOnce`] wraps a source so the listing and the four root
+//! files (`play.json`, `play.files`, `play.sig`, `store.sig`) are read from it exactly once and
+//! every later read gets the same bytes. [`crate::inspect`] wraps its source in it, so verify and
+//! validate see one version whoever calls. The helper reuses it for what inspect does not cover:
+//! it writes the root files into staging from [`ReadOnce::root`] (they must be the verified
+//! bytes), and its install mode hashes them and then validates them. Payload files are passed
+//! through: the unpacker opens each one once.
 
+use crate::envelope::MAX_SIG_FILE_BYTES;
 use ruya_play_format::limits::{MAX_MANIFEST_BYTES, MAX_TABLE_BYTES};
 use ruya_play_format::{Entry, Problem, ReadFault, Source};
-use ruya_play_trust::envelope::MAX_SIG_FILE_BYTES;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::io::{self, Read};

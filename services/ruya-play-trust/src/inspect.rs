@@ -2,11 +2,16 @@
 //! and `store.sig` as bounded bytes; verify the signatures; decide the tier; run the full format
 //! validation with `official` set only from a verified `store.sig`; then the id and build binding,
 //! key continuity, the tier's permission ceiling and revocation.
+//!
+//! The package is read once (lead-29): the source is wrapped in a [`ReadOnce`], so the listing and
+//! the root files are read a single time and the format validation parses the bytes that were
+//! verified, whoever calls [`inspect`].
 
 use crate::continuity::{continuity_of, Continuity};
 use crate::envelope::MAX_SIG_FILE_BYTES;
 use crate::error::TrustError;
 use crate::keys::sha256_hex;
+use crate::read_once::ReadOnce;
 use crate::revocation::{is_revoked, ListCheck, PackageFacts};
 use crate::signing::{bind_to_manifest, verify_signatures, PackageBytes, Signatures, StoreKeys};
 use crate::store::TrustStore;
@@ -122,6 +127,9 @@ pub fn inspect(source: &dyn Source, ctx: &Context<'_>) -> Result<Inspection, Ref
     if let ListCheck::Unavailable(e) = ctx.blocklist {
         return Err(Refusal::Trust(e.clone()));
     }
+    // Read once from here on: what is verified is what is parsed.
+    let once = ReadOnce::new(source);
+    let source: &dyn Source = &once;
     let entries = source.entries().map_err(Refusal::Format)?;
     let sig_limit = MAX_SIG_FILE_BYTES as u64;
     let too_big = |name: &str| TrustError::Malformed {
