@@ -1990,6 +1990,23 @@ got="$(bash "$here/vm-play-check.sh" sysrunner "$lp/runners" | tr -d '\r')"
 [ "$got" = "proton-ge/GE-Proton11-12" ] && pass "vm-play-check.sh sysrunner: the newest proton-ge as <family>/<version>" || fail "sysrunner: '$got'"
 mkdir -p "$lp/none/WineStable"; echo '{"family":"wine","version":"9.0"}' > "$lp/none/WineStable/runner.json"
 bash "$here/vm-play-check.sh" sysrunner "$lp/none" >/dev/null 2>&1 && fail "sysrunner: a tree without proton-ge passed" || pass "vm-play-check.sh sysrunner: no proton-ge runner is a failure"
+# compat32 (RUY-1006): the Compat.i386 ref of the app's runtime, asked of flatpak; a missing one fails and is named.
+cs="$lp/cshim"; mkdir -p "$cs"
+cat > "$cs/flatpak" <<'SHIMEOF'
+#!/bin/sh
+# flatpak info --system --show-runtime <app> | flatpak info --system <ref>
+[ "$3" = --show-runtime ] && { echo org.freedesktop.Platform/x86_64/24.08; exit 0; }
+[ "$3" = "org.freedesktop.Platform.Compat.i386/x86_64/24.08" ] && [ -z "${FAKE_NO_COMPAT:-}" ] && exit 0
+exit 1
+SHIMEOF
+chmod +x "$cs/flatpak"
+got="$(PATH="$cs:$PATH" bash "$here/vm-play-check.sh" compat32 play.x)"; rc=$?
+[ "$rc" = 0 ] && [ "$got" = "org.freedesktop.Platform.Compat.i386/x86_64/24.08" ] && pass "vm-play-check.sh compat32: the runtime's Compat.i386 ref, installed" || fail "compat32: rc $rc, '$got'"
+got="$(FAKE_NO_COMPAT=1 PATH="$cs:$PATH" bash "$here/vm-play-check.sh" compat32 play.x)"; rc=$?
+[ "$rc" = 1 ] && [ "$got" = "org.freedesktop.Platform.Compat.i386/x86_64/24.08" ] && pass "vm-play-check.sh compat32: a missing Compat.i386 fails and names the ref" || fail "compat32 missing: rc $rc, '$got'"
+lw="$(sed -n '/^launch_windows_checks() {/,/^}/p' "$here/vm-play-check.sh")"
+echo "$lw" | grep -q '^    module_check ruya_play_runners$' && echo "$lw" | grep -q "has no 32-bit loader: .*(Compat.i386)" && pass "vm-play-check.sh launch-windows checks ruya_play_runners and the 32-bit loader" || fail "vm-play-check.sh launch-windows: no ruya_play_runners or Compat.i386 check"
+grep -q '^    module_check ruya_play_openfile$' "$here/vm-play-check.sh" && pass "vm-play-check.sh: avc_checks still needs ruya_play_openfile" || fail "vm-play-check.sh: avc_checks lost ruya_play_openfile"
 mkdir -p "$lp/alone"; cp "$here/vm-play-check.sh" "$lp/alone/"
 out="$(bash "$lp/alone/vm-play-check.sh" sysrunner "$lp/runners" 2>&1)"; rc=$?
 [ "$rc" = 1 ] && expect_contains "vm-play-check.sh sysrunner without vm-runner-check.sh next to it says so" "$out" "copy vm-runner-check.sh next to this script" || fail "sysrunner alone: exit $rc, $out"
@@ -2233,6 +2250,22 @@ expect_contains "runner: GE-Proton's i386 ntdll.dll is textrel_shlib_t" "$out" "
 expect_contains "runner: Wine's i386 ntdll.dll is textrel_shlib_t" "$out" "ok   Wine11: lib/wine/i386-windows/ntdll.dll is labelled"
 out="$(rc_ "$tmp/links.good" FAKE_LABEL=system_u:object_r:lib_t:s0)"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: a runner DLL labelled lib_t FAILs (RUY-999)" "$out" "FAIL ProtonGE11: files/lib/wine/i386-windows/ntdll.dll is labelled 'system_u:object_r:lib_t:s0', not textrel_shlib_t" || fail "runner: lib_t label: exit $rc, $out"
+# A wine or proton runner without an i386 ntdll.dll is a FAIL naming it, never a silent skip (RUY-1005); other kinds are not checked.
+mv "$rw/lib/wine/i386-windows/ntdll.dll" "$tmp/ntdll.keep"
+out="$(rc_ "$tmp/links.good")"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner: a Wine runner with no i386 ntdll.dll FAILs" "$out" "FAIL Wine11: a wine runner with no i386-windows/ntdll.dll" || fail "runner: no ntdll.dll: exit $rc, $out"
+mv "$tmp/ntdll.keep" "$rw/lib/wine/i386-windows/ntdll.dll"
+mv "$rt/files/lib/wine/i386-windows/ntdll.dll" "$tmp/ntdll.keep"
+out="$(rc_ "$tmp/links.good")"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner: a Proton runner with no i386 ntdll.dll FAILs" "$out" "FAIL ProtonGE11: a proton runner with no i386-windows/ntdll.dll" || fail "runner: no ntdll.dll (proton): exit $rc, $out"
+mv "$tmp/ntdll.keep" "$rt/files/lib/wine/i386-windows/ntdll.dll"
+ro="$rp/runners/Tool"; mkdir -p "$ro"
+printf '{"kind": "tool", "version": "1"}
+' > "$ro/runner.json"; printf '%s
+' "$hash_ok" > "$ro/.ruya-runner-hash"
+out="$(rc_ "$tmp/links.good")"; rc=$?
+[ "$rc" = 0 ] && ! printf '%s' "$out" | grep -q 'Tool: a ' && pass "runner: a runner of another kind needs no ntdll.dll" || fail "runner: another kind: exit $rc, $out"
+rm -rf "$ro"
 out="$(rc_ "$tmp/links.nolauncher")"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: a missing launcher link FAILs" "$out" "FAIL /var/lib/flatpak/extension/org.ruyaos.Play.Launcher/x86_64/1 is 'no link'" || fail "runner: a missing link: exit $rc"
 out="$(rc_ "$tmp/links.elsewhere")"; rc=$?
