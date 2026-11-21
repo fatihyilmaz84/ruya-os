@@ -69,6 +69,10 @@ jobs:
         run: pwsh -NoProfile -File scripts/lint-dev-docs.ps1 -Samples
       - name: VM check lint
         run: pwsh -NoProfile -File scripts/lint-vm-checks.ps1
+      - name: Profile id lint (user names only from ruya-ids, RUY-1021)
+        run: |
+          pwsh -NoProfile -File scripts/lint-ids.ps1
+          pwsh -NoProfile -File scripts/lint-ids.ps1 -SelfTest
 
   services:
     runs-on: ubuntu-24.04
