@@ -2,8 +2,9 @@
 //! small text file so a restarted service still knows them. The file is read as untrusted input:
 //! a line that does not parse is dropped, and every app id passes `valid_app_id` again.
 
-use crate::app::{valid_app_id, JobStatus};
+use crate::app::JobStatus;
 use crate::flatpak::{Operation, Phase};
+use ruya_flatpak::valid_app_id;
 
 /// Finished jobs kept besides the active ones.
 pub const FINISHED_KEPT: usize = 20;

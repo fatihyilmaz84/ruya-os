@@ -9,11 +9,12 @@ use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use crate::app::{valid_app_id, valid_remote_name};
+use crate::app::valid_remote_name;
 use crate::flatpak::{
     classify_error, parse_ids, parse_installed, parse_remote_ls, parse_remotes, Appstream, Flatpak,
     FlatpakError, InstalledApp, Operation, Phase, Progress, ProgressScanner, RemoteApp, RemoteInfo,
 };
+use ruya_flatpak::valid_app_id;
 
 pub struct FlatpakCli {
     /// `/var/lib/flatpak/appstream`
@@ -56,7 +57,7 @@ fn output(args: &[&str]) -> Result<String, String> {
     }
 }
 
-/// `output` of an argument list built as owned strings (`overrides::*_command`).
+/// `output` of an argument list built as owned strings (`ruya_flatpak::*_command`).
 fn output_of(args: &[String]) -> Result<String, String> {
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     output(&args)
@@ -64,12 +65,13 @@ fn output_of(args: &[String]) -> Result<String, String> {
 
 /// Removes the system-wide override of an installed or removed app (`flatpak override --system
 /// --reset <id>`, as root). `Store::drop_override` calls it after every uninstall; a service that
-/// removes a Flatpak app by another path calls it too, so no withdrawal outlives its app.
+/// removes a Flatpak app by another path runs the same command line (`ruya_flatpak::reset_command`:
+/// `ruya-play` after `Play1.Remove`), so no withdrawal outlives its app.
 pub fn reset_override(id: &str) -> Result<(), String> {
     if !valid_app_id(id) {
         return Err("refused argument".to_owned());
     }
-    output_of(&crate::overrides::reset_command(id)).map(|_| ())
+    output_of(&ruya_flatpak::reset_command(id)).map(|_| ())
 }
 
 fn arch() -> &'static str {
@@ -228,7 +230,7 @@ impl Flatpak for FlatpakCli {
         if !valid_app_id(id) {
             return Err("refused argument".to_owned());
         }
-        output_of(&crate::overrides::show_command(id))
+        output_of(&ruya_flatpak::show_command(id))
     }
 
     fn add_override(&self, id: &str, args: &[String]) -> Result<(), String> {
@@ -237,7 +239,7 @@ impl Flatpak for FlatpakCli {
         if !valid_app_id(id) || !args.iter().all(|a| a.starts_with("--")) {
             return Err("refused argument".to_owned());
         }
-        output_of(&crate::overrides::override_command(id, args)).map(|_| ())
+        output_of(&ruya_flatpak::override_command(id, args)).map(|_| ())
     }
 
     fn reset_override(&self, id: &str) -> Result<(), String> {

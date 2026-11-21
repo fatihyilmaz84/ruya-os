@@ -170,7 +170,7 @@ function Get-PlayVmFiles([string]$Repo) {
 # Is this check one of the .play checks that need the package and ruya-pack on the guest?
 # (vm-runner-check.sh needs only ruya-pack, RUY-34; the two are built together.)
 function Test-PlayCheck([string]$Script, [string]$Mode) {
-    if ($Script -eq "vm-play-check.sh") { return (-not $Mode) -or ($Mode -in @("check", "helper", "verify", "perms", "launch", "launch-windows")) }
+    if ($Script -eq "vm-play-check.sh") { return (-not $Mode) -or ($Mode -in @("check", "helper", "verify", "perms", "remove", "launch", "launch-windows")) }
     if ($Script -eq "vm-library-check.sh") { return $Mode -eq "play" }
     if ($Script -eq "vm-runner-check.sh") { return $true }
     return $false

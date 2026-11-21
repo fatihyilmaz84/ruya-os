@@ -568,7 +568,7 @@ fn the_constants_are_the_numbers_of_the_spec() {
     assert_eq!((MAX_SETUP_STEPS, MAX_DISCS, MAX_DATA_PATHS), (16, 16, 32));
     assert_eq!(
         (MAX_PLAYERS, MAX_AGE_ATTRIBUTES, MAX_LICENCE_BYTES),
-        (64, 40, 128)
+        (64, 40, 256)
     );
     assert_eq!(MAX_PROBLEMS, 100);
     assert_eq!(SUPPORTED_FORMAT, 1);

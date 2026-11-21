@@ -1,0 +1,9 @@
+# Wine stable, the image's second Windows runner (ADR-025 as narrowed by RUY-915, ADR-038; RUY-37):
+# plain (vanilla, not staging) Wine 11.0 as Kron4ek/Wine-Builds builds it for amd64 in the WoW64
+# layout, which runs 32-bit Windows programs without 32-bit Linux libraries. The release tarball,
+# pinned: image/play/install-runners.sh downloads it at build time, refuses any other SHA-256 and
+# unpacks the folder `root` of the tarball as /usr/lib/ruyaos/play/runners/Wine11/. The SHA-256 is
+# the one GitHub lists for the asset.
+url=https://github.com/Kron4ek/Wine-Builds/releases/download/11.0/wine-11.0-amd64-wow64.tar.xz
+sha256=39574efa1132c3ca0d5c77dd2eddbe4a49cca0d6cc2c290ff4924493a1c40314
+root=wine-11.0-amd64-wow64

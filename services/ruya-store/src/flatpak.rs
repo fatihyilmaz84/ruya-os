@@ -463,7 +463,7 @@ struct FakeState {
     version: Option<String>,
     /// Override keyfiles by app id, as `flatpak override` writes them.
     overrides: HashMap<String, String>,
-    /// Every `flatpak override` command line, in order (`overrides::override_command`, ...).
+    /// Every `flatpak override` command line, in order (`ruya_flatpak::override_command`, ...).
     override_runs: Vec<Vec<String>>,
     override_fails: bool,
     /// The next `add_override` fails (once), the commands before it work.
@@ -592,6 +592,14 @@ impl FakeFlatpak {
             .installed_metadata
             .insert(id.to_owned(), metadata.to_owned());
         self
+    }
+
+    /// The installed version's metadata written again (an app committed anew over the same
+    /// deployment, as `ruya-play` does for a newer metadata generation).
+    pub fn set_installed_metadata(&self, id: &str, metadata: &str) {
+        self.state()
+            .installed_metadata
+            .insert(id.to_owned(), metadata.to_owned());
     }
 
     /// The percentages the next transactions report (a download that goes 10, 60, 100).
@@ -851,7 +859,7 @@ impl Flatpak for FakeFlatpak {
     fn show_override(&self, id: &str) -> Result<String, String> {
         let (shown, hook) = {
             let mut state = self.state();
-            state.override_runs.push(crate::overrides::show_command(id));
+            state.override_runs.push(ruya_flatpak::show_command(id));
             if state.override_fails {
                 return Err("flatpak override failed".to_owned());
             }
@@ -868,7 +876,7 @@ impl Flatpak for FakeFlatpak {
         let mut state = self.state();
         state
             .override_runs
-            .push(crate::overrides::override_command(id, args));
+            .push(ruya_flatpak::override_command(id, args));
         if state.override_fails || std::mem::take(&mut state.add_override_fails_once) {
             return Err("flatpak override failed".to_owned());
         }
@@ -879,9 +887,7 @@ impl Flatpak for FakeFlatpak {
 
     fn reset_override(&self, id: &str) -> Result<(), String> {
         let mut state = self.state();
-        state
-            .override_runs
-            .push(crate::overrides::reset_command(id));
+        state.override_runs.push(ruya_flatpak::reset_command(id));
         if state.override_fails {
             return Err("flatpak override failed".to_owned());
         }

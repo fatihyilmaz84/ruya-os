@@ -342,6 +342,47 @@ fn the_flatpak_recommit_regenerates_the_metadata_and_mount_folders_and_installs(
     );
 }
 
+/// RUY-854: an admin's withdrawal (`flatpak override --system`, a file of its own under
+/// `/var/lib/flatpak/overrides/`) is never undone by a re-commit. The commit installs with
+/// `--or-update`, which Flatpak keeps the override across, and runs no command that removes the
+/// app or resets an override.
+#[test]
+fn a_recommit_runs_no_command_that_drops_an_override() {
+    let mut fx = Fx::wine_full();
+    fx.manifest["id"] = serde_json::json!(ID);
+    let (h, _) = deployed(&fx, 0);
+    let (manifest, assessment) =
+        reconcile::installed_app(&reconcile::our_files(&h.cfg.flatpak, ID).unwrap()).unwrap();
+    let state = tempfile::tempdir().unwrap();
+    let copy = staged_copy(&h, state.path());
+    let runner = std::sync::Arc::new(FakeRunner::default());
+    let fc =
+        FlatpakCommit::new(&state.path().join("lib"), Box::new(runner.clone())).keeping_owner();
+    fc.recommit(&RecommitRequest {
+        files: &copy,
+        manifest: &manifest,
+        assessment: &assessment,
+    })
+    .unwrap();
+    let calls = runner.calls.lock().unwrap().clone();
+    for call in &calls {
+        assert!(
+            !call
+                .iter()
+                .any(|a| a == "override" || a == "uninstall" || a == "--reset"),
+            "a command that could drop an override: {call:?}"
+        );
+    }
+    let install = calls
+        .iter()
+        .find(|c| c.get(1).map(String::as_str) == Some("install"))
+        .expect("the re-commit installs");
+    assert!(
+        install.iter().any(|a| a == "--or-update"),
+        "an update, not a new install: {install:?}"
+    );
+}
+
 #[test]
 fn a_mount_folder_never_hides_the_apps_own_files() {
     let mut fx = Fx::wine_full();

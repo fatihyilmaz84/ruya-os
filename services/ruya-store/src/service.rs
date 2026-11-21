@@ -6,12 +6,13 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
-use crate::app::{valid_app_id, valid_commit, valid_remote_name, App, JobStatus, Status};
+use crate::app::{valid_commit, valid_remote_name, App, JobStatus, Status};
 use crate::appstream::{self, Component};
-use crate::flatpak::{Flatpak, FlatpakError, Operation, Phase, Progress, RemoteInfo};
+use crate::flatpak::{Flatpak, FlatpakError, InstalledApp, Operation, Phase, Progress, RemoteInfo};
 use crate::jobs::{self, JobInfo, JobKind, JobState};
 use crate::overrides::{self, Context, Permissions, Refusal};
 use crate::queue::{Monotone, Queue};
+use ruya_flatpak::valid_app_id;
 
 /// What a running job tells the outside world, in the order it must be sent.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -220,14 +221,10 @@ impl<F: Flatpak> Store<F> {
             app.permissions = permissions;
             catalogue.push(app);
         }
-        // Installed apps no remote offers any more (a removed source) still have to be listed.
+        // Installed apps no remote offers (a removed source, a `.play` app) still have to be listed.
         for app in &installed {
             if !catalogue.iter().any(|c| c.id == app.id) {
-                let mut gone = app_from(app.id.as_str(), None, self.api_level);
-                gone.remote = app.remote.clone();
-                gone.source = trust_of(&app.remote).to_owned();
-                gone.installed_size = app.installed_size;
-                catalogue.push(gone);
+                catalogue.push(unoffered_app(app, self.api_level));
             }
         }
         for app in &mut catalogue {
@@ -336,8 +333,8 @@ impl<F: Flatpak> Store<F> {
     }
 
     /// Reads which apps Flatpak has installed now and corrects the catalogue's flags, so an app
-    /// removed (or added) outside the Store, with `flatpak uninstall` for instance, is not
-    /// answered from a stale cache. Chosen over a time-based or event-based invalidation because
+    /// removed or added outside the Store (`flatpak uninstall`; `ruya-play` installing a `.play`
+    /// app) is not answered from a stale cache. Chosen over a time-based or event-based invalidation because
     /// it is correct at the moment that matters and costs one `flatpak list`, which is fast
     /// next to the transactions and the remote reads the same calls lead to. A failing read
     /// keeps what the catalogue says.
@@ -365,6 +362,18 @@ impl<F: Flatpak> Store<F> {
             return false;
         }
         state.applied_ticket = ticket;
+        // An app installed outside the Store since the last refresh (`ruya-play` installs a `.play`
+        // app, an admin runs `flatpak install`) is listed like the ones `refresh` finds installed
+        // that no remote offers, so its permissions can be asked for and withdrawn.
+        let unlisted: Vec<App> = installed
+            .iter()
+            .filter(|i| !state.catalogue.iter().any(|c| c.id == i.id))
+            .map(|i| unoffered_app(i, self.api_level))
+            .collect();
+        if !unlisted.is_empty() {
+            state.catalogue.extend(unlisted);
+            state.catalogue.sort_by_key(|a| a.name.to_lowercase());
+        }
         for app in &mut state.catalogue {
             match installed.iter().find(|i| i.id == app.id) {
                 Some(i) => {
@@ -955,6 +964,16 @@ fn app_from(id: &str, component: Option<&Component>, api_level: u32) -> App {
     }
 }
 
+/// An installed app no remote offers: the record the catalogue lists it with (the installed
+/// flags are set by the caller's pass over the whole catalogue).
+fn unoffered_app(installed: &InstalledApp, api_level: u32) -> App {
+    let mut app = app_from(installed.id.as_str(), None, api_level);
+    app.remote = installed.remote.clone();
+    app.source = trust_of(&installed.remote).to_owned();
+    app.installed_size = installed.installed_size;
+    app
+}
+
 /// What flatpak says is installed; an app with no update is at the catalogue's newest release
 /// when flatpak names no version.
 fn set_installed_version(app: &mut App, flatpak_version: &str) {
@@ -1262,12 +1281,30 @@ mod tests {
     }
 
     #[test]
-    fn an_app_installed_outside_the_store_is_not_added() {
+    fn an_app_installed_outside_the_store_is_listed_once_with_the_correction_announced() {
+        // RUY-854: Flatpak decides what is installed. `ruya-play` installs a `.play` app while the
+        // service runs, an admin may run `flatpak install`: the app is in the next list, as it is
+        // in the one the start-up refresh reads, and the clients are told once.
         let s = store(fake());
         s.flatpak
-            .add_installed("elsewhere", "org.foreign.Tool", 1_000);
-        assert!(s.list_installed(&mut |_| {}).is_empty());
-        assert_eq!(s.get_app("org.foreign.Tool").0, Status::UnknownApp);
+            .add_installed("elsewhere", "org.foreign.Gadget", 1_000);
+        let mut events = Vec::new();
+        let listed = s.list_installed(&mut |e| events.push(e));
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].id, "org.foreign.Gadget");
+        assert_eq!(listed[0].name, "Gadget");
+        assert_eq!(listed[0].remote, "elsewhere");
+        assert_eq!(listed[0].source, "developer");
+        assert_eq!(listed[0].installed_size, 1_000);
+        assert!(listed[0].installed);
+        assert_eq!(events, [Event::InstalledChanged]);
+        events.clear();
+        assert_eq!(s.list_installed(&mut |e| events.push(e)).len(), 1);
+        assert!(events.is_empty(), "announced exactly once");
+        assert_eq!(s.get_app("org.foreign.Gadget").0, Status::Ok);
+        // The catalogue keeps its order (by name) with the newcomer in it.
+        let names: Vec<_> = s.search("", &ANY).into_iter().map(|a| a.name).collect();
+        assert_eq!(names, ["Block Puzzle", "Gadget", "Tool", "Turbo Racer"]);
     }
 
     #[test]
@@ -2051,6 +2088,142 @@ mod tests {
         assert_eq!(p.withdrawn, strings(&["network"]));
     }
 
+    // ---- A `.play` app (RUY-854): a normal system-installation app from the console's own remote ----
+
+    const PLAY: &str = "play.com.example.game";
+    /// `ruya_play_art::PLAY_REMOTE`; ruya-store does not depend on that crate for a name.
+    const PLAY_REMOTE: &str = "ruyaos-play-local";
+    /// What the importer's generated metadata holds for a package that asks for the network, all
+    /// devices and USB drives (05 section 8): the always-granted lines and the three requests.
+    const PLAY_META: &str = "[Application]
+name=play.com.example.game
+
+[Context]
+shared=ipc;network;
+sockets=wayland;pulseaudio;
+devices=dri;all;
+filesystems=/run/media:ro;
+";
+
+    /// A store that started before the `.play` app was installed (by `ruya-play`, not the Store).
+    fn play_store() -> Store<FakeFlatpak> {
+        let s = perm_store(fake().with_installed_metadata(PLAY, PLAY_META));
+        s.flatpak.add_installed(PLAY_REMOTE, PLAY, 9_000_000);
+        s
+    }
+
+    fn writes(s: &Store<FakeFlatpak>) -> Vec<Vec<String>> {
+        s.flatpak
+            .override_runs()
+            .into_iter()
+            .filter(|r| !r.contains(&"--show".to_owned()))
+            .collect()
+    }
+
+    #[test]
+    fn a_play_app_installed_while_the_service_runs_has_its_permissions_listed() {
+        let s = play_store();
+        let mut events = Vec::new();
+        let (status, p) = s.get_permissions(PLAY, &mut |e| events.push(e));
+        assert_eq!(status, Status::Ok);
+        assert_eq!(
+            p.effective,
+            strings(&["network", "host-files", "all-devices", "audio"])
+        );
+        assert!(p.withdrawn.is_empty());
+        assert_eq!(
+            p.withdrawable,
+            strings(&["network", "host-files", "all-devices"])
+        );
+        assert_eq!(
+            events,
+            [Event::InstalledChanged],
+            "the list the shell holds changed"
+        );
+        let ids: Vec<_> = s
+            .list_installed(&mut none)
+            .into_iter()
+            .map(|a| a.id)
+            .collect();
+        assert!(ids.iter().any(|i| i == PLAY), "{ids:?}");
+        // A Standard profile reads them, as for any app.
+        assert_eq!(s.get_permissions(PLAY, &mut none).0, Status::Ok);
+    }
+
+    #[test]
+    fn withdrawing_from_a_play_app_runs_the_override_of_each_key() {
+        let s = play_store();
+        for key in ["network", "all-devices", "host-files"] {
+            assert_eq!(
+                s.withdraw_permission(PLAY, key, true, &mut none),
+                Status::Ok,
+                "{key}"
+            );
+        }
+        assert_eq!(
+            writes(&s),
+            [
+                strings(&["override", "--system", "--unshare=network", PLAY]),
+                // The metadata names the GPU already: only the controllers are put back.
+                strings(&[
+                    "override",
+                    "--system",
+                    "--nodevice=all",
+                    "--device=input",
+                    PLAY
+                ]),
+                strings(&["override", "--system", "--nofilesystem=/run/media", PLAY]),
+            ]
+        );
+        let (_, p) = s.get_permissions(PLAY, &mut none);
+        assert_eq!(p.effective, strings(&["audio", "gamepad"]));
+        assert_eq!(
+            p.withdrawn,
+            strings(&["network", "host-files", "all-devices"])
+        );
+        // Only an admin changes them, here as for every app.
+        assert_eq!(
+            s.withdraw_permission(PLAY, "audio", true, &mut none),
+            Status::NotWithdrawable
+        );
+        assert_eq!(
+            s.restore_permission(PLAY, "network", false, &mut none),
+            Status::Forbidden
+        );
+    }
+
+    #[test]
+    fn a_play_apps_withdrawal_survives_its_metadata_being_written_again() {
+        // A re-commit (ADR-038) writes the generated metadata again; the override is a file of
+        // its own that Flatpak keeps across the update, so the withdrawal stays.
+        let s = play_store();
+        s.withdraw_permission(PLAY, "network", true, &mut none);
+        s.flatpak.set_installed_metadata(
+            PLAY,
+            &format!(
+                "{PLAY_META}features=multiarch;
+[Extension org.ruyaos.Play.Launcher]
+directory=launcher
+"
+            ),
+        );
+        let (status, p) = s.get_permissions(PLAY, &mut none);
+        assert_eq!(status, Status::Ok);
+        assert_eq!(p.withdrawn, strings(&["network"]));
+        assert!(!p.effective.iter().any(|k| k == "network"));
+        // The key still comes back with a restore, from the metadata as it is now.
+        assert_eq!(
+            s.restore_permission(PLAY, "network", true, &mut none),
+            Status::Ok
+        );
+        assert!(s
+            .get_permissions(PLAY, &mut none)
+            .1
+            .effective
+            .iter()
+            .any(|k| k == "network"));
+    }
+
     #[test]
     fn each_withdrawal_runs_its_argument_list() {
         let s = perm_store(fake());
@@ -2323,7 +2496,7 @@ mod tests {
         assert!(s
             .flatpak
             .override_runs()
-            .contains(&strings(&["override", "--system", "--reset", STREAM])));
+            .contains(&ruya_flatpak::reset_command(STREAM)));
         assert_eq!(s.flatpak.override_of(STREAM), before, "nothing is widened");
         assert_eq!(
             s.get_permissions(STREAM, &mut none).1.withdrawn,
@@ -2351,7 +2524,7 @@ mod tests {
         assert!(s
             .flatpak
             .override_runs()
-            .contains(&strings(&["override", "--system", "--reset", STREAM])));
+            .contains(&ruya_flatpak::reset_command(STREAM)));
         // Without an override: ok all the same.
         assert_eq!(s.reset_permissions(STREAM, true, &mut none), Status::Ok);
     }
@@ -2408,7 +2581,7 @@ mod tests {
         );
         assert_eq!(
             s.flatpak.override_runs().last(),
-            Some(&strings(&["override", "--system", "--reset", STREAM]))
+            Some(&ruya_flatpak::reset_command(STREAM))
         );
     }
 

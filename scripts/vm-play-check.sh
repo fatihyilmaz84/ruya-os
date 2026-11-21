@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# modes: check generation helper launch launch-windows lstate offline parse perms pkgid remove restart runid signals sysrunner verify winpkg withid
+# modes: asknet check generation helper launch launch-windows lstate offline parse perms pkgid remove restart runid signals sysrunner verify winpkg withid
 # Checks ruya-play (org.ruyaos.Play1, RUY-829, the lead's run under RUY-100) inside a running VM,
 # as root. Modes:
 #   check  (default) every step below
+#   asknet host fixtures only: `asknet <in.zip> <out.zip>` copies a package whose play.json asks
+#          for network, multiarch and gamemode (`asks_network`, the perms and remove modes use it)
 #   withid host fixtures only: `withid <in.zip> <out.zip> <id>` copies a package with the id of its
 #          play.json changed (the helper verify and perms use)
 #   restart host fixtures only: `restart_service`, the cleanup's last step, exits 1 with a FAIL line
@@ -19,13 +21,21 @@
 #          unsigned (developer mode, from incoming/); `flatpak info --show-permissions` of the app
 #          equals exactly the set 05 section 8 maps those to (no filesystem, no other bus name),
 #          and the deployment's share/ruyaos/play/trust.json says format 1, unverified, no signer,
-#          no store signature
+#          no store signature; then (RUY-854) the console's permission list covers the app: Store1
+#          GetPermissions (as root, an admin) answers for it right after the install with the network
+#          allowed and withdrawable, the sandbox `flatpak run` builds reaches a listener on the
+#          host's loopback, WithdrawPermission network is ok and writes `shared=!network;` into the
+#          app's override only (flatpak info still shows the generated metadata), the next sandbox
+#          cannot connect, ResetPermissions removes the override and the connection works again
 #   remove RUY-816: install the sample (developer mode, from incoming/), Play1.Remove without
 #          admin_approved is forbidden, of "" invalid, of an app that is not play.<id> or not
 #          installed unknown-app; with admin_approved a job that finishes ok (kind remove, phase
 #          removing in state/jobs): the deployment is gone, Flatpak no longer lists the app, the
 #          installed build is forgotten (state/installed.json), a second Remove is unknown-app, the
-#          package installs again, and the shell-less cleanup leaves nothing behind
+#          package installs again, and the shell-less cleanup leaves nothing behind. RUY-923: the
+#          sample asks for the network; an admin withdraws it (Store1 WithdrawPermission, an override
+#          in /var/lib/flatpak/overrides), and the removal drops that override too (`flatpak
+#          override --system --show` is empty) so the reinstall starts with nothing withdrawn
 #   launch RUY-902 (ADR-037/038): the native sample installed (developer mode, from incoming/) and started as a
 #          profile through Session1.Launch (the check makes one when the VM has none, as vm-sample-check.sh
 #          does, and removes it again): AppStarted, the save in the app's data folder (plays=1), Stop ends
@@ -162,6 +172,10 @@ elif what == "sources":
 elif what == "items":
     for s in (data[0] if data else []):
         print(val(s.get("id")))
+elif what == "keys":
+    # A Store1 GetPermissions answer (sasasas): the list named by arg
+    i = {"effective": 1, "withdrawn": 2, "withdrawable": 3}.get(arg, 0)
+    print(" ".join(data[i]) if i and len(data) > i else "")
 elif what == "key":
     rec = data[1] if len(data) > 1 else {}
     print(val(rec.get(arg)) if arg in rec else "")
@@ -209,6 +223,19 @@ PERMS_WANT='[Context] devices=dri
 [Context] sockets=wayland
 [Session Bus Policy] com.feralinteractive.GameMode=talk'
 
+# What the sandbox of an app can do, one fact per line (RUY-854): whether it connects to the TCP
+# port in $1 on 127.0.0.1 (the host's loopback is reachable only with the network shared; a sandbox
+# whose network was withdrawn has its own) and how many interfaces other than lo it sees.
+# $PROC_NET_DEV points the host fixtures at a made-up table.
+NET_PROBE='n=0
+while read -r line; do
+    case "$line" in
+        *:*) name="${line%%:*}"; name="${name// /}"; [ "$name" != lo ] && n=$((n + 1)) ;;
+    esac
+done < "${PROC_NET_DEV:-/proc/net/dev}"
+echo "net=$n"
+if (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; then echo "connect=yes"; else echo "connect=no"; fi'
+
 # patch_manifest <in.zip> <out.zip> <json>: a copy of a package whose top-level play.json has the JSON
 # merge patch applied (an object merges key by key, anything else replaces; RFC 7386 without null).
 # The sample is unsigned and play.files does not list play.json, so nothing else names what changes; a
@@ -248,6 +275,12 @@ windows_pkg() {
 import json, sys
 print(json.dumps({"id": sys.argv[1], "run": {"command": ["${payload}/check.exe"]}, "permissions": {"multiarch": True}}))
 ' "$3")"
+}
+
+# asks_network <in.zip> <out.zip>: a copy of a package whose play.json asks for network, multiarch
+# and gamemode (perms: the 05 section 8 mapping; remove: an app with a permission to withdraw).
+asks_network() {
+    patch_manifest "$1" "$2" '{"permissions": {"network": true, "multiarch": true, "gamemode": true}}'
 }
 
 # The format's longest id (MAX_ID_BYTES in services/ruya-play-format/src/limits.rs; the host fixtures
@@ -421,6 +454,10 @@ if [ "$mode" = parse ]; then
 fi
 if [ "$mode" = restart ]; then
     restart_service
+    exit $?
+fi
+if [ "$mode" = asknet ]; then
+    asks_network "${2:?in.zip}" "${3:?out.zip}"
     exit $?
 fi
 if [ "$mode" = withid ]; then
@@ -613,6 +650,10 @@ PY
     [ "$1" = invalid ] && ok "Verify of an empty id is invalid" || bad "Verify of an empty id: $*"
 }
 
+store_call() { busctl --system --json=short call org.ruyaos.Store1 /org/ruyaos/Store1 org.ruyaos.Store1 "$@" 2>&1; }
+# The app's override on one line (for a failure message).
+override_text() { flatpak override --system --show "$1" 2>&1 | tr '\n' ' '; }
+
 # Remove <app id> as an admin and wait for the job (RUY-816).
 remove_wait() { job_wait "$(call Remove 'sa{sv}' "$1" 1 admin_approved b true)"; }
 
@@ -630,12 +671,16 @@ remove_checks() {
     set -- $(remove_wait "play.com.example.not-installed")
     [ "$1" = unknown-app ] && ok "Remove of an app that is not installed is unknown-app" || bad "Remove of an unknown app: $*"
     [ -d "$app" ] && ok "the refusals removed nothing" || bad "a refused Remove removed $app"
+    # RUY-923: an admin withdrew the network, so the app has an override that the removal must drop.
+    [ "$(store_call WithdrawPermission ss "play.$appid" network | parse status)" = ok ] && ok "WithdrawPermission network by root" || bad "WithdrawPermission network"
+    flatpak override --system --show "play.$appid" | grep -q '^shared=!network;' && ok "the app has an override (shared=!network)" || bad "no override to remove: $(override_text "play.$appid")"
     # The removal.
     set -- $(remove_wait "play.$appid")
     [ "$1 $2" = "ok ok" ] && ok "Remove of the installed sample finishes ok" || bad "Remove of the installed sample: $*"
     [ ! -e "$app" ] && ok "the deployment is gone" || bad "$app is still there after Remove"
     flatpak list --system --app --columns=application 2>/dev/null | grep -qx "play.$appid" && bad "flatpak still lists play.$appid" || ok "flatpak no longer lists play.$appid"
     grep -q "\"$appid\"" "$state/state/installed.json" && bad "state/installed.json still has $appid" || ok "the installed build is forgotten"
+    [ -z "$(flatpak override --system --show "play.$appid" 2>&1)" ] && ok "the removal left no override" || bad "the override outlived the app: $(override_text "play.$appid")"
     python3 - "$state/state/jobs" "$3" <<'PY' && ok "the job table records kind remove, phase removing, ok" || bad "state/jobs has no finished remove job $3"
 import json, sys
 for line in open(sys.argv[1], encoding="utf-8"):
@@ -649,6 +694,15 @@ PY
     # What was removed installs again.
     got="$(install_wait "$state/incoming/vm-play-check.play.zip")"
     [ "$got" = ok ] && ok "the package installs again after Remove" || bad "the reinstall: $got"
+    # A failed call lists nothing withdrawn too: its status must be ok first (RUY-923 review).
+    out="$(store_call GetPermissions s "play.$appid")"
+    if [ "$(echo "$out" | parse status)" != ok ]; then
+        bad "GetPermissions after the reinstall: $out"
+    elif echo " $(echo "$out" | parse keys withdrawn) " | grep -q ' network '; then
+        bad "the reinstall starts with the network withdrawn"
+    else
+        ok "the reinstall starts with nothing withdrawn"
+    fi
 }
 
 # --- launch and launch-windows (RUY-902) ---------------------------------------------------------------
@@ -863,6 +917,8 @@ launch_cleanup() {
 
 cleanup() {
     launch_cleanup
+    [ -n "${listener:-}" ] && kill "$listener" 2>/dev/null
+    [ -n "${appid:-}" ] && flatpak override --system --reset "play.$appid" >/dev/null 2>&1
     [ -n "${appid:-}" ] && flatpak uninstall --system -y --noninteractive "play.$appid" >/dev/null 2>&1
     [ -n "${before_dev:-}" ] && dev_mode "$before_dev" >/dev/null 2>&1
     umount "$usb" "$loose" 2>/dev/null
@@ -916,7 +972,8 @@ fi
 if [ "$mode" = remove ]; then
     dev_mode true >/dev/null
     appid="$(pkg_id "$appid" remove)" || { bad "no remove id for $appid"; exit 1; }
-    with_id "$zip" "$work/remove.play.zip" "$appid" || { bad "with_id: no copy of the sample with the id $appid"; exit 1; }
+    with_id "$zip" "$work/id.play.zip" "$appid" || { bad "with_id: no copy of the sample with the id $appid"; exit 1; }
+    asks_network "$work/id.play.zip" "$work/remove.play.zip" || { bad "asks_network: no copy of the sample asking for the network"; exit 1; }
     mkdir -p "$state/incoming"
     install -m 0600 "$work/remove.play.zip" "$state/incoming/vm-play-check.play.zip"
     got="$(install_wait "$state/incoming/vm-play-check.play.zip")"
@@ -926,23 +983,68 @@ if [ "$mode" = remove ]; then
     exit "$fail"
 fi
 
+# --- RUY-854: the console's permission list (Store1, RUY-744) for a .play app ----------------------
+# A new sandbox each time: "net=N connect=yes|no" (the port is the listener's).
+sandbox_net() { # <app> <port>
+    flatpak run --system --command=bash "$1" -c "$NET_PROBE" probe "$2" 2>/dev/null | tr '\n' ' '
+}
+listener=""
+# A listener on the host's loopback that accepts and closes; prints nothing, sets $port.
+start_listener() {
+    python3 -c '
+import socket
+s = socket.socket()
+s.bind(("127.0.0.1", 0))
+s.listen(8)
+print(s.getsockname()[1], flush=True)
+while True:
+    c, _ = s.accept()
+    c.close()
+' > "$work/listener.port" &
+    listener=$!
+    n=0
+    while [ ! -s "$work/listener.port" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+    port="$(cat "$work/listener.port")"
+    [ -n "$port" ]
+}
+permission_list_checks() { # <flatpak app id>
+    local papp="$1" out now
+    echo "--- RUY-854: the permission list covers the .play app"
+    # No ListInstalled first: the service must know an app that ruya-play installed after it started.
+    out="$(store_call GetPermissions s "$papp")"
+    echo "GetPermissions: $out"
+    [ "$(echo "$out" | parse status)" = ok ] && ok "Store1.GetPermissions answers for $papp (not unknown-app)" || bad "GetPermissions: $out"
+    echo " $(echo "$out" | parse keys effective) " | grep -q ' network ' && ok "the network is among what the app has" || bad "no network in the effective set: $out"
+    echo " $(echo "$out" | parse keys withdrawable) " | grep -q ' network ' && ok "the network is withdrawable" || bad "network is not withdrawable: $out"
+    [ -z "$(echo "$out" | parse keys withdrawn)" ] && ok "nothing is withdrawn yet" || bad "withdrawn before any change: $out"
+    store_call ListInstalled | grep -q "\"$papp\"" && ok "ListInstalled lists $papp" || bad "ListInstalled does not list $papp"
+
+    start_listener || { bad "no listener on the loopback"; return; }
+    now="$(sandbox_net "$papp" "$port")"
+    echo "sandbox before: $now"
+    case "$now" in *"connect=yes"*) ok "the sandbox connects to the host's listener before any withdrawal";; *) bad "the sandbox cannot connect before a withdrawal: '$now'";; esac
+
+    [ "$(store_call WithdrawPermission ss "$papp" network | parse status)" = ok ] && ok "WithdrawPermission network by root" || bad "WithdrawPermission network"
+    flatpak override --system --show "$papp" | grep -q '^shared=!network;' && ok "the override says shared=!network" || bad "override: $(override_text "$papp")"
+    echo " $(store_call GetPermissions s "$papp" | parse keys withdrawn) " | grep -q ' network ' && ok "GetPermissions reports network withdrawn" || bad "GetPermissions after the withdrawal"
+    [ "$(flatpak info --system --show-permissions "$papp" 2>&1 | perm_lines)" = "$PERMS_WANT" ] && ok "the generated metadata is unchanged (the withdrawal is the override alone)" || bad "the withdrawal changed the app's metadata"
+    now="$(sandbox_net "$papp" "$port")"
+    echo "sandbox after: $now"
+    case "$now" in *"connect=no"*) ok "the next launch cannot connect: the network is withdrawn";; *) bad "the sandbox still connects after the withdrawal: '$now'";; esac
+
+    [ "$(store_call ResetPermissions s "$papp" | parse status)" = ok ] && ok "ResetPermissions by root" || bad "ResetPermissions"
+    [ -z "$(flatpak override --system --show "$papp")" ] && ok "the reset left no override" || bad "an override is left: $(override_text "$papp")"
+    now="$(sandbox_net "$papp" "$port")"
+    case "$now" in *"connect=yes"*) ok "the network is back after the reset";; *) bad "the network did not come back: '$now'";; esac
+    kill "$listener" 2>/dev/null
+    listener=""
+}
+
 if [ "$mode" = perms ]; then
     dev_mode true >/dev/null
     appid="$(pkg_id "$appid" perms)" || { bad "no perms id for $appid"; exit 1; }
     with_id "$zip" "$work/id.play.zip" "$appid" || { bad "with_id: no copy of the sample with the id $appid"; exit 1; }
-    python3 - "$work/id.play.zip" "$work/perms.play.zip" <<'PY'
-import json, sys, zipfile
-src, out = sys.argv[1:3]
-sample = zipfile.ZipFile(src)
-with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-    for i in sample.infolist():
-        b = sample.read(i.filename)
-        if i.filename.endswith("play.json") and i.filename.count("/") <= 1:
-            m = json.loads(b)
-            m["permissions"] = {"network": True, "multiarch": True, "gamemode": True}
-            b = json.dumps(m, indent=2).encode()
-        z.writestr(i, b)
-PY
+    asks_network "$work/id.play.zip" "$work/perms.play.zip" || { bad "asks_network: no copy of the sample asking for the network"; exit 1; }
     mkdir -p "$state/incoming"
     install -m 0600 "$work/perms.play.zip" "$state/incoming/vm-play-check.play.zip"
     got="$(install_wait "$state/incoming/vm-play-check.play.zip")"
@@ -961,6 +1063,7 @@ r = json.load(open(sys.argv[1], encoding="utf-8"))
 print(r.get("format"), r.get("tier"), r.get("signer_id"), r.get("signer_name"), r.get("store_signed"))
 ' "$trust" 2>&1)"
     [ "$rec" = "1 unverified None None False" ] && ok "the trust record says format 1, unverified, no signer" || bad "trust.json: $rec"
+    [ "$got" = ok ] && permission_list_checks "play.$appid"
     [ "$fail" = 0 ] && echo "vm-play-check perms: PASS" || echo "vm-play-check perms: FAIL"
     exit "$fail"
 fi

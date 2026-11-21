@@ -63,11 +63,81 @@ fn the_flatpak_uninstall_is_a_fixed_argument_list_on_the_commits_runner() {
     ]
     .map(String::from)
     .to_vec();
+    assert_eq!(commit::uninstall(ID), want);
+    // The uninstall is the first command; the reset of the override follows (RUY-923).
+    assert_eq!(runner.calls.lock().unwrap()[0], want);
+}
+
+/// `flatpak override --system --reset play.<id>`, as `Store::drop_override` runs it.
+fn reset_argv() -> Vec<String> {
+    [
+        "flatpak",
+        "override",
+        "--system",
+        "--reset",
+        "play.com.example.mini",
+    ]
+    .map(String::from)
+    .to_vec()
+}
+
+#[test]
+fn an_uninstall_resets_the_apps_override_after_it() {
+    let state = tempfile::tempdir().unwrap();
+    let runner = Arc::new(FakeRunner::default());
+    let flatpak = FlatpakCommit::new(state.path(), Box::new(runner.clone()));
+    flatpak.uninstall(ID).unwrap();
+    assert_eq!(commit::reset_override(ID), reset_argv());
     assert_eq!(
         runner.calls.lock().unwrap().as_slice(),
-        std::slice::from_ref(&want)
+        [commit::uninstall(ID), reset_argv()],
+        "the uninstall, then the reset, nothing else"
     );
-    assert_eq!(commit::uninstall(ID), want);
+}
+
+/// Fails the commands it is told to; records every call.
+struct Failing {
+    word: &'static str,
+    calls: std::sync::Mutex<Vec<Vec<String>>>,
+}
+
+impl commit::Runner for Failing {
+    fn run(&self, argv: &[String]) -> Result<String, String> {
+        self.calls.lock().unwrap().push(argv.to_vec());
+        if argv.iter().any(|a| a == self.word) {
+            Err(format!("flatpak {} failed", self.word))
+        } else {
+            Ok(String::new())
+        }
+    }
+}
+
+#[test]
+fn a_failed_reset_is_logged_and_does_not_fail_the_removal() {
+    let state = tempfile::tempdir().unwrap();
+    let runner = Arc::new(Failing {
+        word: "--reset",
+        calls: Default::default(),
+    });
+    let flatpak = FlatpakCommit::new(state.path(), Box::new(runner.clone()));
+    flatpak.uninstall(ID).unwrap();
+    assert_eq!(runner.calls.lock().unwrap().len(), 2, "the reset was tried");
+}
+
+#[test]
+fn a_failed_uninstall_resets_nothing() {
+    let state = tempfile::tempdir().unwrap();
+    let runner = Arc::new(Failing {
+        word: "uninstall",
+        calls: Default::default(),
+    });
+    let flatpak = FlatpakCommit::new(state.path(), Box::new(runner.clone()));
+    assert!(flatpak.uninstall(ID).is_err());
+    assert_eq!(
+        runner.calls.lock().unwrap().as_slice(),
+        [commit::uninstall(ID)],
+        "an app that is still installed keeps its override"
+    );
 }
 
 #[test]

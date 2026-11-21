@@ -17,6 +17,10 @@ $names = @{ 9 = 'tab'; 11 = '\v'; 12 = '\f'; 13 = 'lone \r'; 127 = 'DEL' }
 # headers, Makefile-style lines): tabs are allowed there, every other control character is not.
 $badNoTab = '[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]|\r(?!\n)'
 $tabsAllowed = '^image/qt/[^/]+\.patch$'
+# Upstream licence texts shipped with a runner (image/play/runners/<Name>/licences/, RUY-37) stay
+# verbatim: the GNU texts carry tabs and page breaks (\f). Every other control character is refused.
+$badNoTabFf = '[\x00-\x08\x0B\x0E-\x1F\x7F]|\r(?!\n)'
+$tabsFfAllowed = '^image/play/runners/[^/]+/licences/'
 
 # Binary = a NUL byte in the file. Not git's "-text": git also calls a file with a lone CR
 # binary, which is exactly the corruption this lint exists to catch (d09da99).
@@ -35,7 +39,7 @@ foreach ($f in $files) {
     }
     $line = 1
     $last = 0
-    $pattern = if ($f -match $tabsAllowed) { $badNoTab } else { $bad }
+    $pattern = if ($f -match $tabsAllowed) { $badNoTab } elseif ($f -match $tabsFfAllowed) { $badNoTabFf } else { $bad }
     foreach ($m in [regex]::Matches($text, $pattern)) {
         $line += ([regex]::Matches($text.Substring($last, $m.Index - $last), "`n")).Count
         $last = $m.Index

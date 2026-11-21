@@ -1682,6 +1682,59 @@ extra="$(printf '%s\n[Context]\nfilesystems=host;\n' "$shown" | pp)"
 bus="$(printf '%s%s\n' "$shown" 'org.freedesktop.Flatpak=talk' | pp)"
 [ "$bus" != "$want" ] && pass "play perms: another bus name differs" || fail "play perms: an extra bus name went unseen"
 grep -q 'if \[ "\$mode" = perms \]' "$here/vm-play-check.sh" && grep -q -- '--show-permissions' "$here/vm-play-check.sh" && pass "vm-play-check.sh has a perms mode that reads --show-permissions" || fail "vm-play-check.sh: no perms mode"
+# RUY-854: the perms mode asks Store1 (as root, an admin) for the .play app's permission list, withdraws the
+# network and tests it from inside the app's sandbox with a connection attempt.
+store_json='{"type":"sasasas","data":["ok",["network","audio"],["gamepad","all-devices"],["network"]]}'
+[ "$(echo "$store_json" | pc status)" = ok ] && pass "play perms: a GetPermissions status" || fail "play perms: status of '$store_json'"
+[ "$(echo "$store_json" | pc keys effective)" = "network audio" ] && [ "$(echo "$store_json" | pc keys withdrawn)" = "gamepad all-devices" ] && [ "$(echo "$store_json" | pc keys withdrawable)" = network ] && pass "play perms: the three lists of a GetPermissions answer" || fail "play perms: the lists read as '$(echo "$store_json" | pc keys effective)' '$(echo "$store_json" | pc keys withdrawn)' '$(echo "$store_json" | pc keys withdrawable)'"
+[ -z "$(echo '{"type":"sasasas","data":["unknown-app",[],[],[]]}' | pc keys effective)" ] && pass "play perms: an unknown app has no keys" || fail "play perms: unknown-app read with keys"
+np="$tmp/netprobe"; mkdir -p "$np"
+probe="$(sed -n "/^NET_PROBE='/,/connect=no\"; fi'\$/p" "$here/vm-play-check.sh" | sed "1s/^NET_PROBE='//; \$s/'\$//")"
+printf 'Inter-|   Receive\n face |bytes\n    lo: 1 2\n  eth0: 3 4\n' > "$np/shared"
+printf 'Inter-|   Receive\n face |bytes\n    lo: 1 2\n' > "$np/unshared"
+python3 -c '
+import socket, time
+s = socket.socket()
+s.bind(("127.0.0.1", 0))
+s.listen(4)
+print(s.getsockname()[1], flush=True)
+time.sleep(20)
+' > "$np/port" &
+lpid=$!
+n=0; while [ ! -s "$np/port" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+lport="$(cat "$np/port")"
+got="$(PROC_NET_DEV="$np/shared" bash -c "$probe" probe "$lport" | tr -d '\r' | tr '\n' ' ')"
+[ "$got" = "net=1 connect=yes " ] && pass "play perms: the sandbox probe sees an interface and reaches a listener" || fail "play perms: the probe says '$got'"
+got="$(PROC_NET_DEV="$np/unshared" bash -c "$probe" probe 1 | tr -d '\r' | tr '\n' ' ')"
+[ "$got" = "net=0 connect=no " ] && pass "play perms: the probe sees no interface and no listener" || fail "play perms: the probe says '$got'"
+kill "$lpid" 2>/dev/null; wait "$lpid" 2>/dev/null
+# The calls the mode makes are the signatures of Store1.xml.
+storexml="$here/../api/dbus/org.ruyaos.Store1.xml"
+grep -A2 'name="GetPermissions"' "$storexml" | grep -q 'name="app_id" type="s"' && grep -A3 'name="WithdrawPermission"' "$storexml" | grep -q 'name="key" type="s"' && grep -q 'store_call GetPermissions s ' "$here/vm-play-check.sh" && grep -q 'store_call WithdrawPermission ss ' "$here/vm-play-check.sh" && grep -q 'store_call ResetPermissions s ' "$here/vm-play-check.sh" && pass "vm-play-check.sh calls Store1's permission methods with the signatures of Store1.xml" || fail "vm-play-check.sh: its Store1 calls do not match Store1.xml"
+grep -q 'permission_list_checks "play.\$appid"' "$here/vm-play-check.sh" && grep -q 'flatpak override --system --reset "play.\$appid"' "$here/vm-play-check.sh" && pass "vm-play-check.sh perms runs the permission list checks and drops the override at exit" || fail "vm-play-check.sh perms: no permission list checks or no override cleanup"
+grep -q 'connect=no' "$here/vm-play-check.sh" && grep -q 'WithdrawPermission ss "\$papp" network' "$here/vm-play-check.sh" && pass "vm-play-check.sh perms withdraws the network and expects a refused connection" || fail "vm-play-check.sh perms: the network-off case is gone"
+# RUY-923: Play1.Remove drops the app's permission override. The remove mode installs a copy of the sample that
+# asks for the network (the perms mode's copy), has an admin withdraw it, expects `flatpak override --system
+# --show` to be empty after the removal and nothing withdrawn after the reinstall.
+an="$tmp/asknet"; mkdir -p "$an"
+python3 - "$an/in.zip" <<'PY'
+import json, sys, zipfile
+with zipfile.ZipFile(sys.argv[1], "w") as z:
+    z.writestr("play.json", json.dumps({"id": "org.example.hello", "title": "Hello", "permissions": {"network": False}}))
+    z.writestr("art/icon.png", b"png")
+PY
+bash "$here/vm-play-check.sh" asknet "$an/in.zip" "$an/out.zip"
+got="$(python3 -c '
+import json, sys, zipfile
+a, b = zipfile.ZipFile(sys.argv[1]), zipfile.ZipFile(sys.argv[2])
+m = json.loads(b.read("play.json"))
+print(m["id"], m["permissions"]["network"], m["permissions"]["multiarch"], m["permissions"]["gamemode"], a.read("art/icon.png") == b.read("art/icon.png"), a.namelist() == b.namelist())
+' "$an/in.zip" "$an/out.zip")"
+[ "$got" = "org.example.hello True True True True True" ] && pass "vm-play-check.sh asknet asks for network, multiarch and gamemode and changes nothing else" || fail "vm-play-check.sh asknet: '$got'"
+grep -c 'asks_network "\$work/id.play.zip"' "$here/vm-play-check.sh" | grep -qx 2 && pass "vm-play-check.sh: perms and remove build the network-asking package with one function" || fail "vm-play-check.sh: perms and remove do not both use asks_network"
+rm_block="$(sed -n '/^remove_checks() {/,/^}/p' "$here/vm-play-check.sh")"
+echo "$rm_block" | grep -q 'WithdrawPermission ss "play.\$appid" network' && echo "$rm_block" | grep -q 'the removal left no override' && echo "$rm_block" | grep -q 'flatpak override --system --show "play.\$appid"' && echo "$rm_block" | grep -q 'the reinstall starts with nothing withdrawn' && pass "vm-play-check.sh remove withdraws the network, expects no override after Play1.Remove and nothing withdrawn after the reinstall (RUY-923)" || fail "vm-play-check.sh remove: the override is not checked after Play1.Remove"
+grep -A5 '^permission_list_checks() {' "$here/vm-play-check.sh" | grep -q 'override --system --reset' && fail "vm-play-check.sh perms resets an earlier run's override at the start again" || pass "vm-play-check.sh perms needs no reset of an earlier run's override (Play1.Remove drops it)"
 # RUY-877: each installing mode has its own id, so no mode meets another's trust record.
 wi="$tmp/withid"; mkdir -p "$wi"
 python3 - "$wi/in.zip" <<'PY'
@@ -1952,7 +2005,8 @@ expect_contains "samples_clean_outputs: another sample is untouched" "$left" "sa
 grep -q 'trap .samples_clean_outputs' "$here/play-vm-files.sh" && grep -q 'output/play-vm' "$here/play-vm-files.sh" && pass "play-vm-files.sh cleans up on exit and writes output/play-vm" || fail "play-vm-files.sh: no clean-up trap or wrong folder"
 
 echo "== vm-runner-check.sh: the Play platform on /usr (RUY-34) =="
-# A fake image under $rr: the real tmpfiles file, a launcher, one Proton runner, ruya-pack and readlink fakes.
+# A fake image under $rr: the real tmpfiles file, a launcher, one Proton and one Wine runner, ruya-pack and
+# readlink fakes.
 rr="$tmp/runner-root"; rsh="$tmp/runner-shims"; mkdir -p "$rsh" "$rr/usr/lib/tmpfiles.d" "$rr/var/tmp"
 cp "$here/../image/rootfs/usr/lib/tmpfiles.d/ruya-play-platform.conf" "$rr/usr/lib/tmpfiles.d/"
 rp="$rr/usr/lib/ruyaos/play"; rt="$rp/runners/ProtonGE11"
@@ -1966,6 +2020,26 @@ chmod +x "$rp/launcher/bin/ruya-play-launch"
 hash_ok="$(printf 'ab%.0s' $(seq 32))"
 printf '%s\n' "$hash_ok" > "$rt/.ruya-runner-hash"
 printf 'ProtonGE11\tproton-ge\tproton\tGE-Proton11-12\tBSD-3-Clause\thttps://example.org/\n' > "$rp/runners.list"
+# The Wine runner (RUY-37): its runner.json names the loader; bin/wine prints the words after /c echo
+# (CR LF) of a 64- or 32-bit cmd.exe that is there when WINEPREFIX is set, nothing when "silent" is in
+# the runner's folder.
+rw="$rp/runners/Wine11"
+mkdir -p "$rw/bin" "$rw/lib/wine/x86_64-windows" "$rw/lib/wine/i386-windows"
+: > "$rw/lib/wine/x86_64-windows/cmd.exe"; : > "$rw/lib/wine/i386-windows/cmd.exe"
+printf '{"format": 1, "family": "wine", "kind": "wine", "version": "wine-11.0", "arch": "x86_64",\n "entry": {"wine": "bin/wine", "wineserver": "bin/wineserver"}}\n' > "$rw/runner.json"
+printf '%s\n' "$hash_ok" > "$rw/.ruya-runner-hash"
+printf 'Wine11\twine\twine\twine-11.0\tLGPL-2.1-or-later\thttps://example.org/\n' >> "$rp/runners.list"
+cat > "$rw/bin/wine" <<'SHIMEOF'
+#!/bin/sh
+[ -e "$(dirname "$0")/../silent" ] && exit 0
+[ -n "$WINEPREFIX" ] && [ -f "$1" ] || exit 3
+case "$1" in */x86_64-windows/cmd.exe | */i386-windows/cmd.exe) ;; *) exit 4 ;; esac
+[ "$2" = /c ] && [ "$3" = echo ] || exit 5
+shift 3
+printf '%s\r\n' "$*"
+SHIMEOF
+printf '#!/bin/sh\nexit 0\n' > "$rw/bin/wineserver"
+chmod +x "$rw/bin/wine" "$rw/bin/wineserver"
 # proton: prints the words after waitforexitandrun's program and /c echo (CR LF, as cmd.exe does) when
 # both STEAM_COMPAT_* folders are set, and nothing when the file "silent" is next to it.
 cat > "$rt/proton" <<'PYEOF'
@@ -1984,17 +2058,24 @@ cat > "$rsh/readlink" <<'SHIMEOF'
 while read -r p t; do [ "$p" = "$1" ] && { echo "$t"; exit 0; }; done < "$FAKE_LINKS"
 exit 1
 SHIMEOF
-# ruya-pack runner-check: ok with $FAKE_PACK_HASH, or refused.
+# ruya-pack runner-check: ok with $FAKE_PACK_HASH (the kind and version of a runner.json there, else
+# GE-Proton's), or refused.
 cat > "$rsh/ruya-pack" <<'SHIMEOF'
 #!/bin/sh
 if [ -n "${FAKE_PACK_REFUSE:-}" ]; then echo '{"ok": false, "problems": [{"code": "runner.unknown_key"}]}'; exit 1; fi
-echo "{\"hash\": \"$FAKE_PACK_HASH\", \"runner\": {\"version\": \"GE-Proton11-12\", \"kind\": \"proton\"}, \"ok\": true}"
+kind=proton; version=GE-Proton11-12
+if [ -f "$2/runner.json" ]; then
+    kind="$(sed -n 's/.*"kind": *"\([a-z]*\)".*/\1/p' "$2/runner.json")"
+    version="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$2/runner.json")"
+fi
+echo "{\"hash\": \"$FAKE_PACK_HASH\", \"runner\": {\"version\": \"$version\", \"kind\": \"$kind\"}, \"ok\": true}"
 SHIMEOF
 printf '#!/bin/sh\n[ "$1" = -n ] && shift\nexec "$@"\n' > "$rsh/unshare"
 printf '#!/bin/sh\nexit 0\n' > "$rsh/chown"
 chmod +x "$rsh"/*
 printf '%s %s\n' "$rr/var/lib/flatpak/extension/org.ruyaos.Play.Launcher/x86_64/1" /usr/lib/ruyaos/play/launcher \
     "$rr/var/lib/flatpak/extension/org.ruyaos.Play.Runner.ProtonGE11/x86_64/1" /usr/lib/ruyaos/play/runners/ProtonGE11     "$rr/var/lib/flatpak/extension/com.valvesoftware.Steam.CompatibilityTool.ProtonGE11/x86_64/stable" /usr/lib/ruyaos/play/runners/ProtonGE11 > "$tmp/links.good"
+printf '%s %s\n' "$rr/var/lib/flatpak/extension/org.ruyaos.Play.Runner.Wine11/x86_64/1" /usr/lib/ruyaos/play/runners/Wine11 >> "$tmp/links.good"
 grep -v Launcher "$tmp/links.good" > "$tmp/links.nolauncher"
 sed 's#/usr/lib/ruyaos/play/runners/ProtonGE11$#/usr/lib/ruyaos/play/runners/Other#' "$tmp/links.good" > "$tmp/links.elsewhere"
 rc_() { # <links file> [VAR=value ...]: the check against the fake image
@@ -2006,6 +2087,8 @@ out="$(rc_ "$tmp/links.good")"; rc=$?
 [ "$rc" = 0 ] && expect_contains "runner: a good image passes" "$out" "vm-runner-check: all passed" || fail "runner: a good image: exit $rc, $out"
 expect_contains "runner: the Windows program ran as the profile user" "$out" "ProtonGE11: cmd.exe printed RUYA_RUNNER_OK as ruya-p1 without network"
 expect_contains "runner: the hash is compared" "$out" "hash $hash_ok as recorded"
+expect_contains "runner: the Wine runner's 64-bit program ran" "$out" "Wine11: x86_64 cmd.exe printed RUYA_RUNNER_OK as ruya-p1 without network"
+expect_contains "runner: the Wine runner's 32-bit program ran" "$out" "Wine11: i386 cmd.exe printed RUYA_RUNNER_OK as ruya-p1 without network"
 out="$(rc_ "$tmp/links.nolauncher")"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: a missing launcher link FAILs" "$out" "FAIL /var/lib/flatpak/extension/org.ruyaos.Play.Launcher/x86_64/1 is 'no link'" || fail "runner: a missing link: exit $rc"
 out="$(rc_ "$tmp/links.elsewhere")"; rc=$?
@@ -2024,6 +2107,14 @@ mv "$tmp/runners.list.keep" "$rp/runners.list"
 out="$(rc_ "$tmp/links.good")"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner: no marker from the Windows program FAILs" "$out" "FAIL ProtonGE11: cmd.exe through proton as ruya-p1" || fail "runner: the marker: exit $rc"
 rm -f "$rt/silent"
+: > "$rw/silent"
+out="$(rc_ "$tmp/links.good")"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner: no marker through the Wine runner FAILs" "$out" "FAIL Wine11: x86_64 cmd.exe through bin/wine as ruya-p1" || fail "runner: the Wine marker: exit $rc"
+rm -f "$rw/silent"
+mv "$rw/lib/wine/i386-windows/cmd.exe" "$tmp/cmd32.keep"
+out="$(rc_ "$tmp/links.good")"; rc=$?
+[ "$rc" = 1 ] && expect_contains "runner: a Wine runner that cannot run a 32-bit program FAILs" "$out" "FAIL Wine11: i386 cmd.exe through bin/wine as ruya-p1" || fail "runner: the 32-bit program: exit $rc"
+mv "$tmp/cmd32.keep" "$rw/lib/wine/i386-windows/cmd.exe"
 out="$(rc_ "$tmp/links.good" FAKE_BUSCTL_OUT='as 0')"; rc=$?
 [ "$rc" = 0 ] && expect_contains "runner: without a profile the program step is a SKIP" "$out" "SKIP: no profile on this VM" || fail "runner: no profile: exit $rc, $out"
 grep -q 'unshare -n runuser -u "$user"' "$here/vm-runner-check.sh" && pass "vm-runner-check.sh runs the program offline as the profile user" || fail "vm-runner-check.sh: the program does not run under unshare -n as the profile user"
@@ -2140,6 +2231,9 @@ echo "== install-runners.sh: the image build's runner step (RUY-34) =="
 ir="$tmp/install-runners"; ish="$tmp/install-shims"; mkdir -p "$ir/runners/ProtonGE11" "$ir/rel/GE-X/files" "$ish"
 printf '#!/bin/sh\necho proton\n' > "$ir/rel/GE-X/proton"; chmod 0755 "$ir/rel/GE-X/proton"
 echo data > "$ir/rel/GE-X/files/open.dll"; chmod 0666 "$ir/rel/GE-X/files/open.dll"
+# A release without a licence text (as Kron4ek's Wine) first, then the same with its LICENSE (as GE-Proton).
+(cd "$ir/rel" && tar -czf "$ir/release-nolicence.tar.gz" GE-X)
+echo "the release's licence" > "$ir/rel/GE-X/LICENSE"
 (cd "$ir/rel" && tar -czf "$ir/release.tar.gz" GE-X)
 rsha="$(sha256sum "$ir/release.tar.gz" | cut -d' ' -f1)"
 printf '# a comment\nurl=https://example.org/release.tar.gz\nsha256=%s\nroot=GE-X\n' "$rsha" > "$ir/runners/ProtonGE11/pin"
@@ -2176,6 +2270,26 @@ out="$(ir_ fetch "$ir/runners" "$ir/play")"; rc=$?
 printf 'url=http://example.org/r\nsha256=%s\nroot=GE-X\n' "$rsha" > "$ir/runners/ProtonGE11/pin"
 out="$(ir_ fetch "$ir/runners" "$ir/play")"; rc=$?
 [ "$rc" != 0 ] && expect_contains "install-runners: a URL that is not https fails the build" "$out" "url is not https" || fail "install-runners: an http URL: exit $rc"
+# RUY-37: the pin folder's own files (licence texts) are laid over the release; none replaces a release
+# file; a tree without a licence text fails the build.
+nsha="$(sha256sum "$ir/release-nolicence.tar.gz" | cut -d' ' -f1)"
+irn_() { env FAKE_RELEASE="$ir/release-nolicence.tar.gz" PATH="$ish:$PATH" bash "$here/../image/play/install-runners.sh" "$@" 2>&1; }
+printf 'url=https://example.org/r\nsha256=%s\nroot=GE-X\n' "$nsha" > "$ir/runners/ProtonGE11/pin"
+out="$(irn_ fetch "$ir/runners" "$ir/play")"; rc=$?
+[ "$rc" != 0 ] && expect_contains "install-runners: a runner without a licence text fails the build" "$out" "ProtonGE11: no licence text at the runner's root" || fail "install-runners: no licence: exit $rc, $out"
+rm -rf "$ir/play"
+mkdir -p "$ir/runners/ProtonGE11/licences/zlib"
+echo "LGPL text" > "$ir/runners/ProtonGE11/licences/COPYING.LIB"
+echo "zlib text" > "$ir/runners/ProtonGE11/licences/zlib/LICENSE"
+out="$(irn_ fetch "$ir/runners" "$ir/play")"; rc=$?
+[ "$rc" = 0 ] && [ "$(cat "$ir/play/runners/ProtonGE11/licences/zlib/LICENSE")" = "zlib text" ] && [ -f "$ir/play/runners/ProtonGE11/licences/COPYING.LIB" ] && pass "install-runners: the pin folder's licences/ is installed into the runner's tree" || fail "install-runners: licences/: exit $rc, $out"
+[ ! -e "$ir/play/runners/ProtonGE11/pin" ] && pass "install-runners: the pin file itself is not installed" || fail "install-runners: the pin was installed"
+rm -rf "$ir/play"
+echo "ours" > "$ir/runners/ProtonGE11/proton"
+out="$(irn_ fetch "$ir/runners" "$ir/play")"; rc=$?
+[ "$rc" != 0 ] && expect_contains "install-runners: a pin-folder file the release already has fails the build" "$out" "ProtonGE11: the release already has proton" || fail "install-runners: an overwrite: exit $rc, $out"
+[ "$(cat "$ir/play/runners/ProtonGE11/proton" 2>/dev/null | tail -n 1)" = "echo proton" ] && pass "install-runners: the release's file is left as it was" || fail "install-runners: the release's proton was replaced"
+rm -rf "$ir/play" "$ir/runners/ProtonGE11/proton" "$ir/runners/ProtonGE11/licences"
 
 echo "== check-image-manifest.sh: the Play platform's files have rows (RUY-34) =="
 msh="$tmp/manifest-shims"; mkdir -p "$msh"

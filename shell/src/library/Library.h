@@ -51,6 +51,9 @@ public:
     Q_INVOKABLE QString sessionAppId(const QString &id) const;
     // The record of an item, or an empty object.
     Q_INVOKABLE QVariantMap item(const QString &id) const;
+    // The record of the item whose Flatpak application id (sessionAppId) is appId, or an empty object. A binding
+    // that calls it reads `items` too, or it is not evaluated again when the list changes (AppName).
+    Q_INVOKABLE QVariantMap itemForApp(const QString &appId) const;
 
     // Tests only, and only with the mock backend (otherwise a no-op). scenario: "" (the default library), "empty" (nothing installed) or "unlisted" (the default items and one Flatpak app with no Store record) or "play" (the default items and one .play app with every field, RUY-852) or "unplayed" (the default
     // items, none with a last played time) or "art:<dir>" (the default items with pictures: art.tile is

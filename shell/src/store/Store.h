@@ -85,6 +85,10 @@ public:
     // calls it while the results are still those of the other filter.
     Q_INVOKABLE QVariantMap rowIds(bool gamepadOnly) const;
 
+    // Reads the installed list from the service again (ListInstalled). The service lists an app installed behind
+    // the Store's back (a .play app, `flatpak install`) when it is asked; installedChanged follows if it differs.
+    Q_INVOKABLE void refreshInstalled();
+
     // ---- Permissions of an installed app (RUY-744, GetPermissions and the three changes) ----
     // Reads them from the service; answers with permissionsLoaded(appId), then permissions(appId) holds them.
     Q_INVOKABLE void loadPermissions(const QString &appId);
@@ -132,6 +136,10 @@ public:
     // `count` more apps in the mock's catalogue (a real remote's size), announced as changed; mockReset
     // takes them away again (T-377).
     Q_INVOKABLE void mockAddApps(int count);
+    // An app installed behind the Store's back, as the service reports it once asked (RUY-854): it is in the
+    // installed list from the next refreshInstalled(), with `permissions` (keys of the App record's) and no
+    // catalogue record of its own; mockReset takes it away. Announces nothing, as the real service does not.
+    Q_INVOKABLE void mockInstallOutside(const QString &appId, const QString &name, const QStringList &permissions);
     // The mock console's API level (0 until mockReset); org.example.Future needs 1 (RUY-636).
     Q_INVOKABLE void mockSetApiLevel(int level);
     // Every later search answers after ms, until mockReset (T-377: the Store page before the
@@ -146,6 +154,8 @@ public:
     // The next permission read answers after ms with what it read when asked, and how many are still due.
     Q_INVOKABLE void mockPermissionsDelayed(int ms);
     Q_INVOKABLE int mockPendingPermissionReplies() const;
+    // How many GetPermissions the shell asked since mockReset (RUY-854: a hidden pane asks none).
+    Q_INVOKABLE int mockPermissionReads() const;
 
 signals:
     void catalogueChanged();

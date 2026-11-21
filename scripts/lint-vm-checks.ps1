@@ -151,7 +151,7 @@ try {
         @{ check = "vm-play-check.sh parse"; skip = $false },
         @{ check = "vm-library-check.sh check"; skip = $false }
     )
-    foreach ($c in @("vm-play-check.sh", "vm-play-check.sh check", "vm-play-check.sh helper", "vm-play-check.sh verify", "vm-play-check.sh perms", "vm-play-check.sh launch", "vm-play-check.sh launch-windows", "vm-library-check.sh play")) {
+    foreach ($c in @("vm-play-check.sh", "vm-play-check.sh check", "vm-play-check.sh helper", "vm-play-check.sh verify", "vm-play-check.sh perms", "vm-play-check.sh remove", "vm-play-check.sh launch", "vm-play-check.sh launch-windows", "vm-library-check.sh play")) {
         $rules += @{ check = $c; skip = $true; why = "scripts/play-vm-files.sh" }
     }
     foreach ($r in $rules) {
