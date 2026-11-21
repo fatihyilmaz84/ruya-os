@@ -70,7 +70,8 @@ Page {
         return last !== undefined && last.reason === "crashed"
     }
     onVisibleChanged: Usage.setWatching(page, visible)
-    readonly property bool tryShown: loaded && crashedLast && preview.playRunnerSource === "system" && hasBundled
+    // Not while the game runs: A would start it again.
+    readonly property bool tryShown: loaded && !running && crashedLast && preview.playRunnerSource === "system" && hasBundled
 
     readonly property var runnerOptions: RunnerText.choices
         .filter(c => c !== "bundled" || page.hasBundled || page.choice === "bundled")
@@ -210,12 +211,8 @@ Page {
             dimmed: page.failed
             label: qsTr("Runner")
             options: page.failed ? [{ value: "", label: qsTr("Not available") }] : page.runnerOptions
-            onEdited: value => {
-                if (page.failed)
-                    page.notAvailable()
-                else
-                    page.store(value)
-            }
+            onEdited: value => page.store(value)
+            onBlocked: page.notAvailable()      // dimmed: the row does not change, A says why
         }
         // The row shows the page's choice again after its own step (a refused store goes back).
         Binding {

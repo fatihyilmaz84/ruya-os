@@ -111,6 +111,7 @@ Item {
     }
 
     SignalSpy { id: spy }
+    Component { id: spyComponent; SignalSpy {} }
 
     TestCase {
         id: tc
@@ -1020,6 +1021,32 @@ Item {
             compare(spy.count, 3)
             compare(Sfx.navigateCount, navs + 3)
             compare(choice.hintKind, "choice")
+        }
+
+        // A dimmed ChoiceRow cannot be changed (04 §5): Left/Right are consumed and do nothing, A says blocked().
+        function test_dimmed_choice_cannot_be_changed() {
+            const choice = createTemporaryObject(choiceComponent, host)
+            choice.options = [{ value: "a", label: "A" }, { value: "b", label: "B" }]
+            choice.value = "a"
+            choice.dimmed = true
+            choice.forceActiveFocus()
+            const edited = createTemporaryObject(spyComponent, host, { target: choice, signalName: "edited" })
+            const blocked = createTemporaryObject(spyComponent, host, { target: choice, signalName: "blocked" })
+            const navs = Sfx.navigateCount
+            keyClick(Qt.Key_Left)
+            keyClick(Qt.Key_Right)
+            compare(choice.value, "a")
+            verify(choice.activeFocus, "Left and Right are consumed")
+            compare(blocked.count, 0, "no notice for Left and Right")
+            keyClick(Qt.Key_Return)
+            keyClick(Qt.Key_Enter)
+            compare(choice.value, "a", "A does not step")
+            compare(edited.count, 0)
+            compare(blocked.count, 2, "A reports it")
+            compare(Sfx.navigateCount, navs, "silent")
+            choice.dimmed = false
+            keyClick(Qt.Key_Right)
+            compare(choice.value, "b", "undimmed, it changes again")
         }
 
         function test_slider_look() {

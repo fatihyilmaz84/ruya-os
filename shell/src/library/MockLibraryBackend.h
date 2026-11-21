@@ -33,7 +33,7 @@ public:
     // own runner fields (and the list changes, as after a rescan).
     void setResolution(const QString &id, const QString &choice, const LibraryResolution &resolution);
     // Tests only: these runner calls ("get", "set", "resolve") answer "failed" (Library1 did not answer)
-    // until the next call or reset; an empty list ends it.
+    // until the list is changed or the mock is reset; an empty list ends it.
     void setFailingRunnerCalls(const QStringList &calls) { m_failing = calls; }
 
     // Tests only. scenario: "", "empty", "unplayed" or "art:<dir>" (the default items, each with
