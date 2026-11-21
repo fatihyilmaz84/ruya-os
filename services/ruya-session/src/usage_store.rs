@@ -199,20 +199,9 @@ fn private_options() -> fs::OpenOptions {
     }
 }
 
-/// Writes `data` to `path` so a reader sees all of it or the old file: a temporary file next to
-/// it, flushed to disk, then renamed over it.
+/// `safe_file::write_atomic` for text.
 fn write_atomic(path: &Path, data: &str) -> io::Result<()> {
-    let tmp = path.with_extension("tmp");
-    {
-        let mut f = private_options()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(&tmp)?;
-        f.write_all(data.as_bytes())?;
-        f.sync_all()?;
-    }
-    fs::rename(&tmp, path)
+    crate::safe_file::write_atomic(path, data.as_bytes())
 }
 
 fn err<T>(r: io::Result<T>) -> StoreResult<T> {

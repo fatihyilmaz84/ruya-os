@@ -24,6 +24,11 @@ use std::path::PathBuf;
 const USR_TREES: &str = "/usr/lib/ruyaos/play";
 /// Where Flatpak looks for unmaintained extensions.
 const EXTENSION_ROOT: &str = "/var/lib/flatpak/extension";
+/// Steam's extension point for compatibility tools, from the Steam Flathub manifest
+/// (com.valvesoftware.Steam.yml: `subdirectories: true`, `directory: share/steam/compatibilitytools.d`,
+/// `version: stable`). Every Proton runner of the image is linked into it (RUY-35).
+const STEAM_TOOL_POINT: &str = "com.valvesoftware.Steam.CompatibilityTool";
+const STEAM_TOOL_BRANCH: &str = "stable";
 
 /// One line the file must have: the link `path` to `target`. With `per_name`, any number of
 /// lines `<path>.<Name>/...` to `<target>/<Name>` (at least one).
@@ -242,6 +247,17 @@ fn the_image_runners_are_valid_and_linked() {
             format!("{USR_TREES}/runners/{name}"),
         );
         assert!(have.contains(&link), "{name}: no line {link:?}");
+        // A Proton runner is also Steam's compatibility tool: the same tree, one more line.
+        let steam = (
+            format!("{EXTENSION_ROOT}/{STEAM_TOOL_POINT}.{name}/{ARCH}/{STEAM_TOOL_BRANCH}"),
+            format!("{USR_TREES}/runners/{name}"),
+        );
+        assert_eq!(
+            have.contains(&steam),
+            parsed.kind == "proton",
+            "{name} ({}): the Steam line {steam:?} belongs to Proton runners only",
+            parsed.kind
+        );
     }
     let prefix = format!("{EXTENSION_ROOT}/org.ruyaos.Play.Runner.");
     for (path, _) in have.iter().filter(|(p, _)| p.starts_with(&prefix)) {
@@ -249,6 +265,14 @@ fn the_image_runners_are_valid_and_linked() {
         assert!(
             names.iter().any(|n| n == name),
             "{path} links a runner image/play/runners/ does not have"
+        );
+    }
+    let steam_prefix = format!("{EXTENSION_ROOT}/{STEAM_TOOL_POINT}.");
+    for (path, target) in have.iter().filter(|(p, _)| p.starts_with(&steam_prefix)) {
+        let name = path[steam_prefix.len()..].split('/').next().unwrap_or("");
+        assert!(
+            names.iter().any(|n| n == name) && *target == format!("{USR_TREES}/runners/{name}"),
+            "{path} -> {target}: not a runner image/play/runners/ has"
         );
     }
 }
