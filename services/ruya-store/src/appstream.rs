@@ -147,33 +147,14 @@ struct Open {
     date: String,
 }
 
-/// OARS severity words, 0 (none) to 3 (intense).
-fn severity(word: &str) -> u8 {
-    match word.trim() {
-        "mild" => 1,
-        "moderate" => 2,
-        "intense" => 3,
-        _ => 0,
-    }
-}
-
-/// The OARS 1.1 attributes whose `intense` level means 18+ (the others top out at 16+): sex,
-/// sexual violence, drugs and gambling. OARS names gambling `money-gambling`.
-fn adult_attribute(id: &str) -> bool {
-    ["sex-", "violence-sexual", "drugs-", "money-gambling"]
-        .iter()
-        .any(|prefix| id.starts_with(prefix))
-}
-
 #[derive(Default)]
 struct Builder {
     c: Component,
     paragraphs: Vec<String>,
     gamepad: bool,
     custom_controller: String,
-    rated: bool,
-    worst: u8,
-    adult: bool,
+    /// The `content_rating` answers: (OARS attribute id, severity word).
+    oars: Vec<(String, String)>,
     cached_icon: String,
     /// The older `<developer_name>`; used only when there is no `<developer><name>`.
     developer_name: String,
@@ -215,15 +196,10 @@ impl Builder {
             } else {
                 "none".to_owned()
             };
-        if self.rated {
-            self.c.age_rating = match self.worst {
-                0 => "all",
-                1 => "7+",
-                2 => "12+",
-                _ if self.adult => "18+",
-                _ => "16+",
-            }
-            .to_owned();
+        if let Some(label) = ruya_play_format::oars::age_label(
+            self.oars.iter().map(|(i, w)| (i.as_str(), w.as_str())),
+        ) {
+            self.c.age_rating = label.to_owned();
         }
         if self.c.icon.is_empty() {
             self.c.icon = self.cached_icon;
@@ -408,12 +384,7 @@ fn on_text(b: &mut Builder, stack: &[Open], text: &str, icon_base: &str) {
             _ => {}
         },
         ("content_attribute", "content_rating") => {
-            b.rated = true;
-            let level = severity(text);
-            b.worst = b.worst.max(level);
-            if adult_attribute(&top.id) && level >= 3 {
-                b.adult = true;
-            }
+            b.oars.push((top.id.clone(), text.to_owned()));
         }
         ("control", "recommends" | "supports") if text == "gamepad" => b.gamepad = true,
         ("value", "custom") => match top.key.as_str() {

@@ -17,6 +17,7 @@ pub mod folder;
 pub mod json;
 pub mod limits;
 pub mod manifest;
+pub mod oars;
 pub mod path;
 pub mod problem;
 pub mod resolve;

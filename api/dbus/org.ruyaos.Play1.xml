@@ -81,8 +81,7 @@
                          cheap to know; 0 = unknown)
 
   Everything in the Inspect record comes from the unprivileged helper's result (05 §7.3 step 2); no
-  payload byte was copied. The record has no age_label (the manifest carries an OARS map, not a
-  label) and no signer_name (a signature carries a key, not a name): a client reads both as absent.
+  payload byte was copied.
 
   Inspect record (a{sv}), keys:
     id              s    the manifest id, e.g. "com.example.starhopper" (the installed app is
@@ -92,6 +91,13 @@
     version         s    version text
     build           u    the integer that orders versions
     developer       s    developer name; absent when the manifest names none
+    signer_name     s    the manifest's developer name, for a package with a verified developer key
+                         (the signature covers it; self-asserted: the key, not the name, was
+                         verified). Absent for an unsigned package and for one that names no
+                         developer. The shell shows it only beside signer_key_id, never alone
+    age_label       s    "all" | "7+" | "12+" | "16+" | "18+": the label of the manifest's OARS
+                         answers, from the same mapping as the Store's age_rating. Absent when the
+                         manifest declares no answer ("Not rated", never "all")
     genres          as   raw genre keys
     players         s    "1", "1-2", "2-4", ...; absent when the manifest declares none
     controller      s    "full" | "partial" | "none"; absent when the manifest declares none

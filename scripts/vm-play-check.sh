@@ -762,6 +762,17 @@ st="$(call Inspect s "$loose/signed-a.play.zip" | parse status)"
 [ "$st" = unknown-source ] && ok "Inspect on a drive without noexec is unknown-source" || bad "Inspect on a drive without noexec: $st"
 st="$(inspect_clean "$usb/signed-a.play.zip" ok)"
 [ "$st" = ok ] && ok "Inspect of a USB package is ok, no internal fault" || bad "Inspect of a USB package: $st"
+# RUY-914: Inspect serves signer_name (the manifest's developer name) only beside a verified key.
+rec="$(call Inspect s "$usb/signed-a.play.zip")"
+name="$(echo "$rec" | parse key signer_name)"; dev="$(echo "$rec" | parse key developer)"
+keyid="$(echo "$rec" | parse key signer_key_id)"
+if [ -n "$name" ] && [ "$name" = "$dev" ] && [ -n "$keyid" ]; then
+    ok "Inspect of a signed package: signer_name is the developer name, with the key"
+else
+    bad "Inspect of a signed package: signer_name '$name', developer '$dev', key '$keyid'"
+fi
+name="$(call Inspect s "$usb/unsigned.play.zip" | parse key signer_name)"
+[ -z "$name" ] && ok "Inspect of an unsigned package serves no signer_name" || bad "Inspect of an unsigned package: signer_name '$name'"
 st="$(call Inspect s /etc/shadow | parse status)"
 [ "$st" = unknown-source ] && ok "Inspect of a path that is no candidate is unknown-source" || bad "Inspect /etc/shadow: $st"
 st="$(as_shell busctl --system --json=short call "$svc" "$obj" "$svc" Install 'sa{sv}' "$usb/signed-a.play.zip" 0 | parse status)"

@@ -923,6 +923,51 @@ Item {
             verify(find("storagePackages_vol-stick") !== null, "and it is back with the service")
         }
 
+        // RUY-914: Inspect serves signer_name only for a signed package that names a developer, and the
+        // page shows it beside the key; without a name the key stands alone and the sheet has no "Signed by" row.
+        function test_the_signer_name_shows_beside_the_key_and_is_hidden_without_one() {
+            start("admin")
+            openPackage("starhopper")
+            compare(page().info.signerName, "Example Games")
+            compare(findChild(find("installTrustRow"), "trustLine").text, "Signed by Example Games · key 3f9a…f312")
+            keyClick(Qt.Key_Up)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installSigner").shown, 2000)
+            const name = findChild(find("installSigner"), "signerRowName")
+            verify(name.visible)
+            compare(findChild(name, "signerValue").text, "Example Games")
+            verify(findChild(find("installSigner"), "signerRowKey").visible)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("installSigner").shown, 2000)
+            closePackage()
+
+            // Signed, no developer in the manifest: the service sends a key and no name.
+            openPackage("flaky")
+            compare(page().info.signerName, "")
+            compare(page().info.signerKeyId, "3f9a41c07be2d6058e21b4a9d0c7f312")
+            compare(findChild(find("installTrustRow"), "trustLine").text, "Signed by key 3f9a…f312")
+            keyClick(Qt.Key_Up)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installSigner").shown, 2000)
+            verify(!findChild(find("installSigner"), "signerRowName").visible, "no name: no row, never 'Unknown'")
+            verify(findChild(find("installSigner"), "signerRowKey").visible)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("installSigner").shown, 2000)
+            tryVerify(() => find("installTrustRow").activeFocus, 2000, "Back returns to the trust row")
+
+            // An unsigned package has neither.
+            closePackage()
+            openPackage("homebrew")
+            compare(page().info.signerName, "")
+            keyClick(Qt.Key_Up)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("installSigner").shown, 2000)
+            verify(!findChild(find("installSigner"), "signerRowName").visible)
+            verify(!findChild(find("installSigner"), "signerRowKey").visible)
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("installSigner").shown, 2000)
+        }
+
         // ---- Screenshots (dev.ps1 shots) ----
 
         function settle() { wait(300) }
@@ -987,6 +1032,17 @@ Item {
                 openPackage("homebrew")
                 settle()
                 shot("126-install-package-unverified-" + lang)
+                closePackage()
+
+                // Signed, its manifest names no developer: the signer sheet shows the key and no "Signed by" row.
+                openPackage("flaky")
+                keyClick(Qt.Key_Up)
+                keyClick(Qt.Key_Return)
+                tryVerify(() => find("installSigner").shown, 2000)
+                settle()
+                shot("126b-install-signer-no-name-" + lang)
+                keyClick(Qt.Key_Escape)
+                tryVerify(() => !find("installSigner").shown, 2000)
                 closePackage()
 
                 openPackage("tampered")
