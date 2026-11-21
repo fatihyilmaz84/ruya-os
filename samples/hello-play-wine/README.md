@@ -9,6 +9,7 @@ The Windows sample of the [`.play` developer guide](../../docs/developers/play-p
 | A prefix without a template (`arch`, `epoch`) | `run.prefix` |
 | A saves folder inside the prefix, listed for backup | `data.saves`: `prefix:drive_c/users/steamuser/Documents/Hello Play` |
 | A first-run setup step that does nothing | `run.setup[]` runs `setup.exe` once per prefix |
+| A folder the game writes into next to its programs, as Unreal Tournament does with its ini (*experimental*, ADR-040) | `run.writable: ["Program"]`; the programs run from `${game}/Program`, and `data.saves` lists `game:Program/beside.txt` |
 | A 32-bit command-line program for the console's VM check | `src/check.c`, built as `check.exe`; not run by the manifest, see below |
 | Art that passes the console's vetting | `package/art/`, made by `make-art.py` |
 
@@ -20,10 +21,11 @@ The Windows sample of the [`.play` developer guide](../../docs/developers/play-p
 package/            what is committed
   play.json
   art/icon.png, art/hero.png
-package/payload/    NOT committed: build.sh puts hello.exe, setup.exe and check.exe here
+package/payload/    NOT committed: build.sh puts Program/hello.exe, setup.exe, check.exe and check.ini here
 src/hello.c         the game: a window, a square, a step counter saved to Documents\Hello Play\save.txt
 src/setup.c         the no-op setup step
 src/check.c         check.exe: a 32-bit console program that counts its launches in Documents\Hello Play\check.txt
+                    and in beside.txt next to itself, and reads check.ini there
 build.sh            cross-compile, then build the zip with ruya-pack
 make-art.py         draws the two PNGs
 ```
@@ -45,7 +47,9 @@ CI compiles the three programs and builds and inspects the zip on every push (`s
 
 ## The VM check
 
-`hello.exe` waits for the arrow keys, which a headless machine cannot press, so the console's VM check (`scripts/vm-play-check.sh launch-windows`, RUY-902) installs a copy of this package whose command is `check.exe` and which also asks for `"multiarch": true` (32-bit code needs it; the sample itself is 64-bit and asks for nothing more). `check.exe` writes `Documents\Hello Play\check.txt` (`launches`, `pointer_bits`, `wow64`, `network`), exits `0` and is started a second time to show the save in the prefix survived. The check runs offline and expects `launches=1`, `pointer_bits=32`, `wow64=1`, `network=closed`, then `launches=2`. It is written and tested on the host; the run on a console is pending. The `steamuser` folder in `data.saves` is the user name the Proton-style runners use; that run confirms it.
+`hello.exe` waits for the arrow keys, which a headless machine cannot press, so the console's VM check (`scripts/vm-play-check.sh launch-windows`, RUY-902) installs a copy of this package whose command is `check.exe` and which also asks for `"multiarch": true` (32-bit code needs it; the sample itself is 64-bit and asks for nothing more). `check.exe` writes `Documents\Hello Play\check.txt` (`launches`, `pointer_bits`, `wow64`, `network`, `module`, `edition`, `beside`), exits `0` and is started a second time to show the save in the prefix survived. The check runs offline and expects `launches=1`, `pointer_bits=32`, `wow64=1`, `network=closed`, then `launches=2`.
+
+`Program/` is the package's `run.writable` folder (RUY-1019): the console gives each profile its own copy of it, so `check.exe` reads `check.ini` and writes `beside.txt` next to itself, the way a Windows game keeps its ini in its install folder. `module` is the path `GetModuleFileNameW` gives (it must be in the profile's game tree, not the read-only `/app/payload`), `edition` the number in `check.ini` and `beside` the count `check.exe` wrote to `beside.txt`. The check then installs the next build of the package with `check.ini` changed and starts it a third time: `edition=2` (the file the game never changed was replaced) and `beside=3` (what the game wrote was kept). It is written and tested on the host; the run on a console is pending. The `steamuser` folder in `data.saves` is the user name the Proton-style runners use; that run confirms it.
 
 ## Licence
 

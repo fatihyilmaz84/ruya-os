@@ -127,6 +127,38 @@ fn make_dirs_makes_what_is_missing_and_refuses_a_file() {
     assert!(e.to_string().contains("is not a folder"), "{e}");
 }
 
+/// A file and a folder move to another folder (made when missing), a file there is replaced,
+/// and a missing source is `NotFound` (RUY-1019).
+#[test]
+fn rename_moves_an_entry_into_another_folder() {
+    let (tmp, dir) = base();
+    let other = tempfile::tempdir_in(tmp.path()).expect("tmp");
+    let to = Dir::open(other.path()).expect("open");
+    fs::create_dir_all(tmp.path().join("a/sub")).expect("dirs");
+    fs::write(tmp.path().join("a/sub/f"), "mine").expect("file");
+    fs::write(tmp.path().join("a/g"), "new").expect("file");
+    dir.rename(Path::new("a/sub"), &to, Path::new("x/y/sub"))
+        .expect("move a folder");
+    assert_eq!(
+        fs::read_to_string(other.path().join("x/y/sub/f")).expect("read"),
+        "mine"
+    );
+    assert!(!tmp.path().join("a/sub").exists());
+    fs::write(other.path().join("x/g"), "old").expect("file");
+    dir.rename(Path::new("a/g"), &to, Path::new("x/g"))
+        .expect("replace a file");
+    assert_eq!(
+        fs::read_to_string(other.path().join("x/g")).expect("read"),
+        "new"
+    );
+    let e = dir
+        .rename(Path::new("a/none"), &to, Path::new("z"))
+        .expect_err("missing");
+    assert_eq!(e.kind(), io::ErrorKind::NotFound);
+    assert!(dir.rename(Path::new("../x"), &to, Path::new("z")).is_err());
+    assert!(dir.rename(Path::new("a"), &to, Path::new("")).is_err());
+}
+
 #[test]
 fn not_followed_survives_io() {
     let e = NotFollowed::error("/d/prefix");
@@ -598,5 +630,122 @@ mod linux {
         p.dir.remove(Path::new("c"), 8).expect("remove");
         p.dir.remove(Path::new("t"), 8).expect("remove");
         p.untouched();
+    }
+
+    /// A link moves as the link (its target untouched); a link among the folders of either path
+    /// is refused, and nothing behind it is touched (RUY-1019).
+    #[test]
+    fn rename_moves_a_link_as_a_link_and_never_passes_one() {
+        let p = Planted::new();
+        let base = p.tmp.path().join("base");
+        symlink(p.outside(), base.join("l")).expect("link");
+        p.dir
+            .rename(Path::new("l"), &p.dir, Path::new("kept/l"))
+            .expect("move the link");
+        assert!(is_link(&base.join("kept/l")));
+        assert_eq!(
+            fs::read_link(base.join("kept/l")).expect("link"),
+            p.outside()
+        );
+        p.untouched();
+        p.link("via");
+        fs::create_dir_all(base.join("src")).expect("src");
+        fs::write(base.join("src/f"), "mine").expect("file");
+        let e = p
+            .dir
+            .rename(Path::new("via/f"), &p.dir, Path::new("x"))
+            .expect_err("a link before the source");
+        assert!(NotFollowed::is(&e), "{e}");
+        let e = p
+            .dir
+            .rename(Path::new("src/f"), &p.dir, Path::new("via/b/f"))
+            .expect_err("a link before the destination");
+        assert!(NotFollowed::is(&e), "{e}");
+        assert!(base.join("src/f").exists(), "the source stays");
+        p.untouched();
+    }
+
+    /// A folder's and a file's mode are set on the entry itself; a folder closed to its owner is
+    /// opened up first; a link is refused and its target keeps its mode (RUY-1019).
+    #[test]
+    fn set_mode_sets_a_folder_or_a_file_and_refuses_a_link() {
+        let p = Planted::new();
+        let base = p.tmp.path().join("base");
+        fs::create_dir_all(base.join("d/e")).expect("dirs");
+        fs::write(base.join("d/f"), "x").expect("file");
+        p.dir.set_mode(Path::new("d/f"), 0o700).expect("file");
+        assert_eq!(mode(&base.join("d/f")), 0o700);
+        p.dir.set_mode(Path::new("d/e"), 0o500).expect("folder");
+        assert_eq!(mode(&base.join("d/e")), 0o500);
+        fs::set_permissions(base.join("d/e"), fs::Permissions::from_mode(0o000)).expect("close");
+        p.dir
+            .set_mode(Path::new("d/e"), 0o700)
+            .expect("a closed folder");
+        assert_eq!(mode(&base.join("d/e")), 0o700);
+        p.dir.set_mode(Path::new(""), 0o700).expect("the base");
+        symlink(p.outside().join("b"), base.join("d/l")).expect("link");
+        let e = p.dir.set_mode(Path::new("d/l"), 0o777).expect_err("a link");
+        assert!(NotFollowed::is(&e), "{e}");
+        p.link("m");
+        let e = p
+            .dir
+            .set_mode(Path::new("m/b"), 0o777)
+            .expect_err("a link on the way");
+        assert!(NotFollowed::is(&e), "{e}");
+        assert_eq!(
+            p.dir
+                .set_mode(Path::new("none"), 0o700)
+                .expect_err("missing")
+                .kind(),
+            io::ErrorKind::NotFound
+        );
+        p.untouched();
+    }
+
+    /// A link's target is read as written; a file is not a link; a link on the way is refused.
+    #[test]
+    fn read_link_reads_the_target_and_never_follows() {
+        let p = Planted::new();
+        let base = p.tmp.path().join("base");
+        fs::create_dir(base.join("d")).expect("dir");
+        symlink("/app/payload/x", base.join("d/l")).expect("link");
+        fs::write(base.join("d/f"), "x").expect("file");
+        assert_eq!(
+            p.dir.read_link(Path::new("d/l")).expect("link"),
+            Path::new("/app/payload/x")
+        );
+        assert!(p.dir.read_link(Path::new("d/f")).is_err(), "a file");
+        p.link("m");
+        let e = p
+            .dir
+            .read_link(Path::new("m/b"))
+            .expect_err("a link on the way");
+        assert!(NotFollowed::is(&e), "{e}");
+    }
+
+    /// A file bigger than one read buffer is copied whole with its mode, whether the file system
+    /// shares it with a reflink (btrfs, XFS) or the copy falls back to bytes (ext4, tmpfs).
+    #[test]
+    fn a_copied_file_has_every_byte_by_reflink_or_by_copy() {
+        let (tmp, dir) = base();
+        let bytes: Vec<u8> = (0..3 * 1024 * 1024 + 7).map(|i| (i % 251) as u8).collect();
+        fs::write(tmp.path().join("big"), &bytes).expect("file");
+        fs::set_permissions(tmp.path().join("big"), fs::Permissions::from_mode(0o750)).expect("m");
+        assert!(dir
+            .copy(Path::new("big"), &dir, Path::new("c/big"), 8)
+            .expect("copy"));
+        assert_eq!(fs::read(tmp.path().join("c/big")).expect("read"), bytes);
+        assert_eq!(mode(&tmp.path().join("c/big")), 0o750);
+        // Another file system where there is one (tmpfs at /dev/shm): `FICLONE` answers `EXDEV`
+        // and the byte copy brings the same bytes.
+        if !Path::new("/dev/shm").is_dir() {
+            return;
+        }
+        let here = tempfile::tempdir_in("/dev/shm").expect("tmp");
+        let to = Dir::open(here.path()).expect("open");
+        assert!(dir
+            .copy(Path::new("big"), &to, Path::new("big"), 8)
+            .expect("copy"));
+        assert_eq!(fs::read(here.path().join("big")).expect("read"), bytes);
     }
 }

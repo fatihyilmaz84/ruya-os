@@ -48,12 +48,14 @@ fn png_size(path: &Path) -> (u32, u32) {
     (be(16), be(20))
 }
 
-/// The programs `build.sh` compiles for the Windows sample (check.exe is the 32-bit one the VM check
-/// runs, RUY-902).
+/// What `build.sh` puts in the Windows sample's writable folder `Program/` (RUY-1019): the programs
+/// it compiles (check.exe is the 32-bit one the VM check runs, RUY-902) and check.ini, the settings
+/// file check.exe reads beside itself.
 const WINE_STUBS: &[&str] = &[
-    "payload/hello.exe",
-    "payload/setup.exe",
-    "payload/check.exe",
+    "payload/Program/hello.exe",
+    "payload/Program/setup.exe",
+    "payload/Program/check.exe",
+    "payload/Program/check.ini",
 ];
 
 /// The GE-Proton the image ships (the `version` of `image/play/runners/ProtonGE11/runner.json`):

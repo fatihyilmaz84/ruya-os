@@ -96,6 +96,7 @@ fn places() -> Places {
         config: "/c".into(),
         prefix: Some("/d/prefix".into()),
         disc: Some("/app/payload/disc1.iso".into()),
+        game: Some("/d/.ruya-play/game".into()),
         components: BTreeMap::from([("wine".to_string(), "/app/runners/Wine10".to_string())]),
     }
 }
@@ -109,6 +110,7 @@ fn placeholders_substitute_only_the_named_ones() {
         ("${config}", "/c"),
         ("${prefix}/drive_c", "/d/prefix/drive_c"),
         ("${disc}", "/app/payload/disc1.iso"),
+        ("${game}/System/UT.exe", "/d/.ruya-play/game/System/UT.exe"),
         ("${component:wine}/bin", "/app/runners/Wine10/bin"),
         ("${data}${data}", "/d/d"),
         // Anything else is literal.
@@ -124,12 +126,34 @@ fn placeholders_substitute_only_the_named_ones() {
     }
 }
 
+/// Every placeholder of the format's list gets its value here (RUY-1019: `${game}` once fell
+/// to `${disc}`'s value), so a name added to the list without a launcher arm fails.
+#[test]
+fn every_placeholder_of_the_format_has_its_own_value() {
+    let p = places();
+    let mut seen = Vec::new();
+    for name in ruya_play_format::limits::PLACEHOLDERS {
+        let got = substitute(&format!("${{{name}}}"), &p).unwrap();
+        assert_ne!(got, format!("${{{name}}}"), "{name} is not substituted");
+        assert!(
+            !seen.contains(&got),
+            "{name} has another placeholder's value {got}"
+        );
+        seen.push(got);
+    }
+}
+
 #[test]
 fn a_named_placeholder_without_a_value_fails() {
     let mut p = places();
     p.prefix = None;
     assert_eq!(
         substitute("${prefix}", &p).unwrap_err().code,
+        "launch.placeholder"
+    );
+    p.game = None;
+    assert_eq!(
+        substitute("${game}/x", &p).unwrap_err().code,
         "launch.placeholder"
     );
     assert_eq!(

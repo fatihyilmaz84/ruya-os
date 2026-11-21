@@ -163,9 +163,11 @@ impl Dir {
         Ok(rfs::unlinkat(&self.fd, name, AtFlags::REMOVEDIR)?)
     }
 
-    /// Rename `from` to `to`, both in this folder; `to` is replaced (a link there too, unfollowed).
-    pub(crate) fn rename(&self, from: &OsStr, to: &OsStr) -> io::Result<()> {
-        Ok(rfs::renameat(&self.fd, from, &self.fd, to)?)
+    /// Rename `from` in this folder to `to` in `to_dir` (this one or another on the same file
+    /// system); `to` is replaced (a link there too, unfollowed), and a link at `from` is moved as
+    /// a link.
+    pub(crate) fn rename(&self, from: &OsStr, to_dir: &Dir, to: &OsStr) -> io::Result<()> {
+        Ok(rfs::renameat(&self.fd, from, &to_dir.fd, to)?)
     }
 
     /// The target of the link `name`, as written.
@@ -210,4 +212,21 @@ impl Dir {
 /// The permission bits of an open file.
 pub(crate) fn file_mode(file: &File) -> io::Result<u32> {
     Ok(rfs::fstat(file)?.st_mode & 0o7777)
+}
+
+/// Set the permission bits of an open file (its owner may, whatever it was opened for).
+pub(crate) fn set_file_mode(file: &File, bits: u32) -> io::Result<()> {
+    Ok(rfs::fchmod(file, mode(bits))?)
+}
+
+/// The bytes of `from` into the new, empty `to`: shared with a reflink (`FICLONE`) when the file
+/// system can (btrfs, XFS: no data is written), else copied. A file system without reflinks
+/// (`EOPNOTSUPP`, ext4, tmpfs), two file systems (`EXDEV`) or a pair it cannot share
+/// (`EINVAL`) is the byte copy; any other error is the caller's.
+pub(crate) fn copy_bytes(from: &mut File, to: &mut File) -> io::Result<()> {
+    match rfs::ioctl_ficlone(&*to, &*from) {
+        Ok(()) => Ok(()),
+        Err(Errno::OPNOTSUPP | Errno::XDEV | Errno::INVAL) => io::copy(from, to).map(drop),
+        Err(e) => Err(e.into()),
+    }
 }

@@ -98,8 +98,8 @@ impl Dir {
         fs::remove_dir(self.path.join(name))
     }
 
-    pub(crate) fn rename(&self, from: &OsStr, to: &OsStr) -> io::Result<()> {
-        fs::rename(self.path.join(from), self.path.join(to))
+    pub(crate) fn rename(&self, from: &OsStr, to_dir: &Dir, to: &OsStr) -> io::Result<()> {
+        fs::rename(self.path.join(from), to_dir.path.join(to))
     }
 
     pub(crate) fn read_link(&self, name: &OsStr) -> io::Result<PathBuf> {
@@ -135,4 +135,14 @@ impl Dir {
 /// Files carry no Unix mode here: a copy is private.
 pub(crate) fn file_mode(_file: &File) -> io::Result<u32> {
     Ok(0o600)
+}
+
+/// Modes are a Unix notion: nothing to set here.
+pub(crate) fn set_file_mode(_file: &File, _bits: u32) -> io::Result<()> {
+    Ok(())
+}
+
+/// A byte copy: there is no reflink here.
+pub(crate) fn copy_bytes(from: &mut File, to: &mut File) -> io::Result<()> {
+    io::copy(from, to).map(drop)
 }

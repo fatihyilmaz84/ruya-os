@@ -22,17 +22,18 @@
   "run": {
     "runner": "proton",
     "component": "proton",
-    "command": ["${payload}/hello.exe"],
-    "cwd": "${payload}",
+    "command": ["${game}/Program/hello.exe"],
+    "cwd": "${game}/Program",
+    "writable": ["Program"],
     "launch_mode": "fullscreen",
     "prefix": { "arch": "win64", "epoch": 1 },
     "setup": [
-      { "id": "first-run", "command": ["${payload}/setup.exe"], "once": true }
+      { "id": "first-run", "command": ["${game}/Program/setup.exe"], "once": true }
     ]
   },
   "permissions": {
     "network": false,
     "input": "controllers+keyboard-mouse"
   },
-  "data": { "saves": ["prefix:drive_c/users/steamuser/Documents/Hello Play"] }
+  "data": { "saves": ["prefix:drive_c/users/steamuser/Documents/Hello Play", "game:Program/beside.txt"] }
 }

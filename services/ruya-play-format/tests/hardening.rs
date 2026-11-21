@@ -416,3 +416,24 @@ fn prefix_template_and_bundled_path_must_be_folders() {
     fx.manifest["components"][0]["bundled"]["path"] = json!("components/wine/lib/libwine.so");
     assert_rejected(check(&fx), "component.bundled_missing");
 }
+
+// ----- the one streaming hasher (RUY-1019) -------------------------------------------------------
+
+#[test]
+fn sha256_of_gives_the_table_form_and_stops_past_the_limit() {
+    let abc = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+    let got = ruya_play_format::sha256_of(&mut &b"abc"[..], 3).expect("read");
+    assert_eq!(got, Some((abc.to_string(), 3)));
+    assert_eq!(
+        ruya_play_format::sha256_of(&mut &b"abcd"[..], 3).expect("read"),
+        None
+    );
+    // More than one buffer: the bytes are all counted and hashed.
+    let big = vec![7u8; 600 * 1024];
+    let (hash, n) = ruya_play_format::sha256_of(&mut big.as_slice(), u64::MAX)
+        .expect("read")
+        .expect("within");
+    assert_eq!(n, big.len() as u64);
+    assert_ne!(hash, abc);
+    assert_eq!(hash.len(), 64);
+}
