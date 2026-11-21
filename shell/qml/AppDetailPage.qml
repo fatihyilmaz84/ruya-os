@@ -30,11 +30,12 @@ Page {
     readonly property bool hasRecord: app.id !== undefined
     readonly property bool isSteam: hasItem && item.source === "steam"
     readonly property bool isApp: hasItem && item.kind === "app"
-    // A .play app (Library1's `play`, RUY-856): its trust badge, signer and trailer come from the Library item, each only when
-    // the item has the data. Any other item (a Flatpak that merely carries an art key) has none of them.
-    readonly property bool isPlay: hasItem && item.play === true
-    readonly property var playArt: isPlay && item.art ? item.art : ({})
-    readonly property string playTier: isPlay ? (item.playTier ?? "") : ""
+    // A .play app is known by its id (Play's one rule), not by the Library item: a page whose item has left stays a .play
+    // page. Its art, trust badge, signer and trailer come from the item, each only when the item has the data (none once it is gone).
+    readonly property bool isPlay: Play.isPlayApp(appId)
+    readonly property bool playItem: hasItem && item.play === true
+    readonly property var playArt: playItem && item.art ? item.art : ({})
+    readonly property string playTier: playItem ? (item.playTier ?? "") : ""
     // The Inspect-shaped record PlayTrust and SignerSheet read. Library1 has the key id (trust.json's signer_id) but no
     // `keyState`: "Seen before" compares at install time, so the sheet leaves that row out for an installed app.
     readonly property var playInfo: playTier !== "" ? { tier: playTier, signerName: item.playSigner ?? "", signerKeyId: item.playSignerKeyId ?? "", keyState: "" } : null
@@ -98,7 +99,7 @@ Page {
     onVisibleChanged: Usage.setWatching(page, visible)
     // Screenshots (RUY-533): the record's pictures, or four placeholders while GetApp is pending.
     // An installed .play app has no store record: its pictures are the Library item's paths (Library1 `play_screenshots`).
-    readonly property var playShots: isPlay ? (item.playScreenshots ?? []).map(p => ({ image: p, thumb: p, caption: "" })) : []
+    readonly property var playShots: playItem ? (item.playScreenshots ?? []).map(p => ({ image: p, thumb: p, caption: "" })) : []
     readonly property var screenshots: playShots.length > 0 ? playShots : (app.screenshots ?? [])
     readonly property bool screenshotsLoading: !detailsReady && !detailsFailed
     readonly property bool screenshotsShown: (hasRecord && !isSteam && (screenshots.length > 0 || screenshotsLoading)) || playShots.length > 0 || playTrailer !== null
@@ -140,7 +141,11 @@ Page {
     readonly property bool storeDown: !isPlay && (detailsFailed || (appId !== "" && !Store.available) || (!hasRecord && hasItem && appId !== ""))
 
     // A .play app's name is the title of its package (the Store's name for it is the id's last part): AppName's rule.
-    title: isPlay ? AppName.of(appId) : hasRecord ? (app.name ?? "") : hasItem ? (item.title ?? "") : (appId.split(".").pop() ?? "")
+    // Kept once known: it comes from the Library item, which may leave while the page is open.
+    readonly property string playName: isPlay ? AppName.of(appId) : ""
+    property string keptPlayName: ""
+    onPlayNameChanged: if (playName !== "") keptPlayName = playName
+    title: isPlay ? (playName || keptPlayName) : hasRecord ? (app.name ?? "") : hasItem ? (item.title ?? "") : (appId.split(".").pop() ?? "")
 
     // ---- Header: the buttons by state (keys only: the models never change with a progress tick or the language) ----
     // "" none | install | update | play | resume | close | busy (a Store job) | closing
@@ -318,7 +323,7 @@ Page {
         }
         const bytes = n => (n ?? 0) > 0 ? Storage.formatBytes(n) : ""
         add("developer", qsTr("Developer"), app.developer)
-        add("source", qsTr("Source"), hasRecord ? sourceText(app.source ?? "") : qsTr("Flatpak"))
+        add("source", qsTr("Source"), hasRecord ? sourceText(app.source ?? "") : isPlay ? "" : qsTr("Flatpak"))
         add("version", qsTr("Version"), installed ? (app.installedVersion || app.version) : app.version)
         add("updated", qsTr("Updated"), (app.releaseDate ?? 0) > 0 ? Qt.locale(DeviceSettings.language).toString(new Date(TimeZone.formatIsoDate(app.releaseDate * 1000) + "T12:00:00"), "d MMM yyyy") : "")
         if (installed) {
