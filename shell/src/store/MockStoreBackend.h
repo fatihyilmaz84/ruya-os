@@ -96,6 +96,7 @@ public:
     // Tests only: the next getPermissions answers after ms with what it reads now (a slow service).
     void permissionsDelayed(int ms) { m_permissionsDelayMs = ms; }
     int pendingPermissionReplies() const { return m_pendingPermissions; }
+    int permissionReads() const { return m_permissionReads; }
 
 private:
     struct Job
@@ -138,4 +139,5 @@ private:
     bool m_permissionsAdmin = true;
     int m_permissionsDelayMs = 0;
     int m_pendingPermissions = 0;
+    int m_permissionReads = 0; // GetPermissions asked since the last reset
 };

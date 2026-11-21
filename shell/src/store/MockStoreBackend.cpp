@@ -203,6 +203,7 @@ void MockStoreBackend::reset()
     m_searchReplyMs = 0;
     m_permissionsAdmin = true;
     m_permissionsDelayMs = 0;
+    m_permissionReads = 0;
     initState();
     emit installedChanged();
 }
@@ -267,6 +268,7 @@ void MockStoreBackend::getPermissions(const QString &id)
 {
     // Read now, delivered later (a slow service answers with what it read then), through the same guard as
     // the D-Bus client's replies.
+    ++m_permissionReads;
     const quint64 request = beginPermissionsRequest(id);
     const int i = indexOf(id);
     QString status = QStringLiteral("ok");

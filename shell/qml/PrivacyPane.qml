@@ -17,10 +17,8 @@ SettingsPane {
     readonly property var appIds: Store.installed.slice()
         .sort((a, b) => pane.appName(a.id).localeCompare(pane.appName(b.id)) || a.id.localeCompare(b.id))
         .map(a => a.id)
-    // A .play game is named by its package (the Library's title); the Store only knows the id's last part.
     function appName(appId) {
-        const game = Library.items.find(i => i.play === true && Library.sessionAppId(i.id) === appId)
-        return (game ?? {}).title || (Store.installed.find(a => a.id === appId) ?? {}).name || appId
+        return AppName.of(appId) || appId
     }
 
     // Bumped when an answer about any app arrives: the values follow it.
@@ -33,8 +31,11 @@ SettingsPane {
         const p = tick >= 0 ? Store.permissions(appId) : ({})
         return p.status === "ok" ? p.withdrawn.length : 0
     }
-    // Read every app's permissions while the pane is shown (a page closed over it may have changed some).
+    // Read every app's permissions while the pane is shown (a page closed over it may have changed some). A hidden
+    // pane reads nothing, whatever changes in the Library or the Store meanwhile.
     function loadAll() {
+        if (!visible)
+            return
         for (const id of appIds)
             Store.loadPermissions(id)
     }
@@ -44,6 +45,7 @@ SettingsPane {
         Store.refreshInstalled()
         Qt.callLater(loadAll)
     }
+    // The list changed: the new apps' permissions are read.
     onAppIdsChanged: Qt.callLater(loadAll)
     Component.onCompleted: Qt.callLater(loadAll)
 

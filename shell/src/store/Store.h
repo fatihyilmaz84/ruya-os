@@ -154,6 +154,8 @@ public:
     // The next permission read answers after ms with what it read when asked, and how many are still due.
     Q_INVOKABLE void mockPermissionsDelayed(int ms);
     Q_INVOKABLE int mockPendingPermissionReplies() const;
+    // How many GetPermissions the shell asked since mockReset (RUY-854: a hidden pane asks none).
+    Q_INVOKABLE int mockPermissionReads() const;
 
 signals:
     void catalogueChanged();

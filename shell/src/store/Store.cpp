@@ -515,6 +515,12 @@ void Store::mockPermissionsDelayed(int ms)
         mock->permissionsDelayed(ms);
 }
 
+int Store::mockPermissionReads() const
+{
+    auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get());
+    return mock ? mock->permissionReads() : 0;
+}
+
 int Store::mockPendingPermissionReplies() const
 {
     auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get());

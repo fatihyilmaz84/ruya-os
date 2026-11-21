@@ -361,6 +361,28 @@ Item {
             compare(appRow(tc.hopper).value, "1 withdrawn")
         }
 
+        // A pane that is not shown reads no permissions, whatever the Library or the Store do meanwhile.
+        function test_a_hidden_pane_asks_for_no_permissions() {
+            signInAdmin()
+            openPane()
+            tryVerify(() => Store.mockPermissionReads() >= 3, 2000, "shown: one read per app")
+            keyClick(Qt.Key_Left)
+            tryVerify(() => find("categoryList").activeFocus, 2000)
+            keyClick(Qt.Key_Up)                            // Notifications: Privacy is hidden now
+            tryCompare(find("page_settings").current, "key", "notifications")
+            tryVerify(() => !find("panePrivacy").visible)
+            wait(100)
+            const before = Store.mockPermissionReads()
+            installHopper()                                // a new app and a new Library item
+            Store.refreshInstalled()
+            tryVerify(() => Store.installed.some(a => a.id === tc.hopper))
+            wait(300)
+            compare(Store.mockPermissionReads(), before, "no GetPermissions while hidden")
+            keyClick(Qt.Key_Down)                          // Privacy again: every app, the new one too
+            tryVerify(() => find("panePrivacy").visible)
+            tryVerify(() => Store.mockPermissionReads() >= before + 4, 2000, "shown again: one read per app")
+        }
+
         function test_the_play_game_page_has_the_permissions_row() {
             signInAdmin()
             installHopper()

@@ -114,8 +114,8 @@ Page {
     // A .play app is never in the Store: its page has nothing to ask it, so it is never "down" (RUY-856).
     readonly property bool storeDown: !isPlay && (detailsFailed || (appId !== "" && !Store.available) || (!hasRecord && hasItem && appId !== ""))
 
-    // A .play app's name is the title of its package (the Store's name for it is the id's last part).
-    title: isPlay ? (item.title ?? "") : hasRecord ? (app.name ?? "") : hasItem ? (item.title ?? "") : (appId.split(".").pop() ?? "")
+    // A .play app's name is the title of its package (the Store's name for it is the id's last part): AppName's rule.
+    title: isPlay ? AppName.of(appId) : hasRecord ? (app.name ?? "") : hasItem ? (item.title ?? "") : (appId.split(".").pop() ?? "")
 
     // ---- Header: the buttons by state (keys only: the models never change with a progress tick or the language) ----
     // "" none | install | update | play | resume | close | busy (a Store job) | closing
