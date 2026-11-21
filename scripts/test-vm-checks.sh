@@ -2520,6 +2520,7 @@ out="$(FAKE_JOURNAL='qt.gui: card-540.webp: Unsupported image format' webp_run "
 expect_contains "webp: the journal line fails" "$out" "FAIL: the shell could not decode an image"
 out="$(FAKE_JOURNAL='' webp_run "$wp/missing.so")"
 expect_contains "webp: a missing plugin fails" "$out" "FAIL: the Qt WebP image plugin is missing"
+[ "$(grep -c '^webp_checks$' "$here/vm-play-check.sh")" = 1 ] && pass "vm-play-check.sh check mode runs webp_checks" || fail "vm-play-check.sh check mode does not run webp_checks"
 grep -q 'qt6-qtimageformats' "$here/../image/build/20-base.sh" && pass "20-base.sh installs qt6-qtimageformats" || fail "20-base.sh lacks qt6-qtimageformats"
 
 echo
