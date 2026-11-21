@@ -1371,21 +1371,29 @@ Item {
             grabImage(tc.shell).save(shotsDir + "/8b-settings-about-category.png")
 
             // RUY-34: the Windows runner row focused, with its notice under it, in English and Turkish.
-            for (const language of ["en", "tr"]) {
-                DeviceSettings.language = language
-                keyClick(Qt.Key_Right)                   // the pane re-enters at its last row
-                tryVerify(() => find("paneAbout").activeFocus)
-                for (let i = 0; i < 8; ++i)
-                    keyClick(Qt.Key_Up)
-                tryVerify(() => find("aboutVersion").activeFocus)
-                for (let i = 0; i < 4; ++i)
-                    keyClick(Qt.Key_Down)
-                tryVerify(() => find("aboutWindowsRunner").activeFocus)
-                wait(600)
-                grabImage(tc.shell).save(shotsDir + "/8c-settings-about-windows-" + language + ".png")
-                keyClick(Qt.Key_Escape)
-                tryVerify(() => find("categoryList").activeFocus)
+            // RUY-959: then with two Windows runners of Library1 (the pinned GE-Proton and a Wine), two notes.
+            const shoot = name => {
+                for (const language of ["en", "tr"]) {
+                    DeviceSettings.language = language
+                    keyClick(Qt.Key_Right)               // the pane re-enters at its last row
+                    tryVerify(() => find("paneAbout").activeFocus)
+                    for (let i = 0; i < 8; ++i)
+                        keyClick(Qt.Key_Up)
+                    tryVerify(() => find("aboutVersion").activeFocus)
+                    for (let i = 0; i < 4; ++i)
+                        keyClick(Qt.Key_Down)
+                    tryVerify(() => find("aboutWindowsRunner").activeFocus)
+                    wait(600)
+                    grabImage(tc.shell).save(shotsDir + "/" + name + "-" + language + ".png")
+                    keyClick(Qt.Key_Escape)
+                    tryVerify(() => find("categoryList").activeFocus)
+                }
             }
+            shoot("8c-settings-about-windows")
+            Library.mockSetRunners([Library.runners[0], { family: "wine", kind: "wine", version: "10.0", licence: "LGPL-2.1-or-later",
+                                                          sourceUrl: "https://gitlab.winehq.org/wine/wine/-/releases/wine-10.0" }])
+            tryVerify(() => Library.runners.length === 2)
+            shoot("8d-settings-about-windows-two")
         }
 
         // A pane longer than the screen at the top, in the middle and at the end (T-185).
