@@ -535,12 +535,13 @@ pub fn says_no_space(err: &str) -> bool {
 /// an unreachable network, and Flatpak's own offline answer. Only the platform install asks
 /// (RUY-1004): anything else that fails stays `commit.failed`.
 pub fn says_no_network(err: &str) -> bool {
-    const WORDS: [&str; 8] = [
+    const WORDS: [&str; 9] = [
         "could not resolve host",
         "couldn't resolve host",
         "temporary failure in name resolution",
         "unable to connect",
         "couldn't connect to server",
+        "could not connect to server",
         "network is unreachable",
         "connection timed out",
         "connection refused",

@@ -560,6 +560,7 @@ fn the_platform_install_tells_no_network_from_other_failures() {
     let offline = [
         "error: Unable to load summary from remote flathub: While fetching https://dl.flathub.org/repo/summary: [6] Could not resolve host: dl.flathub.org",
         "error: While fetching https://dl.flathub.org/repo/summary: [7] Couldn't connect to server",
+        "error: Unable to load summary from remote flathub: While fetching https://dl.flathub.org/repo/summary.idx: [7] Could not connect to server",
         "error: Unable to connect to dl.flathub.org:443",
         "error: Network is unreachable",
         "error: Temporary failure in name resolution",

@@ -1130,6 +1130,20 @@ Item {
                 keyClick(Qt.Key_Return)
                 closePackage()
 
+                // The one failure the player can fix: Try again, focused (RUY-1004).
+                openPackage("offlinegame")
+                keyClick(Qt.Key_Return)
+                tryVerify(() => find("installConfirm").shown, 2000)
+                keyClick(Qt.Key_Return)
+                tryVerify(() => find("installResult").shown, 15000)
+                tryVerify(() => find("installResultRetry").activeFocus, 2000)
+                clearToasts()
+                settle()
+                shot("128b-install-offline-" + lang)
+                keyClick(Qt.Key_Escape)
+                tryVerify(() => !find("installResult").shown, 2000)
+                closePackage()
+
                 // Past committing: no Cancel, the hint bar says Back only. A fresh mock: starhopper is installed by now.
                 Play.mockReset()
                 openPackage("starhopper")
