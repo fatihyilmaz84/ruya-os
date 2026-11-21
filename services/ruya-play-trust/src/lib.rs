@@ -25,6 +25,7 @@ pub mod error;
 pub mod inspect;
 pub mod keys;
 pub mod permissions;
+pub mod read_once;
 pub mod revocation;
 pub mod signing;
 pub mod statement;
@@ -43,6 +44,7 @@ pub use permissions::{
     added_to, diff, grants, metadata_sections, parse_sections, widened, words, Grant, Granted,
     Permission, PermissionDiff, Section, HIGH_RISK_PAIRS, PERMISSIONS,
 };
+pub use read_once::ReadOnce;
 pub use revocation::{
     is_revoked, select_blocklist, sign_blocklist, verify_downloaded, Blocklist, ListCheck,
     ListSource, PackageFacts, Selected,

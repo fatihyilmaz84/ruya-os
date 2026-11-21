@@ -184,6 +184,9 @@ impl Blocklist {
                     let (Some(id), Some(range)) = (words.get(1), words.get(2)) else {
                         return Err(bad(n, "an id line is: id <id> <builds> <reason>"));
                     };
+                    // Lenient on purpose: the manifest id rule here would make one bad line turn the
+                    // whole blocklist into `blocklist.malformed`, and an id that fails that rule can
+                    // never be installed, so a lenient match costs nothing.
                     if id.len() > MAX_ID_BYTES || !id.is_ascii() {
                         return Err(bad(n, "the id is too long or not ASCII"));
                     }

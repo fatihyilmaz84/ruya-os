@@ -628,7 +628,7 @@ Common ones first:
 | `sig.weak_key` | Run ruya-pack sign again. |
 | `sig.wrong_build` | Run ruya-pack sign again after changing build. |
 | `sig.wrong_id` | Sign this package, not a copy of another package's play.sig. |
-| `sign.id_invalid` | Fix the id in play.json (com.example.game: letters, digits, _ and -, at least three parts) and sign again. |
+| `sign.id_invalid` | Fix the id in play.json and sign again. Use a reverse-DNS id such as com.example.mygame: three or more parts, letters, digits, _ and -, no part starting with a digit, and - only in the last part. |
 | `size.fat32` | Format the USB drive as exFAT: FAT32 cannot hold a file of 4 GiB or more. |
 | `state.corrupt` | The console's trust state is damaged; this is not a package problem. |
 | `state.io` | The console's trust state is damaged; this is not a package problem. |

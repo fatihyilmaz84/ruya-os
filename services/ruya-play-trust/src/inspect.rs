@@ -3,22 +3,21 @@
 //! validation with `official` set only from a verified `store.sig`; then the id and build binding,
 //! key continuity, the tier's permission ceiling and revocation.
 //!
-//! The package is read once (lead-29): the listing, `play.json` and `play.files` are read from the
-//! [`Source`] a single time, verified, and the same bytes are what the format validation parses
-//! (a [`Snapshot`]). A drive that answers a second read differently cannot get one version verified
-//! and another parsed, whoever calls [`inspect`].
+//! The package is read once (lead-29): the source is wrapped in a [`ReadOnce`], so the listing and
+//! the root files are read a single time and the format validation parses the bytes that were
+//! verified, whoever calls [`inspect`].
 
 use crate::continuity::{continuity_of, Continuity};
 use crate::envelope::MAX_SIG_FILE_BYTES;
 use crate::error::TrustError;
 use crate::keys::sha256_hex;
+use crate::read_once::ReadOnce;
 use crate::revocation::{is_revoked, ListCheck, PackageFacts};
 use crate::signing::{bind_to_manifest, verify_signatures, PackageBytes, Signatures, StoreKeys};
 use crate::store::TrustStore;
 use crate::tier::{check_ceiling, decide_tier, Assessment, TierDecision};
 use ruya_play_format::limits::{MAX_MANIFEST_BYTES, MAX_TABLE_BYTES};
-use ruya_play_format::{validate, Entry, EntryKind, Package, Problem, Source, ValidateOptions};
-use std::io::{self, Read};
+use ruya_play_format::{validate, EntryKind, Package, Problem, Source, ValidateOptions};
 
 /// What the inspect step needs besides the package.
 pub struct Context<'a> {
@@ -123,34 +122,14 @@ fn read_root(
     ruya_play_format::read_within(source, name, limit).map_err(|p| Refusal::Format(vec![p]))
 }
 
-/// `inner` as inspect read it: the listing and the two signed files are served from what was read,
-/// everything else (the payload, for `verify_content`) is passed through.
-struct Snapshot<'a> {
-    inner: &'a dyn Source,
-    entries: &'a [Entry],
-    play_json: &'a [u8],
-    play_files: &'a [u8],
-}
-
-impl Source for Snapshot<'_> {
-    fn entries(&self) -> Result<Vec<Entry>, Vec<Problem>> {
-        Ok(self.entries.to_vec())
-    }
-
-    fn open(&self, path: &str) -> io::Result<Box<dyn Read + '_>> {
-        match path {
-            "play.json" => Ok(Box::new(self.play_json)),
-            "play.files" => Ok(Box::new(self.play_files)),
-            _ => self.inner.open(path),
-        }
-    }
-}
-
 /// Inspect a package. See the module text for the order.
 pub fn inspect(source: &dyn Source, ctx: &Context<'_>) -> Result<Inspection, Refusal> {
     if let ListCheck::Unavailable(e) = ctx.blocklist {
         return Err(Refusal::Trust(e.clone()));
     }
+    // Read once from here on: what is verified is what is parsed.
+    let once = ReadOnce::new(source);
+    let source: &dyn Source = &once;
     let entries = source.entries().map_err(Refusal::Format)?;
     let sig_limit = MAX_SIG_FILE_BYTES as u64;
     let too_big = |name: &str| TrustError::Malformed {
@@ -185,13 +164,6 @@ pub fn inspect(source: &dyn Source, ctx: &Context<'_>) -> Result<Inspection, Ref
         });
     };
 
-    // From here on the format sees what was verified, not a second read of the drive.
-    let seen = Snapshot {
-        inner: source,
-        entries: &entries,
-        play_json: &play_json,
-        play_files: &play_files,
-    };
     let signatures = verify_signatures(
         &PackageBytes {
             play_json: &play_json,
@@ -203,7 +175,7 @@ pub fn inspect(source: &dyn Source, ctx: &Context<'_>) -> Result<Inspection, Ref
     )?;
     let tier = decide_tier(&signatures, ctx.trust.developer_mode()?)?;
     let official = tier.tier == crate::tier::Tier::Official;
-    let package = validate(&seen, &opts(official)).map_err(Refusal::Format)?;
+    let package = validate(source, &opts(official)).map_err(Refusal::Format)?;
     bind_to_manifest(&signatures, &package.manifest)?;
     let continuity = continuity_of(ctx.trust, &package.manifest.id, &signatures)?;
     let assessment = check_ceiling(tier.tier, &package.manifest.permissions)?;

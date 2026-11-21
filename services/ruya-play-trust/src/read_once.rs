@@ -1,21 +1,17 @@
 //! The package source is read once and never trusted again (lead-29).
 //!
-//! `ruya_play_trust::inspect` already reads the listing, `play.json` and `play.files` once and
-//! hands the same bytes to its verify and validate steps, so inspect needs no wrapper. This one is
-//! kept for two things inspect does not do:
-//!
-//! - the importer and the helper **write the four root files into staging** ([`ReadOnce::root`]),
-//!   and what lands there must be the bytes that were verified, not a later read of the drive;
-//! - the helper's install mode hashes the root files (`check_roots`) and then runs
-//!   `ruya_play_format::validate`, two readers of the same files that must see one version.
-//!
-//! [`ReadOnce`] wraps the source so the listing and the four root files are read from it exactly
-//! once and every later read gets the same bytes. Payload files are passed through: the unpacker
-//! opens each one once.
+//! A drive (or a FUSE file system) that answers a second read differently could have one set of
+//! bytes verified and another parsed. [`ReadOnce`] wraps a source so the listing and the four root
+//! files (`play.json`, `play.files`, `play.sig`, `store.sig`) are read from it exactly once and
+//! every later read gets the same bytes. [`crate::inspect`] wraps its source in it, so verify and
+//! validate see one version whoever calls. The helper reuses it for what inspect does not cover:
+//! it writes the root files into staging from [`ReadOnce::root`] (they must be the verified
+//! bytes), and its install mode hashes them and then validates them. Payload files are passed
+//! through: the unpacker opens each one once.
 
+use crate::envelope::MAX_SIG_FILE_BYTES;
 use ruya_play_format::limits::{MAX_MANIFEST_BYTES, MAX_TABLE_BYTES};
 use ruya_play_format::{Entry, Problem, ReadFault, Source};
-use ruya_play_trust::envelope::MAX_SIG_FILE_BYTES;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::io::{self, Read};
