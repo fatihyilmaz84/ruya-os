@@ -92,7 +92,7 @@ pub const MAX_PLAYERS: u64 = 64;
 /// Most OARS content attributes.
 pub const MAX_AGE_ATTRIBUTES: usize = 40;
 /// Longest SPDX licence expression.
-pub const MAX_LICENCE_BYTES: usize = 128;
+pub const MAX_LICENCE_BYTES: usize = 256;
 
 /// Files at the package root that are not in `play.files`.
 pub const ROOT_FILES: [&str; 4] = ["play.json", "play.files", "play.sig", "store.sig"];

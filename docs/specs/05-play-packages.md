@@ -197,7 +197,7 @@ All of them are constants in `limits.rs`, repeated in `api/play/play.schema.json
 | `run.env` entries / name / value | 64 / 64 / 1024 bytes | `list.too_long`, `env.bad_name`, `env.bad_value` |
 | Command arguments / one argument | 64 / 4096 bytes | `list.too_long`, `text.too_long` |
 | Setup steps; discs; paths in `data.saves` and `data.cache` | 16; 16; 32 each | `list.too_long` |
-| Players; OARS attributes; licence expression | 64; 40; 128 bytes | `value.range`, `list.too_long`, `value.unknown` |
+| Players; OARS attributes; licence expression | 64; 40; 256 bytes (128 before RUY-37: a runner's full expression did not fit) | `value.range`, `list.too_long`, `value.unknown` |
 | `runner.json` of a bundled copy (§6.2.1): size; `family`; `version` | 64 KiB; 64 bytes; 32 bytes | `runner.too_big`, `runner.family_invalid`, `runner.version_invalid` |
 | Problems in one result | 100, then `problems.truncated` | |
 

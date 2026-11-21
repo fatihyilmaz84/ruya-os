@@ -238,11 +238,25 @@ GStreamer (LGPL), DXVK and FAudio (zlib), wine-mono (MIT) and its fonts (OFL-1.1
 `source_url`, and Settings → About shows both. The owner's ask to mirror the exact sources of every shipped release
 (ADR-025) is not done yet: About links the upstream release.
 
-Wine stable is Wine as released (LGPL-2.1-or-later; the libraries Wine carries in its source tree, such as zlib,
-FAudio and libpng, keep their permissive licences, listed in the source). The Kron4ek build compiles WineHQ's
-release unchanged and ships no licence text or source of its own: `runner.json` says `LGPL-2.1-or-later` and points
-`source_url` at WineHQ's source tarball of the same release (`https://dl.winehq.org/wine/source/11.0/wine-11.0.tar.xz`),
-and Settings → About shows both. The licence text itself is not in the runner's tree yet (the archive has none).
+Wine stable is Wine as released, LGPL-2.1-or-later, plus the libraries Wine compiles into its PE modules from its
+own source tree (the Kron4ek build uses no system copies): capstone (BSD-3-Clause, NCSA), compiler-rt (NCSA or MIT),
+FAudio and zlib (Zlib), fluidsynth and vkd3d (LGPL-2.1-or-later), gsm (TU-Berlin-1.0), jpeg (IJG), jxr
+(BSD-2-Clause), lcms2, musl, libxml2 and libxslt (MIT), ldap (OLDAP-2.8), mpg123 (LGPL-2.1-only), libpng
+(libpng-2.0), libtiff (libtiff), tomcrypt (public domain or WTFPL). `runner.json` sums it up as
+`LGPL-2.1-or-later AND LGPL-2.1-only AND BSD-3-Clause AND BSD-2-Clause AND NCSA AND MIT AND Zlib AND IJG AND
+libpng-2.0 AND libtiff AND OLDAP-2.8 AND TU-Berlin-1.0 AND WTFPL` (the format's licence limit went from 128 to 256
+bytes for it, 05 section 4.4) and points `source_url` at WineHQ's source tarball of the same release
+(`https://dl.winehq.org/wine/source/11.0/wine-11.0.tar.xz`), which the Kron4ek build compiles unpatched; Settings →
+About shows both. The archive ships no licence text, so the texts travel in the pin folder:
+`image/play/runners/Wine11/licences/` holds Wine's `COPYING.LIB` and `LICENSE` and each library's licence file,
+copied unchanged from that source tarball (`licences/README` lists them; `scripts/lint-text.ps1` allows their tabs
+and page breaks), and `install-runners.sh` lays it over the tree as `/usr/lib/ruyaos/play/runners/Wine11/licences/`.
+
+**Licence texts in every runner (RUY-37).** `install-runners.sh fetch` installs every file of a pin folder other
+than `pin` (`runner.json`, `licences/`) into the runner's tree at the same path, refuses one the release already
+has (our files never replace the release's), and fails the build when the tree has no licence text at its root (a
+`LICENSE*`, `LICENCE*` or `COPYING*` file of the release, or a file in `licences/`). The host fixtures in
+`scripts/test-vm-checks.sh` cover all three.
 
 **Another runner** is a new folder in `image/play/runners/` with its `pin` and `runner.json`, its `L+` line in
 `ruya-play-platform.conf` (`services/ruya-play/tests/platform.rs` holds the two together) and a row in the table

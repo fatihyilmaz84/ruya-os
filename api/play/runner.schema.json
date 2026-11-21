@@ -19,7 +19,7 @@
       "uniqueItems": true,
       "items": { "enum": ["multiarch", "dxvk", "vkd3d", "ntsync"] }
     },
-    "licence": { "description": "SPDX licence expression of the runner.", "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9.+() :-]+$" },
+    "licence": { "description": "SPDX licence expression of the runner.", "type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[A-Za-z0-9.+() :-]+$" },
     "source_url": { "description": "Where the runner's source is.", "$ref": "#/$defs/httpsUrl" }
   },
   "allOf": [

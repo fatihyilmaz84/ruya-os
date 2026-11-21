@@ -6,6 +6,6 @@
   "arch": "x86_64",
   "entry": { "wine": "bin/wine", "wineserver": "bin/wineserver" },
   "capabilities": ["multiarch"],
-  "licence": "LGPL-2.1-or-later",
+  "licence": "LGPL-2.1-or-later AND LGPL-2.1-only AND BSD-3-Clause AND BSD-2-Clause AND NCSA AND MIT AND Zlib AND IJG AND libpng-2.0 AND libtiff AND OLDAP-2.8 AND TU-Berlin-1.0 AND WTFPL",
   "source_url": "https://dl.winehq.org/wine/source/11.0/wine-11.0.tar.xz"
 }

@@ -1,0 +1,12 @@
+Licence texts of the image's Wine stable runner (Wine 11.0, Kron4ek/Wine-Builds, vanilla WoW64).
+
+The release archive ships none, so image/play/install-runners.sh lays this folder over the runner's
+tree (/usr/lib/ruyaos/play/runners/Wine11/licences/). The files are copied unchanged from WineHQ's
+source tarball of the same release, the corresponding source of this build:
+https://dl.winehq.org/wine/source/11.0/wine-11.0.tar.xz
+
+  COPYING.LIB, LICENSE  Wine itself (LGPL-2.1-or-later)
+  <library>/            the libraries Wine compiles into its PE modules (libs/<library>/ in the
+                        source): capstone, compiler-rt, faudio, fluidsynth (LGPL-2.1-or-later, the
+                        text is COPYING.LIB), gsm, jpeg, jxr, lcms2, ldap, mpg123, musl, png, tiff,
+                        tomcrypt, vkd3d, xml2, xslt, zlib

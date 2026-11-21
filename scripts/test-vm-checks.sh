@@ -1999,6 +1999,9 @@ echo "== install-runners.sh: the image build's runner step (RUY-34) =="
 ir="$tmp/install-runners"; ish="$tmp/install-shims"; mkdir -p "$ir/runners/ProtonGE11" "$ir/rel/GE-X/files" "$ish"
 printf '#!/bin/sh\necho proton\n' > "$ir/rel/GE-X/proton"; chmod 0755 "$ir/rel/GE-X/proton"
 echo data > "$ir/rel/GE-X/files/open.dll"; chmod 0666 "$ir/rel/GE-X/files/open.dll"
+# A release without a licence text (as Kron4ek's Wine) first, then the same with its LICENSE (as GE-Proton).
+(cd "$ir/rel" && tar -czf "$ir/release-nolicence.tar.gz" GE-X)
+echo "the release's licence" > "$ir/rel/GE-X/LICENSE"
 (cd "$ir/rel" && tar -czf "$ir/release.tar.gz" GE-X)
 rsha="$(sha256sum "$ir/release.tar.gz" | cut -d' ' -f1)"
 printf '# a comment\nurl=https://example.org/release.tar.gz\nsha256=%s\nroot=GE-X\n' "$rsha" > "$ir/runners/ProtonGE11/pin"
@@ -2035,6 +2038,26 @@ out="$(ir_ fetch "$ir/runners" "$ir/play")"; rc=$?
 printf 'url=http://example.org/r\nsha256=%s\nroot=GE-X\n' "$rsha" > "$ir/runners/ProtonGE11/pin"
 out="$(ir_ fetch "$ir/runners" "$ir/play")"; rc=$?
 [ "$rc" != 0 ] && expect_contains "install-runners: a URL that is not https fails the build" "$out" "url is not https" || fail "install-runners: an http URL: exit $rc"
+# RUY-37: the pin folder's own files (licence texts) are laid over the release; none replaces a release
+# file; a tree without a licence text fails the build.
+nsha="$(sha256sum "$ir/release-nolicence.tar.gz" | cut -d' ' -f1)"
+irn_() { env FAKE_RELEASE="$ir/release-nolicence.tar.gz" PATH="$ish:$PATH" bash "$here/../image/play/install-runners.sh" "$@" 2>&1; }
+printf 'url=https://example.org/r\nsha256=%s\nroot=GE-X\n' "$nsha" > "$ir/runners/ProtonGE11/pin"
+out="$(irn_ fetch "$ir/runners" "$ir/play")"; rc=$?
+[ "$rc" != 0 ] && expect_contains "install-runners: a runner without a licence text fails the build" "$out" "ProtonGE11: no licence text at the runner's root" || fail "install-runners: no licence: exit $rc, $out"
+rm -rf "$ir/play"
+mkdir -p "$ir/runners/ProtonGE11/licences/zlib"
+echo "LGPL text" > "$ir/runners/ProtonGE11/licences/COPYING.LIB"
+echo "zlib text" > "$ir/runners/ProtonGE11/licences/zlib/LICENSE"
+out="$(irn_ fetch "$ir/runners" "$ir/play")"; rc=$?
+[ "$rc" = 0 ] && [ "$(cat "$ir/play/runners/ProtonGE11/licences/zlib/LICENSE")" = "zlib text" ] && [ -f "$ir/play/runners/ProtonGE11/licences/COPYING.LIB" ] && pass "install-runners: the pin folder's licences/ is installed into the runner's tree" || fail "install-runners: licences/: exit $rc, $out"
+[ ! -e "$ir/play/runners/ProtonGE11/pin" ] && pass "install-runners: the pin file itself is not installed" || fail "install-runners: the pin was installed"
+rm -rf "$ir/play"
+echo "ours" > "$ir/runners/ProtonGE11/proton"
+out="$(irn_ fetch "$ir/runners" "$ir/play")"; rc=$?
+[ "$rc" != 0 ] && expect_contains "install-runners: a pin-folder file the release already has fails the build" "$out" "ProtonGE11: the release already has proton" || fail "install-runners: an overwrite: exit $rc, $out"
+[ "$(cat "$ir/play/runners/ProtonGE11/proton" 2>/dev/null | tail -n 1)" = "echo proton" ] && pass "install-runners: the release's file is left as it was" || fail "install-runners: the release's proton was replaced"
+rm -rf "$ir/play" "$ir/runners/ProtonGE11/proton" "$ir/runners/ProtonGE11/licences"
 
 echo "== check-image-manifest.sh: the Play platform's files have rows (RUY-34) =="
 msh="$tmp/manifest-shims"; mkdir -p "$msh"

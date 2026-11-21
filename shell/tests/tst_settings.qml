@@ -1256,7 +1256,7 @@ Item {
             compare(find("aboutRunnerNote0").text, "GE-Proton11-12: BSD-3-Clause AND LGPL-2.1-or-later AND LGPL-2.0-or-later AND Zlib AND MIT AND OFL-1.1. Source: https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12")
             verify(find("aboutRunnerNote0").y > find("aboutWindowsRunner").y, "the notice is under its row")
             verify(find("aboutRunnerNote1").visible)
-            compare(find("aboutRunnerNote1").text, "wine-11.0: LGPL-2.1-or-later. Source: https://dl.winehq.org/wine/source/11.0/wine-11.0.tar.xz")
+            compare(find("aboutRunnerNote1").text, "wine-11.0: LGPL-2.1-or-later AND LGPL-2.1-only AND BSD-3-Clause AND BSD-2-Clause AND NCSA AND MIT AND Zlib AND IJG AND libpng-2.0 AND libtiff AND OLDAP-2.8 AND TU-Berlin-1.0 AND WTFPL. Source: https://dl.winehq.org/wine/source/11.0/wine-11.0.tar.xz")
             verify(find("aboutRunnerNote1").y > find("aboutRunnerNote0").y, "Wine's notice follows GE-Proton's")
 
             keyClick(Qt.Key_Right)
@@ -1287,7 +1287,7 @@ Item {
             compare(find("aboutWindowsRunner").label, "Windows uyumluluğu")
             compare(find("aboutWindowsRunner").value, "GE-Proton11-12, wine-11.0")
             compare(find("aboutRunnerNote0").text, "GE-Proton11-12: BSD-3-Clause AND LGPL-2.1-or-later AND LGPL-2.0-or-later AND Zlib AND MIT AND OFL-1.1. Kaynak: https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12")
-            compare(find("aboutRunnerNote1").text, "wine-11.0: LGPL-2.1-or-later. Kaynak: https://dl.winehq.org/wine/source/11.0/wine-11.0.tar.xz")
+            compare(find("aboutRunnerNote1").text, "wine-11.0: LGPL-2.1-or-later AND LGPL-2.1-only AND BSD-3-Clause AND BSD-2-Clause AND NCSA AND MIT AND Zlib AND IJG AND libpng-2.0 AND libtiff AND OLDAP-2.8 AND TU-Berlin-1.0 AND WTFPL. Kaynak: https://dl.winehq.org/wine/source/11.0/wine-11.0.tar.xz")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("aboutVersion").activeFocus)
             for (let i = 0; i < 4; ++i)
