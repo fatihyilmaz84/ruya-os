@@ -55,11 +55,17 @@ if ($proof -and $proof.Mode) {
 
 Say "running the full dev.ps1 test"
 $test = & $dev test *>&1 | Out-String
+# The whole run is kept: a red step that prints no FAIL line (a lint, a build error) was lost before
+# (lead-40), and the fixture tests print many "ok ... FAIL" lines that are not failures.
+$log = Join-Path $Repo "output\merge-gate-test.log"
+Set-Content -LiteralPath $log -Value $test -Encoding utf8
 $totals = ($test -split "`n") | Select-String -Pattern "Totals:" | Select-Object -Last 1
 if ($totals) { Say "$($totals.Line.Trim())" }
 if ($test -notmatch "ALL GREEN \(test\)") {
-    ($test -split "`n") | Select-String -Pattern "FAIL" | Select-Object -First 15 | ForEach-Object { Write-Host "    $_" }
-    Say "RED: dev.ps1 test (revert the merge and the docs commit, reopen the task)"
+    ($test -split "`n") | Select-String -Pattern "FAIL|RED|error" |
+        Where-Object { $_.Line -notmatch "^\s+ok\b" } |
+        Select-Object -Last 15 | ForEach-Object { Write-Host "    $_" }
+    Say "RED: dev.ps1 test (full log: $log; revert the merge and the docs commit, reopen the task)"
     exit 1
 }
 Say "GREEN: dev.ps1 test ALL GREEN"
