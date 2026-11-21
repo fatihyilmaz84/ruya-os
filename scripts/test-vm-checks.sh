@@ -451,12 +451,13 @@ out="$(
     export VM_CHECK_LIB_ONLY=1
     # shellcheck disable=SC1090
     . "$here/vm-x11-check.sh"
-    printf '%s\n' 'INFO xwayland_satellite: ready' | satellite_faults | sed 's/^/clean:/'
-    printf '%s\n' 'DEBUG created decoration subsurface' 'Protocol error 1 on object wl_shm_pool@26: invalid width' | satellite_faults
+    printf '%s\n' 'INFO xwayland_satellite: ready' '-> wl_shm@4.create_pool(wl_shm_pool@26, fd 12, 4096)' | satellite_faults | sed 's/^/clean:/'
+    printf '%s\n' 'Protocol error 1 on object wl_shm_pool@26: invalid width, height or stride (1920x25, 7680)' \
+        "thread 'main' panicked at src/server/mod.rs:803:21: Failed flushing clientside events: Protocol(...)" | satellite_faults
 )"
-expect_lacks "satellite_faults passes an ordinary log" "$out" "clean:"
-expect_contains "satellite_faults finds a decoration subsurface" "$out" "decoration subsurface"
-expect_contains "satellite_faults finds the wl_shm_pool error" "$out" "wl_shm_pool@26"
+expect_lacks "satellite_faults passes an ordinary log, a debug create_pool line included" "$out" "clean:"
+expect_contains "satellite_faults finds the wl_shm_pool protocol error" "$out" "wl_shm_pool@26: invalid width"
+expect_contains "satellite_faults finds the satellite's panic" "$out" "Failed flushing clientside events"
 echo "vm-x11-client.py: against a fake X server"
 out="$(python3 "$here/test-vm-x11-client.py" 2>&1)"; rc=$?
 echo "$out"

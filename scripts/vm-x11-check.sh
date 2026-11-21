@@ -72,11 +72,12 @@ window_pids() {
     sed -n "s/.*ruya-compositor: app .* uid $1 pid \([0-9][0-9]*\) profile $2\$/\1/p"
 }
 
-# The lines of a satellite log on stdin that show it drawing its own title bar (a decoration subsurface) or
-# meeting the wl_shm_pool protocol error (RUY-494: it only draws the bar when the compositor offers no
-# server-side decorations).
+# The lines of a satellite log on stdin that show RUY-494's failure, in the satellite's own wording (Dell 0.0.100):
+# "Protocol error 1 on object wl_shm_pool@26: invalid width, height or stride (1920x25, 7680)" and its panic
+# "... Failed flushing clientside events". It made that pool only for its own title bar, which it draws only
+# when the compositor offers no server-side decorations; the globals step above proves the cause is gone.
 satellite_faults() {
-    grep -a -i -E 'decoration.*subsurface|subsurface.*decoration|wl_shm_pool'
+    grep -a -E 'Protocol error [0-9]+ on object wl_shm_pool@|Failed flushing clientside events'
 }
 
 # Lib mode: scripts/test-vm-checks.sh sources the helpers above and below on canned data.
@@ -358,7 +359,7 @@ check)
     echo "$wl_globals" | grep -q '^zxdg_decoration_manager_v1$' && ok "the compositor offers zxdg_decoration_manager_v1" || bad "no zxdg_decoration_manager_v1 in the globals of '$wl_sock': $(echo "$wl_globals" | tr '\n' ' ')"
     sleep 3   # the satellite's first frames: its decoration (and so its pool) comes with the first window
     faults="$(user_log_since "$t1" "$muid" | satellite_faults)"
-    [ -z "$faults" ] && ok "the satellite's log shows no decoration subsurface and no wl_shm_pool error" || bad "satellite log: $(echo "$faults" | head -2 | tr '\n' '|')"
+    [ -z "$faults" ] && ok "the satellite's log shows no wl_shm_pool protocol error and no panic" || bad "satellite log: $(echo "$faults" | head -2 | tr '\n' '|')"
 
     echo "--- the window reaches the compositor and maps to its instance"
     wait_shell "ruya-compositor: app .* uid $muid pid [0-9]+ profile $me" "$t1" 60 \
