@@ -49,6 +49,7 @@ Item {
             Library.resetMockForTests("")
             Session.mockReset()
             Store.mockReset()
+            Play.mockReset()
             Usage.mockReset()
             launchedSpy.clear()
             launchSpy.clear()
@@ -62,7 +63,8 @@ Item {
             host.height = 720
         }
 
-        function start(itemCount) {
+        // Signs in as Ada (p2, standard); `admin` true as Player One (p1, PIN 1234): no admin's PIN is asked then.
+        function start(itemCount, admin) {
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")
             tc.shell = createTemporaryObject(shellComponent, host)
@@ -70,9 +72,14 @@ Item {
             tc.shell.forceActiveFocus()
             tryVerify(() => Profiles.profiles.length === 3)
             tryVerify(() => find("profileList").activeFocus, 2000, "picker has focus on start")
-            keyClick(Qt.Key_Right)
-            keyClick(Qt.Key_Return)
-            tryCompare(Profiles, "activeProfile", "p2")
+            if (admin) {
+                Profiles.switchTo("p1", "1234")
+                tryCompare(Profiles, "activeProfile", "p1")
+            } else {
+                keyClick(Qt.Key_Right)
+                keyClick(Qt.Key_Return)
+                tryCompare(Profiles, "activeProfile", "p2")
+            }
             tryVerify(() => Library.items.length === (itemCount ?? 10))
             tryVerify(() => Store.available && Store.catalogue.length > 0)
             tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
@@ -527,6 +534,53 @@ Item {
             tryVerify(() => find("detailUninstall").activeFocus, 2000, "Cancel returns to the row")
         }
 
+        // ---- an installed .play game: Play removes it (RUY-925) ----
+
+        readonly property string hopper: "flatpak:play.com.example.starhopper"
+
+        function installedHopper() {
+            Library.resetMockForTests("play")
+            Play.mockSetInstalled("com.example.starhopper", 3)
+            start(11, true)
+        }
+
+        function test_a_play_game_page_offers_uninstall_and_removes_it_through_play() {
+            installedHopper()
+            openPage({ id: tc.hopper })
+            verify(find("detailManage").visible)
+            verify(find("detailUninstall").visible, "no Store record, and still Uninstall")
+            find("detailUninstall").forceActiveFocus()
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("uninstallCancel").activeFocus, 2000)
+            compare(find("uninstallConfirm").appId, "play.com.example.starhopper")
+            verify(!find("uninstallDeleteData").visible, "Play keeps the saved data")
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => !find("uninstallConfirm").shown, 2000)
+            tryCompare(page(), "kind", "uninstall")
+            // Play's job ends; the Library then drops the item (the mock is told, as the service tells it).
+            tryVerify(() => Play.jobs["play.com.example.starhopper"] === undefined && !page().requested, 15000)
+            Library.mockRemoveItem(tc.hopper)
+            tryVerify(() => Library.item(tc.hopper).id === undefined)
+            compare(page().installed, false, "the not-installed state")
+            verify(!find("detailUninstall").visible)
+            verify(!find("detailManage").visible)
+            tryVerify(() => find("detailError") === null || !find("detailError").visible)
+            const focused = tc.shell.Window.activeFocusItem
+            verify(focused && focused.visible, "the focus is on a visible item")
+        }
+
+        function test_a_running_play_removal_hides_uninstall() {
+            installedHopper()
+            openPage({ id: tc.hopper })
+            Play.mockPauseAtPercent(40)
+            Play.remove("play.com.example.starhopper", true)
+            tryVerify(() => page().job !== null && page().job.percent >= 40 && page().working, 15000, "Play's job is the page's job")
+            verify(!find("detailUninstall").visible, "no second Remove while one runs")
+            Play.mockPauseJobs(false)
+            tryVerify(() => !page().working, 15000)
+        }
+
         // ---- screenshots (dev.ps1 shots; English and Turkish, 1080p and 720p) ----
 
         // ---- Your activity (RUY-532) ----
@@ -779,6 +833,25 @@ Item {
             }
             host.width = 1280
             host.height = 720
+        }
+
+        // An installed .play game: Manage with Permissions and Uninstall (RUY-925).
+        function test_zz_screenshots_play() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            for (const lang of ["en", "tr"]) {
+                DeviceSettings.language = lang
+                installedHopper()
+                openPage({ id: tc.hopper })
+                tryVerify(() => find("detailUninstall").visible, 2000)
+                for (let i = 0; i < 20 && !find("detailUninstall").activeFocus; ++i)
+                    keyClick(Qt.Key_Down)
+                tryVerify(() => find("detailUninstall").activeFocus, 2000)
+                settle()
+                grabImage(tc.shell).save(shotsDir + "/" + "109-game-page-play-uninstall-" + lang + ".png")
+                tc.shell.destroy()
+                wait(100)
+            }
         }
     }
 }
