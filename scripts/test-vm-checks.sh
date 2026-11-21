@@ -2137,6 +2137,27 @@ grep -q 'appid="\$(pkg_id "\$appid" "\$part")"' "$here/vm-play-check.sh" && pass
 grep -A4 'name="Launch"' "$here/../api/dbus/org.ruyaos.Session1.xml" | grep -c 'type="s" direction="in"' | grep -qx 2 && grep -q 'Launch ss "\$1" "\$lprof"' "$here/vm-play-check.sh" && grep -q 'Stop s "\$linst"' "$here/vm-play-check.sh" && pass "vm-play-check.sh calls Session1.Launch as (ss) and Stop as (s), the signatures of Session1.xml" || fail "vm-play-check.sh: its Launch/Stop calls do not match Session1.xml"
 grep -A5 'signal name="AppExited"' "$here/../api/dbus/org.ruyaos.Session1.xml" | tr -d '\n' | grep -q 'instance.*app_id.*exit_code.*reason' && pass "vm-play-check.sh signals: AppExited carries instance, app id, exit code, reason in that order (Session1.xml)" || fail "Session1.xml: AppExited arguments changed; signals reads data[2:] as code and reason"
 grep -q 'CreateProfile sssss "" "" "Check Admin" admin 1234' "$here/vm-play-check.sh" && grep -q 'DeleteProfile sss "\$ladmin" 1234 "\$lcreated"' "$here/vm-play-check.sh" && grep -q 'SwitchTo ss' "$here/vm-play-check.sh" && pass "vm-play-check.sh makes, signs in and deletes a profile with the calls vm-sample-check.sh and vm-x11-check.sh use" || fail "vm-play-check.sh: the profile calls differ from the other checks'"
+# sign_in (RUY-1017): no PIN, then RUYA_PIN, then 1234. A busctl shim accepts one PIN (SI_OK) and logs its calls.
+si="$tmp/signin"; mkdir -p "$si"
+cat > "$si/busctl" <<'EOF'
+#!/usr/bin/env bash
+echo "${*: -1}" >> "$SI_LOG"
+if [ "${*: -1}" = "$SI_OK" ]; then echo 'suu "ok" 0 0'; else echo 'suu "wrong-pin" 0 0'; fi
+EOF
+chmod +x "$si/busctl"
+si_run() {  # <accepted pin> <RUYA_PIN or "-">; prints the PINs tried, comma separated, then the exit code
+    : > "$si/log"
+    ( [ "$2" = "-" ] || export RUYA_PIN="$2"
+      export SI_LOG="$si/log" SI_OK="$1" PATH="$si:$PATH"
+      eval "psvc=s ppath=/p; $(sed -n '/^sign_in() {/,/^}/p' "$here/vm-play-check.sh")"
+      sign_in p1 >"$si/out" 2>&1; echo "rc=$?" >>"$si/out" )
+    echo "$(tr '\n' ',' < "$si/log")$(tail -1 "$si/out")"
+}
+[ "$(si_run "" -)" = ",rc=0" ] && pass "sign_in: a profile without a PIN signs in with no PIN, nothing else tried" || fail "sign_in no PIN: '$(si_run "" -)'"
+[ "$(si_run 4321 4321)" = ",4321,rc=0" ] && pass "sign_in: RUYA_PIN is tried second" || fail "sign_in RUYA_PIN: '$(si_run 4321 4321)'"
+[ "$(si_run 1234 4321)" = ",4321,1234,rc=0" ] && pass "sign_in: 1234 is the last fallback, after RUYA_PIN" || fail "sign_in 1234 after RUYA_PIN: '$(si_run 1234 4321)'"
+[ "$(si_run 1234 -)" = ",1234,rc=0" ] && pass "sign_in: 1234 without RUYA_PIN" || fail "sign_in 1234: '$(si_run 1234 -)'"
+si_run 9999 4321 >/dev/null; ! grep -q 4321 "$si/out" && grep -q 'wrong-pin' "$si/out" && pass "sign_in: a failure prints busctl's reply, never the PIN" || fail "sign_in: failure output '$(cat "$si/out")'"
 lr="$(sed -n '/^launch_checks() {/,/^launch_run() {/p' "$here/vm-play-check.sh")"
 [ "$(echo "$lr" | grep -c '^    sigsys_checks$')" = 2 ] && [ "$(echo "$lr" | grep -c '^    avc_checks$')" = 2 ] && pass "vm-play-check.sh: both launch modes end with the init_t AVC and the SIGSYS journal checks" || fail "vm-play-check.sh: a launch mode skips the journal checks"
 [ "$(grep -c 'offline on "\$work"' "$here/vm-play-check.sh")" = 1 ] && [ "$(grep -B2 'offline on "\$work"' "$here/vm-play-check.sh" | grep -c '^    lrouted=1$')" = 1 ] && [ "$(grep -c 'offline off "\$work"' "$here/vm-play-check.sh")" = 2 ] && pass "vm-play-check.sh launch-windows sets its routes flag before it takes the routes away, once, and gives them back (after the launches and in the cleanup)" || fail "vm-play-check.sh: the offline calls changed"
