@@ -45,9 +45,12 @@ pub const RUNTIME_BRANCH: &str = "26.08";
 /// The generation of the generated metadata and desktop entry ([`metadata`], [`desktop_entry`]).
 /// Raise it with every change of either that installed apps need: the importer stamps it into
 /// `installed.json` after each commit, and the start-up reconcile commits every app of ours whose
-/// recorded generation is older again (ADR-038). 0 is an app recorded before generations; 1 adds
-/// the runner and 32-bit extension points.
-pub const METADATA_GENERATION: u32 = 1;
+/// recorded generation is older again (ADR-038). It counts what a commit produces that installed
+/// apps need: the generated metadata and desktop entry, and the platform refs
+/// ([`platform_refs`]) the commit installs. 0 is an app recorded before generations; 1 adds the
+/// runner and 32-bit extension points; 2 installs the Windows apps' 32-bit platform (RUY-999,
+/// RUY-1003).
+pub const METADATA_GENERATION: u32 = 2;
 /// The branch of the console's own extension points: their ABI (ADR-038).
 pub const PLAY_EXTENSION_BRANCH: &str = "1";
 /// The launcher extension (05 §6.4).
@@ -414,10 +417,27 @@ pub fn platform_refs(runner: &str) -> Vec<String> {
     refs
 }
 
-/// Install the [`platform_refs`] of an app of `runner` from [`PLATFORM_REMOTE`], before the app.
-/// No `--or-update`: a ref that is installed already is skipped (updating the runtime is
-/// Flatpak's and the Store's update, not a commit's).
-pub fn install_platform(runner: &str) -> Vec<String> {
+/// The runtimes installed in the system installation, one ref per line (`<id>/<arch>/<branch>`;
+/// [`missing_refs`] reads it).
+pub fn list_runtimes() -> Vec<String> {
+    v(&["flatpak", "list", "--system", "--runtime", "--columns=ref"])
+}
+
+/// The refs of `wanted` that `flatpak list --runtime --columns=ref` (`listing`) does not show.
+/// A start-up re-commit (RUY-1003) must not need the network when everything is there already:
+/// `flatpak install <remote> <ref>` looks the ref up in the remote first, even for an installed one.
+pub fn missing_refs(wanted: Vec<String>, listing: &str) -> Vec<String> {
+    let have: std::collections::HashSet<String> = listing
+        .lines()
+        .map(|l| format!("runtime/{}", l.trim()))
+        .collect();
+    wanted.into_iter().filter(|r| !have.contains(r)).collect()
+}
+
+/// Install `refs` (what [`missing_refs`] left of the [`platform_refs`] of an app) from
+/// [`PLATFORM_REMOTE`], before the app. No `--or-update`: updating the runtime is Flatpak's and the
+/// Store's update, not a commit's.
+pub fn install_platform(refs: Vec<String>) -> Vec<String> {
     let mut argv = v(&[
         "flatpak",
         "install",
@@ -426,7 +446,7 @@ pub fn install_platform(runner: &str) -> Vec<String> {
         "-y",
         PLATFORM_REMOTE,
     ]);
-    argv.extend(platform_refs(runner));
+    argv.extend(refs);
     argv
 }
 
@@ -760,7 +780,7 @@ pub fn canonicalise(dir: &Path, owner_root: bool) -> std::io::Result<()> {
 
 impl FlatpakCommit {
     /// The part of a commit after the layout: root owns the build folder `app`, it is finished,
-    /// exported signed with the device key `key`, the [`platform_refs`] of `runner` are installed
+    /// exported signed with the device key `key`, the [`platform_refs`] of `runner` that are missing are installed
     /// and then the app `play.<id>` from the build.
     fn publish(
         &self,
@@ -777,7 +797,14 @@ impl FlatpakCommit {
         self.run(build_export(&self.paths, app, key))?;
         progress(Phase::Committing, 1.0);
         progress(Phase::Installing, 0.0);
-        self.run(install_platform(runner))?;
+        // Only what is missing, decided by the installation and not by the remote: a start-up
+        // re-commit of an app whose platform is all there needs no network (RUY-1003). A list that
+        // fails counts as nothing installed; the install then says what is wrong.
+        let listing = self.runner.run(&list_runtimes()).unwrap_or_default();
+        let missing = missing_refs(platform_refs(runner), &listing);
+        if !missing.is_empty() {
+            self.run(install_platform(missing))?;
+        }
         progress(Phase::Installing, 0.5);
         self.run(install(id))?;
         progress(Phase::Installing, 1.0);

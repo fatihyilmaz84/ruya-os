@@ -339,13 +339,14 @@ fn the_flatpak_recommit_regenerates_the_metadata_and_mount_folders_and_installs(
             "remote-modify",
             "build-finish",
             "build-export",
+            "list",
             "install",
             "install"
         ]
     );
     // A Windows app: the runtime and the 32-bit libraries and GL drivers its points mount, from
     // Flathub, before the app itself (RUY-999).
-    let platform = &flatpak[4];
+    let platform = &flatpak[5];
     let at = platform
         .iter()
         .position(|a| a == commit::PLATFORM_REMOTE)
@@ -360,9 +361,9 @@ fn the_flatpak_recommit_regenerates_the_metadata_and_mount_folders_and_installs(
     );
     assert!(!platform.iter().any(|a| a == "--or-update"), "{platform:?}");
     assert!(
-        flatpak[5].contains(&commit::REMOTE.to_string()),
+        flatpak[6].contains(&commit::REMOTE.to_string()),
         "{:?}",
-        flatpak[5]
+        flatpak[6]
     );
 }
 
@@ -442,4 +443,97 @@ fn a_mount_folder_never_hides_the_apps_own_files() {
             .iter()
             .any(|c| c[1] == "install"));
     }
+}
+
+/// A `FlatpakCommit` over `runner`, and the re-commit of the Windows app `play.<ID>` deployed at
+/// `generation`, the way the importer sends it.
+fn flatpak_recommit(
+    runner: &std::sync::Arc<FakeRunner>,
+    generation: u32,
+) -> Result<Vec<Vec<String>>, CommitError> {
+    let mut fx = Fx::wine_full();
+    fx.manifest["id"] = serde_json::json!(ID);
+    let (h, _) = deployed(&fx, generation);
+    let (manifest, assessment) =
+        reconcile::installed_app(&reconcile::our_files(&h.cfg.flatpak, ID).unwrap()).unwrap();
+    let state = tempfile::tempdir().unwrap();
+    let copy = staged_copy(&h, state.path());
+    let fc =
+        FlatpakCommit::new(&state.path().join("lib"), Box::new(runner.clone())).keeping_owner();
+    let result = fc.recommit(&RecommitRequest {
+        files: &copy,
+        manifest: &manifest,
+        assessment: &assessment,
+    });
+    let calls = runner.calls.lock().unwrap().clone();
+    result.map(|()| calls)
+}
+
+fn installs_from(calls: &[Vec<String>], remote: &str) -> Vec<Vec<String>> {
+    calls
+        .iter()
+        .filter(|c| {
+            c.get(1).map(String::as_str) == Some("install") && c.iter().any(|a| a == remote)
+        })
+        .cloned()
+        .collect()
+}
+
+/// RUY-1003: an app installed before RUY-999 is re-committed (generation 1 < 2) and gets the 32-bit
+/// platform; one that is current is not planned at all.
+#[test]
+fn a_generation_1_windows_app_gets_the_32_bit_platform_at_reconcile() {
+    let mut fx = Fx::wine_full();
+    fx.manifest["id"] = serde_json::json!(ID);
+    let (h, _) = deployed(&fx, 1);
+    assert_eq!(recommits_planned(&h), vec![ID.to_string()]);
+    let (h, _) = deployed(&fx, METADATA_GENERATION);
+    assert!(recommits_planned(&h).is_empty());
+    let runner = std::sync::Arc::new(FakeRunner::default());
+    // Flathub's runtime only: the two 32-bit refs are missing and are the install's argument.
+    *runner.runtimes.lock().unwrap() = "org.freedesktop.Platform/x86_64/26.08
+"
+    .into();
+    let calls = flatpak_recommit(&runner, 1).unwrap();
+    let platform = installs_from(&calls, commit::PLATFORM_REMOTE);
+    assert_eq!(platform.len(), 1, "{calls:?}");
+    assert_eq!(
+        &platform[0][platform[0].len() - 2..],
+        &[
+            "runtime/org.freedesktop.Platform.Compat.i386/x86_64/26.08".to_string(),
+            "runtime/org.freedesktop.Platform.GL32.default/x86_64/26.08".to_string(),
+        ]
+    );
+}
+
+/// RUY-1003, offline start: with every platform ref installed (`flatpak list`, not Flathub, says
+/// so) the re-commit never names Flathub, so it needs no network.
+#[test]
+fn an_offline_recommit_with_the_platform_installed_does_not_touch_flathub() {
+    let runner = std::sync::Arc::new(FakeRunner::default());
+    *runner.runtimes.lock().unwrap() = "org.freedesktop.Platform/x86_64/26.08
+         org.freedesktop.Platform.Compat.i386/x86_64/26.08
+         org.freedesktop.Platform.GL32.default/x86_64/26.08
+"
+    .into();
+    *runner.fail_with_arg.lock().unwrap() = Some(commit::PLATFORM_REMOTE.into());
+    let calls = flatpak_recommit(&runner, 1).unwrap();
+    assert!(installs_from(&calls, commit::PLATFORM_REMOTE).is_empty());
+    assert_eq!(installs_from(&calls, commit::REMOTE).len(), 1);
+}
+
+/// RUY-1003, offline start with a ref missing: the re-commit fails before the app is installed (it
+/// stays as it was); the importer logs it and plans it again at the next start
+/// (`a_failed_recommit_keeps_the_generation_and_is_tried_again`).
+#[test]
+fn an_offline_recommit_with_a_platform_ref_missing_fails_and_leaves_the_app() {
+    let runner = std::sync::Arc::new(FakeRunner::default());
+    *runner.fail_with_arg.lock().unwrap() = Some(commit::PLATFORM_REMOTE.into());
+    let err = flatpak_recommit(&runner, 1).unwrap_err();
+    assert!(matches!(err, CommitError::Failed(_)), "{err:?}");
+    let calls = runner.calls.lock().unwrap().clone();
+    assert!(
+        installs_from(&calls, commit::REMOTE).is_empty(),
+        "{calls:?}"
+    );
 }
