@@ -108,12 +108,12 @@ impl LaunchOs for LinuxOs {
     fn remove(&mut self, base: &str, rel: &str) -> io::Result<()> {
         match base_dir(base) {
             Err(e) if missing(&e) => Ok(()),
-            r => r?.remove(&rel_path(rel)?),
+            r => r?.remove(&rel_path(rel)?, MAX_COPY_DEPTH),
         }
     }
 
     fn symlink(&mut self, target: &str, base: &str, rel: &str) -> io::Result<()> {
-        base_dir(base)?.symlink(Path::new(target), &rel_path(rel)?)
+        base_dir(base)?.symlink(Path::new(target), &rel_path(rel)?, MAX_COPY_DEPTH)
     }
 
     fn write_atomic(&mut self, base: &str, rel: &str, bytes: &[u8]) -> io::Result<()> {

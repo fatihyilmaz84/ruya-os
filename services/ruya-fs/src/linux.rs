@@ -10,7 +10,7 @@ use rustix::io::Errno;
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::io;
-use std::os::fd::OwnedFd;
+use std::os::fd::{AsRawFd, OwnedFd};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
 
@@ -66,13 +66,57 @@ impl Dir {
     pub(crate) fn open_dir(&self, name: &OsStr) -> io::Result<Found<Dir>> {
         match rfs::openat(&self.fd, name, dir_flags(), Mode::empty()) {
             Ok(fd) => Ok(Found::It(Dir { fd })),
-            // The open itself refused: ELOOP for a link, ENOTDIR for a file (or a link, on a
-            // kernel that checks O_DIRECTORY first). Which one it was is read without following.
-            Err(Errno::LOOP | Errno::NOTDIR) => Ok(match self.kind(name)? {
+            Err(e) => self.not_a_folder(name, e),
+        }
+    }
+
+    /// [`Self::open_dir`] for a folder about to be emptied: one the owner closed to itself (no
+    /// read bit, e.g. mode 0 made by a game) refuses the open with `EACCES`, so it is opened as
+    /// a bare `O_PATH` handle (`O_NOFOLLOW | O_DIRECTORY` refuse a link: `ELOOP`, or `ENOTDIR`
+    /// where the kernel checks the type first), made 0700 through `/proc/self/fd/<fd>` (`fchmod`
+    /// refuses an `O_PATH` fd) and opened through that same path, so the folder opened is the
+    /// one made writable, not whatever the name means by then. A folder the caller may not change
+    /// keeps its error; without `/proc` the error says so (not `NotFound`, which a removal reads
+    /// as "already gone").
+    pub(crate) fn open_dir_for_removal(&self, name: &OsStr) -> io::Result<Found<Dir>> {
+        match rfs::openat(&self.fd, name, dir_flags(), Mode::empty()) {
+            Ok(fd) => return Ok(Found::It(Dir { fd })),
+            Err(Errno::ACCESS) => {}
+            Err(e) => return self.not_a_folder(name, e),
+        }
+        let flags = OFlags::PATH | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC;
+        let handle = match rfs::openat(&self.fd, name, flags, Mode::empty()) {
+            Ok(fd) => fd,
+            Err(e) => return self.not_a_folder(name, e),
+        };
+        let through = format!("/proc/self/fd/{}", handle.as_raw_fd());
+        match rfs::chmod(&through, mode(0o700)) {
+            Ok(()) => {}
+            Err(Errno::NOENT) => {
+                return Err(io::Error::other(format!(
+                    "cannot open up {}: /proc is not mounted",
+                    String::from_utf8_lossy(name.as_bytes())
+                )))
+            }
+            Err(e) => return Err(e.into()),
+        }
+        // The magic link is followed on purpose: it is the inode the handle holds.
+        let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC;
+        Ok(Found::It(Dir {
+            fd: rfs::openat(rfs::CWD, &through, flags, Mode::empty())?,
+        }))
+    }
+
+    /// What a refused folder open means: ELOOP for a link, ENOTDIR for a file (or a link, on a
+    /// kernel that checks O_DIRECTORY first). Which one it was is read without following; any
+    /// other error is the caller's.
+    fn not_a_folder(&self, name: &OsStr, err: Errno) -> io::Result<Found<Dir>> {
+        match err {
+            Errno::LOOP | Errno::NOTDIR => Ok(match self.kind(name)? {
                 Some(Kind::Link) => Found::Link,
                 _ => Found::Other,
             }),
-            Err(e) => Err(e.into()),
+            e => Err(e.into()),
         }
     }
 

@@ -65,6 +65,11 @@ impl Dir {
         }
     }
 
+    /// [`Self::open_dir`]: there is no mode to open around here.
+    pub(crate) fn open_dir_for_removal(&self, name: &OsStr) -> io::Result<Found<Dir>> {
+        self.open_dir(name)
+    }
+
     /// The regular file `name` for reading (the caller looked at its kind first).
     pub(crate) fn open_read(&self, name: &OsStr) -> io::Result<Found<File>> {
         let file = File::open(self.path.join(name))?;

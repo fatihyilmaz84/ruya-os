@@ -307,19 +307,25 @@ impl Dir {
     }
 
     /// Remove `rel` and everything in it; a link is removed, never followed. Nothing there (or a
-    /// folder above it missing) is not an error.
-    pub fn remove(&self, rel: &Path) -> io::Result<()> {
+    /// folder above it missing) is not an error. A folder the owner closed to itself (any mode)
+    /// is opened up first; one deeper than `max_depth` folders (counted as in [`Self::copy`]) is
+    /// refused ([`too_deep`]) with what was emptied before it already gone.
+    pub fn remove(&self, rel: &Path, max_depth: usize) -> io::Result<()> {
         let (dir, name) = match self.parent_of(rel, false) {
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
             r => r?,
         };
-        dir.remove_name(name)
+        dir.remove_name(name, 0, max_depth)
     }
 
-    fn remove_name(&self, name: &OsStr) -> io::Result<()> {
+    /// `depth` is the level of `name` (0 for the root of the removal), checked before it is opened.
+    fn remove_name(&self, name: &OsStr, depth: usize, max: usize) -> io::Result<()> {
+        if depth > max {
+            return Err(too_deep(&self.shown(name), max));
+        }
         match self.inner.kind(name)? {
             None => Ok(()),
-            Some(Kind::Dir) => match self.inner.open_dir(name) {
+            Some(Kind::Dir) => match self.inner.open_dir_for_removal(name) {
                 Ok(Found::It(inner)) => {
                     let sub = Dir {
                         inner,
@@ -329,7 +335,7 @@ impl Dir {
                     // would stop the removal otherwise.
                     sub.inner.set_mode(PRIVATE_DIR)?;
                     for entry in sub.inner.entries()? {
-                        sub.remove_name(&entry)?;
+                        sub.remove_name(&entry, depth + 1, max)?;
                     }
                     ignore_missing(self.inner.remove_dir(name))
                 }
@@ -386,14 +392,14 @@ impl Dir {
             )),
             Some(Kind::Link) => {
                 let target = self.inner.read_link(name)?;
-                dst.remove_name(dst_name)?;
+                dst.remove_name(dst_name, 0, max)?;
                 dst.inner.symlink(&target, dst_name)
             }
             Some(Kind::Dir) => self.child(name)?.copy_dir_into(dst, dst_name, depth, max),
             Some(Kind::File) => {
                 let mut from = self.open_name(name)?;
                 let mode = imp::file_mode(&from)? & 0o777;
-                dst.remove_name(dst_name)?;
+                dst.remove_name(dst_name, 0, max)?;
                 let mut to = dst.inner.create(dst_name, mode)?;
                 io::copy(&mut from, &mut to)?;
                 Ok(())
@@ -412,7 +418,7 @@ impl Dir {
         max: usize,
     ) -> io::Result<()> {
         if dst.inner.kind(dst_name)? != Some(Kind::Dir) {
-            dst.remove_name(dst_name)?;
+            dst.remove_name(dst_name, 0, max)?;
             dst.inner.make_dir(dst_name, PRIVATE_DIR)?;
         }
         let to = dst.child(dst_name)?;
@@ -425,10 +431,10 @@ impl Dir {
     }
 
     /// Make `rel` a link to `target` (the folders above it made when missing, whatever is at
-    /// `rel` removed first, not followed).
-    pub fn symlink(&self, target: &Path, rel: &Path) -> io::Result<()> {
+    /// `rel` removed first, not followed, with the depth cap of [`Self::remove`]).
+    pub fn symlink(&self, target: &Path, rel: &Path, max_depth: usize) -> io::Result<()> {
         let (dir, name) = self.parent_of(rel, true)?;
-        dir.remove_name(name)?;
+        dir.remove_name(name, 0, max_depth)?;
         dir.inner.symlink(target, name)
     }
 }
