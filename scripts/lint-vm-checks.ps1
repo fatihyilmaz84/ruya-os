@@ -95,7 +95,7 @@ try {
     New-Item -ItemType Directory -Force $qs | Out-Null
     [IO.File]::WriteAllText((Join-Path $qs "vm-a-check.sh"), "#!/usr/bin/env bash`n# modes: check other`n")
     [IO.File]::WriteAllText((Join-Path $qs "vm-b-check.sh"), "#!/usr/bin/env bash`n")
-    [IO.File]::WriteAllText((Join-Path $qs "vm-play-check.sh"), "#!/usr/bin/env bash`n# modes: check helper verify perms launch launch-windows parse`n")
+    [IO.File]::WriteAllText((Join-Path $qs "vm-play-check.sh"), "#!/usr/bin/env bash`n# modes: check helper verify perms remove launch launch-windows parse`n")
     [IO.File]::WriteAllText((Join-Path $qs "vm-library-check.sh"), "#!/usr/bin/env bash`n# modes: check play`n")
     # The dispatch reader on one fixture per shape (RUY-890): the canonical forms are read, every other
     # top-level mention of $1 (or of a name assigned from it) fails, never counts as single-mode.
