@@ -75,6 +75,8 @@ public:
     // Tests only: `count` more community apps (org.example.Many0...), one in five with full controller
     // support and one in five partial, the size of a real remote's catalogue; then CatalogChanged (T-377).
     void addApps(int count);
+    // Installed with no signal (RUY-854): the list shows it from the next refresh().
+    void installOutside(const QString &id, const QString &name, const QStringList &permissions);
     // Tests only: the console's API level (0 at start and after reset, like RUYA_API_LEVEL). An app is
     // compatible when its minimum level is at or below it. Then InstalledChanged and CatalogChanged (RUY-636).
     void setApiLevel(int level);

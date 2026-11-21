@@ -164,6 +164,15 @@ void MockStoreBackend::addApps(int count)
     emit catalogChanged();
 }
 
+void MockStoreBackend::installOutside(const QString &id, const QString &name, const QStringList &permissions)
+{
+    AppInfo a = app("", "", "", "", "developer", "none", "all", permissions, 9);
+    a.id = id;
+    a.name = name;
+    a.installed = true;
+    m_apps.append(a);
+}
+
 void MockStoreBackend::setAppText(const QString &id, const QString &name, const QString &summary,
                                   const QString &developer, const QStringList &permissions)
 {

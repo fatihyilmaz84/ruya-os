@@ -105,13 +105,17 @@ Page {
     readonly property bool permsSectionShown: hasRecord && !isSteam && !detailsFailed
     readonly property bool permsListed: permsSectionShown && (app.permissions ?? []).length > 0
     readonly property bool manageShown: hasRecord && installed && !isSteam && !working
+    // What the app may do on this console (RUY-744): every installed Flatpak has it, a .play app too (RUY-854), whether or
+    // not the Store lists it (the service lists an app it finds installed; the page does not wait for that).
+    readonly property bool permissionsShown: installed && !isSteam && !working && (hasRecord || isPlay)
     readonly property bool uninstallShown: manageShown && !running && !closing
 
     // The Store does not answer about this item: GetApp failed, the service is away, or the Library lists a Flatpak the Store has no record of.
     // A .play app is never in the Store: its page has nothing to ask it, so it is never "down" (RUY-856).
     readonly property bool storeDown: !isPlay && (detailsFailed || (appId !== "" && !Store.available) || (!hasRecord && hasItem && appId !== ""))
 
-    title: hasRecord ? (app.name ?? "") : hasItem ? (item.title ?? "") : (appId.split(".").pop() ?? "")
+    // A .play app's name is the title of its package (the Store's name for it is the id's last part).
+    title: isPlay ? (item.title ?? "") : hasRecord ? (app.name ?? "") : hasItem ? (item.title ?? "") : (appId.split(".").pop() ?? "")
 
     // ---- Header: the buttons by state (keys only: the models never change with a progress tick or the language) ----
     // "" none | install | update | play | resume | close | busy (a Store job) | closing
@@ -479,7 +483,7 @@ Page {
             rows.push([permsBlock])
         for (let i = 0; i < factRepeater.count; i += 2)
             rows.push([factRepeater.itemAt(i), factRepeater.itemAt(i + 1)].filter(f => f))
-        if (manageShown)
+        if (permissionsShown)
             rows.push([permissionsRow])
         if (uninstallShown)
             rows.push([uninstallRow])
@@ -502,7 +506,7 @@ Page {
         rows[0][0].focus = true
     }
 
-    readonly property string stopKey: primaryKind + "#" + secondaryKeys + "#" + factKeys + "#" + trustShown + "#" + activityStop + "#" + screenshotsStop + "#" + aboutShown + "#" + permsListed + "#" + manageShown + "#" + uninstallShown
+    readonly property string stopKey: primaryKind + "#" + secondaryKeys + "#" + factKeys + "#" + trustShown + "#" + activityStop + "#" + screenshotsStop + "#" + aboutShown + "#" + permsListed + "#" + permissionsShown + "#" + manageShown + "#" + uninstallShown
     onStopKeyChanged: Qt.callLater(ensureFocus)
 
     function moveFocus(dx, dy) {
@@ -1018,8 +1022,8 @@ Page {
                 objectName: "detailManage"
                 width: parent.width
                 spacing: Theme.spaceS * page.u
-                // An installed Flatpak the Store knows, with no job on it.
-                visible: page.manageShown
+                // An installed Flatpak with no job on it: the Store's own (Uninstall), a .play app too (Permissions).
+                visible: page.permissionsShown || page.manageShown
 
                 Heading { text: qsTr("Manage") }
 
@@ -1027,7 +1031,7 @@ Page {
                 SettingRow {
                     id: permissionsRow
                     objectName: "detailPermissionsRow"
-                    visible: page.manageShown
+                    visible: page.permissionsShown
                     width: parent.width
                     u: page.u
                     kind: "page"

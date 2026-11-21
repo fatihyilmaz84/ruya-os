@@ -28,6 +28,8 @@ Item {
         readonly property string stream: "org.example.Stream"
         readonly property string editor: "org.example.Editor"
         readonly property string puzzle: "org.example.Puzzle"
+        // The .play game of the Library mock's "play" scenario (RUY-854): its Flatpak is play.<package id>.
+        readonly property string hopper: "play.com.example.starhopper"
 
         function find(name) { return findChild(tc.shell, name) }
 
@@ -51,6 +53,7 @@ Item {
         function cleanup() {
             Store.mockReset()
             Session.mockReset()
+            Library.resetMockForTests("")
             Profiles.lock()
             DeviceSettings.language = "en"
         }
@@ -323,6 +326,77 @@ Item {
             verify(row("permNote_network").visible)
         }
 
+        // A .play game is a Flatpak of the system installation: the service lists it once it is asked (here after
+        // the pane is shown, as `ruya-play` installs it behind the Store's back) and the list names it by its title.
+        function installHopper() {
+            Library.resetMockForTests("play")
+            tryVerify(() => Library.item("flatpak:" + tc.hopper).play === true)
+            Store.mockInstallOutside(tc.hopper, "starhopper", ["network", "audio", "gamepad"])
+        }
+
+        function test_a_play_game_is_in_the_list_under_its_title_and_an_admin_withdraws_its_network() {
+            signInAdmin()
+            installHopper()
+            const pane = openPane()
+            tryVerify(() => appRow(tc.hopper) !== null && appRow(tc.hopper).visible, 3000, "the game joined the list")
+            compare(pane.focusableRows().map(r => r.label), ["Block Puzzle", "Open Chess", "Star Hopper", "Text Editor"])
+            for (let i = 0; i < 8 && !appRow(tc.hopper).activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(appRow(tc.hopper).activeFocus)
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "appPermissions")
+            const page = find("page_appPermissions")
+            tryVerify(() => page.answered, 2000)
+            compare(page.title, "Star Hopper")
+            const network = row("permSwitch_network")
+            tryVerify(() => network.activeFocus, 2000, "the first permission has the focus")
+            verify(network.checked)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => Store.permissions(tc.hopper).withdrawn.indexOf("network") >= 0, 2000, "withdrawn from the game")
+            tryVerify(() => row("permNote_network").visible, 2000)
+            compare(row("permNote_network").text, "Takes effect next time you open it.")
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => appRow(tc.hopper).activeFocus, 2000, "Back returns to the game's row")
+            compare(appRow(tc.hopper).value, "1 withdrawn")
+        }
+
+        function test_the_play_game_page_has_the_permissions_row() {
+            signInAdmin()
+            installHopper()
+            tc.shell.openPage("appDetail", { id: "flatpak:" + tc.hopper })
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            const detail = find("page_appDetail")
+            tryVerify(() => detail.isPlay, 2000)
+            compare(detail.title, "Star Hopper")
+            const perms = find("detailPermissionsRow")
+            tryVerify(() => perms.visible, 2000, "no Store record needed")
+            for (let i = 0; i < 20 && !perms.activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(perms.activeFocus, "Down reaches Permissions")
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "appPermissions")
+            compare(tc.shell.currentParams.appId, tc.hopper)
+            tryVerify(() => find("page_appPermissions").answered, 2000)
+            tryVerify(() => row("permSwitch_network").activeFocus, 2000)
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            tryVerify(() => perms.activeFocus, 2000, "Back returns to the Permissions row")
+        }
+
+        function test_a_standard_profile_reads_a_play_games_permissions_only() {
+            signIn("p2", "")
+            installHopper()
+            Store.refreshInstalled()
+            tryVerify(() => Store.installed.some(a => a.id === tc.hopper))
+            tc.shell.openPage("appPermissions", { appId: tc.hopper })
+            tryCompare(tc.shell, "currentPage", "appPermissions")
+            tryVerify(() => find("page_appPermissions").answered, 2000)
+            verify(row("permFact_network").visible)
+            verify(!row("permSwitch_network").visible, "a fact, not a switch")
+            compare(row("permFact_network").value, "Allowed")
+        }
+
         function test_the_game_page_opens_the_same_page() {
             signInAdmin()
             tc.shell.openPage("appDetail", { appId: tc.editor })
@@ -413,6 +487,34 @@ Item {
         // The shots runner picks the functions that save to `shotsDir + "/` themselves (dev.ps1).
         function test_zz_screenshots() { shots(shotsDir + "/", "en") }
         function test_zz_screenshots_tr() { shots(shotsDir + "/", "tr") }
+
+        // A .play game in the list and its permissions page (RUY-854).
+        function test_zz_screenshots_play() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            signInAdmin()
+            installHopper()
+            openPane()
+            tryVerify(() => appRow(tc.hopper) !== null && appRow(tc.hopper).visible, 3000)
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/privacy-pane-play-en.png")
+            for (let i = 0; i < 8 && !appRow(tc.hopper).activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "appPermissions")
+            tryVerify(() => row("permSwitch_network") !== null && row("permSwitch_network").activeFocus, 2000)
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/app-permissions-play-en.png")
+            tc.shell.openPage("appDetail", { id: "flatpak:" + tc.hopper })
+            tryCompare(tc.shell, "currentPage", "appDetail")
+            const perms = find("detailPermissionsRow")
+            tryVerify(() => perms.visible, 2000)
+            for (let i = 0; i < 20 && !perms.activeFocus; ++i)
+                keyClick(Qt.Key_Down)
+            verify(perms.activeFocus)
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/game-page-play-permissions-en.png")
+        }
 
         function test_zz_screenshots_read_only() {
             if (!shotsDir)

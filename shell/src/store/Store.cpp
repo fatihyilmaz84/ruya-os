@@ -467,6 +467,17 @@ void Store::mockAddApps(int count)
         mock->addApps(count);
 }
 
+void Store::refreshInstalled()
+{
+    m_backend->refresh();
+}
+
+void Store::mockInstallOutside(const QString &appId, const QString &name, const QStringList &permissions)
+{
+    if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))
+        mock->installOutside(appId, name, permissions);
+}
+
 void Store::mockSetApiLevel(int level)
 {
     if (auto *mock = qobject_cast<MockStoreBackend *>(m_backend.get()))

@@ -108,6 +108,9 @@
       <arg name="app" type="a{sv}" direction="out"/>
     </method>
 
+    <!-- Every app Flatpak has installed now, whoever installed it: an app installed since the last
+         refresh (a .play app from ruya-play, `flatpak install` by hand) is listed too (RUY-854), and
+         InstalledChanged is sent once when the answer found one. -->
     <method name="ListInstalled">
       <arg name="apps" type="aa{sv}" direction="out"/>
     </method>

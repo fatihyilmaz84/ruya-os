@@ -594,6 +594,14 @@ impl FakeFlatpak {
         self
     }
 
+    /// The installed version's metadata written again (an app committed anew over the same
+    /// deployment, as `ruya-play` does for a newer metadata generation).
+    pub fn set_installed_metadata(&self, id: &str, metadata: &str) {
+        self.state()
+            .installed_metadata
+            .insert(id.to_owned(), metadata.to_owned());
+    }
+
     /// The percentages the next transactions report (a download that goes 10, 60, 100).
     pub fn with_progress(self, steps: &[u32]) -> Self {
         self.state().progress = steps.to_vec();

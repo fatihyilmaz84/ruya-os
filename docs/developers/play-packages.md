@@ -382,6 +382,8 @@ The vocabulary is closed and static: you **request**, the shell shows each entry
 
 By trust tier: a `developer` (signed) package gets low and medium freely, and high with the admin's PIN and a warning; an `unverified` (unsigned) package gets low and medium only, and a high request makes it uninstallable (`ceiling.refused`), not quietly reduced. `permissions.reasons` lets you put a short sentence next to a permission; the shell does not show it yet (RUY-803, RUY-805). Ask for the least you need: the page the player sees is the whole of your pitch.
 
+**An admin can take some of it away after the install (RUY-854).** A `.play` game is in the same Settings > Privacy > App permissions list as every Flatpak app, under its title, and has the same Permissions row on its page: an admin can withdraw its **network**, **all devices** (the controllers and the GPU stay) and **USB drives** (the removable-media access is a file permission), for every profile. It takes effect the **next time the game starts**; a running game keeps what it started with. Withdrawing never grants anything the package did not ask for, and a start-up re-commit of the game's generated metadata does not undo it. A game that asked for the network must start and say so when it has none. (Planned: the withdrawal is not yet dropped when the game is removed; reinstalling it starts withdrawn.)
+
 ## Signing and keys
 
 A signature proves that **the same key signed this**, not who you are. The console shows "Signed by Example Games, key 3f9a..." and never "verified publisher" (only the Official store's own countersignature earns more). Signing is Ed25519 in a small format of our own, made and checked by `ruya-pack`; you need no other tool.

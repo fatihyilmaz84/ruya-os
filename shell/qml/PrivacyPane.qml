@@ -3,7 +3,7 @@ import QtQuick
 import RuyaShell
 
 // Settings -> Privacy (RUY-744, 02 §1.2): the console-wide privacy settings. Today one group, App permissions:
-// the installed apps (the Store's installed list: every Flatpak app on the console), by name, each a page row
+// the installed apps (the Store's installed list: every Flatpak app on the console, a .play game too, RUY-854), by name, each a page row
 // that opens its permissions (AppPermissionsPage, through appRequested). A row's value says how many of the
 // app's permissions are withdrawn, once the service has answered (each app's permissions are read when the
 // pane is shown). RUY-80 adds the privacy statement, network visibility and Your activity as further groups.
@@ -15,10 +15,12 @@ SettingsPane {
 
     // The installed apps by name (ids only: the rows read their name and value through bindings).
     readonly property var appIds: Store.installed.slice()
-        .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "") || a.id.localeCompare(b.id))
+        .sort((a, b) => pane.appName(a.id).localeCompare(pane.appName(b.id)) || a.id.localeCompare(b.id))
         .map(a => a.id)
+    // A .play game is named by its package (the Library's title); the Store only knows the id's last part.
     function appName(appId) {
-        return (Store.installed.find(a => a.id === appId) ?? {}).name || appId
+        const game = Library.items.find(i => i.play === true && Library.sessionAppId(i.id) === appId)
+        return (game ?? {}).title || (Store.installed.find(a => a.id === appId) ?? {}).name || appId
     }
 
     // Bumped when an answer about any app arrives: the values follow it.
@@ -36,7 +38,13 @@ SettingsPane {
         for (const id of appIds)
             Store.loadPermissions(id)
     }
-    onVisibleChanged: if (visible) Qt.callLater(loadAll)
+    // The list is read again when the pane is shown: an app installed since (a .play game) is in the service's
+    // answer, not in what the shell held; its permissions are read when the list arrives.
+    onVisibleChanged: if (visible) {
+        Store.refreshInstalled()
+        Qt.callLater(loadAll)
+    }
+    onAppIdsChanged: Qt.callLater(loadAll)
     Component.onCompleted: Qt.callLater(loadAll)
 
     GroupLabel {
