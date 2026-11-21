@@ -90,12 +90,15 @@ fn a_tree_is_copied_and_removed() {
         .copy(Path::new("no/ne"), &dir, Path::new("x"), 8)
         .expect("copy"));
     assert!(!tmp.path().join("x").exists());
-    dir.remove(Path::new("c")).expect("remove");
-    dir.remove(Path::new("t/g")).expect("remove a file");
+    dir.remove(Path::new("c"), 8).expect("remove");
+    dir.remove(Path::new("t/g"), 8).expect("remove a file");
     assert!(!tmp.path().join("c").exists());
     assert!(!tmp.path().join("t/g").exists());
-    dir.remove(Path::new("none/x")).expect("nothing there");
-    assert!(dir.remove(Path::new("")).is_err(), "never the base itself");
+    dir.remove(Path::new("none/x"), 8).expect("nothing there");
+    assert!(
+        dir.remove(Path::new(""), 8).is_err(),
+        "never the base itself"
+    );
 }
 
 #[test]
@@ -368,7 +371,7 @@ mod linux {
             refused(d.write(&rel("b/f"), b"x"), "write");
             refused(d.write(&rel("new/f"), b"x"), "write into a new folder");
             refused(d.make_dirs(&rel("b/c")).map(drop), "make_dirs");
-            refused(d.remove(&rel("b")), "remove");
+            refused(d.remove(&rel("b"), 8), "remove");
             refused(
                 d.copy(&rel("b"), d, Path::new("copy"), 8).map(drop),
                 "copy from",
@@ -379,7 +382,7 @@ mod linux {
                 d.copy(Path::new("src"), d, &rel("b"), 8).map(drop),
                 "copy to",
             );
-            refused(d.symlink(Path::new("/"), &rel("b/z")), "symlink");
+            refused(d.symlink(Path::new("/"), &rel("b/z"), 8), "symlink");
             p.untouched();
             assert!(!p.tmp.path().join("base/copy").exists());
         }
@@ -416,7 +419,7 @@ mod linux {
         let held = p.dir.walk(Path::new("moved")).expect("walk");
         fs::rename(base.join("moved"), base.join("moved2")).expect("move aside");
         symlink(p.outside(), base.join("moved")).expect("link");
-        held.remove(Path::new("slot")).expect("remove");
+        held.remove(Path::new("slot"), 8).expect("remove");
         assert!(!base.join("moved2/slot").exists());
         p.untouched();
     }
@@ -431,14 +434,54 @@ mod linux {
         symlink(p.outside(), base.join("t/l")).expect("link");
         symlink(p.outside().join("f"), base.join("t/ro/fl")).expect("link");
         fs::set_permissions(base.join("t/ro"), fs::Permissions::from_mode(0o555)).expect("ro");
-        p.dir.remove(Path::new("t")).expect("remove");
+        p.dir.remove(Path::new("t"), 8).expect("remove");
         assert!(!base.join("t").exists());
         p.untouched();
         // A link as the thing removed: the link goes, not the target.
         symlink(p.outside(), base.join("top")).expect("link");
-        p.dir.remove(Path::new("top")).expect("remove");
+        p.dir.remove(Path::new("top"), 8).expect("remove");
         assert!(fs::symlink_metadata(base.join("top")).is_err());
         p.untouched();
+    }
+
+    /// A folder the game closed to itself (any mode) is removed with what is in it; a link to
+    /// one outside is removed and the folder it pointed to is left as it was.
+    #[test]
+    fn remove_opens_up_a_closed_folder_and_never_follows() {
+        let p = Planted::new();
+        let base = p.tmp.path().join("base");
+        fs::create_dir_all(base.join("t/a/b")).expect("dirs");
+        fs::write(base.join("t/a/b/f"), "x").expect("file");
+        fs::create_dir(base.join("t/c")).expect("dir");
+        for (d, bits) in [("t/a/b", 0o000), ("t/a", 0o000), ("t/c", 0o100)] {
+            fs::set_permissions(base.join(d), fs::Permissions::from_mode(bits)).expect("close");
+        }
+        let closed = p.tmp.path().join("closed");
+        fs::create_dir(&closed).expect("dir");
+        fs::set_permissions(&closed, fs::Permissions::from_mode(0o000)).expect("close");
+        symlink(&closed, base.join("t/l")).expect("link");
+        p.dir.remove(Path::new("t"), 8).expect("remove");
+        assert!(!base.join("t").exists());
+        assert_eq!(mode(&closed), 0o000);
+        // So the temporary folder can be cleaned up.
+        fs::set_permissions(&closed, fs::Permissions::from_mode(0o700)).expect("open");
+        p.untouched();
+    }
+
+    /// A tree one folder over the cap is refused with `too_deep`; the folders emptied before the
+    /// refusal are gone, the ones below it are still there.
+    #[test]
+    fn remove_refuses_a_tree_over_the_cap() {
+        let (tmp, dir) = base();
+        let deep = tmp.path().join("d/1/2/3");
+        fs::create_dir_all(&deep).expect("dirs");
+        fs::write(deep.join("f"), "x").expect("file");
+        // d is level 0, "3" level 3, "f" level 4.
+        let e = dir.remove(Path::new("d"), 3).expect_err("too deep");
+        assert!(e.to_string().contains("3 folders deep"), "{e}");
+        assert!(deep.join("f").exists(), "nothing below the cap is touched");
+        dir.remove(Path::new("d"), 4).expect("at the cap");
+        assert!(!tmp.path().join("d").exists());
     }
 
     /// Modes are kept (a read-only folder too), a link is made again as a link with the same
@@ -473,8 +516,8 @@ mod linux {
             p.outside()
         );
         p.untouched();
-        p.dir.remove(Path::new("c")).expect("remove");
-        p.dir.remove(Path::new("t")).expect("remove");
+        p.dir.remove(Path::new("c"), 8).expect("remove");
+        p.dir.remove(Path::new("t"), 8).expect("remove");
         p.untouched();
     }
 }
