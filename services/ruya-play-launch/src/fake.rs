@@ -41,6 +41,8 @@ pub struct FakeOs {
     pub rules: Vec<RunRule>,
     /// Every log line.
     pub lines: RefCell<Vec<String>>,
+    /// Paths whose [`LaunchOs::kind`] fails with this error instead of answering (an `EACCES`).
+    pub kind_errors: BTreeMap<String, io::ErrorKind>,
 }
 
 fn parent(path: &str) -> Option<&str> {
@@ -83,6 +85,12 @@ impl FakeOs {
         self.add_parents(path);
         self.nodes
             .insert(path.to_string(), Node::Link(target.to_string()));
+        self
+    }
+
+    /// Make [`LaunchOs::kind`] of `path` fail with `kind` instead of answering (an `EACCES`).
+    pub fn fail_kind(&mut self, path: &str, kind: io::ErrorKind) -> &mut Self {
+        self.kind_errors.insert(path.to_string(), kind);
         self
     }
 
@@ -173,14 +181,20 @@ impl FakeOs {
 }
 
 impl LaunchOs for FakeOs {
-    fn kind(&self, base: &str, rel: &str) -> Option<Kind> {
-        self.nodes
-            .get(&self.resolve(&join(base, rel), false))
+    fn kind(&self, base: &str, rel: &str) -> io::Result<Option<Kind>> {
+        let path = join(base, rel);
+        if let Some(kind) = self.kind_errors.get(&path) {
+            return Err(io::Error::new(*kind, path));
+        }
+        self.check(base, rel, false)?;
+        Ok(self
+            .nodes
+            .get(&self.resolve(&path, false))
             .map(|n| match n {
                 Node::File(_) => Kind::File,
                 Node::Dir => Kind::Dir,
                 Node::Link(_) => Kind::Link,
-            })
+            }))
     }
 
     fn list(&self, base: &str, rel: &str) -> io::Result<Vec<(String, Kind)>> {
@@ -196,7 +210,10 @@ impl LaunchOs for FakeOs {
             .filter(|rest| !rest.contains('/'))
             .filter_map(|name| {
                 let full = format!("{inner}{name}");
-                self.kind(&full, "").map(|k| (name.to_string(), k))
+                self.kind(&full, "")
+                    .ok()
+                    .flatten()
+                    .map(|k| (name.to_string(), k))
             })
             .collect())
     }

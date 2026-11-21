@@ -233,7 +233,7 @@ fn proton_runs_waitforexitandrun_with_its_compat_folders() {
         format!("{DATA}/proton/client")
     );
     assert_eq!(
-        os.kind(DATA, "proton/client"),
+        os.kind(DATA, "proton/client").unwrap(),
         Some(ruya_play_launch::os::Kind::Dir)
     );
     // The prefix is proton's pfx, made from the template.
@@ -394,7 +394,7 @@ fn a_prefix_without_template_is_left_to_the_runner() {
     g.set("/run/prefix", json!({"arch": "win32"}));
     let mut os = g.install();
     let cmd = launch(&mut os, &[]).unwrap();
-    assert_eq!(os.kind(PREFIX, ""), None);
+    assert_eq!(os.kind(PREFIX, "").unwrap(), None);
     assert_eq!(cmd.env["WINEARCH"], "win32");
 }
 
@@ -670,15 +670,8 @@ fn the_status_file_is_not_followed_when_it_is_a_link() {
     os.link(&format!("{DATA}/.ruya-play"), "/srv/p");
     let err = launch(&mut os, &[]).unwrap_err();
     assert_eq!(err.code, "launch.state");
-    // Not read through the link either.
-    assert!(
-        os.lines
-            .borrow()
-            .iter()
-            .any(|l| l.contains("status file cannot be read") && l.contains("not followed")),
-        "{:?}",
-        os.lines.borrow()
-    );
+    // Not read through the link either: the launch stops there, it does not start from none.
+    assert!(err.message.contains("not followed"), "{}", err.message);
     assert_eq!(os.read("/srv/p/notes.txt"), Some(&b"mine"[..]));
     assert_eq!(os.read("/srv/p/state.json"), Some(&planted.to_bytes()[..]));
     assert_eq!(
@@ -686,6 +679,35 @@ fn the_status_file_is_not_followed_when_it_is_a_link() {
         3,
         "nothing written behind the link"
     );
+}
+
+#[test]
+fn a_status_file_that_cannot_be_checked_fails_the_launch() {
+    let mut os = Game::native().install();
+    os.fail_kind(
+        &format!("{DATA}/.ruya-play/state.json"),
+        std::io::ErrorKind::PermissionDenied,
+    );
+    let err = launch(&mut os, &[]).unwrap_err();
+    assert_eq!(err.code, "launch.state");
+    assert!(err.message.contains("cannot be checked"), "{}", err.message);
+}
+
+#[test]
+fn a_prefix_that_cannot_be_checked_fails_the_launch() {
+    let mut os = Game::wine().install();
+    os.fail_kind(PREFIX, std::io::ErrorKind::PermissionDenied);
+    let err = launch(&mut os, &[]).unwrap_err();
+    assert_eq!(err.code, "launch.prefix");
+    assert!(err.message.contains("cannot be checked"), "{}", err.message);
+    assert!(os.runs.is_empty(), "nothing was rebuilt over it");
+}
+
+#[test]
+fn a_missing_status_file_and_prefix_are_absent_not_errors() {
+    let mut os = Game::wine().install();
+    launch(&mut os, &[]).unwrap();
+    assert_eq!(state(&os).epoch, 1);
 }
 
 #[test]

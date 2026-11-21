@@ -157,29 +157,32 @@ impl State {
     }
 
     /// Read the status file below `data`; the default when it is absent, too big or not format 1
-    /// (logged).
-    pub fn read(os: &dyn LaunchOs, data: &str) -> State {
-        if os.kind(data, FILE).is_none() {
-            return State::default();
+    /// (logged). An error asking whether it is there (a refused link, `EACCES`, `EIO`) is the
+    /// caller's: the game's data is not to be treated as new.
+    pub fn read(os: &dyn LaunchOs, data: &str) -> std::io::Result<State> {
+        if os.kind(data, FILE)?.is_none() {
+            return Ok(State::default());
         }
         let src = AppSource::new(os, data);
-        match ruya_play_format::read_within(&src, FILE, MAX_STATE_BYTES) {
-            Ok(Some(b)) => State::parse(&b).unwrap_or_else(|| {
-                os.log("the status file is not a format 1 status file; starting from none");
-                State::default()
-            }),
-            Ok(None) => {
-                os.log("the status file is too big; starting from none");
-                State::default()
-            }
-            Err(p) => {
-                os.log(&format!(
-                    "the status file cannot be read ({}); starting from none",
-                    p.message
-                ));
-                State::default()
-            }
-        }
+        Ok(
+            match ruya_play_format::read_within(&src, FILE, MAX_STATE_BYTES) {
+                Ok(Some(b)) => State::parse(&b).unwrap_or_else(|| {
+                    os.log("the status file is not a format 1 status file; starting from none");
+                    State::default()
+                }),
+                Ok(None) => {
+                    os.log("the status file is too big; starting from none");
+                    State::default()
+                }
+                Err(p) => {
+                    os.log(&format!(
+                        "the status file cannot be read ({}); starting from none",
+                        p.message
+                    ));
+                    State::default()
+                }
+            },
+        )
     }
 
     /// Write the status file below `data` atomically.
