@@ -161,7 +161,7 @@ An OS update replaces the runners in the image, and the oldest GE-Proton major l
 
 Experimental (tier C, may change before the first release): the extension point and ids (`org.ruyaos.Play.Runner`, `...<Family><major>`), the branch `1`, `runner.json` format 1 and the argv and environment above.
 
-Not an API, so do not rely on it: the folder names below `/app/runners`, anything in a runner's folder except `runner.json` and the files its `entry` names (the sample's `--self-test` uses GE-Proton's own `cmd.exe`, which is an implementation detail of that build), `.ruya-runner-hash`, the console's `runners.list`, the links under `/var/lib/flatpak/extension`, and the runners' link into Steam. There is no RuyaOS call to list, start or choose a runner, and the console will not add one that runs a program for you.
+Not an API, so do not rely on it: the folder names below `/app/runners`, anything in a runner's folder except `runner.json` and the files its `entry` names (the sample's `--self-test` uses GE-Proton's own `cmd.exe`, which is an implementation detail of that build), `.ruya-runner-hash`, the links under `/var/lib/flatpak/extension`, and the runners' link into Steam. There is no RuyaOS call to list, start or choose a runner, and the console will not add one that runs a program for you.
 
 ## Try the sample
 
