@@ -279,6 +279,8 @@ The two samples carry art made by a script (`make-art.py` in each sample, Python
 - Wine regressions are real: a game tested on 9.20 may break on 10.x. The more you trust the OS, the smaller your package; the player can always choose "Package default", "Bundled" or "System" in the game's Compatibility setting (**planned**: the screen is part of the launcher, RUY-101).
 - `ruya-pack validate --system-wine 10.2` (and `--system-proton-ge`, `--system-runner family=version`) dry-runs the choice against the runners you name, with the console's own resolution code. A component whose family you did not name is skipped, and a `resolve.not_checked` warning says so.
 
+(An app that is not a `.play` and starts a Windows runner itself reads [Windows games](windows-games.md).)
+
 The Wine sample uses `source: system` so that no Wine has to be committed to git. A manifest that bundles Wine and takes the OS's when it is newer looks like this (the files under `components/wine/` are yours to add, with a licence text under `licences/`):
 
 ```json

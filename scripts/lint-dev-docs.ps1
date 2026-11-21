@@ -5,8 +5,12 @@
 #     `json` parses, and a `json` block that is a whole play.json (it has format, id and run) must
 #     satisfy api/play/play.schema.json (RUY-105; a small validator for the keywords it uses), a
 #     whole runner.json (format, family and kind) api/play/runner.schema.json (RUY-898);
-#   - a fenced `c` block whose first line is `/* sample: <repo path> */` is the sample's code: each
-#     of its lines must be in that file, in order (a line that is only `...` or `/* ... */` is a gap);
+#   - a fenced `c` block whose first line is `/* sample: <repo path> */` (a `python`, `sh` or `bash`
+#     block: `# sample: <repo path>`) is the sample's code: each of its lines must be in that file,
+#     in order (a line that is only `...` or `/* ... */` is a gap);
+#   - a sample Flatpak manifest (samples/<name>/*.json) that names org.ruyaos.Play must match
+#     the image (RUY-36): the runner point and branch of services/ruya-play/src/service/commit.rs
+#     (subdirectories, no-autodownload), and an id <point>.<Name> needs a folder image/play/runners/<Name>;
 #   - a fenced `xml` block that starts with `<component` and is introduced (within the three lines
 #     before the fence) by a `samples/.../*.metainfo.xml` path in backticks is compared with that
 #     file (T-297): the same elements at the same places, with the same attribute names, and the
@@ -313,6 +317,31 @@ foreach ($f in $files) {
     }
 }
 
+# A fenced c, python, sh or bash block whose first line is `/* sample: <repo path> */` (c) or
+# `# sample: <repo path>` (the others) is the sample's code: each of its lines must be in that file,
+# in order (a line that is only `...` or `/* ... */` is a gap). Returns the finding, or $null.
+function Test-SampleBlock($b) {
+    $first = ($b.body | Where-Object { $_.Trim() } | Select-Object -First 1)
+    $re = if ($b.lang -eq 'c') { '^\s*/\*\s*sample:\s*(\S+)\s*\*/\s*$' } else { '^\s*#\s*sample:\s*(\S+)\s*$' }
+    if ($first -notmatch $re) { return $null }
+    $rel = $Matches[1]
+    $src = Join-Path $Repo $rel
+    if (-not (Test-Path $src)) { return "sample file $rel does not exist" }
+    $srcLines = @([IO.File]::ReadAllText($src, $Utf8) -split "`r?`n" | ForEach-Object { $_.TrimEnd() })
+    $pos = 0
+    foreach ($l in ($b.body | Select-Object -Skip 1)) {
+        $t = $l.TrimEnd()
+        if (-not $t.Trim()) { continue }
+        if ($t.Trim() -match '^(\.\.\.|/\*\s*\.\.\.\s*\*/|#\s*\.\.\.)$') { continue }
+        $found = $false
+        for ($k = $pos; $k -lt $srcLines.Count; $k++) {
+            if ($srcLines[$k].Trim() -eq $t.Trim()) { $pos = $k + 1; $found = $true; break }
+        }
+        if (-not $found) { return "line is not in $rel (or is out of order): $($t.Trim())" }
+    }
+    return $null
+}
+
 # --- code blocks ----------------------------------------------------------------------------
 $n = 0
 foreach ($f in $files) {
@@ -380,25 +409,9 @@ foreach ($f in $files) {
                 Get-SchemaErrors $schemaDoc $schemaDoc $obj "" $errs
                 foreach ($e in $errs) { Fail $where "$schemaName.json block does not satisfy $schemaName.schema.json: $e" }
             }
-            '^c$' {
-                $first = ($b.body | Where-Object { $_.Trim() } | Select-Object -First 1)
-                if ($first -match '^\s*/\*\s*sample:\s*(\S+)\s*\*/\s*$') {
-                    $rel = $Matches[1]
-                    $src = Join-Path $Repo $rel
-                    if (-not (Test-Path $src)) { Fail $where "sample file $rel does not exist"; break }
-                    $srcLines = @([IO.File]::ReadAllText($src, $Utf8) -split "`r?`n" | ForEach-Object { $_.TrimEnd() })
-                    $pos = 0
-                    foreach ($l in ($b.body | Select-Object -Skip 1)) {
-                        $t = $l.TrimEnd()
-                        if (-not $t.Trim()) { continue }
-                        if ($t.Trim() -match '^(\.\.\.|/\*\s*\.\.\.\s*\*/)$') { continue }
-                        $found = $false
-                        for ($k = $pos; $k -lt $srcLines.Count; $k++) {
-                            if ($srcLines[$k].Trim() -eq $t.Trim()) { $pos = $k + 1; $found = $true; break }
-                        }
-                        if (-not $found) { Fail $where "line is not in $rel (or is out of order): $($t.Trim())"; break }
-                    }
-                }
+            '^(c|python|sh|bash)$' {
+                $msg = Test-SampleBlock $b
+                if ($msg) { Fail $where $msg }
             }
         }
     }
@@ -482,6 +495,57 @@ if (-not $ApisJson) { $ApisJson = Join-Path (Join-Path $Repo "output") "apis.jso
 New-Item -ItemType Directory -Force (Split-Path -Parent $ApisJson) | Out-Null
 $json = if ($apis.Count -eq 0) { "[]" } else { ConvertTo-Json -InputObject @($apis.ToArray()) -Depth 4 }
 [IO.File]::WriteAllText($ApisJson, $json + "`n", $Utf8)
+
+# --- samples that use a system runner (RUY-36) ----------------------------------------------------
+# A Flatpak manifest at samples/<name>/*.json that names org.ruyaos.Play (a misspelt runner id too) must parse and its
+# add-extensions must match what the image ships: the point is RUNNER_EXTENSION of
+# services/ruya-play/src/service/commit.rs (a subdirectories point, mounting every runner) or one
+# runner id <point>.<Name> whose <Name> is a folder of image/play/runners/; the branch is
+# PLAY_EXTENSION_BRANCH; no-autodownload is true (the image links the runners in, nothing is fetched).
+$runnerManifests = @()
+$samplesRoot = Join-Path $Repo "samples"
+if (Test-Path $samplesRoot) {
+    foreach ($m in (Get-ChildItem $samplesRoot -Directory | ForEach-Object { Get-ChildItem $_.FullName -Filter "*.json" -File })) {
+        if ([IO.File]::ReadAllText($m.FullName, $Utf8).Contains("org.ruyaos.Play")) { $runnerManifests += $m }
+    }
+}
+if ($runnerManifests.Count -gt 0) {
+    $commitRs = Join-Path $Repo "services/ruya-play/src/service/commit.rs"
+    $commitText = if (Test-Path $commitRs) { [IO.File]::ReadAllText($commitRs, $Utf8) } else { "" }
+    $pointMatch = [regex]::Match($commitText, 'RUNNER_EXTENSION:\s*&str\s*=\s*"([^"]+)"')
+    $branchMatch = [regex]::Match($commitText, 'PLAY_EXTENSION_BRANCH:\s*&str\s*=\s*"([^"]+)"')
+    $runnerNames = @()
+    $runnersDir = Join-Path $Repo "image/play/runners"
+    if (Test-Path $runnersDir) {
+        $runnerNames = @(Get-ChildItem $runnersDir -Directory | Where-Object { Test-Path (Join-Path $_.FullName "runner.json") } | ForEach-Object { $_.Name })
+    }
+    foreach ($m in $runnerManifests) {
+        $rel = "samples/$($m.Directory.Name)/$($m.Name)"
+        if (-not ($pointMatch.Success -and $branchMatch.Success)) {
+            Fail $rel "cannot read RUNNER_EXTENSION and PLAY_EXTENSION_BRANCH from services/ruya-play/src/service/commit.rs"; continue
+        }
+        $point = $pointMatch.Groups[1].Value
+        $branch = $branchMatch.Groups[1].Value
+        try { $man = [IO.File]::ReadAllText($m.FullName, $Utf8) | ConvertFrom-Json }
+        catch { Fail $rel "is not valid json: $($_.Exception.Message)"; continue }
+        $exts = if ($man.PSObject.Properties['add-extensions']) { @($man.'add-extensions'.PSObject.Properties) } else { @() }
+        if ($exts.Count -eq 0) { Fail $rel "has no add-extensions entry for $point"; continue }
+        foreach ($e in $exts) {
+            $id = $e.Name; $ext = $e.Value
+            if ($id -ceq $point) {
+                if ($ext.subdirectories -ne $true) { Fail $rel "$id must set subdirectories to true: every runner mounts under /app/<directory>/<Name>" }
+            } elseif ($id.StartsWith("$point.")) {
+                $name = $id.Substring($point.Length + 1)
+                if ($runnerNames -cnotcontains $name) { Fail $rel "$id names a runner that is not in image/play/runners/ (folders: $($runnerNames -join ', '))" }
+            } else {
+                Fail $rel "extension $id is neither $point nor one of its ids ($point.<Name>)"; continue
+            }
+            if ("$($ext.version)" -ne $branch) { Fail $rel "$id has version '$($ext.version)', the image's branch is '$branch'" }
+            if ($ext.'no-autodownload' -ne $true) { Fail $rel "$id must set no-autodownload to true" }
+            if (-not $ext.directory) { Fail $rel "$id has no directory" }
+        }
+    }
+}
 
 # --- samples (RUY-155) -----------------------------------------------------------------------
 if ($Samples) {

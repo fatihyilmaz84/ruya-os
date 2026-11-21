@@ -908,6 +908,37 @@ Checked 2026-11-06.
         @{ name = "a runner.json block with a kind outside the enum"; a = (& $manifestBlock '{"format":1,"family":"wine","kind":"native"}'); other = $other;
            files = @{ "api/play/play.schema.json" = $playSchema; "api/play/runner.schema.json" = $runnerSchema }; expect = 1; text = "runner.json block does not satisfy runner.schema.json: /kind: not one of the allowed values" }
     )
+    # RUY-36: a sample's `# sample: <path>` python block is the sample's own code, like the C block.
+    $pySample = "import os`ndef pick(root):`n    return None`n"
+    $cases += @(
+        @{ name = "a python block that is the sample's code"; a = $chapter + "`n${fence}python`n# sample: s/run.py`ndef pick(root):`n    # ...`n    return None`n${fence}`n"; other = $other;
+           files = @{ "s/run.py" = $pySample }; expect = 0; text = "" },
+        @{ name = "a python block whose code differs from the sample file"; a = $chapter + "`n${fence}python`n# sample: s/run.py`ndef pick(root):`n    return 1`n${fence}`n"; other = $other;
+           files = @{ "s/run.py" = $pySample }; expect = 1; text = "line is not in s/run.py" }
+    )
+    # RUY-36: a sample Flatpak manifest that names the console's runner point must match the image
+    # (the point and branch of commit.rs, the runner folders of image/play/runners/).
+    $commitFx = "pub const PLAY_EXTENSION_BRANCH: &str = `"1`";`npub const RUNNER_EXTENSION: &str = `"org.ruyaos.Play.Runner`";`n"
+    $runnerFx = "image/play/runners/ProtonGE11/runner.json"
+    $manifestFx = { param($id, $keys) "{`"app-id`":`"org.example.App`",`"add-extensions`":{`"$id`":{`"directory`":`"runners`",$keys}}}`n" }
+    $goodKeys = "`"version`":`"1`",`"subdirectories`":true,`"no-autodownload`":true"
+    $runnerFiles = { param($manifest) @{ "services/ruya-play/src/service/commit.rs" = $commitFx; $runnerFx = "{}"; "samples/s/app.json" = $manifest } }
+    $cases += @(
+        @{ name = "a sample manifest with the runner point"; a = $chapter; other = $other;
+           files = (& $runnerFiles (& $manifestFx "org.ruyaos.Play.Runner" $goodKeys)); expect = 0; text = "" },
+        @{ name = "a sample manifest with one runner id of the image"; a = $chapter; other = $other;
+           files = (& $runnerFiles (& $manifestFx "org.ruyaos.Play.Runner.ProtonGE11" "`"version`":`"1`",`"no-autodownload`":true")); expect = 0; text = "" },
+        @{ name = "a sample manifest whose runner id is changed"; a = $chapter; other = $other;
+           files = (& $runnerFiles (& $manifestFx "org.ruyaos.Play.Runner.ProtonGE99" "`"version`":`"1`",`"no-autodownload`":true")); expect = 1; text = "names a runner that is not in image/play/runners/" },
+        @{ name = "a sample manifest whose runner point is misspelled"; a = $chapter; other = $other;
+           files = (& $runnerFiles (& $manifestFx "org.ruyaos.Play.Runnr" $goodKeys)); expect = 1; text = "neither org.ruyaos.Play.Runner nor one of its ids" },
+        @{ name = "a sample manifest whose runner point has another branch"; a = $chapter; other = $other;
+           files = (& $runnerFiles (& $manifestFx "org.ruyaos.Play.Runner" "`"version`":`"2`",`"subdirectories`":true,`"no-autodownload`":true")); expect = 1; text = "the image's branch is '1'" },
+        @{ name = "a sample manifest whose runner point mounts no subdirectories"; a = $chapter; other = $other;
+           files = (& $runnerFiles (& $manifestFx "org.ruyaos.Play.Runner" "`"version`":`"1`",`"no-autodownload`":true")); expect = 1; text = "must set subdirectories to true" },
+        @{ name = "a sample manifest that would download the runner"; a = $chapter; other = $other;
+           files = (& $runnerFiles (& $manifestFx "org.ruyaos.Play.Runner" "`"version`":`"1`",`"subdirectories`":true")); expect = 1; text = "must set no-autodownload to true" }
+    )
     # RUY-656: apis.json carries the normalised argument signature of each element.
     $sigXml = $xmlHead + "<method name=`"Do`"><arg name=`"a`" type=`"s`" direction=`"in`"/><arg name=`"b`" type=`"i`"/><arg name=`"r`" type=`"b`" direction=`"out`"/>$stabOk$sinceOk</method>" +
         "<signal name=`"Sig`"><arg name=`"x`" type=`"s`"/><arg name=`"y`" type=`"u`"/>$stabOk$sinceOk</signal>" +
