@@ -10,9 +10,10 @@ use std::time::{Duration, Instant};
 
 use crate::directory::ProfileDirectory;
 use crate::spawner::{
-    app_env, is_app_scope, parse_cgroup, unit_app_id, valid_app_id, valid_profile_id,
-    with_pulse_server, AdoptLister, Listing, Spawner, UnitEvent,
+    app_env, is_app_scope, parse_cgroup, unit_app_id, valid_profile_id, with_pulse_server,
+    AdoptLister, Listing, Spawner, UnitEvent,
 };
+use ruya_flatpak::valid_session_app_id;
 
 /// After `Stop`, the app has this long to quit before it is killed: the backstop (RUY-736). It
 /// counts from the stop itself, after the thaw of a frozen app (which can take up to two bounded
@@ -253,7 +254,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         unix: i64,
         launch_args: &[String],
     ) -> (Status, String) {
-        if !valid_app_id(app_id) || !valid_profile_id(profile) {
+        if !valid_session_app_id(app_id) || !valid_profile_id(profile) {
             return (Status::Invalid, String::new());
         }
         let Some(user) = self.directory.unix_user(profile) else {
@@ -638,7 +639,9 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             else {
                 continue;
             };
-            if !valid_app_id(&found.app_id) || self.instances.iter().any(|i| i.unit == found.unit) {
+            if !valid_session_app_id(&found.app_id)
+                || self.instances.iter().any(|i| i.unit == found.unit)
+            {
                 continue;
             }
             // Ended while the listing ran beside the event loop: its end found no instance and

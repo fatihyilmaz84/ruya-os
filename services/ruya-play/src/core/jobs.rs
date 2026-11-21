@@ -250,13 +250,10 @@ fn plain_text(s: &str, max: usize) -> bool {
     s.len() <= max && !s.chars().any(char::is_control)
 }
 
+/// Empty (a job without an app) or a `.play` package's Flatpak id: `play.` and an id
+/// `valid_app_id` accepts.
 fn valid_app(app: &str) -> bool {
-    app.is_empty()
-        || (app.starts_with("play.")
-            && app.len() <= 255
-            && app
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'_' || b == b'-'))
+    app.is_empty() || (app.starts_with("play.") && ruya_flatpak::valid_app_id(app))
 }
 
 fn valid_code(code: &str) -> bool {
@@ -471,6 +468,21 @@ pub fn problem_log_lines(job: &str, status: JobStatus, problems: &[Problem]) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_job_app_is_empty_or_a_play_flatpak_id() {
+        assert!(valid_app(""));
+        assert!(valid_app("play.com.example.mini"));
+        // Not Flatpak ids: one element too few, an element opening with a digit, a stray `/`.
+        for bad in [
+            "play.mini",
+            "play.com.1x.mini",
+            "play.com.ex/ample.x",
+            "org.example.Racer",
+        ] {
+            assert!(!valid_app(bad), "{bad:?}");
+        }
+    }
 
     #[test]
     fn a_failed_job_logs_each_problem_cleaned_and_bounded() {

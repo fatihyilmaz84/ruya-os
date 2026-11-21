@@ -244,8 +244,10 @@ pub fn valid_id(s: &str) -> bool {
     chars_ok(s, lower, |c| lower(c) || matches!(c, '.' | '_' | '-'), 64)
 }
 
+/// A scope's `platform_id` / `game_id`: the launcher's app id or the Library's game id (ADR-028),
+/// so not always a Flatpak id (the schema's example is `ruya-game-example`).
 /// `^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$`
-fn valid_app_id(s: &str) -> bool {
+fn valid_scope_key(s: &str) -> bool {
     chars_ok(
         s,
         |c| c.is_ascii_alphanumeric(),
@@ -784,7 +786,7 @@ impl Check {
             None
         } else {
             o.get(key)
-                .and_then(|s| self.pattern(s, &format!("{path}/{key}"), valid_app_id))
+                .and_then(|s| self.pattern(s, &format!("{path}/{key}"), valid_scope_key))
         };
         if self.errors.len() != before {
             return None;
@@ -1323,8 +1325,8 @@ mod tests {
         assert!(!valid_id("-x"));
         assert!(!valid_id("Upper"));
         assert!(!valid_id(""));
-        assert!(valid_app_id("org.ruyaos.Racer"));
-        assert!(!valid_app_id(".hidden"));
+        assert!(valid_scope_key("org.ruyaos.Racer"));
+        assert!(!valid_scope_key(".hidden"));
         assert!(valid_device("usb-045e-028e-0123456789ab"));
         assert!(!valid_device("USB"));
         assert!(valid_code("left_x"));

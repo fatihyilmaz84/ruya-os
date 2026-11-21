@@ -13,6 +13,7 @@ use std::time::Duration;
 
 use crate::steam_tool::{exec_start_pre, STEAM_APP_ID};
 use async_channel::Sender;
+use ruya_flatpak::valid_session_app_id;
 
 /// What the OS tells us about a unit. The adapter drains these from a channel into the core.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -202,26 +203,6 @@ impl<T: Spawner + ?Sized> Spawner for Box<T> {
     }
 }
 
-const MAX_APP_ID: usize = 120;
-
-/// The Flatpak id grammar, strictly: reverse-DNS with at least three elements ("org.x.App", so at
-/// least two dots), each non-empty and not starting with a digit, characters `[A-Za-z0-9_-]`
-/// (Flatpak allows `-` only in the last element; allowing it everywhere is harmless in a unit
-/// name and an argument list).
-pub fn valid_app_id(id: &str) -> bool {
-    if id.is_empty() || id.len() > MAX_APP_ID {
-        return false;
-    }
-    let parts: Vec<&str> = id.split('.').collect();
-    parts.len() >= 3
-        && parts.iter().all(|p| {
-            !p.is_empty()
-                && !p.starts_with(|c: char| c.is_ascii_digit())
-                && p.chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-        })
-}
-
 /// A profile id as `ruya-profiles` makes them ("p3"): short, `[A-Za-z0-9_-]`.
 pub fn valid_profile_id(id: &str) -> bool {
     !id.is_empty()
@@ -244,7 +225,7 @@ pub fn unit_name(user: &str, app_id: &str) -> String {
 /// unit name (`unit_escape`: `\x2d`); a backslash would escape the next character in the glob, so
 /// it is written as `?` (the names that come back are checked with `is_app_scope` anyway).
 pub fn scope_pattern(app_id: &str) -> Result<String, String> {
-    if !valid_app_id(app_id) {
+    if !valid_session_app_id(app_id) {
         return Err(format!("not an application id: {app_id:?}"));
     }
     Ok(format!(
@@ -273,7 +254,7 @@ pub fn unit_escape(s: &str) -> String {
 /// the `-` of the id written `\x2d`)? The part after the id must be digits only, so
 /// `org.x.App-Extra` is not taken for `org.x.App`.
 pub fn is_app_scope(app_id: &str, name: &str) -> bool {
-    valid_app_id(app_id)
+    valid_session_app_id(app_id)
         && name
             .strip_prefix("app-flatpak-")
             .and_then(|rest| rest.strip_prefix(unit_escape(app_id).as_str()))
@@ -364,7 +345,7 @@ pub fn control_command(
     scopes: &[String],
 ) -> Result<Vec<String>, String> {
     let mut args = user_systemctl(user)?;
-    if !valid_app_id(app_id) {
+    if !valid_session_app_id(app_id) {
         return Err(format!("not an application id: {app_id:?}"));
     }
     if let Some(bad) = scopes.iter().find(|s| !is_app_scope(app_id, s)) {
@@ -414,7 +395,7 @@ pub fn sweep_commands(
     scopes: &[String],
 ) -> Result<Vec<Vec<String>>, String> {
     let base = user_systemctl(user)?;
-    if !valid_app_id(app_id) {
+    if !valid_session_app_id(app_id) {
         return Err(format!("not an application id: {app_id:?}"));
     }
     if let Some(bad) = scopes.iter().find(|s| !is_app_scope(app_id, s)) {
@@ -455,7 +436,7 @@ pub fn console_env() -> Vec<(String, String)> {
 /// Flatpak keeps `app/<id>/current` (a link to `<arch>/<branch>`) for an installed app and
 /// removes the directory on uninstall. A file check, so no process is started per launch.
 pub fn flatpak_app_installed(root: &Path, app_id: &str) -> bool {
-    valid_app_id(app_id) && root.join("app").join(app_id).join("current").exists()
+    valid_session_app_id(app_id) && root.join("app").join(app_id).join("current").exists()
 }
 
 /// The version of the installed app, from the first `<release version="...">` of its AppStream
@@ -463,7 +444,7 @@ pub fn flatpak_app_installed(root: &Path, app_id: &str) -> bool {
 /// update that lands while the app runs is not noticed, so a session keeps the version it began
 /// with.
 pub fn flatpak_app_version(root: &Path, app_id: &str) -> String {
-    if !valid_app_id(app_id) {
+    if !valid_session_app_id(app_id) {
         return String::new();
     }
     let files = root
@@ -568,7 +549,7 @@ fn checked_user(user: &str) -> Result<(), String> {
 }
 
 fn checked_apps(ids: &[String]) -> Result<String, String> {
-    match ids.iter().find(|id| !valid_app_id(id)) {
+    match ids.iter().find(|id| !valid_session_app_id(id)) {
         Some(bad) => Err(format!("not an application id: {bad:?}")),
         None => Ok(ids.join(",")),
     }
@@ -833,7 +814,7 @@ pub fn reclaim_command(
     targets: &[(u64, String)],
 ) -> Result<Vec<String>, String> {
     checked_user(user)?;
-    if !valid_app_id(app_id) {
+    if !valid_session_app_id(app_id) {
         return Err(format!("not an application id: {app_id:?}"));
     }
     if targets.is_empty() {
@@ -869,7 +850,7 @@ pub fn reclaim_command(
 /// reclaim ends (its write is interrupted by the signal). Pure.
 pub fn cancel_reclaim_command(user: &str, app_id: &str) -> Result<Vec<String>, String> {
     let mut args = user_systemctl(user)?;
-    if !valid_app_id(app_id) {
+    if !valid_session_app_id(app_id) {
         return Err(format!("not an application id: {app_id:?}"));
     }
     args.extend([
@@ -1025,7 +1006,7 @@ pub fn launch_command_in(
     if !user.strip_prefix("ruya-").is_some_and(valid_profile_id) {
         return Err(format!("not a profile user: {user:?}"));
     }
-    if !valid_app_id(app_id) {
+    if !valid_session_app_id(app_id) {
         return Err(format!("not an application id: {app_id:?}"));
     }
     if let Some(bad) = app_args.iter().find(|a| !valid_app_arg(a)) {
@@ -1235,7 +1216,7 @@ pub fn unit_app_id(user: &str, unit: &str) -> Option<String> {
         .strip_prefix(user)?
         .strip_prefix('-')?
         .strip_suffix(".service")?;
-    valid_app_id(app).then(|| app.to_owned())
+    valid_session_app_id(app).then(|| app.to_owned())
 }
 
 /// Where a process is, read from its `/proc/<pid>/cgroup` (T-459): the uid of the user manager
@@ -1840,6 +1821,7 @@ mod tests {
     }
 
     use super::*;
+    use ruya_flatpak::MAX_SESSION_APP_ID;
 
     fn env() -> Vec<(String, String)> {
         vec![("WAYLAND_DISPLAY".to_owned(), "wayland-0".to_owned())]
@@ -1853,7 +1835,7 @@ mod tests {
             "com.valvesoftware.Steam",
             "a.b.c_d-e",
         ] {
-            assert!(valid_app_id(ok), "{ok}");
+            assert!(valid_session_app_id(ok), "{ok}");
         }
         for bad in [
             "",
@@ -1870,9 +1852,12 @@ mod tests {
             "--help",
             "org.ruyaos.Racer --root",
         ] {
-            assert!(!valid_app_id(bad), "{bad:?}");
+            assert!(!valid_session_app_id(bad), "{bad:?}");
         }
-        assert!(!valid_app_id(&format!("org.a.{}", "x".repeat(MAX_APP_ID))));
+        assert!(!valid_session_app_id(&format!(
+            "org.a.{}",
+            "x".repeat(MAX_SESSION_APP_ID)
+        )));
     }
 
     #[test]
@@ -2048,7 +2033,7 @@ mod tests {
         for line in list.lines() {
             let mut words = line.split('#').next().unwrap_or("").split_whitespace();
             if let Some(app) = words.next() {
-                assert!(valid_app_id(app), "{app:?}");
+                assert!(valid_session_app_id(app), "{app:?}");
                 assert!(words.all(valid_app_arg), "{line:?}");
             }
         }

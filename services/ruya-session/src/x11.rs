@@ -32,7 +32,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::spawner::{valid_app_arg, valid_app_id};
+use crate::spawner::valid_app_arg;
+use ruya_flatpak::valid_session_app_id;
 
 /// The per-app override list: an app id per line (`#` starts a comment). The image ships
 /// `image/rootfs/usr/share/ruyaos/x11-apps` (Steam).
@@ -129,7 +130,7 @@ pub fn metadata_path(root: &Path, app_id: &str) -> PathBuf {
 /// `needs_x11` from the files: the app's metadata under `root` and the override list. A file
 /// that cannot be read counts as empty (so an app without metadata runs on Wayland).
 pub fn display_mode_x11(root: &Path, app_id: &str, overrides: &Path) -> bool {
-    if !valid_app_id(app_id) {
+    if !valid_session_app_id(app_id) {
         return false;
     }
     let metadata = std::fs::read_to_string(metadata_path(root, app_id)).unwrap_or_default();
@@ -411,7 +412,7 @@ pub fn run_helper(
     app_args: &[String],
 ) -> End {
     let fail = End::Code(EXIT_LAUNCH_FAILED);
-    if !valid_app_id(app_id) {
+    if !valid_session_app_id(app_id) {
         os.log(&format!("not an application id: {app_id:?}"));
         return fail;
     }
@@ -531,7 +532,7 @@ pub fn run_helper(
 
 /// The `x11-cleanup` subcommand (the unit's `ExecStopPost`).
 pub fn run_cleanup(os: &mut dyn X11Os, app_id: &str, runtime_dir: Option<&str>) {
-    if !valid_app_id(app_id) {
+    if !valid_session_app_id(app_id) {
         return;
     }
     if let Some(runtime) = runtime_dir.filter(|d| d.starts_with('/')) {

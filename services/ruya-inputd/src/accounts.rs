@@ -20,24 +20,6 @@ pub fn valid_profile_id(id: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
-const MAX_APP_ID: usize = 120;
-
-/// A Flatpak app id, the rule of `Session1` ("invalid" otherwise): three or more dot-separated
-/// parts of `[A-Za-z0-9_-]`, none empty or starting with a digit, at most 120 characters.
-pub fn valid_app_id(id: &str) -> bool {
-    if id.is_empty() || id.len() > MAX_APP_ID {
-        return false;
-    }
-    let parts: Vec<&str> = id.split('.').collect();
-    parts.len() >= 3
-        && parts.iter().all(|p| {
-            !p.is_empty()
-                && !p.starts_with(|c: char| c.is_ascii_digit())
-                && p.chars()
-                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-        })
-}
-
 /// The first regular uid `useradd` hands out; profile accounts are regular users.
 const FIRST_REGULAR_UID: u32 = 1000;
 const LAST_REGULAR_UID: u32 = 60000;
@@ -106,6 +88,7 @@ impl Accounts for FixedAccounts {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ruya_flatpak::{valid_session_app_id, MAX_SESSION_APP_ID};
 
     const PASSWD: &str = "root:x:0:0:Super User:/root:/bin/bash\n\
 ruya-shell:x:990:990:RuyaOS shell:/var/lib/ruya-shell:/usr/sbin/nologin\n\
@@ -140,11 +123,14 @@ ruya-p3:x:500:500:RuyaOS profile:/var/home/ruya-p3:/usr/sbin/nologin\n";
 
     #[test]
     fn app_ids_follow_the_session_rule() {
-        assert!(valid_app_id("net.supertuxkart.SuperTuxKart"));
-        assert!(!valid_app_id("supertuxkart"));
-        assert!(!valid_app_id("org..x"));
-        assert!(!valid_app_id("org.1x.y"));
-        assert!(!valid_app_id("org.x.y;rm"));
-        assert!(!valid_app_id(&format!("org.a.{}", "x".repeat(MAX_APP_ID))));
+        assert!(valid_session_app_id("net.supertuxkart.SuperTuxKart"));
+        assert!(!valid_session_app_id("supertuxkart"));
+        assert!(!valid_session_app_id("org..x"));
+        assert!(!valid_session_app_id("org.1x.y"));
+        assert!(!valid_session_app_id("org.x.y;rm"));
+        assert!(!valid_session_app_id(&format!(
+            "org.a.{}",
+            "x".repeat(MAX_SESSION_APP_ID)
+        )));
     }
 }

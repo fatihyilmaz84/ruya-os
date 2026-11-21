@@ -14,6 +14,7 @@ async-channel = "2"  # unit events from the spawner to the adapter; already in t
 async-lock = "3"  # Freeze and Thaw in the order they arrive (T-457); already in the tree through zbus
 ruya-play-launch = { path = "../ruya-play-launch" }  # scan_in: the one runner scan (as ruya-library does since RUY-903), so Steam gets the runner the launcher would pick
 ruya-play-format = { path = "../ruya-play-format" }  # resolve::compare_versions, the one version rule
+ruya-flatpak = { path = "../ruya-flatpak" }  # the one app-id grammar and its 120 cap (RUY-973)
 ruya-fs = { path = "../ruya-fs" }  # every file in a profile's home or the service's state, never through a link (RUY-911)
 libc = "0.2"  # localtime_r for the device time zone in the play ledger (already in the tree through ruya-update)
 
