@@ -50,15 +50,18 @@ fn png_size(path: &Path) -> (u32, u32) {
 
 /// The programs `build.sh` compiles for the Windows sample (check.exe is the 32-bit one the VM check
 /// runs, RUY-902).
-const WINE_STUBS: &[&str] = &["payload/hello.exe", "payload/setup.exe", "payload/check.exe"];
+const WINE_STUBS: &[&str] = &[
+    "payload/hello.exe",
+    "payload/setup.exe",
+    "payload/check.exe",
+];
 
 /// The GE-Proton the image ships (the `version` of `image/play/runners/ProtonGE11/runner.json`):
 /// the sample's `min` must be met by it, so its dry run is made against this version.
 fn pinned_ge_proton() -> String {
     let runner = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../image/play/runners/ProtonGE11/runner.json");
-    let json: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(runner).unwrap()).unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&std::fs::read(runner).unwrap()).unwrap();
     json["version"].as_str().unwrap().to_owned()
 }
 
