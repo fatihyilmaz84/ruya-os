@@ -1112,11 +1112,16 @@ mod tests {
         assert_eq!(adopted.len(), 1, "{adopted:?}");
     }
 
+    /// `APP` launched for p1 at `unix`, with no extra launch arguments.
+    fn launch_app(shared: &Shared, unix: i64) -> (Status, String) {
+        lock(shared).launch(APP, "p1", unix, &[])
+    }
+
     fn stopping_session() -> (Shared, String) {
         let spawner: DynSpawner = Box::new(FakeSpawner::new().with_app(APP));
         let dir = ProfileSnapshot::new(["p1".to_owned()]);
         let shared: Shared = Arc::new(Mutex::new(Session::new(spawner, dir, Vec::new())));
-        let (status, unit) = lock(&shared).launch(APP, "p1", 1, &[]);
+        let (status, unit) = launch_app(&shared, 1);
         assert_eq!(
             (status, unit.as_str()),
             (Status::Ok, unit_name("ruya-p1", APP).as_str())
@@ -1152,7 +1157,7 @@ mod tests {
             "it did not wait the whole bound"
         );
         t.join().unwrap_or_else(|_| panic!("ender"));
-        assert_eq!(lock(&shared).launch(APP, "p1", 2, &[]).0, Status::Ok);
+        assert_eq!(launch_app(&shared, 2).0, Status::Ok);
 
         // The old unit never ends: the wait stops at its bound and the launch answers
         // `already-running` (the run is still there, waiting for the 30 s backstop, RUY-736), and
@@ -1164,7 +1169,7 @@ mod tests {
             "p1",
             Duration::from_millis(120)
         )));
-        let (status, instance) = lock(&shared).launch(APP, "p1", 2, &[]);
+        let (status, instance) = launch_app(&shared, 2);
         assert_eq!((status, instance.as_str()), (Status::AlreadyRunning, ""));
     }
 
@@ -1257,7 +1262,7 @@ mod tests {
         let spawner: DynSpawner = Box::new(FakeSpawner::new().with_app(APP));
         let dir = ProfileSnapshot::new(["p1".to_owned(), "p2".to_owned()]);
         let shared: Shared = Arc::new(Mutex::new(Session::new(spawner, dir, Vec::new())));
-        let (_, unit) = lock(&shared).launch(APP, "p1", 1, &[]);
+        let (_, unit) = launch_app(&shared, 1);
         lock(&shared).on_event(UnitEvent::Started { unit: unit.clone() });
         (shared, unit, Some("p1".to_owned()))
     }
@@ -1393,7 +1398,7 @@ mod tests {
         let spawner: DynSpawner = Box::new(FakeSpawner::new().with_app(APP));
         let dir = ProfileSnapshot::new(["p1".to_owned(), "p2".to_owned()]);
         let shared: Shared = Arc::new(Mutex::new(Session::new(spawner, dir, Vec::new())));
-        let (_, unit) = lock(&shared).launch(APP, "p1", 1, &[]);
+        let (_, unit) = launch_app(&shared, 1);
         let mut last = Some("p1".to_owned());
         let turn: FreezerTurn = Arc::new(async_lock::Mutex::new(()));
         futures_lite::future::block_on(async {
@@ -1475,7 +1480,7 @@ mod tests {
         let spawner: DynSpawner = Box::new(FakeSpawner::new().with_app(APP));
         let dir = ProfileSnapshot::new(["p1".to_owned(), "p2".to_owned()]);
         let shared: Shared = Arc::new(Mutex::new(Session::new(spawner, dir, Vec::new())));
-        let (_, unit) = lock(&shared).launch(APP, "p1", 1, &[]);
+        let (_, unit) = launch_app(&shared, 1);
         let mut last = Some("p1".to_owned());
         futures_lite::future::block_on(follow(&shared, &turn, &mut last, || async {
             Some("p2".to_owned())
