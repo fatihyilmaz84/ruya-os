@@ -4,7 +4,7 @@ How a launcher (a Heroic-like app, a store client) or any Flatpak that starts Wi
 
 *Status: **experimental** (tier C of the [public surface](api-surface.md), ADR-022). The extension ids, the branch and `runner.json` format 1 may change before the first release. Checked against the code and specs as of 2026-11-21. Items marked **planned** are not built yet.*
 
-**What exists today, and what does not.** The image ships GE-Proton 11 (`GE-Proton11-12`) as files on `/usr` and links it into Flatpak's extension folder at every boot (RUY-34, ADR-038); the check on a booted image (`scripts/vm-runner-check.sh`) is the lead's and is pending for this chapter's sample. The previous GE-Proton major and Wine stable are **planned** (RUY-915, RUY-37): this chapter is written for them, but a console cannot offer them yet. The sample builds with `flatpak-builder` and its manifest and runner choice are checked on the host; running it on a console image is pending.
+**What exists today, and what does not.** The image ships GE-Proton 11 (`GE-Proton11-12`) as files on `/usr` and links it into Flatpak's extension folder at every boot (RUY-34, ADR-038); the check on a booted image (`scripts/vm-runner-check.sh`) is the lead's and is pending for this chapter's sample. The previous GE-Proton major and Wine stable are **planned** (RUY-915, RUY-37): this chapter is written for them, but a console cannot offer them yet. The sample's manifest and its runner choice are checked on the host (the lint and the sample's unit tests). **Not run yet:** building the sample with `flatpak-builder` and running it on a console image; that is pending the VM check `scripts/vm-runner-check.sh sample`, which itself runs the script against the image's runners and does not build the Flatpak.
 
 **Making a `.play` package?** You do not need this chapter. A package names a component (`type: proton` or `wine`, `source: system`) and the console's launcher does everything below for you: [Play packages](play-packages.md#choosing-a-runner-source).
 
@@ -153,7 +153,7 @@ def main(argv):
 An OS update replaces the runners in the image, and the oldest GE-Proton major leaves two majors after it appeared. So:
 
 - **Read `runner.json` at every start.** Do not store the runner's path or folder name, and do not assume the runner you used last time is still there.
-- **Accept the newest runner you support.** List the majors you tested (the sample has `MIN_MAJOR` and `MAX_MAJOR`) and take the newest one of your family inside that range. A major newer than you tested is a risk you may choose to take; the sample does not.
+- **Accept the newest runner you support.** List the majors you tested (the sample has `MIN_MAJOR` and `MAX_MAJOR`; raise `MAX_MAJOR` after you test a newer GE-Proton) and take the newest one of your family inside that range. A major newer than you tested is a risk you may choose to take; the sample does not.
 - **A new major can change how a game behaves in an existing prefix.** Keep a copy of the old prefix until the game has started once on the new runner.
 - **If nothing fits**, say so in your own interface ("this console has no runner this app was tested with") and keep running. You may also bundle your own Wine or Proton, as a `.play` package does; then the licence duty is yours (see [Play packages](play-packages.md#legal-duties-for-what-you-bundle)).
 
@@ -165,13 +165,30 @@ Not an API, so do not rely on it: the folder names below `/app/runners`, anythin
 
 ## Try the sample
 
-[`samples/hello-runner/`](../../samples/hello-runner/README.md) (CC0): a manifest that declares the point and a script that reads `runner.json` and runs a program, `--self-test` by default so no Windows binary is needed. Build it like the other samples (`flatpak-builder`, then install the repository on the console, see [Getting started](getting-started.md)), then:
+[`samples/hello-runner/`](../../samples/hello-runner/README.md) (CC0): a manifest that declares the point and a script that reads `runner.json` and runs a program. The script has a `--self-test` mode that runs the runner's own `cmd.exe`, so no Windows binary is needed. It is a command-line check, not a game: it needs no desktop entry and no AppStream file. **Not run yet** (neither the build nor the run below; pending the VM check). On a build machine with `flatpak` and `flatpak-builder` (see [Getting started](getting-started.md)), in `samples/hello-runner/`:
+
+```sh
+flatpak-builder --force-clean --user --install-deps-from=flathub --repo=repo build-dir org.ruyaos.HelloRunner.json
+flatpak --user remote-add --if-not-exists --no-gpg-verify hello-local repo
+flatpak --user install -y hello-local org.ruyaos.HelloRunner
+```
+
+The runner exists only on a console, so copy `repo` there and install it system-wide as Getting started shows for the sample game (`flatpak install --system`), then:
 
 ```sh
 flatpak run org.ruyaos.HelloRunner --self-test
 ```
 
-It prints `hello-runner: using ProtonGE11 (GE-Proton11-12)` and then `RUYA_HELLO_RUNNER_OK` (from the runner's own `cmd.exe`). The host lint checks the manifest against the image; `scripts/vm-runner-check.sh sample` runs the script against the image's runners as a profile user without network (the lead runs it on an image), and does not build the Flatpak.
+It should print `hello-runner: using ProtonGE11 (GE-Proton11-12)` and then `RUYA_HELLO_RUNNER_OK` (from the runner's own `cmd.exe`); this output is what the script is written to produce, not something seen on an image yet. To try the script's runner choice off a console, point it at any folder of runners: `python3 run-windows.py --runners DIR --self-test` (the tests do this with made-up folders).
+
+**Your own `.exe`.** The sandbox can read only what the manifest grants, and the sample grants no `--filesystem`. A launcher keeps its games under its own data folder, which is always readable, so put the program there and pass its path:
+
+```sh
+cp game.exe ~/.var/app/org.ruyaos.HelloRunner/data/
+flatpak run org.ruyaos.HelloRunner ~/.var/app/org.ruyaos.HelloRunner/data/game.exe
+```
+
+Anything outside the app's own folders (a USB drive, a shared library folder) needs a `--filesystem=` grant in your manifest ([Permissions and sandbox rules](permissions-and-sandbox.md)); the sample does not ask for one.
 
 - [ ] The manifest declares `org.ruyaos.Play.Runner` with `version` `1`, `subdirectories` and `no-autodownload`.
 - [ ] The app reads `runner.json` for the family, version and entry; no path is built from a folder name.

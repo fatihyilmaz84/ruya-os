@@ -25,6 +25,8 @@ import sys
 # appeared, so list the ones you tested and take the newest that is still there.
 FAMILY = "proton-ge"
 MIN_MAJOR = 10
+# Raise MAX_MAJOR after you test a newer GE-Proton: until then a console that only has a newer major
+# makes this script say there is no runner, which is safer than running a game on one you never tried.
 MAX_MAJOR = 11
 MARKER = "RUYA_HELLO_RUNNER_OK"
 # GE-Proton keeps the Windows programs of its Wine here; only --self-test uses it.

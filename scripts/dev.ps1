@@ -937,7 +937,15 @@ Checked 2026-11-06.
         @{ name = "a sample manifest whose runner point mounts no subdirectories"; a = $chapter; other = $other;
            files = (& $runnerFiles (& $manifestFx "org.ruyaos.Play.Runner" "`"version`":`"1`",`"no-autodownload`":true")); expect = 1; text = "must set subdirectories to true" },
         @{ name = "a sample manifest that would download the runner"; a = $chapter; other = $other;
-           files = (& $runnerFiles (& $manifestFx "org.ruyaos.Play.Runner" "`"version`":`"1`",`"subdirectories`":true")); expect = 1; text = "must set no-autodownload to true" }
+           files = (& $runnerFiles (& $manifestFx "org.ruyaos.Play.Runner" "`"version`":`"1`",`"subdirectories`":true")); expect = 1; text = "must set no-autodownload to true" },
+        # RUY-36 round 2: the extensions of other vendors are not checked, a pinned id is one runner
+        # (no subdirectories), and only an org.ruyaos.* extension makes a manifest a runner sample.
+        @{ name = "a sample manifest with the runner point and an unrelated extension"; a = $chapter; other = $other;
+           files = (& $runnerFiles ("{`"app-id`":`"org.example.App`",`"add-extensions`":{`"org.ruyaos.Play.Runner`":{`"directory`":`"runners`",$goodKeys},`"org.freedesktop.Platform.Compat.i386`":{`"directory`":`"lib/i386-linux-gnu`",`"version`":`"26.08`"}}}`n")); expect = 0; text = "" },
+        @{ name = "a sample manifest with a pinned runner id that sets subdirectories"; a = $chapter; other = $other;
+           files = (& $runnerFiles (& $manifestFx "org.ruyaos.Play.Runner.ProtonGE11" $goodKeys)); expect = 1; text = "is one runner and must not set subdirectories" },
+        @{ name = "a sample manifest that only names the console's id in its app-id"; a = $chapter; other = $other;
+           files = (& $runnerFiles "{`"app-id`":`"org.ruyaos.Play.Runner.Tool`",`"command`":`"x`"}`n"); expect = 0; text = "" }
     )
     # RUY-656: apis.json carries the normalised argument signature of each element.
     $sigXml = $xmlHead + "<method name=`"Do`"><arg name=`"a`" type=`"s`" direction=`"in`"/><arg name=`"b`" type=`"i`"/><arg name=`"r`" type=`"b`" direction=`"out`"/>$stabOk$sinceOk</method>" +

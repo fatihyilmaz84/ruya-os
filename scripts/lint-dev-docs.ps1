@@ -8,7 +8,7 @@
 #   - a fenced `c` block whose first line is `/* sample: <repo path> */` (a `python`, `sh` or `bash`
 #     block: `# sample: <repo path>`) is the sample's code: each of its lines must be in that file,
 #     in order (a line that is only `...` or `/* ... */` is a gap);
-#   - a sample Flatpak manifest (samples/<name>/*.json) that names org.ruyaos.Play must match
+#   - a sample Flatpak manifest (samples/<name>/*.json) with an org.ruyaos.* add-extensions entry must match
 #     the image (RUY-36): the runner point and branch of services/ruya-play/src/service/commit.rs
 #     (subdirectories, no-autodownload), and an id <point>.<Name> needs a folder image/play/runners/<Name>;
 #   - a fenced `xml` block that starts with `<component` and is introduced (within the three lines
@@ -497,16 +497,26 @@ $json = if ($apis.Count -eq 0) { "[]" } else { ConvertTo-Json -InputObject @($ap
 [IO.File]::WriteAllText($ApisJson, $json + "`n", $Utf8)
 
 # --- samples that use a system runner (RUY-36) ----------------------------------------------------
-# A Flatpak manifest at samples/<name>/*.json that names org.ruyaos.Play (a misspelt runner id too) must parse and its
-# add-extensions must match what the image ships: the point is RUNNER_EXTENSION of
-# services/ruya-play/src/service/commit.rs (a subdirectories point, mounting every runner) or one
-# runner id <point>.<Name> whose <Name> is a folder of image/play/runners/; the branch is
-# PLAY_EXTENSION_BRANCH; no-autodownload is true (the image links the runners in, nothing is fetched).
+# A Flatpak manifest at samples/<name>/*.json whose add-extensions has an org.ruyaos.* entry must match
+# what the image ships (extensions of other vendors, such as org.freedesktop.Platform.Compat.i386, are
+# not checked): the runner point is RUNNER_EXTENSION of services/ruya-play/src/service/commit.rs (it
+# must set subdirectories, mounting every runner), or one runner id <point>.<Name> whose <Name> is a
+# folder of image/play/runners/ (it must not set subdirectories); the branch is PLAY_EXTENSION_BRANCH;
+# no-autodownload is true (the image links the runners in, nothing is fetched). Any other org.ruyaos.*
+# entry (a misspelt id) is a finding.
 $runnerManifests = @()
 $samplesRoot = Join-Path $Repo "samples"
 if (Test-Path $samplesRoot) {
     foreach ($m in (Get-ChildItem $samplesRoot -Directory | ForEach-Object { Get-ChildItem $_.FullName -Filter "*.json" -File })) {
-        if ([IO.File]::ReadAllText($m.FullName, $Utf8).Contains("org.ruyaos.Play")) { $runnerManifests += $m }
+        $rel = "samples/$($m.Directory.Name)/$($m.Name)"
+        try { $man = [IO.File]::ReadAllText($m.FullName, $Utf8) | ConvertFrom-Json }
+        catch {
+            if ([IO.File]::ReadAllText($m.FullName, $Utf8).Contains("org.ruyaos.")) { Fail $rel "is not valid json: $($_.Exception.Message)" }
+            continue
+        }
+        if ($man -isnot [System.Management.Automation.PSCustomObject] -or -not $man.PSObject.Properties['add-extensions']) { continue }
+        $exts = @($man.'add-extensions'.PSObject.Properties | Where-Object { $_.Name.StartsWith("org.ruyaos.") })
+        if ($exts.Count -gt 0) { $runnerManifests += @{ rel = $rel; exts = $exts } }
     }
 }
 if ($runnerManifests.Count -gt 0) {
@@ -520,23 +530,20 @@ if ($runnerManifests.Count -gt 0) {
         $runnerNames = @(Get-ChildItem $runnersDir -Directory | Where-Object { Test-Path (Join-Path $_.FullName "runner.json") } | ForEach-Object { $_.Name })
     }
     foreach ($m in $runnerManifests) {
-        $rel = "samples/$($m.Directory.Name)/$($m.Name)"
+        $rel = $m.rel
         if (-not ($pointMatch.Success -and $branchMatch.Success)) {
             Fail $rel "cannot read RUNNER_EXTENSION and PLAY_EXTENSION_BRANCH from services/ruya-play/src/service/commit.rs"; continue
         }
         $point = $pointMatch.Groups[1].Value
         $branch = $branchMatch.Groups[1].Value
-        try { $man = [IO.File]::ReadAllText($m.FullName, $Utf8) | ConvertFrom-Json }
-        catch { Fail $rel "is not valid json: $($_.Exception.Message)"; continue }
-        $exts = if ($man.PSObject.Properties['add-extensions']) { @($man.'add-extensions'.PSObject.Properties) } else { @() }
-        if ($exts.Count -eq 0) { Fail $rel "has no add-extensions entry for $point"; continue }
-        foreach ($e in $exts) {
+        foreach ($e in $m.exts) {
             $id = $e.Name; $ext = $e.Value
             if ($id -ceq $point) {
                 if ($ext.subdirectories -ne $true) { Fail $rel "$id must set subdirectories to true: every runner mounts under /app/<directory>/<Name>" }
             } elseif ($id.StartsWith("$point.")) {
                 $name = $id.Substring($point.Length + 1)
                 if ($runnerNames -cnotcontains $name) { Fail $rel "$id names a runner that is not in image/play/runners/ (folders: $($runnerNames -join ', '))" }
+                if ($ext.subdirectories -eq $true) { Fail $rel "$id is one runner and must not set subdirectories (that is for the point $point)" }
             } else {
                 Fail $rel "extension $id is neither $point nor one of its ids ($point.<Name>)"; continue
             }

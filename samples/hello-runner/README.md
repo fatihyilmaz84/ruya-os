@@ -24,12 +24,25 @@ No Windows program is committed. `--self-test` runs the runner's own `cmd.exe` (
 
 ## Build and run
 
-Build it like [Hello Game](../hello-game/README.md) (`flatpak-builder`, then install the repository), then on a RuyaOS machine:
+On a build machine with `flatpak` and `flatpak-builder` (see the guide's [Getting started](../../docs/developers/getting-started.md)), in this folder (no desktop entry or AppStream file is needed: it is not a game):
 
 ```sh
-flatpak run org.ruyaos.HelloRunner --self-test         # prints which runner it took, then RUYA_HELLO_RUNNER_OK
-flatpak run org.ruyaos.HelloRunner /path/to/game.exe   # a program you made available to the sandbox
+flatpak-builder --force-clean --user --install-deps-from=flathub --repo=repo build-dir org.ruyaos.HelloRunner.json
+flatpak --user remote-add --if-not-exists --no-gpg-verify hello-local repo
+flatpak --user install -y hello-local org.ruyaos.HelloRunner
 ```
+
+The runner exists only on a RuyaOS console: copy `repo` there and install it with `flatpak install --system` as [Hello Game](../hello-game/README.md) shows, then:
+
+```sh
+flatpak run org.ruyaos.HelloRunner --self-test         # should print which runner it took, then RUYA_HELLO_RUNNER_OK
+cp game.exe ~/.var/app/org.ruyaos.HelloRunner/data/    # the sandbox reads its own data folder; the manifest grants no --filesystem
+flatpak run org.ruyaos.HelloRunner ~/.var/app/org.ruyaos.HelloRunner/data/game.exe
+```
+
+**Not run yet:** the build and these runs wait for the VM check. Off a console, `python3 run-windows.py --runners DIR --self-test` reads the runners from any folder `DIR` (this is how the tests work, with made-up runner folders; `make test`).
+
+`MAX_MAJOR` in `run-windows.py` is the newest GE-Proton major you tested: raise it after you test a newer one.
 
 The first start creates the prefix at `~/.var/app/org.ruyaos.HelloRunner/data/proton/pfx` (one per profile). The `scripts/vm-runner-check.sh sample` check runs `run-windows.py` against the image's runners as a profile user without network; the lead runs it on an image.
 
