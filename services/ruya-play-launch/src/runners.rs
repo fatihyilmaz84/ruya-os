@@ -37,10 +37,6 @@ impl FoundRunner {
     }
 }
 
-fn is_hash(s: &str) -> bool {
-    s.len() == 64 && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
-}
-
 /// Whether `root/rel` is a regular file. An error asking is logged and counts as no: a runner
 /// that cannot be checked is not used (the OS's runner folder, not the player's data).
 fn is_file(os: &dyn LaunchOs, root: &str, rel: &str) -> bool {
@@ -67,7 +63,7 @@ fn read_hash(os: &dyn LaunchOs, root: &str) -> Option<String> {
         .as_deref()
         .and_then(|b| std::str::from_utf8(b).ok())
         .map(|s| s.strip_suffix('\n').unwrap_or(s))
-        .filter(|s| is_hash(s));
+        .filter(|s| ruya_play_format::table::is_sha256_hex(s));
     if hash.is_none() {
         os.log(&format!("{root}/{HASH_FILE} is not a runner hash; ignored"));
     }

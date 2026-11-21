@@ -67,11 +67,7 @@ fn parse_line(line: &str) -> Result<FileEntry, String> {
             }
             let size = l.s.ok_or("a file needs \"s\" (size in bytes)")?;
             let sha256 = l.h.ok_or("a file needs \"h\" (SHA-256 in hex)")?;
-            if sha256.len() != 64
-                || !sha256
-                    .bytes()
-                    .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
-            {
+            if !is_sha256_hex(&sha256) {
                 return Err("\"h\" must be 64 lower-case hex digits".into());
             }
             let executable = match l.x {
@@ -179,6 +175,12 @@ pub fn parse_table(bytes: &[u8], problems: &mut Problems) -> Vec<FileEntry> {
         }
     }
     entries
+}
+
+/// True when `h` is a SHA-256 as the table writes it: 64 lower-case hex digits. The one check of
+/// that form (the table, a runner hash, the launcher's records).
+pub fn is_sha256_hex(h: &str) -> bool {
+    h.len() == 64 && h.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 /// A lookup over the table: entries by path, and the folders that exist because something is in them.

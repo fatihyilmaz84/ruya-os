@@ -17,14 +17,20 @@
 //!   was cut short (`game.new/` is there), the launcher builds `game.new/` from the table and sorts
 //!   the old tree: a file whose hash equals its base hash is the old build's, removed; one the
 //!   game changed or made is moved (`renameat`, never copied) to the same place in `game.new/`
-//!   when that place is in a writable folder of the new build, else to
-//!   `.ruya-play/game-kept/<old build>/` (only the newest such set is kept, as with the epoch
-//!   backups); a link the launcher made (to `/app/payload/<path>`) goes with the old tree, any
-//!   other link is the game's and is moved like a changed file, as a link. Then the new tree is
-//!   filled, its modes set, the base and the status file written and `game.new/` renamed into
-//!   place. A rebuild cut short starts again from `game.new/`: the old tree's files are sorted
-//!   once (a moved file is no longer there), and a file already in `game.new/` is the game's or a
-//!   whole copy, so it is kept. The current files are hashed only during an update.
+//!   when that place is in a writable folder of the new build and free, else to
+//!   `.ruya-play/game-kept/<old build>/` ([`Keeper`]: a kept file is never replaced, a taken name
+//!   gets `~<n>`; only the newest set is kept, as with the epoch backups); a link the launcher
+//!   made (to `/app/payload/<path>`) goes with the old tree, any other link is the game's and is
+//!   moved like a changed file, as a link. Before anything moves, `game.new.json` records the
+//!   build `game.new/` is for and its copies' hashes. Then the new tree is filled (whatever is not
+//!   a link where a link or copy goes is kept aside first, never removed), its modes set, the base
+//!   and the status file written and `game.new/` renamed into place. A rebuild of the same build
+//!   cut short starts again from `game.new/`: the old tree's files are sorted once (a moved file is
+//!   no longer there), and a file already in `game.new/` is the game's or a whole copy, so it is
+//!   kept. A `game.new/` started for another build (an update arrived first) is sorted back into
+//!   the old tree by its own record: its unchanged copies go, everything else returns to its path
+//!   there (or is kept aside), and the rebuild starts fresh. The current files are hashed only
+//!   during an update.
 //!
 //! Every step goes through [`LaunchOs`] (ruya-fs on Linux: no link is followed, links are kept as
 //! links). An epoch rebuild of the prefix leaves the tree alone.
@@ -34,7 +40,8 @@ use crate::state::{State, KEPT};
 use crate::Failure;
 use ruya_play_format::limits::MAX_WRITABLE_BYTES;
 use ruya_play_format::manifest::Manifest;
-use ruya_play_format::table::{FileEntry, TableIndex};
+use ruya_play_format::path::check_path;
+use ruya_play_format::table::{is_sha256_hex, FileEntry, TableIndex};
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io;
@@ -47,6 +54,9 @@ pub const NEW: &str = ".ruya-play/game.new";
 pub const STAGE: &str = ".ruya-play/game.tmp";
 /// The record of the copies, below `${data}`.
 pub const BASE: &str = ".ruya-play/game-base.json";
+/// The record of the tree being built ([`NEW`]): written before anything moves into it, so a
+/// rebuild cut short knows which build `game.new/` was started for and what its copies are.
+pub const NEW_BASE: &str = ".ruya-play/game.new.json";
 /// The format of [`BASE`] this launcher writes and reads.
 pub const BASE_FORMAT: u64 = 1;
 /// The most entries [`BASE`] holds (ADR-040).
@@ -65,9 +75,6 @@ const COPY: u32 = 0o600;
 /// A copied file the table marks executable.
 const PROGRAM: u32 = 0o700;
 
-/// The longest path the base holds (the table's own limit).
-const MAX_PATH_BYTES: usize = 1024;
-
 /// What `game-base.json` says: the build its tree was made from and the `play.files` SHA-256 of
 /// each copy in it, by path below `${game}`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -76,18 +83,6 @@ pub struct Base {
     pub build: u64,
     /// Path below `${game}` to SHA-256 (64 lower-case hex digits).
     pub files: BTreeMap<String, String>,
-}
-
-/// A path below `${game}` as the base writes it: plain names joined by `/`.
-fn plain_path(p: &str) -> bool {
-    !p.is_empty()
-        && p.len() <= MAX_PATH_BYTES
-        && !p.chars().any(char::is_control)
-        && p.split('/').all(|c| !c.is_empty() && c != "." && c != "..")
-}
-
-fn is_hash(h: &str) -> bool {
-    h.len() == 64 && h.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 impl Base {
@@ -110,7 +105,8 @@ impl Base {
         let mut files = BTreeMap::new();
         for (path, hash) in list {
             let hash = hash.as_str()?;
-            if !plain_path(path) || !is_hash(hash) {
+            // A path as the table writes one (every copy is a table path), a hash as it does.
+            if check_path(path).is_err() || !is_sha256_hex(hash) {
                 return None;
             }
             files.insert(path.clone(), hash.to_string());
@@ -158,9 +154,10 @@ impl Base {
         (base, left)
     }
 
-    /// The base below `data`; `None` when it is absent or cannot be read as one (logged).
-    pub fn read(os: &dyn LaunchOs, data: &str) -> Option<Base> {
-        match os.kind(data, BASE) {
+    /// The base at `rel` ([`BASE`] or [`NEW_BASE`]) below `data`; `None` when it is absent or
+    /// cannot be read as one (logged).
+    pub fn read(os: &dyn LaunchOs, data: &str, rel: &str) -> Option<Base> {
+        match os.kind(data, rel) {
             Ok(None) => return None,
             Ok(Some(_)) => {}
             Err(e) => {
@@ -171,7 +168,7 @@ impl Base {
             }
         }
         let src = crate::os::AppSource::new(os, data);
-        match ruya_play_format::read_within(&src, BASE, MAX_BASE_BYTES) {
+        match ruya_play_format::read_within(&src, rel, MAX_BASE_BYTES) {
             Ok(Some(bytes)) => {
                 let base = Base::parse(&bytes);
                 if base.is_none() {
@@ -316,45 +313,59 @@ pub fn ensure(
     if m.run.writable.is_empty() {
         return Ok(());
     }
-    let tree = os.kind(data, TREE).map_err(failure("checked"))?;
-    let new = os.kind(data, NEW).map_err(failure("checked"))?;
+    let mut tree = os.kind(data, TREE).map_err(failure("checked"))?;
+    let mut new = os.kind(data, NEW).map_err(failure("checked"))?;
     if state.game_build == Some(m.build) && tree == Some(Kind::Dir) && new.is_none() {
         return Ok(());
     }
     let layout = Layout::new(app, m, files);
     let old = state.game_build.unwrap_or(0);
+    // `game.new/` is this build's when its record says so; one started for another build (an
+    // update came before the rebuild could finish) is an old tree of its own.
+    let started = (new == Some(Kind::Dir))
+        .then(|| Base::read(os, data, NEW_BASE))
+        .flatten();
+    let resume = started.as_ref().is_some_and(|b| b.build == m.build);
     os.log(&format!(
         "making the game folder for build {}{}",
         m.build,
-        match (state.game_build, new) {
-            (_, Some(Kind::Dir)) => " (going on with the one cut short)".to_string(),
-            (Some(b), _) => format!(" (it was build {b})"),
-            (None, _) => String::new(),
+        match (resume, new, state.game_build) {
+            (true, _, _) => " (going on with the one cut short)".to_string(),
+            (false, Some(Kind::Dir), _) => {
+                " (the one cut short was for another build; what it holds goes back first)"
+                    .to_string()
+            }
+            (false, _, Some(b)) => format!(" (it was build {b})"),
+            (false, _, None) => String::new(),
         }
     ));
-    start(os, data, &layout, new).map_err(failure("made"))?;
-    let mut kept = 0usize;
-    match tree {
-        Some(Kind::Dir) => {
-            let base = Base::read(os, data).filter(|b| state.game_build == Some(b.build));
-            let mut sort = Sort {
-                os: &mut *os,
-                data,
-                layout: &layout,
-                base: base.as_ref(),
-                aside: KEPT.path(old),
-                kept: &mut kept,
-            };
-            sort.folder("", 0).map_err(failure("updated"))?;
-        }
-        Some(_) => {
-            os.log("the game folder is not a folder; it is replaced");
-            os.remove(data, TREE).map_err(failure("made"))?;
-        }
-        None => {}
+    if tree.is_some_and(|k| k != Kind::Dir) {
+        os.log("the game folder is not a folder; it is replaced");
+        os.remove(data, TREE).map_err(failure("made"))?;
+        tree = None;
     }
-    fill(os, data, &layout).map_err(failure("made"))?;
-    close(os, data, &layout).map_err(failure("made"))?;
+    let mut keeper = Keeper {
+        aside: KEPT.path(old),
+        kept: 0,
+    };
+    if new == Some(Kind::Dir) && !resume {
+        os.make_dirs(data, TREE).map_err(failure("updated"))?;
+        let mut back = Sort {
+            os: &mut *os,
+            data,
+            layout: &layout,
+            base: started.as_ref(),
+            from: NEW,
+            into: TREE,
+            back: true,
+            keeper: &mut keeper,
+        };
+        back.folder("", 0).map_err(failure("updated"))?;
+        // What is left is the launcher's: its links, folders and the copies nobody changed.
+        os.remove(data, NEW).map_err(failure("updated"))?;
+        tree = Some(Kind::Dir);
+        new = None;
+    }
     let copies: Vec<(&str, &str)> = layout
         .items
         .iter()
@@ -370,6 +381,28 @@ pub fn ensure(
             base.files.len()
         ));
     }
+    if !resume {
+        // Before anything moves into `game.new/`: the build it is for, and its copies' hashes.
+        os.write_atomic(data, NEW_BASE, &base.to_bytes())
+            .map_err(failure("recorded"))?;
+    }
+    start(os, data, &layout, new).map_err(failure("made"))?;
+    if tree == Some(Kind::Dir) {
+        let old_base = Base::read(os, data, BASE).filter(|b| state.game_build == Some(b.build));
+        let mut sort = Sort {
+            os: &mut *os,
+            data,
+            layout: &layout,
+            base: old_base.as_ref(),
+            from: TREE,
+            into: NEW,
+            back: false,
+            keeper: &mut keeper,
+        };
+        sort.folder("", 0).map_err(failure("updated"))?;
+    }
+    fill(os, data, &layout, &mut keeper).map_err(failure("made"))?;
+    close(os, data, &layout).map_err(failure("made"))?;
     os.write_atomic(data, BASE, &base.to_bytes())
         .map_err(failure("recorded"))?;
     state.game_build = Some(m.build);
@@ -377,11 +410,11 @@ pub fn ensure(
     os.remove(data, TREE).map_err(failure("replaced"))?;
     os.rename(data, NEW, data, TREE)
         .map_err(failure("replaced"))?;
-    if kept > 0 {
+    os.remove(data, NEW_BASE).map_err(failure("replaced"))?;
+    if keeper.kept > 0 {
         os.log(&format!(
-            "{kept} files the game wrote have no writable place in build {}; they are in {}/",
-            m.build,
-            KEPT.path(old)
+            "{} files the game wrote have no writable place in build {}; they are in {}/",
+            keeper.kept, m.build, keeper.aside
         ));
         crate::prune_sets(os, data, &KEPT, old);
     }
@@ -405,36 +438,78 @@ fn start(os: &mut dyn LaunchOs, data: &str, layout: &Layout, new: Option<Kind>) 
     Ok(())
 }
 
-/// The walk of the old tree that decides where each file the game may have written goes.
+/// The most `~<n>` names tried for one kept file before the update gives up.
+const MAX_KEPT_NAMES: u32 = 1000;
+
+/// What the game wrote that has no place in the new tree goes into `game-kept/<old build>/` at
+/// its path there; a kept file is never replaced: when the name is taken (a second update from the
+/// same build, a rebuild cut short), the file gets the first free `<name>~1`, `<name>~2`, ...
+struct Keeper {
+    /// `game-kept/<old build>`.
+    aside: String,
+    /// How many entries went there.
+    kept: usize,
+}
+
+impl Keeper {
+    /// Move `from/rel` into the set, under a name nothing has yet.
+    fn keep(&mut self, os: &mut dyn LaunchOs, data: &str, from: &str, rel: &str) -> io::Result<()> {
+        let at = join(&self.aside, rel);
+        let mut to = at.clone();
+        let mut n = 0;
+        while os.kind(data, &to)?.is_some() {
+            n += 1;
+            if n > MAX_KEPT_NAMES {
+                return Err(io::Error::other(format!(
+                    "{at} and {MAX_KEPT_NAMES} more names for it are taken"
+                )));
+            }
+            to = format!("{at}~{n}");
+        }
+        os.rename(data, &join(from, rel), data, &to)?;
+        self.kept += 1;
+        Ok(())
+    }
+}
+
+/// The walk of a tree being replaced that decides where each file the game may have written goes:
+/// the old tree into `game.new/`, or a `game.new/` started for another build back into the old
+/// tree (`back`).
 struct Sort<'a, 'b> {
     os: &'b mut dyn LaunchOs,
     data: &'b str,
     layout: &'b Layout<'a>,
-    /// The old tree's record, when it is the old tree's and could be read.
+    /// The record of the tree walked, when it is that tree's and could be read.
     base: Option<&'b Base>,
-    /// `game-kept/<old build>`.
-    aside: String,
-    kept: &'b mut usize,
+    /// The tree walked.
+    from: &'static str,
+    /// Where what the game wrote stays when it may.
+    into: &'static str,
+    /// Going back into the old tree: anything may stay at its path there when it is free.
+    back: bool,
+    keeper: &'b mut Keeper,
 }
 
 impl Sort<'_, '_> {
-    /// Sort the old tree's folder `rel` (`depth` folders below the root), opened first: a
-    /// folder outside the writable ones is 0500, and the game may have closed one of its own.
+    /// Sort the folder `rel` (`depth` folders below the root), opened first: a folder outside the
+    /// writable ones is 0500, and the game may have closed one of its own.
     fn folder(&mut self, rel: &str, depth: usize) -> io::Result<()> {
-        let at = join(TREE, rel);
+        let at = join(self.from, rel);
         self.os.set_mode(self.data, &at, OPEN)?;
         for (name, kind) in self.os.list(self.data, &at)? {
             let p = below(rel, &name);
             match kind {
                 Kind::Dir if depth < MAX_COPY_DEPTH => self.folder(&p, depth + 1)?,
                 // Deeper than any copy goes: kept whole, not walked.
-                Kind::Dir => self.keep(&p, false)?,
-                Kind::File if self.unchanged(&p) => self.os.remove(self.data, &join(TREE, &p))?,
-                Kind::File => self.keep(&p, true)?,
+                Kind::Dir => self.keeper.keep(self.os, self.data, self.from, &p)?,
+                Kind::File if self.unchanged(&p) => {
+                    self.os.remove(self.data, &join(self.from, &p))?
+                }
+                Kind::File => self.keep(&p)?,
                 Kind::Link => {
-                    let target = self.os.read_link(self.data, &join(TREE, &p))?;
+                    let target = self.os.read_link(self.data, &join(self.from, &p))?;
                     if target != self.layout.link_target(&p) {
-                        self.keep(&p, true)?;
+                        self.keep(&p)?;
                     }
                 }
                 // A FIFO or a socket is no data: it goes with the old tree.
@@ -444,14 +519,13 @@ impl Sort<'_, '_> {
         Ok(())
     }
 
-    /// True when the file `rel` of the old tree is the copy the base records, unchanged. Not
-    /// known (no base, no entry, a file that cannot be read or is bigger than any copy) is
-    /// changed.
+    /// True when the file `rel` is the copy the base records, unchanged. Not known (no base, no
+    /// entry, a file that cannot be read or is bigger than any copy) is changed.
     fn unchanged(&self, rel: &str) -> bool {
         let Some(want) = self.base.and_then(|b| b.files.get(rel)) else {
             return false;
         };
-        let Ok(mut file) = self.os.open(self.data, &join(TREE, rel)) else {
+        let Ok(mut file) = self.os.open(self.data, &join(self.from, rel)) else {
             return false;
         };
         matches!(
@@ -460,36 +534,38 @@ impl Sort<'_, '_> {
         )
     }
 
-    /// Move `rel` (the game's) out of the old tree: to the same place in the new one when it
-    /// stays writable there (`may_stay`), else into `game-kept/<old build>/`.
-    fn keep(&mut self, rel: &str, may_stay: bool) -> io::Result<()> {
-        let from = join(TREE, rel);
-        if may_stay && self.layout.in_place(rel) {
-            return self.os.rename(self.data, &from, self.data, &join(NEW, rel));
+    /// Move `rel` (the game's) out of the tree walked: to the same path in [`Self::into`] when it
+    /// may stay there and nothing is at that path, else into `game-kept/<old build>/`. Nothing at
+    /// the destination is ever replaced.
+    fn keep(&mut self, rel: &str) -> io::Result<()> {
+        let stays = self.back || self.layout.in_place(rel);
+        let to = join(self.into, rel);
+        if stays && matches!(self.os.kind(self.data, &to), Ok(None)) {
+            return self
+                .os
+                .rename(self.data, &join(self.from, rel), self.data, &to);
         }
-        self.os
-            .rename(self.data, &from, self.data, &join(&self.aside, rel))?;
-        *self.kept += 1;
-        Ok(())
+        self.keeper.keep(self.os, self.data, self.from, rel)
     }
 }
 
 /// Every table entry of `payload/` into `game.new/`: a copy (made in [`STAGE`], its mode set,
 /// renamed into place) or a link to the original. What is already there is kept when it is the
-/// game's (moved in) or a whole copy from a rebuild cut short.
-fn fill(os: &mut dyn LaunchOs, data: &str, layout: &Layout) -> io::Result<()> {
+/// game's (moved in) or a whole copy from a rebuild of this build cut short; anything else that is
+/// not a link is kept aside before the entry takes its place, so nothing the game wrote is
+/// removed.
+fn fill(os: &mut dyn LaunchOs, data: &str, layout: &Layout, keeper: &mut Keeper) -> io::Result<()> {
     for (rel, e) in &layout.items {
         let at = join(NEW, rel);
+        let there = os.kind(data, &at)?;
         match e {
             FileEntry::File { executable, .. } if layout.copied(rel) => {
-                let there = os.kind(data, &at)?;
-                let keep = if layout.writable(rel) {
-                    matches!(there, Some(Kind::File | Kind::Link))
-                } else {
-                    there == Some(Kind::File)
-                };
-                if keep {
-                    continue;
+                match there {
+                    Some(Kind::File) => continue,
+                    // The game's link in a writable folder is its data.
+                    Some(Kind::Link) if layout.writable(rel) => continue,
+                    Some(Kind::Link) | None => {}
+                    Some(_) => keeper.keep(os, data, NEW, rel)?,
                 }
                 if !os.copy(layout.app, &format!("payload/{rel}"), data, STAGE)? {
                     return Err(io::Error::new(
@@ -502,8 +578,10 @@ fn fill(os: &mut dyn LaunchOs, data: &str, layout: &Layout) -> io::Result<()> {
             }
             FileEntry::File { .. } | FileEntry::Link { .. } => {
                 let target = layout.link_target(rel);
-                if os.kind(data, &at)? == Some(Kind::Link) && os.read_link(data, &at)? == target {
-                    continue;
+                match there {
+                    Some(Kind::Link) if os.read_link(data, &at)? == target => continue,
+                    Some(Kind::Link) | None => {}
+                    Some(_) => keeper.keep(os, data, NEW, rel)?,
                 }
                 os.symlink(&target, data, &at)?;
             }
@@ -558,7 +636,7 @@ mod tests {
             line(r#"{"a":1}"#),
             line(&format!(
                 r#"{{"{}":"{H}"}}"#,
-                "a".repeat(MAX_PATH_BYTES + 1)
+                "a".repeat(ruya_play_format::limits::MAX_PATH_BYTES + 1)
             )),
         ] {
             assert_eq!(Base::parse(bad.as_bytes()), None, "{bad}");
@@ -586,9 +664,11 @@ mod tests {
         assert_eq!(base.files.len(), MAX_BASE_ENTRIES);
         assert_eq!(left, 5);
         assert!(Base::parse(&base.to_bytes()).is_some());
-        // Long paths: the byte cap stops it first.
+        // Long paths (each a valid table path, parts of at most 255 bytes): the byte cap stops
+        // it first.
+        let part = "d".repeat(250);
         let long: Vec<String> = (0..8000)
-            .map(|i| format!("{}/{i}", "d".repeat(1000)))
+            .map(|i| format!("{part}/{part}/{part}/{i}"))
             .collect();
         let copies: Vec<(&str, &str)> = long.iter().map(|p| (p.as_str(), H)).collect();
         let (base, left) = Base::of(1, &copies);

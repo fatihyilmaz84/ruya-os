@@ -421,3 +421,93 @@ fn the_setup_steps_run_in_the_tree() {
     assert!(step.argv.contains(&g("System/UT.exe")), "{:?}", step.argv);
     assert_eq!(step.cwd, g("System"));
 }
+
+/// The review's sequence (round 2): a rebuild for build 2 is cut short after it moved the game's
+/// files into `game.new/` and copied one of build 2's files; build 3 arrives before the next
+/// launch. What `game.new/` holds is judged by its own record (build 2's), not build 3's: build 2's
+/// copy goes, build 3's file arrives, and the game's files are kept, also one that sits where build
+/// 3 has a link.
+#[test]
+fn a_rebuild_cut_short_for_one_build_is_sorted_back_when_another_build_comes() {
+    let mut game = ut();
+    let mut os = game.install();
+    launch(&mut os, &[]).expect("build 1");
+    os.file(&g("System/UT.ini"), "[Engine] mine");
+    os.file(&g("Save/Save1.usa"), "slot 1");
+    game.put("payload/System/Core.u", b"core v2");
+    update(&mut os, &mut game, 2);
+    // Cut short in the fill: Core.u is copied, UT.exe cannot be.
+    os.nodes.remove("/app/payload/System/UT.exe");
+    let err = launch(&mut os, &[]).expect_err("cut short");
+    assert_eq!(err.code, "launch.game");
+    let new = |rel: &str| format!("{DATA}/{NEW}/{rel}");
+    assert_eq!(file(&os, &new("System/Core.u")), "core v2");
+    assert_eq!(file(&os, &new("Save/Save1.usa")), "slot 1");
+    // Build 3: Save is no longer writable and has a file of the package where the save is.
+    game.put("payload/System/Core.u", b"core v3")
+        .put("payload/Save/Save1.usa", b"the package's");
+    game.manifest["run"]["writable"] = json!(["System"]);
+    game.manifest["data"] = json!({});
+    update(&mut os, &mut game, 3);
+    launch(&mut os, &[]).expect("build 3");
+    assert_eq!(
+        file(&os, &g("System/Core.u")),
+        "core v3",
+        "build 2's copy is no game data"
+    );
+    assert_eq!(base(&os).files["System/Core.u"], sha256(b"core v3"));
+    assert_eq!(file(&os, &g("System/UT.ini")), "[Engine] mine");
+    assert_eq!(
+        os.nodes.get(&g("Save/Save1.usa")),
+        Some(&Node::Link("/app/payload/Save/Save1.usa".into()))
+    );
+    assert_eq!(
+        file(&os, &kept(1, "Save/Save1.usa")),
+        "slot 1",
+        "the save is kept, not removed"
+    );
+    assert_eq!(state(&os).game_build, Some(3));
+    assert!(os.below(&format!("{DATA}/{NEW}")).is_empty());
+    assert!(os
+        .read(&format!("{DATA}/{}", ruya_play_launch::game::NEW_BASE))
+        .is_none());
+}
+
+/// Whatever is at a path where the tree makes a link or a copy and is not the launcher's is kept
+/// aside first, never removed (a file planted in a `game.new/` cut short).
+#[test]
+fn a_file_where_a_link_goes_is_kept_aside_not_removed() {
+    let mut game = ut();
+    let mut os = game.install();
+    launch(&mut os, &[]).expect("build 1");
+    update(&mut os, &mut game, 2);
+    os.nodes.remove("/app/payload/System/UT.exe");
+    launch(&mut os, &[]).expect_err("cut short");
+    os.file(&format!("{DATA}/{NEW}/Maps/DM-Deck.unr"), "mine");
+    game.install_into(&mut os);
+    launch(&mut os, &[]).expect("resumed");
+    assert_eq!(
+        os.nodes.get(&g("Maps/DM-Deck.unr")),
+        Some(&Node::Link("/app/payload/Maps/DM-Deck.unr".into()))
+    );
+    assert_eq!(file(&os, &kept(1, "Maps/DM-Deck.unr")), "mine");
+}
+
+/// A kept file is never replaced: two updates from the same build (here build 0 twice, after the
+/// status file was lost) keep both, the second under the first free `~<n>` name.
+#[test]
+fn a_kept_file_is_never_replaced() {
+    let mut os = ut().install();
+    launch(&mut os, &[]).expect("build 1");
+    let lost = |os: &mut FakeOs| {
+        os.remove(DATA, ".ruya-play/state.json").expect("remove");
+    };
+    os.file(&g("Maps/notes.txt"), "first");
+    lost(&mut os);
+    launch(&mut os, &[]).expect("again, no status file");
+    os.file(&g("Maps/notes.txt"), "second");
+    lost(&mut os);
+    launch(&mut os, &[]).expect("and again");
+    assert_eq!(file(&os, &kept(0, "Maps/notes.txt")), "first");
+    assert_eq!(file(&os, &kept(0, "Maps/notes.txt~1")), "second");
+}
