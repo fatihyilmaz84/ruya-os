@@ -168,13 +168,15 @@ An OS update replaces the runners in the image, and the oldest GE-Proton major l
 Many Windows games write their ini file, log or saves into their own install folder. In a `.play` package that folder, `/app/payload`, is read-only. Declare the folders the game writes into and it gets a private copy of them for each profile:
 
 ```json
-"run": {
-  "runner": "wine", "component": "wine",
-  "command": ["${game}/System/UT.exe"],
-  "cwd": "${game}/System",
-  "writable": ["System", "Save"]
-},
-"data": { "saves": ["game:Save"] }
+{
+  "run": {
+    "runner": "wine", "component": "wine",
+    "command": ["${game}/System/UT.exe"],
+    "cwd": "${game}/System",
+    "writable": ["System", "Save"]
+  },
+  "data": { "saves": ["game:Save"] }
+}
 ```
 
 - `writable` is at most 16 folders of `payload/`, written relative to it. Not the root, none inside another one, none that is a link; they may be missing from the package, then they start empty. The files below them add up to at most 2 GiB.
