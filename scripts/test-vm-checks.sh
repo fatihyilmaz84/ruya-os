@@ -1928,12 +1928,14 @@ done
 grep -q 'Hello Play' "$sw/src/check.c" && grep -q 'check.txt' "$sw/src/check.c" && grep -q 'Documents/Hello Play/check.txt' "$here/vm-play-check.sh" && grep -q 'prefix:drive_c/users/steamuser/Documents/Hello Play' "$sw/package/play.json" && pass "check.txt is in the folder data.saves keeps, where launch-windows looks (RUY-902)" || fail "check.txt: the path of check.c, play.json and vm-play-check.sh differ"
 grep -q 'drive_c/users/steamuser/Documents/Hello Play/check.txt' "$here/vm-play-check.sh" && grep -q 'proton/pfx' "$here/vm-play-check.sh" && pass "launch-windows reads check.txt in the Proton prefix (<data>/proton/pfx, 05 section 6.2.1)" || fail "launch-windows looks outside the Proton prefix"
 # kv on a check.txt as check.exe writes it, CR LF (RUY-999): the values without the CR. The script's own kv,
-# with sed in binary mode: Git Bash's sed drops CR itself (text mode), Linux's keeps it, as on the VM.
+# with sed in binary mode: Git Bash's sed drops CR itself (text mode), Linux's keeps it, as on the VM. Its bytes
+# are compared through od, because Git Bash's $(...) drops a trailing CR too.
 eval "$(grep '^kv() {' "$here/vm-play-check.sh")"
 sed() { command sed -b "$@"; }
+kv_bytes() { kv "$@" | od -An -c | tr -d ' \n'; }
 printf 'launches=1\r\npointer_bits=32\r\nwow64=1\r\n' > "$tmp/check-crlf.txt"
-[ "$(kv "$tmp/check-crlf.txt" launches)" = 1 ] && [ "$(kv "$tmp/check-crlf.txt" pointer_bits)" = 32 ] && [ -z "$(kv "$tmp/check-crlf.txt" network)" ] && pass "vm-play-check.sh kv reads a CR LF check.txt (launches=1, pointer_bits=32, no network key)" || fail "vm-play-check.sh kv on CR LF: launches='$(kv "$tmp/check-crlf.txt" launches | od -c | head -1)'"
-unset -f kv sed
+[ "$(kv_bytes "$tmp/check-crlf.txt" launches)" = '1\n' ] && [ "$(kv_bytes "$tmp/check-crlf.txt" pointer_bits)" = '32\n' ] && [ -z "$(kv_bytes "$tmp/check-crlf.txt" network)" ] && pass "vm-play-check.sh kv reads a CR LF check.txt (launches=1, pointer_bits=32, no network key)" || fail "vm-play-check.sh kv on CR LF: launches is '$(kv_bytes "$tmp/check-crlf.txt" launches)', want '1\n'"
+unset -f kv sed kv_bytes
 
 # lstate: the launcher's status file (05 section 6.3).
 echo '{"format":1,"epoch":1,"backup_of":null,"setup_done":["first-run"],"setup_failed":null,"runner":{"component":"proton","family":"proton-ge","version":"GE-Proton11-12","source":"system","hash":null}}' > "$lp/state-win.json"
