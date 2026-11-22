@@ -17,13 +17,15 @@
   0600 + ACL for that user only) and SDL_VIDEODRIVER=wayland. The interface itself is unchanged.
 
   Status strings are stable API:
-    "ok"                success (for Launch: the app is starting, AppStarted follows when it runs)
-    "unknown-app"       the app id is not installed
+    "ok"                success (for Launch and LaunchItem: the app is starting, AppStarted follows
+                        when it runs)
+    "unknown-app"       the app id is not installed (LaunchItem: the item's app)
     "unknown-profile"   no such profile, or not an account apps may run as
     "already-running"   this app is already running (or starting) for this profile, or a run of it
                         told to stop has not ended yet (RUY-736)
     "unknown-instance"  no running instance with that name
-    "invalid"           malformed argument (empty id, bad characters)
+    "invalid"           malformed argument (empty id, bad characters; LaunchItem: an unknown item
+                        prefix too)
     "failed"            internal error
 
   Freeze and Thaw (T-457, ADR-033 point 3) have these extra statuses:
@@ -64,9 +66,25 @@
   hands it back. Every list is a plain array and every record an a{sv} dictionary, so fields can be
   added later without breaking clients (unknown keys are ignored).
 
+  Items and child instances (ADR-041, RUY-1051). `item` is the Library1 item id of
+  what runs: "flatpak:<app_id>" for a Flatpak app, "steam:<appid>" (digits only) for a Steam game.
+  A Steam game is a child instance of the profile's Steam instance: its own record, with `item`
+  "steam:<appid>", `parent` the Steam instance's name and `app_id` Steam's Flatpak id. A child's
+  instance name is opaque and chosen by the service, like every other. A child is "starting" until
+  its game's scope appears and ends with AppExited "launch-failed" when none appears within 120 s;
+  it ends when none of its scopes has existed for 3 s. Stop, Freeze, Thaw and Kill on a child touch
+  only its scopes; Stop on a parent stops its children first, then the parent. AppStarted and
+  AppExited of a child carry the parent's app_id; the shell reads ListRunning again when AppStarted
+  names an instance it does not know (a game started inside Steam's own UI becomes a child too).
+  Every other instance has `item` "flatpak:<app_id>" and `parent` "". Built so far: the keys,
+  LaunchItem for Flatpak items, and the ledger's `item`; Steam children are planned (RUY-1052) and
+  LaunchItem answers "failed" for a Steam item until then.
+
   Running record (a{sv}), keys:
     instance   s    opaque instance name
-    app_id     s    Flatpak application id
+    app_id     s    Flatpak application id (a Steam child: Steam's)
+    item       s    Library1 item id: "flatpak:<app_id>", or "steam:<appid>" for a Steam child
+    parent     s    the parent's instance name for a child instance, else ""
     profile    s    profile id the app runs as
     started    x    unix seconds
     state      s    "starting" | "running" | "stopping"
@@ -89,7 +107,8 @@
       for any other profile (the history of another profile is not browsable, admin or not).
 
   Session record (a{sv}), keys:
-    app_id              s    Flatpak application id
+    app_id              s    Flatpak application id (a Steam game's session: Steam's)
+    item                s    Library1 item id of what ran ("flatpak:<app_id>" or "steam:<appid>")
     app_version         s    version at the start ("" if unknown); an update mid-session continues
                              the session
     start               x    unix seconds (UTC)
@@ -99,8 +118,9 @@
     open                b    true while the app still runs (end is then "now")
     day                 s    "YYYY-MM-DD": the first local day (device time zone) with counted time in the session
 
-  Day row (a{sv}), keys (one row per app and local day; the day is in the device time zone):
-    app_id     s    Flatpak application id
+  Day record (a{sv}), keys (one row of GetTotals per item and local day; the day is in the device time zone):
+    app_id     s    Flatpak application id (a Steam game's row: Steam's)
+    item       s    Library1 item id ("flatpak:<app_id>" or "steam:<appid>")
     day        s    "YYYY-MM-DD"
     seconds    u    foreground seconds on that day
     sessions   u    sessions whose first day with counted time is that day
@@ -113,9 +133,27 @@
 
     <!-- Starts the app as the profile. The answer comes as soon as it is queued; the app is
          running when AppStarted arrives. If it never gets there, AppExited with reason
-         "launch-failed" is sent instead. `instance` is "" unless the status is "ok". -->
+         "launch-failed" is sent instead. `instance` is "" unless the status is "ok". The
+         Flatpak-only form: LaunchItem("flatpak:<app_id>", profile) is the same call. -->
     <method name="Launch">
       <arg name="app_id" type="s" direction="in"/>
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="instance" type="s" direction="out"/>
+    </method>
+
+    <!-- Starts a Library1 item as the profile (ADR-041 point 3, RUY-1051).
+         "flatpak:<app_id>" is exactly Launch(app_id, profile): the same statuses, instance and
+         signals. "steam:<appid>" (digits only) starts the game as a child instance of the profile's
+         Steam instance (planned, RUY-1052: the service builds steam://rungameid/<appid> itself from
+         the digits; a running Steam is handed the URL, a stopped one is started with it). The child
+         is "starting" until its scope appears, and ends with AppExited "launch-failed" after 120 s
+         without one. Until RUY-1052 a valid Steam item answers "failed". Statuses: ok, invalid (a
+         malformed item, an unknown prefix, or a bad profile id), unknown-app (the item's app is not
+         installed), unknown-profile, already-running, failed. `instance` is "" unless the status is
+         "ok". -->
+    <method name="LaunchItem">
+      <arg name="item" type="s" direction="in"/>
       <arg name="profile" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
       <arg name="instance" type="s" direction="out"/>
@@ -214,9 +252,9 @@
       <arg name="sessions" type="aa{sv}" direction="out"/>
     </method>
 
-    <!-- Totals per app and day from `from` to `to` ("YYYY-MM-DD", inclusive; "" = the earliest
-         kept / today). `today` is today's date in the device time zone. Rows are sorted by day,
-         then app. Same statuses as ListSessions. -->
+    <!-- Totals per item and day (Day records) from `from` to `to` ("YYYY-MM-DD", inclusive; "" =
+         the earliest kept / today). `today` is today's date in the device time zone. Rows are
+         sorted by day, then item. Same statuses as ListSessions. -->
     <method name="GetTotals">
       <arg name="profile" type="s" direction="in"/>
       <arg name="from" type="s" direction="in"/>

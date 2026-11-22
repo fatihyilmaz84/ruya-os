@@ -1,6 +1,7 @@
 //! Where the play ledger lives (T-247): `/var/lib/ruya-session/usage/<profile>/` as root-only
-//! files. One file per profile, `ledger.tsv`, with a line per finished session (`S`) and per
-//! rolled-up day (`R`); a session is appended with one `write` of a whole line (O_APPEND), the
+//! files. One file per profile, `ledger.tsv`, with a line per finished session (`S2`) and per
+//! rolled-up day and item (`R2`; a ledger of the first form, `S` and `R`, is read and rewritten in
+//! this one, RUY-1051); a session is appended with one `write` of a whole line (O_APPEND), the
 //! rolled-up form is rewritten atomically (temporary file, `fsync`, rename). A running session is
 //! a small file in `open/`, rewritten atomically at every heartbeat; one found at start-up
 //! belongs to a run that never ended (crash, power cut).
@@ -12,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use crate::usage::{DayRow, EndReason, Ledger, SessionRecord};
 use ruya_flatpak::valid_session_app_id;
-use ruya_ids::valid_profile_id;
+use ruya_ids::{flatpak_item, parse_item, valid_profile_id, ItemId};
 
 pub type StoreResult<T> = Result<T, String>;
 
@@ -45,7 +46,8 @@ fn clean_version(v: &str) -> String {
 pub fn encode_session(s: &SessionRecord) -> String {
     let days: Vec<String> = s.days.iter().map(|(d, n)| format!("{d}:{n}")).collect();
     format!(
-        "S\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+        "{SESSION}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+        s.item,
         s.app_id,
         clean_version(&s.app_version),
         s.start,
@@ -58,77 +60,140 @@ pub fn encode_session(s: &SessionRecord) -> String {
 
 pub fn encode_row(r: &DayRow) -> String {
     format!(
-        "R\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
-        r.app_id, r.day, r.seconds, r.sessions, r.longest, r.first, r.last
+        "{ROW}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+        r.item, r.app_id, r.day, r.seconds, r.sessions, r.longest, r.first, r.last
     )
 }
+
+/// The tags of the lines this version writes (RUY-1051): the line's form is its tag, so a file may
+/// hold both forms (an old ledger that new sessions were appended to). `S2` and `R2` carry the
+/// item id after the tag; the first forms, `S` and `R` (T-247), have none, and their item is the
+/// Flatpak app's (`flatpak:<app_id>`, all there was before ADR-041).
+const SESSION: &str = "S2";
+const ROW: &str = "R2";
+const OLD_SESSION: &str = "S";
+const OLD_ROW: &str = "R";
 
 enum Line {
     Session(SessionRecord),
     Row(DayRow),
 }
 
-fn decode(line: &str) -> Option<Line> {
-    let f: Vec<&str> = line.split('\t').collect();
-    match f.as_slice() {
-        ["S", app, ver, start, end, fg, reason, days] => {
-            if !valid_session_app_id(app) {
-                return None;
-            }
-            let mut parsed = Vec::new();
-            if !days.is_empty() {
-                for part in days.split(',') {
-                    let (d, n) = part.split_once(':')?;
-                    parsed.push((d.parse().ok()?, n.parse().ok()?));
-                }
-            }
-            Some(Line::Session(SessionRecord {
-                app_id: (*app).to_owned(),
-                app_version: clean_version(ver),
-                start: start.parse().ok()?,
-                end: end.parse().ok()?,
-                foreground_seconds: fg.parse().ok()?,
-                reason: EndReason::parse(reason)?,
-                days: parsed,
-                open: false,
-            }))
-        }
-        ["R", app, day, secs, sessions, longest, first, last] => {
-            if !valid_session_app_id(app) {
-                return None;
-            }
-            Some(Line::Row(DayRow {
-                app_id: (*app).to_owned(),
-                day: day.parse().ok()?,
-                seconds: secs.parse().ok()?,
-                sessions: sessions.parse().ok()?,
-                longest: longest.parse().ok()?,
-                first: first.parse().ok()?,
-                last: last.parse().ok()?,
-            }))
-        }
-        _ => None,
+/// An item id the ledger keeps: a Flatpak item whose app id Session1 takes, or a Steam game.
+fn valid_item(item: &str) -> bool {
+    match parse_item(item) {
+        Some(ItemId::Flatpak(app_id)) => valid_session_app_id(app_id),
+        Some(ItemId::Steam(_)) => true,
+        None => false,
     }
 }
 
+/// The item of a line: the one it carries, checked, or (`None`, a line of the first form) the
+/// Flatpak app's own.
+fn item_of(item: Option<&str>, app_id: &str) -> Option<String> {
+    match item {
+        Some(item) => valid_item(item).then(|| item.to_owned()),
+        None => Some(flatpak_item(app_id)),
+    }
+}
+
+/// A line, and whether it has the first form (`S`, `R`), so the file is rewritten in the new one.
+fn decode(line: &str) -> Option<(Line, bool)> {
+    let f: Vec<&str> = line.split('\t').collect();
+    let (tag, rest) = f.split_first()?;
+    let (item, fields) = match *tag {
+        SESSION | ROW => {
+            let (item, fields) = rest.split_first()?;
+            (Some(*item), fields)
+        }
+        OLD_SESSION | OLD_ROW => (None, rest),
+        _ => return None,
+    };
+    let decoded = match *tag {
+        SESSION | OLD_SESSION => Line::Session(decode_session(item, fields)?),
+        _ => Line::Row(decode_row(item, fields)?),
+    };
+    Some((decoded, item.is_none()))
+}
+
+fn decode_session(item: Option<&str>, f: &[&str]) -> Option<SessionRecord> {
+    let [app, ver, start, end, fg, reason, days] = f else {
+        return None;
+    };
+    if !valid_session_app_id(app) {
+        return None;
+    }
+    let mut parsed = Vec::new();
+    if !days.is_empty() {
+        for part in days.split(',') {
+            let (d, n) = part.split_once(':')?;
+            parsed.push((d.parse().ok()?, n.parse().ok()?));
+        }
+    }
+    Some(SessionRecord {
+        item: item_of(item, app)?,
+        app_id: (*app).to_owned(),
+        app_version: clean_version(ver),
+        start: start.parse().ok()?,
+        end: end.parse().ok()?,
+        foreground_seconds: fg.parse().ok()?,
+        reason: EndReason::parse(reason)?,
+        days: parsed,
+        open: false,
+    })
+}
+
+fn decode_row(item: Option<&str>, f: &[&str]) -> Option<DayRow> {
+    let [app, day, secs, sessions, longest, first, last] = f else {
+        return None;
+    };
+    if !valid_session_app_id(app) {
+        return None;
+    }
+    Some(DayRow {
+        item: item_of(item, app)?,
+        app_id: (*app).to_owned(),
+        day: day.parse().ok()?,
+        seconds: secs.parse().ok()?,
+        sessions: sessions.parse().ok()?,
+        longest: longest.parse().ok()?,
+        first: first.parse().ok()?,
+        last: last.parse().ok()?,
+    })
+}
+
 /// What a ledger file holds. A last line without its newline is a torn write (power cut during
-/// an append): it is dropped and reported through `torn`. Any other bad line is `Err`.
-fn parse_ledger(text: &str) -> Result<(Ledger, bool), String> {
+/// an append): it is dropped and reported through `torn`. `old` says a line had the first form.
+/// Any other bad line is `Err`.
+struct Parsed {
+    ledger: Ledger,
+    torn: bool,
+    old: bool,
+}
+
+fn parse_ledger(text: &str) -> Result<Parsed, String> {
     let torn = !text.is_empty() && !text.ends_with('\n');
     let body = if torn {
         text.rfind('\n').map_or("", |i| &text[..=i])
     } else {
         text
     };
-    let mut ledger = Ledger::default();
+    let mut parsed = Parsed {
+        ledger: Ledger::default(),
+        torn,
+        old: false,
+    };
     for (n, line) in body.lines().enumerate() {
-        match decode(line) {
-            Some(Line::Session(s)) => ledger.sessions.push(s),
-            Some(Line::Row(r)) => ledger.rows.push(r),
-            None => return Err(format!("line {} is not a ledger record", n + 1)),
+        let Some((decoded, old)) = decode(line) else {
+            return Err(format!("line {} is not a ledger record", n + 1));
+        };
+        parsed.old |= old;
+        match decoded {
+            Line::Session(s) => parsed.ledger.sessions.push(s),
+            Line::Row(r) => parsed.ledger.rows.push(r),
         }
     }
-    Ok((ledger, torn))
+    Ok(parsed)
 }
 
 fn ledger_text(l: &Ledger) -> String {
@@ -230,12 +295,19 @@ impl UsageStore for FileStore {
             .map_err(|e| e.to_string())
             .and_then(|t| parse_ledger(&t));
         match parsed {
-            Ok((ledger, torn)) => {
+            Ok(Parsed { ledger, torn, old }) => {
                 if torn {
                     eprintln!(
                         "ruya-session: dropped a torn last line of {}",
                         path.display()
                     );
+                }
+                if old {
+                    // RUY-1051: an older ledger is read as it is and written in the lines of
+                    // today, never set aside as damaged.
+                    eprintln!("ruya-session: rewrote {} with item ids", path.display());
+                }
+                if torn || old {
                     err(write_atomic(&path, &ledger_text(&ledger)))?;
                 }
                 Ok(ledger)
@@ -314,7 +386,7 @@ impl UsageStore for FileStore {
                 let Ok(text) = fs::read_to_string(entry.path()) else {
                     continue;
                 };
-                if let Some(Line::Session(s)) = text.lines().next().and_then(decode) {
+                if let Some((Line::Session(s), _)) = text.lines().next().and_then(decode) {
                     out.push((profile.clone(), key.to_owned(), s));
                 }
             }
@@ -436,13 +508,14 @@ mod tests {
         let text = encode_session(&s);
         assert_eq!(
             text,
-            "S\torg.ruyaos.Racer\t1.0\t1000\t1500\t500\ttime-limit\t20400:300,20401:200\n"
+            "S2\tflatpak:org.ruyaos.Racer\torg.ruyaos.Racer\t1.0\t1000\t1500\t500\ttime-limit\t20400:300,20401:200\n"
         );
-        let (l, torn) = parse_ledger(&text).unwrap_or_default();
-        assert!(!torn);
-        assert_eq!(l.sessions, [s]);
+        let p = parsed(&text);
+        assert!(!p.torn && !p.old);
+        assert_eq!(p.ledger.sessions, [s]);
         let r = DayRow {
             app_id: A.to_owned(),
+            item: "steam:70".to_owned(),
             day: 5,
             seconds: 6,
             sessions: 1,
@@ -450,8 +523,82 @@ mod tests {
             first: 7,
             last: 8,
         };
-        let (l, _) = parse_ledger(&encode_row(&r)).unwrap_or_default();
-        assert_eq!(l.rows, [r]);
+        assert_eq!(
+            encode_row(&r),
+            "R2\tsteam:70\torg.ruyaos.Racer\t5\t6\t1\t6\t7\t8\n"
+        );
+        assert_eq!(parsed(&encode_row(&r)).ledger.rows, [r]);
+    }
+
+    /// `parse_ledger` of a text that must parse.
+    fn parsed(text: &str) -> Parsed {
+        parse_ledger(text).unwrap_or_else(|e| panic!("{e}: {text:?}"))
+    }
+
+    /// A ledger of the first form (T-247 up to RUY-1051): no item ids.
+    const OLD_LEDGER: &str = "R\torg.ruyaos.Racer\t20300\t1000\t2\t700\t5\t6\n\
+                              S\torg.ruyaos.Racer\t1.0\t1000\t1500\t500\tquit\t20400:500\n";
+
+    #[test]
+    fn lines_of_the_first_form_are_read_as_flatpak_items() {
+        let p = parsed(OLD_LEDGER);
+        assert!(p.old && !p.torn);
+        assert_eq!(p.ledger.rows[0].item, "flatpak:org.ruyaos.Racer");
+        assert_eq!(p.ledger.sessions[0].item, "flatpak:org.ruyaos.Racer");
+        assert_eq!(
+            (
+                p.ledger.sessions[0].start,
+                p.ledger.sessions[0].days.as_slice()
+            ),
+            (1000, [(20_400, 500)].as_slice())
+        );
+        // Both forms in one file: new sessions appended to an old ledger.
+        let mixed = format!("{OLD_LEDGER}{}", encode_session(&rec(A, 2_000, 60, 5)));
+        let p = parsed(&mixed);
+        assert!(p.old);
+        assert_eq!(p.ledger.sessions.len(), 2);
+        // Today's form alone is not old.
+        assert!(!parsed(&ledger_text(&p.ledger)).old);
+    }
+
+    #[test]
+    fn an_old_ledger_is_rewritten_in_the_new_form_not_set_aside() {
+        let root = tmp("old-form");
+        let dir = root.join("p1");
+        fs::create_dir_all(&dir).unwrap_or_else(|e| panic!("{e}"));
+        fs::write(dir.join("ledger.tsv"), OLD_LEDGER).unwrap_or_else(|e| panic!("{e}"));
+        let mut st = FileStore::new(&root);
+        let l = st.load("p1").unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!((l.rows.len(), l.sessions.len()), (1, 1));
+        assert!(
+            !dir.join("ledger.corrupt").exists(),
+            "an old ledger is not damaged"
+        );
+        let text = fs::read_to_string(dir.join("ledger.tsv")).unwrap_or_default();
+        assert_eq!(text, ledger_text(&l));
+        assert!(
+            text.lines()
+                .all(|line| line.starts_with("S2\t") || line.starts_with("R2\t")),
+            "{text}"
+        );
+        assert_eq!(st.load("p1").unwrap_or_default().sessions, l.sessions);
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn an_old_heartbeat_file_is_still_read() {
+        let root = tmp("old-open");
+        let open = root.join("p1").join("open");
+        fs::create_dir_all(&open).unwrap_or_else(|e| panic!("{e}"));
+        fs::write(
+            open.join("100-unit.rec"),
+            "S\torg.ruyaos.Racer\t1.0\t100\t160\t60\tquit\t5:60\n",
+        )
+        .unwrap_or_else(|e| panic!("{e}"));
+        let left = FileStore::new(&root).list_open();
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].2.item, "flatpak:org.ruyaos.Racer");
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
@@ -467,10 +614,17 @@ mod tests {
         assert!(parse_ledger("S\tnot an app\t\t1\t2\t3\tquit\t\n").is_err());
         assert!(parse_ledger("X\t1\n").is_err());
         assert!(parse_ledger("S\torg.a.b\t\t1\t2\t3\tnope\t0:3\n").is_err());
+        // The new form: a bad item, or an old line's fields under the new tag (and back).
         let ok = encode_session(&rec(A, 1, 30, 0));
-        let (l, torn) = parse_ledger(&format!("{ok}S\torg.ruyaos.Ra")).unwrap_or_default();
-        assert!(torn);
-        assert_eq!(l.sessions.len(), 1);
+        for item in ["", "steam:x", "play:a", "flatpak:not an app", "flatpak:"] {
+            let bad = ok.replacen("flatpak:org.ruyaos.Racer", item, 1);
+            assert!(parse_ledger(&bad).is_err(), "{bad:?}");
+        }
+        assert!(parse_ledger("S2\torg.ruyaos.Racer\t1.0\t1000\t1500\t500\tquit\t0:3\n").is_err());
+        assert!(parse_ledger("S\tflatpak:org.a.b\torg.a.b\t\t1\t2\t3\tquit\t0:3\n").is_err());
+        let p = parsed(&format!("{ok}S2\tflatpak:org.ruyaos.Ra"));
+        assert!(p.torn);
+        assert_eq!(p.ledger.sessions.len(), 1);
     }
 
     #[test]

@@ -44,6 +44,8 @@ QList<RunningApp> parseRunning(const QDBusArgument &arg)
         RunningApp r;
         r.instance = d.value(QStringLiteral("instance")).toString();
         r.appId = d.value(QStringLiteral("app_id")).toString();
+        r.item = d.value(QStringLiteral("item")).toString();
+        r.parent = d.value(QStringLiteral("parent")).toString();
         r.profile = d.value(QStringLiteral("profile")).toString();
         r.started = d.value(QStringLiteral("started")).toLongLong();
         r.state = d.value(QStringLiteral("state"), r.state).toString();
@@ -84,18 +86,30 @@ void DBusSessionBackend::refresh()
 
 void DBusSessionBackend::launch(const QString &appId, const QString &profile)
 {
-    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("Launch"));
-    msg << appId << profile;
+    launcher(QStringLiteral("Launch"), appId, profile, &SessionBackend::launchFinished);
+}
+
+void DBusSessionBackend::launchItem(const QString &item, const QString &profile)
+{
+    launcher(QStringLiteral("LaunchItem"), item, profile, &SessionBackend::launchItemFinished);
+}
+
+void DBusSessionBackend::launcher(const QString &method, const QString &id, const QString &profile,
+                                  LaunchFinished finished)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, method);
+    msg << id << profile;
     auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, appId, profile](QDBusPendingCallWatcher *w) {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, method, id, profile, finished](QDBusPendingCallWatcher *w) {
         w->deleteLater();
         QDBusPendingReply<QString, QString> reply = *w;
         if (!reply.isValid()) {
-            qWarning("ruya-shell: Session1 Launch %s failed: %s", qPrintable(appId), qPrintable(reply.error().message()));
-            emit launchFinished(appId, profile, QStringLiteral("failed"), {});
+            qWarning("ruya-shell: Session1 %s %s failed: %s", qPrintable(method), qPrintable(id),
+                     qPrintable(reply.error().message()));
+            emit(this->*finished)(id, profile, QStringLiteral("failed"), {});
             return;
         }
-        emit launchFinished(appId, profile, reply.argumentAt<0>(), reply.argumentAt<1>());
+        emit(this->*finished)(id, profile, reply.argumentAt<0>(), reply.argumentAt<1>());
     });
 }
 

@@ -9,7 +9,9 @@
 struct RunningApp
 {
     QString instance; // opaque, chosen by the service
-    QString appId;
+    QString appId; // the Flatpak app id (a Steam child: Steam's)
+    QString item; // the Library1 item id (ADR-041): "flatpak:<appId>", or "steam:<appid>" for a Steam child
+    QString parent; // the parent's instance for a child instance, else ""
     QString profile;
     qint64 started = 0; // unix seconds
     QString state = QStringLiteral("starting"); // "starting" | "running" | "stopping"
@@ -22,6 +24,8 @@ struct RunningApp
         return {
             {QStringLiteral("instance"), instance},
             {QStringLiteral("appId"), appId},
+            {QStringLiteral("item"), item},
+            {QStringLiteral("parent"), parent},
             {QStringLiteral("profile"), profile},
             {QStringLiteral("started"), started},
             {QStringLiteral("state"), state},
@@ -42,6 +46,9 @@ public:
     virtual bool isMock() const = 0;
     virtual void refresh() = 0; // reports the running list
     virtual void launch(const QString &appId, const QString &profile) = 0;
+    // A Library1 item (ADR-041, RUY-1051): "flatpak:<id>" is launch(id); a Steam game answers "failed"
+    // until RUY-1052. The answer comes with launchItemFinished.
+    virtual void launchItem(const QString &item, const QString &profile) = 0;
     virtual void stop(const QString &instance) = 0;
     // Force quit (RUY-736): SIGKILL to the whole run; AppExited "killed" follows.
     virtual void kill(const QString &instance) = 0;
@@ -55,6 +62,8 @@ signals:
     void runningListed(const QList<RunningApp> &apps);
     // status: see the XML; `instance` is set on "ok" only.
     void launchFinished(const QString &appId, const QString &profile, const QString &status, const QString &instance);
+    // LaunchItem's answer, with the statuses of launchFinished.
+    void launchItemFinished(const QString &item, const QString &profile, const QString &status, const QString &instance);
     void stopFinished(const QString &instance, const QString &status);
     // status: "ok" | "unknown-instance" | "not-allowed" | "failed"
     void killFinished(const QString &instance, const QString &status);

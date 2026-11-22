@@ -13,7 +13,9 @@
 // of what runs. Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux (ruya-session,
 // T-139) and the mock elsewhere, like Store and Profiles.
 //
-// Running records are plain objects: { instance, appId, profile, started, state, frozen }.
+// Running records are plain objects: { instance, appId, item, parent, profile, started, state, frozen }.
+// `item` is the Library1 item id ("flatpak:<appId>", or "steam:<appid>" for a Steam game) and `parent`
+// the instance of the Steam instance a game runs under ("" for every other record), ADR-041.
 class Session : public QObject
 {
     Q_OBJECT
@@ -34,6 +36,8 @@ public:
 
     // Results arrive with launchFinished / stopFinished; the app itself with appStarted.
     Q_INVOKABLE void launch(const QString &appId, const QString &profile);
+    // A Library1 item (ADR-041): "flatpak:<id>" is launch(id); the answer comes with launchItemFinished.
+    Q_INVOKABLE void launchItem(const QString &item, const QString &profile);
     Q_INVOKABLE void stop(const QString &instance);
     // Force quit (RUY-736, the closing screen): ends the whole run at once. The answer comes with
     // killFinished, the end with appExited (reason "killed").
@@ -67,6 +71,12 @@ public:
     Q_INVOKABLE void mockKillAnswer(const QString &status);
     // The process id the mock gives a launched instance's window client (0 when unknown), T-459.
     Q_INVOKABLE int mockPidOf(const QString &instance) const;
+    // A Steam game starts under the running instance `parentInstance` (ADR-041, for B6's tests): a child
+    // record with `item` and `parent`, and AppStarted with the parent's app id. Returns the child's instance,
+    // "" when the parent is not running or `item` is not "steam:<digits>".
+    Q_INVOKABLE QString mockStartChild(const QString &parentInstance, const QString &item);
+    // The game ends by itself: AppExited "quit" for the child, with the parent's app id.
+    Q_INVOKABLE void mockEndChild(const QString &instance);
     // "freeze <instance>", "thaw <instance>", "stop <instance>", "kill <instance>" in the order they were asked.
     Q_INVOKABLE QStringList mockCalls() const;
 
@@ -74,6 +84,7 @@ signals:
     void runningChanged();
     // status: see api/dbus/org.ruyaos.Session1.xml; `instance` is set on "ok" only.
     void launchFinished(const QString &appId, const QString &profile, const QString &status, const QString &instance);
+    void launchItemFinished(const QString &item, const QString &profile, const QString &status, const QString &instance);
     void stopFinished(const QString &instance, const QString &status);
     void killFinished(const QString &instance, const QString &status);
     void freezeFinished(const QString &instance, const QString &status);

@@ -14,7 +14,7 @@ use crate::spawner::{
     Spawner, UnitEvent,
 };
 use ruya_flatpak::valid_session_app_id;
-use ruya_ids::{profile_of_user, valid_profile_id};
+use ruya_ids::{flatpak_item, profile_of_user, valid_profile_id};
 
 /// After `Stop`, the app has this long to quit before it is killed: the backstop (RUY-736). It
 /// counts from the stop itself, after the thaw of a frozen app (which can take up to two bounded
@@ -147,6 +147,10 @@ pub enum Notice {
 pub struct RunningApp {
     pub instance: String,
     pub app_id: String,
+    /// The Library1 item id (ADR-041): `flatpak:<app_id>`, or `steam:<appid>` for a Steam child.
+    pub item: String,
+    /// The parent's instance name for a child instance, else "" (ADR-041).
+    pub parent: String,
     pub profile: String,
     pub started: i64,
     pub state: State,
@@ -167,6 +171,11 @@ struct Instance {
     /// The profile's Unix user ("ruya-p1").
     user: String,
     app_id: String,
+    /// The Library1 item id (ADR-041); every instance so far is a Flatpak app's.
+    item: String,
+    /// The parent's instance name for a child instance (ADR-041), else "". Steam children arrive
+    /// with RUY-1052; until then it is always "".
+    parent: String,
     profile: String,
     started: i64,
     state: State,
@@ -296,6 +305,8 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                     unit: unit.clone(),
                     user: user.clone(),
                     app_id: app_id.to_owned(),
+                    item: flatpak_item(app_id),
+                    parent: String::new(),
                     profile: profile.to_owned(),
                     started: unix,
                     state: State::Starting,
@@ -317,6 +328,19 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 (Status::Failed, String::new())
             }
         }
+    }
+
+    /// `LaunchItem` of a Steam game (ADR-041 point 3), `appid` already checked as digits. The child
+    /// instance arrives with RUY-1052, which replaces this answer: until then a valid item is
+    /// "failed", with one journal line. A bad profile id is "invalid", as for `launch`.
+    pub fn launch_steam_game(&self, appid: &str, profile: &str) -> (Status, String) {
+        if !valid_profile_id(profile) {
+            return (Status::Invalid, String::new());
+        }
+        eprintln!(
+            "ruya-session: steam:{appid} for {profile} not launched: Steam children arrive with RUY-1052"
+        );
+        (Status::Failed, String::new())
     }
 
     /// Is an instance of this app of this profile on its way out (told to stop, not gone yet)?
@@ -650,6 +674,8 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             let mut inst = Instance {
                 unit: found.unit,
                 user: found.user.clone(),
+                item: flatpak_item(&found.app_id),
+                parent: String::new(),
                 app_id: found.app_id,
                 profile: profile.to_owned(),
                 started: if found.started > 0 {
@@ -740,6 +766,8 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             .map(|i| RunningApp {
                 instance: i.unit.clone(),
                 app_id: i.app_id.clone(),
+                item: i.item.clone(),
+                parent: i.parent.clone(),
                 profile: i.profile.clone(),
                 started: i.started,
                 state: i.state,
@@ -1765,6 +1793,51 @@ mod tests {
         );
         // A second Started for the same unit is not announced twice.
         assert_eq!(s.on_event(UnitEvent::Started { unit }), None);
+    }
+
+    #[test]
+    fn every_record_names_its_flatpak_item_and_no_parent() {
+        // ADR-041 point 1 (RUY-1051): a launched app and an adopted one alike.
+        let spawner =
+            FakeSpawner::new()
+                .with_app(APP)
+                .with_running("ruya-p1", "org.ruyaos.Puzzle", 50);
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, Vec::new());
+        s.adopt(100, Instant::now(), true);
+        assert_eq!(s.launch(APP, "p1", 100, &[]).0, Status::Ok);
+        let mut keys: Vec<(String, String, String)> = s
+            .list()
+            .into_iter()
+            .map(|a| (a.app_id, a.item, a.parent))
+            .collect();
+        keys.sort();
+        assert_eq!(
+            keys,
+            [
+                (
+                    "org.ruyaos.Puzzle".to_owned(),
+                    "flatpak:org.ruyaos.Puzzle".to_owned(),
+                    String::new()
+                ),
+                (APP.to_owned(), format!("flatpak:{APP}"), String::new()),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_steam_game_is_failed_until_its_children_are_built() {
+        // RUY-1052 replaces this answer with a child instance of Steam.
+        let s = session();
+        assert_eq!(
+            s.launch_steam_game("70", "p1"),
+            (Status::Failed, String::new())
+        );
+        assert_eq!(
+            s.launch_steam_game("70", "../p1"),
+            (Status::Invalid, String::new())
+        );
+        assert!(s.list().is_empty());
     }
 
     #[test]

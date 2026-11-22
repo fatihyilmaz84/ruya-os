@@ -637,6 +637,18 @@ out="$(DROP_INSTALLED="" rundrop 'drop_test_apps org.a; echo "rc=$?"')"
 expect_contains "nothing installed: nothing to do, success" "$out" "rc=0"
 expect_lacks "nothing installed: no uninstall call" "$out" "flatpak uninstall"
 
+# --- vm-session-check.sh: running_item, the ListRunning keys of ADR-041 (RUY-1051) -------------------
+itemsrc="$tmp/running-item.sh"
+sed -n '/^# --- running_item begin/,/^# --- running_item end/p' "$here/vm-session-check.sh" > "$itemsrc"
+[ -s "$itemsrc" ] && pass "vm-session-check.sh has the running_item block" || fail "no running_item block in vm-session-check.sh"
+listed='{"type":"aa{sv}","data":[[{"instance":{"type":"s","data":"u1"},"app_id":{"type":"s","data":"org.a.B"},"item":{"type":"s","data":"flatpak:org.a.B"},"parent":{"type":"s","data":""}},{"instance":{"type":"s","data":"u2"},"app_id":{"type":"s","data":"org.a.C"}}]]}'
+out="$(printf '%s' "$listed" | bash -c ". '$itemsrc'; running_item u1" 2>&1)"
+expect_contains "a record with both keys gives item and parent" "$out" "flatpak:org.a.B|"
+out="$(printf '%s' "$listed" | bash -c ". '$itemsrc'; running_item u2" 2>&1)"
+expect_contains "a record without item and parent is missing" "$out" "missing"
+out="$(printf '%s' "$listed" | bash -c ". '$itemsrc'; running_item u9" 2>&1)"
+expect_contains "an instance not listed is missing" "$out" "missing"
+
 # --- vm-session-check.sh display: the refused client (RUY-679) -------------------------------------
 # Passes on AppExited, or on the unit frozen with "its profile is not signed in"; fails on neither.
 echo '{"member":"AppExited","x":"org.ruyaos.TestWaylandClient"}' > "$tmp/drop-work/signals.log"
