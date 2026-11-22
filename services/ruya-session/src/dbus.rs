@@ -579,7 +579,7 @@ impl SessionIface {
     }
 
     /// ADR-041 point 3: a Flatpak item is `Launch`; a Steam game goes to the core, which answers
-    /// "failed" until RUY-1052 builds its child instance.
+    /// "failed" until RUY-1067 launches its child instance.
     async fn launch_item(
         &self,
         item: &str,
@@ -1004,98 +1004,100 @@ pub async fn forward(
     };
     let event_loop = async {
         while let Ok(event) = events.recv().await {
-            let notice = lock(&session).on_event(event);
-            let Some(notice) = notice else { continue };
-            let started = match &notice {
-                Notice::Started { instance, .. } => Some(instance.clone()),
-                Notice::Exited { .. } => None,
-            };
-            let changed = match &notice {
-                Notice::Started { instance, .. } => {
-                    let app = lock(&session)
-                        .list()
-                        .into_iter()
-                        .find(|a| &a.instance == instance);
-                    if let Some(app) = app {
-                        // The run is dated from now, when it reached `running`.
-                        let live = LiveApp {
-                            started: unix_now(),
-                            ..live_app(&app)
-                        };
-                        usage_lock(&usage).app_started(&live, Instant::now());
-                    }
-                    None
-                }
-                Notice::Exited {
-                    instance, reason, ..
-                } => usage_lock(&usage).app_exited(
-                    instance,
-                    end_reason_of(*reason),
-                    Instant::now(),
-                    unix_now(),
-                ),
-            };
-            let sent = async {
-                let iface = connection
-                    .object_server()
-                    .interface::<_, SessionIface>(OBJECT_PATH)
-                    .await?;
-                let emitter = iface.signal_emitter();
-                match notice {
-                    Notice::Started { instance, app_id } => {
-                        SessionIface::app_started(emitter, instance, app_id).await
+            // Bound first: the guard must not live through the loop, whose body locks again.
+            let notices = lock(&session).on_event(event);
+            for notice in notices {
+                let started = match &notice {
+                    Notice::Started { instance, .. } => Some(instance.clone()),
+                    Notice::Exited { .. } => None,
+                };
+                let changed = match &notice {
+                    Notice::Started { instance, .. } => {
+                        let app = lock(&session)
+                            .list()
+                            .into_iter()
+                            .find(|a| &a.instance == instance);
+                        if let Some(app) = app {
+                            // The run is dated from now, when it reached `running`.
+                            let live = LiveApp {
+                                started: unix_now(),
+                                ..live_app(&app)
+                            };
+                            usage_lock(&usage).app_started(&live, Instant::now());
+                        }
+                        None
                     }
                     Notice::Exited {
+                        instance, reason, ..
+                    } => usage_lock(&usage).app_exited(
                         instance,
-                        app_id,
-                        exit_code,
-                        reason,
-                    } => {
-                        SessionIface::app_exited(
-                            emitter,
+                        end_reason_of(*reason),
+                        Instant::now(),
+                        unix_now(),
+                    ),
+                };
+                let sent = async {
+                    let iface = connection
+                        .object_server()
+                        .interface::<_, SessionIface>(OBJECT_PATH)
+                        .await?;
+                    let emitter = iface.signal_emitter();
+                    match notice {
+                        Notice::Started { instance, app_id } => {
+                            SessionIface::app_started(emitter, instance, app_id).await
+                        }
+                        Notice::Exited {
                             instance,
                             app_id,
                             exit_code,
-                            reason.as_str().to_owned(),
-                        )
-                        .await
+                            reason,
+                        } => {
+                            SessionIface::app_exited(
+                                emitter,
+                                instance,
+                                app_id,
+                                exit_code,
+                                reason.as_str().to_owned(),
+                            )
+                            .await
+                        }
                     }
                 }
-            }
-            .await;
-            if let Err(err) = sent {
-                eprintln!("ruya-session: emitting a signal failed: {err}");
-            }
-            send_usage_changed(&connection, changed.into_iter().collect()).await;
-            // System mode only: `--session` has no signed-in profile to compare with.
-            if let (true, Some(instance)) = (system, started) {
-                let changes = freeze_started(&session, &turn, &instance, || async {
-                    // Bounded: a hung ruya-profiles must not stall the event pump.
-                    let read = async {
-                        fetch_active_profile(&connection)
-                            .await
-                            .map_err(|err| {
-                                eprintln!(
-                                    "ruya-session: Profiles1 ActiveProfile not readable: {err}"
-                                )
-                            })
-                            .ok()
-                    };
-                    let timeout = async {
-                        async_io::Timer::after(Duration::from_secs(2)).await;
-                        eprintln!("ruya-session: Profiles1 ActiveProfile read timed out");
-                        None
-                    };
-                    futures_lite::future::or(read, timeout).await
-                })
                 .await;
-                if !changes.is_empty() {
-                    if let Ok(iface) = connection
-                        .object_server()
-                        .interface::<_, SessionIface>(OBJECT_PATH)
-                        .await
-                    {
-                        emit_frozen(iface.signal_emitter(), changes).await;
+                if let Err(err) = sent {
+                    eprintln!("ruya-session: emitting a signal failed: {err}");
+                }
+                send_usage_changed(&connection, changed.into_iter().collect()).await;
+                // System mode only: `--session` has no signed-in profile to compare with.
+                if let (true, Some(instance)) = (system, started) {
+                    let changes = freeze_started(&session, &turn, &instance, || async {
+                        // Bounded: a hung ruya-profiles must not stall the event pump.
+                        let read = async {
+                            fetch_active_profile(&connection)
+                                .await
+                                .map_err(|err| {
+                                    eprintln!(
+                                        "ruya-session: Profiles1 ActiveProfile not readable: {err}"
+                                    )
+                                })
+                                .ok()
+                        };
+                        let timeout = async {
+                            async_io::Timer::after(Duration::from_secs(2)).await;
+                            eprintln!("ruya-session: Profiles1 ActiveProfile read timed out");
+                            None
+                        };
+                        futures_lite::future::or(read, timeout).await
+                    })
+                    .await;
+                    if !changes.is_empty() {
+                        if let Ok(iface) = connection
+                            .object_server()
+                            .interface::<_, SessionIface>(OBJECT_PATH)
+                            .await
+                        {
+                            emit_frozen(iface.signal_emitter(), changes).await;
+                        }
                     }
                 }
             }

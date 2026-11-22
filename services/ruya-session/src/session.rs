@@ -4,6 +4,14 @@
 //!
 //! An instance goes `starting -> running -> stopping`, and `exited` is the end: an exited
 //! instance is reported once (a `Notice::Exited`) and removed, so it never shows in `list`.
+//!
+//! A Steam game is a child instance of the profile's Steam instance (ADR-041, RUY-1052): it comes
+//! in as `UnitEvent::ChildStarted` (the spawner tells its scopes apart, `scope.rs`), is `running`
+//! from the start, has `item` `steam:<appid>` and `parent` the Steam instance, and ends with an
+//! `Exited` of its own name. Point 7: Stop and Kill of a parent reach its children first; Freeze
+//! and Thaw of a parent reach every running child, and the parent's own unit and scopes only when
+//! its app may be frozen (`Spawner::may_freeze`, the app table's `freeze`); every record's
+//! `frozen` is its own. A parent that ends ends its children first.
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -14,7 +22,7 @@ use crate::spawner::{
     Spawner, UnitEvent,
 };
 use ruya_flatpak::valid_session_app_id;
-use ruya_ids::{flatpak_item, profile_of_user, valid_profile_id};
+use ruya_ids::{flatpak_item, profile_of_user, steam_item, valid_profile_id, valid_steam_appid};
 
 /// After `Stop`, the app has this long to quit before it is killed: the backstop (RUY-736). It
 /// counts from the stop itself, after the thaw of a frozen app (which can take up to two bounded
@@ -171,11 +179,12 @@ struct Instance {
     /// The profile's Unix user ("ruya-p1").
     user: String,
     app_id: String,
-    /// The Library1 item id (ADR-041); every instance so far is a Flatpak app's.
+    /// The Library1 item id (ADR-041): `flatpak:<app_id>`, or `steam:<appid>` for a Steam child.
     item: String,
-    /// The parent's instance name for a child instance (ADR-041), else "". Steam children arrive
-    /// with RUY-1052; until then it is always "".
+    /// The parent's instance name for a child instance (ADR-041), else "".
     parent: String,
+    /// May this record's own unit and scopes be frozen (`Spawner::may_freeze`; a child: always)?
+    freeze_own: bool,
     profile: String,
     started: i64,
     state: State,
@@ -270,7 +279,9 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         let Some(user) = self.directory.unix_user(profile) else {
             return (Status::UnknownProfile, String::new());
         };
-        let same = |i: &&Instance| i.app_id == app_id && i.profile == profile;
+        // The app's own instance; a Steam game's child carries Steam's app id too.
+        let same =
+            |i: &&Instance| i.app_id == app_id && i.profile == profile && i.parent.is_empty();
         if self
             .instances
             .iter()
@@ -307,6 +318,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                     app_id: app_id.to_owned(),
                     item: flatpak_item(app_id),
                     parent: String::new(),
+                    freeze_own: self.spawner.may_freeze(app_id),
                     profile: profile.to_owned(),
                     started: unix,
                     state: State::Starting,
@@ -331,35 +343,63 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     }
 
     /// `LaunchItem` of a Steam game (ADR-041 point 3), `appid` already checked as digits. The child
-    /// instance arrives with RUY-1052, which replaces this answer: until then a valid item is
-    /// "failed", with one journal line. A bad profile id is "invalid", as for `launch`.
+    /// instance is launched by RUY-1067 (B3b), which replaces this answer: until then a valid item
+    /// is "failed", with one journal line. A bad profile id is "invalid", as for `launch`.
     pub fn launch_steam_game(&self, appid: &str, profile: &str) -> (Status, String) {
         if !valid_profile_id(profile) {
             return (Status::Invalid, String::new());
         }
         eprintln!(
-            "ruya-session: steam:{appid} for {profile} not launched: Steam children arrive with RUY-1052"
+            "ruya-session: steam:{appid} for {profile} not launched: Steam children are launched with RUY-1067"
         );
         (Status::Failed, String::new())
     }
 
     /// Is an instance of this app of this profile on its way out (told to stop, not gone yet)?
     pub fn is_stopping(&self, app_id: &str, profile: &str) -> bool {
+        self.instances.iter().any(|i| {
+            i.app_id == app_id
+                && i.profile == profile
+                && i.parent.is_empty()
+                && i.state == State::Stopping
+        })
+    }
+
+    /// The positions of `unit`'s child instances (ADR-041), in the order they started. Stop, Kill,
+    /// Freeze and Thaw never remove an instance, so the positions stay valid through them.
+    fn children_of(&self, unit: &str) -> Vec<usize> {
         self.instances
             .iter()
-            .any(|i| i.app_id == app_id && i.profile == profile && i.state == State::Stopping)
+            .enumerate()
+            .filter(|(_, i)| i.parent == unit)
+            .map(|(at, _)| at)
+            .collect()
     }
 
     /// Asks the app to quit; `tick` kills it if it does not. Stopping an instance that is
     /// already stopping is `Ok` and changes nothing. The grace time starts when the stop is sent:
-    /// `clock` is read after the thaw of a frozen app, so a slow thaw does not eat it.
+    /// `clock` is read after the thaw of a frozen app, so a slow thaw does not eat it. A parent's
+    /// children are stopped first (ADR-041 point 7; a child's failed stop is logged, the parent is
+    /// stopped anyway).
     pub fn stop(&mut self, instance: &str, clock: impl Clock) -> Status {
-        let Some(inst) = self.instances.iter_mut().find(|i| i.unit == instance) else {
+        let Some(at) = self.instances.iter().position(|i| i.unit == instance) else {
             return Status::UnknownInstance;
         };
-        if inst.state == State::Stopping {
+        if self.instances[at].state == State::Stopping {
             return Status::Ok;
         }
+        let now = || clock.now();
+        for child in self.children_of(instance) {
+            if self.instances[child].state != State::Stopping {
+                self.stop_at(child, now);
+            }
+        }
+        self.stop_at(at, now)
+    }
+
+    /// The stop of the one instance at `at` (not stopping yet): a frozen one is thawed first.
+    fn stop_at(&mut self, at: usize, clock: impl Clock) -> Status {
+        let inst = &mut self.instances[at];
         if inst.frozen {
             // A frozen app cannot handle the SIGTERM of the stop: thaw it first (T-457). A failed
             // thaw still stops it; the kill after the grace time ends even a frozen process.
@@ -423,17 +463,30 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     /// frozen one is not thawed (the kill ends it anyway). The instance is then stopping and its end
     /// is "killed". `tick` sends no second kill for it; a second `kill` does. `clock` gives the
     /// start of the stop for an app that was not stopping yet.
+    ///
+    /// A parent's children are killed first (ADR-041 point 7; a child's failed kill is logged, the
+    /// parent is killed anyway).
     pub fn kill(&mut self, instance: &str, active: Option<&str>, clock: impl Clock) -> Status {
-        let Some(inst) = self
+        let Some(at) = self
             .instances
-            .iter_mut()
-            .find(|i| i.unit == instance && !i.hidden)
+            .iter()
+            .position(|i| i.unit == instance && !i.hidden)
         else {
             return Status::UnknownInstance;
         };
-        if active.is_some_and(|a| a.is_empty() || a != inst.profile) {
+        if active.is_some_and(|a| a.is_empty() || a != self.instances[at].profile) {
             return Status::NotAllowed;
         }
+        let now = || clock.now();
+        for child in self.children_of(instance) {
+            self.kill_at(child, now);
+        }
+        self.kill_at(at, now)
+    }
+
+    /// The kill of the one instance at `at`.
+    fn kill_at(&mut self, at: usize, clock: impl Clock) -> Status {
+        let inst = &mut self.instances[at];
         if let Err(err) = self.spawner.kill(&inst.unit) {
             eprintln!("ruya-session: killing {} failed: {err}", inst.unit);
             return Status::Failed;
@@ -490,8 +543,41 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     }
 
     /// The freezer path of `freeze` and `profile_changed`: the running instance at `at` is frozen
-    /// (already frozen: `Ok`, the OS is not asked again), or a failed freeze is undone.
+    /// (already frozen: `Ok`, the OS is not asked again), or a failed freeze is undone. ADR-041
+    /// point 7: a parent's running children first, then its own unit and scopes only when its app
+    /// may be frozen (`freeze_own`); a failure undoes what this call froze.
     fn freeze_at(&mut self, at: usize, now: Instant) -> Status {
+        let mut froze = Vec::new();
+        for child in self.children_of(&self.instances[at].unit.clone()) {
+            let c = &self.instances[child];
+            if c.frozen || c.hidden || c.state != State::Running {
+                continue;
+            }
+            if self.freeze_one(child, now) != Status::Ok {
+                self.undo_freezes(&froze);
+                return Status::Failed;
+            }
+            froze.push(child);
+        }
+        if !self.instances[at].freeze_own {
+            return Status::Ok;
+        }
+        let status = self.freeze_one(at, now);
+        if status != Status::Ok {
+            self.undo_freezes(&froze);
+        }
+        status
+    }
+
+    /// Thaws what a failed `freeze_at` had frozen already, so nothing of it stays frozen.
+    fn undo_freezes(&mut self, froze: &[usize]) {
+        for &at in froze {
+            self.thaw_one(at);
+        }
+    }
+
+    /// The freeze of the one instance at `at`.
+    fn freeze_one(&mut self, at: usize, now: Instant) -> Status {
         let inst = &mut self.instances[at];
         if inst.frozen {
             return Status::Ok;
@@ -586,12 +672,35 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
 
     /// Thaws a running app of the signed-in profile (T-457). The OS is asked even when the app is
     /// not known to be frozen (a restart of this service forgets it); thawing a running app is a
-    /// no-op there. A failed thaw keeps `frozen`, so a later Thaw or Stop tries again.
+    /// no-op there. A failed thaw keeps `frozen`, so a later Thaw or Stop tries again. ADR-041
+    /// point 7: a parent's running children are thawed first, then its own unit and scopes when
+    /// its app may be frozen (what `freeze_at` froze); any failure is `Failed`, after every thaw
+    /// was tried.
     pub fn thaw(&mut self, instance: &str, active: Option<&str>) -> Status {
         let at = match self.freezable(instance, active) {
             Ok(at) => at,
             Err(status) => return status,
         };
+        let mut status = Status::Ok;
+        for child in self.children_of(instance) {
+            let c = &self.instances[child];
+            if c.hidden || c.state != State::Running {
+                continue;
+            }
+            if self.thaw_one(child) != Status::Ok {
+                status = Status::Failed;
+            }
+        }
+        // A record frozen anyway (adopted frozen, before its app's rule changed) is thawed too.
+        let own = &self.instances[at];
+        if (own.freeze_own || own.frozen) && self.thaw_one(at) != Status::Ok {
+            status = Status::Failed;
+        }
+        status
+    }
+
+    /// The thaw of the one instance at `at`.
+    fn thaw_one(&mut self, at: usize) -> Status {
         let inst = &mut self.instances[at];
         if inst.reclaim == Reclaim::Sent {
             // A reclaim still running would page the game out while it plays again (T-466).
@@ -676,6 +785,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 user: found.user.clone(),
                 item: flatpak_item(&found.app_id),
                 parent: String::new(),
+                freeze_own: self.spawner.may_freeze(&found.app_id),
                 app_id: found.app_id,
                 profile: profile.to_owned(),
                 started: if found.started > 0 {
@@ -733,7 +843,9 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     /// The instance a process belongs to (T-459): its cgroup is read, and the instance whose unit,
     /// or one of whose app's Flatpak scopes (`is_app_scope`, any of an Electron app's two), holds
     /// it in the manager of that instance's own user is the answer. The deepest unit on the
-    /// process's path decides. A hidden instance (of a removed profile) is never named.
+    /// process's path decides. A hidden instance (of a removed profile) is never named. A scope of
+    /// a child instance (`Spawner::child_of_scope`, a Steam game) names the child, not its parent
+    /// (ADR-041 point 5).
     pub fn instance_of_pid(&self, pid: u32) -> (Status, String) {
         if pid == 0 {
             return (Status::Invalid, String::new());
@@ -745,6 +857,14 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             .and_then(|place| {
                 let user = self.spawner.user_name(place.uid)?;
                 place.units.iter().find_map(|unit| {
+                    let child = self.spawner.child_of_scope(&user, unit).and_then(|name| {
+                        self.instances
+                            .iter()
+                            .find(|i| i.unit == name && i.user == user && !i.hidden)
+                    });
+                    if let Some(child) = child {
+                        return Some(child.unit.clone());
+                    }
                     self.instances
                         .iter()
                         .filter(|i| !i.hidden)
@@ -776,64 +896,136 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             .collect()
     }
 
-    /// Takes in what the OS reports. Events for units we do not know are ignored.
-    pub fn on_event(&mut self, event: UnitEvent) -> Option<Notice> {
+    /// Takes in what the OS reports; the notices to send, in order (an instance's end comes after
+    /// the ends of its children). Events for units we do not know are ignored.
+    pub fn on_event(&mut self, event: UnitEvent) -> Vec<Notice> {
         match event {
             UnitEvent::Started { unit } => {
-                let inst = self.instances.iter_mut().find(|i| i.unit == unit)?;
+                let Some(inst) = self.instances.iter_mut().find(|i| i.unit == unit) else {
+                    return Vec::new();
+                };
                 if inst.reached_running || inst.hidden {
-                    return None;
+                    return Vec::new();
                 }
                 inst.reached_running = true;
                 if inst.state == State::Starting {
                     inst.state = State::Running;
                 }
-                Some(Notice::Started {
+                vec![Notice::Started {
                     instance: inst.unit.clone(),
                     app_id: inst.app_id.clone(),
-                })
+                }]
             }
             UnitEvent::Exited {
                 unit,
                 code,
                 signaled,
-            } => {
-                let at = self.instances.iter().position(|i| i.unit == unit)?;
-                let inst = self.instances.remove(at);
-                self.sync_audio(&inst.user, false);
-                if inst.hidden {
-                    return None;
-                }
-                let (exit_code, reason) = exit_reason(&inst, code, signaled);
-                Some(Notice::Exited {
-                    instance: inst.unit,
-                    app_id: inst.app_id,
-                    exit_code,
-                    reason,
-                })
-            }
-            UnitEvent::ExecFailed { unit } => {
-                let at = self.instances.iter().position(|i| i.unit == unit)?;
-                let inst = self.instances.remove(at);
-                self.sync_audio(&inst.user, false);
-                if inst.hidden {
-                    return None;
-                }
+            } => self.end(&unit, |inst| exit_reason(inst, code, signaled)),
+            UnitEvent::ExecFailed { unit } => self.end(&unit, |inst| {
                 // The program never ran, whatever `Running as unit` said before: `launch-failed`
                 // (code -1) unless the app was being stopped anyway.
-                let (exit_code, reason) = if inst.state == State::Stopping {
-                    exit_reason(&inst, 0, false)
+                if inst.state == State::Stopping {
+                    exit_reason(inst, 0, false)
                 } else {
                     (-1, ExitReason::LaunchFailed)
-                };
-                Some(Notice::Exited {
-                    instance: inst.unit,
-                    app_id: inst.app_id,
-                    exit_code,
-                    reason,
-                })
-            }
+                }
+            }),
+            UnitEvent::ChildStarted {
+                parent,
+                child,
+                appid,
+                started,
+                frozen,
+            } => self.child_started(&parent, child, &appid, started, frozen),
         }
+    }
+
+    /// The end of `unit`, its children's first (ADR-041 point 7: a child whose own end has not
+    /// come yet ends with its parent, as a child's end would, code 0). `why` gives the parent's
+    /// code and reason. A hidden instance is removed without a notice.
+    fn end(&mut self, unit: &str, why: impl Fn(&Instance) -> (i32, ExitReason)) -> Vec<Notice> {
+        let mut out = Vec::new();
+        if !self.instances.iter().any(|i| i.unit == unit) {
+            return out;
+        }
+        while let Some(at) = self.instances.iter().position(|i| i.parent == unit) {
+            out.extend(self.remove_at(at, |c| exit_reason(c, 0, false)));
+        }
+        if let Some(at) = self.instances.iter().position(|i| i.unit == unit) {
+            out.extend(self.remove_at(at, why));
+        }
+        out
+    }
+
+    /// Removes the instance at `at`: its `Exited` notice, `None` for a hidden one.
+    fn remove_at(
+        &mut self,
+        at: usize,
+        why: impl Fn(&Instance) -> (i32, ExitReason),
+    ) -> Option<Notice> {
+        let inst = self.instances.remove(at);
+        self.sync_audio(&inst.user, false);
+        if inst.hidden {
+            return None;
+        }
+        let (exit_code, reason) = why(&inst);
+        Some(Notice::Exited {
+            instance: inst.unit,
+            app_id: inst.app_id,
+            exit_code,
+            reason,
+        })
+    }
+
+    /// A Steam game's first scope appeared in `parent`'s run (ADR-041 points 2 and 4): its child
+    /// instance `child` is listed, `running`, with `item` `steam:<appid>`, the parent's app id,
+    /// profile and user, and announced with the parent's app id. Hidden while its parent is. A
+    /// child that is known already, a parent that is not, or a bad app id changes nothing.
+    fn child_started(
+        &mut self,
+        parent: &str,
+        child: String,
+        appid: &str,
+        started: i64,
+        frozen: bool,
+    ) -> Vec<Notice> {
+        let Some(p) = self
+            .instances
+            .iter()
+            .find(|i| i.unit == parent && i.parent.is_empty())
+        else {
+            return Vec::new();
+        };
+        if !valid_steam_appid(appid) || self.instances.iter().any(|i| i.unit == child) {
+            return Vec::new();
+        }
+        let inst = Instance {
+            unit: child,
+            user: p.user.clone(),
+            app_id: p.app_id.clone(),
+            item: steam_item(appid),
+            parent: parent.to_owned(),
+            freeze_own: true,
+            profile: p.profile.clone(),
+            started: if started > 0 { started } else { p.started },
+            state: State::Running,
+            reached_running: true,
+            stop_asked: None,
+            kill_sent: false,
+            kill_asked: false,
+            hidden: p.hidden,
+            frozen,
+            frozen_at: None,
+            reclaim: Reclaim::Waiting,
+        };
+        let notice = (!inst.hidden).then(|| Notice::Started {
+            instance: inst.unit.clone(),
+            app_id: inst.app_id.clone(),
+        });
+        let user = inst.user.clone();
+        self.instances.push(inst);
+        self.sync_audio(&user, false);
+        notice.into_iter().collect()
     }
 
     /// Kills the apps that did not quit within `STOP_GRACE` of their `Stop`, and starts the
@@ -851,9 +1043,11 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 }
             }
         }
+        // A child is not reclaimed on its own: the reclaim reaches a unit and its app's scopes.
         let due = |i: &Instance| {
             i.frozen
                 && !i.hidden
+                && i.parent.is_empty()
                 && i.state == State::Running
                 && i.reclaim == Reclaim::Waiting
                 && i.frozen_at
@@ -985,9 +1179,7 @@ mod tests {
     fn running(s: &mut Session<FakeSpawner, ProfileSnapshot>) -> String {
         let (status, unit) = s.launch(APP, "p1", 100, &[]);
         assert_eq!(status, Status::Ok);
-        assert!(s
-            .on_event(UnitEvent::Started { unit: unit.clone() })
-            .is_some());
+        assert!(s.on_event(UnitEvent::Started { unit: unit.clone() }).len() == 1);
         unit
     }
 
@@ -999,12 +1191,13 @@ mod tests {
         }
     }
 
-    fn reason(n: Option<Notice>) -> (i32, &'static str) {
-        match n {
-            Some(Notice::Exited {
+    /// The code and reason of the one exit in `n`.
+    fn reason(n: Vec<Notice>) -> (i32, &'static str) {
+        match n.as_slice() {
+            [Notice::Exited {
                 exit_code, reason, ..
-            }) => (exit_code, reason.as_str()),
-            other => panic!("expected an exit, got {other:?}"),
+            }] => (*exit_code, reason.as_str()),
+            other => panic!("expected one exit, got {other:?}"),
         }
     }
 
@@ -1091,7 +1284,7 @@ mod tests {
         }
         assert_eq!(s.instance_of_pid(0), (Status::Invalid, String::new()));
         // An instance that has ended is not named any more.
-        assert!(s.on_event(exited(&p1, 0, false)).is_some());
+        assert!(s.on_event(exited(&p1, 0, false)).len() == 1);
         assert_eq!(s.instance_of_pid(10), (Status::NotFound, String::new()));
         assert_eq!(s.instance_of_pid(11), (Status::NotFound, String::new()));
     }
@@ -1440,7 +1633,7 @@ mod tests {
         assert!(frozen_of(&s, &unit));
         assert_eq!(reason(s.on_event(exited(&unit, 3, false))), (3, "crashed"));
         assert!(
-            s.on_event(exited(&unit, 3, false)).is_none(),
+            s.on_event(exited(&unit, 3, false)).is_empty(),
             "reported once"
         );
         assert!(s.list().is_empty());
@@ -1496,11 +1689,13 @@ mod tests {
     // ---- An app that reaches running after its profile left (RUY-568) -------------------------
 
     fn started(s: &mut Session<FakeSpawner, ProfileSnapshot>, unit: &str) {
-        assert!(s
-            .on_event(UnitEvent::Started {
+        assert!(
+            s.on_event(UnitEvent::Started {
                 unit: unit.to_owned()
             })
-            .is_some());
+            .len()
+                == 1
+        );
     }
 
     #[test]
@@ -1601,7 +1796,7 @@ mod tests {
         // A thaw of an app that is not frozen, a stop and the end ask nothing more.
         assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
         assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
-        assert!(s.on_event(exited(&unit, 0, false)).is_some());
+        assert!(s.on_event(exited(&unit, 0, false)).len() == 1);
         assert_eq!(s.spawner.audio_calls().len(), 2);
     }
 
@@ -1614,11 +1809,11 @@ mod tests {
         let (_, puzzle) = s.launch("org.ruyaos.Puzzle", "p1", 0, &[]);
         // Another profile's app changes nothing for p1 and, frozen nothing, asks nothing.
         let (_, p2) = s.launch(APP, "p2", 0, &[]);
-        assert!(s.on_event(exited(&p2, 0, false)).is_some());
-        assert!(s.on_event(exited(&puzzle, 0, false)).is_some());
+        assert!(s.on_event(exited(&p2, 0, false)).len() == 1);
+        assert!(s.on_event(exited(&puzzle, 0, false)).len() == 1);
         // The frozen app is closed: thawed and stopping, so nothing of p1 is frozen or running.
         assert_eq!(s.stop(&racer, Instant::now()), Status::Ok);
-        assert!(s.on_event(exited(&racer, 0, false)).is_some());
+        assert!(s.on_event(exited(&racer, 0, false)).len() == 1);
         assert_eq!(
             s.spawner.audio_calls(),
             [
@@ -1776,10 +1971,10 @@ mod tests {
         let notice = s.on_event(UnitEvent::Started { unit: unit.clone() });
         assert_eq!(
             notice,
-            Some(Notice::Started {
+            [Notice::Started {
                 instance: unit.clone(),
                 app_id: APP.to_owned()
-            })
+            }]
         );
         let list = s.list();
         assert_eq!(list.len(), 1);
@@ -1792,7 +1987,7 @@ mod tests {
             ("running", "p1", 100)
         );
         // A second Started for the same unit is not announced twice.
-        assert_eq!(s.on_event(UnitEvent::Started { unit }), None);
+        assert!(s.on_event(UnitEvent::Started { unit }).is_empty());
     }
 
     #[test]
@@ -1827,7 +2022,7 @@ mod tests {
 
     #[test]
     fn a_steam_game_is_failed_until_its_children_are_built() {
-        // RUY-1052 replaces this answer with a child instance of Steam.
+        // RUY-1067 replaces this answer with a child instance of Steam.
         let s = session();
         assert_eq!(
             s.launch_steam_game("70", "p1"),
@@ -2038,7 +2233,7 @@ mod tests {
         assert_eq!(reason(s.on_event(exited(&unit, 0, false))), (0, "quit"));
         assert!(s.list().is_empty());
         // The instance is gone: a later event is ignored and Stop says so.
-        assert_eq!(s.on_event(exited(&unit, 0, false)), None);
+        assert!(s.on_event(exited(&unit, 0, false)).is_empty());
         assert_eq!(s.stop(&unit, now), Status::UnknownInstance);
     }
 
@@ -2151,13 +2346,12 @@ mod tests {
     #[test]
     fn events_for_unknown_units_are_ignored() {
         let mut s = session();
-        assert_eq!(
-            s.on_event(UnitEvent::Started {
+        assert!(s
+            .on_event(UnitEvent::Started {
                 unit: "x.service".into()
-            }),
-            None
-        );
-        assert_eq!(s.on_event(exited("x.service", 1, false)), None);
+            })
+            .is_empty());
+        assert!(s.on_event(exited("x.service", 1, false)).is_empty());
     }
 
     #[test]
@@ -2166,9 +2360,7 @@ mod tests {
         let (_, unit) = s.launch(APP, "p1", 0, &[]);
         assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
         // The app comes up while stopping: still stopping, announced once.
-        assert!(s
-            .on_event(UnitEvent::Started { unit: unit.clone() })
-            .is_some());
+        assert!(s.on_event(UnitEvent::Started { unit: unit.clone() }).len() == 1);
         assert_eq!(s.list()[0].state, State::Stopping);
         assert_eq!(reason(s.on_event(exited(&unit, 0, false))), (0, "quit"));
     }
@@ -2262,14 +2454,13 @@ mod tests {
         let racer = unit_name("ruya-p1", APP);
         let puzzle = unit_name("ruya-p2", PUZZLE);
         // Adoption announced nothing and a late `Started` of the same unit is not news either.
-        assert_eq!(
-            s.on_event(UnitEvent::Started {
+        assert!(s
+            .on_event(UnitEvent::Started {
                 unit: racer.clone()
-            }),
-            None
-        );
+            })
+            .is_empty());
         assert_eq!(reason(s.on_event(exited(&racer, 0, false))), (0, "quit"));
-        assert_eq!(s.on_event(exited(&racer, 0, false)), None);
+        assert!(s.on_event(exited(&racer, 0, false)).is_empty());
         assert_eq!(
             reason(s.on_event(exited(&puzzle, 11, true))),
             (11, "killed")
@@ -2320,7 +2511,7 @@ mod tests {
         assert!(s.list().iter().all(|a| a.profile != "p9"));
         s.tick(t0 + STOP_GRACE);
         assert!(s.spawner.calls().contains(&format!("kill {orphan}")));
-        assert_eq!(s.on_event(exited(&orphan, 0, false)), None);
+        assert!(s.on_event(exited(&orphan, 0, false)).is_empty());
     }
 
     #[test]
@@ -2514,7 +2705,7 @@ mod tests {
             reason(s.on_event(exec_failed(&unit))),
             (-1, "launch-failed")
         );
-        assert_eq!(s.on_event(exec_failed(&unit)), None);
+        assert!(s.on_event(exec_failed(&unit)).is_empty());
     }
 
     #[test]
@@ -2775,5 +2966,282 @@ mod tests {
         assert!(s.stop_all(Instant::now()).is_empty());
         assert!(!s.any_left(&[]));
         assert!(s.spawner.calls().is_empty());
+    }
+
+    // Steam's games as child instances (ADR-041, RUY-1052).
+
+    const STEAM: &str = "com.valvesoftware.Steam";
+    const GAME_SCOPE: &str = "app-flatpak-com.valvesoftware.Steam-1623993748.scope";
+    const STEAM_SCOPE: &str = "app-flatpak-com.valvesoftware.Steam-2192235278.scope";
+
+    fn child_started(parent: &str, appid: &str, frozen: bool) -> UnitEvent {
+        UnitEvent::ChildStarted {
+            parent: parent.to_owned(),
+            child: crate::spawner::child_name(parent, appid),
+            appid: appid.to_owned(),
+            started: 1_500,
+            frozen,
+        }
+    }
+
+    /// Steam of p1 running, with the Half-Life child (70) announced. The spawner's calls so far
+    /// are cleared out of the way by the callers that look at them (`calls_since`).
+    fn steam_with_game(
+        spawner: FakeSpawner,
+    ) -> (Session<FakeSpawner, ProfileSnapshot>, String, String) {
+        let dir = ProfileSnapshot::new(["p1".to_owned(), "p2".to_owned()]);
+        let mut s = Session::new(spawner.with_app(STEAM), dir, vec![]);
+        let (status, steam) = s.launch(STEAM, "p1", 100, &[]);
+        assert_eq!(status, Status::Ok);
+        assert_eq!(
+            s.on_event(UnitEvent::Started {
+                unit: steam.clone()
+            })
+            .len(),
+            1
+        );
+        let child = crate::spawner::child_name(&steam, "70");
+        assert_eq!(
+            s.on_event(child_started(&steam, "70", false)),
+            [Notice::Started {
+                instance: child.clone(),
+                app_id: STEAM.to_owned()
+            }]
+        );
+        (s, steam, child)
+    }
+
+    fn calls_since(s: &Session<FakeSpawner, ProfileSnapshot>, before: usize) -> Vec<String> {
+        s.spawner.calls()[before..].to_vec()
+    }
+
+    #[test]
+    fn a_steam_game_is_a_child_listed_with_its_item_and_parent_and_announced() {
+        let (mut s, steam, child) = steam_with_game(FakeSpawner::new());
+        let list = s.list();
+        assert_eq!(list.len(), 2);
+        let game = list.iter().find(|a| a.instance == child).expect("listed");
+        assert_eq!(
+            *game,
+            RunningApp {
+                instance: child.clone(),
+                app_id: STEAM.to_owned(),
+                item: "steam:70".to_owned(),
+                parent: steam.clone(),
+                profile: "p1".to_owned(),
+                started: 1_500,
+                state: State::Running,
+                frozen: false,
+            }
+        );
+        let parent = list.iter().find(|a| a.instance == steam).expect("listed");
+        assert_eq!(parent.item, "flatpak:com.valvesoftware.Steam");
+        assert_eq!(parent.parent, "");
+        // The same child twice, a parent that is not running and a bad id change nothing.
+        assert!(s.on_event(child_started(&steam, "70", false)).is_empty());
+        assert!(s
+            .on_event(child_started("ruya-app-ruya-p1-x.y.Z.service", "70", false))
+            .is_empty());
+        assert!(s.on_event(child_started(&steam, "7a", false)).is_empty());
+        assert_eq!(s.list().len(), 2);
+        // A second launch of Steam is still Steam's own answer, the child aside.
+        assert_eq!(s.launch(STEAM, "p1", 200, &[]).0, Status::AlreadyRunning);
+    }
+
+    #[test]
+    fn a_childs_end_is_a_quit_and_its_parent_runs_on() {
+        let (mut s, steam, child) = steam_with_game(FakeSpawner::new());
+        assert_eq!(reason(s.on_event(exited(&child, 0, false))), (0, "quit"));
+        let list = s.list();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].instance, steam);
+        // The game again: a new child of the same name.
+        assert_eq!(s.on_event(child_started(&steam, "70", false)).len(), 1);
+    }
+
+    #[test]
+    fn stop_kill_and_freeze_of_a_child_reach_only_the_child() {
+        let (mut s, steam, child) = steam_with_game(FakeSpawner::new());
+        let before = s.spawner.calls().len();
+        assert_eq!(s.freeze(&child, Some("p1"), Instant::now()), Status::Ok);
+        assert_eq!(calls_since(&s, before), [format!("freeze {child}")]);
+        assert!(frozen_of(&s, &child));
+        assert!(!frozen_of(&s, &steam), "each record's frozen is its own");
+        assert_eq!(
+            s.take_frozen_changes(),
+            [FrozenChange {
+                instance: child.clone(),
+                frozen: true
+            }]
+        );
+        let before = s.spawner.calls().len();
+        assert_eq!(s.thaw(&child, Some("p1")), Status::Ok);
+        assert_eq!(calls_since(&s, before), [format!("thaw {child}")]);
+        let before = s.spawner.calls().len();
+        assert_eq!(s.stop(&child, Instant::now()), Status::Ok);
+        assert_eq!(calls_since(&s, before), [format!("stop {child}")]);
+        let before = s.spawner.calls().len();
+        assert_eq!(s.kill(&child, Some("p1"), Instant::now()), Status::Ok);
+        assert_eq!(calls_since(&s, before), [format!("kill {child}")]);
+        let states: Vec<(String, State)> = s
+            .list()
+            .into_iter()
+            .map(|a| (a.instance, a.state))
+            .collect();
+        assert_eq!(states, [(steam, State::Running), (child, State::Stopping)]);
+    }
+
+    #[test]
+    fn stop_and_kill_of_the_parent_reach_its_children_first() {
+        let (mut s, steam, child) = steam_with_game(FakeSpawner::new());
+        let before = s.spawner.calls().len();
+        assert_eq!(s.stop(&steam, Instant::now()), Status::Ok);
+        assert_eq!(
+            calls_since(&s, before),
+            [format!("stop {child}"), format!("stop {steam}")]
+        );
+        assert!(s.list().iter().all(|a| a.state == State::Stopping));
+
+        let (mut s, steam, child) = steam_with_game(FakeSpawner::new());
+        let before = s.spawner.calls().len();
+        assert_eq!(s.kill(&steam, Some("p1"), Instant::now()), Status::Ok);
+        assert_eq!(
+            calls_since(&s, before),
+            [format!("kill {child}"), format!("kill {steam}")]
+        );
+        // Both ends are "killed".
+        assert_eq!(reason(s.on_event(exited(&child, 0, false))), (0, "killed"));
+    }
+
+    #[test]
+    fn a_frozen_child_is_thawed_before_the_stop_of_its_parent() {
+        let (mut s, steam, child) = steam_with_game(FakeSpawner::new());
+        assert_eq!(s.freeze(&child, Some("p1"), Instant::now()), Status::Ok);
+        let before = s.spawner.calls().len();
+        assert_eq!(s.stop(&steam, Instant::now()), Status::Ok);
+        assert_eq!(
+            calls_since(&s, before),
+            [
+                format!("thaw {child}"),
+                format!("stop {child}"),
+                format!("stop {steam}")
+            ]
+        );
+    }
+
+    #[test]
+    fn freeze_and_thaw_of_a_parent_reach_its_children_and_itself_as_its_app_allows() {
+        // freeze = always (Steam's table today): the child, then the parent's own.
+        let (mut s, steam, child) = steam_with_game(FakeSpawner::new());
+        let before = s.spawner.calls().len();
+        assert_eq!(s.freeze(&steam, Some("p1"), Instant::now()), Status::Ok);
+        assert_eq!(
+            calls_since(&s, before),
+            [format!("freeze {child}"), format!("freeze {steam}")]
+        );
+        assert!(frozen_of(&s, &child) && frozen_of(&s, &steam));
+        let before = s.spawner.calls().len();
+        assert_eq!(s.thaw(&steam, Some("p1")), Status::Ok);
+        assert_eq!(
+            calls_since(&s, before),
+            [format!("thaw {child}"), format!("thaw {steam}")]
+        );
+        assert!(!frozen_of(&s, &child) && !frozen_of(&s, &steam));
+
+        // freeze = never (ADR-042, what B5 sets): the child only; Steam keeps running.
+        let (mut s, steam, child) = steam_with_game(FakeSpawner::new().with_freeze_never(STEAM));
+        let before = s.spawner.calls().len();
+        assert_eq!(s.freeze(&steam, Some("p1"), Instant::now()), Status::Ok);
+        assert_eq!(calls_since(&s, before), [format!("freeze {child}")]);
+        assert!(frozen_of(&s, &child));
+        assert!(!frozen_of(&s, &steam), "the parent's frozen is its own");
+        let before = s.spawner.calls().len();
+        assert_eq!(s.thaw(&steam, Some("p1")), Status::Ok);
+        assert_eq!(calls_since(&s, before), [format!("thaw {child}")]);
+        // A profile that leaves freezes the game, not Steam.
+        let before = s.spawner.calls().len();
+        s.profile_changed(Some("p1"), "p2", Instant::now());
+        assert_eq!(calls_since(&s, before), [format!("freeze {child}")]);
+    }
+
+    #[test]
+    fn a_failed_freeze_of_a_parent_undoes_its_childrens() {
+        let (mut s, steam, child) = steam_with_game(FakeSpawner::new());
+        // The shared fake: from now on every freeze fails.
+        let _ = s.spawner.observer().failing_freeze();
+        assert_eq!(s.freeze(&steam, Some("p1"), Instant::now()), Status::Failed);
+        assert!(!frozen_of(&s, &child) && !frozen_of(&s, &steam));
+    }
+
+    #[test]
+    fn a_pid_in_a_game_scope_names_the_child_and_one_in_steams_names_steam() {
+        let spawner = FakeSpawner::new()
+            .with_user(1000, "ruya-p1")
+            .with_user(1001, "ruya-p2")
+            .with_process(42, &cgroup(1000, GAME_SCOPE))
+            .with_process(43, &cgroup(1000, STEAM_SCOPE))
+            .with_process(44, &cgroup(1001, GAME_SCOPE));
+        let parent = unit_name("ruya-p1", STEAM);
+        let child = crate::spawner::child_name(&parent, "70");
+        let (s, steam, listed) =
+            steam_with_game(spawner.with_child_scope("ruya-p1", GAME_SCOPE, &child));
+        assert_eq!(listed, child);
+        assert_eq!(s.instance_of_pid(42), (Status::Ok, child));
+        assert_eq!(s.instance_of_pid(43), (Status::Ok, steam));
+        // The same scope name in another profile's manager is not this child's.
+        assert_eq!(s.instance_of_pid(44), (Status::NotFound, String::new()));
+    }
+
+    #[test]
+    fn a_parent_that_ends_ends_its_children_first() {
+        let (mut s, steam, child) = steam_with_game(FakeSpawner::new());
+        let notices = s.on_event(exited(&steam, 0, false));
+        assert_eq!(
+            notices,
+            [
+                Notice::Exited {
+                    instance: child,
+                    app_id: STEAM.to_owned(),
+                    exit_code: 0,
+                    reason: ExitReason::Quit
+                },
+                Notice::Exited {
+                    instance: steam,
+                    app_id: STEAM.to_owned(),
+                    exit_code: 0,
+                    reason: ExitReason::Quit
+                }
+            ]
+        );
+        assert!(s.list().is_empty());
+    }
+
+    #[test]
+    fn an_adopted_steam_gets_its_games_again_and_a_hidden_ones_stay_hidden() {
+        let spawner = FakeSpawner::new()
+            .with_app(STEAM)
+            .with_running("ruya-p1", STEAM, 1_000)
+            .with_running("ruya-p9", STEAM, 1_000);
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(spawner, dir, vec![]);
+        assert_eq!(s.adopt(5_000, Instant::now(), true).len(), 1);
+        let steam = unit_name("ruya-p1", STEAM);
+        let child = crate::spawner::child_name(&steam, "70");
+        // The game left frozen before the restart comes back frozen.
+        assert_eq!(s.on_event(child_started(&steam, "70", true)).len(), 1);
+        let game = s
+            .list()
+            .into_iter()
+            .find(|a| a.instance == child)
+            .expect("listed");
+        assert_eq!(
+            (game.item.as_str(), game.parent.as_str()),
+            ("steam:70", steam.as_str())
+        );
+        assert!(game.frozen);
+        // The game of a removed profile's Steam is hidden like its parent: never announced.
+        let orphan = unit_name("ruya-p9", STEAM);
+        assert!(s.on_event(child_started(&orphan, "70", false)).is_empty());
+        assert!(s.list().iter().all(|a| a.parent != orphan));
     }
 }

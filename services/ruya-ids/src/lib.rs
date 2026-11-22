@@ -67,6 +67,11 @@ pub fn flatpak_item(app_id: &str) -> String {
     format!("{FLATPAK_ITEM}{app_id}")
 }
 
+/// The item id of a Steam game ("70" -> "steam:70"); `appid` is a `valid_steam_appid` already.
+pub fn steam_item(appid: &str) -> String {
+    format!("{STEAM_ITEM}{appid}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -112,6 +117,7 @@ mod tests {
             Some(ItemId::Flatpak("a.b.C"))
         );
         assert_eq!(parse_item("steam:70"), Some(ItemId::Steam("70")));
+        assert_eq!(parse_item(&steam_item("70")), Some(ItemId::Steam("70")));
         assert_eq!(
             parse_item("steam:4294967295"),
             Some(ItemId::Steam("4294967295"))

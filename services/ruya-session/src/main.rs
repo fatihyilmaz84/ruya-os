@@ -27,6 +27,11 @@ fn main() {
         ruya_session::steam_tool::main_step();
         return;
     }
+    // `steam-probe <scope>`: which Steam game a scope of Steam's run is, as the profile user
+    // (ADR-041 point 2, RUY-1052).
+    if args.get(1).map(String::as_str) == Some(ruya_session::steam_probe::SUBCOMMAND) {
+        std::process::exit(ruya_session::steam_probe::main_step(&args[2..]));
+    }
     match ruya_session::x11::subcommand(&args) {
         ruya_session::x11::Subcommand::Run { app_id, app_args } => {
             x11_subcommand("x11-run", &app_id, &app_args)

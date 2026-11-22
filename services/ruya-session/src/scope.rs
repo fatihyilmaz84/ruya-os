@@ -27,13 +27,34 @@
 //!     a run stops what is left and clears the `failed` state of a scope systemd had to kill,
 //!     so nothing stays listed.
 //!
+//!
+//! A run whose app has `children = steam` in the image's app table (`follow_children`, ADR-041,
+//! RUY-1052) has child instances, one per Steam game:
+//!   - every new scope of the app other than the attached one is probed (`take_probes`; the
+//!     caller runs `steam-probe` as the profile user and hands the verdict back with `probed`); a
+//!     scope whose probe names game G is one of child G's, every other scope is the parent's. A
+//!     scope probed before its sandbox started is undecided and probed again at the next looks,
+//!     at most `MAX_PROBES` times in all, then it is the parent's; a decided scope is never probed
+//!     again;
+//!   - child G starts with its first scope (`UnitEvent::ChildStarted`, named by
+//!     `spawner::child_name`) and keeps every later scope of G (a launcher handing over);
+//!   - it ends (`UnitEvent::Exited` of the child's name, code 0) when none of its scopes has
+//!     existed for `CHILD_GRACE` and no probe of the run is still out, or at once when the run's
+//!     attached scope is gone: a parent's end ends its children first, before the run's own end
+//!     is handed on;
+//!   - such a run is looked at every second (`ATTACH_EVERY`) while its scope lives, so a game's
+//!     start is seen within a second and its end within `CHILD_GRACE` and a second;
+//!   - `child`, `child_of_scope` and `child_scopes` name what a Stop, Freeze, Thaw, Kill and
+//!     `InstanceOfPid` of a child reach, and what the freeze of a parent's own scopes leaves out.
+//!
 //! One round is `plan` (what to ask each manager), the caller's `systemctl show`, and `apply`
 //! (the answer). Nothing here starts a process or waits.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::time::{Duration, Instant};
 
-use crate::spawner::{is_app_scope, scope_pattern, ShowUnit, UnitEvent};
+use crate::spawner::{child_name, is_app_scope, scope_pattern, ShowUnit, UnitEvent};
+use crate::steam_probe::Verdict;
 
 /// How often a run without a scope is looked at.
 pub const ATTACH_EVERY: Duration = Duration::from_secs(1);
@@ -44,6 +65,39 @@ pub const ATTACH_WINDOW: Duration = Duration::from_secs(60);
 pub const WATCH_EVERY: Duration = Duration::from_secs(5);
 /// Failed looks in a row after which a scope is taken to be gone (its manager is gone).
 pub const MAX_MISSES: u32 = 5;
+/// A child instance ends when none of its scopes has existed for this long (ADR-041 point 5): a
+/// launcher that hands over to the game in a new scope stays one child.
+pub const CHILD_GRACE: Duration = Duration::from_secs(3);
+/// How often one scope is probed while it stays undecided (its sandbox not started yet, about
+/// 130 ms after the scope on the Dell); then it is the parent's. One look a second.
+pub const MAX_PROBES: u32 = 5;
+
+/// A scope of a `children` run to probe (`take_probes`): `steam-probe <scope>` as `user`, the
+/// answer back through `probed`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProbeRequest {
+    pub unit: String,
+    pub user: String,
+    pub scope: String,
+}
+
+/// What the control of a child instance reaches (`child`): its own scopes in `user`'s manager.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChildScopes {
+    pub user: String,
+    pub app_id: String,
+    pub scopes: Vec<String>,
+}
+
+/// One child instance of a run: a Steam game.
+#[derive(Debug)]
+struct Kid {
+    name: String,
+    /// Its scopes that were alive at the last look.
+    scopes: BTreeSet<String>,
+    /// Since when it has had no scope.
+    gone_since: Option<Instant>,
+}
 
 /// One `systemctl show` to make: these units (names and patterns) in `user`'s manager.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,12 +125,34 @@ struct Run {
     misses: u32,
     /// Is a look in flight (between `plan` and `apply`)?
     queried: bool,
+    /// The app has child instances (`follow_children`).
+    children: bool,
+    /// The live scopes of a `children` run that were probed: `Some(G)` child G's, `None` the
+    /// parent's. A scope is probed once.
+    sorted: BTreeMap<String, Option<String>>,
+    /// The scopes whose probe is out: when each became active (unix seconds) and whether it was
+    /// frozen, for the child it may start.
+    probing: BTreeMap<String, (i64, bool)>,
+    /// The live scopes that were probed undecided, with how often: probed again at the next look.
+    undecided: BTreeMap<String, u32>,
+    /// The child instances, by Steam app id.
+    kids: BTreeMap<String, Kid>,
 }
 
 impl Run {
     /// Does a live scope keep the run alive?
     fn attached(&self) -> bool {
         self.scope.is_some() && !self.done
+    }
+
+    /// Ends every child (the run's attached scope is gone, or its manager is): their `Exited`s, in
+    /// the order of their app ids.
+    fn end_kids(&mut self, released: &mut Vec<UnitEvent>) {
+        for (_, kid) in std::mem::take(&mut self.kids) {
+            released.push(child_end(&kid.name));
+        }
+        self.probing.clear();
+        self.undecided.clear();
     }
 
     /// The unit's CPU and that of every scope read so far; `None` when nothing was readable.
@@ -104,10 +180,20 @@ pub struct Sweep {
     pub app_id: String,
 }
 
+/// The end of a child instance as the core takes it: an `Exited` of its name.
+fn child_end(name: &str) -> UnitEvent {
+    UnitEvent::Exited {
+        unit: name.to_owned(),
+        code: 0,
+        signaled: false,
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct RunScopes {
     runs: HashMap<String, Run>,
     sweeps: Vec<Sweep>,
+    probes: Vec<ProbeRequest>,
 }
 
 impl RunScopes {
@@ -131,8 +217,111 @@ impl RunScopes {
                 give_up_at: now + ATTACH_WINDOW,
                 misses: 0,
                 queried: false,
+                children: false,
+                sorted: BTreeMap::new(),
+                probing: BTreeMap::new(),
+                undecided: BTreeMap::new(),
+                kids: BTreeMap::new(),
             },
         );
+    }
+
+    /// The run's app has child instances (the app table's `children = steam`, ADR-041): its new
+    /// scopes other than the attached one are probed from now on.
+    pub fn follow_children(&mut self, unit: &str) {
+        if let Some(run) = self.runs.get_mut(unit) {
+            run.children = true;
+        }
+    }
+
+    /// The probes `apply` asked for since the last call, in order.
+    pub fn take_probes(&mut self) -> Vec<ProbeRequest> {
+        std::mem::take(&mut self.probes)
+    }
+
+    /// The verdict of a probe of `take_probes` (`steam_probe::parse_answer`). A scope of a new
+    /// game starts its child (`ChildStarted`); one of a running child joins it; the parent's is
+    /// sorted for good; an undecided one is probed again at the next look, until its
+    /// `MAX_PROBES`th undecided verdict makes it the parent's. Nothing for a run whose scope has
+    /// gone meanwhile.
+    pub fn probed(&mut self, unit: &str, scope: &str, verdict: Verdict) -> Option<UnitEvent> {
+        let run = self.runs.get_mut(unit).filter(|r| !r.done)?;
+        let (started, frozen) = run.probing.remove(scope)?;
+        let tries = run.undecided.remove(scope).unwrap_or(0) + 1;
+        let game = match verdict {
+            Verdict::Undecided if tries < MAX_PROBES => {
+                run.undecided.insert(scope.to_owned(), tries);
+                return None;
+            }
+            Verdict::Undecided => {
+                eprintln!(
+                    "ruya-session: {unit}: {scope} still undecided after {tries} probes, Steam's"
+                );
+                None
+            }
+            Verdict::Parent => None,
+            Verdict::Game(appid) => Some(appid),
+        };
+        run.sorted.insert(scope.to_owned(), game.clone());
+        let appid = game?;
+        if let Some(kid) = run.kids.get_mut(&appid) {
+            kid.scopes.insert(scope.to_owned());
+            kid.gone_since = None;
+            return None;
+        }
+        let name = child_name(unit, &appid);
+        eprintln!("ruya-session: {unit}: {scope} is steam:{appid}, child {name}");
+        run.kids.insert(
+            appid.clone(),
+            Kid {
+                name: name.clone(),
+                scopes: BTreeSet::from([scope.to_owned()]),
+                gone_since: None,
+            },
+        );
+        Some(UnitEvent::ChildStarted {
+            parent: unit.to_owned(),
+            child: name,
+            appid,
+            started,
+            frozen,
+        })
+    }
+
+    /// The child instance `name`: its user, its app and the scopes it had at the last look.
+    pub fn child(&self, name: &str) -> Option<ChildScopes> {
+        self.runs.values().find_map(|run| {
+            let kid = run.kids.values().find(|k| k.name == name)?;
+            Some(ChildScopes {
+                user: run.user.clone(),
+                app_id: run.app_id.clone(),
+                scopes: kid.scopes.iter().cloned().collect(),
+            })
+        })
+    }
+
+    /// The child instance one of whose scopes is `scope` in `user`'s manager.
+    pub fn child_of_scope(&self, user: &str, scope: &str) -> Option<String> {
+        self.runs
+            .values()
+            .filter(|run| run.user == user)
+            .flat_map(|run| run.kids.values())
+            .find(|kid| kid.scopes.contains(scope))
+            .map(|kid| kid.name.clone())
+    }
+
+    /// Every scope of every child of the run `unit`: what a freeze of the parent's own scopes
+    /// leaves out (ADR-041 point 7).
+    pub fn child_scopes(&self, unit: &str) -> Vec<String> {
+        self.runs
+            .get(unit)
+            .map(|run| {
+                run.kids
+                    .values()
+                    .flat_map(|k| k.scopes.iter().cloned())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// The sweeps of the runs whose end was handed on since the last call (`on_unit_event`,
@@ -183,7 +372,7 @@ impl RunScopes {
     pub fn on_unit_event(&mut self, event: UnitEvent, now: Instant) -> Option<UnitEvent> {
         let unit = match &event {
             UnitEvent::Exited { unit, .. } | UnitEvent::ExecFailed { unit } => unit.clone(),
-            UnitEvent::Started { .. } => return Some(event),
+            UnitEvent::Started { .. } | UnitEvent::ChildStarted { .. } => return Some(event),
         };
         let Some(run) = self.runs.get_mut(&unit) else {
             return Some(event);
@@ -273,6 +462,7 @@ impl RunScopes {
                     run.done = true;
                 }
                 if run.done {
+                    run.end_kids(&mut released);
                     if let Some(event) = run.held.take() {
                         released.push(event);
                         self.end_run(&unit);
@@ -333,7 +523,53 @@ impl RunScopes {
                     }
                 }
             }
+            if run.children && !run.done {
+                if let Some(attached) = run.scope.clone() {
+                    let live: BTreeSet<&str> = own.iter().map(|s| s.id.as_str()).collect();
+                    run.sorted.retain(|scope, _| live.contains(scope.as_str()));
+                    run.undecided
+                        .retain(|scope, _| live.contains(scope.as_str()));
+                    for scope in own.iter().filter(|s| s.id != attached) {
+                        if run.sorted.contains_key(&scope.id) || run.probing.contains_key(&scope.id)
+                        {
+                            continue;
+                        }
+                        let frozen = matches!(scope.freezer_state.as_str(), "frozen" | "freezing");
+                        run.probing
+                            .insert(scope.id.clone(), (scope.entered, frozen));
+                        self.probes.push(ProbeRequest {
+                            unit: unit.clone(),
+                            user: run.user.clone(),
+                            scope: scope.id.clone(),
+                        });
+                    }
+                    let mut ended = Vec::new();
+                    for (appid, kid) in run.kids.iter_mut() {
+                        kid.scopes.retain(|scope| live.contains(scope.as_str()));
+                        if !kid.scopes.is_empty() {
+                            kid.gone_since = None;
+                            continue;
+                        }
+                        let since = *kid.gone_since.get_or_insert(now);
+                        // A probe still out may be this game's next scope (an undecided scope is
+                        // queued again above, so its probe is out too).
+                        if run.probing.is_empty()
+                            && now.saturating_duration_since(since) >= CHILD_GRACE
+                        {
+                            ended.push(appid.clone());
+                        }
+                    }
+                    for appid in ended {
+                        if let Some(kid) = run.kids.remove(&appid) {
+                            eprintln!("ruya-session: {unit}: child {} has ended", kid.name);
+                            released.push(child_end(&kid.name));
+                        }
+                    }
+                    run.next_at = now + ATTACH_EVERY;
+                }
+            }
             if run.done {
+                run.end_kids(&mut released);
                 if let Some(event) = run.held.take() {
                     released.push(event);
                     self.end_run(&unit);
@@ -394,10 +630,17 @@ mod tests {
 
     /// A user manager that holds a list of units and answers `systemctl show` for names and
     /// the one glob (`app-flatpak-<id>-*.scope`) the service asks.
+    ///
+    /// It also answers `steam-probe` (RUY-1052): `games` is what the probe of each scope prints
+    /// (a scope not in it prints nothing), `probed` the scopes it was asked about, in order.
     struct FakeManager {
         units: Vec<ShowUnit>,
         down: bool,
         asked: Vec<Query>,
+        games: HashMap<String, String>,
+        /// How many undecided verdicts a scope's probe gives before its answer.
+        early: HashMap<String, u32>,
+        probed: Vec<String>,
     }
 
     impl FakeManager {
@@ -406,6 +649,36 @@ mod tests {
                 units,
                 down: false,
                 asked: Vec::new(),
+                games: HashMap::new(),
+                early: HashMap::new(),
+                probed: Vec::new(),
+            }
+        }
+
+        /// A scope whose probe prints `appid` (a Steam game's scope).
+        fn game(&mut self, show: ShowUnit, appid: &str) {
+            self.games.insert(show.id.clone(), appid.to_owned());
+            self.set(show);
+        }
+
+        fn gone(&mut self, name: &str) {
+            self.units.retain(|u| u.id != name);
+        }
+
+        /// The scope's probe is undecided `times` times first (its sandbox has not started).
+        fn early(&mut self, scope: &str, times: u32) {
+            self.early.insert(scope.to_owned(), times);
+        }
+
+        fn probe(&mut self, r: &ProbeRequest) -> Verdict {
+            self.probed.push(r.scope.clone());
+            if let Some(n) = self.early.get_mut(&r.scope).filter(|n| **n > 0) {
+                *n -= 1;
+                return Verdict::Undecided;
+            }
+            match self.games.get(&r.scope) {
+                Some(appid) => Verdict::Game(appid.clone()),
+                None => Verdict::Parent,
             }
         }
 
@@ -439,12 +712,17 @@ mod tests {
         }
     }
 
-    /// One round: plan, ask the manager, apply. Returns the released events.
+    /// One round: plan, ask the manager, apply, and run the probes it asked for. Returns the
+    /// released events and the children that started, in that order.
     fn round(scopes: &mut RunScopes, mgr: &mut FakeManager, now: Instant) -> Vec<UnitEvent> {
         let mut out = Vec::new();
         for q in scopes.plan(now) {
             let shows = mgr.show(&q);
             out.extend(scopes.apply(&q.user, shows.as_deref(), now));
+            for r in scopes.take_probes() {
+                let game = mgr.probe(&r);
+                out.extend(scopes.probed(&r.unit, &r.scope, game));
+            }
         }
         out
     }
@@ -897,5 +1175,259 @@ mod tests {
             shows.iter().map(|s| s.cpu_nsec).collect::<Vec<_>>(),
             [Some(1234), None, None]
         );
+    }
+
+    // Steam's games as child instances (ADR-041, RUY-1052).
+
+    const STEAM: &str = "com.valvesoftware.Steam";
+    const STEAM_UNIT: &str = "ruya-app-ruya-p1-com.valvesoftware.Steam.service";
+    /// Steam's own sandbox (the run attaches it), its web helper's client scope, a game's scope,
+    /// the same game's next scope (a launcher handing over), and UpdatingDRM's short scope.
+    const ATTACHED: &str = "app-flatpak-com.valvesoftware.Steam-2192235278.scope";
+    const CLIENT: &str = "app-flatpak-com.valvesoftware.Steam-3327064059.scope";
+    const GAME: &str = "app-flatpak-com.valvesoftware.Steam-1623993748.scope";
+    const GAME_NEXT: &str = "app-flatpak-com.valvesoftware.Steam-1700000000.scope";
+    const DRM: &str = "app-flatpak-com.valvesoftware.Steam-1500000000.scope";
+
+    fn child() -> String {
+        child_name(STEAM_UNIT, "70")
+    }
+
+    fn child_started(started: i64, frozen: bool) -> UnitEvent {
+        UnitEvent::ChildStarted {
+            parent: STEAM_UNIT.to_owned(),
+            child: child(),
+            appid: "70".to_owned(),
+            started,
+            frozen,
+        }
+    }
+
+    /// Steam's run with its sandbox attached and its client scope probed (Steam's own).
+    fn steam(now: Instant) -> (RunScopes, FakeManager) {
+        let mut scopes = RunScopes::new();
+        scopes.begin(STEAM_UNIT, USER, STEAM, now);
+        scopes.follow_children(STEAM_UNIT);
+        let mut mgr = FakeManager::new(vec![
+            scope_show(STEAM_UNIT, 1000, None),
+            scope_show(ATTACHED, 1001, None),
+            scope_show(CLIENT, 1005, None),
+        ]);
+        assert!(round(&mut scopes, &mut mgr, now).is_empty());
+        assert_eq!(scopes.scope_of(STEAM_UNIT).as_deref(), Some(ATTACHED));
+        (scopes, mgr)
+    }
+
+    #[test]
+    fn a_game_scope_becomes_a_child_and_only_new_scopes_but_the_attached_one_are_probed() {
+        let now = t0();
+        let (mut scopes, mut mgr) = steam(now);
+        assert_eq!(mgr.probed, [CLIENT], "never the attached scope");
+        mgr.game(scope_show(GAME, 1100, None), "70");
+        // Looked at every second, not every WATCH_EVERY.
+        let now = now + ATTACH_EVERY;
+        assert_eq!(
+            round(&mut scopes, &mut mgr, now),
+            [child_started(1100, false)]
+        );
+        assert_eq!(mgr.probed, [CLIENT, GAME]);
+        // Probed once: later rounds ask nothing more and start nothing.
+        for i in 1..5 {
+            assert!(round(&mut scopes, &mut mgr, now + ATTACH_EVERY * i).is_empty());
+        }
+        assert_eq!(mgr.probed, [CLIENT, GAME]);
+        // What a child's control and InstanceOfPid reach: its own scope only.
+        assert_eq!(
+            scopes.child(&child()),
+            Some(ChildScopes {
+                user: USER.to_owned(),
+                app_id: STEAM.to_owned(),
+                scopes: vec![GAME.to_owned()]
+            })
+        );
+        assert_eq!(scopes.child_of_scope(USER, GAME), Some(child()));
+        assert_eq!(scopes.child_of_scope(USER, ATTACHED), None);
+        assert_eq!(scopes.child_of_scope(USER, CLIENT), None);
+        assert_eq!(scopes.child_of_scope("ruya-p2", GAME), None);
+        assert_eq!(scopes.child_scopes(STEAM_UNIT), [GAME]);
+    }
+
+    #[test]
+    fn a_run_without_children_probes_nothing() {
+        let now = t0();
+        let mut scopes = RunScopes::new();
+        scopes.begin(STEAM_UNIT, USER, STEAM, now);
+        let mut mgr = FakeManager::new(vec![
+            scope_show(STEAM_UNIT, 1000, None),
+            scope_show(ATTACHED, 1001, None),
+        ]);
+        mgr.game(scope_show(GAME, 1100, None), "70");
+        round(&mut scopes, &mut mgr, now);
+        round(&mut scopes, &mut mgr, now + WATCH_EVERY);
+        assert!(mgr.probed.is_empty());
+        assert_eq!(scopes.child(&child()), None);
+    }
+
+    #[test]
+    fn a_drm_scope_then_the_game_scope_make_one_child_and_no_early_end() {
+        let now = t0();
+        let (mut scopes, mut mgr) = steam(now);
+        // UpdatingDRM: its probe prints nothing (SteamGameId without SteamAppId), Steam's.
+        mgr.set(scope_show(DRM, 1050, None));
+        let mut events = round(&mut scopes, &mut mgr, now + ATTACH_EVERY);
+        mgr.gone(DRM);
+        // The game about 9 s after the DRM step.
+        for i in 2..11 {
+            events.extend(round(&mut scopes, &mut mgr, now + ATTACH_EVERY * i));
+        }
+        mgr.game(scope_show(GAME, 1060, None), "70");
+        for i in 11..20 {
+            events.extend(round(&mut scopes, &mut mgr, now + ATTACH_EVERY * i));
+        }
+        assert_eq!(events, [child_started(1060, false)]);
+        assert_eq!(mgr.probed, [CLIENT, DRM, GAME]);
+    }
+
+    #[test]
+    fn a_child_ends_when_none_of_its_scopes_has_existed_for_three_seconds() {
+        let now = t0();
+        let (mut scopes, mut mgr) = steam(now);
+        mgr.game(scope_show(GAME, 1100, None), "70");
+        let t = now + ATTACH_EVERY;
+        assert_eq!(round(&mut scopes, &mut mgr, t).len(), 1);
+        // A launcher hands over: its scope goes, the game's own scope comes within the grace.
+        mgr.gone(GAME);
+        assert!(round(&mut scopes, &mut mgr, t + ATTACH_EVERY).is_empty());
+        mgr.game(scope_show(GAME_NEXT, 1103, None), "70");
+        assert!(round(&mut scopes, &mut mgr, t + ATTACH_EVERY * 3).is_empty());
+        assert_eq!(scopes.child_of_scope(USER, GAME_NEXT), Some(child()));
+        assert!(round(&mut scopes, &mut mgr, t + ATTACH_EVERY * 6).is_empty());
+        // The game ends: its last scope gone, the child ends 3 s later and not before.
+        mgr.gone(GAME_NEXT);
+        let gone = t + ATTACH_EVERY * 7;
+        assert!(round(&mut scopes, &mut mgr, gone).is_empty());
+        assert!(round(&mut scopes, &mut mgr, gone + ATTACH_EVERY).is_empty());
+        assert!(round(&mut scopes, &mut mgr, gone + ATTACH_EVERY * 2).is_empty());
+        assert_eq!(
+            round(&mut scopes, &mut mgr, gone + CHILD_GRACE),
+            [UnitEvent::Exited {
+                unit: child(),
+                code: 0,
+                signaled: false
+            }]
+        );
+        assert_eq!(scopes.child(&child()), None);
+        // Steam runs on.
+        assert_eq!(scopes.scope_of(STEAM_UNIT).as_deref(), Some(ATTACHED));
+    }
+
+    #[test]
+    fn the_end_of_steam_ends_its_children_before_its_own_end_is_handed_on() {
+        let now = t0();
+        let (mut scopes, mut mgr) = steam(now);
+        mgr.game(scope_show(GAME, 1100, None), "70");
+        assert_eq!(round(&mut scopes, &mut mgr, now + ATTACH_EVERY).len(), 1);
+        let end = UnitEvent::Exited {
+            unit: STEAM_UNIT.to_owned(),
+            code: 0,
+            signaled: false,
+        };
+        assert_eq!(
+            scopes.on_unit_event(end.clone(), now),
+            None,
+            "held for the scope"
+        );
+        mgr.gone(ATTACHED);
+        assert_eq!(
+            round(&mut scopes, &mut mgr, now + ATTACH_EVERY * 2),
+            [
+                UnitEvent::Exited {
+                    unit: child(),
+                    code: 0,
+                    signaled: false
+                },
+                end
+            ]
+        );
+        assert_eq!(scopes.child(&child()), None);
+    }
+
+    #[test]
+    fn adoption_probes_the_game_scopes_that_run_already_and_rebuilds_the_child() {
+        let now = t0();
+        let mut scopes = RunScopes::new();
+        scopes.begin(STEAM_UNIT, USER, STEAM, now);
+        scopes.follow_children(STEAM_UNIT);
+        let mut game = scope_show(GAME, 1500, None);
+        game.freezer_state = "frozen".to_owned();
+        let mut mgr = FakeManager::new(vec![
+            scope_show(STEAM_UNIT, 1000, None),
+            scope_show(ATTACHED, 1001, None),
+        ]);
+        mgr.game(game, "70");
+        // The first look after the restart attaches Steam's sandbox and probes the game's.
+        assert_eq!(
+            round(&mut scopes, &mut mgr, now),
+            [child_started(1500, true)]
+        );
+        assert_eq!(scopes.scope_of(STEAM_UNIT).as_deref(), Some(ATTACHED));
+        assert_eq!(mgr.probed, [GAME]);
+    }
+
+    #[test]
+    fn a_game_scope_probed_before_its_sandbox_started_is_probed_again_and_becomes_the_child() {
+        let now = t0();
+        let (mut scopes, mut mgr) = steam(now);
+        mgr.game(scope_show(GAME, 1100, None), "70");
+        mgr.early(GAME, 2);
+        let mut events = Vec::new();
+        for i in 1..6 {
+            events.extend(round(&mut scopes, &mut mgr, now + ATTACH_EVERY * i));
+        }
+        assert_eq!(
+            events,
+            [child_started(1100, false)],
+            "one child, after two undecided looks"
+        );
+        assert_eq!(mgr.probed, [CLIENT, GAME, GAME, GAME]);
+    }
+
+    #[test]
+    fn a_scope_that_stays_undecided_is_probed_at_most_max_probes_times_then_is_steams() {
+        let now = t0();
+        let (mut scopes, mut mgr) = steam(now);
+        mgr.set(scope_show(DRM, 1050, None));
+        mgr.early(DRM, 1000);
+        for i in 1..20 {
+            assert!(round(&mut scopes, &mut mgr, now + ATTACH_EVERY * i).is_empty());
+        }
+        let asked = mgr.probed.iter().filter(|s| *s == DRM).count();
+        assert_eq!(asked, MAX_PROBES as usize);
+        // A scope whose sandbox is there without the ids is Steam's at the first probe.
+        mgr.set(scope_show(GAME, 1100, None));
+        round(&mut scopes, &mut mgr, now + ATTACH_EVERY * 20);
+        round(&mut scopes, &mut mgr, now + ATTACH_EVERY * 21);
+        assert_eq!(mgr.probed.iter().filter(|s| *s == GAME).count(), 1);
+    }
+
+    #[test]
+    fn an_undecided_scope_holds_the_end_of_a_child_whose_scope_went() {
+        let now = t0();
+        let (mut scopes, mut mgr) = steam(now);
+        mgr.game(scope_show(GAME, 1100, None), "70");
+        assert_eq!(round(&mut scopes, &mut mgr, now + ATTACH_EVERY).len(), 1);
+        // The launcher's scope goes, the game's next scope comes and is undecided for a while.
+        mgr.gone(GAME);
+        mgr.game(scope_show(GAME_NEXT, 1102, None), "70");
+        mgr.early(GAME_NEXT, 4);
+        let mut events = Vec::new();
+        for i in 2..10 {
+            events.extend(round(&mut scopes, &mut mgr, now + ATTACH_EVERY * i));
+        }
+        assert!(
+            events.is_empty(),
+            "no end while the next scope is undecided: {events:?}"
+        );
+        assert_eq!(scopes.child_of_scope(USER, GAME_NEXT), Some(child()));
     }
 }

@@ -5,9 +5,20 @@ use std::io::Read;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+/// The most stdout any child may give (`systemctl show` of many units is a few hundred KiB at
+/// most): more is refused, so no child makes this root service buffer without limit.
+pub(crate) const MAX_OUTPUT: usize = 4 * 1024 * 1024;
+
+/// How a bounded child ended: its exit code (`None` when a signal ended it) and its stdout.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Ran {
+    pub code: Option<i32>,
+    pub out: String,
+}
+
 /// Runs `args` with its stdout captured, for at most `limit` (then it is killed). The output on
 /// success; `None` (logged) on a failure or a timeout. The output is read while the child runs,
-/// so an answer larger than the pipe buffer never blocks it.
+/// so an answer larger than the pipe buffer never blocks it; more than `MAX_OUTPUT` is refused.
 pub(crate) fn run_bounded(args: &[String], limit: Duration) -> Option<String> {
     match run_bounded_status(args, limit)? {
         (true, out) => Some(out),
@@ -22,6 +33,14 @@ pub(crate) fn run_bounded(args: &[String], limit: Duration) -> Option<String> {
 /// stdout)`. `None` only when it could not be run or did not exit in time (both logged). A
 /// non-zero exit is not logged: the caller decides what it means.
 pub(crate) fn run_bounded_status(args: &[String], limit: Duration) -> Option<(bool, String)> {
+    run_capped(args, limit, MAX_OUTPUT).map(|ran| (ran.code == Some(0), ran.out))
+}
+
+/// The child of `run_bounded_status` with its exit code, and with at most `cap` bytes of stdout:
+/// a child that writes more is refused (`None`, logged), whatever its exit; the reader stops at
+/// the cap, so a child that goes on writing ends on the closed pipe or at `limit`. A helper that
+/// runs as a profile user (`steam-probe`) is read with a small cap.
+pub(crate) fn run_capped(args: &[String], limit: Duration, cap: usize) -> Option<Ran> {
     let what = args.join(" ");
     let mut child = match Command::new(&args[0])
         .args(&args[1..])
@@ -36,22 +55,30 @@ pub(crate) fn run_bounded_status(args: &[String], limit: Duration) -> Option<(bo
             return None;
         }
     };
-    let reader = child.stdout.take().map(|mut stdout| {
+    let reader = child.stdout.take().map(|stdout| {
         std::thread::spawn(move || {
             let mut bytes = Vec::new();
-            let _ = stdout.read_to_end(&mut bytes);
-            String::from_utf8_lossy(&bytes).into_owned()
+            // One byte past the cap tells a full answer from one that is too long.
+            let _ = stdout.take(cap as u64 + 1).read_to_end(&mut bytes);
+            bytes
         })
     });
-    let collect = |reader: Option<std::thread::JoinHandle<String>>| {
+    let collect = |reader: Option<std::thread::JoinHandle<Vec<u8>>>| {
         reader.and_then(|r| r.join().ok()).unwrap_or_default()
     };
     let deadline = Instant::now() + limit;
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                let out = collect(reader);
-                return Some((status.success(), out));
+                let bytes = collect(reader);
+                if bytes.len() > cap {
+                    eprintln!("ruya-session: {what}: more than {cap} bytes of output, refused");
+                    return None;
+                }
+                return Some(Ran {
+                    code: status.code(),
+                    out: String::from_utf8_lossy(&bytes).into_owned(),
+                });
             }
             Ok(None) if Instant::now() >= deadline => {
                 let _ = child.kill();
@@ -92,9 +119,12 @@ mod tests {
                 let chunk = vec![b'x'; 1024];
                 let mut out = std::io::stdout().lock();
                 for _ in 0..300 {
-                    out.write_all(&chunk).unwrap();
+                    // A reader that stopped at its cap closes the pipe: end quietly.
+                    if out.write_all(&chunk).is_err() {
+                        return;
+                    }
                 }
-                out.flush().unwrap();
+                let _ = out.flush();
             }
             Ok("hang") => std::thread::sleep(Duration::from_secs(60)),
             Ok("fail") => {
@@ -136,5 +166,19 @@ mod tests {
         assert!(!ok);
         assert!(out.contains("inactive"));
         assert!(run_bounded(&child("fail"), Duration::from_secs(20)).is_none());
+        // The exit code comes through.
+        let ran = run_capped(&child("fail"), Duration::from_secs(20), 1024).unwrap();
+        assert_eq!(ran.code, Some(3));
+
+        // An answer over the cap is refused, quickly (the reader stops at the cap).
+        let started = Instant::now();
+        assert!(run_capped(&child("big"), Duration::from_secs(20), 64 * 1024).is_none());
+        assert!(started.elapsed() < Duration::from_secs(15), "took too long");
+        let ran = run_capped(&child("big"), Duration::from_secs(20), 1024 * 1024).unwrap();
+        assert_eq!(
+            ran.out.matches('x').count(),
+            300 * 1024,
+            "under the cap is whole"
+        );
     }
 }

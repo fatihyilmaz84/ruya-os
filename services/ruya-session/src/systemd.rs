@@ -29,6 +29,12 @@
 //! with one `systemctl show` per second at most); `Stop` and the kill name every scope of the app.
 //! When a run's end is handed on, the app's leftover scopes are stopped and their `failed` state
 //! cleared first (`RunScopes::take_sweeps`, `spawner::sweep_commands`, T-435).
+//!
+//! Steam's games are child instances (ADR-041, RUY-1052): a run whose app has `children = steam`
+//! in the app table has each new scope probed (`steam-probe` as the profile user,
+//! `spawner::steam_probe_command`) by a worker thread of its own (`probe_worker`), so a slow probe
+//! never holds up the scope watcher, and a child's name reaches only its own scopes
+//! (`RunScopes::child`, `spawner::child_command`).
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -44,24 +50,26 @@ use zbus::connection::Builder;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 use zbus::{Connection, MatchRule, MessageStream};
 
-use crate::apps::{AppTable, Display, APPS_DIR};
-use crate::bounded::{run_bounded, run_bounded_status};
+use crate::apps::{AppTable, Children, Display, Freeze, APPS_DIR};
+use crate::bounded::{run_bounded, run_bounded_status, run_capped};
 use crate::follow::{
     bridge_args, existence, parse_signal, Backoff, Follower, ManagerLink, Probe, Wake,
     BRIDGE_PROGRAM,
 };
-use crate::scope::{RunScopes, Sweep};
+use crate::scope::{ChildScopes, ProbeRequest, RunScopes, Sweep};
 use crate::spawner::{
-    active_app_scopes, any_swap, app_scopes, cancel_reclaim_command, control_command,
-    control_groups_command, flatpak_app_installed, kill_command, launch_command_in,
-    list_scopes_command, park_audio_command, parse_control_groups, parse_profile_users, parse_show,
-    pulse_start_command, reclaim_amount, reclaim_command, sweep_commands, unit_app_id, unit_name,
-    LineTail, RunFollower, RunningUnit, ShowUnit, KILL_VERB, SHOW_PROPERTIES, SWAP_COMMAND,
+    active_app_scopes, any_swap, app_scopes, cancel_reclaim_command, child_command,
+    control_command, control_groups_command, flatpak_app_installed, kill_command,
+    launch_command_in, list_scopes_command, park_audio_command, parse_control_groups,
+    parse_profile_users, parse_show, pulse_start_command, reclaim_amount, reclaim_command,
+    steam_probe_command, sweep_commands, unit_app_id, unit_name, LineTail, RunFollower,
+    RunningUnit, ShowUnit, KILL_VERB, SHOW_PROPERTIES, SWAP_COMMAND,
 };
 use crate::spawner::{
     AdoptLister, AudioJob, AudioQueue, DisplayMode, Listing, ReclaimLedger, Spawner, UnitEvent,
     PARK_RETRY,
 };
+use crate::steam_probe::{parse_answer, Verdict, MAX_ANSWER};
 use crate::x11::display_mode_x11;
 use std::ffi::OsString;
 use zbus::address::transport::{Transport, Unixexec};
@@ -114,9 +122,79 @@ impl Gate {
     }
 }
 
+/// How long one `steam-probe` may take (its unit has `RuntimeMaxSec=3`).
+const PROBE_LIMIT: Duration = Duration::from_secs(4);
+
+/// One `steam-probe` (bounded, its stdout capped at `MAX_ANSWER`) and its verdict. A probe that
+/// fails, times out or prints nothing leaves its scope to the parent, with one journal line; an
+/// undecided one is asked again by `RunScopes` (`MAX_PROBES`).
+fn probe(ProbeRequest { unit, user, scope }: &ProbeRequest) -> Verdict {
+    let args = match steam_probe_command(user, scope) {
+        Ok(args) => args,
+        Err(err) => {
+            eprintln!("ruya-session: {unit}: {scope} not probed: {err}");
+            return Verdict::Parent;
+        }
+    };
+    let Some(ran) = run_capped(&args, PROBE_LIMIT, MAX_ANSWER) else {
+        eprintln!("ruya-session: {unit}: no answer for {scope}, left to Steam");
+        return Verdict::Parent;
+    };
+    let verdict = parse_answer(ran.code, &ran.out);
+    if verdict == Verdict::Parent {
+        eprintln!("ruya-session: {unit}: {scope} is Steam's own");
+    }
+    verdict
+}
+
+/// Hands a probe's verdict to `RunScopes`; a child that starts is sent on.
+fn settle_probe(gate: &Gate, request: &ProbeRequest, verdict: Verdict) {
+    let started = gate
+        .scopes
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .probed(&request.unit, &request.scope, verdict);
+    if let Some(event) = started {
+        gate.send(event);
+    }
+}
+
+/// Runs the probes the scope watcher queues, one after the other, so the watcher never waits for
+/// one (a hung probe would hold up the scope looks and child ends of every profile). The verdict
+/// goes straight to `RunScopes` under its lock, as the watcher's own answers do.
+fn probe_worker(gate: Gate, jobs: std::sync::mpsc::Receiver<ProbeRequest>) {
+    for request in jobs {
+        let verdict = probe(&request);
+        settle_probe(&gate, &request, verdict);
+    }
+}
+
+/// Queues the probes `apply` asked for (`RunScopes::take_probes`). Without a worker (it could not
+/// be started) a scope is the parent's at once, so no probe stays out and holds a child's end.
+fn queue_probes(
+    gate: &Gate,
+    worker: &std::sync::mpsc::Sender<ProbeRequest>,
+    probes: Vec<ProbeRequest>,
+) {
+    for request in probes {
+        if let Err(std::sync::mpsc::SendError(request)) = worker.send(request) {
+            eprintln!(
+                "ruya-session: {}: {} not probed: no probe worker",
+                request.unit, request.scope
+            );
+            settle_probe(gate, &request, Verdict::Parent);
+        }
+    }
+}
+
+/// Is `app_id` a parent of child instances (the app table's `children = steam`)?
+fn has_children(table: &AppTable, app_id: &str) -> bool {
+    table.children(app_id) == Some(Children::Steam)
+}
+
 /// Looks at the Flatpak scopes of the runs, one `systemctl show` per profile manager and round
 /// (`RunScopes::plan` / `apply`), and hands on the unit ends that waited for a scope.
-fn watch_scopes(gate: Gate) {
+fn watch_scopes(gate: Gate, worker: std::sync::mpsc::Sender<ProbeRequest>) {
     loop {
         std::thread::sleep(SCOPE_TICK);
         let queries = gate
@@ -126,15 +204,16 @@ fn watch_scopes(gate: Gate) {
             .plan(Instant::now());
         for query in queries {
             let shows = show_many(&query.user, &query.names).map(|text| parse_show(&text));
-            let (ended, sweeps) = {
+            let (ended, sweeps, probes) = {
                 let mut scopes = gate.scopes.lock().unwrap_or_else(|e| e.into_inner());
                 let ended = scopes.apply(&query.user, shows.as_deref(), Instant::now());
-                (ended, scopes.take_sweeps())
+                (ended, scopes.take_sweeps(), scopes.take_probes())
             };
             sweep(sweeps);
             for event in ended {
                 gate.send(event);
             }
+            queue_probes(&gate, &worker, probes);
         }
     }
 }
@@ -346,10 +425,18 @@ impl SystemdSpawner {
             units: Arc::new(Mutex::new(HashMap::new())),
             scopes: Arc::new(Mutex::new(RunScopes::new())),
         };
+        let (probes, probe_jobs) = std::sync::mpsc::channel();
+        let prober = gate.clone();
+        if let Err(err) = std::thread::Builder::new()
+            .name("steam-probe".to_owned())
+            .spawn(move || probe_worker(prober, probe_jobs))
+        {
+            eprintln!("ruya-session: cannot probe Steam's scopes: its games stay Steam's: {err}");
+        }
         let watcher = gate.clone();
         if let Err(err) = std::thread::Builder::new()
             .name("scopes".to_owned())
-            .spawn(move || watch_scopes(watcher))
+            .spawn(move || watch_scopes(watcher, probes))
         {
             eprintln!("ruya-session: cannot watch the Flatpak scopes: {err}");
         }
@@ -389,6 +476,33 @@ impl SystemdSpawner {
             .ok_or_else(|| format!("no running unit {unit}"))
     }
 
+    /// The child instance `name` (ADR-041) and the scopes it had at the scope watcher's last look.
+    fn child(&self, name: &str) -> Option<ChildScopes> {
+        self.gate
+            .scopes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .child(name)
+    }
+
+    /// `verb` on a child's own scopes only (`child_command`), on its own thread like `systemctl`.
+    fn child_systemctl(
+        &self,
+        child: ChildScopes,
+        name: &str,
+        verb: &'static [&'static str],
+    ) -> Result<(), String> {
+        let args = child_command(&child.user, verb, &child.app_id, &child.scopes)?;
+        let failed = format!("cannot start a thread for {name}");
+        std::thread::Builder::new()
+            .name("systemctl".to_owned())
+            .spawn(move || {
+                run_bounded(&args, SYSTEMCTL_LIMIT);
+            })
+            .map(|_| ())
+            .map_err(|err| format!("{failed}: {err}"))
+    }
+
     /// `systemctl --user --machine=<user>@.host <verb>... <unit> <scope>...` on its own thread:
     /// it talks to the bus and must not hold up a D-Bus call. Its failure is logged; the run's end
     /// (or the kill after the grace time) is what the core acts on. The scopes are the app itself
@@ -397,6 +511,9 @@ impl SystemdSpawner {
     /// (`KILL_VERB`) leaves out a unit that has ended already while a scope holds the run
     /// (`kill_command`, RUY-736).
     fn systemctl(&self, unit: &str, verb: &'static [&'static str]) -> Result<(), String> {
+        if let Some(child) = self.child(unit) {
+            return self.child_systemctl(child, unit, verb);
+        }
         let (user, app_id) = self.owner_of(unit)?;
         // Checked here, so a bad name is the caller's error, not only a log line.
         control_command(&user, verb, unit, &app_id, &[])?;
@@ -434,14 +551,28 @@ impl SystemdSpawner {
     /// active ones, listed first and named exactly (`active_app_scopes`, `control_command`), so
     /// both scopes of an Electron app are reached and a sibling app never is. Each `systemctl` is
     /// bounded (`SYSTEMCTL_LIMIT`); a listing that fails is an error (freezing the front end alone
-    /// would leave the game running).
+    /// would leave the game running). A child instance is its own scopes only; a parent's own
+    /// freeze leaves its children's scopes out (each child has its own `frozen`, ADR-041 point 7).
     fn freezer(&self, unit: &str, verb: &'static str) -> Result<(), String> {
-        let (user, app_id) = self.owner_of(unit)?;
-        let list = list_scopes_command(&user, &app_id)?;
-        let listing = run_bounded(&list, SYSTEMCTL_LIMIT)
-            .ok_or_else(|| format!("cannot list the scopes of {app_id} of {user}"))?;
-        let scopes = active_app_scopes(&app_id, &listing);
-        let args = control_command(&user, &[verb], unit, &app_id, &scopes)?;
+        let args = if let Some(child) = self.child(unit) {
+            child_command(&child.user, &[verb], &child.app_id, &child.scopes)?
+        } else {
+            let (user, app_id) = self.owner_of(unit)?;
+            let list = list_scopes_command(&user, &app_id)?;
+            let listing = run_bounded(&list, SYSTEMCTL_LIMIT)
+                .ok_or_else(|| format!("cannot list the scopes of {app_id} of {user}"))?;
+            let children = self
+                .gate
+                .scopes
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .child_scopes(unit);
+            let scopes: Vec<String> = active_app_scopes(&app_id, &listing)
+                .into_iter()
+                .filter(|s| !children.contains(s))
+                .collect();
+            control_command(&user, &[verb], unit, &app_id, &scopes)?
+        };
         run_bounded(&args, SYSTEMCTL_LIMIT)
             .map(|_| ())
             .ok_or_else(|| format!("systemctl {verb} {unit} failed"))
@@ -518,11 +649,13 @@ impl Spawner for SystemdSpawner {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .insert(unit.clone(), (user.to_owned(), app_id.to_owned()));
-        self.gate
-            .scopes
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .begin(&unit, user, app_id, Instant::now());
+        {
+            let mut scopes = self.gate.scopes.lock().unwrap_or_else(|e| e.into_inner());
+            scopes.begin(&unit, user, app_id, Instant::now());
+            if has_children(&table, app_id) {
+                scopes.follow_children(&unit);
+            }
+        }
         let job = Job {
             args,
             user: user.to_owned(),
@@ -639,6 +772,19 @@ impl Spawner for SystemdSpawner {
         user_name_of(uid)
     }
 
+    fn child_of_scope(&self, user: &str, scope: &str) -> Option<String> {
+        self.gate
+            .scopes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .child_of_scope(user, scope)
+    }
+
+    /// The app table read at the call (a few small files): `freeze = never` is false.
+    fn may_freeze(&self, app_id: &str) -> bool {
+        AppTable::load(Path::new(APPS_DIR)).freeze(app_id) != Some(Freeze::Never)
+    }
+
     fn adoption_complete(&self) -> bool {
         !self.adopt_failed.load(std::sync::atomic::Ordering::SeqCst)
     }
@@ -680,6 +826,8 @@ fn list_running_apps(gate: &Gate, adopt_failed: &std::sync::atomic::AtomicBool) 
             Vec::new()
         });
     let mut found = Vec::new();
+    // Read once per listing: which adopted apps have child instances.
+    let table = AppTable::load(Path::new(APPS_DIR));
     for user in users {
         let Some(text) = show_units(&user, "ruya-app-*.service") else {
             eprintln!("ruya-session: cannot list the apps of {user}");
@@ -704,12 +852,14 @@ fn list_running_apps(gate: &Gate, adopt_failed: &std::sync::atomic::AtomicBool) 
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .insert(show.id.clone(), (user.clone(), app_id.clone()));
-            gate.scopes.lock().unwrap_or_else(|e| e.into_inner()).begin(
-                &show.id,
-                &user,
-                &app_id,
-                Instant::now(),
-            );
+            {
+                // Its game scopes are probed like at a launch, and become children again.
+                let mut scopes = gate.scopes.lock().unwrap_or_else(|e| e.into_inner());
+                scopes.begin(&show.id, &user, &app_id, Instant::now());
+                if has_children(&table, &app_id) {
+                    scopes.follow_children(&show.id);
+                }
+            }
             mine.push(RunningUnit {
                 unit: show.id,
                 user: user.clone(),
