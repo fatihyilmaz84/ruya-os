@@ -4,14 +4,15 @@
 
 use std::path::{Component, Path, PathBuf};
 
-/// The shell's Unix user.
+/// The shell's Unix user, and its private group of the same name.
 pub const SHELL_USER: &str = "ruya-shell";
 
-/// The uid of `user` in an `/etc/passwd` text (`name:x:uid:gid:...`), `None` when absent.
-pub fn uid_in_passwd(passwd: &str, user: &str) -> Option<u32> {
-    passwd.lines().find_map(|line| {
+/// The id of `name` in an `/etc/passwd` text (`name:x:uid:gid:...`: the uid) or an `/etc/group` text
+/// (`name:x:gid:members`: the gid), `None` when absent or not a number.
+pub fn id_in_db(db: &str, name: &str) -> Option<u32> {
+    db.lines().find_map(|line| {
         let mut f = line.split(':');
-        if f.next()? != user {
+        if f.next()? != name {
             return None;
         }
         f.next()?;
@@ -165,15 +166,21 @@ pub fn mount_is_safe_for(mounts: &[Mount], path: &Path) -> bool {
 mod tests {
     use super::*;
 
+    const GROUP: &str = "wheel:x:10:fy
+ruya-shell:x:974:
+";
     const PASSWD: &str = "root:x:0:0:root:/root:/bin/bash\nruya-shell:x:973:973:RuyaOS shell:/var/lib/ruya-shell:/usr/sbin/nologin\nbroken\n";
 
     #[test]
-    fn the_shell_uid_comes_from_passwd() {
-        assert_eq!(uid_in_passwd(PASSWD, "ruya-shell"), Some(973));
-        assert_eq!(uid_in_passwd(PASSWD, "root"), Some(0));
-        assert_eq!(uid_in_passwd(PASSWD, "ruya-shel"), None);
+    fn the_shell_ids_come_from_passwd_and_group() {
+        assert_eq!(id_in_db(GROUP, "ruya-shell"), Some(974));
+        assert_eq!(id_in_db(GROUP, "ruya"), None);
+        assert_eq!(id_in_db(GROUP, "wheel"), Some(10));
+        assert_eq!(id_in_db(PASSWD, "ruya-shell"), Some(973));
+        assert_eq!(id_in_db(PASSWD, "root"), Some(0));
+        assert_eq!(id_in_db(PASSWD, "ruya-shel"), None);
         assert_eq!(
-            uid_in_passwd("ruya-shell:x:abc:1::/:/bin/sh", "ruya-shell"),
+            id_in_db("ruya-shell:x:abc:1::/:/bin/sh", "ruya-shell"),
             None
         );
     }

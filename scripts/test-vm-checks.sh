@@ -1640,6 +1640,12 @@ got="$(echo "$insp" | pc key signer_name)|$(echo "$insp" | pc key developer)|$(e
 got="$(echo '{"type":"sa{sv}","data":["ok",{"developer":{"type":"s","data":"Example Games"}}]}' | pc key signer_name)"
 [ -z "$got" ] && pass "play: an Inspect record without signer_name reads as nothing (RUY-914)" || fail "play: absent signer_name read as '$got'"
 [ "$(grep -c 'parse key signer_name' "$here/vm-play-check.sh")" = 2 ] && pass "vm-play-check.sh asserts Inspect's signer_name, signed and unsigned (RUY-914)" || fail "vm-play-check.sh lacks a signer_name assertion (signed or unsigned)"
+# RUY-1038: an Inspect record's art paths (the roles' values, then the screenshots), one per line.
+insp='{"type":"sa{sv}","data":["ok",{"art":{"type":"a{ss}","data":{"icon":"/run/ruya-play/inspect/inspect-1/icon-512.webp","hero":"/run/ruya-play/inspect/inspect-1/hero-2160.webp"}},"screenshots":{"type":"as","data":["/run/ruya-play/inspect/inspect-1/screenshot-0-1080.webp"]}}]}'
+got="$(echo "$insp" | pc artpaths | tr -d '\r' | tr '\n' ' ')"
+[ "$got" = "/run/ruya-play/inspect/inspect-1/icon-512.webp /run/ruya-play/inspect/inspect-1/hero-2160.webp /run/ruya-play/inspect/inspect-1/screenshot-0-1080.webp " ] && pass "play: an Inspect record's art paths (RUY-1038)" || fail "play: art paths read as '$got'"
+got="$(echo '{"type":"sa{sv}","data":["ok",{"verdict":{"type":"s","data":"ok"}}]}' | pc artpaths)"
+[ -z "$got" ] && pass "play: a record without art has no art paths (RUY-1038)" || fail "play: art paths of a bare record read as '$got'"
 # RUY-866: an Inspect record's problem codes, one per line (inspect_clean looks for staging.*/helper.*).
 insp='{"type":"sa{sv}","data":["ok",{"problems":{"type":"a(sss)","data":[["trust.unsigned","","x"],["staging.io","","Not a directory"]]},"verdict":{"type":"s","data":"needs-developer-mode"}}]}'
 got="$(echo "$insp" | pc codes | tr -d '\r' | tr '\n' ' ')"

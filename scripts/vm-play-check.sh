@@ -205,6 +205,13 @@ elif what == "keys":
 elif what == "key":
     rec = data[1] if len(data) > 1 else {}
     print(val(rec.get(arg)) if arg in rec else "")
+elif what == "artpaths":
+    # the vetted art of an Inspect record: every role path, then the screenshot paths (RUY-1038)
+    rec = data[1] if len(data) > 1 else {}
+    for p in (val(rec.get("art")) or {}).values():
+        print(p)
+    for p in (val(rec.get("screenshots")) or []):
+        print(p)
 elif what == "codes":
     rec = data[1] if len(data) > 1 else {}
     for p in (val(rec.get("problems")) or []):
@@ -1292,6 +1299,15 @@ st="$(call Inspect s "$loose/signed-a.play.zip" | parse status)"
 [ "$st" = unknown-source ] && ok "Inspect on a drive without noexec is unknown-source" || bad "Inspect on a drive without noexec: $st"
 st="$(inspect_clean "$usb/signed-a.play.zip" ok)"
 [ "$st" = ok ] && ok "Inspect of a USB package is ok, no internal fault" || bad "Inspect of a USB package: $st"
+# RUY-1038: the art Inspect returns is a copy under /run/ruya-play/inspect that only the shell reads
+# (the vetted files in ruya-play-work are root's); a profile user is refused.
+art="$(call Inspect s "$usb/signed-a.play.zip" | parse artpaths | tr -d '\r')"
+[ -n "$art" ] && ok "Inspect of a USB package returns art paths" || bad "Inspect of a USB package returned no art"
+for p in $art; do
+    case "$p" in /run/ruya-play/inspect/inspect-*/*) ;; *) bad "art path $p is not under /run/ruya-play/inspect"; continue ;; esac
+    as_shell head -c 16 "$p" >/dev/null 2>&1 && ok "ruya-shell reads $p" || bad "ruya-shell cannot read $p"
+    runuser -u nobody -- head -c 16 "$p" >/dev/null 2>&1 && bad "nobody can read $p" || ok "nobody is refused $p"
+done
 # RUY-914: Inspect serves signer_name (the manifest's developer name) only beside a verified key.
 rec="$(call Inspect s "$usb/signed-a.play.zip")"
 name="$(echo "$rec" | parse key signer_name)"; dev="$(echo "$rec" | parse key developer)"
