@@ -42,8 +42,9 @@
 // RUY-1052), anything else "invalid". startChild is the seam for a Steam game: a running child record
 // under a running instance (item "steam:<appid>", parent that instance, the parent's app id and profile),
 // announced with AppStarted; endChild ends it with AppExited "quit". Stop and Kill on a parent end its
-// children first ("stop <child>" / "kill <child>" logged before the parent's). Freeze and Thaw do not
-// know children yet (the service builds them with RUY-1052).
+// children first ("stop <child>" / "kill <child>" logged before the parent's). Freeze and Thaw of a
+// parent reach its running children first, as the service does (ADR-041 point 7, RUY-1054): "freeze
+// <child>" / "thaw <child>" are logged before the parent's.
 class MockSessionBackend final : public SessionBackend
 {
     Q_OBJECT
@@ -100,6 +101,8 @@ private:
     // The status of a freeze or thaw of `instance` before anything is done.
     QString freezable(const QString &instance) const;
     void setFrozen(int index, bool frozen);
+    // Freezes or thaws the running children of `parentInstance`, each logged ("freeze <child>").
+    void setChildrenFrozen(const QString &parentInstance, bool frozen);
 
     ProfileCheck m_knownProfile;
     ActiveProfile m_activeProfile;

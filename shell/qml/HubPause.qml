@@ -17,7 +17,8 @@ import RuyaShell
 // the Thaws on their way; an instance leaves it only with the answer. A failed Thaw says so in a toast;
 // the game is then frozen and in neither list, so the sweep (below) or the next Hub over it retries.
 //
-// The sweep: a frozen app of the signed-in profile that is in neither list was frozen behind this
+// The sweep: a frozen app of the signed-in profile that is in neither list (nor a child of one that
+// is: the service freezes a Steam game with Steam's instance, and thaws it with it) was frozen behind this
 // object's back (a shell restart while a game was frozen, a Thaw the service refused because the
 // profile was switched as the Hub closed, a Freeze served after its Thaw, which since RUY-570 can only
 // happen for `asked` apps: the service announces the profile change's freezes inside the freezer's turn): it is thawed. It runs on
@@ -72,11 +73,19 @@ QtObject {
             release(front)
     }
 
+    // An instance this object asked to freeze (or is thawing) covers its children: the service freezes
+    // a parent's games with it and thaws them with it (ADR-041 point 7, ADR-042), so they are not
+    // frozen behind this object's back.
+    function covered(r) {
+        return asked.includes(r.instance) || thawing.includes(r.instance)
+            || (r.parent !== undefined && r.parent !== "" && (asked.includes(r.parent) || thawing.includes(r.parent)))
+    }
+
     function sweep() {
         if (profile === "")
             return
         for (const r of Session.running) {
-            if (r.profile === profile && r.frozen === true && !asked.includes(r.instance) && !thawing.includes(r.instance))
+            if (r.profile === profile && r.frozen === true && !covered(r))
                 thaw(r.instance)
         }
     }

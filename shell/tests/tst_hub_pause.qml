@@ -387,6 +387,27 @@ Item {
             tryVerify(() => recordOf(run.instance).frozen === false, 2000, "the game runs again")
         }
 
+        // RUY-1054, ADR-042: the Hub asks to freeze Steam's instance and the service freezes its game
+        // too; the sweep must not thaw that game as "frozen behind the Hub's back".
+        function test_a_game_frozen_with_its_parent_stays_frozen_and_resume_thaws_both() {
+            start()
+            const run = playRacer()
+            const game = Session.mockStartChild(run.instance, "steam:70")
+            verify(game !== "")
+            tryVerify(() => recordOf(game) !== undefined && recordOf(game).state === "running")
+            openHub()
+            tryVerify(() => recordOf(run.instance).frozen === true, 2000, "the parent is frozen")
+            tryVerify(() => recordOf(game).frozen === true, 2000, "the game is frozen with it")
+            // Give the sweep (every change of the running list) its turns.
+            wait(300)
+            verify(recordOf(game).frozen, "the sweep leaves the game of an asked parent alone")
+            compare(Session.mockCalls(), ["freeze " + game, "freeze " + run.instance])
+            keyClick(Qt.Key_Return)                          // Resume
+            tryVerify(() => recordOf(run.instance).frozen === false && recordOf(game).frozen === false, 2000,
+                      "both run again")
+            compare(Session.mockCalls(), ["freeze " + game, "freeze " + run.instance, "thaw " + game, "thaw " + run.instance])
+        }
+
         function test_b_and_guide_thaw_the_game() {
             start()
             const run = playRacer()
