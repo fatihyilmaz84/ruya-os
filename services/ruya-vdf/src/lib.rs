@@ -2,7 +2,7 @@
 //! `appmanifest_*.acf` and of a compatibility tool's `compatibilitytool.vdf`. A reader and a
 //! writer, no OS: a file is text in, text out (reading it safely is `ruya-fs`'s).
 //!
-//! The reader takes quoted and unquoted tokens, `//` comments and a byte order mark. //!
+//! The reader takes quoted and unquoted tokens, `//` comments and a byte order mark.
 //! Keys keep their order and may repeat (a file is rewritten without losing what it had); lookups
 //! ignore case, as Steam does. Anything that is not the format is an `Err` with a short reason,
 //! never a panic: the files belong to Steam and to the player.
@@ -154,19 +154,15 @@ pub fn parse(text: &str) -> Result<Vec<Entry>, String> {
     }
 }
 
-/// A backslash is doubled only where the reader would take it as an escape (before `n`, `t`,
-/// `\` or `"`, or at the end): the reader keeps an unknown escape such as `\x` as written, so
-/// the writer writes it back as it was read.
+/// A backslash is always doubled, Steam's own form (`"C:\\Games\\Steam"`). The reader keeps an
+/// unknown escape such as `\x` as written, so such a value is written back doubled and reads
+/// the same.
 fn quote(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('"');
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
+    for c in s.chars() {
         match c {
-            '\\' if matches!(chars.peek(), None | Some('n' | 't' | '\\' | '"')) => {
-                out.push_str("\\\\")
-            }
-            '\\' => out.push('\\'),
+            '\\' => out.push_str("\\\\"),
             '"' => out.push_str("\\\""),
             '\n' => out.push_str("\\n"),
             '\t' => out.push_str("\\t"),
@@ -241,15 +237,25 @@ mod tests {
     }
 
     #[test]
-    fn an_unknown_escape_is_written_back_as_it_was_read() {
-        for text in ["\"a\"\t\t\"C:\\x\\dir\"\n", "\"a\"\t\t\"\\q\"\n"] {
+    fn an_unknown_escape_is_kept_by_the_reader_and_survives_a_rewrite() {
+        for text in [
+            "\"a\"\t\t\"C:\\x\\dir\"\n",
+            "\"a\"\t\t\"\\q\"\n",
+            "\"a\"\t\t\"\\\\x\\y\\\\\"\n",
+        ] {
             let parsed = parse(text).expect("valid");
-            assert_eq!(write(&parsed), text, "{text:?}");
+            assert_eq!(parse(&write(&parsed)).expect("valid"), parsed, "{text:?}");
         }
-        // A known escape before a plain letter may be written shorter; the value is the same.
-        let odd = "\"a\"\t\t\"\\\\x\\y\\\\\"\n";
-        let parsed = parse(odd).expect("valid");
-        assert_eq!(parse(&write(&parsed)).expect("valid"), parsed);
+        let kept = parse("\"a\"\t\t\"C:\\x\"\n").expect("valid");
+        assert_eq!(kept[0].value, Value::Str("C:\\x".to_owned()));
+    }
+
+    #[test]
+    fn a_path_with_doubled_backslashes_is_written_back_byte_identical() {
+        let text = "\"path\"\t\t\"C:\\\\Games\\\\Steam\"\n\"n\"\t\t\"a\\\\nb\"\n";
+        let parsed = parse(text).expect("valid");
+        assert_eq!(parsed[0].value, Value::Str("C:\\Games\\Steam".to_owned()));
+        assert_eq!(write(&parsed), text);
     }
 
     #[test]

@@ -289,9 +289,32 @@ mod tests {
     #[test]
     fn an_oversized_library_file_leaves_the_root() {
         let (_dir, root) = fixture_tree();
-        let big = " ".repeat(MAX_LIBRARYFOLDERS as usize + 1);
-        std::fs::write(root.join("steamapps/libraryfolders.vdf"), big).unwrap();
+        let file = root.join("steamapps/libraryfolders.vdf");
+        assert_eq!(
+            library_paths(&root).len(),
+            2,
+            "the fixture lists a second library"
+        );
+        // A comment pads the real fixture past the cap and it still parses: only the cap refuses it.
+        let mut big = std::fs::read_to_string(&file).unwrap();
+        big.push_str(&format!("//{}\n", "x".repeat(MAX_LIBRARYFOLDERS as usize)));
+        std::fs::write(&file, big).unwrap();
         assert_eq!(library_paths(&root), vec![root]);
+    }
+
+    #[test]
+    fn at_most_the_manifest_cap_is_read_per_library() {
+        let (_dir, root) = fixture_tree();
+        let steamapps = root.join("steamapps");
+        for id in 1000..1000 + MAX_MANIFESTS + 1 {
+            let text = manifest("4").replace("\"7\"", &format!("\"{id}\""));
+            std::fs::write(steamapps.join(format!("appmanifest_{id}.acf")), text).unwrap();
+        }
+        let in_root = scan_root(&root)
+            .into_iter()
+            .filter(|i| i.id != "steam:400")
+            .count();
+        assert_eq!(in_root, MAX_MANIFESTS, "4098 files sit in the root library");
     }
 
     #[cfg(unix)]
