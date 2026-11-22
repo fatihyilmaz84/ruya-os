@@ -8,8 +8,9 @@
   python3 vm-input-probe.py game <node>      (as the profile user; driven by `check` over stdin)
   python3 vm-input-probe.py open <node>      prints "open ok" or "open refused <errno name>"
   python3 vm-input-probe.py restart          (root) kill -9 ruya-inputd; prints "<old> <new> <ms>"
-  python3 vm-input-probe.py pad <seconds>    (root) holds a uinput "physical" pad for that long
-      (RUY-409: the shell's route makes its virtual pad); prints "pad ready <node>" once it has a node
+  python3 vm-input-probe.py pad <seconds> [--join PROFILE]    (root) holds a uinput "physical" pad for that long
+      (RUY-409: the shell's route makes its virtual pad); prints "pad ready <node>" once it has a node;
+      --join seats it as that profile's player 1 first (only a seated pad has a virtual pad, RUY-121)
   python3 vm-input-probe.py confirm --profile p1
       (root; RUY-40, RUY-603) a uinput pad with Nintendo's vendor id: the Confirm button swaps Enter and
       Esc for BTN_EAST and BTN_SOUTH by mode; a second pad keeps its own mode (each pad confirms with
@@ -576,6 +577,14 @@ def cmd_pad(args):
     try:
         node = wait_for(lambda: node_by("phys", PHYS)[0], 3)
         print(f"pad ready {node}" if node else "pad has no node", flush=True)
+        if args.join:
+            # Only a seated pad gets a virtual pad (RUY-121): a pad plugged in after the sign-in is not.
+            bus = Bus()
+            try:
+                status, slot = join_by_name(bus, NAME, args.join)
+            finally:
+                bus.close()
+            print(f"joined {status} {slot}", flush=True)
         time.sleep(args.seconds)
     finally:
         pad.close()
@@ -2240,6 +2249,7 @@ def main():
     sub.add_parser("restart")
     p = sub.add_parser("pad")
     p.add_argument("seconds", type=float)
+    p.add_argument("--join", default="", help="seat the pad as this profile's player 1 first (RUY-121)")
     cf = sub.add_parser("confirm")
     cf.add_argument("--profile", required=True)
     hd = sub.add_parser("hold")

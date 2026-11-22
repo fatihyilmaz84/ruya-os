@@ -1082,7 +1082,7 @@ launch_windows_checks() {
     # background watcher looks for the winebus winedevice holding that pad's event node while the game runs.
     pdir="$(dirname "$0")"
     if [ -f "$pdir/vm-input-probe.py" ]; then
-        python3 "$pdir/vm-input-probe.py" pad 1200 > "$work/pad.log" 2>&1 &
+        python3 "$pdir/vm-input-probe.py" pad 1200 --join "$lprof" > "$work/pad.log" 2>&1 &
         lpad=$!
         watch_winebus "$work/winebus.txt" 600 &
         lwatch=$!
