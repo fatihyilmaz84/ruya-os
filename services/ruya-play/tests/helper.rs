@@ -88,13 +88,13 @@ fn inspect_carries_the_vetted_art_of_the_sample() {
                 "{}",
                 f.display()
             );
-            let vetted = h
-                .cfg
-                .inspect
-                .join("inspect-1/art")
-                .join(f.file_name().unwrap());
-            assert!(std::fs::metadata(f).unwrap().len() > 0, "{}", f.display());
-            assert_eq!(std::fs::read(f).unwrap(), std::fs::read(&vetted).unwrap());
+            // The vetted art step writes WebP: the copy is a whole file of that container.
+            let bytes = std::fs::read(f).unwrap();
+            assert!(
+                bytes.len() > 12 && bytes.starts_with(b"RIFF"),
+                "{}",
+                f.display()
+            );
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
@@ -104,44 +104,28 @@ fn inspect_carries_the_vetted_art_of_the_sample() {
             }
         }
     }
-    // Only the vetted art stays: no root files, no copied art sources, no staging, no job.
-    let left = listing(&h.cfg.inspect);
-    assert!(
-        left.iter()
-            .all(|p| p == "inspect-1" || p.starts_with("inspect-1/art")),
-        "{left:?}"
-    );
+    // The private folder is gone: the published copy is the only one. No staging, no job.
+    assert_eq!(listing(&h.cfg.inspect), Vec::<String>::new());
     assert_eq!(h.staging(), Vec::<String>::new());
     assert!(!h.cfg.jobs_file().exists());
     assert_eq!(h.free.calls.load(Ordering::SeqCst), 0);
     // The install's own inspect folder goes with the job; the preview stays.
     let r = h.install();
     assert_eq!(r.status, JobStatus::Ok, "{:?}", r.problems);
-    let top: Vec<String> = listing(&h.cfg.inspect)
-        .into_iter()
-        .filter(|p| !p.contains('/'))
-        .collect();
-    assert_eq!(top, vec!["inspect-1"]);
+    assert_eq!(listing(&h.cfg.inspect), Vec::<String>::new());
+    assert!(h.cfg.publish.join("inspect-1").is_dir());
 }
 
 #[test]
 fn inspect_keeps_the_newest_previews_and_nothing_of_a_refusal() {
-    let h = Setup::with(Pkg::signed(&game())).build();
+    let h = Setup::with(Pkg::signed(&sample())).build();
     for _ in 0..ruya_play::core::importer::MAX_PREVIEWS + 2 {
         assert_eq!(
             h.importer.inspect(&pkg_path("game.play")).0,
             MethodStatus::Ok
         );
     }
-    let top: Vec<String> = listing(&h.cfg.inspect)
-        .into_iter()
-        .filter(|p| !p.contains('/'))
-        .collect();
-    assert_eq!(
-        top,
-        vec!["inspect-3", "inspect-4", "inspect-5", "inspect-6"]
-    );
-    // The published copy goes with the private folder (RUY-1038).
+    // Only the published copies are kept (RUY-1038): the newest four.
     let mut published = listing(&h.cfg.publish);
     published.retain(|p| !p.contains('/'));
     published.sort();

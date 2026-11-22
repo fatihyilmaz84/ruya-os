@@ -19,6 +19,9 @@ impl Environment for NoSystem {
     fn shell_uid(&self) -> Option<u32> {
         None
     }
+    fn shell_gid(&self) -> Option<u32> {
+        None
+    }
 }
 
 #[test]

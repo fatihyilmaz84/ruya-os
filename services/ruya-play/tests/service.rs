@@ -301,6 +301,9 @@ impl Environment for Mounts {
     fn shell_uid(&self) -> Option<u32> {
         None
     }
+    fn shell_gid(&self) -> Option<u32> {
+        None
+    }
 }
 
 struct CountingHelper(Arc<AtomicU32>);

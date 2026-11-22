@@ -20,6 +20,8 @@ pub trait Environment: Send + Sync {
     fn mountinfo(&self) -> String;
     /// The shell's uid (`ruya-shell` in `/etc/passwd`).
     fn shell_uid(&self) -> Option<u32>;
+    /// The shell's gid (`ruya-shell` in `/etc/group`): the group that reads the published art.
+    fn shell_gid(&self) -> Option<u32>;
 }
 
 /// The console's own files.
@@ -32,7 +34,11 @@ impl Environment for SystemEnvironment {
     }
     fn shell_uid(&self) -> Option<u32> {
         let passwd = std::fs::read_to_string("/etc/passwd").ok()?;
-        gates::uid_in_passwd(&passwd, gates::SHELL_USER)
+        gates::id_in_db(&passwd, gates::SHELL_USER)
+    }
+    fn shell_gid(&self) -> Option<u32> {
+        let group = std::fs::read_to_string("/etc/group").ok()?;
+        gates::id_in_db(&group, gates::SHELL_USER)
     }
 }
 

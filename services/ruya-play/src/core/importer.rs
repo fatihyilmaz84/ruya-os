@@ -4,7 +4,7 @@
 //!
 //! 1. **helper, `inspect`:** open the package, read the listing and the four root files once,
 //!    `ruya_play_trust::inspect`, and stage the root files into `inspect/<name>/meta/` (and, for
-//!    `Inspect`, the vetted art into `inspect/<name>/art/`);
+//!    `Inspect`, the vetted art into `inspect/<name>/art/`, copied to `publish/<name>` and removed);
 //! 2. **service:** read those root files back ([`MetaSource`]) and run
 //!    `ruya_play_trust::inspect` over them with its own key records, the blocklist from
 //!    `select_blocklist` (never `ListCheck::NotChecked`) and developer mode;
@@ -66,7 +66,7 @@ pub struct Config {
     /// The jobs table and the installed builds.
     pub state: PathBuf,
     /// One folder per helper `inspect` run: the root files it staged and, for `Inspect`, the
-    /// vetted art the record points at (the newest [`MAX_PREVIEWS`] are kept).
+    /// vetted art, which is copied to `publish` and removed again.
     pub inspect: PathBuf,
     /// One folder per `Inspect` (`inspect-<n>`) with a copy of its vetted art, for the shell to
     /// read (RUY-1038): `inspect` is root only. Emptied at start.
@@ -127,7 +127,7 @@ impl Config {
     }
 }
 
-/// How many `Inspect` folders (with their vetted art) are kept.
+/// How many published `Inspect` folders (with their vetted art) are kept.
 pub const MAX_PREVIEWS: usize = 4;
 
 /// The modes of the published copy: the group `ruya-shell` reads, nobody else (RUY-1038).
@@ -185,7 +185,7 @@ pub struct InspectReport {
     pub inspection: Option<Inspection>,
     /// The build installed for the id now.
     pub installed_build: Option<u64>,
-    /// The vetted art (Play1's `art`), files under `inspect/inspect-<n>/art/`, when the package
+    /// The vetted art (Play1's `art`), files under `publish/inspect-<n>/`, when the package
     /// passed; empty otherwise.
     pub art: Vec<VettedArt>,
     /// For a package whose id is installed: what it changes in the installed app's requests
@@ -477,6 +477,15 @@ fn only_dirs(dir: &Dir, allowed: &[&str]) -> Result<(), Problem> {
     Ok(())
 }
 
+/// Open the vetted art file `rel` (`icon-512.webp`, `logo-0/logo-512.webp`) of `art_dir` for
+/// reading, without following a link: the one way the checks and the published copy read it.
+fn open_vetted(art_dir: &Dir, rel: &str) -> std::io::Result<std::fs::File> {
+    match rel.split_once('/') {
+        Some((sub, leaf)) => art_dir.open_dir(sub).and_then(|d| d.open_file(leaf)),
+        None => art_dir.open_file(rel),
+    }
+}
+
 /// One vetted art file before the shell can see it (RUY-829): a name `ruya-play-art` writes, at
 /// most the bytes such a file can have, and the first bytes of its container. Read through the
 /// folder handle, without following a link.
@@ -495,10 +504,7 @@ fn check_art_file(art_dir: &Dir, rel: &str, size: u64) -> Result<(), Problem> {
             format!("A vetted art file has {size} bytes; at most {max} are possible."),
         ));
     }
-    let file = match rel.split_once('/') {
-        Some((sub, leaf)) => art_dir.open_dir(sub).and_then(|d| d.open_file(leaf)),
-        None => art_dir.open_file(rel),
-    };
+    let file = open_vetted(art_dir, rel);
     let mut head = Vec::with_capacity(art::HEADER_BYTES);
     file.and_then(|f| {
         f.take(art::HEADER_BYTES as u64)
@@ -995,8 +1001,8 @@ impl Importer {
     }
 
     /// Steps 1 to 3: the helper inspects `path` into `inspect/<name>`, then the service checks
-    /// the root files it staged. With `art`, the vetted art stays in that folder (for `Inspect`);
-    /// otherwise the folder is gone when this returns.
+    /// the root files it staged. With `art` (for `Inspect`), the vetted art is copied to
+    /// `publish/<name>` first; the private folder is gone when this returns.
     fn front(&self, name: &str, path: &Path, art: bool, cancel: &AtomicBool) -> Front {
         let dir = match self.scratch.create_dir(name, 0o700) {
             Ok(d) => d,
@@ -1009,23 +1015,12 @@ impl Importer {
         };
         let front = self.front_in(&dir, name, path, art, cancel);
         drop(dir);
-        let keep = art && matches!(front, Front::Checked(_));
-        let cleaned = if keep {
-            // The record points at art/ only.
-            ["meta", "src"]
-                .iter()
-                .try_for_each(|n| match self.scratch.open_dir(name) {
-                    Ok(d) => match d.remove_entry(n) {
-                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                        other => other,
-                    },
-                    Err(e) => Err(e),
-                })
-        } else {
-            self.scratch.remove_entry(name)
-        };
-        match (cleaned, front) {
-            (Err(e), Front::Checked(_)) => Front::Failed(staging_problem("", &e)),
+        // Nothing stays in the private folder: what `Inspect` returns is the published copy.
+        match (self.scratch.remove_entry(name), front) {
+            (Err(e), Front::Checked(_)) => {
+                let _ = self.published.remove_entry(name);
+                Front::Failed(staging_problem("", &e))
+            }
             (_, front) => front,
         }
     }
@@ -1088,14 +1083,18 @@ impl Importer {
         };
         let vetted = if art {
             let found = match dir.open_dir("art") {
-                Ok(a) => check_art(&a, &art_lines),
+                Ok(a) => check_art(&a, &art_lines).map(|_| Some(a)),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound && art_lines.is_empty() => {
-                    Ok(Vec::new())
+                    Ok(None)
                 }
                 Err(e) => Err(staging_problem("art", &e)),
             };
             match found {
-                Ok(v) => v,
+                Ok(Some(a)) => match self.publish_art(name, &a, &art_lines) {
+                    Ok(v) => v,
+                    Err(p) => return Front::Failed(p),
+                },
+                Ok(None) => Vec::new(),
                 Err(p) => return Front::Refused(Box::new((vec![p], Some(checked.inspection)))),
             }
         } else {
@@ -1110,29 +1109,28 @@ impl Importer {
         }))
     }
 
-    /// Remember an `Inspect` folder and drop the oldest beyond [`MAX_PREVIEWS`].
+    /// Remember a published `Inspect` folder and drop the oldest beyond [`MAX_PREVIEWS`].
     fn keep_preview(&self, name: String) {
         let mut kept = self.previews.lock().unwrap_or_else(|e| e.into_inner());
         kept.push_back(name);
         while kept.len() > MAX_PREVIEWS {
             if let Some(old) = kept.pop_front() {
-                let _ = self.scratch.remove_entry(&old);
                 let _ = self.published.remove_entry(&old);
             }
         }
     }
 
-    /// Copy the vetted art of `inspect/<name>` into `publish/<name>` for the shell and return the
-    /// records with their paths there (RUY-1038). Only files that passed [`check_art`] are
-    /// copied, through folder handles without following a link, as `0640` files in `0750`
-    /// folders of the group `ruya-shell`. A copy that fails leaves nothing published.
-    fn publish_art(&self, name: &str, art: &[VettedArt]) -> Result<Vec<VettedArt>, Problem> {
-        let from = self
-            .scratch
-            .open_dir(name)
-            .and_then(|d| d.open_dir("art"))
-            .map_err(|e| staging_problem("art", &e))?;
-        let result = self.copy_art(name, &from, art);
+    /// Copy the vetted art of `inspect/<name>/art` (`from`, which [`check_art`] passed, the files
+    /// named by `lines`) into `publish/<name>` for the shell and return the records with their
+    /// paths there (RUY-1038): through folder handles without following a link, as `0640` files in
+    /// `0750` folders of the group `ruya-shell`. A copy that fails leaves nothing published.
+    fn publish_art(
+        &self,
+        name: &str,
+        from: &Dir,
+        lines: &[ArtLine],
+    ) -> Result<Vec<VettedArt>, Problem> {
+        let result = self.copy_art(name, from, lines);
         if result.is_err() {
             let _ = self.published.remove_entry(name);
         }
@@ -1143,7 +1141,7 @@ impl Importer {
         &self,
         name: &str,
         from: &Dir,
-        art: &[VettedArt],
+        lines: &[ArtLine],
     ) -> Result<Vec<VettedArt>, Problem> {
         let group = |dir: &Dir, entry: &str| match self.cfg.shell_gid {
             Some(gid) => dir.set_group(entry, gid),
@@ -1155,16 +1153,11 @@ impl Importer {
             .map_err(|e| staging_problem(name, &e))?;
         group(&self.published, name).map_err(|e| staging_problem(name, &e))?;
         let mut out = Vec::new();
-        for a in art {
+        for l in lines {
             let mut files = Vec::new();
-            for f in &a.files {
-                let rel = f
-                    .strip_prefix(from.path())
-                    .ok()
-                    .and_then(Path::to_str)
-                    .ok_or_else(|| changed("art", "A vetted art file is outside art/."))?;
+            for rel in &l.files {
                 let fail = |e: std::io::Error| staging_problem(rel, &e);
-                let (src, dst, leaf) = match rel.split_once('/') {
+                let (dst, leaf) = match rel.split_once('/') {
                     Some((sub, leaf)) => {
                         let dst = match to.open_dir(sub) {
                             Ok(d) => d,
@@ -1175,23 +1168,19 @@ impl Importer {
                             }
                             Err(e) => return Err(fail(e)),
                         };
-                        (from.open_dir(sub).map_err(fail)?, dst, leaf)
+                        (dst, leaf)
                     }
-                    None => (
-                        from.try_clone().map_err(fail)?,
-                        to.try_clone().map_err(fail)?,
-                        rel,
-                    ),
+                    None => (to.try_clone().map_err(fail)?, rel.as_str()),
                 };
-                let mut input = src.open_file(leaf).map_err(fail)?;
+                let mut input = open_vetted(from, rel).map_err(fail)?;
                 let mut output = dst.create_file(leaf, PUBLISHED_FILE_MODE).map_err(fail)?;
                 std::io::copy(&mut input, &mut output).map_err(fail)?;
                 group(&dst, leaf).map_err(fail)?;
-                files.push(to.path().join(rel));
+                files.push(staging::join_checked(to.path(), rel).map_err(fail)?);
             }
             out.push(VettedArt {
-                slot: a.slot.clone(),
-                lang: a.lang.clone(),
+                slot: l.slot.clone(),
+                lang: l.lang.clone(),
                 files,
             });
         }
@@ -1212,7 +1201,15 @@ impl Importer {
         let name = format!("inspect-{n}");
         let report = match self.front(&name, path, true, &AtomicBool::new(false)) {
             Front::Missing => return (MethodStatus::UnknownSource, None),
-            Front::Cancelled | Front::Failed(_) => return (MethodStatus::Failed, None),
+            Front::Cancelled => return (MethodStatus::Failed, None),
+            Front::Failed(p) => {
+                // The one trace of why: the code and message carry no package text or path.
+                eprintln!(
+                    "ruya-play: inspect {name} failed: {}: {}",
+                    p.code, p.message
+                );
+                return (MethodStatus::Failed, None);
+            }
             Front::Refused(refusal) => {
                 let (problems, inspection) = *refusal;
                 let installed_build = inspection.as_ref().and_then(|i| {
@@ -1232,14 +1229,7 @@ impl Importer {
                 }
             }
             Front::Checked(passed) => {
-                let mut p = *passed;
-                match self.publish_art(&name, &p.art) {
-                    Ok(art) => p.art = art,
-                    Err(_) => {
-                        let _ = self.scratch.remove_entry(&name);
-                        return (MethodStatus::Failed, None);
-                    }
-                }
+                let p = *passed;
                 self.keep_preview(name);
                 let update = self.update_of(Some(&p.checked.inspection), p.checked.installed_build);
                 InspectReport {
