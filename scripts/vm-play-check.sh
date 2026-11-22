@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: asknet bumpbuild check compat32 generation helper launch launch-windows lstate modpath offline parse perms pkgid remove removeapp runid signals sysrunner verify winpkg withid
+# modes: asknet bumpbuild check compat32 generation helper launch launch-windows libprobe lstate modpath offline parse perms pkgid remove removeapp runid signals sysrunner verify winpkg withid
 # Checks ruya-play (org.ruyaos.Play1, RUY-829, the lead's run under RUY-100) inside a running VM,
 # as root. [RUYA_PIN=<digits>] is the PIN of the profile the launch modes sign in (tried after no PIN,
 # before 1234), as for dell-hub-check.sh; it is never printed. Modes:
@@ -65,6 +65,13 @@
 #          its check.ini changed: bumpbuild) is installed over it and launched a third time: check.exe
 #          reads the new check.ini (edition=2: the file it never changed was replaced), beside.txt
 #          says launches=3 (what it wrote was kept) and game_build is the new build
+#          RUY-1039: in the app's sandbox, with the runner's files/lib/x86_64-linux-gnu first in
+#          LD_LIBRARY_PATH as the proton script has it, libSDL2, libSDL3, libudev, libvulkan, libfreetype,
+#          libgnutls and libpulse each load (a child process per library: an abort is a FAIL line); and
+#          with a held uinput pad (vm-input-probe.py pad, next to this script) routed by the shell, the
+#          winebus winedevice holds the virtual pad's /dev/input/event* during the first launch
+#   libprobe host fixtures only: `libprobe <runner root> "<soname>..."` runs the sandbox probe of the library
+#          loads in this shell (the fixture puts a python3 shim in PATH)
 #   signals host fixtures only: `signals <monitor.log> <member> <app id>` prints one line per such
 #          Session1 signal in a `busctl --json=short monitor` log: the instance and the arguments
 #          after the app id ("inst" for AppStarted, "inst 0 quit" for AppExited)
@@ -497,14 +504,22 @@ compat_i386() {
     echo "${rt%%/*}.Compat.i386/${rt#*/}"
     flatpak info --system "${rt%%/*}.Compat.i386/${rt#*/}" >/dev/null 2>&1
 }
-# system_runner <runners dir>: "<family>/<version>" of the newest proton-ge runner.json one folder below
-# <dir> (the OS's GE-Proton: what the status file names after a system-runner launch). Which folder is the
-# newest is vm-runner-check.sh's `newest` mode (one copy of the version rule), its runner.json says the rest.
-system_runner() {
-    local rc dir
+
+# system_runner_dir <runners dir>: the folder name of the newest proton-ge runner below <dir>. Which
+# folder is the newest is vm-runner-check.sh's `newest` mode (one copy of the version rule).
+system_runner_dir() {
+    local rc
     rc="$(dirname "$0")/vm-runner-check.sh"
     [ -f "$rc" ] || { echo "no $rc: copy vm-runner-check.sh next to this script" >&2; return 1; }
-    dir="$(bash "$rc" newest "$1" family=proton-ge)" || return 1
+    bash "$rc" newest "$1" family=proton-ge
+}
+
+# system_runner <runners dir>: "<family>/<version>" of the newest proton-ge runner.json one folder below
+# <dir> (the OS's GE-Proton: what the status file names after a system-runner launch); its runner.json
+# says the rest.
+system_runner() {
+    local dir
+    dir="$(system_runner_dir "$1")" || return 1
     python3 -I - "$1/$dir/runner.json" <<'PY'
 import json, sys
 with open(sys.argv[1], encoding="utf-8") as f:
@@ -512,6 +527,79 @@ with open(sys.argv[1], encoding="utf-8") as f:
 print("%s/%s" % (r["family"], r["version"]))
 PY
 }
+
+# RUY-1039: the libraries a Windows game's runtime must still load with GE-Proton's own library folder
+# first in LD_LIBRARY_PATH (the `proton` script puts files/lib/x86_64-linux-gnu first). A runner library
+# that shadows a runtime one it is older than breaks the dlopen that needs the newer one: GE-Proton's
+# libxkbcommon 0.9.2 broke libSDL3, sdl2-compat aborted winebus and no game saw a controller.
+RUNNER_LIBS="libSDL2-2.0.so.0 libSDL3.so.0 libudev.so.1 libvulkan.so.1 libfreetype.so.6 libgnutls.so.30 libpulse.so.0"
+# LIB_PROBE <runner root> <soname>...: run inside the sandbox; one line "ok <soname>" or "FAIL <soname>:
+# <last line of the error>" each. Every load is a child process: a library that aborts the process is a
+# FAIL line, not the end of the check.
+LIB_PROBE='root="$1"; shift
+export LD_LIBRARY_PATH="$root/files/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+for lib in "$@"; do
+    if err="$(python3 -I -c "import ctypes, sys; ctypes.CDLL(sys.argv[1])" "$lib" 2>&1)"; then
+        echo "ok $lib"
+    else
+        echo "FAIL $lib: $(echo "$err" | tail -n 1)"
+    fi
+done'
+
+# runner_lib_checks <app id> <runner folder>: RUNNER_LIBS load in the app's sandbox with the runner's
+# library folder first.
+runner_lib_checks() {
+    local line out
+    echo "--- RUY-1039: the runtime's libraries load with the runner's library folder first"
+    out="$(flatpak run --system --command=bash "$1" -c "$LIB_PROBE" probe "/app/runners/$2" $RUNNER_LIBS 2>&1)"
+    for lib in $RUNNER_LIBS; do
+        line="$(echo "$out" | grep -m1 -F " $lib")"
+        case "$line" in
+            "ok $lib") ok "$lib loads with $2's libraries first" ;;
+            *) bad "$lib with $2's libraries first: ${line:-no answer: $out}" ;;
+        esac
+    done
+}
+
+# pad_event_fd <winebus winedevice pid>... : prints "<pid> <node>" of the first of these processes that
+# holds an event node of a virtual pad (its phys is ruya-input/pad<n>); status 1 when none does.
+pad_event_fd() {
+    local pid fd node
+    for pid in "$@"; do
+        for fd in "/proc/$pid/fd/"*; do
+            node="$(readlink "$fd" 2>/dev/null)"
+            case "$node" in
+                /dev/input/event*)
+                    case "$(cat "/sys/class/input/${node##*/}/device/phys" 2>/dev/null)" in
+                        ruya-input/pad*) echo "$pid $node"; return 0 ;;
+                    esac ;;
+            esac
+        done
+    done
+    return 1
+}
+
+# winebus_pids: the processes that have Wine's winebus mapped (the winedevice that hosts it).
+winebus_pids() {
+    local m
+    for m in /proc/[0-9]*/maps; do
+        grep -q 'winebus' "$m" 2>/dev/null && { m="${m#/proc/}"; echo "${m%/maps}"; }
+    done
+}
+
+# watch_winebus <result file> <seconds>: in the background, until a winebus process holds a virtual pad's
+# event node: writes "<pid> <node>" to the file. The winedevice lives only while the game does, so the
+# check polls through the first launch instead of looking once after it.
+watch_winebus() {
+    local out="$1" i=0 got
+    : > "$out"
+    while [ "$i" -lt "$2" ]; do
+        # shellcheck disable=SC2046 # the pids are numbers
+        got="$(pad_event_fd $(winebus_pids))" && { echo "$got" > "$out"; return 0; }
+        sleep 1; i=$((i + 1))
+    done
+}
+
 
 # offline <on|off> <dir>: on takes the default routes away (IPv4 and IPv6) and keeps them in <dir>; off puts
 # them back. The guest stays reachable on its own subnet, so the ssh session lives. Prints nothing. Both
@@ -590,6 +678,11 @@ if [ "$mode" = modpath ]; then
 fi
 if [ "$mode" = sysrunner ]; then
     system_runner "${2:?runners dir}"
+    exit $?
+fi
+if [ "$mode" = libprobe ]; then
+    # shellcheck disable=SC2086 # the sonames are a word list
+    bash -c "$LIB_PROBE" probe "${2:?runner root}" ${3:?sonames}
     exit $?
 fi
 if [ "$mode" = compat32 ]; then
@@ -830,7 +923,7 @@ ppath=/org/ruyaos/Profiles1
 # What the cleanup undoes: the profile the check made (lcreated, with the admin ladmin that makes it
 # deletable), the monitor, the running instance, the SDL override, the removed routes. lzip is the
 # package launch_run installed (launch-windows makes its update from it).
-lprof=""; ladmin=""; lcreated=""; lmon=""; linst=""; lover=""; lrouted=0; lzip=""
+lprof=""; ladmin=""; lcreated=""; lmon=""; linst=""; lover=""; lrouted=0; lzip=""; lpad=""; lwatch=""
 
 list_profiles() { busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | grep -o '"p[0-9]*"' | tr -d '"'; }
 
@@ -960,7 +1053,7 @@ launch_checks() {
 
 # launch-windows: the Windows sample, offline, with a 32-bit command-line program.
 launch_windows_checks() {
-    local app="play.$appid" user="ruya-$lprof" data report runner perms want got ref game module next
+    local app="play.$appid" user="ruya-$lprof" data pdir report runner perms want got ref game module next
     data="/var/home/$user/.var/app/$app/data"
     # ${prefix} of a Proton runner is <data>/proton/pfx (05 section 6.2.1); check.exe saves in Documents.
     report="$data/proton/pfx/drive_c/users/steamuser/Documents/Hello Play/check.txt"
@@ -971,6 +1064,7 @@ launch_windows_checks() {
         || { bad "no proton-ge runner.json under /usr/lib/ruyaos/play/runners"; return; }
     [ -x /usr/lib/ruyaos/play/launcher/bin/ruya-play-launch ] && ok "the launcher is in the image" || bad "no /usr/lib/ruyaos/play/launcher/bin/ruya-play-launch"
     module_check ruya_play_runners
+    runner_lib_checks "$app" "$(system_runner_dir /usr/lib/ruyaos/play/runners)"
     ref="$(compat_i386 "$app")" && ok "the 32-bit loader is installed for $app: $ref" \
         || bad "$app's runtime has no 32-bit loader: ${ref:-no runtime} (Compat.i386) is not installed"
     perms="$(flatpak info --system --show-permissions "$app" 2>&1 | perm_lines)"
@@ -984,10 +1078,28 @@ launch_windows_checks() {
     lrouted=1
     offline on "$work" || { bad "the default routes could not be taken away"; return; }
     ip route get 1.1.1.1 >/dev/null 2>&1 && bad "the guest still has a route to the internet" || ok "the guest has no route to the internet"
+    # RUY-1039: a "physical" pad is held, so the shell's route makes the virtual pad when the game starts; a
+    # background watcher looks for the winebus winedevice holding that pad's event node while the game runs.
+    pdir="$(dirname "$0")"
+    if [ -f "$pdir/vm-input-probe.py" ]; then
+        python3 "$pdir/vm-input-probe.py" pad 1200 > "$work/pad.log" 2>&1 &
+        lpad=$!
+        watch_winebus "$work/winebus.txt" 600 &
+        lwatch=$!
+    else
+        bad "no $pdir/vm-input-probe.py: copy it next to this script (the winebus pad check)"
+    fi
     echo "--- first launch: a new prefix, the setup step, check.exe"
     start_app "$app" 1 || return
     # The first launch makes the prefix (GE-Proton) and runs the setup step: minutes in a VM.
     expect_exit "$app" 1 600 '0 quit' "check.exe ends by itself" || return
+    if [ -n "$lwatch" ]; then
+        # The game ended by itself: the watcher either found the pad in a winebus process, or never will.
+        kill "$lwatch" 2>/dev/null; lwatch=""
+        got="$(cat "$work/winebus.txt" 2>/dev/null)"
+        [ -n "$got" ] && ok "the winebus winedevice (pid ${got% *}) holds the virtual pad's ${got#* }" \
+            || bad "no winebus winedevice held a virtual pad's /dev/input/event* during the launch ($(cat "$work/pad.log" 2>&1 | head -2 | tr '\n' ' '))"
+    fi
     if [ ! -f "$report" ]; then
         bad "no $report; check.txt is at: $(find "$data" -name check.txt 2>/dev/null | head -3)"
         return
@@ -1055,6 +1167,8 @@ launch_run() {
 # the profile the check made.
 launch_cleanup() {
     [ -n "$lmon" ] && kill "$lmon" 2>/dev/null
+    [ -n "$lwatch" ] && kill "$lwatch" 2>/dev/null
+    [ -n "$lpad" ] && kill "$lpad" 2>/dev/null
     if [ "$lrouted" = 1 ]; then
         offline off "$work" && lrouted=0 || bad "the default routes could not be restored: put them back with ip route replace (the saved routes are in $work)"
     fi

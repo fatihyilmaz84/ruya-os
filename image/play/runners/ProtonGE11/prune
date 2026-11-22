@@ -1,0 +1,6 @@
+# GE-Proton bundles libxkbcommon and libxkbregistry 0.9.2, and the proton script puts files/lib/x86_64-linux-gnu
+# first in LD_LIBRARY_PATH. The runtime's libSDL3 needs libxkbcommon V_1.10.0 (the runtime has 0.13.2), so
+# its dlopen failed, sdl2-compat aborted the winedevice that hosts winebus, and no game saw a controller
+# (RUY-1039). Without the bundled copies the runtime's resolve.
+files/lib/x86_64-linux-gnu/libxkbcommon.so*
+files/lib/x86_64-linux-gnu/libxkbregistry.so*
