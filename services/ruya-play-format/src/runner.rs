@@ -810,6 +810,58 @@ impl Pin {
     }
 }
 
+/// The prune file of a system runner (`image/play/runners/<Name>/prune`, 05 §6.4): the files of the
+/// upstream release the image build deletes before the runner hash is computed, because the release
+/// bundles a library that shadows the runtime's newer one (RUY-1039). The grammar is written once,
+/// here; `image/play/install-runners.sh` (`check_prune`) holds to the same verdicts on
+/// `tests/fixtures/prunes/`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Prune {
+    /// One glob per entry, relative to the runner's root, in file order.
+    pub globs: Vec<String>,
+}
+
+impl Prune {
+    /// Parse a prune file: comments (`#` at the start of the line), blank lines and one glob per
+    /// line. At least one comment (the reason) and one glob are needed. A glob is a relative path
+    /// of plain components (letters, digits and `._+-`, with `*` and `?` as wildcards): no leading
+    /// or trailing `/`, no empty, `.` or `..` component, no absolute path, no `[` or space.
+    pub fn parse(text: &str) -> Result<Prune, String> {
+        let (mut comments, mut globs) = (0, Vec::new());
+        for line in text.lines() {
+            if line.starts_with('#') {
+                comments += 1;
+            } else if !line.trim().is_empty() {
+                Self::check_glob(line)?;
+                globs.push(line.to_string());
+            }
+        }
+        if comments == 0 {
+            return Err("no comment line giving the reason".into());
+        }
+        if globs.is_empty() {
+            return Err("no glob".into());
+        }
+        Ok(Prune { globs })
+    }
+
+    fn check_glob(g: &str) -> Result<(), String> {
+        if g.starts_with('/') {
+            return Err(format!("absolute path: {g}"));
+        }
+        for part in g.split('/') {
+            if part.is_empty() || part == "." || part == ".." {
+                return Err(format!("not a plain relative path: {g}"));
+            }
+            let plain = |b: u8| b.is_ascii_alphanumeric() || b"._+-*?".contains(&b);
+            if !part.bytes().all(plain) {
+                return Err(format!("unsupported character in {g}"));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// The runner hash of 05 §7.3, fed one entry at a time: the SHA-256 of one line per entry, `f NUL
 /// rel NUL sha256 NUL x-or-dash LF` for a file, `l NUL rel NUL target LF` for a link and `d NUL rel
 /// LF` for an empty folder (a folder that holds something has no line). Feed the entries in the

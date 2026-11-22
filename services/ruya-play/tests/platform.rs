@@ -20,7 +20,9 @@ use ruya_play_format::problem::Problems;
 use ruya_play_format::resolve::{
     major_of, resolve_one, Chosen, Override, SystemRunner, Unresolved,
 };
-use ruya_play_format::runner::{is_system_runner_name, parse_runner, Pin, RunnerJson, FILE_NAME};
+use ruya_play_format::runner::{
+    is_system_runner_name, parse_runner, Pin, Prune, RunnerJson, FILE_NAME,
+};
 use ruya_play_trust::{check_ceiling, Tier};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -405,6 +407,28 @@ fn the_image_runners_are_valid_and_linked() {
             names.iter().any(|n| n == name) && *target == format!("{USR_TREES}/runners/{name}"),
             "{path} -> {target}: not a runner image/play/runners/ has"
         );
+    }
+}
+
+/// A runner folder's optional `prune` file (`image/play/install-runners.sh` deletes what it names
+/// before the runner hash is computed, RUY-1039) holds to the one grammar ([`Prune::parse`]), and
+/// GE-Proton's prunes the libxkbcommon and libxkbregistry it bundles: they shadow the runtime's newer
+/// copies and break its SDL3 (no controller reaches a Windows game).
+#[test]
+fn the_image_runners_prune_files_hold_to_the_grammar() {
+    let runners = repo("image/play/runners");
+    for name in image_runner_names() {
+        let path = runners.join(&name).join("prune");
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            Prune::parse(&text).unwrap_or_else(|e| panic!("{name}/prune: {e}"));
+        }
+    }
+    let ge = std::fs::read_to_string(runners.join("ProtonGE11").join("prune"))
+        .expect("ProtonGE11 has a prune file");
+    let globs = Prune::parse(&ge).expect("a prune file").globs;
+    for lib in ["libxkbcommon.so*", "libxkbregistry.so*"] {
+        let want = format!("files/lib/x86_64-linux-gnu/{lib}");
+        assert!(globs.contains(&want), "ProtonGE11/prune lacks {want}");
     }
 }
 

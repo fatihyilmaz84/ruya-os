@@ -1914,6 +1914,22 @@ grep -q 'play_clean$' "$here/vm-library-check.sh" && grep -q 'rm -f "$play_state
 
 echo "== vm-play-check.sh: launch and launch-windows (RUY-902) =="
 lp="$tmp/launch"; mkdir -p "$lp"
+# RUY-1039: the sandbox probe of the library loads: LD_LIBRARY_PATH starts with the runner's library
+# folder, each soname is tried in a child process, an abort or an error is a FAIL line and the others are
+# still tried. The python3 shim fails libbad.so.1 (a non-zero exit, as an abort is) and records the path.
+lps="$tmp/libprobe-shims"; mkdir -p "$lps"
+cat > "$lps/python3" <<'SHIMEOF'
+#!/bin/sh
+echo "$LD_LIBRARY_PATH" > "$LP_SEEN"
+[ "$4" = libbad.so.1 ] && { echo "OSError: version V_1.10.0 not found" >&2; kill -ABRT $$; }
+exit 0
+SHIMEOF
+chmod +x "$lps/python3"
+out="$(LP_SEEN="$lp/seen" LD_LIBRARY_PATH=/runtime PATH="$lps:$PATH" bash "$here/vm-play-check.sh" libprobe /app/runners/R libgood.so.0 libbad.so.1 libother.so.2 2>&1)"
+[ "$out" = "ok libgood.so.0
+FAIL libbad.so.1: OSError: version V_1.10.0 not found
+ok libother.so.2" ] && pass "vm-play-check.sh libprobe: each library in its own child, an abort is a FAIL line and the next one is still tried" || fail "libprobe: '$out'"
+[ "$(cat "$lp/seen")" = "/app/runners/R/files/lib/x86_64-linux-gnu:/runtime" ] && pass "vm-play-check.sh libprobe: the runner's x86_64-linux-gnu folder comes first in LD_LIBRARY_PATH" || fail "libprobe: LD_LIBRARY_PATH is '$(cat "$lp/seen")'"
 # The signals of Session1 as `busctl --json=short monitor` prints them: one object per line, the arguments in
 # payload.data. Two apps, two exits of the first, a line that is no JSON and a signal of another member.
 cat > "$lp/signals.log" <<'EOF'
@@ -2619,6 +2635,59 @@ out="$(irn_ fetch "$ir/runners" "$ir/play")"; rc=$?
 [ "$rc" != 0 ] && expect_contains "install-runners: a pin-folder file the release already has fails the build" "$out" "ProtonGE11: the release already has proton" || fail "install-runners: an overwrite: exit $rc, $out"
 [ "$(cat "$ir/play/runners/ProtonGE11/proton" 2>/dev/null | tail -n 1)" = "echo proton" ] && pass "install-runners: the release's file is left as it was" || fail "install-runners: the release's proton was replaced"
 rm -rf "$ir/play" "$ir/runners/ProtonGE11/proton" "$ir/runners/ProtonGE11/licences"
+# RUY-1039: the pin folder's prune file deletes the release's files that shadow the runtime's libraries,
+# before the runner hash is computed. A bad line, a glob that matches nothing and a glob that matches a
+# folder fail the build; the prune file is not installed.
+mkdir -p "$ir/rel/GE-X/files/lib/x86_64-linux-gnu" "$ir/rel/GE-X/files/lib/dir.so"
+echo xk > "$ir/rel/GE-X/files/lib/x86_64-linux-gnu/libxk.so.0.0.9"
+ln -s libxk.so.0.0.9 "$ir/rel/GE-X/files/lib/x86_64-linux-gnu/libxk.so.0"
+echo keep > "$ir/rel/GE-X/files/lib/x86_64-linux-gnu/libkeep.so.1"
+(cd "$ir/rel" && tar -czf "$ir/release-prune.tar.gz" GE-X)
+psha="$(sha256sum "$ir/release-prune.tar.gz" | cut -d' ' -f1)"
+irp_() { env FAKE_RELEASE="$ir/release-prune.tar.gz" PATH="$ish:$PATH" bash "$here/../image/play/install-runners.sh" "$@" 2>&1; }
+printf 'url=https://example.org/r\nsha256=%s\nroot=GE-X\n' "$psha" > "$ir/runners/ProtonGE11/pin"
+printf '# why\nfiles/lib/x86_64-linux-gnu/libxk.so*\n' > "$ir/runners/ProtonGE11/prune"
+rm -rf "$ir/play"
+out="$(irp_ fetch "$ir/runners" "$ir/play")"; rc=$?
+pt="$ir/play/runners/ProtonGE11/files/lib/x86_64-linux-gnu"
+[ "$rc" = 0 ] && [ ! -e "$pt/libxk.so.0.0.9" ] && [ ! -L "$pt/libxk.so.0" ] && pass "install-runners: the prune file's files are gone from the tree (a file and its link)" || fail "install-runners: prune: exit $rc, $out; left: $(ls "$pt" 2>&1)"
+[ -f "$pt/libkeep.so.1" ] && [ -f "$ir/play/runners/ProtonGE11/proton" ] && pass "install-runners: a file no prune glob names stays" || fail "install-runners: prune removed a file it should keep"
+expect_contains "install-runners: fetch says how many files it pruned" "$out" "pruned 2 file(s)"
+[ ! -e "$ir/play/runners/ProtonGE11/prune" ] && pass "install-runners: the prune file itself is not installed" || fail "install-runners: the prune file was installed"
+# The hash is computed after the prune: `check` hands ruya-pack the pruned tree.
+cat > "$ish/ruya-pack" <<'SHIMEOF'
+#!/bin/sh
+[ "$1" = runner-check ] && [ "$3" = --write-hash ] && [ "$#" = 3 ] || exit 2
+(cd "$2" && find . -name 'libxk*' | sort > "$FAKE_SEEN")
+printf 'ab\n' > "$2/.ruya-runner-hash"
+SHIMEOF
+out="$(env FAKE_SEEN="$ir/seen.txt" PATH="$ish:$PATH" bash "$here/../image/play/install-runners.sh" check "$ish/ruya-pack" "$ir/play" "$ir/meta2" 2>&1)"; rc=$?
+[ "$rc" = 0 ] && [ ! -s "$ir/seen.txt" ] && pass "install-runners: runner-check (the hash) sees the pruned tree" || fail "install-runners: check after the prune: exit $rc, $out; saw $(cat "$ir/seen.txt" 2>&1)"
+for bad in 'files/../x' '/etc/passwd' 'files/nothing-here*' 'files/lib/*'; do
+    rm -rf "$ir/play"
+    printf '# why\n%s\n' "$bad" > "$ir/runners/ProtonGE11/prune"
+    out="$(irp_ fetch "$ir/runners" "$ir/play")"; rc=$?
+    case "$bad" in
+    files/nothing-here*) want="matches nothing in the release" ;;
+    files/lib/\*) want="matches the folder" ;;
+    *) want="not a plain relative glob" ;;
+    esac
+    [ "$rc" != 0 ] && expect_contains "install-runners: the prune line '$bad' fails the build" "$out" "$want" || fail "install-runners: prune '$bad': exit $rc, $out"
+done
+# RUY-1039: check_prune gives the same verdict as Prune::parse on every shared fixture.
+prunes="$here/../services/ruya-play-format/tests/fixtures/prunes"
+nprunes=0
+for f in "$prunes"/*.prune; do
+    b="$(basename "$f")"; nprunes=$((nprunes + 1))
+    out="$(bash "$here/../image/play/install-runners.sh" check-prune "$f" 2>&1)"; rc=$?
+    case "$b" in
+    good*) [ "$rc" = 0 ] && pass "install-runners: check_prune accepts $b" || fail "install-runners: check_prune refused $b: $out" ;;
+    bad*) [ "$rc" != 0 ] && pass "install-runners: check_prune refuses $b" || fail "install-runners: check_prune accepted $b" ;;
+    *) fail "install-runners: prune fixture $b is neither good* nor bad*" ;;
+    esac
+done
+[ "$nprunes" -ge 12 ] || fail "install-runners: only $nprunes prune fixtures"
+rm -rf "$ir/play" "$ir/runners/ProtonGE11/prune"
 
 echo "== check-image-manifest.sh: the Play platform's files have rows (RUY-34) =="
 msh="$tmp/manifest-shims"; mkdir -p "$msh"

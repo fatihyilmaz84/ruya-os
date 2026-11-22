@@ -4,6 +4,8 @@
 #   pin          the pinned upstream release: url=, sha256= and root= (the folder of the archive
 #                that becomes the runner), comments with #
 #   runner.json  the runner's file (ADR-037), shipped as is at the runner's root
+#   prune        optional: the release's files to delete, one glob per line relative to the runner's root, with
+#                a comment giving the reason (ruya_play_format::runner::Prune is the grammar)
 #   anything else, such as licences/  our own files laid over the release at the same paths (the
 #                licence texts of a release that ships none); never one the release already has
 # Every runner's tree must carry a licence text at its root (LICENSE*, LICENCE*, COPYING* or
@@ -14,10 +16,13 @@
 #
 #   install-runners.sh fetch <runners> <play>         download each pinned release (any other SHA-256
 #                      fails the build), unpack its root folder to <play>/runners/<Name>/ without group
-#                      or world write bits, put runner.json and the pin folder's other files in it,
+#                      or world write bits, delete what the pin folder's prune names (before the runner hash
+#                      is computed), put runner.json and the pin folder's other files in it,
 #                      refuse a tree without a licence text. Needs the network.
 #   install-runners.sh check-pin <pin>               only the pin's grammar (check_pin); the same verdicts as
 #                      ruya_play_format::runner::Pin::parse on services/ruya-play-format/tests/fixtures/pins/
+#   install-runners.sh check-prune <prune>           only the prune file's grammar (check_prune); the same verdicts as
+#                      ruya_play_format::runner::Prune::parse on services/ruya-play-format/tests/fixtures/prunes/
 #   install-runners.sh check <ruya-pack> <play> <meta>  `ruya-pack runner-check` on each runner (the
 #                      format's own parser and runner hash, never jq or a shell hash): writes
 #                      <meta>/runners/<Name>/.ruya-runner-hash. The shell lists the runners through
@@ -48,7 +53,45 @@ check_pin() {
     [[ -n "$root" && "$root" != . && "$root" != .. && "$root" != */* ]] || die "$1: root is not one folder name"
 }
 
-# add_own_files <pin folder> <tree> <name>: every file of the pin folder other than pin and
+# check_prune <prune>: only comments, blank lines and globs; at least one of each kind; a glob is a
+# relative path of plain components (letters, digits and ._+- with * and ? as wildcards), none empty,
+# . or .. (the same verdicts as ruya_play_format::runner::Prune::parse).
+check_prune() {
+    local line comments=0 globs=0
+    while IFS= read -r line || [ -n "$line" ]; do
+        if [[ "$line" == '#'* ]]; then
+            comments=$((comments + 1))
+        elif [[ ! "$line" =~ ^[[:space:]]*$ ]]; then
+            [[ "$line" =~ ^[A-Za-z0-9._+*?-]+(/[A-Za-z0-9._+*?-]+)*$ ]] || die "$1: not a plain relative glob: $line"
+            case "/$line/" in */./* | */../*) die "$1: not a plain relative glob: $line" ;; esac
+            globs=$((globs + 1))
+        fi
+    done < "$1"
+    [ "$comments" -gt 0 ] || die "$1: no comment line giving the reason"
+    [ "$globs" -gt 0 ] || die "$1: no glob"
+}
+
+# prune_tree <prune> <tree> <name>: delete what each glob of the prune file matches in the runner's
+# tree (a file or a link, never a folder). A glob that matches nothing fails the build: the release
+# moved on and the prune is stale, so someone has to look.
+prune_tree() {
+    local prune="$1" tree="$2" name="$3" glob m n=0
+    check_prune "$prune"
+    while IFS= read -r glob; do
+        [[ "$glob" == '#'* || "$glob" =~ ^[[:space:]]*$ ]] && continue
+        local matches=()
+        matches=($(cd "$tree" && compgen -G "$glob" || true))
+        [ "${#matches[@]}" -gt 0 ] || die "$name: prune $glob matches nothing in the release"
+        for m in "${matches[@]}"; do
+            [ ! -d "$tree/$m" ] || [ -L "$tree/$m" ] || die "$name: prune $glob matches the folder $m"
+            rm -f -- "$tree/$m"
+            n=$((n + 1))
+        done
+    done < "$prune"
+    echo "install-runners: $name: pruned $n file(s) ($(basename "$prune"))"
+}
+
+# add_own_files <pin folder> <tree> <name>: every file of the pin folder other than pin, prune and
 # runner.json (licence texts in licences/, for a release that ships none) goes to the same path in the
 # tree, 0644. A path the release already has fails the build (our files never replace the release's),
 # and so does anything in the pin folder that is not a plain file, or a target folder that leads out of
@@ -58,7 +101,7 @@ add_own_files() {
     top="$(realpath "$tree")"
     while IFS= read -r -d '' rel; do
         rel="${rel#./}"
-        case "$rel" in pin | runner.json) continue ;; esac
+        case "$rel" in pin | runner.json | prune) continue ;; esac
         [ -f "$dir/$rel" ] && [ ! -L "$dir/$rel" ] || die "$name: $rel in the pin folder is not a plain file"
         [ ! -e "$tree/$rel" ] && [ ! -L "$tree/$rel" ] || die "$name: the release already has $rel"
         parent="$(dirname "$tree/$rel")"
@@ -96,6 +139,7 @@ fetch() {
         mv "$work/x/$root" "$tree"
         rm -rf "$work"
         install -m 0644 "$dir/runner.json" "$tree/runner.json"
+        [ ! -f "$dir/prune" ] || prune_tree "$dir/prune" "$tree" "$name"
         add_own_files "$dir" "$tree" "$name"
         has_licence "$tree" || die "$name: no licence text at the runner's root (LICENSE*, LICENCE*, COPYING* or a file in licences/); a release that ships none gets them from licences/ in its pin folder"
         # Nothing the image ships is group- or world-writable (the release has a few 0666 files).
@@ -125,6 +169,7 @@ check() {
 case "${1:-}" in
 fetch) [ $# = 3 ] || die "usage: fetch <runners> <play>"; fetch "$2" "$3" ;;
 check-pin) [ $# = 2 ] || die "usage: check-pin <pin>"; check_pin "$2" ;;
+check-prune) [ $# = 2 ] || die "usage: check-prune <prune>"; check_prune "$2" ;;
 check) [ $# = 4 ] || die "usage: check <ruya-pack> <play> <meta>"; check "$2" "$3" "$4" ;;
-*) die "usage: install-runners.sh fetch <runners> <play> | check-pin <pin> | check <ruya-pack> <play> <meta>" ;;
+*) die "usage: install-runners.sh fetch <runners> <play> | check-pin <pin> | check-prune <prune> | check <ruya-pack> <play> <meta>" ;;
 esac

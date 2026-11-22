@@ -7,7 +7,7 @@ mod common;
 use common::*;
 use ruya_play_format::problem::Problems;
 use ruya_play_format::runner::{
-    parse_runner, runner_hash, BundledRunner, Entry, Pin, RunnerEntry, RunnerJson,
+    parse_runner, runner_hash, BundledRunner, Entry, Pin, Prune, RunnerEntry, RunnerJson,
 };
 use ruya_play_format::FileEntry;
 use ruya_play_format::{validate, Problem, ValidateOptions};
@@ -612,6 +612,53 @@ fn pin_errors_say_what_is_wrong() {
     assert_eq!(
         Pin::parse(&format!("url=https://x.org/a\nsha256={sha}\nroot=.\n")).unwrap_err(),
         "root is not one folder name"
+    );
+}
+
+/// Every file of `tests/fixtures/prunes/`, with its verdict from its name: `good*` parses, `bad*` does
+/// not. `scripts/test-vm-checks.sh` runs `install-runners.sh check-prune` over the same files and
+/// holds the shell to the same verdicts (RUY-1039).
+#[test]
+fn prune_fixtures_are_good_or_bad_by_their_name() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/prunes");
+    let (mut good, mut bad) = (0, 0);
+    for f in std::fs::read_dir(&dir).expect("the prune fixtures") {
+        let path = f.expect("entry").path();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let parsed = Prune::parse(&std::fs::read_to_string(&path).expect("a fixture"));
+        if name.starts_with("good") {
+            good += 1;
+            assert!(!parsed
+                .unwrap_or_else(|e| panic!("{name}: {e}"))
+                .globs
+                .is_empty());
+        } else {
+            assert!(name.starts_with("bad"), "{name}: name it good* or bad*");
+            bad += 1;
+            assert!(parsed.is_err(), "{name} must be refused");
+        }
+    }
+    assert!(good >= 2 && bad >= 10, "fixtures: {good} good, {bad} bad");
+}
+
+#[test]
+fn prune_errors_say_what_is_wrong() {
+    assert_eq!(
+        Prune::parse("# why\na/b*\n\nc?\n").unwrap().globs,
+        ["a/b*", "c?"]
+    );
+    assert_eq!(
+        Prune::parse("a\n").unwrap_err(),
+        "no comment line giving the reason"
+    );
+    assert_eq!(Prune::parse("# why\n").unwrap_err(), "no glob");
+    assert_eq!(
+        Prune::parse("# why\n/a\n").unwrap_err(),
+        "absolute path: /a"
+    );
+    assert_eq!(
+        Prune::parse("# why\na/../b\n").unwrap_err(),
+        "not a plain relative path: a/../b"
     );
 }
 

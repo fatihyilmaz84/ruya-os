@@ -1,0 +1,2 @@
+# a lib that shadows the runtime
+files/lib/x86_64-linux-gnu/libxkbcommon.so*
