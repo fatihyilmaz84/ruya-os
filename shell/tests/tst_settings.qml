@@ -1145,6 +1145,7 @@ Item {
             compare(findChild(pane, "a_second").activeFocus, false)
             compare(pane.focusedRow, null, "no row is focused")
             compare(pane.focusableCount, 0)
+            compare(hintsOf(pane), "back Back", "nothing to select: Back only")
         }
 
         function test_focus_moves_off_a_row_that_becomes_disabled() {
