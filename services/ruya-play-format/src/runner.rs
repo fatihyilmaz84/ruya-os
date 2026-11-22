@@ -699,6 +699,117 @@ pub enum RunnerEntry<'a> {
     },
 }
 
+impl<'a> From<&'a FileEntry> for RunnerEntry<'a> {
+    /// The entry of a table line with its own path and (for a file) its listed SHA-256. A caller
+    /// that hashes below a folder, or from the staged copy's hash, adjusts it with
+    /// [`RunnerEntry::with_rel`] and [`RunnerEntry::with_sha256`].
+    fn from(e: &'a FileEntry) -> Self {
+        match e {
+            FileEntry::File {
+                path,
+                sha256,
+                executable,
+                ..
+            } => RunnerEntry::File {
+                rel: path,
+                sha256,
+                exec: *executable,
+            },
+            FileEntry::Link { path, to } => RunnerEntry::Link { rel: path, to },
+            FileEntry::Dir { path } => RunnerEntry::Dir { rel: path },
+        }
+    }
+}
+
+impl<'a> RunnerEntry<'a> {
+    /// The same entry at the path `rel` below the runner's root.
+    pub fn with_rel(self, rel: &'a str) -> Self {
+        match self {
+            RunnerEntry::File { sha256, exec, .. } => RunnerEntry::File { rel, sha256, exec },
+            RunnerEntry::Link { to, .. } => RunnerEntry::Link { rel, to },
+            RunnerEntry::Dir { .. } => RunnerEntry::Dir { rel },
+        }
+    }
+
+    /// The same entry with the file hash `sha256` (a link or a folder has none and is unchanged).
+    pub fn with_sha256(self, sha256: &'a str) -> Self {
+        match self {
+            RunnerEntry::File { rel, exec, .. } => RunnerEntry::File { rel, sha256, exec },
+            other => other,
+        }
+    }
+}
+
+/// The runner hash of the `entries` ([`RunnerHasher`]), in the order given (`play.files` order).
+pub fn runner_hash<'a>(entries: impl IntoIterator<Item = RunnerEntry<'a>>) -> String {
+    let mut h = RunnerHasher::new();
+    for e in entries {
+        h.add(&e);
+    }
+    h.finish()
+}
+
+/// The pin file of a system runner (`image/play/runners/<Name>/pin`, 05 §6.4): the upstream
+/// release the image build downloads. The grammar is written once, here; `image/play/install-runners.sh`
+/// (`check_pin`) holds to the same verdicts on `tests/fixtures/pins/`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pin {
+    /// The release archive (`https://`).
+    pub url: String,
+    /// Its SHA-256, 64 lower-case hex digits.
+    pub sha256: String,
+    /// The folder of the archive that becomes the runner: one plain name.
+    pub root: String,
+}
+
+impl Pin {
+    /// Parse a pin file: only comments (`#` at the start of the line), blank lines and the keys
+    /// `url=`, `sha256=` and `root=`, each exactly once; the url starts with `https://`, the SHA-256
+    /// is 64 lower-case hex digits, the root is one folder name (not empty, `.`, `..` or with a
+    /// `/`). The error says what is wrong.
+    pub fn parse(text: &str) -> Result<Pin, String> {
+        const KEYS: [&str; 3] = ["url", "sha256", "root"];
+        let mut values: [Vec<&str>; 3] = Default::default();
+        for line in text.lines() {
+            if line.starts_with('#') || line.trim().is_empty() {
+                continue;
+            }
+            let key = KEYS.iter().position(|k| {
+                line.strip_prefix(k)
+                    .is_some_and(|rest| rest.starts_with('='))
+            });
+            match key {
+                Some(i) => values[i].push(&line[KEYS[i].len() + 1..]),
+                None => return Err(format!("unknown line: {line}")),
+            }
+        }
+        for (k, v) in KEYS.iter().zip(&values) {
+            if v.len() != 1 {
+                return Err(format!("{} lines {k}= (exactly one wanted)", v.len()));
+            }
+        }
+        let [url, sha256, root] = [values[0][0], values[1][0], values[2][0]];
+        if sha256.len() != 64
+            || !sha256
+                .bytes()
+                .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+        {
+            return Err("sha256 is not 64 lower-case hex digits".into());
+        }
+        if !url.starts_with("https://") {
+            return Err("url is not https".into());
+        }
+        if root.is_empty() || root == "." || root == ".." || root.contains('/') {
+            return Err("root is not one folder name".into());
+        }
+        Ok(Pin {
+            url: url.into(),
+            sha256: sha256.into(),
+            root: root.into(),
+        })
+    }
+}
+
 /// The runner hash of 05 §7.3, fed one entry at a time: the SHA-256 of one line per entry, `f NUL
 /// rel NUL sha256 NUL x-or-dash LF` for a file, `l NUL rel NUL target LF` for a link and `d NUL rel
 /// LF` for an empty folder (a folder that holds something has no line). Feed the entries in the

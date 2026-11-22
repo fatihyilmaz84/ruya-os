@@ -6,7 +6,10 @@ mod common;
 
 use common::*;
 use ruya_play_format::problem::Problems;
-use ruya_play_format::runner::{parse_runner, BundledRunner, Entry, RunnerJson};
+use ruya_play_format::runner::{
+    parse_runner, runner_hash, BundledRunner, Entry, Pin, RunnerEntry, RunnerJson,
+};
+use ruya_play_format::FileEntry;
 use ruya_play_format::{validate, Problem, ValidateOptions};
 use serde_json::{json, Value};
 
@@ -568,4 +571,84 @@ fn a_copy_without_runner_json_still_needs_its_default_entries() {
     fx.file("components/wine/proton", b"#!/usr/bin/env python3");
     let p = assert_valid(check(&fx));
     assert_eq!(p.runners["wine"].family, "proton");
+}
+
+/// Every file of `tests/fixtures/pins/`, with its verdict from its name: `good*` parses, `bad*` does
+/// not. `scripts/test-vm-checks.sh` runs `install-runners.sh check-pin` over the same files and
+/// holds the shell to the same verdicts (RUY-920).
+#[test]
+fn pin_fixtures_are_good_or_bad_by_their_name() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/pins");
+    let (mut good, mut bad) = (0, 0);
+    for f in std::fs::read_dir(&dir).expect("the pin fixtures") {
+        let path = f.expect("entry").path();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let parsed = Pin::parse(&std::fs::read_to_string(&path).expect("a fixture"));
+        if name.starts_with("good") {
+            good += 1;
+            let pin = parsed.unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!(pin.root, "GE-X", "{name}");
+        } else {
+            assert!(name.starts_with("bad"), "{name}: name it good* or bad*");
+            bad += 1;
+            assert!(parsed.is_err(), "{name} must be refused");
+        }
+    }
+    assert!(good >= 2 && bad >= 10, "fixtures: {good} good, {bad} bad");
+}
+
+#[test]
+fn pin_errors_say_what_is_wrong() {
+    let sha = "ab".repeat(32);
+    let pin = |extra: &str| format!("url=https://x.org/a\nsha256={sha}\nroot=R\n{extra}");
+    assert_eq!(
+        Pin::parse(&pin("mirror=x")).unwrap_err(),
+        "unknown line: mirror=x"
+    );
+    assert_eq!(
+        Pin::parse(&pin("root=.")).unwrap_err(),
+        "2 lines root= (exactly one wanted)"
+    );
+    assert_eq!(
+        Pin::parse(&format!("url=https://x.org/a\nsha256={sha}\nroot=.\n")).unwrap_err(),
+        "root is not one folder name"
+    );
+}
+
+#[test]
+fn runner_hash_takes_table_entries_with_their_own_path_and_hash() {
+    let sha = "ab".repeat(32);
+    let files = vec![
+        FileEntry::File {
+            path: "bin/wine".into(),
+            size: 1,
+            sha256: sha.clone(),
+            executable: true,
+        },
+        FileEntry::Link {
+            path: "lib/a.so".into(),
+            to: "a.so.1".into(),
+        },
+        FileEntry::File {
+            path: "lib/a.so.1".into(),
+            size: 1,
+            sha256: sha,
+            executable: false,
+        },
+        FileEntry::Dir {
+            path: "share/empty".into(),
+        },
+    ];
+    // The same value as `the_hash_formula_is_fixed` in src/runner.rs.
+    assert_eq!(
+        runner_hash(files.iter().map(RunnerEntry::from)),
+        "93550e6c08bce193358acedf36127f3b1bbe7a74b1ddabbcf4d7f536caf68b7c"
+    );
+    // A caller's own path and hash replace the table's.
+    let other = "cd".repeat(32);
+    let moved = runner_hash(files.iter().map(|e| {
+        let rel = e.path().strip_prefix("lib/").unwrap_or(e.path());
+        RunnerEntry::from(e).with_rel(rel).with_sha256(&other)
+    }));
+    assert_ne!(moved, runner_hash(files.iter().map(RunnerEntry::from)));
 }

@@ -3,7 +3,7 @@
 //!
 //! The folder's `runner.json` must be a regular file that [`parse_runner`] accepts, and every
 //! entry it names a regular file of the folder ([`check_entries`]). The hash is the format's one
-//! formula ([`RunnerHasher`]) over the folder's file table as `build` would write it ([`plan`]):
+//! formula ([`runner_hash`]) over the folder's file table as `build` would write it ([`plan`]):
 //! files with their SHA-256 and executable bit, links as written (relative, inside the folder),
 //! empty folders; a root `.ruya-runner-hash` is left out. The image build runs it on each of its
 //! system runners (`image/play/install-runners.sh`): `--write-hash` writes `.ruya-runner-hash`,
@@ -19,7 +19,7 @@ use crate::Context;
 use ruya_play_format::limits::MAX_RUNNER_JSON_BYTES;
 use ruya_play_format::problem::Problems;
 use ruya_play_format::runner::{
-    check_entries, is_system_runner_name, parse_runner, BundledRunner, RunnerEntry, RunnerHasher,
+    check_entries, is_system_runner_name, parse_runner, runner_hash, BundledRunner, RunnerEntry,
     FILE_NAME, HASH_FILE,
 };
 use ruya_play_format::table::TableIndex;
@@ -33,28 +33,6 @@ const SPEC: Spec = Spec {
     switches: &["write-hash"],
     positionals: (1, 1),
 };
-
-/// The runner hash (05 section 7.3) of a table [`plan`] made.
-fn hash(planned: &[Planned]) -> String {
-    let mut h = RunnerHasher::new();
-    for p in planned {
-        h.add(&match p {
-            Planned::File {
-                path,
-                sha256,
-                executable,
-                ..
-            } => RunnerEntry::File {
-                rel: path,
-                sha256,
-                exec: *executable,
-            },
-            Planned::Link { path, to } => RunnerEntry::Link { rel: path, to },
-            Planned::Dir { path } => RunnerEntry::Dir { rel: path },
-        });
-    }
-    h.finish()
-}
 
 /// The table as the format's entries, below `root/` (for [`check_entries`]).
 fn table(root: &str, planned: &[Planned]) -> Vec<FileEntry> {
@@ -143,8 +121,8 @@ pub fn run(args: &[String], _ctx: &Context) -> Result<Reply, Stop> {
         &BTreeSet::new(),
         &mut reply.problems,
     )?;
+    let entries = table(&name, &planned);
     if let Some(r) = &runner {
-        let entries = table(&name, &planned);
         let bundled = BundledRunner {
             family: r.family.clone(),
             entry: r.entry.clone(),
@@ -156,7 +134,12 @@ pub fn run(args: &[String], _ctx: &Context) -> Result<Reply, Stop> {
     let (Some(r), true) = (runner, reply.problems.is_empty()) else {
         return Ok(reply);
     };
-    let h = hash(&planned);
+    // The runner hash (05 section 7.3) of the table below the folder, paths relative to it.
+    let prefix = format!("{name}/");
+    let h = runner_hash(entries.iter().filter_map(|e| {
+        let rel = e.path().strip_prefix(&prefix)?;
+        Some(RunnerEntry::from(e).with_rel(rel))
+    }));
     let mut text = format!(
         "runner {name}: {} {} ({}), {} entries\nrunner hash {h}\n",
         r.family,
