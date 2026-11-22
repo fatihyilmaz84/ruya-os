@@ -232,6 +232,13 @@ struct Instance {
     cancelled: Option<ExitReason>,
 }
 
+/// Why `freeze_at` freezes: the Hub's pause of the signed-in profile's app, or a profile that left.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Pause {
+    Hub,
+    Away,
+}
+
 pub struct Session<S, D> {
     spawner: S,
     directory: D,
@@ -712,16 +719,20 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     /// is moved to swap (`tick`); `now` is when this freeze begins.
     pub fn freeze(&mut self, instance: &str, active: Option<&str>, now: Instant) -> Status {
         match self.freezable(instance, active) {
-            Ok(at) => self.freeze_at(at, now),
+            Ok(at) => self.freeze_at(at, now, Pause::Hub),
             Err(status) => status,
         }
     }
 
     /// The freezer path of `freeze` and `profile_changed`: the running instance at `at` is frozen
     /// (already frozen: `Ok`, the OS is not asked again), or a failed freeze is undone. ADR-041
-    /// point 7: a parent's running children first, then its own unit and scopes only when its app
-    /// may be frozen (`freeze_own`); a failure undoes what this call froze.
-    fn freeze_at(&mut self, at: usize, now: Instant) -> Status {
+    /// point 7: a parent's running children first, then its own unit and scopes; a failure undoes
+    /// what this call froze. A Hub pause (`Pause::Hub`) freezes an app's own unit only when it may
+    /// be frozen (`freeze_own`, ADR-042 point 3: a `never` app is held); a profile that leaves
+    /// (`Pause::Away`) freezes it whatever `freeze_own` says (ADR-046 point 2, RUY-1063: a
+    /// running Steam of a profile that left keeps its `/dev/uinput` descriptor, and a device it
+    /// made later would be credited to the next profile).
+    fn freeze_at(&mut self, at: usize, now: Instant, pause: Pause) -> Status {
         let mut froze = Vec::new();
         for child in self.children_of(&self.instances[at].unit.clone()) {
             let c = &self.instances[child];
@@ -734,7 +745,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             }
             froze.push(child);
         }
-        if !self.instances[at].freeze_own {
+        if pause == Pause::Hub && !self.instances[at].freeze_own {
             // ADR-042: the unit keeps running; only its sound is parked, with its children's.
             let inst = &mut self.instances[at];
             inst.held = true;
@@ -828,7 +839,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         // `freeze_at` never removes an instance, so the positions stay valid.
         away.into_iter()
             .map(|at| {
-                let status = self.freeze_at(at, now);
+                let status = self.freeze_at(at, now, Pause::Away);
                 (self.instances[at].unit.clone(), status)
             })
             .collect()
@@ -847,7 +858,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 && i.state == State::Running
                 && i.profile != active
         })?;
-        Some(self.freeze_at(at, now))
+        Some(self.freeze_at(at, now, Pause::Away))
     }
 
     /// Thaws a running app of the signed-in profile (T-457). The OS is asked even when the app is
@@ -876,7 +887,8 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             let user = self.instances[at].user.clone();
             self.sync_audio(&user, false);
         }
-        // A record frozen anyway (adopted frozen, before its app's rule changed) is thawed too.
+        // A record frozen anyway (adopted frozen, its app's rule changed, or a `never` app frozen
+        // because its profile left, RUY-1063) is thawed too.
         let own = &self.instances[at];
         if (own.freeze_own || own.frozen) && self.thaw_one(at) != Status::Ok {
             status = Status::Failed;
@@ -3373,10 +3385,65 @@ mod tests {
         let before = s.spawner.calls().len();
         assert_eq!(s.thaw(&steam, Some("p1")), Status::Ok);
         assert_eq!(calls_since(&s, before), [format!("thaw {child}")]);
-        // A profile that leaves freezes the game, not Steam.
+        // A profile that leaves freezes the game and Steam too (ADR-046 point 2, RUY-1063: a
+        // running Steam would keep its /dev/uinput descriptor for the next profile's time).
         let before = s.spawner.calls().len();
         s.profile_changed(Some("p1"), "p2", Instant::now());
+        assert_eq!(
+            calls_since(&s, before),
+            [format!("freeze {child}"), format!("freeze {steam}")]
+        );
+        assert!(frozen_of(&s, &child) && frozen_of(&s, &steam));
+    }
+
+    #[test]
+    fn a_switch_freezes_a_never_frozen_steam_and_its_game_and_the_way_back_thaws_both() {
+        let (mut s, steam, child) = steam_with_game(FakeSpawner::new().with_freeze_never(STEAM));
+        let before = s.spawner.calls().len();
+        let asked = s.profile_changed(Some("p1"), "p2", Instant::now());
+        assert_eq!(
+            asked,
+            [(steam.clone(), Status::Ok), (child.clone(), Status::Ok)]
+        );
+        assert_eq!(
+            calls_since(&s, before),
+            [format!("freeze {child}"), format!("freeze {steam}")]
+        );
+        assert!(frozen_of(&s, &child) && frozen_of(&s, &steam));
+        // p1 back: the shell thaws Steam, which thaws its game first, then the unit itself.
+        s.profile_changed(Some("p2"), "p1", Instant::now());
+        let before = s.spawner.calls().len();
+        assert_eq!(s.thaw(&steam, Some("p1")), Status::Ok);
+        assert_eq!(
+            calls_since(&s, before),
+            [format!("thaw {child}"), format!("thaw {steam}")]
+        );
+        assert!(!frozen_of(&s, &child) && !frozen_of(&s, &steam));
+        // The Hub's pause of the same app still only holds Steam (ADR-042 point 3).
+        let before = s.spawner.calls().len();
+        assert_eq!(s.freeze(&steam, Some("p1"), Instant::now()), Status::Ok);
         assert_eq!(calls_since(&s, before), [format!("freeze {child}")]);
+        assert!(!frozen_of(&s, &steam));
+    }
+
+    #[test]
+    fn a_never_frozen_app_that_starts_after_its_profile_left_is_frozen() {
+        let dir = ProfileSnapshot::new(["p1".to_owned(), "p2".to_owned()]);
+        let mut s = Session::new(
+            FakeSpawner::new().with_app(STEAM).with_freeze_never(STEAM),
+            dir,
+            vec![],
+        );
+        let (_, steam) = s.launch(STEAM, "p1", 100, &[]);
+        s.profile_changed(Some("p1"), "p2", Instant::now());
+        s.on_event(UnitEvent::Started {
+            unit: steam.clone(),
+        });
+        assert_eq!(
+            s.freeze_if_away(&steam, "p2", Instant::now()),
+            Some(Status::Ok)
+        );
+        assert!(frozen_of(&s, &steam));
     }
 
     // ---- A paused parent whose app is never frozen is held (ADR-042 point 3) -------------------

@@ -616,7 +616,13 @@ pub struct Router<B: Backend> {
     owners: Owners,
     /// Who holds `/dev/uinput` and the foreign devices made through it (RUY-1063).
     foreign: Foreign,
+    /// How often the navigation keyboard was made again since start (`NAV_RENEWALS` at most).
+    nav_renewals: u32,
 }
+
+/// The navigation keyboard is made again at most this often per start: udev that never sees its
+/// marker would otherwise have it made and destroyed without end (RUY-1063 review).
+pub const NAV_RENEWALS: u32 = 1;
 
 /// An unseated pad's `ForeignInput` "press" is sent at most once per pad in this time (06 §11.3).
 pub const FOREIGN_PRESS_GAP: Duration = Duration::from_secs(1);
@@ -655,6 +661,7 @@ impl<B: Backend> Router<B> {
             navigator: None,
             owners: Owners::in_memory(),
             foreign: Foreign::default(),
+            nav_renewals: 0,
         }
     }
 
@@ -1695,6 +1702,24 @@ impl<B: Backend> Router<B> {
         }
     }
 
+    /// At start: an event node that exists already (`devpath`, its node, udev's
+    /// `RUYA_INPUT_ORIGIN`). A foreign one (made before this start; the foreign record went with the
+    /// last run) is nobody's and closed now, so it keeps no profile's entry of an earlier run.
+    pub fn found_at_start(&mut self, devpath: &str, node: &str, udev_origin: &str) {
+        let backend = &mut self.backend;
+        if origin::classify(devpath, udev_origin, |s| backend.is_own(s)) != Origin::Foreign {
+            return;
+        }
+        let Some(sysname) = origin::parentless_input(devpath) else {
+            return;
+        };
+        self.foreign.found_at_start(sysname);
+        self.journal(format!(
+            "foreign device {sysname} ({node}) found at start: nobody's"
+        ));
+        self.write_foreign_acl(sysname, node, &acl::closed(), "start");
+    }
+
     /// The signed-in profile changed: `/dev/uinput` and every foreign device follow it.
     fn uinput_profile_changed(&mut self, profile: &str, uid: Option<u32>, now: Instant) {
         self.foreign.profile_changed(profile, uid, now);
@@ -1767,6 +1792,16 @@ impl<B: Backend> Router<B> {
                 // `add`, after its marker. Only on udev's word "foreign": rules without the origin
                 // (an older image) say nothing, and nothing is made again then.
                 if ev.action == "add" && ev.origin == "foreign" && self.backend.is_nav(sysname) {
+                    self.nav_renewals += 1;
+                    if self.nav_renewals > NAV_RENEWALS {
+                        if self.nav_renewals == NAV_RENEWALS + 1 {
+                            self.journal(format!(
+                                "udev does not see the origin marker of the navigation keyboard \
+                                 {sysname}: not made again (the shell cannot read it)"
+                            ));
+                        }
+                        return;
+                    }
                     match self.backend.renew_nav() {
                         Ok(new) => self.journal(format!(
                             "navigation keyboard {sysname} was processed by udev before its marker \
@@ -5926,6 +5961,65 @@ mod tests {
         let calls = r.backend_mut().take();
         assert!(!calls.contains(&Call::RenewNav));
         assert!(calls.contains(&Call::WriteAcl("/dev/input/event17".into())));
+    }
+
+    #[test]
+    fn a_foreign_device_found_at_start_is_closed_and_stays_nobodys() {
+        let mut r = router();
+        // An earlier run left p1's entry on it.
+        r.backend_mut()
+            .acls
+            .insert("/dev/input/event30".into(), acl::only_user(P1_UID));
+        r.found_at_start(
+            "/devices/virtual/input/input40/event30",
+            "/dev/input/event30",
+            "foreign",
+        );
+        assert_eq!(r.backend().acls["/dev/input/event30"], acl::closed());
+        // Ours (the navigation keyboard), root's and hardware are left alone.
+        r.found_at_start(
+            "/devices/virtual/input/input1/event3",
+            "/dev/input/event3",
+            "foreign",
+        );
+        r.found_at_start(
+            "/devices/virtual/input/input43/event33",
+            "/dev/input/event33",
+            "trusted",
+        );
+        r.found_at_start(
+            "/devices/pci0000:00/usb1/1-2/1-2:1.0/input/input5/event4",
+            "/dev/input/event4",
+            "",
+        );
+        assert_eq!(pad_acls(&mut r), vec!["/dev/input/event30".to_owned()]);
+        // p1 signs in: it is not p1's (nobody's for its life).
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        r.udev_event_at(
+            &foreign_udev("change", "input40", "/dev/input/event30"),
+            t0() + origin::HANDOVER * 2,
+        );
+        assert_eq!(r.backend().acls["/dev/input/event30"], acl::closed());
+    }
+
+    #[test]
+    fn the_navigation_keyboard_is_made_again_once_per_start_at_most() {
+        let mut r = router();
+        r.udev_event(&foreign_udev("add", "input1", "/dev/input/event3"));
+        assert_eq!(r.backend_mut().take(), vec![Call::RenewNav]);
+        journal(&mut r);
+        // The new one is foreign at its add too (udev never sees the marker): one line, no remake.
+        r.udev_event(&foreign_udev("add", "input901", "/dev/input/event3"));
+        r.udev_event(&foreign_udev("add", "input901", "/dev/input/event3"));
+        assert!(r.backend_mut().take().is_empty());
+        assert_eq!(
+            journal(&mut r),
+            vec![
+                "udev does not see the origin marker of the navigation keyboard input901: \
+                  not made again (the shell cannot read it)"
+                    .to_owned()
+            ]
+        );
     }
 
     // ---- controller profiles ----------------------------------------------------------------

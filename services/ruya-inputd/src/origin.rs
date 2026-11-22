@@ -147,6 +147,12 @@ impl Foreign {
         self.acl_of(sysname)
     }
 
+    /// A foreign device that was there before the service started: nobody's (who held
+    /// `/dev/uinput` when it appeared is not known), closed for its life.
+    pub fn found_at_start(&mut self, sysname: &str) {
+        self.devices.insert(sysname.to_owned(), None);
+    }
+
     /// A udev event of this foreign device was seen.
     pub fn knows(&self, sysname: &str) -> bool {
         self.devices.contains_key(sysname)

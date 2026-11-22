@@ -45,11 +45,12 @@ impl UdevEvent {
 /// The netlink group udevd broadcasts its processed events to.
 pub const UDEV_GROUP: u32 = 2;
 
-/// True for a message udevd sent: multicast to `UDEV_GROUP`. Sending to a netlink multicast group
-/// of this family needs `CAP_NET_ADMIN`, but any process may send a unicast message to the
-/// service's socket; such a message (groups 0) is dropped, as libudev drops it.
-pub fn from_udevd(nl_groups: u32) -> bool {
-    nl_groups & UDEV_GROUP != 0
+/// True for a message udevd sent: multicast to `UDEV_GROUP`, from root (the SCM_CREDENTIALS uid,
+/// `None` when the message carried none). Sending to a netlink multicast group of this family
+/// needs `CAP_NET_ADMIN`, but any process may send a unicast message to the service's socket;
+/// such a message (groups 0), or one not from root, is dropped, as libudev drops it.
+pub fn from_udevd(nl_groups: u32, uid: Option<u32>) -> bool {
+    nl_groups & UDEV_GROUP != 0 && uid == Some(0)
 }
 
 const PREFIX: &[u8; 8] = b"libudev\0";
@@ -156,9 +157,14 @@ mod tests {
 
     #[test]
     fn only_udevds_multicast_is_taken() {
-        assert!(from_udevd(UDEV_GROUP));
-        assert!(!from_udevd(0), "a unicast message from any local process");
-        assert!(!from_udevd(1), "the kernel's own group");
+        assert!(from_udevd(UDEV_GROUP, Some(0)));
+        assert!(
+            !from_udevd(0, Some(0)),
+            "a unicast message from any local process"
+        );
+        assert!(!from_udevd(1, Some(0)), "the kernel's own group");
+        assert!(!from_udevd(UDEV_GROUP, Some(1001)), "not from root");
+        assert!(!from_udevd(UDEV_GROUP, None), "no credentials");
     }
 
     #[test]

@@ -669,6 +669,31 @@ fn salt() -> Vec<u8> {
     }
 }
 
+/// Every event node of a parentless input device now: its sysfs devpath and its node.
+fn parentless_event_nodes() -> Vec<(String, String)> {
+    let Ok(inputs) = std::fs::read_dir("/sys/devices/virtual/input") else {
+        return Vec::new();
+    };
+    let mut found = Vec::new();
+    for input in inputs.flatten() {
+        let Ok(children) = std::fs::read_dir(input.path()) else {
+            continue;
+        };
+        for child in children.flatten() {
+            let name = child.file_name().to_string_lossy().into_owned();
+            if !name.starts_with("event") {
+                continue;
+            }
+            let devpath = format!(
+                "/devices/virtual/input/{}/{name}",
+                input.file_name().to_string_lossy()
+            );
+            found.push((devpath, format!("/dev/input/{name}")));
+        }
+    }
+    found
+}
+
 /// Opened before the first device is made, so the processed `add` of the navigation keyboard is
 /// heard (`Router::udev_event_at` makes it again when udev called it foreign).
 fn open_monitor() -> Option<sys::Monitor> {
@@ -744,6 +769,12 @@ pub fn run() -> io::Result<()> {
     let mut router = Router::new(backend, Box::new(PasswdAccounts));
     // Nobody is signed in yet: nobody but ruya-input may make an input device.
     router.assert_uinput("start");
+    // Foreign devices made before this start keep no profile's entry (RUY-1063).
+    for (devpath, node) in parentless_event_nodes() {
+        let props = udev_properties(Path::new(&node));
+        let udev_origin = props.get(ORIGIN_PROPERTY).map_or("", String::as_str);
+        router.found_at_start(&devpath, &node, udev_origin);
+    }
     // Controller profiles (06 section 7): <state>/profiles/<console profile>/<id>.json.
     router.set_book(Book::new(Box::new(DirStore::new(
         state_dir().join("profiles"),
