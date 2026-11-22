@@ -1925,7 +1925,7 @@ echo "$LD_LIBRARY_PATH" > "$LP_SEEN"
 exit 0
 SHIMEOF
 chmod +x "$lps/python3"
-out="$(LP_SEEN="$lp/seen" LD_LIBRARY_PATH=/runtime PATH="$lps:$PATH" bash "$here/vm-play-check.sh" libprobe /app/runners/R libgood.so.0 libbad.so.1 libother.so.2 2>&1)"
+out="$(LP_SEEN="$lp/seen" LD_LIBRARY_PATH=/runtime PATH="$lps:$PATH" bash "$here/vm-play-check.sh" libprobe /app/runners/R "libgood.so.0 libbad.so.1 libother.so.2" 2>&1)"
 [ "$out" = "ok libgood.so.0
 FAIL libbad.so.1: OSError: version V_1.10.0 not found
 ok libother.so.2" ] && pass "vm-play-check.sh libprobe: each library in its own child, an abort is a FAIL line and the next one is still tried" || fail "libprobe: '$out'"

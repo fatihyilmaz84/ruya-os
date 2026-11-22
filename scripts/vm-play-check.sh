@@ -70,7 +70,7 @@
 #          libgnutls and libpulse each load (a child process per library: an abort is a FAIL line); and
 #          with a held uinput pad (vm-input-probe.py pad, next to this script) routed by the shell, the
 #          winebus winedevice holds the virtual pad's /dev/input/event* during the first launch
-#   libprobe host fixtures only: `libprobe <runner root> <soname>...` runs the sandbox probe of the library
+#   libprobe host fixtures only: `libprobe <runner root> "<soname>..."` runs the sandbox probe of the library
 #          loads in this shell (the fixture puts a python3 shim in PATH)
 #   signals host fixtures only: `signals <monitor.log> <member> <app id>` prints one line per such
 #          Session1 signal in a `busctl --json=short monitor` log: the instance and the arguments
@@ -674,7 +674,8 @@ if [ "$mode" = sysrunner ]; then
     exit $?
 fi
 if [ "$mode" = libprobe ]; then
-    bash -c "$LIB_PROBE" probe "${@:2}"
+    # shellcheck disable=SC2086 # the sonames are a word list
+    bash -c "$LIB_PROBE" probe "${2:?runner root}" ${3:?sonames}
     exit $?
 fi
 if [ "$mode" = compat32 ]; then
