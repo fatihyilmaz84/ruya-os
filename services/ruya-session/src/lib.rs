@@ -7,6 +7,7 @@
 //! sits behind `Spawner` (`spawner.rs`) and `ProfileDirectory` (`directory.rs`); `dbus.rs` is the
 //! thin adapter.
 
+pub mod apps;
 #[cfg(any(target_os = "linux", test))]
 pub mod bounded;
 pub mod dbus;

@@ -1,8 +1,8 @@
 //! X11 mode for apps that cannot do Wayland (ADR-034, RUY-435).
 //!
 //! Wayland stays the only display path: an app runs in X11 mode only when its Flatpak metadata
-//! asks for X11 and not for Wayland (`needs_x11`), or when its id is on the override list
-//! (`X11_OVERRIDES`, one id per line; the image lists Steam). Then the main process of the app's
+//! asks for X11 and not for Wayland (`needs_x11`), or when the image's app table says
+//! `display=x11` for it (`apps.rs`; the image lists Steam). Then the main process of the app's
 //! unit is not `flatpak run` but this binary's `x11-run` helper, running as the profile user:
 //!   1. it makes `$XDG_RUNTIME_DIR/ruya-x11/<app id>/` (0700) and writes a random
 //!      MIT-MAGIC-COOKIE-1 into an Xauthority file there (0600, `xauth_record`);
@@ -34,12 +34,11 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::apps::Display;
 use crate::spawner::valid_app_arg;
 use ruya_flatpak::valid_session_app_id;
+use ruya_keyfile::Keyfile;
 
-/// The per-app override list: an app id per line (`#` starts a comment). The image ships
-/// `image/rootfs/usr/share/ruyaos/x11-apps` (Steam).
-pub const X11_OVERRIDES: &str = "/usr/share/ruyaos/x11-apps";
 /// The X server bridge (ADR-034 point 4; RUY-434 ships it patched for Qt's compositor).
 pub const SATELLITE_PROGRAM: &str = "/usr/bin/xwayland-satellite";
 /// Where X servers put their sockets (systemd's `tmpfiles.d/x11.conf` makes it, 1777).
@@ -73,49 +72,32 @@ const SATELLITE_FILE: &str = "satellite";
 /// The private datagram socket the satellite's `READY=1` (sd_notify) goes to.
 const NOTIFY_FILE: &str = "notify";
 
-/// The `[Context] sockets` list of a Flatpak metadata file (`a;b;!c;`); a `!` entry removes.
+/// The `[Context] sockets` list of a Flatpak metadata file (`a;b;!c;`); a `!` entry removes. A
+/// file the keyfile reader refuses counts as no sockets (so the app runs on Wayland).
 pub fn context_sockets(metadata: &str) -> Vec<String> {
-    let mut in_context = false;
     let mut sockets: Vec<String> = Vec::new();
-    for line in metadata.lines() {
-        let line = line.trim();
-        if line.starts_with('[') {
-            in_context = line == "[Context]";
-            continue;
-        }
-        if !in_context {
-            continue;
-        }
-        let Some((key, value)) = line.split_once('=') else {
-            continue;
-        };
-        if key.trim() != "sockets" {
-            continue;
-        }
-        sockets.clear();
-        for entry in value.split(';').map(str::trim).filter(|e| !e.is_empty()) {
-            if let Some(removed) = entry.strip_prefix('!') {
-                sockets.retain(|s| s != removed);
-            } else if !sockets.iter().any(|s| s == entry) {
-                sockets.push(entry.to_owned());
-            }
+    let Some(value) = Keyfile::parse(metadata)
+        .ok()
+        .and_then(|file| file.get("Context", "sockets").map(str::to_owned))
+    else {
+        return sockets;
+    };
+    for entry in value.split(';').map(str::trim).filter(|e| !e.is_empty()) {
+        if let Some(removed) = entry.strip_prefix('!') {
+            sockets.retain(|s| s != removed);
+        } else if !sockets.iter().any(|s| s == entry) {
+            sockets.push(entry.to_owned());
         }
     }
     sockets
 }
 
-/// Does the override list name `app_id`? One id per line; blank lines and `#` comments ignored.
-pub fn on_override_list(list: &str, app_id: &str) -> bool {
-    list.lines()
-        .map(|line| line.split('#').next().unwrap_or("").trim())
-        .any(|id| id == app_id)
-}
-
 /// The rule (ADR-034 point 2): X11 mode when the metadata's sockets have `x11` or `fallback-x11`
-/// and not `wayland`, or when the app is on the override list.
-pub fn needs_x11(metadata: &str, app_id: &str, overrides: &str) -> bool {
-    if on_override_list(overrides, app_id) {
-        return true;
+/// and not `wayland`, unless the app table's `display` decides (`x11` is X11 mode; `wayland` and
+/// `gamescope` are not, the launch refuses the latter before it gets here).
+pub fn needs_x11(metadata: &str, table_display: Option<Display>) -> bool {
+    if let Some(display) = table_display {
+        return display == Display::X11;
     }
     let sockets = context_sockets(metadata);
     let has = |name: &str| sockets.iter().any(|s| s == name);
@@ -131,15 +113,14 @@ pub fn metadata_path(root: &Path, app_id: &str) -> PathBuf {
         .join("metadata")
 }
 
-/// `needs_x11` from the files: the app's metadata under `root` and the override list. A file
-/// that cannot be read counts as empty (so an app without metadata runs on Wayland).
-pub fn display_mode_x11(root: &Path, app_id: &str, overrides: &Path) -> bool {
+/// `needs_x11` from the files: the app's metadata under `root` and its table row's `display`. A
+/// file that cannot be read counts as empty (so an app without metadata runs on Wayland).
+pub fn display_mode_x11(root: &Path, app_id: &str, table_display: Option<Display>) -> bool {
     if !valid_session_app_id(app_id) {
         return false;
     }
     let metadata = std::fs::read_to_string(metadata_path(root, app_id)).unwrap_or_default();
-    let list = std::fs::read_to_string(overrides).unwrap_or_default();
-    needs_x11(&metadata, app_id, &list)
+    needs_x11(&metadata, table_display)
 }
 
 /// One Xauthority record (the layout of libXau's `XauWriteAuth`): family, then address, display
@@ -839,6 +820,7 @@ pub use linux::exit_like;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::apps::AppTable;
     use std::collections::{BTreeMap, BTreeSet};
 
     const APP: &str = "io.github.divVerent.aaaaxy";
@@ -855,41 +837,52 @@ mod tests {
             format!("[Application]\nname={APP}\n\n[Context]\nshared=network;ipc;\nsockets={sockets}\ndevices=all;\n")
         };
         // x11 only, fallback-x11 only: X11 mode.
-        assert!(needs_x11(&meta("x11;pulseaudio;"), APP, ""));
-        assert!(needs_x11(&meta("fallback-x11;pulseaudio;"), APP, ""));
+        assert!(needs_x11(&meta("x11;pulseaudio;"), None));
+        assert!(needs_x11(&meta("fallback-x11;pulseaudio;"), None));
         // Wayland offered: Wayland, also next to x11 or fallback-x11.
-        assert!(!needs_x11(&meta("wayland;x11;pulseaudio;"), APP, ""));
-        assert!(!needs_x11(&meta("wayland;fallback-x11;"), APP, ""));
-        assert!(!needs_x11(&meta("wayland;pulseaudio;"), APP, ""));
+        assert!(!needs_x11(&meta("wayland;x11;pulseaudio;"), None));
+        assert!(!needs_x11(&meta("wayland;fallback-x11;"), None));
+        assert!(!needs_x11(&meta("wayland;pulseaudio;"), None));
         // No display socket at all, or no metadata: Wayland (the default).
-        assert!(!needs_x11(&meta("pulseaudio;"), APP, ""));
-        assert!(!needs_x11("", APP, ""));
+        assert!(!needs_x11(&meta("pulseaudio;"), None));
+        assert!(!needs_x11("", None));
         // A removed entry does not count.
-        assert!(!needs_x11(&meta("x11;!x11;"), APP, ""));
-        assert!(needs_x11(&meta("wayland;!wayland;x11;"), APP, ""));
+        assert!(!needs_x11(&meta("x11;!x11;"), None));
+        assert!(needs_x11(&meta("wayland;!wayland;x11;"), None));
         // `sockets` outside [Context] does not count.
-        assert!(!needs_x11("[Application]\nsockets=x11;\n", APP, ""));
-        // The override list names the app: X11 mode even with Wayland offered.
-        let list = "# X11-only by override\n\norg.other.App\n io.github.divVerent.aaaaxy  # broken on Wayland\n";
-        assert!(on_override_list(list, APP));
-        assert!(needs_x11(&meta("wayland;"), APP, list));
-        assert!(!needs_x11(&meta("wayland;"), "org.other.Ap", list));
-        assert!(!on_override_list("# io.github.divVerent.aaaaxy\n", APP));
+        assert!(!needs_x11("[Application]\nsockets=x11;\n", None));
+        // The app table's display decides over the sockets, both ways.
+        assert!(needs_x11(&meta("wayland;"), Some(Display::X11)));
+        assert!(!needs_x11(&meta("x11;"), Some(Display::Wayland)));
+        assert!(!needs_x11(&meta("x11;"), Some(Display::Gamescope)));
+        // Metadata the keyfile reader refuses (a duplicate key) counts as no sockets.
+        assert!(!needs_x11(
+            "[Context]
+sockets=x11;
+sockets=x11;
+",
+            None
+        ));
     }
 
     #[test]
     fn the_image_runs_steam_in_x11_mode() {
-        // The shipped list, against the Steam Flatpak's real sockets (Flathub, 2026-11-17):
-        // it lists wayland too, so without the list Steam would start without a DISPLAY.
-        let list = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../image/rootfs/usr/share/ruyaos/x11-apps"),
-        )
-        .expect("image/rootfs/usr/share/ruyaos/x11-apps");
-        let steam = "[Context]\nshared=ipc;network;\nsockets=pulseaudio;wayland;x11;\n";
-        assert!(!needs_x11(steam, "com.valvesoftware.Steam", ""));
-        assert!(needs_x11(steam, "com.valvesoftware.Steam", &list));
-        assert!(!needs_x11("[Context]\nsockets=wayland;\n", APP, &list));
+        // The shipped table, against the Steam Flatpak's real sockets (Flathub, 2026-11-17): it
+        // lists wayland too, so without the table's display Steam would start without a DISPLAY.
+        let table = AppTable::load(&crate::apps::tests::image_dir());
+        let steam = "[Context]
+shared=ipc;network;
+sockets=pulseaudio;wayland;x11;
+";
+        let id = "com.valvesoftware.Steam";
+        assert!(!needs_x11(steam, None));
+        assert!(needs_x11(steam, table.display(id)));
+        assert!(!needs_x11(
+            "[Context]
+sockets=wayland;
+",
+            table.display(APP)
+        ));
     }
 
     #[test]
@@ -898,19 +891,25 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         let meta = metadata_path(&root, APP);
         std::fs::create_dir_all(meta.parent().expect("parent")).expect("dirs");
-        std::fs::write(&meta, "[Context]\nsockets=x11;\n").expect("write");
-        let overrides = root.join("x11-apps");
-        assert!(display_mode_x11(&root, APP, &overrides));
-        std::fs::write(&meta, "[Context]\nsockets=wayland;\n").expect("write");
-        assert!(!display_mode_x11(&root, APP, &overrides));
-        std::fs::write(&overrides, format!("{APP}\n")).expect("write");
-        assert!(display_mode_x11(&root, APP, &overrides));
-        assert!(!display_mode_x11(
-            &root,
-            "org.ruyaos.Racer",
-            &root.join("none")
-        ));
-        assert!(!display_mode_x11(&root, "../x", &overrides));
+        std::fs::write(
+            &meta,
+            "[Context]
+sockets=x11;
+",
+        )
+        .expect("write");
+        assert!(display_mode_x11(&root, APP, None));
+        std::fs::write(
+            &meta,
+            "[Context]
+sockets=wayland;
+",
+        )
+        .expect("write");
+        assert!(!display_mode_x11(&root, APP, None));
+        assert!(display_mode_x11(&root, APP, Some(Display::X11)));
+        assert!(!display_mode_x11(&root, "org.ruyaos.Racer", None));
+        assert!(!display_mode_x11(&root, "../x", Some(Display::X11)));
         let _ = std::fs::remove_dir_all(&root);
     }
 
