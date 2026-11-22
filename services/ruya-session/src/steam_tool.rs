@@ -38,6 +38,12 @@ use ruya_vdf::{self as vdf, Entry, Value};
 
 /// The Steam Flatpak (the only app this step belongs to).
 pub const STEAM_APP_ID: &str = "com.valvesoftware.Steam";
+/// The URL that has Steam start the game `appid` (ADR-041 point 3): Steam's own command line,
+/// built here from the digits alone; Library's opaque `launch` string is never taken. `None` for
+/// anything but a Steam app id (`ruya_ids::valid_steam_appid`).
+pub fn steam_run_url(appid: &str) -> Option<String> {
+    ruya_ids::valid_steam_appid(appid).then(|| format!("steam://rungameid/{appid}"))
+}
 /// The image's runners; each Proton one has its own `compatibilitytool.vdf` (GE-Proton's tarball).
 pub const RUNNERS_DIR: &str = "/usr/lib/ruyaos/play/runners";
 /// The subcommand of `ruya-session` that does this.
@@ -190,6 +196,20 @@ mod tests {
 
     const GE_VDF: &str = "\"compatibilitytools\"\n{\n  \"compat_tools\"\n  {\n    \"GE-Proton11-12\"\n    {\n      \"install_path\" \".\"\n      \"display_name\" \"GE-Proton11-12\"\n      \"from_oslist\" \"windows\"\n      \"to_oslist\" \"linux\"\n    }\n  }\n}\n";
     const TOOL: &str = "GE-Proton11-12";
+
+    #[test]
+    fn the_run_url_is_built_from_the_digits_only() {
+        assert_eq!(
+            steam_run_url("7670").as_deref(),
+            Some("steam://rungameid/7670")
+        );
+        for bad in ["", "7a", "70/../x", "steam://rungameid/70", "12345678901"] {
+            assert_eq!(steam_run_url(bad), None, "{bad}");
+        }
+        // It is one launch argument (`Spawner::start`'s rule).
+        let url = steam_run_url("4294967295").expect("ten digits");
+        assert!(crate::spawner::valid_app_arg(&url), "{url}");
+    }
 
     fn mapping_of(text: &str) -> Vec<Entry> {
         let mut root = vdf::parse(text).expect("valid");

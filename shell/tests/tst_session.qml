@@ -119,20 +119,32 @@ Item {
             compare(r.parent, "")
         }
 
-        function launchItemStatus(item, profile) {
+        // LaunchItem's answer: { status, instance }. The instance is "" unless the status is "ok", or
+        // "already-running" for a Steam game (its child).
+        function launchItemAnswer(item, profile) {
             const n = launchedItems.count
             Session.launchItem(item, profile)
             tryCompare(launchedItems, "count", n + 1)
             const args = launchedItems.signalArguments[n]
             compare(args[0], item)
             compare(args[1], profile)
-            if (args[2] !== "ok")
+            if (args[2] !== "ok" && !(args[2] === "already-running" && item.startsWith("steam:")))
                 compare(args[3], "")
-            return args[2]
+            return { status: args[2], instance: args[3] }
         }
 
-        // LaunchItem as ruya-session answers it: a Flatpak item is Launch, a Steam game "failed" until
-        // RUY-1052, anything else "invalid".
+        function launchItemStatus(item, profile) {
+            return launchItemAnswer(item, profile).status
+        }
+
+        // The AppExited at `index`: instance, app id, exit code, reason.
+        function exitAt(index) {
+            const a = exited.signalArguments[index]
+            return [a[0], a[1], a[2], a[3]].join(" ")
+        }
+
+        // LaunchItem as ruya-session answers it: a Flatpak item is Launch, anything but a Steam game
+        // "invalid" (a Steam game: test_launch_steam_item).
         function test_launch_item() {
             compare(launchItemStatus("flatpak:org.example.Chess", "p1"), "ok")
             const instance = launchedItems.signalArguments[0][3]
@@ -143,10 +155,99 @@ Item {
             compare(launchStatus("org.example.Chess", "p1"), "already-running", "the same app as Launch's")
             compare(launchItemStatus("flatpak:org.nope.Missing", "p1"), "unknown-app")
             compare(launchItemStatus("flatpak:org.example.Racer", "nobody"), "unknown-profile")
-            compare(launchItemStatus("steam:70", "p1"), "failed")
+            compare(launchItemStatus("steam:70", "nobody"), "unknown-profile")
+            compare(launchItemStatus("steam:70", ""), "invalid")
             for (const bad of ["", "flatpak:", "steam:", "steam:7a", "play:x", "org.example.Racer"])
                 compare(launchItemStatus(bad, "p1"), "invalid", bad)
             compare(launched.count, 1, "launchItem answers with launchItemFinished only")
+            compare(Session.running.length, 1, "no refused Steam game left a record")
+        }
+
+        // LaunchItem of a Steam game (RUY-1067), as ruya-session: Steam is launched with the game or
+        // handed it, the game is a starting child until its scope comes, then running; without one it
+        // is "launch-failed" after the wait; a second LaunchItem answers "already-running" with the child.
+        function test_launch_steam_item() {
+            const steamId = "com.valvesoftware.Steam"
+            Session.mockChildLaunchWait(60000)
+            const first = launchItemAnswer("steam:70", "p1")
+            compare(first.status, "ok")
+            const game = first.instance
+            verify(game !== "")
+            tryVerify(() => Session.running.length === 2)
+            const steam = Session.instanceOf(steamId, "p1")
+            compare(steam.parent, "", "Steam itself was launched")
+            verify(steam.instance !== game)
+            let child = Session.running.find(r => r.instance === game)
+            compare(child.state, "starting")
+            compare(child.item, "steam:70")
+            compare(child.parent, steam.instance)
+            compare(child.appId, steamId)
+            compare(child.profile, "p1")
+            compare(Session.mockCalls(), [], "a stopped Steam is launched, not handed the game")
+            let again = launchItemAnswer("steam:70", "p1")
+            compare([again.status, again.instance], ["already-running", game])
+
+            // Its scope comes: running, and AppStarted with Steam's app id.
+            tryVerify(() => Session.instanceOf(steamId, "p1").state === "running")
+            startedSpy.clear()
+            compare(Session.mockStartChild(steam.instance, "steam:70"), game)
+            tryCompare(startedSpy, "count", 1)
+            compare(startedSpy.signalArguments[0][0], game)
+            compare(startedSpy.signalArguments[0][1], steamId)
+            tryVerify(() => Session.running.find(r => r.instance === game).state === "running")
+            again = launchItemAnswer("steam:70", "p1")
+            compare([again.status, again.instance], ["already-running", game])
+
+            // Steam runs: the next game is handed to it, and without a scope it is "launch-failed".
+            Session.mockChildLaunchWait(300)
+            const other = launchItemAnswer("steam:7670", "p1")
+            compare(other.status, "ok")
+            compare(Session.mockCalls(), ["forward steam:7670"])
+            tryVerify(() => Session.running.length === 3)
+            compare(Session.running.find(r => r.instance === other.instance).state, "starting")
+            tryCompare(exited, "count", 1)
+            compare(exitAt(0), [other.instance, steamId, -1, "launch-failed"].join(" "))
+            tryVerify(() => Session.running.length === 2)
+            compare(Session.instanceOf(steamId, "p1").instance, steam.instance, "Steam runs on")
+        }
+
+        // Stop of a Steam game still waiting for its scope ends it at once, with nothing sent to it; Stop of
+        // Steam ends its starting game first, "launch-failed" (RUY-1067).
+        function test_stop_of_a_starting_steam_game() {
+            const steamId = "com.valvesoftware.Steam"
+            Session.mockChildLaunchWait(60000)
+            const game = launchItemAnswer("steam:70", "p1").instance
+            tryVerify(() => Session.running.length === 2)
+            Session.stop(game)
+            tryCompare(exited, "count", 1)
+            compare(exitAt(0), [game, steamId, -1, "quit"].join(" "))
+            compare(Session.mockCalls(), [], "nothing of it to reach")
+            const steam = Session.instanceOf(steamId, "p1").instance
+            tryVerify(() => Session.running.length === 1)
+
+            const second = launchItemAnswer("steam:80", "p1").instance
+            tryVerify(() => Session.running.length === 2)
+            Session.stop(steam)
+            tryCompare(exited, "count", 3)
+            compare(exitAt(1), [second, steamId, -1, "launch-failed"].join(" "))
+            compare(exited.signalArguments[2][0], steam)
+            compare(Session.mockCalls(), ["forward steam:80", "stop " + steam])
+            tryVerify(() => Session.running.length === 0)
+        }
+
+        // Kill of a starting Steam game is "killed" with nothing sent; Kill keeps its profile check (RUY-1067).
+        function test_kill_of_a_starting_steam_game() {
+            Profiles.switchTo("p2", "")
+            tryCompare(Profiles, "activeProfile", "p2")
+            Session.mockChildLaunchWait(60000)
+            const game = launchItemAnswer("steam:70", "p2").instance
+            tryVerify(() => Session.running.length === 2)
+            Session.kill(game)
+            tryCompare(exited, "count", 1)
+            compare(exitAt(0), [game, "com.valvesoftware.Steam", -1, "killed"].join(" "))
+            compare(Session.mockCalls(), [])
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
         }
 
         // The mock's seam for B6: a Steam game as a child of a running Steam instance (ADR-041).

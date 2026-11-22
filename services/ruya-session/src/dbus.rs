@@ -16,6 +16,7 @@ use crate::profile_scan::Trigger;
 use crate::runner_choice::runner_args_from_library;
 use crate::session::{ExitReason, FrozenChange, Notice, RunningApp, Session, Status};
 use crate::spawner::{flatpak_app_version, Listing, Spawner, UnitEvent};
+use crate::steam_tool::STEAM_APP_ID;
 use crate::usage::{DayRow, EndReason, SessionRecord, SystemZone, MAX_LIST};
 use crate::usage_store::FileStore;
 use crate::usage_tracker::{clear_route, may_read, Attention, ClearRoute, LiveApp, Tracker};
@@ -524,6 +525,29 @@ impl SessionIface {
         status.as_str().to_owned()
     }
 
+    /// What every launch does before the core decides: the profiles are read again (system
+    /// mode; `Err` when they cannot be, the call's "failed"), and a launch right after a `Stop` of
+    /// `app_id` (the app itself, or Steam for a Steam game) waits for the old unit instead of
+    /// failing on its name.
+    async fn before_launch(
+        &self,
+        app_id: &str,
+        profile: &str,
+        connection: &Connection,
+    ) -> Result<(), ()> {
+        if self.system {
+            match fetch_profile_ids(connection).await {
+                Ok(ids) => lock(&self.session).directory_mut().set(ids),
+                Err(err) => {
+                    eprintln!("ruya-session: Profiles1 not readable: {err}");
+                    return Err(());
+                }
+            }
+        }
+        wait_while_stopping(&self.session, app_id, profile, LAUNCH_WAIT).await;
+        Ok(())
+    }
+
     /// `Launch(app_id, profile)`, and `LaunchItem` of a Flatpak item: the one launch path
     /// (RUY-1051).
     async fn launch_app(
@@ -532,17 +556,13 @@ impl SessionIface {
         profile: &str,
         connection: &Connection,
     ) -> (String, String) {
-        if self.system {
-            match fetch_profile_ids(connection).await {
-                Ok(ids) => lock(&self.session).directory_mut().set(ids),
-                Err(err) => {
-                    eprintln!("ruya-session: Profiles1 not readable: {err}");
-                    return ("failed".to_owned(), String::new());
-                }
-            }
+        if self
+            .before_launch(app_id, profile, connection)
+            .await
+            .is_err()
+        {
+            return ("failed".to_owned(), String::new());
         }
-        // A launch right after a `Stop` waits for the old unit instead of failing on its name.
-        wait_while_stopping(&self.session, app_id, profile, LAUNCH_WAIT).await;
         // A .play game's runner choice, asked of Library1 before the lock is taken: a slow answer
         // holds up this call only, and never fails the launch (RUY-904).
         let launch_args = if self.system {
@@ -579,8 +599,8 @@ impl SessionIface {
         self.launch_app(app_id, profile, connection).await
     }
 
-    /// ADR-041 point 3: a Flatpak item is `Launch`; a Steam game goes to the core, which answers
-    /// "failed" until RUY-1067 launches its child instance.
+    /// ADR-041 point 3: a Flatpak item is `Launch`; a Steam game is the core's
+    /// `launch_steam_game` (RUY-1067), after the same preamble with Steam's app id.
     async fn launch_item(
         &self,
         item: &str,
@@ -590,7 +610,19 @@ impl SessionIface {
         match parse_item(item) {
             Some(ItemId::Flatpak(app_id)) => self.launch_app(app_id, profile, connection).await,
             Some(ItemId::Steam(appid)) => {
-                let (status, instance) = lock(&self.session).launch_steam_game(appid, profile);
+                if self
+                    .before_launch(STEAM_APP_ID, profile, connection)
+                    .await
+                    .is_err()
+                {
+                    return ("failed".to_owned(), String::new());
+                }
+                let (status, instance) = lock(&self.session).launch_steam_game(
+                    appid,
+                    profile,
+                    unix_now(),
+                    Instant::now(),
+                );
                 (status.as_str().to_owned(), instance)
             }
             None => ("invalid".to_owned(), String::new()),
@@ -983,10 +1015,144 @@ async fn send_usage_changed(connection: &Connection, profiles: Vec<String>) {
     }
 }
 
-/// Feeds the OS events into the core and sends the resulting signals, in order; once a second it
-/// lets the core kill apps that ignored `Stop` and counts play time (`usage`); once a minute, in
-/// system mode, it deletes the usage data of profiles that no longer exist. Every end goes to the
-/// Steam reader's planner too (`scans`, system mode on Linux; `profile_scan.rs`). Runs forever.
+/// Where the core's notices go (`deliver`): the event pump's (`on_event`) and the timer's
+/// (`tick`) alike, so each takes the same way out.
+struct Outlet<'a> {
+    connection: &'a Connection,
+    session: &'a Shared,
+    usage: &'a SharedUsage,
+    system: bool,
+    turn: &'a FreezerTurn,
+    scans: Option<&'a Sender<Trigger>>,
+}
+
+/// What a notice changes in this service: the play ledger (a run that reached `running` opens a
+/// session, an end closes it; a launch that never ran writes nothing) and the Steam reader's
+/// planner (`scans`: a profile's Steam client that ended may have changed its games, RUY-1056).
+/// Returns the profile whose ledger changed, for `UsageChanged`.
+fn record_notice(
+    notice: &Notice,
+    session: &Shared,
+    usage: &SharedUsage,
+    scans: Option<&Sender<Trigger>>,
+) -> Option<String> {
+    if let (Some(scans), Notice::Exited { profile, item, .. }) = (scans, notice) {
+        let _ = scans.try_send(Trigger::Ended {
+            profile: profile.clone(),
+            item: item.clone(),
+        });
+    }
+    match notice {
+        Notice::Started { instance, .. } => {
+            let app = lock(session)
+                .list()
+                .into_iter()
+                .find(|a| &a.instance == instance);
+            if let Some(app) = app {
+                // The run is dated from now, when it reached `running`.
+                let live = LiveApp {
+                    started: unix_now(),
+                    ..live_app(&app)
+                };
+                usage_lock(usage).app_started(&live, Instant::now());
+            }
+            None
+        }
+        Notice::Exited {
+            instance, reason, ..
+        } => usage_lock(usage).app_exited(
+            instance,
+            end_reason_of(*reason),
+            Instant::now(),
+            unix_now(),
+        ),
+    }
+}
+
+/// Hands each notice on, in order: `record_notice`, the signal (`AppStarted` / `AppExited`),
+/// `UsageChanged`, and, in system mode, the freeze of an app that reached `running` after its
+/// profile left (`freeze_started`, RUY-568).
+async fn deliver(out: &Outlet<'_>, notices: Vec<Notice>) {
+    for notice in notices {
+        let started = match &notice {
+            Notice::Started { instance, .. } => Some(instance.clone()),
+            Notice::Exited { .. } => None,
+        };
+        let changed = record_notice(&notice, out.session, out.usage, out.scans);
+        let sent = async {
+            let iface = out
+                .connection
+                .object_server()
+                .interface::<_, SessionIface>(OBJECT_PATH)
+                .await?;
+            let emitter = iface.signal_emitter();
+            match notice {
+                Notice::Started { instance, app_id } => {
+                    SessionIface::app_started(emitter, instance, app_id).await
+                }
+                Notice::Exited {
+                    instance,
+                    app_id,
+                    exit_code,
+                    reason,
+                    ..
+                } => {
+                    SessionIface::app_exited(
+                        emitter,
+                        instance,
+                        app_id,
+                        exit_code,
+                        reason.as_str().to_owned(),
+                    )
+                    .await
+                }
+            }
+        }
+        .await;
+        if let Err(err) = sent {
+            eprintln!("ruya-session: emitting a signal failed: {err}");
+        }
+        send_usage_changed(out.connection, changed.into_iter().collect()).await;
+        // System mode only: `--session` has no signed-in profile to compare with.
+        if let (true, Some(instance)) = (out.system, started) {
+            let connection = out.connection;
+            let changes = freeze_started(out.session, out.turn, &instance, || async {
+                // Bounded: a hung ruya-profiles must not stall the event pump.
+                let read = async {
+                    fetch_active_profile(connection)
+                        .await
+                        .map_err(|err| {
+                            eprintln!("ruya-session: Profiles1 ActiveProfile not readable: {err}")
+                        })
+                        .ok()
+                };
+                let timeout = async {
+                    async_io::Timer::after(Duration::from_secs(2)).await;
+                    eprintln!("ruya-session: Profiles1 ActiveProfile read timed out");
+                    None
+                };
+                futures_lite::future::or(read, timeout).await
+            })
+            .await;
+            if !changes.is_empty() {
+                if let Ok(iface) = connection
+                    .object_server()
+                    .interface::<_, SessionIface>(OBJECT_PATH)
+                    .await
+                {
+                    emit_frozen(iface.signal_emitter(), changes).await;
+                }
+            }
+        }
+    }
+}
+
+/// Feeds the OS events into the core and hands the resulting notices on (`deliver`), in order;
+/// once a second it lets the core kill apps that ignored `Stop` and end the Steam games that got
+/// no scope (their notices take the same `deliver`), and counts play time (`usage`); once a
+/// minute, in system mode, it deletes the usage data of profiles that no longer exist. Every end
+/// goes to the Steam reader's planner too (`scans`, system mode on Linux; `profile_scan.rs`).
+/// Runs forever.
 pub async fn forward(
     connection: Connection,
     session: Shared,
@@ -996,13 +1162,23 @@ pub async fn forward(
     events: Receiver<UnitEvent>,
     scans: Option<Sender<Trigger>>,
 ) {
+    let out = Outlet {
+        connection: &connection,
+        session: &session,
+        usage: &usage,
+        system,
+        turn: &turn,
+        scans: scans.as_ref(),
+    };
     let ticks = async_io::Timer::interval(Duration::from_secs(1));
     let tick_loop = async {
         let mut ticks = ticks;
         let mut seconds = 0_u64;
         loop {
             futures_lite::StreamExt::next(&mut ticks).await;
-            lock(&session).tick(Instant::now());
+            // Bound first: the guard must not live through `deliver`, which locks again.
+            let notices = lock(&session).tick(Instant::now());
+            deliver(&out, notices).await;
             let changed = usage_lock(&usage).tick(Instant::now(), unix_now());
             send_usage_changed(&connection, changed).await;
             seconds += 1;
@@ -1019,111 +1195,9 @@ pub async fn forward(
     };
     let event_loop = async {
         while let Ok(event) = events.recv().await {
-            // Bound first: the guard must not live through the loop, whose body locks again.
+            // Bound first: the guard must not live through `deliver`, which locks again.
             let notices = lock(&session).on_event(event);
-            for notice in notices {
-                let started = match &notice {
-                    Notice::Started { instance, .. } => Some(instance.clone()),
-                    Notice::Exited { .. } => None,
-                };
-                let changed = match &notice {
-                    Notice::Started { instance, .. } => {
-                        let app = lock(&session)
-                            .list()
-                            .into_iter()
-                            .find(|a| &a.instance == instance);
-                        if let Some(app) = app {
-                            // The run is dated from now, when it reached `running`.
-                            let live = LiveApp {
-                                started: unix_now(),
-                                ..live_app(&app)
-                            };
-                            usage_lock(&usage).app_started(&live, Instant::now());
-                        }
-                        None
-                    }
-                    Notice::Exited {
-                        instance, reason, ..
-                    } => usage_lock(&usage).app_exited(
-                        instance,
-                        end_reason_of(*reason),
-                        Instant::now(),
-                        unix_now(),
-                    ),
-                };
-                // A profile's Steam client that ended may have changed its games (RUY-1056).
-                if let (Some(scans), Notice::Exited { profile, item, .. }) = (&scans, &notice) {
-                    let _ = scans.try_send(Trigger::Ended {
-                        profile: profile.clone(),
-                        item: item.clone(),
-                    });
-                }
-                let sent = async {
-                    let iface = connection
-                        .object_server()
-                        .interface::<_, SessionIface>(OBJECT_PATH)
-                        .await?;
-                    let emitter = iface.signal_emitter();
-                    match notice {
-                        Notice::Started { instance, app_id } => {
-                            SessionIface::app_started(emitter, instance, app_id).await
-                        }
-                        Notice::Exited {
-                            instance,
-                            app_id,
-                            exit_code,
-                            reason,
-                            ..
-                        } => {
-                            SessionIface::app_exited(
-                                emitter,
-                                instance,
-                                app_id,
-                                exit_code,
-                                reason.as_str().to_owned(),
-                            )
-                            .await
-                        }
-                    }
-                }
-                .await;
-                if let Err(err) = sent {
-                    eprintln!("ruya-session: emitting a signal failed: {err}");
-                }
-                send_usage_changed(&connection, changed.into_iter().collect()).await;
-                // System mode only: `--session` has no signed-in profile to compare with.
-                if let (true, Some(instance)) = (system, started) {
-                    let changes = freeze_started(&session, &turn, &instance, || async {
-                        // Bounded: a hung ruya-profiles must not stall the event pump.
-                        let read = async {
-                            fetch_active_profile(&connection)
-                                .await
-                                .map_err(|err| {
-                                    eprintln!(
-                                        "ruya-session: Profiles1 ActiveProfile not readable: {err}"
-                                    )
-                                })
-                                .ok()
-                        };
-                        let timeout = async {
-                            async_io::Timer::after(Duration::from_secs(2)).await;
-                            eprintln!("ruya-session: Profiles1 ActiveProfile read timed out");
-                            None
-                        };
-                        futures_lite::future::or(read, timeout).await
-                    })
-                    .await;
-                    if !changes.is_empty() {
-                        if let Ok(iface) = connection
-                            .object_server()
-                            .interface::<_, SessionIface>(OBJECT_PATH)
-                            .await
-                        {
-                            emit_frozen(iface.signal_emitter(), changes).await;
-                        }
-                    }
-                }
-            }
+            deliver(&out, notices).await;
         }
     };
     futures_lite::future::zip(tick_loop, event_loop).await;
@@ -1559,5 +1633,42 @@ mod tests {
             }));
         assert!(changes.is_empty());
         assert!(!is_frozen(&shared, &unit));
+    }
+
+    #[test]
+    fn a_steam_game_that_never_ran_is_delivered_like_any_end_and_writes_no_ledger_row() {
+        // RUY-1067: the timer's notices take the event pump's way out (`deliver` ->
+        // `record_notice`): the Steam reader's planner hears of the end, the ledger stays empty.
+        let spawner: DynSpawner = Box::new(FakeSpawner::new().with_app(STEAM_APP_ID));
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let shared: Shared = Arc::new(Mutex::new(Session::new(spawner, dir, Vec::new())));
+        let root = std::env::temp_dir().join(format!("ruya-1067-ledger-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let usage: SharedUsage =
+            Arc::new(Mutex::new(Tracker::new(FileStore::new(&root), SystemZone)));
+        let t0 = Instant::now();
+        let (status, child) = lock(&shared).launch_steam_game("70", "p1", unix_now(), t0);
+        assert_eq!(status, Status::Ok);
+        let notices = lock(&shared).tick(t0 + crate::session::CHILD_LAUNCH_WAIT);
+        assert!(
+            matches!(notices.as_slice(), [Notice::Exited { instance, reason: ExitReason::LaunchFailed, .. }] if *instance == child),
+            "{notices:?}"
+        );
+        let (scans, heard) = async_channel::unbounded();
+        for notice in &notices {
+            assert_eq!(record_notice(notice, &shared, &usage, Some(&scans)), None);
+        }
+        assert_eq!(
+            heard.try_recv(),
+            Ok(Trigger::Ended {
+                profile: "p1".to_owned(),
+                item: "steam:70".to_owned()
+            })
+        );
+        let sessions = usage_lock(&usage)
+            .list("p1", 0, 100, unix_now())
+            .unwrap_or_else(|e| panic!("{e}"));
+        assert!(sessions.is_empty(), "{sessions:?}");
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

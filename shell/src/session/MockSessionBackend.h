@@ -2,6 +2,7 @@
 
 #include "SessionBackend.h"
 
+#include <QHash>
 #include <QStringList>
 
 #include <functional>
@@ -38,13 +39,21 @@
 // only those name an instance; any other pid is "not-found", 0 or less "invalid".
 //
 // Items and children (ADR-041, RUY-1051): every launched record has item "flatpak:<appId>" and parent "".
-// LaunchItem follows ruya-session: "flatpak:<id>" is Launch(id), "steam:<digits>" is "failed" (until
-// RUY-1052), anything else "invalid". startChild is the seam for a Steam game: a running child record
-// under a running instance (item "steam:<appid>", parent that instance, the parent's app id and profile),
-// announced with AppStarted; endChild ends it with AppExited "quit". Stop and Kill on a parent end its
-// children first ("stop <child>" / "kill <child>" logged before the parent's). Freeze and Thaw of a
-// parent reach its running children first, as the service does (ADR-041 point 7, RUY-1054): "freeze
-// <child>" / "thaw <child>" are logged before the parent's.
+// LaunchItem follows ruya-session: "flatpak:<id>" is Launch(id), anything but "steam:<digits>" "invalid".
+// startChild is the seam for a Steam game's scope: a running child record under a running instance (item
+// "steam:<appid>", parent that instance, the parent's app id and profile), announced with AppStarted;
+// endChild ends it with AppExited "quit". Stop and Kill on a parent end its children first ("stop <child>"
+// / "kill <child>" logged before the parent's). Freeze and Thaw of a parent reach its running children
+// first, as the service does (ADR-041 point 7, RUY-1054): "freeze <child>" / "thaw <child>" are logged
+// before the parent's.
+//
+// LaunchItem of "steam:<digits>" (RUY-1067) mirrors ruya-session: a child of that item and profile in any
+// state is "already-running" with its instance; else com.valvesoftware.Steam (installed here) is launched
+// as Launch would, or, when it runs or starts, handed the game ("forward steam:<appid>" logged), and the
+// answer names a new child that is "starting" until startChild(parent, item) gives it its scope (then
+// "running", AppStarted). Without that it ends with AppExited "launch-failed" (-1) after the child launch
+// wait (ChildLaunchWaitMs, setChildLaunchWait). Stop or Kill of a starting child logs nothing and ends it
+// with "quit" / "killed" (-1); Stop or Kill of its parent ends it with "launch-failed".
 class MockSessionBackend final : public SessionBackend
 {
     Q_OBJECT
@@ -82,6 +91,10 @@ public:
     void setKillAnswer(const QString &status) { m_killAnswer = status; }
     // ruya-session's STOP_GRACE: an ignored Stop is killed this long after it (RUY-736).
     static constexpr int BackstopMs = 30000;
+    // ruya-session's CHILD_LAUNCH_WAIT: a Steam game without its scope this long is "launch-failed" (RUY-1067).
+    static constexpr int ChildLaunchWaitMs = 120000;
+    // The wait of the Steam games LaunchItem starts from now on (ChildLaunchWaitMs again after reset).
+    void setChildLaunchWait(int ms) { m_childWaitMs = ms; }
     QStringList calls() const { return m_calls; }
     // The pid of a launched instance's process (from 4001 up), 0 for an unknown instance.
     int pidOf(const QString &instance) const;
@@ -94,6 +107,15 @@ private:
     int indexOf(const QString &instance) const;
     // Launch's checks and start: the status, and the new instance on "ok".
     QString start(const QString &appId, const QString &profile, QString *instance);
+    // LaunchItem of a Steam game: the status, and the child's instance on "ok" or "already-running".
+    QString launchSteamGame(const QString &item, const QString &profile, QString *instance);
+    // A Steam game `item` in the run of the record at `parentIndex` (its app id and profile), in `state`
+    // ("starting": LaunchItem asked for it; "running": its scope is there). Returns its instance.
+    QString addChild(int parentIndex, const QString &item, const QString &state);
+    // Is the record at `index` a Steam game that waits for its scope (LaunchItem, RUY-1067)?
+    bool awaitsScope(int index) const;
+    // Stop or Kill of such a game: ended with `reason` and exit code -1, no call logged.
+    void endStartingChild(int index, const QString &reason);
     // Stop or Kill (`verb`) of a parent: its children end first, with `code` and `reason` (ADR-041).
     void endChildren(const QString &instance, const QString &verb, int code, const QString &reason);
     void setRunning(const QString &instance);
@@ -119,4 +141,7 @@ private:
     bool m_stubbornStop = false;
     bool m_ignoreStop = false;
     QString m_killAnswer;
+    int m_childWaitMs = ChildLaunchWaitMs;
+    // The Steam games ended before their scope came, and the reason their AppExited will carry.
+    QHash<QString, QString> m_endingAs;
 };

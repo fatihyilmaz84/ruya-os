@@ -165,6 +165,13 @@ pub trait Spawner {
     fn may_freeze(&self, _app_id: &str) -> bool {
         true
     }
+    /// Hands `steam://rungameid/<appid>` to `user`'s running Steam (ADR-041 point 3,
+    /// `steam_url_command`). Returns once the forwarder is on its way; its end is not waited for
+    /// (the game's scope, or the 120 s of `Session::tick`, says how it went). An error when it
+    /// cannot start.
+    fn forward_steam_url(&self, user: &str, appid: &str) -> Result<(), String> {
+        Err(format!("cannot hand steam:{appid} of {user} to Steam here"))
+    }
 }
 
 impl<T: Spawner + ?Sized> Spawner for Box<T> {
@@ -230,6 +237,9 @@ impl<T: Spawner + ?Sized> Spawner for Box<T> {
     }
     fn may_freeze(&self, app_id: &str) -> bool {
         (**self).may_freeze(app_id)
+    }
+    fn forward_steam_url(&self, user: &str, appid: &str) -> Result<(), String> {
+        (**self).forward_steam_url(user, appid)
     }
 }
 
@@ -1017,20 +1027,32 @@ pub fn steam_probe_command(user: &str, scope: &str) -> Result<Vec<String>, Strin
     if !crate::steam_probe::valid_scope(scope) {
         return Err(format!("not a Flatpak scope: {scope:?}"));
     }
-    piped_helper_command(
+    helper_command(
         user,
+        Output::Piped,
         3,
         &[],
         &[SESSION_PROGRAM, crate::steam_probe::SUBCOMMAND, scope],
     )
 }
 
-/// The shape of every helper that runs as a profile user and answers on stdout (`steam-probe`,
-/// `profile-scan`): `systemd-run` in `user`'s manager, stdout piped back, waited for, collected,
-/// bounded by `RuntimeMaxSec=<runtime_max_sec>`, with the unit `properties` after it, then
-/// `command`. Pure; the user is validated again.
-fn piped_helper_command(
+/// Where a helper's stdout goes (`helper_command`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Output {
+    /// Back to the caller (`--pipe`): the helper answers there.
+    Piped,
+    /// To the user's journal, like any unit's: the caller only waits for the end.
+    Journal,
+}
+
+/// The shape of every short helper that runs as a profile user (`steam-probe` and `profile-scan`,
+/// which answer on stdout, and the Steam URL forwarder): `systemd-run` in `user`'s manager,
+/// waited for, collected, bounded by `RuntimeMaxSec=<runtime_max_sec>`, with the unit
+/// `properties` after it, then `command`. Its unit gets the manager's own name (`run-p<pid>-i<n>`),
+/// never an app unit's (`ruya-app-*`, which adoption takes). Pure; the user is validated again.
+fn helper_command(
     user: &str,
+    output: Output,
     runtime_max_sec: u32,
     properties: &[&str],
     command: &[&str],
@@ -1039,7 +1061,6 @@ fn piped_helper_command(
     let mut args: Vec<String> = [
         "systemd-run",
         "--user",
-        "--pipe",
         "--wait",
         "--quiet",
         "--collect",
@@ -1048,6 +1069,9 @@ fn piped_helper_command(
     .map(str::to_owned)
     .to_vec();
     args.insert(1, format!("--machine={user}@.host"));
+    if output == Output::Piped {
+        args.insert(3, "--pipe".to_owned());
+    }
     args.push(format!("--property=RuntimeMaxSec={runtime_max_sec}"));
     args.extend(properties.iter().map(|p| format!("--property={p}")));
     args.push("--".to_owned());
@@ -1085,11 +1109,34 @@ pub const PROFILE_SCAN_PROPERTIES: [&str; 13] = [
 /// bounds the run too (`bounded::run_capped`) and hands the output unchanged to
 /// `Library1.PutProfileItems`, which checks it. Pure; root and any non-profile user are refused.
 pub fn profile_scan_command(user: &str) -> Result<Vec<String>, String> {
-    piped_helper_command(
+    helper_command(
         user,
+        Output::Piped,
         PROFILE_SCAN_RUNTIME_SECS,
         &PROFILE_SCAN_PROPERTIES,
         &[LIBRARY_PROGRAM, PROFILE_SCAN],
+    )
+}
+
+/// How long the Steam URL forwarder's unit may run (`RuntimeMaxSec`): Steam's own command line
+/// hands the URL to the running client and ends within seconds; the caller waits a little longer.
+pub const STEAM_URL_RUNTIME_SECS: u32 = 30;
+
+/// The forwarder of a Steam game's URL to the profile's running Steam (ADR-041 point 3,
+/// RUY-1067): `flatpak run com.valvesoftware.Steam steam://rungameid/<appid>` as `user`, in that
+/// user's manager, waited for and bounded by `RuntimeMaxSec`. Steam's own command line passes the
+/// URL to the client that runs and ends; root never writes into the profile's home (ADR-045) and
+/// never touches Steam's pipe. None of the app table's arguments: it is not Steam's run. Pure;
+/// root, any non-profile user and an `appid` that is not digits are refused.
+pub fn steam_url_command(user: &str, appid: &str) -> Result<Vec<String>, String> {
+    let url = crate::steam_tool::steam_run_url(appid)
+        .ok_or_else(|| format!("not a Steam app id: {appid:?}"))?;
+    helper_command(
+        user,
+        Output::Journal,
+        STEAM_URL_RUNTIME_SECS,
+        &[],
+        &["flatpak", "run", STEAM_APP_ID, &url],
     )
 }
 
@@ -1550,6 +1597,7 @@ struct FakeState {
     fail_sound: bool,
     fail_freeze: bool,
     fail_kill: bool,
+    fail_forward: bool,
     calls: Vec<String>,
     /// `app_audio` requests, as "user frozen=a,b running=a,b,c" (T-466).
     audio: Vec<String>,
@@ -1714,6 +1762,12 @@ impl FakeSpawner {
         self
     }
 
+    /// `forward_steam_url` fails (the forwarder cannot start), RUY-1067.
+    pub fn failing_forward(self) -> Self {
+        self.lock().fail_forward = true;
+        self
+    }
+
     /// Swap is active (T-466).
     pub fn with_swap(self) -> Self {
         self.lock().swap = true;
@@ -1730,7 +1784,7 @@ impl FakeSpawner {
     }
 
     /// "sound user", "start user app", "stop unit", "kill unit", "freeze unit", "thaw unit",
-    /// "reclaim unit", "cancel-reclaim unit", in order.
+    /// "reclaim unit", "cancel-reclaim unit", "forward user appid", in order.
     pub fn calls(&self) -> Vec<String> {
         self.lock().calls.clone()
     }
@@ -1912,6 +1966,15 @@ impl Spawner for FakeSpawner {
 
     fn may_freeze(&self, app_id: &str) -> bool {
         !self.lock().never_freeze.contains(app_id)
+    }
+
+    fn forward_steam_url(&self, user: &str, appid: &str) -> Result<(), String> {
+        let mut state = self.lock();
+        state.calls.push(format!("forward {user} {appid}"));
+        if state.fail_forward {
+            return Err("fake forward failure".to_owned());
+        }
+        Ok(())
     }
 }
 
@@ -3193,6 +3256,35 @@ app-flatpak-io.github.Foo-56.scope loaded active running app-flatpak-io.github.F
         );
         assert!(steam_probe_command("root", scope).is_err());
         assert!(steam_probe_command("ruya-p1", "../x.scope").is_err());
+    }
+
+    #[test]
+    fn the_steam_url_forwarder_is_steams_own_command_line_as_the_profile_user() {
+        use super::steam_url_command;
+        assert_eq!(
+            steam_url_command("ruya-p1", "7670").expect("forwarder"),
+            [
+                "systemd-run",
+                "--machine=ruya-p1@.host",
+                "--user",
+                "--wait",
+                "--quiet",
+                "--collect",
+                "--no-ask-password",
+                "--property=RuntimeMaxSec=30",
+                "--",
+                "flatpak",
+                "run",
+                "com.valvesoftware.Steam",
+                "steam://rungameid/7670",
+            ]
+        );
+        for user in ["root", "ruya-", "p1", "ruya-p1;x"] {
+            assert!(steam_url_command(user, "70").is_err(), "{user}");
+        }
+        for appid in ["", "7a", "70 -x", "../70", "12345678901"] {
+            assert!(steam_url_command("ruya-p1", appid).is_err(), "{appid}");
+        }
     }
 
     #[test]
