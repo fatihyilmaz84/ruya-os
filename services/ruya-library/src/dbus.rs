@@ -1,13 +1,16 @@
-//! org.ruyaos.Library1 on D-Bus. Thin adapter: the rules live in `catalog.rs`, `runners.rs` and
-//! `choices.rs`.
+//! org.ruyaos.Library1 on D-Bus. Thin adapter: the rules live in `catalog.rs`, `view.rs`,
+//! `profile_items.rs`, `runners.rs` and `choices.rs`.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use zbus::interface;
+use zbus::message::Header;
+use zbus::names::BusName;
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
+use zbus::Connection;
 
 use ruya_play_format::resolve::Override;
 
@@ -15,7 +18,9 @@ use crate::catalog::{self, Item};
 use crate::choices::{self, Choices, Status};
 use crate::flatpak::AppLister;
 use crate::play;
+use crate::profile_items;
 use crate::runners::{self, Resolution, Runner};
+use crate::view::{may_put, View};
 
 pub const BUS_NAME: &str = "org.ruyaos.Library1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Library1";
@@ -24,7 +29,6 @@ pub type Dict = HashMap<String, OwnedValue>;
 
 /// What a scan needs; shared with the thread that runs it.
 pub struct Sources {
-    pub steam_roots: Vec<PathBuf>,
     pub lister: Box<dyn AppLister>,
     /// The Flatpak installation whose `play.*` deployments carry the art and `play.json`
     /// (`/var/lib/flatpak`; a fixture folder in tests).
@@ -38,31 +42,74 @@ pub struct Sources {
 
 pub struct LibraryIface {
     sources: Arc<Sources>,
-    items: Mutex<Vec<Item>>,
+    view: Mutex<View>,
     choices: Choices,
+    /// The uid check of the root-only calls (`view::may_put`); off only with `--session`.
+    check_caller: bool,
+}
+
+/// The Flatpak items of one scan of `sources`.
+fn scan(sources: &Sources) -> Vec<Item> {
+    catalog::scan(
+        sources.lister.as_ref(),
+        &sources.play_root,
+        &sources.play_runners,
+    )
 }
 
 impl LibraryIface {
-    /// Scans once, so the first `ListItems` has an answer.
+    /// Scans once, so the first `ListItems` has an answer. Nobody is active until ruya-session
+    /// says (`SetActiveProfile`); the root-only calls check the caller's uid.
     pub fn new(sources: Sources) -> Self {
-        let items = catalog::scan(
-            &sources.steam_roots,
-            sources.lister.as_ref(),
-            &sources.play_root,
-            &sources.play_runners,
-        );
+        let view = View::new(scan(&sources));
         LibraryIface {
             choices: Choices::new(sources.choices_dir.clone()),
             sources: Arc::new(sources),
-            items: Mutex::new(items),
+            view: Mutex::new(view),
+            check_caller: true,
         }
+    }
+
+    /// Development (`--session`): the root-only calls take any caller, since nothing on the
+    /// session bus is root. Logged, so it is never off unnoticed.
+    pub fn without_caller_check(mut self) -> Self {
+        eprintln!(
+            "ruya-library: development mode: PutProfileItems and SetActiveProfile take any caller"
+        );
+        self.check_caller = false;
+        self
     }
 
     /// The Flatpak id of the `.play` item `id` (`choices::play_app` on the current list).
     fn play_app(&self, id: &str) -> Result<String, Status> {
-        match self.items.lock() {
-            Ok(items) => choices::play_app(&items, id),
+        match self.view.lock() {
+            Ok(view) => choices::play_app(view.items(), id),
             Err(_) => Err(Status::Failed),
+        }
+    }
+
+    /// Whether the sender of `header` may make a root-only call: its uid as the bus knows it
+    /// (`GetConnectionUnixUser`), by `view::may_put`. A sender the bus cannot name is refused.
+    async fn caller_allowed(&self, header: &Header<'_>, connection: &Connection) -> bool {
+        if !self.check_caller {
+            return true;
+        }
+        let Some(sender) = header.sender() else {
+            return false;
+        };
+        let uid = match zbus::fdo::DBusProxy::new(connection).await {
+            Ok(bus) => {
+                bus.get_connection_unix_user(BusName::Unique(sender.clone()))
+                    .await
+            }
+            Err(err) => Err(err.into()),
+        };
+        match uid {
+            Ok(uid) => may_put(uid),
+            Err(err) => {
+                eprintln!("ruya-library: the caller {sender} has no uid: {err}");
+                false
+            }
         }
     }
 
@@ -108,14 +155,10 @@ impl LibraryIface {
         Ok(runners::resolve_in_place(&files, &runners, over).unwrap_or_default())
     }
 
-    /// Replaces the list; true when it differs from the one before.
-    fn store(&self, fresh: Vec<Item>) -> bool {
-        match self.items.lock() {
-            Ok(mut items) => {
-                let changed = *items != fresh;
-                *items = fresh;
-                changed
-            }
+    /// Changes the view with `change`; true when the served list differs from the one before.
+    fn store(&self, change: impl FnOnce(&mut View) -> bool) -> bool {
+        match self.view.lock() {
+            Ok(mut view) => change(&mut view),
             Err(_) => false,
         }
     }
@@ -123,12 +166,16 @@ impl LibraryIface {
     /// Scans on the calling thread (the watcher thread in `main.rs`, never the executor).
     /// True when the list changed; the caller then sends `ItemsChanged` with `announce`.
     pub fn refresh(&self) -> bool {
-        self.store(catalog::scan(
-            &self.sources.steam_roots,
-            self.sources.lister.as_ref(),
-            &self.sources.play_root,
-            &self.sources.play_runners,
-        ))
+        let fresh = scan(&self.sources);
+        self.store(|view| view.set_flatpak(fresh))
+    }
+
+    /// The active profile ("" = nobody).
+    fn active(&self) -> String {
+        self.view
+            .lock()
+            .map(|view| view.active().to_owned())
+            .unwrap_or_default()
     }
 
     /// Sends `ItemsChanged`.
@@ -233,8 +280,8 @@ pub fn runner_record(r: &Runner) -> Dict {
 #[interface(name = "org.ruyaos.Library1")]
 impl LibraryIface {
     fn list_items(&self) -> Vec<Dict> {
-        match self.items.lock() {
-            Ok(items) => items.iter().map(record).collect(),
+        match self.view.lock() {
+            Ok(view) => view.items().iter().map(record).collect(),
             Err(_) => Vec::new(),
         }
     }
@@ -242,22 +289,93 @@ impl LibraryIface {
     async fn rescan(&self, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) {
         let sources = self.sources.clone();
         // File and process I/O: not on the executor.
-        let fresh = blocking::unblock(move || {
-            catalog::scan(
-                &sources.steam_roots,
-                sources.lister.as_ref(),
-                &sources.play_root,
-                &sources.play_runners,
-            )
-        })
-        .await;
-        if self.store(fresh) {
+        let fresh = blocking::unblock(move || scan(&sources)).await;
+        if self.store(|view| view.set_flatpak(fresh)) {
             Self::announce(&emitter).await;
+        }
+        // The Steam items are read as the profile (ADR-045): ruya-session runs the reader.
+        let active = self.active();
+        if !active.is_empty() {
+            if let Err(err) = Self::profile_scan_wanted(&emitter, &active).await {
+                eprintln!("ruya-library: emitting ProfileScanWanted failed: {err}");
+            }
         }
     }
 
     #[zbus(signal)]
     async fn items_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
+    async fn put_profile_items(
+        &self,
+        profile: &str,
+        data: String,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        if !self.caller_allowed(&header, connection).await {
+            eprintln!("ruya-library: PutProfileItems from a caller that is not root, refused");
+            return Status::NotAllowed.as_str().to_owned();
+        }
+        if !ruya_ids::valid_profile_id(profile) {
+            return Status::Invalid.as_str().to_owned();
+        }
+        // Up to 32 MiB of JSON: not on the executor.
+        let items = match blocking::unblock(move || profile_items::decode(&data)).await {
+            Ok(items) => items,
+            Err(why) => {
+                eprintln!(
+                    "ruya-library: the Steam items of {profile} refused: {}",
+                    why.as_str()
+                );
+                return Status::Invalid.as_str().to_owned();
+            }
+        };
+        let count = items.len();
+        if self.store(|view| view.put(profile, items)) {
+            Self::announce(&emitter).await;
+        }
+        eprintln!("ruya-library: {count} Steam items for {profile}");
+        Status::Ok.as_str().to_owned()
+    }
+
+    async fn set_active_profile(
+        &self,
+        profile: &str,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        if !self.caller_allowed(&header, connection).await {
+            eprintln!("ruya-library: SetActiveProfile from a caller that is not root, refused");
+            return Status::NotAllowed.as_str().to_owned();
+        }
+        if !profile.is_empty() && !ruya_ids::valid_profile_id(profile) {
+            return Status::Invalid.as_str().to_owned();
+        }
+        let mut moved = false;
+        let changed = self.store(|view| {
+            moved = view.active() != profile;
+            view.set_active(profile)
+        });
+        if moved {
+            if let Err(err) = self.active_profile_changed(&emitter).await {
+                eprintln!("ruya-library: emitting ActiveProfile's change failed: {err}");
+            }
+        }
+        if changed {
+            Self::announce(&emitter).await;
+        }
+        Status::Ok.as_str().to_owned()
+    }
+
+    #[zbus(property)]
+    fn active_profile(&self) -> String {
+        self.active()
+    }
+
+    #[zbus(signal)]
+    async fn profile_scan_wanted(emitter: &SignalEmitter<'_>, profile: &str) -> zbus::Result<()>;
 
     async fn list_runners(&self) -> Vec<Dict> {
         let dir = self.sources.play_runners.clone();

@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use ruya_play_format::resolve::Override;
 
-use crate::catalog::Item;
+use crate::catalog::{clip, Item};
 use crate::runners::{resolve_in_place, Resolution};
 
 /// The runners the image ships; the launcher sees them as `/app/runners` (ADR-038). Read-only
@@ -62,15 +62,8 @@ fn read_json(path: &Path) -> Option<serde_json::Value> {
     serde_json::from_slice(&bytes).ok()
 }
 
-/// Longest title or signer name listed (characters); longer text is cut.
-const MAX_TEXT_CHARS: usize = 120;
 /// At most this many genres (05 section 4).
 const MAX_GENRES: usize = 4;
-
-fn clip(s: &str) -> Option<String> {
-    let s = s.trim();
-    (!s.is_empty()).then(|| s.chars().take(MAX_TEXT_CHARS).collect())
-}
 
 fn text(v: &serde_json::Value, key: &str) -> Option<String> {
     v.get(key)?.as_str().and_then(clip)

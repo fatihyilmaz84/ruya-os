@@ -1702,6 +1702,15 @@ expect_contains "vm-library-check.sh choicejudge: ss \"ok\" \"package\" is the p
 expect_contains "vm-library-check.sh choicejudge: the one-string form is not the reply" "$(cj 's "ok" "system"' system)" "FAIL: the reply is not ok with the choice system"
 expect_contains "vm-library-check.sh choicejudge: another choice is refused" "$(cj 'ss "ok" "package"' system)" "FAIL: the reply is not ok with the choice system"
 expect_contains "vm-library-check.sh choicejudge: a status that is not ok is refused" "$(cj 'ss "unknown" ""' system)" "FAIL: the reply is not ok with the choice system"
+# RUY-1056: the steam mode reads the steam: ids of ListItems (busctl's text), each once and sorted.
+sids="$(printf '%s\n' 'aa{sv} 3 7 "id" s "steam:70" "kind" s "game" 7 "id" s "flatpak:org.x.A" 7 "id" s "steam:220" "launch" s "steam://rungameid/220" "x" s "steam:220"' | bash "$here/vm-library-check.sh" steamids 2>&1 | tr '\n' ' ')"
+[ "$sids" = "steam:220 steam:70 " ] && pass "vm-library-check.sh steamids: the two steam: ids, once each" || fail "vm-library-check.sh steamids: '$sids'"
+sids="$(printf '%s\n' 'aa{sv} 1 7 "id" s "flatpak:org.x.A" "launch" s "flatpak:org.x.A"' | bash "$here/vm-library-check.sh" steamids 2>&1)"
+[ -z "$sids" ] && pass "vm-library-check.sh steamids: none in a Flatpak-only list" || fail "vm-library-check.sh steamids: '$sids'"
+# The steam mode's unit properties are the reader's (spawner::PROFILE_SCAN_PROPERTIES), in order.
+code_props="$(sed -n '/^pub const PROFILE_SCAN_PROPERTIES/,/^];/p' "$here/../services/ruya-session/src/spawner.rs" | grep -o '"[^"]*"' | tr -d '"' | tr '\n' ' ')"
+check_props="$(sed -n 's/^scan_properties="\(.*\)"$/\1/p' "$here/vm-library-check.sh") "
+[ -n "$code_props" ] && [ "$code_props" = "$check_props" ] && pass "vm-library-check.sh steam: the reader's properties, as ruya-session runs it" || fail "vm-library-check.sh scan_properties '$check_props' are not spawner.rs's '$code_props'"
 grep -q 'no-gpg-verify' "$here/vm-play-check.sh" && fail "vm-play-check.sh mentions --no-gpg-verify" || pass "vm-play-check.sh never turns signature checks off"
 # RUY-900: the metadata generation in installed.json, read and set as the service writes the file.
 gj="$tmp/installed.json"

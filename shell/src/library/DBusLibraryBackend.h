@@ -24,8 +24,16 @@ public:
     void getRunnerChoice(const QString &profile, const QString &id) override;
     void setRunnerChoice(const QString &profile, const QString &id, const QString &choice) override;
     void resolveRunner(const QString &id, const QString &choice) override;
+    QString activeProfile() const override { return m_activeProfile; }
+
+private slots:
+    void onPropertiesChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated);
 
 private:
+    // Reads ActiveProfile (at start and whenever the service appears).
+    void fetchActive();
+    void setActive(const QString &profile);
+
     // Calls a Library1 method with args; done gets whether it answered with at least outArgs
     // arguments, and those arguments (a failure is logged with the method's name).
     using Answer = std::function<void(bool ok, const QVariantList &out)>;
@@ -33,4 +41,5 @@ private:
 
     QDBusConnection m_bus;
     QDBusServiceWatcher m_watcher;
+    QString m_activeProfile;
 };

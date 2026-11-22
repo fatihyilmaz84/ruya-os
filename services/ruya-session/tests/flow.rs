@@ -42,7 +42,9 @@ fn launch_started_stop_exited() {
                 instance,
                 app_id: APP.to_owned(),
                 exit_code: 0,
-                reason: ruya_session::session::ExitReason::Quit
+                reason: ruya_session::session::ExitReason::Quit,
+                profile: "p1".to_owned(),
+                item: format!("flatpak:{APP}")
             },
         ]
     );

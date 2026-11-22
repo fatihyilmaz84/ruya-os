@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: check choicejudge clean play playid playjudge runners runnersjudge security seed
+# modes: check choicejudge clean play playid playjudge runners runnersjudge security seed steam steamids
 # Checks ruya-library (org.ruyaos.Library1, T-112 / T-163 / T-183) inside a running VM, as root. It builds a
 # tiny signed Flatpak repository (one runtime, a game and an app, no download, like
 # vm-store-check.sh), adds it through Store1, installs and uninstalls through Store1 and watches
@@ -34,6 +34,14 @@
 #             `runnersjudge` judges ListRunners as busctl --json=short on stdin (host fixtures);
 #             `choicejudge <choice>` judges a GetRunnerChoice reply (busctl's text, `ss "ok" "<choice>"`:
 #             the contract returns status and choice) on stdin, PASS when it is ok with that choice
+#   steam     RUY-1056 (ADR-045): a Steam folder in the first profile's home (two games, a Proton tool,
+#             a manifest that is a link); signed in as that profile ListItems has exactly the two steam:
+#             items; a switch to a second profile sends ItemsChanged and leaves none; PutProfileItems and
+#             SetActiveProfile from ruya-shell are AccessDenied; ruya-library keeps ProtectHome=yes; after
+#             `systemctl restart ruya-library` the items come back without a sign-in; and a unit with the
+#             reader's properties starts in the profile's manager, with its systemd-analyze --user
+#             security. Needs two profiles; removes the folder after (also on a failure).
+#             `steamids` prints the steam: ids of a ListItems reply (busctl's text) on stdin (host fixtures)
 #   security  see vm-security-check.sh (unit hardening)
 # Boot the VM with plain smoke-test.ps1 -Keep (or -Work -Keep for the screenshot).
 set -u
@@ -364,6 +372,114 @@ runners_check() {
 }
 list_items_json() { as_shell busctl --system --json=short call "$svc" "$path" "$ifc" ListItems; }
 
+# --- steam (RUY-1056, ADR-045): the per-profile Steam reader
+# steam_ids: the distinct "steam:<digits>" item ids of a ListItems reply (busctl's text) on stdin, sorted.
+steam_ids() { grep -o '"steam:[0-9]*"' | tr -d '"' | sort -u; }
+# The reader's unit properties, as spawner::PROFILE_SCAN_PROPERTIES in ruya-session has them
+# (test-vm-checks.sh keeps the two the same): the security report is of a unit built like the reader's.
+scan_properties="MemoryMax=512M TasksMax=16 NoNewPrivileges=yes PrivateNetwork=yes RestrictAddressFamilies=none ProtectSystem=strict PrivateTmp=yes ReadOnlyPaths=%h SystemCallFilter=@system-service MemoryDenyWriteExecute=yes LockPersonality=yes RestrictNamespaces=yes CapabilityBoundingSet="
+psvc=org.ruyaos.Profiles1
+ppath=/org/ruyaos/Profiles1
+# sign_in <profile>: SwitchTo with no PIN, then the dev PIN 1234 when a PIN is asked; prints the reply.
+sign_in() {
+    local out
+    out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$1" "" 2>&1)"
+    case "$out" in *'"wrong-pin"'*|*'"pin-required"'*) out="$(busctl --system call "$psvc" "$ppath" "$psvc" SwitchTo ss "$1" 1234 2>&1)";; esac
+    echo "$out"
+}
+# wait_steam <expected ids, one per line, or ""> <seconds>: until ListItems' Steam ids are exactly those;
+# prints the seconds it took.
+wait_steam() {
+    local n=0
+    while [ "$n" -lt "$2" ]; do
+        [ "$(list_items | steam_ids)" = "$1" ] && { echo "$n"; return 0; }
+        sleep 1; n=$((n + 1))
+    done
+    return 1
+}
+steam_manifest() { # <appid> <name> <StateFlags>
+    printf '"AppState"\n{\n\t"appid"\t\t"%s"\n\t"name"\t\t"%s"\n\t"StateFlags"\t\t"%s"\n\t"LastPlayed"\t\t"1700000000"\n}\n' "$1" "$2" "$3"
+}
+# What the steam mode made in the profile's home (removed by the exit trap).
+steam_made=()
+steam_clean() {
+    [ "${#steam_made[@]}" -gt 0 ] && rm -rf "${steam_made[@]}"
+    steam_made=()
+}
+steam_check() {
+    local ids me other user home apps out before t0 s want
+    ids="$(busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | grep -o '"p[0-9]*"' | tr -d '"')"
+    me="$(echo "$ids" | head -1)"; other="$(echo "$ids" | grep -v "^$me\$" | head -1)"
+    [ -n "$me" ] && [ -n "$other" ] || { bad "two profiles are needed (vm-goto.ps1 home, then a second one)"; exit 1; }
+    user="ruya-$me"; home="$(getent passwd "$user" | cut -d: -f6)"
+    [ -d "$home" ] || { bad "no home for $user"; exit 1; }
+    echo "--- a Steam folder in $me's home: two games, a Proton tool and a linked manifest"
+    [ -e "$home/.local/share/Steam" ] && { bad "$home/.local/share/Steam exists already: not touched"; exit 1; }
+    apps="$home/.local/share/Steam/steamapps"
+    steam_made=("$home/.local/share/Steam" "$home/linked-manifest.acf")
+    runuser -u "$user" -- mkdir -p "$apps"
+    steam_manifest 70 "Half-Life" 4 | runuser -u "$user" -- tee "$apps/appmanifest_70.acf" >/dev/null
+    steam_manifest 220 "Half-Life 2" 4 | runuser -u "$user" -- tee "$apps/appmanifest_220.acf" >/dev/null
+    steam_manifest 1493710 "Proton Experimental" 4 | runuser -u "$user" -- tee "$apps/appmanifest_1493710.acf" >/dev/null
+    steam_manifest 400 "Portal" 4 | runuser -u "$user" -- tee "$home/linked-manifest.acf" >/dev/null
+    runuser -u "$user" -- ln -s "$home/linked-manifest.acf" "$apps/appmanifest_400.acf"
+    mkdir -p "$work"
+    stdbuf -oL busctl --system --json=short monitor "$svc" > "$work/signals.log" 2>&1 &
+    mon=$!
+    sleep 2
+
+    echo "--- signed in as $me: exactly the two games"
+    out="$(sign_in "$me")"
+    case "$out" in 'suu "ok"'*) ok "$me signed in";; *) bad "SwitchTo $me: $out"; exit 1;; esac
+    # When $me was in front already the sign-in changed nothing: Rescan asks for its scan (ProfileScanWanted).
+    as_shell busctl --system call "$svc" "$path" "$ifc" Rescan >/dev/null
+    want="$(printf 'steam:220\nsteam:70')"
+    s="$(wait_steam "$want" 40)" && ok "ListItems has steam:70 and steam:220 after about $s s (no Proton tool, no linked manifest)" || bad "the Steam items of $me: $(list_items | steam_ids | tr '\n' ' ')"
+    busctl --system get-property "$svc" "$path" "$ifc" ActiveProfile | grep -q "\"$me\"" && ok "ActiveProfile is $me" || bad "ActiveProfile: $(busctl --system get-property "$svc" "$path" "$ifc" ActiveProfile)"
+    journalctl -b -u ruya-session --no-pager -o cat | grep -a -E "Steam reader of $me took|Steam items of $me put" | tail -2
+
+    echo "--- switch to $other: ItemsChanged, no Steam item"
+    before="$(signals)"
+    out="$(sign_in "$other")"
+    case "$out" in 'suu "ok"'*) ok "$other signed in";; *) bad "SwitchTo $other: $out";; esac
+    s="$(wait_steam "" 30)" && ok "no Steam item for $other after about $s s" || bad "Steam items for $other: $(list_items | steam_ids | tr '\n' ' ')"
+    sleep 1
+    [ "$(signals)" -gt "$before" ] && ok "ItemsChanged fired on the switch" || bad "no ItemsChanged on the switch"
+
+    echo "--- the root-only members are refused to ruya-shell"
+    if out="$(as_shell busctl --system call "$svc" "$path" "$ifc" PutProfileItems ss "$me" '{"version":1,"items":[]}' 2>&1)"; then
+        bad "ruya-shell could call PutProfileItems: $out"
+    else
+        case "$out" in *"ccess denied"*|*AccessDenied*) ok "PutProfileItems from ruya-shell: AccessDenied";; *) bad "PutProfileItems from ruya-shell failed otherwise: $out";; esac
+    fi
+    if out="$(as_shell busctl --system call "$svc" "$path" "$ifc" SetActiveProfile s "$me" 2>&1)"; then
+        bad "ruya-shell could call SetActiveProfile: $out"
+    else
+        case "$out" in *"ccess denied"*|*AccessDenied*) ok "SetActiveProfile from ruya-shell: AccessDenied";; *) bad "SetActiveProfile from ruya-shell failed otherwise: $out";; esac
+    fi
+
+    echo "--- ruya-library reads no home"
+    [ "$(systemctl show -p ProtectHome --value ruya-library)" = yes ] && ok "ruya-library has ProtectHome=yes" || bad "ProtectHome: $(systemctl show -p ProtectHome --value ruya-library)"
+
+    echo "--- a restarted ruya-library gets $me's items back without a sign-in"
+    out="$(sign_in "$me")"
+    wait_steam "$want" 40 >/dev/null || bad "$me's items did not come back on the sign-in"
+    t0="$(date +%s)"
+    systemctl restart ruya-library
+    s="$(wait_steam "$want" 60)" && ok "the two games are back after about $s s, no sign-in" || bad "after the restart: $(list_items | steam_ids | tr '\n' ' ')"
+    journalctl -b -u ruya-session --since "@$t0" --no-pager -o cat | grep -a -E "Steam reader|Steam items" | tail -3
+    kill "$mon" 2>/dev/null; mon=""
+
+    echo "--- the reader's unit hardening (a unit built like it, in $me's manager)"
+    local props=() p uid
+    for p in $scan_properties; do props+=("--property=$p"); done
+    systemd-run --user --machine="$user@.host" --quiet --unit=ruya-scan-security-check --property=RemainAfterExit=yes "${props[@]}" -- /bin/true \
+        && ok "a unit with every reader property starts (none refused by the user manager)" || bad "the user manager refused a reader property (see the journal)"
+    uid="$(id -u "$user")"
+    runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" systemd-analyze --user security ruya-scan-security-check.service | tail -3
+    systemctl --user --machine="$user@.host" stop ruya-scan-security-check.service >/dev/null 2>&1
+}
+
 clean_all() {
     flatpak uninstall --system -y "$game" "$notes" "$rt" >/dev/null 2>&1
     flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
@@ -387,6 +503,7 @@ play_clean() {
 }
 on_exit() {
     [ -n "$mon" ] && kill "$mon" 2>/dev/null
+    steam_clean
     [ -n "${play_id:-}" ] && play_clean
     if [ "$need_clean" = 1 ] && { [ "$keep_on_success" = 0 ] || [ "$fail" != 0 ]; }; then
         echo "--- clean up (trap)"
@@ -413,6 +530,12 @@ runners)
     ;;
 runnersjudge)
     runners_judge
+    ;;
+steam)
+    steam_check
+    ;;
+steamids)
+    steam_ids; exit 0 # ids only, no verdict line
     ;;
 choicejudge)
     choice_judge "${2:?choice}" && ok "the reply is ok with the choice ${2}" || bad "the reply is not ok with the choice ${2}"
@@ -449,7 +572,8 @@ check)
         echo "$base" | grep -q "\"flatpak:$id\"" || { echo "missing: $id"; missing=1; }
     done
     [ "$missing" = 0 ] && ok "ListItems has every app of 'flatpak list --system --app'" || bad "ListItems misses installed apps"
-    echo "$base" | grep -q '"steam:' && bad "a Steam item in the image" || ok "no Steam items (the Steam source is off in the image)"
+    # Steam items are per profile (RUY-1056, the steam mode); a fresh image's profiles have no Steam folder.
+    echo "$base" | grep -q '"steam:' && bad "a Steam item without a profile Steam folder" || ok "no Steam items (no profile has a Steam folder yet)"
     echo "$base" | grep -q "$game" && bad "the test game is there before it is installed" || ok "the test game is not installed yet"
 
     echo "--- build a signed test repository"

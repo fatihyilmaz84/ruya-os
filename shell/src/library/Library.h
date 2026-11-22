@@ -36,6 +36,10 @@ class Library : public QObject
     // Whose runner choices the choice calls read and store (Shell binds the signed-in profile, as it
     // does NotificationCentre's; "" = nobody, and Library1 refuses the calls as "invalid").
     Q_PROPERTY(QString profile READ profile WRITE setProfile NOTIFY profileChanged)
+    // Library1 ActiveProfile (ADR-045): whose Steam items the service lists, "" for nobody. While it is
+    // not `profile` (and `profile` is not ""), items, games and recent hold no Steam item, so no profile
+    // sees another's games during a switch; the list is read again when it changes.
+    Q_PROPERTY(QString activeProfile READ activeProfile NOTIFY activeProfileChanged)
 
 public:
     explicit Library(std::unique_ptr<LibraryBackend> backend, QObject *parent = nullptr);
@@ -51,6 +55,7 @@ public:
     QVariantList runners() const { return m_runners; }
     QString profile() const { return m_profile; }
     void setProfile(const QString &profile);
+    QString activeProfile() const { return m_backend->activeProfile(); }
 
     // The signed-in profile's runner choice for a .play item (Library1, RUY-959, RUY-905): "package",
     // "bundled" or "system". The choice calls follow `profile`, so QML never passes a profile id. Each
@@ -104,6 +109,7 @@ signals:
     void launchRequested(const QString &id, const QString &launchSpec);
     void runnersChanged();
     void profileChanged();
+    void activeProfileChanged();
     // The choice signals are the signed-in profile's only.
     void runnerChoiceAnswered(const QString &id, const QString &status, const QString &choice);
     void runnerChoiceSet(const QString &id, const QString &choice, const QString &status);
@@ -112,7 +118,12 @@ signals:
     void runnerChoiceChanged(const QString &id, const QString &choice);
 
 private:
+    // items, games and recent from the last list, its Steam items left out while the service's active
+    // profile is not the signed-in one. itemsChanged after every list, otherwise only when they differ.
+    void rebuild(bool listed);
+
     std::unique_ptr<LibraryBackend> m_backend;
+    QList<LibraryItem> m_listed; // the last list, sorted
     QVariantList m_items;
     QVariantList m_games;
     QVariantList m_recent;

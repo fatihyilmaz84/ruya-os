@@ -7,6 +7,15 @@
 #include <QTimer>
 
 namespace {
+// Steam items are per profile (ADR-045). The mock's three profiles (Player One, Ada, Sam) have the default
+// Steam games, which the shell's tests sign in for, and so does nobody (""), for the tests that build a page
+// without a signed-in Shell; a profile made later (p4 on) has none. (The service lists none for nobody.)
+bool hasSteamGames(const QString &profile)
+{
+    static const QStringList profiles = {QString(), QStringLiteral("p1"), QStringLiteral("p2"), QStringLiteral("p3")};
+    return profiles.contains(profile);
+}
+
 LibraryItem item(const char *id, const char *kind, const char *title, qlonglong lastPlayed)
 {
     LibraryItem i;
@@ -320,11 +329,37 @@ void MockLibraryBackend::listItems()
     listItemsDelayed(0);
 }
 
+QList<LibraryItem> MockLibraryBackend::visibleItems() const
+{
+    if (hasSteamGames(m_active))
+        return m_items;
+    QList<LibraryItem> out;
+    for (const LibraryItem &i : m_items) {
+        if (i.source != QLatin1String("steam"))
+            out.append(i);
+    }
+    return out;
+}
+
+void MockLibraryBackend::profileSelected(const QString &profile)
+{
+    // As ruya-session: SetActiveProfile after the switch, then ItemsChanged when the list differs.
+    QTimer::singleShot(0, this, [this, profile] {
+        if (profile == m_active)
+            return;
+        const bool before = hasSteamGames(m_active);
+        m_active = profile;
+        emit activeProfileChanged(profile);
+        if (before != hasSteamGames(m_active))
+            emit itemsChanged();
+    });
+}
+
 void MockLibraryBackend::listItemsDelayed(int ms)
 {
     const quint64 request = beginListRequest();
     ++m_pending;
-    QTimer::singleShot(ms, this, [this, request, snapshot = m_items] {
+    QTimer::singleShot(ms, this, [this, request, snapshot = visibleItems()] {
         --m_pending;
         deliverList(request, snapshot);
     });

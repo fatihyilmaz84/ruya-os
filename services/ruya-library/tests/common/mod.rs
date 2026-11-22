@@ -37,7 +37,7 @@ pub fn put(path: &Path, bytes: &[u8]) {
 
 /// What `scan` finds in `root` for the `flatpak list` rows, by item id.
 pub fn list(root: &Path, rows: &str) -> HashMap<String, Item> {
-    scan(&[], &FixtureLister::new(rows), root, &root.join("runners"))
+    scan(&FixtureLister::new(rows), root, &root.join("runners"))
         .into_iter()
         .map(|i| (i.id.clone(), i))
         .collect()

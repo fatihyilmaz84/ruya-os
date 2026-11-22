@@ -27,7 +27,6 @@ fn rows() -> String {
 fn library(root: &Path, state: &Path) -> LibraryIface {
     full_deployment(root);
     LibraryIface::new(Sources {
-        steam_roots: Vec::new(),
         lister: Box::new(FixtureLister::new(&rows())),
         play_root: root.to_path_buf(),
         play_runners: root.join("runners"),
@@ -106,7 +105,6 @@ fn resolve_runner_package_is_what_the_item_says() {
     let (root, state) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let lib = library(root.path(), state.path());
     let item = scan(
-        &[],
         &FixtureLister::new(&rows()),
         root.path(),
         &root.path().join("runners"),

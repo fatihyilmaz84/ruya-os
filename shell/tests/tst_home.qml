@@ -40,6 +40,10 @@ Item {
             tryCompare(Profiles, "activeProfile", "p2")
             tryVerify(() => find("homePlay").activeFocus, 2000, "Play takes focus after sign-in")
             tryVerify(() => Library.available)
+            // ADR-045: the Steam items are hidden until Library1 serves Ada's view, then listed again.
+            tryCompare(Library, "activeProfile", "p2")
+            if (scenario !== "empty")
+                tryVerify(() => Library.items.some(i => i.source === "steam"), 2000, "Ada's Steam games are listed")
             if (scenario === "empty")
                 tryVerify(() => Library.items.length === 0)
             else if (scenario === "unplayed")
