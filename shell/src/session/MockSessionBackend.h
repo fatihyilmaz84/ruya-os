@@ -56,7 +56,6 @@ public:
     bool isMock() const override { return true; }
     void refresh() override;
     void launch(const QString &appId, const QString &profile) override;
-    void launchItem(const QString &item, const QString &profile) override;
     void stop(const QString &instance) override;
     void kill(const QString &instance) override;
     void freeze(const QString &instance) override;
@@ -83,7 +82,10 @@ public:
     QStringList calls() const { return m_calls; }
     // The pid of a launched instance's process (from 4001 up), 0 for an unknown instance.
     int pidOf(const QString &instance) const;
-    // A Steam game `item` starts under the running instance `parentInstance`; its instance, or "" (ADR-041).
+
+    // Items and children (ADR-041): LaunchItem as ruya-session answers it, and the seam for a Steam game.
+    void launchItem(const QString &item, const QString &profile) override;
+    // A Steam game `item` starts under the running instance `parentInstance`; its instance, or "".
     QString startChild(const QString &parentInstance, const QString &item);
     // A child ends by itself (AppExited "quit"); nothing for any other instance.
     void endChild(const QString &instance);

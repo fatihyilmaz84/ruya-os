@@ -1056,7 +1056,7 @@ mod tests {
         let mut t = Tracker::new(MemStore::default(), FixedZone(3 * 3600));
         let mut c = Clock::new();
         c.wall = i64::from(days_from_civil(2026, 11, 7)) * 86_400 + 21 * 3600 + 30 * 60; // 21:30 UTC
-        t.app_started(&live(IA, "p1", A, c.wall), c.now());
+        start(&mut t, &c, IA, "p1", A);
         run(&mut t, &mut c, 3600, "p1", Some(IA), Attention::Active); // to 22:30 UTC = 01:30 local
         t.app_exited(IA, Some(EndReason::Quit), c.now(), c.wall);
         let (today, rows) = t.totals("p1", "", "", c.wall).unwrap_or_default();
@@ -1074,7 +1074,7 @@ mod tests {
         let mut t = Tracker::new(MemStore::default(), FixedZone(3 * 3600));
         let mut c = Clock::new();
         c.wall = i64::from(days_from_civil(2026, 11, 7)) * 86_400 + 20 * 3600 + 30 * 60;
-        t.app_started(&live(IA, "p1", A, c.wall), c.now());
+        start(&mut t, &c, IA, "p1", A);
         run(&mut t, &mut c, 7200, "p1", Some(IA), Attention::Active);
         t.app_exited(IA, Some(EndReason::Quit), c.now(), c.wall);
         let (_, rows) = t
