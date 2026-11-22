@@ -1147,7 +1147,7 @@ Item {
             }
         }
         // RUY-52: Manage profiles with the Add form open and a result message (English and Turkish).
-        function messageShots(lang) {
+        function messageShots(dir, lang) {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             Notifications.pending = []
@@ -1163,13 +1163,13 @@ Item {
                 keyClick(Qt.Key_Return)
                 tryVerify(() => find("profilesMessage").visible)
                 wait(600)
-                grabImage(tc.shell).save(shotsDir + "/27-profiles-message-add-form-" + lang + ".png")
+                grabImage(tc.shell).save(dir + "28-profiles-message-add-form-" + lang + ".png")
             } finally {
                 DeviceSettings.language = "en"
             }
         }
-        function test_zz_screenshots_message_add_form_en() { messageShots("en") }
-        function test_zz_screenshots_message_add_form_tr() { messageShots("tr") }
+        function test_zz_screenshots_message_add_form_en() { messageShots(shotsDir + "/", "en") }
+        function test_zz_screenshots_message_add_form_tr() { messageShots(shotsDir + "/", "tr") }
         function test_zz_screenshots_profile_page_en_1080() { profilePageShots(shotsDir + "/", "en", 1920, 1080) }
         function test_zz_screenshots_profile_page_tr_1080() { profilePageShots(shotsDir + "/", "tr", 1920, 1080) }
         function test_zz_screenshots_profile_page_en_720() { profilePageShots(shotsDir + "/", "en", 1280, 720) }
