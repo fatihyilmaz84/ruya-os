@@ -68,11 +68,26 @@ pub struct Keyfile {
 }
 
 impl Keyfile {
+    /// The strict reader, for files RuyaOS owns (the image's tables): a duplicate group or key is
+    /// an error.
     pub fn parse(text: &str) -> Result<Keyfile, KeyfileError> {
+        Self::read(text, true)
+    }
+
+    /// GKeyFile's own reading, for files others write (Flatpak metadata, which `flatpak run`
+    /// reads the same way): a repeated group merges into the first and the last value of a key
+    /// wins. Lines that are no group, key or comment, and the size cap, are still errors.
+    pub fn parse_lenient(text: &str) -> Result<Keyfile, KeyfileError> {
+        Self::read(text, false)
+    }
+
+    fn read(text: &str, strict: bool) -> Result<Keyfile, KeyfileError> {
         if text.len() > MAX_BYTES {
             return Err(KeyfileError::TooLarge);
         }
         let mut groups: Vec<Group> = Vec::new();
+        // The index of the group the next keys belong to.
+        let mut current: Option<usize> = None;
         for (index, raw) in text.lines().enumerate() {
             let number = index + 1;
             let line = raw.trim();
@@ -84,12 +99,17 @@ impl Keyfile {
                     .strip_suffix(']')
                     .filter(|n| !n.is_empty() && !n.contains(['[', ']']))
                     .ok_or(KeyfileError::Syntax(number))?;
-                if groups.iter().any(|g| g.name == name) {
-                    return Err(KeyfileError::DuplicateGroup(name.to_owned()));
-                }
-                groups.push(Group {
-                    name: name.to_owned(),
-                    entries: Vec::new(),
+                let known = groups.iter().position(|g| g.name == name);
+                current = Some(match known {
+                    Some(_) if strict => return Err(KeyfileError::DuplicateGroup(name.to_owned())),
+                    Some(at) => at,
+                    None => {
+                        groups.push(Group {
+                            name: name.to_owned(),
+                            entries: Vec::new(),
+                        });
+                        groups.len() - 1
+                    }
                 });
                 continue;
             }
@@ -98,18 +118,19 @@ impl Keyfile {
             if key.is_empty() {
                 return Err(KeyfileError::Syntax(number));
             }
-            let group = groups
-                .last_mut()
-                .ok_or(KeyfileError::KeyOutsideGroup(number))?;
-            if group.get(key).is_some() {
-                return Err(KeyfileError::DuplicateKey(
-                    group.name.clone(),
-                    key.to_owned(),
-                ));
+            let at = current.ok_or(KeyfileError::KeyOutsideGroup(number))?;
+            let group = &mut groups[at];
+            let value = value.trim().to_owned();
+            match group.entries.iter_mut().find(|(k, _)| k == key) {
+                Some(_) if strict => {
+                    return Err(KeyfileError::DuplicateKey(
+                        group.name.clone(),
+                        key.to_owned(),
+                    ))
+                }
+                Some(entry) => entry.1 = value,
+                None => group.entries.push((key.to_owned(), value)),
             }
-            group
-                .entries
-                .push((key.to_owned(), value.trim().to_owned()));
         }
         Ok(Keyfile { groups })
     }
@@ -177,6 +198,35 @@ mod tests {
             Keyfile::parse("[G]\n[G]\n"),
             Err(KeyfileError::DuplicateGroup("G".into()))
         );
+    }
+
+    #[test]
+    fn the_lenient_reader_reads_as_gkeyfile_does() {
+        let kf = Keyfile::parse_lenient("[G]\na=1\nb=x\na=2\n[H]\nc=3\n[G]\nd=4\na=5\n")
+            .expect("parses");
+        // The last value wins, a repeated group merges, the order of first appearance is kept.
+        assert_eq!(kf.get("G", "a"), Some("5"));
+        assert_eq!(kf.get("G", "b"), Some("x"));
+        assert_eq!(kf.get("G", "d"), Some("4"));
+        assert_eq!(kf.groups().len(), 2);
+        assert_eq!(
+            kf.group("G").expect("group").keys().collect::<Vec<_>>(),
+            ["a", "b", "d"]
+        );
+        // The same text is refused by the strict reader.
+        assert!(Keyfile::parse("[G]\na=1\na=2\n").is_err());
+        assert!(Keyfile::parse("[G]\n[G]\n").is_err());
+        // What GKeyFile also refuses stays refused, and so does the cap.
+        assert_eq!(
+            Keyfile::parse_lenient("[G]\nnonsense\n"),
+            Err(KeyfileError::Syntax(2))
+        );
+        assert_eq!(
+            Keyfile::parse_lenient("a=1\n"),
+            Err(KeyfileError::KeyOutsideGroup(1))
+        );
+        let over = format!("[G]\nk={}\n", "x".repeat(MAX_BYTES));
+        assert_eq!(Keyfile::parse_lenient(&over), Err(KeyfileError::TooLarge));
     }
 
     #[test]

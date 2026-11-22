@@ -72,14 +72,20 @@ const SATELLITE_FILE: &str = "satellite";
 /// The private datagram socket the satellite's `READY=1` (sd_notify) goes to.
 const NOTIFY_FILE: &str = "notify";
 
-/// The `[Context] sockets` list of a Flatpak metadata file (`a;b;!c;`); a `!` entry removes. A
-/// file the keyfile reader refuses counts as no sockets (so the app runs on Wayland).
+/// The `[Context] sockets` list of a Flatpak metadata file (`a;b;!c;`); a `!` entry removes. Read
+/// as GKeyFile (and so `flatpak run`) reads it: the last `sockets=` wins. A file that cannot be
+/// parsed at all (over the cap, a broken line) is logged and counts as no sockets, so the app runs
+/// on Wayland.
 pub fn context_sockets(metadata: &str) -> Vec<String> {
     let mut sockets: Vec<String> = Vec::new();
-    let Some(value) = Keyfile::parse(metadata)
-        .ok()
-        .and_then(|file| file.get("Context", "sockets").map(str::to_owned))
-    else {
+    let file = match Keyfile::parse_lenient(metadata) {
+        Ok(file) => file,
+        Err(e) => {
+            eprintln!("ruya-session: the Flatpak metadata cannot be parsed ({e}); no sockets");
+            return sockets;
+        }
+    };
+    let Some(value) = file.get("Context", "sockets") else {
         return sockets;
     };
     for entry in value.split(';').map(str::trim).filter(|e| !e.is_empty()) {
@@ -855,14 +861,23 @@ mod tests {
         assert!(needs_x11(&meta("wayland;"), Some(Display::X11)));
         assert!(!needs_x11(&meta("x11;"), Some(Display::Wayland)));
         assert!(!needs_x11(&meta("x11;"), Some(Display::Gamescope)));
-        // Metadata the keyfile reader refuses (a duplicate key) counts as no sockets.
-        assert!(!needs_x11(
-            "[Context]
-sockets=x11;
-sockets=x11;
-",
+        // Read as GKeyFile reads it: the last `sockets=` wins, a repeated group merges.
+        assert!(needs_x11(
+            "[Context]\nsockets=wayland;\nsockets=x11;\n",
             None
         ));
+        assert!(!needs_x11(
+            "[Context]\nsockets=x11;\nsockets=wayland;\n",
+            None
+        ));
+        assert!(needs_x11(
+            "[Context]\nshared=ipc;\n[Application]\nname=a\n[Context]\nsockets=x11;\n",
+            None
+        ));
+        // Metadata that cannot be parsed at all (a broken line, over the cap) counts as no sockets.
+        assert!(!needs_x11("[Context]\nsockets=x11;\nnonsense\n", None));
+        let huge = format!("[Context]\nsockets={}\n", "x11;".repeat(20_000));
+        assert!(context_sockets(&huge).is_empty());
     }
 
     #[test]
@@ -870,17 +885,12 @@ sockets=x11;
         // The shipped table, against the Steam Flatpak's real sockets (Flathub, 2026-11-17): it
         // lists wayland too, so without the table's display Steam would start without a DISPLAY.
         let table = AppTable::load(&crate::apps::tests::image_dir());
-        let steam = "[Context]
-shared=ipc;network;
-sockets=pulseaudio;wayland;x11;
-";
+        let steam = "[Context]\nshared=ipc;network;\nsockets=pulseaudio;wayland;x11;\n";
         let id = "com.valvesoftware.Steam";
         assert!(!needs_x11(steam, None));
         assert!(needs_x11(steam, table.display(id)));
         assert!(!needs_x11(
-            "[Context]
-sockets=wayland;
-",
+            "[Context]\nsockets=wayland;\n",
             table.display(APP)
         ));
     }
@@ -891,21 +901,9 @@ sockets=wayland;
         let _ = std::fs::remove_dir_all(&root);
         let meta = metadata_path(&root, APP);
         std::fs::create_dir_all(meta.parent().expect("parent")).expect("dirs");
-        std::fs::write(
-            &meta,
-            "[Context]
-sockets=x11;
-",
-        )
-        .expect("write");
+        std::fs::write(&meta, "[Context]\nsockets=x11;\n").expect("write");
         assert!(display_mode_x11(&root, APP, None));
-        std::fs::write(
-            &meta,
-            "[Context]
-sockets=wayland;
-",
-        )
-        .expect("write");
+        std::fs::write(&meta, "[Context]\nsockets=wayland;\n").expect("write");
         assert!(!display_mode_x11(&root, APP, None));
         assert!(display_mode_x11(&root, APP, Some(Display::X11)));
         assert!(!display_mode_x11(&root, "org.ruyaos.Racer", None));

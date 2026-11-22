@@ -815,7 +815,7 @@ function Test-Ids {
 
 # The rules live in scripts\lint-app-table.ps1 (shared with CI): per-app launch behaviour is one table (RUY-1050, ADR-043).
 function Test-AppTable {
-    Step "app table lint (no app-args or x11-apps: a per-app behaviour is a key in the apps table)"
+    Step "app table lint (the two retired per-app files stay gone: a per-app behaviour is a key in the apps table)"
     & (Join-Path $PSScriptRoot "lint-app-table.ps1")
     Record "app table lint" ($LASTEXITCODE -eq 0)
     & (Join-Path $PSScriptRoot "lint-app-table.ps1") -SelfTest

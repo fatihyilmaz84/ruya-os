@@ -11,7 +11,7 @@ param([switch]$SelfTest, [string]$Root = "")
 $Repo = Split-Path -Parent $PSScriptRoot
 if (-not $Root) { $Root = $Repo }
 $Pattern = '\b(app-args|x11-apps)\b'
-$Skip = '\\(target|build|build-win|node_modules|\.git)\\'
+$Skip = '[\\/](target|build|build-win|node_modules|\.git)[\\/]'
 
 function Find-OldTableNames([string]$root) {
     $hits = New-Object System.Collections.Generic.List[string]
@@ -20,7 +20,7 @@ function Find-OldTableNames([string]$root) {
         if (-not (Test-Path $path)) { continue }
         foreach ($f in Get-ChildItem $path -Recurse -File -ErrorAction SilentlyContinue) {
             if ($f.FullName -match $Skip) { continue }
-            if ($f.Name -eq "lint-app-table.ps1" -or $f.Name -eq "dev.ps1") { continue }
+            if ($f.Name -eq "lint-app-table.ps1") { continue }
             if ($f.Length -gt 2MB) { continue }
             $n = 0
             foreach ($line in [IO.File]::ReadLines($f.FullName)) {

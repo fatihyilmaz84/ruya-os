@@ -16,7 +16,8 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use ruya_flatpak::valid_session_app_id;
-use ruya_keyfile::Keyfile;
+use ruya_fs::Dir;
+use ruya_keyfile::{Keyfile, MAX_BYTES};
 
 use crate::spawner::valid_app_arg;
 
@@ -111,11 +112,14 @@ impl AppTable {
     /// listed in `problems` and gives its app no entry.
     pub fn load(dir: &Path) -> AppTable {
         let mut table = AppTable::default();
-        let Ok(read) = std::fs::read_dir(dir) else {
+        let Ok(folder) = Dir::open(dir) else {
             return table;
         };
-        for item in read.flatten() {
-            let name = item.file_name().to_string_lossy().into_owned();
+        let Ok(items) = folder.entries(Path::new("")) else {
+            return table;
+        };
+        for (os_name, _) in items {
+            let name = os_name.to_string_lossy().into_owned();
             let Some(id) = name.strip_suffix(EXTENSION) else {
                 table.problems.push(format!("{name}: not a .conf file"));
                 continue;
@@ -126,8 +130,15 @@ impl AppTable {
                     .push(format!("{name}: the name is not a Flatpak id"));
                 continue;
             }
-            let text = match std::fs::read_to_string(item.path()) {
-                Ok(text) => text,
+            // Capped, and never through a link.
+            let text = match folder.read(Path::new(&os_name), MAX_BYTES as u64) {
+                Ok(bytes) => match String::from_utf8(bytes) {
+                    Ok(text) => text,
+                    Err(_) => {
+                        table.problems.push(format!("{name}: not UTF-8"));
+                        continue;
+                    }
+                },
                 Err(e) => {
                     table.problems.push(format!("{name}: {e}"));
                     continue;
