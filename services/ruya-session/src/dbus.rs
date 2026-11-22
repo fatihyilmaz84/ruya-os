@@ -18,7 +18,7 @@ use crate::spawner::{flatpak_app_version, Listing, Spawner, UnitEvent};
 use crate::usage::{DayRow, EndReason, SessionRecord, SystemZone, MAX_LIST};
 use crate::usage_store::FileStore;
 use crate::usage_tracker::{clear_route, may_read, Attention, ClearRoute, LiveApp, Tracker};
-use ruya_ids::valid_profile_id;
+use ruya_ids::{parse_item, valid_profile_id, ItemId};
 
 pub const BUS_NAME: &str = "org.ruyaos.Session1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Session1";
@@ -202,6 +202,8 @@ pub fn running_dict(app: RunningApp) -> Dict {
     [
         ("instance", Value::from(app.instance)),
         ("app_id", Value::from(app.app_id)),
+        ("item", Value::from(app.item)),
+        ("parent", Value::from(app.parent)),
         ("profile", Value::from(app.profile)),
         ("started", Value::from(app.started)),
         ("state", Value::from(app.state.as_str())),
@@ -269,6 +271,7 @@ fn live_app(a: &RunningApp) -> LiveApp {
         instance: a.instance.clone(),
         profile: a.profile.clone(),
         app_id: a.app_id.clone(),
+        item: a.item.clone(),
         started: a.started,
     }
 }
@@ -425,6 +428,7 @@ pub fn session_dict(s: SessionRecord) -> Dict {
     dict_of([
         ("day", Value::from(day)),
         ("app_id", Value::from(s.app_id)),
+        ("item", Value::from(s.item)),
         ("app_version", Value::from(s.app_version)),
         ("start", Value::from(s.start)),
         ("end", Value::from(s.end)),
@@ -434,9 +438,10 @@ pub fn session_dict(s: SessionRecord) -> Dict {
     ])
 }
 
-fn row_dict(r: DayRow) -> Dict {
+pub fn row_dict(r: DayRow) -> Dict {
     dict_of([
         ("app_id", Value::from(r.app_id)),
+        ("item", Value::from(r.item)),
         ("day", Value::from(crate::usage::format_day(r.day))),
         ("seconds", Value::from(r.seconds)),
         ("sessions", Value::from(r.sessions)),
@@ -518,26 +523,13 @@ impl SessionIface {
         status.as_str().to_owned()
     }
 
-    /// The status for a read of `profile`'s history, or `None` when it is allowed.
-    async fn read_gate(&self, profile: &str, connection: &Connection) -> Option<&'static str> {
-        if !valid_profile_id(profile) {
-            return Some("invalid");
-        }
-        match self.active(connection).await {
-            Err(()) => Some("failed"),
-            Ok(active) if !may_read(profile, active.as_deref()) => Some("not-allowed"),
-            Ok(_) => None,
-        }
-    }
-}
-
-#[interface(name = "org.ruyaos.Session1")]
-impl SessionIface {
-    async fn launch(
+    /// `Launch(app_id, profile)`, and `LaunchItem` of a Flatpak item: the one launch path
+    /// (RUY-1051).
+    async fn launch_app(
         &self,
         app_id: &str,
         profile: &str,
-        #[zbus(connection)] connection: &Connection,
+        connection: &Connection,
     ) -> (String, String) {
         if self.system {
             match fetch_profile_ids(connection).await {
@@ -560,6 +552,48 @@ impl SessionIface {
         let (status, instance) =
             lock(&self.session).launch(app_id, profile, unix_now(), &launch_args);
         (status.as_str().to_owned(), instance)
+    }
+
+    /// The status for a read of `profile`'s history, or `None` when it is allowed.
+    async fn read_gate(&self, profile: &str, connection: &Connection) -> Option<&'static str> {
+        if !valid_profile_id(profile) {
+            return Some("invalid");
+        }
+        match self.active(connection).await {
+            Err(()) => Some("failed"),
+            Ok(active) if !may_read(profile, active.as_deref()) => Some("not-allowed"),
+            Ok(_) => None,
+        }
+    }
+}
+
+#[interface(name = "org.ruyaos.Session1")]
+impl SessionIface {
+    async fn launch(
+        &self,
+        app_id: &str,
+        profile: &str,
+        #[zbus(connection)] connection: &Connection,
+    ) -> (String, String) {
+        self.launch_app(app_id, profile, connection).await
+    }
+
+    /// ADR-041 point 3: a Flatpak item is `Launch`; a Steam game goes to the core, which answers
+    /// "failed" until RUY-1052 builds its child instance.
+    async fn launch_item(
+        &self,
+        item: &str,
+        profile: &str,
+        #[zbus(connection)] connection: &Connection,
+    ) -> (String, String) {
+        match parse_item(item) {
+            Some(ItemId::Flatpak(app_id)) => self.launch_app(app_id, profile, connection).await,
+            Some(ItemId::Steam(appid)) => {
+                let (status, instance) = lock(&self.session).launch_steam_game(appid, profile);
+                (status.as_str().to_owned(), instance)
+            }
+            None => ("invalid".to_owned(), String::new()),
+        }
     }
 
     async fn stop(
@@ -977,22 +1011,18 @@ pub async fn forward(
                 Notice::Exited { .. } => None,
             };
             let changed = match &notice {
-                Notice::Started { instance, app_id } => {
-                    let profile = lock(&session)
+                Notice::Started { instance, .. } => {
+                    let app = lock(&session)
                         .list()
                         .into_iter()
-                        .find(|a| &a.instance == instance)
-                        .map(|a| a.profile);
-                    if let Some(profile) = profile {
-                        let version = flatpak_app_version(Path::new(FLATPAK_ROOT), app_id);
-                        usage_lock(&usage).app_started(
-                            instance,
-                            &profile,
-                            app_id,
-                            &version,
-                            Instant::now(),
-                            unix_now(),
-                        );
+                        .find(|a| &a.instance == instance);
+                    if let Some(app) = app {
+                        // The run is dated from now, when it reached `running`.
+                        let live = LiveApp {
+                            started: unix_now(),
+                            ..live_app(&app)
+                        };
+                        usage_lock(&usage).app_started(&live, Instant::now());
                     }
                     None
                 }

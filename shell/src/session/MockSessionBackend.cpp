@@ -7,11 +7,29 @@ namespace {
 const QString Crashy = QStringLiteral("crashy");
 const QString NoLaunch = QStringLiteral("nolaunch");
 
+const QString FlatpakItem = QStringLiteral("flatpak:");
+const QString SteamItem = QStringLiteral("steam:");
+
 // The mock apps, and the .play games of the mock Library (a .play game is a Flatpak app, RUY-905).
 bool installed(const QString &appId)
 {
     return appId == Crashy || appId == NoLaunch || appId.startsWith(QLatin1String("org.example."))
            || appId.startsWith(QLatin1String("play.com.example."));
+}
+
+// "steam:<appid>" with 1 to 10 digits, as ruya-ids' parse_item.
+bool isSteamItem(const QString &item)
+{
+    if (!item.startsWith(SteamItem))
+        return false;
+    const QString appid = item.mid(SteamItem.size());
+    if (appid.isEmpty() || appid.size() > 10)
+        return false;
+    for (const QChar c : appid) {
+        if (c < QLatin1Char('0') || c > QLatin1Char('9'))
+            return false;
+    }
+    return true;
 }
 } // namespace
 
@@ -74,6 +92,28 @@ void MockSessionBackend::refresh()
 
 void MockSessionBackend::launch(const QString &appId, const QString &profile)
 {
+    QString instance;
+    const QString status = start(appId, profile, &instance);
+    QTimer::singleShot(0, this, [this, appId, profile, status, instance] {
+        emit launchFinished(appId, profile, status, instance);
+    });
+}
+
+void MockSessionBackend::launchItem(const QString &item, const QString &profile)
+{
+    QString status = QStringLiteral("invalid");
+    QString instance;
+    if (item.startsWith(FlatpakItem) && item.size() > FlatpakItem.size())
+        status = start(item.mid(FlatpakItem.size()), profile, &instance);
+    else if (isSteamItem(item) && !profile.isEmpty())
+        status = QStringLiteral("failed");     // Steam children arrive with RUY-1052
+    QTimer::singleShot(0, this, [this, item, profile, status, instance] {
+        emit launchItemFinished(item, profile, status, instance);
+    });
+}
+
+QString MockSessionBackend::start(const QString &appId, const QString &profile, QString *instance)
+{
     QString status = QStringLiteral("ok");
     if (appId.isEmpty() || profile.isEmpty())
         status = QStringLiteral("invalid");
@@ -87,23 +127,64 @@ void MockSessionBackend::launch(const QString &appId, const QString &profile)
                 status = QStringLiteral("already-running");
         }
     }
-    if (status != QLatin1String("ok")) {
-        QTimer::singleShot(0, this, [this, appId, profile, status] { emit launchFinished(appId, profile, status, {}); });
-        return;
-    }
+    if (status != QLatin1String("ok"))
+        return status;
 
     RunningApp r;
     r.instance = QStringLiteral("mock-%1.%2").arg(m_next++).arg(appId);
     r.appId = appId;
+    r.item = FlatpakItem + appId;
     r.profile = profile;
     r.started = QDateTime::currentSecsSinceEpoch();
     r.pid = 4000 + m_next - 1;
     m_running.append(r);
-    const QString instance = r.instance;
-    QTimer::singleShot(0, this, [this, appId, profile, instance] {
-        emit launchFinished(appId, profile, QStringLiteral("ok"), instance);
-    });
-    QTimer::singleShot(m_startMs, this, [this, instance] { setRunning(instance); });
+    *instance = r.instance;
+    const QString started = r.instance;
+    QTimer::singleShot(m_startMs, this, [this, started] { setRunning(started); });
+    return status;
+}
+
+QString MockSessionBackend::startChild(const QString &parentInstance, const QString &item)
+{
+    const int p = indexOf(parentInstance);
+    if (p < 0 || !m_running.at(p).parent.isEmpty() || m_running.at(p).state != QLatin1String("running")
+        || !isSteamItem(item))
+        return {};
+    RunningApp child;
+    child.instance = QStringLiteral("mock-%1.%2").arg(m_next++).arg(item);
+    child.appId = m_running.at(p).appId;
+    child.item = item;
+    child.parent = parentInstance;
+    child.profile = m_running.at(p).profile;
+    child.started = QDateTime::currentSecsSinceEpoch();
+    child.state = QStringLiteral("running");
+    child.pid = 4000 + m_next - 1;
+    m_running.append(child);
+    const QString instance = child.instance;
+    const QString appId = child.appId;
+    QTimer::singleShot(0, this, [this, instance, appId] { emit appStarted(instance, appId); });
+    return instance;
+}
+
+void MockSessionBackend::endChild(const QString &instance)
+{
+    const int i = indexOf(instance);
+    if (i >= 0 && !m_running.at(i).parent.isEmpty())
+        exitApp(instance, 0, QStringLiteral("quit"));
+}
+
+void MockSessionBackend::endChildren(const QString &instance, const QString &verb, int code, const QString &reason)
+{
+    // ADR-041: Stop and Kill on a parent end its children first, each before the parent.
+    QStringList children;
+    for (const RunningApp &r : std::as_const(m_running)) {
+        if (r.parent == instance)
+            children.append(r.instance);
+    }
+    for (const QString &child : std::as_const(children)) {
+        m_calls.append(verb + QLatin1Char(' ') + child);
+        exitApp(child, code, reason);
+    }
 }
 
 void MockSessionBackend::setRunning(const QString &instance)
@@ -147,8 +228,9 @@ void MockSessionBackend::stop(const QString &instance)
         m_calls.append(QStringLiteral("thaw ") + instance);
         setFrozen(i, false);
     }
+    endChildren(instance, QStringLiteral("stop"), 0, QStringLiteral("quit"));
     m_calls.append(QStringLiteral("stop ") + instance);
-    m_running[i].state = QStringLiteral("stopping");
+    m_running[indexOf(instance)].state = QStringLiteral("stopping");
     if (m_ignoreStop) {
         // The game does not close: the service's backstop kills it (RUY-736), unless Kill came first.
         QTimer::singleShot(BackstopMs, this, [this, instance] { exitApp(instance, 9, QStringLiteral("killed")); });
@@ -183,8 +265,9 @@ void MockSessionBackend::kill(const QString &instance)
     QTimer::singleShot(0, this, [this, instance, status] { emit killFinished(instance, status); });
     if (status != QLatin1String("ok") || !m_killAnswer.isEmpty())
         return;                         // refused, or the forced answer: nothing is killed
+    endChildren(instance, QStringLiteral("kill"), 9, QStringLiteral("killed"));
     m_calls.append(QStringLiteral("kill ") + instance);
-    m_running[i].state = QStringLiteral("stopping");
+    m_running[indexOf(instance)].state = QStringLiteral("stopping");
     QTimer::singleShot(0, this, [this, instance] {
         if (!m_stubbornStop) {
             exitApp(instance, 9, QStringLiteral("killed"));

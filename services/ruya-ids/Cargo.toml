@@ -1,6 +1,6 @@
 [package]
 name = "ruya-ids"
-description = "RuyaOS ids the services share: the profile id and the Unix user of a profile"
+description = "RuyaOS ids the services share: the profile id, the Unix user of a profile and the Library1 item id"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

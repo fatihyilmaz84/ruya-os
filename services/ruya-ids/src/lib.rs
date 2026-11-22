@@ -1,5 +1,6 @@
-//! The ids the RuyaOS services share (RUY-1008). One rule, one place: a service never copies the
-//! profile-id grammar. Flatpak app ids stay in `ruya-flatpak`.
+//! The ids the RuyaOS services share (RUY-1008; the Library1 item id, RUY-1051). One rule, one
+//! place: a service never copies the profile-id or the item-id grammar. Flatpak app ids stay in
+//! `ruya-flatpak`.
 
 /// The longest profile id, in bytes.
 pub const MAX_PROFILE_ID: usize = 32;
@@ -27,6 +28,43 @@ pub fn user_of(profile_id: &str) -> String {
 pub fn profile_of_user(user: &str) -> Option<&str> {
     user.strip_prefix(USER_PREFIX)
         .filter(|id| valid_profile_id(id))
+}
+
+/// The prefix of a Flatpak app's Library1 item id ("flatpak:org.example.Racer").
+pub const FLATPAK_ITEM: &str = "flatpak:";
+/// The prefix of a Steam game's Library1 item id ("steam:70").
+pub const STEAM_ITEM: &str = "steam:";
+/// The most digits a Steam app id has (a 32-bit number).
+pub const MAX_STEAM_APPID: usize = 10;
+
+/// What a Library1 item id names (ADR-041): the source and the id inside it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItemId<'a> {
+    /// A Flatpak app; its id is not checked here (the grammar is `ruya-flatpak`'s).
+    Flatpak(&'a str),
+    /// A Steam game: its app id, ASCII digits only.
+    Steam(&'a str),
+}
+
+/// A Steam app id as it appears in an item id: 1 to `MAX_STEAM_APPID` ASCII digits.
+pub fn valid_steam_appid(appid: &str) -> bool {
+    !appid.is_empty() && appid.len() <= MAX_STEAM_APPID && appid.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// Reads a Library1 item id: `flatpak:<id>` with a non-empty id, or `steam:<digits>`. `None` for
+/// any other prefix and for a Steam id that is not digits.
+pub fn parse_item(item: &str) -> Option<ItemId<'_>> {
+    if let Some(id) = item.strip_prefix(FLATPAK_ITEM) {
+        return (!id.is_empty()).then_some(ItemId::Flatpak(id));
+    }
+    item.strip_prefix(STEAM_ITEM)
+        .filter(|appid| valid_steam_appid(appid))
+        .map(ItemId::Steam)
+}
+
+/// The item id of a Flatpak app ("org.example.Racer" -> "flatpak:org.example.Racer").
+pub fn flatpak_item(app_id: &str) -> String {
+    format!("{FLATPAK_ITEM}{app_id}")
 }
 
 #[cfg(test)]
@@ -61,5 +99,37 @@ mod tests {
             assert_eq!(profile_of_user(bad), None, "{bad}");
         }
         assert_eq!(profile_of_user(&user_of(&"x".repeat(33))), None);
+    }
+
+    #[test]
+    fn item_ids() {
+        assert_eq!(
+            parse_item("flatpak:org.example.Racer"),
+            Some(ItemId::Flatpak("org.example.Racer"))
+        );
+        assert_eq!(
+            parse_item(&flatpak_item("a.b.C")),
+            Some(ItemId::Flatpak("a.b.C"))
+        );
+        assert_eq!(parse_item("steam:70"), Some(ItemId::Steam("70")));
+        assert_eq!(
+            parse_item("steam:4294967295"),
+            Some(ItemId::Steam("4294967295"))
+        );
+        for bad in [
+            "",
+            "flatpak:",
+            "steam:",
+            "steam:7a",
+            "steam:-1",
+            "steam: 70",
+            "steam:12345678901",
+            "Steam:70",
+            "org.example.Racer",
+            "play:x",
+            ":70",
+        ] {
+            assert_eq!(parse_item(bad), None, "{bad:?}");
+        }
     }
 }

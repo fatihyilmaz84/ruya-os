@@ -59,6 +59,8 @@ struct Open {
     instance: String,
     profile: String,
     app_id: String,
+    /// The Library1 item id (ADR-041 point 6): the ledger's rows are per item.
+    item: String,
     version: String,
     key: String,
     start: i64,
@@ -85,6 +87,7 @@ impl Open {
         let days = self.days();
         SessionRecord {
             app_id: self.app_id.clone(),
+            item: self.item.clone(),
             app_version: self.version.clone(),
             start: self.start,
             end,
@@ -96,14 +99,17 @@ impl Open {
     }
 }
 
-/// An app that runs already when the service starts (adopted by the session core).
+/// An app that reached `running`, or that runs already when the service starts (adopted by the
+/// session core).
 #[derive(Debug, Clone)]
 pub struct LiveApp {
     pub instance: String,
     pub profile: String,
     pub app_id: String,
+    /// Its running record's `item` (ADR-041).
+    pub item: String,
     pub version: String,
-    /// When the app started, in unix seconds.
+    /// When the app started (for `app_started`: when it reached `running`), in unix seconds.
     pub started: i64,
 }
 
@@ -131,6 +137,7 @@ fn key_instance(key: &str) -> Option<&str> {
 fn leftover_of(l: &LiveApp, profile: &str, key: &str, s: &SessionRecord) -> bool {
     l.profile == profile
         && l.app_id == s.app_id
+        && l.item == s.item
         && key_instance(key) == Some(sanitize(&l.instance).as_str())
 }
 
@@ -208,14 +215,7 @@ impl<S: UsageStore, Z: Zone> Tracker<S, Z> {
         }
         for (l, taken) in live.iter().zip(taken) {
             if !taken {
-                self.app_started(
-                    &l.instance,
-                    &l.profile,
-                    &l.app_id,
-                    &l.version,
-                    now,
-                    l.started,
-                );
+                self.app_started(l, now);
             }
         }
         changed
@@ -237,6 +237,7 @@ impl<S: UsageStore, Z: Zone> Tracker<S, Z> {
             instance: l.instance.clone(),
             profile,
             app_id: s.app_id.clone(),
+            item: s.item.clone(),
             version: s.app_version.clone(),
             key,
             start: s.start,
@@ -283,14 +284,7 @@ impl<S: UsageStore, Z: Zone> Tracker<S, Z> {
             });
         match leftover {
             Some((profile, key, s)) => self.take_over(l, profile, key, &s, now),
-            None => self.app_started(
-                &l.instance,
-                &l.profile,
-                &l.app_id,
-                &l.version,
-                now,
-                l.started,
-            ),
+            None => self.app_started(l, now),
         }
     }
 
@@ -336,30 +330,28 @@ impl<S: UsageStore, Z: Zone> Tracker<S, Z> {
     }
 
     /// An app reached `running`. The version is the one at this moment: an update while it runs
-    /// does not split the session.
-    pub fn app_started(
-        &mut self,
-        instance: &str,
-        profile: &str,
-        app_id: &str,
-        version: &str,
-        now: Instant,
-        unix: i64,
-    ) {
-        if !valid_profile_id(profile)
-            || self.open.iter().any(|o| o.instance == instance)
-            || self.open.iter().filter(|o| o.profile == profile).count() >= MAX_OPEN_PER_PROFILE
+    /// does not split the session. Its run is dated from `app.started`.
+    pub fn app_started(&mut self, app: &LiveApp, now: Instant) {
+        if !valid_profile_id(&app.profile)
+            || self.open.iter().any(|o| o.instance == app.instance)
+            || self
+                .open
+                .iter()
+                .filter(|o| o.profile == app.profile)
+                .count()
+                >= MAX_OPEN_PER_PROFILE
         {
             return;
         }
-        let sanitized = sanitize(instance);
+        let sanitized = sanitize(&app.instance);
         self.open.push(Open {
-            instance: instance.to_owned(),
-            profile: profile.to_owned(),
-            app_id: app_id.to_owned(),
-            version: version.to_owned(),
-            key: format!("{unix}-{sanitized}"),
-            start: unix,
+            instance: app.instance.clone(),
+            profile: app.profile.clone(),
+            app_id: app.app_id.clone(),
+            item: app.item.clone(),
+            version: app.version.clone(),
+            key: format!("{}-{sanitized}", app.started),
+            start: app.started,
             ms: BTreeMap::new(),
             last_mark: now,
             last_beat: now,
@@ -601,6 +593,7 @@ mod tests {
     use super::*;
     use crate::usage::{days_from_civil, FixedZone, TableZone};
     use crate::usage_store::MemStore;
+    use ruya_ids::flatpak_item;
 
     const A: &str = "org.ruyaos.Racer";
     const B: &str = "org.ruyaos.Puzzle";
@@ -657,7 +650,7 @@ mod tests {
     }
 
     fn start(t: &mut T, c: &Clock, instance: &str, profile: &str, app: &str) {
-        t.app_started(instance, profile, app, "1.0", c.now(), c.wall);
+        t.app_started(&live(instance, profile, app, c.wall), c.now());
     }
 
     fn quit(t: &mut T, c: &Clock, instance: &str) -> Option<String> {
@@ -782,6 +775,7 @@ mod tests {
             instance: instance.to_owned(),
             profile: profile.to_owned(),
             app_id: app.to_owned(),
+            item: flatpak_item(app),
             version: "1.0".to_owned(),
             started,
         }
@@ -829,7 +823,7 @@ mod tests {
         // and the app that goes on starts a second one.
         let (mut t2, mut c, started) = restarted_after_60s();
         assert_eq!(t2.recover(c.wall), ["p1"]);
-        t2.app_started(IA, "p1", A, "1.0", c.now(), started);
+        t2.app_started(&live(IA, "p1", A, started), c.now());
         run(&mut t2, &mut c, 40, "p1", Some(IA), Attention::Active);
         quit(&mut t2, &c, IA);
         assert_eq!(sessions(&mut t2, "p1", &c).len(), 2);
@@ -1016,7 +1010,13 @@ mod tests {
         run(&mut t, &mut c, 40, "p1", Some(IA), Attention::Active);
         // The app is updated on disk; the running instance and its name stay. A second
         // "started" for the same instance (a duplicate report) changes nothing.
-        t.app_started(IA, "p1", A, "2.0", c.now(), c.wall);
+        t.app_started(
+            &LiveApp {
+                version: "2.0".to_owned(),
+                ..live(IA, "p1", A, c.wall)
+            },
+            c.now(),
+        );
         run(&mut t, &mut c, 40, "p1", Some(IA), Attention::Active);
         quit(&mut t, &c, IA);
         let s = sessions(&mut t, "p1", &c);
@@ -1056,7 +1056,7 @@ mod tests {
         let mut t = Tracker::new(MemStore::default(), FixedZone(3 * 3600));
         let mut c = Clock::new();
         c.wall = i64::from(days_from_civil(2026, 11, 7)) * 86_400 + 21 * 3600 + 30 * 60; // 21:30 UTC
-        t.app_started(IA, "p1", A, "1.0", c.now(), c.wall);
+        start(&mut t, &c, IA, "p1", A);
         run(&mut t, &mut c, 3600, "p1", Some(IA), Attention::Active); // to 22:30 UTC = 01:30 local
         t.app_exited(IA, Some(EndReason::Quit), c.now(), c.wall);
         let (today, rows) = t.totals("p1", "", "", c.wall).unwrap_or_default();
@@ -1074,7 +1074,7 @@ mod tests {
         let mut t = Tracker::new(MemStore::default(), FixedZone(3 * 3600));
         let mut c = Clock::new();
         c.wall = i64::from(days_from_civil(2026, 11, 7)) * 86_400 + 20 * 3600 + 30 * 60;
-        t.app_started(IA, "p1", A, "1.0", c.now(), c.wall);
+        start(&mut t, &c, IA, "p1", A);
         run(&mut t, &mut c, 7200, "p1", Some(IA), Attention::Active);
         t.app_exited(IA, Some(EndReason::Quit), c.now(), c.wall);
         let (_, rows) = t
@@ -1101,7 +1101,7 @@ mod tests {
         let mut t = Tracker::new(MemStore::default(), zone);
         let mut c = Clock::new();
         c.wall = change - 1800; // 00:30 UTC = 01:30 CET
-        t.app_started(IA, "p1", A, "1.0", c.now(), c.wall);
+        t.app_started(&live(IA, "p1", A, c.wall), c.now());
         run(&mut t, &mut c, 3600, "p1", Some(IA), Attention::Active); // to 01:30 UTC = 03:30 CEST
         t.app_exited(IA, Some(EndReason::Quit), c.now(), c.wall);
         let (today, rows) = t
@@ -1253,10 +1253,10 @@ mod tests {
         let mut t = tracker();
         let c = Clock::new();
         for i in 0..(MAX_OPEN_PER_PROFILE + 5) {
-            t.app_started(&format!("unit-{i}"), "p1", A, "1.0", c.now(), c.wall);
+            t.app_started(&live(&format!("unit-{i}"), "p1", A, c.wall), c.now());
         }
         assert_eq!(t.open.len(), MAX_OPEN_PER_PROFILE);
-        t.app_started("x", "../bad", A, "1.0", c.now(), c.wall);
+        t.app_started(&live("x", "../bad", A, c.wall), c.now());
         assert_eq!(
             t.open.len(),
             MAX_OPEN_PER_PROFILE,

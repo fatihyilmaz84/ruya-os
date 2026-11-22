@@ -15,6 +15,8 @@ Item {
     }
 
     SignalSpy { id: launched; target: Session; signalName: "launchFinished" }
+    SignalSpy { id: launchedItems; target: Session; signalName: "launchItemFinished" }
+    SignalSpy { id: startedSpy; target: Session; signalName: "appStarted" }
     SignalSpy { id: stopped; target: Session; signalName: "stopFinished" }
     SignalSpy { id: exited; target: Session; signalName: "appExited" }
     SignalSpy { id: freezeSpy; target: Session; signalName: "freezeFinished" }
@@ -31,6 +33,8 @@ Item {
             tryVerify(() => Profiles.profiles.length === 3)
             tryVerify(() => Session.running.length === 0)
             launched.clear()
+            launchedItems.clear()
+            startedSpy.clear()
             stopped.clear()
             exited.clear()
             freezeSpy.clear()
@@ -103,6 +107,112 @@ Item {
             tryVerify(() => Session.running.length === 0)
             // A normal quit says nothing (checked with Shell hosted in test_crash_toast).
             compare(Notifications.shownCount, shown)
+        }
+
+        // ADR-041 (RUY-1051): every record names its Library1 item; an app launched by Launch has no parent.
+        function test_records_carry_item_and_parent() {
+            const instance = launchOk("org.example.Racer", "p1")
+            tryVerify(() => Session.running.length === 1)
+            const r = Session.running[0]
+            compare(r.instance, instance)
+            compare(r.item, "flatpak:org.example.Racer")
+            compare(r.parent, "")
+        }
+
+        function launchItemStatus(item, profile) {
+            const n = launchedItems.count
+            Session.launchItem(item, profile)
+            tryCompare(launchedItems, "count", n + 1)
+            const args = launchedItems.signalArguments[n]
+            compare(args[0], item)
+            compare(args[1], profile)
+            if (args[2] !== "ok")
+                compare(args[3], "")
+            return args[2]
+        }
+
+        // LaunchItem as ruya-session answers it: a Flatpak item is Launch, a Steam game "failed" until
+        // RUY-1052, anything else "invalid".
+        function test_launch_item() {
+            compare(launchItemStatus("flatpak:org.example.Chess", "p1"), "ok")
+            const instance = launchedItems.signalArguments[0][3]
+            verify(instance !== "")
+            tryVerify(() => Session.instanceOf("org.example.Chess", "p1").instance === instance)
+            compare(Session.instanceOf("org.example.Chess", "p1").item, "flatpak:org.example.Chess")
+            compare(launchItemStatus("flatpak:org.example.Chess", "p1"), "already-running")
+            compare(launchStatus("org.example.Chess", "p1"), "already-running", "the same app as Launch's")
+            compare(launchItemStatus("flatpak:org.nope.Missing", "p1"), "unknown-app")
+            compare(launchItemStatus("flatpak:org.example.Racer", "nobody"), "unknown-profile")
+            compare(launchItemStatus("steam:70", "p1"), "failed")
+            for (const bad of ["", "flatpak:", "steam:", "steam:7a", "play:x", "org.example.Racer"])
+                compare(launchItemStatus(bad, "p1"), "invalid", bad)
+            compare(launched.count, 1, "launchItem answers with launchItemFinished only")
+        }
+
+        // The mock's seam for B6: a Steam game as a child of a running Steam instance (ADR-041).
+        function test_mock_child_seam() {
+            const steam = launchOk("org.example.Steam", "p1")
+            compare(Session.mockStartChild(steam, "steam:70"), "", "the parent is still starting")
+            tryVerify(() => Session.instanceOf("org.example.Steam", "p1").state === "running")
+            startedSpy.clear()
+            compare(Session.mockStartChild(steam, "flatpak:org.example.Racer"), "", "not a Steam game")
+            compare(Session.mockStartChild("no-such-instance", "steam:70"), "")
+            const game = Session.mockStartChild(steam, "steam:70")
+            verify(game !== "" && game !== steam)
+            tryCompare(startedSpy, "count", 1)
+            compare(startedSpy.signalArguments[0][0], game)
+            compare(startedSpy.signalArguments[0][1], "org.example.Steam", "AppStarted carries the parent's app id")
+            tryVerify(() => Session.running.length === 2)
+            const child = Session.running.find(r => r.instance === game)
+            verify(child !== undefined)
+            compare(child.item, "steam:70")
+            compare(child.parent, steam)
+            compare(child.appId, "org.example.Steam")
+            compare(child.profile, "p1")
+            compare(child.state, "running")
+            compare(Session.mockStartChild(game, "steam:80"), "", "a child has no children")
+
+            Session.mockEndChild(game)
+            tryCompare(exited, "count", 1)
+            compare(exited.signalArguments[0][0], game)
+            compare(exited.signalArguments[0][1], "org.example.Steam")
+            compare(exited.signalArguments[0][3], "quit")
+            tryVerify(() => Session.running.length === 1)
+            compare(Session.running[0].instance, steam)
+            Session.mockEndChild(steam)
+            wait(50)
+            compare(exited.count, 1, "endChild ends children only")
+
+            // Stop on the parent stops its children first.
+            const second = Session.mockStartChild(steam, "steam:80")
+            verify(second !== "")
+            tryVerify(() => Session.running.length === 2)
+            Session.stop(steam)
+            tryCompare(exited, "count", 3)
+            compare(exited.signalArguments[1][0], second)
+            compare(exited.signalArguments[2][0], steam)
+            compare(Session.mockCalls(), ["stop " + second, "stop " + steam])
+            tryVerify(() => Session.running.length === 0)
+        }
+
+        // Kill on a parent kills its children first (ADR-041, lead decision on RUY-1051).
+        function test_mock_kill_ends_children_first() {
+            Profiles.switchTo("p2", "")
+            tryCompare(Profiles, "activeProfile", "p2")
+            const steam = launchOk("org.example.Steam", "p2")
+            tryVerify(() => Session.instanceOf("org.example.Steam", "p2").state === "running")
+            const game = Session.mockStartChild(steam, "steam:70")
+            verify(game !== "")
+            tryVerify(() => Session.running.length === 2)
+            Session.kill(steam)
+            tryCompare(exited, "count", 2)
+            compare(exited.signalArguments[0][0], game)
+            compare(exited.signalArguments[0][3], "killed")
+            compare(exited.signalArguments[1][0], steam)
+            compare(Session.mockCalls(), ["kill " + game, "kill " + steam])
+            tryVerify(() => Session.running.length === 0)
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
         }
 
         // Freeze and Thaw (T-457), as ruya-session answers them: a running app of the signed-in

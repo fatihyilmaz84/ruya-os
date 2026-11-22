@@ -36,6 +36,14 @@
 //
 // InstanceOfPid (T-459): every launched instance has a made-up process id (pidOf, 4001 up), and
 // only those name an instance; any other pid is "not-found", 0 or less "invalid".
+//
+// Items and children (ADR-041, RUY-1051): every launched record has item "flatpak:<appId>" and parent "".
+// LaunchItem follows ruya-session: "flatpak:<id>" is Launch(id), "steam:<digits>" is "failed" (until
+// RUY-1052), anything else "invalid". startChild is the seam for a Steam game: a running child record
+// under a running instance (item "steam:<appid>", parent that instance, the parent's app id and profile),
+// announced with AppStarted; endChild ends it with AppExited "quit". Stop and Kill on a parent end its
+// children first ("stop <child>" / "kill <child>" logged before the parent's). Freeze and Thaw do not
+// know children yet (the service builds them with RUY-1052).
 class MockSessionBackend final : public SessionBackend
 {
     Q_OBJECT
@@ -49,6 +57,7 @@ public:
     bool isMock() const override { return true; }
     void refresh() override;
     void launch(const QString &appId, const QString &profile) override;
+    void launchItem(const QString &item, const QString &profile) override;
     void stop(const QString &instance) override;
     void kill(const QString &instance) override;
     void freeze(const QString &instance) override;
@@ -75,9 +84,17 @@ public:
     QStringList calls() const { return m_calls; }
     // The pid of a launched instance's process (from 4001 up), 0 for an unknown instance.
     int pidOf(const QString &instance) const;
+    // A Steam game `item` starts under the running instance `parentInstance`; its instance, or "" (ADR-041).
+    QString startChild(const QString &parentInstance, const QString &item);
+    // A child ends by itself (AppExited "quit"); nothing for any other instance.
+    void endChild(const QString &instance);
 
 private:
     int indexOf(const QString &instance) const;
+    // Launch's checks and start: the status, and the new instance on "ok".
+    QString start(const QString &appId, const QString &profile, QString *instance);
+    // Stop or Kill (`verb`) of a parent: its children end first, with `code` and `reason` (ADR-041).
+    void endChildren(const QString &instance, const QString &verb, int code, const QString &reason);
     void setRunning(const QString &instance);
     void exitApp(const QString &instance, int code, const QString &reason);
     // The status of a freeze or thaw of `instance` before anything is done.

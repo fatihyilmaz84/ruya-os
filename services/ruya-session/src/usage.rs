@@ -55,6 +55,9 @@ impl EndReason {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionRecord {
     pub app_id: String,
+    /// The Library1 item id of what ran (ADR-041 point 6): `flatpak:<app_id>`, or `steam:<appid>`
+    /// for a Steam game (whose `app_id` is Steam's).
+    pub item: String,
     pub app_version: String,
     pub start: i64,
     pub end: i64,
@@ -65,10 +68,11 @@ pub struct SessionRecord {
     pub open: bool,
 }
 
-/// The totals of one app on one local day.
+/// The totals of one item on one local day (ADR-041 point 6: a Steam game is its own row).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DayRow {
     pub app_id: String,
+    pub item: String,
     pub day: i32,
     pub seconds: u32,
     pub sessions: u32,
@@ -228,7 +232,7 @@ pub fn parse_day(s: &str) -> Option<i32> {
 pub struct Ledger {
     /// Raw sessions, oldest first.
     pub sessions: Vec<SessionRecord>,
-    /// Daily totals of sessions that left the raw window, sorted by (day, app).
+    /// Daily totals of sessions that left the raw window, sorted by (day, item).
     pub rows: Vec<DayRow>,
 }
 
@@ -240,6 +244,7 @@ fn rows_of(s: &SessionRecord) -> Vec<DayRow> {
         .enumerate()
         .map(|(i, (day, secs))| DayRow {
             app_id: s.app_id.clone(),
+            item: s.item.clone(),
             day: *day,
             seconds: *secs,
             sessions: u32::from(i == 0),
@@ -267,13 +272,13 @@ impl Ledger {
     fn fold(&mut self, s: &SessionRecord) {
         let mut map: BTreeMap<(i32, String), DayRow> = std::mem::take(&mut self.rows)
             .into_iter()
-            .map(|r| ((r.day, r.app_id.clone()), r))
+            .map(|r| ((r.day, r.item.clone()), r))
             .collect();
         for row in rows_of(s) {
-            match map.get_mut(&(row.day, row.app_id.clone())) {
+            match map.get_mut(&(row.day, row.item.clone())) {
                 Some(have) => have.merge(&row),
                 None => {
-                    map.insert((row.day, row.app_id.clone()), row);
+                    map.insert((row.day, row.item.clone()), row);
                 }
             }
         }
@@ -303,7 +308,7 @@ impl Ledger {
         changed
     }
 
-    /// Totals per app and day in `from..=to` (day numbers, `None` = unbounded), from the daily
+    /// Totals per item and day in `from..=to` (day numbers, `None` = unbounded), from the daily
     /// rows, the raw sessions and the sessions still running (`open`).
     pub fn totals(
         &self,
@@ -316,10 +321,10 @@ impl Ledger {
             if from.is_some_and(|f| row.day < f) || to.is_some_and(|t| row.day > t) {
                 return;
             }
-            match map.get_mut(&(row.day, row.app_id.clone())) {
+            match map.get_mut(&(row.day, row.item.clone())) {
                 Some(have) => have.merge(&row),
                 None => {
-                    map.insert((row.day, row.app_id.clone()), row);
+                    map.insert((row.day, row.item.clone()), row);
                 }
             }
         };
@@ -343,7 +348,7 @@ impl Ledger {
             .filter(|s| s.end >= since)
             .cloned()
             .collect();
-        all.sort_by(|a, b| b.start.cmp(&a.start).then_with(|| a.app_id.cmp(&b.app_id)));
+        all.sort_by(|a, b| b.start.cmp(&a.start).then_with(|| a.item.cmp(&b.item)));
         all.truncate(limit.min(MAX_LIST));
         all
     }
@@ -356,6 +361,7 @@ pub(crate) mod testing {
     pub fn rec(app: &str, start: i64, fg: u32, day: i32) -> SessionRecord {
         SessionRecord {
             app_id: app.to_owned(),
+            item: ruya_ids::flatpak_item(app),
             app_version: "1.0".to_owned(),
             start,
             end: start + i64::from(fg),
@@ -434,6 +440,7 @@ mod tests {
         l.add(rec(B, 20_401 * 86_400, 120, 20_401));
         l.rows.push(DayRow {
             app_id: A.to_owned(),
+            item: ruya_ids::flatpak_item(A),
             day: 20_300,
             seconds: 1000,
             sessions: 2,
@@ -457,6 +464,34 @@ mod tests {
         );
         assert_eq!(l.totals(Some(20_400), Some(20_400), &[]).len(), 1);
         assert_eq!(l.totals(Some(20_402), None, &[]).len(), 0);
+    }
+
+    #[test]
+    fn rows_are_per_item_not_per_app() {
+        // ADR-041 point 6 (RUY-1051): a Steam game is its own row beside Steam's, with the same
+        // app_id, in the totals and when it is rolled up.
+        const STEAM: &str = "com.valvesoftware.Steam";
+        let game = |start: i64, fg: u32| {
+            let mut s = rec(STEAM, start, fg, 20_400);
+            s.item = "steam:70".to_owned();
+            s
+        };
+        let mut l = Ledger::default();
+        l.add(rec(STEAM, 20_400 * 86_400, 100, 20_400));
+        l.add(game(20_400 * 86_400 + 200, 300));
+        l.add(game(20_400 * 86_400 + 900, 50));
+        let rows = |t: &[DayRow]| -> Vec<(String, String, u32, u32)> {
+            t.iter()
+                .map(|r| (r.app_id.clone(), r.item.clone(), r.seconds, r.sessions))
+                .collect()
+        };
+        let expected = [
+            (STEAM.to_owned(), format!("flatpak:{STEAM}"), 100, 1),
+            (STEAM.to_owned(), "steam:70".to_owned(), 350, 2),
+        ];
+        assert_eq!(rows(&l.totals(None, None, &[])), expected);
+        assert!(l.roll_up(20_500, 20_400 * 86_400 + 100 * 86_400));
+        assert_eq!(rows(&l.rows), expected);
     }
 
     #[test]
@@ -522,6 +557,7 @@ mod tests {
         for day in [20_500 - ROLLUP_DAYS, 20_500 - ROLLUP_DAYS + 1, 20_000] {
             l.rows.push(DayRow {
                 app_id: A.to_owned(),
+                item: ruya_ids::flatpak_item(A),
                 day,
                 seconds: 60,
                 sessions: 1,
@@ -560,6 +596,7 @@ mod tests {
         for i in 0..(MAX_ROWS + 10) {
             l.rows.push(DayRow {
                 app_id: A.to_owned(),
+                item: ruya_ids::flatpak_item(A),
                 day: i as i32,
                 seconds: 1,
                 sessions: 1,

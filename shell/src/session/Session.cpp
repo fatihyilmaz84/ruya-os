@@ -21,6 +21,12 @@ Session::Session(std::unique_ptr<SessionBackend> backend, QObject *parent)
                     m_backend->refresh();
                 emit launchFinished(appId, profile, status, instance);
             });
+    connect(m_backend.get(), &SessionBackend::launchItemFinished, this,
+            [this](const QString &item, const QString &profile, const QString &status, const QString &instance) {
+                if (status == QLatin1String("ok"))
+                    m_backend->refresh();
+                emit launchItemFinished(item, profile, status, instance);
+            });
     connect(m_backend.get(), &SessionBackend::stopFinished, this, &Session::stopFinished);
     connect(m_backend.get(), &SessionBackend::killFinished, this, [this](const QString &instance, const QString &status) {
         if (status == QLatin1String("ok"))
@@ -103,6 +109,11 @@ Session *Session::create(QQmlEngine *qmlEngine, QJSEngine *)
 void Session::launch(const QString &appId, const QString &profile)
 {
     m_backend->launch(appId, profile);
+}
+
+void Session::launchItem(const QString &item, const QString &profile)
+{
+    m_backend->launchItem(item, profile);
 }
 
 void Session::stop(const QString &instance)
@@ -193,6 +204,19 @@ void Session::mockFailThaw(bool fail)
 {
     if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
         mock->setFailThaw(fail);
+}
+
+QString Session::mockStartChild(const QString &parentInstance, const QString &item)
+{
+    if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
+        return mock->startChild(parentInstance, item);
+    return {};
+}
+
+void Session::mockEndChild(const QString &instance)
+{
+    if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
+        mock->endChild(instance);
 }
 
 QStringList Session::mockCalls() const

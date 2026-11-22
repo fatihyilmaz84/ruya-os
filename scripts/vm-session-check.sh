@@ -118,6 +118,22 @@ extra_scope() {
     n=0; until pgrep -u "$1" -f "sleep $3" >/dev/null 2>&1 || [ "$n" -ge 10 ]; do sleep 1; n=$((n + 1)); done
 }
 launch() { as_shell busctl --system call "$svc" "$path" "$ifc" Launch ss "$1" "$2"; }
+launch_item() { as_shell busctl --system call "$svc" "$path" "$ifc" LaunchItem ss "$1" "$2"; }
+# --- running_item begin
+# running_item <instance>: reads a ListRunning answer (busctl --json=short) on stdin and prints
+# "<item>|<parent>" of that instance's record (ADR-041, RUY-1051); "missing" when the record or a key is.
+running_item() {
+    python3 -I -c '
+import json, sys
+for rec in json.load(sys.stdin)["data"][0]:
+    if rec.get("instance", {}).get("data") == sys.argv[1]:
+        if "item" in rec and "parent" in rec:
+            print(rec["item"]["data"] + "|" + rec["parent"]["data"])
+            sys.exit(0)
+print("missing")
+' "$1"
+}
+# --- running_item end
 stop_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Stop s "$1"; }
 kill_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Kill s "$1"; }
 running() { as_shell busctl --system --json=short call "$svc" "$path" "$ifc" ListRunning; }
@@ -538,10 +554,16 @@ restart)
     echo "$run" | grep -q "$inst" && echo "$run" | grep -q '"running"'         && ok "ListRunning still lists it as running (name back after about $n s)" || bad "ListRunning after the restart: $run"
     echo "$run" | grep -q "\"$pid\"" && ok "ListRunning names the profile $pid" || bad "profile missing after the restart"
     echo "$run" | grep -q "\"$sleeper\"" && ok "ListRunning names the app" || bad "app id missing after the restart"
+    keys="$(printf '%s' "$run" | running_item "$inst")"
+    [ "$keys" = "flatpak:$sleeper|" ] && ok "ListRunning gives it item flatpak:$sleeper and parent \"\" (RUY-1051)" || bad "item and parent of $inst: $keys"
     pgrep -u "$user" -f "sleep 3000" >/dev/null && ok "the app was not touched by the restart" || bad "the app died with the restart"
     journalctl -u ruya-session -b --no-pager | grep -a "adopted $inst" | tail -1
     journalctl -u ruya-session -b --no-pager | grep -a -q "adopted $inst" && ok "the journal says it was adopted" || bad "no 'adopted' line in the journal"
     case "$(launch "$sleeper" "$pid")" in 'ss "already-running" ""') ok "a relaunch: already-running";; *) bad "relaunch after the restart";; esac
+    # LaunchItem (RUY-1051): a Flatpak item is Launch; a Steam game is "failed" until RUY-1052.
+    case "$(launch_item "flatpak:$sleeper" "$pid")" in 'ss "already-running" ""') ok "LaunchItem flatpak:$sleeper answers as Launch: already-running";; *) bad "LaunchItem of the running app";; esac
+    case "$(launch_item "steam:70" "$pid")" in 'ss "failed" ""') ok "LaunchItem steam:70: failed until RUY-1052";; *) bad "LaunchItem steam:70 is not failed";; esac
+    case "$(launch_item "play:x" "$pid")" in 'ss "invalid" ""') ok "LaunchItem of an unknown prefix: invalid";; *) bad "LaunchItem play:x is not invalid";; esac
 
     start_monitor
     echo "--- Stop an adopted app"
@@ -556,6 +578,10 @@ restart)
     [ -n "$inst2" ] && ok "a new Launch works again ($inst2)" || bad "Launch after the stop: $out"
     stop_app "$inst2" >/dev/null
     n=0; until ! running | grep -q "$inst2" || [ "$n" -ge 20 ]; do sleep 1; n=$((n + 1)); done
+    out="$(launch_item "flatpak:$sleeper" "$pid")"; inst_item="$(echo "$out" | unit_of)"
+    [ -n "$inst_item" ] && ok "LaunchItem flatpak:$sleeper launches as Launch does ($inst_item)" || bad "LaunchItem after the stop: $out"
+    stop_app "$inst_item" >/dev/null
+    n=0; until ! running | grep -q "$inst_item" || [ "$n" -ge 20 ]; do sleep 1; n=$((n + 1)); done
 
     echo "--- Stop, then Launch at once (T-340): no already-running, no taken unit name"
     out="$(launch "$sleeper" "$pid")"; inst4="$(echo "$out" | unit_of)"
