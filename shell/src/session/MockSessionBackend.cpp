@@ -9,12 +9,14 @@ const QString NoLaunch = QStringLiteral("nolaunch");
 
 const QString FlatpakItem = QStringLiteral("flatpak:");
 const QString SteamItem = QStringLiteral("steam:");
+// The Steam Flatpak, the parent of every Steam game (ruya-session's STEAM_APP_ID).
+const QString SteamAppId = QStringLiteral("com.valvesoftware.Steam");
 
-// The mock apps, and the .play games of the mock Library (a .play game is a Flatpak app, RUY-905).
+// The mock apps, Steam, and the .play games of the mock Library (a .play game is a Flatpak app, RUY-905).
 bool installed(const QString &appId)
 {
-    return appId == Crashy || appId == NoLaunch || appId.startsWith(QLatin1String("org.example."))
-           || appId.startsWith(QLatin1String("play.com.example."));
+    return appId == Crashy || appId == NoLaunch || appId == SteamAppId
+           || appId.startsWith(QLatin1String("org.example.")) || appId.startsWith(QLatin1String("play.com.example."));
 }
 
 // "steam:<appid>" with 1 to 10 digits, as ruya-ids' parse_item.
@@ -81,6 +83,8 @@ void MockSessionBackend::reset()
     m_stubbornStop = false;
     m_ignoreStop = false;
     m_killAnswer.clear();
+    m_childWaitMs = ChildLaunchWaitMs;
+    m_endingAs.clear();
     m_lastActive = m_activeProfile ? m_activeProfile().value_or(QString()) : QString();
     emit runningListed(m_running);
 }
@@ -105,8 +109,8 @@ void MockSessionBackend::launchItem(const QString &item, const QString &profile)
     QString instance;
     if (item.startsWith(FlatpakItem) && item.size() > FlatpakItem.size())
         status = start(item.mid(FlatpakItem.size()), profile, &instance);
-    else if (isSteamItem(item) && !profile.isEmpty())
-        status = QStringLiteral("failed");     // Steam children arrive with RUY-1052
+    else if (isSteamItem(item))
+        status = launchSteamGame(item, profile, &instance);
     QTimer::singleShot(0, this, [this, item, profile, status, instance] {
         emit launchItemFinished(item, profile, status, instance);
     });
@@ -123,7 +127,7 @@ QString MockSessionBackend::start(const QString &appId, const QString &profile, 
         status = QStringLiteral("unknown-profile");
     else {
         for (const RunningApp &r : std::as_const(m_running)) {
-            if (r.appId == appId && r.profile == profile)
+            if (r.appId == appId && r.profile == profile && r.parent.isEmpty())   // a Steam child is not Steam
                 status = QStringLiteral("already-running");
         }
     }
@@ -144,12 +148,75 @@ QString MockSessionBackend::start(const QString &appId, const QString &profile, 
     return status;
 }
 
+QString MockSessionBackend::launchSteamGame(const QString &item, const QString &profile, QString *instance)
+{
+    // As ruya-session's launch_steam_game (RUY-1067).
+    if (profile.isEmpty())
+        return QStringLiteral("invalid");
+    if (m_knownProfile && !m_knownProfile(profile))
+        return QStringLiteral("unknown-profile");
+    for (const RunningApp &r : std::as_const(m_running)) {
+        if (r.item == item && r.profile == profile) {
+            *instance = r.instance;                // starting, running or stopping: that child
+            return QStringLiteral("already-running");
+        }
+    }
+    QString parent;
+    for (const RunningApp &r : std::as_const(m_running)) {
+        if (r.appId == SteamAppId && r.parent.isEmpty() && r.profile == profile && r.state != QLatin1String("stopping"))
+            parent = r.instance;
+    }
+    if (!parent.isEmpty()) {
+        m_calls.append(QStringLiteral("forward ") + item);   // the running Steam is handed the game
+    } else {
+        const QString status = start(SteamAppId, profile, &parent);
+        if (status != QLatin1String("ok"))
+            return status;
+    }
+    RunningApp child;
+    child.instance = QStringLiteral("mock-%1.%2").arg(m_next++).arg(item);
+    child.appId = SteamAppId;
+    child.item = item;
+    child.parent = parent;
+    child.profile = profile;
+    child.started = QDateTime::currentSecsSinceEpoch();
+    child.pid = 4000 + m_next - 1;
+    m_running.append(child);
+    *instance = child.instance;
+    const QString name = child.instance;
+    QTimer::singleShot(m_childWaitMs, this, [this, name] {
+        const int i = indexOf(name);
+        if (i >= 0 && awaitsScope(i))
+            exitApp(name, -1, QStringLiteral("launch-failed"));   // its scope never came
+    });
+    return QStringLiteral("ok");
+}
+
+bool MockSessionBackend::awaitsScope(int index) const
+{
+    const RunningApp &r = m_running.at(index);
+    return !r.parent.isEmpty() && r.state == QLatin1String("starting");
+}
+
 QString MockSessionBackend::startChild(const QString &parentInstance, const QString &item)
 {
     const int p = indexOf(parentInstance);
     if (p < 0 || !m_running.at(p).parent.isEmpty() || m_running.at(p).state != QLatin1String("running")
         || !isSteamItem(item))
         return {};
+    for (int i = 0; i < m_running.size(); ++i) {
+        const RunningApp &r = m_running.at(i);
+        if (r.parent != parentInstance || r.item != item)
+            continue;
+        if (!awaitsScope(i))
+            return {};                             // known already: nothing changes
+        // The game LaunchItem asked for got its scope: it runs now (ruya-session's child_started).
+        m_running[i].state = QStringLiteral("running");
+        const QString instance = r.instance;
+        const QString appId = r.appId;
+        QTimer::singleShot(0, this, [this, instance, appId] { emit appStarted(instance, appId); });
+        return instance;
+    }
     RunningApp child;
     child.instance = QStringLiteral("mock-%1.%2").arg(m_next++).arg(item);
     child.appId = m_running.at(p).appId;
@@ -182,6 +249,12 @@ void MockSessionBackend::endChildren(const QString &instance, const QString &ver
             children.append(r.instance);
     }
     for (const QString &child : std::as_const(children)) {
+        const int c = indexOf(child);
+        if (awaitsScope(c) || m_endingAs.contains(child)) {
+            if (!m_endingAs.contains(child))
+                endStartingChild(c, QStringLiteral("launch-failed"));   // nothing of it to reach (RUY-1067)
+            continue;
+        }
         m_calls.append(verb + QLatin1Char(' ') + child);
         exitApp(child, code, reason);
     }
@@ -223,6 +296,10 @@ void MockSessionBackend::stop(const QString &instance)
     QTimer::singleShot(0, this, [this, instance, status] { emit stopFinished(instance, status); });
     if (status != QLatin1String("ok") || m_running.at(i).state == QLatin1String("stopping"))
         return;
+    if (awaitsScope(i)) {
+        endStartingChild(i, QStringLiteral("quit"));
+        return;
+    }
     if (m_running.at(i).frozen) {
         // Like ruya-session: a frozen app is thawed before it is asked to quit.
         m_calls.append(QStringLiteral("thaw ") + instance);
@@ -265,6 +342,10 @@ void MockSessionBackend::kill(const QString &instance)
     QTimer::singleShot(0, this, [this, instance, status] { emit killFinished(instance, status); });
     if (status != QLatin1String("ok") || !m_killAnswer.isEmpty())
         return;                         // refused, or the forced answer: nothing is killed
+    if (awaitsScope(i) || m_endingAs.contains(instance)) {
+        endStartingChild(i, QStringLiteral("killed"));
+        return;
+    }
     endChildren(instance, QStringLiteral("kill"), 9, QStringLiteral("killed"));
     m_calls.append(QStringLiteral("kill ") + instance);
     m_running[indexOf(instance)].state = QStringLiteral("stopping");
@@ -277,6 +358,20 @@ void MockSessionBackend::kill(const QString &instance)
         if (j >= 0)
             emit appExited(instance, m_running.at(j).appId, 9, QStringLiteral("killed"));
     });
+}
+
+void MockSessionBackend::endStartingChild(int index, const QString &reason)
+{
+    // A Steam game still waiting for its scope is ended by ruya-session alone (RUY-1067): no call reaches
+    // the OS, it is "stopping" until the next tick, then AppExited with exit code -1. A Kill after a Stop
+    // makes it "killed".
+    const QString instance = m_running.at(index).instance;
+    m_running[index].state = QStringLiteral("stopping");
+    const bool queued = m_endingAs.contains(instance);
+    m_endingAs.insert(instance, reason);
+    if (queued)
+        return;
+    QTimer::singleShot(0, this, [this, instance] { exitApp(instance, -1, m_endingAs.take(instance)); });
 }
 
 QString MockSessionBackend::freezable(const QString &instance) const

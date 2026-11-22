@@ -77,7 +77,11 @@ public:
     Q_INVOKABLE QString mockStartChild(const QString &parentInstance, const QString &item);
     // The game ends by itself: AppExited "quit" for the child, with the parent's app id.
     Q_INVOKABLE void mockEndChild(const QString &instance);
-    // "freeze <instance>", "thaw <instance>", "stop <instance>", "kill <instance>" in the order they were asked.
+    // A Steam game LaunchItem starts from now on is "launch-failed" after `ms` without its scope
+    // (ruya-session's 120 s, again after mockReset), RUY-1067.
+    Q_INVOKABLE void mockChildLaunchWait(int ms);
+    // "freeze <instance>", "thaw <instance>", "stop <instance>", "kill <instance>" and "forward steam:<appid>"
+    // (a Steam game handed to the running Steam) in the order they were asked.
     Q_INVOKABLE QStringList mockCalls() const;
 
 signals:

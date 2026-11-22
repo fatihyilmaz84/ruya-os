@@ -560,9 +560,10 @@ restart)
     journalctl -u ruya-session -b --no-pager | grep -a "adopted $inst" | tail -1
     journalctl -u ruya-session -b --no-pager | grep -a -q "adopted $inst" && ok "the journal says it was adopted" || bad "no 'adopted' line in the journal"
     case "$(launch "$sleeper" "$pid")" in 'ss "already-running" ""') ok "a relaunch: already-running";; *) bad "relaunch after the restart";; esac
-    # LaunchItem (RUY-1051): a Flatpak item is Launch; a Steam game is "failed" until RUY-1052.
+    # LaunchItem (RUY-1051): a Flatpak item is Launch; a Steam game (RUY-1067) needs Steam, which
+    # the VM has not: "unknown-app".
     case "$(launch_item "flatpak:$sleeper" "$pid")" in 'ss "already-running" ""') ok "LaunchItem flatpak:$sleeper answers as Launch: already-running";; *) bad "LaunchItem of the running app";; esac
-    case "$(launch_item "steam:70" "$pid")" in 'ss "failed" ""') ok "LaunchItem steam:70: failed until RUY-1052";; *) bad "LaunchItem steam:70 is not failed";; esac
+    case "$(launch_item "steam:70" "$pid")" in 'ss "unknown-app" ""') ok "LaunchItem steam:70 without Steam: unknown-app";; *) bad "LaunchItem steam:70 without Steam is not unknown-app";; esac
     case "$(launch_item "play:x" "$pid")" in 'ss "invalid" ""') ok "LaunchItem of an unknown prefix: invalid";; *) bad "LaunchItem play:x is not invalid";; esac
 
     start_monitor

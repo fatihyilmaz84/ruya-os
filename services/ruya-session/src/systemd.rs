@@ -62,8 +62,9 @@ use crate::spawner::{
     control_command, control_groups_command, flatpak_app_installed, kill_command,
     launch_command_in, list_scopes_command, park_audio_command, parse_control_groups,
     parse_profile_users, parse_show, pulse_start_command, reclaim_amount, reclaim_command,
-    steam_probe_command, sweep_commands, unit_app_id, unit_name, LineTail, RunFollower,
-    RunningUnit, ShowUnit, KILL_VERB, SHOW_PROPERTIES, SWAP_COMMAND,
+    steam_probe_command, steam_url_command, sweep_commands, unit_app_id, unit_name, LineTail,
+    RunFollower, RunningUnit, ShowUnit, KILL_VERB, SHOW_PROPERTIES, STEAM_URL_RUNTIME_SECS,
+    SWAP_COMMAND,
 };
 use crate::spawner::{
     AdoptLister, AudioJob, AudioQueue, DisplayMode, Listing, ReclaimLedger, Spawner, UnitEvent,
@@ -783,6 +784,25 @@ impl Spawner for SystemdSpawner {
     /// The app table read at the call (a few small files): `freeze = never` is false.
     fn may_freeze(&self, app_id: &str) -> bool {
         AppTable::load(Path::new(APPS_DIR)).freeze(app_id) != Some(Freeze::Never)
+    }
+
+    /// The forwarder (`steam_url_command`) on its own thread, bounded a little past its unit's
+    /// `RuntimeMaxSec`, like `child_systemctl`: the D-Bus call does not wait for Steam. Its end is
+    /// logged; the game's scope (or the core's 120 s) is what counts.
+    fn forward_steam_url(&self, user: &str, appid: &str) -> Result<(), String> {
+        let args = steam_url_command(user, appid)?;
+        let what = format!("steam:{appid} of {user}");
+        let failed = format!("cannot start a thread for {what}");
+        let limit = Duration::from_secs(u64::from(STEAM_URL_RUNTIME_SECS) + 5);
+        std::thread::Builder::new()
+            .name("steam-url".to_owned())
+            .spawn(move || {
+                if run_bounded(&args, limit).is_some() {
+                    eprintln!("ruya-session: handed {what} to the running Steam");
+                }
+            })
+            .map(|_| ())
+            .map_err(|err| format!("{failed}: {err}"))
     }
 
     fn adoption_complete(&self) -> bool {
