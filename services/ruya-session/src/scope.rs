@@ -87,7 +87,9 @@ impl Run {
         Some(
             self.scope_cpu
                 .values()
-                .fold(self.unit_cpu.unwrap_or(0), |sum, cpu| sum.saturating_add(*cpu)),
+                .fold(self.unit_cpu.unwrap_or(0), |sum, cpu| {
+                    sum.saturating_add(*cpu)
+                }),
         )
     }
 }
