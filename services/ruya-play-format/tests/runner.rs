@@ -618,7 +618,7 @@ fn pin_errors_say_what_is_wrong() {
 #[test]
 fn runner_hash_takes_table_entries_with_their_own_path_and_hash() {
     let sha = "ab".repeat(32);
-    let files = vec![
+    let files = [
         FileEntry::File {
             path: "bin/wine".into(),
             size: 1,
