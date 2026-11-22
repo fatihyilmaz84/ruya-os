@@ -1690,7 +1690,10 @@ impl Importer {
             Err(p) => return fail(vec![p]),
         };
         reporter.bytes_done = rehashed.bytes;
-        let runners = unpack::runner_hashes(&insp.package.manifest, files, &rehashed);
+        let runners = match unpack::runner_hashes(&insp.package.manifest, files, &rehashed) {
+            Ok(r) => r,
+            Err(p) => return fail(vec![p]),
+        };
         match &checked.selected {
             Ok(selected) => {
                 if let Some(revoked) = is_revoked(&selected.list, &insp.facts(), &runners) {
