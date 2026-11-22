@@ -610,6 +610,12 @@ Consequences: RUY-408 builds the cache, the queue and the delivery at start. A n
 4. Games started inside Steam's own UI become children the same way. The shell re-reads ListRunning when AppStarted names an instance it does not know. AppStarted and AppExited keep their signature, with the parent's app_id.
 5. A child ends when none of its scopes has existed for 3 s (a launcher handing over to the game). Stop, Freeze, Thaw and Kill on a child touch only its scopes; Stop on the parent stops the children first, then Steam. InstanceOfPid answers the child for any pid in its scopes.
 6. The ledger's session and day rows get `item`. While Steam's instance is in front and has a running child, the shell's front instance is the child: ReportPresence reports it and the Hub shows it, with "Close game" and "Close Steam".
+7. **Parent and children (lead, 2026-11-22, RUY-1051 review; inside this ADR and ADR-042):**
+   - Stop and Kill on a parent end its children first, then the parent.
+   - Freeze and Thaw on a parent apply to every child, and to the parent's own scopes only as far as its app-table `freeze` rule allows (Steam is `never`).
+   - Each record's `frozen` describes that record alone.
+   - `LaunchItem` for a Steam item whose child is already running answers `already-running` with that child's instance.
+   The Session1 XML carries the same text.
 **Consequences.** Session1 XML, mock, D-Bus client and contract tests change together; the shell keys its running model by `item`; Library, Home, the game page and play time stay unchanged. Spike RUY-1047 proves point 2 first.
 
 ### ADR-042 — Freeze what is a game, never a client — *Accepted (architect, 2026-11-22, RUY-817)*
