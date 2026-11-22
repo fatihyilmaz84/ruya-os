@@ -31,7 +31,7 @@ Item {
         function init() {
             Library.resetMockForTests("")
             signIn("p1")
-            tryCompare(Library.items, "length", 10)
+            tryVerify(() => Library.items.length === 10, 2000, "the list has 10 items")
         }
 
         function cleanup() {
@@ -64,17 +64,17 @@ Item {
             Library.profile = "p2"
             compare(steamIn(Library.items), [], "Player One's games are hidden from Ada at once")
             tryCompare(Library, "activeProfile", "p2")
-            tryCompare(Library.items, "length", 10)
+            tryVerify(() => Library.items.length === 10, 2000, "the list has 10 items")
             compare(Library.item("steam:730").title, "Counter Strike", "Ada's own Steam games")
         }
 
         function test_switching_back_brings_the_profiles_steam_items_back() {
             signIn("p4")
-            tryCompare(Library.items, "length", 5)
+            tryVerify(() => Library.items.length === 5, 2000, "the list has 5 items")
             Library.profile = "p1"
             compare(steamIn(Library.items), [], "still p4's view until the service switches")
             tryCompare(Library, "activeProfile", "p1")
-            tryCompare(Library.items, "length", 10)
+            tryVerify(() => Library.items.length === 10, 2000, "the list has 10 items")
             compare(Library.item("steam:730").title, "Counter Strike")
         }
 
