@@ -20,7 +20,7 @@ Item {
         Item { objectName: "standInApp"; Keys.onPressed: event => { event.accepted = true } }
     }
 
-    Component { id: barePane; SettingsPane { } }
+    Component { id: barePane; SettingsPane { SettingRow { kind: "item"; label: "Row" } } }
     Component { id: wallpaperComponent; WallpaperPicker { anchors.fill: parent } }
     Component { id: zoneComponent; ZonePicker { anchors.fill: parent } }
     Component { id: confirmComponent; PowerConfirm { anchors.fill: parent } }
@@ -184,7 +184,7 @@ Item {
             tryVerify(() => find("paneAbout").activeFocus, 2000)
             compare(shownOf(find("paneAbout")), "back Back")
             compare(tc.shown(), "back Back", "About's own hints")
-            // A pane that sets no hints gets the default.
+            // A pane that sets no hints gets the default (it has a row to select; with none, Back only: tst_settings).
             const bare = createTemporaryObject(barePane, host)
             compare(shownOf(bare), "accept Select|back Back")
         }
