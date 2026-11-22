@@ -354,28 +354,31 @@ pub fn check_tree(
 /// into staging, a link and an empty folder as the re-walk confirmed. T-239's runner resolution
 /// reports the same value for a bundled runner.
 pub fn runner_hashes(manifest: &Manifest, files: &[FileEntry], unpacked: &Unpacked) -> Vec<String> {
-    let mut out = Vec::new();
-    for c in &manifest.components {
-        let Some(bundled) = &c.bundled else {
-            continue;
-        };
-        let prefix = format!("{}/", bundled.path.trim_end_matches('/'));
-        out.push(runner_hash(files.iter().filter_map(|e| {
-            let entry = RunnerEntry::from(e).with_rel(e.path().strip_prefix(&prefix)?);
-            Some(match e {
-                // `rehash` hashed every file of the table it was given, and the caller passes
-                // that same table: a file without a staged hash is a bug, never an empty hash.
-                FileEntry::File { path, .. } => entry.with_sha256(
-                    unpacked
-                        .hashes
-                        .get(path)
-                        .expect("rehash hashed every file of the table"),
-                ),
-                _ => entry,
-            })
-        })));
-    }
-    out
+    manifest
+        .components
+        .iter()
+        .filter_map(|c| c.bundled.as_ref())
+        .map(|bundled| runner_hash_below(&bundled.path, files, unpacked))
+        .collect()
+}
+
+/// The runner hash of the table entries below the folder `root`, as [`runner_hashes`] takes it.
+fn runner_hash_below(root: &str, files: &[FileEntry], unpacked: &Unpacked) -> String {
+    let prefix = format!("{}/", root.trim_end_matches('/'));
+    runner_hash(files.iter().filter_map(|e| {
+        let entry = RunnerEntry::from(e).with_rel(e.path().strip_prefix(&prefix)?);
+        Some(match e {
+            // `rehash` hashed every file of the table it was given, and the caller passes that
+            // same table: a file without a staged hash is a bug, never an empty hash.
+            FileEntry::File { path, .. } => entry.with_sha256(
+                unpacked
+                    .hashes
+                    .get(path)
+                    .expect("rehash hashed every file of the table"),
+            ),
+            _ => entry,
+        })
+    }))
 }
 
 /// The service's own pass over a tree the helper wrote (05 §7.3, lead-33): every file of the table
@@ -546,5 +549,14 @@ mod tests {
                 assert_eq!(&unpacked.hashes[path], sha256);
             }
         }
+        // The staged hashes give the hash of the table itself, below the folder `c`.
+        let below: Vec<RunnerEntry> = files
+            .iter()
+            .filter_map(|e| Some(RunnerEntry::from(e).with_rel(e.path().strip_prefix("c/")?)))
+            .collect();
+        assert_eq!(
+            runner_hash_below("c/", &files, &unpacked),
+            runner_hash(below)
+        );
     }
 }
