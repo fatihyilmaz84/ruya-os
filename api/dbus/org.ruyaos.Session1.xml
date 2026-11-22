@@ -173,8 +173,8 @@
          UI) answers "already-running" with that child's instance, and nothing is started. Statuses:
          ok, invalid (a malformed item, an unknown prefix, or a bad profile id), unknown-app (the
          item's app is not installed; a Steam game: Steam is not), unknown-profile, already-running
-         (a Steam game also while Steam's own run is still ending, then with ""), failed (Steam could
-         not be started or handed the URL). `instance` is "" unless the status is "ok", or
+         (a Steam game also while Steam's own run is still ending, then with ""), failed (as Launch's;
+         a running Steam: the forwarder could not be started). `instance` is "" unless the status is "ok", or
          "already-running" for a Steam game's child. -->
     <method name="LaunchItem">
       <arg name="item" type="s" direction="in"/>

@@ -173,17 +173,8 @@ QString MockSessionBackend::launchSteamGame(const QString &item, const QString &
         if (status != QLatin1String("ok"))
             return status;
     }
-    RunningApp child;
-    child.instance = QStringLiteral("mock-%1.%2").arg(m_next++).arg(item);
-    child.appId = SteamAppId;
-    child.item = item;
-    child.parent = parent;
-    child.profile = profile;
-    child.started = QDateTime::currentSecsSinceEpoch();
-    child.pid = 4000 + m_next - 1;
-    m_running.append(child);
-    *instance = child.instance;
-    const QString name = child.instance;
+    const QString name = addChild(indexOf(parent), item, QStringLiteral("starting"));
+    *instance = name;
     QTimer::singleShot(m_childWaitMs, this, [this, name] {
         const int i = indexOf(name);
         if (i >= 0 && awaitsScope(i))
@@ -217,20 +208,26 @@ QString MockSessionBackend::startChild(const QString &parentInstance, const QStr
         QTimer::singleShot(0, this, [this, instance, appId] { emit appStarted(instance, appId); });
         return instance;
     }
-    RunningApp child;
-    child.instance = QStringLiteral("mock-%1.%2").arg(m_next++).arg(item);
-    child.appId = m_running.at(p).appId;
-    child.item = item;
-    child.parent = parentInstance;
-    child.profile = m_running.at(p).profile;
-    child.started = QDateTime::currentSecsSinceEpoch();
-    child.state = QStringLiteral("running");
-    child.pid = 4000 + m_next - 1;
-    m_running.append(child);
-    const QString instance = child.instance;
-    const QString appId = child.appId;
+    const QString instance = addChild(p, item, QStringLiteral("running"));
+    const QString appId = m_running.at(p).appId;
     QTimer::singleShot(0, this, [this, instance, appId] { emit appStarted(instance, appId); });
     return instance;
+}
+
+QString MockSessionBackend::addChild(int parentIndex, const QString &item, const QString &state)
+{
+    const RunningApp &p = m_running.at(parentIndex);
+    RunningApp child;
+    child.instance = QStringLiteral("mock-%1.%2").arg(m_next++).arg(item);
+    child.appId = p.appId;
+    child.item = item;
+    child.parent = p.instance;
+    child.profile = p.profile;
+    child.started = QDateTime::currentSecsSinceEpoch();
+    child.state = state;
+    child.pid = 4000 + m_next - 1;
+    m_running.append(child);
+    return child.instance;
 }
 
 void MockSessionBackend::endChild(const QString &instance)
@@ -391,6 +388,16 @@ QString MockSessionBackend::freezable(const QString &instance) const
     return QStringLiteral("ok");
 }
 
+void MockSessionBackend::setChildrenFrozen(const QString &parentInstance, bool frozen)
+{
+    for (int c = 0; c < m_running.size(); ++c) {
+        if (m_running.at(c).parent != parentInstance || m_running.at(c).state != QLatin1String("running"))
+            continue;
+        m_calls.append(QLatin1String(frozen ? "freeze " : "thaw ") + m_running.at(c).instance);
+        setFrozen(c, frozen);
+    }
+}
+
 void MockSessionBackend::setFrozen(int index, bool frozen)
 {
     if (m_running.at(index).frozen == frozen)
@@ -406,11 +413,14 @@ void MockSessionBackend::freeze(const QString &instance)
     if (status == QLatin1String("ok")) {
         const int i = indexOf(instance);
         if (!m_running.at(i).frozen) {
-            m_calls.append(QStringLiteral("freeze ") + instance);
-            if (m_failFreeze)
+            if (m_failFreeze) {
+                m_calls.append(QStringLiteral("freeze ") + instance);
                 status = QStringLiteral("failed");     // undone at once: the app keeps running
-            else
+            } else {
+                setChildrenFrozen(instance, true);     // ADR-041 point 7: the children first
+                m_calls.append(QStringLiteral("freeze ") + instance);
                 setFrozen(i, true);
+            }
         }
     }
     QTimer::singleShot(0, this, [this, instance, status] { emit freezeFinished(instance, status); });
@@ -420,11 +430,14 @@ void MockSessionBackend::thaw(const QString &instance)
 {
     QString status = freezable(instance);
     if (status == QLatin1String("ok")) {
-        m_calls.append(QStringLiteral("thaw ") + instance);
-        if (m_failThaw)
+        if (m_failThaw) {
+            m_calls.append(QStringLiteral("thaw ") + instance);
             status = QStringLiteral("failed");     // still frozen
-        else
+        } else {
+            setChildrenFrozen(instance, false);
+            m_calls.append(QStringLiteral("thaw ") + instance);
             setFrozen(indexOf(instance), false);
+        }
     }
     QTimer::singleShot(0, this, [this, instance, status] { emit thawFinished(instance, status); });
 }

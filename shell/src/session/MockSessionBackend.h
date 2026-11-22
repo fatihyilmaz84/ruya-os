@@ -43,7 +43,9 @@
 // startChild is the seam for a Steam game's scope: a running child record under a running instance (item
 // "steam:<appid>", parent that instance, the parent's app id and profile), announced with AppStarted;
 // endChild ends it with AppExited "quit". Stop and Kill on a parent end its children first ("stop <child>"
-// / "kill <child>" logged before the parent's). Freeze and Thaw do not know children yet.
+// / "kill <child>" logged before the parent's). Freeze and Thaw of a parent reach its running children
+// first, as the service does (ADR-041 point 7, RUY-1054): "freeze <child>" / "thaw <child>" are logged
+// before the parent's.
 //
 // LaunchItem of "steam:<digits>" (RUY-1067) mirrors ruya-session: a child of that item and profile in any
 // state is "already-running" with its instance; else com.valvesoftware.Steam (installed here) is launched
@@ -107,6 +109,9 @@ private:
     QString start(const QString &appId, const QString &profile, QString *instance);
     // LaunchItem of a Steam game: the status, and the child's instance on "ok" or "already-running".
     QString launchSteamGame(const QString &item, const QString &profile, QString *instance);
+    // A Steam game `item` in the run of the record at `parentIndex` (its app id and profile), in `state`
+    // ("starting": LaunchItem asked for it; "running": its scope is there). Returns its instance.
+    QString addChild(int parentIndex, const QString &item, const QString &state);
     // Is the record at `index` a Steam game that waits for its scope (LaunchItem, RUY-1067)?
     bool awaitsScope(int index) const;
     // Stop or Kill of such a game: ended with `reason` and exit code -1, no call logged.
@@ -118,6 +123,8 @@ private:
     // The status of a freeze or thaw of `instance` before anything is done.
     QString freezable(const QString &instance) const;
     void setFrozen(int index, bool frozen);
+    // Freezes or thaws the running children of `parentInstance`, each logged ("freeze <child>").
+    void setChildrenFrozen(const QString &parentInstance, bool frozen);
 
     ProfileCheck m_knownProfile;
     ActiveProfile m_activeProfile;
