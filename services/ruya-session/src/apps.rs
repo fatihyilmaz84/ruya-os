@@ -198,7 +198,7 @@ pub(crate) mod tests {
         assert_eq!(table.problems(), Vec::<String>::new());
         assert_eq!(table.args(STEAM), ["-gamepadui"]);
         assert_eq!(table.display(STEAM), Some(Display::X11));
-        assert_eq!(table.freeze(STEAM), Some(Freeze::Always));
+        assert_eq!(table.freeze(STEAM), Some(Freeze::Never));
         assert_eq!(table.children(STEAM), Some(Children::Steam));
         // Another app has no row.
         assert!(table.args("org.other.App").is_empty());

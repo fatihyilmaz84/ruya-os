@@ -201,6 +201,11 @@ struct Instance {
     frozen: bool,
     /// When this freeze began (T-466; an adopted frozen app: when it was adopted).
     frozen_at: Option<Instant>,
+    /// Paused without being frozen: a Freeze reached this instance but its app may not be frozen
+    /// itself (`freeze_own` false, ADR-042). Separate from `frozen`, which is this record's own
+    /// (ADR-041 point 7); it only parks the instance's sound (`sync_audio`). Cleared by a Thaw,
+    /// a Stop and the exit.
+    held: bool,
     reclaim: Reclaim,
 }
 
@@ -329,6 +334,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                     hidden: false,
                     frozen: false,
                     frozen_at: None,
+                    held: false,
                     reclaim: Reclaim::Waiting,
                 });
                 // A new app of a profile with a frozen one may play: its sound must not be parked.
@@ -400,6 +406,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     /// The stop of the one instance at `at` (not stopping yet): a frozen one is thawed first.
     fn stop_at(&mut self, at: usize, clock: impl Clock) -> Status {
         let inst = &mut self.instances[at];
+        inst.held = false;
         if inst.frozen {
             // A frozen app cannot handle the SIGTERM of the stop: thaw it first (T-457). A failed
             // thaw still stops it; the kill after the grace time ends even a frozen process.
@@ -560,6 +567,11 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             froze.push(child);
         }
         if !self.instances[at].freeze_own {
+            // ADR-042: the unit keeps running; only its sound is parked, with its children's.
+            let inst = &mut self.instances[at];
+            inst.held = true;
+            let user = inst.user.clone();
+            self.sync_audio(&user, false);
             return Status::Ok;
         }
         let status = self.freeze_one(at, now);
@@ -682,6 +694,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             Err(status) => return status,
         };
         let mut status = Status::Ok;
+        let was_held = std::mem::take(&mut self.instances[at].held);
         for child in self.children_of(instance) {
             let c = &self.instances[child];
             if c.hidden || c.state != State::Running {
@@ -690,6 +703,10 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             if self.thaw_one(child) != Status::Ok {
                 status = Status::Failed;
             }
+        }
+        if was_held {
+            let user = self.instances[at].user.clone();
+            self.sync_audio(&user, false);
         }
         // A record frozen anyway (adopted frozen, before its app's rule changed) is thawed too.
         let own = &self.instances[at];
@@ -803,6 +820,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 // first and a Thaw announces the change (T-457).
                 frozen: found.frozen,
                 frozen_at: found.frozen.then_some(now),
+                held: false,
                 reclaim: Reclaim::Waiting,
             };
             if orphan {
@@ -1016,6 +1034,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             hidden: p.hidden,
             frozen,
             frozen_at: None,
+            held: false,
             reclaim: Reclaim::Waiting,
         };
         let notice = (!inst.hidden).then(|| Notice::Started {
@@ -1076,10 +1095,10 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         }
     }
 
-    /// Asks for the sound of `user`'s apps to match what is frozen (T-466): its frozen apps are
-    /// parked, the rest put back. Only a change is sent, and only while the user has a frozen app
-    /// or had one at the last request; `force` sends it anyway (after a restart of this service,
-    /// when what is parked is not known).
+    /// Asks for the sound of `user`'s apps to match what is frozen (T-466): its frozen and held
+    /// apps are parked, the rest put back. Only a change is sent, and only while the user has a
+    /// frozen or held app or had one at the last request; `force` sends it anyway (after a restart
+    /// of this service, when what is parked is not known).
     fn sync_audio(&mut self, user: &str, force: bool) {
         let mine: Vec<&Instance> = self
             .instances
@@ -1088,7 +1107,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             .collect();
         let mut frozen: Vec<String> = mine
             .iter()
-            .filter(|i| i.frozen)
+            .filter(|i| i.frozen || i.held)
             .map(|i| i.app_id.clone())
             .collect();
         let mut running: Vec<String> = mine
@@ -3162,6 +3181,79 @@ mod tests {
         let before = s.spawner.calls().len();
         s.profile_changed(Some("p1"), "p2", Instant::now());
         assert_eq!(calls_since(&s, before), [format!("freeze {child}")]);
+    }
+
+    // ---- A paused parent whose app is never frozen is held (ADR-042 point 3) -------------------
+
+    #[test]
+    fn a_never_frozen_parent_with_a_game_is_held_so_its_sound_is_parked_with_the_games() {
+        let (mut s, steam, child) = steam_with_game(FakeSpawner::new().with_freeze_never(STEAM));
+        s.take_frozen_changes();
+        assert!(s.spawner.audio_calls().is_empty());
+        assert_eq!(s.freeze(&steam, Some("p1"), Instant::now()), Status::Ok);
+        // Sound is per app id today (RUY-1081): the game's freeze already parks "Steam", and the
+        // held parent changes nothing more in the request.
+        assert_eq!(
+            s.spawner.audio_calls(),
+            [format!("ruya-p1 frozen={STEAM} running={STEAM}")]
+        );
+        assert!(s.instances.iter().any(|i| i.held && i.unit == steam));
+        // Only the game's record changed: `FrozenChanged` is never sent for the held parent.
+        assert_eq!(
+            s.take_frozen_changes(),
+            [FrozenChange {
+                instance: child.clone(),
+                frozen: true
+            }]
+        );
+        assert!(!frozen_of(&s, &steam));
+        assert_eq!(s.thaw(&steam, Some("p1")), Status::Ok);
+        assert_eq!(
+            s.spawner.audio_calls().last().unwrap(),
+            &format!("ruya-p1 frozen= running={STEAM}")
+        );
+        // A thaw of a parent that is no longer held asks no more.
+        let calls = s.spawner.audio_calls().len();
+        assert_eq!(s.thaw(&steam, Some("p1")), Status::Ok);
+        assert_eq!(s.spawner.audio_calls().len(), calls);
+    }
+
+    #[test]
+    fn a_never_frozen_parent_paused_alone_is_held_and_no_frozen_change_is_sent() {
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let mut s = Session::new(
+            FakeSpawner::new().with_app(STEAM).with_freeze_never(STEAM),
+            dir,
+            vec![],
+        );
+        let (_, steam) = s.launch(STEAM, "p1", 100, &[]);
+        s.on_event(UnitEvent::Started {
+            unit: steam.clone(),
+        });
+        assert_eq!(s.freeze(&steam, Some("p1"), Instant::now()), Status::Ok);
+        assert_eq!(
+            s.spawner.audio_calls(),
+            [format!("ruya-p1 frozen={STEAM} running={STEAM}")]
+        );
+        assert!(s.take_frozen_changes().is_empty());
+        assert!(!s.spawner.calls().iter().any(|c| c.starts_with("freeze ")));
+        // A second Freeze changes nothing; the Thaw puts the sound back.
+        assert_eq!(s.freeze(&steam, Some("p1"), Instant::now()), Status::Ok);
+        assert_eq!(s.spawner.audio_calls().len(), 1);
+        assert_eq!(s.thaw(&steam, Some("p1")), Status::Ok);
+        assert_eq!(
+            s.spawner.audio_calls()[1..],
+            [format!("ruya-p1 frozen= running={STEAM}")]
+        );
+        assert!(s.take_frozen_changes().is_empty());
+        // A Stop of a held parent clears it: the end leaves nothing parked.
+        assert_eq!(s.freeze(&steam, Some("p1"), Instant::now()), Status::Ok);
+        assert_eq!(s.stop(&steam, Instant::now()), Status::Ok);
+        assert_eq!(s.on_event(exited(&steam, 0, false)).len(), 1);
+        assert_eq!(
+            s.spawner.audio_calls().last().unwrap(),
+            "ruya-p1 frozen= running="
+        );
     }
 
     #[test]

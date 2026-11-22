@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# modes: check clean display display-clean kill restart security shutdown shutdown-verify
+# modes: check clean display display-clean kill restart security shutdown shutdown-verify steam-pause
 # Checks ruya-session (org.ruyaos.Session1, T-162) inside a running VM, as root. It builds a tiny
 # local Flatpak repository (one runtime made of the guest's own bash and sleep, two command-line
 # apps: one that sleeps, one that exits 3), installs it system-wide,
 # creates a profile through Profiles1 if there is none, and drives Launch / Stop over the system
 # bus as ruya-shell. Copy and run (boot with plain smoke-test.ps1 -Keep):
 #   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-session-check.sh scripts/vm-session-probe.qml root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-session-check.sh [check|restart|kill|shutdown|shutdown-verify|security|display|display-clean|clean]
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-session-check.sh [check|restart|kill|shutdown|shutdown-verify|security|display|display-clean|clean|steam-pause]
 # `shutdown` and `shutdown-verify` (RUY-888) are the two halves of `vm-reboot-check.ps1 -Shutdown` (the queue
 # cannot reboot): `shutdown` checks ruya-session's shutdown delay lock (systemd-inhibit --list) and logind's
 # 40 s InhibitDelayMaxSec, then launches a test game that saves at quit (its SIGTERM trap writes a file),
@@ -39,6 +39,12 @@
 # profile "Check Kid", runs the apps as the kid and deletes it at the end (which also checks that a
 # profile with a lingering manager and a running app can be deleted); the admin stays. Profiles
 # that were there before are used as they are and not deleted.
+# `steam-pause` (RUY-1054, ADR-042; DELL ONLY: the VM has no Steam, so the queue does not list it) runs on a
+# machine where the signed-in profile has Steam running with a game: the Guide key (vm-inject-key.py in
+# /root; the Hub's own path, a direct Freeze is thawed by the Hub's sweep, RUY-1080) pauses it for
+# STEAM_PAUSE_SECS (default 120). PASS: the game's scope has cgroup.events frozen 1, every other Steam
+# scope and the Steam unit frozen 0 and no disconnect line in Steam's connection_log; after Resume
+# (Return on the focused card) all frozen 0. Exit 2 when Steam or its game is not running.
 set -u
 svc=org.ruyaos.Session1
 path=/org/ruyaos/Session1
@@ -134,6 +140,22 @@ print("missing")
 ' "$1"
 }
 # --- running_item end
+# --- steam_pair begin
+# steam_pair: reads a ListRunning answer (busctl --json=short) on stdin and prints
+# "<steam instance>|<game instance>|<game appid>" of the first Steam instance with a game child
+# (ADR-041: item "steam:<appid>", parent = the Steam instance), "none" when there is no such pair.
+steam_pair() {
+    python3 -I -c '
+import json, sys
+recs = [{k: v["data"] for k, v in r.items()} for r in json.load(sys.stdin)["data"][0]]
+for child in recs:
+    if child.get("item", "").startswith("steam:") and child.get("parent"):
+        print("%s|%s|%s" % (child["parent"], child["instance"], child["item"][6:]))
+        sys.exit(0)
+print("none")
+'
+}
+# --- steam_pair end
 stop_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Stop s "$1"; }
 kill_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Kill s "$1"; }
 running() { as_shell busctl --system --json=short call "$svc" "$path" "$ifc" ListRunning; }
@@ -524,6 +546,58 @@ case "${1:-check}" in
 security)
     echo "unit hardening: scripts/vm-security-check.sh (one place, with a baseline)"
     ls -Zd /var/lib/ruya-session /var/lib/ruya-session/usage 2>&1
+    ;;
+steam-pause)
+    echo "--- Steam with a game, paused through the Guide key (RUY-1054, ADR-042)"
+    active="$(as_shell busctl --system get-property "$psvc" "$ppath" "$psvc" ActiveProfile | sed -n 's/^s "\(.*\)"/\1/p')"
+    [ -n "$active" ] || { echo "STEAM PAUSE CHECK NOT RUN: nobody is signed in"; exit 2; }
+    user="ruya-$active"
+    pair="$(running | steam_pair)"
+    [ "$pair" != none ] || { echo "STEAM PAUSE CHECK NOT RUN: no Steam instance with a game child is running for $active"; exit 2; }
+    steam_inst="${pair%%|*}"; rest="${pair#*|}"; game_inst="${rest%%|*}"; appid="${rest#*|}"
+    [ -f /root/vm-inject-key.py ] || { echo "STEAM PAUSE CHECK NOT RUN: /root/vm-inject-key.py is missing"; exit 2; }
+    echo "info: $user, Steam $steam_inst, game steam:$appid ($game_inst)"
+    # The cgroup freezer state of one unit of the user's manager (the cgroup.events line "frozen <0|1>").
+    cg_frozen() {
+        local cg
+        cg="$(systemctl --user -M "$user@.host" show -p ControlGroup --value "$1" </dev/null 2>&1 | cat)"
+        awk '$1 == "frozen" { print $2 }' "/sys/fs/cgroup$cg/cgroup.events" 2>/dev/null
+    }
+    # Steam's active Flatpak scopes: the game's holds a process with SteamGameId=<appid> in its
+    # environment (the test ruya-session uses); every other one is Steam's own.
+    game_scopes=""; own_scopes=""
+    for sc in $(systemctl --user -M "$user@.host" list-units --state=active --plain --no-legend --full 'app-flatpak-com.valvesoftware.Steam-*.scope' </dev/null 2>&1 | awk '{print $1}'); do
+        cg="$(systemctl --user -M "$user@.host" show -p ControlGroup --value "$sc" </dev/null 2>&1 | cat)"
+        if cat "/sys/fs/cgroup$cg/cgroup.procs" 2>/dev/null | while read -r p; do tr '\0' '\n' < "/proc/$p/environ" 2>/dev/null; done | grep -qx "SteamGameId=$appid"; then
+            game_scopes="$game_scopes $sc"
+        else
+            own_scopes="$own_scopes $sc"
+        fi
+    done
+    [ -n "$game_scopes" ] || { echo "STEAM PAUSE CHECK NOT RUN: no scope with SteamGameId=$appid"; exit 2; }
+    echo "info: game scopes:$game_scopes; Steam's own:${own_scopes:- none}"
+    clog="$(getent passwd "$user" | cut -d: -f6)/.var/app/com.valvesoftware.Steam/.local/share/Steam/logs/connection_log.txt"
+    before="$(wc -l < "$clog" 2>/dev/null || echo 0)"
+    python3 /root/vm-inject-key.py guide
+    sleep 3
+    for sc in $game_scopes; do [ "$(cg_frozen "$sc")" = 1 ] && ok "the game's scope $sc is frozen" || bad "the game's scope $sc is not frozen"; done
+    for sc in $own_scopes; do [ "$(cg_frozen "$sc")" = 0 ] && ok "Steam's scope $sc runs" || bad "Steam's scope $sc is frozen"; done
+    [ "$(cg_frozen "$steam_inst")" = 0 ] && ok "the Steam unit runs" || bad "the Steam unit is frozen"
+    echo "info: the pause holds for ${STEAM_PAUSE_SECS:-120} s"
+    sleep "${STEAM_PAUSE_SECS:-120}"
+    for sc in $game_scopes; do [ "$(cg_frozen "$sc")" = 1 ] && ok "the game's scope is still frozen" || bad "the game's scope thawed during the pause"; done
+    [ "$(cg_frozen "$steam_inst")" = 0 ] && ok "the Steam unit still runs" || bad "the Steam unit froze during the pause"
+    new="$(tail -n +"$((before + 1))" "$clog" 2>/dev/null)"
+    echo "info: connection_log since the pause began:"; echo "$new" | sed 's/^/    /'
+    if [ -f "$clog" ]; then
+        echo "$new" | grep -qiE 'disconnect|logged off|connection (lost|failed)' && bad "Steam lost its connection during the pause" || ok "Steam's connection_log shows no disconnect during the pause"
+    else
+        echo "info: no connection_log at $clog (not checked)"
+    fi
+    python3 /root/vm-inject-key.py return
+    sleep 3
+    for sc in $game_scopes $own_scopes; do [ "$(cg_frozen "$sc")" = 0 ] && ok "after Resume $sc runs" || bad "after Resume $sc is frozen"; done
+    [ "$(cg_frozen "$steam_inst")" = 0 ] && ok "after Resume the Steam unit runs" || bad "after Resume the Steam unit is frozen"
     ;;
 restart)
     echo "--- a profile and the test apps"

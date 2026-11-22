@@ -649,6 +649,17 @@ expect_contains "a record without item and parent is missing" "$out" "missing"
 out="$(printf '%s' "$listed" | bash -c ". '$itemsrc'; running_item u9" 2>&1)"
 expect_contains "an instance not listed is missing" "$out" "missing"
 
+# --- vm-session-check.sh steam-pause: steam_pair finds Steam and its game (RUY-1054) -----------------
+pairsrc="$tmp/steam-pair.sh"
+sed -n '/^# --- steam_pair begin/,/^# --- steam_pair end/p' "$here/vm-session-check.sh" > "$pairsrc"
+[ -s "$pairsrc" ] && pass "vm-session-check.sh has the steam_pair block" || fail "no steam_pair block in vm-session-check.sh"
+listed='{"type":"aa{sv}","data":[[{"instance":{"type":"s","data":"st"},"item":{"type":"s","data":"flatpak:com.valvesoftware.Steam"},"parent":{"type":"s","data":""}},{"instance":{"type":"s","data":"st:steam-70"},"item":{"type":"s","data":"steam:70"},"parent":{"type":"s","data":"st"}}]]}'
+out="$(printf '%s' "$listed" | bash -c ". '$pairsrc'; steam_pair" 2>&1)"
+expect_contains "steam_pair names Steam, its game and the game's appid" "$out" "st|st:steam-70|70"
+listed='{"type":"aa{sv}","data":[[{"instance":{"type":"s","data":"st"},"item":{"type":"s","data":"flatpak:com.valvesoftware.Steam"},"parent":{"type":"s","data":""}}]]}'
+out="$(printf '%s' "$listed" | bash -c ". '$pairsrc'; steam_pair" 2>&1)"
+expect_contains "steam_pair without a game is none" "$out" "none"
+
 # --- vm-session-check.sh display: the refused client (RUY-679) -------------------------------------
 # Passes on AppExited, or on the unit frozen with "its profile is not signed in"; fails on neither.
 echo '{"member":"AppExited","x":"org.ruyaos.TestWaylandClient"}' > "$tmp/drop-work/signals.log"
