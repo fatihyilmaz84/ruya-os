@@ -16,6 +16,8 @@
 #                      fails the build), unpack its root folder to <play>/runners/<Name>/ without group
 #                      or world write bits, put runner.json and the pin folder's other files in it,
 #                      refuse a tree without a licence text. Needs the network.
+#   install-runners.sh check-pin <pin>               only the pin's grammar (check_pin); the same verdicts as
+#                      ruya_play_format::runner::Pin::parse on services/ruya-play-format/tests/fixtures/pins/
 #   install-runners.sh check <ruya-pack> <play> <meta>  `ruya-pack runner-check` on each runner (the
 #                      format's own parser and runner hash, never jq or a shell hash): writes
 #                      <meta>/runners/<Name>/.ruya-runner-hash. The shell lists the runners through
@@ -122,6 +124,7 @@ check() {
 
 case "${1:-}" in
 fetch) [ $# = 3 ] || die "usage: fetch <runners> <play>"; fetch "$2" "$3" ;;
+check-pin) [ $# = 2 ] || die "usage: check-pin <pin>"; check_pin "$2" ;;
 check) [ $# = 4 ] || die "usage: check <ruya-pack> <play> <meta>"; check "$2" "$3" "$4" ;;
-*) die "usage: install-runners.sh fetch <runners> <play> | check <ruya-pack> <play> <meta>" ;;
+*) die "usage: install-runners.sh fetch <runners> <play> | check-pin <pin> | check <ruya-pack> <play> <meta>" ;;
 esac

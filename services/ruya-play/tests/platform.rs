@@ -20,7 +20,7 @@ use ruya_play_format::problem::Problems;
 use ruya_play_format::resolve::{
     major_of, resolve_one, Chosen, Override, SystemRunner, Unresolved,
 };
-use ruya_play_format::runner::{is_system_runner_name, parse_runner, RunnerJson, FILE_NAME};
+use ruya_play_format::runner::{is_system_runner_name, parse_runner, Pin, RunnerJson, FILE_NAME};
 use ruya_play_trust::{check_ceiling, Tier};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -350,17 +350,8 @@ fn the_image_runners_serve_a_system_wine_and_a_system_proton_package() {
     }
 }
 
-/// The value of the one `key=value` line of a pin file.
-fn pin_value<'a>(pin: &'a str, key: &str) -> Option<&'a str> {
-    let mut values = pin
-        .lines()
-        .filter_map(|l| l.strip_prefix(key)?.strip_prefix('='));
-    let v = values.next();
-    v.filter(|_| values.next().is_none())
-}
-
 /// Every runner folder of `image/play/runners/` (`image/play/install-runners.sh` installs each one)
-/// has a pin of the release (an https URL, a SHA-256, the archive's folder), a `runner.json` the one
+/// has a pin of the release ([`Pin::parse`]), a `runner.json` the one
 /// parser accepts, a name that can be the last part of `org.ruyaos.Play.Runner.<Name>`, and its `L+`
 /// line; and every runner line of the tmpfiles.d file has its folder.
 #[test]
@@ -374,18 +365,8 @@ fn the_image_runners_are_valid_and_linked() {
         assert!(is_system_runner_name(name), "{name}: not a runner name");
         let dir = runners.join(name);
         let pin = std::fs::read_to_string(dir.join("pin")).expect("a pin file");
-        let url = pin_value(&pin, "url").unwrap_or_else(|| panic!("{name}: one url= line"));
-        assert!(url.starts_with("https://"), "{name}: {url}");
-        let sha = pin_value(&pin, "sha256").unwrap_or_else(|| panic!("{name}: one sha256= line"));
-        assert!(
-            sha.len() == 64 && sha.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')),
-            "{name}: {sha}"
-        );
-        let root = pin_value(&pin, "root").unwrap_or_else(|| panic!("{name}: one root= line"));
-        assert!(
-            !root.is_empty() && !root.contains('/') && root != "..",
-            "{name}: {root}"
-        );
+        // The one grammar (`Pin::parse`); `install-runners.sh check_pin` holds to the same verdicts.
+        Pin::parse(&pin).unwrap_or_else(|e| panic!("{name}: {e}"));
         let parsed = image_runner(name);
         // Settings > About shows each runner's licences and source (ADR-025's notice duty).
         assert!(
@@ -425,4 +406,48 @@ fn the_image_runners_are_valid_and_linked() {
             "{path} -> {target}: not a runner image/play/runners/ has"
         );
     }
+}
+
+/// The shell's mock library backend lists the image's runners (`pinnedRunners()`): the versions and
+/// source URLs it hard-codes are the ones the image pins. Per runner folder, `runner.json`'s version
+/// is in the pin's URL and root and in the source URL, and the mock source holds the version and the
+/// source URL as string literals (comments and translations are not read).
+#[test]
+fn the_runner_pins_runner_json_and_the_shell_mock_agree() {
+    let mock_path = repo("shell/src/library/MockLibraryBackend.cpp");
+    let mock = std::fs::read_to_string(&mock_path).expect("the mock library backend");
+    let mut seen = 0;
+    for name in image_runner_names() {
+        let runner = image_runner(&name);
+        let pin_text = std::fs::read_to_string(repo("image/play/runners").join(&name).join("pin"))
+            .expect("a pin file");
+        let pin = Pin::parse(&pin_text).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let source = runner.source_url.expect("a source_url");
+        assert!(
+            pin.url.contains(&runner.version),
+            "{name}: pin url {} lacks runner.json's version {}",
+            pin.url,
+            runner.version
+        );
+        assert!(
+            pin.root.starts_with(&runner.version),
+            "{name}: pin root {} does not start with runner.json's version {}",
+            pin.root,
+            runner.version
+        );
+        assert!(
+            source.contains(&runner.version),
+            "{name}: source_url {source} lacks version {}",
+            runner.version
+        );
+        for (what, value) in [("version", &runner.version), ("source_url", &source)] {
+            assert!(
+                mock.contains(&format!("QStringLiteral(\"{value}\")")),
+                "{name}: {} has no literal for {what} {value}; update pinnedRunners() with the pin",
+                mock_path.display()
+            );
+        }
+        seen += 1;
+    }
+    assert!(seen >= 2, "the image pins {seen} runners");
 }

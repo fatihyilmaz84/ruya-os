@@ -1,0 +1,4 @@
+url=https://example.org/a.tar.gz
+sha256=abababababababababababababababababababababababababababababababab
+root=GE-X
+mirror=https://example.org/m

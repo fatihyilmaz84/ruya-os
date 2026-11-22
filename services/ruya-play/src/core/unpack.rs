@@ -12,7 +12,7 @@ use crate::core::codes;
 use crate::core::deps::Step;
 use crate::core::staging::{self, is_changed, is_no_space, Dir, Found, Kind};
 use ruya_play_format::manifest::Manifest;
-use ruya_play_format::runner::{RunnerEntry, RunnerHasher};
+use ruya_play_format::runner::{runner_hash, RunnerEntry};
 use ruya_play_format::table::TableIndex;
 use ruya_play_format::{sha256_of_chunks, FileEntry, Problem, ReadFault, Source};
 use std::collections::{BTreeMap, HashMap};
@@ -349,35 +349,36 @@ pub fn check_tree(
 }
 
 /// The `runner` hash of each bundled component (05 §7.3), computed from the staged copy with the
-/// format's one formula ([`RunnerHasher`]): every table entry below the component's `bundled.path`,
+/// format's one formula ([`runner_hash`]): every table entry below the component's `bundled.path`,
 /// in table order, with its path relative to that folder; a file with its hash as it was written
 /// into staging, a link and an empty folder as the re-walk confirmed. T-239's runner resolution
 /// reports the same value for a bundled runner.
 pub fn runner_hashes(manifest: &Manifest, files: &[FileEntry], unpacked: &Unpacked) -> Vec<String> {
-    let mut out = Vec::new();
-    for c in &manifest.components {
-        let Some(bundled) = &c.bundled else {
-            continue;
-        };
-        let prefix = format!("{}/", bundled.path.trim_end_matches('/'));
-        let mut h = RunnerHasher::new();
-        for e in files {
-            let Some(rel) = e.path().strip_prefix(&prefix) else {
-                continue;
-            };
-            h.add(&match e {
-                FileEntry::File { executable, .. } => RunnerEntry::File {
-                    rel,
-                    sha256: unpacked.hashes.get(e.path()).map_or("", String::as_str),
-                    exec: *executable,
-                },
-                FileEntry::Link { to, .. } => RunnerEntry::Link { rel, to },
-                FileEntry::Dir { .. } => RunnerEntry::Dir { rel },
-            });
-        }
-        out.push(h.finish());
-    }
-    out
+    manifest
+        .components
+        .iter()
+        .filter_map(|c| c.bundled.as_ref())
+        .map(|bundled| runner_hash_below(&bundled.path, files, unpacked))
+        .collect()
+}
+
+/// The runner hash of the table entries below the folder `root`, as [`runner_hashes`] takes it.
+fn runner_hash_below(root: &str, files: &[FileEntry], unpacked: &Unpacked) -> String {
+    let prefix = format!("{}/", root.trim_end_matches('/'));
+    runner_hash(files.iter().filter_map(|e| {
+        let entry = RunnerEntry::from(e).with_rel(e.path().strip_prefix(&prefix)?);
+        Some(match e {
+            // `rehash` hashed every file of the table it was given, and the caller passes that
+            // same table: a file without a staged hash is a bug, never an empty hash.
+            FileEntry::File { path, .. } => entry.with_sha256(
+                unpacked
+                    .hashes
+                    .get(path)
+                    .expect("rehash hashed every file of the table"),
+            ),
+            _ => entry,
+        })
+    }))
 }
 
 /// The service's own pass over a tree the helper wrote (05 §7.3, lead-33): every file of the table
@@ -503,5 +504,59 @@ mod tests {
         let index = TableIndex::new(&files);
         assert!(ends_at_dir(&index, "c/l1", "l2"));
         assert!(!ends_at_dir(&index, "c/l3", "lib/x.so"));
+    }
+
+    /// `runner_hashes` expects a staged hash for every file it hashes: `rehash` gives one for every
+    /// file of the table, so a file without one cannot reach it.
+    #[test]
+    fn rehash_hashes_every_file_of_the_table() {
+        let tmp = tempfile::tempdir().expect("a temp folder");
+        std::fs::create_dir(tmp.path().join("c")).unwrap();
+        std::fs::write(tmp.path().join("c/a"), b"abc").unwrap();
+        std::fs::write(tmp.path().join("c/b"), b"").unwrap();
+        let sha = |bytes: &[u8]| {
+            ruya_play_format::sha256_of_chunks(&mut &bytes[..], bytes.len() as u64, &mut |_| Ok(()))
+                .unwrap()
+                .unwrap()
+                .0
+        };
+        let files = vec![
+            FileEntry::Dir { path: "c".into() },
+            FileEntry::File {
+                path: "c/a".into(),
+                size: 3,
+                sha256: sha(b"abc"),
+                executable: false,
+            },
+            FileEntry::File {
+                path: "c/b".into(),
+                size: 0,
+                sha256: sha(b""),
+                executable: true,
+            },
+            FileEntry::Link {
+                path: "c/l".into(),
+                to: "a".into(),
+            },
+        ];
+        let tree = Dir::open_root(tmp.path()).unwrap();
+        let unpacked = rehash(&tree, &files).expect("rehash");
+        let mut hashed: Vec<&str> = unpacked.hashes.keys().map(String::as_str).collect();
+        hashed.sort_unstable();
+        assert_eq!(hashed, ["c/a", "c/b"]);
+        for f in &files {
+            if let FileEntry::File { path, sha256, .. } = f {
+                assert_eq!(&unpacked.hashes[path], sha256);
+            }
+        }
+        // The staged hashes give the hash of the table itself, below the folder `c`.
+        let below: Vec<RunnerEntry> = files
+            .iter()
+            .filter_map(|e| Some(RunnerEntry::from(e).with_rel(e.path().strip_prefix("c/")?)))
+            .collect();
+        assert_eq!(
+            runner_hash_below("c/", &files, &unpacked),
+            runner_hash(below)
+        );
     }
 }

@@ -2585,6 +2585,20 @@ out="$(ir_ fetch "$ir/runners" "$ir/play")"; rc=$?
 printf 'url=http://example.org/r\nsha256=%s\nroot=GE-X\n' "$rsha" > "$ir/runners/ProtonGE11/pin"
 out="$(ir_ fetch "$ir/runners" "$ir/play")"; rc=$?
 [ "$rc" != 0 ] && expect_contains "install-runners: a URL that is not https fails the build" "$out" "url is not https" || fail "install-runners: an http URL: exit $rc"
+# RUY-920: the pin grammar is written once in Rust (Pin::parse); check_pin gives the same verdict on
+# every shared fixture (good* accepted, bad* refused), the ones Rust tests read too.
+pins="$here/../services/ruya-play-format/tests/fixtures/pins"
+npins=0
+for f in "$pins"/*.pin; do
+    b="$(basename "$f")"; npins=$((npins + 1))
+    out="$(bash "$here/../image/play/install-runners.sh" check-pin "$f" 2>&1)"; rc=$?
+    case "$b" in
+    good*) [ "$rc" = 0 ] && pass "install-runners: check_pin accepts $b" || fail "install-runners: check_pin refused $b: $out" ;;
+    bad*) [ "$rc" != 0 ] && pass "install-runners: check_pin refuses $b" || fail "install-runners: check_pin accepted $b" ;;
+    *) fail "install-runners: pin fixture $b is neither good* nor bad*" ;;
+    esac
+done
+[ "$npins" -ge 12 ] || fail "install-runners: only $npins pin fixtures"
 # RUY-37: the pin folder's own files (licence texts) are laid over the release; none replaces a release
 # file; a tree without a licence text fails the build.
 nsha="$(sha256sum "$ir/release-nolicence.tar.gz" | cut -d' ' -f1)"
