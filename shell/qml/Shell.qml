@@ -349,14 +349,14 @@ FocusScope {
             return
         // (A destroyed item has already cleared focusedApp; null means "none" unless the apps are behind Home.)
         const wasFront = focusedApp === record.item || (!focusedApp && !appsBehindHome)
-        const gone = instanceOfWindow(record)
+        const gone = runningFor(record)     // as the route finds it, a window still waiting for its pid included (RUY-1040)
         apps = apps.filter(r => r.id !== id)
         if (!focusedApp || wasFront)
             focusedApp = appsBehindHome ? null : fallbackFront()
         // The last window of a running instance went and nothing else is in front (RUY-814, item 3).
         if (wasFront && gone && !focusedApp && !appsBehindHome && signedIn && gone.state !== "stopping"
                 && gone.profile === Profiles.activeProfile && !closingInstances.includes(gone.instance)
-                && !apps.some(r => { const o = instanceOfWindow(r); return o && o.instance === gone.instance })) {
+                && !apps.some(r => { const o = runningFor(r); return o && o.instance === gone.instance })) {
             gapInstance = gone.instance
             windowGapTimer.restart()
         }
@@ -948,7 +948,8 @@ FocusScope {
 
     // The running record (Session1) of the app a window belongs to: by the instance of the window's
     // process (T-459), else by the application id the window gives itself, else (a client that names
-    // none, as in tests) the newest of the profile's apps.
+    // none, as in tests) the newest of the profile's apps. The Input route and the window gap both go
+    // through it, so a window whose pid lookup has not answered is the same instance for both (RUY-1040).
     function runningFor(record) {
         const mine = Session.running.filter(r => r.profile === Profiles.activeProfile && r.state !== "stopping")
         const run = instanceOfWindow(record)
