@@ -8,6 +8,8 @@ rust-version.workspace = true
 
 [dependencies]
 ruya-ids = { path = "../ruya-ids" }  # the one profile-id rule and profile user name (RUY-1008)
+ruya-fs = { path = "../ruya-fs" }  # Steam files read below the root, never through a link, with a size cap (RUY-960)
+ruya-vdf = { path = "../ruya-vdf" }  # the one Steam VDF reader (RUY-960)
 zbus = { version = "5", default-features = false, features = ["async-io"] }
 futures-lite = "2"
 serde_json = "1"  # play.json and trust.json of a .play app; already built for ruya-play, no new download

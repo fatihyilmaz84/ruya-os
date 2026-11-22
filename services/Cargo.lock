@@ -1029,10 +1029,12 @@ dependencies = [
  "blocking",
  "futures-lite",
  "ruya-contract-test",
+ "ruya-fs",
  "ruya-ids",
  "ruya-play-art",
  "ruya-play-format",
  "ruya-play-launch",
+ "ruya-vdf",
  "serde_json",
  "tempfile",
  "zbus",
@@ -1172,6 +1174,7 @@ dependencies = [
  "ruya-keyfile",
  "ruya-play-format",
  "ruya-play-launch",
+ "ruya-vdf",
  "tempfile",
  "zbus",
 ]
@@ -1214,6 +1217,10 @@ dependencies = [
  "tempfile",
  "zbus",
 ]
+
+[[package]]
+name = "ruya-vdf"
+version = "0.1.0"
 
 [[package]]
 name = "semver"

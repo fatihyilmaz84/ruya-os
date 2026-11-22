@@ -34,7 +34,7 @@ use ruya_play_launch::runners::scan_in;
 
 use ruya_fs::Dir;
 
-use crate::vdf::{self, Entry, Value};
+use ruya_vdf::{self as vdf, Entry, Value};
 
 /// The Steam Flatpak (the only app this step belongs to).
 pub const STEAM_APP_ID: &str = "com.valvesoftware.Steam";
