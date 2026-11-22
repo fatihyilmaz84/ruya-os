@@ -6,6 +6,8 @@ import RuyaShell
 // ruya-session sets; the mock plays it and follows Library.profile one turn later) and hides every
 // Steam item while it is not the signed-in profile, so no profile sees another's games during a
 // switch. The mock: its three profiles (p1, p2, p3) have the Steam games, a later profile (p4) none.
+// The mock lists them for nobody ("") too, for pages built without a Shell; the service's own view of
+// nobody (Flatpak items only) is tested in Rust (view.rs).
 Item {
     width: 320
     height: 240
@@ -74,12 +76,6 @@ Item {
             tryCompare(Library, "activeProfile", "p1")
             tryCompare(Library.items, "length", 10)
             compare(Library.item("steam:730").title, "Counter Strike")
-        }
-
-        function test_nobody_signed_in_has_no_steam_items() {
-            signIn("")
-            tryCompare(Library.items, "length", 5)
-            compare(steamIn(Library.items), [])
         }
 
         // A list that arrives after the switch but was read before it (the service answered before its
