@@ -6,8 +6,10 @@
 //!   (`spawner::valid_app_arg`). Steam: `-gamepadui`.
 //! - `display`: `wayland`, `x11` or `gamescope` (overrides the metadata's sockets,
 //!   `x11::needs_x11`). `gamescope` parses, and the launch refuses it until it is built.
-//! - `freeze`: `always` or `never` (parsed and exposed; the Hub's pause reads it later).
-//! - `children`: `steam` (parsed and exposed; the games an app starts are listed later).
+//! - `freeze`: `always` or `never`. `never` keeps the app's own unit and scopes out of Freeze and
+//!   Thaw, its children are frozen anyway (`Spawner::may_freeze`, ADR-041 point 7); the Hub's
+//!   pause reads it later.
+//! - `children`: `steam`: the games the app starts are its child instances (`scope.rs`, RUY-1052).
 //!
 //! The file name must be a valid Flatpak id. A file that does not parse, names an unknown key or
 //! holds a bad value is refused as a whole (the app then has no entry) and reported by `problems`.

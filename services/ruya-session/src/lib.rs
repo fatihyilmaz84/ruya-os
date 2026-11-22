@@ -18,6 +18,7 @@ pub mod scope;
 pub mod session;
 pub mod shutdown;
 pub mod spawner;
+pub mod steam_probe;
 pub mod steam_tool;
 #[cfg(target_os = "linux")]
 pub mod systemd;

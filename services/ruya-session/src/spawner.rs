@@ -30,6 +30,19 @@ pub enum UnitEvent {
     },
     /// The program of the unit could not be executed (exit status 203/EXEC): the app never ran.
     ExecFailed { unit: String },
+    /// A Steam game's first scope appeared in the run of `parent` (ADR-041, RUY-1052): its child
+    /// instance `child` (`child_name`) for Steam app `appid` starts. The child's end is an
+    /// `Exited` of `child` (code 0, not signalled) once none of its scopes has existed for
+    /// `scope::CHILD_GRACE`, or when its parent's run ends.
+    ChildStarted {
+        parent: String,
+        child: String,
+        appid: String,
+        /// When its first scope became active, in unix seconds (0 when unknown).
+        started: i64,
+        /// That scope is frozen (a Freeze before a restart of this service).
+        frozen: bool,
+    },
 }
 
 /// An app unit that was already running when the service started (see `Spawner::adopt_running`).
@@ -142,6 +155,16 @@ pub trait Spawner {
     /// Ends a reclaim of the unit's app that may still run (a thaw must not be slowed by it).
     /// Returns at once.
     fn cancel_reclaim(&self, _unit: &str) {}
+    /// The child instance (`UnitEvent::ChildStarted`) whose scopes include `scope` in `user`'s
+    /// manager (ADR-041, `InstanceOfPid`), else `None`.
+    fn child_of_scope(&self, _user: &str, _scope: &str) -> Option<String> {
+        None
+    }
+    /// May the app's own unit and scopes be frozen? The image app table's `freeze` (ADR-042,
+    /// ADR-043): false for `never`. A child instance is frozen anyway.
+    fn may_freeze(&self, _app_id: &str) -> bool {
+        true
+    }
 }
 
 impl<T: Spawner + ?Sized> Spawner for Box<T> {
@@ -202,11 +225,23 @@ impl<T: Spawner + ?Sized> Spawner for Box<T> {
     fn cancel_reclaim(&self, unit: &str) {
         (**self).cancel_reclaim(unit)
     }
+    fn child_of_scope(&self, user: &str, scope: &str) -> Option<String> {
+        (**self).child_of_scope(user, scope)
+    }
+    fn may_freeze(&self, app_id: &str) -> bool {
+        (**self).may_freeze(app_id)
+    }
 }
 
 /// The unit an app runs in: one per (user, app).
 pub fn unit_name(user: &str, app_id: &str) -> String {
     format!("ruya-app-{user}-{app_id}.service")
+}
+
+/// The instance name of the Steam game `appid` in the run of `parent` (ADR-041): opaque to the
+/// shell, unique while the parent runs (one Steam per profile user, one child per game).
+pub fn child_name(parent: &str, appid: &str) -> String {
+    format!("{parent}:steam-{appid}")
 }
 
 /// The pattern of the scope `flatpak run` puts the sandbox in (`app-flatpak-<id>-<number>.scope`,
@@ -336,6 +371,32 @@ pub fn control_command(
     app_id: &str,
     scopes: &[String],
 ) -> Result<Vec<String>, String> {
+    named_command(user, verb, Some(unit), app_id, scopes)
+}
+
+/// `control_command` for a child instance (ADR-041, RUY-1052): `verb` on `scopes` alone, the
+/// child's own scopes (`scope::RunScopes::child`), never the parent's unit. No scope is an error
+/// (there is nothing of the child to reach). Pure; user, app and every scope are validated again.
+pub fn child_command(
+    user: &str,
+    verb: &[&str],
+    app_id: &str,
+    scopes: &[String],
+) -> Result<Vec<String>, String> {
+    if scopes.is_empty() {
+        return Err(format!("no scope of the child of {app_id} is left"));
+    }
+    named_command(user, verb, None, app_id, scopes)
+}
+
+/// `systemctl --user --machine=<user>@.host <verb>... [<unit>] <scope>...`, every name checked.
+fn named_command(
+    user: &str,
+    verb: &[&str],
+    unit: Option<&str>,
+    app_id: &str,
+    scopes: &[String],
+) -> Result<Vec<String>, String> {
     let mut args = user_systemctl(user)?;
     if !valid_session_app_id(app_id) {
         return Err(format!("not an application id: {app_id:?}"));
@@ -344,7 +405,7 @@ pub fn control_command(
         return Err(format!("not a scope of {app_id}: {bad:?}"));
     }
     args.extend(verb.iter().map(|v| (*v).to_owned()));
-    args.push(unit.to_owned());
+    args.extend(unit.map(str::to_owned));
     args.extend(scopes.iter().cloned());
     Ok(args)
 }
@@ -366,12 +427,8 @@ pub fn kill_command(
     scopes: &[String],
     unit_ended: bool,
 ) -> Result<Vec<String>, String> {
-    let mut args = control_command(user, KILL_VERB, unit, app_id, scopes)?;
-    if unit_ended && !scopes.is_empty() {
-        let at = args.len() - scopes.len() - 1;
-        args.remove(at);
-    }
-    Ok(args)
+    let unit = (!unit_ended || scopes.is_empty()).then_some(unit);
+    named_command(user, KILL_VERB, unit, app_id, scopes)
 }
 
 /// The `systemctl` argument lists that clear what is left of a run of `app_id` in `user`'s
@@ -951,6 +1008,33 @@ pub enum DisplayMode {
 /// `ExecStopPost` (`x11-cleanup`).
 pub const SESSION_PROGRAM: &str = "/usr/bin/ruya-session";
 
+/// The `steam-probe` helper of a new scope of Steam's run (ADR-041 point 2, RUY-1052): this binary
+/// as `user`, in that user's manager, with its stdout piped back (`--pipe`, the shape of the
+/// manager bridge in `follow.rs`), waited for and bounded by `RuntimeMaxSec`. The caller bounds
+/// the call too (`bounded::run_bounded`) and checks the answer (`steam_probe::parse_answer`).
+/// Pure; user and scope are validated again.
+pub fn steam_probe_command(user: &str, scope: &str) -> Result<Vec<String>, String> {
+    checked_user(user)?;
+    if !crate::steam_probe::valid_scope(scope) {
+        return Err(format!("not a Flatpak scope: {scope:?}"));
+    }
+    let mut args: Vec<String> = [
+        "systemd-run",
+        "--user",
+        "--pipe",
+        "--wait",
+        "--quiet",
+        "--collect",
+        "--no-ask-password",
+        "--property=RuntimeMaxSec=10",
+    ]
+    .map(str::to_owned)
+    .to_vec();
+    args.insert(1, format!("--machine={user}@.host"));
+    args.extend(["--", SESSION_PROGRAM, crate::steam_probe::SUBCOMMAND, scope].map(str::to_owned));
+    Ok(args)
+}
+
 /// Every app gets the input devices in its sandbox (RUY-837, 06 §1 and §3), whatever its manifest
 /// asks: many games ask only `devices=dri`, and then `/dev/input` does not exist for them, so no
 /// pad can reach them. What opens there is still ruya-inputd's choice: every pad's node is closed
@@ -1200,21 +1284,24 @@ pub struct ProcessPlace {
     pub units: Vec<String>,
 }
 
+/// The uid of a user manager's cgroup component (`user@1000.service` -> 1000), else `None`.
+pub fn user_manager_uid(part: &str) -> Option<u32> {
+    part.strip_prefix("user@")
+        .and_then(|r| r.strip_suffix(".service"))
+        .filter(|uid| !uid.is_empty() && uid.bytes().all(|b| b.is_ascii_digit()))
+        .and_then(|uid| uid.parse().ok())
+}
+
 /// The place of a process out of its cgroup file: the cgroup v2 line (`0::<path>`) whose path
 /// goes through a user manager (`.../user@<uid>.service/app.slice/<unit>`). `None` for a process
 /// outside every user manager (a system service, the kernel) or a file of another shape.
 pub fn parse_cgroup(text: &str) -> Option<ProcessPlace> {
     let path = text.lines().find_map(|l| l.strip_prefix("0::"))?;
     let parts: Vec<&str> = path.trim().split('/').filter(|p| !p.is_empty()).collect();
-    let at = parts.iter().position(|p| {
-        p.strip_prefix("user@")
-            .and_then(|r| r.strip_suffix(".service"))
-            .is_some_and(|uid| !uid.is_empty() && uid.bytes().all(|b| b.is_ascii_digit()))
-    })?;
-    let uid = parts[at]
-        .strip_prefix("user@")
-        .and_then(|r| r.strip_suffix(".service"))
-        .and_then(|uid| uid.parse().ok())?;
+    let (at, uid) = parts
+        .iter()
+        .enumerate()
+        .find_map(|(at, p)| user_manager_uid(p).map(|uid| (at, uid)))?;
     let units = parts[at + 1..]
         .iter()
         .rev()
@@ -1425,6 +1512,10 @@ struct FakeState {
     processes: HashMap<u32, String>,
     /// uid -> user name (`user_name`).
     users: HashMap<u32, String>,
+    /// (user, scope) -> child instance (`child_of_scope`, RUY-1052).
+    child_scopes: HashMap<(String, String), String>,
+    /// Apps whose table says `freeze = never` (`may_freeze`).
+    never_freeze: HashSet<String>,
 }
 
 /// A listing that blocks, to show that nothing else waits for it: the listing says it is inside
@@ -1525,6 +1616,20 @@ impl FakeSpawner {
     /// A Unix user `name` with this uid.
     pub fn with_user(self, uid: u32, name: &str) -> Self {
         self.lock().users.insert(uid, name.to_owned());
+        self
+    }
+
+    /// `scope` in `user`'s manager is one of `child`'s (`child_of_scope`, RUY-1052).
+    pub fn with_child_scope(self, user: &str, scope: &str, child: &str) -> Self {
+        self.lock()
+            .child_scopes
+            .insert((user.to_owned(), scope.to_owned()), child.to_owned());
+        self
+    }
+
+    /// The app table says `freeze = never` for `app_id` (`may_freeze`, ADR-042).
+    pub fn with_freeze_never(self, app_id: &str) -> Self {
+        self.lock().never_freeze.insert(app_id.to_owned());
         self
     }
 
@@ -1738,6 +1843,17 @@ impl Spawner for FakeSpawner {
 
     fn cancel_reclaim(&self, unit: &str) {
         self.lock().calls.push(format!("cancel-reclaim {unit}"));
+    }
+
+    fn child_of_scope(&self, user: &str, scope: &str) -> Option<String> {
+        self.lock()
+            .child_scopes
+            .get(&(user.to_owned(), scope.to_owned()))
+            .cloned()
+    }
+
+    fn may_freeze(&self, app_id: &str) -> bool {
+        !self.lock().never_freeze.contains(app_id)
     }
 }
 
@@ -2956,5 +3072,68 @@ app-flatpak-io.github.Foo-56.scope loaded active running app-flatpak-io.github.F
             })
         );
         assert_eq!(fake.calls().len(), 2);
+    }
+
+    #[test]
+    fn a_childs_command_names_only_its_scopes_never_the_parents_unit() {
+        use super::{child_command, child_name, unit_name, KILL_VERB};
+        let app = "com.valvesoftware.Steam";
+        let game = vec!["app-flatpak-com.valvesoftware.Steam-1623993748.scope".to_owned()];
+        for verb in [
+            &["stop", "--no-block"][..],
+            &["freeze"],
+            &["thaw"],
+            KILL_VERB,
+        ] {
+            let args = child_command("ruya-p1", verb, app, &game).expect("child");
+            let mut want: Vec<String> = [
+                "systemctl",
+                "--user",
+                "--no-pager",
+                "--machine=ruya-p1@.host",
+            ]
+            .map(str::to_owned)
+            .to_vec();
+            want.extend(verb.iter().map(|v| (*v).to_owned()));
+            want.extend(game.iter().cloned());
+            assert_eq!(args, want);
+        }
+        // No scope left: nothing of the child to reach, never the bare verb.
+        assert!(child_command("ruya-p1", &["freeze"], app, &[]).is_err());
+        // Never another app's scope.
+        let other = vec!["app-flatpak-org.other.Game-1.scope".to_owned()];
+        assert!(child_command("ruya-p1", &["stop"], app, &other).is_err());
+        // The child's name is its parent's and the game's.
+        let parent = unit_name("ruya-p1", app);
+        assert_eq!(
+            child_name(&parent, "70"),
+            "ruya-app-ruya-p1-com.valvesoftware.Steam.service:steam-70"
+        );
+    }
+
+    #[test]
+    fn the_probe_runs_as_the_profile_user_with_its_answer_piped_back() {
+        use super::steam_probe_command;
+        let scope = "app-flatpak-com.valvesoftware.Steam-1623993748.scope";
+        assert_eq!(
+            steam_probe_command("ruya-p1", scope).expect("probe"),
+            [
+                "systemd-run",
+                "--machine=ruya-p1@.host",
+                "--user",
+                "--pipe",
+                "--wait",
+                "--quiet",
+                "--collect",
+                "--no-ask-password",
+                "--property=RuntimeMaxSec=10",
+                "--",
+                "/usr/bin/ruya-session",
+                "steam-probe",
+                scope,
+            ]
+        );
+        assert!(steam_probe_command("root", scope).is_err());
+        assert!(steam_probe_command("ruya-p1", "../x.scope").is_err());
     }
 }

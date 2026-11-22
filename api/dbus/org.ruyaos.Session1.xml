@@ -75,17 +75,21 @@
   it ends when none of its scopes has existed for 3 s. Stop, Freeze, Thaw and Kill on a child touch
   only its scopes. Stop and Kill on a parent end its children first, then the parent. Freeze and
   Thaw on a parent apply to every child, and to the parent's own unit and scopes only as its app's
-  freeze rule allows (ADR-042: Steam is "never", so a Freeze of Steam freezes its games and leaves
-  Steam itself running). Each record's `frozen` is its own, with its own FrozenChanged. A LaunchItem
+  freeze rule allows (ADR-042: Steam becomes "never" with RUY-815's B5, and a Freeze of Steam then
+  freezes its games and leaves Steam itself running; until then the image's table says "always", so
+  Steam is frozen too). Each record's `frozen` is its own, with its own FrozenChanged. A LaunchItem
   of a Steam game whose child already runs answers "already-running" with that child's instance.
   InstanceOfPid answers the child for a pid in one of its scopes. While the Steam instance is in
   front and has a running child, the shell's front instance is the child: ReportPresence names the
   child, so its play time goes to the child's item. AppStarted and AppExited of a child carry the
   parent's app_id; the shell reads ListRunning again when AppStarted names an instance it does not
   know (a game started inside Steam's own UI becomes a child too). Every other instance has `item`
-  "flatpak:<app_id>" and `parent` "". Built so far: the keys, LaunchItem for Flatpak items, and the
-  ledger's `item`; Steam children are planned (RUY-1052) and LaunchItem answers "failed" for a
-  Steam item until then.
+  "flatpak:<app_id>" and `parent` "". Built: the keys, LaunchItem for Flatpak items, the ledger's
+  `item`, and Steam children (RUY-1052: a game's scope is told by the Steam app ids of its sandbox's
+  top process, read as the profile user; a child is "running" from its first scope, adopted games
+  become children again after a restart; Stop, Kill, Freeze, Thaw and InstanceOfPid as above).
+  Planned: LaunchItem of a Steam item (RUY-1067: "starting", the 120 s "launch-failed" and
+  "already-running"); until then it answers "failed".
 
   Running record (a{sv}), keys:
     instance   s    opaque instance name
@@ -170,8 +174,7 @@
     <!-- Asks the app to quit (SIGTERM to the unit and every scope of the app), and kills it if it
          has not ended 30 s later (the backstop). AppExited (reason "quit", or "killed" after the
          kill) follows. Stopping an instance that is already stopping is "ok". A child instance
-         (ADR-041) is only its own scopes; a parent's children are stopped first, then the parent
-         (planned, RUY-1052). -->
+         (ADR-041) is only its own scopes; a parent's children are stopped first, then the parent. -->
     <method name="Stop">
       <arg name="instance" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
@@ -184,7 +187,7 @@
          profile (a frozen one is not thawed: the kill ends it anyway). AppExited with reason
          "killed" follows, whatever signal the run's unit died of. "ok" means the kill was sent; a
          second Kill sends it again. A child instance (ADR-041) is only its own scopes; a parent's
-         children are killed first, then the parent (planned, RUY-1052). Statuses: ok,
+         children are killed first, then the parent. Statuses: ok,
          unknown-instance, not-allowed (another profile's app, or nobody is signed in), failed. -->
     <method name="Kill">
       <arg name="instance" type="s" direction="in"/>
@@ -202,9 +205,9 @@
          systemctl is bounded to 5 s). Freeze and Thaw calls are served one at a time, in the order
          they arrive. FrozenChanged(instance, true) follows a change. A child instance (ADR-041) is
          only its own scopes; on a parent the freeze applies to every child, and to the parent's own
-         unit and scopes only as its app's freeze rule allows (ADR-042: Steam is "never"); each
-         record's `frozen` is its own (planned, RUY-1052). Statuses: ok, invalid, not-running,
-         not-allowed, failed. -->
+         unit and scopes only as its app's freeze rule allows (ADR-042; Steam's table says "always"
+         until RUY-815's B5 makes it "never"); each record's `frozen` is its own. A failure undoes
+         what the call froze. Statuses: ok, invalid, not-running, not-allowed, failed. -->
     <method name="Freeze">
       <arg name="instance" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
@@ -228,7 +231,7 @@
          Flatpak scopes (`app-flatpak-<app_id>-<n>.scope`, also an Electron app's second one,
          T-435), contains it, in the manager of that instance's profile user. A starting or
          stopping instance counts too. A pid in one of a child instance's scopes (a Steam game,
-         ADR-041) answers the child, not its parent (planned, RUY-1052). `instance` is "" unless the
+         ADR-041) answers the child, not its parent. `instance` is "" unless the
          status is "ok". Statuses: ok, invalid (pid 0), not-found. -->
     <method name="InstanceOfPid">
       <arg name="pid" type="u" direction="in"/>
