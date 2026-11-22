@@ -296,6 +296,16 @@ QString MockSessionBackend::freezable(const QString &instance) const
     return QStringLiteral("ok");
 }
 
+void MockSessionBackend::setChildrenFrozen(const QString &parentInstance, bool frozen)
+{
+    for (int c = 0; c < m_running.size(); ++c) {
+        if (m_running.at(c).parent != parentInstance || m_running.at(c).state != QLatin1String("running"))
+            continue;
+        m_calls.append(QLatin1String(frozen ? "freeze " : "thaw ") + m_running.at(c).instance);
+        setFrozen(c, frozen);
+    }
+}
+
 void MockSessionBackend::setFrozen(int index, bool frozen)
 {
     if (m_running.at(index).frozen == frozen)
@@ -311,11 +321,14 @@ void MockSessionBackend::freeze(const QString &instance)
     if (status == QLatin1String("ok")) {
         const int i = indexOf(instance);
         if (!m_running.at(i).frozen) {
-            m_calls.append(QStringLiteral("freeze ") + instance);
-            if (m_failFreeze)
+            if (m_failFreeze) {
+                m_calls.append(QStringLiteral("freeze ") + instance);
                 status = QStringLiteral("failed");     // undone at once: the app keeps running
-            else
+            } else {
+                setChildrenFrozen(instance, true);     // ADR-041 point 7: the children first
+                m_calls.append(QStringLiteral("freeze ") + instance);
                 setFrozen(i, true);
+            }
         }
     }
     QTimer::singleShot(0, this, [this, instance, status] { emit freezeFinished(instance, status); });
@@ -325,11 +338,14 @@ void MockSessionBackend::thaw(const QString &instance)
 {
     QString status = freezable(instance);
     if (status == QLatin1String("ok")) {
-        m_calls.append(QStringLiteral("thaw ") + instance);
-        if (m_failThaw)
+        if (m_failThaw) {
+            m_calls.append(QStringLiteral("thaw ") + instance);
             status = QStringLiteral("failed");     // still frozen
-        else
+        } else {
+            setChildrenFrozen(instance, false);
+            m_calls.append(QStringLiteral("thaw ") + instance);
             setFrozen(indexOf(instance), false);
+        }
     }
     QTimer::singleShot(0, this, [this, instance, status] { emit thawFinished(instance, status); });
 }
