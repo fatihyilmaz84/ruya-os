@@ -352,8 +352,13 @@ pub fn check_tree(
 /// format's one formula ([`runner_hash`]): every table entry below the component's `bundled.path`,
 /// in table order, with its path relative to that folder; a file with its hash as it was written
 /// into staging, a link and an empty folder as the re-walk confirmed. T-239's runner resolution
-/// reports the same value for a bundled runner.
-pub fn runner_hashes(manifest: &Manifest, files: &[FileEntry], unpacked: &Unpacked) -> Vec<String> {
+/// reports the same value for a bundled runner. A file of a bundled runner that `unpacked` has no
+/// hash for is `staging.changed`, as a file `rehash` finds different is.
+pub fn runner_hashes(
+    manifest: &Manifest,
+    files: &[FileEntry],
+    unpacked: &Unpacked,
+) -> Result<Vec<String>, Problem> {
     manifest
         .components
         .iter()
@@ -363,22 +368,29 @@ pub fn runner_hashes(manifest: &Manifest, files: &[FileEntry], unpacked: &Unpack
 }
 
 /// The runner hash of the table entries below the folder `root`, as [`runner_hashes`] takes it.
-fn runner_hash_below(root: &str, files: &[FileEntry], unpacked: &Unpacked) -> String {
+fn runner_hash_below(
+    root: &str,
+    files: &[FileEntry],
+    unpacked: &Unpacked,
+) -> Result<String, Problem> {
     let prefix = format!("{}/", root.trim_end_matches('/'));
-    runner_hash(files.iter().filter_map(|e| {
-        let entry = RunnerEntry::from(e).with_rel(e.path().strip_prefix(&prefix)?);
-        Some(match e {
-            // `rehash` hashed every file of the table it was given, and the caller passes that
-            // same table: a file without a staged hash is a bug, never an empty hash.
-            FileEntry::File { path, .. } => entry.with_sha256(
-                unpacked
-                    .hashes
-                    .get(path)
-                    .expect("rehash hashed every file of the table"),
-            ),
+    let mut entries = Vec::new();
+    for e in files {
+        let Some(rel) = e.path().strip_prefix(&prefix) else {
+            continue;
+        };
+        let entry = RunnerEntry::from(e).with_rel(rel);
+        entries.push(match e {
+            FileEntry::File { path, .. } => {
+                let sha = unpacked.hashes.get(path).ok_or_else(|| {
+                    changed(path, "The staged file has no hash from the re-hash pass.")
+                })?;
+                entry.with_sha256(sha)
+            }
             _ => entry,
-        })
-    }))
+        });
+    }
+    Ok(runner_hash(entries))
 }
 
 /// The service's own pass over a tree the helper wrote (05 §7.3, lead-33): every file of the table
@@ -555,8 +567,25 @@ mod tests {
             .filter_map(|e| Some(RunnerEntry::from(e).with_rel(e.path().strip_prefix("c/")?)))
             .collect();
         assert_eq!(
-            runner_hash_below("c/", &files, &unpacked),
+            runner_hash_below("c/", &files, &unpacked).expect("every file has a hash"),
             runner_hash(below)
         );
+    }
+
+    /// A file of a bundled runner without a staged hash is a problem, never a panic.
+    #[test]
+    fn a_runner_file_without_a_staged_hash_is_staging_changed() {
+        let files = vec![
+            FileEntry::Dir { path: "c".into() },
+            FileEntry::File {
+                path: "c/a".into(),
+                size: 0,
+                sha256: String::new(),
+                executable: false,
+            },
+        ];
+        let p = runner_hash_below("c", &files, &Unpacked::default()).unwrap_err();
+        assert_eq!(p.code, codes::STAGING_CHANGED);
+        assert_eq!(p.path, "c/a");
     }
 }
