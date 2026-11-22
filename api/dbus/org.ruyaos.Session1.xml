@@ -4,7 +4,7 @@
   org.ruyaos.Session1 — launch installed apps as a profile, stop them, list what runs.
   Served by ruya-session on the system bus at /org/ruyaos/Session1 (core T-139, in the image T-162;
   the shell's mock backend follows this contract too). It runs as root; an app is a transient unit
-  of the profile user's own systemd manager, and `instance` is that unit's name.
+  of the profile user's own systemd manager. `instance` is opaque (see below).
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §4.1.
 
   Trust: the `profile` argument of Launch is trusted. The bus policy lets only ruya-shell and root
@@ -62,9 +62,11 @@
     "wrong-pin"         ClearHistory: the admin PIN did not match (attempts_left says how many remain)
     "locked-out"        ClearHistory: too many failures (retry_after_secs says when to try again)
 
-  An instance is an opaque string chosen by the service (a systemd unit name); the shell only
-  hands it back. Every list is a plain array and every record an a{sv} dictionary, so fields can be
-  added later without breaking clients (unknown keys are ignored).
+  An instance is an opaque string chosen by the service; the shell only hands it back and must
+  never parse it. Today an app's instance is its systemd unit name and a Steam child's is
+  `<parent unit>:steam-<appid>`; both may change. Every list is a plain array and every record
+  an a{sv} dictionary, so fields can be added later without breaking clients (unknown keys are
+  ignored).
 
   Items and child instances (ADR-041, RUY-1051). `item` is the Library1 item id of
   what runs: "flatpak:<app_id>" for a Flatpak app, "steam:<appid>" (digits only) for a Steam game.

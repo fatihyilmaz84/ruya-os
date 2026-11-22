@@ -12,7 +12,9 @@
 //! `FLATPAK_ID`, which `flatpak` sets inside every sandbox (pressure-vessel's `pv-adverb` in a
 //! game's scope). The scope belongs to child G when that environ has **both** `SteamAppId` and
 //! `SteamGameId`, each a Steam app id (digits, at most 10, not 0, `steam_game_id`), and
-//! G = `SteamGameId`. Anything else, and every scope where it cannot be told, is the parent's:
+//! G = `SteamGameId`. A scope with no process carrying `FLATPAK_ID` yet is **undecided**: the
+//! sandbox has not started (pv-adverb comes about 130 ms after the scope's first `bwrap`), and the
+//! service asks again (`scope::MAX_PROBES`). Anything else is the parent's:
 //!
 //! - Steam's attached scope carries the id in the reaper and `_v2-entry-point` while a game runs,
 //!   but its top process is Steam's own `steam.sh` (spike RUY-1047): "any process carries the id"
@@ -26,8 +28,10 @@
 //!   `FLATPAK_ID` (Dell 0.0.102, 2026-11-22: the oldest process with a non-empty environ in Half-Life's
 //!   scope was that proxy's `bwrap`, not `pv-adverb`).
 //!
-//! The helper prints G and a newline, or nothing. The service checks the answer again with
-//! `steam_game_id` (`parse_answer`).
+//!
+//! The helper prints G and a newline (exit 0), or nothing (exit 0, the parent's), or nothing with
+//! exit status `UNDECIDED_EXIT`. The service reads the status and checks the answer again with
+//! `steam_game_id` (`parse_answer`); any other end (a failure, a timeout) is the parent's.
 
 use std::io::Read;
 
@@ -44,6 +48,10 @@ pub const SANDBOX_KEY: &str = "FLATPAK_ID";
 pub const MAX_PROCS: usize = 4096;
 /// The most bytes read of one environ (a game's has a few kilobytes).
 pub const MAX_ENVIRON: u64 = 256 * 1024;
+/// The helper's exit status for an undecided scope (no process inside the sandbox yet).
+pub const UNDECIDED_EXIT: i32 = 3;
+/// The most stdout the service takes from the helper (an app id and a newline is 11 bytes).
+pub const MAX_ANSWER: usize = 64;
 /// The most bytes read of `cgroup.procs` or a `stat` file.
 const MAX_SMALL_FILE: u64 = 64 * 1024;
 
@@ -71,16 +79,32 @@ pub fn env_value<'a>(environ: &'a [u8], key: &str) -> Option<&'a str> {
     })
 }
 
-/// The game a scope belongs to, by the rule in the module text: `Some(G)` for child G, `None` for
-/// the parent.
-pub fn game_of(procs: &[Proc]) -> Option<String> {
-    let top = procs
+/// What a probe says about a scope.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Verdict {
+    /// The scope is Steam game G's (its child).
+    Game(String),
+    /// The scope is the parent's.
+    Parent,
+    /// No process of the sandbox yet: ask again.
+    Undecided,
+}
+
+/// The verdict on a scope by the rule in the module text.
+pub fn game_of(procs: &[Proc]) -> Verdict {
+    let Some(top) = procs
         .iter()
         .filter(|p| env_value(&p.environ, SANDBOX_KEY).is_some_and(|v| !v.is_empty()))
-        .min_by_key(|p| (p.start, p.pid))?;
+        .min_by_key(|p| (p.start, p.pid))
+    else {
+        return Verdict::Undecided;
+    };
     let app = env_value(&top.environ, "SteamAppId").and_then(steam_game_id);
     let game = env_value(&top.environ, "SteamGameId").and_then(steam_game_id);
-    app.and(game).map(str::to_owned)
+    match app.and(game) {
+        Some(g) => Verdict::Game(g.to_owned()),
+        None => Verdict::Parent,
+    }
 }
 
 /// The start time out of a `/proc/<pid>/stat` line: field 22, counted after the command name in
@@ -112,9 +136,18 @@ pub fn valid_scope(scope: &str) -> bool {
         && scope.bytes().all(|b| b.is_ascii_graphic() && b != b'/')
 }
 
-/// The service's check of the helper's answer: G, or `None` for an empty or bad answer.
-pub fn parse_answer(out: &str) -> Option<String> {
-    steam_game_id(out.trim()).map(str::to_owned)
+/// The service's reading of the helper's end: its exit code (`None`: a signal) and stdout. Exit 0
+/// with an app id is that game, `UNDECIDED_EXIT` is undecided, anything else (an empty or bad
+/// answer, a failure) is the parent's.
+pub fn parse_answer(code: Option<i32>, out: &str) -> Verdict {
+    match code {
+        Some(0) => match steam_game_id(out.trim()) {
+            Some(g) => Verdict::Game(g.to_owned()),
+            None => Verdict::Parent,
+        },
+        Some(UNDECIDED_EXIT) => Verdict::Undecided,
+        _ => Verdict::Parent,
+    }
 }
 
 fn read_capped(path: &str, cap: u64) -> Option<Vec<u8>> {
@@ -125,8 +158,8 @@ fn read_capped(path: &str, cap: u64) -> Option<Vec<u8>> {
 }
 
 /// The helper's main: reads the scope's processes and prints G or nothing. Exit code 2 for a bad
-/// call, 1 when the scope cannot be read (the service then leaves the scope to the parent), 0
-/// otherwise.
+/// call, 1 when the scope cannot be read (the service then leaves the scope to the parent),
+/// `UNDECIDED_EXIT` for an undecided scope, 0 otherwise.
 pub fn main_step(args: &[String]) -> i32 {
     let [scope] = args else {
         eprintln!("ruya-session {SUBCOMMAND}: usage: {SUBCOMMAND} <scope>");
@@ -165,10 +198,14 @@ pub fn main_step(args: &[String]) -> i32 {
             })
         })
         .collect();
-    if let Some(game) = game_of(&procs) {
-        println!("{game}");
+    match game_of(&procs) {
+        Verdict::Game(game) => {
+            println!("{game}");
+            0
+        }
+        Verdict::Parent => 0,
+        Verdict::Undecided => UNDECIDED_EXIT,
     }
-    0
 }
 
 #[cfg(test)]
@@ -226,14 +263,14 @@ mod tests {
             wrappers(114190, 5812117),
             vec![p(114201, 5812130, &ids), p(114224, 5812164, &ids)],
         );
-        assert_eq!(game_of(&scope).as_deref(), Some("70"));
+        assert_eq!(game_of(&scope), Verdict::Game("70".to_owned()));
         // G is SteamGameId.
         let scope = vec![p(
             1,
             1,
             &[IN, ("SteamAppId", "7670"), ("SteamGameId", "7671")],
         )];
-        assert_eq!(game_of(&scope).as_deref(), Some("7671"));
+        assert_eq!(game_of(&scope), Verdict::Game("7671".to_owned()));
     }
 
     #[test]
@@ -249,7 +286,7 @@ mod tests {
                 p(114146, 5811974, &ids),
             ],
         );
-        assert_eq!(game_of(&scope), None);
+        assert_eq!(game_of(&scope), Verdict::Parent);
     }
 
     #[test]
@@ -272,27 +309,28 @@ mod tests {
                 ),
             ],
         );
-        assert_eq!(game_of(&scope), None);
+        assert_eq!(game_of(&scope), Verdict::Parent);
     }
 
     #[test]
     fn pre_launch_scopes_are_the_parents() {
         // UpdatingDRM: SteamGameId without SteamAppId.
         let drm = vec![p(5, 50, &[IN, ("SteamGameId", "21670")])];
-        assert_eq!(game_of(&drm), None);
+        assert_eq!(game_of(&drm), Verdict::Parent);
         // An install script: STEAM_COMPAT_APP_ID only.
         let install = vec![p(6, 60, &[IN, ("STEAM_COMPAT_APP_ID", "7670")])];
-        assert_eq!(game_of(&install), None);
+        assert_eq!(game_of(&install), Verdict::Parent);
     }
 
     #[test]
-    fn a_scope_of_empty_or_outside_environs_is_the_parents() {
-        // Only the wrappers: the bwrap environs are empty, the proxy's carries no FLATPAK_ID.
-        assert_eq!(game_of(&wrappers(1, 10)), None);
+    fn a_scope_of_empty_or_outside_environs_is_never_a_game() {
+        // Only the wrappers: the bwrap environs are empty, the proxy's carries no FLATPAK_ID; the
+        // sandbox has not started, so the scope is undecided (asked again), never a game.
+        assert_eq!(game_of(&wrappers(1, 10)), Verdict::Undecided);
         // Even when such a process carries the ids, it is not inside the sandbox.
         let outside = vec![p(1, 1, &[("SteamAppId", "70"), ("SteamGameId", "70")])];
-        assert_eq!(game_of(&outside), None);
-        assert_eq!(game_of(&[]), None);
+        assert_eq!(game_of(&outside), Verdict::Undecided);
+        assert_eq!(game_of(&[]), Verdict::Undecided);
     }
 
     #[test]
@@ -308,7 +346,7 @@ mod tests {
             ("-1", "70"),
         ] {
             let scope = vec![p(1, 1, &[IN, ("SteamAppId", app), ("SteamGameId", game)])];
-            assert_eq!(game_of(&scope), None, "{app:?} {game:?}");
+            assert_eq!(game_of(&scope), Verdict::Parent, "{app:?} {game:?}");
         }
     }
 
@@ -317,10 +355,10 @@ mod tests {
         let game = [IN, ("SteamAppId", "70"), ("SteamGameId", "70")];
         let steam = [IN];
         assert_eq!(
-            game_of(&[p(9, 5, &game), p(3, 7, &steam)]).as_deref(),
-            Some("70")
+            game_of(&[p(9, 5, &game), p(3, 7, &steam)]),
+            Verdict::Game("70".to_owned())
         );
-        assert_eq!(game_of(&[p(9, 5, &game), p(3, 5, &steam)]), None);
+        assert_eq!(game_of(&[p(9, 5, &game), p(3, 5, &steam)]), Verdict::Parent);
     }
 
     #[test]
@@ -374,10 +412,27 @@ mod tests {
 
     #[test]
     fn the_service_takes_only_an_app_id_from_the_helper() {
-        assert_eq!(parse_answer("70\n").as_deref(), Some("70"));
+        assert_eq!(
+            parse_answer(Some(0), "70\n"),
+            Verdict::Game("70".to_owned())
+        );
         for bad in ["", "\n", "0", "12345678901", "70 71", "x", "-70"] {
-            assert_eq!(parse_answer(bad), None, "{bad:?}");
+            assert_eq!(parse_answer(Some(0), bad), Verdict::Parent, "{bad:?}");
         }
+        assert_eq!(parse_answer(Some(UNDECIDED_EXIT), ""), Verdict::Undecided);
+        // A failure, a signal, or an id with a failing status is never a game.
+        assert_eq!(parse_answer(Some(1), "70\n"), Verdict::Parent);
+        assert_eq!(parse_answer(None, "70\n"), Verdict::Parent);
+    }
+
+    #[test]
+    fn a_scope_before_its_sandbox_is_undecided_and_one_inside_without_ids_is_the_parents() {
+        // The first look at a game's scope: the wrappers and the proxy, no pv-adverb yet.
+        assert_eq!(game_of(&wrappers(114190, 5812117)), Verdict::Undecided);
+        // A process inside the sandbox without the ids decides at once: the parent's.
+        let mut scope = wrappers(1, 10);
+        scope.push(p(9, 30, &[IN]));
+        assert_eq!(game_of(&scope), Verdict::Parent);
     }
 
     #[test]

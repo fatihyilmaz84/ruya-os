@@ -30,9 +30,12 @@
 //!
 //! A run whose app has `children = steam` in the image's app table (`follow_children`, ADR-041,
 //! RUY-1052) has child instances, one per Steam game:
-//!   - every new scope of the app other than the attached one is probed once (`take_probes`; the
-//!     caller runs `steam-probe` as the profile user and hands the answer back with `probed`); a
-//!     scope whose probe names game G is one of child G's, every other scope is the parent's;
+//!   - every new scope of the app other than the attached one is probed (`take_probes`; the
+//!     caller runs `steam-probe` as the profile user and hands the verdict back with `probed`); a
+//!     scope whose probe names game G is one of child G's, every other scope is the parent's. A
+//!     scope probed before its sandbox started is undecided and probed again at the next looks,
+//!     at most `MAX_PROBES` times in all, then it is the parent's; a decided scope is never probed
+//!     again;
 //!   - child G starts with its first scope (`UnitEvent::ChildStarted`, named by
 //!     `spawner::child_name`) and keeps every later scope of G (a launcher handing over);
 //!   - it ends (`UnitEvent::Exited` of the child's name, code 0) when none of its scopes has
@@ -51,6 +54,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::time::{Duration, Instant};
 
 use crate::spawner::{child_name, is_app_scope, scope_pattern, ShowUnit, UnitEvent};
+use crate::steam_probe::Verdict;
 
 /// How often a run without a scope is looked at.
 pub const ATTACH_EVERY: Duration = Duration::from_secs(1);
@@ -64,6 +68,9 @@ pub const MAX_MISSES: u32 = 5;
 /// A child instance ends when none of its scopes has existed for this long (ADR-041 point 5): a
 /// launcher that hands over to the game in a new scope stays one child.
 pub const CHILD_GRACE: Duration = Duration::from_secs(3);
+/// How often one scope is probed while it stays undecided (its sandbox not started yet, about
+/// 130 ms after the scope on the Dell); then it is the parent's. One look a second.
+pub const MAX_PROBES: u32 = 5;
 
 /// A scope of a `children` run to probe (`take_probes`): `steam-probe <scope>` as `user`, the
 /// answer back through `probed`.
@@ -126,6 +133,8 @@ struct Run {
     /// The scopes whose probe is out: when each became active (unix seconds) and whether it was
     /// frozen, for the child it may start.
     probing: BTreeMap<String, (i64, bool)>,
+    /// The live scopes that were probed undecided, with how often: probed again at the next look.
+    undecided: BTreeMap<String, u32>,
     /// The child instances, by Steam app id.
     kids: BTreeMap<String, Kid>,
 }
@@ -143,6 +152,7 @@ impl Run {
             released.push(child_end(&kid.name));
         }
         self.probing.clear();
+        self.undecided.clear();
     }
 
     /// The unit's CPU and that of every scope read so far; `None` when nothing was readable.
@@ -210,6 +220,7 @@ impl RunScopes {
                 children: false,
                 sorted: BTreeMap::new(),
                 probing: BTreeMap::new(),
+                undecided: BTreeMap::new(),
                 kids: BTreeMap::new(),
             },
         );
@@ -228,13 +239,29 @@ impl RunScopes {
         std::mem::take(&mut self.probes)
     }
 
-    /// The answer of a probe of `take_probes`: `Some(G)` when the scope is Steam game G's, `None`
-    /// when it is the parent's (the probe printed nothing, or failed). A scope of a new game
-    /// starts its child (`ChildStarted`); one of a running child joins it. Nothing for a run whose
-    /// scope has gone meanwhile.
-    pub fn probed(&mut self, unit: &str, scope: &str, game: Option<String>) -> Option<UnitEvent> {
+    /// The verdict of a probe of `take_probes` (`steam_probe::parse_answer`). A scope of a new
+    /// game starts its child (`ChildStarted`); one of a running child joins it; the parent's is
+    /// sorted for good; an undecided one is probed again at the next look, until its
+    /// `MAX_PROBES`th undecided verdict makes it the parent's. Nothing for a run whose scope has
+    /// gone meanwhile.
+    pub fn probed(&mut self, unit: &str, scope: &str, verdict: Verdict) -> Option<UnitEvent> {
         let run = self.runs.get_mut(unit).filter(|r| !r.done)?;
         let (started, frozen) = run.probing.remove(scope)?;
+        let tries = run.undecided.remove(scope).unwrap_or(0) + 1;
+        let game = match verdict {
+            Verdict::Undecided if tries < MAX_PROBES => {
+                run.undecided.insert(scope.to_owned(), tries);
+                return None;
+            }
+            Verdict::Undecided => {
+                eprintln!(
+                    "ruya-session: {unit}: {scope} still undecided after {tries} probes, Steam's"
+                );
+                None
+            }
+            Verdict::Parent => None,
+            Verdict::Game(appid) => Some(appid),
+        };
         run.sorted.insert(scope.to_owned(), game.clone());
         let appid = game?;
         if let Some(kid) = run.kids.get_mut(&appid) {
@@ -500,6 +527,8 @@ impl RunScopes {
                 if let Some(attached) = run.scope.clone() {
                     let live: BTreeSet<&str> = own.iter().map(|s| s.id.as_str()).collect();
                     run.sorted.retain(|scope, _| live.contains(scope.as_str()));
+                    run.undecided
+                        .retain(|scope, _| live.contains(scope.as_str()));
                     for scope in own.iter().filter(|s| s.id != attached) {
                         if run.sorted.contains_key(&scope.id) || run.probing.contains_key(&scope.id)
                         {
@@ -522,7 +551,8 @@ impl RunScopes {
                             continue;
                         }
                         let since = *kid.gone_since.get_or_insert(now);
-                        // A probe still out may be this game's next scope.
+                        // A probe still out may be this game's next scope (an undecided scope is
+                        // queued again above, so its probe is out too).
                         if run.probing.is_empty()
                             && now.saturating_duration_since(since) >= CHILD_GRACE
                         {
@@ -608,6 +638,8 @@ mod tests {
         down: bool,
         asked: Vec<Query>,
         games: HashMap<String, String>,
+        /// How many undecided verdicts a scope's probe gives before its answer.
+        early: HashMap<String, u32>,
         probed: Vec<String>,
     }
 
@@ -618,6 +650,7 @@ mod tests {
                 down: false,
                 asked: Vec::new(),
                 games: HashMap::new(),
+                early: HashMap::new(),
                 probed: Vec::new(),
             }
         }
@@ -632,9 +665,21 @@ mod tests {
             self.units.retain(|u| u.id != name);
         }
 
-        fn probe(&mut self, r: &ProbeRequest) -> Option<String> {
+        /// The scope's probe is undecided `times` times first (its sandbox has not started).
+        fn early(&mut self, scope: &str, times: u32) {
+            self.early.insert(scope.to_owned(), times);
+        }
+
+        fn probe(&mut self, r: &ProbeRequest) -> Verdict {
             self.probed.push(r.scope.clone());
-            self.games.get(&r.scope).cloned()
+            if let Some(n) = self.early.get_mut(&r.scope).filter(|n| **n > 0) {
+                *n -= 1;
+                return Verdict::Undecided;
+            }
+            match self.games.get(&r.scope) {
+                Some(appid) => Verdict::Game(appid.clone()),
+                None => Verdict::Parent,
+            }
         }
 
         fn set(&mut self, show: ShowUnit) {
@@ -1327,5 +1372,62 @@ mod tests {
         );
         assert_eq!(scopes.scope_of(STEAM_UNIT).as_deref(), Some(ATTACHED));
         assert_eq!(mgr.probed, [GAME]);
+    }
+
+    #[test]
+    fn a_game_scope_probed_before_its_sandbox_started_is_probed_again_and_becomes_the_child() {
+        let now = t0();
+        let (mut scopes, mut mgr) = steam(now);
+        mgr.game(scope_show(GAME, 1100, None), "70");
+        mgr.early(GAME, 2);
+        let mut events = Vec::new();
+        for i in 1..6 {
+            events.extend(round(&mut scopes, &mut mgr, now + ATTACH_EVERY * i));
+        }
+        assert_eq!(
+            events,
+            [child_started(1100, false)],
+            "one child, after two undecided looks"
+        );
+        assert_eq!(mgr.probed, [CLIENT, GAME, GAME, GAME]);
+    }
+
+    #[test]
+    fn a_scope_that_stays_undecided_is_probed_at_most_max_probes_times_then_is_steams() {
+        let now = t0();
+        let (mut scopes, mut mgr) = steam(now);
+        mgr.set(scope_show(DRM, 1050, None));
+        mgr.early(DRM, 1000);
+        for i in 1..20 {
+            assert!(round(&mut scopes, &mut mgr, now + ATTACH_EVERY * i).is_empty());
+        }
+        let asked = mgr.probed.iter().filter(|s| *s == DRM).count();
+        assert_eq!(asked, MAX_PROBES as usize);
+        // A scope whose sandbox is there without the ids is Steam's at the first probe.
+        mgr.set(scope_show(GAME, 1100, None));
+        round(&mut scopes, &mut mgr, now + ATTACH_EVERY * 20);
+        round(&mut scopes, &mut mgr, now + ATTACH_EVERY * 21);
+        assert_eq!(mgr.probed.iter().filter(|s| *s == GAME).count(), 1);
+    }
+
+    #[test]
+    fn an_undecided_scope_holds_the_end_of_a_child_whose_scope_went() {
+        let now = t0();
+        let (mut scopes, mut mgr) = steam(now);
+        mgr.game(scope_show(GAME, 1100, None), "70");
+        assert_eq!(round(&mut scopes, &mut mgr, now + ATTACH_EVERY).len(), 1);
+        // The launcher's scope goes, the game's next scope comes and is undecided for a while.
+        mgr.gone(GAME);
+        mgr.game(scope_show(GAME_NEXT, 1102, None), "70");
+        mgr.early(GAME_NEXT, 4);
+        let mut events = Vec::new();
+        for i in 2..10 {
+            events.extend(round(&mut scopes, &mut mgr, now + ATTACH_EVERY * i));
+        }
+        assert!(
+            events.is_empty(),
+            "no end while the next scope is undecided: {events:?}"
+        );
+        assert_eq!(scopes.child_of_scope(USER, GAME_NEXT), Some(child()));
     }
 }

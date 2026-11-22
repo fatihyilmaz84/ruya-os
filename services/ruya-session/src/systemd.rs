@@ -31,9 +31,10 @@
 //! cleared first (`RunScopes::take_sweeps`, `spawner::sweep_commands`, T-435).
 //!
 //! Steam's games are child instances (ADR-041, RUY-1052): a run whose app has `children = steam`
-//! in the app table has each new scope probed once by the watcher (`steam-probe` as the profile
-//! user, `spawner::steam_probe_command`, outside the lock), and a child's name reaches only its
-//! own scopes (`RunScopes::child`, `spawner::child_command`).
+//! in the app table has each new scope probed (`steam-probe` as the profile user,
+//! `spawner::steam_probe_command`) by a worker thread of its own (`probe_worker`), so a slow probe
+//! never holds up the scope watcher, and a child's name reaches only its own scopes
+//! (`RunScopes::child`, `spawner::child_command`).
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -50,7 +51,7 @@ use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 use zbus::{Connection, MatchRule, MessageStream};
 
 use crate::apps::{AppTable, Children, Display, Freeze, APPS_DIR};
-use crate::bounded::{run_bounded, run_bounded_status};
+use crate::bounded::{run_bounded, run_bounded_status, run_capped};
 use crate::follow::{
     bridge_args, existence, parse_signal, Backoff, Follower, ManagerLink, Probe, Wake,
     BRIDGE_PROGRAM,
@@ -68,7 +69,7 @@ use crate::spawner::{
     AdoptLister, AudioJob, AudioQueue, DisplayMode, Listing, ReclaimLedger, Spawner, UnitEvent,
     PARK_RETRY,
 };
-use crate::steam_probe::parse_answer;
+use crate::steam_probe::{parse_answer, Verdict, MAX_ANSWER};
 use crate::x11::display_mode_x11;
 use std::ffi::OsString;
 use zbus::address::transport::{Transport, Unixexec};
@@ -121,41 +122,67 @@ impl Gate {
     }
 }
 
-/// How long one `steam-probe` may take (its unit has `RuntimeMaxSec=10`).
-const PROBE_LIMIT: Duration = Duration::from_secs(12);
+/// How long one `steam-probe` may take (its unit has `RuntimeMaxSec=3`).
+const PROBE_LIMIT: Duration = Duration::from_secs(4);
 
-/// Runs the probes `apply` asked for (`RunScopes::take_probes`), one after the other and without
-/// the lock, and hands each answer back (`RunScopes::probed`); a child that starts is sent on. A
-/// probe that fails or prints nothing leaves its scope to the parent, with one journal line, and
-/// is never run again for that scope.
-fn run_probes(gate: &Gate, probes: Vec<ProbeRequest>) {
-    for ProbeRequest { unit, user, scope } in probes {
-        let game = match steam_probe_command(&user, &scope) {
-            Ok(args) => match run_bounded(&args, PROBE_LIMIT) {
-                Some(out) => {
-                    let game = parse_answer(&out);
-                    if game.is_none() {
-                        eprintln!("ruya-session: {unit}: {scope} is Steam's own");
-                    }
-                    game
-                }
-                None => {
-                    eprintln!("ruya-session: {unit}: no answer for {scope}, left to Steam");
-                    None
-                }
-            },
-            Err(err) => {
-                eprintln!("ruya-session: {unit}: {scope} not probed: {err}");
-                None
-            }
-        };
-        let started = gate
-            .scopes
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .probed(&unit, &scope, game);
-        if let Some(event) = started {
-            gate.send(event);
+/// One `steam-probe` (bounded, its stdout capped at `MAX_ANSWER`) and its verdict. A probe that
+/// fails, times out or prints nothing leaves its scope to the parent, with one journal line; an
+/// undecided one is asked again by `RunScopes` (`MAX_PROBES`).
+fn probe(ProbeRequest { unit, user, scope }: &ProbeRequest) -> Verdict {
+    let args = match steam_probe_command(user, scope) {
+        Ok(args) => args,
+        Err(err) => {
+            eprintln!("ruya-session: {unit}: {scope} not probed: {err}");
+            return Verdict::Parent;
+        }
+    };
+    let Some(ran) = run_capped(&args, PROBE_LIMIT, MAX_ANSWER) else {
+        eprintln!("ruya-session: {unit}: no answer for {scope}, left to Steam");
+        return Verdict::Parent;
+    };
+    let verdict = parse_answer(ran.code, &ran.out);
+    if verdict == Verdict::Parent {
+        eprintln!("ruya-session: {unit}: {scope} is Steam's own");
+    }
+    verdict
+}
+
+/// Hands a probe's verdict to `RunScopes`; a child that starts is sent on.
+fn settle_probe(gate: &Gate, request: &ProbeRequest, verdict: Verdict) {
+    let started = gate
+        .scopes
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .probed(&request.unit, &request.scope, verdict);
+    if let Some(event) = started {
+        gate.send(event);
+    }
+}
+
+/// Runs the probes the scope watcher queues, one after the other, so the watcher never waits for
+/// one (a hung probe would hold up the scope looks and child ends of every profile). The verdict
+/// goes straight to `RunScopes` under its lock, as the watcher's own answers do.
+fn probe_worker(gate: Gate, jobs: std::sync::mpsc::Receiver<ProbeRequest>) {
+    for request in jobs {
+        let verdict = probe(&request);
+        settle_probe(&gate, &request, verdict);
+    }
+}
+
+/// Queues the probes `apply` asked for (`RunScopes::take_probes`). Without a worker (it could not
+/// be started) a scope is the parent's at once, so no probe stays out and holds a child's end.
+fn queue_probes(
+    gate: &Gate,
+    worker: &std::sync::mpsc::Sender<ProbeRequest>,
+    probes: Vec<ProbeRequest>,
+) {
+    for request in probes {
+        if let Err(std::sync::mpsc::SendError(request)) = worker.send(request) {
+            eprintln!(
+                "ruya-session: {}: {} not probed: no probe worker",
+                request.unit, request.scope
+            );
+            settle_probe(gate, &request, Verdict::Parent);
         }
     }
 }
@@ -167,7 +194,7 @@ fn has_children(table: &AppTable, app_id: &str) -> bool {
 
 /// Looks at the Flatpak scopes of the runs, one `systemctl show` per profile manager and round
 /// (`RunScopes::plan` / `apply`), and hands on the unit ends that waited for a scope.
-fn watch_scopes(gate: Gate) {
+fn watch_scopes(gate: Gate, worker: std::sync::mpsc::Sender<ProbeRequest>) {
     loop {
         std::thread::sleep(SCOPE_TICK);
         let queries = gate
@@ -186,7 +213,7 @@ fn watch_scopes(gate: Gate) {
             for event in ended {
                 gate.send(event);
             }
-            run_probes(&gate, probes);
+            queue_probes(&gate, &worker, probes);
         }
     }
 }
@@ -398,10 +425,18 @@ impl SystemdSpawner {
             units: Arc::new(Mutex::new(HashMap::new())),
             scopes: Arc::new(Mutex::new(RunScopes::new())),
         };
+        let (probes, probe_jobs) = std::sync::mpsc::channel();
+        let prober = gate.clone();
+        if let Err(err) = std::thread::Builder::new()
+            .name("steam-probe".to_owned())
+            .spawn(move || probe_worker(prober, probe_jobs))
+        {
+            eprintln!("ruya-session: cannot probe Steam's scopes: its games stay Steam's: {err}");
+        }
         let watcher = gate.clone();
         if let Err(err) = std::thread::Builder::new()
             .name("scopes".to_owned())
-            .spawn(move || watch_scopes(watcher))
+            .spawn(move || watch_scopes(watcher, probes))
         {
             eprintln!("ruya-session: cannot watch the Flatpak scopes: {err}");
         }

@@ -1026,7 +1026,7 @@ pub fn steam_probe_command(user: &str, scope: &str) -> Result<Vec<String>, Strin
         "--quiet",
         "--collect",
         "--no-ask-password",
-        "--property=RuntimeMaxSec=10",
+        "--property=RuntimeMaxSec=3",
     ]
     .map(str::to_owned)
     .to_vec();
@@ -3126,7 +3126,7 @@ app-flatpak-io.github.Foo-56.scope loaded active running app-flatpak-io.github.F
                 "--quiet",
                 "--collect",
                 "--no-ask-password",
-                "--property=RuntimeMaxSec=10",
+                "--property=RuntimeMaxSec=3",
                 "--",
                 "/usr/bin/ruya-session",
                 "steam-probe",
