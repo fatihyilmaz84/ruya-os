@@ -453,6 +453,25 @@ Item {
             compare(find("profilesMessage").text, "Enter a name first.")
         }
 
+        // RUY-52: the result of an action is seen with the Add form open (it sits under the list).
+        function test_result_message_is_visible_with_the_add_form_open() {
+            startShell()
+            signIn("p1", "1234")
+            openProfilesPane()
+            openAddForm()
+            goToRow("rowCreate")
+            keyClick(Qt.Key_Return)                       // no name: a refusal message
+            const msg = find("profilesMessage")
+            tryVerify(() => msg.visible && msg.text === "Enter a name first.")
+            const pane = find("paneProfiles")
+            const view = pane.viewport
+            tryVerify(() => {
+                const top = msg.mapToItem(view, 0, 0).y
+                return top >= -0.5 && top + msg.height <= view.height + 0.5
+            }, 2000, "the message lies within the visible area")
+            verify(msg.mapToItem(pane, 0, 0).y < find("rowAdd").mapToItem(pane, 0, 0).y, "above the Add row and its form")
+        }
+
         function test_cancel_pin_pad_aborts_the_flow() {
             startShell()
             signIn("p1", "1234")
