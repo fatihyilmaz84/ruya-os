@@ -11,8 +11,8 @@
 //!   - finds the run's scope: the live `app-flatpak-<app>-<n>.scope` of the run's app that
 //!     entered `active` no earlier than the unit (`attach`), looked for every second for a
 //!     minute after the start (an adopted unit is looked at once, at once);
-//!   - reads the CPU of the unit and of the scope (`cpu_nsec`; the sum is the run's usage, kept
-//!     after the scope has gone);
+//!   - reads the CPU of the unit and of every scope of the app that started after it (`cpu_nsec`;
+//!     the sum is the run's usage, kept after a scope has gone);
 //!   - holds the unit's end (`on_unit_event`) while the scope lives, and hands it on when the
 //!     scope is gone, so a run ends when **both** are gone; while an end is held the scope is
 //!     looked at every second (`ATTACH_EVERY`), so a `Stop` that needed the kill ends well inside
@@ -30,7 +30,7 @@
 //! One round is `plan` (what to ask each manager), the caller's `systemctl show`, and `apply`
 //! (the answer). Nothing here starts a process or waits.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
 
 use crate::spawner::{is_app_scope, scope_pattern, ShowUnit, UnitEvent};
@@ -61,7 +61,9 @@ struct Run {
     /// The scope has gone (or never was): nothing is held for it any more.
     done: bool,
     unit_cpu: Option<u64>,
-    scope_cpu: Option<u64>,
+    /// The highest CPU reading of every scope of the app that started after the unit (the
+    /// attached one, the portal's, a game's subsandbox), kept after a scope has ended.
+    scope_cpu: BTreeMap<String, u64>,
     /// The unit's end, kept until the scope is gone.
     held: Option<UnitEvent>,
     next_at: Instant,
@@ -75,6 +77,18 @@ impl Run {
     /// Does a live scope keep the run alive?
     fn attached(&self) -> bool {
         self.scope.is_some() && !self.done
+    }
+
+    /// The unit's CPU and that of every scope read so far; `None` when nothing was readable.
+    fn cpu(&self) -> Option<u64> {
+        if self.unit_cpu.is_none() && self.scope_cpu.is_empty() {
+            return None;
+        }
+        Some(
+            self.scope_cpu
+                .values()
+                .fold(self.unit_cpu.unwrap_or(0), |sum, cpu| sum.saturating_add(*cpu)),
+        )
     }
 }
 
@@ -109,7 +123,7 @@ impl RunScopes {
                 scope: None,
                 done: false,
                 unit_cpu: None,
-                scope_cpu: None,
+                scope_cpu: BTreeMap::new(),
                 held: None,
                 next_at: now,
                 give_up_at: now + ATTACH_WINDOW,
@@ -155,14 +169,10 @@ impl RunScopes {
         self.runs.get(unit).is_some_and(|r| r.held.is_some())
     }
 
-    /// CPU time of the run so far, in nanoseconds: the unit's and the scope's together. The
+    /// CPU time of the run so far, in nanoseconds: the unit's and every scope's together. A
     /// scope's last reading stays after it has gone. `None` when nothing was readable.
     pub fn cpu_nsec(&self, unit: &str) -> Option<u64> {
-        let run = self.runs.get(unit)?;
-        match (run.unit_cpu, run.scope_cpu) {
-            (None, None) => None,
-            (a, b) => Some(a.unwrap_or(0).saturating_add(b.unwrap_or(0))),
-        }
+        self.runs.get(unit).and_then(Run::cpu)
     }
 
     /// An event of a unit on its way to the core. `Started` and the events of units without a
@@ -202,16 +212,15 @@ impl RunScopes {
             if run.done || run.next_at > now {
                 continue;
             }
-            let scope = match &run.scope {
-                Some(name) => name.clone(),
-                None => match scope_pattern(&run.app_id) {
-                    Ok(pattern) => pattern,
-                    Err(_) => {
-                        run.done = true;
-                        continue;
-                    }
-                },
+            // The attached scope by name (it is asked for even when the glob misses it), and
+            // the pattern of the app's scopes for the others (a Steam client, a game's own).
+            let Ok(pattern) = scope_pattern(&run.app_id) else {
+                run.done = true;
+                continue;
             };
+            let mut names = vec![unit.clone()];
+            names.extend(run.scope.clone());
+            names.push(pattern);
             run.queried = true;
             let at = match by_user.iter().position(|q| q.user == run.user) {
                 Some(at) => at,
@@ -223,9 +232,10 @@ impl RunScopes {
                     by_user.len() - 1
                 }
             };
-            by_user[at].names.push(unit);
-            if !by_user[at].names.contains(&scope) {
-                by_user[at].names.push(scope);
+            for name in names {
+                if !by_user[at].names.contains(&name) {
+                    by_user[at].names.push(name);
+                }
             }
         }
         by_user
@@ -273,21 +283,29 @@ impl RunScopes {
             if let Some(cpu) = unit_show.and_then(|s| s.cpu_nsec) {
                 run.unit_cpu = Some(run.unit_cpu.map_or(cpu, |old| old.max(cpu)));
             }
+            let entered = unit_show.map_or(0, |s| s.entered);
+            let own: Vec<&ShowUnit> = shows
+                .iter()
+                .filter(|s| is_app_scope(&run.app_id, &s.id) && s.alive())
+                // A scope is made after the unit started. A second of slack: the timestamps
+                // are whole seconds.
+                .filter(|s| entered == 0 || s.entered + 1 >= entered)
+                .collect();
+            for scope in &own {
+                if let Some(cpu) = scope.cpu_nsec {
+                    let seen = run.scope_cpu.entry(scope.id.clone()).or_insert(cpu);
+                    *seen = (*seen).max(cpu);
+                }
+            }
             match run.scope.clone() {
                 None => {
-                    let entered = unit_show.map_or(0, |s| s.entered);
-                    let found = shows
+                    let found = own
                         .iter()
-                        .filter(|s| is_app_scope(&run.app_id, &s.id) && s.alive())
-                        // The scope is made after the unit started. A second of slack: the
-                        // timestamps are whole seconds.
-                        .filter(|s| entered == 0 || s.entered + 1 >= entered)
                         .min_by(|a, b| (a.entered, &a.id).cmp(&(b.entered, &b.id)));
                     match found {
                         Some(scope) => {
                             eprintln!("ruya-session: {unit}: attached {}", scope.id);
                             run.scope = Some(scope.id.clone());
-                            run.scope_cpu = scope.cpu_nsec;
                             run.next_at = now + WATCH_EVERY;
                         }
                         None if now >= run.give_up_at => run.done = true,
@@ -295,29 +313,21 @@ impl RunScopes {
                     }
                 }
                 Some(name) => {
-                    let live = shows.iter().find(|s| s.id == name && s.alive());
-                    match live {
-                        Some(scope) => {
-                            if let Some(cpu) = scope.cpu_nsec {
-                                run.scope_cpu = Some(run.scope_cpu.map_or(cpu, |old| old.max(cpu)));
-                            }
-                            run.next_at = now
-                                + if run.held.is_some() {
-                                    ATTACH_EVERY
-                                } else {
-                                    WATCH_EVERY
-                                };
-                        }
-                        None => {
-                            eprintln!(
-                                "ruya-session: {unit}: scope gone, cpu {} ms",
-                                run.unit_cpu
-                                    .unwrap_or(0)
-                                    .saturating_add(run.scope_cpu.unwrap_or(0))
-                                    / 1_000_000
-                            );
-                            run.done = true;
-                        }
+                    let live = shows.iter().any(|s| s.id == name && s.alive());
+                    if live {
+                        run.next_at = now
+                            + if run.held.is_some() {
+                                ATTACH_EVERY
+                            } else {
+                                WATCH_EVERY
+                            };
+                    } else {
+                        eprintln!(
+                            "ruya-session: {unit}: scope gone, cpu {} ms, {} scopes counted",
+                            run.cpu().unwrap_or(0) / 1_000_000,
+                            run.scope_cpu.len()
+                        );
+                        run.done = true;
                     }
                 }
             }
@@ -480,12 +490,17 @@ mod tests {
         let now = now + ATTACH_EVERY;
         assert!(round(&mut scopes, &mut mgr, now).is_empty());
         assert_eq!(scopes.scope_of(UNIT).as_deref(), Some(SCOPE));
-        // From now on the exact scope is asked, not the pattern.
+        // From now on the exact scope is asked too, and the pattern still (the app's other
+        // scopes count for the CPU).
         let now = now + WATCH_EVERY;
         round(&mut scopes, &mut mgr, now);
         assert_eq!(
             mgr.asked.last().map(|q| q.names.clone()),
-            Some(vec![UNIT.to_owned(), SCOPE.to_owned()])
+            Some(vec![
+                UNIT.to_owned(),
+                SCOPE.to_owned(),
+                "app-flatpak-net.supertuxkart.SuperTuxKart-*.scope".to_owned()
+            ])
         );
     }
 
@@ -530,6 +545,41 @@ mod tests {
         assert!(round(&mut scopes, &mut mgr, now + WATCH_EVERY * 3).is_empty());
         assert_eq!(scopes.scope_of(UNIT), None);
         assert_eq!(scopes.cpu_nsec(UNIT), Some(game + 28_000_000));
+    }
+
+    #[test]
+    fn usage_counts_every_scope_of_the_app() {
+        let now = t0();
+        let mut scopes = RunScopes::new();
+        scopes.begin(UNIT, USER, APP, now);
+        let second = "app-flatpak-net.supertuxkart.SuperTuxKart-5000.scope";
+        let third = "app-flatpak-net.supertuxkart.SuperTuxKart-6000.scope";
+        let sibling = "app-flatpak-net.supertuxkart.SuperTuxKart-Extra-9.scope";
+        let older = "app-flatpak-net.supertuxkart.SuperTuxKart-7.scope";
+        let mut mgr = FakeManager::new(vec![
+            unit_show(1000, Some(10)),
+            scope_show(SCOPE, 1001, Some(100)),
+            scope_show(sibling, 1001, Some(1_000_000)),
+            scope_show("app-flatpak-org.other.Game-77.scope", 1001, Some(1_000_000)),
+            // Made before the unit started: an older run's.
+            scope_show(older, 900, Some(1_000_000)),
+        ]);
+        round(&mut scopes, &mut mgr, now);
+        assert_eq!(scopes.scope_of(UNIT).as_deref(), Some(SCOPE));
+        assert_eq!(scopes.cpu_nsec(UNIT), Some(110));
+        // The portal's scope and a game's subsandbox appear later.
+        mgr.set(scope_show(second, 1010, Some(1_000)));
+        round(&mut scopes, &mut mgr, now + WATCH_EVERY);
+        mgr.set(scope_show(third, 1020, Some(20_000)));
+        mgr.set(scope_show(SCOPE, 1001, Some(200)));
+        round(&mut scopes, &mut mgr, now + WATCH_EVERY * 2);
+        assert_eq!(scopes.cpu_nsec(UNIT), Some(10 + 200 + 1_000 + 20_000));
+        // A scope that ends keeps its last reading in the sum; the others go on.
+        mgr.set(gone_scope(second));
+        mgr.set(scope_show(third, 1020, Some(30_000)));
+        round(&mut scopes, &mut mgr, now + WATCH_EVERY * 3);
+        assert_eq!(scopes.cpu_nsec(UNIT), Some(10 + 200 + 1_000 + 30_000));
+        assert_eq!(scopes.scope_of(UNIT).as_deref(), Some(SCOPE));
     }
 
     #[test]
