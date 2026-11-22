@@ -112,7 +112,7 @@ Item {
             const app = createTemporaryObject(appComponent, host, props ?? {})
             verify(app)
             tc.shell.addApp(app, profile ?? "p2")
-            if ((app.pid ?? 0) > 0)
+            if (windowRecord(app).pending)               // a sibling of a mapped window asks nothing
                 tryCompare(pidSpy, "count", n + 1)
             return app
         }
@@ -285,6 +285,62 @@ Item {
             const b = addWindow({ pid: 99998 })
             compare(tc.shell.instanceOfWindow(windowRecord(a)), undefined)
             compare(tc.shell.instanceOfWindow(windowRecord(b)), undefined)
+        }
+
+        // RUY-1089: a game with two windows (Steam: Big Picture, then the game) comes back as the one
+        // that was in front, by the Running card, the Hub's Switch to and Resume on its page.
+        function twoWindows() {
+            const racer = launchBare("org.example.Racer")
+            const first = addWindow({ pid: Session.mockPidOf(racer) })
+            const second = addWindow({ pid: Session.mockPidOf(racer) })
+            tryVerify(() => second.activeFocus, 2000)
+            compare(windowRecord(first).instance, racer)
+            compare(windowRecord(second).instance, racer)
+            return { racer: racer, first: first, second: second }
+        }
+
+        function test_the_last_focused_window_comes_back_by_the_running_card() {
+            start()
+            const w = twoWindows()
+            tc.shell.focusApp(w.first)
+            tryVerify(() => w.first.activeFocus, 2000)
+            tc.shell.focusApp(w.second)
+            goHome()
+            const row = find("recentRow")
+            tryVerify(() => row.activeFocus, 2000)
+            keyClick(Qt.Key_Return)                          // Play on the Running card
+            tryVerify(() => w.second.activeFocus, 2000, "the window that was in front is back")
+            verify(!w.first.activeFocus)
+            verify(w.second.z > w.first.z)
+        }
+
+        function test_the_last_focused_window_comes_back_by_switch_to_and_resume() {
+            start()
+            const w = twoWindows()
+            tc.shell.focusApp(w.first)
+            tc.shell.focusApp(w.second)
+            goHome()
+            openHub()
+            goTo("to:org.example.Racer")
+            keyClick(Qt.Key_Return)
+            tryVerify(() => w.second.activeFocus, 2000, "Switch to brings the last window")
+            tc.shell.focusApp(w.first)                      // the player had the other in front now
+            goHome()
+            tc.shell.launchApp("org.example.Racer", "Turbo Racer", "")    // Resume on the game's page
+            tryVerify(() => w.first.activeFocus, 2000, "Resume brings the window last in front")
+            verify(!w.second.activeFocus)
+        }
+
+        function test_a_gone_last_window_falls_back_to_the_oldest() {
+            start()
+            const w = twoWindows()
+            const third = addWindow({ pid: Session.mockPidOf(w.racer) })
+            tryVerify(() => third.activeFocus, 2000)
+            compare(tc.shell.windowOf("org.example.Racer").item, third)
+            tc.shell.removeApp(third)
+            compare(tc.shell.windowOf("org.example.Racer").item, w.first, "the oldest remaining")
+            tc.shell.focusApp(w.second)
+            compare(tc.shell.windowOf("org.example.Racer").item, w.second)
         }
 
         // The rare case: a running game with no window at all. Play toasts, nothing else.
