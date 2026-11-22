@@ -929,21 +929,6 @@ pub fn launch_command(
     launch_command_in(user, app_id, env, DisplayMode::Wayland, &[])
 }
 
-/// The image's per-app launch arguments: a line is an app id and the arguments `flatpak run`
-/// passes to that app (`#` starts a comment). Steam gets `-gamepadui`, so it always opens in
-/// Big Picture (owner, 2026-11-17).
-pub const APP_ARGS: &str = "/usr/share/ruyaos/app-args";
-
-/// The arguments the list gives `app_id` (the first line naming it), or none.
-pub fn app_args_from(list: &str, app_id: &str) -> Vec<String> {
-    list.lines()
-        .map(|line| line.split('#').next().unwrap_or("").split_whitespace())
-        .find_map(|mut words| {
-            (words.next() == Some(app_id)).then(|| words.map(str::to_owned).collect())
-        })
-        .unwrap_or_default()
-}
-
 /// A launch argument is one plain word (it reaches `systemd-run` and the app's argv as one
 /// entry): ASCII letters, digits and `-_.=:/`, at most 64 characters.
 pub fn valid_app_arg(arg: &str) -> bool {
@@ -983,7 +968,7 @@ pub const APP_TASKS_MAX: u32 = 8192;
 /// `launch_command` for either display mode. In X11 mode the unit runs
 /// `ruya-session x11-run <app_id>` (which starts the X server and then `flatpak run`) and cleans
 /// up with `ruya-session x11-cleanup <app_id>` after any end, a Stop included. `app_args`
-/// (from `APP_ARGS`) follow the app id in both modes; `x11-run` hands them to `flatpak run`.
+/// (from the app table, `apps::AppTable::args`) follow the app id in both modes; `x11-run` hands them to `flatpak run`.
 pub fn launch_command_in(
     user: &str,
     app_id: &str,
@@ -1978,42 +1963,6 @@ mod tests {
                 !other.iter().any(|a| a.contains("ExecStartPre")),
                 "{mode:?}"
             );
-        }
-    }
-
-    #[test]
-    fn the_launch_argument_list_is_read_per_app() {
-        let list = "# comment\n\norg.other.App -a\ncom.valvesoftware.Steam  -gamepadui  # Big Picture\ncom.valvesoftware.Steam -late\n";
-        assert_eq!(
-            app_args_from(list, "com.valvesoftware.Steam"),
-            ["-gamepadui"]
-        );
-        assert_eq!(app_args_from(list, "org.other.App"), ["-a"]);
-        assert!(app_args_from(list, "org.other.Ap").is_empty());
-        assert!(
-            app_args_from("# com.valvesoftware.Steam -x\n", "com.valvesoftware.Steam").is_empty()
-        );
-        assert!(app_args_from("", "com.valvesoftware.Steam").is_empty());
-    }
-
-    #[test]
-    fn the_image_starts_steam_in_big_picture() {
-        let list = std::fs::read_to_string(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../image/rootfs/usr/share/ruyaos/app-args"),
-        )
-        .expect("image/rootfs/usr/share/ruyaos/app-args");
-        assert_eq!(
-            app_args_from(&list, "com.valvesoftware.Steam"),
-            ["-gamepadui"]
-        );
-        // Every argument the image ships is one the launch accepts.
-        for line in list.lines() {
-            let mut words = line.split('#').next().unwrap_or("").split_whitespace();
-            if let Some(app) = words.next() {
-                assert!(valid_session_app_id(app), "{app:?}");
-                assert!(words.all(valid_app_arg), "{line:?}");
-            }
         }
     }
 

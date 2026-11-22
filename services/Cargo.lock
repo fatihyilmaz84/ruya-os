@@ -1019,6 +1019,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruya-keyfile"
+version = "0.1.0"
+
+[[package]]
 name = "ruya-library"
 version = "0.1.0"
 dependencies = [
@@ -1165,6 +1169,7 @@ dependencies = [
  "ruya-flatpak",
  "ruya-fs",
  "ruya-ids",
+ "ruya-keyfile",
  "ruya-play-format",
  "ruya-play-launch",
  "tempfile",

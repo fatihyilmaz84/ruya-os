@@ -44,6 +44,7 @@ use zbus::connection::Builder;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 use zbus::{Connection, MatchRule, MessageStream};
 
+use crate::apps::{AppTable, Display, APPS_DIR};
 use crate::bounded::{run_bounded, run_bounded_status};
 use crate::follow::{
     bridge_args, existence, parse_signal, Backoff, Follower, ManagerLink, Probe, Wake,
@@ -51,18 +52,17 @@ use crate::follow::{
 };
 use crate::scope::{RunScopes, Sweep};
 use crate::spawner::{
-    active_app_scopes, any_swap, app_args_from, app_scopes, cancel_reclaim_command,
-    control_command, control_groups_command, flatpak_app_installed, kill_command,
-    launch_command_in, list_scopes_command, park_audio_command, parse_control_groups,
-    parse_profile_users, parse_show, pulse_start_command, reclaim_amount, reclaim_command,
-    sweep_commands, unit_app_id, unit_name, LineTail, RunFollower, RunningUnit, ShowUnit, APP_ARGS,
-    KILL_VERB, SHOW_PROPERTIES, SWAP_COMMAND,
+    active_app_scopes, any_swap, app_scopes, cancel_reclaim_command, control_command,
+    control_groups_command, flatpak_app_installed, kill_command, launch_command_in,
+    list_scopes_command, park_audio_command, parse_control_groups, parse_profile_users, parse_show,
+    pulse_start_command, reclaim_amount, reclaim_command, sweep_commands, unit_app_id, unit_name,
+    LineTail, RunFollower, RunningUnit, ShowUnit, KILL_VERB, SHOW_PROPERTIES, SWAP_COMMAND,
 };
 use crate::spawner::{
     AdoptLister, AudioJob, AudioQueue, DisplayMode, Listing, ReclaimLedger, Spawner, UnitEvent,
     PARK_RETRY,
 };
-use crate::x11::{display_mode_x11, X11_OVERRIDES};
+use crate::x11::display_mode_x11;
 use std::ffi::OsString;
 use zbus::address::transport::{Transport, Unixexec};
 use zbus::Address;
@@ -493,17 +493,22 @@ impl Spawner for SystemdSpawner {
         launch_args: &[String],
     ) -> Result<String, String> {
         // X11-only apps get a private X server inside their unit (ADR-034, RUY-435).
-        let mode = if display_mode_x11(&self.flatpak_root, app_id, Path::new(X11_OVERRIDES)) {
+        let table = AppTable::load(Path::new(APPS_DIR));
+        for problem in table.problems() {
+            eprintln!("ruya-session: app table {APPS_DIR}/{problem}");
+        }
+        if table.display(app_id) == Some(Display::Gamescope) {
+            eprintln!("ruya-session: {app_id} asks for display=gamescope, which is not built yet");
+            return Err(format!("{app_id}: display gamescope is not available yet"));
+        }
+        let mode = if display_mode_x11(&self.flatpak_root, app_id, table.display(app_id)) {
             eprintln!("ruya-session: {app_id} of {user} runs in X11 mode");
             DisplayMode::X11
         } else {
             DisplayMode::Wayland
         };
-        // Per-app launch arguments from the image (Steam: Big Picture); a missing file is none.
-        let mut app_args = app_args_from(
-            &std::fs::read_to_string(APP_ARGS).unwrap_or_default(),
-            app_id,
-        );
+        // Per-app launch arguments from the image's app table (Steam: Big Picture).
+        let mut app_args = table.args(app_id);
         // What this launch adds, such as a .play game's runner choice (RUY-904).
         app_args.extend(launch_args.iter().cloned());
         let args = launch_command_in(user, app_id, env, mode, &app_args)?;

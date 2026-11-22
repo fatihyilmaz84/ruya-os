@@ -1,7 +1,0 @@
-# Apps that ruya-session starts in X11 mode (per-app xwayland-satellite, ADR-034)
-# although their Flatpak metadata also lists the wayland socket. One app id per line.
-# Read by services/ruya-session/src/x11.rs (X11_OVERRIDES); spec 03, "X11 mode".
-
-# The Steam client is X11-only. In Wayland mode it gets no DISPLAY and stops with
-# "requires a correctly-configured desktop session" (Dell, 2026-11-17, lead-30).
-com.valvesoftware.Steam

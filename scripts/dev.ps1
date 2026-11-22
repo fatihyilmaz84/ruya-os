@@ -813,6 +813,15 @@ function Test-Ids {
     Record "profile id lint self-test (a hit, a marked line, a test module, tests.rs, ruya-ids)" ($LASTEXITCODE -eq 0)
 }
 
+# The rules live in scripts\lint-app-table.ps1 (shared with CI): per-app launch behaviour is one table (RUY-1050, ADR-043).
+function Test-AppTable {
+    Step "app table lint (the two retired per-app files stay gone: a per-app behaviour is a key in the apps table)"
+    & (Join-Path $PSScriptRoot "lint-app-table.ps1")
+    Record "app table lint" ($LASTEXITCODE -eq 0)
+    & (Join-Path $PSScriptRoot "lint-app-table.ps1") -SelfTest
+    Record "app table lint self-test" ($LASTEXITCODE -eq 0)
+}
+
 # The rules live in scripts\lint-vm-checks.ps1 (shared with CI): the lead-run VM check scripts (T-296).
 function Test-VmChecks {
     Step "VM check lint (vm-*.sh syntax and exec bit, host tests on canned data, ISO check refusals)"
@@ -1187,6 +1196,7 @@ function Test-ScriptSelfChecks {
     Test-ShotsFilterAndRetry
     Test-Duplicates
     Test-Ids
+    Test-AppTable
 }
 
 function Do-Shell {
