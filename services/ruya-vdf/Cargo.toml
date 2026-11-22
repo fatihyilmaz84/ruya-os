@@ -1,0 +1,9 @@
+[package]
+name = "ruya-vdf"
+description = "RuyaOS Valve text KeyValues (VDF): an ordered reader and writer for Steam's config, library and manifest files"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# No dependencies: text in, text out; the file access is ruya-fs's.

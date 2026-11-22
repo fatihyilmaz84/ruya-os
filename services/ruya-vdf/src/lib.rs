@@ -1,6 +1,8 @@
-//! Valve's text KeyValues ("VDF"), the format of Steam's `config.vdf` and of a compatibility
-//! tool's `compatibilitytool.vdf`. A reader and a writer, no OS: a file is text in, text out.
+//! Valve's text KeyValues ("VDF"), the format of Steam's `config.vdf`, `libraryfolders.vdf`,
+//! `appmanifest_*.acf` and of a compatibility tool's `compatibilitytool.vdf`. A reader and a
+//! writer, no OS: a file is text in, text out (reading it safely is `ruya-fs`'s).
 //!
+//! The reader takes quoted and unquoted tokens, `//` comments and a byte order mark. //!
 //! Keys keep their order and may repeat (a file is rewritten without losing what it had); lookups
 //! ignore case, as Steam does. Anything that is not the format is an `Err` with a short reason,
 //! never a panic: the files belong to Steam and to the player.
@@ -20,6 +22,32 @@ pub enum Value {
 pub struct Entry {
     pub key: String,
     pub value: Value,
+}
+
+impl Value {
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            Value::Str(s) => Some(s),
+            Value::Obj(_) => None,
+        }
+    }
+
+    /// The entries of a block (none for a string).
+    pub fn entries(&self) -> &[Entry] {
+        match self {
+            Value::Obj(list) => list,
+            Value::Str(_) => &[],
+        }
+    }
+
+    /// The first child named `key` (any case; Steam files mix `appid` and `AppID`).
+    pub fn get(&self, key: &str) -> Option<&Value> {
+        find(self.entries(), key).map(|e| &e.value)
+    }
+
+    pub fn get_str(&self, key: &str) -> Option<&str> {
+        self.get(key).and_then(Value::as_str)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -67,7 +95,18 @@ fn tokens(text: &str) -> Result<Vec<Token>, String> {
                 }
                 out.push(Token::Text(s));
             }
-            other => return Err(format!("unexpected {other:?} outside a string")),
+            first => {
+                // An unquoted token runs to white space, a brace or a quote.
+                let mut s = String::from(first);
+                while let Some(&c) = chars.peek() {
+                    if c.is_whitespace() || matches!(c, '{' | '}' | '"') {
+                        break;
+                    }
+                    s.push(c);
+                    chars.next();
+                }
+                out.push(Token::Text(s));
+            }
         }
     }
     Ok(out)
@@ -166,6 +205,11 @@ pub fn find<'a>(list: &'a [Entry], key: &str) -> Option<&'a Entry> {
     list.iter().find(|e| e.key.eq_ignore_ascii_case(key))
 }
 
+/// The first entry named `key` (any case) as a string; `None` for a block or nothing.
+pub fn find_str<'a>(list: &'a [Entry], key: &str) -> Option<&'a str> {
+    find(list, key).and_then(|e| e.value.as_str())
+}
+
 /// The block named `key` (any case), made empty at the end when there is none. A string of that
 /// name is not a block: `Err`, and nothing is changed.
 pub fn block_mut<'a>(list: &'a mut Vec<Entry>, key: &str) -> Result<&'a mut Vec<Entry>, String> {
@@ -226,7 +270,8 @@ mod tests {
             "}",
             "{ }",
             "\"a\" \"b",
-            "a b",
+            "a { b }",
+            "a",
             "\"a\" \"b\" }",
             &format!("{}{}", "\"a\" {".repeat(40), "}".repeat(40)),
         ] {
@@ -243,5 +288,68 @@ mod tests {
         assert_eq!(list.len(), 2);
         assert!(block_mut(&mut list, "new").is_ok());
         assert_eq!(list.len(), 3);
+    }
+
+    // From ruya-library's old reader.
+
+    fn doc(text: &str) -> Value {
+        Value::Obj(parse(text).expect("valid"))
+    }
+
+    #[test]
+    fn nested_objects() {
+        let v = doc(r#""a" { "b" { "c" "1" } "d" "2" }"#);
+        let a = v.get("a").unwrap();
+        assert_eq!(a.get("b").unwrap().get_str("c"), Some("1"));
+        assert_eq!(a.get_str("d"), Some("2"));
+    }
+
+    #[test]
+    fn escapes_in_quoted_strings() {
+        let v = doc(r#""k" "a\"b\\c\nd\te""#);
+        assert_eq!(v.get_str("k"), Some("a\"b\\c\nd\te"));
+    }
+
+    #[test]
+    fn comments_are_skipped_between_pairs() {
+        let v = doc("// head\n\"a\" \"1\" // tail\n// more\n\"b\" \"2\"");
+        assert_eq!(v.get_str("a"), Some("1"));
+        assert_eq!(v.get_str("b"), Some("2"));
+    }
+
+    #[test]
+    fn unquoted_tokens() {
+        let v = doc("key value\nobj { inner 3 }\nurl http://x/y");
+        assert_eq!(v.get_str("key"), Some("value"));
+        assert_eq!(v.get("obj").unwrap().get_str("inner"), Some("3"));
+        assert_eq!(find_str(v.entries(), "URL"), Some("http://x/y"));
+    }
+
+    #[test]
+    fn keys_match_case_insensitively_and_a_string_has_no_children() {
+        let v = doc(r#""AppID" "7""#);
+        assert_eq!(v.get_str("appid"), Some("7"));
+        assert!(v.get("appid").unwrap().get("x").is_none());
+        assert!(v.get("AppID").unwrap().entries().is_empty());
+    }
+
+    #[test]
+    fn absurd_nesting_is_an_error_not_a_stack_overflow() {
+        assert!(parse(&"\"a\" {".repeat(10_000)).is_err());
+    }
+
+    #[test]
+    fn repeated_keys_are_kept_in_order() {
+        let text = "\"a\"\t\t\"1\"\n\"a\"\t\t\"2\"\n";
+        let list = parse(text).expect("valid");
+        assert_eq!(list.len(), 2);
+        assert_eq!(find_str(&list, "A"), Some("1"));
+        assert_eq!(write(&list), text);
+    }
+
+    #[test]
+    fn a_steam_config_round_trips() {
+        let text = "\"InstallConfigStore\"\n{\n\t\"Software\"\n\t{\n\t\t\"Valve\"\n\t\t{\n\t\t\t\"Steam\"\n\t\t\t{\n\t\t\t\t\"CompatToolMapping\"\n\t\t\t\t{\n\t\t\t\t\t\"0\"\n\t\t\t\t\t{\n\t\t\t\t\t\t\"name\"\t\t\"GE-Proton9-1\"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n";
+        assert_eq!(write(&parse(text).expect("valid")), text);
     }
 }

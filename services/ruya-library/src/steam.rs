@@ -1,9 +1,20 @@
 //! Steam games, read-only, from `steamapps/libraryfolders.vdf` and `steamapps/appmanifest_*.acf`.
+//! Every file is read through `ruya_fs::Dir` (never through a link) with a size cap: the Steam
+//! folders belong to the player and to Steam, not to this service.
 
 use std::path::{Path, PathBuf};
 
+use ruya_fs::{Dir, Kind as FsKind};
+use ruya_vdf::{self as vdf, Value};
+
 use crate::catalog::{Item, Kind, Source};
-use crate::vdf::{self, Value};
+
+/// The most a `libraryfolders.vdf` may hold; a real one is a few kilobytes.
+const MAX_LIBRARYFOLDERS: u64 = 1024 * 1024;
+/// The most an `appmanifest_*.acf` may hold; a real one is a few kilobytes.
+const MAX_MANIFEST: u64 = 1024 * 1024;
+/// The most manifests read from one library; a real library has a few hundred.
+const MAX_MANIFESTS: usize = 4096;
 
 /// Entries that are tooling, not games.
 const SKIPPED_PREFIXES: [&str; 3] = [
@@ -20,24 +31,25 @@ const FULLY_INSTALLED: u64 = 4;
 /// leaves just the root.
 pub fn library_paths(root: &Path) -> Vec<PathBuf> {
     let mut paths = vec![root.to_path_buf()];
-    let file = root.join("steamapps").join("libraryfolders.vdf");
-    let Ok(text) = std::fs::read_to_string(&file) else {
+    let rel = Path::new("steamapps").join("libraryfolders.vdf");
+    let Some(text) = read_text(root, &rel, MAX_LIBRARYFOLDERS) else {
         return paths;
     };
     let Ok(doc) = vdf::parse(&text) else {
-        eprintln!("ruya-library: cannot parse {}", file.display());
+        eprintln!("ruya-library: cannot parse {}", root.join(&rel).display());
         return paths;
     };
-    let Some(folders) = doc.get("libraryfolders") else {
+    let Some(folders) = vdf::find(&doc, "libraryfolders") else {
         return paths;
     };
-    for (key, value) in folders.entries() {
+    for entry in folders.value.entries() {
+        let key = &entry.key;
         if key.is_empty() || !key.bytes().all(|b| b.is_ascii_digit()) {
             continue;
         }
-        let path = match value {
+        let path = match &entry.value {
             Value::Str(p) => Some(p.as_str()),
-            Value::Obj(_) => value.get_str("path"),
+            value @ Value::Obj(_) => value.get_str("path"),
         };
         if let Some(p) = path.filter(|p| !p.is_empty()) {
             let p = PathBuf::from(p);
@@ -49,10 +61,19 @@ pub fn library_paths(root: &Path) -> Vec<PathBuf> {
     paths
 }
 
+/// The text of the file `rel` below the folder `base` (which is trusted: it is a Steam root or
+/// a library path). `None` when it is missing, a link, not a regular file, over `limit` bytes or
+/// not UTF-8.
+fn read_text(base: &Path, rel: &Path, limit: u64) -> Option<String> {
+    let dir = Dir::open(base).ok()?;
+    let bytes = dir.read(rel, limit).ok()?;
+    String::from_utf8(bytes).ok()
+}
+
 /// One game from the text of an `appmanifest_*.acf`; `None` for anything that is not a fully
 /// installed game.
 pub fn parse_manifest(text: &str) -> Option<Item> {
-    let doc = vdf::parse(text).ok()?;
+    let doc = Value::Obj(vdf::parse(text).ok()?);
     let state = doc.get("AppState")?;
     let appid = state.get_str("appid")?.trim();
     if appid.is_empty() || !appid.bytes().all(|b| b.is_ascii_digit()) {
@@ -83,20 +104,27 @@ pub fn parse_manifest(text: &str) -> Option<Item> {
     })
 }
 
-/// All games of the libraries of one Steam root. Unreadable files are skipped.
+/// All games of the libraries of one Steam root. Unreadable files are skipped, links are not
+/// followed, and a library is read up to [`MAX_MANIFESTS`] manifests.
 pub fn scan_root(root: &Path) -> Vec<Item> {
     let mut items: Vec<Item> = Vec::new();
     for lib in library_paths(root) {
-        let Ok(dir) = std::fs::read_dir(lib.join("steamapps")) else {
+        let Ok(dir) = Dir::open(&lib) else {
             continue;
         };
-        for entry in dir.flatten() {
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            if !(name.starts_with("appmanifest_") && name.ends_with(".acf")) {
-                continue;
-            }
-            let Ok(text) = std::fs::read_to_string(entry.path()) else {
+        let Ok(entries) = dir.entries(Path::new("steamapps")) else {
+            continue;
+        };
+        let manifests = entries
+            .into_iter()
+            .filter(|(name, kind)| {
+                let name = name.to_string_lossy();
+                *kind == FsKind::File && name.starts_with("appmanifest_") && name.ends_with(".acf")
+            })
+            .take(MAX_MANIFESTS);
+        for (name, _) in manifests {
+            let rel = Path::new("steamapps").join(name);
+            let Some(text) = read_text(&lib, &rel, MAX_MANIFEST) else {
                 continue;
             };
             if let Some(item) = parse_manifest(&text) {
@@ -247,5 +275,45 @@ mod tests {
             "\"AppState\" { \"appid\" \"../x\" \"name\" \"n\" \"StateFlags\" \"4\" }"
         )
         .is_none());
+    }
+
+    #[test]
+    fn an_oversized_manifest_is_refused() {
+        let (_dir, root) = fixture_tree();
+        let big = format!("{}{}", manifest("4"), " ".repeat(MAX_MANIFEST as usize));
+        std::fs::write(root.join("steamapps/appmanifest_220.acf"), big).unwrap();
+        let ids: Vec<_> = scan_root(&root).into_iter().map(|i| i.id).collect();
+        assert_eq!(ids, vec!["steam:400"], "only the small manifest is read");
+    }
+
+    #[test]
+    fn an_oversized_library_file_leaves_the_root() {
+        let (_dir, root) = fixture_tree();
+        let big = " ".repeat(MAX_LIBRARYFOLDERS as usize + 1);
+        std::fs::write(root.join("steamapps/libraryfolders.vdf"), big).unwrap();
+        assert_eq!(library_paths(&root), vec![root]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_to_a_manifest_is_refused() {
+        let (dir, root) = fixture_tree();
+        let elsewhere = dir.path().join("elsewhere.acf");
+        std::fs::write(&elsewhere, manifest("4")).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, root.join("steamapps/appmanifest_7.acf")).unwrap();
+        let ids: Vec<_> = scan_root(&root).into_iter().map(|i| i.id).collect();
+        assert!(!ids.contains(&"steam:7".to_owned()), "{ids:?}");
+        assert!(ids.contains(&"steam:220".to_owned()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_to_the_library_file_leaves_the_root() {
+        let (dir, root) = fixture_tree();
+        let real = root.join("steamapps/libraryfolders.vdf");
+        let moved = dir.path().join("moved.vdf");
+        std::fs::rename(&real, &moved).unwrap();
+        std::os::unix::fs::symlink(&moved, &real).unwrap();
+        assert_eq!(library_paths(&root), vec![root]);
     }
 }

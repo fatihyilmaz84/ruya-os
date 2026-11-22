@@ -8,5 +8,4 @@ pub mod flatpak;
 pub mod play;
 pub mod runners;
 pub mod steam;
-pub mod vdf;
 pub mod watch;
