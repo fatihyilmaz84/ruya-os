@@ -3472,14 +3472,32 @@ mod tests {
         s.list().into_iter().find(|a| a.instance == instance)
     }
 
-    fn launch_failed(instance: &str, item: &str) -> Notice {
+    /// The end of p1's Steam game `instance` that never got its scope.
+    fn never_ran(instance: &str, item: &str, reason: ExitReason) -> Notice {
         Notice::Exited {
             instance: instance.to_owned(),
             app_id: STEAM.to_owned(),
             exit_code: -1,
-            reason: ExitReason::LaunchFailed,
+            reason,
             profile: "p1".to_owned(),
             item: item.to_owned(),
+        }
+    }
+
+    /// p1's Steam running, with steam:70 asked for by LaunchItem and still starting.
+    fn steam_with_starting_game() -> (Session<FakeSpawner, ProfileSnapshot>, String, String) {
+        let mut s = steam_session(FakeSpawner::new(), true);
+        let steam = steam_up(&mut s, true);
+        let (_, child) = s.launch_steam_game("70", "p1", 100, Instant::now());
+        (s, steam, child)
+    }
+
+    /// `verb` ("stop" or "kill", as p1) of `instance`.
+    fn end_by(s: &mut Session<FakeSpawner, ProfileSnapshot>, verb: &str, instance: &str) -> Status {
+        if verb == "stop" {
+            s.stop(instance, Instant::now())
+        } else {
+            s.kill(instance, Some("p1"), Instant::now())
         }
     }
 
@@ -3602,7 +3620,7 @@ mod tests {
         assert!(record_of(&s, &child).is_some());
         assert_eq!(
             s.tick(t0 + Duration::from_secs(120)),
-            [launch_failed(&child, "steam:70")]
+            [never_ran(&child, "steam:70", ExitReason::LaunchFailed)]
         );
         assert!(record_of(&s, &child).is_none(), "the record is gone");
         assert!(record_of(&s, &steam).is_some(), "Steam runs on");
@@ -3654,16 +3672,9 @@ mod tests {
     #[test]
     fn stop_and_kill_of_a_starting_game_end_it_in_the_core() {
         for (verb, reason) in [("stop", ExitReason::Quit), ("kill", ExitReason::Killed)] {
-            let mut s = steam_session(FakeSpawner::new(), true);
-            let steam = steam_up(&mut s, true);
-            let (_, child) = s.launch_steam_game("70", "p1", 100, Instant::now());
+            let (mut s, steam, child) = steam_with_starting_game();
             let before = s.spawner.calls().len();
-            let status = if verb == "stop" {
-                s.stop(&child, Instant::now())
-            } else {
-                s.kill(&child, Some("p1"), Instant::now())
-            };
-            assert_eq!(status, Status::Ok, "{verb}");
+            assert_eq!(end_by(&mut s, verb, &child), Status::Ok, "{verb}");
             assert_eq!(calls_since(&s, before), Vec::<String>::new(), "{verb}");
             assert_eq!(
                 record_of(&s, &child).map(|a| a.state),
@@ -3671,26 +3682,16 @@ mod tests {
             );
             // Its scope coming now changes nothing: it was ended.
             assert!(s.on_event(child_started(&steam, "70", false)).is_empty());
-            let ended = s.tick(Instant::now());
             assert_eq!(
-                ended,
-                [Notice::Exited {
-                    instance: child.clone(),
-                    app_id: STEAM.to_owned(),
-                    exit_code: -1,
-                    reason,
-                    profile: "p1".to_owned(),
-                    item: "steam:70".to_owned(),
-                }],
+                s.tick(Instant::now()),
+                [never_ran(&child, "steam:70", reason)],
                 "{verb}"
             );
             assert!(record_of(&s, &child).is_none());
             assert_eq!(record_of(&s, &steam).map(|a| a.state), Some(State::Running));
         }
         // Kill after Stop is "killed"; Kill keeps its profile check.
-        let mut s = steam_session(FakeSpawner::new(), true);
-        steam_up(&mut s, true);
-        let (_, child) = s.launch_steam_game("70", "p1", 100, Instant::now());
+        let (mut s, _, child) = steam_with_starting_game();
         assert_eq!(
             s.kill(&child, Some("p2"), Instant::now()),
             Status::NotAllowed
@@ -3703,29 +3704,23 @@ mod tests {
     #[test]
     fn stop_or_kill_of_steam_ends_its_starting_game_first() {
         for verb in ["stop", "kill"] {
-            let mut s = steam_session(FakeSpawner::new(), true);
-            let steam = steam_up(&mut s, true);
-            let (_, child) = s.launch_steam_game("70", "p1", 100, Instant::now());
+            let (mut s, steam, child) = steam_with_starting_game();
             let before = s.spawner.calls().len();
-            let status = if verb == "stop" {
-                s.stop(&steam, Instant::now())
-            } else {
-                s.kill(&steam, Some("p1"), Instant::now())
-            };
-            assert_eq!(status, Status::Ok);
+            assert_eq!(end_by(&mut s, verb, &steam), Status::Ok);
             assert_eq!(
                 calls_since(&s, before),
                 [format!("{verb} {steam}")],
                 "the game has nothing to reach"
             );
             assert!(s.list().iter().all(|a| a.state == State::Stopping));
-            assert_eq!(s.tick(Instant::now()), [launch_failed(&child, "steam:70")]);
+            assert_eq!(
+                s.tick(Instant::now()),
+                [never_ran(&child, "steam:70", ExitReason::LaunchFailed)]
+            );
             assert_eq!(s.list().len(), 1);
         }
         // Steam's end before the next tick: the game's end still comes first.
-        let mut s = steam_session(FakeSpawner::new(), true);
-        let steam = steam_up(&mut s, true);
-        let (_, child) = s.launch_steam_game("70", "p1", 100, Instant::now());
+        let (mut s, steam, child) = steam_with_starting_game();
         assert_eq!(s.stop(&steam, Instant::now()), Status::Ok);
         let ends: Vec<(String, i32, ExitReason)> = s
             .on_event(exited(&steam, 0, false))
