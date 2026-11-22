@@ -1203,11 +1203,9 @@ impl Importer {
             Front::Missing => return (MethodStatus::UnknownSource, None),
             Front::Cancelled => return (MethodStatus::Failed, None),
             Front::Failed(p) => {
-                // The one trace of why: the code and message carry no package text or path.
-                eprintln!(
-                    "ruya-play: inspect {name} failed: {}: {}",
-                    p.code, p.message
-                );
+                for line in jobs::problem_log_lines(&name, JobStatus::Failed, &[p]) {
+                    eprintln!("{line}");
+                }
                 return (MethodStatus::Failed, None);
             }
             Front::Refused(refusal) => {

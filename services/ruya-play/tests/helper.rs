@@ -71,7 +71,25 @@ fn sample() -> Fx {
 
 #[test]
 fn inspect_carries_the_vetted_art_of_the_sample() {
-    let mut h = Setup::with(Pkg::signed(&sample())).build();
+    VETTED.lock().unwrap().clear();
+    let mut setup = Setup::with(Pkg::signed(&sample()));
+    // Record the helper's vetted files before the service copies them.
+    setup.wrap_helper = Some(Box::new(|inner| {
+        Box::new(Tamper {
+            inner,
+            mode: Mode::Inspect,
+            act: |staging| {
+                let art = staging.join("art");
+                let mut seen = VETTED.lock().unwrap();
+                for rel in listing(&art) {
+                    if let Ok(bytes) = std::fs::read(art.join(&rel)) {
+                        seen.insert(rel, bytes);
+                    }
+                }
+            },
+        })
+    }));
+    let mut h = setup.build();
     let (st, report) = h.importer.inspect(&pkg_path("game.play"));
     assert_eq!(st, MethodStatus::Ok);
     let report = report.unwrap();
@@ -88,13 +106,17 @@ fn inspect_carries_the_vetted_art_of_the_sample() {
                 "{}",
                 f.display()
             );
-            // The vetted art step writes WebP: the copy is a whole file of that container.
-            let bytes = std::fs::read(f).unwrap();
-            assert!(
-                bytes.len() > 12 && bytes.starts_with(b"RIFF"),
-                "{}",
-                f.display()
-            );
+            // The copy is the vetted file, byte for byte.
+            let rel = f
+                .strip_prefix(h.cfg.publish.join("inspect-1"))
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .replace('\\', "/");
+            let vetted = VETTED.lock().unwrap().get(&rel).cloned();
+            let vetted = vetted.unwrap_or_else(|| panic!("no vetted bytes of {rel}"));
+            assert!(!vetted.is_empty());
+            assert!(std::fs::read(f).unwrap() == vetted, "{}", f.display());
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
@@ -162,6 +184,11 @@ fn a_failed_copy_of_the_art_fails_the_inspect_and_leaves_nothing() {
     assert_eq!(listing(&h.cfg.inspect), Vec::<String>::new());
     assert_eq!(listing(&h.cfg.publish), Vec::<String>::new());
 }
+
+/// The vetted art files the helper staged, by name below `art/` (see
+/// `inspect_carries_the_vetted_art_of_the_sample`).
+static VETTED: std::sync::Mutex<std::collections::BTreeMap<String, Vec<u8>>> =
+    std::sync::Mutex::new(std::collections::BTreeMap::new());
 
 /// Runs the real helper, then changes what it staged before the service looks.
 struct Tamper {
