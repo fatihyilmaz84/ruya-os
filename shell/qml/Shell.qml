@@ -163,10 +163,18 @@ FocusScope {
     function recordOf(item) {
         return apps.find(r => r.item === item)
     }
-    // The window of a running app of the signed-in profile, by its application id (appIdOf: the
-    // instance's first), or undefined.
+    // The window the player last had in front, per application id (RUY-1089): a record id. A game
+    // with two toplevels (Steam: Big Picture, then the game) comes back as the one that was in front,
+    // not as the first. Set in focusApp, dropped with the window.
+    property var lastFrontOf: ({})
+
+    // The window of a running app of the signed-in profile, by its application id (appIdOf): the one
+    // last in front, else the instance's first (none was focused yet, or it is gone), or undefined.
     function windowOf(appId) {
-        return appId === "" ? undefined : apps.find(r => appIdOf(r) === appId && appShownTo(r.profile))
+        if (appId === "")
+            return undefined
+        const mine = apps.filter(r => appIdOf(r) === appId && appShownTo(r.profile))
+        return mine.find(r => r.id === lastFrontOf[appId]) ?? mine[0]
     }
 
     // The running instance (Session1 record) a window belongs to, or undefined (T-467): the one its
@@ -333,6 +341,9 @@ FocusScope {
         appsBehindHome = false
         item.z = ++appRaise             // the newest on top: "Switch to" and Resume bring one to the front
         focusedApp = item
+        const appId = appIdOf(record)
+        if (appId !== "")
+            lastFrontOf[appId] = record.id
         if (!systemPanel.open && !whosPlaying.pausing)   // the overlay (or "Who's playing?") keeps the focus until it closes
             focusCurrent()
     }
@@ -351,6 +362,10 @@ FocusScope {
         const wasFront = focusedApp === record.item || (!focusedApp && !appsBehindHome)
         const gone = runningFor(record)     // as the route finds it, a window still waiting for its pid included (RUY-1040)
         apps = apps.filter(r => r.id !== id)
+        for (const k of Object.keys(lastFrontOf)) {
+            if (lastFrontOf[k] === id)
+                delete lastFrontOf[k]
+        }
         if (!focusedApp || wasFront)
             focusedApp = appsBehindHome ? null : fallbackFront()
         // The last window of a running instance went and nothing else is in front (RUY-814, item 3).
