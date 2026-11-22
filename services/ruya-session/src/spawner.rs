@@ -1048,7 +1048,7 @@ enum Output {
 /// The shape of every short helper that runs as a profile user (`steam-probe` and `profile-scan`,
 /// which answer on stdout, and the Steam URL forwarder): `systemd-run` in `user`'s manager,
 /// waited for, collected, bounded by `RuntimeMaxSec=<runtime_max_sec>`, with the unit
-/// `properties` after it, then `command`. Its unit gets the manager's own name (`run-u<n>`),
+/// `properties` after it, then `command`. Its unit gets the manager's own name (`run-p<pid>-i<n>`),
 /// never an app unit's (`ruya-app-*`, which adoption takes). Pure; the user is validated again.
 fn helper_command(
     user: &str,
