@@ -219,6 +219,12 @@ void Session::mockEndChild(const QString &instance)
         mock->endChild(instance);
 }
 
+void Session::mockChildLaunchWait(int ms)
+{
+    if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))
+        mock->setChildLaunchWait(ms);
+}
+
 QStringList Session::mockCalls() const
 {
     if (auto *mock = qobject_cast<MockSessionBackend *>(m_backend.get()))

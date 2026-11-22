@@ -18,11 +18,12 @@
 
   Status strings are stable API:
     "ok"                success (for Launch and LaunchItem: the app is starting, AppStarted follows
-                        when it runs)
+                        when it runs; LaunchItem of a Steam game: the instance is the game's child)
     "unknown-app"       the app id is not installed (LaunchItem: the item's app)
     "unknown-profile"   no such profile, or not an account apps may run as
     "already-running"   this app is already running (or starting) for this profile, or a run of it
-                        told to stop has not ended yet (RUY-736)
+                        told to stop has not ended yet (RUY-736); LaunchItem of a Steam game: its
+                        child is starting, running or stopping (the answer names that child)
     "unknown-instance"  no running instance with that name
     "invalid"           malformed argument (empty id, bad characters; LaunchItem: an unknown item
                         prefix too)
@@ -87,11 +88,15 @@
   parent's app_id; the shell reads ListRunning again when AppStarted names an instance it does not
   know (a game started inside Steam's own UI becomes a child too). Every other instance has `item`
   "flatpak:<app_id>" and `parent` "". Built: the keys, LaunchItem for Flatpak items, the ledger's
-  `item`, and Steam children (RUY-1052: a game's scope is told by the Steam app ids of its sandbox's
+  `item`, Steam children (RUY-1052: a game's scope is told by the Steam app ids of its sandbox's
   top process, read as the profile user; a child is "running" from its first scope, adopted games
-  become children again after a restart; Stop, Kill, Freeze, Thaw and InstanceOfPid as above).
-  Planned: LaunchItem of a Steam item (RUY-1067: "starting", the 120 s "launch-failed" and
-  "already-running"); until then it answers "failed".
+  become children again after a restart; Stop, Kill, Freeze, Thaw and InstanceOfPid as above), and
+  LaunchItem of a Steam item (RUY-1067). A child LaunchItem asked for is "starting" until its first
+  scope, which makes it "running" with AppStarted, and ends with AppExited "launch-failed" (exit
+  code -1) after 120 s without one. While it is starting it has nothing to reach: Stop and Kill end
+  it in the service alone ("stopping" for up to a second, then AppExited "quit" or "killed", exit
+  code -1), Stop or Kill of its parent ends it the same way with "launch-failed", Freeze answers
+  "not-running", and a launch that never ran writes no ledger session.
 
   Running record (a{sv}), keys:
     instance   s    opaque instance name
@@ -158,14 +163,19 @@
     <!-- Starts a Library1 item as the profile (ADR-041 point 3, RUY-1051).
          "flatpak:<app_id>" is exactly Launch(app_id, profile): the same statuses, instance and
          signals. "steam:<appid>" (digits only) starts the game as a child instance of the profile's
-         Steam instance (planned, RUY-1052: the service builds steam://rungameid/<appid> itself from
-         the digits; a running Steam is handed the URL, a stopped one is started with it). The child
-         is "starting" until its scope appears, and ends with AppExited "launch-failed" after 120 s
-         without one. A Steam game whose child already runs answers "already-running" with that
-         child's instance. Until RUY-1052 a valid Steam item answers "failed". Statuses: ok, invalid
-         (a malformed item, an unknown prefix, or a bad profile id), unknown-app (the item's app is
-         not installed), unknown-profile, already-running, failed. `instance` is "" unless the status
-         is "ok", or "already-running" for a Steam game. -->
+         Steam instance (RUY-1067): the service builds steam://rungameid/<appid> itself from the
+         digits; a stopped Steam is launched with it (as Launch launches Steam: Steam's own
+         AppStarted follows), a running or starting one is handed the URL by a short unit of the
+         profile user (Steam's own command line) and its record is unchanged. "ok" names the child's
+         instance: it is "starting" until its scope appears (then "running", AppStarted with Steam's
+         app_id), and ends with AppExited "launch-failed" (exit code -1) after 120 s without one. A
+         Steam game whose child is starting, running or stopping (launched here or from Steam's own
+         UI) answers "already-running" with that child's instance, and nothing is started. Statuses:
+         ok, invalid (a malformed item, an unknown prefix, or a bad profile id), unknown-app (the
+         item's app is not installed; a Steam game: Steam is not), unknown-profile, already-running
+         (a Steam game also while Steam's own run is still ending, then with ""), failed (as Launch's;
+         a running Steam: the forwarder could not be started). `instance` is "" unless the status is "ok", or
+         "already-running" for a Steam game's child. -->
     <method name="LaunchItem">
       <arg name="item" type="s" direction="in"/>
       <arg name="profile" type="s" direction="in"/>
@@ -176,7 +186,10 @@
     <!-- Asks the app to quit (SIGTERM to the unit and every scope of the app), and kills it if it
          has not ended 30 s later (the backstop). AppExited (reason "quit", or "killed" after the
          kill) follows. Stopping an instance that is already stopping is "ok". A child instance
-         (ADR-041) is only its own scopes; a parent's children are stopped first, then the parent. -->
+         (ADR-041) is only its own scopes; a parent's children are stopped first, then the parent. A
+         Steam game still starting (LaunchItem, no scope yet) is ended by the service alone: it is
+         "stopping", and AppExited "quit" (exit code -1) follows within a second; a parent's Stop
+         ends such a child the same way with "launch-failed". -->
     <method name="Stop">
       <arg name="instance" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
@@ -189,7 +202,9 @@
          profile (a frozen one is not thawed: the kill ends it anyway). AppExited with reason
          "killed" follows, whatever signal the run's unit died of. "ok" means the kill was sent; a
          second Kill sends it again. A child instance (ADR-041) is only its own scopes; a parent's
-         children are killed first, then the parent. Statuses: ok,
+         children are killed first, then the parent. A Steam game still starting (no scope yet) is
+         ended by the service alone, AppExited "killed" (exit code -1) within a second; a parent's
+         Kill ends such a child with "launch-failed". Statuses: ok,
          unknown-instance, not-allowed (another profile's app, or nobody is signed in), failed. -->
     <method name="Kill">
       <arg name="instance" type="s" direction="in"/>
