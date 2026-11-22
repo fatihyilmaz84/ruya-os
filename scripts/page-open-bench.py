@@ -8,7 +8,7 @@ summarises the shell's own probe lines from the journal,
 docs/specs/02-shell.md section 1). Run it as root on the console (the Dell), with a profile signed in,
 on Home, nothing open:
 
-  scp -i ~/.ssh/<key> scripts/page-open-bench.py root@<dell>:/root/
+  scp -i ~/.ssh/<key> scripts/page-open-bench.py scripts/vm_uinput_trust.py root@<dell>:/root/
   ssh -i ~/.ssh/<key> root@<dell> python3 /root/page-open-bench.py --runs 10 --label "0.0.56 high"
 
 Scenarios (each run starts and ends on Home; --scenario picks one, default all three). Each first goes
@@ -34,6 +34,8 @@ import struct
 import subprocess
 import sys
 import time
+
+import vm_uinput_trust  # root vouches for its keyboard (RUY-1063)
 
 KEY = {"up": 103, "down": 108, "left": 105, "right": 106, "accept": 28, "back": 1,
        "lb": 104, "rb": 109}
@@ -67,7 +69,8 @@ class Keyboard:
         name = b"ruya-bench-keyboard".ljust(80, b"\0")
         fcntl.ioctl(self.fd, UI_DEV_SETUP, struct.pack("HHHH80sI", 0x03, 0x1209, 0x0002, 1, name, 0))
         fcntl.ioctl(self.fd, UI_DEV_CREATE)
-        time.sleep(1.5)  # let udev and the compositor adopt the new device
+        self.trusted = vm_uinput_trust.trust(self.fd)
+        time.sleep(1.5)  # let the compositor adopt the new device
 
     def emit(self, etype, code, value):
         os.write(self.fd, struct.pack("llHHi", 0, 0, etype, code, value))
@@ -81,6 +84,7 @@ class Keyboard:
         time.sleep(gap)
 
     def close(self):
+        vm_uinput_trust.untrust(self.trusted)
         fcntl.ioctl(self.fd, UI_DEV_DESTROY)
         os.close(self.fd)
 

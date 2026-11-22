@@ -8,7 +8,6 @@ const VERSION: u32 = 2;
 const USER_OBJ: u16 = 0x01;
 const USER: u16 = 0x02;
 const GROUP_OBJ: u16 = 0x04;
-const GROUP: u16 = 0x08;
 const MASK: u16 = 0x10;
 const OTHER: u16 = 0x20;
 const UNDEFINED_ID: u32 = u32::MAX;
@@ -83,14 +82,17 @@ pub fn closed() -> Vec<u8> {
 
 /// True when the ACL is exactly what `only_user(uid)` writes: nothing to re-assert.
 pub fn is_only_user(bytes: &[u8], uid: u32) -> bool {
-    let Some(entries) = parse(bytes) else {
+    matches(bytes, &only_user(uid))
+}
+
+/// True when `bytes` holds the same entries as `want` (in any order): nothing to write.
+pub fn matches(bytes: &[u8], want: &[u8]) -> bool {
+    let (Some(mut have), Some(mut want)) = (parse(bytes), parse(want)) else {
         return false;
     };
-    let mut want = parse(&only_user(uid)).unwrap_or_default();
-    let mut have = entries;
-    want.sort();
     have.sort();
-    have == want && !have.iter().any(|&(tag, _, _)| tag == GROUP)
+    want.sort();
+    have == want
 }
 
 #[cfg(test)]
@@ -127,6 +129,14 @@ mod tests {
     fn a_logind_acl_must_be_reasserted() {
         assert_eq!(named_users(&logind_acl()), Some(vec![(990, RW)]));
         assert!(!is_only_user(&logind_acl(), 1001));
+    }
+
+    #[test]
+    fn a_closed_acl_matches_only_itself() {
+        assert!(matches(&closed(), &closed()));
+        assert!(!matches(&only_user(1001), &closed()));
+        assert!(!matches(&logind_acl(), &closed()));
+        assert!(!matches(&[1, 2, 3], &closed()));
     }
 
     #[test]

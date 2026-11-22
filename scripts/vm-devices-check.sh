@@ -51,6 +51,7 @@
 # "RuyaOS Navigation" (read with EVIOCGKEY); two pads hold Down, one lets go, Down stays down, the other lets go, Down is up; the journal line
 # `gone: ...; released ...` is there. WARNING: it sends real Down and Enter key presses to the running shell, which activates whatever has focus:
 # run it last, or with a throwaway screen focused. No /dev/uinput access as root: prints UNVERIFIED and passes nothing.
+#   Needs vm_uinput_trust.py next to this script (root vouches for its pads, RUY-1063; the VM queue copies it).
 # events: only the PipeWire event checks (T-133); IDLE=60 adds the idle-process count (also part of check; samples the process list for IDLE seconds).
 # state: prints State and Primary (for the link test, see docs/dev-setup.md).
 set -u
@@ -1228,9 +1229,11 @@ time_check() {
 
 # T-337: ruya-inputd releases the keys a vanished pad held, and two pads share a key safely.
 # Virtual gamepads come from /dev/uinput (python3 standard library only); the keys are read back from the
-# "RuyaOS Navigation" device with the EVIOCGKEY ioctl. Prints PASS:/FAIL:/UNVERIFIED: lines.
+# "RuyaOS Navigation" device with the EVIOCGKEY ioctl. Prints PASS:/FAIL:/UNVERIFIED: lines. Root vouches for
+# its pads (vm_uinput_trust.py next to this script, RUY-1063): ruya-inputd never reads an unvouched uinput pad.
 inputd_py='
 import fcntl, glob, os, struct, sys, time
+import vm_uinput_trust
 
 EV_SYN, EV_KEY = 0, 1
 BTN_SOUTH, BTN_DPAD_DOWN = 0x130, 0x221
@@ -1256,7 +1259,17 @@ def make_pad(tag):
     name = ("ruya-test-pad-" + tag).encode().ljust(80, b"\0")
     fcntl.ioctl(fd, UI_DEV_SETUP, struct.pack("HHHH80sI", 0x03, 0x1209, 0x0002, 1, name, 0))
     fcntl.ioctl(fd, UI_DEV_CREATE)
+    trusted[fd] = vm_uinput_trust.trust(fd)
     return fd
+
+
+def drop_pad(fd):
+    vm_uinput_trust.untrust(trusted.pop(fd))
+    fcntl.ioctl(fd, UI_DEV_DESTROY)
+    os.close(fd)
+
+
+trusted = {}
 
 
 def send(fd, code, value):
@@ -1323,8 +1336,7 @@ if wait_for(nav, KEY_DOWN, True, 2) and wait_for(nav, KEY_ENTER, True, 2):
     say("PASS", "a held d-pad Down and A press KEY_DOWN and KEY_ENTER")
 else:
     say("FAIL", "holding Down and A did not press KEY_DOWN and KEY_ENTER")
-fcntl.ioctl(pad, UI_DEV_DESTROY)
-os.close(pad)
+drop_pad(pad)
 if wait_for(nav, KEY_DOWN, False, 3) and wait_for(nav, KEY_ENTER, False, 3):
     say("PASS", "the pad vanished while holding Down and A: KEY_DOWN and KEY_ENTER are up")
 else:
@@ -1354,8 +1366,7 @@ if wait_for(nav, KEY_DOWN, False, 2):
 else:
     say("FAIL", "KEY_DOWN stayed down after both pads let go")
 for fd in (p1, p2):
-    fcntl.ioctl(fd, UI_DEV_DESTROY)
-    os.close(fd)
+    drop_pad(fd)
 '
 
 inputd_check() {
@@ -1375,7 +1386,7 @@ inputd_check() {
         return
     fi
     ok "the compositor and the shell are stopped: no Accept can start anything"
-    out="$(python3 -c "$inputd_py" 2>&1)"
+    out="$(PYTHONPATH="$(cd "$(dirname "$0")" && pwd)" python3 -c "$inputd_py" 2>&1)"
     inputd_restore
     trap - EXIT
     while IFS= read -r line; do

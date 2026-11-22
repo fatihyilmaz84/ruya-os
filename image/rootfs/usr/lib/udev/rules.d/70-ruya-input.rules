@@ -2,21 +2,47 @@
 # the uaccess ACLs; the ruya-input ACLs on physical pads are added later, in
 # 74-ruya-input-acl.rules (after logind's uaccess builtin, which flushes named ACL entries).
 
-# 1. Only root and ruya-input can create input devices, so only they can claim the ruya-input/
-#    phys prefix below.
-KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="ruya-input", MODE="0660", OPTIONS+="static_node=uinput"
+# 1. /dev/uinput belongs to ruya-input, mode 0600. ruya-inputd gives it one ACL entry, for the
+#    signed-in profile's user (Steam Input makes its own pads there; owner decision RUY-1061 a,
+#    ADR-024 amendment), none while nobody is signed in, and sets it again after every udev event
+#    on the node (this MODE masks the entry). So a profile can make input devices: what it makes
+#    is foreign (below) and reaches neither the shell nor ruya-inputd's pad reader.
+KERNEL=="uinput", SUBSYSTEM=="misc", OWNER="ruya-input", MODE="0600", OPTIONS+="static_node=uinput"
 
 SUBSYSTEM!="input", GOTO="ruya_input_end"
 KERNEL!="event*", GOTO="ruya_input_end"
 
-# 3. Virtual pads (ruya-inputd, phys ruya-input/pad<n>): owned by ruya-input, mode 0600, and no
+# A parentless input device (/devices/virtual/input/inputN) was made through uinput, and nothing
+# in sysfs or udev names its creator; its phys is whatever the creator wrote. It is FOREIGN unless
+# a marker names its input device ($id, the KERNELS match): /run/ruya-input/own/inputN, which
+# ruya-inputd writes right after it makes the device and removes before it destroys it, or
+# /run/ruya-input-trusted/inputN, which only root can write (a device root made and vouches for:
+# the VM and Dell checks' stand-in pads and keyboards), and which makes it hardware. The test runs
+# at every event: a device processed before its marker is foreign at "add" and own at the next
+# event (an own device is briefly foreign, never the reverse; input numbers are never reused).
+DEVPATH!="/devices/virtual/input/*", GOTO="ruya_input_physical"
+SUBSYSTEMS=="input", KERNELS=="input[0-9]*", TEST=="/run/ruya-input/own/$id", ENV{RUYA_INPUT_ORIGIN}="own", GOTO="ruya_input_own"
+SUBSYSTEMS=="input", KERNELS=="input[0-9]*", TEST=="/run/ruya-input-trusted/$id", ENV{RUYA_INPUT_ORIGIN}="trusted", GOTO="ruya_input_physical"
+
+# Foreign (a profile's, Steam's virtual pad, or ours before its marker): ruya-input's, mode 0600,
+# not for the shell's libinput, and 71-ruya-input-pad.rules takes the uaccess and power-switch
+# tags away (no ruya-shell ACL, no power key to logind). ruya-inputd never reads it; a foreign pad
+# gets one ACL entry from it, for the profile that held /dev/uinput when it appeared, while that
+# profile is signed in. Keyboards and mice reach nothing (RUY-1090 routes them into the game).
+ENV{RUYA_INPUT_ORIGIN}="foreign", OWNER="ruya-input", MODE="0600", ENV{LIBINPUT_IGNORE_DEVICE}="1", GOTO="ruya_input_end"
+
+LABEL="ruya_input_own"
+# 3. Virtual pads (ruya-inputd's, phys ruya-input/pad<n>): owned by ruya-input, mode 0600, and no
 #    uaccess tag: systemd's 70-uaccess.rules (after this file) tags them as joysticks, so
 #    71-ruya-input-pad.rules removes the tag again. The service sets the one ACL entry, for the
 #    signed-in profile's user, after every udev event on the node, because a `change` event (or a
-#    seat change) makes udev / logind rewrite the node's ACL. Other ruya-input/ devices (a keyboard
-#    or mouse for the compositor, RUY-45) keep uaccess.
+#    seat change) makes udev / logind rewrite the node's ACL. Its other devices (the navigation
+#    keyboard, later a keyboard or mouse for the compositor, RUY-45) keep uaccess. The phys is
+#    looked at only here, on a marked device.
 ATTRS{phys}=="ruya-input/pad*", OWNER="ruya-input", MODE="0600", GOTO="ruya_input_end"
+TAG+="uaccess", GOTO="ruya_input_end"
 
+LABEL="ruya_input_physical"
 # 2. A pad's motion and touchpad nodes (hid-playstation, hid-sony, hid-nintendo): read by
 #    ruya-inputd only (T-373), not by the shell's libinput, which would hand the touchpad's
 #    motion to the focused surface, a game included.

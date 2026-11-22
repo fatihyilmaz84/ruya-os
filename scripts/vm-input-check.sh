@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: caps check close confirm coop fallback forget guide hold join nodes owner players profiles restart seathold security shell signals start startpad twopads useractive
+# modes: caps check close confirm coop fallback forget guide hold join nodes owner players profiles restart seathold security shell signals start startpad twopads uinput useractive
 # Checks Ruya Input (ruya-inputd, org.ruyaos.Input1, RUY-3 / T-367) inside a running VM, as root:
 # the service runs as ruya-input, a uinput "physical" pad gets a virtual Xbox 360-style pad for
 # the routed profile whose ACL names only that profile's user, other users are refused, the route
@@ -8,8 +8,10 @@
 # is back within 0.5 s. The restart step (RUY-597) runs three kills and passes when the MEDIAN is at most
 # 500 ms and the worst at most 1000 ms: the first run after heavy checks is slow (644 ms once; a lone re-run
 # gave 190-426 ms), and the 1000 ms ceiling still catches a real regression. Copy and run (boot with plain smoke-test.ps1 -Keep):
-#   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py root@127.0.0.1:/root/
-#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|forget|shell|close|fallback|confirm|hold|twopads|startpad|guide|owner|nodes|start|useractive|signals|players|seathold|coop|join]
+#   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py scripts/vm_uinput_trust.py root@127.0.0.1:/root/
+#   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|forget|shell|close|fallback|confirm|hold|twopads|startpad|guide|owner|nodes|uinput|start|useractive|signals|players|seathold|coop|join]
+# The probe's stand-in pads are root's uinput devices, which root vouches for (vm_uinput_trust.py next to the probe,
+# RUY-1063): a uinput device nobody vouched for is foreign and ruya-inputd never reads it.
 # `startpad` (RUY-837) with the shell stopped like `twopads`: a uinput pad signs the profile in; the profile user opens no
 # /dev/input node; PreparePads answers ok within 1 s with the route still `shell`; right after the answer the profile user's
 # one look at /dev/input (a game that scans once at its start, as Neverball does) opens exactly ruya-input/pad1; the route
@@ -79,9 +81,17 @@
 # either pad's Guide gives KEY_HOMEPAGE; in route `app` with pad 0 as player 1 and pad 1 as player 2, pad 0's Guide, held
 # 0.6 s, gives KEY_HOMEPAGE down and up on RuyaOS Navigation, pad 1's gives none and a ForeignInput "player-guide", and
 # neither gives a BTN_MODE on either virtual pad the profile user reads.
+# `uinput` (RUY-1063, 06 section 3 rule 1) with the shell running (like `nodes`): /dev/uinput opens read-write for the
+# signed-in profile's user only, for the other profile's after a switch, for neither when locked (no named entry then); a
+# keyboard and a pad with phys ruya-input/pad1 that the profile user makes are foreign (RUYA_INPUT_ORIGIN=foreign,
+# ruya-input's, that user's ACL entry only and none while the other profile is signed in, no ruya-shell entry, no uaccess
+# or power-switch tag, LIBINPUT_IGNORE_DEVICE=1) and ruya-inputd logs no "using" line for them; after a restart of
+# ruya-inputd its navigation keyboard has its marker (/run/ruya-input/own/inputN), RUYA_INPUT_ORIGIN=own and uaccess,
+# the shell holds the new node open, and a virtual pad made in the route app carries the marker too. Run it alone.
 # `nodes` (RUY-446) checks the virtual pad node (phys ruya-input/pad<n>) the way 06 section 3 rule 3 says: ruya-input's,
 # user rw and nothing for group and other (getfacl; stat's group bits show the ACL mask), no uaccess tag, no ACL entry for
-# ruya-shell, the profile user's entry; a ruya-input/kbm* node keeps uaccess. Run it alone, not inside `check`, with the
+# ruya-shell, the profile user's entry; the navigation keyboard keeps uaccess, a ruya-input/kbm* node that ruya-inputd did
+# not make has none (RUY-1063: a phys proves nothing). Run it alone, not inside `check`, with the
 # shell running (RUY-581: the step fails without it).
 # `start` (RUY-583) checks the chain inputd -> evdev -> xkb -> Qt for Start: with the shell running at Home, a uinput pad taps
 # BTN_START; the shell must log "ruya-shell: options menu open (<card|pill|row>)" exactly once (the second tap closes the
@@ -131,6 +141,12 @@ probe="$here/vm-input-probe.py"
 fail=0
 ok() { echo "PASS: $*"; }
 bad() { echo "FAIL: $*"; fail=1; }
+# The probe in a directory the profile users can read, with the module its stand-in devices need (RUY-1063).
+install_probe() {
+    install -m 0644 "$probe" "$1/vm-input-probe.py"
+    [ -f "$here/vm_uinput_trust.py" ] && install -m 0644 "$here/vm_uinput_trust.py" "$1/vm_uinput_trust.py"
+    return 0
+}
 
 profiles() { busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | grep -o '"p[0-9]*"' | tr -d '"'; }
 
@@ -182,7 +198,8 @@ unit_check() {
     if lsmod | grep -qw '^joydev'; then bad "joydev is loaded (legacy js nodes, 06 section 3)"; else ok "joydev is not loaded"; fi
     if modprobe joydev >/dev/null 2>&1; then bad "modprobe joydev succeeded"; modprobe -r joydev; else ok "modprobe joydev is refused (blacklisted)"; fi
     if lsinitrd "/usr/lib/modules/$(uname -r)/initramfs.img" 2>/dev/null | grep -q 'joydev\.ko'; then bad "joydev is in the initramfs"; else ok "joydev is not in the initramfs"; fi
-    [ "$(stat -c '%G %a' /dev/uinput)" = "ruya-input 660" ] && ok "/dev/uinput is ruya-input 0660" || bad "/dev/uinput: $(stat -c '%U %G %a' /dev/uinput)"
+    # RUY-1063: ruya-input owns it (mode 0600; the signed-in profile's ACL entry shows as the group bits).
+    [ "$(stat -c '%U' /dev/uinput)" = ruya-input ] && ok "/dev/uinput is ruya-input's" || bad "/dev/uinput: $(stat -c '%U %G %a' /dev/uinput)"
 }
 
 routing_check() {
@@ -193,7 +210,7 @@ routing_check() {
     # The probe runs again as the profile users (the game, the refused opens): /root is 0700.
     dir="$(mktemp -d /var/tmp/ruya-input-check.XXXXXX)"
     chmod 0755 "$dir"
-    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    install_probe "$dir"
     while IFS= read -r line; do
         case "$line" in
         PASS:*) ok "${line#PASS: }" ;;
@@ -969,7 +986,7 @@ startpad)
     [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
     dir="$(mktemp -d "${CHECK_TMP:-/var/tmp}/ruya-input-check.XXXXXX")"
     chmod 0755 "$dir"
-    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    install_probe "$dir"
     since="$(date '+%Y-%m-%d %H:%M:%S')"
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe startpad --user "ruya-$me"
     # The prepared pad is ready (its ACL set) before the game's route binds it.
@@ -988,7 +1005,7 @@ twopads)
     [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
     dir="$(mktemp -d "${CHECK_TMP:-/var/tmp}/ruya-input-check.XXXXXX")"
     chmod 0755 "$dir"
-    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    install_probe "$dir"
     # With the compositor and the shell stopped (RUY-573): the shell's own SetRoute calls (its start,
     # a South press signing a no-PIN profile in) land between the probe's and fail it at random.
     since="$(date '+%Y-%m-%d %H:%M:%S')"
@@ -1018,7 +1035,7 @@ players)
     [ -n "$player2" ] && ok "CreateProfile made $player2 (Check Player)" || { bad "CreateProfile Check Player: $out"; echo "SOME CHECKS FAILED"; exit 1; }
     dir="$(mktemp -d "${CHECK_TMP:-/var/tmp}/ruya-input-check.XXXXXX")"
     chmod 0755 "$dir"
-    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    install_probe "$dir"
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe players --user "ruya-$me" --other "$player2"
     # RUY-124: the owners file the probe's restart read back is private to ruya-input.
     st="$(stat -c '%a %U' /var/lib/ruya-input/owners.json 2>&1)"
@@ -1053,7 +1070,7 @@ seathold|coop)
         || bad "no 'RUYA_SEAT_HOLD_SECS: a seat is held 5 s' line after the restart"
     dir="$(mktemp -d "${CHECK_TMP:-/var/tmp}/ruya-input-check.XXXXXX")"
     chmod 0755 "$dir"
-    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    install_probe "$dir"
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe "$mode" --user "ruya-$me" --other "$player2"
     rm -rf "$dir"
     rm -f "$dropin/50-ruya-check-seat-hold.conf"
@@ -1069,7 +1086,7 @@ useractive)
     [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
     dir="$(mktemp -d /var/tmp/ruya-input-check.XXXXXX)"
     chmod 0755 "$dir"
-    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    install_probe "$dir"
     echo "--- pad input to a game is announced as activity, at most every 30 s (RUY-588)"
     fresh_activity_gate || exit 1
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe useractive
@@ -1081,7 +1098,7 @@ signals)
     [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
     dir="$(mktemp -d /var/tmp/ruya-input-check.XXXXXX)"
     chmod 0755 "$dir"
-    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    install_probe "$dir"
     echo "--- Input1's signals reach only root and ruya-shell (RUY-594)"
     fresh_activity_gate || exit 1
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe signals --user "ruya-$me"
@@ -1093,7 +1110,7 @@ guide)
     [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
     dir="$(mktemp -d /var/tmp/ruya-input-check.XXXXXX)"
     chmod 0755 "$dir"
-    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    install_probe "$dir"
     echo "--- Guide never reaches a game (RUY-11); after a sign-in only player 1's reaches the shell (RUY-38)"
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe guide --user "ruya-$me" --other "$other"
     rm -rf "$dir"
@@ -1104,9 +1121,24 @@ owner)
     [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
     dir="$(mktemp -d /var/tmp/ruya-input-check.XXXXXX)"
     chmod 0755 "$dir"
-    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    install_probe "$dir"
     echo "--- after a sign-in only player 1's pad navigates; another asks with ForeignInput; SetNavigator flips it (RUY-38)"
     probe_cwd="$dir" probe_py="$dir/vm-input-probe.py" stopped_shell_probe owner
+    rm -rf "$dir"
+    ;;
+uinput)
+    two_profiles
+    [ -n "$me" ] && [ -n "$other" ] && ok "profiles: $me signs in, $other is the other" || { bad "need two profiles"; exit 1; }
+    [ -f "$probe" ] || { bad "$probe is missing: copy it next to this script"; exit 1; }
+    [ -f "$here/vm_uinput_trust.py" ] || { bad "vm_uinput_trust.py is missing: copy it next to this script"; exit 1; }
+    systemctl is-active ruya-inputd >/dev/null || { bad "ruya-inputd is not active"; exit 1; }
+    dir="$(mktemp -d "${CHECK_TMP:-/var/tmp}/ruya-input-check.XXXXXX")"
+    chmod 0755 "$dir"
+    install_probe "$dir"
+    echo "--- /dev/uinput for the signed-in profile only; what a profile makes is foreign; ruya-inputd's devices are marked (RUY-1063)"
+    out="$(cd "$dir" && python3 "$dir/vm-input-probe.py" uinput --user "ruya-$me" --profile "$me" --other "ruya-$other" 2>&1)" && rc=0 || rc=$?
+    [ -n "$out" ] && echo "$out"
+    if [ "$rc" -ne 0 ] || printf '%s\n' "$out" | grep -qE '^(FAIL:|Traceback )'; then fail=1; fi
     rm -rf "$dir"
     ;;
 nodes)
@@ -1114,7 +1146,7 @@ nodes)
     [ -n "$me" ] && ok "profile $me" || { bad "need a profile"; exit 1; }
     dir="$(mktemp -d /var/tmp/ruya-input-check.XXXXXX)"
     chmod 0755 "$dir"
-    install -m 0644 "$probe" "$dir/vm-input-probe.py"
+    install_probe "$dir"
     # The shell stays UP (RUY-581): with it stopped, logind has no session to give an ACL entry and
     # "no ruya-shell entry" could not fail. The probe itself fails when the shell is not running.
     systemctl is-active ruya-inputd >/dev/null || { bad "ruya-inputd is not active"; exit 1; }

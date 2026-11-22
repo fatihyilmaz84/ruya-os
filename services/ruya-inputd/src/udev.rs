@@ -13,6 +13,9 @@ pub struct UdevEvent {
     pub devpath: String,
     /// `/dev/input/event17` (absent on the input device itself)
     pub devname: String,
+    /// `RUYA_INPUT_ORIGIN` (the udev rules' verdict on a parentless device: `own`, `trusted`,
+    /// `foreign`; "" for hardware).
+    pub origin: String,
 }
 
 impl UdevEvent {
@@ -32,6 +35,21 @@ impl UdevEvent {
                 .next()
                 .is_some_and(|n| n.starts_with("event"))
     }
+
+    /// The uinput node itself (`misc/uinput`), whose ACL the service re-asserts after each event.
+    pub fn is_uinput(&self) -> bool {
+        self.subsystem == "misc" && self.devname == crate::origin::UINPUT_NODE
+    }
+}
+
+/// The netlink group udevd broadcasts its processed events to.
+pub const UDEV_GROUP: u32 = 2;
+
+/// True for a message udevd sent: multicast to `UDEV_GROUP`. Sending to a netlink multicast group
+/// of this family needs `CAP_NET_ADMIN`, but any process may send a unicast message to the
+/// service's socket; such a message (groups 0) is dropped, as libudev drops it.
+pub fn from_udevd(nl_groups: u32) -> bool {
+    nl_groups & UDEV_GROUP != 0
 }
 
 const PREFIX: &[u8; 8] = b"libudev\0";
@@ -61,6 +79,7 @@ pub fn parse_monitor_message(buf: &[u8]) -> Option<UdevEvent> {
         subsystem: get("SUBSYSTEM"),
         devpath: get("DEVPATH"),
         devname: get("DEVNAME"),
+        origin: get(crate::origin::ORIGIN_PROPERTY),
     })
 }
 
@@ -109,6 +128,37 @@ mod tests {
         assert_eq!(ev.devname, "/dev/input/event17");
         assert_eq!(ev.parent_sysname(), Some("input23"));
         assert!(ev.is_event_node());
+        assert_eq!(ev.origin, "");
+    }
+
+    #[test]
+    fn the_origin_and_the_uinput_node_are_read() {
+        let msg = monitor_message(&[
+            ("ACTION", "add"),
+            ("DEVPATH", "/devices/virtual/input/input40/event30"),
+            ("SUBSYSTEM", "input"),
+            ("DEVNAME", "/dev/input/event30"),
+            ("RUYA_INPUT_ORIGIN", "foreign"),
+        ]);
+        let ev = parse_monitor_message(&msg).expect("parsed");
+        assert_eq!(ev.origin, "foreign");
+        assert!(!ev.is_uinput());
+        let msg = monitor_message(&[
+            ("ACTION", "change"),
+            ("DEVPATH", "/devices/virtual/misc/uinput"),
+            ("SUBSYSTEM", "misc"),
+            ("DEVNAME", "/dev/uinput"),
+        ]);
+        let ev = parse_monitor_message(&msg).expect("parsed");
+        assert!(ev.is_uinput());
+        assert!(!ev.is_event_node());
+    }
+
+    #[test]
+    fn only_udevds_multicast_is_taken() {
+        assert!(from_udevd(UDEV_GROUP));
+        assert!(!from_udevd(0), "a unicast message from any local process");
+        assert!(!from_udevd(1), "the kernel's own group");
     }
 
     #[test]

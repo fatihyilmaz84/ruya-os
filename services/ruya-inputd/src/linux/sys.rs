@@ -14,6 +14,7 @@ use crate::pad::{
     code, OutEvent, Rumble, VIRTUAL_AXES, VIRTUAL_BUS_USB, VIRTUAL_KEYS, VIRTUAL_NAME,
     VIRTUAL_PRODUCT, VIRTUAL_VENDOR, VIRTUAL_VERSION,
 };
+use crate::udev::{from_udevd, UDEV_GROUP};
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -394,8 +395,6 @@ pub struct Monitor {
     fd: RawFd,
 }
 
-const UDEV_GROUP: u32 = 2;
-
 impl Monitor {
     pub fn open() -> io::Result<Monitor> {
         // SAFETY: plain socket calls with a zeroed, then filled sockaddr_nl.
@@ -430,16 +429,33 @@ impl Monitor {
         }
     }
 
-    /// The next message; blocks.
+    /// The next message udevd sent (`udev::from_udevd`); blocks. A unicast message any local
+    /// process can send to this socket is dropped: the events now decide ACLs (RUY-1063).
     pub fn recv(&self) -> io::Result<Vec<u8>> {
-        let mut buf = vec![0u8; 16384];
-        // SAFETY: the buffer's length is passed.
-        let n = unsafe { libc::recv(self.fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len(), 0) };
-        if n < 0 {
-            return Err(io::Error::last_os_error());
+        loop {
+            let mut buf = vec![0u8; 16384];
+            // SAFETY: a zeroed sockaddr_nl with its size, and the buffer's length are passed.
+            let mut from: libc::sockaddr_nl = unsafe { std::mem::zeroed() };
+            let mut len = size_of::<libc::sockaddr_nl>() as libc::socklen_t;
+            let n = unsafe {
+                libc::recvfrom(
+                    self.fd,
+                    buf.as_mut_ptr() as *mut libc::c_void,
+                    buf.len(),
+                    0,
+                    &mut from as *mut libc::sockaddr_nl as *mut libc::sockaddr,
+                    &mut len,
+                )
+            };
+            if n < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            if !from_udevd(from.nl_groups) {
+                continue;
+            }
+            buf.truncate(n as usize);
+            return Ok(buf);
         }
-        buf.truncate(n as usize);
-        Ok(buf)
     }
 }
 

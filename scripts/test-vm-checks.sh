@@ -41,6 +41,11 @@
 #   - vm-store-check.sh    the `perms` mode (RUY-744): the sandbox probe counts the interfaces other than lo, so
 #                          lo alone reads as no network; the test app asks for all devices and not dri; the
 #                          probe looks at /dev/bus/usb; the override's devices entries are read in any order
+#   - vm-input-check.sh    the `uinput` mode (RUY-1063): no probe or no vm_uinput_trust.py fails, the probe gets both
+#                          profiles with the module next to it, a probe FAIL fails
+#   - the input udev rules (RUY-1063, test-udev-input-rules.py): /dev/uinput, ruya-inputd's marked devices, foreign
+#                          ones (a phys ruya-input/pad1 included), foreign at add and own after the marker, root's
+#                          vouched-for stand-ins and hardware, each with its origin, owner, mode, tags and RUN
 # Needs bash and python3 (python on Windows). Exit 0 = all pass.
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -477,6 +482,10 @@ out="$(python3 "$here/test-vm-input-probe.py" 2>&1)"; rc=$?
 echo "$out"
 fails=$((fails + $(echo "$out" | grep -c '^    FAIL')))
 [ "$rc" = 0 ] && pass "test-vm-input-probe.py exit 0" || fail "test-vm-input-probe.py exit $rc"
+echo "the input udev rules: own, foreign and trusted devices (RUY-1063)"
+out="$(python3 "$here/test-udev-input-rules.py" 2>&1)"; rc=$?
+echo "$out" | sed 's/^/    /'
+[ "$rc" = 0 ] && pass "test-udev-input-rules.py exit 0" || fail "test-udev-input-rules.py exit $rc"
 
 # --- vm-sample-check.sh: an early failure still cleans -----------------------------------------------
 echo "vm-sample-check.sh: cleanup runs when a step fails early"
@@ -947,6 +956,46 @@ for case in \
     expect_contains "guests, bug $bug: caught" "$out" "$needle"
     [ "$rc" = 1 ] && pass "guests, bug $bug: exit 1" || fail "guests, bug $bug: exit $rc"
 done
+# --- vm-input-check.sh uinput (RUY-1063): the probe and its module, the two profiles, a probe FAIL fails ----------
+echo "vm-input-check.sh uinput: the probe gets both profiles and vm_uinput_trust.py next to it"
+ui="$tmp/uinput"; mkdir -p "$ui/bin" "$ui/alone" "$ui/nomod" "$ui/with" "$ui/tmp"
+cat > "$ui/bin/busctl" <<'SHIMEOF'
+#!/bin/sh
+case "$*" in
+*ListProfiles*) echo 'aa{sv} 2 2 "id" s "p1" "name" s "A" 2 "id" s "p2" "name" s "B"' ;;
+esac
+exit 0
+SHIMEOF
+printf '#!/bin/sh\nexit 0\n' > "$ui/bin/systemctl"
+chmod +x "$ui/bin"/*
+cp "$here/vm-input-check.sh" "$ui/alone/"
+cp "$here/vm-input-check.sh" "$here/vm_uinput_trust.py" "$ui/with/"
+cp "$here/vm-input-check.sh" "$ui/nomod/"
+# A stand-in probe: logs its arguments and whether the module sits next to it; FAKE_PROBE_FAIL makes it fail.
+cat > "$ui/with/vm-input-probe.py" <<'SHIMEOF'
+import os, sys
+here = os.path.dirname(os.path.abspath(__file__))
+with open(os.environ["FAKE_LOG"], "a") as f:
+    f.write("probe " + " ".join(sys.argv[1:]) + (" module" if os.path.isfile(os.path.join(here, "vm_uinput_trust.py")) else "") + "\n")
+print("FAIL: stand-in probe" if os.environ.get("FAKE_PROBE_FAIL") else "PASS: stand-in probe")
+SHIMEOF
+cp "$ui/with/vm-input-probe.py" "$ui/nomod/"
+runuinput() { # <dir>
+    : > "$tmp/uinput.log"
+    FAKE_LOG="$tmp/uinput.log" CHECK_TMP="$ui/tmp" PATH="$ui/bin:$PATH" bash "$1/vm-input-check.sh" uinput 2>&1
+}
+out="$(runuinput "$ui/alone")"; rc=$?
+expect_contains "uinput without the probe: FAIL" "$out" "vm-input-probe.py is missing: copy it next to this script"
+[ "$rc" = 1 ] && pass "uinput without the probe: exit 1" || fail "uinput without the probe: exit $rc"
+out="$(runuinput "$ui/nomod")"; rc=$?
+expect_contains "uinput without vm_uinput_trust.py: FAIL" "$out" "vm_uinput_trust.py is missing: copy it next to this script"
+[ "$rc" = 1 ] && pass "uinput without the module: exit 1" || fail "uinput without the module: exit $rc"
+out="$(runuinput "$ui/with")"; rc=$?
+[ "$rc" = 0 ] && pass "uinput with a passing probe: exit 0" || fail "uinput with a passing probe: exit $rc ($out)"
+expect_contains "uinput runs the probe as p1 with p2 as the other, the module next to it" "$(cat "$tmp/uinput.log")" \
+    "probe uinput --user ruya-p1 --profile p1 --other ruya-p2 module"
+out="$(FAKE_PROBE_FAIL=1 runuinput "$ui/with")"; rc=$?
+[ "$rc" = 1 ] && pass "uinput with a failing probe: exit 1" || fail "uinput with a failing probe: exit $rc"
 # --- vm-input-check.sh players (RUY-121): the second profile is made and removed, the probe gets it ---------
 echo "vm-input-check.sh players: the probe, the second profile and its removal"
 pl="$tmp/players"; mkdir -p "$pl/bin" "$pl/alone" "$pl/with" "$pl/tmp"

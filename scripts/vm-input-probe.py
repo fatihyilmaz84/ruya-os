@@ -25,8 +25,17 @@
       pad's profile, emptying one slot changes only that pad (vm-input-check.sh twopads runs it)
   python3 vm-input-probe.py nodes --profile p1 --user ruya-p1
       (root; RUY-446) the virtual pad nodes (phys ruya-input/pad<n>) are ruya-input's, user rw only, with no
-      uaccess tag and no entry for ruya-shell, and the profile user's ACL entry; a node whose phys is
-      ruya-input/kbm* keeps uaccess (vm-input-check.sh nodes runs it)
+      uaccess tag and no entry for ruya-shell, and the profile user's ACL entry; the navigation keyboard keeps
+      uaccess, a ruya-input/kbm* node ruya-inputd did not make has none (RUY-1063; vm-input-check.sh nodes runs it)
+  python3 vm-input-probe.py uinput --user ruya-p1 --profile p1 --other ruya-p2
+      (root; RUY-1063) /dev/uinput opens for the signed-in profile's user only; a keyboard and a pad (phys
+      ruya-input/pad1) that user makes are foreign (no uaccess, power-switch or ruya-shell entry, its ACL entry
+      only while signed in, never read by ruya-inputd); after a restart the navigation keyboard and a virtual pad
+      carry ruya-inputd's marker (vm-input-check.sh uinput runs it, with the shell up)
+  python3 vm-input-probe.py mkdev keyboard|pad [--send] [--seconds S]
+      (a profile user; RUY-1063) makes a uinput keyboard (digits, arrows, Enter, KEY_POWER) or a pad with phys
+      ruya-input/pad1 and holds it; --send presses each key once (the Dell's negative check)
+Root's stand-in devices are vouched for with vm_uinput_trust.py, which must be next to this script.
   python3 vm-input-probe.py navpad [--settle S] [--lefts N] [--rights M] [--start K] [--join PROFILE]
       (root; RUY-410) a uinput pad that, S seconds after it is ready, taps the D-pad left N times and
       right M times, then A (the emergency reader's keys: Left, Right, Return); prints "pad ready <node>"
@@ -248,10 +257,20 @@ class Bus:
 
 # ---- the "physical" pad -------------------------------------------------------------------
 
-class FakePad:
-    """A uinput gamepad that ruya-inputd takes as physical; it answers rumble uploads."""
+def trusted_uinput():
+    """vm_uinput_trust (next to this script): root vouches for its stand-in devices (RUY-1063)."""
+    try:
+        import vm_uinput_trust
+    except ImportError:
+        sys.exit("vm_uinput_trust.py is missing: copy it next to vm-input-probe.py (RUY-1063)")
+    return vm_uinput_trust
 
-    def __init__(self, vendor=0x1234, product=0x5678, phys=PHYS, name=NAME):
+
+class FakePad:
+    """A uinput gamepad that ruya-inputd takes as physical (root vouches for it, RUY-1063); it answers
+    rumble uploads. `trusted=False` leaves it foreign: a pad as a profile would make it."""
+
+    def __init__(self, vendor=0x1234, product=0x5678, phys=PHYS, name=NAME, trusted=True):
         self.fd = os.open("/dev/uinput", os.O_RDWR | os.O_NONBLOCK)
         fcntl.ioctl(self.fd, UI_SET_PHYS, phys.encode() + b"\0")
         for ev in (EV_KEY, EV_ABS, EV_FF):
@@ -266,6 +285,8 @@ class FakePad:
         fcntl.ioctl(self.fd, UI_SET_FFBIT, FF_RUMBLE)
         fcntl.ioctl(self.fd, UI_DEV_SETUP, struct.pack("HHHH80sI", 0x03, vendor, product, 1, name.encode(), 8))
         fcntl.ioctl(self.fd, UI_DEV_CREATE)
+        self.trust = trusted_uinput() if trusted else None
+        self.sysname = self.trust.trust(self.fd) if self.trust else None
         self.rumble = []  # (strong, weak) uploads
         self.played = []  # (effect id, value)
         self.alive = True
@@ -301,6 +322,8 @@ class FakePad:
 
     def close(self):
         self.alive = False
+        if self.trust:
+            self.trust.untrust(self.sysname)
         try:
             fcntl.ioctl(self.fd, UI_DEV_DESTROY)
         finally:
@@ -565,7 +588,7 @@ def cmd_game(args):
 
 def cmd_open(args):
     try:
-        os.close(os.open(args.node, os.O_RDONLY | os.O_NONBLOCK))
+        os.close(os.open(args.node, (os.O_RDWR if args.write else os.O_RDONLY) | os.O_NONBLOCK))
         print("open ok")
     except OSError as e:
         print(f"open refused {errno.errorcode.get(e.errno, e.errno)}")
@@ -1444,7 +1467,8 @@ def shell_running():
 
 def cmd_nodes(args):
     """RUY-446: a virtual pad node is ruya-input's with user rw and no group or other access, carries no
-    uaccess tag and no ACL entry for ruya-shell; a ruya-input/kbm* node keeps uaccess. RUY-581: it runs
+    uaccess tag and no ACL entry for ruya-shell; the navigation keyboard keeps uaccess, a ruya-input/kbm* node
+    root made without vouching for it is foreign and has none (RUY-1063). RUY-581: it runs
     with the shell UP (the seat's active session is ruya-shell's, so logind would give it an entry on a
     node that still carried uaccess); with the shell stopped "no ruya-shell entry" could not fail."""
     fails = 0
@@ -1496,16 +1520,17 @@ def cmd_nodes(args):
             ok(f"{n} has no ACL entry for ruya-shell (named: {named})") if "ruya-shell" not in named else bad(
                 f"{n} has an ACL entry for ruya-shell: {named}")
             ok(f"{n} has the profile user's ACL entry") if args.user in named else bad(f"{n}: no entry for {args.user}: {named}")
-        # A keyboard or mouse (the kbm rule of 06 section 3) keeps uaccess: stand in with a uinput device.
-        kbm = FakePad(0x1234, 0x567A, "ruya-input/kbm-check", NAME + " kbm")
+        # ruya-inputd's other devices keep uaccess (the shell reads them): its navigation keyboard (06 section 3).
+        nav_node = node_by("name", "RuyaOS Navigation")[0]
+        ok(f"{nav_node} (the navigation keyboard, ruya-inputd's own) keeps the uaccess tag") if nav_node and             "uaccess" in udev_tags(nav_node) else bad(f"the navigation keyboard {nav_node}: tags {sorted(udev_tags(nav_node)) if nav_node else []}")
+        # A ruya-input/ phys proves nothing (RUY-1063): a device ruya-inputd did not make is foreign, no uaccess.
+        kbm = FakePad(0x1234, 0x567A, "ruya-input/kbm-check", NAME + " kbm", trusted=False)
         knode = wait_for(lambda: node_by("phys", "ruya-input/kbm-check")[0], 3)
         if not knode:
             bad("the ruya-input/kbm stand-in has no node")
         else:
-            # The tag comes with the add event's rules run: wait for it (bounded), do not sleep.
-            wait_for(lambda: "uaccess" in udev_tags(knode), 3)
-            ok(f"{knode} (ruya-input/kbm*) keeps the uaccess tag") if "uaccess" in udev_tags(knode) else bad(
-                f"{knode} (ruya-input/kbm*) lost the uaccess tag: {sorted(udev_tags(knode))}")
+            subprocess.run(["udevadm", "settle", "--timeout=10"])
+            ok(f"{knode} (phys ruya-input/kbm*, not ruya-inputd's) has no uaccess tag") if "uaccess" not in udev_tags(knode)                 else bad(f"{knode} (phys ruya-input/kbm*, not ruya-inputd's) carries uaccess: {sorted(udev_tags(knode))}")
     finally:
         if bus:
             bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
@@ -1517,6 +1542,210 @@ def cmd_nodes(args):
         wait_for(lambda: not [d for d in (devices() or []) if d.get("name", "").startswith(NAME)]
                  and not node_by("phys", "vm-check/pad0")[0] and not node_by("phys", "ruya-input/kbm-check")[0], 5)
         time.sleep(1.5)
+    return fails
+
+
+KEY_1, KEY_0, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_POWER = 2, 11, 103, 108, 105, 106, 116
+FOREIGN_KEYS = list(range(KEY_1, KEY_0 + 1)) + [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_ENTER, KEY_POWER]
+FOREIGN_KBD = "RuyaOS Check Foreign Keyboard"
+FOREIGN_PAD = "RuyaOS Check Foreign Pad"
+
+
+def cmd_mkdev(args):
+    """As a profile user (RUY-1063): makes a uinput keyboard (digits, arrows, Enter, KEY_POWER) or a pad
+    with phys ruya-input/pad1 through /dev/uinput, prints "made <sysname> <node>" (or "refused <errno>"),
+    with --send presses every key of the keyboard once after --settle seconds and prints "sent", and holds
+    the device until --seconds ran out or stdin closes."""
+    try:
+        if args.kind == "pad":
+            dev = FakePad(0x1234, 0x567B, "ruya-input/pad1", FOREIGN_PAD, trusted=False)
+            fd = dev.fd
+        else:
+            fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
+            fcntl.ioctl(fd, UI_SET_EVBIT, EV_KEY)
+            for code in FOREIGN_KEYS:
+                fcntl.ioctl(fd, UI_SET_KEYBIT, code)
+            fcntl.ioctl(fd, UI_SET_PHYS, b"ruya-input/kbm1\0")
+            name = FOREIGN_KBD.encode().ljust(80, b"\0")
+            fcntl.ioctl(fd, UI_DEV_SETUP, struct.pack("HHHH80sI", 0x03, 0x1209, 0x0003, 1, name, 0))
+            fcntl.ioctl(fd, UI_DEV_CREATE)
+            dev = None
+    except OSError as e:
+        print(f"refused {errno.errorcode.get(e.errno, e.errno)}", flush=True)
+        return
+    try:
+        buf = bytearray(64)
+        fcntl.ioctl(fd, 0x8040552C, buf)  # UI_GET_SYSNAME
+        sysname = bytes(buf).split(b"\0", 1)[0].decode()
+        ev = glob.glob(f"/sys/devices/virtual/input/{sysname}/event*")
+        print(f"made {sysname} /dev/input/{os.path.basename(ev[0]) if ev else '?'}", flush=True)
+        if args.send and dev is None:
+            time.sleep(args.settle)
+            for code in FOREIGN_KEYS:
+                for v in (1, 0):
+                    os.write(fd, EVENT.pack(0, 0, EV_KEY, code, v) + EVENT.pack(0, 0, EV_SYN, 0, 0))
+                    time.sleep(0.05)
+            print("sent", flush=True)
+        r, _, _ = select.select([sys.stdin], [], [], args.seconds)
+    finally:
+        if dev:
+            dev.close()
+        else:
+            fcntl.ioctl(fd, UI_DEV_DESTROY)
+            os.close(fd)
+
+
+def cmd_uinput(args):
+    """RUY-1063 (06 section 3 rule 1), with the shell UP (the ruya-shell ACL entry could not fail without it):
+    /dev/uinput opens for the signed-in profile's user only, for the other after a switch, for neither after a
+    lock; a keyboard and a pad (phys ruya-input/pad1) that profile makes are foreign: ruya-input's, its user's
+    ACL entry only while it is signed in, no ruya-shell entry, no uaccess or power-switch tag,
+    LIBINPUT_IGNORE_DEVICE=1, and ruya-inputd never reads them; after a restart of ruya-inputd its navigation
+    keyboard and a virtual pad carry its marker (own) and the shell holds the new navigation node open."""
+    fails = 0
+
+    def ok(msg):
+        print(f"PASS: {msg}", flush=True)
+
+    def bad(msg):
+        nonlocal fails
+        fails += 1
+        print(f"FAIL: {msg}", flush=True)
+
+    def expect(cond, good, wrong):
+        ok(good) if cond else bad(wrong)
+
+    def opens(user):
+        out = subprocess.run(["runuser", "-u", user, "--", sys.executable, os.path.abspath(__file__), "open",
+                              "--write", "/dev/uinput"], capture_output=True, text=True).stdout.strip()
+        return out == "open ok", out
+
+    def props(node):
+        out = subprocess.run(["udevadm", "info", "-q", "property", "-n", node], capture_output=True, text=True).stdout
+        return dict(l.split("=", 1) for l in out.splitlines() if "=" in l)
+
+    def journal_since(since):
+        return subprocess.run(["journalctl", "-u", "ruya-inputd", "--since", since, "--no-pager", "-o", "cat"],
+                              capture_output=True, text=True).stdout
+
+    if not shell_running():
+        bad("the shell is not running: the check of the ruya-shell ACL entry would pass on any node")
+        return fails
+    me, other = args.user, args.other
+    other_profile = other[len("ruya-"):] if other.startswith("ruya-") else other
+    since = time.strftime("%Y-%m-%d %H:%M:%S")
+    bus = Bus()
+    held = []
+    pad = None
+    try:
+        # 1. Criterion 6: the signed-in profile only, the other after a switch, neither when locked.
+        expect(bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile]) == "ok", "SetRoute shell me",
+               "SetRoute shell me failed")
+        a, b = opens(me), opens(other)
+        expect(a[0] and not b[0], f"/dev/uinput opens for {me}, not for {other} ({b[1]})", f"signed in {me}: {me} {a[1]}, {other} {b[1]}")
+        bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", other_profile])
+        a, b = opens(me), opens(other)
+        expect(b[0] and not a[0], f"after the switch /dev/uinput opens for {other}, not for {me}", f"switched: {me} {a[1]}, {other} {b[1]}")
+        bus.call(SVC, PATH, IFC, "SetRoute", ["locked", "", "", ""])
+        a, b = opens(me), opens(other)
+        expect(not a[0] and not b[0], "locked: /dev/uinput opens for neither", f"locked: {me} {a[1]}, {other} {b[1]}")
+        owner, named = acl_users("/dev/uinput")
+        expect(owner == "ruya-input" and not named, "locked: /dev/uinput is ruya-input's with no named entry",
+               f"locked: /dev/uinput owner {owner}, named {named}")
+        bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+        # A device that appears within 2 s of a profile change is nobody's (it may be the last profile's).
+        time.sleep(2.2)
+        # 2. Criteria 3 and 7: what the profile makes is foreign.
+        for kind, name in (("keyboard", FOREIGN_KBD), ("pad", FOREIGN_PAD)):
+            p = subprocess.Popen(["runuser", "-u", me, "--", sys.executable, os.path.abspath(__file__), "mkdev", kind,
+                                  "--seconds", "60"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+            held.append(p)
+            line = p.stdout.readline().strip()
+            if not line.startswith("made "):
+                bad(f"{me} could not make a uinput {kind}: {line!r}")
+                continue
+            _, sysname, node = line.split()
+            subprocess.run(["udevadm", "settle", "--timeout=10"])
+            wait_for(lambda: acl_users(node)[1] == [me], 3)
+            owner, named = acl_users(node)
+            pr = props(node)
+            tags = udev_tags(node)
+            expect(pr.get("RUYA_INPUT_ORIGIN") == "foreign", f"{kind} {sysname}: RUYA_INPUT_ORIGIN=foreign",
+                   f"{kind} {sysname}: origin {pr.get('RUYA_INPUT_ORIGIN')!r}")
+            expect(owner == "ruya-input", f"{kind} {node} is ruya-input's", f"{kind} {node}: owner {owner}")
+            expect(named == [me], f"{kind} {node}: the ACL names {me} only", f"{kind} {node}: named {named}")
+            expect("ruya-shell" not in named, f"{kind} {node}: no ruya-shell entry", f"{kind} {node}: ruya-shell entry")
+            expect(not ({"uaccess", "power-switch"} & tags), f"{kind} {node}: no uaccess or power-switch tag",
+                   f"{kind} {node}: tags {sorted(tags)}")
+            expect(pr.get("LIBINPUT_IGNORE_DEVICE") == "1", f"{kind} {node}: LIBINPUT_IGNORE_DEVICE=1",
+                   f"{kind} {node}: LIBINPUT_IGNORE_DEVICE {pr.get('LIBINPUT_IGNORE_DEVICE')!r}")
+            # The switch closes it, the way back opens it again.
+            bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", other_profile])
+            expect(acl_users(node)[1] == [], f"{kind} {node}: no entry while {other} is signed in",
+                   f"{kind} {node}: named {acl_users(node)[1]} while {other} is signed in")
+            bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+            expect(acl_users(node)[1] == [me], f"{kind} {node}: {me}'s again after the way back",
+                   f"{kind} {node}: named {acl_users(node)[1]} after the way back")
+            time.sleep(2.2)
+        time.sleep(2.5)  # one rescan of ruya-inputd (2 s): it must not pick the pad up
+        log = journal_since(since)
+        expect(f"using {FOREIGN_PAD}" not in log and f"using {FOREIGN_KBD}" not in log,
+               "ruya-inputd did not read the foreign pad (phys ruya-input/pad1) or keyboard",
+               "ruya-inputd logged 'using' for a foreign device")
+        names = [d.get("name") for d in (devices() or [])]
+        expect(FOREIGN_PAD not in names, "ListDevices does not list the foreign pad", f"ListDevices lists {names}")
+        for p in held:
+            p.stdin.close()
+            p.wait(5)
+        held = []
+        # 3. Criterion 8: after a restart the navigation keyboard and a virtual pad are ruya-inputd's own.
+        restarted = time.strftime("%Y-%m-%d %H:%M:%S")
+        subprocess.run(["systemctl", "restart", "ruya-inputd"], check=False)
+        nav = wait_for(lambda: node_by("name", "RuyaOS Navigation")[1], 5)
+        nav_node = node_by("name", "RuyaOS Navigation")[0]
+        if not nav or not nav_node:
+            bad("no navigation keyboard after the restart")
+            return fails
+        subprocess.run(["udevadm", "settle", "--timeout=10"])
+        expect(os.path.isfile(f"/run/ruya-input/own/{nav}"), f"the navigation keyboard {nav} has its marker",
+               f"no /run/ruya-input/own/{nav}: {os.listdir('/run/ruya-input/own') if os.path.isdir('/run/ruya-input/own') else 'no dir'}")
+        expect(props(nav_node).get("RUYA_INPUT_ORIGIN") == "own" and "uaccess" in udev_tags(nav_node),
+               f"{nav_node}: RUYA_INPUT_ORIGIN=own with the uaccess tag", f"{nav_node}: {props(nav_node).get('RUYA_INPUT_ORIGIN')!r}, tags {sorted(udev_tags(nav_node))}")
+        spid = subprocess.run(["pgrep", "-u", "ruya-shell", "-x", "ruya-shell"], capture_output=True, text=True).stdout.split()
+        held_open = spid and wait_for(lambda: any(os.path.realpath(os.path.join(f"/proc/{spid[0]}/fd", f)) == nav_node
+                                                   for f in os.listdir(f"/proc/{spid[0]}/fd")), 5)
+        expect(held_open, f"the shell holds the new navigation node {nav_node} open (it navigates)",
+               f"the shell does not hold {nav_node} open")
+        # The shell sends its route again to the new service; the probe's route must come after it.
+        wait_for(lambda: f"profile '{args.profile}'" in journal_since(restarted), 5)
+        pad = FakePad(phys="vm-check/pad0", name=NAME)
+        if not wait_for(lambda: NAME in [d.get("name") for d in (devices() or [])], 5):
+            bad("ListDevices does not list the trusted stand-in pad")
+            return fails
+        ok("the stand-in pad root vouched for is read as hardware")
+        bus.call(SVC, PATH, IFC, "SetRoute", ["app", "vm-check-1063", "org.ruyaos.VmCheck", args.profile])
+        join_by_name(bus, NAME, args.profile)
+        wait_for(lambda: node_by("phys", "ruya-input/pad1")[0], 3)
+        vnode, vsys = node_by("phys", "ruya-input/pad1")
+        if not vnode:
+            bad("no virtual pad in the route app")
+            return fails
+        subprocess.run(["udevadm", "settle", "--timeout=10"])
+        expect(os.path.isfile(f"/run/ruya-input/own/{vsys}") and props(vnode).get("RUYA_INPUT_ORIGIN") == "own",
+               f"the virtual pad {vsys} has its marker and RUYA_INPUT_ORIGIN=own",
+               f"the virtual pad {vsys}: marker {os.path.isfile(f'/run/ruya-input/own/{vsys}')}, origin {props(vnode).get('RUYA_INPUT_ORIGIN')!r}")
+    finally:
+        for p in held:
+            try:
+                p.stdin.close()
+                p.wait(5)
+            except (OSError, subprocess.TimeoutExpired):
+                p.kill()
+        if bus:
+            bus.call(SVC, PATH, IFC, "SetRoute", ["shell", "", "", args.profile])
+            bus.close()
+        if pad:
+            pad.close()
     return fails
 
 
@@ -2246,6 +2475,16 @@ def main():
     g.add_argument("node")
     o = sub.add_parser("open")
     o.add_argument("node")
+    o.add_argument("--write", action="store_true", help="open read-write (uinput)")
+    md = sub.add_parser("mkdev")
+    md.add_argument("kind", choices=["keyboard", "pad"])
+    md.add_argument("--seconds", type=float, default=60)
+    md.add_argument("--send", action="store_true", help="press every key once (keyboard)")
+    md.add_argument("--settle", type=float, default=1.5)
+    ui = sub.add_parser("uinput")
+    ui.add_argument("--user", required=True)
+    ui.add_argument("--profile", required=True)
+    ui.add_argument("--other", required=True, help="the other profile's user (ruya-p2)")
     sub.add_parser("restart")
     p = sub.add_parser("pad")
     p.add_argument("seconds", type=float)
@@ -2329,11 +2568,13 @@ def main():
         sys.exit(1 if cmd_coop(args) else 0)
     if args.cmd == "nodes":
         sys.exit(1 if cmd_nodes(args) else 0)
+    if args.cmd == "uinput":
+        sys.exit(1 if cmd_uinput(args) else 0)
     if args.cmd == "hold":
         sys.exit(1 if cmd_hold(args) else 0)
     if args.cmd == "owner":
         sys.exit(1 if cmd_owner(args) else 0)
-    {"listen": cmd_listen, "scan": cmd_scan, "game": cmd_game, "open": cmd_open, "restart": cmd_restart, "pad": cmd_pad, "navpad": cmd_navpad, "playing": cmd_playing}[args.cmd](args)
+    {"listen": cmd_listen, "scan": cmd_scan, "game": cmd_game, "open": cmd_open, "mkdev": cmd_mkdev, "restart": cmd_restart, "pad": cmd_pad, "navpad": cmd_navpad, "playing": cmd_playing}[args.cmd](args)
 
 
 if __name__ == "__main__":

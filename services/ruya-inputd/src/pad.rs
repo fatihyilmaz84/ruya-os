@@ -508,12 +508,9 @@ pub const VIRTUAL_VENDOR: u16 = 0x045e;
 pub const VIRTUAL_PRODUCT: u16 = 0x028e;
 pub const VIRTUAL_VERSION: u16 = 0x0114;
 pub const VIRTUAL_BUS_USB: u16 = 0x03;
-/// Every device the service creates has a phys starting with this; the service never reads one
-/// of them as a physical pad.
-pub const OWN_PHYS_PREFIX: &str = "ruya-input/";
-/// The phys of a virtual pad, `ruya-input/pad<n>`: the udev rule hands exactly these to
-/// `ruya-input` without uaccess (06-input.md §3), so a later `ruya-input/kbm*` keyboard or mouse
-/// for the compositor (RUY-45) can keep it.
+/// The phys of a virtual pad, `ruya-input/pad<n>` (its number is its seat). A label, not proof of
+/// origin: any process with `/dev/uinput` can write it, so the udev rules look at it only on a
+/// device the service marked as its own (06-input.md §3, `origin`, RUY-1063).
 pub const PAD_PHYS_PREFIX: &str = "ruya-input/pad";
 
 /// The keys of the virtual pad in the xpad order SDL's mapping counts (`a:b0 ... rightstick:b10`):

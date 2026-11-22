@@ -51,6 +51,15 @@ impl Backend for DynBackend {
     fn write_acl(&mut self, node: &str, acl: &[u8]) -> Result<(), String> {
         (**self).write_acl(node, acl)
     }
+    fn is_own(&mut self, sysname: &str) -> bool {
+        (**self).is_own(sysname)
+    }
+    fn is_nav(&mut self, sysname: &str) -> bool {
+        (**self).is_nav(sysname)
+    }
+    fn renew_nav(&mut self) -> Result<String, String> {
+        (**self).renew_nav()
+    }
     fn ff_upload(
         &mut self,
         pad: crate::routing::PadKey,
@@ -714,6 +723,15 @@ mod prepare_tests {
         fn write_acl(&mut self, _: &str, _: &[u8]) -> Result<(), String> {
             Ok(())
         }
+        fn is_own(&mut self, sysname: &str) -> bool {
+            sysname == "input101"
+        }
+        fn is_nav(&mut self, _: &str) -> bool {
+            false
+        }
+        fn renew_nav(&mut self) -> Result<String, String> {
+            Err("no navigation keyboard here".into())
+        }
         fn ff_upload(&mut self, _: PadKey, _: i16, _: &crate::pad::Rumble) -> Result<i16, i32> {
             Err(0)
         }
@@ -755,6 +773,7 @@ mod prepare_tests {
                 subsystem: "input".into(),
                 devpath: "/devices/virtual/input/input101/event21".into(),
                 devname: "/dev/input/event21".into(),
+                ..UdevEvent::default()
             })
         });
         assert_eq!(futures_lite::future::block_on(call), Status::Ok);
