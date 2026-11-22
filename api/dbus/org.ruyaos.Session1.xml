@@ -73,12 +73,19 @@
   instance name is opaque and chosen by the service, like every other. A child is "starting" until
   its game's scope appears and ends with AppExited "launch-failed" when none appears within 120 s;
   it ends when none of its scopes has existed for 3 s. Stop, Freeze, Thaw and Kill on a child touch
-  only its scopes; Stop on a parent stops its children first, then the parent. AppStarted and
-  AppExited of a child carry the parent's app_id; the shell reads ListRunning again when AppStarted
-  names an instance it does not know (a game started inside Steam's own UI becomes a child too).
-  Every other instance has `item` "flatpak:<app_id>" and `parent` "". Built so far: the keys,
-  LaunchItem for Flatpak items, and the ledger's `item`; Steam children are planned (RUY-1052) and
-  LaunchItem answers "failed" for a Steam item until then.
+  only its scopes. Stop and Kill on a parent end its children first, then the parent. Freeze and
+  Thaw on a parent apply to every child, and to the parent's own unit and scopes only as its app's
+  freeze rule allows (ADR-042: Steam is "never", so a Freeze of Steam freezes its games and leaves
+  Steam itself running). Each record's `frozen` is its own, with its own FrozenChanged. A LaunchItem
+  of a Steam game whose child already runs answers "already-running" with that child's instance.
+  InstanceOfPid answers the child for a pid in one of its scopes. While the Steam instance is in
+  front and has a running child, the shell's front instance is the child: ReportPresence names the
+  child, so its play time goes to the child's item. AppStarted and AppExited of a child carry the
+  parent's app_id; the shell reads ListRunning again when AppStarted names an instance it does not
+  know (a game started inside Steam's own UI becomes a child too). Every other instance has `item`
+  "flatpak:<app_id>" and `parent` "". Built so far: the keys, LaunchItem for Flatpak items, and the
+  ledger's `item`; Steam children are planned (RUY-1052) and LaunchItem answers "failed" for a
+  Steam item until then.
 
   Running record (a{sv}), keys:
     instance   s    opaque instance name
@@ -148,10 +155,11 @@
          Steam instance (planned, RUY-1052: the service builds steam://rungameid/<appid> itself from
          the digits; a running Steam is handed the URL, a stopped one is started with it). The child
          is "starting" until its scope appears, and ends with AppExited "launch-failed" after 120 s
-         without one. Until RUY-1052 a valid Steam item answers "failed". Statuses: ok, invalid (a
-         malformed item, an unknown prefix, or a bad profile id), unknown-app (the item's app is not
-         installed), unknown-profile, already-running, failed. `instance` is "" unless the status is
-         "ok". -->
+         without one. A Steam game whose child already runs answers "already-running" with that
+         child's instance. Until RUY-1052 a valid Steam item answers "failed". Statuses: ok, invalid
+         (a malformed item, an unknown prefix, or a bad profile id), unknown-app (the item's app is
+         not installed), unknown-profile, already-running, failed. `instance` is "" unless the status
+         is "ok", or "already-running" for a Steam game. -->
     <method name="LaunchItem">
       <arg name="item" type="s" direction="in"/>
       <arg name="profile" type="s" direction="in"/>
@@ -161,7 +169,9 @@
 
     <!-- Asks the app to quit (SIGTERM to the unit and every scope of the app), and kills it if it
          has not ended 30 s later (the backstop). AppExited (reason "quit", or "killed" after the
-         kill) follows. Stopping an instance that is already stopping is "ok". -->
+         kill) follows. Stopping an instance that is already stopping is "ok". A child instance
+         (ADR-041) is only its own scopes; a parent's children are stopped first, then the parent
+         (planned, RUY-1052). -->
     <method name="Stop">
       <arg name="instance" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
@@ -173,8 +183,9 @@
          error). Works on a starting, running, stopping or frozen app of the signed-in
          profile (a frozen one is not thawed: the kill ends it anyway). AppExited with reason
          "killed" follows, whatever signal the run's unit died of. "ok" means the kill was sent; a
-         second Kill sends it again. Statuses: ok, unknown-instance, not-allowed (another
-         profile's app, or nobody is signed in), failed. -->
+         second Kill sends it again. A child instance (ADR-041) is only its own scopes; a parent's
+         children are killed first, then the parent (planned, RUY-1052). Statuses: ok,
+         unknown-instance, not-allowed (another profile's app, or nobody is signed in), failed. -->
     <method name="Kill">
       <arg name="instance" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
@@ -189,8 +200,11 @@
          freezer fails or does not answer in time, what was frozen is thawed again and the status is
          "failed": the app keeps running. Synchronous: the answer comes when the freeze is done (each
          systemctl is bounded to 5 s). Freeze and Thaw calls are served one at a time, in the order
-         they arrive. FrozenChanged(instance, true) follows a change. Statuses: ok,
-         invalid, not-running, not-allowed, failed. -->
+         they arrive. FrozenChanged(instance, true) follows a change. A child instance (ADR-041) is
+         only its own scopes; on a parent the freeze applies to every child, and to the parent's own
+         unit and scopes only as its app's freeze rule allows (ADR-042: Steam is "never"); each
+         record's `frozen` is its own (planned, RUY-1052). Statuses: ok, invalid, not-running,
+         not-allowed, failed. -->
     <method name="Freeze">
       <arg name="instance" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
@@ -201,7 +215,7 @@
          FrozenChanged(instance, false) follows a change. Statuses as Freeze. The Thaw puts a parked
          sound stream back where it was (T-466); an app that stayed frozen for 30 s, with swap active,
          had part of its memory moved to swap, so it may fault some of it back in. Neither changes
-         this interface. -->
+         this interface. On a child or a parent the Thaw covers what the Freeze did (ADR-041). -->
     <method name="Thaw">
       <arg name="instance" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
@@ -213,8 +227,9 @@
          cgroup (/proc/<pid>/cgroup) and answers the instance whose unit, or one of whose app's
          Flatpak scopes (`app-flatpak-<app_id>-<n>.scope`, also an Electron app's second one,
          T-435), contains it, in the manager of that instance's profile user. A starting or
-         stopping instance counts too. `instance` is "" unless the status is "ok". Statuses: ok,
-         invalid (pid 0), not-found. -->
+         stopping instance counts too. A pid in one of a child instance's scopes (a Steam game,
+         ADR-041) answers the child, not its parent (planned, RUY-1052). `instance` is "" unless the
+         status is "ok". Statuses: ok, invalid (pid 0), not-found. -->
     <method name="InstanceOfPid">
       <arg name="pid" type="u" direction="in"/>
       <arg name="status" type="s" direction="out"/>
@@ -233,7 +248,9 @@
     <!-- The shell tells who is in front: `instance` is the foreground app's instance ("" when
          the shell itself is in front), `attention` is "active" | "idle" | "locked" | "suspended".
          `profile` is the active profile ("" when none). Call on every change and every 20 s.
-         "invalid" for an unknown attention or a bad profile id. -->
+         While the Steam instance is in front and has a running child (ADR-041 point 6), `instance`
+         is the child's, so the game's item counts, not Steam's. "invalid" for an unknown attention
+         or a bad profile id. -->
     <method name="ReportPresence">
       <arg name="profile" type="s" direction="in"/>
       <arg name="instance" type="s" direction="in"/>

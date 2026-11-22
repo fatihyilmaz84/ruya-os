@@ -195,6 +195,26 @@ Item {
             tryVerify(() => Session.running.length === 0)
         }
 
+        // Kill on a parent kills its children first (ADR-041, lead decision on RUY-1051).
+        function test_mock_kill_ends_children_first() {
+            Profiles.switchTo("p2", "")
+            tryCompare(Profiles, "activeProfile", "p2")
+            const steam = launchOk("org.example.Steam", "p2")
+            tryVerify(() => Session.instanceOf("org.example.Steam", "p2").state === "running")
+            const game = Session.mockStartChild(steam, "steam:70")
+            verify(game !== "")
+            tryVerify(() => Session.running.length === 2)
+            Session.kill(steam)
+            tryCompare(exited, "count", 2)
+            compare(exited.signalArguments[0][0], game)
+            compare(exited.signalArguments[0][3], "killed")
+            compare(exited.signalArguments[1][0], steam)
+            compare(Session.mockCalls(), ["kill " + game, "kill " + steam])
+            tryVerify(() => Session.running.length === 0)
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+        }
+
         // Freeze and Thaw (T-457), as ruya-session answers them: a running app of the signed-in
         // profile only, a second freeze changes nothing, a stop thaws a frozen app first.
         function freezeStatus(instance) {

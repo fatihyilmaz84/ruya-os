@@ -173,14 +173,18 @@ void MockSessionBackend::endChild(const QString &instance)
         exitApp(instance, 0, QStringLiteral("quit"));
 }
 
-QStringList MockSessionBackend::childrenOf(const QString &instance) const
+void MockSessionBackend::endChildren(const QString &instance, const QString &verb, int code, const QString &reason)
 {
-    QStringList out;
+    // ADR-041: Stop and Kill on a parent end its children first, each before the parent.
+    QStringList children;
     for (const RunningApp &r : std::as_const(m_running)) {
         if (r.parent == instance)
-            out.append(r.instance);
+            children.append(r.instance);
     }
-    return out;
+    for (const QString &child : std::as_const(children)) {
+        m_calls.append(verb + QLatin1Char(' ') + child);
+        exitApp(child, code, reason);
+    }
 }
 
 void MockSessionBackend::setRunning(const QString &instance)
@@ -224,14 +228,9 @@ void MockSessionBackend::stop(const QString &instance)
         m_calls.append(QStringLiteral("thaw ") + instance);
         setFrozen(i, false);
     }
-    // ADR-041 point 5: a parent's children are stopped first; each ends before the parent does.
-    for (const QString &child : childrenOf(instance)) {
-        m_calls.append(QStringLiteral("stop ") + child);
-        exitApp(child, 0, QStringLiteral("quit"));
-    }
-    const int at = indexOf(instance);
+    endChildren(instance, QStringLiteral("stop"), 0, QStringLiteral("quit"));
     m_calls.append(QStringLiteral("stop ") + instance);
-    m_running[at].state = QStringLiteral("stopping");
+    m_running[indexOf(instance)].state = QStringLiteral("stopping");
     if (m_ignoreStop) {
         // The game does not close: the service's backstop kills it (RUY-736), unless Kill came first.
         QTimer::singleShot(BackstopMs, this, [this, instance] { exitApp(instance, 9, QStringLiteral("killed")); });
@@ -266,8 +265,9 @@ void MockSessionBackend::kill(const QString &instance)
     QTimer::singleShot(0, this, [this, instance, status] { emit killFinished(instance, status); });
     if (status != QLatin1String("ok") || !m_killAnswer.isEmpty())
         return;                         // refused, or the forced answer: nothing is killed
+    endChildren(instance, QStringLiteral("kill"), 9, QStringLiteral("killed"));
     m_calls.append(QStringLiteral("kill ") + instance);
-    m_running[i].state = QStringLiteral("stopping");
+    m_running[indexOf(instance)].state = QStringLiteral("stopping");
     QTimer::singleShot(0, this, [this, instance] {
         if (!m_stubbornStop) {
             exitApp(instance, 9, QStringLiteral("killed"));

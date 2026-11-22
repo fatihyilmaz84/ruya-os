@@ -9,6 +9,9 @@
 # with Add-Type (PowerShell 5.1 and pwsh both have it; no install): a PowerShell loop over a million tokens
 # takes minutes. Inline #[cfg(test)] modules in services/*/src ARE scanned. Left out: test folders (shell/tests, tests dirs), generated files, *.ts translations,
 # api/**/*.xml and Cargo.lock (generated or data, not logic), docs, and everything outside the four areas.
+# In a shell backend header (shell/src/**/DBus*Backend.h, Mock*Backend.h) a pure override declaration
+# (`void stop(const QString &instance) override;`) is no token: both transports declare the same interface,
+# which is no copy to share (RUY-1051). Inline override bodies and everything else in them are still scanned.
 #
 # Baseline: one line per pair of files with duplicated tokens:   fileA | fileB | tokens   # reason
 # (a file pair, A sorted before B; the same file twice for a copy inside one file). `tokens` is the number
@@ -51,9 +54,41 @@ public static class DupScan
 
     static bool IsWord(char c) { return c == '_' || c == '$' || char.IsLetterOrDigit(c); }
 
-    // lang: "c" (qml, js, cpp, rust: // and /* */), "sh" (#), "ps" (# and <# #>, here-strings).
-    static void Tokenize(string s, string lang, bool rust, Dictionary<string, int> intern, List<int> ids, List<int> lines)
+    // A shell backend header (DBus*Backend.h, Mock*Backend.h): its pure override declarations are not tokens.
+    public static bool IsBackendHeader(string rel)
     {
+        string name = Path.GetFileName(rel);
+        return rel.StartsWith("shell/src/", StringComparison.Ordinal) && name.EndsWith("Backend.h", StringComparison.Ordinal)
+               && (name.StartsWith("DBus", StringComparison.Ordinal) || name.StartsWith("Mock", StringComparison.Ordinal));
+    }
+
+    // Drops every statement that ends in `override ;` (a declaration, no body). A statement starts after
+    // `;`, `{`, `}` or an access label (`public:`, `private:`, `protected:`, `signals:`, `slots:`).
+    static void DropOverrideDecls(List<string> toks, List<int> lines)
+    {
+        var keepT = new List<string>(); var keepL = new List<int>();
+        int start = 0;
+        for (int k = 0; k < toks.Count; k++)
+        {
+            string t = toks[k];
+            bool label = t == ":" && k > 0 && (toks[k - 1] == "public" || toks[k - 1] == "private" || toks[k - 1] == "protected"
+                                               || toks[k - 1] == "signals" || toks[k - 1] == "slots")
+                         && (k + 1 >= toks.Count || toks[k + 1] != ":");
+            if (t == ";" || t == "{" || t == "}" || label)
+            {
+                bool decl = t == ";" && k > start && toks[k - 1] == "override";
+                if (!decl) for (int m = start; m <= k; m++) { keepT.Add(toks[m]); keepL.Add(lines[m]); }
+                start = k + 1;
+            }
+        }
+        for (int m = start; m < toks.Count; m++) { keepT.Add(toks[m]); keepL.Add(lines[m]); }
+        toks.Clear(); toks.AddRange(keepT); lines.Clear(); lines.AddRange(keepL);
+    }
+
+    // lang: "c" (qml, js, cpp, rust: // and /* */), "sh" (#), "ps" (# and <# #>, here-strings).
+    static void Tokenize(string s, string lang, bool rust, bool backendHeader, Dictionary<string, int> intern, List<int> ids, List<int> lines)
+    {
+        var toks = new List<string>(); var tokLines = new List<int>();
         int n = s.Length, i = 0, line = 1;
         while (i < n)
         {
@@ -109,9 +144,14 @@ public static class DupScan
             }
             else if (IsWord(c)) { while (i < n && IsWord(s[i])) i++; tok = s.Substring(start, i - start); }
             else { i++; tok = c.ToString(); }
+            toks.Add(tok); tokLines.Add(startLine);
+        }
+        if (backendHeader) DropOverrideDecls(toks, tokLines);
+        for (int k = 0; k < toks.Count; k++)
+        {
             int id;
-            if (!intern.TryGetValue(tok, out id)) { id = intern.Count + 1; intern[tok] = id; }
-            ids.Add(id); lines.Add(startLine);
+            if (!intern.TryGetValue(toks[k], out id)) { id = intern.Count + 1; intern[toks[k]] = id; }
+            ids.Add(id); lines.Add(tokLines[k]);
         }
     }
 
@@ -125,7 +165,7 @@ public static class DupScan
             string lang = ext == ".sh" ? "sh" : ext == ".ps1" ? "ps" : "c";
             string text = File.ReadAllText(Path.Combine(root, rel), Encoding.UTF8);
             var ids = new List<int>(); var lines = new List<int>();
-            Tokenize(text, lang, ext == ".rs", intern, ids, lines);
+            Tokenize(text, lang, ext == ".rs", IsBackendHeader(rel), intern, ids, lines);
             docs.Add(new Doc { Path = rel, Ids = ids.ToArray(), Lines = lines.ToArray() });
         }
 
@@ -321,6 +361,28 @@ function Invoke-SelfTest {
         $out = Invoke-Lint $fx $emptyBl $min 0 6>&1 | Out-String
         if ($out -notmatch 'shell/qml/p-q\.qml \| shell/qml/p\.qml') { $failed += "the pair key is not in ordinal file order ($out)" }
         Remove-Item (Join-Path $fx "shell/qml/p.qml"), (Join-Path $fx "shell/qml/p-q.qml")
+        # backend headers (RUY-1051): a shared list of override declarations is no copy; real code still is
+        $script:areas = @("shell/src")
+        $hdir = Join-Path $fx "shell/src/x"
+        New-Item -ItemType Directory -Path $hdir | Out-Null
+        $decls = (1..8 | ForEach-Object { "    void call$_(const QString &instance, int n) override;" }) -join "`n"
+        $header = { param($cls, $extra) "class $cls final : public XBackend`n{`npublic:`n    bool isMock() const override { return $cls; }`n$decls`n$extra`nprivate:`n    int m_$cls;`n};" }
+        Set-Content -LiteralPath (Join-Path $hdir "DBusXBackend.h") -Value (& $header "DBusX" "") -Encoding UTF8
+        Set-Content -LiteralPath (Join-Path $hdir "MockXBackend.h") -Value (& $header "MockX" "") -Encoding UTF8
+        $n = @(Invoke-Lint $fx $emptyBl $min 0 6>&1 | Where-Object { $_ -is [int] }) | Select-Object -Last 1
+        if ($n -ne 0) { $failed += "a shared list of override declarations in backend headers was reported" }
+        Set-Content -LiteralPath (Join-Path $hdir "PlainX.h") -Value (& $header "PlainX" "") -Encoding UTF8
+        Set-Content -LiteralPath (Join-Path $hdir "PlainY.h") -Value (& $header "PlainY" "") -Encoding UTF8
+        $out = Invoke-Lint $fx $emptyBl $min 0 6>&1 | Out-String
+        if ($out -notmatch 'PlainX\.h') { $failed += "override declarations outside a backend header were not reported ($out)" }
+        Remove-Item (Join-Path $hdir "PlainX.h"), (Join-Path $hdir "PlainY.h")
+        $code = "    void helper() { " + ((1..$min | ForEach-Object { "w$_ ;" }) -join " ") + " }"
+        Set-Content -LiteralPath (Join-Path $hdir "DBusXBackend.h") -Value (& $header "DBusX" $code) -Encoding UTF8
+        Set-Content -LiteralPath (Join-Path $hdir "MockXBackend.h") -Value (& $header "MockX" $code) -Encoding UTF8
+        $out = Invoke-Lint $fx $emptyBl $min 0 6>&1 | Out-String
+        if ($out -notmatch 'DBusXBackend\.h:\d+ == shell/src/x/MockXBackend\.h') { $failed += "a planted copy of real code in backend headers was not reported ($out)" }
+        Remove-Item -Recurse -Force $hdir
+        $script:areas = @("shell/qml")
         & $write ($min - 1)    # the copy is gone: the entry is stale
         Set-Content -LiteralPath $bl -Value "shell/qml/A.qml | shell/qml/B.qml | $min" -Encoding UTF8
         $n = @(Invoke-Lint $fx $bl $min 0 6>&1 | Where-Object { $_ -is [int] }) | Select-Object -Last 1
