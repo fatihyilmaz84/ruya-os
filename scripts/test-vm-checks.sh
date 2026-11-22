@@ -660,6 +660,19 @@ listed='{"type":"aa{sv}","data":[[{"instance":{"type":"s","data":"st"},"item":{"
 out="$(printf '%s' "$listed" | bash -c ". '$pairsrc'; steam_pair" 2>&1)"
 expect_contains "steam_pair without a game is none" "$out" "none"
 
+# steam_scope_game asks the product's probe (a stub here) and never reads the processes itself: a
+# reaper that carries the game's id inside the client's scope (ADR-041 point 2) is the probe's call.
+scopesrc="$tmp/steam-scope-game.sh"
+sed -n '/^# --- steam_scope_game begin/,/^# --- steam_scope_game end/p' "$here/vm-session-check.sh" > "$scopesrc"
+[ -s "$scopesrc" ] && pass "vm-session-check.sh has the steam_scope_game block" || fail "no steam_scope_game block in vm-session-check.sh"
+stub='steam_probe() { case "$2" in game.scope) echo 70;; reaper.scope) ;; late.scope) n=$(cat "$tmp/n" 2>/dev/null || echo 0); echo $((n+1)) > "$tmp/n"; [ "$n" -ge 2 ] && echo 70 || return 3;; *) return 3;; esac; }'
+sg() { bash -c "tmp='$tmp'; . '$scopesrc'; $stub; PROBE_RETRY_SLEEP=0 steam_scope_game ruya-p1 $1" 2>&1; }
+expect_contains "steam_scope_game: the probe's appid is the game's scope" "$(sg game.scope)" "70"
+expect_contains "steam_scope_game: an empty probe (a reaper in the client's scope) is Steam's own" "$(sg reaper.scope)" "-"
+rm -f "$tmp/n"
+expect_contains "steam_scope_game: exit 3 is retried until decided" "$(sg late.scope)" "70"
+expect_contains "steam_scope_game: always undecided is ?" "$(sg stuck.scope)" "?"
+
 # --- vm-session-check.sh display: the refused client (RUY-679) -------------------------------------
 # Passes on AppExited, or on the unit frozen with "its profile is not signed in"; fails on neither.
 echo '{"member":"AppExited","x":"org.ruyaos.TestWaylandClient"}' > "$tmp/drop-work/signals.log"

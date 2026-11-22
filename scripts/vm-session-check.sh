@@ -156,6 +156,27 @@ print("none")
 '
 }
 # --- steam_pair end
+# --- steam_scope_game begin
+# steam_probe <user> <scope>: the product's probe, as the profile user (spawner.rs steam_probe_command):
+# stdout is the game's Steam app id (empty: Steam's own scope), exit 3 is "undecided".
+steam_probe() {
+    systemd-run --machine="$1@.host" --user --wait --pipe --quiet --collect --no-ask-password \
+        --property=RuntimeMaxSec=3 -- /usr/bin/ruya-session steam-probe "$2" </dev/null 2>/dev/null
+}
+# steam_scope_game <user> <scope>: prints the game's app id, "-" for a scope of Steam's own, "?" when
+# the probe stays undecided after 5 tries (PROBE_RETRY_SLEEP seconds apart, default 1).
+steam_scope_game() {
+    local n=0 out rc
+    while :; do
+        out="$(steam_probe "$1" "$2")"; rc=$?
+        [ "$rc" = 3 ] || break
+        n=$((n + 1))
+        [ "$n" -lt 5 ] || { echo "?"; return 0; }
+        sleep "${PROBE_RETRY_SLEEP:-1}"
+    done
+    echo "${out:--}"
+}
+# --- steam_scope_game end
 stop_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Stop s "$1"; }
 kill_app() { as_shell busctl --system call "$svc" "$path" "$ifc" Kill s "$1"; }
 running() { as_shell busctl --system --json=short call "$svc" "$path" "$ifc" ListRunning; }
@@ -563,18 +584,18 @@ steam-pause)
         cg="$(systemctl --user -M "$user@.host" show -p ControlGroup --value "$1" </dev/null 2>&1 | cat)"
         awk '$1 == "frozen" { print $2 }' "/sys/fs/cgroup$cg/cgroup.events" 2>/dev/null
     }
-    # Steam's active Flatpak scopes: the game's holds a process with SteamGameId=<appid> in its
-    # environment (the test ruya-session uses); every other one is Steam's own.
+    # Steam's active Flatpak scopes: the product's own probe (ADR-041 point 2, `ruya-session
+    # steam-probe`) says which one is the game's; every other one is Steam's own.
     game_scopes=""; own_scopes=""
     for sc in $(systemctl --user -M "$user@.host" list-units --state=active --plain --no-legend --full 'app-flatpak-com.valvesoftware.Steam-*.scope' </dev/null 2>&1 | awk '{print $1}'); do
-        cg="$(systemctl --user -M "$user@.host" show -p ControlGroup --value "$sc" </dev/null 2>&1 | cat)"
-        if cat "/sys/fs/cgroup$cg/cgroup.procs" 2>/dev/null | while read -r p; do tr '\0' '\n' < "/proc/$p/environ" 2>/dev/null; done | grep -qx "SteamGameId=$appid"; then
-            game_scopes="$game_scopes $sc"
-        else
-            own_scopes="$own_scopes $sc"
-        fi
+        verdict="$(steam_scope_game "$user" "$sc")"
+        case "$verdict" in
+            "$appid") game_scopes="$game_scopes $sc" ;;
+            '?') echo "STEAM PAUSE CHECK NOT RUN: the probe of $sc stayed undecided"; exit 2 ;;
+            *) own_scopes="$own_scopes $sc" ;;
+        esac
     done
-    [ -n "$game_scopes" ] || { echo "STEAM PAUSE CHECK NOT RUN: no scope with SteamGameId=$appid"; exit 2; }
+    [ -n "$game_scopes" ] || { echo "STEAM PAUSE CHECK NOT RUN: the probe names no scope of game $appid"; exit 2; }
     echo "info: game scopes:$game_scopes; Steam's own:${own_scopes:- none}"
     clog="$(getent passwd "$user" | cut -d: -f6)/.var/app/com.valvesoftware.Steam/.local/share/Steam/logs/connection_log.txt"
     before="$(wc -l < "$clog" 2>/dev/null || echo 0)"
