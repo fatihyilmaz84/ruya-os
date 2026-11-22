@@ -133,7 +133,8 @@
     adds_high_risk  b    true when permissions_added has a high-risk request (05 §8: such an
                          update needs the admin's PIN); absent as above
     art             a{ss} role ("icon", "hero", "card", "cover", "logo", ...) -> path of the VETTED
-                         file in staging (05 §5); absent roles were not supplied
+                         file, a copy the shell can read under /run/ruya-play/inspect/
+                         (05 §5, §7.3); absent roles were not supplied
     screenshots     as   paths of vetted screenshots (thumbnails not listed)
     revoked         b    true when the package is on the block list
     installed_build u    the build installed now; absent when the id is not installed

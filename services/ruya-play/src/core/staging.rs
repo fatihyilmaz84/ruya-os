@@ -329,6 +329,20 @@ mod imp {
             let st = rfs::fstatvfs(&self.fd)?;
             Ok(st.f_bavail.saturating_mul(st.f_frsize))
         }
+
+        /// Give the entry `name` of this folder (a file or a folder, never what a link points
+        /// at) to the group `gid`; the owner stays.
+        pub fn set_group(&self, name: &str, gid: u32) -> io::Result<()> {
+            let name = component(name)?;
+            rfs::chownat(
+                &self.fd,
+                name,
+                None,
+                Some(rfs::Gid::from_raw(gid)),
+                AtFlags::SYMLINK_NOFOLLOW,
+            )
+            .map_err(|e| classify(e, name))
+        }
     }
 }
 
@@ -495,6 +509,11 @@ mod imp {
             }
             out.sort_by(|a, b| a.name.cmp(&b.name));
             Ok(out)
+        }
+
+        /// Groups do not exist here; the service only gives one on Linux.
+        pub fn set_group(&self, name: &str, _gid: u32) -> io::Result<()> {
+            component(name).map(|_| ())
         }
 
         /// Not available here: the free-space check takes a [`crate::core::deps::FreeSpace`].

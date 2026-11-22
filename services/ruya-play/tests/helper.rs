@@ -82,8 +82,26 @@ fn inspect_carries_the_vetted_art_of_the_sample() {
     for a in &report.art {
         assert!(!a.files.is_empty(), "{} has no files", a.slot);
         for f in &a.files {
-            assert!(f.starts_with(&h.cfg.inspect), "{}", f.display());
+            // The shell reads a published copy (RUY-1038), not the root-only vetted file.
+            assert!(
+                f.starts_with(h.cfg.publish.join("inspect-1")),
+                "{}",
+                f.display()
+            );
+            let vetted = h
+                .cfg
+                .inspect
+                .join("inspect-1/art")
+                .join(f.file_name().unwrap());
             assert!(std::fs::metadata(f).unwrap().len() > 0, "{}", f.display());
+            assert_eq!(std::fs::read(f).unwrap(), std::fs::read(&vetted).unwrap());
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mode = |p: &Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o7777;
+                assert_eq!(mode(f), 0o640, "{}", f.display());
+                assert_eq!(mode(f.parent().unwrap()), 0o750);
+            }
         }
     }
     // Only the vetted art stays: no root files, no copied art sources, no staging, no job.
@@ -123,12 +141,42 @@ fn inspect_keeps_the_newest_previews_and_nothing_of_a_refusal() {
         top,
         vec!["inspect-3", "inspect-4", "inspect-5", "inspect-6"]
     );
+    // The published copy goes with the private folder (RUY-1038).
+    let mut published = listing(&h.cfg.publish);
+    published.retain(|p| !p.contains('/'));
+    published.sort();
+    assert_eq!(
+        published,
+        vec!["inspect-3", "inspect-4", "inspect-5", "inspect-6"]
+    );
 
     let h = Setup::with(Pkg::Zip(b"not a zip".to_vec())).build();
     let report = h.importer.inspect(&pkg_path("game.play")).1.unwrap();
     assert_eq!(report.problems[0].code, "zip.not_a_zip");
     assert!(report.art.is_empty());
     assert_eq!(listing(&h.cfg.inspect), Vec::<String>::new());
+}
+
+#[test]
+fn start_up_empties_the_published_art() {
+    let root = tempfile::tempdir().unwrap();
+    let cfg = ruya_play::Config::under(root.path());
+    std::fs::create_dir_all(cfg.publish.join("inspect-9/logo-0")).unwrap();
+    std::fs::write(cfg.publish.join("inspect-9/icon.png"), b"x").unwrap();
+    let h = Harness::open_in(root, Setup::default());
+    assert_eq!(listing(&h.cfg.publish), Vec::<String>::new());
+}
+
+#[test]
+fn a_failed_copy_of_the_art_fails_the_inspect_and_leaves_nothing() {
+    let h = Setup::with(Pkg::signed(&sample())).build();
+    // A name the copy needs is taken, as a crash or an intruder could leave it.
+    std::fs::write(h.cfg.publish.join("inspect-1"), b"in the way").unwrap();
+    let (st, report) = h.importer.inspect(&pkg_path("game.play"));
+    assert_eq!(st, MethodStatus::Failed);
+    assert!(report.is_none());
+    assert_eq!(listing(&h.cfg.inspect), Vec::<String>::new());
+    assert_eq!(listing(&h.cfg.publish), Vec::<String>::new());
 }
 
 /// Runs the real helper, then changes what it staged before the service looks.

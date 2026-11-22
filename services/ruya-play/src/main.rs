@@ -33,6 +33,11 @@ const FLATPAK: &str = "/var/lib/flatpak";
 /// are renamed into them (RUY-866, `Config::with_work`). Not `ruya-play-helper-*`, so the
 /// helpers' leftover sweep never removes it.
 const WORK: &str = "/var/lib/private/ruya-play-work";
+/// A copy of each `Inspect`'s vetted art for the shell (root:ruya-shell 0750, created by
+/// tmpfiles.d; RUY-1038, `Config::with_publish`). On `/run`, not on the work mount, so it is copied.
+const PUBLISH: &str = "/run/ruya-play/inspect";
+/// The group that reads it.
+const SHELL_GROUP: &str = "ruya-shell";
 /// How often the mounts are looked at for `SourcesChanged`.
 const MOUNT_POLL: Duration = Duration::from_secs(2);
 
@@ -300,12 +305,28 @@ fn watch_mounts(env: Arc<dyn Environment>, events: async_channel::Sender<Signal>
     });
 }
 
+/// The id of the group `name` in `/etc/group` (`name:x:gid:members`).
+fn group_id(name: &str) -> Option<u32> {
+    std::fs::read_to_string("/etc/group")
+        .ok()?
+        .lines()
+        .filter_map(|l| {
+            let mut f = l.split(':');
+            let (n, _, gid) = (f.next()?, f.next()?, f.next()?);
+            (n == name).then(|| gid.parse().ok()).flatten()
+        })
+        .next()
+}
+
 fn run(session: bool) -> Result<(), Box<dyn Error>> {
     let root = root_dir(session);
     std::fs::create_dir_all(&root)?;
     let mut cfg = Config::under(&root);
     if !session {
-        cfg = cfg.with_work(Path::new(WORK));
+        let gid = group_id(SHELL_GROUP).ok_or("the group ruya-shell is not in /etc/group")?;
+        cfg = cfg
+            .with_work(Path::new(WORK))
+            .with_publish(Path::new(PUBLISH), gid);
     }
     cfg.flatpak = PathBuf::from(FLATPAK);
     let env: Arc<dyn Environment> = Arc::new(SystemEnvironment);

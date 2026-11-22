@@ -68,6 +68,12 @@ pub struct Config {
     /// One folder per helper `inspect` run: the root files it staged and, for `Inspect`, the
     /// vetted art the record points at (the newest [`MAX_PREVIEWS`] are kept).
     pub inspect: PathBuf,
+    /// One folder per `Inspect` (`inspect-<n>`) with a copy of its vetted art, for the shell to
+    /// read (RUY-1038): `inspect` is root only. Emptied at start.
+    pub publish: PathBuf,
+    /// The group that reads `publish` (`ruya-shell`); `None` where there is no such group (host
+    /// tests, the session-bus dev mode), and the files keep the service's group.
+    pub shell_gid: Option<u32>,
     /// The Flatpak installation the apps are committed to (`/var/lib/flatpak`); `Verify` reads
     /// the deployed files there and never writes.
     pub flatpak: PathBuf,
@@ -81,6 +87,8 @@ impl Config {
             staging: root.join("staging"),
             state: root.join("state"),
             inspect: root.join("inspect"),
+            publish: root.join("published"),
+            shell_gid: None,
             flatpak: root.join("flatpak"),
         }
     }
@@ -98,6 +106,16 @@ impl Config {
         }
     }
 
+    /// The same, with the published art in `publish` for the group `shell_gid` (RUY-1038: on the
+    /// image `/run/ruya-play/inspect`, another mount than `inspect/`, so the art is copied).
+    pub fn with_publish(self, publish: &Path, shell_gid: u32) -> Config {
+        Config {
+            publish: publish.to_path_buf(),
+            shell_gid: Some(shell_gid),
+            ..self
+        }
+    }
+
     /// The job table's file.
     pub fn jobs_file(&self) -> PathBuf {
         self.state.join("jobs")
@@ -111,6 +129,10 @@ impl Config {
 
 /// How many `Inspect` folders (with their vetted art) are kept.
 pub const MAX_PREVIEWS: usize = 4;
+
+/// The modes of the published copy: the group `ruya-shell` reads, nobody else (RUY-1038).
+const PUBLISHED_DIR_MODE: u32 = 0o750;
+const PUBLISHED_FILE_MODE: u32 = 0o640;
 
 /// What a running job tells the shell.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -246,6 +268,7 @@ pub struct Importer {
     shared: Arc<Shared>,
     staging: Dir,
     scratch: Dir,
+    published: Dir,
     previews: Mutex<VecDeque<String>>,
     inspects: AtomicU64,
     running: Mutex<()>,
@@ -573,6 +596,10 @@ impl Importer {
         for dir in [&cfg.incoming, &cfg.staging, &cfg.state, &cfg.inspect] {
             create_private_dir(dir).map_err(|e| staging_problem("", &e))?;
         }
+        // On the image tmpfiles.d made it (root:ruya-shell 0750); a host run makes its own.
+        std::fs::create_dir_all(&cfg.publish).map_err(|e| staging_problem("", &e))?;
+        let published = Dir::open_root(&cfg.publish).map_err(|e| staging_problem("", &e))?;
+        staging::clear(&published).map_err(|e| staging_problem("", &e))?;
         let staging_root = Dir::open_root(&cfg.staging).map_err(|e| staging_problem("", &e))?;
         staging::clear(&staging_root).map_err(|e| staging_problem("", &e))?;
         let scratch = Dir::open_root(&cfg.inspect).map_err(|e| staging_problem("", &e))?;
@@ -607,6 +634,7 @@ impl Importer {
             shared,
             staging: staging_root,
             scratch,
+            published,
             previews: Mutex::new(VecDeque::new()),
             inspects: AtomicU64::new(0),
             running: Mutex::new(()),
@@ -1089,8 +1117,85 @@ impl Importer {
         while kept.len() > MAX_PREVIEWS {
             if let Some(old) = kept.pop_front() {
                 let _ = self.scratch.remove_entry(&old);
+                let _ = self.published.remove_entry(&old);
             }
         }
+    }
+
+    /// Copy the vetted art of `inspect/<name>` into `publish/<name>` for the shell and return the
+    /// records with their paths there (RUY-1038). Only files that passed [`check_art`] are
+    /// copied, through folder handles without following a link, as `0640` files in `0750`
+    /// folders of the group `ruya-shell`. A copy that fails leaves nothing published.
+    fn publish_art(&self, name: &str, art: &[VettedArt]) -> Result<Vec<VettedArt>, Problem> {
+        let from = self
+            .scratch
+            .open_dir(name)
+            .and_then(|d| d.open_dir("art"))
+            .map_err(|e| staging_problem("art", &e))?;
+        let result = self.copy_art(name, &from, art);
+        if result.is_err() {
+            let _ = self.published.remove_entry(name);
+        }
+        result
+    }
+
+    fn copy_art(
+        &self,
+        name: &str,
+        from: &Dir,
+        art: &[VettedArt],
+    ) -> Result<Vec<VettedArt>, Problem> {
+        let group = |dir: &Dir, entry: &str| match self.cfg.shell_gid {
+            Some(gid) => dir.set_group(entry, gid),
+            None => Ok(()),
+        };
+        let to = self
+            .published
+            .create_dir(name, PUBLISHED_DIR_MODE)
+            .map_err(|e| staging_problem(name, &e))?;
+        group(&self.published, name).map_err(|e| staging_problem(name, &e))?;
+        let mut out = Vec::new();
+        for a in art {
+            let mut files = Vec::new();
+            for f in &a.files {
+                let rel = f
+                    .strip_prefix(from.path())
+                    .ok()
+                    .and_then(Path::to_str)
+                    .ok_or_else(|| changed("art", "A vetted art file is outside art/."))?;
+                let fail = |e: std::io::Error| staging_problem(rel, &e);
+                let (src, dst, leaf) = match rel.split_once('/') {
+                    Some((sub, leaf)) => {
+                        let dst = match to.open_dir(sub) {
+                            Ok(d) => d,
+                            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                                let d = to.create_dir(sub, PUBLISHED_DIR_MODE).map_err(fail)?;
+                                group(&to, sub).map_err(fail)?;
+                                d
+                            }
+                            Err(e) => return Err(fail(e)),
+                        };
+                        (from.open_dir(sub).map_err(fail)?, dst, leaf)
+                    }
+                    None => (
+                        from.try_clone().map_err(fail)?,
+                        to.try_clone().map_err(fail)?,
+                        rel,
+                    ),
+                };
+                let mut input = src.open_file(leaf).map_err(fail)?;
+                let mut output = dst.create_file(leaf, PUBLISHED_FILE_MODE).map_err(fail)?;
+                std::io::copy(&mut input, &mut output).map_err(fail)?;
+                group(&dst, leaf).map_err(fail)?;
+                files.push(to.path().join(rel));
+            }
+            out.push(VettedArt {
+                slot: a.slot.clone(),
+                lang: a.lang.clone(),
+                files,
+            });
+        }
+        Ok(out)
     }
 
     /// `Inspect(path)`: steps 1 to 3 and the art. Nothing is written but the helper's inspect
@@ -1127,7 +1232,14 @@ impl Importer {
                 }
             }
             Front::Checked(passed) => {
-                let p = *passed;
+                let mut p = *passed;
+                match self.publish_art(&name, &p.art) {
+                    Ok(art) => p.art = art,
+                    Err(_) => {
+                        let _ = self.scratch.remove_entry(&name);
+                        return (MethodStatus::Failed, None);
+                    }
+                }
                 self.keep_preview(name);
                 let update = self.update_of(Some(&p.checked.inspection), p.checked.installed_build);
                 InspectReport {
