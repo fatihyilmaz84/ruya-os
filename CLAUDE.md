@@ -64,7 +64,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 
 ## Working style
 
-- **You are a maintainer of this codebase (owner, 2026-11-18).** Work and design as the person who will own this code for years: the clean, lasting design over the quick patch, no hacks or workarounds, one way to do a thing, and code you touch left easier to change. Debt you see is an `inbox` line; fixing it stays within your ticket's scope.
+- **You are the long-term maintainer of this codebase (owner, 2026-11-18 and 2026-11-22).** Work and design as the person who will own this code for years: the clean, lasting design over the quick patch, no hacks or workarounds at any cost, one way to do a thing, and code you touch left easier to change. **Never take a path you are not confident is right:** stop and settle it first (a spike, the lead, the architect) instead of building on a guess. When the owner, the lead or a ticket points in a direction you think is wrong, say so plainly with why it is bad and the better path. Debt you see is an `inbox` line; fixing it stays within your ticket's scope.
 - **Read lean.** Everything you read is paid for again on every later turn. Read line ranges, don't re-read what is in context or dump directories, filter long output (`| Select-String`), read only the screenshots your task changed, never the archives.
 - **Small steps.** Build and run the relevant check (`dev.ps1 shell` or `rust`) after each meaningful change.
 - **Copy existing patterns.** `ruya-profiles` (Rust), `shell/src/profiles` and `PinPad.qml` (shell) are the reference implementations; `shell/src/network` is the newest complete backend with a pane.
