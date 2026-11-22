@@ -27,6 +27,9 @@ ProfilePaneBase {
     property string newRole: "standard"
     property bool newUsePin: false
 
+    // A new result is brought into view with the focused row (it sits above the Add form).
+    onMessageChanged: Qt.callLater(ensureFocusedVisible)
+
     // A profile row was accepted: the Settings page opens that profile's page (ManagedProfilePage).
     signal profileRequested(string id)
 
@@ -168,6 +171,17 @@ ProfilePaneBase {
                    + (modelData.id === Profiles.activeProfile ? " · " + qsTr("You") : "")
         }
     }
+    // The result of the last action sits right under the list, above the Add form, so it is seen with the form open (RUY-52).
+    Text {
+        objectName: "profilesMessage"
+        width: parent ? parent.width : 0
+        visible: pane.message.length > 0
+        textFormat: Text.PlainText
+        text: pane.message
+        color: pane.messageIsError ? Theme.errorText : Theme.toastSuccess
+        font.pixelSize: Theme.typeBody * pane.u
+        wrapMode: Text.Wrap
+    }
 
     SettingRow {
         id: addRow
@@ -219,16 +233,5 @@ ProfilePaneBase {
         visible: pane.isAdmin && pane.adding
         label: qsTr("Create profile")
         onActivated: pane.startCreate()
-    }
-
-    Text {
-        objectName: "profilesMessage"
-        width: parent ? parent.width : 0
-        visible: pane.message.length > 0
-        textFormat: Text.PlainText
-        text: pane.message
-        color: pane.messageIsError ? Theme.errorText : Theme.toastSuccess
-        font.pixelSize: Theme.typeBody * pane.u
-        wrapMode: Text.Wrap
     }
 }

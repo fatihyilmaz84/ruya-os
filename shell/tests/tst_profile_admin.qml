@@ -453,6 +453,27 @@ Item {
             compare(find("profilesMessage").text, "Enter a name first.")
         }
 
+        function withinView(item, view) {
+            const top = item.mapToItem(view, 0, 0).y
+            return top >= -0.5 && top + item.height <= view.height + 0.5
+        }
+
+        // RUY-52: the result of an action is seen with the Add form open (it sits under the list).
+        function test_result_message_is_visible_with_the_add_form_open() {
+            startShell()
+            signIn("p1", "1234")
+            openProfilesPane()
+            openAddForm()
+            goToRow("rowCreate")
+            keyClick(Qt.Key_Return)                       // no name: a refusal message
+            const msg = find("profilesMessage")
+            tryVerify(() => msg.visible && msg.text === "Enter a name first.")
+            const pane = find("paneProfiles")
+            const view = pane.viewport
+            tryVerify(() => msg.y > find("profileRow_p3").y && msg.y < find("rowAdd").y, 2000, "under the list, above the Add row and its form")
+            tryVerify(() => withinView(msg, view), 2000, "the message lies within the visible area")
+        }
+
         function test_cancel_pin_pad_aborts_the_flow() {
             startShell()
             signIn("p1", "1234")
@@ -1125,6 +1146,30 @@ Item {
                 host.height = 720
             }
         }
+        // RUY-52: Manage profiles with the Add form open and a result message (English and Turkish).
+        function messageShots(dir, lang) {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            Notifications.pending = []
+            while (Notifications.model.count > 0)
+                Notifications.dismiss(Notifications.model.get(0).toastId)
+            DeviceSettings.language = lang
+            try {
+                startShell()
+                signIn("p1", "1234")
+                openProfilesPane()
+                openAddForm()
+                goToRow("rowCreate")
+                keyClick(Qt.Key_Return)
+                tryVerify(() => find("profilesMessage").visible)
+                wait(600)
+                grabImage(tc.shell).save(dir + "28-profiles-message-add-form-" + lang + ".png")
+            } finally {
+                DeviceSettings.language = "en"
+            }
+        }
+        function test_zz_screenshots_message_add_form_en() { messageShots(shotsDir + "/", "en") }
+        function test_zz_screenshots_message_add_form_tr() { messageShots(shotsDir + "/", "tr") }
         function test_zz_screenshots_profile_page_en_1080() { profilePageShots(shotsDir + "/", "en", 1920, 1080) }
         function test_zz_screenshots_profile_page_tr_1080() { profilePageShots(shotsDir + "/", "tr", 1920, 1080) }
         function test_zz_screenshots_profile_page_en_720() { profilePageShots(shotsDir + "/", "en", 1280, 720) }

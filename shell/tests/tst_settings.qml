@@ -110,6 +110,27 @@ Item {
         }
     }
 
+    // First focus over disabled rows (T-429, RUY-52).
+    Component {
+        id: disabledFirstPaneComponent
+        SettingsPane {
+            width: 700
+            height: 400
+            SettingRow { kind: "item"; objectName: "d_first"; label: "First"; enabled: false }
+            SettingRow { kind: "item"; objectName: "d_second"; label: "Second" }
+            SettingRow { kind: "item"; objectName: "d_third"; label: "Third" }
+        }
+    }
+    Component {
+        id: allDisabledPaneComponent
+        SettingsPane {
+            width: 700
+            height: 400
+            SettingRow { kind: "item"; objectName: "a_first"; label: "First"; enabled: false }
+            SettingRow { kind: "item"; objectName: "a_second"; label: "Second"; enabled: false }
+        }
+    }
+
     SignalSpy { id: spy }
     Component { id: spyComponent; SignalSpy {} }
 
@@ -1105,6 +1126,36 @@ Item {
             group.text = "A very long heading that cannot possibly fit in seven hundred design pixels of a pane column at all, never"
             compare(text.truncated, true)
             compare(text.width, group.width)
+        }
+
+        // RUY-52: where focus lands over disabled rows (SettingsPane checks `visible && enabled`).
+        function test_first_focus_skips_disabled_rows() {
+            const pane = createTemporaryObject(disabledFirstPaneComponent, host)
+            pane.forceActiveFocus()
+            tryVerify(() => findChild(pane, "d_second").activeFocus, 2000, "the first enabled row holds the focus")
+            compare(findChild(pane, "d_first").activeFocus, false)
+        }
+
+        function test_all_rows_disabled_keeps_focus_on_the_pane() {
+            const pane = createTemporaryObject(allDisabledPaneComponent, host)
+            pane.forceActiveFocus()
+            wait(50)                                  // settleFocus runs on the next event loop turn
+            tryVerify(() => pane.activeFocus, 2000, "the pane holds the focus")
+            compare(findChild(pane, "a_first").activeFocus, false)
+            compare(findChild(pane, "a_second").activeFocus, false)
+            compare(pane.focusedRow, null, "no row is focused")
+            compare(pane.focusableCount, 0)
+            compare(hintsOf(pane), "back Back", "nothing to select: Back only")
+        }
+
+        function test_focus_moves_off_a_row_that_becomes_disabled() {
+            const pane = createTemporaryObject(disabledFirstPaneComponent, host)
+            pane.forceActiveFocus()
+            tryVerify(() => findChild(pane, "d_second").activeFocus)
+            findChild(pane, "d_second").enabled = false
+            tryVerify(() => findChild(pane, "d_third").activeFocus, 2000, "focus moves to the next enabled row")
+            findChild(pane, "d_third").enabled = false
+            tryVerify(() => pane.activeFocus && pane.focusedRow === null, 2000, "with none left the pane holds it")
         }
 
         // RUY-512: the hint bar follows the focused row's kind.
