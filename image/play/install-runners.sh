@@ -71,18 +71,27 @@ check_prune() {
     [ "$globs" -gt 0 ] || die "$1: no glob"
 }
 
+# inside_tree <top> <path>: the real path of <path> is <top> (a realpath) or below it, so a folder link in
+# the release cannot lead a write or a delete out of the runner's tree.
+inside_tree() {
+    case "$(realpath "$2")/" in "$1"/*) return 0 ;; esac
+    return 1
+}
+
 # prune_tree <prune> <tree> <name>: delete what each glob of the prune file matches in the runner's
 # tree (a file or a link, never a folder). A glob that matches nothing fails the build: the release
 # moved on and the prune is stale, so someone has to look.
 prune_tree() {
-    local prune="$1" tree="$2" name="$3" glob m n=0
+    local prune="$1" tree="$2" name="$3" glob m n=0 top matches=()
+    top="$(realpath "$tree")"
     check_prune "$prune"
     while IFS= read -r glob; do
         [[ "$glob" == '#'* || "$glob" =~ ^[[:space:]]*$ ]] && continue
-        local matches=()
-        matches=($(cd "$tree" && compgen -G "$glob" || true))
+        # mapfile: a name with a space is neither split nor globbed again
+        mapfile -t matches < <(cd "$tree" && compgen -G "$glob" || true)
         [ "${#matches[@]}" -gt 0 ] || die "$name: prune $glob matches nothing in the release"
         for m in "${matches[@]}"; do
+            inside_tree "$top" "$(dirname "$tree/$m")" || die "$name: prune $glob: $m is outside the runner's tree"
             [ ! -d "$tree/$m" ] || [ -L "$tree/$m" ] || die "$name: prune $glob matches the folder $m"
             rm -f -- "$tree/$m"
             n=$((n + 1))
@@ -106,7 +115,7 @@ add_own_files() {
         [ ! -e "$tree/$rel" ] && [ ! -L "$tree/$rel" ] || die "$name: the release already has $rel"
         parent="$(dirname "$tree/$rel")"
         mkdir -p "$parent"
-        case "$(realpath "$parent")/" in "$top"/*) ;; *) die "$name: $rel would leave the runner's tree" ;; esac
+        inside_tree "$top" "$parent" || die "$name: $rel would leave the runner's tree"
         install -m 0644 "$dir/$rel" "$tree/$rel"
     done < <(cd "$dir" && find . -mindepth 1 ! -type d -print0 | sort -z)
 }

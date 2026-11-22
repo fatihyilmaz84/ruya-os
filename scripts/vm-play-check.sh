@@ -1046,7 +1046,7 @@ launch_checks() {
 
 # launch-windows: the Windows sample, offline, with a 32-bit command-line program.
 launch_windows_checks() {
-    local app="play.$appid" user="ruya-$lprof" data report runner perms want got ref game module next
+    local app="play.$appid" user="ruya-$lprof" data pdir report runner perms want got ref game module next
     data="/var/home/$user/.var/app/$app/data"
     # ${prefix} of a Proton runner is <data>/proton/pfx (05 section 6.2.1); check.exe saves in Documents.
     report="$data/proton/pfx/drive_c/users/steamuser/Documents/Hello Play/check.txt"

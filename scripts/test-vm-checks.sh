@@ -2687,6 +2687,23 @@ for f in "$prunes"/*.prune; do
     esac
 done
 [ "$nprunes" -ge 12 ] || fail "install-runners: only $nprunes prune fixtures"
+# A folder link in the release that leads out of the tree: the prune must not follow it (the file outside
+# survives and the build fails).
+mkdir -p "$ir/outside/lib" "$ir/rel2/GE-X"
+echo outside > "$ir/outside/lib/libxk.so.0"
+echo "the release's licence" > "$ir/rel2/GE-X/LICENSE"
+printf '#!/bin/sh\n' > "$ir/rel2/GE-X/proton"
+# MSYS: a real link on Windows too (Git Bash otherwise copies the folder); no effect on Linux.
+MSYS=winsymlinks:nativestrict ln -s "$ir/outside" "$ir/rel2/GE-X/files"
+(cd "$ir/rel2" && tar -czf "$ir/release-link.tar.gz" GE-X)
+lsha="$(sha256sum "$ir/release-link.tar.gz" | cut -d' ' -f1)"
+printf 'url=https://example.org/r\nsha256=%s\nroot=GE-X\n' "$lsha" > "$ir/runners/ProtonGE11/pin"
+printf '# why\nfiles/lib/libxk.so*\n' > "$ir/runners/ProtonGE11/prune"
+rm -rf "$ir/play"
+out="$(env MSYS=winsymlinks:nativestrict FAKE_RELEASE="$ir/release-link.tar.gz" PATH="$ish:$PATH" bash "$here/../image/play/install-runners.sh" fetch "$ir/runners" "$ir/play" 2>&1)"; rc=$?
+[ -L "$ir/rel2/GE-X/files" ] || fail "install-runners: the fixture could not make a folder link"
+[ "$rc" != 0 ] && expect_contains "install-runners: a prune through a folder link that leaves the tree fails the build" "$out" "is outside the runner's tree" || fail "install-runners: prune through a link: exit $rc, $out"
+[ -f "$ir/outside/lib/libxk.so.0" ] && pass "install-runners: the file outside the runner's tree survives the prune" || fail "install-runners: the prune deleted a file outside the tree"
 rm -rf "$ir/play" "$ir/runners/ProtonGE11/prune"
 
 echo "== check-image-manifest.sh: the Play platform's files have rows (RUY-34) =="
