@@ -13,6 +13,9 @@ pub mod bounded;
 pub mod dbus;
 pub mod directory;
 pub mod follow;
+#[cfg(target_os = "linux")]
+pub mod library_feed;
+pub mod profile_scan;
 pub mod runner_choice;
 pub mod scope;
 pub mod session;

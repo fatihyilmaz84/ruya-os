@@ -147,6 +147,10 @@ pub enum Notice {
         app_id: String,
         exit_code: i32,
         reason: ExitReason,
+        /// The profile it ran for and its Library1 item id: the adapter's own uses (a profile's
+        /// Steam client that ends has its Steam items read again, RUY-1056), not in the signal.
+        profile: String,
+        item: String,
     },
 }
 
@@ -974,6 +978,8 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             app_id: inst.app_id,
             exit_code,
             reason,
+            profile: inst.profile,
+            item: inst.item,
         })
     }
 
@@ -3203,13 +3209,17 @@ mod tests {
                     instance: child,
                     app_id: STEAM.to_owned(),
                     exit_code: 0,
-                    reason: ExitReason::Quit
+                    reason: ExitReason::Quit,
+                    profile: "p1".to_owned(),
+                    item: "steam:70".to_owned()
                 },
                 Notice::Exited {
                     instance: steam,
                     app_id: STEAM.to_owned(),
                     exit_code: 0,
-                    reason: ExitReason::Quit
+                    reason: ExitReason::Quit,
+                    profile: "p1".to_owned(),
+                    item: format!("flatpak:{STEAM}")
                 }
             ]
         );

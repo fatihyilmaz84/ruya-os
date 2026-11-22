@@ -18,6 +18,10 @@
 #      The default deny is only that when it carries no other receive_* attribute and no eavesdrop (receive_member,
 #      receive_interface, receive_path, receive_error, receive_requested_reply narrow it: `receive_member="Nothing"`
 #      would close nothing), and root and ruya-shell have no receive deny at all (RUY-616).
+#   5. Root-only members (RUY-1056): a method that api/dbus/<name>.xml marks
+#      `<annotation name="org.ruyaos.Caller" value="root"/>` is denied to ruya-shell in writing: the
+#      `user="ruya-shell"` policy has `deny send_destination="<name>" send_member="<method>"` AFTER its
+#      last `allow send_destination="<name>"` (in dbus policy the last matching rule wins).
 param([string]$Root, [switch]$SelfTest)
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path -Parent $PSScriptRoot
@@ -31,7 +35,25 @@ function Get-RecvNarrowing($Rule) {
     }
 }
 
-function Test-BusPolicyFile([string]$Path) {
+# The methods api/dbus/<name>.xml marks root only (org.ruyaos.Caller = root); none without that file.
+function Get-RootOnlyMembers([string]$ApiDir, [string]$Name) {
+    if ($Name -notmatch '^[A-Za-z0-9_.]+$') { return @() }   # a wildcard or empty name (refused by rule 2)
+    $xml = Join-Path $ApiDir "$Name.xml"
+    if (-not (Test-Path $xml)) { return @() }
+    $settings = New-Object System.Xml.XmlReaderSettings
+    $settings.DtdProcessing = [System.Xml.DtdProcessing]::Ignore
+    $settings.XmlResolver = $null
+    $doc = New-Object System.Xml.XmlDocument
+    $reader = [System.Xml.XmlReader]::Create($xml, $settings)
+    try { $doc.Load($reader) } finally { $reader.Dispose() }
+    foreach ($m in $doc.SelectNodes("//interface/method")) {
+        foreach ($an in $m.SelectNodes("annotation")) {
+            if ($an.GetAttribute("name") -eq "org.ruyaos.Caller" -and $an.GetAttribute("value") -eq "root") { $m.GetAttribute("name") }
+        }
+    }
+}
+
+function Test-BusPolicyFile([string]$Path, [string]$ApiDir) {
     $errs = New-Object System.Collections.Generic.List[string]
     $settings = New-Object System.Xml.XmlReaderSettings
     $settings.DtdProcessing = [System.Xml.DtdProcessing]::Ignore
@@ -98,34 +120,54 @@ function Test-BusPolicyFile([string]$Path) {
             if (-not $allowedRecv.Contains("$u|$n")) { $errs.Add("$u has no allow receive_sender (receive_type signal) for $n") }
         }
     }
+    # Rule 5: every root-only member of a name the file allows is denied to ruya-shell after its allow.
+    $shellRules = @()
+    foreach ($p in $doc.SelectNodes("//policy")) {
+        if ($p.GetAttribute("user") -eq "ruya-shell") { $shellRules += @($p.ChildNodes | Where-Object { $_.NodeType -eq "Element" }) }
+    }
+    foreach ($n in $allowedNames) {
+        foreach ($member in @(Get-RootOnlyMembers $ApiDir $n)) {
+            $lastAllow = -1; $deny = -1
+            for ($i = 0; $i -lt $shellRules.Count; $i++) {
+                $r = $shellRules[$i]
+                if ($r.GetAttribute("send_destination") -ne $n) { continue }
+                if ($r.LocalName -eq "allow") { $lastAllow = $i }
+                elseif ($r.LocalName -eq "deny" -and $r.GetAttribute("send_member") -eq $member) { $deny = $i }
+            }
+            if ($deny -lt 0) { $errs.Add("$n.$member is root only (org.ruyaos.Caller) but ruya-shell has no deny send_member=`"$member`"") }
+            elseif ($deny -lt $lastAllow) { $errs.Add("the ruya-shell deny of $n.$member comes before an allow of $n, which wins") }
+        }
+    }
     if ($allowedNames.Count -eq 0 -and $deniedNames.Count -eq 0) { $errs.Add("no policy rules found") }
     return $errs
 }
 
-function Test-BusPolicies([string]$Dir) {
+function Test-BusPolicies([string]$Dir, [string]$ApiDir) {
     $files = @(Get-ChildItem -Path $Dir -Filter "*.conf" -File -ErrorAction SilentlyContinue)
     if ($files.Count -eq 0) { Write-Host "FAIL: no policy files in $Dir"; return 1 }
     $bad = 0
     foreach ($f in $files) {
-        $e = @(Test-BusPolicyFile $f.FullName)
+        $e = @(Test-BusPolicyFile $f.FullName $ApiDir)
         foreach ($m in $e) { Write-Host "FAIL: $($f.Name): $m"; $bad++ }
     }
     return $bad
 }
 
 $policyDir = Join-Path $Root "image/rootfs/usr/share/dbus-1/system.d"
-$bad = Test-BusPolicies $policyDir
+$bad = Test-BusPolicies $policyDir (Join-Path $Root "api/dbus")
 if ($bad -eq 0) { Write-Host "ok: bus policies are deny-by-default" }
 
 if ($SelfTest) {
     $good = @'
 <busconfig>
   <policy user="root"><allow own="org.x.A1"/><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/></policy>
-  <policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/></policy>
+  <policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/><deny send_destination="org.x.A1" send_member="Put"/></policy>
   <policy user="ruya-link"><allow send_destination="org.x.A1" send_member="Ping"/></policy>
   <policy context="default"><deny own="org.x.A1"/><deny send_destination="org.x.A1"/><deny receive_sender="org.x.A1" receive_type="signal"/></policy>
 </busconfig>
 '@
+    # The contract of org.x.A1: Put is root only, Get is not.
+    $api = '<node><interface name="org.x.A1"><method name="Put"><annotation name="org.ruyaos.Caller" value="root"/></method><method name="Get"/></interface></node>'
     $cases = @(
         @{ Name = "the good fixture (control)"; From = ""; To = ""; Expect = 0 },
         @{ Name = "a missing default deny"; From = '<deny send_destination="org.x.A1"/>'; To = ""; Expect = 1 },
@@ -134,7 +176,7 @@ if ($SelfTest) {
         @{ Name = "an allow in the default context"; From = '<deny send_destination="org.x.A1"/>'; To = '<deny send_destination="org.x.A1"/><allow send_destination="org.x.A1"/>'; Expect = 1 },
         @{ Name = "a missing default deny receive_sender"; From = '<deny receive_sender="org.x.A1" receive_type="signal"/>'; To = ""; Expect = 1 },
         @{ Name = "a default deny receive_sender without receive_type"; From = '<deny receive_sender="org.x.A1" receive_type="signal"/>'; To = '<deny receive_sender="org.x.A1"/>'; Expect = 1 },
-        @{ Name = "no receive allow for ruya-shell"; From = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/></policy>'; To = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/></policy>'; Expect = 1 },
+        @{ Name = "no receive allow for ruya-shell"; From = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/>'; To = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/>'; Expect = 1 },
         @{ Name = "no receive allow for root"; From = '<allow own="org.x.A1"/><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/>'; To = '<allow own="org.x.A1"/><allow send_destination="org.x.A1"/>'; Expect = 1 },
         @{ Name = "a receive allow without receive_type"; From = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/>'; To = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1"/>'; Expect = 1 },
         @{ Name = "ruya-link receiving the service's signals"; From = '<allow send_destination="org.x.A1" send_member="Ping"/>'; To = '<allow send_destination="org.x.A1" send_member="Ping"/><allow receive_sender="org.x.A1" receive_type="signal"/>'; Expect = 1 },
@@ -151,7 +193,10 @@ if ($SelfTest) {
         @{ Name = "ruya-link with a wildcard send_member"; From = 'send_member="Ping"'; To = 'send_member="*"'; Expect = 1 },
         @{ Name = "ruya-link with a wildcard send_destination"; From = '<allow send_destination="org.x.A1" send_member'; To = '<allow send_destination="*" send_member'; Expect = 1 },
         @{ Name = "ruya-link with an empty send_member"; From = 'send_member="Ping"'; To = 'send_member=""'; Expect = 1 },
-        @{ Name = "ruya-link owning a name"; From = '<allow send_destination="org.x.A1" send_member="Ping"/>'; To = '<allow own="org.x.A1"/>'; Expect = 1 }
+        @{ Name = "ruya-link owning a name"; From = '<allow send_destination="org.x.A1" send_member="Ping"/>'; To = '<allow own="org.x.A1"/>'; Expect = 1 },
+        @{ Name = "a root-only member not denied to ruya-shell"; From = '<deny send_destination="org.x.A1" send_member="Put"/>'; To = ""; Expect = 1 },
+        @{ Name = "a root-only member denied for another member"; From = 'send_member="Put"/></policy>'; To = 'send_member="Get"/></policy>'; Expect = 1 },
+        @{ Name = "a root-only deny before the allow it should override"; From = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/><deny send_destination="org.x.A1" send_member="Put"/>'; To = '<policy user="ruya-shell"><deny send_destination="org.x.A1" send_member="Put"/><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/>'; Expect = 1 }
     )
     foreach ($c in $cases) {
         $dir = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-bus-" + [guid]::NewGuid().ToString("N"))
@@ -160,7 +205,10 @@ if ($SelfTest) {
         $text = if ($c.From) { $good.Replace($c.From, $c.To) } else { $good }
         if ($c.From -and $text -eq $good) { Write-Host "FAIL: self-test fixture for $($c.Name) did not change"; $bad++ }
         [IO.File]::WriteAllText((Join-Path $pd "org.x.A1.conf"), $text)
-        $n = Test-BusPolicies $pd 6>&1 | Where-Object { $_ -is [int] } | Select-Object -Last 1
+        $ad = Join-Path $dir "api/dbus"
+        New-Item -ItemType Directory -Force $ad | Out-Null
+        [IO.File]::WriteAllText((Join-Path $ad "org.x.A1.xml"), $api)
+        $n = Test-BusPolicies $pd $ad 6>&1 | Where-Object { $_ -is [int] } | Select-Object -Last 1
         $failed = [bool]($n -gt 0)
         $want = ($c.Expect -gt 0)
         if ($failed -ne $want) { Write-Host "FAIL: self-test: lint $(if ($want) {'accepted'} else {'refused'}) $($c.Name)"; $bad++ }

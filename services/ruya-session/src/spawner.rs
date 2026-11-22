@@ -1014,10 +1014,28 @@ pub const SESSION_PROGRAM: &str = "/usr/bin/ruya-session";
 /// the call too (`bounded::run_bounded`) and checks the answer (`steam_probe::parse_answer`).
 /// Pure; user and scope are validated again.
 pub fn steam_probe_command(user: &str, scope: &str) -> Result<Vec<String>, String> {
-    checked_user(user)?;
     if !crate::steam_probe::valid_scope(scope) {
         return Err(format!("not a Flatpak scope: {scope:?}"));
     }
+    piped_helper_command(
+        user,
+        3,
+        &[],
+        &[SESSION_PROGRAM, crate::steam_probe::SUBCOMMAND, scope],
+    )
+}
+
+/// The shape of every helper that runs as a profile user and answers on stdout (`steam-probe`,
+/// `profile-scan`): `systemd-run` in `user`'s manager, stdout piped back, waited for, collected,
+/// bounded by `RuntimeMaxSec=<runtime_max_sec>`, with the unit `properties` after it, then
+/// `command`. Pure; the user is validated again.
+fn piped_helper_command(
+    user: &str,
+    runtime_max_sec: u32,
+    properties: &[&str],
+    command: &[&str],
+) -> Result<Vec<String>, String> {
+    checked_user(user)?;
     let mut args: Vec<String> = [
         "systemd-run",
         "--user",
@@ -1026,13 +1044,53 @@ pub fn steam_probe_command(user: &str, scope: &str) -> Result<Vec<String>, Strin
         "--quiet",
         "--collect",
         "--no-ask-password",
-        "--property=RuntimeMaxSec=3",
     ]
     .map(str::to_owned)
     .to_vec();
     args.insert(1, format!("--machine={user}@.host"));
-    args.extend(["--", SESSION_PROGRAM, crate::steam_probe::SUBCOMMAND, scope].map(str::to_owned));
+    args.push(format!("--property=RuntimeMaxSec={runtime_max_sec}"));
+    args.extend(properties.iter().map(|p| format!("--property={p}")));
+    args.push("--".to_owned());
+    args.extend(command.iter().map(|&c| c.to_owned()));
     Ok(args)
+}
+
+/// Where `ruya-library` is installed: its `profile-scan` mode is the per-profile Steam reader.
+pub const LIBRARY_PROGRAM: &str = "/usr/bin/ruya-library";
+/// The reader mode of `ruya-library` (ADR-045).
+pub const PROFILE_SCAN: &str = "profile-scan";
+/// How long the reader's unit may run (`RuntimeMaxSec`); the caller waits a little longer.
+pub const PROFILE_SCAN_RUNTIME_SECS: u32 = 20;
+/// The reader's sandbox (RUY-1056): it is a native helper, not a Flatpak app, so it gets the
+/// hardening of a system service here. It reads the home (read-only) and writes only to stdout:
+/// no network or socket, no new privileges, capabilities or namespaces, no writable code.
+pub const PROFILE_SCAN_PROPERTIES: [&str; 13] = [
+    "MemoryMax=512M",
+    "TasksMax=16",
+    "NoNewPrivileges=yes",
+    "PrivateNetwork=yes",
+    "RestrictAddressFamilies=none",
+    "ProtectSystem=strict",
+    "PrivateTmp=yes",
+    "ReadOnlyPaths=%h",
+    "SystemCallFilter=@system-service",
+    "MemoryDenyWriteExecute=yes",
+    "LockPersonality=yes",
+    "RestrictNamespaces=yes",
+    "CapabilityBoundingSet=",
+];
+
+/// The per-profile Steam reader (ADR-045): `ruya-library profile-scan` as `user`, in that user's
+/// manager, with the hardening of `PROFILE_SCAN_PROPERTIES`, its JSON piped back. The caller
+/// bounds the run too (`bounded::run_capped`) and hands the output unchanged to
+/// `Library1.PutProfileItems`, which checks it. Pure; root and any non-profile user are refused.
+pub fn profile_scan_command(user: &str) -> Result<Vec<String>, String> {
+    piped_helper_command(
+        user,
+        PROFILE_SCAN_RUNTIME_SECS,
+        &PROFILE_SCAN_PROPERTIES,
+        &[LIBRARY_PROGRAM, PROFILE_SCAN],
+    )
 }
 
 /// Every app gets the input devices in its sandbox (RUY-837, 06 §1 and §3), whatever its manifest
@@ -3135,5 +3193,46 @@ app-flatpak-io.github.Foo-56.scope loaded active running app-flatpak-io.github.F
         );
         assert!(steam_probe_command("root", scope).is_err());
         assert!(steam_probe_command("ruya-p1", "../x.scope").is_err());
+    }
+
+    #[test]
+    fn the_profile_scan_runs_as_the_profile_user_hardened_and_bounded() {
+        use super::profile_scan_command;
+        let args = profile_scan_command("ruya-p2").expect("scan");
+        let mut want: Vec<String> = [
+            "systemd-run",
+            "--machine=ruya-p2@.host",
+            "--user",
+            "--pipe",
+            "--wait",
+            "--quiet",
+            "--collect",
+            "--no-ask-password",
+            "--property=RuntimeMaxSec=20",
+        ]
+        .map(str::to_owned)
+        .to_vec();
+        for p in [
+            "MemoryMax=512M",
+            "TasksMax=16",
+            "NoNewPrivileges=yes",
+            "PrivateNetwork=yes",
+            "RestrictAddressFamilies=none",
+            "ProtectSystem=strict",
+            "PrivateTmp=yes",
+            "ReadOnlyPaths=%h",
+            "SystemCallFilter=@system-service",
+            "MemoryDenyWriteExecute=yes",
+            "LockPersonality=yes",
+            "RestrictNamespaces=yes",
+            "CapabilityBoundingSet=",
+        ] {
+            want.push(format!("--property={p}"));
+        }
+        want.extend(["--", "/usr/bin/ruya-library", "profile-scan"].map(str::to_owned));
+        assert_eq!(args, want);
+        for user in ["root", "ruya-", "p1", "ruya-p1;x"] {
+            assert!(profile_scan_command(user).is_err(), "{user}");
+        }
     }
 }

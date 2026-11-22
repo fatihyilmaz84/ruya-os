@@ -152,6 +152,12 @@ public:
     virtual void getRunnerChoice(const QString &profile, const QString &id) = 0;
     virtual void setRunnerChoice(const QString &profile, const QString &id, const QString &choice) = 0;
     virtual void resolveRunner(const QString &id, const QString &choice) = 0;
+    // Library1 ActiveProfile (ADR-045): whose Steam items the list holds, "" for nobody. ruya-session
+    // sets it in the service; the D-Bus backend only mirrors it (activeProfileChanged).
+    virtual QString activeProfile() const = 0;
+    // The shell's signed-in profile changed (Library.profile). The D-Bus backend does nothing: ruya-session
+    // tells Library1. The mock plays ruya-session and follows it.
+    virtual void profileSelected(const QString &profile) { Q_UNUSED(profile) }
 
 signals:
     void itemsListed(const QList<LibraryItem> &items);
@@ -165,6 +171,8 @@ signals:
     void runnerResolved(const QString &id, const QString &choice, const QString &status, const LibraryResolution &resolution);
     // Library1 RunnerChoiceChanged.
     void runnerChoiceChanged(const QString &profile, const QString &id, const QString &choice);
+    // Library1 ActiveProfile changed (PropertiesChanged).
+    void activeProfileChanged(const QString &profile);
 
 protected:
     // Replies can arrive out of order: number each ListItems request when it is sent and report a

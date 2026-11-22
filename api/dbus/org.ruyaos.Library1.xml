@@ -4,10 +4,37 @@
   org.ruyaos.Library1 — everything installed that can be started: Steam games (read from Steam's
   library files, read-only) and installed Flatpak apps, as one list.
   Served by ruya-library (T-112) at /org/ruyaos/Library1 on the system bus, as the system user
-  ruya-library (T-163). In the image it serves the system Flatpak installation only; Steam is off
-  there (Steam libraries live in the profiles' homes). The service sends ItemsChanged by itself
-  when apps are installed or removed. Launching is not part of this
-  interface (the session service does it, from the item's "launch" string).
+  ruya-library (T-163). It reads the system Flatpak installation itself and never a profile's home
+  (ProtectHome=yes): Steam games come per profile from ruya-session (ADR-045, below). The service
+  sends ItemsChanged by itself when apps are installed or removed and when the active profile's
+  view changes. Launching is not part of this interface (the session service does it, from the
+  item's "launch" string).
+
+  Per-profile Steam items (ADR-045, RUY-1056). Steam libraries live in each profile's home.
+  ruya-session runs `ruya-library profile-scan` as the profile's user (a short-lived, hardened unit
+  in the profile's manager) and hands its stdout, unchanged, to PutProfileItems. ruya-library keeps
+  one Steam list per profile and serves the view of ActiveProfile: ListItems is the Flatpak items
+  plus the Steam items of ActiveProfile ("" = nobody signed in: Flatpak items only). ruya-session
+  sets ActiveProfile with SetActiveProfile on every change of Profiles1.ActiveProfile, before any
+  scan, and again when Library1's bus name gets a new owner (ruya-library may not talk to
+  Profiles1). A put for a profile that is not active is kept and changes nothing visible; a change
+  of the active profile that changes the merged list sends ItemsChanged.
+  PutProfileItems and SetActiveProfile are root only (org.ruyaos.Caller "root"): the service
+  answers "not_allowed" to any caller whose Unix uid is not 0, and the bus policy denies them to
+  ruya-shell. In development (the session bus) the uid check is off, said once in the log.
+
+  Profile items document, JSON v1 (PutProfileItems `data`; what profile-scan prints):
+    {"version":1,"items":[{"appid":"<1-10 digits>","name":s,"last_played":x}, ...]}
+  The data comes from a reader that runs as the profile's user, so ruya-library checks it again:
+    - the whole document is refused ("invalid") when it is over 32 MiB, not JSON, not an object
+      with "version" 1 and an "items" array, or holds more than 4096 items;
+    - an item is dropped alone when its appid is not 1 to 10 ASCII digits, its name is missing or empty
+      (after control characters are stripped and the text is trimmed), or its last_played is
+      negative or not an integer (absent = 0);
+    - a name is cut at 120 characters; a repeated appid keeps its first item;
+    - "launch" is built by ruya-library ("steam://rungameid/<appid>"), never read from the document.
+  Unknown keys are ignored, at both levels. Reserved for later versions of the reader, ignored by
+  v1: "art" (an item's pictures, RUY-958) and "facts" (appinfo facts, RUY-1070).
   Contract between shell (Qt/QML) and services (Rust); see docs/specs/03-services-and-apps.md §5.
 
   Every record is an a{sv} dictionary, so fields can be added later without breaking clients
@@ -100,8 +127,10 @@
     "unknown"    no item with that id is installed
     "not_play"   the item is not a .play app (a Steam game, a plain Flatpak app, a play.* app from
                  another remote)
-    "invalid"    a malformed profile id or a choice that is not one of the three
+    "invalid"    a malformed profile id or a choice that is not one of the three; for
+                 PutProfileItems and SetActiveProfile a malformed profile id or a refused document
     "failed"     the choice could not be stored
+    "not_allowed" PutProfileItems or SetActiveProfile from a caller whose uid is not 0
 
   ResolveRunner's answer holds the six runner keys of the item record, for the choice asked for
   instead of the package's default: the launcher's own resolution with that runner argument
@@ -126,12 +155,45 @@
       <arg name="items" type="aa{sv}" direction="out"/>
     </method>
 
-    <!-- Read the library files and the Flatpak list again. Returns after the scan; ItemsChanged
-         follows if the list differs from before. -->
+    <!-- Read the Flatpak list again and ask for the active profile's Steam items again
+         (ProfileScanWanted, when a profile is active). Returns after the Flatpak scan;
+         ItemsChanged follows if the list differs from before. -->
     <method name="Rescan"/>
 
     <!-- The list changed; call ListItems again. -->
     <signal name="ItemsChanged"/>
+
+    <!-- Root only (ruya-session): the Steam items of `profile`, a JSON v1 document (above). The
+         profile's list is replaced by the document's items; ItemsChanged follows when `profile`
+         is ActiveProfile and the list differs. "ok", "invalid" (a malformed profile id or a
+         refused document: the profile's list is left as it was) or "not_allowed". -->
+    <method name="PutProfileItems">
+      <annotation name="org.ruyaos.Caller" value="root"/>
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="data" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Root only (ruya-session): the signed-in profile, "" for nobody. ActiveProfile changes
+         (PropertiesChanged) and ItemsChanged follows when the merged list differs. "ok",
+         "invalid" (not "" and not a profile id) or "not_allowed". -->
+    <method name="SetActiveProfile">
+      <annotation name="org.ruyaos.Caller" value="root"/>
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Whose view ListItems serves: the last SetActiveProfile, "" at start (nobody, until
+         ruya-session says). The shell hides Steam items while it is not the signed-in profile. -->
+    <property name="ActiveProfile" type="s" access="read">
+      <annotation name="org.freedesktop.DBus.Property.EmitsChangedSignal" value="true"/>
+    </property>
+
+    <!-- Rescan asks for `profile`'s Steam items again: ruya-session runs the profile's reader
+         and puts the result. -->
+    <signal name="ProfileScanWanted">
+      <arg name="profile" type="s"/>
+    </signal>
 
     <!-- The image's runners, in the order above. -->
     <method name="ListRunners">

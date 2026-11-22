@@ -15,25 +15,22 @@ Library::Library(std::unique_ptr<LibraryBackend> backend, QObject *parent)
 {
     connect(m_backend.get(), &LibraryBackend::itemsListed, this, [this](const QList<LibraryItem> &items) {
         // The contract orders by last played; sort again so the facade does not depend on it.
-        QList<LibraryItem> sorted = items;
-        std::stable_sort(sorted.begin(), sorted.end(),
+        m_listed = items;
+        std::stable_sort(m_listed.begin(), m_listed.end(),
                          [](const LibraryItem &a, const LibraryItem &b) { return a.lastPlayed > b.lastPlayed; });
-        m_items.clear();
-        m_games.clear();
-        m_recent.clear();
-        for (const LibraryItem &i : std::as_const(sorted)) {
-            const QVariantMap v = i.toVariant();
-            m_items.append(v);
-            if (i.kind == QLatin1String("game"))
-                m_games.append(v);
-            if (i.lastPlayed > 0 && m_recent.size() < RecentCount)
-                m_recent.append(v);
-        }
+        rebuild(true);
         if (!m_available) {
             m_available = true;
             emit availableChanged();
         }
-        emit itemsChanged();
+    });
+    // A list read before the change holds the previous profile's Steam items (the service's replies and
+    // its PropertiesChanged arrive in order): they leave at once, and the list is read again.
+    connect(m_backend.get(), &LibraryBackend::activeProfileChanged, this, [this] {
+        m_listed.removeIf([](const LibraryItem &i) { return i.source == QLatin1String("steam"); });
+        emit activeProfileChanged();
+        rebuild(false);
+        m_backend->listItems();
     });
     connect(m_backend.get(), &LibraryBackend::itemsChanged, this, [this] { m_backend->listItems(); });
     connect(m_backend.get(), &LibraryBackend::rescanFinished, this, &Library::rescanned);
@@ -98,6 +95,32 @@ void Library::setProfile(const QString &profile)
         return;
     m_profile = profile;
     emit profileChanged();
+    m_backend->profileSelected(profile);
+    rebuild(false);
+}
+
+void Library::rebuild(bool listed)
+{
+    const bool hideSteam = !m_profile.isEmpty() && m_backend->activeProfile() != m_profile;
+    QVariantList items;
+    QVariantList games;
+    QVariantList recent;
+    for (const LibraryItem &i : std::as_const(m_listed)) {
+        if (hideSteam && i.source == QLatin1String("steam"))
+            continue;
+        const QVariantMap v = i.toVariant();
+        items.append(v);
+        if (i.kind == QLatin1String("game"))
+            games.append(v);
+        if (i.lastPlayed > 0 && recent.size() < RecentCount)
+            recent.append(v);
+    }
+    if (!listed && items == m_items)
+        return;
+    m_items = items;
+    m_games = games;
+    m_recent = recent;
+    emit itemsChanged();
 }
 
 void Library::runnerChoice(const QString &id)

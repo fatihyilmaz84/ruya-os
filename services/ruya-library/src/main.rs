@@ -1,25 +1,50 @@
 //! ruya-library: serves org.ruyaos.Library1 on the system bus. With `--session` (development) it
 //! serves on the session bus and, off Linux or without Flatpak, lists a few demo apps.
 //!
-//! The Steam roots come from the home directory in `RUYA_LIBRARY_HOME` (else `HOME`). Pointing
-//! that at the active profile's user is a follow-up (needs the session service, T-130). The
-//! profiles' runner choices are kept in `RUYA_LIBRARY_STATE` (else /var/lib/ruyaos/library, or a
-//! folder in the temporary directory with `--session`).
+//! The service reads no home: the Steam items of each profile come from ruya-session
+//! (`PutProfileItems`, ADR-045), which runs this binary as `ruya-library profile-scan` as the
+//! profile's user. The profiles' runner choices are kept in `RUYA_LIBRARY_STATE` (else
+//! /var/lib/ruyaos/library, or a folder in the temporary directory with `--session`).
 
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use ruya_library::catalog::steam_roots;
 use ruya_library::dbus::{LibraryIface, Sources, BUS_NAME, OBJECT_PATH};
 use ruya_library::flatpak::{AppLister, FixtureLister};
 use ruya_library::watch::{fingerprint, Fingerprint, Watcher};
+use ruya_library::{profile_items, steam};
+
+/// The reader mode (ADR-045): run as the profile's user, it prints the JSON v1 document of the
+/// Steam games below `$HOME` and exits 0. It has no bus and writes nothing.
+const PROFILE_SCAN: &str = "profile-scan";
 
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some(PROFILE_SCAN) {
+        profile_scan();
+    }
     if let Err(err) = run() {
         eprintln!("ruya-library: fatal: {err}");
         std::process::exit(1);
     }
+}
+
+/// `ruya-library profile-scan`: the document on stdout, exit 0 (no home or no Steam is an empty
+/// list); exit 1 only when there is no `HOME` or stdout cannot be written.
+fn profile_scan() -> ! {
+    use std::io::Write;
+    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+        eprintln!("ruya-library: profile-scan: no HOME");
+        std::process::exit(1);
+    };
+    let games = steam::scan_home(&home);
+    let doc = profile_items::encode(&games);
+    let mut out = std::io::stdout().lock();
+    if let Err(err) = out.write_all(doc.as_bytes()).and_then(|()| out.flush()) {
+        eprintln!("ruya-library: profile-scan: {err}");
+        std::process::exit(1);
+    }
+    std::process::exit(0)
 }
 
 const DEMO_FLATPAK: &str =
@@ -46,16 +71,12 @@ fn lister(session: bool) -> Box<dyn AppLister> {
 
 fn run() -> Result<(), Box<dyn Error>> {
     let session = std::env::args().any(|a| a == "--session");
-    let home = std::env::var_os("RUYA_LIBRARY_HOME")
-        .or_else(|| std::env::var_os("HOME"))
-        .map(PathBuf::from);
     // Looked at before the first scan, so an install in between is seen by the watcher.
     let root = std::env::var_os("RUYA_FLATPAK_ROOT")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(FLATPAK_ROOT));
     let baseline = fingerprint(&root);
     let sources = Sources {
-        steam_roots: home.as_deref().map(steam_roots).unwrap_or_default(),
         lister: lister(session),
         play_root: root.clone(),
         play_runners: PathBuf::from(ruya_library::play::RUNNERS_DIR),
@@ -71,6 +92,12 @@ fn run() -> Result<(), Box<dyn Error>> {
         ),
     };
     let iface = LibraryIface::new(sources);
+    // Nothing on the session bus is root: the uid check of the root-only calls is off (logged).
+    let iface = if session {
+        iface.without_caller_check()
+    } else {
+        iface
+    };
 
     futures_lite::future::block_on(async {
         let builder = if session {

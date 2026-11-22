@@ -7,6 +7,12 @@
 #include <QTimer>
 
 namespace {
+// Steam items are per profile (ADR-045). The mock's three profiles (Player One, Ada, Sam) have the default
+// Steam games, which the shell's tests sign in for; a profile made later (p4 on) has none.
+const QStringList SteamProfiles = {QStringLiteral("p1"), QStringLiteral("p2"), QStringLiteral("p3")};
+// Whose view the mock serves at start and after every reset.
+const QString StartProfile = QStringLiteral("p1");
+
 LibraryItem item(const char *id, const char *kind, const char *title, qlonglong lastPlayed)
 {
     LibraryItem i;
@@ -188,6 +194,12 @@ void MockLibraryBackend::setResolution(const QString &id, const QString &choice,
 void MockLibraryBackend::reset(const QString &scenario)
 {
     m_items.clear();
+    // Every scenario starts with Player One active again (the mock's start), whatever was selected before.
+    ++m_follow;
+    if (m_active != StartProfile) {
+        m_active = StartProfile;
+        emit activeProfileChanged(m_active);
+    }
     // Every scenario has the image's pinned runner and no stored runner choice (RUY-959), and every
     // runner call answers (RUY-905).
     m_runners = pinnedRunners();
@@ -320,11 +332,37 @@ void MockLibraryBackend::listItems()
     listItemsDelayed(0);
 }
 
+QList<LibraryItem> MockLibraryBackend::visibleItems() const
+{
+    if (SteamProfiles.contains(m_active))
+        return m_items;
+    QList<LibraryItem> out;
+    for (const LibraryItem &i : m_items) {
+        if (i.source != QLatin1String("steam"))
+            out.append(i);
+    }
+    return out;
+}
+
+void MockLibraryBackend::profileSelected(const QString &profile)
+{
+    // As ruya-session: SetActiveProfile after the switch, then ItemsChanged when the list differs.
+    QTimer::singleShot(0, this, [this, profile, follow = m_follow] {
+        if (follow != m_follow || profile == m_active)
+            return; // reset since, or nothing to change
+        const bool before = SteamProfiles.contains(m_active);
+        m_active = profile;
+        emit activeProfileChanged(profile);
+        if (before != SteamProfiles.contains(m_active))
+            emit itemsChanged();
+    });
+}
+
 void MockLibraryBackend::listItemsDelayed(int ms)
 {
     const quint64 request = beginListRequest();
     ++m_pending;
-    QTimer::singleShot(ms, this, [this, request, snapshot = m_items] {
+    QTimer::singleShot(ms, this, [this, request, snapshot = visibleItems()] {
         --m_pending;
         deliverList(request, snapshot);
     });

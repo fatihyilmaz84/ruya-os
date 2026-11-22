@@ -6,12 +6,13 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use async_channel::Receiver;
+use async_channel::{Receiver, Sender};
 use zbus::object_server::SignalEmitter;
 use zbus::zvariant::{OwnedValue, Value};
 use zbus::{interface, Connection, MatchRule, MessageStream};
 
 use crate::directory::{profile_ids, ProfileDirectory, ProfileRow, ProfileSnapshot};
+use crate::profile_scan::Trigger;
 use crate::runner_choice::runner_args_from_library;
 use crate::session::{ExitReason, FrozenChange, Notice, RunningApp, Session, Status};
 use crate::spawner::{flatpak_app_version, Listing, Spawner, UnitEvent};
@@ -811,8 +812,14 @@ const PROFILES_NAME: &str = "org.ruyaos.Profiles1";
 /// it changed, the apps of the profile that left are frozen (`Session::profile_changed`) and
 /// announced (`FrozenChanged`). This covers a switch from the Hub or the picker, a sign-out and
 /// the idle lock alike. The signal is only the trigger: the value is read in the freezer's turn
-/// (`follow_active`). Runs forever.
-pub async fn watch_active_profile(connection: Connection, session: Shared, turn: FreezerTurn) {
+/// (`follow_active`). Every change, the first value included, also goes to the Steam reader's
+/// planner (`scans`, RUY-1056), which tells Library1. Runs forever.
+pub async fn watch_active_profile(
+    connection: Connection,
+    session: Shared,
+    turn: FreezerTurn,
+    scans: Option<Sender<Trigger>>,
+) {
     let signals = MatchRule::builder()
         .msg_type(zbus::message::Type::Signal)
         .sender(PROFILES_NAME)
@@ -860,7 +867,13 @@ pub async fn watch_active_profile(connection: Connection, session: Shared, turn:
                 emit_frozen(iface.signal_emitter(), changes).await;
             }
         };
+        let before = last.clone();
         follow_active(&session, &turn, &mut last, read, emit).await;
+        if let (Some(scans), Some(active)) = (&scans, &last) {
+            if before.as_ref() != Some(active) {
+                let _ = scans.try_send(Trigger::Active(active.clone()));
+            }
+        }
         if futures_lite::StreamExt::next(&mut stream).await.is_none() {
             return eprintln!(
                 "ruya-session: the bus closed, the signed-in profile is not followed"
@@ -972,7 +985,8 @@ async fn send_usage_changed(connection: &Connection, profiles: Vec<String>) {
 
 /// Feeds the OS events into the core and sends the resulting signals, in order; once a second it
 /// lets the core kill apps that ignored `Stop` and counts play time (`usage`); once a minute, in
-/// system mode, it deletes the usage data of profiles that no longer exist. Runs forever.
+/// system mode, it deletes the usage data of profiles that no longer exist. Every end goes to the
+/// Steam reader's planner too (`scans`, system mode on Linux; `profile_scan.rs`). Runs forever.
 pub async fn forward(
     connection: Connection,
     session: Shared,
@@ -980,6 +994,7 @@ pub async fn forward(
     system: bool,
     turn: FreezerTurn,
     events: Receiver<UnitEvent>,
+    scans: Option<Sender<Trigger>>,
 ) {
     let ticks = async_io::Timer::interval(Duration::from_secs(1));
     let tick_loop = async {
@@ -1036,6 +1051,13 @@ pub async fn forward(
                         unix_now(),
                     ),
                 };
+                // A profile's Steam client that ended may have changed its games (RUY-1056).
+                if let (Some(scans), Notice::Exited { profile, item, .. }) = (&scans, &notice) {
+                    let _ = scans.try_send(Trigger::Ended {
+                        profile: profile.clone(),
+                        item: item.clone(),
+                    });
+                }
                 let sent = async {
                     let iface = connection
                         .object_server()
@@ -1051,6 +1073,7 @@ pub async fn forward(
                             app_id,
                             exit_code,
                             reason,
+                            ..
                         } => {
                             SessionIface::app_exited(
                                 emitter,

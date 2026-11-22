@@ -12,6 +12,7 @@ use ruya_session::dbus::{
     SharedUsage, BUS_NAME, OBJECT_PATH,
 };
 use ruya_session::directory::ProfileSnapshot;
+use ruya_session::profile_scan::Trigger;
 use ruya_session::session::Session;
 use ruya_session::spawner::{console_env, FakeSpawner, UnitEvent, PULSE_DIR, WAYLAND_DIR};
 use ruya_session::usage::SystemZone;
@@ -88,6 +89,26 @@ async fn follow_shutdowns_of(connection: &zbus::Connection, session: &Shared, sy
 #[cfg(not(target_os = "linux"))]
 async fn follow_shutdowns_of(_connection: &zbus::Connection, _session: &Shared, _system: bool) {}
 
+/// Each profile's Steam items into Library1 (ADR-045, RUY-1056): system mode only, where the
+/// reader runs in the profile's manager.
+#[cfg(target_os = "linux")]
+async fn feed_library_of(
+    connection: &zbus::Connection,
+    scans: Option<(Sender<Trigger>, Receiver<Trigger>)>,
+) {
+    if let Some((tx, rx)) = scans {
+        ruya_session::library_feed::feed_library(connection.clone(), rx, tx).await;
+    }
+}
+
+/// The reader needs a profile's systemd manager: Linux only.
+#[cfg(not(target_os = "linux"))]
+async fn feed_library_of(
+    _connection: &zbus::Connection,
+    _scans: Option<(Sender<Trigger>, Receiver<Trigger>)>,
+) {
+}
+
 #[cfg(target_os = "linux")]
 fn system_spawner(events: Sender<UnitEvent>) -> Result<DynSpawner, Box<dyn Error>> {
     Ok(Box::new(ruya_session::systemd::SystemdSpawner::new(events)))
@@ -148,6 +169,9 @@ fn run() -> Result<(), Box<dyn Error>> {
         std::path::PathBuf::from,
     );
     let tracker = Tracker::new(FileStore::new(usage_dir), SystemZone);
+    // The Steam reader's triggers (`profile_scan.rs`): system mode only.
+    let scans: Option<(Sender<Trigger>, Receiver<Trigger>)> = (!dev).then(async_channel::unbounded);
+    let scan_tx = scans.as_ref().map(|(tx, _)| tx.clone());
     let usage: SharedUsage = Arc::new(Mutex::new(tracker));
 
     futures_lite::future::block_on(async {
@@ -174,13 +198,17 @@ fn run() -> Result<(), Box<dyn Error>> {
                     !dev,
                     turn.clone(),
                     rx,
+                    scan_tx.clone(),
                 ),
                 adopt_late(&connection, &session, &usage, !dev, settled),
             ),
             futures_lite::future::zip(
-                watch_active_profile(connection.clone(), session.clone(), turn),
-                // Before the system goes down, every app quits (RUY-888; logind, system mode).
-                follow_shutdowns_of(&connection, &session, !dev),
+                watch_active_profile(connection.clone(), session.clone(), turn, scan_tx),
+                futures_lite::future::zip(
+                    // Before the system goes down, every app quits (RUY-888; logind, system mode).
+                    follow_shutdowns_of(&connection, &session, !dev),
+                    feed_library_of(&connection, scans),
+                ),
             ),
         )
         .await;

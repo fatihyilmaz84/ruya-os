@@ -22,7 +22,7 @@ pub const DEFAULT_CHOICE: &str = "package";
 /// More than this in a profile's file is read as garbled (a choice is a few dozen bytes).
 const MAX_FILE_BYTES: u64 = 256 * 1024;
 
-/// The answer of a choice call (Library1 status strings).
+/// The answer of a choice call, and of the root-only calls (Library1 status strings).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
     Ok,
@@ -34,6 +34,8 @@ pub enum Status {
     Invalid,
     /// The choice could not be stored.
     Failed,
+    /// A root-only call (PutProfileItems, SetActiveProfile) from a caller whose uid is not 0.
+    NotAllowed,
 }
 
 impl Status {
@@ -44,6 +46,7 @@ impl Status {
             Status::NotPlay => "not_play",
             Status::Invalid => "invalid",
             Status::Failed => "failed",
+            Status::NotAllowed => "not_allowed",
         }
     }
 }

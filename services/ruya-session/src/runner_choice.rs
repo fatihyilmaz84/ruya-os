@@ -87,11 +87,13 @@ pub async fn ask_library(
         .deserialize()
 }
 
-/// The answer of `call`, or an error sentence when it fails or takes longer than `limit`.
-pub async fn ask_within(
+/// The answer of `call`, or an error sentence when it fails or takes longer than `limit` (every
+/// call this service makes to Library1: GetRunnerChoice here, the Steam reader's calls in
+/// `library_feed.rs`).
+pub async fn ask_within<T>(
     limit: Duration,
-    call: impl Future<Output = zbus::Result<(String, String)>>,
-) -> Result<(String, String), String> {
+    call: impl Future<Output = zbus::Result<T>>,
+) -> Result<T, String> {
     futures_lite::future::or(async { Some(call.await) }, async {
         async_io::Timer::after(limit).await;
         None
@@ -257,7 +259,7 @@ mod tests {
     #[test]
     fn a_bus_error_is_a_sentence() {
         let got = block_on(ask_within(Duration::from_secs(5), async {
-            Err(zbus::Error::Failure("ServiceUnknown".to_owned()))
+            Err::<(String, String), _>(zbus::Error::Failure("ServiceUnknown".to_owned()))
         }));
         assert!(got.unwrap_err().contains("ServiceUnknown"));
     }

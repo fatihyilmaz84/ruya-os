@@ -8,6 +8,7 @@ use ruya_contract_test::{
 use ruya_library::catalog::scan;
 use ruya_library::dbus::{record, resolution_record, runner_record, LibraryIface, Sources};
 use ruya_library::flatpak::FixtureLister;
+use ruya_library::profile_items::{self, Game};
 use ruya_library::runners::{Resolution, Runner};
 
 mod common;
@@ -16,7 +17,6 @@ use common::{full_deployment, FULL_ROW};
 #[test]
 fn library1_matches_the_contract() {
     let iface = LibraryIface::new(Sources {
-        steam_roots: Vec::new(),
         lister: Box::new(FixtureLister::new("")),
         play_root: std::path::PathBuf::from("/nonexistent"),
         play_runners: std::path::PathBuf::from("/nonexistent"),
@@ -33,14 +33,19 @@ fn library1_matches_the_contract() {
 fn library1_item_records_have_the_documented_keys() {
     let dir = tempfile::tempdir().unwrap();
     full_deployment(dir.path());
-    let steam = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/steam");
     let rows = format!("org.example.App\tApp\tflathub\n{FULL_ROW}");
     let mut items = scan(
-        &[steam],
         &FixtureLister::new(&rows),
         dir.path(),
         &dir.path().join("runners"),
     );
+    // A Steam game as PutProfileItems takes it in (RUY-1056): the reader's document, decoded.
+    let steam = profile_items::encode(&[Game {
+        appid: "220".into(),
+        name: "Turbo Racer".into(),
+        last_played: 1_700_000_000,
+    }]);
+    items.extend(profile_items::decode(&steam).unwrap());
     // The runner keys come from the launcher's resolution, which only Linux runs on a real folder
     // (play.rs tests the mapping): one sample that resolves and one that is refused serve them on
     // every host.

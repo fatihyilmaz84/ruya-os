@@ -1,10 +1,9 @@
 //! The merged library: Steam games and Flatpak apps in one deterministic order.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::flatpak::{self, AppLister};
 use crate::play::{self, PlayInfo};
-use crate::steam;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
@@ -66,22 +65,22 @@ pub fn merge(steam: Vec<Item>, flatpak: Vec<Item>) -> Vec<Item> {
     items
 }
 
-/// Reads every Steam root and the Flatpak list. A failing part contributes nothing (and is
-/// logged): the library of the other source still shows.
-pub fn scan(
-    steam_roots: &[PathBuf],
-    lister: &dyn AppLister,
-    play_root: &Path,
-    runners_dir: &Path,
-) -> Vec<Item> {
-    let mut steam_items: Vec<Item> = Vec::new();
-    for root in steam_roots {
-        for item in steam::scan_root(root) {
-            if !steam_items.iter().any(|i| i.id == item.id) {
-                steam_items.push(item);
-            }
-        }
-    }
+/// The most characters a title from a file this service does not control keeps (a `.play` app's
+/// `play.json`, a profile's Steam item).
+pub const MAX_TEXT_CHARS: usize = 120;
+
+/// Text from a file this service does not control, as an item shows it: control characters
+/// stripped, trimmed, cut at `MAX_TEXT_CHARS`; `None` when nothing is left.
+pub fn clip(s: &str) -> Option<String> {
+    let clean: String = s.chars().filter(|c| !c.is_control()).collect();
+    let clean = clean.trim();
+    (!clean.is_empty()).then(|| clean.chars().take(MAX_TEXT_CHARS).collect())
+}
+
+/// The Flatpak items of the system installation (a `.play` app with its extra keys), in the
+/// order of `merge`. A failing lister gives nothing (and is logged). The Steam items are per
+/// profile and come in through `PutProfileItems` (ADR-045, `view.rs`): this service reads no home.
+pub fn scan(lister: &dyn AppLister, play_root: &Path, runners_dir: &Path) -> Vec<Item> {
     let flatpak_items = match lister.list() {
         Ok(text) => {
             let mut items = flatpak::parse_list(&text, lister);
@@ -103,15 +102,7 @@ pub fn scan(
             Vec::new()
         }
     };
-    merge(steam_items, flatpak_items)
-}
-
-/// Steam roots under a home directory (spec 03 §5): native Steam and the Flatpak Steam.
-pub fn steam_roots(home: &std::path::Path) -> Vec<PathBuf> {
-    vec![
-        home.join(".local/share/Steam"),
-        home.join(".var/app/com.valvesoftware.Steam/.local/share/Steam"),
-    ]
+    merge(Vec::new(), flatpak_items)
 }
 
 #[cfg(test)]
@@ -163,59 +154,37 @@ mod tests {
     }
 
     #[test]
-    fn scan_merges_both_sources_and_survives_a_failing_lister() {
+    fn scan_lists_the_flatpak_apps_and_survives_a_failing_lister() {
         struct Broken;
         impl AppLister for Broken {
             fn list(&self) -> Result<String, String> {
                 Err("no flatpak".into())
             }
         }
-        let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().join("Steam");
-        std::fs::create_dir_all(root.join("steamapps")).unwrap();
-        std::fs::write(
-            root.join("steamapps/appmanifest_5.acf"),
-            "\"AppState\" { \"appid\" \"5\" \"name\" \"Five\" \"StateFlags\" \"4\" }",
-        )
-        .unwrap();
-        let roots = vec![root.clone(), root];
         let lister = FixtureLister::new("a.b.C\tCee\tflathub\nd.e.Game\tTux\tflathub\n")
             .with_desktop("d.e.Game", "[Desktop Entry]\nCategories=Game;\n");
-        let both = scan(
-            &roots,
-            &lister,
-            Path::new("/nonexistent"),
-            Path::new("/nonexistent"),
-        );
+        let none = Path::new("/nonexistent");
+        let kinds: Vec<(String, Kind)> = scan(&lister, none, none)
+            .into_iter()
+            .map(|i| (i.id, i.kind))
+            .collect();
         assert_eq!(
-            both.len(),
-            3,
-            "the same root twice lists a game once: {both:?}"
+            kinds,
+            [
+                ("flatpak:a.b.C".to_owned(), Kind::App),
+                ("flatpak:d.e.Game".to_owned(), Kind::Game)
+            ]
         );
-        let kinds: Vec<(&str, Kind)> = both.iter().map(|i| (i.id.as_str(), i.kind)).collect();
-        assert!(
-            kinds.contains(&("flatpak:d.e.Game", Kind::Game)),
-            "{kinds:?}"
-        );
-        assert!(kinds.contains(&("flatpak:a.b.C", Kind::App)), "{kinds:?}");
-        assert_eq!(
-            scan(
-                &roots,
-                &Broken,
-                Path::new("/nonexistent"),
-                Path::new("/nonexistent")
-            )
-            .len(),
-            1
-        );
+        assert!(scan(&Broken, none, none).is_empty());
     }
 
     #[test]
-    fn steam_roots_are_native_then_flatpak() {
-        let roots = steam_roots(std::path::Path::new("/home/p"));
-        assert!(roots[0].ends_with(".local/share/Steam"));
-        assert!(roots[1]
-            .to_string_lossy()
-            .contains("com.valvesoftware.Steam"));
+    fn clip_strips_control_characters_trims_and_cuts() {
+        assert_eq!(clip("  a\u{7}b\nc  ").as_deref(), Some("abc"));
+        assert_eq!(clip(" \t\n "), None);
+        assert_eq!(
+            clip(&"\u{e9}".repeat(130)).unwrap().chars().count(),
+            MAX_TEXT_CHARS
+        );
     }
 }

@@ -4,6 +4,11 @@
 
 // In-memory library: ten items (Steam and Flatpak, games and apps, varied last_played), in the
 // order of the contract. The scenario "empty" has no item. rescan() answers and changes nothing.
+// Steam items are per profile (ADR-045): the mock's three profiles (p1 Player One, p2 Ada, p3 Sam) have
+// the Steam games, a profile made later (p4 on) has none, and nobody ("") has none. The mock plays
+// ruya-session: it follows profileSelected one event-loop turn later (ActiveProfile changes, then
+// itemsChanged when the visible list differs). It starts with "p1" active, and every reset() goes back to
+// that, so a test without a signed-in Shell sees the Steam items.
 class MockLibraryBackend final : public LibraryBackend
 {
     Q_OBJECT
@@ -26,6 +31,8 @@ public:
     void getRunnerChoice(const QString &profile, const QString &id) override;
     void setRunnerChoice(const QString &profile, const QString &id, const QString &choice) override;
     void resolveRunner(const QString &id, const QString &choice) override;
+    QString activeProfile() const override { return m_active; }
+    void profileSelected(const QString &profile) override;
     // Tests only: the runners ListRunners answers from now on, and a ListRunners reply after ms.
     void setRunners(const QList<LibraryRunner> &runners) { m_runners = runners; }
     void listRunnersDelayed(int ms);
@@ -51,7 +58,12 @@ private:
     // The Library1 status of a choice call for id ("ok" when it is a .play item).
     QString choiceStatus(const QString &profile, const QString &id) const;
 
-    QList<LibraryItem> m_items;
+    // The list ListItems answers now: Steam items only while the active profile has them.
+    QList<LibraryItem> visibleItems() const;
+
+    QList<LibraryItem> m_items; // every installed item, Steam ones included
+    QString m_active = QStringLiteral("p1"); // Library1 ActiveProfile
+    quint64 m_follow = 0;                    // profileSelected follows only if no reset came since
     QList<LibraryRunner> m_runners;
     QMap<QString, QMap<QString, QString>> m_choices; // profile -> item id -> choice
     QMap<QString, QMap<QString, LibraryResolution>> m_resolutions; // item id -> choice -> answer

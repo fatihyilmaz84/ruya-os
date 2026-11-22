@@ -3,6 +3,7 @@
 #include <QDBusArgument>
 #include <QDBusMessage>
 #include <QDBusPendingCallWatcher>
+#include <QDBusPendingReply>
 #include <QDBusVariant>
 
 #include <utility>
@@ -11,6 +12,8 @@ namespace {
 const QString Service = QStringLiteral("org.ruyaos.Library1");
 const QString Path = QStringLiteral("/org/ruyaos/Library1");
 const QString Interface = QStringLiteral("org.ruyaos.Library1");
+const QString PropertiesInterface = QStringLiteral("org.freedesktop.DBus.Properties");
+const QString ActiveProfile = QStringLiteral("ActiveProfile");
 
 QDBusConnection chooseBus()
 {
@@ -135,12 +138,48 @@ DBusLibraryBackend::DBusLibraryBackend(QObject *parent)
     , m_watcher(Service, m_bus, QDBusServiceWatcher::WatchForRegistration, this)
 {
     connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] {
+        fetchActive();
         listItems();
         listRunners();
     });
     m_bus.connect(Service, Path, Interface, QStringLiteral("ItemsChanged"), this, SIGNAL(itemsChanged()));
     m_bus.connect(Service, Path, Interface, QStringLiteral("RunnerChoiceChanged"), this,
                   SIGNAL(runnerChoiceChanged(QString, QString, QString)));
+    m_bus.connect(Service, Path, PropertiesInterface, QStringLiteral("PropertiesChanged"), this,
+                  SLOT(onPropertiesChanged(QString, QVariantMap, QStringList)));
+    fetchActive();
+}
+
+void DBusLibraryBackend::fetchActive()
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, PropertiesInterface, QStringLiteral("Get"));
+    msg << Interface << ActiveProfile;
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        QDBusPendingReply<QDBusVariant> reply = *w;
+        if (reply.isValid())
+            setActive(reply.value().variant().toString());
+    });
+}
+
+void DBusLibraryBackend::setActive(const QString &profile)
+{
+    if (profile == m_activeProfile)
+        return;
+    m_activeProfile = profile;
+    emit activeProfileChanged(profile);
+}
+
+void DBusLibraryBackend::onPropertiesChanged(const QString &interface, const QVariantMap &changed,
+                                             const QStringList &invalidated)
+{
+    if (interface != Interface)
+        return;
+    if (changed.contains(ActiveProfile))
+        setActive(changed.value(ActiveProfile).toString());
+    else if (invalidated.contains(ActiveProfile))
+        fetchActive();
 }
 
 void DBusLibraryBackend::call(const QString &method, const QVariantList &args, int outArgs, Answer done)
