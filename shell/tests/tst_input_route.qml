@@ -31,6 +31,18 @@ Item {
         }
     }
 
+    // A window of a client that names no app id and whose process Session1 has not answered for yet
+    // (xwayland-satellite's placeholder window, RUY-1040).
+    Component {
+        id: pidWindowComponent
+        Item {
+            objectName: "standInPidWindow"
+            property string appId: ""
+            property int pid: 0
+            Keys.onPressed: event => event.accepted = true
+        }
+    }
+
     SignalSpy { id: launchedSpy; target: Session; signalName: "launchFinished" }
     SignalSpy { id: preparedSpy; target: Input; signalName: "padsPrepared" }
 
@@ -587,6 +599,30 @@ Item {
             tryVerify(() => find("systemActions").activeFocus, 2000, "the Hub has the focus")
             tryVerify(() => Input.route === "overlay", 2000, "the route is overlay")
             checkCalls()
+        }
+
+        // A window whose pid lookup has not answered is routed to the instance the route falls back to,
+        // and the window gap resolves it the same way: removing it before the answer leaves "overlay"
+        // with the instance, never "shell", which would destroy the game's pads (RUY-1040).
+        function test_a_window_removed_before_its_pid_answer_leaves_the_gap_not_shell() {
+            start()
+            signIn(1, "p2")
+            const run = playRacer()
+            tc.shell.removeApp(run.app)
+            tryVerify(() => Input.route === "overlay" && Input.instance === run.instance, 2000, "the gap holds the instance")
+            Session.mockDelayPidAnswers(60000)
+            Input.mockClearCalls()
+            const early = createTemporaryObject(pidWindowComponent, host, { pid: Session.mockPidOf(run.instance) })
+            tc.shell.addApp(early, "p2")
+            tryVerify(() => Input.route === "app" && Input.instance === run.instance, 2000, "the pending window is routed app")
+            tc.shell.removeApp(early)
+            tryVerify(() => Input.route === "overlay" && Input.instance === run.instance, 2000, "removed before the answer: the gap")
+            const routes = Input.mockCalls().map(c => c.route)
+            verify(!routes.includes("shell"), "no shell route was sent: " + routes)
+            const next = createTemporaryObject(pidWindowComponent, host, { pid: Session.mockPidOf(run.instance) })
+            tc.shell.addApp(next, "p2")
+            tryVerify(() => Input.route === "app" && Input.instance === run.instance, 2000, "a second window gives app again")
+            Session.mockDelayPidAnswers(0)
         }
     }
 }
