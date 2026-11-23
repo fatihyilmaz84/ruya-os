@@ -4,8 +4,10 @@ import RuyaShell
 // One device's battery in the status cluster (T-223, 02 §1.1, 04 §3.7): the icon of the device's
 // kind, a battery glyph that matches the level, and the percentage. Looked up by `deviceId` in
 // Batteries.devices, so the chip stays put while the level changes. Never focusable; the
-// accessible name says device and level. Warning colour while the device is discharging at 15 %
-// or less (Batteries' `low`).
+// accessible name says device and level. Flat on the page (RUY-1109, 04 §5.5): the icons are `text`; while the
+// device is discharging at 15 % or less (Batteries' `low`) the glyph turns to `battery_alert` and the number to
+// `warningText`, so it is never colour alone. A coarse battery (`levelOnly`, RUY-935) shows the kind icon and the
+// level glyph and no number; its accessible name still says the level, in words.
 Row {
     id: chip
 
@@ -45,12 +47,17 @@ Row {
     readonly property string kindIcon: DeviceIcons.iconFor(chip.device.kind ?? "", chip.device.family ?? "",
                                                            chip.device.model ?? "")
     readonly property string levelIcon: levelIconFor(percent, chargeState, low)
-    readonly property color tone: low ? Theme.warningText : Theme.text
+    // A battery that only reports a coarse level (RUY-935: the device says so with `levelOnly`): no number is drawn.
+    property bool levelOnly: chip.device.levelOnly ?? false
+    // The level in words for the accessible name of a level-only chip.
+    readonly property string levelWord: percent >= 79 ? qsTr("full") : percent >= 51 ? qsTr("high")
+                                      : percent >= 22 ? qsTr("medium") : percent >= 8 ? qsTr("low") : qsTr("empty")
 
     spacing: Theme.spaceXs * chip.u
 
     Accessible.role: Accessible.StaticText
-    Accessible.name: low ? qsTr("%1 battery %2 percent, low").arg(deviceName).arg(percent)
+    Accessible.name: levelOnly ? qsTr("%1 battery level %2").arg(deviceName).arg(levelWord)
+                   : low ? qsTr("%1 battery %2 percent, low").arg(deviceName).arg(percent)
                    : chargeState === "charging" ? qsTr("%1 battery %2 percent, charging").arg(deviceName).arg(percent)
                    : qsTr("%1 battery %2 percent").arg(deviceName).arg(percent)
 
@@ -59,20 +66,21 @@ Row {
         anchors.verticalCenter: parent.verticalCenter
         u: chip.u
         name: chip.kindIcon
-        color: chip.tone
+        color: Theme.text
     }
     Icon {
         objectName: "batteryLevelIcon"
         anchors.verticalCenter: parent.verticalCenter
         u: chip.u
         name: chip.levelIcon
-        color: chip.tone
+        color: Theme.text
     }
     Text {
         objectName: "batteryPercent"
+        visible: !chip.levelOnly
         anchors.verticalCenter: parent.verticalCenter
         text: chip.percent + "%"
-        color: chip.tone
+        color: chip.low ? Theme.warningText : Theme.text
         font.pixelSize: Theme.typeBody * chip.u
     }
 }

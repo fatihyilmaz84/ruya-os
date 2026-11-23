@@ -1018,6 +1018,36 @@ Bu geri alınamaz.</translation>
     <name>BatteryChip</name>
     <message>
         <location filename="../qml/BatteryChip.qml" line="+53"/>
+        <source>full</source>
+        <translation>dolu</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>high</source>
+        <translation>yüksek</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>medium</source>
+        <translation>orta</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>low</source>
+        <translation>düşük</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>empty</source>
+        <translation>boş</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>%1 battery level %2</source>
+        <translation>%1 pil düzeyi: %2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>%1 battery %2 percent, low</source>
         <translation>%1 pili yüzde %2, düşük</translation>
     </message>
@@ -1055,7 +1085,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>BatteryMore</name>
     <message numerus="yes">
-        <location filename="../qml/BatteryMore.qml" line="+34"/>
+        <location filename="../qml/BatteryMore.qml" line="+35"/>
         <source>%n more device(s) with a battery: %1</source>
         <translation>
             <numerusform>Pili olan %n cihaz daha: %1</numerusform>
@@ -1067,7 +1097,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 yüzde %2</translation>
     </message>
     <message numerus="yes">
-        <location line="+46"/>
+        <location line="+49"/>
         <source>%n more</source>
         <translation>
             <numerusform>%n tane daha</numerusform>
@@ -3112,7 +3142,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>HubPause</name>
     <message>
-        <location filename="../qml/HubPause.qml" line="+132"/>
+        <location filename="../qml/HubPause.qml" line="+141"/>
         <source>Could not resume the game. Open Ruya Hub and choose Resume.</source>
         <translation>Oyun sürdürülemedi. Ruya Hub&apos;ı açıp Devam et&apos;i seçin.</translation>
     </message>
@@ -3412,7 +3442,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ManageProfilesPane</name>
     <message>
-        <location filename="../qml/ManageProfilesPane.qml" line="+162"/>
+        <location filename="../qml/ManageProfilesPane.qml" line="+165"/>
         <source>Your own profile is under My profile.</source>
         <translation>Kendi profiliniz Profilim bölümünde.</translation>
     </message>
@@ -3447,7 +3477,7 @@ Bu geri alınamaz.</translation>
         <translation>Siz</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+21"/>
         <source>Add profile</source>
         <translation>Profil ekle</translation>
     </message>
@@ -3749,7 +3779,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>NotificationBell</name>
     <message numerus="yes">
-        <location filename="../qml/NotificationBell.qml" line="+33"/>
+        <location filename="../qml/NotificationBell.qml" line="+37"/>
         <source>Notifications, %n unread, quiet mode on</source>
         <translation>
             <numerusform>Bildirimler, %n okunmamış, sessiz mod açık</numerusform>
@@ -5834,12 +5864,13 @@ Bu geri alınamaz.</translation>
 <context>
     <name>SettingsPane</name>
     <message>
-        <location filename="../qml/SettingsPane.qml" line="+19"/>
+        <location filename="../qml/SettingsPane.qml" line="+20"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
         <location line="+0"/>
+        <location line="+1"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -6015,7 +6046,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+755"/>
+        <location filename="../qml/Shell.qml" line="+770"/>
         <source>Could not %1.</source>
         <translation>%1 işlemi yapılamadı.</translation>
     </message>
@@ -6073,7 +6104,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 beklenmedik şekilde durdu</translation>
     </message>
     <message>
-        <location line="+149"/>
+        <location line="+150"/>
         <location line="+29"/>
         <source>Could not close %1.</source>
         <translation>%1 kapatılamadı.</translation>
@@ -6114,7 +6145,7 @@ Bu geri alınamaz.</translation>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+374"/>
+        <location line="+401"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -6206,13 +6237,18 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+530"/>
-        <location line="+11"/>
+        <location line="+14"/>
         <location line="+4"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
     <message>
-        <location line="-3"/>
+        <location line="-16"/>
+        <source>Open</source>
+        <translation>Aç</translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>Options</source>
         <translation>Seçenekler</translation>
     </message>
@@ -6222,12 +6258,12 @@ Bu geri alınamaz.</translation>
         <translation>Seçilen ses teması kullanılamıyor. Bunun yerine standart tema çalıyor.</translation>
     </message>
     <message>
-        <location line="-250"/>
+        <location line="-253"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1945"/>
+        <location line="-1973"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -6252,13 +6288,14 @@ Bu geri alınamaz.</translation>
         <translation>Oyun kapatılamadı. Tekrar dene.</translation>
     </message>
     <message>
-        <location line="+62"/>
+        <location line="+63"/>
         <location line="+108"/>
         <source>Running app</source>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1676"/>
+        <location line="+1693"/>
+        <location line="+13"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Bölümler</translation>

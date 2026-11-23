@@ -102,7 +102,7 @@ Item {
             verify(inChip("pad-1", "batteryLevelIcon").known, "the level glyph is in the icon table")
             compare(find("batteryMore").visible, false, "no +N for one device")
             // Centred in the pill, like the clock.
-            const pill = find("statusGlass")
+            const pill = find("statusTray")
             const mid = status.mapToItem(pill, 0, status.height / 2).y
             verify(Math.abs(mid - pill.height / 2) < 2, "centred in the status cluster: " + mid)
             verify(find("homePlay").activeFocus, "the battery never takes focus")
@@ -177,8 +177,9 @@ Item {
             compare(inChip("pad-1", "batteryPercent").color, Theme.text)
             Batteries.mockSet("pad-1", 15)
             tryCompare(inChip("pad-1", "batteryLevelIcon"), "name", "battery_alert")
-            compare(inChip("pad-1", "batteryLevelIcon").color, Theme.warningText)
-            compare(inChip("pad-1", "batteryKindIcon").color, Theme.warningText)
+            // Flat tray (RUY-1109): the glyph carries the state, the icons stay `text`, only the number is `warningText`.
+            compare(inChip("pad-1", "batteryLevelIcon").color, Theme.text)
+            compare(inChip("pad-1", "batteryKindIcon").color, Theme.text)
             compare(inChip("pad-1", "batteryPercent").color, Theme.warningText)
             compare(chip("pad-1").Accessible.name, "Ruya Pad Pro battery 15 percent, low")
             Batteries.mockSet("pad-1", 9, "charging")

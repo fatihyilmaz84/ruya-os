@@ -81,7 +81,7 @@ Item {
             return d
         }
 
-        function pills() { return [find("sectionNav"), find("statusGlass")] }
+        function pills() { return [find("sectionNav"), find("bellGlass")] }
 
         function topBarShown() {
             return pills().every(p => p.visible && p.opacity === 1)
