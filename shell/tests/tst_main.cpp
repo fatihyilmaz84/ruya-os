@@ -198,7 +198,7 @@ private:
 // Pictures for the art glow (T-281): solid-ish 160 x 90 pictures in a temporary directory, so no
 // binary is committed. red, blue, green, white and dark are a gentle diagonal gradient of one
 // colour; redblue is red on the left half and blue on the right; grey and pastel exercise the
-// sampler's limits. Exposed to the tests as `artFixtures` (a path); the mock library and store take
+// sampler's limits; brighttop, darktop, portraitdarktop, squaredarktop and darkpatch exercise the top band. Exposed to the tests as `artFixtures` (a path); the mock library and store take
 // the first six as card art (MockArt.h).
 static QString writeArtFixtures(const QTemporaryDir &dir)
 {
@@ -228,6 +228,28 @@ static QString writeArtFixtures(const QTemporaryDir &dir)
     p.fillRect(80, 0, 80, 90, QColor(40, 80, 230));
     p.end();
     two.save(dir.filePath(QStringLiteral("redblue.png")));
+    // The top band behind the status tray (RUY-1117): white over the top third and black below (brighttop), and the
+    // other way round (darktop), 16:9; a 2:3 cover black over its top quarter and white below (portraitdarktop) and a
+    // square tile black over its top 30 % (squaredarktop): drawn as a centred 16:9 crop, their top rows are off screen.
+    auto band = [&](const char *name, int w, int h, int topRows, const QColor &top, const QColor &rest) {
+        QImage image(w, h, QImage::Format_RGB32);
+        image.fill(rest);
+        QPainter bp(&image);
+        bp.fillRect(0, 0, w, topRows, top);
+        bp.end();
+        image.save(dir.filePath(QString::fromLatin1(name) + QStringLiteral(".png")));
+    };
+    band("brighttop", 160, 90, 30, Qt::white, Qt::black);
+    band("darktop", 160, 90, 30, Qt::black, Qt::white);
+    band("portraitdarktop", 300, 450, 112, Qt::black, Qt::white);
+    band("squaredarktop", 300, 300, 90, Qt::black, Qt::white);
+    // Black with one small white patch at the top right, where the clock is (darkpatch): about 5 % of the top band.
+    QImage patch(160, 90, QImage::Format_RGB32);
+    patch.fill(Qt::black);
+    QPainter pp(&patch);
+    pp.fillRect(144, 0, 8, 18, Qt::white);
+    pp.end();
+    patch.save(dir.filePath(QStringLiteral("darkpatch.png")));
     // Three pictures that cannot be mistaken for a dark failed load (RUY-856, the .play fixture's hero, card and cover): a teal
     // scene with a sun and stripes, an orange card with big circles, a portrait violet cover with a diamond.
     auto scene = [&](const char *name, int w, int h, const QColor &from, const QColor &to, const QColor &mark, int kind) {

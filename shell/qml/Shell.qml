@@ -1583,29 +1583,88 @@ FocusScope {
         }
     }
 
-    // The tray's shade (RUY-955, 04 §5.5): the ground colour at 70 % across the top of the page, solid to the tray's
-    // bottom, then fading to clear over `spaceXxl`, so the flat tray's text reads over any art. It is shown and faded
-    // with the tray (its opacity and visibility are the tray's own), so it is never drawn behind an app.
+    // What lies behind the status tray (RUY-1117, 04 §5.5), the one place that decides it: on Home the picture of the
+    // hero layer in front (or the wallpaper while that item has none and a wallpaper shows through); on a page the
+    // wallpaper, else the theme's Backdrop. { kind: "art" | "wallpaper" | "backdrop" | "unknown", source, aspect }
+    // ("unknown": a hero item drawn as its placeholder colour field, never measured; `aspect`: the drawn width / height,
+    // both pictures are a centred PreserveAspectCrop, so ArtPalette measures the band of the visible crop).
+    function trayBackground() {
+        if (!root.pageOpen) {
+            const front = heroArt.showB ? artB : artA
+            if (front.picture.length > 0)
+                return { kind: "art", source: front.picture, aspect: front.width / Math.max(1, front.height) }
+            if (!wallpaperLayer.has)
+                return { kind: "unknown", source: "", aspect: 0 }
+        }
+        if (wallpaperLayer.has)
+            return { kind: "wallpaper", source: wallpaperLayer.target, aspect: wallpaperLayer.width / Math.max(1, wallpaperLayer.height) }
+        return { kind: "backdrop", source: "", aspect: 0 }
+    }
+
+    // The tray's shade (RUY-955, RUY-1117, 04 §5.5): the ground colour across the top of the page, solid to the tray's
+    // bottom, then fading to clear over 2 x `spaceXxl` along a smoothstep (`fade`), so the flat tray's text reads over any art. Its alpha is only as
+    // strong as what lies behind the tray needs (ThemeMath.trayShadeAlpha over the top band ArtPalette measures):
+    // over dark art it all but disappears; over art not measured yet (or unreadable, or a placeholder) it is the
+    // ceiling `trayShadeAlphaMax`. A change moves over `tintMs` (the hero's own cross-fade); under reduced motion
+    // it jumps. It is shown and faded with the tray (its opacity and visibility are the tray's own, no rule of its
+    // own), so it is never drawn behind an app.
     Item {
         id: trayShade
         objectName: "trayShade"
         anchors { left: parent.left; right: parent.right; top: parent.top }
-        height: statusTray.y + statusTray.height + Theme.spaceXxl * root.u
+        height: statusTray.y + statusTray.height + 2 * Theme.spaceXxl * root.u
         opacity: statusTray.opacity
         visible: statusTray.visible
+
+        readonly property var behind: root.trayBackground()
+        property int measured: 0          // bumped when ArtPalette has measured the picture behind the tray
+        // The light behind the tray ({ high, low } relative luminances), or null while it is not known.
+        readonly property var band: {
+            void measured
+            if (behind.kind === "backdrop")
+                return ThemeMath.backdropBand(Themes.snapshot(Theme.shownSet), backdrop.tint)
+            if (behind.kind === "unknown")
+                return null
+            const b = ArtPalette.bandOf(behind.source, behind.aspect)
+            if (b.ok !== true)
+                return null
+            // The wallpaper lies under its dim layer (the theme's ground at its effective dim).
+            return behind.kind === "wallpaper" ? ThemeMath.bandUnder(b, Theme.background, wallpaperLayer.effectiveDim) : b
+        }
+        readonly property real targetAlpha: band ? ThemeMath.trayShadeAlpha(band, Theme) : Theme.trayShadeAlphaMax
+        property real alpha: targetAlpha
+        Behavior on alpha { NumberAnimation { duration: Theme.tintMs; easing.type: Easing.InOutQuad } }   // tintMs is 0 under reduced motion: a jump
+        readonly property color color: Theme.trayShade(alpha)
+        // The fade under the solid band (04 §5.5): [position, share of the shade's alpha] stops of the smoothstep
+        // 1 - 3t^2 + 2t^3, so it leaves the band without an edge and ends in `trayShadeClear`; the same RGB throughout.
+        readonly property var fade: [[0, 1], [0.125, 0.96], [0.25, 0.84], [0.5, 0.5], [0.75, 0.16], [0.875, 0.04], [1, 0]]
+
+        Connections {
+            target: ArtPalette
+            function onSampled(source) {
+                if (source === trayShade.behind.source)
+                    ++trayShade.measured
+            }
+        }
+
         Rectangle {
             id: trayShadeSolid
             width: parent.width
             height: statusTray.y + statusTray.height
-            color: Theme.trayShade
+            color: trayShade.color
         }
         Rectangle {
+            objectName: "trayShadeFade"
             y: trayShadeSolid.height
             width: parent.width
-            height: Theme.spaceXxl * root.u
-            gradient: Gradient {
-                GradientStop { position: 0.0; color: Theme.trayShade }
-                GradientStop { position: 1.0; color: Theme.trayShadeClear }
+            height: 2 * Theme.spaceXxl * root.u
+            gradient: Gradient { id: trayShadeFade }
+            Component { id: trayShadeStop; GradientStop {} }
+            // The stops, built once from `fade`; each colour follows the shade's alpha.
+            Component.onCompleted: {
+                trayShadeFade.stops = trayShade.fade.map(f => trayShadeStop.createObject(trayShadeFade, {
+                    position: f[0], color: Qt.binding(() => Theme.trayShade(trayShade.alpha * f[1]))
+                }))
             }
         }
     }
@@ -1726,6 +1785,7 @@ FocusScope {
             source: l0
             sourceX: statusTray.x + x
             sourceY: statusTray.y + y
+            shade: trayShade.color
             count: NotificationCentre.unreadCount
             quiet: NotificationCentre.quiet
             enabled: root.navShown && !systemPanel.open && !batteryList.shown && !notificationSheet.shown

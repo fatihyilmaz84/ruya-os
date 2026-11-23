@@ -52,6 +52,15 @@ QtObject {
         }
     }
 
+    // The light of the Backdrop for a theme snapshot `t` and a tint (RUY-1117): the relative luminance of its
+    // brightest (`high`) and darkest (`low`) colour, from the samples the gate measures (both gradient ends,
+    // each blob over the brighter end, the three blobs overlapping).
+    function backdropBand(t, tint) {
+        const s = backdropSamples(t, tint)
+        const lums = s.strict.concat([s.overlap]).map(c => luminance(c))
+        return { high: Math.max.apply(null, lums), low: Math.min.apply(null, lums) }
+    }
+
     // --- Distinctness (T-271) ---
 
     // CIE L*a*b* (D65) of an opaque colour, and the distance between two colours (CIE76 delta E:
@@ -103,11 +112,44 @@ QtObject {
         const a = top.a
         return Qt.rgba(top.r * a + bottom.r * (1 - a), top.g * a + bottom.g * (1 - a), top.b * a + bottom.b * (1 - a), 1)
     }
+    // An opaque grey of relative luminance `lum` (the inverse of `channel`).
+    function grey(lum) {
+        const s = lum <= 0.0031308 ? lum * 12.92 : 1.055 * Math.pow(lum, 1 / 2.4) - 0.055
+        return Qt.rgba(s, s, s, 1)
+    }
+    // A band of light ({ high, low } luminances) seen through a layer of `layer` at `alpha` (the wallpaper's dim).
+    function bandUnder(band, layer, alpha) {
+        const veil = Qt.rgba(layer.r, layer.g, layer.b, alpha)
+        return { high: luminance(over(veil, grey(band.high))), low: luminance(over(veil, grey(band.low))) }
+    }
     // Contrast ratio of two colours; a translucent `fg` is first painted over `bg`.
     function contrast(fg, bg) {
         const f = over(fg, bg)
         const l1 = luminance(f)
         const l2 = luminance(bg)
         return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)
+    }
+
+    // --- The status tray's shade (RUY-1117, 04 §5.5) ---
+
+    // The ceiling (also the shade over art not measured yet) and the step the alpha moves in.
+    readonly property real trayShadeAlphaMax: 0.7
+    readonly property real trayShadeStep: 0.05
+    // The smallest alpha in [0, trayShadeAlphaMax], in trayShadeStep steps (no flicker from tiny changes), at which
+    // the theme `t`'s `text` reads at 4.5:1 and its `warningText` at 3:1 on the shade (`background` at that alpha)
+    // over a grey as light as the art's top band (`band`: { high, low } relative luminances). Light text (the dark
+    // themes) is held over the band's bright end, dark text (Daylight) over its dark end. Pure: the gate and the
+    // shell use the same function.
+    function trayShadeAlpha(band, t) {
+        const lum = luminance(t.text) >= luminance(t.background) ? band.high : band.low
+        const ground = grey(lum)
+        const steps = Math.round(trayShadeAlphaMax / trayShadeStep)
+        for (let i = 0; i < steps; ++i) {
+            const a = i * trayShadeStep
+            const shade = over(Qt.rgba(t.background.r, t.background.g, t.background.b, a), ground)
+            if (contrast(t.text, shade) >= 4.5 && contrast(t.warningText, shade) >= 3)
+                return Math.round(a * 100) / 100
+        }
+        return trayShadeAlphaMax
     }
 }
