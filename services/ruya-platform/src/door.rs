@@ -209,6 +209,14 @@ impl Platform {
         }
     }
 
+    /// `Manage.ListCapabilities`: every registered capability's key with its default.
+    pub fn list_capabilities(&self) -> Vec<(String, bool)> {
+        self.registry
+            .keys()
+            .map(|key| (key.to_owned(), default_allowed(key)))
+            .collect()
+    }
+
     /// `Manage.ListPermissions`: every (app id, capability, allowed) the player set for `profile`.
     pub fn list_permissions(&self, profile: &str) -> Result<Vec<(String, String, bool)>, Status> {
         self.known_profile(profile)?;
@@ -379,6 +387,36 @@ pub(crate) mod tests {
     }
 
     const L: &str = lifecycle::INTERFACE;
+
+    /// A second capability, to see the listing follows the registry (RUY-1104).
+    struct Captures;
+
+    impl crate::registry::Handler for Captures {
+        fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+            self
+        }
+    }
+
+    #[test]
+    fn capabilities_are_the_registrys_keys_with_their_defaults() {
+        let mut f = World::new().door();
+        assert_eq!(f.door.list_capabilities(), [("lifecycle".to_owned(), true)]);
+        f.door
+            .registry_mut()
+            .register(
+                "org.ruyaos.Platform1.Captures",
+                "captures",
+                Box::new(Captures),
+            )
+            .expect("registers");
+        assert_eq!(
+            f.door.list_capabilities(),
+            [
+                ("lifecycle".to_owned(), true),
+                ("captures".to_owned(), false)
+            ]
+        );
+    }
 
     #[test]
     fn a_permitted_app_is_admitted_as_itself() {

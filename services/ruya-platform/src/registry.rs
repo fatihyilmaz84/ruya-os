@@ -102,6 +102,11 @@ impl Registry {
         self.entries.iter().any(|e| e.key == key)
     }
 
+    /// The key of every registered capability, in the order they were registered.
+    pub fn keys(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.entries.iter().map(|e| e.key)
+    }
+
     /// The handler of `interface` as its own type.
     pub fn handler_mut<H: Handler>(&mut self, interface: &str) -> Option<&mut H> {
         self.entries

@@ -65,6 +65,10 @@ qt_add_qml_module(ruyashell
         src/battery/MockBatteryBackend.h src/battery/MockBatteryBackend.cpp
         src/battery/DBusBatteryBackend.h src/battery/DBusBatteryBackend.cpp
         src/battery/Batteries.h src/battery/Batteries.cpp
+        src/platform/PlatformBackend.h
+        src/platform/MockPlatformBackend.h src/platform/MockPlatformBackend.cpp
+        src/platform/DBusPlatformBackend.h src/platform/DBusPlatformBackend.cpp
+        src/platform/Platform.h src/platform/Platform.cpp
         src/time/TimeBackend.h
         src/time/MockTimeBackend.h src/time/MockTimeBackend.cpp
         src/time/DBusTimeBackend.h src/time/DBusTimeBackend.cpp
@@ -359,7 +363,7 @@ else()
 endif()
 
 # qmltyperegistrar includes the QML_ELEMENT headers by file name.
-target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/time src/display src/thermal src/storage src/system src/power src/store src/play src/library src/update src/session src/usage src/input src/probe src/wallpaper src/sound src/art src/gamesettings src/notifications)
+target_include_directories(ruyashell PUBLIC src/backend src/profiles src/settings src/audio src/network src/bluetooth src/battery src/time src/display src/thermal src/storage src/system src/power src/store src/play src/library src/update src/session src/usage src/input src/probe src/wallpaper src/sound src/art src/gamesettings src/notifications src/platform)
 # Qt6::GuiPrivate: ScreenPower calls QPlatformScreen::setPowerState (DPMS under eglfs_kms, T-202).
 target_include_directories(ruyashell PUBLIC src/performance)   # T-451
 target_link_libraries(ruyashell PRIVATE Qt6::Network Qt6::Quick Qt6::Multimedia Qt6::DBus Qt6::GuiPrivate)

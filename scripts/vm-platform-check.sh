@@ -145,7 +145,7 @@ for id in "$appa" "$appb"; do
 done
 
 echo "--- what an app must not reach"
-for what in Manage.ListPermissions Manage.SetPermission Manage.NotifyLifecycle; do
+for what in Manage.ListCapabilities Manage.ListPermissions Manage.SetPermission Manage.NotifyLifecycle; do
     line="$(grep "^[A-Z]*[a-z]* $what " "$(log_of "$appa")")"
     [ "$line" = "refused $what org.freedesktop.DBus.Error.AccessDenied" ] && ok "$what is AccessDenied by the policy" || bad "$what: '$line', want AccessDenied"
 done
@@ -160,6 +160,9 @@ out="$(runuser -u "$user" -- python3 -I "$here/vm-platform-probe.py" register 2>
 [ "$out" = "register not-an-app" ] && ok "an unsandboxed process of $user is not-an-app" || bad "unsandboxed Register as $user: $out"
 out="$(runuser -u nobody -- busctl --system call "$dest" "$opath" "$manage" ListPermissions s "$pid" 2>&1)"
 echo "$out" | grep -qi "access denied\|AccessDenied" && ok "nobody cannot call Manage" || bad "nobody calling Manage.ListPermissions: $out"
+
+out="$(busctl --system call "$dest" "$opath" "$manage" ListCapabilities 2>&1)"
+[ "$out" = 'sa(sb) "ok" 1 "lifecycle" true' ] && ok "ListCapabilities as root: lifecycle, on by default" || bad "ListCapabilities as root: $out"
 
 echo "--- unicast Lifecycle signals"
 sa="$(scope_of "$appa")"; sb="$(scope_of "$appb")"
