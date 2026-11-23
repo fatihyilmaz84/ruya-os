@@ -792,7 +792,6 @@ impl Spawner for SystemdSpawner {
             .child_of_scope(user, scope)
     }
 
-    /// The app table read at the call (a few small files): `freeze = never` is false.
     fn scope_lister(&self, unit: &str) -> ScopeLister {
         if let Some(child) = self.child(unit) {
             return Box::new(move || child.scopes);
@@ -809,6 +808,7 @@ impl Spawner for SystemdSpawner {
         })
     }
 
+    /// The app table read at the call (a few small files): `freeze = never` is false.
     fn may_freeze(&self, app_id: &str) -> bool {
         AppTable::load(Path::new(APPS_DIR)).freeze(app_id) != Some(Freeze::Never)
     }

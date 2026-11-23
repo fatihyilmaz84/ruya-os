@@ -675,18 +675,25 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     }
 
     /// `stop` (`StopKind::Close`) or the stop of `stop_all` (`StopKind::PowerOff`: the grace
-    /// counts from the `Stopping`, also for an instance whose Close game still waits for its save).
+    /// counts from the `Stopping`, also for an instance whose Close game still waits for its save, or
+    /// whose own wait settled while a child of it still waits).
     fn stop_tree(&mut self, instance: &str, clock: impl Clock, kind: StopKind) -> Status {
         let Some(at) = self.instances.iter().position(|i| i.unit == instance) else {
             return Status::UnknownInstance;
         };
         if self.instances[at].state == State::Stopping {
-            if let (StopKind::PowerOff, SaveWait::Waiting { since, .. }) =
-                (kind, self.instances[at].save)
-            {
-                self.instances[at].save = SaveWait::Waiting {
-                    since,
-                    in_grace: true,
+            // A wait still out, or settled but held back by a child: its SIGTERM is not sent yet.
+            if kind == StopKind::PowerOff {
+                self.instances[at].save = match self.instances[at].save {
+                    SaveWait::Waiting { since, .. } => SaveWait::Waiting {
+                        since,
+                        in_grace: true,
+                    },
+                    SaveWait::Settled { since, .. } => SaveWait::Settled {
+                        since,
+                        in_grace: true,
+                    },
+                    SaveWait::Off => SaveWait::Off,
                 };
             }
             return Status::Ok;
@@ -4533,6 +4540,26 @@ mod tests {
         assert_eq!(s.saved(&unit, t0 + Duration::from_secs(4)), Status::Ok);
         s.tick(t0 + STOP_GRACE);
         assert_eq!(s.spawner.calls().last(), Some(&format!("kill {unit}")));
+    }
+
+    #[test]
+    fn a_power_off_counts_the_grace_of_a_settled_parent_whose_child_still_waits_from_its_stopping()
+    {
+        let (s, steam, child) = steam_with_game(FakeSpawner::new());
+        let (mut s, rx) = told(s);
+        let t0 = Instant::now();
+        assert_eq!(s.stop(&steam, t0), Status::Ok);
+        assert_eq!(notices(&rx).len(), 2);
+        // Steam did not register: its own wait settles at once; its game still saves.
+        assert_eq!(s.saved(&steam, t0), Status::Ok);
+        assert_eq!(s.stop_all(t0 + Duration::from_millis(100)).len(), 2);
+        assert_eq!(s.saved(&child, t0 + Duration::from_secs(4)), Status::Ok);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("stop {steam}")));
+        let unit = steam;
+        s.tick(t0 + STOP_GRACE - Duration::from_millis(1));
+        assert!(!s.spawner.calls().contains(&format!("kill {unit}")));
+        s.tick(t0 + STOP_GRACE);
+        assert!(s.spawner.calls().contains(&format!("kill {unit}")));
     }
 
     #[test]
