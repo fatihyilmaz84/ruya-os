@@ -37,11 +37,17 @@ pub use linux::HelperProcfs;
 
 #[cfg(target_os = "linux")]
 mod linux {
-    use std::io;
-    use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-    use std::os::unix::ffi::OsStrExt;
+    use std::io::{self, IoSlice};
+    use std::mem::MaybeUninit;
+    use std::os::fd::BorrowedFd;
     use std::path::{Path, PathBuf};
     use std::time::Duration;
+
+    use rustix::net::sockopt::{set_socket_timeout, Timeout};
+    use rustix::net::{
+        connect, recv, sendmsg, socket_with, AddressFamily, RecvFlags, SendAncillaryBuffer,
+        SendAncillaryMessage, SendFlags, SocketAddrUnix, SocketFlags, SocketType,
+    };
 
     use ruya_platform_identify::fdinfo::own_pidfd_pid;
     use ruya_platform_identify::wire::{decode_reply, encode_request, Request, MAX_REPLY, SOCKET};
@@ -82,114 +88,38 @@ mod linux {
         }
     }
 
-    fn check(rc: libc::c_int) -> io::Result<libc::c_int> {
-        if rc < 0 {
-            Err(io::Error::last_os_error())
-        } else {
-            Ok(rc)
-        }
-    }
-
-    fn set_timeout(fd: &OwnedFd, option: libc::c_int) -> io::Result<()> {
-        let tv = libc::timeval {
-            tv_sec: TIMEOUT.as_secs() as libc::time_t,
-            tv_usec: 0,
-        };
-        // SAFETY: setsockopt(2) on our own socket with a timeval that outlives the call.
-        check(unsafe {
-            libc::setsockopt(
-                fd.as_raw_fd(),
-                libc::SOL_SOCKET,
-                option,
-                &tv as *const libc::timeval as *const libc::c_void,
-                std::mem::size_of::<libc::timeval>() as libc::socklen_t,
-            )
-        })
-        .map(drop)
-    }
-
-    fn connect(path: &Path) -> io::Result<OwnedFd> {
-        // SAFETY: socket(2) with constant arguments; the descriptor is owned from here on.
-        let fd = unsafe {
-            OwnedFd::from_raw_fd(check(libc::socket(
-                libc::AF_UNIX,
-                libc::SOCK_SEQPACKET | libc::SOCK_CLOEXEC,
-                0,
-            ))?)
-        };
-        set_timeout(&fd, libc::SO_SNDTIMEO)?;
-        set_timeout(&fd, libc::SO_RCVTIMEO)?;
-        // SAFETY: an all-zero sockaddr_un is a valid empty one.
-        let mut addr: libc::sockaddr_un = unsafe { std::mem::zeroed() };
-        addr.sun_family = libc::AF_UNIX as libc::sa_family_t;
-        let bytes = path.as_os_str().as_bytes();
-        if bytes.len() >= addr.sun_path.len() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "socket path too long",
-            ));
-        }
-        for (dst, src) in addr.sun_path.iter_mut().zip(bytes) {
-            *dst = *src as libc::c_char;
-        }
-        // SAFETY: connect(2) with an address that lives through the call.
-        check(unsafe {
-            libc::connect(
-                fd.as_raw_fd(),
-                &addr as *const libc::sockaddr_un as *const libc::sockaddr,
-                std::mem::size_of::<libc::sockaddr_un>() as libc::socklen_t,
-            )
-        })?;
-        Ok(fd)
-    }
-
     /// One request on a new connection: the request bytes with the pidfd as SCM_RIGHTS, then the
     /// one reply.
     fn ask(path: &Path, pidfd: i32, uid: u32) -> io::Result<Reply> {
-        let sock = connect(path)?;
-        let mut request = encode_request(&Request { uid });
-        let mut iov = libc::iovec {
-            iov_base: request.as_mut_ptr() as *mut libc::c_void,
-            iov_len: request.len(),
-        };
-        // 8-byte aligned room for one descriptor (CMSG_SPACE of 4 bytes is 24).
-        let mut control = [0u64; 4];
-        // SAFETY: CMSG_SPACE is a pure size computation.
-        let space = unsafe { libc::CMSG_SPACE(std::mem::size_of::<i32>() as u32) } as usize;
-        // SAFETY: an all-zero msghdr is a valid empty one.
-        let mut msg: libc::msghdr = unsafe { std::mem::zeroed() };
-        msg.msg_iov = &mut iov;
-        msg.msg_iovlen = 1;
-        msg.msg_control = control.as_mut_ptr() as *mut libc::c_void;
-        msg.msg_controllen = space as _;
-        // SAFETY: the one cmsg header and its descriptor are written inside `control`, which
-        // `space` (at most its size) covers; sendmsg reads buffers that live through the call.
-        let sent = unsafe {
-            let c = libc::CMSG_FIRSTHDR(&msg);
-            (*c).cmsg_level = libc::SOL_SOCKET;
-            (*c).cmsg_type = libc::SCM_RIGHTS;
-            (*c).cmsg_len = libc::CMSG_LEN(std::mem::size_of::<i32>() as u32) as _;
-            std::ptr::write_unaligned(libc::CMSG_DATA(c) as *mut i32, pidfd);
-            libc::sendmsg(sock.as_raw_fd(), &msg, libc::MSG_NOSIGNAL)
-        };
-        if sent < 0 {
-            return Err(io::Error::last_os_error());
+        let sock = socket_with(
+            AddressFamily::UNIX,
+            SocketType::SEQPACKET,
+            SocketFlags::CLOEXEC,
+            None,
+        )?;
+        set_socket_timeout(&sock, Timeout::Send, Some(TIMEOUT))?;
+        set_socket_timeout(&sock, Timeout::Recv, Some(TIMEOUT))?;
+        connect(&sock, &SocketAddrUnix::new(path)?)?;
+        let request = encode_request(&Request { uid });
+        // SAFETY: `pidfd` is the credentials' ProcessFD, which the caller of `identify` keeps open
+        // until it returns (`Caller::pidfd`); it is only borrowed for this one sendmsg.
+        let pidfd = unsafe { BorrowedFd::borrow_raw(pidfd) };
+        let passed = [pidfd];
+        let mut space = [MaybeUninit::uninit(); rustix::cmsg_space!(ScmRights(1))];
+        let mut control = SendAncillaryBuffer::new(&mut space);
+        if !control.push(SendAncillaryMessage::ScmRights(&passed)) {
+            return Err(io::Error::other("no room for the pidfd"));
         }
+        sendmsg(
+            &sock,
+            &[IoSlice::new(&request)],
+            &mut control,
+            SendFlags::NOSIGNAL,
+        )?;
         // One byte more than the largest reply, so a longer one is seen.
         let mut reply = vec![0u8; MAX_REPLY + 1];
-        // SAFETY: recv(2) into a buffer that lives through the call.
-        let n = unsafe {
-            libc::recv(
-                sock.as_raw_fd(),
-                reply.as_mut_ptr() as *mut libc::c_void,
-                reply.len(),
-                0,
-            )
-        };
-        if n < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        reply.truncate(n as usize);
+        let (_, n) = recv(&sock, &mut reply[..], RecvFlags::empty())?;
+        reply.truncate(n.min(MAX_REPLY + 1));
         decode_reply(&reply).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 }

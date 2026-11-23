@@ -1080,6 +1080,7 @@ dependencies = [
  "async-io",
  "futures-lite",
  "libc",
+ "rustix",
  "ruya-contract-test",
  "ruya-flatpak",
  "ruya-fs",
@@ -1098,7 +1099,7 @@ dependencies = [
 name = "ruya-platform-identify"
 version = "0.1.0"
 dependencies = [
- "libc",
+ "rustix",
  "ruya-fs",
  "ruya-keyfile",
 ]

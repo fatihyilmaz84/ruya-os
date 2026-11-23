@@ -11,7 +11,9 @@ ruya-keyfile = { path = "../ruya-keyfile" }  # MAX_BYTES: the .flatpak-info cap 
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ruya-fs = { path = "../ruya-fs" }  # the caller's .flatpak-info and the fdinfo, never through a link (RUY-911)
-libc = "0.2"  # SO_PEERCRED and recvmsg with SCM_RIGHTS on the accepted socket; already in the tree
+# SO_PEERCRED and recvmsg with SCM_RIGHTS on the accepted socket, a safe API (linux_raw); already in
+# the tree (ruya-fs, async-io), the net feature adds no crate.
+rustix = { version = "1", default-features = false, features = ["std", "net"] }
 
 [[bin]]
 name = "ruya-platform-identify"
