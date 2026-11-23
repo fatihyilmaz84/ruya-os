@@ -115,7 +115,6 @@ QtObject {
     // measures the ceiling over pure white and pure black.
     readonly property real trayShadeAlphaMax: ThemeMath.trayShadeAlphaMax
     function trayShade(alpha) { return Qt.rgba(background.r, background.g, background.b, alpha) }
-    readonly property color trayShadeClear: Qt.rgba(background.r, background.g, background.b, 0)
     readonly property color errorText: tok("errorText")
     readonly property real disabledOpacity: 0.4                     // unavailable controls (PIN-pad OK, locked pad, a dimmed row's label)
     readonly property real peekOpacity: 0.7                         // scroll cue: the first / last visible row while more rows exist beyond it (not disabledOpacity, which means unavailable)

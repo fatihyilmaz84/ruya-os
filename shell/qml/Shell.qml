@@ -1636,7 +1636,7 @@ FocusScope {
         Behavior on alpha { NumberAnimation { duration: Theme.tintMs; easing.type: Easing.InOutQuad } }   // tintMs is 0 under reduced motion: a jump
         readonly property color color: Theme.trayShade(alpha)
         // The fade under the solid band (04 §5.5): [position, share of the shade's alpha] stops of the smoothstep
-        // 1 - 3t^2 + 2t^3, so it leaves the band without an edge and ends in `trayShadeClear`; the same RGB throughout.
+        // 1 - 3t^2 + 2t^3, so it leaves the band without an edge and ends in `trayShade(0)`; the same RGB throughout.
         readonly property var fade: [[0, 1], [0.125, 0.96], [0.25, 0.84], [0.5, 0.5], [0.75, 0.16], [0.875, 0.04], [1, 0]]
 
         Connections {
