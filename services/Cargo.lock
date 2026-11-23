@@ -1073,6 +1073,24 @@ name = "ruya-pads"
 version = "0.1.0"
 
 [[package]]
+name = "ruya-platform"
+version = "0.1.0"
+dependencies = [
+ "async-io",
+ "futures-lite",
+ "libc",
+ "ruya-contract-test",
+ "ruya-flatpak",
+ "ruya-fs",
+ "ruya-ids",
+ "ruya-keyfile",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "zbus",
+]
+
+[[package]]
 name = "ruya-play"
 version = "0.1.0"
 dependencies = [

@@ -13,6 +13,7 @@ use std::time::Duration;
 
 use crate::steam_tool::{exec_start_pre, STEAM_APP_ID};
 use async_channel::Sender;
+use ruya_flatpak::scope::{is_app_scope, unit_escape};
 use ruya_flatpak::valid_session_app_id;
 use ruya_ids::profile_of_user;
 
@@ -269,35 +270,6 @@ pub fn scope_pattern(app_id: &str) -> Result<String, String> {
         "app-flatpak-{}-*.scope",
         unit_escape(app_id).replace('\\', "?")
     ))
-}
-
-/// The id as systemd writes it in a unit name (`systemd-escape`): every byte outside
-/// `[A-Za-z0-9_.:]` becomes `\xNN`, so the `-` of `attack-vector-alpha` is `\x2d` (a leading `.`
-/// too, which an app id never has). Only valid app ids are expected; others get the same rule.
-pub fn unit_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for (i, b) in s.bytes().enumerate() {
-        let plain = b.is_ascii_alphanumeric() || matches!(b, b'_' | b':') || (b == b'.' && i > 0);
-        if plain {
-            out.push(b as char);
-        } else {
-            out.push_str(&format!("\\x{b:02x}"));
-        }
-    }
-    out
-}
-
-/// Is `name` a scope `flatpak run <app_id>` makes (`app-flatpak-<escaped app_id>-<number>.scope`,
-/// the `-` of the id written `\x2d`)? The part after the id must be digits only, so
-/// `org.x.App-Extra` is not taken for `org.x.App`.
-pub fn is_app_scope(app_id: &str, name: &str) -> bool {
-    valid_session_app_id(app_id)
-        && name
-            .strip_prefix("app-flatpak-")
-            .and_then(|rest| rest.strip_prefix(unit_escape(app_id).as_str()))
-            .and_then(|rest| rest.strip_prefix('-'))
-            .and_then(|rest| rest.strip_suffix(".scope"))
-            .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// `systemctl` in `user`'s manager, the start of every list below. The user is validated again.
@@ -1381,40 +1353,6 @@ pub fn unit_app_id(user: &str, unit: &str) -> Option<String> {
     valid_session_app_id(app).then(|| app.to_owned())
 }
 
-/// Where a process is, read from its `/proc/<pid>/cgroup` (T-459): the uid of the user manager
-/// whose tree holds it and the units between that manager and the process, the deepest first.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ProcessPlace {
-    pub uid: u32,
-    pub units: Vec<String>,
-}
-
-/// The uid of a user manager's cgroup component (`user@1000.service` -> 1000), else `None`.
-pub fn user_manager_uid(part: &str) -> Option<u32> {
-    part.strip_prefix("user@")
-        .and_then(|r| r.strip_suffix(".service"))
-        .filter(|uid| !uid.is_empty() && uid.bytes().all(|b| b.is_ascii_digit()))
-        .and_then(|uid| uid.parse().ok())
-}
-
-/// The place of a process out of its cgroup file: the cgroup v2 line (`0::<path>`) whose path
-/// goes through a user manager (`.../user@<uid>.service/app.slice/<unit>`). `None` for a process
-/// outside every user manager (a system service, the kernel) or a file of another shape.
-pub fn parse_cgroup(text: &str) -> Option<ProcessPlace> {
-    let path = text.lines().find_map(|l| l.strip_prefix("0::"))?;
-    let parts: Vec<&str> = path.trim().split('/').filter(|p| !p.is_empty()).collect();
-    let (at, uid) = parts
-        .iter()
-        .enumerate()
-        .find_map(|(at, p)| user_manager_uid(p).map(|uid| (at, uid)))?;
-    let units = parts[at + 1..]
-        .iter()
-        .rev()
-        .map(|p| (*p).to_owned())
-        .collect();
-    Some(ProcessPlace { uid, units })
-}
-
 /// The profile users out of `loginctl list-users --no-legend` (`UID USER LINGER STATE` per
 /// line): the names `ruya-<id>`. `ruya-shell` is a name of that shape too; whether it is a
 /// profile is for the directory to say, not for this parser.
@@ -1982,7 +1920,7 @@ impl Spawner for FakeSpawner {
 mod tests {
     #[test]
     fn a_cgroup_file_names_the_user_manager_and_the_units_deepest_first() {
-        use super::{parse_cgroup, ProcessPlace};
+        use ruya_flatpak::scope::{parse_cgroup, ProcessPlace};
         let flatpak = "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-flatpak-io.github.x.Game-12345.scope\n";
         assert_eq!(
             parse_cgroup(flatpak),
