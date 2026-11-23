@@ -232,7 +232,6 @@ Item {
             renameBoth()
             tryCompare(find("activeProfileName"), "text", tc.longB)
             wait(400)
-            grabImage(find("statusGlass")).save(shotsDir + "/73-long-names-status-crop.png")
             grabImage(tc.shell).save(shotsDir + "/73-long-names-status.png")
             lockToPicker()
             wait(700)

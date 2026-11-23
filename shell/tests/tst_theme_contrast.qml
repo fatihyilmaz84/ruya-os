@@ -11,6 +11,7 @@ import RuyaShell
 //  - text (>= 4.5): `text` on the ground, panels, opaque glass, scrims, art fades, toasts, the
 //    primary and danger buttons, and on glass over the Backdrop (each blob over the gradient's
 //    brighter end, and the ground). `textDim` only on opaque surfaces (04 §3.1).
+//  - trayShade (RUY-1109): `text` >= 4.5 and `warningText` >= 3 on the status tray's shade over pure white and pure black art.
 //  - overlap (>= 3): glass where the two big blobs overlap, with the white blob on top: the
 //    pessimistic corner, held to the large-text floor.
 //  - ring (>= 3): the focus ring against the glass, the ground, the panel and the scrims.
@@ -124,6 +125,12 @@ Item {
                 row(rows, "text on scrimOverlay over " + name, t.text, ThemeMath.over(t.scrimOverlay, e), 4.5)
                 row(rows, "text on heroScrim over " + name + " art", t.text, ThemeMath.over(t.heroScrim, e), 4.5)
                 row(rows, "text on artCaptionFade over " + name + " art", t.text, ThemeMath.over(t.artCaptionFade, e), 4.5)
+                // The status tray is flat on the page (RUY-1109, 04 §5.5): its text and its low-battery number lie on
+                // `trayShade` over whatever art is there. The shade is the theme's ground at `trayShadeAlpha`
+                // (Theme derives it the same way); `warningText` is large text (the 3 floor, the icons beside it).
+                const shade = ThemeMath.over(Qt.rgba(t.background.r, t.background.g, t.background.b, Theme.trayShadeAlpha), e)
+                row(rows, "text on trayShade over " + name + " art", t.text, shade, 4.5)
+                row(rows, "warningText on trayShade over " + name + " art", t.warningText, shade, 3)
                 const toast = ThemeMath.over(t.toastBackground, e)
                 row(rows, "text on toast over " + name, t.text, toast, 4.5)
                 for (const kind of ["toastInfo", "toastSuccess", "toastWarning", "toastError"])
