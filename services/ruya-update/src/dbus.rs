@@ -14,9 +14,9 @@ use zbus::{fdo, interface, Connection};
 
 use crate::bootc::Bootc;
 use crate::job::JobRecord;
-use crate::ledger::Day;
 use crate::schedule::{Clock, SystemClock};
 use crate::service::{Record, Status, Update};
+use ruya_jobs::ledger::Day;
 
 pub const BUS_NAME: &str = "org.ruyaos.Update1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Update1";

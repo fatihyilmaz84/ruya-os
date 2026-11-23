@@ -1023,6 +1023,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruya-jobs"
+version = "0.1.0"
+dependencies = [
+ "ruya-calendar",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "ruya-keyfile"
 version = "0.1.0"
 
@@ -1202,6 +1211,7 @@ dependencies = [
  "async-lock",
  "futures-lite",
  "libc",
+ "ruya-calendar",
  "ruya-contract-test",
  "ruya-flatpak",
  "ruya-fs",
@@ -1248,8 +1258,8 @@ dependencies = [
  "blocking",
  "futures-lite",
  "libc",
- "ruya-calendar",
  "ruya-contract-test",
+ "ruya-jobs",
  "serde_json",
  "tempfile",
  "zbus",

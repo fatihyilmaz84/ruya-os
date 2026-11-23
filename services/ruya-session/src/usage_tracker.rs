@@ -591,8 +591,9 @@ pub fn clear_route(profile: &str, active: Option<&str>, admin_id: &str) -> Clear
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::usage::{days_from_civil, FixedZone, TableZone};
+    use crate::usage::{FixedZone, TableZone};
     use crate::usage_store::MemStore;
+    use ruya_calendar::days_from_civil;
     use ruya_ids::flatpak_item;
 
     const A: &str = "org.ruyaos.Racer";
@@ -601,7 +602,7 @@ mod tests {
     const IB: &str = "unit-b";
     /// 2026-11-07 12:00 UTC.
     fn t0() -> i64 {
-        i64::from(days_from_civil(2026, 11, 7)) * 86_400 + 12 * 3600
+        days_from_civil(2026, 11, 7) * 86_400 + 12 * 3600
     }
 
     /// A fake clock: the monotonic and the wall clock move together unless a test moves the wall.
@@ -1055,7 +1056,7 @@ mod tests {
         // Istanbul, UTC+3: 22:00 UTC is 01:00 the next local day.
         let mut t = Tracker::new(MemStore::default(), FixedZone(3 * 3600));
         let mut c = Clock::new();
-        c.wall = i64::from(days_from_civil(2026, 11, 7)) * 86_400 + 21 * 3600 + 30 * 60; // 21:30 UTC
+        c.wall = days_from_civil(2026, 11, 7) * 86_400 + 21 * 3600 + 30 * 60; // 21:30 UTC
         start(&mut t, &c, IA, "p1", A);
         run(&mut t, &mut c, 3600, "p1", Some(IA), Attention::Active); // to 22:30 UTC = 01:30 local
         t.app_exited(IA, Some(EndReason::Quit), c.now(), c.wall);
@@ -1073,7 +1074,7 @@ mod tests {
         // 20:30 UTC to 22:30 UTC is 23:30 to 01:30 local: it straddles local midnight.
         let mut t = Tracker::new(MemStore::default(), FixedZone(3 * 3600));
         let mut c = Clock::new();
-        c.wall = i64::from(days_from_civil(2026, 11, 7)) * 86_400 + 20 * 3600 + 30 * 60;
+        c.wall = days_from_civil(2026, 11, 7) * 86_400 + 20 * 3600 + 30 * 60;
         start(&mut t, &c, IA, "p1", A);
         run(&mut t, &mut c, 7200, "p1", Some(IA), Attention::Active);
         t.app_exited(IA, Some(EndReason::Quit), c.now(), c.wall);
@@ -1096,7 +1097,7 @@ mod tests {
     #[test]
     fn a_dst_day_has_its_own_length_and_the_totals_follow() {
         // Berlin, 2026-03-29: at 01:00 UTC the clocks jump from +1 to +2 (a 23 hour day).
-        let change = i64::from(days_from_civil(2026, 3, 29)) * 86_400 + 3600;
+        let change = days_from_civil(2026, 3, 29) * 86_400 + 3600;
         let zone = TableZone(vec![(0, 3600), (change, 7200)]);
         let mut t = Tracker::new(MemStore::default(), zone);
         let mut c = Clock::new();
@@ -1184,7 +1185,7 @@ mod tests {
     fn old_sessions_roll_up_when_the_ledger_is_loaded_and_each_new_day() {
         let mut store = MemStore::default();
         let mut l = Ledger::default();
-        let old_day = days_from_civil(2026, 11, 7) - 100;
+        let old_day = i32::try_from(days_from_civil(2026, 11, 7)).expect("fits") - 100;
         l.sessions.push(crate::usage::testing::rec(
             A,
             i64::from(old_day) * 86_400,

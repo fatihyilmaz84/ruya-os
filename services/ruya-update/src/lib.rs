@@ -5,7 +5,5 @@
 pub mod bootc;
 pub mod dbus;
 pub mod job;
-pub mod ledger;
-pub mod rate;
 pub mod schedule;
 pub mod service;

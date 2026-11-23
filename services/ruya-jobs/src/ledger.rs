@@ -1,15 +1,11 @@
-//! The per-day download totals of `GetDownloadStats` (ADR-026 "Stats"): the bytes this service
-//! fetched each local day, and the jobs that finished. Kept for 90 days in a root-only file in the
-//! state directory. Pure apart from `load`/`save`.
+//! The per-day download totals of `GetDownloadStats` (ADR-026 "Stats"): the bytes a service
+//! fetched each local day, and the jobs that finished. The service keeps it in a root-only file of
+//! its own (its path and how many days are kept are the caller's); pure apart from `load`.
 
 use std::collections::BTreeMap;
 use std::path::Path;
 
 use ruya_calendar::{day_of, format_day, parse_day};
-
-/// Days are kept this long, today included.
-pub const KEEP_DAYS: i64 = 90;
-pub const LEDGER_FILE: &str = "downloads.json";
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Day {
@@ -32,9 +28,9 @@ pub fn local_day(unix: i64, utc_offset_secs: i64) -> String {
     format_day(day_of(unix, utc_offset_secs))
 }
 
-/// The oldest day still kept at `now`.
-pub fn oldest_kept(now: i64, utc_offset_secs: i64) -> String {
-    local_day(now - (KEEP_DAYS - 1) * 86_400, utc_offset_secs)
+/// The oldest day still kept at `now` when `keep_days` days are kept, today included.
+pub fn oldest_kept(now: i64, utc_offset_secs: i64, keep_days: i64) -> String {
+    local_day(now - (keep_days - 1) * 86_400, utc_offset_secs)
 }
 
 impl Ledger {
@@ -118,9 +114,8 @@ impl Ledger {
 
 /// The kept ledger: empty when there is none, an error naming the file when it cannot be used
 /// (it is then left as it is: never overwritten).
-pub fn load(dir: &Path) -> Result<Ledger, String> {
-    let path = dir.join(LEDGER_FILE);
-    match std::fs::read_to_string(&path) {
+pub fn load(path: &Path) -> Result<Ledger, String> {
+    match std::fs::read_to_string(path) {
         Ok(text) => Ledger::from_json(&text).map_err(|e| format!("{}: {e}", path.display())),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Ledger::default()),
         Err(e) => Err(format!("{}: {e}", path.display())),
@@ -147,7 +142,7 @@ mod tests {
             "west of UTC"
         );
         assert_eq!(local_day(951_782_400, 0), "2000-02-29", "a leap day");
-        assert_eq!(oldest_kept(1_795_435_200, 0), "2026-08-26");
+        assert_eq!(oldest_kept(1_795_435_200, 0, 90), "2026-08-26");
     }
 
     #[test]
@@ -190,7 +185,7 @@ mod tests {
         let mut l = Ledger::default();
         l.add("2026-08-25", 1, None);
         l.add("2026-08-26", 1, None);
-        l.prune(&oldest_kept(1_795_435_200, 0));
+        l.prune(&oldest_kept(1_795_435_200, 0, 90));
         assert_eq!(l.stats(90, "0000-00-00").len(), 1);
     }
 
@@ -213,8 +208,9 @@ mod tests {
     #[test]
     fn a_missing_file_is_an_empty_ledger_and_a_corrupt_one_an_error() {
         let dir = tempfile::tempdir().expect("tmp");
-        assert_eq!(load(dir.path()), Ok(Ledger::default()));
-        std::fs::write(dir.path().join(LEDGER_FILE), "garbage").expect("write");
-        assert!(load(dir.path()).is_err());
+        let path = dir.path().join("downloads.json");
+        assert_eq!(load(&path), Ok(Ledger::default()));
+        std::fs::write(&path, "garbage").expect("write");
+        assert!(load(&path).is_err());
     }
 }

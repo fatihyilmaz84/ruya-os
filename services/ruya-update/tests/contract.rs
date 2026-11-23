@@ -6,9 +6,9 @@ use std::sync::Arc;
 use ruya_contract_test::{
     assert_interfaces_are, assert_record_served, assert_serves, record_signatures,
 };
+use ruya_jobs::ledger::Day;
 use ruya_update::bootc::{Bootc, Deployment, FakeBootc, FakeEnd, FakeRun, HostStatus, Progress};
 use ruya_update::dbus::{day_dict, job_dict, record, DynBootc, UpdateIface};
-use ruya_update::ledger::Day;
 use ruya_update::schedule::FakeClock;
 use ruya_update::service::Update;
 

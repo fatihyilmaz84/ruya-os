@@ -4,7 +4,7 @@
 //! for the rate).
 
 use crate::bootc::Progress;
-use crate::rate::Rate;
+use ruya_jobs::rate::Rate;
 
 /// `percent` when every byte has arrived; the import and the deploy take it to `INSTALL_END`.
 pub const DOWNLOAD_END: u32 = 90;

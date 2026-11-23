@@ -11,8 +11,8 @@ use crate::bootc::{tag_of, with_tag, Bootc, HostStatus, Progress, Pull, PullEnd,
 use crate::job::{
     Job, JobRecord, JobState, REASON_PLAYING, STATUS_CANCELLED, STATUS_FAILED, STATUS_OK,
 };
-use crate::ledger::{self, local_day, oldest_kept, Day, Ledger, LEDGER_FILE};
 use crate::schedule::{parse_seconds, Clock, Reboot, Schedule};
+use ruya_jobs::ledger::{self, local_day, oldest_kept, Day, Ledger};
 
 /// Statuses of the method replies (stable API, `api/dbus/org.ruyaos.Update1.xml`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,6 +92,9 @@ const AUTO_RESTART_FILE: &str = "auto_restart";
 const LAST_CHECK_FILE: &str = "last_check";
 /// The image job while it is paused or runs (so a restart finds it paused).
 const JOB_FILE: &str = "download_job";
+/// The download ledger (GetDownloadStats), and how many days it keeps.
+const LEDGER_FILE: &str = "downloads.json";
+const KEEP_DAYS: i64 = 90;
 /// While a download runs, its changes are sent at most this often (a phase change at once).
 pub const JOB_EMIT_MS: u64 = 1000;
 
@@ -238,14 +241,15 @@ impl<B: Bootc> Update<B> {
         let job = dir.as_deref().and_then(load_job);
         // A paused download is an update waiting: Download (or ResumeDownload) continues it.
         let available = job.as_ref().map(|j| j.version.clone()).unwrap_or_default();
-        let (ledger, ledger_problem) = match dir.as_deref().map(ledger::load) {
-            Some(Ok(ledger)) => (ledger, String::new()),
-            Some(Err(problem)) => {
-                eprintln!("ruya-update: not counting downloads: {problem}");
-                (Ledger::default(), problem)
-            }
-            None => (Ledger::default(), String::new()),
-        };
+        let (ledger, ledger_problem) =
+            match dir.as_deref().map(|d| ledger::load(&d.join(LEDGER_FILE))) {
+                Some(Ok(ledger)) => (ledger, String::new()),
+                Some(Err(problem)) => {
+                    eprintln!("ruya-update: not counting downloads: {problem}");
+                    (Ledger::default(), problem)
+                }
+                None => (Ledger::default(), String::new()),
+            };
         Update {
             bootc,
             dir,
@@ -658,14 +662,14 @@ impl<B: Bootc> Update<B> {
 
     /// GetDownloadStats: per local day, newest first, at most `days` (1..90).
     pub fn download_stats(&self, days: u32, clock: &dyn Clock) -> (Status, Vec<Day>) {
-        if days == 0 || i64::from(days) > ledger::KEEP_DAYS {
+        if days == 0 || i64::from(days) > KEEP_DAYS {
             return (Status::Invalid, Vec::new());
         }
         let inner = self.lock();
         if !inner.ledger_problem.is_empty() {
             return (Status::Failed, Vec::new());
         }
-        let oldest = oldest_kept(clock.now(), clock.utc_offset_secs());
+        let oldest = oldest_kept(clock.now(), clock.utc_offset_secs(), KEEP_DAYS);
         (Status::Ok, inner.ledger.stats(days, &oldest))
     }
 
@@ -695,7 +699,7 @@ impl<B: Bootc> Update<B> {
         }
         let (now, offset) = (clock.now(), clock.utc_offset_secs());
         inner.ledger.add(&local_day(now, offset), bytes, finished);
-        inner.ledger.prune(&oldest_kept(now, offset));
+        inner.ledger.prune(&oldest_kept(now, offset, KEEP_DAYS));
         if let Some(dir) = &self.dir {
             if let Err(e) = save_file(dir, LEDGER_FILE, &inner.ledger.to_json()) {
                 eprintln!("ruya-update: cannot write the download ledger: {e}");
@@ -2446,7 +2450,7 @@ mod tests {
         u.run_download(&clk(), &mut || {});
         let (_, days) = u.download_stats(7, &clk());
         assert_eq!((days[0].bytes, days[0].jobs, days[0].failed), (1100, 1, 0));
-        let kept = ledger::load(dir.path()).expect("written");
+        let kept = ledger::load(&dir.path().join(LEDGER_FILE)).expect("written");
         assert_eq!(kept.stats(7, "1970-01-01"), days);
         assert_eq!(u.download_stats(0, &clk()).0, Status::Invalid);
         assert_eq!(u.download_stats(91, &clk()).0, Status::Invalid);
