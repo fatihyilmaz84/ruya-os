@@ -25,6 +25,7 @@ MANAGE = "org.ruyaos.Platform1.Manage"
 
 # What a sandboxed app must not reach: (label, destination, path, interface, member, arguments).
 FORBIDDEN = [
+    ("Manage.ListCapabilities", DEST, PATH, MANAGE, "ListCapabilities", []),
     ("Manage.ListPermissions", DEST, PATH, MANAGE, "ListPermissions", ["p1"]),
     ("Manage.SetPermission", DEST, PATH, MANAGE, "SetPermission", ["p1", "org.ruyaos.TestPlatformA", "lifecycle", True]),
     ("Manage.NotifyLifecycle", DEST, PATH, MANAGE, "NotifyLifecycle", ["p1", "x.scope", "resume", 0]),

@@ -17,7 +17,7 @@
     org.ruyaos.Platform1.Manage     internal, untagged: the shell (the per-app permission pane,
                                     T-220) and root (ruya-session, RUY-1099). The service checks the
                                     caller's uid itself as well (defence in depth; off in the
-                                    session-bus dev mode): ListPermissions and SetPermission root or ruya-shell,
+                                    session-bus dev mode): ListCapabilities, ListPermissions and SetPermission root or ruya-shell,
                                     NotifyLifecycle root only (org.ruyaos.Caller "root").
 
   Identity (Lifecycle): the caller is identified from its connection, never from an argument
@@ -108,6 +108,17 @@
   </interface>
 
   <interface name="org.ruyaos.Platform1.Manage">
+    <!-- Every capability the door serves and what it is before the player chose: (key, allowed by
+         default), in the order they are registered ("lifecycle" true; the keys are the registry's,
+         the defaults capabilities.rs's). The permission pane lists these, and ListPermissions only
+         what was set. The service cannot tell people apart (callers are root or ruya-shell): that a
+         profile changes its own permissions, an admin any profile's and a guest none is the
+         shell's rule (ADR-022). "ok", "not-allowed". -->
+    <method name="ListCapabilities">
+      <arg name="status" type="s" direction="out"/>
+      <arg name="capabilities" type="a(sb)" direction="out"/>
+    </method>
+
     <!-- The player's choices for `profile_id`: every (app id, capability, allowed) that was set.
          A pair that is not listed has its capability's default. "ok", "invalid-argument" (also: no
          such profile), "not-allowed", "failed". -->

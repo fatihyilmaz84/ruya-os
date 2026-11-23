@@ -252,6 +252,24 @@ impl ManageIface {
 
 #[interface(name = "org.ruyaos.Platform1.Manage")]
 impl ManageIface {
+    async fn list_capabilities(
+        &self,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] conn: &Connection,
+    ) -> (String, Vec<(String, bool)>) {
+        let shell = self.checks.shell_uid;
+        if !self
+            .caller_may(&header, conn, |uid| may_manage(uid, shell))
+            .await
+        {
+            return (Status::NotAllowed.as_str().to_owned(), Vec::new());
+        }
+        match with(&self.core, |door| door.list_capabilities()) {
+            Some(list) => (Status::Ok.as_str().to_owned(), list),
+            None => (Status::Failed.as_str().to_owned(), Vec::new()),
+        }
+    }
+
     async fn list_permissions(
         &self,
         profile_id: &str,
