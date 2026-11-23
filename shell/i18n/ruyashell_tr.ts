@@ -61,7 +61,7 @@
     <message>
         <location line="+12"/>
         <source>%1: %2. Source: %3</source>
-        <extracomment>%1 is a runner&apos;s version (GE-Proton11-12), %2 its licences (SPDX), %3 the web address of its source.</extracomment>
+        <extracomment>%1 is a runner&apos;s version (GE-Proton11-13), %2 its licences (SPDX), %3 the web address of its source.</extracomment>
         <translation>%1: %2. Kaynak: %3</translation>
     </message>
 </context>

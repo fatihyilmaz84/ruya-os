@@ -39,7 +39,7 @@ MAX_FOLDERS = 32  # the console's own launcher reads at most this many
 
 
 def numbers(version):
-    """The numbers in a version text, compared in order: GE-Proton11-12 is [11, 12]."""
+    """The numbers in a version text, compared in order: GE-Proton11-13 is [11, 12]."""
     return [int(n) for n in re.findall(r"[0-9]+", version)]
 
 

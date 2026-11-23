@@ -194,8 +194,8 @@ mod tests {
     use ruya_play_launch::fake::FakeOs;
     use std::fs;
 
-    const GE_VDF: &str = "\"compatibilitytools\"\n{\n  \"compat_tools\"\n  {\n    \"GE-Proton11-12\"\n    {\n      \"install_path\" \".\"\n      \"display_name\" \"GE-Proton11-12\"\n      \"from_oslist\" \"windows\"\n      \"to_oslist\" \"linux\"\n    }\n  }\n}\n";
-    const TOOL: &str = "GE-Proton11-12";
+    const GE_VDF: &str = "\"compatibilitytools\"\n{\n  \"compat_tools\"\n  {\n    \"GE-Proton11-13\"\n    {\n      \"install_path\" \".\"\n      \"display_name\" \"GE-Proton11-13\"\n      \"from_oslist\" \"windows\"\n      \"to_oslist\" \"linux\"\n    }\n  }\n}\n";
+    const TOOL: &str = "GE-Proton11-13";
 
     #[test]
     fn the_run_url_is_built_from_the_digits_only() {
@@ -303,7 +303,7 @@ mod tests {
             let root = format!("{RUNNERS}/{folder}");
             os.file(
                 &format!("{root}/runner.json"),
-                RUNNER_JSON.replace("GE-Proton11-12", version),
+                RUNNER_JSON.replace("GE-Proton11-13", version),
             );
             os.file(&format!("{root}/proton"), "#!/bin/sh\n");
             os.file(&format!("{root}/{TOOL_FILE}"), GE_VDF.replace(TOOL, tool));
@@ -315,7 +315,7 @@ mod tests {
     fn the_newest_proton_runner_by_its_version_wins_not_the_folder_name() {
         let os = image(&[
             ("ProtonGE99", "GE-Proton10-34", "GE-Proton10-34"),
-            ("ProtonGE11", "GE-Proton11-12", TOOL),
+            ("ProtonGE11", "GE-Proton11-13", TOOL),
         ]);
         assert_eq!(default_tool(&os, RUNNERS), Ok(TOOL.to_owned()));
     }
@@ -326,7 +326,7 @@ mod tests {
         os.file(
             "/runners/Other/runner.json",
             RUNNER_JSON
-                .replace("GE-Proton11-12", "GE-Proton12-1")
+                .replace("GE-Proton11-13", "GE-Proton12-1")
                 .replace("\"kind\": \"proton\"", "\"kind\": \"emulator\"")
                 .replace("\"entry\": { \"proton\": \"proton\" },", ""),
         );
@@ -345,7 +345,7 @@ mod tests {
     fn a_newest_runner_without_a_readable_tool_file_is_an_error() {
         let mut os = image(&[
             ("ProtonGE10", "GE-Proton10-34", "GE-Proton10-34"),
-            ("ProtonGE11", "GE-Proton11-12", TOOL),
+            ("ProtonGE11", "GE-Proton11-13", TOOL),
         ]);
         os.nodes.remove("/runners/ProtonGE11/compatibilitytool.vdf");
         assert!(default_tool(&os, RUNNERS).is_err());
@@ -360,7 +360,7 @@ mod tests {
         tmp: &Path,
         config: Option<&str>,
     ) -> (PathBuf, Result<Done, String>, Option<String>) {
-        let os = image(&[("ProtonGE11", "GE-Proton11-12", TOOL)]);
+        let os = image(&[("ProtonGE11", "GE-Proton11-13", TOOL)]);
         let home = tmp.join("home");
         let file = home.join(CONFIG);
         fs::create_dir_all(file.parent().expect("parent")).expect("dirs");
@@ -384,7 +384,7 @@ mod tests {
         // The player picks another tool in Steam; the next start leaves it.
         let chosen = first.replace(TOOL, "proton_9");
         fs::write(home.join(CONFIG), &chosen).expect("player's choice");
-        let os = image(&[("ProtonGE11", "GE-Proton11-12", TOOL)]);
+        let os = image(&[("ProtonGE11", "GE-Proton11-13", TOOL)]);
         assert_eq!(run(&home, &os, RUNNERS), Ok(Done::AlreadySettled));
         assert_eq!(fs::read_to_string(home.join(CONFIG)).expect("read"), chosen);
 
@@ -452,7 +452,7 @@ mod tests {
         fn step(home: &Path) -> Result<Done, String> {
             run(
                 home,
-                &image(&[("ProtonGE11", "GE-Proton11-12", TOOL)]),
+                &image(&[("ProtonGE11", "GE-Proton11-13", TOOL)]),
                 RUNNERS,
             )
         }

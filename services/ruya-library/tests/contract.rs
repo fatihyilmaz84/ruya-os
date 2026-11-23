@@ -101,7 +101,7 @@ fn library1_runner_and_resolution_records_have_the_documented_keys() {
     let full = Runner {
         family: "proton-ge".into(),
         kind: "proton".into(),
-        version: "GE-Proton11-12".into(),
+        version: "GE-Proton11-13".into(),
         licence: Some("BSD-3-Clause".into()),
         source_url: Some("https://example.org/ge".into()),
     };

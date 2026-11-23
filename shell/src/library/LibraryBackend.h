@@ -14,7 +14,7 @@
 // Everything "" (and no fallback) for a native game.
 struct LibraryResolution
 {
-    QString runner;       // "<family> <version>" the launch would use, e.g. "proton-ge GE-Proton11-12"
+    QString runner;       // "<family> <version>" the launch would use, e.g. "proton-ge GE-Proton11-13"
     QString runnerSource; // "bundled" | "system" (with runner)
     QString runnerTested; // the version the developer tested with; "" when none
     QString resolveError; // one English sentence: why the launch would refuse; "" when it can start
@@ -118,7 +118,7 @@ struct LibraryRunner
 {
     QString family;  // "proton-ge", "wine"
     QString kind;    // "wine" | "proton" | "emulator" | "engine"
-    QString version; // "GE-Proton11-12"
+    QString version; // "GE-Proton11-13"
     QString licence; // SPDX; "" when runner.json names none
     QString sourceUrl;
 

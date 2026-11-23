@@ -7,7 +7,7 @@ import RuyaShell
 // System) and the rows below preview it (Starts with, Tested with, the Versions). After a crash on the system
 // runner "Try the bundled runner" comes first; a refusal and a choice that falls back are worded by Library1's
 // code and flag; Library1 not answering gives Try again. Against the Library mock's "play" scenario: Star
-// Hopper, a Proton game with a bundled GE-Proton10-9 that the image's GE-Proton11-12 runs by default. Signs
+// Hopper, a Proton game with a bundled GE-Proton10-9 that the image's GE-Proton11-13 runs by default. Signs
 // in as Player One (admin, p1).
 Item {
     id: host
@@ -142,12 +142,12 @@ Item {
             compare(find("compatRunner").currentLabel, "Package default")
             compare(find("compatRunner").options.map(o => o.value), ["package", "bundled", "system"])
             verify(!find("compatTry").visible, "no crash, no Try")
-            compare(find("compatStartsWith").value, "proton-ge GE-Proton11-12")
+            compare(find("compatStartsWith").value, "proton-ge GE-Proton11-13")
             compare(find("compatStartsWith").detail, "System copy")
             compare(find("compatTested").value, "proton-ge GE-Proton10-9")
             verify(find("compatVersions").visible)
             compare(find("compatBundled").value, "proton-ge GE-Proton10-9")
-            compare(find("compatSystem").value, "proton-ge GE-Proton11-12")
+            compare(find("compatSystem").value, "proton-ge GE-Proton11-13")
             verify(!find("compatRunnerNote").visible, "nothing to say")
             verify(!find("compatError").visible)
             const order = ["compatStartsWith", "compatTested", "compatBundled", "compatSystem"]
@@ -201,7 +201,7 @@ Item {
             compare(runner.value, "system")
             tryCompare(find("page_playCompatibility"), "saving", "")
             compare(storedChoice(), "system")
-            tryCompare(find("compatStartsWith"), "value", "proton-ge GE-Proton11-12")
+            tryCompare(find("compatStartsWith"), "value", "proton-ge GE-Proton11-13")
             keyClick(Qt.Key_Right)                       // wraps
             compare(runner.value, "package")
             tryCompare(find("page_playCompatibility"), "saving", "")
@@ -223,7 +223,7 @@ Item {
         // The package's bundled copy is what the bundled choice gets; without one Library1 answers the package
         // default, flagged, and Bundled is not offered (05 §6.2), not even after a crash.
         function test_without_a_bundled_copy_bundled_is_not_offered() {
-            Library.mockSetResolution(tc.hopper, "bundled", { playRunner: "proton-ge GE-Proton11-12", playRunnerSource: "system",
+            Library.mockSetResolution(tc.hopper, "bundled", { playRunner: "proton-ge GE-Proton11-13", playRunnerSource: "system",
                                                               playRunnerTested: "GE-Proton10-9", playFallback: true })
             crashedLastTime()
             signIn()
@@ -237,7 +237,7 @@ Item {
 
         function test_a_refusal_is_worded_by_its_code_and_hides_tested() {
             Library.mockSetResolution(tc.hopper, "system", {
-                playResolveError: "The OS runner is GE-Proton11-12, a major version above the allowed 10.",
+                playResolveError: "The OS runner is GE-Proton11-13, a major version above the allowed 10.",
                 playResolveCode: "resolve.system_too_new" })
             signIn()
             openCompat()
@@ -295,7 +295,7 @@ Item {
         // A stored Bundled for a package without a copy (a package updated since) keeps the option, so the row never
         // shows an empty value, and says why it uses the package default (RUY-905 deviation 3, accepted).
         function test_a_stored_bundled_choice_without_a_copy_keeps_the_option_and_says_so() {
-            Library.mockSetResolution(tc.hopper, "bundled", { playRunner: "proton-ge GE-Proton11-12", playRunnerSource: "system",
+            Library.mockSetResolution(tc.hopper, "bundled", { playRunner: "proton-ge GE-Proton11-13", playRunnerSource: "system",
                                                               playRunnerTested: "GE-Proton10-9", playFallback: true })
             signIn()
             Library.setRunnerChoice(tc.hopper, "bundled")
@@ -381,7 +381,7 @@ Item {
             tryCompare(runner, "value", "package")
             tryVerify(() => find("compatError").visible, 2000)
             compare(find("compatError").text, "The choice could not be saved. Try again.")
-            compare(find("compatStartsWith").value, "proton-ge GE-Proton11-12")
+            compare(find("compatStartsWith").value, "proton-ge GE-Proton11-13")
             Library.mockFailRunnerCalls([])
             compare(storedChoice(), "package")
         }
@@ -413,7 +413,7 @@ Item {
             tryVerify(() => page.loaded, 2000)
             tryVerify(() => runner.activeFocus, 2000, "the focus goes to the Runner row")
             verify(!retry.visible)
-            compare(find("compatStartsWith").value, "proton-ge GE-Proton11-12")
+            compare(find("compatStartsWith").value, "proton-ge GE-Proton11-13")
         }
 
         // At 720p the same layout at u = 2/3, and Turkish fits: no value elides.
@@ -452,7 +452,7 @@ Item {
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             DeviceSettings.language = lang
             Library.mockSetResolution(tc.hopper, "system", {
-                playResolveError: "The OS runner is GE-Proton11-12, a major version above the allowed 10.",
+                playResolveError: "The OS runner is GE-Proton11-13, a major version above the allowed 10.",
                 playResolveCode: "resolve.system_too_new" })
             signIn()
             openCompat()

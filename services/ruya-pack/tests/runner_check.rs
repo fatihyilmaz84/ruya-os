@@ -9,9 +9,9 @@ use serde_json::json;
 use std::path::{Path, PathBuf};
 
 const RUNNER_JSON: &str = r#"{"format": 1, "family": "proton-ge", "kind": "proton",
-  "version": "GE-Proton11-12", "arch": "x86_64", "entry": {"proton": "proton"},
+  "version": "GE-Proton11-13", "arch": "x86_64", "entry": {"proton": "proton"},
   "licence": "BSD-3-Clause AND LGPL-2.1-or-later",
-  "source_url": "https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12"}"#;
+  "source_url": "https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-13"}"#;
 
 const PROTON: &[u8] = b"#!/usr/bin/env python3\nprint('proton')\n";
 const WINE: &[u8] = b"\x7fELF fake wine";
@@ -108,8 +108,8 @@ fn the_hash_is_the_formula_over_the_tree_and_leaves_its_own_file_out() {
     assert_eq!(
         o.json["runner"],
         json!({"name": "ProtonGE11", "family": "proton-ge", "kind": "proton",
-               "version": "GE-Proton11-12", "licence": "BSD-3-Clause AND LGPL-2.1-or-later",
-               "source_url": "https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12"})
+               "version": "GE-Proton11-13", "licence": "BSD-3-Clause AND LGPL-2.1-or-later",
+               "source_url": "https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-13"})
     );
     assert!(
         !dir.join(HASH_FILE).exists(),

@@ -34,4 +34,4 @@ if ! command -v "$pack" >/dev/null 2>&1; then
 fi
 # The sample uses source: system, so nothing is bundled; the dry run names the OS's GE-Proton.
 "$pack" build "$here/package" -o "$here/hello-play-wine.play.zip"
-"$pack" inspect "$here/hello-play-wine.play.zip" --system-proton-ge GE-Proton11-12
+"$pack" inspect "$here/hello-play-wine.play.zip" --system-proton-ge GE-Proton11-13

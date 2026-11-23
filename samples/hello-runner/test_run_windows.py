@@ -59,17 +59,17 @@ class PickRunner(unittest.TestCase):
 
     def test_takes_the_newest_major_it_supports(self):
         make_runner(self.root, "ProtonGE10", "GE-Proton10-34")
-        make_runner(self.root, "ProtonGE11", "GE-Proton11-12")
+        make_runner(self.root, "ProtonGE11", "GE-Proton11-13")
         make_runner(self.root, "ProtonGE12", "GE-Proton12-1")  # newer than the majors it tested
         name, version, proton = run_windows.pick_runner(self.root)
-        self.assertEqual((name, version), ("ProtonGE11", "GE-Proton11-12"))
+        self.assertEqual((name, version), ("ProtonGE11", "GE-Proton11-13"))
         self.assertEqual(proton, os.path.join(self.root, "ProtonGE11", "proton"))
 
     def test_compares_the_numbers_not_the_folder_names(self):
         make_runner(self.root, "ProtonGE11", "GE-Proton10-34")
         make_runner(self.root, "ProtonGE10", "GE-Proton11-2")
-        make_runner(self.root, "ProtonGE9", "GE-Proton11-12")
-        self.assertEqual(run_windows.pick_runner(self.root)[:2], ("ProtonGE9", "GE-Proton11-12"))
+        make_runner(self.root, "ProtonGE9", "GE-Proton11-13")
+        self.assertEqual(run_windows.pick_runner(self.root)[:2], ("ProtonGE9", "GE-Proton11-13"))
 
     def test_skips_what_it_cannot_use(self):
         make_runner(self.root, "format2", "GE-Proton11-99", format=2)
@@ -86,7 +86,7 @@ class PickRunner(unittest.TestCase):
         self.assertEqual(run_windows.pick_runner(self.root)[0], "good")
 
     def test_a_missing_entry_file_or_runner_json_is_skipped(self):
-        folder = make_runner(self.root, "gone", "GE-Proton11-12")
+        folder = make_runner(self.root, "gone", "GE-Proton11-13")
         os.remove(os.path.join(folder, "proton"))
         os.makedirs(os.path.join(self.root, "empty"))
         with open(os.path.join(self.root, "garbage"), "w", encoding="utf-8") as f:
@@ -101,7 +101,7 @@ class PickRunner(unittest.TestCase):
 
     @unittest.skipUnless(can_link(), "this host cannot make symbolic links")
     def test_follows_no_links(self):
-        real = make_runner(self.root, "real", "GE-Proton11-12")
+        real = make_runner(self.root, "real", "GE-Proton11-13")
         os.symlink(real, os.path.join(self.root, "link"), target_is_directory=True)
         folder = make_runner(self.root, "plain", "GE-Proton11-50")
         os.remove(os.path.join(folder, "proton"))
@@ -130,7 +130,7 @@ class Main(unittest.TestCase):
         return code, calls, out.getvalue(), err.getvalue()
 
     def test_starts_proton_the_way_the_console_does(self):
-        make_runner(self.root, "ProtonGE11", "GE-Proton11-12")
+        make_runner(self.root, "ProtonGE11", "GE-Proton11-13")
         code, calls, out, _ = self.run_main(["--runners", self.root, "game.exe", "-windowed"])
         self.assertIsNone(code)
         self.assertEqual(len(calls), 1)
@@ -142,12 +142,12 @@ class Main(unittest.TestCase):
         self.assertEqual(env["STEAM_COMPAT_CLIENT_INSTALL_PATH"], os.path.join(self.data, "proton", "client"))
         self.assertTrue(os.path.isdir(env["STEAM_COMPAT_CLIENT_INSTALL_PATH"]))
         self.assertNotIn("WINEPREFIX", env)
-        self.assertIn("using ProtonGE11 (GE-Proton11-12)", out)
+        self.assertIn("using ProtonGE11 (GE-Proton11-13)", out)
 
     def test_proton_gets_a_game_id_and_a_working_folder_it_can_read(self):
         # protonfixes stops on a missing PWD, and on a compat folder without digits when no game
         # id is set: an id or PWD inherited from the caller must not leak through either.
-        make_runner(self.root, "ProtonGE11", "GE-Proton11-12")
+        make_runner(self.root, "ProtonGE11", "GE-Proton11-13")
         with mock.patch.dict(os.environ, {"SteamAppId": "620", "SteamGameId": "620", "PWD": "/elsewhere"}):
             _, calls, _, _ = self.run_main(["--runners", self.root, "game.exe"])
         env = calls[0][2]
@@ -158,7 +158,7 @@ class Main(unittest.TestCase):
     def self_test(self, writes=True, status=0, display=":0"):
         """--self-test with subprocess.run recorded. `writes`: the fake cmd.exe does what the
         argument says (writes the marker to the Windows path after the `>`), as a real one does."""
-        make_runner(self.root, "ProtonGE11", "GE-Proton11-12")
+        make_runner(self.root, "ProtonGE11", "GE-Proton11-13")
         calls = []
 
         def fake_run(argv, env=None):
@@ -223,7 +223,7 @@ class Main(unittest.TestCase):
         self.assertIn("needs an X display", err)
 
     def test_a_program_needs_no_display_check_and_is_still_exec_ed(self):
-        make_runner(self.root, "ProtonGE11", "GE-Proton11-12")
+        make_runner(self.root, "ProtonGE11", "GE-Proton11-13")
         with mock.patch.dict(os.environ):
             os.environ.pop("DISPLAY", None)
             code, calls, _, _ = self.run_main(["--runners", self.root, "game.exe"])
@@ -244,7 +244,7 @@ class Main(unittest.TestCase):
         self.assertIn("usage:", err)
 
     def test_a_runner_that_cannot_start_is_an_error_not_a_traceback(self):
-        make_runner(self.root, "ProtonGE11", "GE-Proton11-12")
+        make_runner(self.root, "ProtonGE11", "GE-Proton11-13")
         out, err = io.StringIO(), io.StringIO()
         with mock.patch.object(os, "execve", side_effect=OSError("denied")):
             with redirect_stdout(out), redirect_stderr(err):

@@ -76,9 +76,9 @@ QList<LibraryRunner> pinnedRunners()
     LibraryRunner proton;
     proton.family = QStringLiteral("proton-ge");
     proton.kind = QStringLiteral("proton");
-    proton.version = QStringLiteral("GE-Proton11-12");
+    proton.version = QStringLiteral("GE-Proton11-13");
     proton.licence = QStringLiteral("BSD-3-Clause AND LGPL-2.1-or-later AND LGPL-2.0-or-later AND Zlib AND MIT AND OFL-1.1");
-    proton.sourceUrl = QStringLiteral("https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12");
+    proton.sourceUrl = QStringLiteral("https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-13");
     LibraryRunner wine;
     wine.family = QStringLiteral("wine");
     wine.kind = QStringLiteral("wine");
@@ -252,9 +252,9 @@ void MockLibraryBackend::reset(const QString &scenario)
             p.playSigner = QStringLiteral("Example Games");
             p.playSignerKeyId = QStringLiteral("0123456789abcdef0123456789abcdef");
             // A Windows game on Proton with a bundled GE-Proton10-9, the version its developer tested, and
-            // source "newest": the image's GE-Proton11-12 runs it (RUY-903). Bundled is its own copy, System
+            // source "newest": the image's GE-Proton11-13 runs it (RUY-903). Bundled is its own copy, System
             // the image's: what the launcher answers such a package against the pinned runners (RUY-905).
-            const LibraryResolution imageProton = resolved("proton-ge GE-Proton11-12", "system", "GE-Proton10-9");
+            const LibraryResolution imageProton = resolved("proton-ge GE-Proton11-13", "system", "GE-Proton10-9");
             p.resolution = imageProton;
             m_resolutions[p.id] = {{QStringLiteral("package"), imageProton},
                                    {QStringLiteral("bundled"), resolved("proton-ge GE-Proton10-9", "bundled", "GE-Proton10-9")},

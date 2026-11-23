@@ -27,7 +27,7 @@ Item {
             compare(p.playSigner, "Example Games")
             compare(p.playSignerKeyId, "0123456789abcdef0123456789abcdef")
             compare(p.playScreenshots.length, 0, "no screenshot path to a file the mock does not have (RUY-886)")
-            compare(p.playRunner, "proton-ge GE-Proton11-12")
+            compare(p.playRunner, "proton-ge GE-Proton11-13")
             compare(p.playRunnerSource, "system")
             compare(p.playRunnerTested, "GE-Proton10-9")
             compare(p.playResolveError, "")
@@ -72,7 +72,7 @@ Item {
             compare(q.playResolveCode, "resolve.system_too_old", "RUY-905: the code beside the sentence")
             compare(q.playRunner, "")
             compare(q.playRunnerSource, "")
-            compare(Library.item("flatpak:play.com.example.starhopper").playRunner, "proton-ge GE-Proton11-12")
+            compare(Library.item("flatpak:play.com.example.starhopper").playRunner, "proton-ge GE-Proton11-13")
             Library.resetMockForTests("")
         }
 
@@ -190,7 +190,7 @@ Item {
             tryCompare(resolved, "count", 1)
             compare(resolved.signalArguments[0][2], "ok")
             const r = resolved.signalArguments[0][3]
-            compare(r.playRunner, "proton-ge GE-Proton11-12")
+            compare(r.playRunner, "proton-ge GE-Proton11-13")
             compare(r.playRunnerSource, "system")
             compare(r.playRunnerTested, "GE-Proton10-9")
             compare(r.playResolveError, "")
@@ -232,7 +232,7 @@ Item {
             compare(Library.runners.length, 0, "the late reply of the first list was dropped")
             Library.resetMockForTests("")
             tryVerify(() => Library.runners.length === 2)
-            compare(Library.runners[0].version, "GE-Proton11-12")
+            compare(Library.runners[0].version, "GE-Proton11-13")
             compare(Library.runners[1].version, "wine-11.0")
         }
     }
