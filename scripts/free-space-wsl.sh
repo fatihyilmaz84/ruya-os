@@ -15,6 +15,9 @@ podman images --format '{{.Repository}}:{{.Tag}}' | grep '^localhost:5000/' | xa
 # build.sh tags every Containerfile stage as localhost/ruyaos-cache:<stage> (RUY-771), so the build
 # cache is not dangling and a plain prune keeps it; stale untagged images go.
 podman image prune -f >/dev/null
+# A crashed build leaves its working folders and anonymous volumes behind (RUY-957).
+rm -rf /var/tmp/buildah[0-9]* 2>/dev/null || true
+podman volume prune -f >/dev/null 2>&1 || true
 podman images --format '  kept {{.Repository}}:{{.Tag}} {{.Size}}'
 fstrim -a >/dev/null 2>&1 || true
 echo "  WSL in use: $(df -h --output=used / | tail -1 | tr -d ' ')"
