@@ -1020,6 +1020,36 @@ This can&apos;t be undone.</translation>
     <name>BatteryChip</name>
     <message>
         <location filename="../qml/BatteryChip.qml" line="+53"/>
+        <source>full</source>
+        <translation>full</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>high</source>
+        <translation>high</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>medium</source>
+        <translation>medium</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>low</source>
+        <translation>low</translation>
+    </message>
+    <message>
+        <location line="+0"/>
+        <source>empty</source>
+        <translation>empty</translation>
+    </message>
+    <message>
+        <location line="+5"/>
+        <source>%1 battery level %2</source>
+        <translation>%1 battery level %2</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>%1 battery %2 percent, low</source>
         <translation>%1 battery %2 percent, low</translation>
     </message>
@@ -1057,7 +1087,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>BatteryMore</name>
     <message numerus="yes">
-        <location filename="../qml/BatteryMore.qml" line="+34"/>
+        <location filename="../qml/BatteryMore.qml" line="+35"/>
         <source>%n more device(s) with a battery: %1</source>
         <translation>
             <numerusform>%n more device with a battery: %1</numerusform>
@@ -1070,7 +1100,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 %2 percent</translation>
     </message>
     <message numerus="yes">
-        <location line="+46"/>
+        <location line="+49"/>
         <source>%n more</source>
         <translation>
             <numerusform>%n more</numerusform>
@@ -3117,7 +3147,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>HubPause</name>
     <message>
-        <location filename="../qml/HubPause.qml" line="+132"/>
+        <location filename="../qml/HubPause.qml" line="+141"/>
         <source>Could not resume the game. Open Ruya Hub and choose Resume.</source>
         <translation>Could not resume the game. Open Ruya Hub and choose Resume.</translation>
     </message>
@@ -3417,7 +3447,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ManageProfilesPane</name>
     <message>
-        <location filename="../qml/ManageProfilesPane.qml" line="+162"/>
+        <location filename="../qml/ManageProfilesPane.qml" line="+165"/>
         <source>Your own profile is under My profile.</source>
         <translation>Your own profile is under My profile.</translation>
     </message>
@@ -3452,7 +3482,7 @@ This can&apos;t be undone.</translation>
         <translation>You</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+21"/>
         <source>Add profile</source>
         <translation>Add profile</translation>
     </message>
@@ -3755,7 +3785,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>NotificationBell</name>
     <message numerus="yes">
-        <location filename="../qml/NotificationBell.qml" line="+33"/>
+        <location filename="../qml/NotificationBell.qml" line="+37"/>
         <source>Notifications, %n unread, quiet mode on</source>
         <translation>
             <numerusform>Notifications, %n unread, quiet mode on</numerusform>
@@ -5853,12 +5883,13 @@ This can&apos;t be undone.</translation>
 <context>
     <name>SettingsPane</name>
     <message>
-        <location filename="../qml/SettingsPane.qml" line="+19"/>
+        <location filename="../qml/SettingsPane.qml" line="+20"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
         <location line="+0"/>
+        <location line="+1"/>
         <source>Back</source>
         <translation>Back</translation>
     </message>
@@ -6034,7 +6065,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>Shell</name>
     <message>
-        <location filename="../qml/Shell.qml" line="+755"/>
+        <location filename="../qml/Shell.qml" line="+770"/>
         <source>Could not %1.</source>
         <translation>Could not %1.</translation>
     </message>
@@ -6092,7 +6123,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 stopped unexpectedly</translation>
     </message>
     <message>
-        <location line="+149"/>
+        <location line="+150"/>
         <location line="+29"/>
         <source>Could not close %1.</source>
         <translation>Could not close %1.</translation>
@@ -6133,7 +6164,7 @@ This can&apos;t be undone.</translation>
         <translation>Wallpaper could not be loaded</translation>
     </message>
     <message>
-        <location line="+374"/>
+        <location line="+401"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
@@ -6225,13 +6256,18 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+530"/>
-        <location line="+11"/>
+        <location line="+14"/>
         <location line="+4"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
     <message>
-        <location line="-3"/>
+        <location line="-16"/>
+        <source>Open</source>
+        <translation>Open</translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>Options</source>
         <translation>Options</translation>
     </message>
@@ -6241,12 +6277,12 @@ This can&apos;t be undone.</translation>
         <translation>The chosen sound theme can&apos;t be used. The standard one plays instead.</translation>
     </message>
     <message>
-        <location line="-250"/>
+        <location line="-253"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1945"/>
+        <location line="-1973"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -6271,13 +6307,14 @@ This can&apos;t be undone.</translation>
         <translation>The game could not be closed. Try again.</translation>
     </message>
     <message>
-        <location line="+62"/>
+        <location line="+63"/>
         <location line="+108"/>
         <source>Running app</source>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1676"/>
+        <location line="+1693"/>
+        <location line="+13"/>
         <location line="+3"/>
         <source>Sections</source>
         <translation>Sections</translation>

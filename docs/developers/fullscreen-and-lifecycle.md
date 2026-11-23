@@ -104,7 +104,7 @@ def frame_step():
 When the player chooses "Close game" in Ruya Hub, or the console must stop it, the shell calls `Session1.Stop(instance)`. `ruya-session` then:
 
 1. if your game is frozen (the Hub froze it, or it sat frozen behind Home), **thaws it first**, so that it can handle the signal;
-2. if your game registered for [Lifecycle events](#lifecycle-events-experimental) (experimental, not yet in the image), sends it `Resume` (when it was frozen or held) and then `Stopping(5000)`, and waits until you call `SaveDone` or the 5 seconds have passed, never longer. **An app that did not register gets no `Stopping` and no wait: only the `SIGTERM`.** Neither does an app whose profile has been deleted. If the thaw in step 1 failed, the `Stopping` reaches a game that is still frozen and cannot read it: the 5 seconds run out, and the `SIGTERM` stays the safety net, as always;
+2. if your game registered for [Lifecycle events](#lifecycle-events-experimental) (experimental), sends it `Resume` (when it was frozen or held) and then `Stopping(5000)`, and waits until you call `SaveDone` or the 5 seconds have passed, never longer. **An app that did not register gets no `Stopping` and no wait: only the `SIGTERM`.** Neither does an app whose profile has been deleted. If the thaw in step 1 failed, the `Stopping` reaches a game that is still frozen and cannot read it: the 5 seconds run out, and the `SIGTERM` stays the safety net, as always;
 3. stops the unit and the scope with `systemctl --user stop`: **SIGTERM** to every process of your app;
 4. waits up to **30 seconds** (`STOP_GRACE`, RUY-736; it was 5 s before; counted from the moment the `SIGTERM` is sent, after the thaw (T-466), so a slow thaw of a large game does not shorten the time you get; at power off they count from the `Stopping` instead, so the save window is part of them, see [Power off](#suspend-profile-switch-and-sleep));
 5. if anything is still running, sends **SIGKILL** to the whole group.
@@ -141,7 +141,7 @@ What we know about SIGTERM and the Flatpak sandbox: sending `SIGTERM` to **all**
 
 ## Lifecycle events (experimental)
 
-*Experimental (level 0, [The public surface](api-surface.md)) and **not yet in the image**: the service `ruya-platform`, its contract `api/dbus/org.ruyaos.Platform1.xml` (RUY-1098) and the console's side that sends the events (`ruya-session`, RUY-1099) are built and tested on the host; the console does not run the service yet (RUY-157). Names, arguments and behaviour may change.*
+*Experimental (level 0, [The public surface](api-surface.md)) and **not yet in the image**: the service `ruya-platform`, its contract `api/dbus/org.ruyaos.Platform1.xml` (RUY-1098) and the console's side that sends the events (`ruya-session`, RUY-1099) are built, and the console image runs the service from 0.0.106 on (RUY-157; its check on a booted console, `vm-platform-check.sh`, is pending). Names, arguments and behaviour may change.*
 
 **There is no notice before a freeze.** A normal Home, the Hub and a profile switch freeze your app with no signal at all: the freeze is instant and a frozen app could not act on a notice. You learn of a freeze afterwards, from `frozen_ms` in `Resume`, and from the gap in your clock (rule 1 of [What to do](#what-to-do)), which you keep detecting either way. `Background` comes only when the console keeps your app running behind Home (a hold, for instance while it plays music; ADR-042 and ADR-046).
 

@@ -1583,37 +1583,62 @@ FocusScope {
         }
     }
 
-    // Status cluster (device batteries, profile, clock) top right, on glass; shown on Home and on pages.
-    GlassPill {
-        id: statusGlass
-        objectName: "statusGlass"
-        // Fades out when an app takes the screen and is not drawn once settled: its glass would sample the hidden L0 (T-376).
+    // The tray's shade (RUY-955, 04 §5.5): the ground colour at 70 % across the top of the page, solid to the tray's
+    // bottom, then fading to clear over `spaceXxl`, so the flat tray's text reads over any art. It is shown and faded
+    // with the tray (its opacity and visibility are the tray's own), so it is never drawn behind an app.
+    Item {
+        id: trayShade
+        objectName: "trayShade"
+        anchors { left: parent.left; right: parent.right; top: parent.top }
+        height: statusTray.y + statusTray.height + Theme.spaceXxl * root.u
+        opacity: statusTray.opacity
+        visible: statusTray.visible
+        Rectangle {
+            id: trayShadeSolid
+            width: parent.width
+            height: statusTray.y + statusTray.height
+            color: Theme.trayShade
+        }
+        Rectangle {
+            y: trayShadeSolid.height
+            width: parent.width
+            height: Theme.spaceXxl * root.u
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: Theme.trayShade }
+                GradientStop { position: 1.0; color: Theme.trayShadeClear }
+            }
+        }
+    }
+
+    // The status tray (device batteries, profile, clock) top right, flat on the page like a console's status line
+    // (RUY-955, 04 §5.5): no container, one row centred on the nav, the clock's right edge on the safe area; the bell
+    // is its one glass item. Shown on Home and on pages.
+    Item {
+        id: statusTray
+        objectName: "statusTray"
+        // Fades out when an app takes the screen and is not drawn once settled (T-376; the bell's glass would sample the hidden L0).
         opacity: root.appOpen ? 0 : 1
         visible: root.signedIn && (!root.appOpen || opacity > 0)
         Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
         height: Theme.buttonHeight * root.u + 2 * Theme.spaceXs * root.u
-        // The bell sits at the left end, `spaceXs` from the pill's edge like a nav pill, `spaceS` before the
-        // rest (RUY-413); the rest keeps the pill's `spaceL` padding on the right.
-        readonly property real bellSlot: (Theme.spaceXs + Theme.buttonHeight + Theme.spaceS) * root.u
-        width: bellSlot + statusRow.width + Theme.spaceL * root.u
+        // The bell's slot: the bell and `spaceL` before the rest. The download pill (RUY-30) goes between the bell and the
+        // battery chips; nothing is reserved for it until it exists.
+        readonly property real bellSlot: (Theme.buttonHeight + Theme.spaceL) * root.u
+        width: bellSlot + statusRow.width
         x: root.width - root.marginX - width
         y: root.marginY
-        u: root.u
-        source: l0
-        sourceX: x
-        sourceY: y
 
-        // The cluster is sized from the room between the nav and the right margin (T-223): the
+        // The tray is sized from the room between the nav and the right margin (T-223): the
         // profile name elides to what is left (never under about six characters) and the battery
-        // chips are as many as fit (the rest collapse into "+N"), so the pill never reaches the
+        // chips are as many as fit (the rest collapse into "+N"), so the tray never reaches the
         // nav (a Theme.spaceM gap stays) however long the name or many the devices.
         readonly property real room: root.width - root.marginX - (sectionNav.x + sectionNav.width + Theme.spaceM * root.u)
-                                     - bellSlot - Theme.spaceL * root.u
+                                     - bellSlot
         // Every device that earns a chip, in the order the slots are given out (T-301): pads and headsets
         // before mice, keyboards and the rest, each group lowest first (the service sorts that way), so
         // three full pads are not pushed out by a mouse at 5 % (that one shows in Settings and in its toast).
         readonly property var batteryDevices: Batteries.chips.concat(Batteries.more)
-            .map((d, i) => ({ device: d, order: i, rank: statusGlass.rankOf(d) }))
+            .map((d, i) => ({ device: d, order: i, rank: statusTray.rankOf(d) }))
             .sort((a, b) => a.rank - b.rank || a.order - b.order)
             .map(x => x.device)
         function rankOf(device) {
@@ -1629,7 +1654,7 @@ FocusScope {
         readonly property bool manyPlayers: seated.length >= 2
         // Avatar, its gap to the name, the clock and the gap between profile and clock, and each further
         // player's chip with its gap (the battery chips give way first).
-        readonly property real fixedWidth: (Theme.statusAvatarSize + Theme.spaceS + Theme.spaceM) * root.u + clock.implicitWidth
+        readonly property real fixedWidth: (Theme.statusAvatarSize + Theme.spaceS + Theme.spaceL) * root.u + clock.implicitWidth
                                            + otherPlayers.length * (Theme.statusAvatarSize + Theme.spaceS) * root.u
         // How many chips fit, and whether the "N more" chip has to drop its words to fit (T-301).
         readonly property var fit: fitChips()
@@ -1663,7 +1688,7 @@ FocusScope {
         // The width of the battery group with `n` chips and an "N more" chip for the rest (without its
         // words when `compact`), with its gap to the profile.
         function batteryWidth(n, compact) {
-            const all = statusGlass.batteryDevices
+            const all = statusTray.batteryDevices
             if (all.length === 0)
                 return 0
             let w = 0
@@ -1674,14 +1699,14 @@ FocusScope {
                 const probe = compact ? (two ? probeCompact2 : probeCompact1) : (two ? probeMore2 : probeMore1)
                 w += (n > 0 ? Theme.spaceM * root.u : 0) + probe.implicitWidth
             }
-            return w + Theme.spaceM * root.u
+            return w + Theme.spaceL * root.u
         }
         // The most chips that fit with the "N more" chip and the shortest profile name (nameMin) in the
         // room, at the current UI size. At least one chip is kept if it fits in any form: first with the
         // words "N more", then without them; if no chip fits, the "N more" chip stands alone, with its
         // words if they fit, else without. (Nothing fits at 150 % and more: the nav takes the room.)
         function fitChips() {
-            const most = Math.min(statusGlass.batteryDevices.length, Batteries.chips.length)
+            const most = Math.min(statusTray.batteryDevices.length, Batteries.chips.length)
             for (const compact of [false, true]) {
                 for (let n = most; n > 0; --n) {
                     if (batteryWidth(n, compact) + fixedWidth + nameMin <= room)
@@ -1696,9 +1721,11 @@ FocusScope {
         NotificationBell {
             id: bell
             objectName: "notificationBell"
-            x: Theme.spaceXs * root.u
             anchors.verticalCenter: parent.verticalCenter
             u: root.u
+            source: l0
+            sourceX: statusTray.x + x
+            sourceY: statusTray.y + y
             count: NotificationCentre.unreadCount
             quiet: NotificationCentre.quiet
             enabled: root.navShown && !systemPanel.open && !batteryList.shown && !notificationSheet.shown
@@ -1726,21 +1753,21 @@ FocusScope {
 
         Row {
             id: statusRow
-            x: statusGlass.bellSlot
+            x: statusTray.bellSlot
             anchors.verticalCenter: parent.verticalCenter
-            spacing: Theme.spaceM * root.u
+            spacing: Theme.spaceL * root.u
 
             // The battery of each wireless device (Batteries, UPower behind it), lowest first: up to
             // three chips and a "+N" for the rest; nothing without a device that needs one (T-223).
             Row {
                 id: batteryStatus
                 objectName: "batteryStatus"
-                visible: statusGlass.batteryDevices.length > 0
+                visible: statusTray.batteryDevices.length > 0
                 spacing: Theme.spaceM * root.u
                 anchors.verticalCenter: parent.verticalCenter
                 // The ids, not the entries: the delegates are kept while a level changes.
-                readonly property var chipIds: statusGlass.batteryDevices.slice(0, statusGlass.chipCount).map(d => d.id)
-                readonly property var overflow: statusGlass.batteryDevices.slice(statusGlass.chipCount)
+                readonly property var chipIds: statusTray.batteryDevices.slice(0, statusTray.chipCount).map(d => d.id)
+                readonly property var overflow: statusTray.batteryDevices.slice(statusTray.chipCount)
                 Repeater {
                     model: batteryStatus.chipIds
                     BatteryChip {
@@ -1760,7 +1787,7 @@ FocusScope {
                     anchors.verticalCenter: parent.verticalCenter
                     u: root.u
                     count: batteryStatus.overflow.length
-                    compact: statusGlass.moreCompact
+                    compact: statusTray.moreCompact
                     devices: batteryStatus.overflow
                     onActivated: batteryList.open()
                     onLeftRequested: {
@@ -1787,10 +1814,10 @@ FocusScope {
                     objectName: "playerChip_1"
                     anchors.verticalCenter: parent.verticalCenter
                     u: root.u
-                    profileId: statusGlass.firstSeat ? statusGlass.firstSeat.profile : Profiles.activeProfile
+                    profileId: statusTray.firstSeat ? statusTray.firstSeat.profile : Profiles.activeProfile
                     slot: 1
-                    held: statusGlass.firstSeat ? statusGlass.firstSeat.held === true : false
-                    showNumber: statusGlass.manyPlayers
+                    held: statusTray.firstSeat ? statusTray.firstSeat.held === true : false
+                    showNumber: statusTray.manyPlayers
                 }
                 Text {
                     id: profileName
@@ -1798,13 +1825,13 @@ FocusScope {
                     anchors.verticalCenter: parent.verticalCenter
                     textFormat: Text.PlainText
                     text: Profiles.active.name ?? ""
-                    width: Math.min(implicitWidth, statusGlass.nameWidth)   // the full name unless the room is short
+                    width: Math.min(implicitWidth, statusTray.nameWidth)   // the full name unless the room is short
                     elide: Text.ElideRight
                     color: Theme.text
                     font.pixelSize: Theme.typeBody * root.u
                 }
                 Repeater {
-                    model: statusGlass.otherPlayers
+                    model: statusTray.otherPlayers
                     PlayerChip {
                         required property var modelData
                         objectName: "playerChip_" + modelData.slot
@@ -1812,7 +1839,7 @@ FocusScope {
                         profileId: modelData.profile
                         slot: modelData.slot
                         held: modelData.held === true
-                        showNumber: statusGlass.manyPlayers
+                        showNumber: statusTray.manyPlayers
                     }
                 }
             }
@@ -2768,6 +2795,9 @@ FocusScope {
             return pinPadInPicker.modalHints
         if (!signedIn)
             return setupActive ? setup.hints : [{ action: "accept", text: qsTr("Select") }]
+        if (bell.activeFocus || batteryMore.activeFocus)   // a tray item opens something (04 §5.5)
+            return [{ action: "accept", text: qsTr("Open") },
+                    { actions: ["tabPrev", "tabNext"], text: qsTr("Sections") }]
         if (pageOpen) {     // slots and pageStack are updated one after the other
             const top = slots.length > 0 ? slots[slots.length - 1].page : null
             if (!top)

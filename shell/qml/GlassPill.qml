@@ -16,6 +16,8 @@ Item {
     property Item source
     property real sourceX: 0
     property real sourceY: 0
+    // A tint drawn over the blurred crop and under the glass fill (the bell's `trayShade`, 04 §5.5); none by default.
+    property color shade: "transparent"
 
     // The liquid look is wanted (tier and switch) and is drawing (its shader compiled).
     readonly property bool liquidWanted: Theme.liquidOn && Theme.blurMax > 0
@@ -67,6 +69,12 @@ Item {
             blurSource: blurFx
             u: glass.u
         }
+    }
+    Rectangle {
+        objectName: "glassShade"
+        anchors.fill: parent
+        radius: height / 2
+        color: glass.shade
     }
     Rectangle {
         objectName: "glassFill"

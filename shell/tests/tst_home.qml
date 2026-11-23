@@ -346,7 +346,7 @@ Item {
 
         function test_performance_tier_keeps_the_layout() {
             start("")
-            const names = ["sectionNav", "heroBlock", "recentRow", "statusGlass"]
+            const names = ["sectionNav", "heroBlock", "recentRow", "statusTray"]
             const before = names.map(n => [find(n).x, find(n).y, find(n).width, find(n).height])
             verify(find("glassBlur").visible, "high tier blurs")
             compare(find("glassFill").color, Theme.glassStrong)

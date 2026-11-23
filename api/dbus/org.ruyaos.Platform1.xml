@@ -4,8 +4,10 @@
   org.ruyaos.Platform1 — the one door for sandboxed apps (ADR-022, tier B).
 
   DRAFT (RUY-1098, lead-44 split of RUY-157). Served by ruya-platform (root) on the system bus at
-  /org/ruyaos/Platform1. The crate, this contract and its tests are built; the unit, the bus
-  policy and the image install are RUY-157's (lead), so nothing here is in the image yet. The
+  /org/ruyaos/Platform1. The crate, this contract and its tests are built (RUY-1098); the unit
+  ruya-platform.service and the bus policy org.ruyaos.Platform1.conf are in the image (RUY-157:
+  profile users may call only Lifecycle and receive only its signals; Manage is root and
+  ruya-shell, NotifyLifecycle root only); scripts/vm-platform-check.sh checks it in the VM. The
   design is docs/specs/03-services-and-apps.md §4.4 and docs/developers/api-surface.md.
 
   Two interfaces:

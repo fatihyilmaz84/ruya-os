@@ -1,14 +1,16 @@
 import QtQuick
 import RuyaShell
 
-// The "N more" chip of the status cluster (T-301, 04 §5): a stack of two battery glyphs and the label
+// The "N more" entry of the flat status tray (T-301, RUY-1109, 04 §5.5): a stack of two battery glyphs and the label
 // "N more" for the devices that did not get a chip of their own. It is the one focusable part of
-// the cluster: the pad reaches it from the section nav (Right at the last pill) and Accept opens the
+// the tray (with the bell): the pad reaches it from the section nav (Right at the last pill) and Accept opens the
 // list of the hidden devices (BatteryListModal). Left goes back to the nav, Down into the page,
 // Back as in the nav (closes the page), LB/RB step the section; it never keeps a key.
 // Its accessible name lists the devices, so a screen reader needs no focus on the others.
 // `compact` is the old "+N": no glyph and no words, for a cluster that has no room for them (a large
-// UI size); the accessible name does not change.
+// UI size); the accessible name does not change. No container at rest: when focused it gets the standard
+// focus pill, `buttonHeight` high and the content plus `spaceS` each side, drawn outside the content box so
+// nothing shifts (04 §5.5).
 FocusScope {
     id: more
 
@@ -24,9 +26,8 @@ FocusScope {
     signal backRequested()
     signal stepRequested(int direction)
 
-    readonly property real pad: Theme.spaceXs * more.u
-    implicitWidth: content.width + 2 * pad + (Theme.focusRingWidth * more.u)
-    implicitHeight: content.height + 2 * pad
+    implicitWidth: content.width
+    implicitHeight: content.height
 
     activeFocusOnTab: false
 
@@ -37,10 +38,13 @@ FocusScope {
 
     Rectangle {
         objectName: "batteryMoreFocus"
-        anchors.fill: parent
+        visible: more.activeFocus
+        anchors.centerIn: parent
+        width: parent.width + 2 * Theme.spaceS * more.u
+        height: Theme.buttonHeight * more.u
         radius: height / 2
-        color: more.activeFocus ? Theme.focusFill : "transparent"
-        border.width: more.activeFocus ? Theme.focusRingWidth * more.u : 0
+        color: Theme.focusFill
+        border.width: Theme.focusRingWidth * more.u
         border.color: Theme.focusRing
     }
 
