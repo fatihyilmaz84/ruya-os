@@ -18,6 +18,7 @@ param(
         "vm-devices-check.sh bluetooth", "vm-devices-check.sh twopads", "vm-devices-check.sh inputd", "vm-devices-check.sh system",
         "vm-audio-check.sh",
         "vm-library-check.sh steam",
+        "vm-platform-check.sh",
         "vm-storage-check.ps1 scan",
         "vm-reboot-check.ps1 -SavedOutput"
     ),

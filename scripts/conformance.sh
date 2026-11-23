@@ -12,7 +12,7 @@
 #
 # Exit 0 passed, 1 failed, 2 not run (a missing tool). `--apis` (the apis.json lint-dev-docs.ps1
 # writes) adds the coverage check: every public Platform1 element has a case. The run on a real
-# console (the runner inside a sandbox, against the system service) is the VM check of RUY-157.
+# console (the runner's apps as Flatpak peers, the events through Manage.NotifyLifecycle) is planned.
 # CARGO_TARGET_DIR overrides where the binaries are built (default: services/target).
 set -eu
 

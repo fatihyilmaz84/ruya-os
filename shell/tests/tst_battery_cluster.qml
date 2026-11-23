@@ -16,6 +16,11 @@ Item {
         Shell { version: "test"; focus: true }
     }
 
+    Component {
+        id: chipComponent
+        BatteryChip { u: 1 }
+    }
+
     TestCase {
         id: tc
         name: "BatteryCluster"
@@ -76,29 +81,29 @@ Item {
             return found
         }
 
-        // The pill is laid out when it is as wide as the row inside it plus the bell's slot on the left
-        // (RUY-413) and its padding on the right. The budget
+        // The tray is laid out when it is as wide as the row inside it plus the bell's slot on the left
+        // (RUY-413); the clock's right edge is the tray's (no padding, RUY-1109). The budget
         // that picks the chips is computed at once from the fonts, but the Row (and so the pill) follows
         // one frame later, and the clock text changes width (HH:mm in a proportional font) every
         // minute: right after either, the pill's edge is still the old one (the gap read 23 or 25 px
         // against 24 under load). Measured widths only: nothing here depends on a font's metrics.
         function pillIsLaidOut() {
-            const pill = find("statusGlass")
+            const pill = find("statusTray")
             const inner = find("batteryStatus").parent
-            return Math.abs(pill.width - (inner.width + pill.bellSlot + Theme.spaceL * tc.shell.u)) < 0.5
+            return Math.abs(pill.width - (inner.width + pill.bellSlot)) < 0.5
         }
         // "" when the cluster clears the nav and sits in the safe area, else what is wrong.
         function clusterProblem(size, what) {
             const nav = find("sectionNav")
-            const pill = find("statusGlass")
+            const pill = find("statusTray")
             const u = tc.shell.u
             const navRight = nav.mapToItem(tc.shell, nav.width, 0).x
             if (navRight + 24 * u > pill.x + 0.5)
                 return what + " at " + size[1] + "p: the cluster starts at " + pill.x + ", the nav ends at " + navRight
             if (pill.x + pill.width > tc.shell.width - tc.shell.marginX + 1)
                 return what + " at " + size[1] + "p: inside the safe area, right edge " + (pill.x + pill.width)
-            if (find("batteryStatus").width + 2 * 8 * u > pill.width)
-                return what + ": the chips sit inside the pill"
+            if (find("batteryStatus").width + pill.bellSlot > pill.width)
+                return what + ": the chips sit inside the tray"
             return ""
         }
 
@@ -378,9 +383,9 @@ Item {
                     const label = findChild(more, "batteryMoreLabel")
                     verify(label.width >= label.implicitWidth - 0.5, what + ": the label is not squeezed")
                     compare(chipIds().length + more.count, 5, what + ": every device is a chip or behind the chip")
-                    compare(label.text === "+" + more.count, find("statusGlass").moreCompact, what + ": \"+N\" only when the words are dropped")
+                    compare(label.text === "+" + more.count, find("statusTray").moreCompact, what + ": \"+N\" only when the words are dropped")
                     if (percent === 100)
-                        compare(find("statusGlass").moreCompact, false, what + ": the words fit at the normal size")
+                        compare(find("statusTray").moreCompact, false, what + ": the words fit at the normal size")
                     seen.push(chipIds().length)
                     tc.shell.destroy()
                     wait(50)
@@ -402,9 +407,9 @@ Item {
                 checkCluster([width, 1080], "a " + width + " px wide window", ["WH-1000XM4", "Ruya Keyboard"])
                 const more = find("batteryMore")
                 const label = findChild(more, "batteryMoreLabel")
-                compact.push(find("statusGlass").moreCompact)
-                compare(label.text, find("statusGlass").moreCompact ? "+" + more.count : more.count + " more")
-                compare(findChild(more, "batteryMoreFront").visible, !find("statusGlass").moreCompact, "the glyph goes with the words")
+                compact.push(find("statusTray").moreCompact)
+                compare(label.text, find("statusTray").moreCompact ? "+" + more.count : more.count + " more")
+                compare(findChild(more, "batteryMoreFront").visible, !find("statusTray").moreCompact, "the glyph goes with the words")
                 tc.shell.destroy()
                 wait(50)
             }
@@ -423,7 +428,7 @@ Item {
                 tryVerify(() => find("batteryMore").visible, 2000, "the chip at " + width)
                 find("statusClock").text = "88:88"
                 waitForRendering(tc.shell)
-                const fits = find("statusGlass").fitsRoom
+                const fits = find("statusTray").fitsRoom
                 tc.shell.destroy()
                 wait(50)
                 if (fits)
@@ -490,6 +495,91 @@ Item {
             wait(50)
         }
 
+        // Every item below `item` with this object name.
+        function descendants(item, name) {
+            let out = []
+            for (const child of item.children) {
+                if (child.objectName === name)
+                    out.push(child)
+                out = out.concat(descendants(child, name))
+            }
+            return out
+        }
+
+        // The flat tray (RUY-1109, 04 §5.5): no glass container; the bell is the one glass item; the clock's right edge
+        // is the safe area; the line is centred on the nav; the shade lies under it and goes with it.
+        function test_the_tray_is_flat_with_one_glass_bell() {
+            Batteries.mockPopulate()
+            openShell(1920, 1080)
+            const tray = find("statusTray")
+            compare(descendants(tray, "glassBlur").length + descendants(tray, "glassFill").length, 2,
+                    "one glass pill in the tray (blur and fill): the bell's")
+            verify(descendants(find("notificationBell"), "glassFill").length === 1, "and it is the bell's")
+            verify(find("statusGlass") === null, "no glass container")
+            const clock = find("statusClock")
+            const right = clock.mapToItem(tc.shell, clock.width, 0).x
+            verify(Math.abs(right - (tc.shell.width - tc.shell.marginX)) < 1, "the clock's right edge is the safe area: " + right)
+            const nav = find("sectionNav")
+            const navMid = nav.mapToItem(tc.shell, 0, nav.height / 2).y
+            const bell = find("notificationBell")
+            compare(bell.width, Theme.buttonHeight * tc.shell.u)
+            verify(Math.abs(bell.mapToItem(tc.shell, 0, bell.height / 2).y - navMid) < 1, "the bell is centred on the nav")
+            verify(Math.abs(clock.mapToItem(tc.shell, 0, clock.height / 2).y - navMid) < 2, "the clock is on the line")
+            const shade = find("trayShade")
+            compare(shade.visible, tray.visible)
+            compare(shade.height, tray.y + tray.height + Theme.spaceXxl * tc.shell.u, "solid to the tray's bottom, then the fade")
+            compare(find("bellGlass").shade, Theme.trayShade)
+            tc.shell.destroy()
+            wait(50)
+        }
+
+        // "N more" has no container at rest; focused it draws the focus pill outside its content: nothing shifts.
+        function test_n_more_draws_its_focus_pill_outside_the_content() {
+            Batteries.mockPopulate()
+            openShell(1920, 1080)
+            const more = find("batteryMore")
+            const focus = findChild(more, "batteryMoreFocus")
+            compare(focus.visible, false, "nothing behind it at rest")
+            waitForRendering(tc.shell)
+            tryVerify(() => settled() && pillIsLaidOut(), 2000, "the tray is laid out")
+            const clock = find("statusClock")
+            const where = () => [more.mapToItem(tc.shell, 0, 0).x, more.width, clock.mapToItem(tc.shell, 0, 0).x]
+            const before = where()
+            openMore()
+            compare(focus.visible, true)
+            compare(find("hintBar").hints.map(h => (h.action ?? h.actions.join("+")) + " " + h.text),
+                    ["accept Open", "tabPrev+tabNext Sections"], "a tray item says A Open, LB RB Sections")
+            const u = tc.shell.u
+            compare(focus.height, Theme.buttonHeight * u)
+            compare(focus.width, more.width + 2 * Theme.spaceS * u, "the content and spaceS each side")
+            compare(focus.border.width, Theme.focusRingWidth * u)
+            compare(where(), before, "nothing shifts")
+            compare(findChild(find("notificationBell"), "bellSurface").visible, false, "the bell's focus fill is off while it is not focused")
+            keyClick(Qt.Key_Left)
+            tryVerify(() => find("notificationBell").activeFocus, 2000)
+            compare(findChild(find("notificationBell"), "bellSurface").visible, true, "the bell's focus fill and ring")
+            compare(focus.visible, false)
+            tc.shell.destroy()
+            wait(50)
+        }
+
+        // A coarse battery (RUY-935) is a level-only chip: the kind icon and the level glyph, no number, the level in words.
+        function test_a_level_only_chip_has_no_number_but_a_level_in_words() {
+            Batteries.mockSet("pad-1", 60)
+            const chip = createTemporaryObject(chipComponent, host, { deviceId: "pad-1", levelOnly: true })
+            verify(chip)
+            tryCompare(chip, "percent", 60)
+            compare(findChild(chip, "batteryPercent").visible, false, "no number")
+            verify(findChild(chip, "batteryLevelIcon").visible && findChild(chip, "batteryKindIcon").visible)
+            compare(chip.Accessible.name, "Ruya Pad Pro battery level high")
+            Batteries.mockSet("pad-1", 5)
+            tryCompare(chip, "levelWord", "empty")
+            compare(chip.Accessible.name, "Ruya Pad Pro battery level empty")
+            compare(findChild(chip, "batteryLevelIcon").name, "battery_alert", "the low glyph is not colour alone")
+            const numbered = createTemporaryObject(chipComponent, host, { deviceId: "pad-1" })
+            compare(findChild(numbered, "batteryPercent").visible, true)
+        }
+
         // The chip does not swallow keys it does not handle: Guide opens the system panel from it as from the nav.
         function test_guide_opens_the_panel_from_the_chip() {
             Batteries.mockPopulate()
@@ -543,6 +633,7 @@ Item {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
             const cases = [
+                ["none", () => { Batteries.mockClear() }],
                 ["one", () => { Batteries.mockSet("pad-1", 62, "discharging", "controller", "DualSense Wireless Controller") }],
                 ["two", () => { Batteries.mockClear(); Batteries.mockSet("pad-1", 62, "charging", "controller", "DualSense Wireless Controller")
                                 Batteries.mockSet("h", 41, "discharging", "headset", "WH-1000XM4") }],
@@ -559,7 +650,6 @@ Item {
                     c[1]()
                     wait(500)
                     grabImage(tc.shell).save(shotsDir + "/battery-" + size[2] + "-" + c[0] + ".png")
-                    grabImage(find("statusGlass")).save(shotsDir + "/battery-" + size[2] + "-" + c[0] + "-crop.png")
                 }
                 tc.shell.destroy()
                 wait(50)
@@ -574,7 +664,6 @@ Item {
                 openShell(size[0], size[1])
                 wait(500)
                 grabImage(tc.shell).save(shotsDir + "/battery-" + size[2] + "-longname.png")
-                grabImage(find("statusGlass")).save(shotsDir + "/battery-" + size[2] + "-longname-crop.png")
                 tc.shell.destroy()
                 wait(50)
             }
@@ -589,7 +678,6 @@ Item {
             tryVerify(() => !Theme.fade.running)
             wait(500)
             grabImage(tc.shell).save(shotsDir + "/battery-1080-daylight.png")
-            grabImage(find("statusGlass")).save(shotsDir + "/battery-1080-daylight-crop.png")
             tc.shell.destroy()
             DeviceSettings.theme = before
         }
@@ -609,7 +697,6 @@ Item {
             tryVerify(() => find("batteryMore").visible, 2000)
             openMore()
             wait(500)
-            grabImage(find("statusGlass")).save(shotsDir + "/T359-battery-like-pads-crop.png")
             keyClick(Qt.Key_Return)
             tryVerify(() => find("batteryList").shown, 2000)
             wait(600)
@@ -633,7 +720,12 @@ Item {
                 openMore()
                 wait(500)
                 grabImage(tc.shell).save(shotsDir + "/battery-more-" + lang + ".png")
-                grabImage(find("statusGlass")).save(shotsDir + "/battery-more-" + lang + "-crop.png")
+                keyClick(Qt.Key_Left)                              // the bell, focused (RUY-1109)
+                tryVerify(() => find("notificationBell").activeFocus, 2000)
+                wait(300)
+                grabImage(tc.shell).save(shotsDir + "/battery-bell-focus-" + lang + ".png")
+                keyClick(Qt.Key_Right)
+                tryVerify(() => find("batteryMore").activeFocus, 2000)
                 keyClick(Qt.Key_Return)
                 tryVerify(() => find("batteryList").shown, 2000)
                 wait(600)
@@ -643,6 +735,15 @@ Item {
                 tc.shell.destroy()
                 wait(50)
             }
+            // Turkish at 720p, "N tane daha" focused (RUY-1109).
+            DeviceSettings.language = "tr"
+            openShell(1280, 720)
+            tryVerify(() => find("batteryMore").visible, 2000)
+            openMore()
+            wait(500)
+            grabImage(tc.shell).save(shotsDir + "/battery-more-tr-720.png")
+            tc.shell.destroy()
+            wait(50)
             DeviceSettings.language = "en"
             // The chip and its list on the light theme (the stack glyph must still read).
             const before = DeviceSettings.theme
@@ -653,7 +754,6 @@ Item {
             tryVerify(() => find("batteryMore").visible, 2000)
             openMore()
             wait(500)
-            grabImage(find("statusGlass")).save(shotsDir + "/battery-more-daylight-crop.png")
             keyClick(Qt.Key_Return)
             tryVerify(() => find("batteryList").shown, 2000)
             wait(600)
@@ -668,7 +768,6 @@ Item {
                 openShell(1920, 1080)
                 wait(500)
                 grabImage(tc.shell).save(shotsDir + "/battery-scale-" + percent + ".png")
-                grabImage(find("statusGlass")).save(shotsDir + "/battery-scale-" + percent + "-crop.png")
                 tc.shell.destroy()
                 wait(50)
             }

@@ -210,7 +210,8 @@ cat > "$sec/baseline.json" <<'JSONEOF'
  "unconfined": [{"process": "ruya-odd", "reason": "t"}, {"process": "ruya-notifications", "reason": "t"}],
  "setid": [{"path": "/usr/bin/passwd", "reason": "t"}],
  "accounts": [{"name": "root", "reason": "t"}],
- "xwayland_domains": [{"domain": "xserver_t", "reason": "t"}]}
+ "xwayland_domains": [{"domain": "xserver_t", "reason": "t"}],
+ "public_bus_doors": {"_comment": "t", "org.ruyaos.Platform1": ["org.ruyaos.Platform1.Lifecycle"]}}
 JSONEOF
 cat > "$sec/bin/systemd-analyze" <<'SHIMEOF'
 #!/bin/sh
@@ -376,6 +377,18 @@ expect_contains "a receive deny in the root policy: FAIL" "$out" "FAIL: busrecv:
 mutate_bus shelldeny org.ruyaos.Store1.conf 's|\(<policy user="ruya-shell">\)|\1<deny receive_sender="org.ruyaos.Store1" receive_type="signal"/>|'
 out="$(BUS="$sec/bus/shelldeny" runsec)"
 expect_contains "a receive deny in the ruya-shell policy: FAIL" "$out" "FAIL: busrecv: org.ruyaos.Store1.conf: unexpected receive rule deny for org.ruyaos.Store1 in policy ruya-shell (it would cut the shell or root off"
+# RUY-157: the one public door (ADR-022): every user hears Platform1.Lifecycle's signals, nothing else of it
+out="$(runsec)"
+expect_contains "the shipped Platform1 policy: a door for Lifecycle only" "$out" "PASS: busrecv: org.ruyaos.Platform1 signals go to root and ruya-shell; every user hears only org.ruyaos.Platform1 org.ruyaos.Platform1.Lifecycle"
+sed 's/"public_bus_doors": {[^}]*}/"public_bus_doors": {}/' "$sec/baseline.json" > "$sec/baseline-nodoor.json"
+out="$(SEC_BASELINE="$sec/baseline-nodoor.json" SEC_BUSPOLICY="$busgood" SEC_X11DIR="$sec/x11" SEC_UNITDIRS="$sec/units" SEC_PASSWD="$sec/passwd" SEC_SHADOW="$sec/shadow" PATH="$sec/bin:$PATH" bash "$here/vm-security-check.sh" 2>&1)"
+expect_contains "a default receive allow for a name that is no door: FAIL" "$out" "FAIL: busrecv: org.ruyaos.Platform1.conf: unexpected receive rule allow for org.ruyaos.Platform1 in policy default"
+mutate_bus doormanage org.ruyaos.Platform1.conf 's|receive_interface="org.ruyaos.Platform1.Lifecycle"|receive_interface="org.ruyaos.Platform1.Manage"|'
+out="$(BUS="$sec/bus/doormanage" runsec)"
+expect_contains "a door opening a non-public interface: FAIL" "$out" "FAIL: busrecv: org.ruyaos.Platform1.conf: unexpected receive rule allow for org.ruyaos.Platform1 in policy default"
+mutate_bus doorfirst org.ruyaos.Platform1.conf '/<policy context="default">/,/<\/policy>/{/<deny receive_sender=/d}'
+out="$(BUS="$sec/bus/doorfirst" runsec)"
+expect_contains "a door's receive allow without the default deny before it: FAIL" "$out" "FAIL: busrecv: org.ruyaos.Platform1.conf: unexpected receive rule allow for org.ruyaos.Platform1 in policy default"
 mkdir -p "$sec/bus/empty"
 out="$(BUS="$sec/bus/empty" runsec)"
 expect_contains "no policy files: FAIL, not a skip" "$out" "FAIL: busrecv: no org.ruyaos.*.conf to check"

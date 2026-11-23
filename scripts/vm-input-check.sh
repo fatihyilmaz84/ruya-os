@@ -8,7 +8,7 @@
 # is back within 0.5 s. The restart step (RUY-597) runs three kills and passes when the MEDIAN is at most
 # 500 ms and the worst at most 1000 ms: the first run after heavy checks is slow (644 ms once; a lone re-run
 # gave 190-426 ms), and the 1000 ms ceiling still catches a real regression. Copy and run (boot with plain smoke-test.ps1 -Keep):
-#   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py scripts/vm_uinput_trust.py root@127.0.0.1:/root/
+#   scp -i ~/.ssh/ruyaos_dev -P 2222 scripts/vm-input-check.sh scripts/vm-input-probe.py scripts/vm_dbus.py scripts/vm_uinput_trust.py root@127.0.0.1:/root/
 #   ssh -i ~/.ssh/ruyaos_dev -p 2222 root@127.0.0.1 bash /root/vm-input-check.sh [check|restart|security|caps|profiles|forget|shell|close|fallback|confirm|hold|twopads|startpad|guide|owner|nodes|uinput|start|useractive|signals|players|seathold|coop|join]
 # The probe's stand-in pads are root's uinput devices, which root vouches for (vm_uinput_trust.py next to the probe,
 # RUY-1063): a uinput device nobody vouched for is foreign and ruya-inputd never reads it.
@@ -141,10 +141,13 @@ probe="$here/vm-input-probe.py"
 fail=0
 ok() { echo "PASS: $*"; }
 bad() { echo "FAIL: $*"; fail=1; }
-# The probe in a directory the profile users can read, with the module its stand-in devices need (RUY-1063).
+# The probe in a directory the profile users can read, with the modules it imports: its D-Bus client
+# (vm_dbus.py, RUY-157) and the vouching its stand-in devices need (vm_uinput_trust.py, RUY-1063).
 install_probe() {
     install -m 0644 "$probe" "$1/vm-input-probe.py"
-    [ -f "$here/vm_uinput_trust.py" ] && install -m 0644 "$here/vm_uinput_trust.py" "$1/vm_uinput_trust.py"
+    for m in vm_dbus.py vm_uinput_trust.py; do
+        [ -f "$here/$m" ] && install -m 0644 "$here/$m" "$1/$m"
+    done
     return 0
 }
 

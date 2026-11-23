@@ -3,9 +3,15 @@
 #   .\scripts\lint-bus-policies.ps1 -SelfTest    also prove each rule refuses its fixture
 # Rules (every file):
 #   1. A `<policy context="default">` has a `deny own="<name>"` and a `deny send_destination="<name>"` for
-#      every bus name the file allows, and never an `allow` of any kind. dbus-broker's own system.conf already
+#      every bus name the file allows, and no `allow` but a public door's. dbus-broker's own system.conf already
 #      denies `own` by default; the policy says so in writing (RUY-18), so it holds whatever another file
 #      or a changed distribution default says.
+#      Public doors (ADR-022, RUY-157): image/security-baseline.json "public_bus_doors" names the bus names
+#      (today only org.ruyaos.Platform1) and the interfaces each may open to every user, and every element of
+#      a listed interface must be tagged org.ruyaos.Stability in api/dbus/<name>.xml. Their default-context
+#      allows have exactly one of two shapes, after the name's default deny: `send_destination` +
+#      `send_interface` + `send_type="method_call"`, or `receive_sender` + `receive_interface` +
+#      `receive_type="signal"`. vm-security-check.sh busrecv reads the same list.
 #   2. `allow` appears only in `user="root"` and `user="ruya-shell"` policies, plus:
 #      - `user="ruya-link"` (ADR-029): every allow names `send_destination` AND `send_member`
 #        (never a whole destination or interface), and never `own`;
@@ -53,7 +59,60 @@ function Get-RootOnlyMembers([string]$ApiDir, [string]$Name) {
     }
 }
 
-function Test-BusPolicyFile([string]$Path, [string]$ApiDir) {
+# The public doors (image/security-baseline.json "public_bus_doors"): bus name -> the interfaces a
+# default-context allow may open. Each listed interface must exist in api/dbus/<name>.xml with every
+# method, signal and property tagged org.ruyaos.Stability (a public element, ADR-022).
+function Get-PublicDoors([string]$BaselinePath, [string]$ApiDir) {
+    $doors = @{}; $problems = @()
+    if (-not (Test-Path $BaselinePath)) { return @{ Doors = $doors; Problems = @("no $BaselinePath") } }
+    $json = Get-Content -Raw $BaselinePath | ConvertFrom-Json
+    if ($null -eq $json.public_bus_doors) { return @{ Doors = $doors; Problems = $problems } }
+    foreach ($p in $json.public_bus_doors.PSObject.Properties) {
+        if ($p.Name -like "_*") { continue }
+        $doors[$p.Name] = @($p.Value)
+        $xml = Join-Path $ApiDir "$($p.Name).xml"
+        if (-not (Test-Path $xml)) { $problems += "public door $($p.Name) has no $xml"; continue }
+        $settings = New-Object System.Xml.XmlReaderSettings
+        $settings.DtdProcessing = [System.Xml.DtdProcessing]::Ignore
+        $settings.XmlResolver = $null
+        $doc = New-Object System.Xml.XmlDocument
+        $reader = [System.Xml.XmlReader]::Create($xml, $settings)
+        try { $doc.Load($reader) } finally { $reader.Dispose() }
+        foreach ($i in $doors[$p.Name]) {
+            $iface = $doc.SelectSingleNode("//interface[@name='$i']")
+            if ($null -eq $iface) { $problems += "public door $($p.Name): interface $i is not in $xml"; continue }
+            foreach ($el in $iface.SelectNodes("method|signal|property")) {
+                if ($null -eq $el.SelectSingleNode("annotation[@name='org.ruyaos.Stability']")) {
+                    $problems += "public door $($p.Name): $i.$($el.GetAttribute('name')) is not tagged org.ruyaos.Stability"
+                }
+            }
+        }
+    }
+    return @{ Doors = $doors; Problems = $problems }
+}
+
+# Why a default-context allow is refused, or nothing when it is a public door's allow: exactly
+# send_destination + send_interface (+ send_type="method_call"), or receive_sender + receive_interface +
+# receive_type="signal", for a listed name and interface, after that name's deny in the same policy.
+function Test-DoorAllow($Rule, $Doors, $DeniedNames, $DeniedRecv) {
+    $attrs = @($Rule.Attributes | ForEach-Object { $_.Name } | Sort-Object)
+    if ($Rule.HasAttribute("send_destination")) {
+        $name = $Rule.GetAttribute("send_destination"); $iface = $Rule.GetAttribute("send_interface")
+        $shape = (($attrs -join ",") -eq "send_destination,send_interface,send_type" -and $Rule.GetAttribute("send_type") -eq "method_call")
+        $denied = $DeniedNames.Contains($name)
+    } elseif ($Rule.HasAttribute("receive_sender")) {
+        $name = $Rule.GetAttribute("receive_sender"); $iface = $Rule.GetAttribute("receive_interface")
+        $shape = (($attrs -join ",") -eq "receive_interface,receive_sender,receive_type" -and $Rule.GetAttribute("receive_type") -eq "signal")
+        $denied = $DeniedRecv.Contains($name)
+    } else { return "is not a public door's send or receive" }
+    if (-not $Doors.ContainsKey($name)) { return "is for $name, which is not a public door (security-baseline.json public_bus_doors)" }
+    if (-not $shape) { return "is not exactly a door's shape (send_destination + send_interface + send_type=method_call, or receive_sender + receive_interface + receive_type=signal)" }
+    if ($iface -notin $Doors[$name]) { return "opens $iface, which is not a public interface of $name" }
+    if (-not $denied) { return "comes before the default deny of $name (the last matching rule wins: the allow must follow it)" }
+    return $null
+}
+
+function Test-BusPolicyFile([string]$Path, [string]$ApiDir, $Doors) {
     $errs = New-Object System.Collections.Generic.List[string]
     $settings = New-Object System.Xml.XmlReaderSettings
     $settings.DtdProcessing = [System.Xml.DtdProcessing]::Ignore
@@ -74,7 +133,10 @@ function Test-BusPolicyFile([string]$Path, [string]$ApiDir) {
         $rules = @($p.ChildNodes | Where-Object { $_.NodeType -eq "Element" })
         if ($ctx -eq "default") {
             foreach ($r in $rules) {
-                if ($r.LocalName -eq "allow") { $errs.Add("default context has an allow ($($r.OuterXml))") }
+                if ($r.LocalName -eq "allow") {
+                    $why = Test-DoorAllow $r $Doors $deniedNames $deniedRecv
+                    if ($why) { $errs.Add("default context has an allow that $why ($($r.OuterXml))") }
+                }
                 elseif ($r.LocalName -eq "deny" -and $r.HasAttribute("send_destination")) { [void]$deniedNames.Add($r.GetAttribute("send_destination")) }
                 elseif ($r.LocalName -eq "deny" -and $r.HasAttribute("own")) { [void]$deniedOwn.Add($r.GetAttribute("own")) }
                 elseif ($r.LocalName -eq "deny" -and $r.HasAttribute("receive_sender")) {
@@ -142,20 +204,24 @@ function Test-BusPolicyFile([string]$Path, [string]$ApiDir) {
     return $errs
 }
 
-function Test-BusPolicies([string]$Dir, [string]$ApiDir) {
+function Test-BusPolicies([string]$Dir, [string]$ApiDir, $Doors) {
     $files = @(Get-ChildItem -Path $Dir -Filter "*.conf" -File -ErrorAction SilentlyContinue)
     if ($files.Count -eq 0) { Write-Host "FAIL: no policy files in $Dir"; return 1 }
     $bad = 0
     foreach ($f in $files) {
-        $e = @(Test-BusPolicyFile $f.FullName $ApiDir)
+        $e = @(Test-BusPolicyFile $f.FullName $ApiDir $Doors)
         foreach ($m in $e) { Write-Host "FAIL: $($f.Name): $m"; $bad++ }
     }
     return $bad
 }
 
 $policyDir = Join-Path $Root "image/rootfs/usr/share/dbus-1/system.d"
-$bad = Test-BusPolicies $policyDir (Join-Path $Root "api/dbus")
-if ($bad -eq 0) { Write-Host "ok: bus policies are deny-by-default" }
+$apiDir = Join-Path $Root "api/dbus"
+$publicDoors = Get-PublicDoors (Join-Path $Root "image/security-baseline.json") $apiDir
+$bad = 0
+foreach ($m in $publicDoors.Problems) { Write-Host "FAIL: $m"; $bad++ }
+$bad += Test-BusPolicies $policyDir $apiDir $publicDoors.Doors
+if ($bad -eq 0) { Write-Host "ok: bus policies are deny-by-default (public doors: $(@($publicDoors.Doors.Keys) -join ', '))" }
 
 if ($SelfTest) {
     $good = @'
@@ -163,11 +229,14 @@ if ($SelfTest) {
   <policy user="root"><allow own="org.x.A1"/><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/></policy>
   <policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/><deny send_destination="org.x.A1" send_member="Put"/></policy>
   <policy user="ruya-link"><allow send_destination="org.x.A1" send_member="Ping"/></policy>
-  <policy context="default"><deny own="org.x.A1"/><deny send_destination="org.x.A1"/><deny receive_sender="org.x.A1" receive_type="signal"/></policy>
+  <policy context="default"><deny own="org.x.A1"/><deny send_destination="org.x.A1"/><deny receive_sender="org.x.A1" receive_type="signal"/><allow send_destination="org.x.A1" send_interface="org.x.A1.Pub" send_type="method_call"/><allow receive_sender="org.x.A1" receive_interface="org.x.A1.Pub" receive_type="signal"/></policy>
 </busconfig>
 '@
-    # The contract of org.x.A1: Put is root only, Get is not.
-    $api = '<node><interface name="org.x.A1"><method name="Put"><annotation name="org.ruyaos.Caller" value="root"/></method><method name="Get"/></interface></node>'
+    # The contract of org.x.A1: Put is root only, Get is not; org.x.A1.Pub is public (tagged), the door the
+    # fixture opens to every user (security-baseline.json public_bus_doors, ADR-022).
+    $api = '<node><interface name="org.x.A1"><method name="Put"><annotation name="org.ruyaos.Caller" value="root"/></method><method name="Get"/></interface><interface name="org.x.A1.Pub"><method name="Hi"><annotation name="org.ruyaos.Stability" value="experimental"/></method></interface></node>'
+    $doorAllow = '<allow send_destination="org.x.A1" send_interface="org.x.A1.Pub" send_type="method_call"/>'
+    $doorRecv = '<allow receive_sender="org.x.A1" receive_interface="org.x.A1.Pub" receive_type="signal"/>'
     $cases = @(
         @{ Name = "the good fixture (control)"; From = ""; To = ""; Expect = 0 },
         @{ Name = "a missing default deny"; From = '<deny send_destination="org.x.A1"/>'; To = ""; Expect = 1 },
@@ -196,6 +265,13 @@ if ($SelfTest) {
         @{ Name = "ruya-link owning a name"; From = '<allow send_destination="org.x.A1" send_member="Ping"/>'; To = '<allow own="org.x.A1"/>'; Expect = 1 },
         @{ Name = "a root-only member not denied to ruya-shell"; From = '<deny send_destination="org.x.A1" send_member="Put"/>'; To = ""; Expect = 1 },
         @{ Name = "a root-only member denied for another member"; From = 'send_member="Put"/></policy>'; To = 'send_member="Get"/></policy>'; Expect = 1 },
+        @{ Name = "a door's allow before its default deny"; From = '<deny send_destination="org.x.A1"/><deny receive_sender'; To = $doorAllow.Replace('/>', '/><deny send_destination="org.x.A1"/><deny receive_sender'); Expect = 1 },
+        @{ Name = "a door's send allow narrowed to a member (another shape)"; From = $doorAllow; To = $doorAllow.Replace('send_type=', 'send_member="Hi" send_type='); Expect = 1 },
+        @{ Name = "a door's send allow without send_type"; From = $doorAllow; To = $doorAllow.Replace(' send_type="method_call"', ''); Expect = 1 },
+        @{ Name = "a door's allow of a non-public interface"; From = $doorAllow; To = $doorAllow.Replace('org.x.A1.Pub', 'org.x.A1'); Expect = 1 },
+        @{ Name = "a door's receive allow of a non-public interface"; From = $doorRecv; To = $doorRecv.Replace('org.x.A1.Pub', 'org.x.A1'); Expect = 1 },
+        @{ Name = "a door's receive allow without receive_type"; From = $doorRecv; To = $doorRecv.Replace(' receive_type="signal"', ''); Expect = 1 },
+        @{ Name = "a door's allow for a name that is not a door"; From = ""; To = ""; NoDoor = $true; Expect = 1 },
         @{ Name = "a root-only deny before the allow it should override"; From = '<policy user="ruya-shell"><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/><deny send_destination="org.x.A1" send_member="Put"/>'; To = '<policy user="ruya-shell"><deny send_destination="org.x.A1" send_member="Put"/><allow send_destination="org.x.A1"/><allow receive_sender="org.x.A1" receive_type="signal"/>'; Expect = 1 }
     )
     foreach ($c in $cases) {
@@ -208,12 +284,28 @@ if ($SelfTest) {
         $ad = Join-Path $dir "api/dbus"
         New-Item -ItemType Directory -Force $ad | Out-Null
         [IO.File]::WriteAllText((Join-Path $ad "org.x.A1.xml"), $api)
-        $n = Test-BusPolicies $pd $ad 6>&1 | Where-Object { $_ -is [int] } | Select-Object -Last 1
+        $doors = if ($c.NoDoor) { @{} } else { @{ "org.x.A1" = @("org.x.A1.Pub") } }
+        $n = Test-BusPolicies $pd $ad $doors 6>&1 | Where-Object { $_ -is [int] } | Select-Object -Last 1
         $failed = [bool]($n -gt 0)
         $want = ($c.Expect -gt 0)
         if ($failed -ne $want) { Write-Host "FAIL: self-test: lint $(if ($want) {'accepted'} else {'refused'}) $($c.Name)"; $bad++ }
         Remove-Item -Recurse -Force $dir
     }
+    # The door list itself: a listed interface with an untagged element, or one the XML lacks, is refused.
+    $dir = Join-Path ([IO.Path]::GetTempPath()) ("ruya-lint-door-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Force $dir | Out-Null
+    [IO.File]::WriteAllText((Join-Path $dir "org.x.A1.xml"), $api)
+    foreach ($d in @(
+        @{ Name = "a door whose interface is all tagged (control)"; Json = '{"public_bus_doors": {"org.x.A1": ["org.x.A1.Pub"]}}'; Expect = 0 },
+        @{ Name = "a door listing an untagged interface"; Json = '{"public_bus_doors": {"org.x.A1": ["org.x.A1"]}}'; Expect = 1 },
+        @{ Name = "a door listing an interface the XML lacks"; Json = '{"public_bus_doors": {"org.x.A1": ["org.x.A1.Nope"]}}'; Expect = 1 },
+        @{ Name = "a door without a contract"; Json = '{"public_bus_doors": {"org.x.B1": ["org.x.B1.Pub"]}}'; Expect = 1 })) {
+        $bp = Join-Path $dir "baseline.json"
+        [IO.File]::WriteAllText($bp, $d.Json)
+        $got = @((Get-PublicDoors $bp $dir).Problems).Count
+        if (($got -gt 0) -ne ($d.Expect -gt 0)) { Write-Host "FAIL: self-test: door list $(if ($d.Expect) {'accepted'} else {'refused'}) $($d.Name)"; $bad++ }
+    }
+    Remove-Item -Recurse -Force $dir
     if ($bad -eq 0) { Write-Host "ok: each bus policy rule refuses its fixture" }
 }
 if ($bad -gt 0) { exit 1 }

@@ -1,9 +1,9 @@
 import QtQuick
 import RuyaShell
 
-// The bell at the left end of the status cluster (RUY-413, 04 §5 "Bell"): a round button of
-// `buttonHeight` on the Hub pill's surface (`glass` with a hairline `glassBorder`; focused,
-// `focusFill` under the `focusRingWidth` ring), the `notifications` glyph (`notifications_paused`,
+// The bell at the left end of the status tray (RUY-413, RUY-1109, 04 §5.5): the one glass item of the flat tray,
+// a round `GlassPill` of `buttonHeight` over a blurred crop of `source` (L0), with `trayShade` between the crop
+// and the glass (`glassStrong`); focused, `focusFill` under the `focusRingWidth` ring; the `notifications` glyph (`notifications_paused`,
 // filled, while quiet mode is on) and the unread count in a 32 u badge (`typeMicro` DemiBold,
 // `onPrimary` on `primaryFill`; "9+" above nine; none at 0). Right from the Settings gear reaches it;
 // Accept opens the notification centre. Left goes back to the gear, Right to the "N more" chip when
@@ -15,6 +15,10 @@ FocusScope {
     property real u: 1
     property int count: 0
     property bool quiet: false
+    // The layer the glass blurs (L0) and where the bell sits in it.
+    property Item source
+    property real sourceX: 0
+    property real sourceY: 0
 
     signal activated()
     signal leftRequested()
@@ -34,13 +38,23 @@ FocusScope {
                             : qsTr("Notifications, %n unread", "", count))
     Accessible.focusable: true
 
+    GlassPill {
+        objectName: "bellGlass"
+        anchors.fill: parent
+        u: bell.u
+        source: bell.source
+        sourceX: bell.sourceX
+        sourceY: bell.sourceY
+        shade: Theme.trayShade
+    }
     Rectangle {
         objectName: "bellSurface"
         anchors.fill: parent
         radius: height / 2
-        color: bell.activeFocus ? Theme.focusFill : Theme.glass
-        border.width: bell.activeFocus ? Theme.focusRingWidth * bell.u : Theme.hairlineAt(bell.u)
-        border.color: bell.activeFocus ? Theme.focusRing : Theme.glassBorder
+        visible: bell.activeFocus
+        color: Theme.focusFill
+        border.width: Theme.focusRingWidth * bell.u
+        border.color: Theme.focusRing
     }
 
     Icon {

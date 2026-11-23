@@ -108,6 +108,12 @@ QtObject {
     readonly property color artCaptionFadeClear: Qt.rgba(artCaptionFade.r, artCaptionFade.g, artCaptionFade.b, 0)
     // The hint shade's middle stop (Shell.qml, 04 "Pages"): the hero scrim at 70 % of its alpha.
     readonly property color hintShadeMid: Qt.rgba(heroScrim.r, heroScrim.g, heroScrim.b, heroScrim.a * 0.7)
+    // The status tray's shade (RUY-955, 04 §5.5): the ground colour at 70 % across the top of the page, solid to the tray's
+    // bottom, then fading to its clear end over `spaceXxl`, so `text` and `warningText` read over any art (derived from
+    // `background`, not themeable; the contrast gate measures it over pure white and pure black).
+    readonly property real trayShadeAlpha: 0.7
+    readonly property color trayShade: Qt.rgba(background.r, background.g, background.b, trayShadeAlpha)
+    readonly property color trayShadeClear: Qt.rgba(background.r, background.g, background.b, 0)
     readonly property color errorText: tok("errorText")
     readonly property real disabledOpacity: 0.4                     // unavailable controls (PIN-pad OK, locked pad, a dimmed row's label)
     readonly property real peekOpacity: 0.7                         // scroll cue: the first / last visible row while more rows exist beyond it (not disabledOpacity, which means unavailable)

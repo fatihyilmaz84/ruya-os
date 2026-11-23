@@ -112,7 +112,7 @@ Item {
         }
 
         // Where the top bar's chip of seat `slot` is, in the cluster.
-        function chipX(slot) { return find("playerChip_" + slot).mapToItem(find("statusGlass"), 0, 0).x }
+        function chipX(slot) { return find("playerChip_" + slot).mapToItem(find("statusTray"), 0, 0).x }
 
         function test_one_player_is_todays_avatar_and_no_row() {
             openShell()
@@ -138,7 +138,7 @@ Item {
             verify(findChild(first, "playerDot").visible && findChild(second, "playerDot").visible)
             // The name sits between them; the next chip is `spaceS` after it.
             const name = find("activeProfileName")
-            const nameRight = name.mapToItem(find("statusGlass"), name.width, 0).x
+            const nameRight = name.mapToItem(find("statusTray"), name.width, 0).x
             tryVerify(() => Math.abs(chipX(2) - nameRight - Theme.spaceS * u()) < 1.5, 2000,
                       "second chip " + chipX(2) + " after the name's end " + nameRight)
             compare(second.Accessible.name, "Player One, player 2")
@@ -182,7 +182,7 @@ Item {
         function test_the_budget_counts_each_further_player() {
             openShell(1280, 720)
             Batteries.mockPopulate()
-            const glass = find("statusGlass")
+            const glass = find("statusTray")
             tryVerify(() => glass.batteryDevices.length >= 4, 2000)
             const baseWidth = glass.fixedWidth
             const baseChips = glass.chipCount
@@ -337,12 +337,11 @@ Item {
                     wait(400)
                     const tag = "players-" + lang + "-" + size[2]
                     grabImage(tc.shell).save(shotsDir + "/" + tag + "-home2.png")
-                    grabImage(find("statusGlass")).save(shotsDir + "/" + tag + "-home2-crop.png")
                     Input.mockSeatHoldMs(60000)
                     Input.mockRemoveDevice(host.xbox)
                     tryVerify(() => find("playerChip_2") !== null && find("playerChip_2").held, 2000)
                     wait(300)
-                    grabImage(find("statusGlass")).save(shotsDir + "/" + tag + "-held-crop.png")
+                    grabImage(tc.shell).save(shotsDir + "/" + tag + "-held.png")
                     Input.mockAddDevice({ id: host.xbox, family: "xbox" })
                     tryVerify(() => !find("playerChip_2").held, 2000)
                     rename("p1", "Alexandria Montgomery")
