@@ -137,6 +137,14 @@ Item {
             compare(ThemeMath.bandThroughGlass(grey(0), Qt.rgba(1, 1, 1, 0)).low, 0, "clear glass over black stays black")
         }
 
+        // The wallpaper's band is measured under its dim layer (ThemeMath.bandUnder, RUY-1117; kept from tst_tray_shade).
+        function test_a_dimmed_band() {
+            const veiled = ThemeMath.bandUnder({ high: 1, low: 0 }, Qt.rgba(0, 0, 0, 1), 0.5)
+            verify(veiled.high < 1 && veiled.high > 0.1, "a black veil at half darkens white: " + veiled.high)
+            compare(veiled.low, 0, "and leaves black black")
+            compare(ThemeMath.bandUnder({ high: 0.4, low: 0.2 }, Qt.rgba(0, 0, 0, 1), 0).high.toFixed(3), "0.400", "no veil, no change")
+        }
+
         // --- ArtPalette.bandOf ------------------------------------------------------------------------
 
         readonly property real wide: 16 / 9     // the view's aspect: a 16:9 screen
