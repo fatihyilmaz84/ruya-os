@@ -151,6 +151,46 @@ pub fn interface_names(xml: &str) -> Result<Vec<String>, String> {
     Ok(parse(xml)?.into_keys().collect())
 }
 
+/// The comment that documents each method, signal and property of a contract file: the text of
+/// the comment right before the member's element (nothing but whitespace between them), "" for
+/// a member without one. Keyed `<interface>.<member>` (RUY-158: the conformance runner reads the
+/// statuses each method documents from it).
+pub fn member_comments(xml: &str) -> Result<BTreeMap<String, String>, String> {
+    let mut comments = BTreeMap::new();
+    let mut reader = Reader::from_str(xml);
+    let mut interface: Option<String> = None;
+    let mut last_comment = String::new();
+    loop {
+        let event = reader
+            .read_event()
+            .map_err(|e| format!("XML error at {}: {e}", reader.buffer_position()))?;
+        match &event {
+            Event::Comment(c) => {
+                last_comment = String::from_utf8_lossy(c.as_ref()).into_owned();
+                continue;
+            }
+            Event::Text(t) if t.iter().all(u8::is_ascii_whitespace) => continue,
+            Event::Start(e) | Event::Empty(e) => match e.name().as_ref() {
+                b"interface" => interface = Some(required(e, "name", "interface")?),
+                b"method" | b"signal" | b"property" => {
+                    let Some(iface) = interface.as_deref() else {
+                        return Err("a member outside an interface".to_owned());
+                    };
+                    let name = required(e, "name", "member")?;
+                    comments.insert(format!("{iface}.{name}"), std::mem::take(&mut last_comment));
+                }
+                _ => {}
+            },
+            Event::End(e) if e.name().as_ref() == b"interface" => interface = None,
+            Event::Eof => break,
+            _ => {}
+        }
+        // A comment documents only the element right after it.
+        last_comment.clear();
+    }
+    Ok(comments)
+}
+
 /// Compares what a service serves for `interface` with the contract's `interface`.
 ///
 /// Every member must be the same on both sides, with the same shape. `not_built` names the
@@ -429,6 +469,21 @@ pub fn assert_record_served(file: &str, name: &str, served: &[(&str, BTreeMap<St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_comment_documents_only_the_member_right_after_it() {
+        let xml = "<node><!-- the node --><interface name=\"a.B\">\n\
+                   <!-- \"ok\" for M -->\n<method name=\"M\"><arg type=\"s\"/></method>\n\
+                   <method name=\"N\"/>\n<!-- for S --><signal name=\"S\"/>\n\
+                   <!-- for P -->\n<annotation name=\"x\" value=\"y\"/>\n<property name=\"P\" type=\"s\" access=\"read\"/>\n\
+                   </interface></node>";
+        let c = member_comments(xml).expect("parses");
+        assert_eq!(c["a.B.M"].trim(), "\"ok\" for M");
+        assert_eq!(c["a.B.N"], "");
+        assert_eq!(c["a.B.S"].trim(), "for S");
+        assert_eq!(c["a.B.P"], "", "an element between them takes the comment");
+        assert!(member_comments("<node><method name=\"M\"/></node>").is_err());
+    }
 
     const CONTRACT: &str = r#"<node>
   <!-- a comment with <angle> brackets in a doc -->

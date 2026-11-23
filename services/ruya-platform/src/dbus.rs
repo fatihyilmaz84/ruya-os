@@ -106,6 +106,31 @@ async fn as_app<R>(
     answer
 }
 
+/// `Lifecycle.Register` for the message's sender: the served method's whole body (also the
+/// developer mock's, RUY-158, which wraps the answer).
+pub async fn register(core: &Shared, header: &Header<'_>, conn: &Connection) -> Status {
+    as_app(
+        core,
+        header,
+        conn,
+        |s| s,
+        |door, caller| lifecycle::register(door, caller, Instant::now()),
+    )
+    .await
+}
+
+/// `Lifecycle.SaveDone` for the message's sender (as [`register`]).
+pub async fn save_done(core: &Shared, header: &Header<'_>, conn: &Connection) -> Status {
+    as_app(
+        core,
+        header,
+        conn,
+        |s| s,
+        |door, caller| lifecycle::save_done(door, caller, Instant::now()),
+    )
+    .await
+}
+
 pub struct LifecycleIface {
     core: Shared,
 }
@@ -114,51 +139,58 @@ impl LifecycleIface {
     pub fn new(core: Shared) -> Self {
         LifecycleIface { core }
     }
-}
 
-#[interface(name = "org.ruyaos.Platform1.Lifecycle")]
-impl LifecycleIface {
-    async fn register(
-        &self,
-        #[zbus(header)] header: Header<'_>,
-        #[zbus(connection)] conn: &Connection,
-    ) -> String {
-        let status = as_app(
-            &self.core,
-            &header,
-            conn,
-            |s| s,
-            |door, caller| lifecycle::register(door, caller, Instant::now()),
-        )
-        .await;
+    /// The answer of a Lifecycle method: its status.
+    fn reply(&self, _member: &str, status: Status) -> String {
         status.as_str().to_owned()
     }
-
-    async fn save_done(
-        &self,
-        #[zbus(header)] header: Header<'_>,
-        #[zbus(connection)] conn: &Connection,
-    ) -> String {
-        let status = as_app(
-            &self.core,
-            &header,
-            conn,
-            |s| s,
-            |door, caller| lifecycle::save_done(door, caller, Instant::now()),
-        )
-        .await;
-        status.as_str().to_owned()
-    }
-
-    #[zbus(signal)]
-    async fn background(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
-
-    #[zbus(signal)]
-    async fn resume(emitter: &SignalEmitter<'_>, frozen_ms: u64) -> zbus::Result<()>;
-
-    #[zbus(signal)]
-    async fn stopping(emitter: &SignalEmitter<'_>, deadline_ms: u32) -> zbus::Result<()>;
 }
+
+/// Declares `org.ruyaos.Platform1.Lifecycle` on `$ty`, the one copy of the interface: a struct
+/// with a `core: Shared` field and a `fn reply(&self, member: &str, status: Status) -> String`
+/// that turns each method's status into its answer. The service's [`LifecycleIface`] answers the
+/// status itself; the developer mock's object (`mock::MockLifecycle`, dev-mock feature) passes it
+/// through the faults of its control interface. The signals are sent by [`notify_lifecycle`]
+/// through the service's object. The user's module imports `interface`, `Header`, `Connection`
+/// and `SignalEmitter`.
+macro_rules! lifecycle_interface {
+    ($(#[$attr:meta])* $ty:ident) => {
+        #[interface(name = "org.ruyaos.Platform1.Lifecycle")]
+        $(#[$attr])*
+        impl $ty {
+            async fn register(
+                &self,
+                #[zbus(header)] header: Header<'_>,
+                #[zbus(connection)] conn: &Connection,
+            ) -> String {
+                let status = $crate::dbus::register(&self.core, &header, conn).await;
+                self.reply("Register", status)
+            }
+
+            async fn save_done(
+                &self,
+                #[zbus(header)] header: Header<'_>,
+                #[zbus(connection)] conn: &Connection,
+            ) -> String {
+                let status = $crate::dbus::save_done(&self.core, &header, conn).await;
+                self.reply("SaveDone", status)
+            }
+
+            #[zbus(signal)]
+            async fn background(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
+            #[zbus(signal)]
+            async fn resume(emitter: &SignalEmitter<'_>, frozen_ms: u64) -> zbus::Result<()>;
+
+            #[zbus(signal)]
+            async fn stopping(emitter: &SignalEmitter<'_>, deadline_ms: u32) -> zbus::Result<()>;
+        }
+    };
+}
+#[cfg(feature = "dev-mock")]
+pub(crate) use lifecycle_interface;
+
+lifecycle_interface!(LifecycleIface);
 
 /// Sends `event` to each of `names` alone (a unicast signal: the message carries the destination,
 /// so the bus delivers it to that connection only).
@@ -276,40 +308,56 @@ impl ManageIface {
         if !self.caller_may(&header, conn, may_notify).await {
             return Status::NotAllowed.as_str().to_owned();
         }
-        let notice = with(&self.core, |door| {
-            lifecycle::notify(door, profile_id, scope, event, value_ms, Instant::now())
-        })
-        .unwrap_or(Err(Status::Failed));
-        let notice = match notice {
-            Ok(notice) => notice,
-            Err(status) => return status.as_str().to_owned(),
-        };
-        send_unicast(conn, &notice.names, notice.event).await;
-        let Some(wait) = notice.wait else {
-            return Status::Ok.as_str().to_owned();
-        };
-        // The core's lock is not held while this waits: SaveDone, a name leaving or a withdrawal
-        // answers through the channel.
-        let answered = futures_lite::future::or(async { wait.answer.recv().await.ok() }, async {
-            async_io::Timer::at(wait.deadline).await;
-            None
-        })
-        .await;
-        let status = match answered {
-            Some(status) => status,
-            None => {
-                with(&self.core, |door| {
-                    lifecycle::expire(door, profile_id, scope, Instant::now())
-                });
-                wait.settled()
-            }
-        };
-        eprintln!(
-            "ruya-platform: {profile_id} {scope} stopping: {}",
-            status.as_str()
-        );
-        status.as_str().to_owned()
+        notify_lifecycle(&self.core, conn, profile_id, scope, event, value_ms)
+            .await
+            .as_str()
+            .to_owned()
     }
+}
+
+/// `NotifyLifecycle` once its caller was checked (also the developer mock's `Fire`): the signal to
+/// the instance's registered connections and, for a "stopping", its settled answer.
+pub async fn notify_lifecycle(
+    core: &Shared,
+    conn: &Connection,
+    profile_id: &str,
+    scope: &str,
+    event: &str,
+    value_ms: u64,
+) -> Status {
+    let notice = with(core, |door| {
+        lifecycle::notify(door, profile_id, scope, event, value_ms, Instant::now())
+    })
+    .unwrap_or(Err(Status::Failed));
+    let notice = match notice {
+        Ok(notice) => notice,
+        Err(status) => return status,
+    };
+    send_unicast(conn, &notice.names, notice.event).await;
+    let Some(wait) = notice.wait else {
+        return Status::Ok;
+    };
+    // The core's lock is not held while this waits: SaveDone, a name leaving or a withdrawal
+    // answers through the channel.
+    let answered = futures_lite::future::or(async { wait.answer.recv().await.ok() }, async {
+        async_io::Timer::at(wait.deadline).await;
+        None
+    })
+    .await;
+    let status = match answered {
+        Some(status) => status,
+        None => {
+            with(core, |door| {
+                lifecycle::expire(door, profile_id, scope, Instant::now())
+            });
+            wait.settled()
+        }
+    };
+    eprintln!(
+        "ruya-platform: {profile_id} {scope} stopping: {}",
+        status.as_str()
+    );
+    status
 }
 
 /// Forgets every unique name that leaves the bus (NameOwnerChanged with no new owner), for as long

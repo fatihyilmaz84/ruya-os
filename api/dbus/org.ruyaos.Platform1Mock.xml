@@ -1,0 +1,49 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<!--
+  org.ruyaos.Platform1Mock: the control interface of the developer mock (RUY-158).
+
+  DRAFT, developer tooling only: never on a console, never in the image. `ruya-platform-mock`
+  (services/ruya-platform/src/bin/ruya-platform-mock.rs) serves it on the SESSION bus at
+  /org/ruyaos/Platform1Mock under its own bus name org.ruyaos.Platform1Mock, next to the real
+  org.ruyaos.Platform1 objects (Lifecycle and Manage, the same code as the service). Manage is not
+  checked there (the session-bus dev mode), so a permission is turned off with
+  Manage.SetPermission and a lifecycle event can also be sent with Manage.NotifyLifecycle; this
+  interface adds only what a console has and the session bus does not: which app, profile and
+  instance a caller is (the scenario file), which profile is active, and a wrong answer on demand.
+  Untagged: no element here is public API (docs/developers/api-surface.md).
+
+  Statuses: "ok"; "invalid-argument" (an app the scenario does not have, a profile it does not
+  list, a member that cannot be faulted, a string too long or with a control character); every
+  other status is the one NotifyLifecycle answers (api/dbus/org.ruyaos.Platform1.xml).
+-->
+<node>
+  <interface name="org.ruyaos.Platform1Mock">
+    <!-- A lifecycle event for the scenario app `app` (its name in the scenario file; "" is the
+         scenario's default app), in the scenario's profile: exactly Manage.NotifyLifecycle with
+         that app's scope ("background" with `value_ms` 0, "resume" with the frozen time,
+         "stopping" with the deadline), through the same code, with the same answer. -->
+    <method name="Fire">
+      <arg name="app" type="s" direction="in"/>
+      <arg name="event" type="s" direction="in"/>
+      <arg name="value_ms" type="t" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Makes `profile_id` (one of the scenario's profiles) the active one, as Profiles1 does on
+         a console when another player signs in. "ok", "invalid-argument". -->
+    <method name="SwitchProfile">
+      <arg name="profile_id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- From now on the Lifecycle method `member` ("Register" or "SaveDone") answers `status`
+         instead of its real answer (the call itself still runs); "" ends the fault. For showing
+         that a conformance run catches a wrong answer. "ok", "invalid-argument". -->
+    <method name="Fault">
+      <arg name="member" type="s" direction="in"/>
+      <arg name="status" type="s" direction="in"/>
+      <arg name="result" type="s" direction="out"/>
+    </method>
+  </interface>
+</node>

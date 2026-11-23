@@ -1,0 +1,10 @@
+{
+  "profile": "p1",
+  "profiles": ["p1", "p2"],
+  "active": "p1",
+  "default_app": "demo",
+  "apps": {
+    "demo": { "app_id": "org.ruyaos.samples.PlatformDemo", "instance": "1" },
+    "other": { "app_id": "org.example.Other", "instance": "2" }
+  }
+}

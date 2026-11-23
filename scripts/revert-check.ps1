@@ -15,7 +15,8 @@
 # a lint or a scripts\*.ps1 file; -Mode vmchecks: step 2 is `bash scripts/test-vm-checks.sh`, for a scripts\vm-*.sh
 # mutation. Neither builds or rebuilds anything; the verdict is the child's exit code (nonzero = CAUGHT).
 #   .\scripts\revert-check.ps1 -Mode docs -File scripts\lint-dev-docs.ps1 -Old '<a rule>' -New '<nothing>'
-# A -File under services\<crate>\ is Rust: step 2 is `cargo test -p <crate> -- <-Test name filters>`, e.g.
+# A -File under services\<crate>\ is Rust: step 2 is `cargo test -p <crate> --all-features -- <-Test name filters>`
+# (every feature, so code behind one, like ruya-platform's dev-mock, is tested too), e.g.
 #   .\scripts\revert-check.ps1 -File services\ruya-session\src\spawner.rs -Old '...' -New '...' -Test scope_names
 param(
     [Parameter(Mandatory = $true)][string]$File,
@@ -95,7 +96,7 @@ try {
         Push-Location (Join-Path $Repo "services")
         try {
             # libtest takes several name filters (a test runs when its name contains any of them).
-            $out = (& cargo test --locked -q -p $crate -- @Test 2>&1 | Out-String -Width 4096)
+            $out = (& cargo test --locked -q -p $crate --all-features -- @Test 2>&1 | Out-String -Width 4096)
         } finally { Pop-Location }
         $logs = @()
     } elseif ($Test.Count -gt 0) {

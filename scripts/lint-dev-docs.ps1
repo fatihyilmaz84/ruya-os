@@ -23,7 +23,8 @@
 #     in a chapter other than api-surface.md;
 #   - samples (-Samples only): `make -C samples/<name> test` for every sample with a Makefile; a
 #     failing test or a missing make is a finding. Without -Samples the lint prints
-#     "samples not built (use -Samples)" and stays green.
+#     "samples not built (use -Samples)" and stays green. -SkipSample <name>,... leaves out samples
+#     whose test needs what this host lacks and another CI job runs (each says so in the output).
 #
 # This is the one parser of the Stability/Since annotations. It writes the public elements to
 # apis.json (default <Repo>/output/apis.json, git-ignored; change with -ApisJson), for the API
@@ -44,7 +45,9 @@ param(
     [string]$Dir = "",
     [string]$Repo = "",
     [string]$ApisJson = "",
-    [switch]$Samples
+    [switch]$Samples,
+    # Samples whose `make test` another CI job runs (named in ci.yml with the reason).
+    [string[]]$SkipSample = @()
 )
 $ErrorActionPreference = "Stop"
 if (-not $Repo) { $Repo = Split-Path -Parent $PSScriptRoot }
@@ -560,6 +563,7 @@ if ($Samples) {
     foreach ($s in (Get-ChildItem (Join-Path $Repo "samples") -Directory -ErrorAction SilentlyContinue | Sort-Object Name)) {
         if (-not (Test-Path (Join-Path $s.FullName "Makefile"))) { continue }
         $where = "samples/$($s.Name)"
+        if ($SkipSample -contains $s.Name) { Write-Host "${where}: make test not run here (-SkipSample)"; continue }
         if (-not $make) { Fail $where "has a Makefile and make was not found"; continue }
         $r = Run-Native $make.Source @("-C", $s.FullName, "test")
         if ($r.code -ne 0) { Fail $where "make test failed: $(($r.out -split "`n" | Select-Object -Last 3) -join ' | ')" }

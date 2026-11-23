@@ -2,7 +2,7 @@
 
 How your game is started, what the screen looks like to it, how it is stopped, and how to build screens that read from the sofa. The short version: **you get the whole screen, you do not choose the size, you stop when asked, you can be frozen at any moment (the Guide button's Hub pauses you), and the player's way back is the Guide button, not yours.**
 
-*Checked against the code as of 2026-11-11; the lifecycle events section as of 2026-11-23 (RUY-1098). Items marked **planned** are not built yet.*
+*Checked against the code as of 2026-11-11; the lifecycle events section as of 2026-11-23 (RUY-1098; its sample, RUY-158). Items marked **planned** are not built yet.*
 
 ## How your game is started
 
@@ -154,6 +154,44 @@ Through its one bus permission, `--system-talk-name=org.ruyaos.Platform1`, an ap
 
 What this does not change: you still cannot refuse or delay a pause or a stop, and the console will not wait for your answer longer than the deadline.
 
+**The sample** (`samples/platform-demo`, C with sd-bus, CC0; RUY-158) does all of this, and its `make test` runs it against the developer mock ([Testing the Platform API off the console](testing-and-debugging.md#testing-the-platform-api-off-the-console)). It registers once, after start, with the signal match set up first, and runs on when there is nothing to register with:
+
+```c
+/* sample: samples/platform-demo/src/platform-demo.c */
+    /* The match first, so no signal is missed between Register and it. */
+    r = sd_bus_match_signal(bus, NULL, PLATFORM, PLATFORM_PATH, LIFECYCLE, NULL, on_lifecycle, NULL);
+    if (r >= 0)
+        r = sd_bus_call_method(bus, PLATFORM, PLATFORM_PATH, LIFECYCLE, "Register", &error, &reply, "");
+    if (r >= 0)
+        r = sd_bus_message_read(reply, "s", &status);
+    if (r < 0) {
+        if (sd_bus_error_has_name(&error, SD_BUS_ERROR_SERVICE_UNKNOWN))
+            printf("no Platform service: running without lifecycle events\n");
+...
+}
+```
+
+The signal handler only notes a `Stopping`; the main loop keeps the clock check as its primary path, then saves (written, `fsync`ed, renamed) and only then answers `SaveDone`:
+
+```c
+/* sample: samples/platform-demo/src/platform-demo.c */
+    } else if (strcmp(member, "Stopping") == 0) {
+        uint32_t deadline_ms = 0;
+        if (sd_bus_message_read(m, "u", &deadline_ms) >= 0)
+            printf("Stopping: saving, %u ms left\n", (unsigned)deadline_ms);
+        g_stopping = 1; /* the main loop saves and answers */
+    }
+...
+        if (gap > PAUSED_GAP)
+            printf("a gap of %.0f ms: we were frozen, pausing the game\n", gap * 1000.0);
+...
+    err = save_game(frame);
+    if (err != 0)
+        printf("save failed: %s\n", strerror(err));
+    if (bus && g_stopping)
+        lifecycle_save_done(bus);
+```
+
 ## Suspend, profile switch and sleep
 
 - **Suspend/resume:** the console does not stop apps when it goes to sleep, so you resume where you were. Do not rely on wall-clock time being continuous across a resume (clamp your frame time, as the sample does). Suspending with the shell on the real display is **not working yet** (T-166). **Right after a resume the console may freeze you** until the player continues *(experimental, RUY-707)*: when player 1's controller is not connected after the wake, "Who's playing?" opens over your game (see [the sleep case above](#what-the-player-sees)). Detect the gap from the clock (rule 1 of [What to do](#what-to-do)), as after the Hub. If the player switches profile there, you stay frozen and kept under the previous profile and are thawed when that profile signs in again.
@@ -190,4 +228,4 @@ The player sits about 3 m from a TV. These rules are the console's own design ru
 
 ## Sources
 
-Checked on 2026-11-11 against: `api/dbus/org.ruyaos.Session1.xml`; for the lifecycle events (RUY-1098, 2026-11-23): `api/dbus/org.ruyaos.Platform1.xml`, `services/ruya-platform/src/lifecycle.rs`, `door.rs` and `identity.rs`; `services/ruya-session/src/spawner.rs` (`launch_command`, `unit_name`), `systemd.rs` (stop and kill through `systemctl`), `session.rs` (`STOP_GRACE`, `exit_reason`), `main.rs` (no display env outside the dev mode); `shell/compositor/Compositor.qml` (`sendFullscreen`); `shell/src/input/KeyRouter.h`; `docs/specs/02-shell.md` sections 1.5, 4.3; `docs/specs/04-design-system.md` sections 1, 2; `docs/specs/00-overview.md` ADR-002 (T-123 result), ADR-004; `docs/specs/03-services-and-apps.md` sections 4.1, 4.6; task files T-147, T-164, T-165, T-166, T-198; `docs/dev-setup.md` (display and T-166 status); the SIGTERM tests described above (WSL, `samples/hello-game`); for the pause (T-468): `services/ruya-session/src/session.rs` (`freeze`, `thaw`, `stop` thawing first, the grace's clock read after the thaw since T-466; `RECLAIM_AFTER`, `tick`, `sync_audio`), `spawner.rs` (`reclaim_command`, `RECLAIM_PERCENT`, `park_audio_command`), `services/ruya-devices/src/park.rs` (which streams are parked and how they go back), `systemd.rs` (`freezer`: `systemctl --user freeze|thaw` on the unit and its active scopes, each bounded to 5 s), `dbus.rs` (Freeze and Thaw in order); `shell/qml/HubPause.qml`, `shell/qml/Shell.qml` (`hubPause`, `closeApp`, `foregroundInstance`: no play time while the Hub is open, `fallbackFront`), `shell/src/settings/DeviceSettings.cpp` (`hub/pauseGames`); `shell/compositor/Compositor.qml` (only `sendFullscreen`, no `activated` or `suspended` state); `docs/specs/02-shell.md` section 1.6; ADR-033; `docs/specs/03-services-and-apps.md` section 4.1; `samples/hello-game/src/main.c` (`dt` clamp); a freeze test on 2026-11-11 (Fedora 44 under WSL, systemd 259, a Python stand-in game in a transient user service: clocks, timers, sockets, signals, freeze 0.5 s and thaw 7 ms); for the profile switch (T-165, 2026-11-13): `services/ruya-session/src/session.rs` (`profile_changed`), `dbus.rs` (`watch_active_profile`, `follow_active`), `shell/qml/HubPause.qml` (`sweep`), `shell/qml/Shell.qml` (`appFrozen`, `fallbackFront`). **Not checked:** what a Wayland client receives around the freeze (keyboard leave and enter, frame callbacks), a Flatpak game, a game's sound, and the numbers on real hardware.
+Checked on 2026-11-11 against: `api/dbus/org.ruyaos.Session1.xml`; for the lifecycle events (RUY-1098, 2026-11-23): `api/dbus/org.ruyaos.Platform1.xml`, `services/ruya-platform/src/lifecycle.rs`, `door.rs` and `identity.rs`; `services/ruya-session/src/spawner.rs` (`launch_command`, `unit_name`), `systemd.rs` (stop and kill through `systemctl`), `session.rs` (`STOP_GRACE`, `exit_reason`), `main.rs` (no display env outside the dev mode); `shell/compositor/Compositor.qml` (`sendFullscreen`); `shell/src/input/KeyRouter.h`; `docs/specs/02-shell.md` sections 1.5, 4.3; `docs/specs/04-design-system.md` sections 1, 2; `docs/specs/00-overview.md` ADR-002 (T-123 result), ADR-004; `docs/specs/03-services-and-apps.md` sections 4.1, 4.6; task files T-147, T-164, T-165, T-166, T-198; `docs/dev-setup.md` (display and T-166 status); the SIGTERM tests described above (WSL, `samples/hello-game`); for the pause (T-468): `services/ruya-session/src/session.rs` (`freeze`, `thaw`, `stop` thawing first, the grace's clock read after the thaw since T-466; `RECLAIM_AFTER`, `tick`, `sync_audio`), `spawner.rs` (`reclaim_command`, `RECLAIM_PERCENT`, `park_audio_command`), `services/ruya-devices/src/park.rs` (which streams are parked and how they go back), `systemd.rs` (`freezer`: `systemctl --user freeze|thaw` on the unit and its active scopes, each bounded to 5 s), `dbus.rs` (Freeze and Thaw in order); `shell/qml/HubPause.qml`, `shell/qml/Shell.qml` (`hubPause`, `closeApp`, `foregroundInstance`: no play time while the Hub is open, `fallbackFront`), `shell/src/settings/DeviceSettings.cpp` (`hub/pauseGames`); `shell/compositor/Compositor.qml` (only `sendFullscreen`, no `activated` or `suspended` state); `docs/specs/02-shell.md` section 1.6; ADR-033; `docs/specs/03-services-and-apps.md` section 4.1; `samples/hello-game/src/main.c` (`dt` clamp); a freeze test on 2026-11-11 (Fedora 44 under WSL, systemd 259, a Python stand-in game in a transient user service: clocks, timers, sockets, signals, freeze 0.5 s and thaw 7 ms); for the profile switch (T-165, 2026-11-13): `services/ruya-session/src/session.rs` (`profile_changed`), `dbus.rs` (`watch_active_profile`, `follow_active`), `shell/qml/HubPause.qml` (`sweep`), `shell/qml/Shell.qml` (`appFrozen`, `fallbackFront`). For the sample (RUY-158, 2026-11-23): `samples/platform-demo/src/platform-demo.c` and its `tests/`, run against `ruya-platform-mock`; its `make test` was not yet run on Linux when this was written. **Not checked:** what a Wayland client receives around the freeze (keyboard leave and enter, frame callbacks), a Flatpak game, a game's sound, and the numbers on real hardware.

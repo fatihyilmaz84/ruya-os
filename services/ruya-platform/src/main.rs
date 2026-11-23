@@ -13,7 +13,6 @@ use ruya_platform::dbus::{
     watch_names, watch_profiles, Checks, LifecycleIface, ManageIface, Shared, BUS_NAME, OBJECT_PATH,
 };
 use ruya_platform::identity::{Procfs, Users};
-use ruya_platform::lifecycle::{self, Lifecycle};
 use ruya_platform::procfs::SystemUsers;
 use ruya_platform::registry::Registry;
 use ruya_platform::store::Store;
@@ -54,12 +53,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         PathBuf::from,
     );
     let store = Store::open(&dir)?;
-    let mut registry = Registry::default();
-    registry.register(
-        lifecycle::INTERFACE,
-        lifecycle::KEY,
-        Box::<Lifecycle>::default(),
-    )?;
+    let registry = Registry::served()?;
     let (procfs, users) = readers();
     let core: Shared = Arc::new(Mutex::new(Platform::new(procfs, users, store, registry)));
     let checks = Checks {

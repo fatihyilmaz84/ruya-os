@@ -2,7 +2,8 @@
 //! Everything here but `dbus.rs` and the Linux readers in `procfs.rs` is pure and tested on any
 //! host: who the caller is (`identity`), what the player allowed (`store`, `capabilities`), the
 //! rate and size limits (`limits`), the gate every call passes (`door`), where capabilities plug
-//! in (`registry`) and the first capability (`lifecycle`).
+//! in (`registry`) and the first capability (`lifecycle`). `mock` is the developer mock's scenario
+//! world and control interface (RUY-158: the `ruya-platform-mock` binary; only with the `dev-mock` feature, never in the image).
 
 pub mod capabilities;
 pub mod dbus;
@@ -10,6 +11,8 @@ pub mod door;
 pub mod identity;
 pub mod lifecycle;
 pub mod limits;
+#[cfg(feature = "dev-mock")]
+pub mod mock;
 pub mod procfs;
 pub mod registry;
 pub mod status;

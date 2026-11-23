@@ -2,7 +2,7 @@
 
 How to run your game on a RuyaOS machine, watch what it does, break it on purpose, and fix the usual problems. Most of this is plain Flatpak and systemd; the RuyaOS parts are where things live and how the console starts and stops your game.
 
-*Checked against the code as of 2026-11-06. Items marked **planned** are not built yet.*
+*Checked against the code as of 2026-11-06; "Testing the Platform API off the console" as of 2026-11-23 (RUY-158). Items marked **planned** are not built yet.*
 
 ## Get a dev machine
 
@@ -96,6 +96,51 @@ flatpak run --env=SDL_VIDEODRIVER=dummy --env=SDL_AUDIODRIVER=dummy org.example.
 
 Engines have headless modes too (`--headless` in Godot). The sample game has `make test`, a unit test of its save code with no SDL, which also runs inside the Flatpak build.
 
+## Testing the Platform API off the console
+
+*Experimental, like the API ([Lifecycle events](fullscreen-and-lifecycle.md#lifecycle-events-experimental)); built and tested on the project's hosts, its Linux runs not yet confirmed in CI when this was written.*
+
+You can call the [Platform API](api-surface.md) on any Linux PC, without a console: the **developer mock**, `ruya-platform-mock`, serves `org.ruyaos.Platform1` on your session bus. It is not a copy of the console's rules: it runs the console's own service code (the same statuses, the rate limit of 10 calls, the limit of 8 registered connections per instance, the `SaveDone` rules, the per-app permission), and replaces only what a PC does not have. On a console the caller's app, instance and profile come from its Flatpak sandbox; with the mock they come from a **scenario file**:
+
+```json
+{
+  "profile": "p1",
+  "profiles": ["p1", "p2"],
+  "active": "p1",
+  "default_app": "demo",
+  "apps": {
+    "demo": { "app_id": "org.example.Game", "instance": "1" },
+    "other": { "app_id": "org.example.Other", "instance": "2" }
+  }
+}
+```
+
+Every process that connects is the app named by `RUYA_MOCK_APP=<name>` in its environment, or the `default_app` without it; a name the file does not have makes it an unsandboxed caller (`not-an-app`). Every caller belongs to `profile`; `active` is the signed-in profile. The mock runs on Linux only (it reads `/proc`) and needs a D-Bus daemon that passes the caller's process descriptor (`ProcessFD`), as Fedora 44's does; on an older one it stops at start and says so. Build it from the RuyaOS repository (Rust and cargo):
+
+```sh
+(cd services && cargo build -p ruya-platform --features dev-mock --bin ruya-platform-mock)
+```
+
+Then, in a private bus so nothing else on your desktop sees it:
+
+```sh
+dbus-run-session -- sh
+mock=services/target/debug/ruya-platform-mock
+$mock --scenario my-scenario.json &
+$mock wait
+# Your game talks to the system bus, as on a console; point it at this bus:
+DBUS_SYSTEM_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS ./my-game &
+$mock fire resume 1500            # Resume(1500) to the default app; --app <name> for another
+$mock fire background
+$mock fire stopping 5000          # waits; prints saved, timeout or not-registered
+$mock switch-profile p2           # another player signs in: Register is not-allowed now
+busctl --user call org.ruyaos.Platform1 /org/ruyaos/Platform1 org.ruyaos.Platform1.Manage SetPermission sssb p1 org.example.Game lifecycle false
+```
+
+`fire` sends what the console sends (the same as `Manage.NotifyLifecycle` with your app's scope) and prints the console's answer; the last line is the player turning lifecycle events off for your app (Settings > Privacy, planned). `$mock fault Register not-allowed` makes `Register` answer a wrong status on purpose (`$mock fault Register` ends it), to check that your test or your app notices. What the mock does **not** do: freeze your process (stop it with `kill -STOP` and `kill -CONT` to see your clock gap), run a sandbox, or send anything by itself (nothing happens until you `fire`).
+
+`samples/platform-demo` (C, sd-bus, CC0) is the smallest app that uses all of it; its `make test` runs it with no service at all, then against the mock: a clock gap, `Resume`, and a `Stopping` answered with a save and `SaveDone`. **Conformance:** `bash scripts/conformance.sh` (from the repository) runs the console's conformance cases against the mock: every public element, valid calls and the abuse cases (an unsandboxed caller, a flood, a ninth connection, `SaveDone` without or after its `Stopping`, an inactive profile, the capability turned off during the run, no signal to another app or profile). It prints `PASS` or `FAIL` per case and `CONFORMANCE: n/m`, or `CONFORMANCE: NOT RUN` with the reason when it cannot run; a check that did not run is never reported as passed. The same run against a console's own service is **planned**.
+
 ## Common problems
 
 | Symptom | Cause and fix |
@@ -128,4 +173,4 @@ Engines have headless modes too (`--headless` in Godot). The sample game has `ma
 
 ## Sources
 
-Checked on 2026-11-06 against: `docs/dev-setup.md` (dev image, SSH, VM, monitor port, `-Work`, installer ISO); `scripts/vm-session-check.sh` and `scripts/vm-sample-check.sh` (the `Session1` calls, the unit and scope names, the `2>&1 | cat` pitfall); `api/dbus/org.ruyaos.Session1.xml` (statuses); `services/ruya-session/src/spawner.rs` (`unit_name`, `scope_pattern`), `session.rs`; `services/ruya-library/src/watch.rs` (2 s refresh) and `flatpak.rs`; `docs/specs/03-services-and-apps.md` sections 4.1, 4.3 (job error statuses); `image/CLAUDE.md` (the `-M` stderr rule); `flatpak run --command=sh`, `--env`, `ps`, `kill`, `info --show-permissions` and `override --show` run on the sample (Flatpak 1.18.4, WSL), including a SIGTERM to all sandbox processes (saved, 3 of 3), to the game only (saved) and to `flatpak run` only (the sandbox kept running), and `flatpak kill` (no save line). Not run on a RuyaOS machine yet: the journal filter for a profile's game, `list-units` over `-M` (the sample check, a lead run, will show).
+Checked on 2026-11-06 against: `docs/dev-setup.md` (dev image, SSH, VM, monitor port, `-Work`, installer ISO); `scripts/vm-session-check.sh` and `scripts/vm-sample-check.sh` (the `Session1` calls, the unit and scope names, the `2>&1 | cat` pitfall); `api/dbus/org.ruyaos.Session1.xml` (statuses); `services/ruya-session/src/spawner.rs` (`unit_name`, `scope_pattern`), `session.rs`; `services/ruya-library/src/watch.rs` (2 s refresh) and `flatpak.rs`; `docs/specs/03-services-and-apps.md` sections 4.1, 4.3 (job error statuses); `image/CLAUDE.md` (the `-M` stderr rule); `flatpak run --command=sh`, `--env`, `ps`, `kill`, `info --show-permissions` and `override --show` run on the sample (Flatpak 1.18.4, WSL), including a SIGTERM to all sandbox processes (saved, 3 of 3), to the game only (saved) and to `flatpak run` only (the sandbox kept running), and `flatpak kill` (no save line). Not run on a RuyaOS machine yet: the journal filter for a profile's game, `list-units` over `-M` (the sample check, a lead run, will show). Updated on 2026-11-23 for RUY-158 against `services/ruya-platform/src/mock.rs`, `src/bin/ruya-platform-mock.rs` and `src/bin/ruya-platform-conformance/`, `api/dbus/org.ruyaos.Platform1Mock.xml`, `scripts/conformance.sh` and `samples/platform-demo`; the mock and the runner were built and their unit tests run on Windows, their Linux runs (the mock on a bus, the conformance run, the sample's `make test`) were not run when this was written.

@@ -14,6 +14,19 @@ pub enum Status {
 }
 
 impl Status {
+    /// Every status, in the order of the XML header.
+    pub const ALL: [Status; 9] = [
+        Status::Ok,
+        Status::NotAnApp,
+        Status::NotAllowed,
+        Status::RateLimited,
+        Status::InvalidArgument,
+        Status::NotRegistered,
+        Status::Saved,
+        Status::Timeout,
+        Status::Failed,
+    ];
+
     pub fn as_str(self) -> &'static str {
         match self {
             Status::Ok => "ok",
@@ -36,17 +49,7 @@ mod tests {
     #[test]
     fn every_status_is_in_the_contract() {
         let xml = include_str!("../../../api/dbus/org.ruyaos.Platform1.xml");
-        for s in [
-            Status::Ok,
-            Status::NotAnApp,
-            Status::NotAllowed,
-            Status::RateLimited,
-            Status::InvalidArgument,
-            Status::NotRegistered,
-            Status::Saved,
-            Status::Timeout,
-            Status::Failed,
-        ] {
+        for s in Status::ALL {
             assert!(
                 xml.contains(&format!("\"{}\"", s.as_str())),
                 "{} is not in the XML header",

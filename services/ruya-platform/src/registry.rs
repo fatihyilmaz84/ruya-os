@@ -53,6 +53,18 @@ pub struct Registry {
 }
 
 impl Registry {
+    /// Every capability the service serves, registered: the one list the service and the developer
+    /// mock (RUY-158) both start from. A new capability adds its line here.
+    pub fn served() -> Result<Registry, RegistryError> {
+        let mut registry = Registry::default();
+        registry.register(
+            crate::lifecycle::INTERFACE,
+            crate::lifecycle::KEY,
+            Box::<crate::lifecycle::Lifecycle>::default(),
+        )?;
+        Ok(registry)
+    }
+
     pub fn register(
         &mut self,
         interface: &'static str,
