@@ -1632,10 +1632,7 @@ FocusScope {
         }
         readonly property real targetAlpha: band ? ThemeMath.trayShadeAlpha(band, Theme) : Theme.trayShadeAlphaMax
         property real alpha: targetAlpha
-        Behavior on alpha {
-            enabled: Theme.tintMs > 0
-            NumberAnimation { duration: Theme.tintMs; easing.type: Easing.InOutQuad }
-        }
+        Behavior on alpha { NumberAnimation { duration: Theme.tintMs; easing.type: Easing.InOutQuad } }   // tintMs is 0 under reduced motion: a jump
         readonly property color color: Theme.trayShade(alpha)
 
         Connections {
