@@ -18,7 +18,7 @@ Page {
         const items = Library.items
         if ((params.id ?? "") !== "")
             return items.find(i => i.id === params.id) ?? ({})
-        return paramAppId !== "" ? (items.find(i => Library.sessionAppId(i.id) === paramAppId) ?? ({})) : ({})
+        return paramAppId !== "" && items.length > 0 ? Library.itemForApp(paramAppId) : ({})   // any installation (RUY-137)
     }
     readonly property bool hasItem: item.id !== undefined
     readonly property string liveAppId: paramAppId !== "" ? paramAppId : (hasItem ? Library.sessionAppId(item.id) : "")

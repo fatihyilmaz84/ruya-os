@@ -3376,7 +3376,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>InstallationText</name>
     <message>
-        <location filename="../qml/InstallationText.qml" line="+34"/>
+        <location filename="../qml/InstallationText.qml" line="+41"/>
         <source>%1 · %2</source>
         <comment>An installation: its source, then its version or runner</comment>
         <translation>%1 · %2</translation>
@@ -3972,7 +3972,7 @@ This can&apos;t be undone.</translation>
         <translation>Store and downloads</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+27"/>
         <source>%1 s</source>
         <translation>%1 s</translation>
     </message>
@@ -6124,7 +6124,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 is still closing.</translation>
     </message>
     <message>
-        <location line="+88"/>
+        <location line="+87"/>
         <location line="+30"/>
         <source>%1 could not start</source>
         <translation>%1 could not start</translation>
@@ -6188,57 +6188,57 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+28"/>
+        <location line="+29"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location line="-27"/>
+        <location line="-28"/>
         <source>Your library is empty</source>
         <translation>Your library is empty</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
         <source>Open Store</source>
         <translation>Open Store</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+183"/>
+        <location line="+196"/>
         <source>Play</source>
         <translation>Play</translation>
     </message>
     <message>
-        <location line="-184"/>
-        <location line="+186"/>
+        <location line="-197"/>
+        <location line="+199"/>
         <source>Resume</source>
         <translation>Resume</translation>
     </message>
     <message>
-        <location line="-186"/>
+        <location line="-199"/>
         <source>Closing…</source>
         <translation>Closing…</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+183"/>
+        <location line="+196"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Open</translation>
     </message>
     <message>
-        <location line="-180"/>
-        <location line="+185"/>
+        <location line="-193"/>
+        <location line="+198"/>
         <source>Details</source>
         <translation>Details</translation>
     </message>
     <message>
-        <location line="-166"/>
+        <location line="-179"/>
         <source>Recent</source>
         <translation>Recent</translation>
     </message>
     <message>
-        <location line="+165"/>
+        <location line="+178"/>
         <source>Close game</source>
         <translation>Close game</translation>
     </message>
@@ -6253,7 +6253,7 @@ This can&apos;t be undone.</translation>
         <translation>Your activity</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <source>Choose installation</source>
         <translation>Choose installation</translation>
     </message>
@@ -6264,13 +6264,7 @@ This can&apos;t be undone.</translation>
         <translation>Separate %1</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Same game as %1 (%2)?</source>
-        <comment>Options: link two installations; %1 a title, %2 its source</comment>
-        <translation>Same game as %1 (%2)?</translation>
-    </message>
-    <message>
-        <location line="+9"/>
+        <location line="+16"/>
         <source>Uninstall…</source>
         <translation>Uninstall…</translation>
     </message>
@@ -6323,7 +6317,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-2089"/>
+        <location line="-2104"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -6338,7 +6332,7 @@ This can&apos;t be undone.</translation>
         <translation>Press any button to wait</translation>
     </message>
     <message>
-        <location line="+124"/>
+        <location line="+123"/>
         <source>%1 is already running</source>
         <translation>%1 is already running</translation>
     </message>
@@ -6354,7 +6348,13 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1809"/>
+        <location line="+1104"/>
+        <source>Same game as the %1 version?</source>
+        <comment>Options: link two installations; %1 the other one&apos;s source (.play, Flatpak, Steam)</comment>
+        <translation>Same game as the %1 version?</translation>
+    </message>
+    <message>
+        <location line="+721"/>
         <location line="+13"/>
         <location line="+3"/>
         <source>Sections</source>

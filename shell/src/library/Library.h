@@ -88,6 +88,10 @@ public:
     // The Flatpak application id Session1.Launch takes for an item, or "" when the item has no
     // launch path through Session1 yet (a Steam game): the shell offers no Play for those (T-147).
     Q_INVOKABLE QString sessionAppId(const QString &id) const;
+    // The Flatpak application ids of every installation of game `id` that Session1 can start (RUY-137): the
+    // preferred one first, then the others in Library1's order; [] for none. The one answer for "is this game
+    // running", whichever installation runs. A binding that calls it reads `items` too (as for itemForApp).
+    Q_INVOKABLE QStringList sessionAppIds(const QString &id) const;
     // The record of an item, or an empty object.
     Q_INVOKABLE QVariantMap item(const QString &id) const;
     // The record of the item whose Flatpak application id (sessionAppId) is appId, or of the game that has an

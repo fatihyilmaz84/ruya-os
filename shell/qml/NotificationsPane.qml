@@ -27,11 +27,8 @@ SettingsPane {
     }
     // An app's name: its library title, else its Store name, else its id.
     function appName(appId) {
-        for (const it of Library.items) {
-            if (Library.sessionAppId(it.id) === appId)
-                return it.title
-        }
-        return Store.app(appId).name || appId
+        const found = Library.items.length > 0 ? Library.itemForApp(appId) : ({})   // any installation (RUY-137)
+        return found.title ?? (Store.app(appId).name || appId)
     }
 
     // "00:00" ... "23:00", and the stored time when it is not on the hour (set by something else).

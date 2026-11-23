@@ -3371,7 +3371,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>InstallationText</name>
     <message>
-        <location filename="../qml/InstallationText.qml" line="+34"/>
+        <location filename="../qml/InstallationText.qml" line="+41"/>
         <source>%1 · %2</source>
         <comment>An installation: its source, then its version or runner</comment>
         <translation>%1 · %2</translation>
@@ -3960,7 +3960,7 @@ Bu geri alınamaz.</translation>
         <translation>Mağaza ve indirmeler</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+27"/>
         <source>%1 s</source>
         <translation>%1 sn</translation>
     </message>
@@ -6104,7 +6104,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 hâlâ kapanıyor.</translation>
     </message>
     <message>
-        <location line="+88"/>
+        <location line="+87"/>
         <location line="+30"/>
         <source>%1 could not start</source>
         <translation>%1 başlatılamadı</translation>
@@ -6168,57 +6168,57 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+28"/>
+        <location line="+29"/>
         <source>Installed</source>
         <translation>Kurulu</translation>
     </message>
     <message>
-        <location line="-27"/>
+        <location line="-28"/>
         <source>Your library is empty</source>
         <translation>Kitaplığın boş</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
         <source>Open Store</source>
         <translation>Mağazayı aç</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+183"/>
+        <location line="+196"/>
         <source>Play</source>
         <translation>Oyna</translation>
     </message>
     <message>
-        <location line="-184"/>
-        <location line="+186"/>
+        <location line="-197"/>
+        <location line="+199"/>
         <source>Resume</source>
         <translation>Devam et</translation>
     </message>
     <message>
-        <location line="-186"/>
+        <location line="-199"/>
         <source>Closing…</source>
         <translation>Kapanıyor…</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+183"/>
+        <location line="+196"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Aç</translation>
     </message>
     <message>
-        <location line="-180"/>
-        <location line="+185"/>
+        <location line="-193"/>
+        <location line="+198"/>
         <source>Details</source>
         <translation>Ayrıntılar</translation>
     </message>
     <message>
-        <location line="-166"/>
+        <location line="-179"/>
         <source>Recent</source>
         <translation>Son oynananlar</translation>
     </message>
     <message>
-        <location line="+165"/>
+        <location line="+178"/>
         <source>Close game</source>
         <translation>Oyunu kapat</translation>
     </message>
@@ -6233,7 +6233,7 @@ Bu geri alınamaz.</translation>
         <translation>Etkinliğiniz</translation>
     </message>
     <message>
-        <location line="+5"/>
+        <location line="+6"/>
         <source>Choose installation</source>
         <translation>Kurulumu seç</translation>
     </message>
@@ -6244,13 +6244,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kurulumunu ayır</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Same game as %1 (%2)?</source>
-        <comment>Options: link two installations; %1 a title, %2 its source</comment>
-        <translation>%1 (%2) ile aynı oyun mu?</translation>
-    </message>
-    <message>
-        <location line="+9"/>
+        <location line="+16"/>
         <source>Uninstall…</source>
         <translation>Kaldır…</translation>
     </message>
@@ -6303,7 +6297,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-2089"/>
+        <location line="-2104"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -6318,7 +6312,7 @@ Bu geri alınamaz.</translation>
         <translation>Beklemek için bir düğmeye bas</translation>
     </message>
     <message>
-        <location line="+124"/>
+        <location line="+123"/>
         <source>%1 is already running</source>
         <translation>%1 zaten çalışıyor</translation>
     </message>
@@ -6334,7 +6328,13 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1809"/>
+        <location line="+1104"/>
+        <source>Same game as the %1 version?</source>
+        <comment>Options: link two installations; %1 the other one&apos;s source (.play, Flatpak, Steam)</comment>
+        <translation>%1 sürümüyle aynı oyun mu?</translation>
+    </message>
+    <message>
+        <location line="+721"/>
         <location line="+13"/>
         <location line="+3"/>
         <source>Sections</source>

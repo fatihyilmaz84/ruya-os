@@ -326,7 +326,7 @@ void MockLibraryBackend::reset(const QString &scenario)
         // "installations": a .play of Turbo Racer next to its Flatpak (RUY-137): two games with one title until the
         // player links them; never played, so the Flatpak one stays Home's hero.
         if (scenario == QLatin1String("installations")) {
-            LibraryItem p = item("flatpak:play.org.example.racer", "game", "Turbo Racer", 0);
+            LibraryItem p = item("flatpak:play.com.example.racer", "game", "Turbo Racer", 0);
             p.play = true;
             p.playTier = QStringLiteral("developer");
             p.playSigner = QStringLiteral("Example Games");
@@ -483,6 +483,9 @@ void MockLibraryBackend::linkInstallations(const QString &profile, const QString
     members.removeAll(ga->id);
     links.insert(ga->id, members);
     m_preferred[profile].remove(gb->id);
+    // As Library1: the link keeps the installation Play used for a's game.
+    if (!m_preferred.value(profile).contains(ga->id))
+        m_preferred[profile].insert(ga->id, ga->preferredInstallation());
     answerInstallationCall(profile, call, QStringLiteral("ok"), true);
 }
 

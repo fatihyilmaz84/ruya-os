@@ -20,6 +20,17 @@ Item {
 
     SignalSpy { id: launchSpy; target: Library; signalName: "launchRequested" }
     SignalSpy { id: answerSpy; target: Library; signalName: "installationCallFinished" }
+    SignalSpy { id: launchedSpy; target: Session; signalName: "launchFinished" }
+
+    Component {
+        id: appComponent
+        Item {
+            property string appId: "play.com.example.racer"
+            property int pid: 0
+            objectName: "standInApp"
+            Keys.onPressed: event => { event.accepted = true }
+        }
+    }
 
     TestCase {
         id: tc
@@ -27,7 +38,7 @@ Item {
         when: windowShown
 
         readonly property string racer: "flatpak:org.example.Racer"
-        readonly property string play: "flatpak:play.org.example.racer"
+        readonly property string play: "flatpak:play.com.example.racer"
         property Shell shell: null
 
         function find(name) { return findChild(tc.shell, name) }
@@ -46,6 +57,7 @@ Item {
             Store.mockReset()
             launchSpy.clear()
             answerSpy.clear()
+            launchedSpy.clear()
             while (Notifications.model.count > 0)
                 Notifications.dismiss(Notifications.model.get(0).toastId)
             Notifications.pending = []
@@ -114,7 +126,7 @@ Item {
             compare(Library.item(play).suggestions, [racer])
             keyClick(Qt.Key_Menu)
             compare(rowIds(), ["play", "details", "activity", "link:" + play, "uninstall"])
-            compare(rowLabel("link:" + play), "Same game as Turbo Racer (.play)?")
+            compare(rowLabel("link:" + play), "Same game as the .play version?")
             keyClick(Qt.Key_Escape)
             focusOnTheCard()
         }
@@ -122,17 +134,17 @@ Item {
         function test_a_suggestion_links_and_the_library_shows_one_game() {
             start()
             link()
-            compare(installIds(), [play, racer], ".play first")
+            compare(installIds(), [play, racer], "Library1's order: .play first")
             compare(game().confidence, "confirmed")
             compare(game().suggestions, [])
             compare(Library.item(play).id, undefined, "no game of its own any more")
-            compare(game().launch, play, "Play starts the .play now")
+            compare(game().launch, racer, "a link never changes what Play starts")
             keyClick(Qt.Key_Menu)
-            compare(rowIds(), ["play", "details", "activity", "installations", "separate:" + play, "uninstall"], "Uninstall… is the preferred .play's")
+            compare(rowIds(), ["play", "details", "activity", "installations", "separate:" + play, "uninstall"])
             compare(rowLabel("separate:" + play), "Separate .play")
             keyClick(Qt.Key_Return)                     // Play
             tryCompare(launchSpy, "count", 1)
-            compare(launchSpy.signalArguments[0][1], play)
+            compare(launchSpy.signalArguments[0][1], racer)
         }
 
         function test_choose_installation_lists_both_and_changes_what_play_launches() {
@@ -144,23 +156,22 @@ Item {
             compare(menu().title, "Turbo Racer")
             compare(rowIds(), ["prefer:" + play, "prefer:" + racer])
             compare(menu().rows.map(r => r.label), [".play · 1.4.2", "Flatpak"])
-            compare(menu().rows.map(r => r.icon), ["check_circle", ""], "the preferred one is checked")
-            keyClick(Qt.Key_Down)
-            const n = answerSpy.count
+            compare(menu().rows.map(r => r.icon), ["", "check_circle"], "the preferred one is checked")
+            const n = answerSpy.count                   // the .play row, the first
             keyClick(Qt.Key_Return)
             tryCompare(answerSpy, "count", n + 1)
             compare(answerSpy.signalArguments[n][0], "SetPreferredInstallation")
             compare(answerSpy.signalArguments[n][1], "ok")
             focusOnTheCard()
-            tryVerify(() => game().launch === racer, 2000)
-            compare(game().installations.map(i => i.preferred), [false, true])
+            tryVerify(() => game().launch === play, 2000)
+            compare(game().installations.map(i => i.preferred), [true, false])
             runRow("installations")
-            compare(menu().rows.map(r => r.icon), ["", "check_circle"])
+            compare(menu().rows.map(r => r.icon), ["check_circle", ""])
             keyClick(Qt.Key_Escape)
             focusOnTheCard()
             runRow("play")
             tryCompare(launchSpy, "count", 1)
-            compare(launchSpy.signalArguments[0][1], racer, "Play launches the chosen one")
+            compare(launchSpy.signalArguments[0][1], play, "Play launches the chosen one")
         }
 
         function test_separate_splits_the_game_again() {
@@ -187,11 +198,11 @@ Item {
             tryVerify(() => line() !== null)
             verify(line().text.indexOf("installations") < 0, "one installation: no line: " + line().text)
             Library.linkInstallations(racer, play)
-            tryVerify(() => line().text.endsWith("2 installations, Play uses .play"), 2000, line().text)
-            Library.setPreferredInstallation(racer, racer)
             tryVerify(() => line().text.endsWith("2 installations, Play uses Flatpak"), 2000, line().text)
+            Library.setPreferredInstallation(racer, play)
+            tryVerify(() => line().text.endsWith("2 installations, Play uses .play"), 2000, line().text)
             DeviceSettings.language = "tr"
-            tryVerify(() => line().text.endsWith("2 kurulum, Oyna: Flatpak"), 2000, line().text)
+            tryVerify(() => line().text.endsWith("2 kurulum, Oyna: .play"), 2000, line().text)
         }
 
         function test_a_refused_change_toasts_and_leaves_the_focus() {
@@ -210,7 +221,8 @@ Item {
             start()
             Library.linkInstallations(racer, play)
             tryVerify(() => Library.items.length === 10, 2000)
-            compare(game().play, true, "the .play is preferred: the game has its keys")
+            Library.setPreferredInstallation(racer, play)
+            tryVerify(() => game().play === true, 2000, "the .play is preferred: the game has its keys")
             const spy = createTemporaryObject(signalSpyComponent, tc, { target: Library, signalName: "runnerChoiceAnswered" })
             Library.runnerChoice(racer)
             tryCompare(spy, "count", 1)
@@ -219,6 +231,88 @@ Item {
         }
 
         Component { id: signalSpyComponent; SignalSpy {} }
+
+        // ---- a game that runs from an installation Play does not use (Shell.gameAppIn) ----
+
+        function runningFromThePlay() {
+            start()
+            link()                                      // Play uses the Flatpak
+            const n = launchedSpy.count
+            Session.launch("play.com.example.racer", "p2")
+            tryCompare(launchedSpy, "count", n + 1)
+            const instance = launchedSpy.signalArguments[n][3]
+            tryVerify(() => Session.running.some(r => r.instance === instance && r.state === "running"), 2000)
+            return instance
+        }
+
+        function test_itemForApp_finds_the_game_by_an_installation_play_does_not_use() {
+            start()
+            link()
+            compare(Library.itemForApp("org.example.Racer").id, racer)
+            compare(Library.itemForApp("play.com.example.racer").id, racer, "the other installation")
+            compare(Library.sessionAppIds(racer), ["org.example.Racer", "play.com.example.racer"], "Play's first")
+        }
+
+        function test_a_running_installation_play_does_not_use_reads_as_running_everywhere() {
+            runningFromThePlay()
+            const card = find("recentRow").currentItem
+            tryVerify(() => card.running, 2000, "the Recent card")
+            verify(tc.shell.heroRunning, "the hero")
+            compare(find("homePlay").text, "Resume")
+            keyClick(Qt.Key_Menu)
+            compare(rowIds(), ["close", "details", "activity"], "no Play, and the game cannot change while it runs")
+            keyClick(Qt.Key_Escape)
+            focusOnTheCard()
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("homePlay").activeFocus)
+            keyClick(Qt.Key_Up)
+            keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)                     // Games: its first card is the game
+            tryCompare(tc.shell, "currentPage", "games")
+            tryVerify(() => find("gamesGrid").activeFocus, 2000)
+            wait(50)                                    // the Return that opened it is released
+            keyClick(Qt.Key_Menu)
+            compare(menu().title, "Turbo Racer")
+            compare(rowIds(), ["close", "details", "activity"], "the Games card too")
+            keyClick(Qt.Key_Escape)
+        }
+
+        function test_resume_brings_back_the_running_installation_and_starts_no_second() {
+            const instance = runningFromThePlay()
+            const app = createTemporaryObject(appComponent, host, { pid: Session.mockPidOf(instance) })
+            tc.shell.addApp(app, "p2")
+            tryVerify(() => app.activeFocus, 2000)
+            app.focus = false
+            tc.shell.forceActiveFocus()
+            keyClick(Qt.Key_HomePage)
+            tryVerify(() => find("systemActions").activeFocus, 2000, "the Hub opens")
+            const panel = find("systemPanel")
+            for (let i = 0; i < 30 && panel.currentKey !== "home"; ++i)
+                keyClick(Qt.Key_Down)
+            keyClick(Qt.Key_Return)
+            tryVerify(() => find("recentRow").activeFocus, 2000)
+            keyClick(Qt.Key_Menu)
+            compare(rowIds(), ["resume", "close", "details", "activity"])
+            const n = launchedSpy.count
+            keyClick(Qt.Key_Return)                     // Resume
+            tryVerify(() => app.activeFocus, 2000, "the .play's window is back")
+            compare(launchedSpy.count, n, "no second installation started")
+        }
+
+        function test_same_game_is_not_offered_while_the_other_game_runs() {
+            start()
+            const n = launchedSpy.count
+            Session.launch("play.com.example.racer", "p2")
+            tryCompare(launchedSpy, "count", n + 1)
+            tryVerify(() => tc.shell.runningAppIds.includes("play.com.example.racer"), 2000)
+            // The running .play game comes first in the Recent row; the Flatpak game's card is further on.
+            for (let i = 0; i < 8 && tc.shell.heroItem.id !== racer; ++i)
+                keyClick(Qt.Key_Right)
+            compare(tc.shell.heroItem.id, racer)
+            keyClick(Qt.Key_Menu)
+            compare(rowIds(), ["play", "details", "activity", "uninstall"], "no Same game while the other game runs")
+            keyClick(Qt.Key_Escape)
+        }
 
         function settle() { wait(900) }
 

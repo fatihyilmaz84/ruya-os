@@ -824,7 +824,7 @@ FocusScope {
     Connections {
         target: Library
         function onLaunchRequested(id, launchSpec) {
-            const appId = Library.sessionAppId(id)
+            const appId = root.gameAppIn(id, root.runningAppIds.concat(root.closingAppIds)) || Library.sessionAppId(id)
             if (appId === "") {
                 console.warn("ruya-shell: no Session1 launch path for", id, "(" + launchSpec + ")")
                 return
@@ -896,10 +896,9 @@ FocusScope {
     }
 
     function titleOfApp(appId) {
-        for (const it of Library.items) {
-            if (Library.sessionAppId(it.id) === appId)
-                return it.title
-        }
+        const found = Library.itemForApp(appId)
+        if (found.id !== undefined)
+            return found.title
         return Store.app(appId).name || appId
     }
 
@@ -994,10 +993,10 @@ FocusScope {
         const record = recordOf(focusedApp)
         const run = runningFor(record)
         const appId = (run ? run.appId : "") || (record ? record.appId : "")
-        const found = Library.items.find(i => appId !== "" && Library.sessionAppId(i.id) === appId)
+        const found = Library.items.length >= 0 ? Library.itemForApp(appId) : ({})   // reads items: follows the list
         return { appId: appId,
                  title: appId !== "" ? titleOfApp(appId) : qsTr("Running app"),
-                 picture: found ? ArtRoles.wide(found.art) : "",
+                 picture: found.id !== undefined ? ArtRoles.wide(found.art) : "",
                  started: run ? run.started : Date.now() / 1000,
                  instance: run ? run.instance : "",
                  frozen: run ? (run.frozen ?? false) : false }
@@ -1026,8 +1025,8 @@ FocusScope {
     // A running app's picture in the Hub's strip: its Library card's art (the tile role, ArtRoles), "" when
     // the Library does not know it (the strip shows the tint and the initial).
     function cardArtOfApp(appId) {
-        const found = Library.items.find(i => appId !== "" && Library.sessionAppId(i.id) === appId)
-        return found ? ArtRoles.tile(found.art) : ""
+        const found = Library.itemForApp(appId)
+        return found.id !== undefined ? ArtRoles.tile(found.art) : ""
     }
 
     // Home from the quick menu: the apps keep running behind it and lose the focus; Home shows the
@@ -1036,8 +1035,8 @@ FocusScope {
         const appId = quickMenuApp ? quickMenuApp.appId : ""
         while (pageOpen)
             closePage()
-        const found = Library.items.find(i => appId !== "" && Library.sessionAppId(i.id) === appId)
-        const at = found ? recentIds.indexOf(found.id) : -1
+        const found = Library.itemForApp(appId)
+        const at = found.id !== undefined ? recentIds.indexOf(found.id) : -1
         appsBehindHome = true
         focusedApp = null
         endWindowGap()
@@ -1985,7 +1984,8 @@ FocusScope {
             title: root.libraryEmpty ? qsTr("Your library is empty") : (root.heroItem.title ?? "")
             // A .play app's logo replaces the title text (RUY-856); only for an item Library1 says is a .play app.
             logo: !root.libraryEmpty && root.heroItem.play === true && root.heroItem.art ? (root.heroItem.art.logo ?? "") : ""
-            meta: root.libraryEmpty ? "" : InstallationText.sourceName(root.heroItem.source ?? "")
+            // The installation Play uses, the game page's word (.play, Flatpak, Steam; RUY-137).
+            meta: root.libraryEmpty ? "" : InstallationText.playName(root.heroItem)
             primaryText: root.libraryEmpty ? qsTr("Open Store") : (root.heroClosing ? qsTr("Closing…") : root.heroRunning ? qsTr("Resume")
                                                                        : root.heroItem.kind === "app" ? qsTr("Open", "Button: start an app (a game says Play)") : qsTr("Play"))
             primaryShown: root.libraryEmpty || Library.sessionAppId(root.heroItem.id ?? "") !== ""
@@ -2046,9 +2046,9 @@ FocusScope {
                 anchored: ListView.isCurrentItem && root.optionsOn && root.optionsSurface === "recent"
                 holdShown: ListView.isCurrentItem && recentHold.ringShown
                 holdProgress: recentHold.ringProgress
-                running: root.runningAppIds.includes(Library.sessionAppId(modelData))
-                         && !root.closingAppIds.includes(Library.sessionAppId(modelData))
-                closing: root.closingAppIds.includes(Library.sessionAppId(modelData))
+                running: root.gameAppIn(modelData, root.runningAppIds) !== ""
+                         && root.gameAppIn(modelData, root.closingAppIds) === ""
+                closing: root.gameAppIn(modelData, root.closingAppIds) !== ""
             }
 
             onCurrentIndexChanged: {
@@ -2092,15 +2092,27 @@ FocusScope {
     // are (a string, so that the row is rebuilt only when this set changes, not on every Session1
     // state change). An app that is running but not among the recent ones comes first in the row.
     readonly property var runningAppIds: Session.running.filter(r => r.profile === Profiles.activeProfile).map(r => r.appId)
-    readonly property string runningItemKey: Library.items.filter(i => runningAppIds.includes(Library.sessionAppId(i.id)))
+    readonly property string runningItemKey: Library.items.filter(i => gameAppIn(i.id, runningAppIds) !== "")
                                                           .map(i => i.id).join("|")
+    // The app id of game `id` that is in `appIds`, whichever of its installations it is (RUY-137): the one
+    // answer for running, closing, Resume and Close, so a game started from an installation Play no longer
+    // uses still reads as running. "" when none. Reads `Library.items` so a binding follows the list.
+    function gameAppIn(id, appIds) {
+        if (Library.items.length === 0 || (appIds ?? []).length === 0)
+            return ""
+        return Library.sessionAppIds(id).find(a => appIds.includes(a)) ?? ""
+    }
+    // The game runs or closes for the signed-in profile (any installation).
+    function gameBusy(id) {
+        return gameAppIn(id, runningAppIds.concat(closingAppIds)) !== ""
+    }
     readonly property var recentIds: {
         const base = (recentIsFallback ? Library.items.slice(0, 8) : Library.recent).map(r => r.id)
         const extra = runningItemKey === "" ? [] : runningItemKey.split("|").filter(id => !base.includes(id))
         return extra.concat(base).slice(0, 8)
     }
-    readonly property bool heroClosing: !libraryEmpty && closingAppIds.includes(Library.sessionAppId(heroItem.id ?? ""))
-    readonly property bool heroRunning: !libraryEmpty && !heroClosing && runningAppIds.includes(Library.sessionAppId(heroItem.id ?? ""))
+    readonly property bool heroClosing: !libraryEmpty && gameAppIn(heroItem.id ?? "", closingAppIds) !== ""
+    readonly property bool heroRunning: !libraryEmpty && !heroClosing && gameAppIn(heroItem.id ?? "", runningAppIds) !== ""
     readonly property bool libraryEmpty: recentIds.length === 0
     readonly property var heroItem: libraryEmpty ? ({}) : Library.item(recentIds[Math.max(0, Math.min(recentRow.currentIndex, recentIds.length - 1))])
     onHeroItemChanged: heroArt.show(libraryEmpty ? null : heroItem)
@@ -2166,12 +2178,13 @@ FocusScope {
         if (!item)
             return []
         const appId = Library.sessionAppId(id)
-        const closing = appId !== "" && closingAppIds.includes(appId)
-        const running = appId !== "" && !closing && runningAppIds.includes(appId)
+        const closing = gameAppIn(id, closingAppIds) !== ""
+        const runApp = closing ? "" : gameAppIn(id, runningAppIds)
+        const running = runApp !== ""
         const rows = []
         if (appId !== "" && !running && !closing)
             rows.push({ id: "play", label: item.kind === "app" ? qsTr("Open", "Button: start an app (a game says Play)") : qsTr("Play"), icon: "play_arrow" })
-        if (running && windowOf(appId) !== undefined)
+        if (running && windowOf(runApp) !== undefined)
             rows.push({ id: "resume", label: qsTr("Resume"), icon: "play_arrow" })
         if (running)
             rows.push({ id: "close", label: item.kind === "game" ? qsTr("Close game") : qsTr("Close app"), icon: "close" })
@@ -2180,19 +2193,21 @@ FocusScope {
             rows.push({ id: "activity", label: qsTr("Your activity"), icon: "bar_chart" })
         // One game, several installations (RUY-137): which one Play uses, the ones the player linked, and the
         // games with the same title it may be (added after the rest, the first to go at the cap of 8).
-        const installs = item.installations ?? []
+        // None while this game runs or closes: it must not change under a running instance.
+        const installs = running || closing ? [] : (item.installations ?? [])
         if (installs.length > 1)
             rows.push({ id: "installations", label: qsTr("Choose installation"), icon: "chevron_right" })
-        if (item.confidence === "confirmed") {
+        if (item.confidence === "confirmed" && !running && !closing) {
             for (const inst of installs) {
                 if (inst.id !== id)
                     rows.push({ id: "separate:" + inst.id, label: qsTr("Separate %1", "Options: make an installation a game of its own again").arg(InstallationText.name(inst)), icon: "close" })
             }
         }
         const suggestions = []
-        for (const other of (item.suggestions ?? []).map(s => Library.item(s)).filter(o => o.id !== undefined).slice(0, 2)) {
+        const others = running || closing ? [] : (item.suggestions ?? []).map(s => Library.item(s)).filter(o => o.id !== undefined && !gameBusy(o.id))
+        for (const other of others.slice(0, 2)) {
             suggestions.push({ id: "link:" + other.id, icon: "check_circle",
-                               label: qsTr("Same game as %1 (%2)?", "Options: link two installations; %1 a title, %2 its source").arg(other.title).arg(InstallationText.name(InstallationText.preferredOf(other.installations))) })
+                               label: qsTr("Same game as the %1 version?", "Options: link two installations; %1 the other one's source (.play, Flatpak, Steam)").arg(InstallationText.name(InstallationText.preferredOf(other.installations))) })
         }
         // Uninstall…: an installed Flatpak app the Store knows, that does not run and has no Store job
         // on its card (a row that would start a job is hidden while one runs; one of ours counts from the moment
@@ -2259,7 +2274,7 @@ FocusScope {
         const item = Library.items.find(i => i.id === id)
         if (!item)
             return
-        const appId = Library.sessionAppId(id)
+        const appId = gameAppIn(id, runningAppIds.concat(closingAppIds)) || Library.sessionAppId(id)
         switch (action) {
         case "play":
         case "resume":
@@ -2311,7 +2326,7 @@ FocusScope {
         target: Library
         function onInstallationCallFinished(call, status) {
             if (status !== "ok")
-                Notifications.show(qsTr("Could not change %1. Try again.", "A refused installation change; %1 is the game").arg(root.installationTitle), "error")
+                Notifications.show(qsTr("Could not change %1. Try again.", "A refused installation change; %1 is the game").arg(Notifications.named(root.installationTitle)), "error")
         }
     }
 

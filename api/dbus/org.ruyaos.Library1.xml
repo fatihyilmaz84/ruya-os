@@ -54,8 +54,11 @@
   The game's id is the id of the installation it is anchored on: the game the other joined
   (LinkInstallations' `a`), else the installation whose own key the others share, else the lowest
   id. A game of one installation has that installation's id: every id that existed before RUY-137
-  is unchanged. Play uses the game's preferred installation: the one SetPreferredInstallation chose,
-  else the first available in the fixed order (a .play app, a Flatpak app, a Steam game, then id).
+  is unchanged. Play uses the game's preferred installation: the one SetPreferredInstallation chose
+  (or the one Play used for `a`'s game when LinkInstallations made it: a link never changes what Play
+  starts), else the first available in the fixed order (a .play app, a Flatpak app, a Steam game,
+  then id). A game's link and preference are kept under its link's anchor, also while that
+  installation is missing, so a link made meanwhile changes neither for good.
   Links and preferences are each profile's (stored with its runner choices, below); ListItems
   groups by ActiveProfile's. A link or a preference naming an installation that is not installed
   is kept and ignored, and counts again when it is back.
@@ -287,7 +290,8 @@
     </method>
 
     <!-- The player says installations `a` and `b` are one game: the game of `b` joins the game of
-         `a`, whose id stays (the game of `b` is gone, with its preference). "ok" (also when they
+         `a`, whose id and preferred installation stay (the game of `b` is gone, with its link and
+         preference). "ok" (also when they
          are one game already), "unknown" (either is not installed), "invalid" (a and b are the
          same, a malformed profile id) or "failed". -->
     <method name="LinkInstallations">

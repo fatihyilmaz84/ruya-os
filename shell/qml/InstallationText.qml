@@ -4,7 +4,7 @@ import RuyaShell
 
 // The words of a game's installations (RUY-137, Library1 "Installation record"): which source installed it,
 // its row in the Options menu's installation list, and the game page's line when a game has several. The
-// Shell's game rows, the Home hero's meta line and the game page read them here.
+// Shell's game rows, the Home hero's meta line (playName) and the game page read them here.
 //
 // Every function reads `language`, so a binding that calls one is evaluated again when the UI language changes.
 QtObject {
@@ -26,6 +26,13 @@ QtObject {
         if (!installation)
             return ""
         return installation.play === true ? ".play" : sourceName(installation.source)
+    }
+
+    // What a game's meta line calls it (the Home hero): the installation Play uses when it has several, the
+    // game page's word; else its source's name.
+    function playName(game) {
+        const list = game?.installations ?? []
+        return list.length > 1 ? name(preferredOf(list)) : sourceName(game?.source ?? "")
     }
 
     // Its row: the name and, when known, the version (else the runner a .play app would start with).

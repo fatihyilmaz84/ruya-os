@@ -86,6 +86,9 @@ impl GameChoices {
 pub struct Game {
     /// The anchor installation's id (module comment).
     pub id: String,
+    /// Where its preference and its link are kept: the anchor of a link that holds one of its
+    /// installations (also while that anchor is missing, so nothing moves for good), else `id`.
+    pub key: String,
     /// At least one, in the fixed order.
     pub installations: Vec<Item>,
     /// Index into `installations`.
@@ -100,6 +103,7 @@ impl Game {
     pub fn alone(item: Item) -> Game {
         Game {
             id: item.id.clone(),
+            key: item.id.clone(),
             installations: vec![item],
             preferred: 0,
             confidence: Confidence::Single,
@@ -201,6 +205,7 @@ pub fn group(items: &[Item], choices: &GameChoices) -> Vec<Game> {
 
     // A link is one game; only its installations that are here count.
     let mut linked = vec![false; items.len()];
+    let anchors: Vec<&String> = choices.links.keys().collect();
     let link_sets: Vec<Vec<usize>> = choices
         .links
         .iter()
@@ -230,6 +235,11 @@ pub fn group(items: &[Item], choices: &GameChoices) -> Vec<Game> {
         .into_values()
         .map(|members| {
             let id = anchor(items, &item_keys, &link_sets, &members);
+            let key = link_sets
+                .iter()
+                .zip(&anchors)
+                .find(|(p, _)| p.iter().any(|n| members.contains(n)))
+                .map_or_else(|| id.clone(), |(_, a)| (*a).clone());
             let mut installations: Vec<Item> = members.iter().map(|&n| items[n].clone()).collect();
             installations.sort_by(installation_order);
             let confidence = if members.len() == 1 {
@@ -239,7 +249,7 @@ pub fn group(items: &[Item], choices: &GameChoices) -> Vec<Game> {
             } else {
                 Confidence::Id
             };
-            let chosen = choices.preferred.get(&id).and_then(|want| {
+            let chosen = choices.preferred.get(&key).and_then(|want| {
                 installations
                     .iter()
                     .position(|i| &i.id == want && available(i))
@@ -249,6 +259,7 @@ pub fn group(items: &[Item], choices: &GameChoices) -> Vec<Game> {
                 .unwrap_or(0);
             Game {
                 id,
+                key,
                 installations,
                 preferred,
                 confidence,
@@ -368,6 +379,9 @@ fn take_sets(links: &mut BTreeMap<String, Vec<String>>, game: &Game) -> Vec<Stri
 
 /// `LinkInstallations`: the game of `b` joins the game of `a` (whose id stays). Ok(false) when they
 /// are one game already; `Unknown` when either is not installed, `Invalid` for the same installation.
+/// The joined game keeps the key of `a`'s game (its link's anchor, also while that installation is
+/// missing) and the installation Play used for it: the stored choice, else the one it had, so a link
+/// never changes what Play starts. The game of `b` loses its link and its preference.
 pub fn link(choices: &mut GameChoices, games: &[Game], a: &str, b: &str) -> Result<bool, Status> {
     let ga = game_of(games, a).ok_or(Status::Unknown)?;
     let gb = game_of(games, b).ok_or(Status::Unknown)?;
@@ -382,13 +396,16 @@ pub fn link(choices: &mut GameChoices, games: &[Game], a: &str, b: &str) -> Resu
     ids.extend(take_sets(&mut choices.links, gb));
     let mut members: Vec<String> = Vec::new();
     for id in ids {
-        if id != ga.id && !members.contains(&id) {
+        if id != ga.key && !members.contains(&id) {
             members.push(id);
         }
     }
-    choices.links.insert(ga.id.clone(), members);
-    // The game of `b` is no game of its own any more.
-    choices.preferred.remove(&gb.id);
+    choices.links.insert(ga.key.clone(), members);
+    choices.preferred.remove(&gb.key);
+    choices
+        .preferred
+        .entry(ga.key.clone())
+        .or_insert_with(|| ga.preferred().id.clone());
     Ok(true)
 }
 
@@ -421,11 +438,11 @@ pub fn unlink(
     if let Some(new_anchor) = new_anchor.filter(|_| !members.is_empty()) {
         choices.links.insert(new_anchor, members);
     }
-    // The game's preference stays with what is left, under its id (a new one when the anchor left),
+    // The game's preference stays with what is left, under its key (a new one when the anchor left),
     // while that is still a game of more than one installation; one for the leaving installation goes.
     if let Some(kept) = choices
         .preferred
-        .remove(&game.id)
+        .remove(&game.key)
         .filter(|kept| kept != installation)
     {
         let rest: Vec<Item> = game
@@ -437,7 +454,7 @@ pub fn unlink(
         if let Some(g) =
             game_of(&group(&rest, choices), &kept).filter(|g| g.installations.len() > 1)
         {
-            choices.preferred.insert(g.id.clone(), kept);
+            choices.preferred.insert(g.key.clone(), kept);
         }
     }
     Ok(true)
@@ -459,12 +476,12 @@ pub fn prefer(
             Status::Unknown
         });
     }
-    if choices.preferred.get(game).map(String::as_str) == Some(installation) {
+    if choices.preferred.get(&g.key).map(String::as_str) == Some(installation) {
         return Ok(false);
     }
     choices
         .preferred
-        .insert(game.to_owned(), installation.to_owned());
+        .insert(g.key.clone(), installation.to_owned());
     Ok(true)
 }
 
@@ -617,8 +634,8 @@ mod tests {
         );
         assert_eq!(
             games[0].preferred().id,
-            "flatpak:play.org.example.racer",
-            ".play first"
+            "flatpak:org.example.Racer",
+            "the anchor game keeps the installation Play used"
         );
         assert_eq!(games[0].last_played(), 7);
         assert!(games[0].suggestions.is_empty(), "one game asks nothing");
@@ -709,8 +726,14 @@ mod tests {
         let mut c = none();
         link_in(&mut c, &both, &racer.id, &play.id).unwrap();
         let games = group(&both, &c);
-        assert_eq!(prefer(&mut c, &games, &racer.id, &racer.id), Ok(true));
-        assert_eq!(prefer(&mut c, &games, &racer.id, &racer.id), Ok(false));
+        assert_eq!(
+            c.preferred.get(&racer.id),
+            Some(&racer.id),
+            "the link stored it"
+        );
+        assert_eq!(prefer(&mut c, &games, &racer.id, &play.id), Ok(true));
+        assert_eq!(prefer(&mut c, &games, &racer.id, &play.id), Ok(false));
+        prefer_in(&mut c, &both, &racer.id, &racer.id).unwrap();
         assert_eq!(group(&both, &c)[0].preferred().id, racer.id);
 
         // A second .play is installed and linked; the chosen Flatpak goes away: .play first.
@@ -724,6 +747,71 @@ mod tests {
         assert_eq!(c.preferred.get(&racer.id), Some(&racer.id), "kept, ignored");
         // It comes back, and so does the choice.
         assert_eq!(group(&three, &c)[0].preferred().id, racer.id);
+    }
+
+    #[test]
+    fn a_link_takes_the_joined_games_preference_away() {
+        let items = [
+            item("flatpak:a.A", "A", 0),
+            item("flatpak:b.B", "B", 0),
+            item("flatpak:c.C", "B", 0),
+        ];
+        let mut c = none();
+        link_in(&mut c, &items, "flatpak:b.B", "flatpak:c.C").unwrap();
+        prefer_in(&mut c, &items, "flatpak:b.B", "flatpak:c.C").unwrap();
+        link_in(&mut c, &items, "flatpak:a.A", "flatpak:b.B").unwrap();
+        assert_eq!(
+            c.preferred.get("flatpak:b.B"),
+            None,
+            "b's game is gone, so is its choice"
+        );
+        assert_eq!(
+            c.preferred.get("flatpak:a.A").map(String::as_str),
+            Some("flatpak:a.A")
+        );
+        assert_eq!(c.preferred.len(), 1, "{c:?}");
+    }
+
+    #[test]
+    fn a_link_made_while_the_anchor_is_missing_keeps_its_anchor_and_preference() {
+        let a = item("flatpak:a.A", "A", 0);
+        let b = item("flatpak:b.B", "A", 0);
+        let d = item("flatpak:d.D", "A", 0);
+        let mut c = none();
+        link_in(&mut c, &[a.clone(), b.clone()], &a.id, &b.id).unwrap();
+        // a.A is gone (a drive is away): its game is b.B for now; d.D joins it.
+        let away = [b.clone(), d.clone()];
+        assert_eq!(
+            group(&away, &c).len(),
+            2,
+            "b.B alone: its link has one installation here"
+        );
+        link_in(&mut c, &away, &b.id, &d.id).unwrap();
+        prefer_in(&mut c, &away, &b.id, &d.id).unwrap();
+        assert_eq!(
+            c.links.keys().collect::<Vec<_>>(),
+            [&a.id],
+            "the anchor stays a.A: {c:?}"
+        );
+        assert_eq!(
+            c.preferred.keys().collect::<Vec<_>>(),
+            [&a.id],
+            "the choice under it: {c:?}"
+        );
+        // a.A comes back: one game under a.A again, with the choice; nothing orphaned.
+        let all = [a.clone(), b.clone(), d.clone()];
+        let games = group(&all, &c);
+        assert_eq!(games.len(), 1, "{c:?}");
+        assert_eq!(games[0].id, a.id);
+        assert_eq!(
+            games[0].preferred().id,
+            d.id,
+            "the choice is found under the game's key"
+        );
+        assert!(
+            c.preferred.keys().all(|k| *k == games[0].key),
+            "no orphaned preference: {c:?}"
+        );
     }
 
     #[test]

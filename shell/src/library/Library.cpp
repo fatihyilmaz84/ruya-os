@@ -237,6 +237,21 @@ QString Library::sessionAppId(const QString &id) const
     return flatpakIdOf(item(id));
 }
 
+QStringList Library::sessionAppIds(const QString &id) const
+{
+    const QVariantMap found = item(id);
+    QStringList out;
+    const QString preferred = flatpakIdOf(found);
+    if (!preferred.isEmpty())
+        out.append(preferred);
+    for (const QVariant &inst : found.value(QStringLiteral("installations")).toList()) {
+        const QString appId = flatpakIdOf(inst.toMap());
+        if (!appId.isEmpty() && !out.contains(appId))
+            out.append(appId);
+    }
+    return out;
+}
+
 QVariantMap Library::itemForApp(const QString &appId) const
 {
     if (appId.isEmpty())

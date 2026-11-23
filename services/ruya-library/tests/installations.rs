@@ -95,11 +95,11 @@ fn two_installations_with_one_title_are_two_games_until_the_player_links_them() 
         seen(&lib),
         [(
             FLAT.to_owned(),
-            PLAY.to_owned(),
+            FLAT.to_owned(),
             "confirmed".to_owned(),
-            vec![(PLAY.to_owned(), true), (FLAT.to_owned(), false)]
+            vec![(PLAY.to_owned(), false), (FLAT.to_owned(), true)]
         )],
-        "the anchor's id, the .play's launch (it comes first)"
+        "the anchor's id, and Play still starts what it started (the anchor game's choice)"
     );
     assert!(suggestions(&lib, FLAT).is_empty());
 
@@ -121,8 +121,13 @@ fn the_preference_survives_a_restart_and_falls_back_while_its_installation_is_go
     let (root, state) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let lib = library(root.path(), state.path(), true);
     lib.link("p1", FLAT, PLAY).unwrap();
+    assert_eq!(
+        lib.prefer("p1", FLAT, FLAT),
+        Ok(false),
+        "the link kept what Play used"
+    );
+    assert_eq!(lib.prefer("p1", FLAT, PLAY), Ok(true));
     assert_eq!(lib.prefer("p1", FLAT, FLAT), Ok(true));
-    assert_eq!(lib.prefer("p1", FLAT, FLAT), Ok(false), "no change");
     let chosen = vec![(
         FLAT.to_owned(),
         FLAT.to_owned(),
