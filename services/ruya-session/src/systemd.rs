@@ -770,7 +770,7 @@ impl Spawner for SystemdSpawner {
     }
 
     fn user_name(&self, uid: u32) -> Option<String> {
-        user_name_of(uid)
+        ruya_users::name_of(uid)
     }
 
     fn child_of_scope(&self, user: &str, scope: &str) -> Option<String> {
@@ -1172,7 +1172,7 @@ impl ManagerLink for UserLink {
     /// its manager run (`user@<uid>.service`), what does the manager say of the unit. Only a
     /// clear answer is a "no"; an error of any step keeps the unit (RUY-23).
     fn exists(&mut self, unit: &str) -> Option<bool> {
-        let uid = lookup_uid(&self.user);
+        let uid = ruya_users::lookup_uid(&self.user);
         let user_known = match uid {
             Ok(found) => Some(found.is_some()),
             Err(_) => None,
@@ -1182,35 +1182,6 @@ impl ManagerLink for UserLink {
             || manager_running(uid.ok().flatten()?),
             || unit_state(&self.user, unit),
         )
-    }
-}
-
-/// The uid of a Unix user: `Ok(None)` when the user database says there is no such user, `Err`
-/// (the errno) when it could not be asked.
-fn lookup_uid(name: &str) -> Result<Option<u32>, i32> {
-    let Ok(name) = std::ffi::CString::new(name) else {
-        return Err(libc::EINVAL);
-    };
-    let mut buf = vec![0 as libc::c_char; 4096];
-    // SAFETY: an all-zero `passwd` is a valid value for getpwnam_r to fill in.
-    let mut pwd: libc::passwd = unsafe { std::mem::zeroed() };
-    let mut result: *mut libc::passwd = std::ptr::null_mut();
-    // SAFETY: every pointer is valid for the call and `buf.len()` is the buffer's real size.
-    let rc = unsafe {
-        libc::getpwnam_r(
-            name.as_ptr(),
-            &mut pwd,
-            buf.as_mut_ptr(),
-            buf.len(),
-            &mut result,
-        )
-    };
-    match rc {
-        0 if !result.is_null() => Ok(Some(pwd.pw_uid)),
-        // The documented "no such user" answers. EPERM read this way is harmless: profile users
-        // are in /etc/passwd, which nothing here is denied (RUY-621).
-        0 | libc::ENOENT | libc::ESRCH | libc::EBADF | libc::EPERM => Ok(None),
-        err => Err(err),
     }
 }
 
@@ -1371,20 +1342,4 @@ fn ensure_manager(user: &str) {
         }
         None => eprintln!("ruya-session: no uid for {user}"),
     }
-}
-
-/// The name of the Unix user `uid` (`getpwuid_r`, the system's user database), T-459.
-fn user_name_of(uid: u32) -> Option<String> {
-    let mut buf = vec![0 as libc::c_char; 4096];
-    // SAFETY: an all-zero `passwd` is a valid value for getpwuid_r to fill in.
-    let mut pwd: libc::passwd = unsafe { std::mem::zeroed() };
-    let mut result: *mut libc::passwd = std::ptr::null_mut();
-    // SAFETY: every pointer is valid for the call and `buf.len()` is the buffer's real size.
-    let rc = unsafe { libc::getpwuid_r(uid, &mut pwd, buf.as_mut_ptr(), buf.len(), &mut result) };
-    if rc != 0 || result.is_null() || pwd.pw_name.is_null() {
-        return None;
-    }
-    // SAFETY: on success `pw_name` points to a NUL-terminated string inside `buf`, alive here.
-    let name = unsafe { std::ffi::CStr::from_ptr(pwd.pw_name) };
-    name.to_str().ok().map(str::to_owned)
 }

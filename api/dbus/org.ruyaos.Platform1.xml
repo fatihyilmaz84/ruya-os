@@ -1,0 +1,149 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<!--
+  org.ruyaos.Platform1 — the one door for sandboxed apps (ADR-022, tier B).
+
+  DRAFT (RUY-1098, lead-44 split of RUY-157). Served by ruya-platform (root) on the system bus at
+  /org/ruyaos/Platform1. The crate, this contract and its tests are built; the unit, the bus
+  policy and the image install are RUY-157's (lead), so nothing here is in the image yet. The
+  design is docs/specs/03-services-and-apps.md §4.4 and docs/developers/api-surface.md.
+
+  Two interfaces:
+    org.ruyaos.Platform1.Lifecycle  public (every element tagged org.ruyaos.Stability
+                                    experimental, Since 0): what a sandboxed app calls through its
+                                    one bus permission, system-talk-name org.ruyaos.Platform1.
+    org.ruyaos.Platform1.Manage     internal, untagged: the shell (the per-app permission pane,
+                                    T-220) and root (ruya-session, RUY-1099). The service checks the
+                                    caller's uid itself as well (defence in depth; off in the
+                                    session-bus dev mode): ListPermissions and SetPermission root or ruya-shell,
+                                    NotifyLifecycle root only (org.ruyaos.Caller "root").
+
+  Identity (Lifecycle): the caller is identified from its connection, never from an argument
+  (ADR-022, RUY-157 step 1). GetConnectionCredentials gives ProcessFD (a pidfd of the caller's
+  xdg-dbus-proxy), ProcessID and UnixUserID; the pidfd must be alive and name ProcessID; the
+  process's /proc/<pid>/root/.flatpak-info names the app ([Application] name) and the instance
+  ([Instance] instance-id); its /proc/<pid>/cgroup must end exactly in that instance's scope
+  app-flatpak-<escaped id>-<instance-id>.scope under user@<UnixUserID>.service; the pidfd is
+  checked again after the reads; UnixUserID must be a profile's user (ruya-<id>) whose profile is
+  in Profiles1 (ListProfiles or ListGuests). Anything else is "not-an-app". Trust boundary: this
+  holds for sandboxed callers only; code running unsandboxed as the profile's uid can forge a scope
+  and a .flatpak-info, so nothing third-party runs unsandboxed as a profile. An identity is kept
+  per unique bus name until the name leaves the bus.
+
+  Permissions: per (profile, app id, capability), set by the player (Manage.SetPermission), kept
+  root-only in /var/lib/ruyaos/platform/profiles/<profile-id>.json and removed with the profile.
+  A capability nobody set has its default: "lifecycle" on, every other capability off.
+
+  Limits: each unique bus name and each app instance has a token bucket (a burst of 10 calls,
+  then 2 per second); a call beyond it is "rate-limited" and changes nothing. Every string
+  argument is checked for its size and for control characters before anything else.
+
+  Status strings are stable API:
+    "ok"                success
+    "not-an-app"        the caller is not a sandboxed app of a signed-up profile (above)
+    "not-allowed"       the player turned the capability off for this app and profile; the app's
+                        profile is not the active one (Register); the call does not fit the state
+                        (SaveDone without a Stopping before it); Manage: the caller may not manage
+    "rate-limited"      too many calls from this connection or this instance; Register: the
+                        instance already has 8 registered connections
+    "invalid-argument"  an argument is too long, has a control character or is not of its form
+                        (a profile id, an app id, a capability, a scope, an event), or names a
+                        profile that does not exist
+    "not-registered"    SaveDone or NotifyLifecycle for an instance that did not Register; a
+                        waiting "stopping" whose registration ended (its last connection left,
+                        its profile was removed, the player turned the capability off)
+    "saved"             NotifyLifecycle "stopping": the instance called SaveDone
+    "timeout"           NotifyLifecycle "stopping": the deadline passed without a SaveDone
+    "failed"            internal error (the permission file could not be read or written; a
+                        corrupt file is never overwritten)
+-->
+<node>
+  <interface name="org.ruyaos.Platform1.Lifecycle">
+    <!-- The calling instance asks for its lifecycle events: from now on its connection receives
+         Background, Resume and Stopping, sent to it alone (unicast, never broadcast), until the
+         connection closes. "ok" (also again), "not-an-app", "not-allowed" (the lifecycle
+         capability is off, or the app's profile is not the active one), "rate-limited". -->
+    <method name="Register">
+      <annotation name="org.ruyaos.Stability" value="experimental"/>
+      <annotation name="org.ruyaos.Since" value="0"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- The answer to Stopping: the app's data is on disk (call it after fsync): the OS's wait
+         ends and the instance may be stopped at once. Valid once per Stopping; after the deadline
+         the stop goes on anyway and a late SaveDone is "ok" and ignored. "ok", "not-an-app",
+         "not-allowed" (no Stopping came, or the capability is off), "not-registered",
+         "rate-limited" (the same buckets as Register). -->
+    <method name="SaveDone">
+      <annotation name="org.ruyaos.Stability" value="experimental"/>
+      <annotation name="org.ruyaos.Since" value="0"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- The console keeps the instance running behind Home (a hold, ADR-042/046): it left the
+         front and is not frozen. Only then: a normal Home, the Hub and a profile switch freeze the
+         app with no signal at all (there is no notice before a freeze: it is instant and a frozen
+         app could not act on one); the app learns of a freeze from Resume's frozen_ms. -->
+    <signal name="Background">
+      <annotation name="org.ruyaos.Stability" value="experimental"/>
+      <annotation name="org.ruyaos.Since" value="0"/>
+    </signal>
+
+    <!-- The instance is in front again. `frozen_ms` is how long it was frozen, 0 if it was not. -->
+    <signal name="Resume">
+      <annotation name="org.ruyaos.Stability" value="experimental"/>
+      <annotation name="org.ruyaos.Since" value="0"/>
+      <arg name="frozen_ms" type="t"/>
+    </signal>
+
+    <!-- The OS is about to stop the instance: save now and call SaveDone within `deadline_ms`
+         (5000: the save window; the stop's SIGTERM follows, then SIGKILL after the stop grace). -->
+    <signal name="Stopping">
+      <annotation name="org.ruyaos.Stability" value="experimental"/>
+      <annotation name="org.ruyaos.Since" value="0"/>
+      <arg name="deadline_ms" type="u"/>
+    </signal>
+  </interface>
+
+  <interface name="org.ruyaos.Platform1.Manage">
+    <!-- The player's choices for `profile_id`: every (app id, capability, allowed) that was set.
+         A pair that is not listed has its capability's default. "ok", "invalid-argument" (also: no
+         such profile), "not-allowed", "failed". -->
+    <method name="ListPermissions">
+      <arg name="profile_id" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="permissions" type="a(ssb)" direction="out"/>
+    </method>
+
+    <!-- Sets one choice, written at once. Turning a capability off ends what the app holds of it
+         (Lifecycle: its registrations). "ok", "invalid-argument" (a malformed profile or app id,
+         a capability that does not exist, no such profile), "not-allowed", "failed". -->
+    <method name="SetPermission">
+      <arg name="profile_id" type="s" direction="in"/>
+      <arg name="app_id" type="s" direction="in"/>
+      <arg name="capability" type="s" direction="in"/>
+      <arg name="allowed" type="b" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Root only (ruya-session, RUY-1099): a lifecycle event for the instance whose Flatpak scope
+         is `scope` (app-flatpak-<escaped id>-<instance-id>.scope) in `profile_id`'s user manager
+         (a scope name is unique within one manager only). `event`: "background" (`value_ms` 0),
+         "resume" (`value_ms` the time it was frozen) or "stopping" (`value_ms` the deadline, at
+         most 4294967295). Sent as the Lifecycle signal to the instance's registered connections
+         only. "background" and "resume" reply at once: "ok". "stopping" replies when it is
+         settled: "saved" (the instance called SaveDone), "timeout" (`value_ms` passed first) or
+         "not-registered" (at once when nothing is registered, or when the registration ends
+         while it waits). A "stopping" for an instance that already waits joins that wait: no
+         second signal, the same deadline, the same answer. Also "invalid-argument",
+         "not-allowed". Nothing is broadcast: only the caller learns the answer. -->
+    <method name="NotifyLifecycle">
+      <annotation name="org.ruyaos.Caller" value="root"/>
+      <arg name="profile_id" type="s" direction="in"/>
+      <arg name="scope" type="s" direction="in"/>
+      <arg name="event" type="s" direction="in"/>
+      <arg name="value_ms" type="t" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+  </interface>
+</node>

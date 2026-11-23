@@ -1,0 +1,10 @@
+[package]
+name = "ruya-users"
+description = "RuyaOS: the system's user database for the services (a user's uid, a uid's name)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"  # getpwnam_r and getpwuid_r (already in the tree)

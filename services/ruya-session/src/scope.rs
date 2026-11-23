@@ -53,8 +53,9 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::time::{Duration, Instant};
 
-use crate::spawner::{child_name, is_app_scope, scope_pattern, ShowUnit, UnitEvent};
+use crate::spawner::{child_name, scope_pattern, ShowUnit, UnitEvent};
 use crate::steam_probe::Verdict;
+use ruya_flatpak::scope::is_app_scope;
 
 /// How often a run without a scope is looked at.
 pub const ATTACH_EVERY: Duration = Duration::from_secs(1);

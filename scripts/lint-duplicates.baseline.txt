@@ -23,7 +23,6 @@ services/ruya-inputd/src/book.rs | services/ruya-inputd/src/owners.rs | 122  # d
 services/ruya-inputd/src/mapping.rs | services/ruya-inputd/src/mapping.rs | 90  # debt
 services/ruya-inputd/src/pad.rs | services/ruya-inputd/src/pad.rs | 101  # debt
 services/ruya-inputd/src/routing.rs | services/ruya-inputd/src/routing.rs | 1166  # debt
-services/ruya-notifications/src/caller.rs | services/ruya-session/src/systemd.rs | 100  # debt
 services/ruya-notifications/src/store.rs | services/ruya-profiles/src/store.rs | 99  # debt
 services/ruya-pack/src/inspect.rs | services/ruya-pack/src/validate.rs | 84  # debt
 services/ruya-play/src/core/importer.rs | services/ruya-play/src/service/commit.rs | 86  # debt

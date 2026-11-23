@@ -25,10 +25,10 @@ use std::time::{Duration, Instant};
 
 use crate::directory::ProfileDirectory;
 use crate::spawner::{
-    app_env, is_app_scope, parse_cgroup, unit_app_id, with_pulse_server, AdoptLister, Listing,
-    Spawner, UnitEvent,
+    app_env, unit_app_id, with_pulse_server, AdoptLister, Listing, Spawner, UnitEvent,
 };
 use crate::steam_tool::{steam_run_url, STEAM_APP_ID};
+use ruya_flatpak::scope::{is_app_scope, parse_cgroup};
 use ruya_flatpak::valid_session_app_id;
 use ruya_ids::{flatpak_item, profile_of_user, steam_item, valid_profile_id, valid_steam_appid};
 

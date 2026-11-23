@@ -2,7 +2,7 @@
 
 What an app may rely on, what it may not, how the console will open more, and how a change to the public surface is made safely. This chapter is the charter behind `docs/developers/`: a feature is **documented here or it is not public**.
 
-*Status: **Accepted** (ADR-022 in `docs/specs/00-overview.md`, owner, 2026-11-08, approved as drafted: the tier-B list below, the never-public list, and stability promises only from the first release). The Platform service that opens tier B is planned (T-352), so nothing in tier B can be called yet. The apps reach the client bindings through the `org.ruyaos.Platform` runtime extension (ADR-015, Accepted the same day; spike T-250). Everything public is **experimental** until the first release: names, arguments and behaviour may change without notice.*
+*Status: **Accepted** (ADR-022 in `docs/specs/00-overview.md`, owner, 2026-11-08, approved as drafted: the tier-B list below, the never-public list, and stability promises only from the first release). The Platform service that opens tier B, `ruya-platform`, is built with its first capability, Lifecycle (RUY-1098), but **not yet in the image** (its unit and bus policy are RUY-157), so nothing in tier B can be called on a console yet. The apps reach the client bindings through the `org.ruyaos.Platform` runtime extension (ADR-015, Accepted the same day; spike T-250). Everything public is **experimental** until the first release: names, arguments and behaviour may change without notice.*
 
 ## Why a charter
 
@@ -13,7 +13,7 @@ Every D-Bus service of the console answers only the shell and root. That is deli
 | Tier | What | Who can use it | Today |
 |---|---|---|---|
 | **A, shell-private** | Profiles (PIN, admin), Store, Update, Devices administration, Telemetry configuration, the compositor | the shell and root only; the bus policy stays "shell and root" | as built |
-| **B, the Platform API** | a short list of capabilities (below) behind one service, `org.ruyaos.Platform1` | a sandboxed app, per app and per profile, only what the player allowed | **planned** (T-352) |
+| **B, the Platform API** | a short list of capabilities (below) behind one service, `org.ruyaos.Platform1` | a sandboxed app, per app and per profile, only what the player allowed | **built, not in the image** (RUY-1098; the image part RUY-157) |
 | **C, data-only formats** | files with a documented layout; no code runs | anyone, no permission needed | partly built |
 
 Rules that hold for every tier-B capability:
@@ -30,7 +30,7 @@ Anything not on this list needs a new line in ADR-022 first (the owner's approva
 
 | Capability | What an app can do | Task | Missing |
 |---|---|---|---|
-| Lifecycle | learn "going to background / frozen / closing", answer "save now" within 5 s (stop sends `SIGTERM`; the service sends `SIGKILL` after up to 30 s; the player can Force quit from 5 s on (a console choice that may change), so save and exit within 5 s) | T-279, T-275 | mock, sample, conformance (the chapter `fullscreen-and-lifecycle.md` describes the pause as it is today, T-468; it needs the API added when T-279 is built) |
+| Lifecycle | learn "going to background / frozen / closing", answer "save now" within 5 s (stop sends `SIGTERM`; the service sends `SIGKILL` after up to 30 s; the player can Force quit from 5 s on (a console choice that may change), so save and exit within 5 s) | RUY-1098 (the interface), RUY-1099 (the OS sends it), T-279, T-275 | the image (RUY-157), mock and sample (RUY-158), conformance (the chapter `fullscreen-and-lifecycle.md` has the interface, marked not yet in the image) |
 | Achievements | unlock, set progress, list its own | T-246 | mock for off-device tests, conformance; re-seat on `Platform1` (T-246 designs its own portal) |
 | Play statistics, presence, now-playing | report what is played (game, system, state), read its own history | T-247 (the ledger, built, private), T-306 | the app-facing call is only in T-306; a presence/report sample and chapter are missing |
 | Notifications | post, update, withdraw; actions; kept in the notification centre | T-245 | chapter, sample, mock, conformance |
@@ -93,7 +93,13 @@ No code, so no bus permission, and the safest way to extend the console. The for
 
 ## What is public today
 
-Nothing in tier B. In tier C: the layouts and keys in the table above. Everything else that this guide mentions (the Guide button, the `SIGTERM` contract (stop sends `SIGTERM`; the service sends `SIGKILL` after up to 30 s; the player can Force quit from 5 s on (a console choice that may change), so save and exit within 5 s), the freedesktop portals the Flatpak runtime ships) is behaviour of the platform, documented in its own chapter.
+| Tier | Element | Stability | Where it is described |
+|---|---|---|---|
+| B | `org.ruyaos.Platform1.Lifecycle`: `Register`, `SaveDone`, `Background`, `Resume`, `Stopping` (`api/dbus/org.ruyaos.Platform1.xml`) | experimental, since level 0; **not yet in the image** (RUY-157) | [Full screen and lifecycle](fullscreen-and-lifecycle.md#lifecycle-events-experimental) |
+
+**Who an app is (the trust boundary).** `Platform1` takes the caller's identity (app id, instance, profile) from its connection, never from an argument: the bus's credentials of the app's `xdg-dbus-proxy`, its `.flatpak-info` and its cgroup scope, checked against each other and against the pidfd of the process. That is unforgeable for a **sandboxed** caller only. Code that runs unsandboxed as the profile's user can make a matching scope and a fake `.flatpak-info` (the same limit the freedesktop portals have), so nothing third-party may run unsandboxed as a profile, and the Store treats the Flatpak permissions that escape the sandbox (`--socket=session-bus`, `--talk-name=org.freedesktop.Flatpak`, talking to systemd) as "trusted as the profile". The player's Platform permissions live root-only per profile (`/var/lib/ruyaos/platform/profiles/<profile>.json`), out of reach of an app with home access.
+
+Nothing else in tier B. In tier C: the layouts and keys in the table above. Everything else that this guide mentions (the Guide button, the `SIGTERM` contract (stop sends `SIGTERM`; the service sends `SIGKILL` after up to 30 s; the player can Force quit from 5 s on (a console choice that may change), so save and exit within 5 s), the freedesktop portals the Flatpak runtime ships) is behaviour of the platform, documented in its own chapter.
 
 ## Retrofit audit of the open tasks (2026-11-08)
 
@@ -121,4 +127,4 @@ One-time audit by the lead: T-245 to T-247, T-262 to T-268, T-217, T-248 to T-25
 
 ## Sources
 
-Checked on 2026-11-08 against: `docs/specs/00-overview.md` (ADR-015 and ADR-016 are Accepted since 2026-11-08; ADR-017, ADR-020 and ADR-022), `docs/specs/03-services-and-apps.md` §4.4 to §4.6, `docs/tasks/PLANNING.md`, `.claude/agents/ruya-api-reviewer.md` and `ruya-devdocs-auditor.md`, and the open tasks named in the audit. Nothing described as planned here exists yet.
+Checked on 2026-11-08 against: `docs/specs/00-overview.md` (ADR-015 and ADR-016 are Accepted since 2026-11-08; ADR-017, ADR-020 and ADR-022), `docs/specs/03-services-and-apps.md` §4.4 to §4.6, `docs/tasks/PLANNING.md`, `.claude/agents/ruya-api-reviewer.md` and `ruya-devdocs-auditor.md`, and the open tasks named in the audit. Nothing described as planned here exists yet. Updated on 2026-11-23 for RUY-1098: `api/dbus/org.ruyaos.Platform1.xml` and `services/ruya-platform` (identity, permissions, Lifecycle).

@@ -2,13 +2,14 @@
 //! `history.rs`. `watch_profiles` follows Profiles1 (the active profile, profiles and guests that
 //! come and go) and retries while it is absent.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::io;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use ruya_profiles_client::fetch as fetch_profiles;
 use zbus::message::Header;
 use zbus::object_server::SignalEmitter;
-use zbus::{fdo, interface, Connection, MatchRule, MessageStream};
+use zbus::{fdo, interface, Connection};
 
 use crate::caller;
 use crate::history::{Event, Item, NewItem, Status};
@@ -19,9 +20,6 @@ use ruya_ids::valid_profile_id;
 
 pub const BUS_NAME: &str = "org.ruyaos.Notifications1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Notifications1";
-pub const PROFILES_NAME: &str = "org.ruyaos.Profiles1";
-const PROFILES_PATH: &str = "/org/ruyaos/Profiles1";
-
 /// How often Profiles1 is asked again while it does not answer.
 pub const PROFILES_RETRY: Duration = Duration::from_secs(2);
 
@@ -111,7 +109,7 @@ impl NotificationsIface {
             return false;
         };
         if self.shell_uid.is_none() {
-            self.shell_uid = caller::uid_of(caller::SHELL_USER);
+            self.shell_uid = ruya_users::uid_of(caller::SHELL_USER);
         }
         let ok = caller::allowed(uid, self.shell_uid);
         if !ok {
@@ -367,22 +365,6 @@ impl NotificationsIface {
     async fn changed(emitter: &SignalEmitter<'_>, profile: &str) -> zbus::Result<()>;
 }
 
-/// Profiles1's active profile and every profile id that exists: ListProfiles (kept profiles)
-/// with ListGuests (live temporary guests).
-pub async fn fetch_profiles(connection: &Connection) -> zbus::Result<(String, BTreeSet<String>)> {
-    let proxy = zbus::Proxy::new(connection, PROFILES_NAME, PROFILES_PATH, PROFILES_NAME).await?;
-    let active: String = proxy.get_property("ActiveProfile").await?;
-    let profiles: Vec<(String, String, String, String, bool)> =
-        proxy.call("ListProfiles", &()).await?;
-    let guests: Vec<(String, String, u32)> = proxy.call("ListGuests", &()).await?;
-    let ids = profiles
-        .into_iter()
-        .map(|p| p.0)
-        .chain(guests.into_iter().map(|g| g.0))
-        .collect();
-    Ok((active, ids))
-}
-
 async fn apply(connection: &Connection, profiles: Profiles, active: &str) {
     let Ok(iface) = connection
         .object_server()
@@ -420,74 +402,20 @@ pub async fn follow_profiles_once(connection: &Connection) -> bool {
     }
 }
 
-/// Follows Profiles1 for as long as the bus is up: on its ActiveProfile change, ProfilesChanged
-/// (profiles and guests made or removed) and on its name coming back, the active profile and the
-/// profile list are read again. While Profiles1 does not answer it is asked every
-/// `PROFILES_RETRY`; the service never exits for it.
-pub async fn watch_profiles(connection: Connection, mut answering: bool) {
-    let rule = |interface: &'static str, member: &'static str| {
-        MatchRule::builder()
-            .msg_type(zbus::message::Type::Signal)
-            .sender(PROFILES_NAME)
-            .and_then(|b| b.path(PROFILES_PATH))
-            .and_then(|b| b.interface(interface))
-            .and_then(|b| b.member(member))
-            .map(|b| b.build())
-    };
-    let owner = MatchRule::builder()
-        .msg_type(zbus::message::Type::Signal)
-        .sender("org.freedesktop.DBus")
-        .and_then(|b| b.member("NameOwnerChanged"))
-        .and_then(|b| b.arg(0, PROFILES_NAME))
-        .map(|b| b.build());
-    let (Ok(props), Ok(changed), Ok(owner)) = (
-        rule("org.freedesktop.DBus.Properties", "PropertiesChanged"),
-        rule(PROFILES_NAME, "ProfilesChanged"),
-        owner,
-    ) else {
-        return eprintln!("ruya-notifications: cannot follow Profiles1");
-    };
-    let streams = (
-        MessageStream::for_match_rule(props, &connection, None).await,
-        MessageStream::for_match_rule(changed, &connection, None).await,
-        MessageStream::for_match_rule(owner, &connection, None).await,
-    );
-    let (Ok(a), Ok(b), Ok(c)) = streams else {
-        return eprintln!("ruya-notifications: cannot follow Profiles1");
-    };
-    let mut stream = futures_lite::stream::or(futures_lite::stream::or(a, b), c);
-    loop {
-        // Read after the streams are set up, so no change is missed in between.
-        match fetch_profiles(&connection).await {
-            Ok((active, ids)) => {
-                if !answering {
-                    eprintln!("ruya-notifications: Profiles1 answers again");
-                }
-                answering = true;
-                apply(&connection, Profiles::Known(ids), &active).await;
-            }
-            Err(err) => {
-                if answering {
-                    eprintln!(
-                        "ruya-notifications: Profiles1 not readable, asking again every {} s: {err}",
-                        PROFILES_RETRY.as_secs()
-                    );
-                }
-                answering = false;
-            }
-        }
-        let next = async { futures_lite::StreamExt::next(&mut stream).await.is_some() };
-        let up = if answering {
-            next.await
-        } else {
-            futures_lite::future::or(next, async {
-                async_io::Timer::after(PROFILES_RETRY).await;
-                true
-            })
-            .await
-        };
-        if !up {
-            return eprintln!("ruya-notifications: the bus closed, Profiles1 is not followed");
-        }
-    }
+/// Follows Profiles1 for as long as the bus is up (`ruya_profiles_client::follow`): on its
+/// ActiveProfile change, ProfilesChanged (profiles and guests made or removed) and on its name
+/// coming back, the active profile and the profile list are read again. While Profiles1 does not
+/// answer it is asked every `PROFILES_RETRY`; the service never exits for it.
+pub async fn watch_profiles(connection: Connection, answering: bool) {
+    ruya_profiles_client::follow(
+        &connection,
+        "ruya-notifications",
+        PROFILES_RETRY,
+        answering,
+        |active, ids| {
+            let connection = connection.clone();
+            async move { apply(&connection, Profiles::Known(ids), &active).await }
+        },
+    )
+    .await;
 }

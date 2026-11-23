@@ -8,14 +8,12 @@ rust-version.workspace = true
 
 [dependencies]
 ruya-ids = { path = "../ruya-ids" }  # the one profile-id rule and profile user name (RUY-1008)
+ruya-users = { path = "../ruya-users" }  # the ruya-shell uid from the one user-database lookup (RUY-1098)
+ruya-profiles-client = { path = "../ruya-profiles-client" }  # reading and following Profiles1, shared with ruya-platform (RUY-1098)
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"  # the per-profile store files (already in the tree)
 zbus = { version = "5", default-features = false, features = ["async-io"] }
 futures-lite = "2"
-async-io = "2"  # the Profiles1 retry timer; already in the tree through zbus
-
-[target.'cfg(target_os = "linux")'.dependencies]
-libc = "0.2"  # getpwnam_r for the ruya-shell uid (already in the tree through ruya-session)
 
 [dev-dependencies]
 ruya-contract-test = { path = "../ruya-contract-test" }  # the served interface against api/dbus (RUY-403)

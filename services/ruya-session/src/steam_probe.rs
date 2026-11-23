@@ -37,7 +37,7 @@ use std::io::Read;
 
 use ruya_ids::valid_steam_appid;
 
-use crate::spawner::user_manager_uid;
+use ruya_flatpak::scope::user_manager_uid;
 
 /// The subcommand of `ruya-session` that runs this.
 pub const SUBCOMMAND: &str = "steam-probe";
