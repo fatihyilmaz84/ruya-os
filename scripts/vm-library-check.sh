@@ -615,6 +615,13 @@ print("FAIL: " + "; ".join(why) if why else "PASS")
 ' "$@"
 }
 
+# install_verdict <mode> <a> <b> [preferred]: install_judge's answer as a PASS or FAIL line (installjudge).
+install_verdict() {
+    local out
+    out="$(install_judge "$@")"
+    [ "$out" = PASS ] && ok "install_judge $1: the records agree" || bad "install_judge $1: ${out#FAIL: }"
+}
+
 # installs_are <mode> <a> <b> [preferred] <seconds>: until install_judge passes; prints its last line.
 installs_are() {
     local n=0 last secs="${*: -1}" args=("${@:1:$#-1}")
@@ -731,8 +738,7 @@ installations)
     clean_all
     ;;
 installjudge)
-    out="$(install_judge "${@:2}")"
-    [ "$out" = PASS ] && ok "install_judge ${2:-}: the records agree" || bad "install_judge ${2:-}: ${out#FAIL: }"
+    install_verdict "${2:-}" "${3:-}" "${4:-}" "${5:-}"
     ;;
 steam)
     steam_check
