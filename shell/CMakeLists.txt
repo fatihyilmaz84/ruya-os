@@ -236,6 +236,8 @@ qt_add_qml_module(ruyashell
         qml/ScreenSaver.qml
         qml/PowerSavingPane.qml
         qml/GlassPill.qml
+        qml/GlyphHalo.qml
+        qml/TopBarInk.qml
         qml/GlassLayers.qml
         qml/GlassRim.qml
         qml/GlassShadow.qml
@@ -259,9 +261,10 @@ qt_add_qml_module(ruyashell
         qml/HubGameCard.qml
         qml/RunningStrip.qml
         qml/HubIconRow.qml
-        qml/NotificationBell.qml
         qml/NotificationRow.qml
+        qml/NotificationCentreView.qml
         qml/NotificationSheet.qml
+        qml/NotificationsPage.qml
         qml/NotificationsPane.qml
         qml/PrivacyPane.qml
         qml/LaunchSplash.qml

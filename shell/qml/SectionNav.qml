@@ -2,32 +2,43 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import RuyaShell
 
-// Section nav (04 §5): a glass pill of section pills (Home, Games, Media, Store, Settings).
-// The current section is filled with `primaryFill`; the focused pill carries the white ring.
-// Left/Right move between pills, Accept emits `activated(key)`, Down leaves downwards, LB/RB
+// Section nav (04 §5, §5.5): a glass pill of section pills (Home, Games, Media, Store, Settings and the
+// notification bell, RUY-1136). The current section is filled with `primaryFill`; the focused pill carries the
+// white ring. Left/Right move between pills, Accept emits `activated(key)`, Down leaves downwards, LB/RB
 // ask for the next/previous section (`stepRequested`), Back asks to go back (`backRequested`).
 // One instance lives in the shell's top layer and is shown on Home and the section pages.
 // One FocusGlide highlight glides under the pills to the focused one (04 §3.8).
 // The glass blurs a crop of `blurSource` (the shared backdrop layer); with no blur (the
-// Performance tier) it is `glassOpaque`.
+// Performance tier) it is `glassOpaque`. The words and glyphs of the pills at rest are drawn in `ink` (the top bar's
+// adaptive ink, Shell's `navInk`), with the glyph halo while `halo` is on; the current and the focused pill keep
+// their own text colours (`onPrimary`, `text`): they are surfaces of their own.
 FocusScope {
     id: nav
 
     property real u: 1
-    property var keys: ["home", "games", "media", "store", "settings"]   // keys only: labels follow the language
+    // Keys only: labels follow the language. The last two are icons: the Settings gear and the bell.
+    property var keys: ["home", "games", "media", "store", "settings", "notifications"]
     property string section: "home"      // the section on screen
     property int currentIndex: 0         // the pill that has (or last had) focus
     property Item blurSource
     property real blurX: 0               // position of this item in `blurSource` coordinates
     property real blurY: 0
+    // The top bar's ink (TopBarInk) for the pills at rest, and its glyph halo.
+    property color ink: Theme.text
+    property bool halo: false
+    property color haloColor: "transparent"
+    // The bell's badge and glyph (NotificationCentre): the unread count, and whether quiet mode is on.
+    property int notificationCount: 0
+    property bool quiet: false
 
     readonly property string currentKey: keys[currentIndex]
+    readonly property string badgeText: notificationCount > 9 ? "9+" : String(notificationCount)
 
     signal activated(string key)
     signal downRequested()
     signal stepRequested(int direction)
     signal backRequested()
-    // Right at the last pill (Left at the first under a mirrored layout): the status cluster is there (T-301).
+    // Right at the last pill (Left at the first under a mirrored layout): the status tray is there (T-301).
     signal edgeRequested()
 
     function label(key) {
@@ -37,8 +48,24 @@ FocusScope {
         case "media": return qsTr("Media")
         case "store": return qsTr("Store")
         case "settings": return qsTr("Settings")
+        case "notifications": return qsTr("Notifications")
         }
         return key
+    }
+    // What a screen reader says for a pill: its label; the bell adds the unread count and quiet mode.
+    function accessibleLabel(key) {
+        if (key !== "notifications")
+            return label(key)
+        return quiet ? qsTr("Notifications, %n unread, quiet mode on", "", notificationCount)
+                     : qsTr("Notifications, %n unread", "", notificationCount)
+    }
+    // The glyph of an icon pill, "" for a word pill.
+    function iconOf(key) {
+        if (key === "settings")
+            return "settings"
+        if (key === "notifications")
+            return quiet ? "notifications_paused" : "notifications"
+        return ""
     }
 
     implicitWidth: pills.width + 2 * Theme.spaceXs * u
@@ -48,7 +75,7 @@ FocusScope {
 
     Accessible.role: Accessible.PageTabList
     // The nav holds focus, not its pills: the name follows the current pill.
-    Accessible.name: label(currentKey)
+    Accessible.name: accessibleLabel(currentKey)
 
     GlassPill {
         objectName: "sectionNavGlass"
@@ -70,11 +97,59 @@ FocusScope {
         shown: nav.activeFocus
     }
 
+    // The pills' fills and rings, each under its pill of `pills` (which owns the geometry), so the halo of the words
+    // and glyphs (on `pills` only) never draws around a pill.
+    Repeater {
+        id: fills
+        model: nav.keys
+
+        delegate: Item {
+            id: under
+
+            required property int index
+            required property string modelData
+            readonly property Item pill: repeater.count > index ? repeater.itemAt(index) : null
+            readonly property bool isSection: modelData === nav.section
+            readonly property bool focused: nav.activeFocus && index === nav.currentIndex
+
+            x: pill ? pills.x + pill.x : 0
+            y: pill ? pills.y + pill.y : 0
+            width: pill ? pill.width : 0
+            height: pill ? pill.height : 0
+
+            Rectangle {
+                objectName: "navPillFill_" + under.modelData
+                anchors.fill: parent
+                radius: height / 2
+                color: under.isSection ? Theme.primaryFill : (under.focused && !glide.active ? Theme.focusFill : "transparent")
+                border.width: under.focused && !under.isSection ? Theme.focusRingWidth * nav.u : 0
+                border.color: Theme.focusRing
+            }
+            // The current pill is white, so its ring sits outside with a gap (PrimaryButton).
+            Rectangle {
+                objectName: "navPillRing_" + under.modelData
+                anchors.fill: parent
+                anchors.margins: -Theme.focusRingOffset * nav.u
+                radius: height / 2
+                color: "transparent"
+                border.width: Theme.focusRingWidth * nav.u
+                border.color: Theme.focusRing
+                visible: under.focused && under.isSection
+            }
+        }
+    }
+
+    // The words and glyphs: one layer, so the glyph halo (busy art, 04 §5.5) hugs them as a whole.
     Row {
         id: pills
         objectName: "navPills"
         anchors.centerIn: parent
         spacing: Theme.spaceXxs * nav.u
+        layer.enabled: nav.halo
+        layer.effect: GlyphHalo {
+            u: nav.u
+            haloColor: nav.haloColor
+        }
 
         Repeater {
             id: repeater
@@ -87,54 +162,66 @@ FocusScope {
                 required property string modelData
                 readonly property bool isSection: modelData === nav.section
                 readonly property bool focused: nav.activeFocus && index === nav.currentIndex
+                readonly property string icon: nav.iconOf(modelData)
+                // At rest the ink of the bar; on its own surface (current or focused) that surface's text colour.
+                readonly property color ink: isSection ? Theme.onPrimary : focused ? Theme.text : nav.ink
 
                 objectName: "navPill_" + modelData
                 width: Math.max(height, text.implicitWidth + 2 * Theme.spaceL * nav.u)
                 height: Theme.buttonHeight * nav.u
 
                 Accessible.role: Accessible.PageTab
-                Accessible.name: nav.label(modelData)
+                Accessible.name: nav.accessibleLabel(modelData)
                 Accessible.selected: isSection
 
-                Rectangle {
-                    objectName: "navPillFill_" + pill.modelData
-                    anchors.fill: parent
-                    radius: height / 2
-                    color: pill.isSection ? Theme.primaryFill : (pill.focused && !glide.active ? Theme.focusFill : "transparent")
-                    border.width: pill.focused && !pill.isSection ? Theme.focusRingWidth * nav.u : 0
-                    border.color: Theme.focusRing
-                }
-                // The current pill is white, so its ring sits outside with a gap (PrimaryButton).
-                Rectangle {
-                    objectName: "navPillRing_" + pill.modelData
-                    anchors.fill: parent
-                    anchors.margins: -Theme.focusRingOffset * nav.u
-                    radius: height / 2
-                    color: "transparent"
-                    border.width: Theme.focusRingWidth * nav.u
-                    border.color: Theme.focusRing
-                    visible: pill.focused && pill.isSection
-                }
                 Text {
                     id: text
+                    objectName: "navLabel_" + pill.modelData
                     anchors.centerIn: parent
-                    text: pill.modelData === "settings" ? "" : nav.label(pill.modelData)
-                    color: pill.isSection ? Theme.onPrimary : Theme.text
+                    text: pill.icon !== "" ? "" : nav.label(pill.modelData)
+                    color: pill.ink
                     font.pixelSize: Theme.typeBody * nav.u
                     font.weight: pill.isSection ? Theme.weightDemiBold : Theme.weightRegular
                 }
-                // The Settings pill is an icon, filled while Settings is the section on screen; its
-                // name is the accessible name of the pill.
+                // The icon pills (the Settings gear, the bell): filled while their section is on screen (the bell also
+                // while quiet mode is on); their name is the accessible name of the pill.
                 Icon {
                     objectName: "navIcon_" + pill.modelData
                     anchors.centerIn: parent
-                    visible: pill.modelData === "settings"
-                    name: pill.modelData === "settings" ? "settings" : ""
+                    visible: pill.icon !== ""
+                    name: pill.icon
                     u: nav.u
-                    filled: pill.isSection
-                    color: pill.isSection ? Theme.onPrimary : Theme.text
+                    filled: pill.isSection || (pill.modelData === "notifications" && nav.quiet)
+                    color: pill.ink
                 }
             }
+        }
+    }
+
+    // The bell's unread count (RUY-413): a 32 u pill over the bell pill's top right corner (three quarters of its width
+    // inside the pill, a quarter of its height above it), `typeMicro` DemiBold `onPrimary` on `primaryFill`, "9+" above
+    // nine, none at 0; its outline in the bar's ink keeps it apart from the art. Above the words' layer, outside its halo.
+    Rectangle {
+        id: badge
+        objectName: "bellBadge"
+        readonly property Item bell: repeater.count === nav.keys.length ? repeater.itemAt(nav.keys.indexOf("notifications")) : null
+        visible: bell !== null && nav.notificationCount > 0
+        height: 32 * nav.u // token-ok: the badge's size, 04 §5 "Bell"
+        width: Math.max(height, badgeLabel.implicitWidth + 2 * Theme.spaceXs * nav.u)
+        radius: height / 2
+        x: bell ? pills.x + bell.x + bell.width - width * 0.75 : 0
+        y: bell ? pills.y + bell.y - height * 0.25 : 0
+        color: Theme.primaryFill
+        border.width: Theme.hairlineAt(nav.u)
+        border.color: nav.ink
+        Text {
+            id: badgeLabel
+            objectName: "bellBadgeText"
+            anchors.centerIn: parent
+            text: nav.badgeText
+            color: Theme.onPrimary
+            font.pixelSize: Theme.typeMicro * nav.u
+            font.weight: Theme.weightDemiBold
         }
     }
 

@@ -16,8 +16,6 @@ Item {
     property Item source
     property real sourceX: 0
     property real sourceY: 0
-    // A tint drawn over the blurred crop and under the glass fill (the bell's `trayShade`, 04 §5.5); none by default.
-    property color shade: "transparent"
 
     // The liquid look is wanted (tier and switch) and is drawing (its shader compiled).
     readonly property bool liquidWanted: Theme.liquidOn && Theme.blurMax > 0
@@ -56,7 +54,7 @@ Item {
         blurEnabled: true
         blur: 1.0
         blurMax: Theme.blurMax * (glass.liquid ? Theme.liquidBlurFactor : 1)   // a lighter blur keeps the detail the edge bends
-        brightness: -0.08 + (glass.liquid ? Theme.liquidBrightnessLift : 0)   // the lighter blur of the liquid pill is brightened back to the plain pill's level
+        brightness: -ThemeMath.glassPillDarken + (glass.liquid ? Theme.liquidBrightnessLift : 0)   // the lighter blur of the liquid pill is brightened back to the plain pill's level
         saturation: 0.3
     }
     Loader {
@@ -69,12 +67,6 @@ Item {
             blurSource: blurFx
             u: glass.u
         }
-    }
-    Rectangle {
-        objectName: "glassShade"
-        anchors.fill: parent
-        radius: height / 2
-        color: glass.shade
     }
     Rectangle {
         objectName: "glassFill"

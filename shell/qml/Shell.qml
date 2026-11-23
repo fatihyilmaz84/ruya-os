@@ -1398,12 +1398,13 @@ FocusScope {
         value: Profiles.activeProfile
     }
 
-    // An action of a notification, picked in the centre (RUY-413). An app's action (source "app") only
-    // goes back to the app through the service (Invoke; the bridge of RUY-88 hands it over), whatever
-    // its id says: an app never runs a console action. The console's own actions run here: "restart"
-    // asks first (the centre closes, then the power confirmation with Cancel focused, like every
-    // other restart path) and is recorded only when confirmed; "settings:<category>" opens that
-    // Settings pane. Running an action clears the item (Invoke), a pinned one stays.
+    // An action of a notification, picked in the centre (RUY-413; its section page or the Hub's sheet,
+    // RUY-1136). An app's action (source "app") only goes back to the app through the service (Invoke;
+    // the bridge of RUY-88 hands it over), whatever its id says: an app never runs a console action.
+    // The console's own actions run here: "restart" asks first (the sheet closes, then the power
+    // confirmation with Cancel focused, like every other restart path; over the page the page stays) and
+    // is recorded only when confirmed; "settings:<category>" opens that Settings pane. Running an action
+    // clears the item (Invoke), a pinned one stays.
     property int pendingRestartItem: 0      // the item whose "Restart now" waits for the confirmation
     function runNotificationAction(item, action) {
         if (item.source === "app") {
@@ -1469,6 +1470,7 @@ FocusScope {
         store: storePage,
         appDetail: appDetailPage,
         settings: settingsPage,
+        notifications: notificationsPage,
         systemInfo: systemInfoPage,
         controller: controllerPage,
         managedProfile: managedProfilePage,
@@ -1582,8 +1584,8 @@ FocusScope {
         }
     }
 
-    // What lies behind the status tray (RUY-1117, 04 §5.5), the one place that decides it: on Home the picture of the
-    // hero layer in front (or the wallpaper while that item has none and a wallpaper shows through); on a page the
+    // What lies behind the top bar (RUY-1117, RUY-1136, 04 §5.5), the one place that decides it: on Home the picture of
+    // the hero layer in front (or the wallpaper while that item has none and a wallpaper shows through); on a page the
     // wallpaper, else the theme's Backdrop. { kind: "art" | "wallpaper" | "backdrop" | "unknown", source, aspect }
     // ("unknown": a hero item drawn as its placeholder colour field, never measured; `aspect`: the drawn width / height,
     // both pictures are a centred PreserveAspectCrop, so ArtPalette measures the band of the visible crop).
@@ -1600,29 +1602,19 @@ FocusScope {
         return { kind: "backdrop", source: "", aspect: 0 }
     }
 
-    // The tray's shade (RUY-955, RUY-1117, 04 §5.5): the ground colour across the top of the page, solid to the tray's
-    // bottom, then fading to clear over 2 x `spaceXxl` along a smoothstep (`fade`), so the flat tray's text reads over any art. Its alpha is only as
-    // strong as what lies behind the tray needs (ThemeMath.trayShadeAlpha over the top band ArtPalette measures):
-    // over dark art it all but disappears; over art not measured yet (or unreadable, or a placeholder) it is the
-    // ceiling `trayShadeAlphaMax`. A change moves over `tintMs` (the hero's own cross-fade); under reduced motion
-    // it jumps. It is shown and faded with the tray (its opacity and visibility are the tray's own, no rule of its
-    // own), so it is never drawn behind an app.
+    // The light behind the top bar (RUY-1136, 04 §5.5): the top band of the picture behind it as ArtPalette measures it
+    // (its bright and dark 2 %, `bandOf`), the wallpaper under its dim layer; null while it is not measured, for
+    // unreadable art and a placeholder, and on the theme's Backdrop (its ground is known: the theme's `text` reads there).
     Item {
-        id: trayShade
-        objectName: "trayShade"
-        anchors { left: parent.left; right: parent.right; top: parent.top }
-        height: statusTray.y + statusTray.height + 2 * Theme.spaceXxl * root.u
-        opacity: statusTray.opacity
-        visible: statusTray.visible
+        id: barLight
+        objectName: "barLight"
+        visible: false
 
         readonly property var behind: root.trayBackground()
-        property int measured: 0          // bumped when ArtPalette has measured the picture behind the tray
-        // The light behind the tray ({ high, low } relative luminances), or null while it is not known.
+        property int measured: 0          // bumped when ArtPalette has measured the picture behind the bar
         readonly property var band: {
             void measured
-            if (behind.kind === "backdrop")
-                return ThemeMath.backdropBand(Themes.snapshot(Theme.shownSet), backdrop.tint)
-            if (behind.kind === "unknown")
+            if (behind.kind !== "art" && behind.kind !== "wallpaper")
                 return null
             const b = ArtPalette.bandOf(behind.source, behind.aspect)
             if (b.ok !== true)
@@ -1630,59 +1622,42 @@ FocusScope {
             // The wallpaper lies under its dim layer (the theme's ground at its effective dim).
             return behind.kind === "wallpaper" ? ThemeMath.bandUnder(b, Theme.background, wallpaperLayer.effectiveDim) : b
         }
-        readonly property real targetAlpha: band ? ThemeMath.trayShadeAlpha(band, Theme) : Theme.trayShadeAlphaMax
-        property real alpha: targetAlpha
-        Behavior on alpha { NumberAnimation { duration: Theme.tintMs; easing.type: Easing.InOutQuad } }   // tintMs is 0 under reduced motion: a jump
-        readonly property color color: Theme.trayShade(alpha)
-        // The fade under the solid band (04 §5.5): [position, share of the shade's alpha] stops of the smoothstep
-        // 1 - 3t^2 + 2t^3, so it leaves the band without an edge and ends in `trayShade(0)`; the same RGB throughout.
-        readonly property var fade: [[0, 1], [0.125, 0.96], [0.25, 0.84], [0.5, 0.5], [0.75, 0.16], [0.875, 0.04], [1, 0]]
 
         Connections {
             target: ArtPalette
             function onSampled(source) {
-                if (source === trayShade.behind.source)
-                    ++trayShade.measured
-            }
-        }
-
-        Rectangle {
-            id: trayShadeSolid
-            width: parent.width
-            height: statusTray.y + statusTray.height
-            color: trayShade.color
-        }
-        Rectangle {
-            objectName: "trayShadeFade"
-            y: trayShadeSolid.height
-            width: parent.width
-            height: 2 * Theme.spaceXxl * root.u
-            gradient: Gradient { id: trayShadeFade }
-            Component { id: trayShadeStop; GradientStop {} }
-            // The stops, built once from `fade`; each colour follows the shade's alpha.
-            Component.onCompleted: {
-                trayShadeFade.stops = trayShade.fade.map(f => trayShadeStop.createObject(trayShadeFade, {
-                    position: f[0], color: Qt.binding(() => Theme.trayShade(trayShade.alpha * f[1]))
-                }))
+                if (source === barLight.behind.source)
+                    ++barLight.measured
             }
         }
     }
+    // The top bar's inks (RUY-1136, 04 §5.5): light or dark from that light, with the glyph halo over busy art. The tray
+    // lies flat on the art; the nav's words lie on its glass pill, so they are held against the light seen through it
+    // (ThemeMath.bandThroughGlass); without blur (Performance) the pill is `glassOpaque`, a known ground: `text`.
+    TopBarInk {
+        id: trayInk
+        objectName: "trayInk"
+        band: barLight.band
+    }
+    TopBarInk {
+        id: navInk
+        objectName: "navInk"
+        band: barLight.band && Theme.blurMax > 0 ? ThemeMath.bandThroughGlass(barLight.band, Theme.glassStrong) : null
+    }
 
     // The status tray (device batteries, profile, clock) top right, flat on the page like a console's status line
-    // (RUY-955, 04 §5.5): no container, one row centred on the nav, the clock's right edge on the safe area; the bell
-    // is its one glass item. Shown on Home and on pages.
+    // (RUY-955, 04 §5.5): no container and no shade, one row centred on the nav, the clock's right edge on the safe area,
+    // its words and glyphs in the bar's ink (`trayInk`, RUY-1136). Shown on Home and on pages. The download pill (RUY-30)
+    // goes before the battery chips; nothing is reserved for it until it exists.
     Item {
         id: statusTray
         objectName: "statusTray"
-        // Fades out when an app takes the screen and is not drawn once settled (T-376; the bell's glass would sample the hidden L0).
+        // Fades out when an app takes the screen and is not drawn once settled (T-376).
         opacity: root.appOpen ? 0 : 1
         visible: root.signedIn && (!root.appOpen || opacity > 0)
         Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
         height: Theme.buttonHeight * root.u + 2 * Theme.spaceXs * root.u
-        // The bell's slot: the bell and `spaceL` before the rest. The download pill (RUY-30) goes between the bell and the
-        // battery chips; nothing is reserved for it until it exists.
-        readonly property real bellSlot: (Theme.buttonHeight + Theme.spaceL) * root.u
-        width: bellSlot + statusRow.width
+        width: statusRow.width
         x: root.width - root.marginX - width
         y: root.marginY
 
@@ -1691,7 +1666,6 @@ FocusScope {
         // chips are as many as fit (the rest collapse into "+N"), so the tray never reaches the
         // nav (a Theme.spaceM gap stays) however long the name or many the devices.
         readonly property real room: root.width - root.marginX - (sectionNav.x + sectionNav.width + Theme.spaceM * root.u)
-                                     - bellSlot
         // Every device that earns a chip, in the order the slots are given out (T-301): pads and headsets
         // before mice, keyboards and the rest, each group lowest first (the service sorts that way), so
         // three full pads are not pushed out by a mouse at 5 % (that one shows in Settings and in its toast).
@@ -1774,47 +1748,17 @@ FocusScope {
             return { chips: 0, compact: batteryWidth(0, false) + fixedWidth + nameMin > room }
         }
 
-        // The notification centre's bell (RUY-413): Right from the Settings gear, Left back to it, Right on
-        // to the "N more" chip when there is one; Accept opens the centre.
-        NotificationBell {
-            id: bell
-            objectName: "notificationBell"
-            anchors.verticalCenter: parent.verticalCenter
-            u: root.u
-            source: l0
-            sourceX: statusTray.x + x
-            sourceY: statusTray.y + y
-            shade: trayShade.color
-            count: NotificationCentre.unreadCount
-            quiet: NotificationCentre.quiet
-            enabled: root.navShown && !systemPanel.open && !batteryList.shown && !notificationSheet.shown
-            onActivated: notificationSheet.open()
-            onLeftRequested: {
-                Sfx.navigate()
-                sectionNav.currentIndex = sectionNav.keys.length - 1
-                sectionNav.forceActiveFocus()
-            }
-            onRightRequested: {
-                if (batteryMore.visible && batteryMore.enabled) {
-                    Sfx.navigate()
-                    batteryMore.forceActiveFocus()
-                }
-            }
-            onDownRequested: { Sfx.navigate(); root.leaveNavDown() }
-            onBackRequested: {
-                if (root.pageOpen) {
-                    Sfx.back()
-                    root.closePage()
-                }
-            }
-            onStepRequested: direction => root.stepSection(direction)
-        }
-
+        // The words and glyphs of the tray: one layer, so the glyph halo (busy art, 04 §5.5) hugs them as a whole.
         Row {
             id: statusRow
-            x: statusTray.bellSlot
+            objectName: "statusRow"
             anchors.verticalCenter: parent.verticalCenter
             spacing: Theme.spaceL * root.u
+            layer.enabled: trayInk.halo
+            layer.effect: GlyphHalo {
+                u: root.u
+                haloColor: trayInk.haloColor
+            }
 
             // The battery of each wireless device (Batteries, UPower behind it), lowest first: up to
             // three chips and a "+N" for the rest; nothing without a device that needs one (T-223).
@@ -1834,6 +1778,8 @@ FocusScope {
                         objectName: "batteryChip_" + modelData
                         deviceId: modelData
                         u: root.u
+                        ink: trayInk.color
+                        warningInk: trayInk.warningColor
                     }
                 }
                 // The devices without a chip of their own: one chip the pad can reach (Right from the last
@@ -1848,10 +1794,12 @@ FocusScope {
                     count: batteryStatus.overflow.length
                     compact: statusTray.moreCompact
                     devices: batteryStatus.overflow
+                    ink: trayInk.color
                     onActivated: batteryList.open()
-                    onLeftRequested: {
+                    onLeftRequested: {           // back to the nav's last pill, the bell
                         Sfx.navigate()
-                        bell.forceActiveFocus()
+                        sectionNav.currentIndex = sectionNav.keys.length - 1
+                        sectionNav.forceActiveFocus()
                     }
                     onDownRequested: { Sfx.navigate(); root.leaveNavDown() }
                     onBackRequested: {
@@ -1877,6 +1825,7 @@ FocusScope {
                     slot: 1
                     held: statusTray.firstSeat ? statusTray.firstSeat.held === true : false
                     showNumber: statusTray.manyPlayers
+                    ring: trayInk.color
                 }
                 Text {
                     id: profileName
@@ -1886,7 +1835,7 @@ FocusScope {
                     text: Profiles.active.name ?? ""
                     width: Math.min(implicitWidth, statusTray.nameWidth)   // the full name unless the room is short
                     elide: Text.ElideRight
-                    color: Theme.text
+                    color: trayInk.color
                     font.pixelSize: Theme.typeBody * root.u
                 }
                 Repeater {
@@ -1899,13 +1848,14 @@ FocusScope {
                         slot: modelData.slot
                         held: modelData.held === true
                         showNumber: statusTray.manyPlayers
+                        ring: trayInk.color
                     }
                 }
             }
             Text {
                 id: clock
                 anchors.verticalCenter: parent.verticalCenter
-                color: Theme.text
+                color: trayInk.color
                 font.pixelSize: Theme.typeHeadline * root.u
                 font.weight: Theme.weightDemiBold
                 objectName: "statusClock"
@@ -2518,6 +2468,14 @@ FocusScope {
     Component { id: storePage; StorePage {} }
     Component { id: appDetailPage; AppDetailPage {} }
     Component { id: settingsPage; SettingsPage {} }
+    // The bell's section (RUY-1136): the notification centre as a page.
+    Component {
+        id: notificationsPage
+        NotificationsPage {
+            onActionRequested: (item, action) => root.runNotificationAction(item, action)
+            onAppRequested: item => root.openNotificationSource(item)
+        }
+    }
     Component { id: systemInfoPage; SystemInfoPage {} }
     Component { id: controllerPage; ControllerPage {} }
     Component { id: managedProfilePage; ManagedProfilePage {} }
@@ -2578,13 +2536,19 @@ FocusScope {
         opacity: root.navShown ? 1 : 0
         visible: root.navShown || opacity > 0     // visible at once, so focus can be given in the same step
         enabled: root.navShown && !systemPanel.open
+        ink: navInk.color
+        halo: navInk.halo
+        haloColor: navInk.haloColor
+        notificationCount: NotificationCentre.unreadCount
+        quiet: NotificationCentre.quiet
         Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }
         onActivated: key => root.openSection(key)
         onDownRequested: root.leaveNavDown()
+        // Right from the last pill (the bell): the tray's focusable item, "N more", when there is one.
         onEdgeRequested: {
-            if (bell.visible && bell.enabled) {
+            if (batteryMore.visible && batteryMore.enabled) {
                 Sfx.navigate()
-                bell.forceActiveFocus()
+                batteryMore.forceActiveFocus()
             }
         }
         onStepRequested: direction => root.stepSection(direction)
@@ -2789,8 +2753,8 @@ FocusScope {
         onClosed: Qt.callLater(root.rescueFocus)      // its return target may be gone (nothing is hidden any more)
     }
 
-    // The notification centre (RUY-413): a sheet in the modal layer, opened from the bell, or from the Hub's
-    // Notifications panel (RUY-414), where the layer is raised above the Hub (z 20) while the sheet shows.
+    // The notification centre as a sheet (RUY-413), opened from the Hub's Notifications panel (RUY-414), raised above
+    // the Hub (z 20) while it shows. The bell opens the centre as its section page instead (RUY-1136).
     NotificationSheet {
         id: notificationSheet
         objectName: "notificationSheet"
@@ -2929,7 +2893,7 @@ FocusScope {
             return pinPadInPicker.modalHints
         if (!signedIn)
             return setupActive ? setup.hints : [{ action: "accept", text: qsTr("Select") }]
-        if (bell.activeFocus || batteryMore.activeFocus)   // a tray item opens something (04 §5.5)
+        if (batteryMore.activeFocus)   // the tray's item opens something (04 §5.5)
             return [{ action: "accept", text: qsTr("Open") },
                     { actions: ["tabPrev", "tabNext"], text: qsTr("Sections") }]
         if (pageOpen) {     // slots and pageStack are updated one after the other
@@ -3102,7 +3066,7 @@ FocusScope {
         }
         // Cancelled: back to the choices. (The dialog's own restore would land on a list
         // delegate that may be gone, so name the list.) A cancelled Restart now from the centre
-        // leaves its item as it was; the focus goes back to the bell (the dialog's own restore).
+        // leaves its item as it was; the focus goes back to the centre's row on its page (the dialog's own restore).
         onClosed: {
             if (systemPanel.open)
                 systemPanel.actions.forceActiveFocus()

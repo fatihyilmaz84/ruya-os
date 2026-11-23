@@ -11,7 +11,9 @@ import RuyaShell
 //  - text (>= 4.5): `text` on the ground, panels, opaque glass, scrims, art fades, toasts, the
 //    primary and danger buttons, and on glass over the Backdrop (each blob over the gradient's
 //    brighter end, and the ground). `textDim` only on opaque surfaces (04 §3.1).
-//  - trayShade (RUY-1109): `text` >= 4.5 and `warningText` >= 3 on the status tray's shade at its ceiling over pure white and pure black art.
+//  - the top bar's ink (RUY-1136, 04 §5.5; its own tests below): over each fixture of art light the ink ThemeMath.trayInk
+//    picks reads at 4.5:1 against its worst case (the nav's words through every theme's glass too), or the art is busy
+//    and the glyph halo is on; a fixed ink fails some fixture.
 //  - overlap (>= 3): glass where the two big blobs overlap, with the white blob on top: the
 //    pessimistic corner, held to the large-text floor.
 //  - ring (>= 3): the focus ring against the glass, the ground, the panel and the scrims.
@@ -125,13 +127,6 @@ Item {
                 row(rows, "text on scrimOverlay over " + name, t.text, ThemeMath.over(t.scrimOverlay, e), 4.5)
                 row(rows, "text on heroScrim over " + name + " art", t.text, ThemeMath.over(t.heroScrim, e), 4.5)
                 row(rows, "text on artCaptionFade over " + name + " art", t.text, ThemeMath.over(t.artCaptionFade, e), 4.5)
-                // The status tray is flat on the page (RUY-1109, 04 §5.5): its text and its low-battery number lie on
-                // `trayShade` over whatever art is there. The shade is the theme's ground; over pure white and pure black
-                // it is at its ceiling `trayShadeAlphaMax` (RUY-1117: below it adapts to the art, ThemeMath.trayShadeAlpha,
-                // tst_tray_shade); `warningText` is large text (the 3 floor, the icons beside it).
-                const shade = ThemeMath.over(Qt.rgba(t.background.r, t.background.g, t.background.b, Theme.trayShadeAlphaMax), e)
-                row(rows, "text on trayShade over " + name + " art", t.text, shade, 4.5)
-                row(rows, "warningText on trayShade over " + name + " art", t.warningText, shade, 3)
                 const toast = ThemeMath.over(t.toastBackground, e)
                 row(rows, "text on toast over " + name, t.text, toast, 4.5)
                 for (const kind of ["toastInfo", "toastSuccess", "toastWarning", "toastError"])
@@ -241,19 +236,64 @@ Item {
             verify(failures(lightOnLight).length > 0, "light text on a light theme")
         }
 
-        // The tray rows need the shade (RUY-1117): without it, every theme's tray text fails over pure white or pure
-        // black art, so the ceiling is a real floor and not a value the gate would pass anyway.
-        function test_tray_rows_fail_without_the_shade() {
-            for (const s of Themes.all) {
-                const t = Themes.snapshot(s)
-                const worst = t.lightness >= 0.5 ? black : white
-                const text = ThemeMath.contrast(t.text, worst)
-                const warning = ThemeMath.contrast(t.warningText, worst)
-                verify(text < 4.5 || warning < 3, s.key + ": bare art already reads (" + text + ", " + warning + ")")
-                const shaded = ThemeMath.over(Qt.rgba(t.background.r, t.background.g, t.background.b, Theme.trayShadeAlphaMax), worst)
-                verify(ThemeMath.contrast(t.text, shaded) >= 4.5 && ThemeMath.contrast(t.warningText, shaded) >= 3,
-                       s.key + ": the ceiling reads")
+        // The top bar's ink (RUY-1136, 04 §5.5): fixtures of the light behind the bar ({ high, low }: the bright and the
+        // dark 2 % of the band ArtPalette.bandOf measures) and whether they are busy (neither ink reads at 4.5:1).
+        readonly property var inkFixtures: [
+            { name: "uniform black", band: { high: 0, low: 0 }, busy: false },
+            { name: "uniform white", band: { high: 1, low: 1 }, busy: false },
+            // Mid grey: the inks are not pure white and black, so no grey between 0.16 and 0.21 carries either at 4.5:1.
+            { name: "mid grey 0.18", band: { high: 0.18, low: 0.18 }, busy: true },
+            { name: "light sky", band: { high: 0.85, low: 0.45 }, busy: false },
+            { name: "dark scene", band: { high: 0.06, low: 0.003 }, busy: false },
+            { name: "bright and dark patches", band: { high: 0.9, low: 0.004 }, busy: true }
+        ]
+        // The ink colour of a pick, and the contrast against its worst case (the bright end for light ink, the dark end
+        // for dark ink).
+        function inkColor(pick) { return pick.ink === "light" ? Theme.inkLight : Theme.inkDark }
+        function worstOf(pick, band) {
+            return ThemeMath.contrast(inkColor(pick), ThemeMath.grey(pick.ink === "light" ? band.high : band.low))
+        }
+        function checkInk(where, band, busy) {
+            const pick = ThemeMath.trayInk(band, "", Theme)
+            const worst = worstOf(pick, band)
+            if (busy === false || !pick.busy) {
+                verify(!pick.busy, where + ": not busy")
+                verify(worst >= 4.5, where + ": " + pick.ink + " ink at " + worst.toFixed(2))
+            } else {
+                verify(pick.busy, where + ": busy, the halo is on")
+                verify(worst < 4.5, where + ": busy means under 4.5 (" + worst.toFixed(2) + ")")
             }
+            return pick
+        }
+
+        function test_tray_ink_reads_over_the_fixtures() {
+            for (const f of inkFixtures) {
+                const pick = checkInk("tray over " + f.name, f.band, f.busy)
+                compare(pick.busy, f.busy, f.name + " busy")
+                // The nav's words lie on its glass pill (bandThroughGlass), in every theme: they read or carry the halo.
+                for (const s of Themes.all) {
+                    const t = Themes.snapshot(s)
+                    checkInk("nav over " + f.name + " (" + s.key + ")", ThemeMath.bandThroughGlass(f.band, t.glassStrong))
+                }
+            }
+            // The low battery's number (large text, the 3 floor) reads in its warning ink over the fixtures that are not busy.
+            for (const f of inkFixtures.filter(x => !x.busy)) {
+                const pick = ThemeMath.trayInk(f.band, "", Theme)
+                const warning = pick.ink === "light" ? Theme.inkLightWarning : Theme.inkDarkWarning
+                const c = ThemeMath.contrast(warning, ThemeMath.grey(pick.ink === "light" ? f.band.high : f.band.low))
+                verify(c >= 3, f.name + ": the warning ink at " + c.toFixed(2))
+            }
+        }
+
+        // Red without the rule: one fixed ink (either one, or the theme's own `text`) fails a fixture that is not busy.
+        function test_a_fixed_ink_fails_without_the_rule() {
+            const plain = inkFixtures.filter(f => !f.busy)
+            const fails = ink => plain.some(f => Math.min(ThemeMath.contrast(ink, ThemeMath.grey(f.band.high)),
+                                                          ThemeMath.contrast(ink, ThemeMath.grey(f.band.low))) < 4.5)
+            verify(fails(Theme.inkLight), "light ink alone")
+            verify(fails(Theme.inkDark), "dark ink alone")
+            for (const s of Themes.all)
+                verify(fails(Themes.snapshot(s).text), s.key + ": the theme's text alone")
         }
 
         // Pinned limits (04 §3.6, §7): what the gate does NOT promise, so a fix has to change the

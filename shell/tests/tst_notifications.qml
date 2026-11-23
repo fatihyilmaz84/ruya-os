@@ -3,9 +3,9 @@ import QtTest
 import RuyaShell
 
 // The notification centre (RUY-413): the mock of Notifications1 behind NotificationCentre, the bell
-// in the status cluster, the centre sheet and the quiet rules of the toasts. Driven with the
-// controller keys only (Up/Down/Left/Right, Return = A, Escape = B, Menu = Start). Signs in as Ada
-// (p2, no PIN). The mock is reset before every test.
+// (the section nav's last pill, RUY-1136), the centre as the bell's section page and the quiet rules of the
+// toasts. Driven with the controller keys only (Up/Down/Left/Right, Return = A, Escape = B, Menu = Start,
+// PageUp/PageDown = LB/RB). Signs in as Ada (p2, no PIN). The mock is reset before every test.
 Item {
     id: host
     width: 1280
@@ -72,25 +72,35 @@ Item {
             Notifications.pending = []
         }
 
-        // Up from Play to the nav, Right to the gear, Right to the bell.
+        // The nav has the focus, on the bell (its last pill).
+        function bellFocused() {
+            const nav = find("sectionNav")
+            return nav.activeFocus && nav.currentKey === "notifications"
+        }
+        // Up from Play to the nav, Right along the pills to the bell, the last one.
         function toBell() {
             keyClick(Qt.Key_Up)
             tryVerify(() => find("sectionNav").activeFocus, 2000, "the nav has focus")
-            for (let i = 0; i < 4; ++i)
+            for (let i = 0; i < 5; ++i)
                 keyClick(Qt.Key_Right)
-            tryCompare(find("sectionNav"), "currentIndex", 4)
-            keyClick(Qt.Key_Right)
-            tryVerify(() => find("notificationBell").activeFocus, 2000, "Right from the gear reaches the bell")
+            tryVerify(() => bellFocused(), 2000, "Right along the nav reaches the bell")
         }
 
+        // The centre is on screen: the bell's section page is on top.
+        function centreOpen() { return tc.shell.currentPage === "notifications" }
         function openCentre() {
             toBell()
             keyClick(Qt.Key_Return)
-            tryVerify(() => find("notificationSheet").shown, 2000, "A on the bell opens the centre")
-            tryVerify(() => find("notificationSheet").opacity >= 1, 2000, "the centre has faded in")
+            tryVerify(() => centreOpen(), 2000, "A on the bell opens its section")
+            tryVerify(() => sheet() !== null && sheet().activeFocus, 2000, "the centre has the focus")
         }
 
-        function sheet() { return find("notificationSheet") }
+        // The centre on the bell's page (NotificationCentreView), and its parts (the Hub's sheet has a copy of them).
+        function sheet() {
+            const page = find("page_notifications")
+            return page ? findChild(page, "centreView") : null
+        }
+        function part(name) { return findChild(sheet(), name) }
         function rowOf(id) { return findChild(sheet(), "centreRow_" + id) }
         function itemTitled(title) { return NotificationCentre.items.find(i => i.title === title) }
         function idOf(title) {
@@ -100,7 +110,7 @@ Item {
         // The row with that title has the focus (the list has it and the row is the focused one).
         function rowFocused(title) {
             const s = sheet()
-            return find("centreList").activeFocus && s.stop === "row" && s.focusKey === "n:" + idOf(title)
+            return part("centreList").activeFocus && s.stop === "row" && s.focusKey === "n:" + idOf(title)
         }
         function hintText() {
             return find("hintBar").hints.map(h => (h.action ?? h.actions.join("_")) + " " + h.text).join(", ")
@@ -146,7 +156,7 @@ Item {
         }
 
         function settle() {
-            tryVerify(() => find("centreSlide").x === tc.shell.width - sheet().sheetWidth && sheet().opacity >= 1, 3000, "the sheet is at rest")
+            tryVerify(() => centreOpen() && find("pageSlot_notifications").settled, 3000, "the page is at rest")
             waitForRendering(tc.shell)
         }
 
@@ -154,7 +164,7 @@ Item {
         function shots(dir, suffix, t) {
             // The bell with a badge on Home, then focused.
             fill(t)
-            tryVerify(() => findChild(find("notificationBell"), "bellBadge").visible)
+            tryVerify(() => find("bellBadge").visible)
             waitForRendering(tc.shell)
             grabImage(tc.shell).save(dir + "93-bell-badge" + suffix + ".png")
             toBell()
@@ -162,7 +172,7 @@ Item {
             grabImage(tc.shell).save(dir + "93b-bell-focused" + suffix + ".png")
             // The full centre, the focus on the pinned row with its action.
             keyClick(Qt.Key_Return)
-            tryVerify(() => sheet().shown)
+            tryVerify(() => centreOpen())
             settle()
             grabImage(tc.shell).save(dir + "94-centre-full" + suffix + ".png")
             keyClick(Qt.Key_Down)                    // the app's item: two actions
@@ -183,7 +193,7 @@ Item {
             waitForRendering(tc.shell)
             grabImage(tc.shell).save(dir + "94d-centre-empty" + suffix + ".png")
             keyClick(Qt.Key_Escape)
-            tryVerify(() => !sheet().shown && sheet().opacity === 0, 3000)
+            tryVerify(() => !centreOpen() && find("home").opacity === 1, 3000)
             waitForRendering(tc.shell)
             grabImage(tc.shell).save(dir + "93c-bell-quiet" + suffix + ".png")
             NotificationCentre.setQuiet(false)
@@ -193,22 +203,22 @@ Item {
         // ---- the mock and the badge ----
 
         function test_badge_counts() {
-            const bell = find("notificationBell")
-            const badge = findChild(bell, "bellBadge")
+            const bell = find("navPill_notifications")
+            const badge = find("bellBadge")
             compare(NotificationCentre.unreadCount, 0)
             verify(!badge.visible, "no badge at 0")
             verify(bell.Accessible.name.indexOf("0 unread") >= 0, bell.Accessible.name)
             post("One", tc.t0)
             tryCompare(NotificationCentre, "unreadCount", 1)
             verify(badge.visible)
-            compare(findChild(bell, "bellBadgeText").text, "1")
+            compare(find("bellBadgeText").text, "1")
             for (let i = 2; i <= 9; ++i)
                 post("Item " + i, tc.t0 + i)
             tryCompare(NotificationCentre, "unreadCount", 9)
-            compare(findChild(bell, "bellBadgeText").text, "9")
+            compare(find("bellBadgeText").text, "9")
             post("Ten", tc.t0 + 10)
             tryCompare(NotificationCentre, "unreadCount", 10)
-            compare(findChild(bell, "bellBadgeText").text, "9+", "above nine it says 9+")
+            compare(find("bellBadgeText").text, "9+", "above nine it says 9+")
             compare(badge.height, 32 * tc.shell.u)
             verify(bell.Accessible.name.indexOf("10 unread") >= 0, bell.Accessible.name)
         }
@@ -221,14 +231,14 @@ Item {
             openCentre()
             tryCompare(NotificationCentre, "unreadCount", 0)
             compare(NotificationCentre.mockCalls("markread"), calls + 1)
-            verify(!findChild(find("notificationBell"), "bellBadge").visible, "the badge empties")
+            verify(!find("bellBadge").visible, "the badge empties")
             compare(findChild(sheet(), "centreNewCount").text, "2 new")
             verify(findChild(sheet(), "centreNewCount").visible, "it fits before Clear all in English")
             tryVerify(() => rowOf(idOf("Update ready")) !== null)
             verify(findChild(rowOf(idOf("Update ready")), "notificationDot").visible, "a new item keeps its dot")
             keyClick(Qt.Key_Escape)
-            tryVerify(() => !sheet().shown)
-            tryVerify(() => find("notificationBell").activeFocus, 2000, "Back returns the focus to the bell")
+            tryVerify(() => !centreOpen())
+            tryVerify(() => bellFocused(), 2000, "Back goes Home, the focus on the bell")
         }
 
         function test_list_order_and_pinning() {
@@ -279,10 +289,10 @@ Item {
             const row = findChild(rowOf(idOf("Drive inserted")), "notificationRow")
             verify(row.expanded, "the focused row shows its actions")
             compare(findChild(row, "notificationAction_0").color, Theme.primaryFill)
-            compare(hintText(), "accept Select, options Clear, back Close")
+            compare(hintText(), "accept Select, options Clear, back Back")
             const invoked = NotificationCentre.mockCalls("invoke")
             keyClick(Qt.Key_Return)
-            tryVerify(() => !sheet().shown, 2000, "an action that leaves closes the centre")
+            tryVerify(() => !centreOpen(), 2000, "an action that leaves closes the centre")
             tryCompare(tc.shell, "currentPage", "settings")
             compare(tc.shell.currentParams.category, "storage", "Open Settings opens the Storage pane")
             compare(NotificationCentre.mockCalls("invoke"), invoked + 1)
@@ -290,8 +300,8 @@ Item {
             verify(itemTitled("Older") !== undefined)
         }
 
-        // Review round 2: "Restart now" never restarts on one press. The centre closes and the power
-        // confirmation asks, Cancel focused; Cancel leaves the item, Restart now restarts and records it.
+        // Review round 2: "Restart now" never restarts on one press. The power confirmation asks over the centre's
+        // page, Cancel focused; Cancel leaves the item and the focus on its row, Restart now restarts and records it.
         function test_restart_now_asks_first() {
             Notifications.show("Update ready. Restart to finish.", "info", "", "download_done", "",
                                { source: "updates", actions: [{ id: "restart", label: "Restart now" }] })
@@ -304,20 +314,17 @@ Item {
             keyClick(Qt.Key_Return)
             const confirm = find("overlayPowerConfirm")
             tryVerify(() => confirm.shown, 2000, "A asks first")
-            tryVerify(() => !sheet().shown, 2000, "the centre closed")
+            verify(centreOpen(), "over the centre's page")
             tryVerify(() => findChild(confirm, "powerCancel").activeFocus, 2000, "Cancel has the focus")
             compare(Power.actionCount, restarts, "nothing restarted yet")
             compare(hintText(), "accept Select, back Cancel")
             keyClick(Qt.Key_Escape)
             tryVerify(() => !confirm.shown)
-            tryVerify(() => find("notificationBell").activeFocus, 2000, "Cancel: the focus is back on the bell")
+            tryVerify(() => rowFocused("Update ready. Restart to finish."), 2000, "Cancel: the focus is back on its row")
             compare(Power.actionCount, restarts)
             compare(NotificationCentre.mockCalls("invoke"), invoked, "a cancelled restart is not recorded")
             verify(itemTitled("Update ready. Restart to finish.") !== undefined, "and the item stays")
             // Again, and confirm this time.
-            keyClick(Qt.Key_Return)
-            tryVerify(() => sheet().shown)
-            tryVerify(() => rowFocused("Update ready. Restart to finish."))
             keyClick(Qt.Key_Return)
             tryVerify(() => findChild(confirm, "powerCancel").activeFocus)
             keyClick(Qt.Key_Right)
@@ -349,21 +356,22 @@ Item {
             compare(NotificationCentre.mockCalls("invoke"), invoked + 1)
             verify(!find("overlayPowerConfirm").shown, "no power confirmation")
             compare(Power.actionCount, restarts, "no restart")
-            verify(sheet().shown, "the centre stays")
+            verify(centreOpen(), "the centre stays")
             tryVerify(() => rowFocused("And me"))
             keyClick(Qt.Key_Right)                           // its "settings:storage"
             tryCompare(sheet(), "pick", 1)
             keyClick(Qt.Key_Return)
             tryVerify(() => itemTitled("And me") === undefined, 2000, "handed back too")
             compare(NotificationCentre.mockCalls("invoke"), invoked + 2)
-            compare(tc.shell.currentPage, "", "no Settings page opened")
-            verify(sheet().shown)
-            tryVerify(() => find("centreQuiet").activeFocus)
+            compare(tc.shell.currentPage, "notifications", "no Settings page opened")
+            verify(centreOpen())
+            tryVerify(() => part("centreQuiet").activeFocus)
         }
 
         // Review round 2: a pinned item's title is a safety notice: it wraps to two lines, never cut.
         function test_pinned_title_wraps() {
-            const longTitle = "Restarting in 2 minutes to finish"      // the real title is shorter; this one needs two lines
+            // The real title is shorter; this one needs two lines on the page's 1200 u row.
+            const longTitle = "Restarting in 2 minutes to finish the update that came in while you were playing"
             NotificationCentre.mockSetNow(tc.t0)
             Notifications.keep("update-restart", longTitle, "warning", "restart_alt", "To finish the update",
                                { source: "updates", urgency: "critical", pinned: true })
@@ -396,7 +404,7 @@ Item {
             clearToasts()
             openCentre()
             tryVerify(() => rowFocused("Match found"))
-            compare(hintText(), "accept Select, left_right Choose, options Clear, back Close")
+            compare(hintText(), "accept Select, left_right Choose, options Clear, back Back")
             const row = findChild(rowOf(idOf("Match found")), "notificationRow")
             compare(row.pick, 0)
             keyClick(Qt.Key_Right)
@@ -405,7 +413,7 @@ Item {
             compare(row.pick, 1, "the pick stops at the last action")
             keyClick(Qt.Key_Return)
             tryVerify(() => itemTitled("Match found") === undefined, 2000, "Join or Later runs and clears the item")
-            verify(sheet().shown, "an app's action leaves the centre open")
+            verify(centreOpen(), "an app's action leaves the centre open")
             tryVerify(() => rowFocused("Older"), 2000, "the focus moves to the next row")
         }
 
@@ -425,11 +433,11 @@ Item {
             tryVerify(() => rowFocused("A"), 2000, "no next row: the previous one")
             keyClick(Qt.Key_Menu)
             tryVerify(() => NotificationCentre.count === 0)
-            tryVerify(() => find("centreQuiet").activeFocus, 2000, "no row left: Quiet mode")
+            tryVerify(() => part("centreQuiet").activeFocus, 2000, "no row left: Quiet mode")
             verify(findChild(sheet(), "centreEmpty").visible, "the empty state")
-            verify(!find("centreClearAll").visible)
+            verify(!part("centreClearAll").visible)
             keyClick(Qt.Key_Escape)
-            tryVerify(() => !sheet().shown && find("notificationBell").activeFocus, 2000, "Back closes, the bell has the focus")
+            tryVerify(() => !centreOpen() && bellFocused(), 2000, "Back closes, the bell has the focus")
         }
 
         function test_clear_all_keeps_pinned() {
@@ -441,18 +449,18 @@ Item {
             openCentre()
             tryVerify(() => rowFocused("The console is too hot"))
             keyClick(Qt.Key_Up)
-            tryVerify(() => find("centreQuiet").activeFocus, 2000, "Up from the first row: Quiet mode")
+            tryVerify(() => part("centreQuiet").activeFocus, 2000, "Up from the first row: Quiet mode")
             keyClick(Qt.Key_Up)
-            tryVerify(() => find("centreClearAll").activeFocus, 2000, "then Clear all")
-            compare(hintText(), "accept Clear all, back Close")
+            tryVerify(() => part("centreClearAll").activeFocus, 2000, "then Clear all")
+            compare(hintText(), "accept Clear all, back Back")
             keyClick(Qt.Key_Return)
             tryVerify(() => NotificationCentre.count === 1, 2000, "Clear all clears")
             compare(NotificationCentre.items[0].title, "The console is too hot", "the pinned item stays")
-            tryVerify(() => !find("centreClearAll").visible, 2000, "only pinned items left: no Clear all")
+            tryVerify(() => !part("centreClearAll").visible, 2000, "only pinned items left: no Clear all")
             tryVerify(() => rowFocused("The console is too hot"), 2000, "the focus moves to the first row")
             Notifications.remove("thermal-critical")
             tryVerify(() => NotificationCentre.count === 0)
-            tryVerify(() => find("centreQuiet").activeFocus, 2000, "the last row went: Quiet mode")
+            tryVerify(() => part("centreQuiet").activeFocus, 2000, "the last row went: Quiet mode")
         }
 
         function test_caps_50_and_7_days() {
@@ -527,16 +535,16 @@ Item {
 
         function test_quiet_mode() {
             openCentre()
-            tryVerify(() => find("centreQuiet").activeFocus, 2000, "nothing kept: the focus is on Quiet mode")
-            compare(hintText(), "accept Toggle, back Close")
+            tryVerify(() => part("centreQuiet").activeFocus, 2000, "nothing kept: the focus is on Quiet mode")
+            compare(hintText(), "accept Toggle, back Back")
             keyClick(Qt.Key_Return)
             tryCompare(NotificationCentre, "quiet", true, 2000, "A on Quiet mode turns it on")
-            verify(find("centreQuiet").checked)
+            verify(part("centreQuiet").checked)
             keyClick(Qt.Key_Escape)
-            tryVerify(() => !sheet().shown)
-            const bell = find("notificationBell")
-            compare(findChild(bell, "bellIcon").name, "notifications_paused", "the bell shows quiet mode")
-            verify(findChild(bell, "bellIcon").filled)
+            tryVerify(() => !centreOpen())
+            const bell = find("navPill_notifications")
+            compare(find("navIcon_notifications").name, "notifications_paused", "the bell shows quiet mode")
+            verify(find("navIcon_notifications").filled)
             verify(bell.Accessible.name.indexOf("quiet mode on") >= 0, bell.Accessible.name)
             const cues = Sfx.notificationCount + Sfx.warningCount
             const quieted = Notifications.quietedCount
@@ -547,10 +555,10 @@ Item {
             compare(Sfx.notificationCount + Sfx.warningCount, cues, "no cue")
             compare(Notifications.quietedCount, quieted + 2)
             tryCompare(NotificationCentre, "unreadCount", 2, 2000, "the items are kept and counted")
-            verify(findChild(bell, "bellBadge").visible)
+            verify(find("bellBadge").visible)
             NotificationCentre.setQuiet(false)
             tryCompare(NotificationCentre, "quiet", false)
-            compare(findChild(bell, "bellIcon").name, "notifications")
+            compare(find("navIcon_notifications").name, "notifications")
             Notifications.show("Back to normal", "info")
             compare(Notifications.model.count, 1, "toasts again")
         }
@@ -564,7 +572,7 @@ Item {
             tryVerify(() => NotificationCentre.items.some(i => i.pinned && i.source === "updates"), 2000,
                       "the restart notice is kept, pinned")
             tryCompare(NotificationCentre, "unreadCount", 1, 2000, "and the badge counts it")
-            verify(findChild(find("notificationBell"), "bellBadge").visible)
+            verify(find("bellBadge").visible)
             compare(Notifications.model.count, 0, "no toast in quiet mode")
             NotificationCentre.setQuiet(false)
             tryCompare(NotificationCentre, "quiet", false)
@@ -648,20 +656,25 @@ Item {
         // ---- the centre's focus and keys ----
 
         function test_centre_focus() {
-            // Empty: the focus is on Quiet mode, Up and Down go nowhere, Back closes.
+            // Empty: the focus is on Quiet mode (the empty state below it); Down goes nowhere, Up to the nav, Back Home.
             openCentre()
-            tryVerify(() => find("centreQuiet").activeFocus, 2000, "empty: Quiet mode")
-            keyClick(Qt.Key_Up)
-            verify(find("centreQuiet").activeFocus, "nothing to clear: Up stays")
+            tryVerify(() => part("centreQuiet").activeFocus, 2000, "empty: Quiet mode")
+            verify(part("centreEmpty").visible, "the empty state")
+            compare(hintText(), "accept Toggle, back Back")
             keyClick(Qt.Key_Down)
-            verify(find("centreQuiet").activeFocus, "no rows: Down stays")
+            verify(part("centreQuiet").activeFocus, "no rows: Down stays")
+            keyClick(Qt.Key_Up)
+            tryVerify(() => bellFocused(), 2000, "nothing to clear: Up goes to the nav, on the bell")
+            verify(centreOpen(), "the page stays")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => part("centreQuiet").activeFocus, 2000, "Down: back into the page where it was")
             keyClick(Qt.Key_Escape)
-            tryVerify(() => !sheet().shown && find("notificationBell").activeFocus, 2000, "Back from Quiet mode")
+            tryVerify(() => !centreOpen() && bellFocused(), 2000, "Back from Quiet mode: Home, on the bell")
             // With rows: the newest has the focus; Up, Up, Down, Down walks Quiet mode and Clear all.
             post("Old", tc.t0 - 1000)
             post("New", tc.t0)
             keyClick(Qt.Key_Return)
-            tryVerify(() => sheet().shown)
+            tryVerify(() => centreOpen())
             tryVerify(() => rowFocused("New"), 2000, "the newest item has the focus")
             keyClick(Qt.Key_Down)
             tryVerify(() => rowFocused("Old"))
@@ -670,29 +683,30 @@ Item {
             keyClick(Qt.Key_Up)
             tryVerify(() => rowFocused("New"))
             keyClick(Qt.Key_Up)
-            tryVerify(() => find("centreQuiet").activeFocus)
+            tryVerify(() => part("centreQuiet").activeFocus)
             keyClick(Qt.Key_Up)
-            tryVerify(() => find("centreClearAll").activeFocus)
+            tryVerify(() => part("centreClearAll").activeFocus)
             keyClick(Qt.Key_Up)
-            verify(find("centreClearAll").activeFocus, "the top: Up stays")
+            tryVerify(() => bellFocused(), 2000, "the top: Up goes to the nav")
             keyClick(Qt.Key_Escape)
-            tryVerify(() => !sheet().shown && find("notificationBell").activeFocus, 2000, "Back from Clear all")
+            tryVerify(() => !centreOpen() && bellFocused(), 2000, "Back from the nav on the page: Home")
             keyClick(Qt.Key_Return)
             tryVerify(() => rowFocused("New"), 2000, "every opening starts on the first row")
             keyClick(Qt.Key_Escape)
-            tryVerify(() => !sheet().shown && find("notificationBell").activeFocus, 2000, "Back from a row")
-            // Nothing leaks: the page under the centre did not move.
+            tryVerify(() => !centreOpen() && bellFocused(), 2000, "Back from a row")
             compare(tc.shell.currentPage, "")
-            // The bell's own keys: Left back to the gear, Down into Home.
+            // The bell's own keys, as every pill's: Left back to the gear, Down into Home.
             keyClick(Qt.Key_Left)
-            tryVerify(() => find("sectionNav").activeFocus && find("sectionNav").currentIndex === 4, 2000, "Left: the gear")
+            tryVerify(() => find("sectionNav").activeFocus && find("sectionNav").currentKey === "settings", 2000, "Left: the gear")
             keyClick(Qt.Key_Right)
-            tryVerify(() => find("notificationBell").activeFocus)
+            tryVerify(() => bellFocused())
+            compare(hintText(), "accept Select, tabPrev_tabNext Sections", "the bell's hints are every tab's")
             keyClick(Qt.Key_Down)
             tryVerify(() => find("homePlay").activeFocus, 2000, "Down: Home")
             compare(tc.shell.focusRepairs, 0)
         }
 
+        // The bell is in the nav on the section pages too: Up from Settings reaches the gear, Right the bell, A its page.
         function test_bell_on_section_pages() {
             keyClick(Qt.Key_Up)
             tryVerify(() => find("sectionNav").activeFocus, 2000)
@@ -702,15 +716,60 @@ Item {
             tryCompare(tc.shell, "currentPage", "settings")
             tryVerify(() => find("categoryList").activeFocus, 2000, "the page has the focus")
             keyClick(Qt.Key_Up)
-            tryVerify(() => find("sectionNav").activeFocus && find("sectionNav").currentIndex === 4, 2000, "Up: the gear")
+            tryVerify(() => find("sectionNav").activeFocus && find("sectionNav").currentKey === "settings", 2000, "Up: the gear")
             keyClick(Qt.Key_Right)
-            tryVerify(() => find("notificationBell").activeFocus, 2000, "the bell on a section page")
+            tryVerify(() => bellFocused(), 2000, "the bell on a section page")
             keyClick(Qt.Key_Return)
-            tryVerify(() => sheet().shown)
-            keyClick(Qt.Key_Escape)
-            tryVerify(() => !sheet().shown && find("notificationBell").activeFocus)
-            keyClick(Qt.Key_Escape)                 // Back on the bell closes the page, as in the nav
+            tryVerify(() => centreOpen(), 2000, "the Settings page gives way to the bell's")
+            tryVerify(() => part("centreQuiet").activeFocus, 2000)
+            keyClick(Qt.Key_Escape)                 // Back from a section goes Home
             tryCompare(tc.shell, "currentPage", "")
+            tryVerify(() => bellFocused())
+        }
+
+        // LB/RB step onto and off the bell like every section (RUY-1136): from Settings the next section is the bell's
+        // page, from there the previous is Settings; past the bell nothing (the nav does not wrap).
+        function test_lb_rb_reach_the_bell() {
+            post("Ada's", tc.t0)
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("sectionNav").activeFocus, 2000)
+            for (let i = 0; i < 4; ++i)
+                keyClick(Qt.Key_Right)
+            keyClick(Qt.Key_Return)                 // the gear: Settings
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("categoryList").activeFocus, 2000, "the page has the focus")
+            keyClick(Qt.Key_PageDown)               // RB from the page's content
+            tryCompare(tc.shell, "currentPage", "notifications")
+            tryVerify(() => rowFocused("Ada's"), 2000, "the bell's page: the focus on its first row")
+            compare(find("sectionNav").section, "notifications", "the bell is the section on screen")
+            verify(find("navPillFill_notifications").color === Theme.primaryFill || Qt.colorEqual(find("navPillFill_notifications").color, Theme.primaryFill),
+                   "the bell pill is filled as the current section")
+            tryCompare(NotificationCentre, "unreadCount", 0, 2000, "opening it marked everything read")
+            verify(!find("bellBadge").visible, "the badge is empty")
+            keyClick(Qt.Key_PageDown)               // RB past the last section: nothing
+            wait(50)
+            compare(tc.shell.currentPage, "notifications", "the nav does not wrap")
+            verify(rowFocused("Ada's"))
+            keyClick(Qt.Key_PageUp)                 // LB: back to Settings
+            tryCompare(tc.shell, "currentPage", "settings")
+            // In the nav: LB/RB move the pill and open the section.
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("sectionNav").activeFocus && find("sectionNav").currentKey === "settings", 2000)
+            keyClick(Qt.Key_PageDown)
+            tryCompare(tc.shell, "currentPage", "notifications")
+            compare(find("sectionNav").currentKey, "notifications", "RB in the nav: the bell's pill")
+            tryVerify(() => rowFocused("Ada's"), 2000, "and its page has the focus, as every section's")
+            keyClick(Qt.Key_PageUp)
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => find("sectionNav").currentKey === "settings")
+            // Back from the bell's page goes Home, as from any section.
+            keyClick(Qt.Key_PageDown)
+            tryCompare(tc.shell, "currentPage", "notifications")
+            keyClick(Qt.Key_Down)
+            tryVerify(() => rowFocused("Ada's"))
+            keyClick(Qt.Key_Escape)
+            tryCompare(tc.shell, "currentPage", "")
+            compare(tc.shell.focusRepairs, 0)
         }
 
         // Locking (or a switch) closes the centre: the next profile never sees this one's list.
@@ -719,7 +778,7 @@ Item {
             openCentre()
             Profiles.lock()
             tryCompare(Profiles, "activeProfile", "")
-            tryVerify(() => !sheet().shown, 2000, "the centre closed with the profile")
+            tryVerify(() => !centreOpen(), 2000, "the centre closed with the profile")
             compare(NotificationCentre.count, 0, "and the list is nobody's")
             tryVerify(() => find("profileList").activeFocus, 2000, "the picker has the focus")
         }

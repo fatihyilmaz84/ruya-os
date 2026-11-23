@@ -54,8 +54,8 @@ Item {
         }
 
         function test_liquid_clock_follows_the_app_and_the_idle_period() {
-            const glass = findChild(find("notificationBell"), "liquidGlass")
-            verify(glass, "the bell carries the liquid look on High")
+            const glass = findChild(find("sectionNavGlass"), "liquidGlass")
+            verify(glass, "the nav carries the liquid look on High")
             compare(LiquidGate.screenShown, true, "the shell feeds the gate: the window is shown")
             compare(LiquidGate.appOpen, false)
             tryCompare(glass, "clockWanted", true)

@@ -70,7 +70,7 @@ Item {
             if (!find("sectionNav").activeFocus)
                 keyClick(Qt.Key_Up)                    // the section nav
             tryVerify(() => find("sectionNav").activeFocus, 2000, "the section nav has focus")
-            // Right to the gear, the last pill, and no further: Right from the gear goes on to the bell (RUY-413).
+            // Right to the gear and no further: the bell is the pill after it (RUY-1136).
             for (let i = 0; i < 4 && find("sectionNav").currentIndex < 4; ++i)
                 keyClick(Qt.Key_Right)
             tryCompare(find("sectionNav"), "currentIndex", 4)

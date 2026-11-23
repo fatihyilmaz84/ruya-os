@@ -81,8 +81,8 @@ Item {
             return found
         }
 
-        // The tray is laid out when it is as wide as the row inside it plus the bell's slot on the left
-        // (RUY-413); the clock's right edge is the tray's (no padding, RUY-1109). The budget
+        // The tray is laid out when it is as wide as the row inside it (the bell is the nav's last pill since
+        // RUY-1136); the clock's right edge is the tray's (no padding, RUY-1109). The budget
         // that picks the chips is computed at once from the fonts, but the Row (and so the pill) follows
         // one frame later, and the clock text changes width (HH:mm in a proportional font) every
         // minute: right after either, the pill's edge is still the old one (the gap read 23 or 25 px
@@ -90,7 +90,7 @@ Item {
         function pillIsLaidOut() {
             const pill = find("statusTray")
             const inner = find("batteryStatus").parent
-            return Math.abs(pill.width - (inner.width + pill.bellSlot)) < 0.5
+            return Math.abs(pill.width - inner.width) < 0.5
         }
         // "" when the cluster clears the nav and sits in the safe area, else what is wrong.
         function clusterProblem(size, what) {
@@ -102,7 +102,7 @@ Item {
                 return what + " at " + size[1] + "p: the cluster starts at " + pill.x + ", the nav ends at " + navRight
             if (pill.x + pill.width > tc.shell.width - tc.shell.marginX + 1)
                 return what + " at " + size[1] + "p: inside the safe area, right edge " + (pill.x + pill.width)
-            if (find("batteryStatus").width + pill.bellSlot > pill.width)
+            if (find("batteryStatus").width > pill.width)
                 return what + ": the chips sit inside the tray"
             return ""
         }
@@ -170,9 +170,8 @@ Item {
                     tryCompare(find("activeProfileName"), "text", name)
                     checkCluster(size, "'" + name + "'", devices)
                     const chipsShown = chipIds().length
-                    // The bell (RUY-413) takes 64 u of the room: four full pads ("100%", three digits) now leave Ada
-                    // one or two chips and the rest in "N more", by a few pixels of the clock's width (two chips need
-                    // 11 px more at 720p with "07:59"); before the bell two always fitted.
+                    // The bell (RUY-413, the nav's last pill since RUY-1136) takes room: four full pads ("100%", three
+                    // digits) leave Ada one or two chips and the rest in "N more", by a few pixels of the clock's width.
                     if (name === "Ada")
                         verify(chipsShown >= 1, "a short name leaves room for a chip at " + size[1] + "p: " + chipsShown)
                     if (name === names[4] && size[1] === 720) {
@@ -448,11 +447,9 @@ Item {
         function openMore() {
             keyClick(Qt.Key_Up)                                    // the nav, on Home
             tryVerify(() => find("sectionNav").activeFocus, 2000, "the nav has focus")
-            for (let i = 0; i < 4; ++i)
-                keyClick(Qt.Key_Right)                             // ... to the last pill
-            tryCompare(find("sectionNav"), "currentIndex", 4)
-            keyClick(Qt.Key_Right)                                 // ... on to the cluster's bell (RUY-413)
-            tryVerify(() => find("notificationBell").activeFocus, 2000, "Right from the last pill reaches the bell")
+            for (let i = 0; i < 5; ++i)
+                keyClick(Qt.Key_Right)                             // ... to the last pill, the bell (RUY-1136)
+            tryCompare(find("sectionNav"), "currentKey", "notifications")
             keyClick(Qt.Key_Right)                                 // ... and on to the chip
             tryVerify(() => find("batteryMore").activeFocus, 2000, "Right from the bell reaches the +N chip")
         }
@@ -486,14 +483,14 @@ Item {
             tryVerify(() => list.shown)
             keyClick(Qt.Key_Return)
             tryVerify(() => !list.shown && more.activeFocus, 2000, "Accept on Close closes too, focus on the chip")
-            // The chip leads back: Left to the bell, Left to the last pill, and Right twice again; Down into the
-            // page; Back leaves Home alone.
+            // The chip leads back: Left to the nav's last pill (the bell), Left to the gear, and Right twice again;
+            // Down into the page; Back leaves Home alone.
             keyClick(Qt.Key_Left)
-            tryVerify(() => find("notificationBell").activeFocus, 2000, "Left: the bell")
+            tryVerify(() => find("sectionNav").activeFocus && find("sectionNav").currentKey === "notifications", 2000, "Left: the bell")
             keyClick(Qt.Key_Left)
-            tryVerify(() => find("sectionNav").activeFocus && find("sectionNav").currentIndex === 4, 2000, "Left: the last pill")
+            tryVerify(() => find("sectionNav").activeFocus && find("sectionNav").currentKey === "settings", 2000, "Left: the gear")
             keyClick(Qt.Key_Right)
-            tryVerify(() => find("notificationBell").activeFocus)
+            tryVerify(() => find("sectionNav").currentKey === "notifications")
             keyClick(Qt.Key_Right)
             tryVerify(() => more.activeFocus)
             keyClick(Qt.Key_Down)
@@ -513,29 +510,26 @@ Item {
             return out
         }
 
-        // The flat tray (RUY-1109, 04 §5.5): no glass container; the bell is the one glass item; the clock's right edge
-        // is the safe area; the line is centred on the nav; the shade lies under it and goes with it.
-        function test_the_tray_is_flat_with_one_glass_bell() {
+        // The flat tray (RUY-1109, RUY-1136, 04 §5.5): no glass and no shade; the bell is the nav's last pill; the clock's
+        // right edge is the safe area; the line is centred on the nav (its ink: tst_tray_ink).
+        function test_the_tray_is_flat_without_a_shade() {
             Batteries.mockPopulate()
             openShell(1920, 1080)
             const tray = find("statusTray")
-            compare(descendants(tray, "glassBlur").length + descendants(tray, "glassFill").length, 2,
-                    "one glass pill in the tray (blur and fill): the bell's")
-            verify(descendants(find("notificationBell"), "glassFill").length === 1, "and it is the bell's")
+            compare(descendants(tray, "glassBlur").length + descendants(tray, "glassFill").length, 0, "no glass in the tray")
             verify(find("statusGlass") === null, "no glass container")
+            verify(find("trayShade") === null, "no shade")
+            verify(find("notificationBell") === null, "no bell of its own")
             const clock = find("statusClock")
             const right = clock.mapToItem(tc.shell, clock.width, 0).x
             verify(Math.abs(right - (tc.shell.width - tc.shell.marginX)) < 1, "the clock's right edge is the safe area: " + right)
             const nav = find("sectionNav")
             const navMid = nav.mapToItem(tc.shell, 0, nav.height / 2).y
-            const bell = find("notificationBell")
-            compare(bell.width, Theme.buttonHeight * tc.shell.u)
+            const bell = find("navPill_notifications")
+            compare(bell.width, Theme.buttonHeight * tc.shell.u, "the bell is an icon pill, round like the gear")
+            compare(bell.width, find("navPill_settings").width)
             verify(Math.abs(bell.mapToItem(tc.shell, 0, bell.height / 2).y - navMid) < 1, "the bell is centred on the nav")
             verify(Math.abs(clock.mapToItem(tc.shell, 0, clock.height / 2).y - navMid) < 2, "the clock is on the line")
-            const shade = find("trayShade")
-            compare(shade.visible, tray.visible)
-            compare(shade.height, tray.y + tray.height + 2 * Theme.spaceXxl * tc.shell.u, "solid to the tray's bottom, then the fade")
-            compare(find("bellGlass").shade, shade.color, "the bell's glass takes the tray's shade as it is")
             tc.shell.destroy()
             wait(50)
         }
@@ -561,10 +555,10 @@ Item {
             compare(focus.width, more.width + 2 * Theme.spaceS * u, "the content and spaceS each side")
             compare(focus.border.width, Theme.focusRingWidth * u)
             compare(where(), before, "nothing shifts")
-            compare(findChild(find("notificationBell"), "bellSurface").visible, false, "the bell's focus fill is off while it is not focused")
+            compare(find("navPillFill_notifications").border.width, 0, "the bell's ring is off while it is not focused")
             keyClick(Qt.Key_Left)
-            tryVerify(() => find("notificationBell").activeFocus, 2000)
-            compare(findChild(find("notificationBell"), "bellSurface").visible, true, "the bell's focus fill and ring")
+            tryVerify(() => find("sectionNav").activeFocus && find("sectionNav").currentKey === "notifications", 2000)
+            compare(find("navPillFill_notifications").border.width, Theme.focusRingWidth * u, "the bell's ring, as every pill's")
             compare(focus.visible, false)
             tc.shell.destroy()
             wait(50)
@@ -727,8 +721,8 @@ Item {
                 openMore()
                 wait(500)
                 grabImage(tc.shell).save(shotsDir + "/battery-more-" + lang + ".png")
-                keyClick(Qt.Key_Left)                              // the bell, focused (RUY-1109)
-                tryVerify(() => find("notificationBell").activeFocus, 2000)
+                keyClick(Qt.Key_Left)                              // the bell, focused (the nav's last pill, RUY-1136)
+                tryVerify(() => find("sectionNav").activeFocus && find("sectionNav").currentKey === "notifications", 2000)
                 wait(300)
                 grabImage(tc.shell).save(shotsDir + "/battery-bell-focus-" + lang + ".png")
                 keyClick(Qt.Key_Right)

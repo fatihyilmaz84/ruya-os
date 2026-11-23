@@ -3,14 +3,15 @@ import RuyaShell
 
 // The "N more" entry of the flat status tray (T-301, RUY-1109, 04 §5.5): a stack of two battery glyphs and the label
 // "N more" for the devices that did not get a chip of their own. It is the one focusable part of
-// the tray (with the bell): the pad reaches it from the section nav (Right at the last pill) and Accept opens the
+// the tray: the pad reaches it from the section nav (Right at the last pill, the bell) and Accept opens the
 // list of the hidden devices (BatteryListModal). Left goes back to the nav, Down into the page,
 // Back as in the nav (closes the page), LB/RB step the section; it never keeps a key.
 // Its accessible name lists the devices, so a screen reader needs no focus on the others.
 // `compact` is the old "+N": no glyph and no words, for a cluster that has no room for them (a large
 // UI size); the accessible name does not change. No container at rest: when focused it gets the standard
 // focus pill, `buttonHeight` high and the content plus `spaceS` each side, drawn outside the content box so
-// nothing shifts (04 §5.5).
+// nothing shifts (04 §5.5). At rest its glyphs and words are `ink` (the tray's adaptive ink, RUY-1136); on its focus
+// pill they are the pill's `text`.
 FocusScope {
     id: more
 
@@ -19,6 +20,9 @@ FocusScope {
     property bool compact: false
     // The hidden devices, [{ name, percent }], for the accessible name.
     property var devices: []
+    // The ink at rest (the tray sets its adaptive ink).
+    property color ink: Theme.text
+    readonly property color drawn: activeFocus ? Theme.text : ink
 
     signal activated()
     signal leftRequested()
@@ -68,7 +72,7 @@ FocusScope {
                 x: stack.shift
                 u: more.u
                 name: "battery_full"
-                color: Theme.text
+                color: more.drawn
                 opacity: Theme.peekOpacity
             }
             Icon {
@@ -76,7 +80,7 @@ FocusScope {
                 objectName: "batteryMoreFront"
                 u: more.u
                 name: "battery_full"
-                color: Theme.text
+                color: more.drawn
             }
         }
         Text {
@@ -84,7 +88,7 @@ FocusScope {
             objectName: "batteryMoreLabel"
             anchors.verticalCenter: parent.verticalCenter
             text: more.compact ? "+" + more.count : qsTr("%n more", "", more.count)
-            color: Theme.text
+            color: more.drawn
             font.pixelSize: Theme.typeBody * more.u
         }
     }

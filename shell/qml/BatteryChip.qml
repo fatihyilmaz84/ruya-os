@@ -4,15 +4,18 @@ import RuyaShell
 // One device's battery in the status cluster (T-223, 02 §1.1, 04 §3.7): the icon of the device's
 // kind, a battery glyph that matches the level, and the percentage. Looked up by `deviceId` in
 // Batteries.devices, so the chip stays put while the level changes. Never focusable; the
-// accessible name says device and level. Flat on the page (RUY-1109, 04 §5.5): the icons are `text`; while the
-// device is discharging at 15 % or less (Batteries' `low`) the glyph turns to `battery_alert` and the number to
-// `warningText`, so it is never colour alone. A coarse battery (`levelOnly`, RUY-935) shows the kind icon and the
+// accessible name says device and level. Flat on the page (RUY-1109, 04 §5.5): the icons and the number are `ink`
+// (the tray's adaptive ink, RUY-1136; `text` elsewhere); while the device is discharging at 15 % or less (Batteries'
+// `low`) the glyph turns to `battery_alert` and the number to `warningInk`, so it is never colour alone. A coarse battery (`levelOnly`, RUY-935) shows the kind icon and the
 // level glyph and no number; its accessible name still says the level, in words.
 Row {
     id: chip
 
     property string deviceId
     property real u: 1
+    // The ink of the glyphs and the number, and of a low number (the tray sets its adaptive pair).
+    property color ink: Theme.text
+    property color warningInk: Theme.warningText
 
     // The level glyph, seven steps (04 §3.7): 0-7, 8-21, 22-35, 36-50, 51-64, 65-78, 79-100 %.
     // The alert glyph replaces it while low, the bolt one while charging, the full one when the
@@ -66,21 +69,21 @@ Row {
         anchors.verticalCenter: parent.verticalCenter
         u: chip.u
         name: chip.kindIcon
-        color: Theme.text
+        color: chip.ink
     }
     Icon {
         objectName: "batteryLevelIcon"
         anchors.verticalCenter: parent.verticalCenter
         u: chip.u
         name: chip.levelIcon
-        color: Theme.text
+        color: chip.ink
     }
     Text {
         objectName: "batteryPercent"
         visible: !chip.levelOnly
         anchors.verticalCenter: parent.verticalCenter
         text: chip.percent + "%"
-        color: chip.low ? Theme.warningText : Theme.text
+        color: chip.low ? chip.warningInk : chip.ink
         font.pixelSize: Theme.typeBody * chip.u
     }
 }

@@ -81,7 +81,7 @@ Item {
             return d
         }
 
-        function pills() { return [find("sectionNav"), find("bellGlass")] }
+        function pills() { return [find("sectionNav")] }   // the top bar's one glass pill (the bell is in it since RUY-1136)
 
         function topBarShown() {
             return pills().every(p => p.visible && p.opacity === 1)
@@ -108,7 +108,7 @@ Item {
             failOnWarning(/is not assigned a valid texture provider/)
             tryVerify(() => topBarShown(), 2000, "the top bar is up")
             const shadows = pills().map(p => findChild(p, "glassShadow"))
-            verify(shadows.every(s => s && s.visible), "both pills draw a shadow")
+            verify(shadows.every(s => s && s.visible), "the pill draws a shadow")
             const fresh = grabSamples()
             fresh.img.save(shotsDir + "/topbar-shadow-fresh-" + data.tag + ".png")
 
