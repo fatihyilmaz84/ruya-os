@@ -67,8 +67,8 @@ use crate::spawner::{
     SWAP_COMMAND,
 };
 use crate::spawner::{
-    AdoptLister, AudioJob, AudioQueue, DisplayMode, Listing, ReclaimLedger, Spawner, UnitEvent,
-    PARK_RETRY,
+    AdoptLister, AudioJob, AudioQueue, DisplayMode, Listing, ReclaimLedger, ScopeLister, Spawner,
+    UnitEvent, PARK_RETRY,
 };
 use crate::steam_probe::{parse_answer, Verdict, MAX_ANSWER};
 use crate::x11::display_mode_x11;
@@ -559,25 +559,36 @@ impl SystemdSpawner {
             child_command(&child.user, &[verb], &child.app_id, &child.scopes)?
         } else {
             let (user, app_id) = self.owner_of(unit)?;
-            let list = list_scopes_command(&user, &app_id)?;
-            let listing = run_bounded(&list, SYSTEMCTL_LIMIT)
-                .ok_or_else(|| format!("cannot list the scopes of {app_id} of {user}"))?;
-            let children = self
-                .gate
-                .scopes
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .child_scopes(unit);
-            let scopes: Vec<String> = active_app_scopes(&app_id, &listing)
-                .into_iter()
-                .filter(|s| !children.contains(s))
-                .collect();
+            let scopes = own_active_scopes(&user, &app_id, &self.child_scopes(unit))?;
             control_command(&user, &[verb], unit, &app_id, &scopes)?
         };
         run_bounded(&args, SYSTEMCTL_LIMIT)
             .map(|_| ())
             .ok_or_else(|| format!("systemctl {verb} {unit} failed"))
     }
+
+    /// Every scope of the run `unit`'s child instances, as the scope watcher saw them last.
+    fn child_scopes(&self, unit: &str) -> Vec<String> {
+        self.gate
+            .scopes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .child_scopes(unit)
+    }
+}
+
+/// The active scopes of `app_id` in `user`'s manager but `children` (a parent's children's own
+/// scopes, ADR-041 point 7): what a freeze of a parent instance reaches besides its unit, and
+/// whom Platform1 knows it by (RUY-1099). Listed now and named exactly (`active_app_scopes`);
+/// bounded (`SYSTEMCTL_LIMIT`); an error when the manager could not be asked.
+fn own_active_scopes(user: &str, app_id: &str, children: &[String]) -> Result<Vec<String>, String> {
+    let list = list_scopes_command(user, app_id)?;
+    let listing = run_bounded(&list, SYSTEMCTL_LIMIT)
+        .ok_or_else(|| format!("cannot list the scopes of {app_id} of {user}"))?;
+    Ok(active_app_scopes(app_id, &listing)
+        .into_iter()
+        .filter(|s| !children.contains(s))
+        .collect())
 }
 
 impl Spawner for SystemdSpawner {
@@ -782,6 +793,22 @@ impl Spawner for SystemdSpawner {
     }
 
     /// The app table read at the call (a few small files): `freeze = never` is false.
+    fn scope_lister(&self, unit: &str) -> ScopeLister {
+        if let Some(child) = self.child(unit) {
+            return Box::new(move || child.scopes);
+        }
+        let Ok((user, app_id)) = self.owner_of(unit) else {
+            return Box::new(Vec::new);
+        };
+        let children = self.child_scopes(unit);
+        Box::new(move || {
+            own_active_scopes(&user, &app_id, &children).unwrap_or_else(|err| {
+                eprintln!("ruya-session: {err}");
+                Vec::new()
+            })
+        })
+    }
+
     fn may_freeze(&self, app_id: &str) -> bool {
         AppTable::load(Path::new(APPS_DIR)).freeze(app_id) != Some(Freeze::Never)
     }

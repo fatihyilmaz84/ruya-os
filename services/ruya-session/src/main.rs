@@ -12,8 +12,9 @@ use ruya_session::dbus::{
     SharedUsage, BUS_NAME, OBJECT_PATH,
 };
 use ruya_session::directory::ProfileSnapshot;
+use ruya_session::lifecycle::{platform_notify, Link, NOTIFY_SLACK};
 use ruya_session::profile_scan::Trigger;
-use ruya_session::session::Session;
+use ruya_session::session::{LifecycleNotice, Session, SAVE_WAIT};
 use ruya_session::spawner::{console_env, FakeSpawner, UnitEvent, PULSE_DIR, WAYLAND_DIR};
 use ruya_session::usage::SystemZone;
 use ruya_session::usage_store::FileStore;
@@ -150,7 +151,10 @@ fn run() -> Result<(), Box<dyn Error>> {
             Some(WAYLAND_DIR),
         )
     };
-    let mut session = Session::new(spawner, profiles, env);
+    // The apps' lifecycle goes to Platform1 (RUY-1099), from the thread `lifecycle::run` starts.
+    let (outbox, notices): (Sender<LifecycleNotice>, Receiver<LifecycleNotice>) =
+        async_channel::unbounded();
+    let mut session = Session::new(spawner, profiles, env).with_lifecycle(outbox, SAVE_WAIT);
     if let Some(dir) = wayland_dir {
         // On the console each app also gets its profile's own sound server (ADR-010, T-365).
         session = session.with_wayland_dir(dir).with_pulse_dir(PULSE_DIR);
@@ -183,6 +187,11 @@ fn run() -> Result<(), Box<dyn Error>> {
         let iface = SessionIface::new(session.clone(), usage.clone(), !dev);
         let turn = iface.freezer_turn();
         let connection = builder.serve_at(OBJECT_PATH, iface)?.build().await?;
+        ruya_session::lifecycle::run(
+            session.clone(),
+            notices,
+            Link::new(platform_notify(connection.clone()), NOTIFY_SLACK),
+        );
         // Apps that kept running through a restart are taken over, and play runs that never
         // ended (crash, power cut) end at their last heartbeat, before the name is taken: the
         // first `ListRunning` of the shell already sees them.
