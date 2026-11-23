@@ -1,7 +1,7 @@
 # GE-Proton, the image's default Windows runner (ADR-025, ADR-038). The upstream release tarball,
 # pinned: image/play/install-runners.sh downloads it at build time, refuses any other SHA-256 and
-# unpacks the folder `root` of the tarball as /usr/lib/ruyaos/play/runners/ProtonGE11/. The same
-# release passed the .play spike in the VM (RUY-91, scripts/spikes/play/RESULTS.md).
+# unpacks the folder `root` of the tarball as /usr/lib/ruyaos/play/runners/ProtonGE11/. A release
+# of the same major (GE-Proton11-12) passed the .play spike in the VM (RUY-91, scripts/spikes/play/RESULTS.md).
 url=https://github.com/GloriousEggroll/proton-ge-custom/releases/download/GE-Proton11-13/GE-Proton11-13-x86_64.tar.gz
 sha256=2761e8efec78e37f12812269d6157c3dd52f8bfed34568a2d4fcac3ca1b9ff22
 root=GE-Proton11-13-x86_64
