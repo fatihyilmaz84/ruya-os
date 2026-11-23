@@ -118,9 +118,11 @@ Item {
 
         // --- ArtPalette.bandOf ------------------------------------------------------------------------
 
-        function bandOf(source) {
-            tryVerify(() => ArtPalette.bandOf(source).ok === true, 5000, source + " is measured")
-            return ArtPalette.bandOf(source)
+        readonly property real wide: 16 / 9     // the view's aspect: a 16:9 screen
+        function bandOf(source, aspect) {
+            const a = aspect === undefined ? tc.wide : aspect
+            tryVerify(() => ArtPalette.bandOf(source, a).ok === true, 5000, source + " is measured")
+            return ArtPalette.bandOf(source, a)
         }
 
         function test_the_top_band_is_measured() {
@@ -132,28 +134,49 @@ Item {
             verify(dark.low <= dark.high)
             const white = bandOf(path("white"))
             verify(white.high > 0.8 && white.low > 0.7, "a white picture: " + white.low + " .. " + white.high)
+            // A small bright patch (about 5 % of the band, where the clock is) counts: the 98th percentile, not the 90th.
+            const patch = bandOf(path("darkpatch"))
+            verify(patch.high > 0.3, "a bright patch behind the clock: " + patch.high)
+            verify(patch.low < 0.02, "on black: " + patch.low)
+        }
+
+        // The hero and the wallpaper are a centred PreserveAspectCrop: the band is the top of what is on screen. A 2:3
+        // cover dark over its top quarter and a square tile dark over its top 30 % show only white rows in a 16:9 view
+        // (the cover) or white at the top of the band (the tile): the band is bright, not the off-screen black.
+        function test_the_band_is_the_top_of_the_visible_crop() {
+            const portrait = bandOf(path("portraitdarktop"))
+            verify(portrait.high > 0.9, "a 2:3 cover in 16:9: its visible top is white: " + portrait.high)
+            const whole = bandOf(path("portraitdarktop"), 0)
+            verify(whole.high < 0.02, "uncropped, its top is the black: " + whole.high)
+            const square = bandOf(path("squaredarktop"))
+            verify(square.high > 0.9, "a square tile in 16:9: the band reaches into the white: " + square.high)
+            verify(square.low < 0.02, "and the black at its top is in it too: " + square.low)
+            verify(bandOf(path("squaredarktop"), 0).high < 0.02, "uncropped, its top 20 % is black")
+            // A 16:9 picture in a 16:9 view is not cropped, and in a narrower view only its sides go.
+            compare(bandOf(path("darktop")).high, bandOf(path("darktop"), 0).high)
+            compare(bandOf(path("brighttop"), 4 / 3).high, bandOf(path("brighttop"), 0).high)
         }
 
         function test_one_decode_for_the_colours_and_the_band() {
             const source = fileUrl("brighttop")
             const before = ArtPalette.analysed
-            compare(Object.keys(ArtPalette.bandOf(source)).length, 0, "not known yet")
+            compare(Object.keys(ArtPalette.bandOf(source, tc.wide)).length, 0, "not known yet")
             ArtPalette.colorsOf(source)
-            tryVerify(() => ArtPalette.bandOf(source).ok === true, 5000)
+            tryVerify(() => ArtPalette.bandOf(source, tc.wide).ok === true, 5000)
             verify(ArtPalette.colorsOf(source).color !== undefined, "the colours came with it")
             wait(50)
             compare(ArtPalette.analysed, before + 1, "one picture, both measures: one analysis")
             for (let i = 0; i < 10; ++i)
-                ArtPalette.bandOf(source)
+                ArtPalette.bandOf(source, i % 3)
             wait(50)
             compare(ArtPalette.analysed, before + 1, "asking again does not decode again")
         }
 
         function test_an_unreadable_picture_has_no_band() {
             const missing = artFixtures + "/no-such-band.png"
-            compare(Object.keys(ArtPalette.bandOf(missing)).length, 0)
+            compare(Object.keys(ArtPalette.bandOf(missing, tc.wide)).length, 0)
             wait(150)
-            compare(Object.keys(ArtPalette.bandOf(missing)).length, 0, "it stays unknown")
+            compare(Object.keys(ArtPalette.bandOf(missing, tc.wide)).length, 0, "it stays unknown")
         }
 
         // --- the shade in the shell ---------------------------------------------------------------------
@@ -200,11 +223,56 @@ Item {
             const overBright = settledOn(path("brighttop"))
             verify(overDark < overBright, "a dark top needs less shade than a white one: " + overDark + " vs " + overBright)
             compare(overDark, 0, "over dark art it disappears: " + JSON.stringify(shade.band))
-            compare(overBright, ThemeMath.trayShadeAlpha(ArtPalette.bandOf(path("brighttop")), Theme))
+            compare(shade.behind.aspect, front().width / front().height, "measured as drawn")
+            compare(overBright, ThemeMath.trayShadeAlpha(ArtPalette.bandOf(path("brighttop"), shade.behind.aspect), Theme))
             compare(find("notificationBell").shade, shade.color, "the bell's glass takes the same shade")
             compare(find("bellGlass").shade, shade.color)
             compare(shade.color.a.toFixed(2), overBright.toFixed(2), "the drawn colour is the ground at that alpha")
             verify(Qt.colorEqual(Qt.rgba(shade.color.r, shade.color.g, shade.color.b, 1), Qt.rgba(Theme.background.r, Theme.background.g, Theme.background.b, 1)))
+        }
+
+        // A portrait cover as the hero (ArtRoles.wide falls back to it): the shade is what its visible top needs, as
+        // over white art, never the 0 its off-screen black top would give.
+        function test_a_cover_hero_is_measured_as_drawn() {
+            signIn()
+            showHero(path("white"))
+            const overWhite = settledOn(path("white"))
+            showHero(path("portraitdarktop"))
+            const overCover = settledOn(path("portraitdarktop"))
+            verify(overCover >= overWhite && overCover > 0.5, "the visible white top needs the shade: " + overCover)
+            showHero(path("squaredarktop"))
+            verify(settledOn(path("squaredarktop")) >= overWhite, "and a square tile's")
+        }
+
+        // The fade under the solid band (04 §5.5): 2 x spaceXxl along the smoothstep 1 - 3t^2 + 2t^3, the shade's RGB
+        // throughout, from the shade's alpha to clear.
+        function test_the_fade_is_a_smoothstep_over_two_spaceXxl() {
+            signIn()
+            const shade = find("trayShade")
+            showHero(path("white"))
+            const alpha = settledOn(path("white"))
+            verify(alpha > 0)
+            const fade = findChild(shade, "trayShadeFade")
+            compare(fade.height, 2 * Theme.spaceXxl * tc.shell.u)
+            compare(fade.y, find("statusTray").y + find("statusTray").height, "under the solid band")
+            const stops = fade.gradient.stops
+            compare(stops.length, shade.fade.length)
+            compare(stops.length, 7)
+            for (let i = 0; i < stops.length; ++i) {
+                const t = stops[i].position
+                compare(t, shade.fade[i][0])
+                const smooth = 1 - 3 * t * t + 2 * t * t * t
+                verify(Math.abs(shade.fade[i][1] - smooth) < 0.005, "stop " + t + ": " + shade.fade[i][1] + " vs " + smooth)
+                const c = stops[i].color
+                verify(Math.abs(c.a - alpha * shade.fade[i][1]) < 0.01, "stop " + t + " alpha " + c.a)
+                if (c.a > 0.01)
+                    verify(Math.abs(c.r - Theme.background.r) < 0.01 && Math.abs(c.b - Theme.background.b) < 0.01, "the ground's RGB")
+            }
+            compare(stops[stops.length - 1].color.a, 0, "it ends clear")
+            // The stops follow the shade.
+            showHero(path("darktop"))
+            settledOn(path("darktop"))
+            compare(stops[0].color.a, 0)
         }
 
         function test_unknown_art_gets_the_ceiling_then_its_value() {
@@ -249,7 +317,8 @@ Item {
             compare(shade.behind.kind, "wallpaper")
             compare(shade.behind.source, find("wallpaperLayer").target)
             tryVerify(() => shade.band !== null, 5000, "the wallpaper is measured")
-            const raw = ArtPalette.bandOf(find("wallpaperLayer").target)
+            compare(shade.behind.aspect, find("wallpaperLayer").width / find("wallpaperLayer").height)
+            const raw = ArtPalette.bandOf(find("wallpaperLayer").target, shade.behind.aspect)
             const dimmed = ThemeMath.bandUnder(raw, Theme.background, find("wallpaperLayer").effectiveDim)
             compare(shade.targetAlpha, ThemeMath.trayShadeAlpha(dimmed, Theme), "the wallpaper under its dim")
             verify(dimmed.high <= raw.high, "the dim only darkens")

@@ -143,14 +143,13 @@ ArtColors ArtPalette::analyse(const QImage &image)
     qreal meanV = 0, meanW = 0;
     qreal sumR = 0, sumG = 0, sumB = 0;
     const int count = small.width() * small.height();
-    const int bandRows = std::max(1, int(std::lround(small.height() * BandShare)));
-    std::vector<double> band;
-    band.reserve(size_t(bandRows) * small.width());
+    out.lumWidth = small.width();
+    out.lumHeight = small.height();
+    out.lum.reserve(count);
     for (int y = 0; y < small.height(); ++y) {
         const QRgb *line = reinterpret_cast<const QRgb *>(small.constScanLine(y));
         for (int x = 0; x < small.width(); ++x) {
-            if (y < bandRows)
-                band.push_back(Luminance::of(line[x]));
+            out.lum.push_back(float(Luminance::of(line[x])));
             const QColor c = QColor::fromRgb(line[x]);
             float h, s, v;
             c.getHsvF(&h, &s, &v);
@@ -173,9 +172,6 @@ ArtColors ArtPalette::analyse(const QImage &image)
     meanW /= count;
 
     out.ok = true;
-    std::sort(band.begin(), band.end());
-    out.bandHigh = Luminance::quantile(band, BandHighQuantile);
-    out.bandLow = Luminance::quantile(band, BandLowQuantile);
     if (meanW < ChromaticMean) {
         // No dominant hue: a neutral grey, never louder than NeutralStrengthMax.
         const QColor mean = QColor::fromRgbF(sumR / count, sumG / count, sumB / count);
@@ -209,6 +205,41 @@ ArtColors ArtPalette::analyse(const QImage &image)
     const qreal chroma = std::clamp(0.5 + meanW * 4, 0.5, 1.0);
     out.strength = std::clamp((MinStrength + (1 - MinStrength) * bright) * chroma, MinStrength, 1.0);
     return out;
+}
+
+ArtBand ArtPalette::band(const ArtColors &colors, qreal viewAspect)
+{
+    const int w = colors.lumWidth;
+    const int h = colors.lumHeight;
+    if (w < 1 || h < 1 || colors.lum.size() < w * h)
+        return {};
+    // The visible crop in sample pixels: a view wider than the picture shows a centred strip of its rows, a
+    // narrower one a centred strip of its columns.
+    const qreal aspect = qreal(w) / h;
+    qreal x0 = 0, x1 = w, y0 = 0, y1 = h;
+    if (viewAspect > 0 && viewAspect > aspect) {
+        const qreal shown = w / viewAspect;
+        y0 = (h - shown) / 2;
+        y1 = y0 + shown;
+    } else if (viewAspect > 0 && viewAspect < aspect) {
+        const qreal shown = h * viewAspect;
+        x0 = (w - shown) / 2;
+        x1 = x0 + shown;
+    }
+    // The top BandShare of the visible rows; every sample pixel the band touches counts (at least one row).
+    const qreal bandEnd = y0 + (y1 - y0) * BandShare;
+    const int rowFrom = std::clamp(int(std::floor(y0)), 0, h - 1);
+    const int rowTo = std::clamp(int(std::ceil(bandEnd)), rowFrom + 1, h);
+    const int colFrom = std::clamp(int(std::floor(x0)), 0, w - 1);
+    const int colTo = std::clamp(int(std::ceil(x1)), colFrom + 1, w);
+    std::vector<double> values;
+    values.reserve(size_t(rowTo - rowFrom) * (colTo - colFrom));
+    for (int y = rowFrom; y < rowTo; ++y) {
+        for (int x = colFrom; x < colTo; ++x)
+            values.push_back(colors.lum[y * w + x]);
+    }
+    std::sort(values.begin(), values.end());
+    return {Luminance::quantile(values, BandQuantile), Luminance::quantile(values, 1 - BandQuantile)};
 }
 
 ArtPalette::ArtPalette(QQmlEngine *engine, QObject *parent)
@@ -252,14 +283,15 @@ QVariantMap ArtPalette::colorsOf(const QString &source)
             {QStringLiteral("neutral"), c->neutral}};
 }
 
-QVariantMap ArtPalette::bandOf(const QString &source)
+QVariantMap ArtPalette::bandOf(const QString &source, qreal viewAspect)
 {
     const ArtColors *c = lookup(source);
     if (!c || !c->ok)
         return {};
+    const ArtBand b = band(*c, viewAspect);
     return {{QStringLiteral("ok"), true},
-            {QStringLiteral("high"), c->bandHigh},
-            {QStringLiteral("low"), c->bandLow}};
+            {QStringLiteral("high"), b.high},
+            {QStringLiteral("low"), b.low}};
 }
 
 void ArtPalette::finish(const QString &source, const ArtColors &colors, qint64 us)

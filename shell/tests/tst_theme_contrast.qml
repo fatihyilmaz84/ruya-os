@@ -128,7 +128,7 @@ Item {
                 // The status tray is flat on the page (RUY-1109, 04 §5.5): its text and its low-battery number lie on
                 // `trayShade` over whatever art is there. The shade is the theme's ground; over pure white and pure black
                 // it is at its ceiling `trayShadeAlphaMax` (RUY-1117: below it adapts to the art, ThemeMath.trayShadeAlpha,
-                // tst_themes); `warningText` is large text (the 3 floor, the icons beside it).
+                // tst_tray_shade); `warningText` is large text (the 3 floor, the icons beside it).
                 const shade = ThemeMath.over(Qt.rgba(t.background.r, t.background.g, t.background.b, Theme.trayShadeAlphaMax), e)
                 row(rows, "text on trayShade over " + name + " art", t.text, shade, 4.5)
                 row(rows, "warningText on trayShade over " + name + " art", t.warningText, shade, 3)

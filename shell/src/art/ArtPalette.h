@@ -9,6 +9,7 @@
 #include <QString>
 #include <QStringList>
 #include <QVariantMap>
+#include <QVector>
 
 // The colours of a card's picture (T-281, 04 §3.8): one or two representative colours per picture,
 // worked out once when the picture is first asked for, off the GUI thread, and cached by source.
@@ -25,10 +26,10 @@
 // is how loudly the glow should speak: a very dark picture gives a faint one, a neutral one is
 // capped at NeutralStrengthMax.
 //
-// The same pass measures the light of the picture's top band (RUY-1117, 04 §5.5), what lies behind the
-// status tray: over the top BandShare of the sampled rows, the 90th (`bandHigh`) and 10th (`bandLow`)
-// percentile of the WCAG relative luminance (linearised sRGB, transparent pixels over black). The tray's
-// shade is only as strong as that light needs (ThemeMath.trayShadeAlpha).
+// The same pass keeps the light of the sample (RUY-1117, 04 §5.5): the WCAG relative luminance (linearised sRGB,
+// transparent pixels over black) of each of the sample's pixels, `lumWidth` x `lumHeight`, row by row. The status
+// tray's shade reads the top band of what is on screen from it (`band`): the picture is drawn as a centred
+// PreserveAspectCrop, so the band is the top BandShare of the rows the crop for the view's aspect leaves visible.
 struct ArtColors
 {
     bool ok = false;
@@ -36,8 +37,16 @@ struct ArtColors
     QColor secondary;
     qreal strength = 0;
     bool neutral = false;
-    qreal bandHigh = 0;
-    qreal bandLow = 0;
+    QVector<float> lum;     // lumWidth x lumHeight, row by row
+    int lumWidth = 0;
+    int lumHeight = 0;
+};
+
+// The light of a band of a picture: the BandQuantile (`high`) and 1 - BandQuantile (`low`) relative luminance.
+struct ArtBand
+{
+    qreal high = 0;
+    qreal low = 0;
 };
 
 class ArtPalette : public QObject
@@ -61,8 +70,9 @@ public:
     static constexpr qreal NeutralStrengthMax = 0.60;
     static constexpr int SampleSize = 32;
     static constexpr qreal BandShare = 0.20;        // the top band: this share of the rows (at least one)
-    static constexpr qreal BandHighQuantile = 0.90;
-    static constexpr qreal BandLowQuantile = 0.10;
+    // A band's `high` is this quantile of its luminances, its `low` 1 - this: a bright patch behind the clock or
+    // the nav counts, a few stray pixels do not.
+    static constexpr qreal BandQuantile = 0.98;
     static constexpr int CacheLimit = 256;          // pictures remembered; the cache starts over beyond this
     static constexpr qint64 MaxDownloadBytes = 8LL * 1024 * 1024;
     static constexpr int DownloadTimeoutMs = 15000;   // a download that stalls this long is a failure
@@ -74,6 +84,9 @@ public:
 
     // The pure part, used by the worker and the tests: the colours of an image.
     static ArtColors analyse(const QImage &image);
+    // The pure part of bandOf: the top band of `colors`' sample as drawn into a view of `viewAspect` (width / height)
+    // with a centred PreserveAspectCrop; 0 or less: the whole picture is shown (no crop).
+    static ArtBand band(const ArtColors &colors, qreal viewAspect);
 
     int analysed() const { return m_analysed; }
     qint64 lastAnalyseUs() const { return m_lastUs; }
@@ -84,10 +97,10 @@ public:
     // cannot be read stays empty for good (the card keeps its placeholder colour) and emits nothing.
     Q_INVOKABLE QVariantMap colorsOf(const QString &source);
 
-    // The light of the picture's top band (RUY-1117): { ok: true, high, low } (relative luminances 0..1)
-    // once known, else an empty map, loaded and analysed like colorsOf (the same decode, the same cache,
-    // the same `sampled(source)`). A picture that cannot be read stays empty for good.
-    Q_INVOKABLE QVariantMap bandOf(const QString &source);
+    // The light of the top band of the picture as drawn into a view of `viewAspect` (RUY-1117, see `band`):
+    // { ok: true, high, low } (relative luminances 0..1) once known, else an empty map, loaded and analysed like
+    // colorsOf (the same decode, the same cache, the same `sampled(source)`). An unreadable picture stays empty.
+    Q_INVOKABLE QVariantMap bandOf(const QString &source, qreal viewAspect);
 
     // The worker's result, on the GUI thread (called by the worker's queued hand-over; not for callers).
     static void deliver(ArtPalette *self, const QString &source, const ArtColors &colors, qint64 us)

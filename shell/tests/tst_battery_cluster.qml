@@ -534,7 +534,7 @@ Item {
             verify(Math.abs(clock.mapToItem(tc.shell, 0, clock.height / 2).y - navMid) < 2, "the clock is on the line")
             const shade = find("trayShade")
             compare(shade.visible, tray.visible)
-            compare(shade.height, tray.y + tray.height + Theme.spaceXxl * tc.shell.u, "solid to the tray's bottom, then the fade")
+            compare(shade.height, tray.y + tray.height + 2 * Theme.spaceXxl * tc.shell.u, "solid to the tray's bottom, then the fade")
             compare(find("bellGlass").shade, shade.color, "the bell's glass takes the tray's shade as it is")
             tc.shell.destroy()
             wait(50)
