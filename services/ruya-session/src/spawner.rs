@@ -3344,10 +3344,19 @@ app-flatpak-io.github.Foo-56.scope loaded active running app-flatpak-io.github.F
     fn the_profile_scan_properties_are_ones_a_transient_unit_takes_and_holds() {
         use super::PROFILE_SCAN_PROPERTIES as P;
         for p in P {
-            assert!(!p.contains('%'), "a specifier is not expanded in a transient unit: {p}");
-            assert!(!p.starts_with("RestrictAddressFamilies="), "refused or ambiguous over D-Bus: {p}");
+            assert!(
+                !p.contains('%'),
+                "a specifier is not expanded in a transient unit: {p}"
+            );
+            assert!(
+                !p.starts_with("RestrictAddressFamilies="),
+                "refused or ambiguous over D-Bus: {p}"
+            );
         }
-        assert!(P.contains(&"ProtectHome=read-only"), "the home and /run/user stay writable");
+        assert!(
+            P.contains(&"ProtectHome=read-only"),
+            "the home and /run/user stay writable"
+        );
         let at = |want: &str| P.iter().position(|p| *p == want).expect(want);
         assert!(at("SystemCallFilter=@system-service") < at("SystemCallFilter=~@network-io"));
     }
