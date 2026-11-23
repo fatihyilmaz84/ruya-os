@@ -304,7 +304,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+244"/>
+        <location filename="../qml/AppDetailPage.qml" line="+246"/>
         <source>Official</source>
         <translation>Official</translation>
     </message>
@@ -577,7 +577,7 @@ This can&apos;t be undone.</translation>
         <translation>Read</translation>
     </message>
     <message>
-        <location line="+412"/>
+        <location line="+414"/>
         <source>No special permissions.</source>
         <translation>No special permissions.</translation>
     </message>
@@ -627,7 +627,7 @@ This can&apos;t be undone.</translation>
         <translation>Close the game to uninstall it.</translation>
     </message>
     <message>
-        <location line="-945"/>
+        <location line="-947"/>
         <source>Install</source>
         <translation>Install</translation>
     </message>
@@ -638,7 +638,7 @@ This can&apos;t be undone.</translation>
         <translation>Update</translation>
     </message>
     <message>
-        <location line="+683"/>
+        <location line="+685"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Needs a newer RuyaOS than this console has. It stays installed.</translation>
     </message>
@@ -664,7 +664,7 @@ This can&apos;t be undone.</translation>
         <translation>The update adds: %1</translation>
     </message>
     <message>
-        <location line="-711"/>
+        <location line="-713"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Open</translation>
@@ -719,17 +719,17 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+166"/>
+        <location line="+168"/>
         <source>Update ready</source>
         <translation>Update ready</translation>
     </message>
     <message>
-        <location line="-155"/>
+        <location line="-156"/>
         <source>Installed through Steam</source>
         <translation>Installed through Steam</translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="+95"/>
         <source>Start this game from Steam for now.</source>
         <translation>Start this game from Steam for now.</translation>
     </message>
@@ -1100,7 +1100,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 %2 percent</translation>
     </message>
     <message numerus="yes">
-        <location line="+49"/>
+        <location line="+50"/>
         <source>%n more</source>
         <translation>
             <numerusform>%n more</numerusform>
@@ -3374,6 +3374,24 @@ This can&apos;t be undone.</translation>
     </message>
 </context>
 <context>
+    <name>InstallationText</name>
+    <message>
+        <location filename="../qml/InstallationText.qml" line="+41"/>
+        <source>%1 · %2</source>
+        <comment>An installation: its source, then its version or runner</comment>
+        <translation>%1 · %2</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+14"/>
+        <source>%n installations, Play uses %1</source>
+        <comment>The game page: a game installed more than once</comment>
+        <translation>
+            <numerusform>%n installation, Play uses %1</numerusform>
+            <numerusform>%n installations, Play uses %1</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
     <name>LaunchSplash</name>
     <message>
         <location filename="../qml/LaunchSplash.qml" line="+41"/>
@@ -3785,7 +3803,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>NotificationBell</name>
     <message numerus="yes">
-        <location filename="../qml/NotificationBell.qml" line="+37"/>
+        <location filename="../qml/NotificationBell.qml" line="+39"/>
         <source>Notifications, %n unread, quiet mode on</source>
         <translation>
             <numerusform>Notifications, %n unread, quiet mode on</numerusform>
@@ -3954,7 +3972,7 @@ This can&apos;t be undone.</translation>
         <translation>Store and downloads</translation>
     </message>
     <message>
-        <location line="+30"/>
+        <location line="+27"/>
         <source>%1 s</source>
         <translation>%1 s</translation>
     </message>
@@ -4038,7 +4056,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>OptionsMenu</name>
     <message>
-        <location filename="../qml/OptionsMenu.qml" line="+48"/>
+        <location filename="../qml/OptionsMenu.qml" line="+50"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -6106,7 +6124,7 @@ This can&apos;t be undone.</translation>
         <translation>%1 is still closing.</translation>
     </message>
     <message>
-        <location line="+88"/>
+        <location line="+87"/>
         <location line="+30"/>
         <source>%1 could not start</source>
         <translation>%1 could not start</translation>
@@ -6164,63 +6182,63 @@ This can&apos;t be undone.</translation>
         <translation>Wallpaper could not be loaded</translation>
     </message>
     <message>
-        <location line="+401"/>
+        <location line="+461"/>
         <source>Continue playing</source>
         <translation>Continue playing</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+28"/>
+        <location line="+29"/>
         <source>Installed</source>
         <translation>Installed</translation>
     </message>
     <message>
-        <location line="-27"/>
+        <location line="-28"/>
         <source>Your library is empty</source>
         <translation>Your library is empty</translation>
     </message>
     <message>
-        <location line="+4"/>
+        <location line="+5"/>
         <source>Open Store</source>
         <translation>Open Store</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+186"/>
+        <location line="+196"/>
         <source>Play</source>
         <translation>Play</translation>
     </message>
     <message>
-        <location line="-187"/>
-        <location line="+189"/>
+        <location line="-197"/>
+        <location line="+199"/>
         <source>Resume</source>
         <translation>Resume</translation>
     </message>
     <message>
-        <location line="-189"/>
+        <location line="-199"/>
         <source>Closing…</source>
         <translation>Closing…</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+186"/>
+        <location line="+196"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Open</translation>
     </message>
     <message>
-        <location line="-183"/>
-        <location line="+188"/>
+        <location line="-193"/>
+        <location line="+198"/>
         <source>Details</source>
         <translation>Details</translation>
     </message>
     <message>
-        <location line="-169"/>
+        <location line="-179"/>
         <source>Recent</source>
         <translation>Recent</translation>
     </message>
     <message>
-        <location line="+168"/>
+        <location line="+178"/>
         <source>Close game</source>
         <translation>Close game</translation>
     </message>
@@ -6236,16 +6254,33 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+6"/>
+        <source>Choose installation</source>
+        <translation>Choose installation</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Separate %1</source>
+        <comment>Options: make an installation a game of its own again</comment>
+        <translation>Separate %1</translation>
+    </message>
+    <message>
+        <location line="+16"/>
         <source>Uninstall…</source>
         <translation>Uninstall…</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+13"/>
         <source>Store options are unavailable right now.</source>
         <translation>Store options are unavailable right now.</translation>
     </message>
     <message>
-        <location line="+129"/>
+        <location line="+97"/>
+        <source>Could not change %1. Try again.</source>
+        <comment>A refused installation change; %1 is the game</comment>
+        <translation>Could not change %1. Try again.</translation>
+    </message>
+    <message>
+        <location line="+66"/>
         <source>Could not uninstall %1. Try again.</source>
         <translation>Could not uninstall %1. Try again.</translation>
     </message>
@@ -6282,7 +6317,7 @@ This can&apos;t be undone.</translation>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="-1973"/>
+        <location line="-2104"/>
         <source>Restarting in 2 minutes</source>
         <translation>Restarting in 2 minutes</translation>
     </message>
@@ -6297,7 +6332,7 @@ This can&apos;t be undone.</translation>
         <translation>Press any button to wait</translation>
     </message>
     <message>
-        <location line="+124"/>
+        <location line="+123"/>
         <source>%1 is already running</source>
         <translation>%1 is already running</translation>
     </message>
@@ -6313,7 +6348,13 @@ This can&apos;t be undone.</translation>
         <translation>Running app</translation>
     </message>
     <message>
-        <location line="+1693"/>
+        <location line="+1104"/>
+        <source>Same game as the %1 version?</source>
+        <comment>Options: link two installations; %1 the other one&apos;s source (.play, Flatpak, Steam)</comment>
+        <translation>Same game as the %1 version?</translation>
+    </message>
+    <message>
+        <location line="+721"/>
         <location line="+13"/>
         <location line="+3"/>
         <source>Sections</source>

@@ -1,5 +1,5 @@
 //! org.ruyaos.Library1 on D-Bus. Thin adapter: the rules live in `catalog.rs`, `view.rs`,
-//! `profile_items.rs`, `runners.rs` and `choices.rs`.
+//! `games.rs`, `profile_items.rs`, `runners.rs` and `choices.rs`.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -17,6 +17,7 @@ use ruya_play_format::resolve::Override;
 use crate::catalog::{self, Item};
 use crate::choices::{self, Choices, Status};
 use crate::flatpak::AppLister;
+use crate::games::{self, Game, GameChoices};
 use crate::play;
 use crate::profile_items;
 use crate::runners::{self, Resolution, Runner};
@@ -155,6 +156,93 @@ impl LibraryIface {
         Ok(runners::resolve_in_place(&files, &runners, over).unwrap_or_default())
     }
 
+    /// `SetActiveProfile`'s rule (the caller check aside): the profile ("" = nobody) and its links
+    /// and preferences come into the view. Answers whether the profile moved and whether the served
+    /// list changed.
+    pub fn activate(&self, profile: &str) -> Result<(bool, bool), Status> {
+        if !profile.is_empty() && !ruya_ids::valid_profile_id(profile) {
+            return Err(Status::Invalid);
+        }
+        let choices = if profile.is_empty() {
+            GameChoices::default()
+        } else {
+            // A file that cannot be read leaves the profile with its plain games (logged there).
+            self.choices
+                .state(profile)
+                .map(|s| s.games)
+                .unwrap_or_default()
+        };
+        let mut moved = false;
+        let changed = self.store(|view| {
+            moved = view.active() != profile;
+            view.set_active(profile, choices)
+        });
+        Ok((moved, changed))
+    }
+
+    /// Changes `profile`'s links and preferences with `change`, given the games it sees now, and
+    /// stores them. True when the served list changed (`ItemsChanged`).
+    fn change_games(
+        &self,
+        profile: &str,
+        change: impl FnOnce(&mut GameChoices, &[Game]) -> Result<bool, Status>,
+    ) -> Result<bool, Status> {
+        let (changed, state) = self.choices.update(profile, |state| {
+            let seen = self
+                .view
+                .lock()
+                .map_err(|_| Status::Failed)?
+                .games_of(profile, &state.games);
+            change(&mut state.games, &seen)
+        })?;
+        Ok(changed && self.store(|view| view.set_choices(profile, state.games)))
+    }
+
+    /// `LinkInstallations`' rule: the game of `b` joins the game of `a`.
+    pub fn link(&self, profile: &str, a: &str, b: &str) -> Result<bool, Status> {
+        self.change_games(profile, |c, seen| games::link(c, seen, a, b))
+    }
+
+    /// `UnlinkInstallation`'s rule.
+    pub fn unlink(&self, profile: &str, installation: &str) -> Result<bool, Status> {
+        self.change_games(profile, |c, seen| games::unlink(c, seen, installation))
+    }
+
+    /// `SetPreferredInstallation`'s rule.
+    pub fn prefer(&self, profile: &str, game: &str, installation: &str) -> Result<bool, Status> {
+        self.change_games(profile, |c, seen| {
+            games::prefer(c, seen, game, installation)
+        })
+    }
+
+    /// What `ListItems` serves now.
+    pub fn list(&self) -> Vec<Dict> {
+        match self.view.lock() {
+            Ok(view) => view.games().iter().map(record).collect(),
+            Err(_) => Vec::new(),
+        }
+    }
+
+    /// The answer of an installation call: its status, after `ItemsChanged` when the list changed.
+    async fn answer(
+        result: Result<bool, Status>,
+        call: &str,
+        emitter: &SignalEmitter<'_>,
+    ) -> String {
+        match result {
+            Ok(changed) => {
+                if changed {
+                    Self::announce(emitter).await;
+                }
+                Status::Ok.as_str().to_owned()
+            }
+            Err(status) => {
+                eprintln!("ruya-library: {call} answered {}", status.as_str());
+                status.as_str().to_owned()
+            }
+        }
+    }
+
     /// Changes the view with `change`; true when the served list differs from the one before.
     fn store(&self, change: impl FnOnce(&mut View) -> bool) -> bool {
         match self.view.lock() {
@@ -186,19 +274,57 @@ impl LibraryIface {
     }
 }
 
-/// The `a{sv}` record `ListItems` serves for one item (public for the contract test).
-pub fn record(item: &Item) -> Dict {
-    let art: HashMap<String, String> = item.art.iter().cloned().collect();
-    let entries = vec![
+/// The `a{sv}` record `ListItems` serves for one game (public for the contract test): the record of
+/// its preferred installation under the game's id and latest play, with its installations.
+pub fn record(game: &Game) -> Dict {
+    let installations: Vec<Dict> = game
+        .installations
+        .iter()
+        .enumerate()
+        .map(|(n, i)| installation_record(i, n == game.preferred))
+        .collect();
+    let mut entries = item_entries(game.preferred(), &game.id, game.last_played());
+    entries.push(("installations", Value::from(installations)));
+    entries.push(("confidence", Value::from(game.confidence.as_str())));
+    if !game.suggestions.is_empty() {
+        entries.push(("suggestions", Value::from(game.suggestions.clone())));
+    }
+    dict(entries)
+}
+
+/// The `a{sv}` record of one installation of a game (public for the contract test).
+pub fn installation_record(item: &Item, preferred: bool) -> Dict {
+    let mut entries = vec![
         ("id", Value::from(item.id.clone())),
+        ("source", Value::from(item.source.as_str())),
+        ("launch", Value::from(item.launch.clone())),
+        ("available", Value::from(games::available(item))),
+        ("preferred", Value::from(preferred)),
+    ];
+    if let Some(play) = &item.play {
+        entries.push(("play", Value::from(true)));
+        if let Some(runner) = &play.resolution.runner {
+            entries.push(("runner", Value::from(runner.clone())));
+        }
+        if let Some(version) = &play.version {
+            entries.push(("version", Value::from(version.clone())));
+        }
+    }
+    dict(entries)
+}
+
+/// The keys of an installation's own record, under the game's `id` and `last_played`.
+fn item_entries(item: &Item, id: &str, last_played: i64) -> Vec<(&'static str, Value<'static>)> {
+    let art: HashMap<String, String> = item.art.iter().cloned().collect();
+    let mut entries = vec![
+        ("id", Value::from(id.to_owned())),
         ("kind", Value::from(item.kind.as_str())),
         ("title", Value::from(item.title.clone())),
         ("source", Value::from(item.source.as_str())),
         ("launch", Value::from(item.launch.clone())),
         ("art", Value::from(art)),
-        ("last_played", Value::from(item.last_played)),
+        ("last_played", Value::from(last_played)),
     ];
-    let mut entries = entries;
     // A `.play` app adds its own keys; others have none of them (Library1 XML).
     if let Some(play) = &item.play {
         entries.push(("play", Value::from(true)));
@@ -227,7 +353,7 @@ pub fn record(item: &Item) -> Dict {
         }
         entries.extend(resolution_entries(&play.resolution));
     }
-    dict(entries)
+    entries
 }
 
 fn dict(entries: Vec<(&str, Value<'static>)>) -> Dict {
@@ -280,10 +406,7 @@ pub fn runner_record(r: &Runner) -> Dict {
 #[interface(name = "org.ruyaos.Library1")]
 impl LibraryIface {
     fn list_items(&self) -> Vec<Dict> {
-        match self.view.lock() {
-            Ok(view) => view.items().iter().map(record).collect(),
-            Err(_) => Vec::new(),
-        }
+        self.list()
     }
 
     async fn rescan(&self, #[zbus(signal_emitter)] emitter: SignalEmitter<'_>) {
@@ -350,14 +473,10 @@ impl LibraryIface {
             eprintln!("ruya-library: SetActiveProfile from a caller that is not root, refused");
             return Status::NotAllowed.as_str().to_owned();
         }
-        if !profile.is_empty() && !ruya_ids::valid_profile_id(profile) {
-            return Status::Invalid.as_str().to_owned();
-        }
-        let mut moved = false;
-        let changed = self.store(|view| {
-            moved = view.active() != profile;
-            view.set_active(profile)
-        });
+        let (moved, changed) = match self.activate(profile) {
+            Ok(answer) => answer,
+            Err(status) => return status.as_str().to_owned(),
+        };
         if moved {
             if let Err(err) = self.active_profile_changed(&emitter).await {
                 eprintln!("ruya-library: emitting ActiveProfile's change failed: {err}");
@@ -432,6 +551,38 @@ impl LibraryIface {
         (Status::Ok.as_str().to_owned(), resolution_record(&r))
     }
 
+    async fn set_preferred_installation(
+        &self,
+        profile: &str,
+        game: &str,
+        installation: &str,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let result = self.prefer(profile, game, installation);
+        Self::answer(result, "SetPreferredInstallation", &emitter).await
+    }
+
+    async fn link_installations(
+        &self,
+        profile: &str,
+        a: &str,
+        b: &str,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let result = self.link(profile, a, b);
+        Self::answer(result, "LinkInstallations", &emitter).await
+    }
+
+    async fn unlink_installation(
+        &self,
+        profile: &str,
+        installation: &str,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
+    ) -> String {
+        let result = self.unlink(profile, installation);
+        Self::answer(result, "UnlinkInstallation", &emitter).await
+    }
+
     #[zbus(signal)]
     async fn runner_choice_changed(
         emitter: &SignalEmitter<'_>,
@@ -457,6 +608,7 @@ mod tests {
             art: Vec::new(),
             last_played: 0,
             play,
+            declared: Vec::new(),
         }
     }
 
@@ -464,11 +616,12 @@ mod tests {
     /// the extra keys are absent for a plain item and for the fields a .play app does not have.
     #[test]
     fn the_extra_keys_are_absent_for_a_plain_item_and_for_what_a_play_app_lacks() {
-        let plain = record(&item(None));
+        let game = |play| games::group(&[item(play)], &GameChoices::default()).remove(0);
+        let plain = record(&game(None));
         assert!(["play", "genres", "players", "play_tier"]
             .iter()
             .all(|k| !plain.contains_key(*k)));
-        let bare = record(&item(Some(PlayInfo::default())));
+        let bare = record(&game(Some(PlayInfo::default())));
         assert!(bool::try_from(bare["play"].try_clone().unwrap()).unwrap());
         for key in [
             "players",

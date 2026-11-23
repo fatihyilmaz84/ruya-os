@@ -274,6 +274,7 @@ pub fn parse_list(output: &str, lister: &dyn AppLister) -> Vec<Item> {
                 art: Vec::new(),
                 last_played: 0,
                 play: None,
+                declared: Vec::new(),
             })
         })
         .collect()

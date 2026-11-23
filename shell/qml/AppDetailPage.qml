@@ -18,7 +18,7 @@ Page {
         const items = Library.items
         if ((params.id ?? "") !== "")
             return items.find(i => i.id === params.id) ?? ({})
-        return paramAppId !== "" ? (items.find(i => Library.sessionAppId(i.id) === paramAppId) ?? ({})) : ({})
+        return paramAppId !== "" && items.length > 0 ? Library.itemForApp(paramAppId) : ({})   // any installation (RUY-137)
     }
     readonly property bool hasItem: item.id !== undefined
     readonly property string liveAppId: paramAppId !== "" ? paramAppId : (hasItem ? Library.sessionAppId(item.id) : "")
@@ -29,6 +29,8 @@ Page {
     readonly property var app: appId === "" ? ({}) : (Store.catalogue.find(a => a.id === appId) ?? ({}))
     readonly property bool hasRecord: app.id !== undefined
     readonly property bool isSteam: hasItem && item.source === "steam"
+    // Its installations (RUY-137): the item is a game, its keys are the preferred installation's.
+    readonly property var installations: hasItem ? (item.installations ?? []) : []
     readonly property bool isApp: hasItem && item.kind === "app"
     // A .play app is known by its id (Play's one rule), not by the Library item: a page whose item has left stays a .play
     // page. Its art, trust badge, signer and trailer come from the item, each only when the item has the data (none once it is gone).
@@ -726,7 +728,9 @@ Page {
                         topPadding: Theme.spaceS * page.u
                         textFormat: Text.PlainText
                         elide: Text.ElideRight
-                        text: page.hasRecord ? (page.app.developer ?? "") : page.isSteam ? qsTr("Installed through Steam") : ""
+                        // A game installed more than once says which installation Play uses (RUY-137).
+                        text: [page.hasRecord ? (page.app.developer ?? "") : page.isSteam ? qsTr("Installed through Steam") : "",
+                               page.installations.length > 1 ? InstallationText.playUses(page.installations) : ""].filter(t => t !== "").join(" · ")
                         color: Theme.text
                         font.pixelSize: Theme.typeBody * page.u
                     }

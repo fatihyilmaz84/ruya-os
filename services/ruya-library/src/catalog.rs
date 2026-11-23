@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use crate::flatpak::{self, AppLister};
+use crate::games::Key;
 use crate::play::{self, PlayInfo};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +51,9 @@ pub struct Item {
     pub last_played: i64,
     /// Set for a `.play` app with a readable `play.json` (`play.rs`).
     pub play: Option<PlayInfo>,
+    /// Identification keys its source declares beside the one its own id is (`games::keys`): none
+    /// from Steam and Flatpak today; an app-provided game declares its Steam app id (RUY-452).
+    pub declared: Vec<Key>,
 }
 
 /// Last played first, then title (case-insensitive), then id, so equal titles keep a fixed order.
@@ -124,6 +128,7 @@ mod tests {
             art: Vec::new(),
             last_played,
             play: None,
+            declared: Vec::new(),
         }
     }
 

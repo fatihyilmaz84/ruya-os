@@ -53,8 +53,8 @@ Page {
 
     // The game's own icon (the Library's art.icon, else the Store's), or "" for the generic glyph.
     function iconOf(appId) {
-        const item = Library.items.find(i => Library.sessionAppId(i.id) === appId)
-        const own = item && item.art ? (item.art.icon ?? "") : ""
+        const item = Library.itemForApp(appId)                  // any installation of the game (RUY-137)
+        const own = item.art ? (item.art.icon ?? "") : ""
         const app = own === "" ? Store.catalogue.find(a => a.id === appId) : null
         const path = own !== "" ? own : app ? (app.icon ?? "") : ""
         // A path (Linux "/..." or a Windows drive "C:/...") becomes a file URL; a URL stays as it is.

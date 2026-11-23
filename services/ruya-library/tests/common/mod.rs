@@ -8,7 +8,7 @@ use ruya_library::catalog::{scan, Item};
 use ruya_library::flatpak::FixtureLister;
 
 pub const PLAY_JSON: &str = r#"{
-  "format": 1, "id": "com.example.starhopper", "build": 3,
+  "format": 1, "id": "com.example.starhopper", "version": "1.4.2", "build": 3,
   "name": { "tr": "Yildiz Atlayici", "en": "Star Hopper" },
   "genres": ["platformer", "adventure"],
   "players": { "min": 1, "max": 2, "modes": ["single", "local"] },

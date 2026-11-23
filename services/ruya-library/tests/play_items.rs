@@ -4,6 +4,7 @@ use std::path::Path;
 
 use ruya_library::catalog::Item;
 use ruya_library::dbus::record;
+use ruya_library::games::Game;
 
 mod common;
 use common::{files, full_deployment, list, put, FULL_ROW, PLAY_JSON};
@@ -74,7 +75,9 @@ fn the_served_record_carries_trust_jsons_tier_and_signer() {
     let dir = tempfile::tempdir().unwrap();
     full_deployment(dir.path());
     let items = list(dir.path(), FULL_ROW);
-    let served = record(&items["flatpak:play.com.example.starhopper"]);
+    let served = record(&Game::alone(
+        items["flatpak:play.com.example.starhopper"].clone(),
+    ));
     let text = |key: &str| String::try_from(served[key].try_clone().unwrap()).unwrap();
     assert_eq!(text("play_tier"), "developer");
     assert_eq!(text("play_signer"), "Example Games");
@@ -363,7 +366,7 @@ mod runner_keys {
         assert_eq!(play.resolution.runner_source.as_deref(), Some("system"));
         assert_eq!(play.resolution.runner_tested.as_deref(), Some("9.20"));
         assert_eq!(play.resolution.resolve_error, None);
-        let rec = record(item);
+        let rec = record(&Game::alone(item.clone()));
         assert!(rec.contains_key("play_runner") && !rec.contains_key("play_resolve_error"));
     }
 

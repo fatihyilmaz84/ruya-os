@@ -6,8 +6,11 @@ use ruya_contract_test::{
     assert_interfaces_are, assert_record_served, assert_serves, record_signatures,
 };
 use ruya_library::catalog::scan;
-use ruya_library::dbus::{record, resolution_record, runner_record, LibraryIface, Sources};
+use ruya_library::dbus::{
+    installation_record, record, resolution_record, runner_record, LibraryIface, Sources,
+};
 use ruya_library::flatpak::FixtureLister;
+use ruya_library::games::{group, GameChoices};
 use ruya_library::profile_items::{self, Game};
 use ruya_library::runners::{Resolution, Runner};
 
@@ -68,30 +71,82 @@ fn library1_item_records_have_the_documented_keys() {
     why.resolve_error = Some("No runner.".into());
     why.resolve_code = Some("resolve.no_system_runner".into());
     items.extend([resolved, refused]);
-    let sample = |id: &str| {
-        let item = items.iter().find(|i| i.id == id).unwrap_or_else(|| {
-            panic!(
-                "no item {id} in {:?}",
-                items.iter().map(|i| &i.id).collect::<Vec<_>>()
-            )
-        });
-        (item.id.clone(), record_signatures(&record(item)))
-    };
-    let samples: Vec<(String, BTreeMap<String, String>)> = [
-        "flatpak:org.example.App",
-        "steam:220",
-        "flatpak:play.com.example.starhopper",
-        "flatpak:play.resolved",
-        "flatpak:play.refused",
-    ]
-    .iter()
-    .map(|id| sample(id))
-    .collect();
+    // A game of two installations (the player linked a plain app and a .play app, so the .play's
+    // runner and version are an installation's) and two games with one title (a suggestion each).
+    let mut racer = items[0].clone();
+    racer.id = "flatpak:org.example.Racer".into();
+    racer.title = "Turbo Racer".into();
+    items.push(racer);
+    let mut choices = GameChoices::default();
+    choices.links.insert(
+        "flatpak:org.example.App".into(),
+        vec!["flatpak:play.resolved".into()],
+    );
+    let games = group(&ruya_library::catalog::merge(items, Vec::new()), &choices);
+    let samples: Vec<(String, BTreeMap<String, String>)> = games
+        .iter()
+        .map(|g| (g.id.clone(), record_signatures(&record(g))))
+        .collect();
     let labelled: Vec<(&str, BTreeMap<String, String>)> = samples
         .iter()
         .map(|(l, k)| (l.as_str(), k.clone()))
         .collect();
     assert_record_served("org.ruyaos.Library1.xml", "Item", &labelled);
+    let linked = games
+        .iter()
+        .find(|g| g.id == "flatpak:org.example.App")
+        .unwrap();
+    assert_eq!(linked.installations.len(), 2);
+    assert!(games.iter().any(|g| !g.suggestions.is_empty()));
+
+    // RUY-137: the Installation record, every installation of every game.
+    let installs: Vec<(String, BTreeMap<String, String>)> = games
+        .iter()
+        .flat_map(|g| {
+            g.installations.iter().enumerate().map(move |(n, i)| {
+                let label = format!("{} in {}", i.id, g.id);
+                (
+                    label,
+                    record_signatures(&installation_record(i, n == g.preferred)),
+                )
+            })
+        })
+        .collect();
+    let labelled: Vec<(&str, BTreeMap<String, String>)> = installs
+        .iter()
+        .map(|(l, k)| (l.as_str(), k.clone()))
+        .collect();
+    assert_record_served("org.ruyaos.Library1.xml", "Installation", &labelled);
+}
+
+/// RUY-137: the installation calls take the caller rule of SetRunnerChoice: the shell and root (the
+/// bus policy), never root only. None carries `org.ruyaos.Caller`, which would make
+/// lint-bus-policies deny it to ruya-shell, the policy names none of them, and its default context
+/// denies everyone else.
+#[test]
+fn the_installation_calls_are_for_the_shell_and_root() {
+    let xml = ruya_contract_test::read_contract("org.ruyaos.Library1.xml");
+    let policy =
+        include_str!("../../../image/rootfs/usr/share/dbus-1/system.d/org.ruyaos.Library1.conf");
+    for method in [
+        "SetPreferredInstallation",
+        "LinkInstallations",
+        "UnlinkInstallation",
+    ] {
+        let at = xml
+            .find(&format!("<method name=\"{method}\">"))
+            .unwrap_or_else(|| panic!("{method} is not in the contract"));
+        let body = &xml[at..at + xml[at..].find("</method>").unwrap()];
+        assert!(
+            !body.contains("org.ruyaos.Caller"),
+            "{method} is not root only"
+        );
+        assert!(!policy.contains(method), "the policy names {method}");
+    }
+    let default = &policy[policy.find("<policy context=\"default\">").unwrap()..];
+    assert!(default.contains("<deny send_destination=\"org.ruyaos.Library1\"/>"));
+    let shell = &policy[policy.find("<policy user=\"ruya-shell\">").unwrap()..];
+    assert!(shell.contains("<allow send_destination=\"org.ruyaos.Library1\"/>"));
 }
 
 /// RUY-959: the Runner record of ListRunners and the Resolution record of ResolveRunner, through

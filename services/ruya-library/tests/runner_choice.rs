@@ -8,6 +8,7 @@ use ruya_library::catalog::scan;
 use ruya_library::choices::Status;
 use ruya_library::dbus::{record, resolution_record, LibraryIface, Sources};
 use ruya_library::flatpak::FixtureLister;
+use ruya_library::games::Game;
 use ruya_library::runners::{resolve, Resolution};
 use ruya_play_format::resolve::Override;
 
@@ -114,7 +115,7 @@ fn resolve_runner_package_is_what_the_item_says() {
     .unwrap();
     let resolved = lib.runner_resolution(PLAY, "package").unwrap();
     assert_eq!(&resolved, &item.play.as_ref().unwrap().resolution);
-    let from_item = record(&item);
+    let from_item = record(&Game::alone(item));
     for (key, value) in resolution_record(&resolved) {
         assert_eq!(from_item.get(&key), Some(&value), "{key}");
     }

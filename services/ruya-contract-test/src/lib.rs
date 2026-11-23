@@ -731,6 +731,7 @@ mod tests {
             [
                 "Input1.xml Device",
                 "Input1.xml Player",
+                "Library1.xml Installation",
                 "Library1.xml Item",
                 "Library1.xml Resolution",
                 "Library1.xml Runner",
