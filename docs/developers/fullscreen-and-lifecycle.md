@@ -141,7 +141,7 @@ What we know about SIGTERM and the Flatpak sandbox: sending `SIGTERM` to **all**
 
 ## Lifecycle events (experimental)
 
-*Experimental (level 0, [The public surface](api-surface.md)) and **not yet in the image**: the service `ruya-platform`, its contract `api/dbus/org.ruyaos.Platform1.xml` (RUY-1098) and the console's side that sends the events (`ruya-session`, RUY-1099) are built, and the console image runs the service from 0.0.106 on (RUY-157; its check on a booted console, `vm-platform-check.sh`, is pending). Names, arguments and behaviour may change.*
+*Experimental (level 0, [The public surface](api-surface.md)): the service `ruya-platform`, its contract `api/dbus/org.ruyaos.Platform1.xml` (RUY-1098) and the console's side that sends the events (`ruya-session`, RUY-1099) are built, and the console image runs the service from 0.0.106 on (RUY-157; its check on a booted console, `vm-platform-check.sh`, is pending). Names, arguments and behaviour may change.*
 
 **There is no notice before a freeze.** A normal Home, the Hub and a profile switch freeze your app with no signal at all: the freeze is instant and a frozen app could not act on a notice. You learn of a freeze afterwards, from `frozen_ms` in `Resume`, and from the gap in your clock (rule 1 of [What to do](#what-to-do)), which you keep detecting either way. `Background` comes only when the console keeps your app running behind Home (a hold, for instance while it plays music; ADR-042 and ADR-046).
 

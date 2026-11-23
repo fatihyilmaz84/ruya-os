@@ -2,7 +2,7 @@
 
 What an app may rely on, what it may not, how the console will open more, and how a change to the public surface is made safely. This chapter is the charter behind `docs/developers/`: a feature is **documented here or it is not public**.
 
-*Status: **Accepted** (ADR-022 in `docs/specs/00-overview.md`, owner, 2026-11-08, approved as drafted: the tier-B list below, the never-public list, and stability promises only from the first release). The Platform service that opens tier B, `ruya-platform`, is built with its first capability, Lifecycle (RUY-1098), but **not yet in the image** (its unit and bus policy are RUY-157), so nothing in tier B can be called on a console yet. The apps reach the client bindings through the `org.ruyaos.Platform` runtime extension (ADR-015, Accepted the same day; spike T-250). Everything public is **experimental** until the first release: names, arguments and behaviour may change without notice.*
+*Status: **Accepted** (ADR-022 in `docs/specs/00-overview.md`, owner, 2026-11-08, approved as drafted: the tier-B list below, the never-public list, and stability promises only from the first release). The Platform service that opens tier B, `ruya-platform`, is built with its first capability, Lifecycle (RUY-1098), and in the image from 0.0.106 on (its unit and bus policy, RUY-157; the check on a booted console, `vm-platform-check.sh`, is pending). The apps reach the client bindings through the `org.ruyaos.Platform` runtime extension (ADR-015, Accepted the same day; spike T-250). Everything public is **experimental** until the first release: names, arguments and behaviour may change without notice.*
 
 ## Why a charter
 
@@ -13,7 +13,7 @@ Every D-Bus service of the console answers only the shell and root. That is deli
 | Tier | What | Who can use it | Today |
 |---|---|---|---|
 | **A, shell-private** | Profiles (PIN, admin), Store, Update, Devices administration, Telemetry configuration, the compositor | the shell and root only; the bus policy stays "shell and root" | as built |
-| **B, the Platform API** | a short list of capabilities (below) behind one service, `org.ruyaos.Platform1` | a sandboxed app, per app and per profile, only what the player allowed | **built, not in the image** (RUY-1098; the image part RUY-157) |
+| **B, the Platform API** | a short list of capabilities (below) behind one service, `org.ruyaos.Platform1` | a sandboxed app, per app and per profile, only what the player allowed | **built; in the image from 0.0.106** (RUY-1098, RUY-157; VM check pending) |
 | **C, data-only formats** | files with a documented layout; no code runs | anyone, no permission needed | partly built |
 
 Rules that hold for every tier-B capability:
@@ -95,7 +95,7 @@ No code, so no bus permission, and the safest way to extend the console. The for
 
 | Tier | Element | Stability | Where it is described |
 |---|---|---|---|
-| B | `org.ruyaos.Platform1.Lifecycle`: `Register`, `SaveDone`, `Background`, `Resume`, `Stopping` (`api/dbus/org.ruyaos.Platform1.xml`) | experimental, since level 0; **not yet in the image** (RUY-157) | [Full screen and lifecycle](fullscreen-and-lifecycle.md#lifecycle-events-experimental) |
+| B | `org.ruyaos.Platform1.Lifecycle`: `Register`, `SaveDone`, `Background`, `Resume`, `Stopping` (`api/dbus/org.ruyaos.Platform1.xml`) | experimental, since level 0; in the image from 0.0.106 (RUY-157) | [Full screen and lifecycle](fullscreen-and-lifecycle.md#lifecycle-events-experimental) |
 
 **Who an app is (the trust boundary).** `Platform1` takes the caller's identity (app id, instance, profile) from its connection, never from an argument: the bus's credentials of the app's `xdg-dbus-proxy`, its `.flatpak-info` and its cgroup scope, checked against each other and against the pidfd of the process. That is unforgeable for a **sandboxed** caller only. Code that runs unsandboxed as the profile's user can make a matching scope and a fake `.flatpak-info` (the same limit the freedesktop portals have), so nothing third-party may run unsandboxed as a profile, and the Store treats the Flatpak permissions that escape the sandbox (`--socket=session-bus`, `--talk-name=org.freedesktop.Flatpak`, talking to systemd) as "trusted as the profile". The player's Platform permissions live root-only per profile (`/var/lib/ruyaos/platform/profiles/<profile>.json`), out of reach of an app with home access.
 
