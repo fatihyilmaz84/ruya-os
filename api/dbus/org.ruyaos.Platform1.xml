@@ -130,7 +130,8 @@
          is `scope` (app-flatpak-<escaped id>-<instance-id>.scope) in `profile_id`'s user manager
          (a scope name is unique within one manager only). `event`: "background" (`value_ms` 0),
          "resume" (`value_ms` the time it was frozen) or "stopping" (`value_ms` the deadline, at
-         most 4294967295). Sent as the Lifecycle signal to the instance's registered connections
+         most 60000: the call stays open until it settles, so a longer one is
+         "invalid-argument"; ruya-session sends 5000). Sent as the Lifecycle signal to the instance's registered connections
          only. "background" and "resume" reply at once: "ok". "stopping" replies when it is
          settled: "saved" (the instance called SaveDone), "timeout" (`value_ms` passed first) or
          "not-registered" (at once when nothing is registered, or when the registration ends

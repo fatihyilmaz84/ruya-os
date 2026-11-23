@@ -28,6 +28,10 @@ pub const INTERFACE: &str = "org.ruyaos.Platform1.Lifecycle";
 pub const KEY: &str = "lifecycle";
 /// The most connections one instance may register (a proxy per instance makes one or two).
 pub const MAX_NAMES: usize = 8;
+/// The longest deadline a Stopping may carry (RUY-1099): a `NotifyLifecycle("stopping")` blocks
+/// until it settles, so an unbounded `value_ms` would hold its caller's call open without end.
+/// ruya-session sends 5 000.
+pub const MAX_STOPPING_MS: u64 = 60_000;
 
 /// An event `NotifyLifecycle` carries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,7 +49,7 @@ impl Event {
             "resume" => Ok(Event::Resume {
                 frozen_ms: value_ms,
             }),
-            "stopping" => u32::try_from(value_ms)
+            "stopping" if value_ms <= MAX_STOPPING_MS => u32::try_from(value_ms)
                 .map(|deadline_ms| Event::Stopping { deadline_ms })
                 .map_err(|_| Status::InvalidArgument),
             _ => Err(Status::InvalidArgument),
@@ -389,9 +393,19 @@ mod tests {
         );
         assert_eq!(Event::parse("stopping", 5000), Ok(STOP));
         assert_eq!(
-            Event::parse("stopping", u64::from(u32::MAX) + 1),
-            Err(Status::InvalidArgument)
+            Event::parse("stopping", MAX_STOPPING_MS),
+            Ok(Event::Stopping {
+                deadline_ms: 60_000
+            })
         );
+        // RUY-1099: a Stopping holds its caller's call open, so its deadline is capped.
+        for over in [MAX_STOPPING_MS + 1, u64::from(u32::MAX) + 1] {
+            assert_eq!(
+                Event::parse("stopping", over),
+                Err(Status::InvalidArgument),
+                "{over}"
+            );
+        }
         for bad in ["", "Stopping", "suspend", "freeze"] {
             assert_eq!(Event::parse(bad, 0), Err(Status::InvalidArgument), "{bad}");
         }

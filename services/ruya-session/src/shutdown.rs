@@ -20,7 +20,8 @@ use futures_lite::{Stream, StreamExt};
 use crate::session::STOP_GRACE;
 
 /// How long the stop of every app may hold the shutdown back: the backstop's `STOP_GRACE`, then a
-/// moment for the kill's end to be reported. logind waits at most `InhibitDelayMaxSec`, which the
+/// moment for the kill's end to be reported. A registered app's save wait (RUY-1099) is part of
+/// its `STOP_GRACE` here (`Session::stop_all`), so it adds nothing. logind waits at most `InhibitDelayMaxSec`, which the
 /// image sets longer (`image/rootfs/usr/lib/systemd/logind.conf.d/50-ruyaos-inhibit-delay.conf`).
 pub const STOP_ALL_WAIT: Duration = Duration::from_secs(STOP_GRACE.as_secs() + 5);
 

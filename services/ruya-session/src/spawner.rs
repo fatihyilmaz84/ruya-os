@@ -71,6 +71,10 @@ pub struct Listing {
 /// A listing that can run on any thread without the session lock (RUY-621).
 pub type AdoptLister = Box<dyn FnOnce() -> Listing + Send>;
 
+/// The listing of one instance's own active Flatpak scopes (`Spawner::scope_lister`), run on any
+/// thread without the session lock (RUY-1099).
+pub type ScopeLister = Box<dyn FnOnce() -> Vec<String> + Send>;
+
 pub trait Spawner {
     /// Is this Flatpak application installed?
     fn is_installed(&self, app_id: &str) -> bool;
@@ -166,6 +170,14 @@ pub trait Spawner {
     fn may_freeze(&self, _app_id: &str) -> bool {
         true
     }
+    /// The instance's own active Flatpak scopes, the names Platform1 knows its processes by
+    /// (RUY-1099): what `freeze` reaches of it (a child: its own scopes; a parent: its app's
+    /// active scopes but its children's), as a closure the caller runs without the session lock,
+    /// since it may list them in the manager (bounded). Empty when the instance is not known or
+    /// the listing fails.
+    fn scope_lister(&self, _unit: &str) -> ScopeLister {
+        Box::new(Vec::new)
+    }
     /// Hands `steam://rungameid/<appid>` to `user`'s running Steam (ADR-041 point 3,
     /// `steam_url_command`). Returns once the forwarder is on its way; its end is not waited for
     /// (the game's scope, or the 120 s of `Session::tick`, says how it went). An error when it
@@ -238,6 +250,9 @@ impl<T: Spawner + ?Sized> Spawner for Box<T> {
     }
     fn may_freeze(&self, app_id: &str) -> bool {
         (**self).may_freeze(app_id)
+    }
+    fn scope_lister(&self, unit: &str) -> ScopeLister {
+        (**self).scope_lister(unit)
     }
     fn forward_steam_url(&self, user: &str, appid: &str) -> Result<(), String> {
         (**self).forward_steam_url(user, appid)
@@ -1568,6 +1583,10 @@ struct FakeState {
     child_scopes: HashMap<(String, String), String>,
     /// Apps whose table says `freeze = never` (`may_freeze`).
     never_freeze: HashSet<String>,
+    /// unit -> its own scopes (`scope_lister`, RUY-1099).
+    own_scopes: HashMap<String, Vec<String>>,
+    /// How long a `scope_lister` listing takes (a slow manager).
+    scope_delay: Duration,
 }
 
 /// A listing that blocks, to show that nothing else waits for it: the listing says it is inside
@@ -1682,6 +1701,21 @@ impl FakeSpawner {
     /// The app table says `freeze = never` for `app_id` (`may_freeze`, ADR-042).
     pub fn with_freeze_never(self, app_id: &str) -> Self {
         self.lock().never_freeze.insert(app_id.to_owned());
+        self
+    }
+
+    /// Each `scope_lister` listing takes `delay` (RUY-1099: a manager slow to answer).
+    pub fn with_scope_delay(self, delay: Duration) -> Self {
+        self.lock().scope_delay = delay;
+        self
+    }
+
+    /// `unit`'s own active scopes are `scopes` (`scope_lister`, RUY-1099).
+    pub fn with_scopes(self, unit: &str, scopes: &[&str]) -> Self {
+        self.lock().own_scopes.insert(
+            unit.to_owned(),
+            scopes.iter().map(|s| (*s).to_owned()).collect(),
+        );
         self
     }
 
@@ -1912,6 +1946,16 @@ impl Spawner for FakeSpawner {
 
     fn may_freeze(&self, app_id: &str) -> bool {
         !self.lock().never_freeze.contains(app_id)
+    }
+
+    fn scope_lister(&self, unit: &str) -> ScopeLister {
+        let state = self.lock();
+        let scopes = state.own_scopes.get(unit).cloned().unwrap_or_default();
+        let delay = state.scope_delay;
+        Box::new(move || {
+            std::thread::sleep(delay);
+            scopes
+        })
     }
 
     fn forward_steam_url(&self, user: &str, appid: &str) -> Result<(), String> {

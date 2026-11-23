@@ -38,7 +38,7 @@ const PURGE_EVERY_SECS: u64 = 60;
 
 type Dict = HashMap<String, OwnedValue>;
 
-fn lock(shared: &Shared) -> MutexGuard<'_, Session<DynSpawner, ProfileSnapshot>> {
+pub(crate) fn lock(shared: &Shared) -> MutexGuard<'_, Session<DynSpawner, ProfileSnapshot>> {
     // A poisoned lock means a handler panicked; the registry is still consistent enough to serve.
     shared.lock().unwrap_or_else(|e| e.into_inner())
 }
@@ -517,7 +517,7 @@ impl SessionIface {
             let status = if freeze {
                 session.freeze(instance, active.as_deref(), Instant::now())
             } else {
-                session.thaw(instance, active.as_deref())
+                session.thaw(instance, active.as_deref(), Instant::now())
             };
             (status, session.take_frozen_changes())
         };
@@ -1469,7 +1469,10 @@ mod tests {
                 futures_lite::future::poll_once(&mut change).await.is_none(),
                 "the change waits for the Thaw's turn"
             );
-            assert_eq!(lock(&shared).thaw(&unit, Some("p1")), Status::Ok);
+            assert_eq!(
+                lock(&shared).thaw(&unit, Some("p1"), Instant::now()),
+                Status::Ok
+            );
             lock(&shared).take_frozen_changes(); // the Hub's freeze and thaw, announced by them
             drop(thaw_turn);
             let changes = change.await;

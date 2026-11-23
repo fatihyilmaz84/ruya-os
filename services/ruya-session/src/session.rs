@@ -25,9 +25,10 @@ use std::time::{Duration, Instant};
 
 use crate::directory::ProfileDirectory;
 use crate::spawner::{
-    app_env, unit_app_id, with_pulse_server, AdoptLister, Listing, Spawner, UnitEvent,
+    app_env, unit_app_id, with_pulse_server, AdoptLister, Listing, ScopeLister, Spawner, UnitEvent,
 };
 use crate::steam_tool::{steam_run_url, STEAM_APP_ID};
+use async_channel::Sender;
 use ruya_flatpak::scope::{is_app_scope, parse_cgroup};
 use ruya_flatpak::valid_session_app_id;
 use ruya_ids::{flatpak_item, profile_of_user, steam_item, valid_profile_id, valid_steam_appid};
@@ -45,6 +46,10 @@ pub const RECLAIM_AFTER: Duration = Duration::from_secs(30);
 /// A Steam game launched by `launch_steam_game` is `starting` until its scope appears; without one
 /// this long after the launch it ends `launch-failed` (ADR-041 point 3).
 pub const CHILD_LAUNCH_WAIT: Duration = Duration::from_secs(120);
+
+/// The deadline of the Platform1 `Stopping` a `Stop` sends before its SIGTERM (RUY-1099): an app
+/// that registered for its lifecycle has this long to save and call `SaveDone`.
+pub const SAVE_WAIT: Duration = Duration::from_secs(5);
 
 /// Where the time of a call comes from: an `Instant` (tests) or a clock read when the core needs
 /// it (`Instant::now`), so `stop` can take the time after a slow thaw.
@@ -182,6 +187,75 @@ pub struct RunningApp {
     pub frozen: bool,
 }
 
+/// A Platform1 lifecycle event (RUY-1099, ADR-022) for the adapter to send to one instance's own
+/// scopes (`Manage.NotifyLifecycle`). There is none before a freeze: it is instant, and a frozen
+/// app could not act on it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LifecycleEvent {
+    /// A Freeze reached an instance whose app may not be frozen: it is held, still running.
+    Background,
+    /// A hold or a freeze ended: how long it lasted.
+    Resume { frozen_ms: u64 },
+    /// A `Stop`'s save wait: its deadline, counted from the notice's `at`, which bounds the whole
+    /// wait (the scope listing included). The SIGTERM waits for `Session::saved`.
+    Stopping { deadline_ms: u64 },
+}
+
+impl LifecycleEvent {
+    /// `NotifyLifecycle`'s `event` and `value_ms`.
+    pub fn as_call(self) -> (&'static str, u64) {
+        match self {
+            LifecycleEvent::Background => ("background", 0),
+            LifecycleEvent::Resume { frozen_ms } => ("resume", frozen_ms),
+            LifecycleEvent::Stopping { deadline_ms } => ("stopping", deadline_ms),
+        }
+    }
+}
+
+/// One lifecycle event for the instance `instance` of `profile`, in the order the core decided
+/// them (`Session::with_lifecycle`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LifecycleNotice {
+    pub instance: String,
+    pub profile: String,
+    pub event: LifecycleEvent,
+    /// When the core decided it.
+    pub at: Instant,
+}
+
+/// Where a `Stop`'s save wait is (RUY-1099). `since` is when its `Stopping` was told; `in_grace`
+/// (power off): the grace counts from `since`, so the save window is part of `STOP_GRACE`
+/// instead of adding to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SaveWait {
+    /// No wait: not stopping, or its SIGTERM is sent.
+    Off,
+    /// Its `Stopping` is out and not settled yet.
+    Waiting { since: Instant, in_grace: bool },
+    /// Settled (`saved`), but a child of it still waits: a parent's SIGTERM follows its children's.
+    Settled { since: Instant, in_grace: bool },
+}
+
+impl SaveWait {
+    fn waiting(self) -> bool {
+        matches!(self, SaveWait::Waiting { .. })
+    }
+
+    fn settled(self) -> bool {
+        matches!(self, SaveWait::Settled { .. })
+    }
+}
+
+/// Which stop `stop_tree` makes (RUY-1099).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StopKind {
+    /// `Stop` (Close game): the save wait, then the SIGTERM and the whole `STOP_GRACE`.
+    Close,
+    /// `stop_all` (power off): the save wait counts inside `STOP_GRACE`, so the bound of
+    /// `shutdown::STOP_ALL_WAIT` holds.
+    PowerOff,
+}
+
 /// A change of an app's `frozen` for the adapter to announce (`FrozenChanged`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrozenChange {
@@ -217,11 +291,13 @@ struct Instance {
     frozen: bool,
     /// When this freeze began (T-466; an adopted frozen app: when it was adopted).
     frozen_at: Option<Instant>,
-    /// Paused without being frozen: a Freeze reached this instance but its app may not be frozen
-    /// itself (`freeze_own` false, ADR-042). Separate from `frozen`, which is this record's own
-    /// (ADR-041 point 7); it only parks the instance's sound (`sync_audio`). Cleared by a Thaw,
-    /// a Stop and the exit.
-    held: bool,
+    /// Paused without being frozen, since then: a Freeze reached this instance but its app may not
+    /// be frozen itself (`freeze_own` false, ADR-042). Separate from `frozen`, which is this
+    /// record's own (ADR-041 point 7); it parks the instance's sound (`sync_audio`) and is told as
+    /// `Background` (RUY-1099). Cleared by a Thaw and a Stop (both tell `Resume`) and the exit.
+    held: Option<Instant>,
+    /// The save wait of its `Stop` (RUY-1099): `state` is `Stopping`, the SIGTERM not sent yet.
+    save: SaveWait,
     reclaim: Reclaim,
     /// A Steam game launched by `launch_steam_game` that waits for its scope: when it was asked
     /// (`tick` ends it after `CHILD_LAUNCH_WAIT`). `None` once it runs, and for every other record.
@@ -256,6 +332,9 @@ pub struct Session<S, D> {
     last_active: Option<String>,
     /// Did the listing `adopt` merged last see everything (RUY-23)?
     adopted_all: bool,
+    /// Platform1 is told (RUY-1099, `with_lifecycle`): the notices go here, and the deadline of a
+    /// `Stop`'s save wait. `None`: nothing is told, and a `Stop` sends its SIGTERM at once.
+    lifecycle: Option<(Sender<LifecycleNotice>, Duration)>,
 }
 
 impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
@@ -277,7 +356,47 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             audio_sent: HashMap::new(),
             last_active: None,
             adopted_all: true,
+            lifecycle: None,
         }
+    }
+
+    /// The instances' lifecycle is told to Platform1 (RUY-1099, ADR-022): every `LifecycleNotice`
+    /// goes to `outbox`, in order, and a `Stop` waits for its `Stopping` (deadline `save_wait`,
+    /// `SAVE_WAIT` on the console) to settle (`saved`) before its SIGTERM. A notice the outbox no
+    /// longer takes is dropped, and a `Stop` then sends its SIGTERM at once.
+    pub fn with_lifecycle(mut self, outbox: Sender<LifecycleNotice>, save_wait: Duration) -> Self {
+        self.lifecycle = Some((outbox, save_wait));
+        self
+    }
+
+    /// The listing of `instance`'s own active scopes (`Spawner::scope_lister`), for the adapter to
+    /// run without the lock: whom a `LifecycleNotice` is for.
+    pub fn scope_lister(&self, instance: &str) -> ScopeLister {
+        self.spawner.scope_lister(instance)
+    }
+
+    /// Hands `event` for the instance at `at` to the outbox. False when nothing is told (no
+    /// outbox, or it is closed).
+    fn tell(&self, at: usize, event: LifecycleEvent, now: Instant) -> bool {
+        let Some((outbox, _)) = &self.lifecycle else {
+            return false;
+        };
+        let inst = &self.instances[at];
+        outbox
+            .try_send(LifecycleNotice {
+                instance: inst.unit.clone(),
+                profile: inst.profile.clone(),
+                event,
+                at: now,
+            })
+            .is_ok()
+    }
+
+    /// Tells the instance at `at` that its hold or freeze, begun at `since`, ended at `now`.
+    fn tell_resume(&self, at: usize, since: Instant, now: Instant) {
+        let frozen_ms =
+            u64::try_from(now.saturating_duration_since(since).as_millis()).unwrap_or(u64::MAX);
+        self.tell(at, LifecycleEvent::Resume { frozen_ms }, now);
     }
 
     /// Each app then gets `WAYLAND_DISPLAY` set to its profile user's own socket in `dir`
@@ -364,7 +483,8 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                     hidden: false,
                     frozen: false,
                     frozen_at: None,
-                    held: false,
+                    held: None,
+                    save: SaveWait::Off,
                     reclaim: Reclaim::Waiting,
                     launch_asked: None,
                     cancelled: None,
@@ -488,7 +608,8 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             hidden: p.hidden,
             frozen: false,
             frozen_at: None,
-            held: false,
+            held: None,
+            save: SaveWait::Off,
             reclaim: Reclaim::Waiting,
             launch_asked,
             cancelled: None,
@@ -544,11 +665,37 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     ///
     /// A Steam game that still waits for its scope ends in the core (`cancel_launch`, no call to
     /// the OS): "quit" when it is the one stopped, "launch-failed" when its parent is.
+    ///
+    /// With `with_lifecycle` (RUY-1099) each instance stopped is first told `Stopping` (after the
+    /// `Resume` of its thaw or hold) and is `stopping` from then on, but its SIGTERM waits until
+    /// the adapter reports the `Stopping` settled (`saved`), or `tick` finds its deadline passed;
+    /// the grace starts at the SIGTERM. A parent's SIGTERM still follows its children's.
     pub fn stop(&mut self, instance: &str, clock: impl Clock) -> Status {
+        self.stop_tree(instance, clock, StopKind::Close)
+    }
+
+    /// `stop` (`StopKind::Close`) or the stop of `stop_all` (`StopKind::PowerOff`: the grace
+    /// counts from the `Stopping`, also for an instance whose Close game still waits for its save, or
+    /// whose own wait settled while a child of it still waits).
+    fn stop_tree(&mut self, instance: &str, clock: impl Clock, kind: StopKind) -> Status {
         let Some(at) = self.instances.iter().position(|i| i.unit == instance) else {
             return Status::UnknownInstance;
         };
         if self.instances[at].state == State::Stopping {
+            // A wait still out, or settled but held back by a child: its SIGTERM is not sent yet.
+            if kind == StopKind::PowerOff {
+                self.instances[at].save = match self.instances[at].save {
+                    SaveWait::Waiting { since, .. } => SaveWait::Waiting {
+                        since,
+                        in_grace: true,
+                    },
+                    SaveWait::Settled { since, .. } => SaveWait::Settled {
+                        since,
+                        in_grace: true,
+                    },
+                    SaveWait::Off => SaveWait::Off,
+                };
+            }
             return Status::Ok;
         }
         if self.awaits_scope(at) {
@@ -563,29 +710,38 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             if self.awaits_scope(child) {
                 self.cancel_launch(child, ExitReason::LaunchFailed);
             } else {
-                self.stop_at(child, now);
+                self.stop_at(child, now, kind);
             }
         }
-        self.stop_at(at, now)
+        self.stop_at(at, now, kind)
     }
 
-    /// The stop of the one instance at `at` (not stopping yet): a frozen one is thawed first.
-    fn stop_at(&mut self, at: usize, clock: impl Clock) -> Status {
+    /// The stop of the one instance at `at` (not stopping yet): a frozen one is thawed first, and
+    /// a held or frozen one is told `Resume`. With `with_lifecycle` it is told `Stopping` and
+    /// waits for `saved` (not a hidden one: its profile is gone); otherwise its SIGTERM goes now
+    /// (`send_stop`).
+    fn stop_at(&mut self, at: usize, clock: impl Clock, kind: StopKind) -> Status {
         let inst = &mut self.instances[at];
-        inst.held = false;
+        let held_since = inst.held.take();
+        let mut paused_since = held_since;
         if inst.frozen {
             // A frozen app cannot handle the SIGTERM of the stop: thaw it first (T-457). A failed
             // thaw still stops it; the kill after the grace time ends even a frozen process.
             if inst.reclaim == Reclaim::Sent {
                 self.spawner.cancel_reclaim(&inst.unit);
             }
-            inst.frozen_at = None;
+            let frozen_since = inst.frozen_at.take();
             inst.reclaim = Reclaim::Waiting;
-            if let Err(err) = self.spawner.thaw(&inst.unit) {
-                eprintln!(
-                    "ruya-session: thawing {} before its stop failed: {err}",
-                    inst.unit
-                );
+            match self.spawner.thaw(&inst.unit) {
+                Ok(()) => paused_since = earlier(held_since, frozen_since),
+                Err(err) => {
+                    // Still frozen: it is not told that it runs again.
+                    paused_since = None;
+                    eprintln!(
+                        "ruya-session: thawing {} before its stop failed: {err}",
+                        inst.unit
+                    );
+                }
             }
             inst.frozen = false;
             self.frozen_changes.push(FrozenChange {
@@ -593,11 +749,50 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 frozen: false,
             });
         }
+        // Read after the thaw, as the grace's start is.
+        let now = clock.now();
+        if let Some(since) = paused_since {
+            self.tell_resume(at, since, now);
+        }
+        let deadline = self.lifecycle.as_ref().map(|(_, wait)| *wait);
+        if let (false, Some(deadline)) = (self.instances[at].hidden, deadline) {
+            let deadline_ms = u64::try_from(deadline.as_millis()).unwrap_or(u64::MAX);
+            if self.tell(at, LifecycleEvent::Stopping { deadline_ms }, now) {
+                let inst = &mut self.instances[at];
+                inst.state = State::Stopping;
+                inst.save = SaveWait::Waiting {
+                    since: now,
+                    in_grace: kind == StopKind::PowerOff,
+                };
+                let user = inst.user.clone();
+                self.sync_audio(&user, false);
+                return Status::Ok;
+            }
+        }
+        self.send_stop(at, clock)
+    }
+
+    /// The SIGTERM of the instance at `at` (`Spawner::stop`): it is then `stopping`, and the grace
+    /// of `tick`'s backstop starts, now or, for a power off's save wait, when its `Stopping` was
+    /// told.
+    fn send_stop(&mut self, at: usize, clock: impl Clock) -> Status {
+        let inst = &mut self.instances[at];
+        let grace_from = match std::mem::replace(&mut inst.save, SaveWait::Off) {
+            SaveWait::Waiting {
+                since,
+                in_grace: true,
+            }
+            | SaveWait::Settled {
+                since,
+                in_grace: true,
+            } => Some(since),
+            _ => None,
+        };
         let user = inst.user.clone();
         let status = match self.spawner.stop(&inst.unit) {
             Ok(()) => {
                 inst.state = State::Stopping;
-                inst.stop_asked = Some(clock.now());
+                inst.stop_asked = Some(grace_from.unwrap_or_else(|| clock.now()));
                 Status::Ok
             }
             Err(err) => {
@@ -609,17 +804,66 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         status
     }
 
+    /// The `Stopping` of `instance` has settled (RUY-1099): the app saved, its deadline passed,
+    /// nothing of it is registered, or Platform1 did not answer in time. Its SIGTERM goes now,
+    /// unless a child of it still waits (then it follows that child's), it was killed meanwhile,
+    /// or it has ended. `UnknownInstance` when no such instance waits. A parent whose own wait had
+    /// settled and that waited only for this child is stopped too.
+    pub fn saved(&mut self, instance: &str, clock: impl Clock) -> Status {
+        let status = match self
+            .instances
+            .iter()
+            .position(|i| i.unit == instance && i.save.waiting())
+        {
+            Some(at) => {
+                self.settle(at);
+                Status::Ok
+            }
+            None => Status::UnknownInstance,
+        };
+        self.release_settled(clock);
+        status
+    }
+
+    /// The save wait at `at` (waiting) has settled.
+    fn settle(&mut self, at: usize) {
+        if let SaveWait::Waiting { since, in_grace } = self.instances[at].save {
+            self.instances[at].save = SaveWait::Settled { since, in_grace };
+        }
+    }
+
+    /// Sends the SIGTERM of every settled save wait none of whose children still waits, children
+    /// first.
+    fn release_settled(&mut self, clock: impl Clock) {
+        while let Some(at) = (0..self.instances.len()).find(|&at| {
+            self.instances[at].save.settled()
+                && self
+                    .children_of(&self.instances[at].unit)
+                    .iter()
+                    .all(|&c| self.instances[c].save == SaveWait::Off)
+        }) {
+            let now = clock.now();
+            if self.send_stop(at, now) != Status::Ok {
+                // It was told it stops already: the backstop's kill follows after the grace.
+                self.instances[at].stop_asked.get_or_insert(now);
+            }
+        }
+    }
+
     /// The system goes down (RUY-888, `StopAll`): every app of every profile, frozen or not,
     /// starting, running or hidden, is stopped through `stop`, one after the other, so a frozen
     /// one is thawed right before its own SIGTERM and `tick` kills only what outlives the grace.
     /// Returns each instance asked, with the outcome; an app already stopping is `Ok` and keeps
-    /// its grace.
+    /// its grace. With `with_lifecycle` (RUY-1099) each one gets the save wait of `stop`, all at
+    /// once, but its grace counts from its `Stopping`: the save window is part of `STOP_GRACE`
+    /// (an instance whose Close game still waits for its save too), so the bound of
+    /// `shutdown::STOP_ALL_WAIT` holds.
     pub fn stop_all(&mut self, clock: impl Clock + Copy) -> Vec<(String, Status)> {
         let units: Vec<String> = self.instances.iter().map(|i| i.unit.clone()).collect();
         units
             .into_iter()
             .map(|unit| {
-                let status = self.stop(&unit, clock);
+                let status = self.stop_tree(&unit, clock, StopKind::PowerOff);
                 (unit, status)
             })
             .collect()
@@ -680,6 +924,8 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         }
         inst.kill_asked = true;
         inst.kill_sent = true;
+        // A save wait ends here: the kill replaces its SIGTERM (`saved` sends none).
+        inst.save = SaveWait::Off;
         let was_stopping = inst.state == State::Stopping;
         inst.state = State::Stopping;
         inst.stop_asked.get_or_insert_with(|| clock.now());
@@ -740,30 +986,35 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 continue;
             }
             if self.freeze_one(child, now) != Status::Ok {
-                self.undo_freezes(&froze);
+                self.undo_freezes(&froze, now);
                 return Status::Failed;
             }
             froze.push(child);
         }
         if pause == Pause::Hub && !self.instances[at].freeze_own {
-            // ADR-042: the unit keeps running; only its sound is parked, with its children's.
+            // ADR-042: the unit keeps running; only its sound is parked, with its children's. It
+            // is told `Background` (RUY-1099), once, and not while it is frozen anyway.
             let inst = &mut self.instances[at];
-            inst.held = true;
+            let newly = inst.held.is_none() && !inst.frozen;
+            inst.held.get_or_insert(now);
             let user = inst.user.clone();
             self.sync_audio(&user, false);
+            if newly {
+                self.tell(at, LifecycleEvent::Background, now);
+            }
             return Status::Ok;
         }
         let status = self.freeze_one(at, now);
         if status != Status::Ok {
-            self.undo_freezes(&froze);
+            self.undo_freezes(&froze, now);
         }
         status
     }
 
     /// Thaws what a failed `freeze_at` had frozen already, so nothing of it stays frozen.
-    fn undo_freezes(&mut self, froze: &[usize]) {
+    fn undo_freezes(&mut self, froze: &[usize], now: Instant) {
         for &at in froze {
-            self.thaw_one(at);
+            self.thaw_one(at, now, None);
         }
     }
 
@@ -866,38 +1117,44 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     /// no-op there. A failed thaw keeps `frozen`, so a later Thaw or Stop tries again. ADR-041
     /// point 7: a parent's running children are thawed first, then its own unit and scopes when
     /// its app may be frozen (what `freeze_at` froze); any failure is `Failed`, after every thaw
-    /// was tried.
-    pub fn thaw(&mut self, instance: &str, active: Option<&str>) -> Status {
+    /// was tried. Every record that was frozen or held and runs again is told `Resume`, with how
+    /// long that lasted (RUY-1099); `now` is when the thaw happens.
+    pub fn thaw(&mut self, instance: &str, active: Option<&str>, now: Instant) -> Status {
         let at = match self.freezable(instance, active) {
             Ok(at) => at,
             Err(status) => return status,
         };
         let mut status = Status::Ok;
-        let was_held = std::mem::take(&mut self.instances[at].held);
+        let held_since = self.instances[at].held.take();
         for child in self.children_of(instance) {
             let c = &self.instances[child];
             if c.hidden || c.state != State::Running {
                 continue;
             }
-            if self.thaw_one(child) != Status::Ok {
+            if self.thaw_one(child, now, None) != Status::Ok {
                 status = Status::Failed;
             }
         }
-        if was_held {
+        if held_since.is_some() {
             let user = self.instances[at].user.clone();
             self.sync_audio(&user, false);
         }
         // A record frozen anyway (adopted frozen, its app's rule changed, or a `never` app frozen
         // because its profile left, RUY-1063) is thawed too.
         let own = &self.instances[at];
-        if (own.freeze_own || own.frozen) && self.thaw_one(at) != Status::Ok {
-            status = Status::Failed;
+        if own.freeze_own || own.frozen {
+            if self.thaw_one(at, now, held_since) != Status::Ok {
+                status = Status::Failed;
+            }
+        } else if let Some(since) = held_since {
+            self.tell_resume(at, since, now);
         }
         status
     }
 
-    /// The thaw of the one instance at `at`.
-    fn thaw_one(&mut self, at: usize) -> Status {
+    /// The thaw of the one instance at `at`. When it works and the record was frozen, or held
+    /// since `held_since`, it is told `Resume` from the earlier of the two.
+    fn thaw_one(&mut self, at: usize, now: Instant, held_since: Option<Instant>) -> Status {
         let inst = &mut self.instances[at];
         if inst.reclaim == Reclaim::Sent {
             // A reclaim still running would page the game out while it plays again (T-466).
@@ -907,6 +1164,11 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         match self.spawner.thaw(&inst.unit) {
             Ok(()) => {
                 eprintln!("{}", freezer_line(&inst.unit, "Thaw"));
+                let frozen_since = inst.frozen.then_some(inst.frozen_at).flatten();
+                if let Some(since) = earlier(held_since, frozen_since) {
+                    self.tell_resume(at, since, now);
+                }
+                let inst = &mut self.instances[at];
                 if inst.frozen {
                     inst.frozen = false;
                     inst.frozen_at = None;
@@ -1000,7 +1262,8 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 // first and a Thaw announces the change (T-457).
                 frozen: found.frozen,
                 frozen_at: found.frozen.then_some(now),
-                held: false,
+                held: None,
+                save: SaveWait::Off,
                 reclaim: Reclaim::Waiting,
                 launch_asked: None,
                 cancelled: None,
@@ -1237,7 +1500,8 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         notice.into_iter().collect()
     }
 
-    /// Kills the apps that did not quit within `STOP_GRACE` of their `Stop`, and starts the
+    /// Sends the SIGTERM of a save wait past its deadline (`end_overdue_saves`, RUY-1099), kills
+    /// the apps that did not quit within `STOP_GRACE` of their `Stop`, and starts the
     /// memory reclaim of the apps frozen for `RECLAIM_AFTER` (T-466; only when swap is active,
     /// since without it a reclaim only drops clean cache). Call about once a second.
     ///
@@ -1264,8 +1528,30 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         while let Some(at) = self.instances.iter().position(|i| i.cancelled.is_some()) {
             ended.extend(self.remove_at(at, |i| exit_reason(i, 0, false)));
         }
+        self.end_overdue_saves(now);
         self.kill_and_reclaim(now);
         ended
+    }
+
+    /// A save wait whose deadline has passed settles here (RUY-1099): the adapter's own bound is
+    /// the same, this one holds when its answer is lost.
+    fn end_overdue_saves(&mut self, now: Instant) {
+        let Some(wait) = self.lifecycle.as_ref().map(|(_, wait)| *wait) else {
+            return;
+        };
+        for at in 0..self.instances.len() {
+            if let SaveWait::Waiting { since, .. } = self.instances[at].save {
+                if now.saturating_duration_since(since) >= wait {
+                    eprintln!(
+                        "ruya-session: {}: no answer to its Stopping within {} ms",
+                        self.instances[at].unit,
+                        wait.as_millis()
+                    );
+                    self.settle(at);
+                }
+            }
+        }
+        self.release_settled(now);
     }
 
     /// `tick`'s backstop kills and memory reclaims.
@@ -1326,7 +1612,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             .collect();
         let mut frozen: Vec<String> = mine
             .iter()
-            .filter(|i| i.frozen || i.held)
+            .filter(|i| i.frozen || i.held.is_some())
             .map(|i| i.app_id.clone())
             .collect();
         let mut running: Vec<String> = mine
@@ -1389,6 +1675,14 @@ fn exit_reason(inst: &Instance, code: i32, signaled: bool) -> (i32, ExitReason) 
         ExitReason::Crashed
     };
     (code, reason)
+}
+
+/// The earlier of two optional times.
+fn earlier(a: Option<Instant>, b: Option<Instant>) -> Option<Instant> {
+    match (a, b) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (a, b) => a.or(b),
+    }
 }
 
 /// The journal line of a freezer call the OS accepted (RUY-547): `froze <unit> (Freeze)` or
@@ -1580,7 +1874,7 @@ mod tests {
         // A second freeze is a no-op: the OS is not asked again, nothing is announced.
         assert_eq!(s.freeze(&unit, Some("p1"), Instant::now()), Status::Ok);
         assert!(s.take_frozen_changes().is_empty());
-        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        assert_eq!(s.thaw(&unit, Some("p1"), Instant::now()), Status::Ok);
         assert!(!frozen_of(&s, &unit));
         assert_eq!(
             s.take_frozen_changes(),
@@ -1599,7 +1893,7 @@ mod tests {
         );
         // A thaw of an app that is not frozen still asks the OS (a restart of the service forgets
         // the state), announces nothing and is ok.
-        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        assert_eq!(s.thaw(&unit, Some("p1"), Instant::now()), Status::Ok);
         assert!(s.take_frozen_changes().is_empty());
         assert_eq!(s.spawner.calls().last(), Some(&format!("thaw {unit}")));
     }
@@ -1614,7 +1908,11 @@ mod tests {
                 Status::NotAllowed,
                 "{active:?}"
             );
-            assert_eq!(s.thaw(&unit, active), Status::NotAllowed, "{active:?}");
+            assert_eq!(
+                s.thaw(&unit, active, Instant::now()),
+                Status::NotAllowed,
+                "{active:?}"
+            );
         }
         assert!(!frozen_of(&s, &unit));
         assert_eq!(s.spawner.calls(), [format!("start ruya-p1 {APP}")]);
@@ -1630,7 +1928,10 @@ mod tests {
             s.freeze("nope.service", Some("p1"), Instant::now()),
             Status::NotRunning
         );
-        assert_eq!(s.thaw("nope.service", Some("p1")), Status::NotRunning);
+        assert_eq!(
+            s.thaw("nope.service", Some("p1"), Instant::now()),
+            Status::NotRunning
+        );
         let (_, unit) = s.launch(APP, "p1", 0, &[]); // still starting
         assert_eq!(
             s.freeze(&unit, Some("p1"), Instant::now()),
@@ -1889,7 +2190,7 @@ mod tests {
         let unit = running(&mut s);
         s.profile_changed(Some("p1"), "", Instant::now());
         s.take_frozen_changes();
-        assert_eq!(s.thaw(&unit, Some("")), Status::NotAllowed);
+        assert_eq!(s.thaw(&unit, Some(""), Instant::now()), Status::NotAllowed);
         assert!(frozen_of(&s, &unit));
         assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
         assert_eq!(
@@ -1912,7 +2213,7 @@ mod tests {
         let unit = running(&mut s);
         assert_eq!(s.freeze(&unit, Some("p1"), Instant::now()), Status::Ok); // the Hub opens
                                                                              // The Thaw first, then the change.
-        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        assert_eq!(s.thaw(&unit, Some("p1"), Instant::now()), Status::Ok);
         s.profile_changed(Some("p1"), "", Instant::now());
         assert!(frozen_of(&s, &unit));
         // The change first: the Thaw then reads "" as the signed-in profile and is refused.
@@ -1920,11 +2221,11 @@ mod tests {
         let unit = running(&mut s);
         assert_eq!(s.freeze(&unit, Some("p1"), Instant::now()), Status::Ok);
         s.profile_changed(Some("p1"), "", Instant::now());
-        assert_eq!(s.thaw(&unit, Some("")), Status::NotAllowed);
+        assert_eq!(s.thaw(&unit, Some(""), Instant::now()), Status::NotAllowed);
         assert!(frozen_of(&s, &unit));
         // p1 signs in again: the shell's Thaw works.
         s.profile_changed(Some(""), "p1", Instant::now());
-        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        assert_eq!(s.thaw(&unit, Some("p1"), Instant::now()), Status::Ok);
         assert!(!frozen_of(&s, &unit));
     }
 
@@ -2030,13 +2331,13 @@ mod tests {
         // A second Freeze changes nothing and asks nothing.
         assert_eq!(s.freeze(&unit, Some("p1"), Instant::now()), Status::Ok);
         assert_eq!(s.spawner.audio_calls().len(), 1);
-        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        assert_eq!(s.thaw(&unit, Some("p1"), Instant::now()), Status::Ok);
         assert_eq!(
             s.spawner.audio_calls()[1..],
             [format!("ruya-p1 frozen= running={APP}")]
         );
         // A thaw of an app that is not frozen, a stop and the end ask nothing more.
-        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        assert_eq!(s.thaw(&unit, Some("p1"), Instant::now()), Status::Ok);
         assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
         assert!(s.on_event(exited(&unit, 0, false)).len() == 1);
         assert_eq!(s.spawner.audio_calls().len(), 2);
@@ -2117,7 +2418,7 @@ mod tests {
         s.tick(t0 + RECLAIM_AFTER * 3);
         assert_eq!(reclaims(&s).len(), 1);
         // The thaw ends a reclaim that may still run, before it thaws.
-        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        assert_eq!(s.thaw(&unit, Some("p1"), Instant::now()), Status::Ok);
         let calls = s.spawner.calls();
         assert_eq!(
             calls[calls.len() - 2..],
@@ -2139,7 +2440,7 @@ mod tests {
         let t0 = Instant::now();
         assert_eq!(s.freeze(&unit, Some("p1"), t0), Status::Ok);
         s.tick(t0 + Duration::from_secs(20));
-        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        assert_eq!(s.thaw(&unit, Some("p1"), Instant::now()), Status::Ok);
         let t1 = t0 + Duration::from_secs(25);
         assert_eq!(s.freeze(&unit, Some("p1"), t1), Status::Ok);
         s.tick(t0 + RECLAIM_AFTER + Duration::from_secs(1));
@@ -2157,7 +2458,7 @@ mod tests {
         s.tick(t0 + RECLAIM_AFTER * 2);
         assert!(reclaims(&s).is_empty(), "{:?}", s.spawner.calls());
         // Nothing to cancel at the thaw either.
-        assert_eq!(s.thaw(&unit, Some("p1")), Status::Ok);
+        assert_eq!(s.thaw(&unit, Some("p1"), Instant::now()), Status::Ok);
         assert!(reclaims(&s).is_empty());
     }
 
@@ -3302,7 +3603,7 @@ mod tests {
             }]
         );
         let before = s.spawner.calls().len();
-        assert_eq!(s.thaw(&child, Some("p1")), Status::Ok);
+        assert_eq!(s.thaw(&child, Some("p1"), Instant::now()), Status::Ok);
         assert_eq!(calls_since(&s, before), [format!("thaw {child}")]);
         let before = s.spawner.calls().len();
         assert_eq!(s.stop(&child, Instant::now()), Status::Ok);
@@ -3372,7 +3673,7 @@ mod tests {
         );
         assert!(frozen_of(s, child) && frozen_of(s, steam));
         let before = s.spawner.calls().len();
-        assert_eq!(s.thaw(steam, Some("p1")), Status::Ok);
+        assert_eq!(s.thaw(steam, Some("p1"), Instant::now()), Status::Ok);
         assert_eq!(
             calls_since(s, before),
             [format!("thaw {child}"), format!("thaw {steam}")]
@@ -3396,7 +3697,7 @@ mod tests {
         assert!(frozen_of(&s, &child));
         assert!(!frozen_of(&s, &steam), "the parent's frozen is its own");
         let before = s.spawner.calls().len();
-        assert_eq!(s.thaw(&steam, Some("p1")), Status::Ok);
+        assert_eq!(s.thaw(&steam, Some("p1"), Instant::now()), Status::Ok);
         assert_eq!(calls_since(&s, before), [format!("thaw {child}")]);
     }
 
@@ -3453,7 +3754,10 @@ mod tests {
             s.spawner.audio_calls(),
             [format!("ruya-p1 frozen={STEAM} running={STEAM}")]
         );
-        assert!(s.instances.iter().any(|i| i.held && i.unit == steam));
+        assert!(s
+            .instances
+            .iter()
+            .any(|i| i.held.is_some() && i.unit == steam));
         // Only the game's record changed: `FrozenChanged` is never sent for the held parent.
         assert_eq!(
             s.take_frozen_changes(),
@@ -3463,14 +3767,14 @@ mod tests {
             }]
         );
         assert!(!frozen_of(&s, &steam));
-        assert_eq!(s.thaw(&steam, Some("p1")), Status::Ok);
+        assert_eq!(s.thaw(&steam, Some("p1"), Instant::now()), Status::Ok);
         assert_eq!(
             s.spawner.audio_calls().last().unwrap(),
             &format!("ruya-p1 frozen= running={STEAM}")
         );
         // A thaw of a parent that is no longer held asks no more.
         let calls = s.spawner.audio_calls().len();
-        assert_eq!(s.thaw(&steam, Some("p1")), Status::Ok);
+        assert_eq!(s.thaw(&steam, Some("p1"), Instant::now()), Status::Ok);
         assert_eq!(s.spawner.audio_calls().len(), calls);
     }
 
@@ -3496,7 +3800,7 @@ mod tests {
         // A second Freeze changes nothing; the Thaw puts the sound back.
         assert_eq!(s.freeze(&steam, Some("p1"), Instant::now()), Status::Ok);
         assert_eq!(s.spawner.audio_calls().len(), 1);
-        assert_eq!(s.thaw(&steam, Some("p1")), Status::Ok);
+        assert_eq!(s.thaw(&steam, Some("p1"), Instant::now()), Status::Ok);
         assert_eq!(
             s.spawner.audio_calls()[1..],
             [format!("ruya-p1 frozen= running={STEAM}")]
@@ -3947,5 +4251,332 @@ mod tests {
         );
         let left: Vec<String> = s.list().into_iter().map(|a| a.instance).collect();
         assert_eq!(left, [steam]);
+    }
+
+    // ---- The lifecycle told to Platform1 (RUY-1099, ADR-022) -----------------------------------
+
+    use async_channel::Receiver;
+
+    /// `s` with its notices in a channel, as the console runs it.
+    fn told(
+        s: Session<FakeSpawner, ProfileSnapshot>,
+    ) -> (
+        Session<FakeSpawner, ProfileSnapshot>,
+        Receiver<LifecycleNotice>,
+    ) {
+        let (outbox, notices) = async_channel::unbounded();
+        (s.with_lifecycle(outbox, SAVE_WAIT), notices)
+    }
+
+    /// The notices sent so far, as (instance, event).
+    fn notices(rx: &Receiver<LifecycleNotice>) -> Vec<(String, LifecycleEvent)> {
+        std::iter::from_fn(|| rx.try_recv().ok())
+            .map(|n| {
+                assert_eq!(n.profile, "p1");
+                (n.instance, n.event)
+            })
+            .collect()
+    }
+
+    /// The backstop's kill of `unit` comes at `at`, not a moment before.
+    fn killed_at(s: &mut Session<FakeSpawner, ProfileSnapshot>, unit: &str, at: Instant) {
+        s.tick(at - Duration::from_millis(1));
+        assert!(!s.spawner.calls().contains(&format!("kill {unit}")));
+        s.tick(at);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("kill {unit}")));
+    }
+
+    const STOPPING: LifecycleEvent = LifecycleEvent::Stopping { deadline_ms: 5000 };
+
+    fn resume(ms: u64) -> LifecycleEvent {
+        LifecycleEvent::Resume { frozen_ms: ms }
+    }
+
+    fn held_steam() -> (
+        Session<FakeSpawner, ProfileSnapshot>,
+        Receiver<LifecycleNotice>,
+        String,
+    ) {
+        let dir = ProfileSnapshot::new(["p1".to_owned()]);
+        let s = Session::new(
+            FakeSpawner::new().with_app(STEAM).with_freeze_never(STEAM),
+            dir,
+            vec![],
+        );
+        let (mut s, rx) = told(s);
+        let (_, steam) = s.launch(STEAM, "p1", 100, &[]);
+        s.on_event(UnitEvent::Started {
+            unit: steam.clone(),
+        });
+        (s, rx, steam)
+    }
+
+    #[test]
+    fn a_freeze_tells_nothing_and_its_thaw_tells_resume_with_the_frozen_time() {
+        let (mut s, rx) = told(session());
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        assert_eq!(s.freeze(&unit, Some("p1"), t0), Status::Ok);
+        assert!(frozen_of(&s, &unit));
+        assert!(notices(&rx).is_empty(), "no notice before or at a freeze");
+        let t1 = t0 + Duration::from_millis(1500);
+        assert_eq!(s.thaw(&unit, Some("p1"), t1), Status::Ok);
+        assert_eq!(notices(&rx), [(unit.clone(), resume(1500))]);
+        // A thaw of an app that was not frozen tells nothing.
+        assert_eq!(s.thaw(&unit, Some("p1"), t1), Status::Ok);
+        assert!(notices(&rx).is_empty());
+        // Neither does a profile that leaves: its freeze is a freeze like the Hub's.
+        s.profile_changed(Some("p1"), "p2", t1);
+        assert!(frozen_of(&s, &unit));
+        assert!(notices(&rx).is_empty());
+    }
+
+    #[test]
+    fn only_a_hold_tells_background_once_and_its_end_tells_resume() {
+        let (mut s, rx, steam) = held_steam();
+        let t0 = Instant::now();
+        assert_eq!(s.freeze(&steam, Some("p1"), t0), Status::Ok);
+        assert!(!frozen_of(&s, &steam));
+        assert_eq!(notices(&rx), [(steam.clone(), LifecycleEvent::Background)]);
+        // A second Freeze while held tells nothing more.
+        assert_eq!(
+            s.freeze(&steam, Some("p1"), t0 + Duration::from_secs(1)),
+            Status::Ok
+        );
+        assert!(notices(&rx).is_empty());
+        // The Thaw ends the hold: the time since it began.
+        let t1 = t0 + Duration::from_millis(700);
+        assert_eq!(s.thaw(&steam, Some("p1"), t1), Status::Ok);
+        assert_eq!(notices(&rx), [(steam.clone(), resume(700))]);
+        // A profile that leaves freezes even a `never` app (RUY-1063): no Background then.
+        s.profile_changed(Some("p1"), "", t1);
+        assert!(frozen_of(&s, &steam));
+        assert!(notices(&rx).is_empty());
+    }
+
+    #[test]
+    fn a_held_app_frozen_later_is_told_one_resume_from_the_hold() {
+        let (mut s, rx, steam) = held_steam();
+        let t0 = Instant::now();
+        assert_eq!(s.freeze(&steam, Some("p1"), t0), Status::Ok);
+        // Its profile leaves while it is held, and signs in again.
+        s.profile_changed(Some("p1"), "", t0 + Duration::from_secs(2));
+        s.profile_changed(Some(""), "p1", t0 + Duration::from_secs(3));
+        assert_eq!(notices(&rx), [(steam.clone(), LifecycleEvent::Background)]);
+        assert_eq!(
+            s.thaw(&steam, Some("p1"), t0 + Duration::from_secs(4)),
+            Status::Ok
+        );
+        assert_eq!(notices(&rx), [(steam, resume(4000))]);
+    }
+
+    #[test]
+    fn a_child_is_told_its_own_resume_and_a_frozen_parent_its_own() {
+        let (s, steam, child) = steam_with_game(FakeSpawner::new());
+        let (mut s, rx) = told(s);
+        let t0 = Instant::now();
+        assert_eq!(s.freeze(&steam, Some("p1"), t0), Status::Ok);
+        assert!(notices(&rx).is_empty());
+        assert_eq!(
+            s.thaw(&steam, Some("p1"), t0 + Duration::from_millis(250)),
+            Status::Ok
+        );
+        assert_eq!(notices(&rx), [(child, resume(250)), (steam, resume(250))]);
+    }
+
+    #[test]
+    fn a_stop_tells_stopping_and_sends_its_sigterm_once_the_wait_settled() {
+        let (mut s, rx) = told(session());
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        assert_eq!(s.stop(&unit, t0), Status::Ok);
+        assert_eq!(notices(&rx), [(unit.clone(), STOPPING)]);
+        assert!(!s.spawner.calls().contains(&format!("stop {unit}")));
+        assert_eq!(s.list()[0].state, State::Stopping);
+        // A second Stop while it waits changes nothing.
+        assert_eq!(s.stop(&unit, t0), Status::Ok);
+        assert!(notices(&rx).is_empty());
+        // Nothing while it saves: no SIGTERM, and the grace has not started.
+        let t1 = t0 + Duration::from_secs(3);
+        s.tick(t1 - Duration::from_millis(1));
+        assert!(!s.spawner.calls().contains(&format!("stop {unit}")));
+        // Settled: the SIGTERM, and Close game's whole grace starts now.
+        assert_eq!(s.saved(&unit, t1), Status::Ok);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("stop {unit}")));
+        assert_eq!(s.saved(&unit, t1), Status::UnknownInstance, "settled once");
+        killed_at(&mut s, &unit, t1 + STOP_GRACE);
+    }
+
+    #[test]
+    fn an_app_that_quits_while_it_saves_is_a_quit_and_its_late_answer_does_nothing() {
+        let (mut s, rx) = told(session());
+        let unit = running(&mut s);
+        assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
+        assert_eq!(notices(&rx).len(), 1);
+        assert_eq!(reason(s.on_event(exited(&unit, 0, false))), (0, "quit"));
+        assert_eq!(s.saved(&unit, Instant::now()), Status::UnknownInstance);
+        assert!(!s.spawner.calls().contains(&format!("stop {unit}")));
+    }
+
+    #[test]
+    fn a_kill_while_it_saves_ends_the_wait_and_no_sigterm_follows() {
+        let (mut s, rx) = told(session());
+        let unit = running(&mut s);
+        assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
+        assert_eq!(notices(&rx).len(), 1);
+        assert_eq!(s.kill(&unit, Some("p1"), Instant::now()), Status::Ok);
+        assert_eq!(s.saved(&unit, Instant::now()), Status::UnknownInstance);
+        assert!(!s.spawner.calls().contains(&format!("stop {unit}")));
+        assert_eq!(reason(s.on_event(exited(&unit, 0, true))), (0, "killed"));
+    }
+
+    #[test]
+    fn a_frozen_app_is_thawed_told_resume_then_stopping() {
+        let (mut s, rx) = told(session());
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        assert_eq!(s.freeze(&unit, Some("p1"), t0), Status::Ok);
+        assert_eq!(s.stop(&unit, t0 + Duration::from_millis(3000)), Status::Ok);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("thaw {unit}")));
+        assert_eq!(
+            notices(&rx),
+            [(unit.clone(), resume(3000)), (unit.clone(), STOPPING)]
+        );
+    }
+
+    #[test]
+    fn a_parents_sigterm_follows_its_childrens_after_every_wait_settled() {
+        let (s, steam, child) = steam_with_game(FakeSpawner::new());
+        let (mut s, rx) = told(s);
+        let before = s.spawner.calls().len();
+        assert_eq!(s.stop(&steam, Instant::now()), Status::Ok);
+        assert_eq!(
+            notices(&rx),
+            [(child.clone(), STOPPING), (steam.clone(), STOPPING)]
+        );
+        // Steam's own wait settles first (it did not register): it waits for its game.
+        assert_eq!(s.saved(&steam, Instant::now()), Status::Ok);
+        assert!(calls_since(&s, before).is_empty());
+        assert_eq!(s.saved(&child, Instant::now()), Status::Ok);
+        assert_eq!(
+            calls_since(&s, before),
+            [format!("stop {child}"), format!("stop {steam}")]
+        );
+    }
+
+    #[test]
+    fn without_platform1_a_stop_sends_its_sigterm_at_once() {
+        // No outbox (`--session` tests, a service without the sender), or one nobody reads.
+        let mut s = session();
+        let unit = running(&mut s);
+        assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("stop {unit}")));
+        let (mut s, rx) = told(session());
+        drop(rx);
+        let unit = running(&mut s);
+        assert_eq!(s.stop(&unit, Instant::now()), Status::Ok);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("stop {unit}")));
+    }
+
+    #[test]
+    fn a_save_wait_without_an_answer_ends_at_its_deadline_in_tick() {
+        let (mut s, rx) = told(session());
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        assert_eq!(s.stop(&unit, t0), Status::Ok);
+        assert_eq!(notices(&rx).len(), 1);
+        s.tick(t0 + SAVE_WAIT - Duration::from_millis(1));
+        assert!(!s.spawner.calls().contains(&format!("stop {unit}")));
+        let t1 = t0 + SAVE_WAIT;
+        s.tick(t1);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("stop {unit}")));
+        // The answer that comes late changes nothing.
+        assert_eq!(s.saved(&unit, t1), Status::UnknownInstance);
+        // Close game: the whole grace from the SIGTERM.
+        killed_at(&mut s, &unit, t1 + STOP_GRACE);
+    }
+
+    #[test]
+    fn at_power_off_the_save_window_is_part_of_the_grace() {
+        let (mut s, rx) = told(session());
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        assert_eq!(s.stop_all(t0), [(unit.clone(), Status::Ok)]);
+        assert_eq!(notices(&rx), [(unit.clone(), STOPPING)]);
+        assert!(!s.spawner.calls().contains(&format!("stop {unit}")));
+        // It saved after 2 s: the SIGTERM then, and the kill still 30 s after the Stopping.
+        assert_eq!(s.saved(&unit, t0 + Duration::from_secs(2)), Status::Ok);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("stop {unit}")));
+        killed_at(&mut s, &unit, t0 + STOP_GRACE);
+    }
+
+    #[test]
+    fn at_power_off_a_silent_app_gets_its_sigterm_at_5_s_and_its_kill_at_30_s() {
+        let (mut s, rx) = told(session());
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        assert_eq!(s.stop_all(t0), [(unit.clone(), Status::Ok)]);
+        assert_eq!(notices(&rx).len(), 1);
+        s.tick(t0 + SAVE_WAIT);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("stop {unit}")));
+        killed_at(&mut s, &unit, t0 + STOP_GRACE);
+    }
+
+    #[test]
+    fn a_power_off_during_a_close_games_save_wait_counts_its_grace_from_that_stopping() {
+        let (mut s, rx) = told(session());
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        assert_eq!(s.stop(&unit, t0), Status::Ok);
+        assert_eq!(
+            s.stop_all(t0 + Duration::from_secs(1)),
+            [(unit.clone(), Status::Ok)]
+        );
+        assert_eq!(
+            notices(&rx),
+            [(unit.clone(), STOPPING)],
+            "no second Stopping"
+        );
+        assert_eq!(s.saved(&unit, t0 + Duration::from_secs(4)), Status::Ok);
+        s.tick(t0 + STOP_GRACE);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("kill {unit}")));
+    }
+
+    #[test]
+    fn a_power_off_counts_the_grace_of_a_settled_parent_whose_child_still_waits_from_its_stopping()
+    {
+        let (s, steam, child) = steam_with_game(FakeSpawner::new());
+        let (mut s, rx) = told(s);
+        let t0 = Instant::now();
+        assert_eq!(s.stop(&steam, t0), Status::Ok);
+        assert_eq!(notices(&rx).len(), 2);
+        // Steam did not register: its own wait settles at once; its game still saves.
+        assert_eq!(s.saved(&steam, t0), Status::Ok);
+        assert_eq!(s.stop_all(t0 + Duration::from_millis(100)).len(), 2);
+        assert_eq!(s.saved(&child, t0 + Duration::from_secs(4)), Status::Ok);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("stop {steam}")));
+        let unit = steam;
+        s.tick(t0 + STOP_GRACE - Duration::from_millis(1));
+        assert!(!s.spawner.calls().contains(&format!("kill {unit}")));
+        s.tick(t0 + STOP_GRACE);
+        assert!(s.spawner.calls().contains(&format!("kill {unit}")));
+    }
+
+    #[test]
+    fn at_power_off_children_and_parents_wait_side_by_side_and_end_in_order() {
+        let (s, steam, child) = steam_with_game(FakeSpawner::new());
+        let (mut s, rx) = told(s);
+        let before = s.spawner.calls().len();
+        let t0 = Instant::now();
+        assert_eq!(s.stop_all(t0).len(), 2);
+        assert_eq!(
+            notices(&rx),
+            [(child.clone(), STOPPING), (steam.clone(), STOPPING)]
+        );
+        s.tick(t0 + SAVE_WAIT);
+        assert_eq!(
+            calls_since(&s, before),
+            [format!("stop {child}"), format!("stop {steam}")]
+        );
     }
 }
