@@ -487,6 +487,20 @@ out="$(python3 "$here/test-udev-input-rules.py" 2>&1)"; rc=$?
 echo "$out" | sed 's/^/    /'
 [ "$rc" = 0 ] && pass "test-udev-input-rules.py exit 0" || fail "test-udev-input-rules.py exit $rc"
 
+echo "dell-perf-bench.sh: the numbers, the JSON and --compare (RUY-842)"
+out="$(python3 "$here/test-dell-perf-stats.py" 2>&1)"; rc=$?
+echo "$out"
+fails=$((fails + $(echo "$out" | grep -c '^    FAIL')))
+[ "$rc" = 0 ] && pass "test-dell-perf-stats.py exit 0" || fail "test-dell-perf-stats.py exit $rc"
+for s in dell-hub-check.sh dell-epp-bench.sh dell-perf-bench.sh lib/dell-common.sh lib/dell-cost.sh; do
+    bash -n "$here/$s" 2>/dev/null && pass "$s parses" || fail "$s does not parse"
+done
+for s in dell-hub-check.sh dell-epp-bench.sh dell-perf-bench.sh; do
+    grep -q 'lib/dell-common.sh' "$here/$s" && ! grep -q '^r() {' "$here/$s" && pass "$s uses lib/dell-common.sh, not its own ssh helper"         || fail "$s has its own ssh helper or does not source lib/dell-common.sh"
+done
+out="$(bash "$here/dell-perf-bench.sh" --compare 2>&1)"
+expect_contains "dell-perf-bench.sh --compare wants two files" "$out" "usage:"
+
 # --- vm-sample-check.sh: an early failure still cleans -----------------------------------------------
 echo "vm-sample-check.sh: cleanup runs when a step fails early"
 printf '#!/bin/sh\nexit 3\n' > "$shims/systemctl"

@@ -19,9 +19,7 @@
 set -u
 HOST="${1:-192.168.178.109}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-SSHO="-i $HOME/.ssh/ruyaos_dev -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
-r() { ssh $SSHO "root@$HOST" "$@"; }
-BUS='runuser -u ruya-shell -- busctl --system'
+. "$HERE/lib/dell-common.sh"   # SSHO, r, BUS, stop_apps, shell_cost
 ORDER="${RUYA_BENCH_ORDER:-balance_performance performance performance balance_performance}"
 GAME_SECS="${RUYA_BENCH_GAME_SECS:-30}"
 D=/var/tmp/epp-bench
@@ -52,21 +50,10 @@ setepp() { r "for p in /sys/devices/system/cpu/cpufreq/policy*/energy_performanc
 
 # Stop every app (Home), settle 20 s, RAPL package energy over 60 s. Prints "<watts> <temp C>".
 idle() {
-    for i in $(r "$BUS --json=short call org.ruyaos.Session1 /org/ruyaos/Session1 org.ruyaos.Session1 ListRunning" | grep -o 'ruya-app-[^"]*service'); do
-        r "$BUS call org.ruyaos.Session1 /org/ruyaos/Session1 org.ruyaos.Session1 Stop s $i" >/dev/null
-    done
-    r 'bash -s' <<'EOF'
-sleep 20
-z=/sys/class/powercap/intel-rapl:0
-max=$(cat $z/max_energy_range_uj)
-e0=$(cat $z/energy_uj); t0=$(date +%s.%N)
-sleep 60
-e1=$(cat $z/energy_uj); t1=$(date +%s.%N)
-[ "$e1" -lt "$e0" ] && e1=$((e1 + max))
-temp=0
-for t in /sys/class/thermal/thermal_zone*; do [ "$(cat $t/type)" = x86_pkg_temp ] && temp=$(( $(cat $t/temp) / 1000 )); done
-awk -v a="$e0" -v b="$e1" -v s="$t0" -v e="$t1" -v t="$temp" 'BEGIN{printf "%.2f %d\n", (b - a) / 1e6 / (e - s), t}'
-EOF
+    stop_apps
+    sleep 20
+    set -- $(shell_cost 60)
+    echo "$3 $4"
 }
 
 summary=""
