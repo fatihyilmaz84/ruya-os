@@ -97,7 +97,7 @@ def frame_step():
     return min(gap, MAX_STEP)
 ```
 
-**Test it:** on a RuyaOS dev machine, as root, freeze and thaw your running game the way the Hub does ([Testing and debugging](testing-and-debugging.md)). Lifecycle events for apps are an experimental API ([Lifecycle events](#lifecycle-events-experimental)), **not yet in the image**: until they are, there are none, and even then there is no notice before a freeze.
+**Test it:** on a RuyaOS dev machine, as root, freeze and thaw your running game the way the Hub does ([Testing and debugging](testing-and-debugging.md)). Lifecycle events for apps are an experimental API ([Lifecycle events](#lifecycle-events-experimental)), **not working on a console yet** (the image carries the service, but it does not yet recognise a sandboxed app; see that section): until it does, your app gets none, and even then there is no notice before a freeze.
 
 ## Stopping: quit, crashed, killed
 
@@ -141,7 +141,7 @@ What we know about SIGTERM and the Flatpak sandbox: sending `SIGTERM` to **all**
 
 ## Lifecycle events (experimental)
 
-*Experimental (level 0, [The public surface](api-surface.md)): the service `ruya-platform`, its contract `api/dbus/org.ruyaos.Platform1.xml` (RUY-1098) and the console's side that sends the events (`ruya-session`, RUY-1099) are built, and the console image runs the service from 0.0.106 on (RUY-157; its check on a booted console, `vm-platform-check.sh`, is pending). Names, arguments and behaviour may change.*
+*Experimental (level 0, [The public surface](api-surface.md)): the service `ruya-platform`, its contract `api/dbus/org.ruyaos.Platform1.xml` (RUY-1098) and the console's side that sends the events (`ruya-session`, RUY-1099) are built, and the console image runs the service from 0.0.106 on, but its check on a booted console (`vm-platform-check.sh`) failed on 0.0.106: the service does not yet recognise a sandboxed app, so `Register` answers `not-an-app` (RUY-157). Off the console, the [developer mock](testing-and-debugging.md) works. Names, arguments and behaviour may change.*
 
 **There is no notice before a freeze.** A normal Home, the Hub and a profile switch freeze your app with no signal at all: the freeze is instant and a frozen app could not act on a notice. You learn of a freeze afterwards, from `frozen_ms` in `Resume`, and from the gap in your clock (rule 1 of [What to do](#what-to-do)), which you keep detecting either way. `Background` comes only when the console keeps your app running behind Home (a hold, for instance while it plays music; ADR-042 and ADR-046).
 
