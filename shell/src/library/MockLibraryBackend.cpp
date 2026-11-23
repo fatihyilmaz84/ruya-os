@@ -74,6 +74,9 @@ const LibraryItem *gameHolding(const QList<LibraryItem> &games, const QString &i
     }
     return nullptr;
 }
+// The pointer points into `games`: a temporary list (gamesOf(...) passed straight in) dies at the end of
+// the statement and leaves it dangling (RUY-137, a SIGSEGV on Fedora's Qt), so the compiler refuses one.
+const LibraryItem *gameHolding(QList<LibraryItem> &&games, const QString &id) = delete;
 
 // A resolution that found a runner.
 LibraryResolution resolved(const char *runner, const char *source, const char *tested)
@@ -494,7 +497,8 @@ void MockLibraryBackend::unlinkInstallation(const QString &profile, const QStrin
     const QString call = QStringLiteral("UnlinkInstallation");
     if (!validProfile(profile))
         return answerInstallationCall(profile, call, QStringLiteral("invalid"), false);
-    const LibraryItem *game = gameHolding(gamesOf(profile), installation);
+    const QList<LibraryItem> games = gamesOf(profile);
+    const LibraryItem *game = gameHolding(games, installation);
     if (!game)
         return answerInstallationCall(profile, call, QStringLiteral("unknown"), false);
     const QString gameId = game->id;
