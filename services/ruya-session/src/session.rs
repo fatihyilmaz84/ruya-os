@@ -3356,24 +3356,37 @@ mod tests {
         );
     }
 
+    /// `freeze` freezes Steam's game, then Steam's own unit; the Thaw of Steam thaws both, the game
+    /// first.
+    fn freezes_both_and_thaw_thaws_both(
+        s: &mut Session<FakeSpawner, ProfileSnapshot>,
+        steam: &str,
+        child: &str,
+        freeze: impl FnOnce(&mut Session<FakeSpawner, ProfileSnapshot>),
+    ) {
+        let before = s.spawner.calls().len();
+        freeze(s);
+        assert_eq!(
+            calls_since(s, before),
+            [format!("freeze {child}"), format!("freeze {steam}")]
+        );
+        assert!(frozen_of(s, child) && frozen_of(s, steam));
+        let before = s.spawner.calls().len();
+        assert_eq!(s.thaw(steam, Some("p1")), Status::Ok);
+        assert_eq!(
+            calls_since(s, before),
+            [format!("thaw {child}"), format!("thaw {steam}")]
+        );
+        assert!(!frozen_of(s, child) && !frozen_of(s, steam));
+    }
+
     #[test]
     fn freeze_and_thaw_of_a_parent_reach_its_children_and_itself_as_its_app_allows() {
         // freeze = always (Steam's table today): the child, then the parent's own.
         let (mut s, steam, child) = steam_with_game(FakeSpawner::new());
-        let before = s.spawner.calls().len();
-        assert_eq!(s.freeze(&steam, Some("p1"), Instant::now()), Status::Ok);
-        assert_eq!(
-            calls_since(&s, before),
-            [format!("freeze {child}"), format!("freeze {steam}")]
-        );
-        assert!(frozen_of(&s, &child) && frozen_of(&s, &steam));
-        let before = s.spawner.calls().len();
-        assert_eq!(s.thaw(&steam, Some("p1")), Status::Ok);
-        assert_eq!(
-            calls_since(&s, before),
-            [format!("thaw {child}"), format!("thaw {steam}")]
-        );
-        assert!(!frozen_of(&s, &child) && !frozen_of(&s, &steam));
+        freezes_both_and_thaw_thaws_both(&mut s, &steam, &child, |s| {
+            assert_eq!(s.freeze(&steam, Some("p1"), Instant::now()), Status::Ok);
+        });
 
         // freeze = never (ADR-042, what B5 sets): the child only; Steam keeps running.
         let (mut s, steam, child) = steam_with_game(FakeSpawner::new().with_freeze_never(STEAM));
@@ -3385,40 +3398,20 @@ mod tests {
         let before = s.spawner.calls().len();
         assert_eq!(s.thaw(&steam, Some("p1")), Status::Ok);
         assert_eq!(calls_since(&s, before), [format!("thaw {child}")]);
-        // A profile that leaves freezes the game and Steam too (ADR-046 point 2, RUY-1063: a
-        // running Steam would keep its /dev/uinput descriptor for the next profile's time).
-        let before = s.spawner.calls().len();
-        s.profile_changed(Some("p1"), "p2", Instant::now());
-        assert_eq!(
-            calls_since(&s, before),
-            [format!("freeze {child}"), format!("freeze {steam}")]
-        );
-        assert!(frozen_of(&s, &child) && frozen_of(&s, &steam));
     }
 
     #[test]
     fn a_switch_freezes_a_never_frozen_steam_and_its_game_and_the_way_back_thaws_both() {
+        // A profile that leaves freezes the game and Steam too (ADR-046 point 2, RUY-1063: a
+        // running Steam would keep its /dev/uinput descriptor for the next profile's time). p1
+        // back: the shell's Thaw of Steam thaws its game first, then the unit itself.
         let (mut s, steam, child) = steam_with_game(FakeSpawner::new().with_freeze_never(STEAM));
-        let before = s.spawner.calls().len();
-        let asked = s.profile_changed(Some("p1"), "p2", Instant::now());
-        assert_eq!(
-            asked,
-            [(steam.clone(), Status::Ok), (child.clone(), Status::Ok)]
-        );
-        assert_eq!(
-            calls_since(&s, before),
-            [format!("freeze {child}"), format!("freeze {steam}")]
-        );
-        assert!(frozen_of(&s, &child) && frozen_of(&s, &steam));
-        // p1 back: the shell thaws Steam, which thaws its game first, then the unit itself.
-        s.profile_changed(Some("p2"), "p1", Instant::now());
-        let before = s.spawner.calls().len();
-        assert_eq!(s.thaw(&steam, Some("p1")), Status::Ok);
-        assert_eq!(
-            calls_since(&s, before),
-            [format!("thaw {child}"), format!("thaw {steam}")]
-        );
-        assert!(!frozen_of(&s, &child) && !frozen_of(&s, &steam));
+        freezes_both_and_thaw_thaws_both(&mut s, &steam, &child, |s| {
+            let asked = s.profile_changed(Some("p1"), "p2", Instant::now());
+            assert!(asked.iter().all(|(_, status)| *status == Status::Ok));
+            assert!(asked.iter().any(|(unit, _)| *unit == steam));
+            s.profile_changed(Some("p2"), "p1", Instant::now());
+        });
         // The Hub's pause of the same app still only holds Steam (ADR-042 point 3).
         let before = s.spawner.calls().len();
         assert_eq!(s.freeze(&steam, Some("p1"), Instant::now()), Status::Ok);
