@@ -1085,19 +1085,27 @@ pub const LIBRARY_PROGRAM: &str = "/usr/bin/ruya-library";
 pub const PROFILE_SCAN: &str = "profile-scan";
 /// How long the reader's unit may run (`RuntimeMaxSec`); the caller waits a little longer.
 pub const PROFILE_SCAN_RUNTIME_SECS: u32 = 20;
-/// The reader's sandbox (RUY-1056): it is a native helper, not a Flatpak app, so it gets the
-/// hardening of a system service here. It reads the home (read-only) and writes only to stdout:
-/// no network or socket, no new privileges, capabilities or namespaces, no writable code.
+/// The reader's sandbox (RUY-1056, RUY-1102): it is a native helper, not a Flatpak app, so it
+/// gets the hardening of a system service here. It reads the home and writes only to stdout and
+/// its own private `/tmp`: no network or socket, no new privileges, capabilities or namespaces,
+/// no writable code. Every entry is one a transient unit accepts (no `%h` specifier, no
+/// `RestrictAddressFamilies=none`: both are refused over D-Bus, RUY-1102). `ProtectSystem=strict`
+/// leaves `/home`, `/run/user` and `/root` writable, as systemd leaves those to `ProtectHome=`;
+/// `ProtectHome=read-only` closes them. A `ReadOnlyPaths=` of the home does not: systemd drops it
+/// as a no-op (its nearest listed parent, `/`, is read-only already) and the strict table's
+/// writable `/home` then lands on `/var/home`, as `/home` is a link there (bootc). Sockets of every
+/// family: `socket()` is out of the system-call allow-list (`~@network-io`, kept right after
+/// `@system-service`, which it narrows), so a call ends the reader.
 pub const PROFILE_SCAN_PROPERTIES: [&str; 13] = [
     "MemoryMax=512M",
     "TasksMax=16",
     "NoNewPrivileges=yes",
     "PrivateNetwork=yes",
-    "RestrictAddressFamilies=none",
     "ProtectSystem=strict",
+    "ProtectHome=read-only",
     "PrivateTmp=yes",
-    "ReadOnlyPaths=%h",
     "SystemCallFilter=@system-service",
+    "SystemCallFilter=~@network-io",
     "MemoryDenyWriteExecute=yes",
     "LockPersonality=yes",
     "RestrictNamespaces=yes",
@@ -3309,11 +3317,11 @@ app-flatpak-io.github.Foo-56.scope loaded active running app-flatpak-io.github.F
             "TasksMax=16",
             "NoNewPrivileges=yes",
             "PrivateNetwork=yes",
-            "RestrictAddressFamilies=none",
             "ProtectSystem=strict",
+            "ProtectHome=read-only",
             "PrivateTmp=yes",
-            "ReadOnlyPaths=%h",
             "SystemCallFilter=@system-service",
+            "SystemCallFilter=~@network-io",
             "MemoryDenyWriteExecute=yes",
             "LockPersonality=yes",
             "RestrictNamespaces=yes",
@@ -3326,5 +3334,21 @@ app-flatpak-io.github.Foo-56.scope loaded active running app-flatpak-io.github.F
         for user in ["root", "ruya-", "p1", "ruya-p1;x"] {
             assert!(profile_scan_command(user).is_err(), "{user}");
         }
+    }
+
+    /// What the user manager on hardware taught (RUY-1102): a transient unit expands no
+    /// specifier and refuses `RestrictAddressFamilies=none`, `ProtectSystem=strict` leaves the
+    /// home writable without `ProtectHome=read-only`, and `~@network-io` narrows only an
+    /// allow-list set before it.
+    #[test]
+    fn the_profile_scan_properties_are_ones_a_transient_unit_takes_and_holds() {
+        use super::PROFILE_SCAN_PROPERTIES as P;
+        for p in P {
+            assert!(!p.contains('%'), "a specifier is not expanded in a transient unit: {p}");
+            assert!(!p.starts_with("RestrictAddressFamilies="), "refused or ambiguous over D-Bus: {p}");
+        }
+        assert!(P.contains(&"ProtectHome=read-only"), "the home and /run/user stay writable");
+        let at = |want: &str| P.iter().position(|p| *p == want).expect(want);
+        assert!(at("SystemCallFilter=@system-service") < at("SystemCallFilter=~@network-io"));
     }
 }
