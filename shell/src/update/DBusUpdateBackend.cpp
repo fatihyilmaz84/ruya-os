@@ -59,9 +59,17 @@ DBusUpdateBackend::DBusUpdateBackend(QObject *parent)
 {
     connect(&m_watcher, &QDBusServiceWatcher::serviceRegistered, this, [this] { refresh(); });
     m_bus.connect(Service, Path, Interface, QStringLiteral("StatusChanged"), this, SLOT(onStatusChanged()));
+    m_bus.connect(Service, Path, Interface, QStringLiteral("JobChanged"), this,
+                  SLOT(onJobChanged(QDBusMessage)));
 }
 
 void DBusUpdateBackend::refresh()
+{
+    refreshStatus();
+    refreshJob();
+}
+
+void DBusUpdateBackend::refreshStatus()
 {
     const quint64 request = beginStatusRequest();
     auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("GetStatus"));
@@ -79,9 +87,34 @@ void DBusUpdateBackend::refresh()
     });
 }
 
+void DBusUpdateBackend::refreshJob()
+{
+    const quint64 request = beginJobRequest();
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("GetDownloadJob"));
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage message = w->reply();
+        if (message.type() != QDBusMessage::ReplyMessage || message.arguments().size() < 2) {
+            qWarning("ruya-shell: Update1 GetDownloadJob failed: %s", qPrintable(w->error().message()));
+            acceptJob(request);
+            return;
+        }
+        const QDBusArgument arg = message.arguments().at(1).value<QDBusArgument>();
+        deliverJob(request, parseDict(arg));
+    });
+}
+
+void DBusUpdateBackend::onJobChanged(const QDBusMessage &message)
+{
+    if (message.arguments().isEmpty())
+        return;
+    deliverJob(beginJobRequest(), parseDict(message.arguments().at(0).value<QDBusArgument>()));
+}
+
 void DBusUpdateBackend::onStatusChanged()
 {
-    refresh();
+    refreshStatus(); // the job comes with its own signal
 }
 
 void DBusUpdateBackend::call(const QString &method, const QString &reportAs, const QVariantList &args)
@@ -104,6 +137,21 @@ void DBusUpdateBackend::check()
 void DBusUpdateBackend::download()
 {
     call(QStringLiteral("Download"), QStringLiteral("download"));
+}
+
+void DBusUpdateBackend::pauseDownload()
+{
+    call(QStringLiteral("PauseDownload"), QStringLiteral("pauseDownload"));
+}
+
+void DBusUpdateBackend::resumeDownload()
+{
+    call(QStringLiteral("ResumeDownload"), QStringLiteral("resumeDownload"));
+}
+
+void DBusUpdateBackend::cancelDownload()
+{
+    call(QStringLiteral("CancelDownload"), QStringLiteral("cancelDownload"));
 }
 
 void DBusUpdateBackend::rollback()

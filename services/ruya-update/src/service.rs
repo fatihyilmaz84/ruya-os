@@ -1,12 +1,17 @@
 //! The rules of Update1: the status record, which call is allowed when, what a check and a
-//! download make of `bootc`'s answers. No I/O except through `Bootc` and the one-file state
-//! (the channel) under `/var/lib/ruya-update`. Time is passed in.
+//! download make of `bootc`'s answers, the image job (ADR-026 v2: pause, resume, cancel) and the
+//! download ledger. No I/O except through `Bootc` and the small state files under
+//! `/var/lib/ruya-update`. Time is passed in.
 
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use crate::bootc::{tag_of, with_tag, Bootc, HostStatus};
+use crate::bootc::{tag_of, with_tag, Bootc, HostStatus, Progress, Pull, PullEnd, Stop};
+use crate::job::{
+    Job, JobRecord, JobState, REASON_PLAYING, STATUS_CANCELLED, STATUS_FAILED, STATUS_OK,
+};
+use crate::ledger::{self, local_day, oldest_kept, Day, Ledger, LEDGER_FILE};
 use crate::schedule::{parse_seconds, Clock, Reboot, Schedule};
 
 /// Statuses of the method replies (stable API, `api/dbus/org.ruyaos.Update1.xml`).
@@ -18,6 +23,8 @@ pub enum Status {
     Invalid,
     Forbidden,
     Failed,
+    WrongState,
+    Unsupported,
 }
 
 impl Status {
@@ -29,6 +36,8 @@ impl Status {
             Status::Invalid => "invalid",
             Status::Forbidden => "forbidden",
             Status::Failed => "failed",
+            Status::WrongState => "wrong-state",
+            Status::Unsupported => "unsupported",
         }
     }
 }
@@ -81,6 +90,18 @@ const CHANNELS: [&str; 2] = ["stable", "beta"];
 const CHANNEL_FILE: &str = "channel";
 const AUTO_RESTART_FILE: &str = "auto_restart";
 const LAST_CHECK_FILE: &str = "last_check";
+/// The image job while it is paused or runs (so a restart finds it paused).
+const JOB_FILE: &str = "download_job";
+/// While a download runs, its changes are sent at most this often (a phase change at once).
+pub const JOB_EMIT_MS: u64 = 1000;
+
+/// Why the running pull is being stopped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Stopping {
+    /// Paused, with the job's reason ("" or "playing").
+    Pause(String),
+    Cancel,
+}
 
 struct Inner {
     state: State,
@@ -97,6 +118,17 @@ struct Inner {
     /// "Restart automatically for updates"; on until an admin turns it off.
     auto_restart: bool,
     schedule: Schedule,
+    /// The image job: running, paused, or the last one that finished since the service started.
+    job: Option<Job>,
+    /// Stops the running pull; made when the job begins or resumes.
+    stop: Option<Stop>,
+    stopping: Option<Stopping>,
+    /// When the running job's change was last sent (`JOB_EMIT_MS`).
+    last_job_emit_ms: Option<u64>,
+    ledger: Ledger,
+    /// Why the kept ledger could not be read; "" when it could. It is then neither written nor
+    /// reported (GetDownloadStats answers "failed").
+    ledger_problem: String,
 }
 
 pub struct Update<B: Bootc> {
@@ -152,6 +184,39 @@ fn load_auto_restart(dir: &std::path::Path) -> bool {
     }
 }
 
+/// The kept image job, paused. One that cannot be read is ignored (a state file never stops the
+/// service); the next pause replaces it.
+fn load_job(dir: &std::path::Path) -> Option<Job> {
+    let path = dir.join(JOB_FILE);
+    let text = match fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(e) => {
+            eprintln!("ruya-update: ignoring {}: {e}", path.display());
+            return None;
+        }
+    };
+    match Job::from_json(text.trim()) {
+        Ok(job) => Some(job),
+        Err(e) => {
+            eprintln!("ruya-update: ignoring {}: {e}", path.display());
+            None
+        }
+    }
+}
+
+/// A job id that differs from the last job's: "os-<unix seconds it began>".
+fn next_job_id(last: Option<&Job>, now: i64) -> String {
+    let base = format!("os-{now}");
+    let mut id = base.clone();
+    let mut n = 2;
+    while last.is_some_and(|j| j.id == id) {
+        id = format!("{base}-{n}");
+        n += 1;
+    }
+    id
+}
+
 impl<B: Bootc> Update<B> {
     /// `dir`: where the channel is remembered. A corrupt state file does not stop the service
     /// (`/var` survives an image rollback, so a fatal start would fail every boot): the host's
@@ -170,20 +235,37 @@ impl<B: Bootc> Update<B> {
             .as_deref()
             .and_then(|d| fs::read_to_string(d.join(LAST_CHECK_FILE)).ok())
             .map_or(0, |text| parse_seconds(&text));
+        let job = dir.as_deref().and_then(load_job);
+        // A paused download is an update waiting: Download (or ResumeDownload) continues it.
+        let available = job.as_ref().map(|j| j.version.clone()).unwrap_or_default();
+        let (ledger, ledger_problem) = match dir.as_deref().map(ledger::load) {
+            Some(Ok(ledger)) => (ledger, String::new()),
+            Some(Err(problem)) => {
+                eprintln!("ruya-update: not counting downloads: {problem}");
+                (Ledger::default(), problem)
+            }
+            None => (Ledger::default(), String::new()),
+        };
         Update {
             bootc,
             dir,
             inner: Mutex::new(Inner {
                 state: State::Idle,
-                available: String::new(),
+                available,
                 error: String::new(),
                 last_check,
-                progress: 0,
+                progress: job.as_ref().map_or(0, |j| j.percent),
                 channel,
                 channel_problem,
                 host: HostStatus::default(),
                 auto_restart,
                 schedule: Schedule::default(),
+                job,
+                stop: None,
+                stopping: None,
+                last_job_emit_ms: None,
+                ledger,
+                ledger_problem,
             }),
             commands: Mutex::new(()),
         }
@@ -315,60 +397,317 @@ impl<B: Bootc> Update<B> {
 
     // ---- download --------------------------------------------------------------------
 
-    pub fn begin_download(&self) -> Status {
+    /// Download: stages the image a check found, as a new job; with a paused job, continues it
+    /// (as ResumeDownload). `run_download` does the work (on a thread).
+    pub fn begin_download(&self, now: i64) -> Status {
         let mut inner = self.lock();
+        self.begin_locked(&mut inner, now)
+    }
+
+    /// ResumeDownload: "wrong-state" unless a download is paused.
+    pub fn resume_download(&self, now: i64) -> Status {
+        let mut inner = self.lock();
+        if !inner
+            .job
+            .as_ref()
+            .is_some_and(|j| j.state == JobState::Paused)
+        {
+            return Status::WrongState;
+        }
+        self.begin_locked(&mut inner, now)
+    }
+
+    fn begin_locked(&self, inner: &mut Inner, now: i64) -> Status {
         if inner.state.running() {
             return Status::Busy;
         }
-        if inner.available.is_empty() {
+        let paused = inner
+            .job
+            .as_ref()
+            .is_some_and(|j| j.state == JobState::Paused);
+        if !paused && inner.available.is_empty() {
             return Status::Unavailable;
         }
         // Whoever starts a download takes over: a failure of this one is retried only if the
         // schedule started it (`scheduled_download` notes that afterwards).
         inner.schedule.download_begun();
+        if paused {
+            if let Some(job) = inner.job.as_mut() {
+                job.resume();
+            }
+        } else {
+            let id = next_job_id(inner.job.as_ref(), now);
+            inner.job = Some(Job::new(&id, &inner.available, now));
+        }
+        if let Some(job) = &inner.job {
+            // Kept while it runs too: a service stopped under it finds it paused at its next
+            // start.
+            self.keep_job(job);
+            inner.progress = job.percent;
+        }
         inner.state = State::Downloading;
-        inner.progress = 0;
         inner.error.clear();
+        inner.stop = Some(Stop::default());
+        inner.stopping = None;
+        inner.last_job_emit_ms = None;
         Status::Ok
     }
 
-    /// Stages the image. `bootc` reports no progress we read: 0 while it works, 100 when done.
-    pub fn run_download(&self, emit: &mut dyn FnMut()) {
-        let result = {
-            let _cmd = self.command_lock();
-            match self.switch_target() {
-                Some(image) => self.bootc.switch(&image),
-                None => self.bootc.upgrade(),
-            }
-            .and_then(|()| self.bootc.status())
+    /// Runs `bootc upgrade` (or `switch` to the chosen channel) with its progress events, until
+    /// it stages the image, fails, or is stopped by a pause or a cancel.
+    pub fn run_download(&self, clock: &dyn Clock, emit: &mut dyn FnMut()) {
+        let target = match self.switch_target() {
+            Some(image) => Pull::Switch(image),
+            None => Pull::Upgrade,
         };
-        {
-            let mut inner = self.lock();
-            match result {
-                Err(e) => {
-                    inner.state = State::Failed;
-                    inner.error = e;
+        let stop = self.lock().stop.clone().unwrap_or_default();
+        let (result, host) = {
+            let _cmd = self.command_lock();
+            let result = self.bootc.pull(&target, &stop, &mut |event| {
+                self.on_progress(&event, clock, emit);
+            });
+            // Read whatever the end: a stopped pull must have left the deployments as they were.
+            (result, self.bootc.status())
+        };
+        self.end_run(result, host, clock);
+        emit();
+    }
+
+    fn on_progress(&self, event: &Progress, clock: &dyn Clock, emit: &mut dyn FnMut()) {
+        let now_ms = clock.monotonic_ms();
+        let send = {
+            let mut guard = self.lock();
+            let inner = &mut *guard;
+            let Some(job) = inner.job.as_mut() else {
+                return;
+            };
+            let seen = job.progress(event, now_ms);
+            if let (
+                true,
+                Progress::Bytes {
+                    bytes_total,
+                    bytes_cached,
+                    steps_total,
+                    steps_cached,
+                    ..
+                },
+            ) = (seen.first_bytes, event)
+            {
+                // scripts/vm-update-check.sh `download` compares these lines of two runs.
+                eprintln!(
+                    "ruya-update: download {}: {steps_cached} layers ({bytes_cached} bytes) here, {steps_total} layers ({bytes_total} bytes) to fetch",
+                    job.id
+                );
+            }
+            inner.progress = job.percent;
+            let due = inner
+                .last_job_emit_ms
+                .map_or(true, |at| now_ms >= at + JOB_EMIT_MS);
+            if seen.phase_changed || due {
+                inner.last_job_emit_ms = Some(now_ms);
+            }
+            seen.phase_changed || due
+        };
+        if send {
+            emit();
+        }
+    }
+
+    /// What a run's end makes of the job and the status record.
+    fn end_run(
+        &self,
+        result: Result<PullEnd, String>,
+        host: Result<HostStatus, String>,
+        clock: &dyn Clock,
+    ) {
+        enum End {
+            Staged,
+            Paused(String),
+            Cancelled,
+            Failed(String),
+        }
+        let now = clock.now();
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        let stopping = inner.stopping.take();
+        inner.stop = None;
+        let end = match (result, stopping) {
+            (Ok(PullEnd::Done), _) => match &host {
+                Ok(h) if staged_label(h).is_some() => End::Staged,
+                Ok(_) => End::Failed("bootc staged nothing".to_owned()),
+                Err(e) => End::Failed(e.clone()),
+            },
+            (_, Some(Stopping::Cancel)) => End::Cancelled,
+            (_, Some(Stopping::Pause(reason))) => End::Paused(reason),
+            (Ok(PullEnd::Stopped), None) => End::Failed("bootc was stopped".to_owned()),
+            (Err(e), None) => End::Failed(e),
+        };
+        if let Ok(h) = host {
+            inner.host = h;
+        }
+        let Some(job) = inner.job.as_mut() else {
+            return;
+        };
+        let run_bytes = job.run_bytes;
+        let finished = match end {
+            End::Staged => {
+                job.finish(STATUS_OK, now);
+                inner.available.clear();
+                inner.state = State::Staged;
+                Some(false)
+            }
+            End::Paused(reason) => {
+                job.pause(&reason);
+                self.keep_job(job);
+                inner.state = idle_or_staged(&inner.host);
+                None
+            }
+            End::Cancelled => {
+                job.finish(STATUS_CANCELLED, now);
+                inner.state = idle_or_staged(&inner.host);
+                Some(false)
+            }
+            End::Failed(e) => {
+                job.finish(STATUS_FAILED, now);
+                inner.state = State::Failed;
+                inner.error = e;
+                Some(true)
+            }
+        };
+        inner.progress = job.percent;
+        if finished.is_some() {
+            self.forget_job();
+        }
+        self.count(inner, clock, run_bytes, finished);
+    }
+
+    /// PauseDownload: the running download stops and keeps its fetched layers.
+    pub fn pause_download(&self) -> Status {
+        self.pause_with("")
+    }
+
+    /// The download policy (RUY-31, "pause while playing") pauses the running download; the
+    /// schedule resumes it by itself once no app runs.
+    pub fn policy_pause(&self) -> Status {
+        self.pause_with(REASON_PLAYING)
+    }
+
+    fn pause_with(&self, reason: &str) -> Status {
+        let mut inner = self.lock();
+        let Some(job) = inner.job.as_ref().filter(|j| j.state == JobState::Running) else {
+            return Status::WrongState;
+        };
+        if !job.resumable() {
+            return Status::Unsupported;
+        }
+        match inner.stopping {
+            Some(Stopping::Cancel) => return Status::WrongState,
+            Some(Stopping::Pause(_)) => return Status::Ok,
+            None => {}
+        }
+        inner.stopping = Some(Stopping::Pause(reason.to_owned()));
+        if let Some(stop) = &inner.stop {
+            stop.request();
+        }
+        Status::Ok
+    }
+
+    /// CancelDownload: a running download stops for good, a paused one ends at once; nothing is
+    /// staged. "unsupported" once the import has begun.
+    pub fn cancel_download(&self, clock: &dyn Clock) -> Status {
+        let mut guard = self.lock();
+        let inner = &mut *guard;
+        let Some(job) = inner.job.as_ref() else {
+            return Status::WrongState;
+        };
+        match job.state {
+            JobState::Running => {
+                if !job.resumable() {
+                    return Status::Unsupported;
                 }
-                Ok(host) if staged_label(&host).is_none() => {
-                    inner.host = host;
-                    inner.state = State::Failed;
-                    inner.error = "bootc staged nothing".to_owned();
+                inner.stopping = Some(Stopping::Cancel);
+                if let Some(stop) = &inner.stop {
+                    stop.request();
                 }
-                Ok(host) => {
-                    inner.host = host;
-                    inner.progress = 100;
-                    inner.available.clear();
-                    inner.state = State::Staged;
-                }
+                Status::Ok
+            }
+            JobState::Paused => {
+                self.cancel_paused(inner, clock);
+                Status::Ok
+            }
+            JobState::Finished => Status::WrongState,
+        }
+    }
+
+    /// A paused job ends as cancelled: CancelDownload, or what it would stage is no longer wanted
+    /// (SetChannel, Rollback).
+    fn cancel_paused(&self, inner: &mut Inner, clock: &dyn Clock) {
+        let Some(job) = inner.job.as_mut().filter(|j| j.state == JobState::Paused) else {
+            return;
+        };
+        job.finish(STATUS_CANCELLED, clock.now());
+        inner.progress = job.percent;
+        self.forget_job();
+        self.count(inner, clock, 0, Some(false));
+    }
+
+    /// The image job's record: None when there has been none since the service started.
+    pub fn job_record(&self, now_ms: u64) -> Option<JobRecord> {
+        self.lock().job.as_ref().map(|j| j.record(now_ms))
+    }
+
+    /// GetDownloadStats: per local day, newest first, at most `days` (1..90).
+    pub fn download_stats(&self, days: u32, clock: &dyn Clock) -> (Status, Vec<Day>) {
+        if days == 0 || i64::from(days) > ledger::KEEP_DAYS {
+            return (Status::Invalid, Vec::new());
+        }
+        let inner = self.lock();
+        if !inner.ledger_problem.is_empty() {
+            return (Status::Failed, Vec::new());
+        }
+        let oldest = oldest_kept(clock.now(), clock.utc_offset_secs());
+        (Status::Ok, inner.ledger.stats(days, &oldest))
+    }
+
+    fn keep_job(&self, job: &Job) {
+        if let Some(dir) = &self.dir {
+            if let Err(e) = save_file(dir, JOB_FILE, &job.to_json()) {
+                eprintln!("ruya-update: cannot keep the download job: {e}");
             }
         }
-        emit();
+    }
+
+    fn forget_job(&self) {
+        if let Some(dir) = &self.dir {
+            match fs::remove_file(dir.join(JOB_FILE)) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                    eprintln!("ruya-update: cannot remove the kept download job: {e}");
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// The ledger counts `bytes` and a finished job (`Some(failed)`) on today's local date.
+    fn count(&self, inner: &mut Inner, clock: &dyn Clock, bytes: u64, finished: Option<bool>) {
+        if !inner.ledger_problem.is_empty() || (bytes == 0 && finished.is_none()) {
+            return;
+        }
+        let (now, offset) = (clock.now(), clock.utc_offset_secs());
+        inner.ledger.add(&local_day(now, offset), bytes, finished);
+        inner.ledger.prune(&oldest_kept(now, offset));
+        if let Some(dir) = &self.dir {
+            if let Err(e) = save_file(dir, LEDGER_FILE, &inner.ledger.to_json()) {
+                eprintln!("ruya-update: cannot write the download ledger: {e}");
+            }
+        }
     }
 
     // ---- admin calls -----------------------------------------------------------------
 
-    /// `admin`: the caller is root, or the shell while the active profile is an admin.
-    pub fn rollback(&self, admin: bool) -> Status {
+    /// `admin`: the caller is root, or the shell while the active profile is an admin. A paused
+    /// download ends as cancelled: resumed, it would stage the newer image over the rollback.
+    pub fn rollback(&self, admin: bool, clock: &dyn Clock) -> Status {
         if !admin {
             return Status::Forbidden;
         }
@@ -400,6 +739,7 @@ impl<B: Bootc> Update<B> {
                 inner.host = host;
                 inner.available.clear();
                 inner.error.clear();
+                self.cancel_paused(&mut inner, clock);
                 // A job that began while `bootc` worked settles the state itself.
                 if !inner.state.running() {
                     inner.state = State::Staged;
@@ -409,7 +749,8 @@ impl<B: Bootc> Update<B> {
         }
     }
 
-    pub fn set_channel(&self, channel: &str, admin: bool) -> Status {
+    /// A paused download ends as cancelled: it was for the other channel.
+    pub fn set_channel(&self, channel: &str, admin: bool, clock: &dyn Clock) -> Status {
         if !admin {
             return Status::Forbidden;
         }
@@ -428,6 +769,7 @@ impl<B: Bootc> Update<B> {
         inner.channel = Some(channel.to_owned());
         inner.channel_problem.clear();
         inner.available.clear();
+        self.cancel_paused(&mut inner, clock);
         if matches!(inner.state, State::UpToDate | State::Failed) {
             inner.state = State::Idle;
         }
@@ -467,12 +809,30 @@ impl<B: Bootc> Update<B> {
     pub fn tick(&self, clock: &dyn Clock, reboot: &dyn Reboot, emit: &mut dyn FnMut()) {
         let now = clock.now();
         self.lock().schedule.seen(now);
-        self.scheduled_check(now, emit);
-        self.scheduled_download_retry(now, emit);
+        self.scheduled_resume(clock, emit);
+        self.scheduled_check(clock, emit);
+        self.scheduled_download_retry(clock, emit);
         self.scheduled_restart(clock, reboot, emit);
     }
 
-    fn scheduled_check(&self, now: i64, emit: &mut dyn FnMut()) {
+    /// A download the policy paused ("playing") runs again by itself once no app runs; one the
+    /// user paused waits for the user.
+    fn scheduled_resume(&self, clock: &dyn Clock, emit: &mut dyn FnMut()) {
+        {
+            let inner = self.lock();
+            let by_policy = inner
+                .job
+                .as_ref()
+                .is_some_and(|j| j.state == JobState::Paused && j.reason == REASON_PLAYING);
+            if !by_policy || inner.schedule.app_running() {
+                return;
+            }
+        }
+        self.scheduled_download(clock, emit);
+    }
+
+    fn scheduled_check(&self, clock: &dyn Clock, emit: &mut dyn FnMut()) {
+        let now = clock.now();
         {
             let inner = self.lock();
             // A staged image waits for its restart: a check could only say "staged".
@@ -492,17 +852,19 @@ impl<B: Bootc> Update<B> {
             inner.state == State::Idle && !inner.available.is_empty()
         };
         if found {
-            self.scheduled_download(now, emit);
+            self.scheduled_download(clock, emit);
         }
     }
 
-    /// A download the schedule starts: if it fails it is tried again after `RETRY_SECS`.
-    fn scheduled_download(&self, now: i64, emit: &mut dyn FnMut()) {
-        if self.begin_download() != Status::Ok {
+    /// A download the schedule starts (or a paused one it continues): if it fails it is tried
+    /// again after `RETRY_SECS`.
+    fn scheduled_download(&self, clock: &dyn Clock, emit: &mut dyn FnMut()) {
+        let now = clock.now();
+        if self.begin_download(now) != Status::Ok {
             return;
         }
         emit();
-        self.run_download(emit);
+        self.run_download(clock, emit);
         let mut inner = self.lock();
         if inner.state == State::Failed {
             inner.schedule.download_failed(now);
@@ -512,7 +874,8 @@ impl<B: Bootc> Update<B> {
     /// The retry of a failed scheduled download. Anything that settled it meanwhile (the user's
     /// own download, a new check, a channel change) leaves nothing to retry: `begin_download`
     /// refuses without an update found and clears the note.
-    fn scheduled_download_retry(&self, now: i64, emit: &mut dyn FnMut()) {
+    fn scheduled_download_retry(&self, clock: &dyn Clock, emit: &mut dyn FnMut()) {
+        let now = clock.now();
         {
             let mut inner = self.lock();
             if !inner.schedule.download_retry_due(now) {
@@ -523,7 +886,7 @@ impl<B: Bootc> Update<B> {
                 return;
             }
         }
-        self.scheduled_download(now, emit);
+        self.scheduled_download(clock, emit);
     }
 
     /// The restart into a staged image: announced first, done at the look after the grace period
@@ -560,6 +923,15 @@ impl<B: Bootc> Update<B> {
             return None;
         }
         (tag_of(&inner.host.tracked) != channel).then(|| with_tag(&inner.host.tracked, channel))
+    }
+}
+
+/// The state after a download stopped without staging: a staged image from before still waits.
+fn idle_or_staged(host: &HostStatus) -> State {
+    if staged_label(host).is_some() {
+        State::Staged
+    } else {
+        State::Idle
     }
 }
 
@@ -634,6 +1006,11 @@ mod tests {
         let u = Update::new(FakeBootc::new(host), None);
         u.refresh().expect("refresh");
         u
+    }
+
+    /// A clock for the calls that stamp a job or count a day.
+    fn clk() -> FakeClock {
+        FakeClock::new(1000, 12 * 60)
     }
 
     fn check(u: &Update<FakeBootc>) {
@@ -736,28 +1113,28 @@ mod tests {
         let u = service(host());
         assert_eq!(u.begin_check(), Status::Ok);
         assert_eq!(u.begin_check(), Status::Busy);
-        assert_eq!(u.begin_download(), Status::Busy);
-        assert_eq!(u.rollback(true), Status::Busy);
-        assert_eq!(u.set_channel("beta", true), Status::Busy);
+        assert_eq!(u.begin_download(1000), Status::Busy);
+        assert_eq!(u.rollback(true, &clk()), Status::Busy);
+        assert_eq!(u.set_channel("beta", true, &clk()), Status::Busy);
     }
 
     #[test]
     fn download_needs_a_found_update() {
         let u = service(host());
-        assert_eq!(u.begin_download(), Status::Unavailable);
+        assert_eq!(u.begin_download(1000), Status::Unavailable);
     }
 
     #[test]
     fn download_stages_the_image() {
         let u = service(host());
         check(&u);
-        assert_eq!(u.begin_download(), Status::Ok);
+        assert_eq!(u.begin_download(1000), Status::Ok);
         let r = u.record();
         assert_eq!((r.state, r.progress), (State::Downloading, 0));
         assert_eq!(u.begin_check(), Status::Busy);
-        assert_eq!(u.begin_download(), Status::Busy);
+        assert_eq!(u.begin_download(1000), Status::Busy);
         let mut changes = 0;
-        u.run_download(&mut || changes += 1);
+        u.run_download(&clk(), &mut || changes += 1);
         let r = u.record();
         assert_eq!(r.state, State::Staged);
         assert_eq!(r.staged, "0.0.20");
@@ -765,29 +1142,29 @@ mod tests {
         assert_eq!(r.progress, 100);
         assert_eq!(changes, 1);
         assert!(u.bootc.calls().contains(&"upgrade".to_owned()));
-        assert_eq!(u.begin_download(), Status::Unavailable);
+        assert_eq!(u.begin_download(1000), Status::Unavailable);
     }
 
     #[test]
     fn a_failed_download_keeps_the_found_update() {
         let u = service(host());
         check(&u);
-        assert_eq!(u.begin_download(), Status::Ok);
+        assert_eq!(u.begin_download(1000), Status::Ok);
         u.bootc.fail_next("disk full");
-        u.run_download(&mut || {});
+        u.run_download(&clk(), &mut || {});
         let r = u.record();
         assert_eq!(r.state, State::Failed);
         assert_eq!(r.error, "disk full");
         assert_eq!(r.available, "0.0.20");
-        assert_eq!(u.begin_download(), Status::Ok, "retry");
+        assert_eq!(u.begin_download(1000), Status::Ok, "retry");
     }
 
     #[test]
     fn a_staged_image_is_found_again_by_a_check() {
         let u = service(host());
         check(&u);
-        assert_eq!(u.begin_download(), Status::Ok);
-        u.run_download(&mut || {});
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        u.run_download(&clk(), &mut || {});
         check(&u);
         assert_eq!(u.record().state, State::Staged);
     }
@@ -803,7 +1180,7 @@ mod tests {
     #[test]
     fn rollback_is_for_admins() {
         let u = service(host());
-        assert_eq!(u.rollback(false), Status::Forbidden);
+        assert_eq!(u.rollback(false, &clk()), Status::Forbidden);
         assert!(!u.bootc.calls().contains(&"rollback".to_owned()));
         assert!(u.record().rollback_available);
     }
@@ -811,25 +1188,25 @@ mod tests {
     #[test]
     fn rollback_stages_the_previous_image_once() {
         let u = service(host());
-        assert_eq!(u.rollback(true), Status::Ok);
+        assert_eq!(u.rollback(true, &clk()), Status::Ok);
         let r = u.record();
         assert_eq!((r.state, r.staged.as_str()), (State::Staged, "0.0.18"));
         assert!(!r.rollback_available);
-        assert_eq!(u.rollback(true), Status::Unavailable);
+        assert_eq!(u.rollback(true, &clk()), Status::Unavailable);
     }
 
     #[test]
     fn rollback_without_a_previous_image_is_unavailable() {
         let mut h = host();
         h.rollback = None;
-        assert_eq!(service(h).rollback(true), Status::Unavailable);
+        assert_eq!(service(h).rollback(true, &clk()), Status::Unavailable);
     }
 
     #[test]
     fn a_failing_rollback_is_failed_and_changes_nothing() {
         let u = service(host());
         u.bootc.fail_next("no");
-        assert_eq!(u.rollback(true), Status::Failed);
+        assert_eq!(u.rollback(true, &clk()), Status::Failed);
         let r = u.record();
         assert_eq!(r.state, State::Idle);
         assert!(r.rollback_available);
@@ -838,15 +1215,15 @@ mod tests {
     #[test]
     fn set_channel_rules() {
         let u = service(host());
-        assert_eq!(u.set_channel("beta", false), Status::Forbidden);
-        assert_eq!(u.set_channel("nightly", true), Status::Invalid);
+        assert_eq!(u.set_channel("beta", false, &clk()), Status::Forbidden);
+        assert_eq!(u.set_channel("nightly", true, &clk()), Status::Invalid);
         assert_eq!(u.record().channel, "stable");
         check(&u);
         assert_eq!(u.record().available, "0.0.20");
-        assert_eq!(u.set_channel("beta", true), Status::Ok);
+        assert_eq!(u.set_channel("beta", true, &clk()), Status::Ok);
         let r = u.record();
         assert_eq!((r.channel.as_str(), r.available.as_str()), ("beta", ""));
-        assert_eq!(u.begin_download(), Status::Unavailable);
+        assert_eq!(u.begin_download(1000), Status::Unavailable);
     }
 
     #[test]
@@ -856,20 +1233,20 @@ mod tests {
         let u = service(h);
         check(&u);
         assert_eq!(u.record().state, State::UpToDate);
-        assert_eq!(u.set_channel("beta", true), Status::Ok);
+        assert_eq!(u.set_channel("beta", true, &clk()), Status::Ok);
         assert_eq!(u.record().state, State::Idle);
     }
 
     #[test]
     fn a_new_channel_is_switched_to_on_download() {
         let u = service(host());
-        assert_eq!(u.set_channel("beta", true), Status::Ok);
+        assert_eq!(u.set_channel("beta", true, &clk()), Status::Ok);
         check(&u);
         let r = u.record();
         assert_eq!((r.state, r.available.as_str()), (State::Idle, "beta"));
         assert!(!u.bootc.calls().contains(&"check".to_owned()));
-        assert_eq!(u.begin_download(), Status::Ok);
-        u.run_download(&mut || {});
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        u.run_download(&clk(), &mut || {});
         assert!(u
             .bootc
             .calls()
@@ -883,7 +1260,7 @@ mod tests {
     fn the_channel_survives_a_restart() {
         let dir = tempfile::tempdir().expect("tempdir");
         let u = Update::new(FakeBootc::new(host()), Some(dir.path().join("state")));
-        assert_eq!(u.set_channel("beta", true), Status::Ok);
+        assert_eq!(u.set_channel("beta", true, &clk()), Status::Ok);
         let u = Update::new(FakeBootc::new(host()), Some(dir.path().join("state")));
         assert_eq!(u.record().channel, "beta");
     }
@@ -908,7 +1285,7 @@ mod tests {
         assert!(!u.bootc.calls().iter().any(|c| c.starts_with("switch")));
 
         // SetChannel replaces the file and clears the report.
-        assert_eq!(u.set_channel("stable", true), Status::Ok);
+        assert_eq!(u.set_channel("stable", true, &clk()), Status::Ok);
         let r = u.record();
         assert_eq!((r.state, r.error.as_str()), (State::Idle, ""));
         let dir_text = fs::read_to_string(dir.path().join(CHANNEL_FILE)).expect("read");
@@ -951,7 +1328,7 @@ mod tests {
         assert!(r.error.contains("which image"), "{}", r.error);
         assert!(!u.bootc.calls().iter().any(|c| c.starts_with("switch")));
         assert!(!u.bootc.calls().contains(&"check".to_owned()));
-        assert_eq!(u.begin_download(), Status::Unavailable);
+        assert_eq!(u.begin_download(1000), Status::Unavailable);
     }
 
     #[test]
@@ -970,10 +1347,10 @@ mod tests {
     fn a_download_that_staged_nothing_is_a_failure() {
         let u = service(host());
         check(&u);
-        assert_eq!(u.begin_download(), Status::Ok);
+        assert_eq!(u.begin_download(1000), Status::Ok);
         // The image vanished from the registry between the check and the download.
         u.bootc.set_cached_update(None);
-        u.run_download(&mut || {});
+        u.run_download(&clk(), &mut || {});
         let r = u.record();
         assert_eq!(r.state, State::Failed);
         assert_eq!(r.error, "bootc staged nothing");
@@ -986,7 +1363,7 @@ mod tests {
         let u = service(host());
         let (started, release) = u.bootc.hold_next_rollback();
         std::thread::scope(|scope| {
-            let rollback = scope.spawn(|| u.rollback(true));
+            let rollback = scope.spawn(|| u.rollback(true, &clk()));
             // `bootc rollback` is running, with `commands` held.
             started.recv().expect("rollback started");
             assert_eq!(
@@ -1016,8 +1393,8 @@ mod tests {
     fn a_rollback_does_not_wait_for_a_download() {
         let u = service(host());
         check(&u);
-        assert_eq!(u.begin_download(), Status::Ok);
-        assert_eq!(u.rollback(true), Status::Busy);
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        assert_eq!(u.rollback(true, &clk()), Status::Busy);
     }
 
     // ---- schedule --------------------------------------------------------------------
@@ -1577,9 +1954,9 @@ mod tests {
     fn a_failed_manual_download_is_not_retried() {
         let u = service(host());
         check(&u);
-        assert_eq!(u.begin_download(), Status::Ok);
+        assert_eq!(u.begin_download(1000), Status::Ok);
         u.bootc.fail_next_call("upgrade", "no space");
-        u.run_download(&mut || {});
+        u.run_download(&clk(), &mut || {});
         assert_eq!(u.record().state, State::Failed);
         let clock = FakeClock::new(1000 + 10 * RETRY, NIGHT);
         u.tick(&clock, &FakeReboot::default(), &mut || {});
@@ -1600,9 +1977,9 @@ mod tests {
         u.bootc.fail_next_call("upgrade", "no space");
         u.tick(&clock, &reboot, &mut || {});
         // The user presses Download; it fails too. That failure is theirs to retry.
-        assert_eq!(u.begin_download(), Status::Ok);
+        assert_eq!(u.begin_download(1000), Status::Ok);
         u.bootc.fail_next_call("upgrade", "no space");
-        u.run_download(&mut || {});
+        u.run_download(&clk(), &mut || {});
         clock.set(T0 + 2 * RETRY, NIGHT);
         u.tick(&clock, &reboot, &mut || {});
         assert_eq!(calls_named(&u, "upgrade"), 2);
@@ -1629,5 +2006,476 @@ mod tests {
         fs::write(dir.path().join(AUTO_RESTART_FILE), "maybe").expect("write");
         let u = Update::new(FakeBootc::new(host()), Some(dir.path().to_owned()));
         assert!(u.record().auto_restart);
+    }
+
+    // ---- the image job (RUY-29) ------------------------------------------------------
+
+    use crate::bootc::{FakeEnd, FakeRun};
+    use std::sync::Arc;
+
+    fn bytes_ev(bytes: u64, total: u64) -> Progress {
+        Progress::Bytes {
+            bytes,
+            bytes_total: total,
+            bytes_cached: 0,
+            steps: 0,
+            steps_total: 10,
+            steps_cached: 0,
+        }
+    }
+
+    fn steps_ev(task: &str, steps: u64, total: u64) -> Progress {
+        Progress::Steps {
+            task: task.to_owned(),
+            steps,
+            steps_total: total,
+        }
+    }
+
+    fn run(events: Vec<Progress>, end: FakeEnd) -> FakeRun {
+        FakeRun { events, end }
+    }
+
+    /// A service that found 0.0.20, keeping its state in `dir` when given.
+    fn found_in(dir: Option<&std::path::Path>, runs: Vec<FakeRun>) -> Arc<Update<FakeBootc>> {
+        let fake = FakeBootc::new(host());
+        fake.script_pulls(runs);
+        let u = Update::new(fake, dir.map(|d| d.to_owned()));
+        u.refresh().expect("refresh");
+        check(&u);
+        Arc::new(u)
+    }
+
+    fn found(runs: Vec<FakeRun>) -> Arc<Update<FakeBootc>> {
+        found_in(None, runs)
+    }
+
+    /// Runs the download on a thread; returns once the fake's pull holds for its stop.
+    fn download_until_held(u: &Arc<Update<FakeBootc>>) -> std::thread::JoinHandle<()> {
+        let holds = u.bootc.pull_holds();
+        let runner = u.clone();
+        let thread = std::thread::spawn(move || runner.run_download(&clk(), &mut || {}));
+        holds.recv().expect("the pull holds");
+        thread
+    }
+
+    fn job(u: &Update<FakeBootc>) -> JobRecord {
+        u.job_record(0).expect("a job")
+    }
+
+    #[test]
+    fn new_status_strings_are_the_contract() {
+        assert_eq!(Status::WrongState.as_str(), "wrong-state");
+        assert_eq!(Status::Unsupported.as_str(), "unsupported");
+    }
+
+    #[test]
+    fn a_download_reports_bytes_then_the_install() {
+        let u = found(vec![run(
+            vec![
+                bytes_ev(0, 1000),
+                bytes_ev(500, 1000),
+                bytes_ev(1000, 1000),
+                steps_ev("importing", 0, 1),
+                steps_ev("importing", 1, 1),
+                steps_ev("deploying", 3, 3),
+            ],
+            FakeEnd::Done,
+        )]);
+        assert!(
+            u.job_record(0).is_none(),
+            "no job before the first download"
+        );
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        let j = job(&u);
+        assert_eq!(
+            (j.id.as_str(), j.title.as_str()),
+            ("os-1000", "RuyaOS 0.0.20")
+        );
+        assert_eq!((j.state, j.phase, j.percent), ("running", "download", 0));
+        let mut seen = Vec::new();
+        u.run_download(&clk(), &mut || {
+            let j = u.job_record(0).expect("a job");
+            seen.push((j.phase, j.percent, u.record().progress));
+        });
+        // The clock stands still: the first event, the phase change and the end are sent, the
+        // other byte events wait for the next second.
+        assert_eq!(
+            seen,
+            [
+                ("download", 0, 0),
+                ("install", 90, 90),
+                ("install", 100, 100)
+            ]
+        );
+        let j = job(&u);
+        assert_eq!((j.state, j.status.as_str()), ("finished", "ok"));
+        assert_eq!(
+            (j.bytes_done, j.bytes_total, j.finished),
+            (1000, 1000, 1000)
+        );
+        assert_eq!(u.record().state, State::Staged);
+    }
+
+    #[test]
+    fn changes_are_sent_once_a_second_while_bytes_arrive() {
+        let u = found(vec![run(
+            vec![bytes_ev(0, 1000), bytes_ev(100, 1000), bytes_ev(200, 1000)],
+            FakeEnd::Done,
+        )]);
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        let mut sent = 0;
+        let clock = FakeClock::new(1000, 0);
+        u.on_progress(&bytes_ev(0, 1000), &clock, &mut || sent += 1);
+        u.on_progress(&bytes_ev(100, 1000), &clock, &mut || sent += 1);
+        assert_eq!(sent, 1, "the second within the same second waits");
+        clock.set(1001, 0);
+        u.on_progress(&bytes_ev(200, 1000), &clock, &mut || sent += 1);
+        assert_eq!(sent, 2);
+    }
+
+    #[test]
+    fn pause_keeps_the_job_and_resume_continues_it() {
+        let u = found(vec![
+            run(
+                vec![bytes_ev(0, 1000), bytes_ev(400, 1000)],
+                FakeEnd::HoldForStop,
+            ),
+            run(
+                vec![
+                    bytes_ev(0, 700),
+                    bytes_ev(700, 700),
+                    steps_ev("importing", 1, 1),
+                ],
+                FakeEnd::Done,
+            ),
+        ]);
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        let thread = download_until_held(&u);
+        assert_eq!(u.pause_download(), Status::Ok);
+        assert_eq!(
+            u.pause_download(),
+            Status::Ok,
+            "a pause under way: ok again"
+        );
+        thread.join().expect("the download thread");
+        let j = job(&u);
+        assert_eq!((j.state, j.percent, j.bytes_done), ("paused", 36, 400));
+        assert!(j.resumable);
+        assert_eq!((j.rate_bps, j.eta_s), (0, 0));
+        let r = u.record();
+        assert_eq!(
+            (r.state, r.available.as_str(), r.progress),
+            (State::Idle, "0.0.20", 36)
+        );
+        assert_eq!(r.staged, "", "nothing staged");
+        assert_eq!(u.pause_download(), Status::WrongState, "nothing runs");
+
+        assert_eq!(u.resume_download(2000), Status::Ok);
+        assert_eq!(job(&u).state, "running");
+        let mut percents = Vec::new();
+        u.run_download(&clk(), &mut || percents.push(job(&u).percent));
+        assert!(
+            percents.iter().all(|p| *p >= 36),
+            "never back below the paused percent: {percents:?}"
+        );
+        let j = job(&u);
+        assert_eq!(j.id, "os-1000", "the same job");
+        assert_eq!(
+            (j.status.as_str(), j.percent, j.bytes_done),
+            ("ok", 100, 1100)
+        );
+        assert_eq!(j.bytes_total, 1000, "fixed by the first run");
+        assert_eq!(u.record().state, State::Staged);
+        assert_eq!(calls_named(&u, "upgrade"), 2, "the same command again");
+    }
+
+    #[test]
+    fn download_continues_a_paused_job() {
+        let u = found(vec![run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop)]);
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        let thread = download_until_held(&u);
+        assert_eq!(u.pause_download(), Status::Ok);
+        thread.join().expect("thread");
+        assert_eq!(u.begin_download(1500), Status::Ok);
+        let j = job(&u);
+        assert_eq!(
+            (j.id.as_str(), j.state, j.bytes_done),
+            ("os-1000", "running", 400)
+        );
+    }
+
+    #[test]
+    fn a_pause_before_bootc_starts_stops_it_from_starting() {
+        let u = found(vec![]);
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        assert_eq!(u.pause_download(), Status::Ok);
+        u.run_download(&clk(), &mut || {});
+        assert_eq!(job(&u).state, "paused");
+        assert_eq!(u.record().staged, "");
+    }
+
+    #[test]
+    fn cancel_stops_a_running_download_and_stages_nothing() {
+        let u = found(vec![run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop)]);
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        let thread = download_until_held(&u);
+        assert_eq!(u.cancel_download(&clk()), Status::Ok);
+        assert_eq!(
+            u.pause_download(),
+            Status::WrongState,
+            "a cancel is under way"
+        );
+        thread.join().expect("thread");
+        let j = job(&u);
+        assert_eq!((j.state, j.status.as_str()), ("finished", "cancelled"));
+        assert_eq!(j.finished, 1000);
+        let r = u.record();
+        assert_eq!((r.state, r.staged.as_str()), (State::Idle, ""));
+        assert_eq!(r.available, "0.0.20", "it can be downloaded again");
+        assert_eq!(u.cancel_download(&clk()), Status::WrongState, "finished");
+        assert_eq!(u.resume_download(1000), Status::WrongState);
+        assert_eq!(u.begin_download(1000), Status::Ok, "a new job");
+        assert_eq!(job(&u).id, "os-1000-2", "not the cancelled job's id");
+    }
+
+    #[test]
+    fn a_cancel_after_a_pause_request_wins() {
+        let u = found(vec![run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop)]);
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        let thread = download_until_held(&u);
+        assert_eq!(u.pause_download(), Status::Ok);
+        assert_eq!(u.cancel_download(&clk()), Status::Ok);
+        thread.join().expect("thread");
+        assert_eq!(job(&u).status, "cancelled");
+    }
+
+    #[test]
+    fn cancel_ends_a_paused_download_at_once() {
+        let u = found(vec![run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop)]);
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        let thread = download_until_held(&u);
+        assert_eq!(u.pause_download(), Status::Ok);
+        thread.join().expect("thread");
+        assert_eq!(u.cancel_download(&clk()), Status::Ok);
+        let j = job(&u);
+        assert_eq!((j.state, j.status.as_str()), ("finished", "cancelled"));
+        assert_eq!(u.resume_download(1000), Status::WrongState);
+    }
+
+    #[test]
+    fn nothing_to_pause_resume_or_cancel_is_wrong_state() {
+        let u = found(vec![]);
+        assert_eq!(u.pause_download(), Status::WrongState);
+        assert_eq!(u.resume_download(1000), Status::WrongState);
+        assert_eq!(u.cancel_download(&clk()), Status::WrongState);
+    }
+
+    #[test]
+    fn pause_and_cancel_are_refused_once_the_import_has_begun() {
+        let u = found(vec![run(
+            vec![bytes_ev(1000, 1000), steps_ev("importing", 0, 1)],
+            FakeEnd::HoldForStop,
+        )]);
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        let thread = download_until_held(&u);
+        assert!(!job(&u).resumable);
+        assert_eq!(u.pause_download(), Status::Unsupported);
+        assert_eq!(u.cancel_download(&clk()), Status::Unsupported);
+        assert_eq!(job(&u).state, "running", "untouched");
+        // End the held pull the way nothing in the service would: bootc stopped on its own.
+        if let Some(stop) = u.lock().stop.clone() {
+            stop.request();
+        }
+        thread.join().expect("thread");
+        let j = job(&u);
+        assert_eq!((j.state, j.status.as_str()), ("finished", "failed"));
+        assert_eq!(u.record().error, "bootc was stopped");
+    }
+
+    #[test]
+    fn resume_while_a_check_runs_is_busy() {
+        let u = found(vec![run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop)]);
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        let thread = download_until_held(&u);
+        assert_eq!(u.pause_download(), Status::Ok);
+        thread.join().expect("thread");
+        assert_eq!(u.begin_check(), Status::Ok);
+        assert_eq!(u.resume_download(1000), Status::Busy);
+    }
+
+    #[test]
+    fn a_failed_run_finishes_the_job_failed() {
+        let u = found(vec![run(
+            vec![bytes_ev(300, 1000)],
+            FakeEnd::Fail("registry gone".to_owned()),
+        )]);
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        u.run_download(&clk(), &mut || {});
+        let j = job(&u);
+        assert_eq!(
+            (j.state, j.status.as_str(), j.bytes_done),
+            ("finished", "failed", 300)
+        );
+        assert_eq!(u.record().state, State::Failed);
+        assert_eq!(u.record().error, "registry gone");
+    }
+
+    #[test]
+    fn a_restart_while_paused_keeps_the_job_paused() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let u = found_in(
+            Some(dir.path()),
+            vec![run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop)],
+        );
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        let thread = download_until_held(&u);
+        assert_eq!(u.policy_pause(), Status::Ok);
+        thread.join().expect("thread");
+        let before = job(&u);
+        drop(u);
+
+        let again = Update::new(FakeBootc::new(host()), Some(dir.path().to_owned()));
+        again.refresh().expect("refresh");
+        let j = again.job_record(0).expect("the kept job");
+        assert_eq!(j, before, "the same paused job: id, percent, bytes, reason");
+        assert_eq!(j.reason, "playing");
+        let r = again.record();
+        assert_eq!(
+            (r.state, r.available.as_str(), r.progress),
+            (State::Idle, "0.0.20", 36)
+        );
+        assert_eq!(again.resume_download(2000), Status::Ok);
+        again.run_download(&clk(), &mut || {});
+        let j = again.job_record(0).expect("job");
+        assert_eq!((j.id.as_str(), j.status.as_str()), ("os-1000", "ok"));
+        assert!(
+            !dir.path().join(JOB_FILE).exists(),
+            "a finished job is not kept"
+        );
+        let third = Update::new(FakeBootc::new(host()), Some(dir.path().to_owned()));
+        assert!(third.job_record(0).is_none());
+    }
+
+    #[test]
+    fn a_service_stopped_under_a_running_download_finds_it_paused() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let u = found_in(Some(dir.path()), vec![]);
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        drop(u);
+        let again = Update::new(FakeBootc::new(host()), Some(dir.path().to_owned()));
+        assert_eq!(again.job_record(0).expect("kept").state, "paused");
+    }
+
+    #[test]
+    fn a_bad_kept_job_is_ignored() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::write(dir.path().join(JOB_FILE), "{garbage").expect("write");
+        let u = Update::new(FakeBootc::new(host()), Some(dir.path().to_owned()));
+        assert!(u.job_record(0).is_none());
+        assert_eq!(u.record().available, "");
+    }
+
+    fn paused(u: &Arc<Update<FakeBootc>>) {
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        let thread = download_until_held(u);
+        assert_eq!(u.pause_download(), Status::Ok);
+        thread.join().expect("thread");
+        assert_eq!(job(u).state, "paused");
+    }
+
+    #[test]
+    fn set_channel_and_rollback_cancel_a_paused_download() {
+        let u = found(vec![run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop)]);
+        paused(&u);
+        assert_eq!(u.set_channel("beta", true, &clk()), Status::Ok);
+        assert_eq!(job(&u).status, "cancelled");
+
+        let u = found(vec![run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop)]);
+        paused(&u);
+        assert_eq!(u.rollback(true, &clk()), Status::Ok);
+        assert_eq!(job(&u).status, "cancelled");
+        assert_eq!(u.resume_download(1000), Status::WrongState);
+    }
+
+    #[test]
+    fn a_download_paused_by_the_policy_resumes_when_no_app_runs() {
+        let u = found(vec![run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop)]);
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        let thread = download_until_held(&u);
+        assert_eq!(u.policy_pause(), Status::Ok);
+        thread.join().expect("thread");
+        assert_eq!(job(&u).reason, "playing");
+        let clock = FakeClock::new(1060, 12 * 60);
+        let reboot = FakeReboot::default();
+        u.report_activity(1060, true);
+        u.tick(&clock, &reboot, &mut || {});
+        assert_eq!(job(&u).state, "paused", "an app still runs");
+        u.report_activity(1070, false);
+        clock.set(1120, 12 * 60);
+        u.tick(&clock, &reboot, &mut || {});
+        let j = job(&u);
+        assert_eq!((j.id.as_str(), j.status.as_str()), ("os-1000", "ok"));
+        assert_eq!(u.record().state, State::Staged);
+    }
+
+    #[test]
+    fn a_download_the_user_paused_waits_for_the_user() {
+        let u = found(vec![run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop)]);
+        paused(&u);
+        let clock = FakeClock::new(1060, 12 * 60);
+        u.tick(&clock, &FakeReboot::default(), &mut || {});
+        assert_eq!(job(&u).state, "paused");
+    }
+
+    #[test]
+    fn the_ledger_counts_each_runs_bytes_and_the_finished_job() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let u = found_in(
+            Some(dir.path()),
+            vec![
+                run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop),
+                run(vec![bytes_ev(700, 700)], FakeEnd::Done),
+            ],
+        );
+        paused(&u);
+        let (status, days) = u.download_stats(7, &clk());
+        assert_eq!(status, Status::Ok);
+        assert_eq!(
+            days,
+            [Day {
+                day: "1970-01-01".into(),
+                bytes: 400,
+                jobs: 0,
+                failed: 0
+            }]
+        );
+        assert_eq!(u.resume_download(1000), Status::Ok);
+        u.run_download(&clk(), &mut || {});
+        let (_, days) = u.download_stats(7, &clk());
+        assert_eq!((days[0].bytes, days[0].jobs, days[0].failed), (1100, 1, 0));
+        let kept = ledger::load(dir.path()).expect("written");
+        assert_eq!(kept.stats(7, "1970-01-01"), days);
+        assert_eq!(u.download_stats(0, &clk()).0, Status::Invalid);
+        assert_eq!(u.download_stats(91, &clk()).0, Status::Invalid);
+        assert_eq!(u.download_stats(90, &clk()).0, Status::Ok);
+    }
+
+    #[test]
+    fn a_corrupt_ledger_is_reported_and_never_overwritten() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        fs::write(dir.path().join(LEDGER_FILE), "garbage").expect("write");
+        let u = found_in(
+            Some(dir.path()),
+            vec![run(vec![bytes_ev(10, 10)], FakeEnd::Done)],
+        );
+        assert_eq!(u.download_stats(7, &clk()).0, Status::Failed);
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        u.run_download(&clk(), &mut || {});
+        assert_eq!(job(&u).status, "ok", "the download itself is not held up");
+        assert_eq!(
+            fs::read_to_string(dir.path().join(LEDGER_FILE)).expect("read"),
+            "garbage"
+        );
     }
 }

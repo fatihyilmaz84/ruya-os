@@ -739,7 +739,10 @@ mod tests {
                 "Session1.xml Day",
                 "Session1.xml Running",
                 "Session1.xml Session",
-                "Store1.xml App"
+                "Store1.xml App",
+                "Update1.xml Day",
+                "Update1.xml Job",
+                "Update1.xml Status"
             ],
             "a new record block is listed here; a missing one is not in the shape the parser reads"
         );

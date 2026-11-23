@@ -1,6 +1,6 @@
 //! org.ruyaos.Update1 on D-Bus. Thin adapter: the rules live in `service.rs`. A check or download
 //! runs on its own thread (`bootc` blocks); every change becomes a `StatusChanged` signal through
-//! a channel, in the order it happened.
+//! a channel, in the order it happened, and a `JobChanged` when the image job's record changed.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -13,6 +13,9 @@ use zbus::zvariant::{OwnedValue, Value};
 use zbus::{fdo, interface, Connection};
 
 use crate::bootc::Bootc;
+use crate::job::JobRecord;
+use crate::ledger::Day;
+use crate::schedule::{Clock, SystemClock};
 use crate::service::{Record, Status, Update};
 
 pub const BUS_NAME: &str = "org.ruyaos.Update1";
@@ -116,7 +119,41 @@ fn dict(entries: Vec<(&str, Value<'_>)>) -> Dict {
         .collect()
 }
 
-fn record(r: &Record) -> Dict {
+/// The Job record of the contract (GetDownloadJob, JobChanged).
+pub fn job_dict(j: &JobRecord) -> Dict {
+    dict(vec![
+        ("id", Value::from(j.id.clone())),
+        ("source", Value::from(j.source)),
+        ("kind", Value::from(j.kind)),
+        ("app", Value::from(j.app.clone())),
+        ("title", Value::from(j.title.clone())),
+        ("state", Value::from(j.state)),
+        ("status", Value::from(j.status.clone())),
+        ("reason", Value::from(j.reason.clone())),
+        ("phase", Value::from(j.phase)),
+        ("percent", Value::from(j.percent)),
+        ("bytes_done", Value::from(j.bytes_done)),
+        ("bytes_total", Value::from(j.bytes_total)),
+        ("rate_bps", Value::from(j.rate_bps)),
+        ("eta_s", Value::from(j.eta_s)),
+        ("position", Value::from(j.position)),
+        ("resumable", Value::from(j.resumable)),
+        ("started", Value::from(j.started)),
+        ("finished", Value::from(j.finished)),
+    ])
+}
+
+/// One entry of GetDownloadStats.
+pub fn day_dict(d: &Day) -> Dict {
+    dict(vec![
+        ("day", Value::from(d.day.clone())),
+        ("bytes", Value::from(d.bytes)),
+        ("jobs", Value::from(d.jobs)),
+        ("failed", Value::from(d.failed)),
+    ])
+}
+
+pub fn record(r: &Record) -> Dict {
     dict(vec![
         ("state", Value::from(r.state.as_str())),
         ("current", Value::from(r.current.clone())),
@@ -144,12 +181,53 @@ impl UpdateIface {
     }
 
     fn download(&self) -> String {
-        let status = self.update.begin_download();
+        let status = self.update.begin_download(now());
         if status == Status::Ok {
             self.changed();
-            self.spawn(|update, emit| update.run_download(emit));
+            self.spawn(|update, emit| update.run_download(&SystemClock, emit));
         }
         status.as_str().to_owned()
+    }
+
+    fn pause_download(&self) -> String {
+        let status = self.update.pause_download();
+        // The job thread reports the pause once bootc has stopped.
+        status.as_str().to_owned()
+    }
+
+    fn resume_download(&self) -> String {
+        let status = self.update.resume_download(now());
+        if status == Status::Ok {
+            self.changed();
+            self.spawn(|update, emit| update.run_download(&SystemClock, emit));
+        }
+        status.as_str().to_owned()
+    }
+
+    fn cancel_download(&self) -> String {
+        let status = self.update.cancel_download(&SystemClock);
+        // A paused job ends here; a running one when bootc has stopped (the job thread reports it).
+        if status == Status::Ok {
+            self.changed();
+        }
+        status.as_str().to_owned()
+    }
+
+    fn get_download_job(&self) -> (String, Dict) {
+        let job = self
+            .update
+            .job_record(SystemClock.monotonic_ms())
+            .map(|j| job_dict(&j))
+            .unwrap_or_default();
+        (Status::Ok.as_str().to_owned(), job)
+    }
+
+    fn get_download_stats(&self, days: u32) -> (String, Vec<Dict>) {
+        let (status, stats) = self.update.download_stats(days, &SystemClock);
+        (
+            status.as_str().to_owned(),
+            stats.iter().map(day_dict).collect(),
+        )
     }
 
     async fn rollback(
@@ -160,7 +238,7 @@ impl UpdateIface {
         let admin = self.caller_is_admin(&header, connection).await;
         let update = self.update.clone();
         // `bootc rollback` takes a moment: not on the executor.
-        let status = blocking::unblock(move || update.rollback(admin)).await;
+        let status = blocking::unblock(move || update.rollback(admin, &SystemClock)).await;
         if status == Status::Ok {
             self.changed();
         }
@@ -174,7 +252,7 @@ impl UpdateIface {
         #[zbus(connection)] connection: &Connection,
     ) -> String {
         let admin = self.caller_is_admin(&header, connection).await;
-        let status = self.update.set_channel(channel, admin);
+        let status = self.update.set_channel(channel, admin, &SystemClock);
         if status == Status::Ok {
             self.changed();
         }
@@ -208,21 +286,37 @@ impl UpdateIface {
 
     #[zbus(signal)]
     async fn status_changed(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn job_changed(emitter: &SignalEmitter<'_>, job: Dict) -> zbus::Result<()>;
 }
 
-/// Turns the changes into signals, in order. Runs forever.
-pub async fn forward(connection: Connection, changes: Receiver<()>) {
+/// Turns the changes into signals, in order: StatusChanged for each, JobChanged when the job's
+/// record differs from the one sent last. Runs forever.
+pub async fn forward(connection: Connection, update: Shared, changes: Receiver<()>) {
+    let mut sent_job: Option<JobRecord> = None;
     while changes.recv().await.is_ok() {
+        let job = update.job_record(SystemClock.monotonic_ms());
+        let new_job = job.filter(|j| sent_job.as_ref() != Some(j));
         let sent = async {
             let iface = connection
                 .object_server()
                 .interface::<_, UpdateIface>(OBJECT_PATH)
                 .await?;
-            UpdateIface::status_changed(iface.signal_emitter()).await
+            UpdateIface::status_changed(iface.signal_emitter()).await?;
+            if let Some(job) = &new_job {
+                UpdateIface::job_changed(iface.signal_emitter(), job_dict(job)).await?;
+            }
+            Ok::<(), zbus::Error>(())
         }
         .await;
-        if let Err(err) = sent {
-            eprintln!("ruya-update: emitting a signal failed: {err}");
+        match sent {
+            Ok(()) => {
+                if new_job.is_some() {
+                    sent_job = new_job;
+                }
+            }
+            Err(err) => eprintln!("ruya-update: emitting a signal failed: {err}"),
         }
     }
 }
