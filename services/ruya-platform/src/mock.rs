@@ -269,10 +269,9 @@ pub fn core(
 /// the mock has them: the service's own `LifecycleIface` carries nothing of the kind.
 pub type Faults = Arc<Mutex<BTreeMap<String, String>>>;
 
-/// The mock's Lifecycle object: the service's own method bodies (`dbus::register`,
-/// `dbus::save_done`), each answer passed through the mock's faults. The signals are only
-/// declared here (introspection); they are sent by the service's code (`dbus::notify_lifecycle`).
-/// The contract test holds it to `Platform1.xml` like the service's object.
+/// The mock's Lifecycle object: the service's own interface (`dbus::lifecycle_interface!`, the
+/// same method bodies and signals), each answer passed through the mock's faults. The contract
+/// test holds it to `Platform1.xml` like the service's object.
 pub struct MockLifecycle {
     core: Shared,
     faults: Faults,
@@ -290,35 +289,12 @@ impl MockLifecycle {
     }
 }
 
-#[interface(name = "org.ruyaos.Platform1.Lifecycle")]
-impl MockLifecycle {
-    async fn register(
-        &self,
-        #[zbus(header)] header: Header<'_>,
-        #[zbus(connection)] conn: &Connection,
-    ) -> String {
-        let status = door_dbus::register(&self.core, &header, conn).await;
-        self.reply("Register", status)
-    }
-
-    async fn save_done(
-        &self,
-        #[zbus(header)] header: Header<'_>,
-        #[zbus(connection)] conn: &Connection,
-    ) -> String {
-        let status = door_dbus::save_done(&self.core, &header, conn).await;
-        self.reply("SaveDone", status)
-    }
-
-    #[zbus(signal)]
-    async fn background(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
-
-    #[zbus(signal)]
-    async fn resume(emitter: &SignalEmitter<'_>, frozen_ms: u64) -> zbus::Result<()>;
-
-    #[zbus(signal)]
-    async fn stopping(emitter: &SignalEmitter<'_>, deadline_ms: u32) -> zbus::Result<()>;
-}
+door_dbus::lifecycle_interface!(
+    // Its signals are declared for the introspection only: they are sent through the service's
+    // object (`dbus::notify_lifecycle`).
+    #[allow(dead_code)]
+    MockLifecycle
+);
 
 /// Everything the mock serves: Lifecycle (the service's bodies, with the faults the control
 /// interface sets) and the service's own Manage (unchecked, as its `--session`) at

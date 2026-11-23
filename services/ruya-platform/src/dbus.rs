@@ -139,41 +139,58 @@ impl LifecycleIface {
     pub fn new(core: Shared) -> Self {
         LifecycleIface { core }
     }
+
+    /// The answer of a Lifecycle method: its status.
+    fn reply(&self, _member: &str, status: Status) -> String {
+        status.as_str().to_owned()
+    }
 }
 
-#[interface(name = "org.ruyaos.Platform1.Lifecycle")]
-impl LifecycleIface {
-    async fn register(
-        &self,
-        #[zbus(header)] header: Header<'_>,
-        #[zbus(connection)] conn: &Connection,
-    ) -> String {
-        register(&self.core, &header, conn)
-            .await
-            .as_str()
-            .to_owned()
-    }
+/// Declares `org.ruyaos.Platform1.Lifecycle` on `$ty`, the one copy of the interface: a struct
+/// with a `core: Shared` field and a `fn reply(&self, member: &str, status: Status) -> String`
+/// that turns each method's status into its answer. The service's [`LifecycleIface`] answers the
+/// status itself; the developer mock's object (`mock::MockLifecycle`, dev-mock feature) passes it
+/// through the faults of its control interface. The signals are sent by [`notify_lifecycle`]
+/// through the service's object. The user's module imports `interface`, `Header`, `Connection`
+/// and `SignalEmitter`.
+macro_rules! lifecycle_interface {
+    ($(#[$attr:meta])* $ty:ident) => {
+        #[interface(name = "org.ruyaos.Platform1.Lifecycle")]
+        $(#[$attr])*
+        impl $ty {
+            async fn register(
+                &self,
+                #[zbus(header)] header: Header<'_>,
+                #[zbus(connection)] conn: &Connection,
+            ) -> String {
+                let status = $crate::dbus::register(&self.core, &header, conn).await;
+                self.reply("Register", status)
+            }
 
-    async fn save_done(
-        &self,
-        #[zbus(header)] header: Header<'_>,
-        #[zbus(connection)] conn: &Connection,
-    ) -> String {
-        save_done(&self.core, &header, conn)
-            .await
-            .as_str()
-            .to_owned()
-    }
+            async fn save_done(
+                &self,
+                #[zbus(header)] header: Header<'_>,
+                #[zbus(connection)] conn: &Connection,
+            ) -> String {
+                let status = $crate::dbus::save_done(&self.core, &header, conn).await;
+                self.reply("SaveDone", status)
+            }
 
-    #[zbus(signal)]
-    async fn background(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+            #[zbus(signal)]
+            async fn background(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
 
-    #[zbus(signal)]
-    async fn resume(emitter: &SignalEmitter<'_>, frozen_ms: u64) -> zbus::Result<()>;
+            #[zbus(signal)]
+            async fn resume(emitter: &SignalEmitter<'_>, frozen_ms: u64) -> zbus::Result<()>;
 
-    #[zbus(signal)]
-    async fn stopping(emitter: &SignalEmitter<'_>, deadline_ms: u32) -> zbus::Result<()>;
+            #[zbus(signal)]
+            async fn stopping(emitter: &SignalEmitter<'_>, deadline_ms: u32) -> zbus::Result<()>;
+        }
+    };
 }
+#[cfg(feature = "dev-mock")]
+pub(crate) use lifecycle_interface;
+
+lifecycle_interface!(LifecycleIface);
 
 /// Sends `event` to each of `names` alone (a unicast signal: the message carries the destination,
 /// so the bus delivers it to that connection only).
