@@ -196,7 +196,8 @@ pub enum LifecycleEvent {
     Background,
     /// A hold or a freeze ended: how long it lasted.
     Resume { frozen_ms: u64 },
-    /// A `Stop`'s save wait: the deadline. The SIGTERM waits for `Session::saved`.
+    /// A `Stop`'s save wait: its deadline, counted from the notice's `at`, which bounds the whole
+    /// wait (the scope listing included). The SIGTERM waits for `Session::saved`.
     Stopping { deadline_ms: u64 },
 }
 
@@ -218,17 +219,41 @@ pub struct LifecycleNotice {
     pub instance: String,
     pub profile: String,
     pub event: LifecycleEvent,
+    /// When the core decided it.
+    pub at: Instant,
 }
 
-/// Where a `Stop`'s save wait is (RUY-1099).
+/// Where a `Stop`'s save wait is (RUY-1099). `since` is when its `Stopping` was told; `in_grace`
+/// (power off): the grace counts from `since`, so the save window is part of `STOP_GRACE`
+/// instead of adding to it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SaveWait {
     /// No wait: not stopping, or its SIGTERM is sent.
     Off,
     /// Its `Stopping` is out and not settled yet.
-    Waiting,
+    Waiting { since: Instant, in_grace: bool },
     /// Settled (`saved`), but a child of it still waits: a parent's SIGTERM follows its children's.
-    Settled,
+    Settled { since: Instant, in_grace: bool },
+}
+
+impl SaveWait {
+    fn waiting(self) -> bool {
+        matches!(self, SaveWait::Waiting { .. })
+    }
+
+    fn settled(self) -> bool {
+        matches!(self, SaveWait::Settled { .. })
+    }
+}
+
+/// Which stop `stop_tree` makes (RUY-1099).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StopKind {
+    /// `Stop` (Close game): the save wait, then the SIGTERM and the whole `STOP_GRACE`.
+    Close,
+    /// `stop_all` (power off): the save wait counts inside `STOP_GRACE`, so the bound of
+    /// `shutdown::STOP_ALL_WAIT` holds.
+    PowerOff,
 }
 
 /// A change of an app's `frozen` for the adapter to announce (`FrozenChanged`).
@@ -352,7 +377,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
 
     /// Hands `event` for the instance at `at` to the outbox. False when nothing is told (no
     /// outbox, or it is closed).
-    fn tell(&self, at: usize, event: LifecycleEvent) -> bool {
+    fn tell(&self, at: usize, event: LifecycleEvent, now: Instant) -> bool {
         let Some((outbox, _)) = &self.lifecycle else {
             return false;
         };
@@ -362,6 +387,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 instance: inst.unit.clone(),
                 profile: inst.profile.clone(),
                 event,
+                at: now,
             })
             .is_ok()
     }
@@ -370,7 +396,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     fn tell_resume(&self, at: usize, since: Instant, now: Instant) {
         let frozen_ms =
             u64::try_from(now.saturating_duration_since(since).as_millis()).unwrap_or(u64::MAX);
-        self.tell(at, LifecycleEvent::Resume { frozen_ms });
+        self.tell(at, LifecycleEvent::Resume { frozen_ms }, now);
     }
 
     /// Each app then gets `WAYLAND_DISPLAY` set to its profile user's own socket in `dir`
@@ -642,18 +668,27 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     ///
     /// With `with_lifecycle` (RUY-1099) each instance stopped is first told `Stopping` (after the
     /// `Resume` of its thaw or hold) and is `stopping` from then on, but its SIGTERM waits until
-    /// the adapter reports the `Stopping` settled (`saved`); the grace starts at the SIGTERM. A
-    /// parent's SIGTERM still follows its children's.
+    /// the adapter reports the `Stopping` settled (`saved`), or `tick` finds its deadline passed;
+    /// the grace starts at the SIGTERM. A parent's SIGTERM still follows its children's.
     pub fn stop(&mut self, instance: &str, clock: impl Clock) -> Status {
-        self.stop_tree(instance, clock, true)
+        self.stop_tree(instance, clock, StopKind::Close)
     }
 
-    /// `stop`, and with `save` false (`stop_all`) no save wait: the SIGTERM goes at once.
-    fn stop_tree(&mut self, instance: &str, clock: impl Clock, save: bool) -> Status {
+    /// `stop` (`StopKind::Close`) or the stop of `stop_all` (`StopKind::PowerOff`: the grace
+    /// counts from the `Stopping`, also for an instance whose Close game still waits for its save).
+    fn stop_tree(&mut self, instance: &str, clock: impl Clock, kind: StopKind) -> Status {
         let Some(at) = self.instances.iter().position(|i| i.unit == instance) else {
             return Status::UnknownInstance;
         };
         if self.instances[at].state == State::Stopping {
+            if let (StopKind::PowerOff, SaveWait::Waiting { since, .. }) =
+                (kind, self.instances[at].save)
+            {
+                self.instances[at].save = SaveWait::Waiting {
+                    since,
+                    in_grace: true,
+                };
+            }
             return Status::Ok;
         }
         if self.awaits_scope(at) {
@@ -668,17 +703,17 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             if self.awaits_scope(child) {
                 self.cancel_launch(child, ExitReason::LaunchFailed);
             } else {
-                self.stop_at(child, now, save);
+                self.stop_at(child, now, kind);
             }
         }
-        self.stop_at(at, now, save)
+        self.stop_at(at, now, kind)
     }
 
     /// The stop of the one instance at `at` (not stopping yet): a frozen one is thawed first, and
-    /// a held or frozen one is told `Resume`. With `save` and `with_lifecycle` it is told
-    /// `Stopping` and waits for `saved` (not a hidden one: its profile is gone); otherwise its
-    /// SIGTERM goes now (`send_stop`).
-    fn stop_at(&mut self, at: usize, clock: impl Clock, save: bool) -> Status {
+    /// a held or frozen one is told `Resume`. With `with_lifecycle` it is told `Stopping` and
+    /// waits for `saved` (not a hidden one: its profile is gone); otherwise its SIGTERM goes now
+    /// (`send_stop`).
+    fn stop_at(&mut self, at: usize, clock: impl Clock, kind: StopKind) -> Status {
         let inst = &mut self.instances[at];
         let held_since = inst.held.take();
         let mut paused_since = held_since;
@@ -707,17 +742,21 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 frozen: false,
             });
         }
+        // Read after the thaw, as the grace's start is.
+        let now = clock.now();
         if let Some(since) = paused_since {
-            // Read after the thaw, as the grace's start is.
-            self.tell_resume(at, since, clock.now());
+            self.tell_resume(at, since, now);
         }
         let deadline = self.lifecycle.as_ref().map(|(_, wait)| *wait);
-        if let (true, false, Some(deadline)) = (save, self.instances[at].hidden, deadline) {
+        if let (false, Some(deadline)) = (self.instances[at].hidden, deadline) {
             let deadline_ms = u64::try_from(deadline.as_millis()).unwrap_or(u64::MAX);
-            if self.tell(at, LifecycleEvent::Stopping { deadline_ms }) {
+            if self.tell(at, LifecycleEvent::Stopping { deadline_ms }, now) {
                 let inst = &mut self.instances[at];
                 inst.state = State::Stopping;
-                inst.save = SaveWait::Waiting;
+                inst.save = SaveWait::Waiting {
+                    since: now,
+                    in_grace: kind == StopKind::PowerOff,
+                };
                 let user = inst.user.clone();
                 self.sync_audio(&user, false);
                 return Status::Ok;
@@ -727,15 +766,26 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     }
 
     /// The SIGTERM of the instance at `at` (`Spawner::stop`): it is then `stopping`, and the grace
-    /// of `tick`'s backstop starts.
+    /// of `tick`'s backstop starts, now or, for a power off's save wait, when its `Stopping` was
+    /// told.
     fn send_stop(&mut self, at: usize, clock: impl Clock) -> Status {
         let inst = &mut self.instances[at];
-        inst.save = SaveWait::Off;
+        let grace_from = match std::mem::replace(&mut inst.save, SaveWait::Off) {
+            SaveWait::Waiting {
+                since,
+                in_grace: true,
+            }
+            | SaveWait::Settled {
+                since,
+                in_grace: true,
+            } => Some(since),
+            _ => None,
+        };
         let user = inst.user.clone();
         let status = match self.spawner.stop(&inst.unit) {
             Ok(()) => {
                 inst.state = State::Stopping;
-                inst.stop_asked = Some(clock.now());
+                inst.stop_asked = Some(grace_from.unwrap_or_else(|| clock.now()));
                 Status::Ok
             }
             Err(err) => {
@@ -755,17 +805,31 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
     pub fn saved(&mut self, instance: &str, clock: impl Clock) -> Status {
         let status = match self
             .instances
-            .iter_mut()
-            .find(|i| i.unit == instance && i.save == SaveWait::Waiting)
+            .iter()
+            .position(|i| i.unit == instance && i.save.waiting())
         {
-            Some(inst) => {
-                inst.save = SaveWait::Settled;
+            Some(at) => {
+                self.settle(at);
                 Status::Ok
             }
             None => Status::UnknownInstance,
         };
+        self.release_settled(clock);
+        status
+    }
+
+    /// The save wait at `at` (waiting) has settled.
+    fn settle(&mut self, at: usize) {
+        if let SaveWait::Waiting { since, in_grace } = self.instances[at].save {
+            self.instances[at].save = SaveWait::Settled { since, in_grace };
+        }
+    }
+
+    /// Sends the SIGTERM of every settled save wait none of whose children still waits, children
+    /// first.
+    fn release_settled(&mut self, clock: impl Clock) {
         while let Some(at) = (0..self.instances.len()).find(|&at| {
-            self.instances[at].save == SaveWait::Settled
+            self.instances[at].save.settled()
                 && self
                     .children_of(&self.instances[at].unit)
                     .iter()
@@ -777,21 +841,22 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
                 self.instances[at].stop_asked.get_or_insert(now);
             }
         }
-        status
     }
 
     /// The system goes down (RUY-888, `StopAll`): every app of every profile, frozen or not,
     /// starting, running or hidden, is stopped through `stop`, one after the other, so a frozen
     /// one is thawed right before its own SIGTERM and `tick` kills only what outlives the grace.
     /// Returns each instance asked, with the outcome; an app already stopping is `Ok` and keeps
-    /// its grace. There is no save wait here (RUY-1099): the SIGTERMs go at once, so the bound of
+    /// its grace. With `with_lifecycle` (RUY-1099) each one gets the save wait of `stop`, all at
+    /// once, but its grace counts from its `Stopping`: the save window is part of `STOP_GRACE`
+    /// (an instance whose Close game still waits for its save too), so the bound of
     /// `shutdown::STOP_ALL_WAIT` holds.
     pub fn stop_all(&mut self, clock: impl Clock + Copy) -> Vec<(String, Status)> {
         let units: Vec<String> = self.instances.iter().map(|i| i.unit.clone()).collect();
         units
             .into_iter()
             .map(|unit| {
-                let status = self.stop_tree(&unit, clock, false);
+                let status = self.stop_tree(&unit, clock, StopKind::PowerOff);
                 (unit, status)
             })
             .collect()
@@ -928,7 +993,7 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
             let user = inst.user.clone();
             self.sync_audio(&user, false);
             if newly {
-                self.tell(at, LifecycleEvent::Background);
+                self.tell(at, LifecycleEvent::Background, now);
             }
             return Status::Ok;
         }
@@ -1428,7 +1493,8 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         notice.into_iter().collect()
     }
 
-    /// Kills the apps that did not quit within `STOP_GRACE` of their `Stop`, and starts the
+    /// Sends the SIGTERM of a save wait past its deadline (`end_overdue_saves`, RUY-1099), kills
+    /// the apps that did not quit within `STOP_GRACE` of their `Stop`, and starts the
     /// memory reclaim of the apps frozen for `RECLAIM_AFTER` (T-466; only when swap is active,
     /// since without it a reclaim only drops clean cache). Call about once a second.
     ///
@@ -1455,8 +1521,30 @@ impl<S: Spawner, D: ProfileDirectory> Session<S, D> {
         while let Some(at) = self.instances.iter().position(|i| i.cancelled.is_some()) {
             ended.extend(self.remove_at(at, |i| exit_reason(i, 0, false)));
         }
+        self.end_overdue_saves(now);
         self.kill_and_reclaim(now);
         ended
+    }
+
+    /// A save wait whose deadline has passed settles here (RUY-1099): the adapter's own bound is
+    /// the same, this one holds when its answer is lost.
+    fn end_overdue_saves(&mut self, now: Instant) {
+        let Some(wait) = self.lifecycle.as_ref().map(|(_, wait)| *wait) else {
+            return;
+        };
+        for at in 0..self.instances.len() {
+            if let SaveWait::Waiting { since, .. } = self.instances[at].save {
+                if now.saturating_duration_since(since) >= wait {
+                    eprintln!(
+                        "ruya-session: {}: no answer to its Stopping within {} ms",
+                        self.instances[at].unit,
+                        wait.as_millis()
+                    );
+                    self.settle(at);
+                }
+            }
+        }
+        self.release_settled(now);
     }
 
     /// `tick`'s backstop kills and memory reclaims.
@@ -4183,6 +4271,14 @@ mod tests {
             .collect()
     }
 
+    /// The backstop's kill of `unit` comes at `at`, not a moment before.
+    fn killed_at(s: &mut Session<FakeSpawner, ProfileSnapshot>, unit: &str, at: Instant) {
+        s.tick(at - Duration::from_millis(1));
+        assert!(!s.spawner.calls().contains(&format!("kill {unit}")));
+        s.tick(at);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("kill {unit}")));
+    }
+
     const STOPPING: LifecycleEvent = LifecycleEvent::Stopping { deadline_ms: 5000 };
 
     fn resume(ms: u64) -> LifecycleEvent {
@@ -4293,18 +4389,15 @@ mod tests {
         // A second Stop while it waits changes nothing.
         assert_eq!(s.stop(&unit, t0), Status::Ok);
         assert!(notices(&rx).is_empty());
-        // No backstop kill while it saves: the grace has not started.
-        s.tick(t0 + STOP_GRACE);
-        assert!(!s.spawner.calls().contains(&format!("kill {unit}")));
-        // Settled: the SIGTERM, and the grace starts now.
-        let t1 = t0 + Duration::from_secs(5);
+        // Nothing while it saves: no SIGTERM, and the grace has not started.
+        let t1 = t0 + Duration::from_secs(3);
+        s.tick(t1 - Duration::from_millis(1));
+        assert!(!s.spawner.calls().contains(&format!("stop {unit}")));
+        // Settled: the SIGTERM, and Close game's whole grace starts now.
         assert_eq!(s.saved(&unit, t1), Status::Ok);
         assert_eq!(s.spawner.calls().last(), Some(&format!("stop {unit}")));
         assert_eq!(s.saved(&unit, t1), Status::UnknownInstance, "settled once");
-        s.tick(t1 + STOP_GRACE - Duration::from_millis(1));
-        assert!(!s.spawner.calls().contains(&format!("kill {unit}")));
-        s.tick(t1 + STOP_GRACE);
-        assert_eq!(s.spawner.calls().last(), Some(&format!("kill {unit}")));
+        killed_at(&mut s, &unit, t1 + STOP_GRACE);
     }
 
     #[test]
@@ -4379,12 +4472,84 @@ mod tests {
     }
 
     #[test]
-    fn stop_all_waits_for_no_save() {
-        // RUY-888's bound (`shutdown::STOP_ALL_WAIT`) has no room for a save wait yet.
+    fn a_save_wait_without_an_answer_ends_at_its_deadline_in_tick() {
         let (mut s, rx) = told(session());
         let unit = running(&mut s);
-        assert_eq!(s.stop_all(Instant::now()), [(unit.clone(), Status::Ok)]);
+        let t0 = Instant::now();
+        assert_eq!(s.stop(&unit, t0), Status::Ok);
+        assert_eq!(notices(&rx).len(), 1);
+        s.tick(t0 + SAVE_WAIT - Duration::from_millis(1));
+        assert!(!s.spawner.calls().contains(&format!("stop {unit}")));
+        let t1 = t0 + SAVE_WAIT;
+        s.tick(t1);
         assert_eq!(s.spawner.calls().last(), Some(&format!("stop {unit}")));
-        assert!(notices(&rx).is_empty());
+        // The answer that comes late changes nothing.
+        assert_eq!(s.saved(&unit, t1), Status::UnknownInstance);
+        // Close game: the whole grace from the SIGTERM.
+        killed_at(&mut s, &unit, t1 + STOP_GRACE);
+    }
+
+    #[test]
+    fn at_power_off_the_save_window_is_part_of_the_grace() {
+        let (mut s, rx) = told(session());
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        assert_eq!(s.stop_all(t0), [(unit.clone(), Status::Ok)]);
+        assert_eq!(notices(&rx), [(unit.clone(), STOPPING)]);
+        assert!(!s.spawner.calls().contains(&format!("stop {unit}")));
+        // It saved after 2 s: the SIGTERM then, and the kill still 30 s after the Stopping.
+        assert_eq!(s.saved(&unit, t0 + Duration::from_secs(2)), Status::Ok);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("stop {unit}")));
+        killed_at(&mut s, &unit, t0 + STOP_GRACE);
+    }
+
+    #[test]
+    fn at_power_off_a_silent_app_gets_its_sigterm_at_5_s_and_its_kill_at_30_s() {
+        let (mut s, rx) = told(session());
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        assert_eq!(s.stop_all(t0), [(unit.clone(), Status::Ok)]);
+        assert_eq!(notices(&rx).len(), 1);
+        s.tick(t0 + SAVE_WAIT);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("stop {unit}")));
+        killed_at(&mut s, &unit, t0 + STOP_GRACE);
+    }
+
+    #[test]
+    fn a_power_off_during_a_close_games_save_wait_counts_its_grace_from_that_stopping() {
+        let (mut s, rx) = told(session());
+        let unit = running(&mut s);
+        let t0 = Instant::now();
+        assert_eq!(s.stop(&unit, t0), Status::Ok);
+        assert_eq!(
+            s.stop_all(t0 + Duration::from_secs(1)),
+            [(unit.clone(), Status::Ok)]
+        );
+        assert_eq!(
+            notices(&rx),
+            [(unit.clone(), STOPPING)],
+            "no second Stopping"
+        );
+        assert_eq!(s.saved(&unit, t0 + Duration::from_secs(4)), Status::Ok);
+        s.tick(t0 + STOP_GRACE);
+        assert_eq!(s.spawner.calls().last(), Some(&format!("kill {unit}")));
+    }
+
+    #[test]
+    fn at_power_off_children_and_parents_wait_side_by_side_and_end_in_order() {
+        let (s, steam, child) = steam_with_game(FakeSpawner::new());
+        let (mut s, rx) = told(s);
+        let before = s.spawner.calls().len();
+        let t0 = Instant::now();
+        assert_eq!(s.stop_all(t0).len(), 2);
+        assert_eq!(
+            notices(&rx),
+            [(child.clone(), STOPPING), (steam.clone(), STOPPING)]
+        );
+        s.tick(t0 + SAVE_WAIT);
+        assert_eq!(
+            calls_since(&s, before),
+            [format!("stop {child}"), format!("stop {steam}")]
+        );
     }
 }

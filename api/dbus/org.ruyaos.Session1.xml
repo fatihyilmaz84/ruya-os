@@ -188,8 +188,8 @@
          kill) follows. Stopping an instance that is already stopping is "ok". The instance is
          "stopping" from the reply on; before its SIGTERM it is told Platform1 Stopping (deadline
          5 s, RUY-1099), and the SIGTERM waits until that settles: at once for an app that did not
-         register (or without Platform1), else when it calls SaveDone or the deadline passed
-         (Platform1's answer is awaited for at most 7 s; 03 "Stop's save wait"). The
+         register (or without Platform1), else when it calls SaveDone or at the deadline, never
+         later (03 "Stop's save wait"). The
          30 s count from the SIGTERM; "ok" means the stop was taken on, a SIGTERM that then fails
          is logged and the backstop's kill follows. A child instance
          (ADR-041) is only its own scopes; a parent's children are stopped first, then the parent. A

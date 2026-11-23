@@ -5,12 +5,12 @@
 //!
 //! The notices are sent in the order the core made them, on a thread of their own (`run`), so a
 //! slow listing or a slow Platform1 holds up neither a `Session1` call nor the event loop:
-//! `Background` and `Resume` are answered at once and get `NOTIFY_SLACK`; a `Stopping` is waited
-//! for on a thread of its own (all scopes at once) for at most its deadline and `NOTIFY_SLACK`,
-//! and then the core sends the SIGTERM (`Session::saved`). Platform1 missing, failing or late
-//! counts as nothing registered (`not-registered`), logged once per start of this service. Every
-//! call is best effort: nothing here can keep a freeze, a thaw or a stop from happening, and a
-//! stop waits at most the deadline and `NOTIFY_SLACK` for its answer.
+//! `Background` and `Resume` are answered at once and get `NOTIFY_SLACK`. A `Stopping` is waited
+//! for on a thread of its own, and its whole wait (the scope listing, then all scopes asked at
+//! once) ends by its deadline counted from the notice (`save_wait`); then the core sends the
+//! SIGTERM (`Session::saved`). Platform1 missing, failing or late counts as nothing registered
+//! (`not-registered`), logged once per start of this service. Every call is best effort: nothing
+//! here can keep a freeze, a thaw or a stop from happening, and a stop waits at most its deadline.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -25,13 +25,14 @@ use zbus::Connection;
 use crate::dbus::{lock, Shared};
 use crate::runner_choice::ask_within;
 use crate::session::{LifecycleEvent, LifecycleNotice};
+use crate::spawner::ScopeLister;
 
 pub const PLATFORM_NAME: &str = "org.ruyaos.Platform1";
 pub const PLATFORM_PATH: &str = "/org/ruyaos/Platform1";
 pub const MANAGE_INTERFACE: &str = "org.ruyaos.Platform1.Manage";
 
-/// How long a `NotifyLifecycle` may take beyond its own deadline: a `Background` or `Resume`
-/// (answered at once) this long, a `Stopping` its deadline and this long (lead-44).
+/// How long a `NotifyLifecycle` of a `Background` or a `Resume` (answered at once) may take. A
+/// `Stopping` has what is left of its deadline instead (round 2, lead: never beyond it).
 pub const NOTIFY_SLACK: Duration = Duration::from_secs(2);
 
 /// The answer of one `NotifyLifecycle`.
@@ -76,17 +77,17 @@ impl Link {
         }
     }
 
-    /// One `NotifyLifecycle` for `scope` of `profile`, bounded: Platform1's status, or
+    /// One `NotifyLifecycle` for `scope` of `profile`, for at most `limit`: Platform1's status, or
     /// `not-registered` when it did not answer in time or the call failed (no Platform1 on the
     /// bus, its policy refused it), logged once per start of this service.
-    async fn tell(&self, profile: &str, scope: &str, event: LifecycleEvent) -> String {
+    async fn tell(
+        &self,
+        profile: &str,
+        scope: &str,
+        event: LifecycleEvent,
+        limit: Duration,
+    ) -> String {
         let (name, value_ms) = event.as_call();
-        let limit = match event {
-            LifecycleEvent::Stopping { deadline_ms } => {
-                Duration::from_millis(deadline_ms).saturating_add(self.slack)
-            }
-            LifecycleEvent::Background | LifecycleEvent::Resume { .. } => self.slack,
-        };
         let call = (self.notify)(profile.to_owned(), scope.to_owned(), name, value_ms);
         match ask_within(limit, call).await {
             Ok(status) => status,
@@ -114,7 +115,7 @@ pub async fn send_notices(session: Shared, notices: Receiver<LifecycleNotice>, l
             let spawned = std::thread::Builder::new()
                 .name("save-wait".to_owned())
                 .spawn(move || {
-                    futures_lite::future::block_on(save_wait(&waiting, &link, &notice, lister()))
+                    futures_lite::future::block_on(save_wait(&waiting, &link, &notice, lister))
                 });
             if let Err(err) = spawned {
                 eprintln!("ruya-session: cannot wait for {instance} to save: {err}");
@@ -123,7 +124,9 @@ pub async fn send_notices(session: Shared, notices: Receiver<LifecycleNotice>, l
             continue;
         }
         for scope in lister() {
-            let status = link.tell(&notice.profile, &scope, notice.event).await;
+            let status = link
+                .tell(&notice.profile, &scope, notice.event, link.slack)
+                .await;
             if status != "ok" && status != "not-registered" {
                 eprintln!(
                     "ruya-session: Platform1 answered {status} to {} of {scope}",
@@ -134,14 +137,31 @@ pub async fn send_notices(session: Shared, notices: Receiver<LifecycleNotice>, l
     }
 }
 
-/// The `Stopping` of `notice` to each of `scopes` at once, then the stop (`Session::saved`) once
-/// every answer is in or its limit passed.
-async fn save_wait(session: &Shared, link: &Link, notice: &LifecycleNotice, scopes: Vec<String>) {
+/// The save wait of `notice` (a `Stopping`), all of it within its deadline from `notice.at`: the
+/// instance's scopes are listed (`lister`, on a thread of its own: a listing past the deadline
+/// counts as none), each is told `Stopping` with what is left of the deadline and asked for at
+/// most that long, all at once; then the stop (`Session::saved`).
+async fn save_wait(session: &Shared, link: &Link, notice: &LifecycleNotice, lister: ScopeLister) {
+    let LifecycleEvent::Stopping { deadline_ms } = notice.event else {
+        return;
+    };
+    let end = notice.at + Duration::from_millis(deadline_ms);
     let started = Instant::now();
+    let scopes = list_by(lister, end).await.unwrap_or_else(|| {
+        eprintln!(
+            "ruya-session: the scopes of {} were not listed in time: it is stopped without a Stopping",
+            notice.instance
+        );
+        Vec::new()
+    });
+    let left = end.saturating_duration_since(Instant::now());
+    let event = LifecycleEvent::Stopping {
+        deadline_ms: u64::try_from(left.as_millis()).unwrap_or(u64::MAX),
+    };
     let answers = join_all(
         scopes
             .iter()
-            .map(|scope| link.tell(&notice.profile, scope, notice.event))
+            .map(|scope| link.tell(&notice.profile, scope, event, left))
             .collect(),
     )
     .await;
@@ -154,6 +174,23 @@ async fn save_wait(session: &Shared, link: &Link, notice: &LifecycleNotice, scop
         );
     }
     lock(session).saved(&notice.instance, Instant::now);
+}
+
+/// `lister`'s scopes, listed on a thread of its own; `None` when they are not there by `end` (or
+/// the thread cannot start).
+async fn list_by(lister: ScopeLister, end: Instant) -> Option<Vec<String>> {
+    let (tx, rx) = async_channel::bounded(1);
+    std::thread::Builder::new()
+        .name("scope-list".to_owned())
+        .spawn(move || {
+            let _ = tx.send_blocking(lister());
+        })
+        .ok()?;
+    futures_lite::future::or(async { rx.recv().await.ok() }, async {
+        async_io::Timer::at(end).await;
+        None
+    })
+    .await
 }
 
 /// Every future of `futures` to its end, side by side; the outputs in their order.
@@ -227,11 +264,22 @@ mod tests {
     /// APP running for p1 with two own scopes, its lifecycle sent through `notify` (save wait
     /// `wait`, slack `slack`); the spawner's observer for its calls.
     fn running(notify: Notify, wait: Duration, slack: Duration) -> (Shared, String, FakeSpawner) {
+        running_listed_in(notify, wait, slack, Duration::ZERO)
+    }
+
+    /// `running`, with a scope listing that takes `listing`.
+    fn running_listed_in(
+        notify: Notify,
+        wait: Duration,
+        slack: Duration,
+        listing: Duration,
+    ) -> (Shared, String, FakeSpawner) {
         let unit = unit_name("ruya-p1", APP);
         let fake = FakeSpawner::new()
             .with_app(APP)
             .with_freeze_never(APP)
-            .with_scopes(&unit, &[SCOPE_A, SCOPE_B]);
+            .with_scopes(&unit, &[SCOPE_A, SCOPE_B])
+            .with_scope_delay(listing);
         let spy = fake.observer();
         let spawner: DynSpawner = Box::new(fake);
         let (outbox, notices) = async_channel::unbounded();
@@ -294,19 +342,27 @@ mod tests {
         let absent: fn(&'static str) -> Reply =
             |_| Box::pin(async { Err(zbus::Error::Failure("ServiceUnknown".into())) });
         let unregistered: fn(&'static str) -> Reply = |_| reply("not-registered");
-        for answer in [absent, unregistered] {
+        // Close game and power off alike: the SIGTERM at once.
+        for (answer, power_off) in [
+            (absent, false),
+            (unregistered, false),
+            (absent, true),
+            (unregistered, true),
+        ] {
             let (notify, calls) = fake(answer);
             let (shared, unit, spy) = running(notify, SAVE_WAIT, NOTIFY_SLACK);
             let start = Instant::now();
-            assert_eq!(lock(&shared).stop(&unit, Instant::now()), Status::Ok);
+            if power_off {
+                assert_eq!(lock(&shared).stop_all(Instant::now).len(), 1);
+            } else {
+                assert_eq!(lock(&shared).stop(&unit, Instant::now()), Status::Ok);
+            }
             assert!(stopped_after(&spy, &unit, start) < Duration::from_secs(1));
-            assert_eq!(
-                wait_for_calls(&calls, 2)
-                    .iter()
-                    .map(|c| (c.2, c.3))
-                    .collect::<Vec<_>>(),
-                [("stopping", 5000), ("stopping", 5000)]
-            );
+            // Each scope is told what is left of the 5 s.
+            for call in wait_for_calls(&calls, 2) {
+                assert_eq!(call.2, "stopping");
+                assert!((4000..=5000).contains(&call.3), "{call:?}");
+            }
         }
     }
 
@@ -344,16 +400,34 @@ mod tests {
     }
 
     #[test]
-    fn a_platform_that_never_answers_holds_the_stop_for_the_deadline_and_the_slack_only() {
+    fn a_slow_scope_listing_does_not_push_the_stop_past_the_deadline() {
+        let (notify, calls) = fake(|_| reply("saved"));
+        let wait = Duration::from_millis(300);
+        let (shared, unit, spy) =
+            running_listed_in(notify, wait, NOTIFY_SLACK, Duration::from_secs(3));
+        let start = Instant::now();
+        assert_eq!(lock(&shared).stop_all(Instant::now).len(), 1);
+        let after = stopped_after(&spy, &unit, start);
+        assert!(after >= wait, "{after:?}");
+        assert!(after < wait + Duration::from_millis(300), "{after:?}");
+        assert!(
+            calls.lock().unwrap().is_empty(),
+            "listed too late: no Stopping"
+        );
+    }
+
+    #[test]
+    fn a_platform_that_never_answers_holds_the_stop_for_the_deadline_only() {
         let (notify, _) = fake(|_| Box::pin(futures_lite::future::pending()));
         let wait = Duration::from_millis(300);
-        let slack = Duration::from_millis(200);
+        let slack = Duration::from_millis(400);
         let (shared, unit, spy) = running(notify, wait, slack);
         let start = Instant::now();
         assert_eq!(lock(&shared).stop(&unit, Instant::now()), Status::Ok);
         let after = stopped_after(&spy, &unit, start);
-        assert!(after >= wait + slack, "{after:?}");
-        assert!(after < wait + slack + Duration::from_secs(2), "{after:?}");
+        assert!(after >= wait, "{after:?}");
+        // The slack never adds to a Stopping's deadline (it is longer than the margin here).
+        assert!(after < wait + Duration::from_millis(300), "{after:?}");
         // A freeze and a thaw never wait for Platform1: the core answers at once, the notices go
         // from the sender's thread.
         let (notify, _) = fake(|_| Box::pin(futures_lite::future::pending()));

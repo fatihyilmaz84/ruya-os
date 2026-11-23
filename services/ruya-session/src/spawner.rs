@@ -1577,6 +1577,8 @@ struct FakeState {
     never_freeze: HashSet<String>,
     /// unit -> its own scopes (`scope_lister`, RUY-1099).
     own_scopes: HashMap<String, Vec<String>>,
+    /// How long a `scope_lister` listing takes (a slow manager).
+    scope_delay: Duration,
 }
 
 /// A listing that blocks, to show that nothing else waits for it: the listing says it is inside
@@ -1691,6 +1693,12 @@ impl FakeSpawner {
     /// The app table says `freeze = never` for `app_id` (`may_freeze`, ADR-042).
     pub fn with_freeze_never(self, app_id: &str) -> Self {
         self.lock().never_freeze.insert(app_id.to_owned());
+        self
+    }
+
+    /// Each `scope_lister` listing takes `delay` (RUY-1099: a manager slow to answer).
+    pub fn with_scope_delay(self, delay: Duration) -> Self {
+        self.lock().scope_delay = delay;
         self
     }
 
@@ -1933,13 +1941,13 @@ impl Spawner for FakeSpawner {
     }
 
     fn scope_lister(&self, unit: &str) -> ScopeLister {
-        let scopes = self
-            .lock()
-            .own_scopes
-            .get(unit)
-            .cloned()
-            .unwrap_or_default();
-        Box::new(move || scopes)
+        let state = self.lock();
+        let scopes = state.own_scopes.get(unit).cloned().unwrap_or_default();
+        let delay = state.scope_delay;
+        Box::new(move || {
+            std::thread::sleep(delay);
+            scopes
+        })
     }
 
     fn forward_steam_url(&self, user: &str, appid: &str) -> Result<(), String> {
