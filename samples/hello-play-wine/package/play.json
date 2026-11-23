@@ -17,7 +17,7 @@
   "requirements": { "arch": "x86_64", "min_ram_mb": 512 },
   "art": { "icon": "art/icon.png", "hero": "art/hero.png" },
   "components": [
-    { "id": "proton", "type": "proton", "source": "system", "min": "GE-Proton11-1", "tested": "GE-Proton11-12" }
+    { "id": "proton", "type": "proton", "source": "system", "min": "GE-Proton11-1", "tested": "GE-Proton11-13" }
   ],
   "run": {
     "runner": "proton",

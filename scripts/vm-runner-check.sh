@@ -79,7 +79,7 @@ active_profile() {
 
 # newest_runner <runners dir> <key>=<value>: the folder name of the newest runner.json one folder below <dir>
 # whose <key> is <value> (kind=proton, family=proton-ge), nothing and exit 1 when none. "Newest" is the
-# rule of resolve::compare_versions: the numbers in the version, compared in order (GE-Proton11-12 is 11, 12).
+# rule of resolve::compare_versions: the numbers in the version, compared in order (GE-Proton11-13 is 11, 12).
 # The one copy: `steam` uses it, and vm-play-check.sh asks for it through the `newest` mode.
 newest_runner() {
     python3 -I - "$1" "$2" <<'PYEOF'

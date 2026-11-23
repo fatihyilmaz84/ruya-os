@@ -41,7 +41,7 @@ On Linux with the MinGW-w64 cross compilers for 64 and 32 bit (Fedora: `sudo dnf
 ./build.sh --payload-only   # cross-compile only
 ```
 
-Sign it with your own key before you give it to anyone (`ruya-pack keygen`, `ruya-pack sign`; never commit a key). To check the runner choice against a GE-Proton version: `ruya-pack validate hello-play-wine.play.zip --system-proton-ge GE-Proton11-12`.
+Sign it with your own key before you give it to anyone (`ruya-pack keygen`, `ruya-pack sign`; never commit a key). To check the runner choice against a GE-Proton version: `ruya-pack validate hello-play-wine.play.zip --system-proton-ge GE-Proton11-13`.
 
 CI compiles the three programs and builds and inspects the zip on every push (`scripts/ci-samples-linux.sh`).
 

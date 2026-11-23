@@ -1332,9 +1332,9 @@ Item {
             verify(find("aboutWindowsRunner").visible)
             compare(find("aboutWindowsRunner").kind, "info")
             compare(find("aboutWindowsRunner").label, "Windows compatibility")
-            compare(find("aboutWindowsRunner").value, "GE-Proton11-12, wine-11.0")
+            compare(find("aboutWindowsRunner").value, "GE-Proton11-13, wine-11.0")
             verify(find("aboutRunnerNote0").visible)
-            compare(find("aboutRunnerNote0").text, "GE-Proton11-12: BSD-3-Clause AND LGPL-2.1-or-later AND LGPL-2.0-or-later AND Zlib AND MIT AND OFL-1.1. Source: https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12")
+            compare(find("aboutRunnerNote0").text, "GE-Proton11-13: BSD-3-Clause AND LGPL-2.1-or-later AND LGPL-2.0-or-later AND Zlib AND MIT AND OFL-1.1. Source: https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-13")
             verify(find("aboutRunnerNote0").y > find("aboutWindowsRunner").y, "the notice is under its row")
             verify(find("aboutRunnerNote1").visible)
             compare(find("aboutRunnerNote1").text, "wine-11.0: LGPL-2.1-or-later AND LGPL-2.1-only AND BSD-3-Clause AND BSD-2-Clause AND NCSA AND MIT AND Zlib AND IJG AND libpng-2.0 AND libtiff AND OLDAP-2.8 AND TU-Berlin-1.0 AND WTFPL. Source: https://dl.winehq.org/wine/source/11.0/wine-11.0.tar.xz")
@@ -1366,8 +1366,8 @@ Item {
             openSettings()
             selectCategory("about")
             compare(find("aboutWindowsRunner").label, "Windows uyumluluğu")
-            compare(find("aboutWindowsRunner").value, "GE-Proton11-12, wine-11.0")
-            compare(find("aboutRunnerNote0").text, "GE-Proton11-12: BSD-3-Clause AND LGPL-2.1-or-later AND LGPL-2.0-or-later AND Zlib AND MIT AND OFL-1.1. Kaynak: https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12")
+            compare(find("aboutWindowsRunner").value, "GE-Proton11-13, wine-11.0")
+            compare(find("aboutRunnerNote0").text, "GE-Proton11-13: BSD-3-Clause AND LGPL-2.1-or-later AND LGPL-2.0-or-later AND Zlib AND MIT AND OFL-1.1. Kaynak: https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-13")
             compare(find("aboutRunnerNote1").text, "wine-11.0: LGPL-2.1-or-later AND LGPL-2.1-only AND BSD-3-Clause AND BSD-2-Clause AND NCSA AND MIT AND Zlib AND IJG AND libpng-2.0 AND libtiff AND OLDAP-2.8 AND TU-Berlin-1.0 AND WTFPL. Kaynak: https://dl.winehq.org/wine/source/11.0/wine-11.0.tar.xz")
             keyClick(Qt.Key_Right)
             tryVerify(() => find("aboutVersion").activeFocus)
@@ -1382,15 +1382,15 @@ Item {
         // its order) with one note each; an emulator is not a Windows runner.
         function test_about_lists_each_windows_runner_of_the_library_with_its_note() {
             Library.mockSetRunners([
-                { family: "proton-ge", kind: "proton", version: "GE-Proton11-12", licence: "BSD-3-Clause", sourceUrl: "https://example.org/ge" },
+                { family: "proton-ge", kind: "proton", version: "GE-Proton11-13", licence: "BSD-3-Clause", sourceUrl: "https://example.org/ge" },
                 { family: "dosbox", kind: "emulator", version: "0.74", licence: "GPL-2.0-only", sourceUrl: "https://example.org/d" },
                 { family: "wine", kind: "wine", version: "10.0", licence: "LGPL-2.1-or-later", sourceUrl: "https://example.org/wine" },
             ])
             tryVerify(() => Library.runners.length === 3)
             openSettings()
             selectCategory("about")
-            compare(find("aboutWindowsRunner").value, "GE-Proton11-12, 10.0")
-            compare(find("aboutRunnerNote0").text, "GE-Proton11-12: BSD-3-Clause. Source: https://example.org/ge")
+            compare(find("aboutWindowsRunner").value, "GE-Proton11-13, 10.0")
+            compare(find("aboutRunnerNote0").text, "GE-Proton11-13: BSD-3-Clause. Source: https://example.org/ge")
             compare(find("aboutRunnerNote1").text, "10.0: LGPL-2.1-or-later. Source: https://example.org/wine")
             verify(find("aboutRunnerNote0").visible && find("aboutRunnerNote1").visible)
             compare(find("aboutRunnerNote2"), null, "the emulator has no note")
@@ -1417,7 +1417,7 @@ Item {
             compare(find("aboutRunnerNote0"), null)
             Library.resetMockForTests("")
             tryVerify(() => find("aboutWindowsRunner").visible)
-            compare(find("aboutWindowsRunner").value, "GE-Proton11-12, wine-11.0")
+            compare(find("aboutWindowsRunner").value, "GE-Proton11-13, wine-11.0")
         }
 
         function test_guide_overlay_over_settings_pane() {

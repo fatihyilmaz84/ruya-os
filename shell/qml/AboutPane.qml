@@ -64,7 +64,7 @@ SettingsPane {
             objectName: "aboutRunnerNote" + index
             u: pane.u
             visible: modelData.licence !== "" && modelData.sourceUrl !== ""
-            //: %1 is a runner's version (GE-Proton11-12), %2 its licences (SPDX), %3 the web address of its source.
+            //: %1 is a runner's version (GE-Proton11-13), %2 its licences (SPDX), %3 the web address of its source.
             text: qsTr("%1: %2. Source: %3").arg(modelData.version).arg(modelData.licence).arg(modelData.sourceUrl)
         }
     }

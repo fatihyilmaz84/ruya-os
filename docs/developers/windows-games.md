@@ -4,7 +4,7 @@ How a launcher (a Heroic-like app, a store client) or any Flatpak that starts Wi
 
 *Status: **experimental** (tier C of the [public surface](api-surface.md), ADR-022). The extension ids, the branch and `runner.json` format 1 may change before the first release. Checked against the code and specs as of 2026-11-21. Items marked **planned** are not built yet.*
 
-**What exists today, and what does not.** The image ships GE-Proton 11 (`GE-Proton11-12`) as files on `/usr` and links it into Flatpak's extension folder at every boot (RUY-34, ADR-038); the check on a booted image (`scripts/vm-runner-check.sh`) is the lead's and is pending for this chapter's sample. The previous GE-Proton major and Wine stable are **planned** (RUY-915, RUY-37): this chapter is written for them, but a console cannot offer them yet. The sample's manifest and its runner choice are checked on the host (the lint and the sample's unit tests). **Not run yet:** building the sample with `flatpak-builder` and running it on a console image; that is pending the VM check `scripts/vm-runner-check.sh sample`, which itself runs the script against the image's runners and does not build the Flatpak.
+**What exists today, and what does not.** The image ships GE-Proton 11 (`GE-Proton11-13`) as files on `/usr` and links it into Flatpak's extension folder at every boot (RUY-34, ADR-038); the check on a booted image (`scripts/vm-runner-check.sh`) is the lead's and is pending for this chapter's sample. The previous GE-Proton major and Wine stable are **planned** (RUY-915, RUY-37): this chapter is written for them, but a console cannot offer them yet. The sample's manifest and its runner choice are checked on the host (the lint and the sample's unit tests). **Not run yet:** building the sample with `flatpak-builder` and running it on a console image; that is pending the VM check `scripts/vm-runner-check.sh sample`, which itself runs the script against the image's runners and does not build the Flatpak.
 
 **Making a `.play` package?** You do not need this chapter. A package names a component (`type: proton` or `wine`, `source: system`) and the console's launcher does everything below for you: [Play packages](play-packages.md#choosing-a-runner-source).
 
@@ -58,12 +58,12 @@ Every runner has a `runner.json` at the root of its folder. This is the real one
   "format": 1,
   "family": "proton-ge",
   "kind": "proton",
-  "version": "GE-Proton11-12",
+  "version": "GE-Proton11-13",
   "arch": "x86_64",
   "entry": { "proton": "proton" },
   "capabilities": ["multiarch", "dxvk", "vkd3d"],
   "licence": "BSD-3-Clause AND LGPL-2.1-or-later AND LGPL-2.0-or-later AND Zlib AND MIT AND OFL-1.1",
-  "source_url": "https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-12"
+  "source_url": "https://github.com/GloriousEggroll/proton-ge-custom/releases/tag/GE-Proton11-13"
 }
 ```
 
@@ -74,7 +74,7 @@ The file is checked against [`api/play/runner.schema.json`](../../api/play/runne
 | `format` | `1`. A higher number may mean something else: skip that runner. |
 | `family` | Which runner this is (`proton-ge`, `wine`). Versions compare only inside one family. |
 | `kind` | `proton` or `wine`: how to start it (next section). |
-| `version` | Text holding numbers. Compare the numbers in order: `GE-Proton11-12` is 11, 12, so it is newer than `GE-Proton10-34`. The first number is the major. |
+| `version` | Text holding numbers. Compare the numbers in order: `GE-Proton11-13` is 11, 12, so it is newer than `GE-Proton10-34`. The first number is the major. |
 | `arch` | `x86_64`. |
 | `entry` | The file to start, relative to the runner's folder. Proton: `{"proton": "proton"}`. Wine: `{"wine": "bin/wine", "wineserver": "bin/wineserver"}`. Never join a path you did not read from here. |
 | `capabilities`, `licence`, `source_url` | Informational. |
@@ -213,7 +213,7 @@ The runner exists only on a console, so copy `repo` there and install it system-
 flatpak run org.ruyaos.HelloRunner --self-test
 ```
 
-It should print `hello-runner: using ProtonGE11 (GE-Proton11-12)` and then `RUYA_HELLO_RUNNER_OK` (printed by the script once the runner's own `cmd.exe` has written it to a file); this output is what the script is written to produce, not something seen on an image yet. `--self-test` needs an X display: Proton starts every program with its own console window, and Wine cannot open one without a display, so the program would never return. The script stops with `--self-test needs an X display` when `DISPLAY` is not set, and it reads the marker from a file because `cmd.exe`'s `echo` goes to that console window, never to your standard output. Flatpak gives the sandbox a `DISPLAY` (the manifest's `--socket=x11`) only when the process that runs `flatpak` has one; a login over `ssh` has none. A launcher that declares `--socket=x11` and not `--socket=wayland` does not have this problem for the programs it starts: the console runs such an app on X11 through `ruya-session`, so it has a display. One that also declares `--socket=wayland` runs on Wayland with no `DISPLAY`, and Proton hangs for it exactly as described above. To try the script's runner choice off a console, point it at any folder of runners: `python3 run-windows.py --runners DIR --self-test` (the tests do this with made-up folders).
+It should print `hello-runner: using ProtonGE11 (GE-Proton11-13)` and then `RUYA_HELLO_RUNNER_OK` (printed by the script once the runner's own `cmd.exe` has written it to a file); this output is what the script is written to produce, not something seen on an image yet. `--self-test` needs an X display: Proton starts every program with its own console window, and Wine cannot open one without a display, so the program would never return. The script stops with `--self-test needs an X display` when `DISPLAY` is not set, and it reads the marker from a file because `cmd.exe`'s `echo` goes to that console window, never to your standard output. Flatpak gives the sandbox a `DISPLAY` (the manifest's `--socket=x11`) only when the process that runs `flatpak` has one; a login over `ssh` has none. A launcher that declares `--socket=x11` and not `--socket=wayland` does not have this problem for the programs it starts: the console runs such an app on X11 through `ruya-session`, so it has a display. One that also declares `--socket=wayland` runs on Wayland with no `DISPLAY`, and Proton hangs for it exactly as described above. To try the script's runner choice off a console, point it at any folder of runners: `python3 run-windows.py --runners DIR --self-test` (the tests do this with made-up folders).
 
 **Your own `.exe`.** The sandbox can read only what the manifest grants, and the sample grants no `--filesystem`. A launcher keeps its games under its own data folder, which is always readable, so put the program there and pass its path:
 

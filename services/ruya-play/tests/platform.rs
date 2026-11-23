@@ -256,7 +256,7 @@ fn ge_proton_retention(runners: &[(&str, &str, &str)]) -> Result<(), String> {
 #[test]
 fn the_retention_rule_keeps_one_or_two_ge_proton_majors() {
     let wine = ("Wine11", "wine", "wine-11.0");
-    let ge11 = ("ProtonGE11", "proton-ge", "GE-Proton11-12");
+    let ge11 = ("ProtonGE11", "proton-ge", "GE-Proton11-13");
     let ge10 = ("ProtonGE10", "proton-ge", "GE-Proton10-30");
     let ge9 = ("ProtonGE9", "proton-ge", "GE-Proton9-27");
     assert_eq!(ge_proton_retention(&[ge11, wine]), Ok(()));

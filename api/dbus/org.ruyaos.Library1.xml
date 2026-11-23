@@ -109,7 +109,7 @@
   Runner record (a{sv}), keys:
     family       s    runner.json family ("proton-ge", "wine")
     kind         s    "wine", "proton", "emulator" or "engine"
-    version      s    runner.json version ("GE-Proton11-12", "10.0")
+    version      s    runner.json version ("GE-Proton11-13", "10.0")
     licence      s    its SPDX licence; absent when runner.json names none
     source_url   s    where its source is (https); absent when runner.json names none
 

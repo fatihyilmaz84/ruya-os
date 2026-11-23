@@ -2153,22 +2153,22 @@ print(json.loads(b.read("play.json"))["build"], ini.decode(), e["s"] == len(ini)
 bash "$here/vm-play-check.sh" bumpbuild "$lp/bb-in.zip" "$lp/bb-none.zip" Program/none.ini x >/dev/null 2>&1 && fail "vm-play-check.sh bumpbuild accepts a file the package lacks" || pass "vm-play-check.sh bumpbuild refuses a file the package lacks"
 
 # lstate: the launcher's status file (05 section 6.3).
-echo '{"format":1,"epoch":1,"backup_of":null,"setup_done":["first-run"],"setup_failed":null,"runner":{"component":"proton","family":"proton-ge","version":"GE-Proton11-12","source":"system","hash":null}}' > "$lp/state-win.json"
+echo '{"format":1,"epoch":1,"backup_of":null,"setup_done":["first-run"],"setup_failed":null,"runner":{"component":"proton","family":"proton-ge","version":"GE-Proton11-13","source":"system","hash":null}}' > "$lp/state-win.json"
 echo '{"format":1,"epoch":0,"backup_of":null,"setup_done":[],"setup_failed":null,"runner":null}' > "$lp/state-native.json"
 echo 'not json' > "$lp/state-bad.json"
-echo '{"format":1,"epoch":1,"backup_of":null,"setup_done":["first-run"],"setup_failed":null,"runner":{"component":"proton","family":"proton-ge","version":"GE-Proton11-12","source":"system","hash":null},"game_build":2}' > "$lp/state-game.json"
+echo '{"format":1,"epoch":1,"backup_of":null,"setup_done":["first-run"],"setup_failed":null,"runner":{"component":"proton","family":"proton-ge","version":"GE-Proton11-13","source":"system","hash":null},"game_build":2}' > "$lp/state-game.json"
 ls_() { bash "$here/vm-play-check.sh" lstate "$1" | tr -d '\r'; }
-[ "$(ls_ "$lp/state-game.json")" = "epoch=1 setup_done=first-run runner=system/proton-ge/GE-Proton11-12 game=2" ] && pass "vm-play-check.sh lstate: the build of the game tree (game_build, RUY-1019)" || fail "lstate (game tree): '$(ls_ "$lp/state-game.json")'"
-[ "$(ls_ "$lp/state-win.json")" = "epoch=1 setup_done=first-run runner=system/proton-ge/GE-Proton11-12" ] && pass "vm-play-check.sh lstate: a system-runner launch" || fail "lstate (windows): '$(ls_ "$lp/state-win.json")'"
+[ "$(ls_ "$lp/state-game.json")" = "epoch=1 setup_done=first-run runner=system/proton-ge/GE-Proton11-13 game=2" ] && pass "vm-play-check.sh lstate: the build of the game tree (game_build, RUY-1019)" || fail "lstate (game tree): '$(ls_ "$lp/state-game.json")'"
+[ "$(ls_ "$lp/state-win.json")" = "epoch=1 setup_done=first-run runner=system/proton-ge/GE-Proton11-13" ] && pass "vm-play-check.sh lstate: a system-runner launch" || fail "lstate (windows): '$(ls_ "$lp/state-win.json")'"
 [ "$(ls_ "$lp/state-native.json")" = "epoch=0 setup_done= runner=none" ] && pass "vm-play-check.sh lstate: a native game has no runner" || fail "lstate (native): '$(ls_ "$lp/state-native.json")'"
 case "$(ls_ "$lp/state-bad.json")" in unreadable:*) pass "vm-play-check.sh lstate: a damaged file is unreadable, not empty" ;; *) fail "lstate (bad): '$(ls_ "$lp/state-bad.json")'" ;; esac
 case "$(ls_ "$lp/missing.json")" in unreadable:*) pass "vm-play-check.sh lstate: a missing file is unreadable" ;; *) fail "lstate (missing): '$(ls_ "$lp/missing.json")'" ;; esac
 
 # newest (vm-runner-check.sh): the newest runner of a kind or family by the numbers in the version
-# (GE-Proton10-9 is below GE-Proton11-12), the one rule steam and vm-play-check.sh's sysrunner share.
+# (GE-Proton10-9 is below GE-Proton11-13), the one rule steam and vm-play-check.sh's sysrunner share.
 mkdir -p "$lp/runners/ProtonGE10" "$lp/runners/ProtonGE11" "$lp/runners/WineStable" "$lp/runners/Broken"
 echo '{"family":"proton-ge","kind":"proton","version":"GE-Proton10-9"}' > "$lp/runners/ProtonGE10/runner.json"
-echo '{"family":"proton-ge","kind":"proton","version":"GE-Proton11-12"}' > "$lp/runners/ProtonGE11/runner.json"
+echo '{"family":"proton-ge","kind":"proton","version":"GE-Proton11-13"}' > "$lp/runners/ProtonGE11/runner.json"
 echo '{"family":"wine","kind":"wine","version":"99.0"}' > "$lp/runners/WineStable/runner.json"
 echo '{' > "$lp/runners/Broken/runner.json"
 nw() { bash "$here/vm-runner-check.sh" newest "$@" | tr -d '\r'; }
@@ -2181,7 +2181,7 @@ grep -q 'newest_runner "\$play/runners" kind=proton' "$here/vm-runner-check.sh" 
 
 # sysrunner: "<family>/<version>" of that newest proton-ge, through vm-runner-check.sh next to the script.
 got="$(bash "$here/vm-play-check.sh" sysrunner "$lp/runners" | tr -d '\r')"
-[ "$got" = "proton-ge/GE-Proton11-12" ] && pass "vm-play-check.sh sysrunner: the newest proton-ge as <family>/<version>" || fail "sysrunner: '$got'"
+[ "$got" = "proton-ge/GE-Proton11-13" ] && pass "vm-play-check.sh sysrunner: the newest proton-ge as <family>/<version>" || fail "sysrunner: '$got'"
 mkdir -p "$lp/none/WineStable"; echo '{"family":"wine","version":"9.0"}' > "$lp/none/WineStable/runner.json"
 bash "$here/vm-play-check.sh" sysrunner "$lp/none" >/dev/null 2>&1 && fail "sysrunner: a tree without proton-ge passed" || pass "vm-play-check.sh sysrunner: no proton-ge runner is a failure"
 # compat32 (RUY-1006): the Compat.i386 ref of the app's runtime, asked of flatpak; a missing one fails and is named.
@@ -2293,7 +2293,7 @@ grep -q 'zip=/root/hello-play-wine.play.zip' "$here/vm-play-check.sh" && pass "v
 echo "== vm-library-check.sh runners: Library1 ListRunners and the runner choice (RUY-959) =="
 rj() { printf '%s' "$1" | bash "$here/vm-library-check.sh" runnersjudge 2>&1; }
 ge='{"type":"s","data":"proton-ge"}'
-good='{"type":"aa{sv}","data":[[{"family":'"$ge"',"kind":{"type":"s","data":"proton"},"version":{"type":"s","data":"GE-Proton11-12"},"licence":{"type":"s","data":"BSD-3-Clause"}},{"family":{"type":"s","data":"wine"},"kind":{"type":"s","data":"wine"},"version":{"type":"s","data":"10.0"}}]]}'
+good='{"type":"aa{sv}","data":[[{"family":'"$ge"',"kind":{"type":"s","data":"proton"},"version":{"type":"s","data":"GE-Proton11-13"},"licence":{"type":"s","data":"BSD-3-Clause"}},{"family":{"type":"s","data":"wine"},"kind":{"type":"s","data":"wine"},"version":{"type":"s","data":"10.0"}}]]}'
 out="$(rj "$good")"; rc=$?
 [ "$rc" = 0 ] && expect_contains "runners: GE-Proton and Wine pass" "$out" "PASS: the image's GE-Proton is listed" || fail "runners: a good listing: exit $rc, $out"
 expect_contains "runners: the count is printed" "$out" "ListRunners lists 2 runner(s)"
@@ -2301,7 +2301,7 @@ out="$(rj '{"type":"aa{sv}","data":[[{"family":{"type":"s","data":"wine"},"kind"
 [ "$rc" = 1 ] && expect_contains "runners: no GE-Proton FAILs" "$out" "FAIL: no proton-ge runner" || fail "runners: no GE-Proton: exit $rc, $out"
 out="$(rj '{"type":"aa{sv}","data":[[]]}')"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runners: an empty list FAILs" "$out" "FAIL: ListRunners lists no runner" || fail "runners: empty: exit $rc, $out"
-out="$(rj '{"type":"aa{sv}","data":[[{"family":'"$ge"',"kind":{"type":"s","data":"proton"},"version":{"type":"s","data":"GE-Proton11-12"}},{"family":{"type":"s","data":"wine"},"kind":{"type":"s","data":"wine"}}]]}')"; rc=$?
+out="$(rj '{"type":"aa{sv}","data":[[{"family":'"$ge"',"kind":{"type":"s","data":"proton"},"version":{"type":"s","data":"GE-Proton11-13"}},{"family":{"type":"s","data":"wine"},"kind":{"type":"s","data":"wine"}}]]}')"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runners: a runner without a version FAILs" "$out" "FAIL: a runner without a family, kind or version" || fail "runners: no version: exit $rc, $out"
 grep -q 'systemctl restart ruya-library' "$here/vm-library-check.sh" && grep -q 'set_choice "$prof" "$id" system' "$here/vm-library-check.sh" && grep -q 'play_install "$1" || return' "$here/vm-library-check.sh" && pass "vm-library-check.sh runners stores a choice for the installed sample and restarts the service" || fail "vm-library-check.sh runners: no choice across a restart"
 grep -q 'StateDirectory=ruyaos/library' "$here/../image/rootfs/usr/lib/systemd/system/ruya-library.service" && grep -q 'file=/var/lib/ruyaos/library/' "$here/vm-library-check.sh" && pass "the choice file the check looks at is the unit's StateDirectory" || fail "ruya-library.service StateDirectory and vm-library-check.sh runners disagree"
@@ -2426,7 +2426,7 @@ SHIMEOF
 cat > "$rsh/ruya-pack" <<'SHIMEOF'
 #!/bin/sh
 if [ -n "${FAKE_PACK_REFUSE:-}" ]; then echo '{"ok": false, "problems": [{"code": "runner.unknown_key"}]}'; exit 1; fi
-kind=proton; version=GE-Proton11-12
+kind=proton; version=GE-Proton11-13
 if [ -f "$2/runner.json" ]; then
     kind="$(sed -n 's/.*"kind": *"\([a-z]*\)".*/\1/p' "$2/runner.json")"
     version="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$2/runner.json")"
@@ -2549,7 +2549,7 @@ steam_runner() { # <folder> <version> <tool>
     ln -s "$t" "$rr/var/lib/flatpak/extension/com.valvesoftware.Steam.CompatibilityTool.$1/x86_64/stable"
 }
 steam_runner ProtonGE11 GE-Proton10-34 GE-Proton10-34
-steam_runner ProtonGE12 GE-Proton11-12 GE-Proton11-12
+steam_runner ProtonGE12 GE-Proton11-13 GE-Proton11-13
 sx="$rr/var/lib/flatpak/extension/com.valvesoftware.Steam.CompatibilityTool.ProtonGE12/x86_64"
 steam_dir="$rr/home/ruya-p1/.var/app/com.valvesoftware.Steam/.local/share/Steam"
 mkdir -p "$rr/var/lib/flatpak/app/com.valvesoftware.Steam" "$steam_dir/config"
@@ -2560,26 +2560,26 @@ steam_config() { # <tool name>: a config.vdf whose default is that tool, a "0" e
     printf '"InstallConfigStore"\n{\n\t"Software"\n\t{\n\t\t"Valve"\n\t\t{\n\t\t\t"Steam"\n\t\t\t{\n\t\t\t\t"CompatToolMapping"\n\t\t\t\t{\n\t\t\t\t\t"0"\n\t\t\t\t\t{\n\t\t\t\t\t\t"name"\t\t"%s"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t\t"Other"\n\t\t\t\t{\n\t\t\t\t\t"0"\n\t\t\t\t\t{\n\t\t\t\t\t\t"name"\t\t"not-this"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n' "$1" > "$steam_cfg"
 }
 sc_() { env RUYA_ROOT="$rr" PATH="$rsh:$PATH" bash "$here/vm-runner-check.sh" steam 2>&1; }
-steam_config GE-Proton11-12
+steam_config GE-Proton11-13
 out="$(sc_)"; rc=$?
 [ "$rc" = 0 ] && expect_contains "runner steam: a good image passes" "$out" "vm-runner-check: all passed" || fail "runner steam: a good image: exit $rc, $out"
-expect_contains "runner steam: the tool is listed" "$out" "ProtonGE12: Steam's extension point has the tool GE-Proton11-12"
-expect_contains "runner steam: the newest runner is the one by version" "$out" "the newest Proton runner is ProtonGE12, tool GE-Proton11-12"
-expect_contains "runner steam: the default is the newest tool" "$out" "ruya-p1: the default is GE-Proton11-12, the newest runner's tool"
+expect_contains "runner steam: the tool is listed" "$out" "ProtonGE12: Steam's extension point has the tool GE-Proton11-13"
+expect_contains "runner steam: the newest runner is the one by version" "$out" "the newest Proton runner is ProtonGE12, tool GE-Proton11-13"
+expect_contains "runner steam: the default is the newest tool" "$out" "ruya-p1: the default is GE-Proton11-13, the newest runner's tool"
 expect_contains "runner steam: Steam's own files are required" "$out" "ruya-p1: Steam's own files are in"
 steam_config GE-Proton10-34
 out="$(sc_)"; rc=$?
-[ "$rc" = 1 ] && expect_contains "runner steam: an older tool as the default FAILs" "$out" "FAIL ruya-p1: the default is 'GE-Proton10-34', not GE-Proton11-12" || fail "runner steam: an older default: exit $rc"
+[ "$rc" = 1 ] && expect_contains "runner steam: an older tool as the default FAILs" "$out" "FAIL ruya-p1: the default is 'GE-Proton10-34', not GE-Proton11-13" || fail "runner steam: an older default: exit $rc"
 steam_config proton_9
 out="$(sc_)"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner steam: a tool the player chose FAILs too" "$out" "FAIL ruya-p1: the default is 'proton_9'" || fail "runner steam: a player's choice: exit $rc"
-printf '"InstallConfigStore"\n{\n\t"Software"\n\t{\n\t\t"Valve"\n\t\t{\n\t\t\t"Steam"\n\t\t\t{\n\t\t\t\t"CompatToolMapping"\n\t\t\t\t{\n\t\t\t\t}\n\t\t\t\t"Other"\n\t\t\t\t{\n\t\t\t\t\t"0"\n\t\t\t\t\t{\n\t\t\t\t\t\t"name"\t\t"GE-Proton11-12"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n' > "$steam_cfg"
+printf '"InstallConfigStore"\n{\n\t"Software"\n\t{\n\t\t"Valve"\n\t\t{\n\t\t\t"Steam"\n\t\t\t{\n\t\t\t\t"CompatToolMapping"\n\t\t\t\t{\n\t\t\t\t}\n\t\t\t\t"Other"\n\t\t\t\t{\n\t\t\t\t\t"0"\n\t\t\t\t\t{\n\t\t\t\t\t\t"name"\t\t"GE-Proton11-13"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n' > "$steam_cfg"
 out="$(sc_)"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner steam: a 0 outside the mapping block is not read" "$out" "FAIL ruya-p1: the default is 'none'" || fail "runner steam: a 0 elsewhere: exit $rc"
 : > "$steam_cfg"
 out="$(sc_)"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner steam: no default FAILs" "$out" "FAIL ruya-p1: the default is 'none'" || fail "runner steam: no default: exit $rc"
-steam_config GE-Proton11-12
+steam_config GE-Proton11-13
 rm "$steam_dir/steam.sh"
 out="$(sc_)"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner steam: a config without Steam's own files FAILs" "$out" "FAIL ruya-p1: no steam.sh or ubuntu12_32" || fail "runner steam: no Steam files: exit $rc"
@@ -2589,7 +2589,7 @@ out="$(sc_)"; rc=$?
 rm -f "$steam_cfg"
 out="$(sc_)"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner steam: no profile that started Steam FAILs" "$out" "FAIL no profile has started Steam yet" || fail "runner steam: no config: exit $rc"
-steam_config GE-Proton11-12
+steam_config GE-Proton11-13
 rm -rf "$sx/stable"
 out="$(sc_)"; rc=$?
 [ "$rc" = 1 ] && expect_contains "runner steam: a runner not linked for Steam FAILs" "$out" "FAIL ProtonGE12: no compatibilitytool.vdf" || fail "runner steam: no link: exit $rc"
@@ -2615,7 +2615,7 @@ assert os.environ.get("DISPLAY") and "WAYLAND_DISPLAY" not in os.environ, os.env
 # its working folder, and that must be one the profile user can use.
 assert os.path.samefile(os.getcwd(), os.path.dirname(os.path.abspath(__file__))), (os.getcwd(), __file__)
 if mode != "norunner":
-    print("hello-runner: using ProtonGE11 (GE-Proton11-12)")
+    print("hello-runner: using ProtonGE11 (GE-Proton11-13)")
 if mode != "noprefix":
     os.makedirs(os.path.join(os.environ["XDG_DATA_HOME"], "proton", "pfx"), exist_ok=True)
 if mode != "silent":
