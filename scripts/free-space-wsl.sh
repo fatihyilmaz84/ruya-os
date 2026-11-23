@@ -17,6 +17,11 @@ podman images --format '{{.Repository}}:{{.Tag}}' | grep '^localhost:5000/' | xa
 podman image prune -f >/dev/null
 # A crashed build leaves its working folders and anonymous volumes behind (RUY-957).
 rm -rf /var/tmp/buildah[0-9]* 2>/dev/null || true
+# ... and its build containers, which only `--external` lists and `podman container prune` never
+# removes: 83 of them since 2026-11-03 held 37 GB (lead-45). No build runs here (checked above).
+ext="$(podman ps -a --external -q | wc -l)"
+podman ps -a --external -q | xargs -r podman rm -f >/dev/null 2>&1 || true
+echo "  removed build containers: $ext -> $(podman ps -a --external -q | wc -l)"
 podman volume prune -f >/dev/null 2>&1 || true
 podman images --format '  kept {{.Repository}}:{{.Tag}} {{.Size}}'
 fstrim -a >/dev/null 2>&1 || true
