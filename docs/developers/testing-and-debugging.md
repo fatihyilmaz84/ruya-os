@@ -118,7 +118,7 @@ You can call the [Platform API](api-surface.md) on any Linux PC, without a conso
 Every process that connects is the app named by `RUYA_MOCK_APP=<name>` in its environment, or the `default_app` without it; a name the file does not have makes it an unsandboxed caller (`not-an-app`). Every caller belongs to `profile`; `active` is the signed-in profile. The mock runs on Linux only (it reads `/proc`) and needs a D-Bus daemon that passes the caller's process descriptor (`ProcessFD`), as Fedora 44's does; on an older one it stops at start and says so. Build it from the RuyaOS repository (Rust and cargo):
 
 ```sh
-(cd services && cargo build -p ruya-platform --bin ruya-platform-mock)
+(cd services && cargo build -p ruya-platform --features dev-mock --bin ruya-platform-mock)
 ```
 
 Then, in a private bus so nothing else on your desktop sees it:

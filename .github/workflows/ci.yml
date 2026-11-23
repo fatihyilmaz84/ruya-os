@@ -92,12 +92,13 @@ jobs:
       # same lints. Bump both together.
       - run: rustup toolchain install 1.92.0 --profile minimal -c clippy,rustfmt && rustup default 1.92.0
       - run: cargo fmt --check
-      - run: cargo clippy --all-targets --locked -- -D warnings
-      - run: cargo test --locked
+      # dev-mock: the Platform developer harness (RUY-158), never in the image build.
+      - run: cargo clippy --all-targets --features ruya-platform/dev-mock --locked -- -D warnings
+      - run: cargo test --features ruya-platform/dev-mock --locked
       - name: Platform conformance coverage (a case for every public Platform1 element, RUY-158)
         run: |
           pwsh -NoProfile -File ../scripts/lint-dev-docs.ps1 -ApisJson ../output/apis.json
-          cargo run --locked -q -p ruya-platform --bin ruya-platform-conformance -- coverage --apis ../output/apis.json
+          cargo run --locked -q -p ruya-platform --features dev-mock --bin ruya-platform-conformance -- coverage --apis ../output/apis.json
 
   shell:
     runs-on: ubuntu-24.04

@@ -163,11 +163,11 @@ function Do-Rust {
     Push-Location $Services
     Invoke-Native "cargo fmt --check" { cargo fmt --check }
     Step "Rust: clippy (Windows)"
-    Invoke-Native "clippy windows" { cargo clippy --all-targets --locked -q -- -D warnings }
+    Invoke-Native "clippy windows" { cargo clippy --all-targets --features ruya-platform/dev-mock --locked -q -- -D warnings }
     Step "Rust: clippy (Linux target, type-checks Linux-only code)"
-    Invoke-Native "clippy linux" { cargo clippy --all-targets --locked -q --target x86_64-unknown-linux-gnu -- -D warnings }
+    Invoke-Native "clippy linux" { cargo clippy --all-targets --features ruya-platform/dev-mock --locked -q --target x86_64-unknown-linux-gnu -- -D warnings }
     Step "Rust: tests"
-    Invoke-Native "cargo test" { cargo test --locked -q }
+    Invoke-Native "cargo test" { cargo test --features ruya-platform/dev-mock --locked -q }
     Pop-Location
 }
 
@@ -1091,7 +1091,7 @@ function Test-Conformance {
     Step "Platform conformance coverage (a case for every public Platform1 element)"
     $apis = Join-Path $Repo "output\apis.json"
     Push-Location $Services
-    $runner = { param($file) cargo run -q --locked -p ruya-platform --bin ruya-platform-conformance -- coverage --apis $file 2>&1 | Out-String }
+    $runner = { param($file) cargo run -q --locked -p ruya-platform --features dev-mock --bin ruya-platform-conformance -- coverage --apis $file 2>&1 | Out-String }
     $out = & $runner $apis
     $code = $LASTEXITCODE
     if ($code -ne 0) { Write-Host $out }

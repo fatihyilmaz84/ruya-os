@@ -185,8 +185,9 @@ The signal handler only notes a `Stopping`; the main loop keeps the clock check 
         if (gap > PAUSED_GAP)
             printf("a gap of %.0f ms: we were frozen, pausing the game\n", gap * 1000.0);
 ...
-    if (save_game(frame) != 0)
-        printf("save failed: %s\n", strerror(errno));
+    err = save_game(frame);
+    if (err != 0)
+        printf("save failed: %s\n", strerror(err));
     if (bus && g_stopping)
         lifecycle_save_done(bus);
 ```

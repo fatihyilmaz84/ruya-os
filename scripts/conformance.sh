@@ -92,5 +92,5 @@ for tool in cargo dbus-run-session; do
 done
 target=${CARGO_TARGET_DIR:-$root/services/target}
 (cd "$root/services" && CARGO_TARGET_DIR="$target" cargo build --locked -q -p ruya-platform \
-    --bin ruya-platform-mock --bin ruya-platform-conformance)
+    --features dev-mock --bin ruya-platform-mock --bin ruya-platform-conformance)
 exec dbus-run-session -- bash "$0" --inner "$target/debug" "$self_test" "${args[@]}"

@@ -20,7 +20,7 @@ CC0 1.0 (public domain, SPDX `CC0-1.0`): copy any file, change it, ship it, no a
 On Linux, with a C compiler, `pkg-config`, sd-bus (`systemd-devel` on Fedora, `libsystemd-dev` on Debian and Ubuntu) and `dbus-run-session` (`dbus-daemon`). The test needs the mock from this repository, built once:
 
 ```sh
-(cd ../../services && cargo build -p ruya-platform --bin ruya-platform-mock)
+(cd ../../services && cargo build -p ruya-platform --features dev-mock --bin ruya-platform-mock)
 make test
 ```
 

@@ -3,7 +3,6 @@
 //! every rule is in `door.rs` and `lifecycle.rs`. It also follows the bus (a unique name that
 //! leaves) and Profiles1 (which profiles exist, which is active).
 
-use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -107,30 +106,38 @@ async fn as_app<R>(
     answer
 }
 
-/// Statuses that replace a Lifecycle method's real answer, by member name (`Register`,
-/// `SaveDone`). Always empty in the service: only the developer mock's `Fault` sets one (RUY-158),
-/// so the conformance runner can be shown to catch a wrong answer. The call itself still runs.
-pub type Faults = Arc<Mutex<BTreeMap<String, String>>>;
+/// `Lifecycle.Register` for the message's sender: the served method's whole body (also the
+/// developer mock's, RUY-158, which wraps the answer).
+pub async fn register(core: &Shared, header: &Header<'_>, conn: &Connection) -> Status {
+    as_app(
+        core,
+        header,
+        conn,
+        |s| s,
+        |door, caller| lifecycle::register(door, caller, Instant::now()),
+    )
+    .await
+}
+
+/// `Lifecycle.SaveDone` for the message's sender (as [`register`]).
+pub async fn save_done(core: &Shared, header: &Header<'_>, conn: &Connection) -> Status {
+    as_app(
+        core,
+        header,
+        conn,
+        |s| s,
+        |door, caller| lifecycle::save_done(door, caller, Instant::now()),
+    )
+    .await
+}
 
 pub struct LifecycleIface {
     core: Shared,
-    faults: Faults,
 }
 
 impl LifecycleIface {
     pub fn new(core: Shared) -> Self {
-        Self::with_faults(core, Faults::default())
-    }
-
-    /// The developer mock's object: `faults` is shared with its `Fault` method.
-    pub fn with_faults(core: Shared, faults: Faults) -> Self {
-        LifecycleIface { core, faults }
-    }
-
-    /// The reply of `member`: its fault if one is set, else `status`.
-    pub(crate) fn reply(&self, member: &str, status: Status) -> String {
-        let fault = self.faults.lock().ok().and_then(|f| f.get(member).cloned());
-        fault.unwrap_or_else(|| status.as_str().to_owned())
+        LifecycleIface { core }
     }
 }
 
@@ -141,15 +148,10 @@ impl LifecycleIface {
         #[zbus(header)] header: Header<'_>,
         #[zbus(connection)] conn: &Connection,
     ) -> String {
-        let status = as_app(
-            &self.core,
-            &header,
-            conn,
-            |s| s,
-            |door, caller| lifecycle::register(door, caller, Instant::now()),
-        )
-        .await;
-        self.reply("Register", status)
+        register(&self.core, &header, conn)
+            .await
+            .as_str()
+            .to_owned()
     }
 
     async fn save_done(
@@ -157,15 +159,10 @@ impl LifecycleIface {
         #[zbus(header)] header: Header<'_>,
         #[zbus(connection)] conn: &Connection,
     ) -> String {
-        let status = as_app(
-            &self.core,
-            &header,
-            conn,
-            |s| s,
-            |door, caller| lifecycle::save_done(door, caller, Instant::now()),
-        )
-        .await;
-        self.reply("SaveDone", status)
+        save_done(&self.core, &header, conn)
+            .await
+            .as_str()
+            .to_owned()
     }
 
     #[zbus(signal)]

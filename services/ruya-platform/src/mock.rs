@@ -19,7 +19,11 @@ use ruya_ids::{user_of, valid_profile_id};
 use serde::{Deserialize, Serialize};
 use zbus::{interface, Connection};
 
-use crate::dbus::{notify_lifecycle, Checks, Faults, LifecycleIface, ManageIface, Shared};
+use std::sync::Mutex;
+use zbus::message::Header;
+use zbus::object_server::SignalEmitter;
+
+use crate::dbus::{self as door_dbus, notify_lifecycle, Checks, ManageIface, Shared};
 use crate::door::arg;
 use crate::identity::{Procfs, Users};
 use crate::limits::{MAX_APP_ID, MAX_PROFILE_ID};
@@ -257,15 +261,71 @@ pub fn core(
         Registry::served()?,
     );
     door.follow_profiles(scenario.profiles.clone(), scenario.active(), Instant::now());
-    Ok(Arc::new(std::sync::Mutex::new(door)))
+    Ok(Arc::new(Mutex::new(door)))
 }
 
-/// Everything the mock serves: the service's Lifecycle (with the faults the control interface
-/// sets) and Manage (unchecked, as the service's `--session`) at `/org/ruyaos/Platform1`, and
-/// the control interface at [`MOCK_PATH`]. One constructor, so the contract test checks exactly
-/// what the binary serves.
+/// Statuses that replace a Lifecycle method's real answer, by member name (`Register`,
+/// `SaveDone`), set by `Fault`, so a conformance run can be shown to catch a wrong answer. Only
+/// the mock has them: the service's own `LifecycleIface` carries nothing of the kind.
+pub type Faults = Arc<Mutex<BTreeMap<String, String>>>;
+
+/// The mock's Lifecycle object: the service's own method bodies (`dbus::register`,
+/// `dbus::save_done`), each answer passed through the mock's faults. The signals are only
+/// declared here (introspection); they are sent by the service's code (`dbus::notify_lifecycle`).
+/// The contract test holds it to `Platform1.xml` like the service's object.
+pub struct MockLifecycle {
+    core: Shared,
+    faults: Faults,
+}
+
+impl MockLifecycle {
+    pub fn new(core: Shared, faults: Faults) -> MockLifecycle {
+        MockLifecycle { core, faults }
+    }
+
+    /// The reply of `member`: its fault if one is set, else `status`.
+    fn reply(&self, member: &str, status: Status) -> String {
+        let fault = self.faults.lock().ok().and_then(|f| f.get(member).cloned());
+        fault.unwrap_or_else(|| status.as_str().to_owned())
+    }
+}
+
+#[interface(name = "org.ruyaos.Platform1.Lifecycle")]
+impl MockLifecycle {
+    async fn register(
+        &self,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] conn: &Connection,
+    ) -> String {
+        let status = door_dbus::register(&self.core, &header, conn).await;
+        self.reply("Register", status)
+    }
+
+    async fn save_done(
+        &self,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] conn: &Connection,
+    ) -> String {
+        let status = door_dbus::save_done(&self.core, &header, conn).await;
+        self.reply("SaveDone", status)
+    }
+
+    #[zbus(signal)]
+    async fn background(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn resume(emitter: &SignalEmitter<'_>, frozen_ms: u64) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    async fn stopping(emitter: &SignalEmitter<'_>, deadline_ms: u32) -> zbus::Result<()>;
+}
+
+/// Everything the mock serves: Lifecycle (the service's bodies, with the faults the control
+/// interface sets) and the service's own Manage (unchecked, as its `--session`) at
+/// `/org/ruyaos/Platform1`, and the control interface at [`MOCK_PATH`]. One constructor, so the
+/// contract test checks exactly what the binary serves.
 pub struct Objects {
-    pub lifecycle: LifecycleIface,
+    pub lifecycle: MockLifecycle,
     pub manage: ManageIface,
     pub control: MockIface,
 }
@@ -278,7 +338,7 @@ impl Objects {
             shell_uid: None,
         };
         Objects {
-            lifecycle: LifecycleIface::with_faults(core.clone(), faults.clone()),
+            lifecycle: MockLifecycle::new(core.clone(), faults.clone()),
             manage: ManageIface::new(core.clone(), checks),
             control: MockIface::new(core, scenario, faults),
         }
@@ -596,7 +656,7 @@ mod tests {
     fn a_fault_replaces_the_served_lifecycle_answer() {
         let dir = tempfile::tempdir().expect("temp dir");
         let m = mock(&dir);
-        let lifecycle = LifecycleIface::with_faults(m.core.clone(), m.faults.clone());
+        let lifecycle = MockLifecycle::new(m.core.clone(), m.faults.clone());
         assert_eq!(lifecycle.reply("Register", Status::Ok), "ok");
         assert_eq!(m.set_fault("Register", "rate-limited"), Status::Ok);
         assert_eq!(lifecycle.reply("Register", Status::Ok), "rate-limited");

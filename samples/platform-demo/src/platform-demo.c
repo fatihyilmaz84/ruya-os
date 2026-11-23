@@ -127,7 +127,8 @@ static void lifecycle_save_done(sd_bus *bus)
     sd_bus_message_unref(reply);
 }
 
-/* Writes the save next to the old one, flushes it, then renames it over (Saves and data). */
+/* Writes the save next to the old one, flushes it, then renames it over (Saves and data).
+ * 0, or the errno of the step that failed. */
 static int save_game(unsigned long frames)
 {
     const char *base = getenv("XDG_DATA_HOME");
@@ -138,14 +139,15 @@ static int save_game(unsigned long frames)
     snprintf(tmp, sizeof tmp, "%s.tmp", path);
     f = fopen(tmp, "w");
     if (!f)
-        return -1;
+        return errno;
     fprintf(f, "frames=%lu\n", frames);
     if (fflush(f) != 0 || fsync(fileno(f)) != 0) {
+        int err = errno; /* before fclose, which may set its own */
         fclose(f);
-        return -1;
+        return err;
     }
     if (fclose(f) != 0 || rename(tmp, path) != 0)
-        return -1;
+        return errno;
     fd = open(base && *base ? base : ".", O_RDONLY | O_DIRECTORY);
     if (fd >= 0) { /* the rename itself is on disk too */
         fsync(fd);
@@ -162,6 +164,7 @@ int main(int argc, char **argv)
     struct sigaction sa;
     sd_bus *bus;
     double last;
+    int err;
 
     if (argc == 3 && strcmp(argv[1], "--frames") == 0)
         frames_max = atol(argv[2]);
@@ -196,8 +199,9 @@ int main(int argc, char **argv)
             usleep(FRAME_US);
     }
 
-    if (save_game(frame) != 0)
-        printf("save failed: %s\n", strerror(errno));
+    err = save_game(frame);
+    if (err != 0)
+        printf("save failed: %s\n", strerror(err));
     if (bus && g_stopping)
         lifecycle_save_done(bus);
     sd_bus_flush_close_unref(bus);

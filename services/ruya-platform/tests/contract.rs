@@ -5,13 +5,13 @@ use std::sync::{Arc, Mutex};
 
 use ruya_contract_test::{assert_interfaces_are, assert_serves, parse, served_xml};
 use ruya_platform::dbus::{Checks, LifecycleIface, ManageIface, Shared};
-use ruya_platform::mock::{self, Objects, Processes, Scenario};
 use ruya_platform::procfs::{NoProcfs, SystemUsers};
 use ruya_platform::registry::Registry;
 use ruya_platform::store::Store;
 use ruya_platform::Platform;
 
 const FILE: &str = "org.ruyaos.Platform1.xml";
+#[cfg(feature = "dev-mock")]
 const MOCK_FILE: &str = "org.ruyaos.Platform1Mock.xml";
 
 fn core(dir: &tempfile::TempDir) -> Shared {
@@ -75,8 +75,10 @@ fn manage_has_no_signal() {
 /// What the developer mock serves (RUY-158): the service's own Lifecycle and Manage, so the
 /// mock cannot offer an element Platform1.xml lacks or miss one it has, and its control
 /// interface, which is in a file of its own and never in Platform1.xml.
+#[cfg(feature = "dev-mock")]
 #[test]
 fn the_mock_serves_the_contract_and_its_control_interface() {
+    use ruya_platform::mock::{self, Objects, Processes, Scenario};
     struct NoProcesses;
     impl Processes for NoProcesses {
         fn pidfd_pid(&self, _pidfd: i32) -> Option<i32> {

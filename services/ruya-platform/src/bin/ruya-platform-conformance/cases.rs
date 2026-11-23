@@ -14,6 +14,7 @@ use ruya_platform::dbus::{BUS_NAME, OBJECT_PATH};
 use ruya_platform::lifecycle::{KEY, MAX_NAMES};
 use ruya_platform::limits::CALLER_RATE;
 use ruya_platform::mock::{Scenario, ScenarioApp, MOCK_BUS_NAME, MOCK_PATH};
+use ruya_platform::Status;
 use zbus::Connection;
 
 use crate::docs::Docs;
@@ -166,7 +167,8 @@ impl Ctx {
     }
 
     /// `got` must be `want`, and both must be statuses the XML documents for `element`.
-    fn expect(&self, element: &str, got: &str, want: &str) -> Result<(), String> {
+    fn expect(&self, element: &str, got: &str, want: Status) -> Result<(), String> {
+        let want = want.as_str();
         if !self.docs.allows(element, want) {
             return Err(format!(
                 "the case expects {want:?} from {element}, which the XML does not document"
@@ -229,7 +231,7 @@ impl Ctx {
 
     fn switch(&self, profile: &str) -> Result<(), String> {
         let got = self.call(MOCK_BUS_NAME, MOCK_PATH, MOCK, "SwitchProfile", &(profile,))?;
-        if got == "ok" {
+        if got == Status::Ok.as_str() {
             Ok(())
         } else {
             Err(format!("SwitchProfile {profile}: {got}"))
@@ -244,7 +246,7 @@ impl Ctx {
             "SetPermission",
             &(PROFILE, app.app_id.as_str(), KEY, allowed),
         )?;
-        if got == "ok" {
+        if got == Status::Ok.as_str() {
             Ok(())
         } else {
             Err(format!("SetPermission {allowed}: {got}"))
@@ -273,7 +275,7 @@ impl Ctx {
         let mut app = self.app()?;
         let n = app.peer.open()?;
         let got = app.peer.call(n, "Register")?;
-        self.expect(REGISTER, &got, "ok")?;
+        self.expect(REGISTER, &got, Status::Ok)?;
         Ok(app)
     }
 
@@ -306,7 +308,7 @@ impl Ctx {
     fn settled(
         &self,
         answer: JoinHandle<Result<String, String>>,
-        want: &str,
+        want: Status,
     ) -> Result<(), String> {
         let got = answer.join().map_err(|_| "the Fire call panicked")??;
         self.expect(NOTIFY, &got, want)
@@ -338,7 +340,7 @@ pub const CASES: &[Case] = &[
         run: |ctx| {
             let mut app = ctx.registered()?;
             let again = app.peer.call(0, "Register")?;
-            ctx.expect(REGISTER, &again, "ok")
+            ctx.expect(REGISTER, &again, Status::Ok)
         },
     },
     Case {
@@ -346,7 +348,7 @@ pub const CASES: &[Case] = &[
         covers: &[BACKGROUND],
         run: |ctx| {
             let mut app = ctx.registered()?;
-            ctx.expect(NOTIFY, &ctx.fire(&app, "background", 0)?, "ok")?;
+            ctx.expect(NOTIFY, &ctx.fire(&app, "background", 0)?, Status::Ok)?;
             ctx.signal(&mut app, 0, "Background")
         },
     },
@@ -355,7 +357,7 @@ pub const CASES: &[Case] = &[
         covers: &[RESUME],
         run: |ctx| {
             let mut app = ctx.registered()?;
-            ctx.expect(NOTIFY, &ctx.fire(&app, "resume", 1234)?, "ok")?;
+            ctx.expect(NOTIFY, &ctx.fire(&app, "resume", 1234)?, Status::Ok)?;
             ctx.signal(&mut app, 0, "Resume 1234")
         },
     },
@@ -365,8 +367,8 @@ pub const CASES: &[Case] = &[
         run: |ctx| {
             let mut app = ctx.registered()?;
             let answer = ctx.stopping(&mut app, 5000)?;
-            ctx.expect(SAVE_DONE, &app.peer.call(0, "SaveDone")?, "ok")?;
-            ctx.settled(answer, "saved")
+            ctx.expect(SAVE_DONE, &app.peer.call(0, "SaveDone")?, Status::Ok)?;
+            ctx.settled(answer, Status::Saved)
         },
     },
     Case {
@@ -375,8 +377,8 @@ pub const CASES: &[Case] = &[
         run: |ctx| {
             let mut app = ctx.registered()?;
             let answer = ctx.stopping(&mut app, 300)?;
-            ctx.settled(answer, "timeout")?;
-            ctx.expect(SAVE_DONE, &app.peer.call(0, "SaveDone")?, "ok")
+            ctx.settled(answer, Status::Timeout)?;
+            ctx.expect(SAVE_DONE, &app.peer.call(0, "SaveDone")?, Status::Ok)
         },
     },
     Case {
@@ -385,8 +387,8 @@ pub const CASES: &[Case] = &[
         run: |ctx| {
             let mut peer = Peer::spawn(UNSANDBOXED)?;
             let n = peer.open()?;
-            ctx.expect(REGISTER, &peer.call(n, "Register")?, "not-an-app")?;
-            ctx.expect(SAVE_DONE, &peer.call(n, "SaveDone")?, "not-an-app")
+            ctx.expect(REGISTER, &peer.call(n, "Register")?, Status::NotAnApp)?;
+            ctx.expect(SAVE_DONE, &peer.call(n, "SaveDone")?, Status::NotAnApp)
         },
     },
     Case {
@@ -397,11 +399,11 @@ pub const CASES: &[Case] = &[
             let n = app.peer.open()?;
             for i in 1..=CALLER_RATE.capacity {
                 let got = app.peer.call(n, "Register")?;
-                ctx.expect(REGISTER, &got, "ok")
+                ctx.expect(REGISTER, &got, Status::Ok)
                     .map_err(|e| format!("call {i}: {e}"))?;
             }
             let got = app.peer.call(n, "Register")?;
-            ctx.expect(REGISTER, &got, "rate-limited")
+            ctx.expect(REGISTER, &got, Status::RateLimited)
                 .map_err(|e| format!("call {}: {e}", CALLER_RATE.capacity + 1))
         },
     },
@@ -412,7 +414,11 @@ pub const CASES: &[Case] = &[
             let mut app = ctx.app()?;
             for i in 1..=MAX_NAMES + 1 {
                 let n = app.peer.open()?;
-                let want = if i <= MAX_NAMES { "ok" } else { "rate-limited" };
+                let want = if i <= MAX_NAMES {
+                    Status::Ok
+                } else {
+                    Status::RateLimited
+                };
                 let got = app.peer.call(n, "Register")?;
                 ctx.expect(REGISTER, &got, want)
                     .map_err(|e| format!("connection {i}: {e}"))?;
@@ -425,14 +431,18 @@ pub const CASES: &[Case] = &[
         covers: &[SAVE_DONE],
         run: |ctx| {
             let mut app = ctx.registered()?;
-            ctx.expect(SAVE_DONE, &app.peer.call(0, "SaveDone")?, "not-allowed")?;
+            ctx.expect(
+                SAVE_DONE,
+                &app.peer.call(0, "SaveDone")?,
+                Status::NotAllowed,
+            )?;
             // Not registered at all: another connection of a fresh app.
             let mut other = ctx.app()?;
             let n = other.peer.open()?;
             ctx.expect(
                 SAVE_DONE,
                 &other.peer.call(n, "SaveDone")?,
-                "not-registered",
+                Status::NotRegistered,
             )
         },
     },
@@ -442,9 +452,13 @@ pub const CASES: &[Case] = &[
         run: |ctx| {
             let mut app = ctx.registered()?;
             let answer = ctx.stopping(&mut app, 5000)?;
-            ctx.expect(SAVE_DONE, &app.peer.call(0, "SaveDone")?, "ok")?;
-            ctx.settled(answer, "saved")?;
-            ctx.expect(SAVE_DONE, &app.peer.call(0, "SaveDone")?, "not-allowed")
+            ctx.expect(SAVE_DONE, &app.peer.call(0, "SaveDone")?, Status::Ok)?;
+            ctx.settled(answer, Status::Saved)?;
+            ctx.expect(
+                SAVE_DONE,
+                &app.peer.call(0, "SaveDone")?,
+                Status::NotAllowed,
+            )
         },
     },
     Case {
@@ -452,11 +466,15 @@ pub const CASES: &[Case] = &[
         covers: &[SAVE_DONE, BACKGROUND, RESUME],
         run: |ctx| {
             let mut app = ctx.registered()?;
-            ctx.expect(NOTIFY, &ctx.fire(&app, "background", 0)?, "ok")?;
+            ctx.expect(NOTIFY, &ctx.fire(&app, "background", 0)?, Status::Ok)?;
             ctx.signal(&mut app, 0, "Background")?;
-            ctx.expect(NOTIFY, &ctx.fire(&app, "resume", 50)?, "ok")?;
+            ctx.expect(NOTIFY, &ctx.fire(&app, "resume", 50)?, Status::Ok)?;
             ctx.signal(&mut app, 0, "Resume 50")?;
-            ctx.expect(SAVE_DONE, &app.peer.call(0, "SaveDone")?, "not-allowed")
+            ctx.expect(
+                SAVE_DONE,
+                &app.peer.call(0, "SaveDone")?,
+                Status::NotAllowed,
+            )
         },
     },
     Case {
@@ -466,9 +484,9 @@ pub const CASES: &[Case] = &[
             let mut app = ctx.app()?;
             let n = app.peer.open()?;
             ctx.switch(OTHER_PROFILE)?;
-            ctx.expect(REGISTER, &app.peer.call(n, "Register")?, "not-allowed")?;
+            ctx.expect(REGISTER, &app.peer.call(n, "Register")?, Status::NotAllowed)?;
             ctx.switch(PROFILE)?;
-            ctx.expect(REGISTER, &app.peer.call(n, "Register")?, "ok")
+            ctx.expect(REGISTER, &app.peer.call(n, "Register")?, Status::Ok)
         },
     },
     Case {
@@ -478,8 +496,8 @@ pub const CASES: &[Case] = &[
             let mut app = ctx.registered()?;
             let answer = ctx.stopping(&mut app, 5000)?;
             ctx.switch(OTHER_PROFILE)?;
-            ctx.expect(SAVE_DONE, &app.peer.call(0, "SaveDone")?, "ok")?;
-            ctx.settled(answer, "saved")
+            ctx.expect(SAVE_DONE, &app.peer.call(0, "SaveDone")?, Status::Ok)?;
+            ctx.settled(answer, Status::Saved)
         },
     },
     Case {
@@ -490,13 +508,17 @@ pub const CASES: &[Case] = &[
             let answer = ctx.stopping(&mut app, 5000)?;
             ctx.set_permission(&app, false)?;
             let result = (|| {
-                ctx.settled(answer, "not-registered")?;
-                ctx.expect(REGISTER, &app.peer.call(0, "Register")?, "not-allowed")?;
-                ctx.expect(SAVE_DONE, &app.peer.call(0, "SaveDone")?, "not-allowed")
+                ctx.settled(answer, Status::NotRegistered)?;
+                ctx.expect(REGISTER, &app.peer.call(0, "Register")?, Status::NotAllowed)?;
+                ctx.expect(
+                    SAVE_DONE,
+                    &app.peer.call(0, "SaveDone")?,
+                    Status::NotAllowed,
+                )
             })();
             ctx.set_permission(&app, true)?;
             result?;
-            ctx.expect(REGISTER, &app.peer.call(0, "Register")?, "ok")
+            ctx.expect(REGISTER, &app.peer.call(0, "Register")?, Status::Ok)
         },
     },
     Case {
@@ -510,8 +532,8 @@ pub const CASES: &[Case] = &[
             let until = Instant::now() + PATIENCE;
             loop {
                 let got = ctx.fire(&app, "background", 0)?;
-                if got != "ok" || Instant::now() >= until {
-                    return ctx.expect(NOTIFY, &got, "not-registered");
+                if got != Status::Ok.as_str() || Instant::now() >= until {
+                    return ctx.expect(NOTIFY, &got, Status::NotRegistered);
                 }
                 std::thread::sleep(Duration::from_millis(50));
             }
@@ -524,16 +546,16 @@ pub const CASES: &[Case] = &[
             let mut a = ctx.registered()?;
             let mut b = ctx.registered()?;
             // A's Background and Stopping; B's first signal is its own Resume (the fence).
-            ctx.expect(NOTIFY, &ctx.fire(&a, "background", 0)?, "ok")?;
+            ctx.expect(NOTIFY, &ctx.fire(&a, "background", 0)?, Status::Ok)?;
             ctx.signal(&mut a, 0, "Background")?;
             let answer = ctx.stopping(&mut a, 300)?;
-            ctx.settled(answer, "timeout")?;
-            ctx.expect(NOTIFY, &ctx.fire(&b, "resume", 7)?, "ok")?;
+            ctx.settled(answer, Status::Timeout)?;
+            ctx.expect(NOTIFY, &ctx.fire(&b, "resume", 7)?, Status::Ok)?;
             ctx.signal(&mut b, 0, "Resume 7")?;
             // The same scope in another profile is another instance: not A's.
             let got = ctx.notify(OTHER_PROFILE, &a.scope, "background", 0)?;
-            ctx.expect(NOTIFY, &got, "not-registered")?;
-            ctx.expect(NOTIFY, &ctx.fire(&a, "resume", 8)?, "ok")?;
+            ctx.expect(NOTIFY, &got, Status::NotRegistered)?;
+            ctx.expect(NOTIFY, &ctx.fire(&a, "resume", 8)?, Status::Ok)?;
             ctx.signal(&mut a, 0, "Resume 8")
         },
     },

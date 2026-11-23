@@ -158,11 +158,46 @@ mod serve {
         let scenario = Arc::new(
             Scenario::parse(&text).map_err(|e| format!("{}: {e}", scenario_file.display()))?,
         );
-        // Each run starts with no choices: every capability has its default.
+        // Each run starts with no choices: every capability has its default. A folder the mock
+        // made itself is removed when it ends (the bus closed, SIGTERM, SIGINT or an error); one
+        // given with --state is the caller's.
+        let own = state.is_none();
         let state = state.unwrap_or_else(|| {
             std::env::temp_dir().join(format!("ruya-platform-mock-{}", std::process::id()))
         });
-        let store = Store::open(&state)?;
+        if own {
+            remove_on_signal(state.clone());
+        }
+        let result = serve(scenario, &state);
+        if own {
+            let _ = std::fs::remove_dir_all(&state);
+        }
+        result
+    }
+
+    /// SIGTERM and SIGINT are blocked in every thread (this runs before zbus starts its threads)
+    /// and taken by one thread of their own, which removes `dir` and ends the process.
+    fn remove_on_signal(dir: PathBuf) {
+        // SAFETY: plain libc calls on a sigset_t this function owns; sigwait only reads it.
+        let set = unsafe {
+            let mut set: libc::sigset_t = std::mem::zeroed();
+            libc::sigemptyset(&mut set);
+            libc::sigaddset(&mut set, libc::SIGTERM);
+            libc::sigaddset(&mut set, libc::SIGINT);
+            libc::pthread_sigmask(libc::SIG_BLOCK, &set, std::ptr::null_mut());
+            set
+        };
+        std::thread::spawn(move || {
+            let mut signal = 0;
+            // SAFETY: as above; `signal` is a valid out pointer.
+            unsafe { libc::sigwait(&set, &mut signal) };
+            let _ = std::fs::remove_dir_all(&dir);
+            std::process::exit(0);
+        });
+    }
+
+    fn serve(scenario: Arc<Scenario>, state: &std::path::Path) -> Result<(), Box<dyn Error>> {
+        let store = Store::open(state)?;
         let core = mock::core(scenario.clone(), Box::new(LinuxProcesses), store)?;
         let objects = mock::Objects::new(core.clone(), scenario.clone());
 

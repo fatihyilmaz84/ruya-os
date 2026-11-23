@@ -20,6 +20,29 @@ futures-lite = "2"
 async-io = "2"  # the deadline of a Stopping's wait; already in the tree through zbus
 async-channel = "2"  # the answer to a Stopping's wait (one per waiter); already in the tree through zbus
 
+# The developer harness (RUY-158): the mock module and its two binaries. Off by default, so the
+# service the image builds (`cargo build --release`) contains none of it; dev.ps1 and CI build
+# and test with `--features dev-mock`.
+ruya-contract-test = { path = "../ruya-contract-test", optional = true }  # the conformance runner reads the contract's comments with the one XML reader
+libc = { version = "0.2", optional = true }  # the mock removes its state on SIGTERM (sigwait); already in the tree through ruya-users
+
+[features]
+dev-mock = ["dep:ruya-contract-test", "dep:libc"]
+
+[[bin]]
+name = "ruya-platform"
+path = "src/main.rs"
+
+[[bin]]
+name = "ruya-platform-mock"
+path = "src/bin/ruya-platform-mock.rs"
+required-features = ["dev-mock"]
+
+[[bin]]
+name = "ruya-platform-conformance"
+path = "src/bin/ruya-platform-conformance/main.rs"
+required-features = ["dev-mock"]
+
 [dev-dependencies]
 ruya-contract-test = { path = "../ruya-contract-test" }  # the served interface against api/dbus (RUY-403)
 tempfile = "3"
