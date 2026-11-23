@@ -4,6 +4,10 @@ Description=RuyaOS platform service (org.ruyaos.Platform1, the one door for sand
 # the service asks again (RUY-1098), so the profile service comes first.
 Wants=ruya-profiles.service
 After=ruya-profiles.service
+# Who a caller is comes from the identity helper (ADR-022 decision 4); without it every app call
+# is refused (not-an-app).
+Wants=ruya-platform-identify.socket
+After=ruya-platform-identify.socket
 Before=ruya-compositor@tty1.service
 
 [Service]
@@ -15,12 +19,14 @@ Restart=on-failure
 # /var/lib/ruyaos/platform/profiles/<id>.json (0600). The only place this service writes.
 StateDirectory=ruyaos/platform
 StateDirectoryMode=0700
-# Caller identity (ADR-022, RUY-157): /proc/<pid>/root/.flatpak-info and /proc/<pid>/cgroup of the
-# caller's xdg-dbus-proxy, a process of a profile user. Reading another uid's /proc/<pid>/root is
-# a ptrace-mode read: CAP_SYS_PTRACE and nothing else (no DAC override: .flatpak-info is
-# world-readable inside the sandbox). ProtectProc=ptraceable keeps those processes visible.
-CapabilityBoundingSet=CAP_SYS_PTRACE
-ProtectProc=ptraceable
+# Caller identity (ADR-022, RUY-157): the door is the most exposed root service (every sandbox
+# talks to it), so it holds no capability (ADR-022 build decision 4, RUY-1129). A caller's
+# .flatpak-info is 0600 and owned by the profile user; the door hands the caller's pidfd to
+# ruya-platform-identify.socket, whose helper reads it with CAP_SYS_PTRACE and
+# CAP_DAC_READ_SEARCH and returns bytes, never a path. The door reads only its own
+# /proc/self/fdinfo, so every other process stays invisible to it.
+CapabilityBoundingSet=
+ProtectProc=invisible
 ProcSubset=pid
 ProtectSystem=strict
 ProtectHome=yes

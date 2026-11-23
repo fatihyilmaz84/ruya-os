@@ -38,8 +38,12 @@
       "reason": "root, empty capability set, no network, 01-platform.md section 3 (T-162); measured 0.0.61"
     },
     "ruya-platform.service": {
+      "max_exposure": 1.1,
+      "reason": "root (owns its bus name), empty capability set and ProtectProc=invisible (ADR-022 decision 4: the identity helper reads a caller's .flatpak-info), no network, writes only its StateDirectory; the ruya-notifications hardening. Measured 1.1 on the Dell (0.0.106 with the RUY-1129 units and binaries, transient)"
+    },
+    "ruya-platform-identify@.service": {
       "max_exposure": 1.6,
-      "reason": "root (owns its bus name), only CAP_SYS_PTRACE (reads a caller's /proc/<pid>/root/.flatpak-info, ADR-022), no network, writes only its StateDirectory; the ruya-notifications hardening plus that one capability. Not measured yet: RUY-157 set it on the host, the first VM run of vm-platform-check.sh measures it"
+      "reason": "root, socket-activated per request of ruya-platform only (0600 root socket), exactly CAP_SYS_PTRACE and CAP_DAC_READ_SEARCH (another uid's /proc/<pid>/root/.flatpak-info, 0600), no bus (InaccessiblePaths=/run/dbus), no network, no address family, one task, 5 s; ADR-022 decision 4. Measured 1.6 on the Dell (0.0.106 with the RUY-1129 units, transient)"
     },
     "ruya-play.service": {
       "max_exposure": 3.5,
@@ -92,6 +96,10 @@
     {
       "process": "ruya-platform",
       "reason": "RUY-157, like every ruya-* service: no SELinux policy module for ruya-* yet, every service and the shell run unconfined_service_t; a custom policy is the fix (RUY-20)"
+    },
+    {
+      "process": "ruya-platform-identify",
+      "reason": "RUY-1129, like every ruya-* service (seen only while a request runs, a few milliseconds): no SELinux policy module for ruya-* yet, every service and the shell run unconfined_service_t; a custom policy is the fix (RUY-20)"
     },
     {
       "process": "ruya-play",

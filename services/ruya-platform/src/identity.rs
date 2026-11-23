@@ -5,33 +5,36 @@
 //! peer, `ProcessID` and `UnixUserID`). Behind `xdg-dbus-proxy` the peer is the proxy, which runs
 //! in the app's sandbox and scope, so it carries the app's identity. The recipe:
 //!
-//! 1. the pidfd is alive and names `ProcessID` (its fdinfo `Pid:`; a process that is gone shows
-//!    `-1`, so a reused pid is seen);
-//! 2. `/proc/<pid>/root/.flatpak-info` names the app (`[Application] name`) and the instance
+//! 1. the pidfd is alive and names `ProcessID` (the door's own fdinfo `Pid:`; a process that is
+//!    gone shows `-1`, so a reused pid is seen);
+//! 2. the identity helper (`ruya-platform-identify`, ADR-022 decision 4: the door holds no
+//!    capability) answers with the pid its own fdinfo of the pidfd names, which must be
+//!    `ProcessID`, the caller's `/proc/<pid>/root/.flatpak-info` (only when `UnixUserID` owns it)
+//!    and `/proc/<pid>/cgroup`;
+//! 3. the `.flatpak-info` names the app (`[Application] name`) and the instance
 //!    (`[Instance] instance-id`);
-//! 3. `/proc/<pid>/cgroup` ends exactly in that instance's scope
+//! 4. the cgroup ends exactly in that instance's scope
 //!    (`app-flatpak-<escaped id>-<instance-id>.scope`) under `user@<UnixUserID>.service`;
-//! 4. the pidfd still names `ProcessID` after the reads (the files were the caller's);
-//! 5. `UnixUserID` is a profile's user (`ruya-<id>`) whose profile exists.
+//! 5. the pidfd still names `ProcessID` after the reads (the files were the caller's);
+//! 6. `UnixUserID` is a profile's user (`ruya-<id>`) whose profile exists.
 //!
 //! Anything else is `NotAnApp`. **Trust boundary:** this holds for sandboxed callers only. Code
 //! running unsandboxed as the profile's uid can make a matching scope and a fake `.flatpak-info`
-//! (shown in the spike), so nothing third-party may run unsandboxed as a profile.
+//! (shown in the spike), so nothing third-party may run unsandboxed as a profile. Such code can
+//! also bind-mount any file it can see onto `/.flatpak-info`; the helper reads none the caller's
+//! uid does not own.
 //!
 //! The reads go through [`Procfs`] and the user database through [`Users`], so the whole recipe is
 //! tested with fakes; `procfs.rs` has the Linux readers.
 
+use std::fmt;
 use std::io;
 
 use ruya_flatpak::scope::{instance_scope, runs_in_scope, valid_instance_id};
 use ruya_flatpak::valid_app_id;
 use ruya_ids::profile_of_user;
 use ruya_keyfile::Keyfile;
-
-/// The largest `.flatpak-info` read (the keyfile reader's own cap).
-pub const MAX_FLATPAK_INFO: usize = ruya_keyfile::MAX_BYTES;
-/// The largest `/proc/<pid>/cgroup` read; the real file is one short line on cgroup v2.
-pub const MAX_CGROUP: usize = 16 * 1024;
+pub use ruya_platform_identify::{FileError, Files, Refusal, Reply};
 
 /// What the bus said about the caller of one message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,15 +48,15 @@ pub struct Caller<'a> {
     pub pidfd: Option<i32>,
 }
 
-/// The kernel and file reads of the recipe.
+/// The kernel reads of the recipe.
 pub trait Procfs: Send {
-    /// The `Pid:` of the pidfd's fdinfo: the process's pid, `-1` once it is gone; `None` when the
-    /// descriptor is no pidfd or cannot be read.
+    /// The `Pid:` of this process's fdinfo of the pidfd: the process's pid, `-1` once it is gone;
+    /// `None` when the descriptor is no pidfd or cannot be read. Needs no privilege.
     fn pidfd_pid(&self, pidfd: i32) -> Option<i32>;
-    /// `/proc/<pid>/root/.flatpak-info`, at most `MAX_FLATPAK_INFO` bytes, never through a link.
-    fn flatpak_info(&self, pid: u32) -> io::Result<Vec<u8>>;
-    /// `/proc/<pid>/cgroup`, at most `MAX_CGROUP` bytes.
-    fn cgroup(&self, pid: u32) -> io::Result<Vec<u8>>;
+    /// The identity helper's answer for the caller the pidfd names, whose bus uid is `uid`: the
+    /// pid the helper saw and the caller's `.flatpak-info` and cgroup, or why not. `Err` when the
+    /// helper could not be asked or its reply is not on the wire's grammar.
+    fn caller_files(&self, pidfd: i32, uid: u32) -> io::Result<Reply>;
 }
 
 /// The system's user database.
@@ -81,16 +84,42 @@ pub enum NotAnApp {
     NoCredentials,
     /// The pidfd does not name the pid: the process is gone, or the pid is another process's.
     ProcessGone,
-    /// No `.flatpak-info` could be read: not a sandbox.
+    /// The identity helper could not be asked, or its reply was malformed.
+    HelperUnavailable,
+    /// The identity helper refused the request.
+    HelperRefused(Refusal),
+    /// No `.flatpak-info` is there: not a sandbox.
     NoFlatpakInfo,
+    /// A `.flatpak-info` is there but was not read: the caller's uid does not own it (a file
+    /// bind-mounted there), it is no regular file or too large, or the read was refused. Kept
+    /// apart from a missing file, so a permission problem is not taken for an unsandboxed caller.
+    FlatpakInfoUnreadable(FileError),
     /// `.flatpak-info` names no valid app id or instance id.
     BadFlatpakInfo,
     /// The cgroup is not that instance's scope in the uid's own user manager.
     WrongScope,
-    /// The pidfd no longer names the pid after the reads.
+    /// The helper saw another pid, or the pidfd no longer names the pid after the reads.
     ProcessChanged,
     /// The uid is no profile's user, or the profile does not exist.
     NotAProfile,
+}
+
+impl fmt::Display for NotAnApp {
+    /// The journal's words (vm-platform-check.sh looks for `flatpak-info not-owned`).
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            NotAnApp::NoCredentials => f.write_str("no credentials"),
+            NotAnApp::ProcessGone => f.write_str("process gone"),
+            NotAnApp::HelperUnavailable => f.write_str("identity helper unavailable"),
+            NotAnApp::HelperRefused(r) => write!(f, "identity helper refused: {}", r.as_str()),
+            NotAnApp::NoFlatpakInfo => f.write_str("no flatpak-info"),
+            NotAnApp::FlatpakInfoUnreadable(e) => write!(f, "flatpak-info {}", e.as_str()),
+            NotAnApp::BadFlatpakInfo => f.write_str("bad flatpak-info"),
+            NotAnApp::WrongScope => f.write_str("wrong scope"),
+            NotAnApp::ProcessChanged => f.write_str("process changed"),
+            NotAnApp::NotAProfile => f.write_str("not a profile"),
+        }
+    }
 }
 
 /// The app id and instance id of a `.flatpak-info`, or `None` (GKeyFile's own reading, as
@@ -102,13 +131,6 @@ pub fn parse_flatpak_info(bytes: &[u8]) -> Option<(String, String)> {
     let instance = info.get("Instance", "instance-id")?;
     (valid_app_id(app) && valid_instance_id(instance))
         .then(|| (app.to_owned(), instance.to_owned()))
-}
-
-/// The `Pid:` value of an fdinfo text (`Pid:\t1234`), `None` without one.
-pub fn fdinfo_pid(text: &str) -> Option<i32> {
-    text.lines()
-        .find_map(|l| l.strip_prefix("Pid:"))
-        .and_then(|v| v.trim().parse().ok())
 }
 
 /// The recipe (module doc). `is_profile` says whether a profile id exists now (Profiles1).
@@ -127,12 +149,22 @@ pub fn identify(
     if want <= 0 || procfs.pidfd_pid(pidfd) != Some(want) {
         return Err(NotAnApp::ProcessGone);
     }
-    let info = procfs
-        .flatpak_info(pid)
-        .map_err(|_| NotAnApp::NoFlatpakInfo)?;
+    let files = match procfs.caller_files(pidfd, uid) {
+        Err(_) => return Err(NotAnApp::HelperUnavailable),
+        Ok(Reply::Refused(Refusal::ProcessGone)) => return Err(NotAnApp::ProcessGone),
+        Ok(Reply::Refused(r)) => return Err(NotAnApp::HelperRefused(r)),
+        Ok(Reply::Files(files)) => files,
+    };
+    if files.pid != pid {
+        return Err(NotAnApp::ProcessChanged);
+    }
+    let info = files.info.map_err(|e| match e {
+        FileError::Missing => NotAnApp::NoFlatpakInfo,
+        e => NotAnApp::FlatpakInfoUnreadable(e),
+    })?;
     let (app_id, instance_id) = parse_flatpak_info(&info).ok_or(NotAnApp::BadFlatpakInfo)?;
     let scope = instance_scope(&app_id, &instance_id).ok_or(NotAnApp::BadFlatpakInfo)?;
-    let cgroup = procfs.cgroup(pid).map_err(|_| NotAnApp::WrongScope)?;
+    let cgroup = files.cgroup.map_err(|_| NotAnApp::WrongScope)?;
     let cgroup = std::str::from_utf8(&cgroup).map_err(|_| NotAnApp::WrongScope)?;
     if !runs_in_scope(cgroup, uid, &scope) {
         return Err(NotAnApp::WrongScope);
@@ -156,25 +188,31 @@ pub fn identify(
 /// Fakes of the recipe's reads, for this crate's tests.
 #[cfg(test)]
 pub(crate) mod fake {
-    use super::{Procfs, Users};
+    use super::{FileError, Procfs, Reply, Users};
+    use ruya_platform_identify::serve::{files_of, InMemory, Kernel};
     use std::collections::{HashMap, VecDeque};
     use std::io;
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Mutex;
 
-    /// One process as the fake kernel shows it.
-    #[derive(Debug, Clone, Default)]
+    /// One process as the fake helper answers for it.
+    #[derive(Debug, Clone)]
     pub struct Process {
-        pub flatpak_info: Option<Vec<u8>>,
-        pub cgroup: Option<Vec<u8>>,
+        /// The owner of its `.flatpak-info` (the profile user in a real sandbox).
+        pub owner: u32,
+        pub info: Result<Vec<u8>, FileError>,
+        pub cgroup: Result<Vec<u8>, FileError>,
     }
 
-    /// Pidfds and processes set by the test; a pidfd answers its queued pids one read at a time,
-    /// then its last one for ever.
+    /// Pidfds and processes set by the test; a pidfd answers its queued pids one look at a time,
+    /// then its last one for ever. The recipe looks three times: the door, the helper (its own
+    /// copy of the pidfd), the door's re-check.
     #[derive(Debug, Default)]
     pub struct FakeProcfs {
         pub pidfds: Mutex<HashMap<i32, VecDeque<i32>>>,
         pub processes: HashMap<u32, Process>,
+        /// The helper cannot be asked (not running, or a reply off the wire's grammar).
+        pub helper_down: bool,
         reads: AtomicU32,
     }
 
@@ -187,7 +225,7 @@ pub(crate) mod fake {
                 .insert(fd, pids.iter().copied().collect());
         }
 
-        /// How many `.flatpak-info` and cgroup reads were made.
+        /// How many times the helper was asked for the caller's files.
         pub fn reads(&self) -> u32 {
             self.reads.load(Ordering::Relaxed)
         }
@@ -208,20 +246,30 @@ pub(crate) mod fake {
             }
         }
 
-        fn flatpak_info(&self, pid: u32) -> io::Result<Vec<u8>> {
+        /// The helper's own rules (`serve::files_of`) on this fake kernel.
+        fn caller_files(&self, pidfd: i32, uid: u32) -> io::Result<Reply> {
             self.count();
-            self.processes
-                .get(&pid)
-                .and_then(|p| p.flatpak_info.clone())
-                .ok_or_else(|| io::ErrorKind::NotFound.into())
+            if self.helper_down {
+                return Err(io::ErrorKind::ConnectionRefused.into());
+            }
+            Ok(files_of(self, pidfd, uid))
         }
+    }
 
-        fn cgroup(&self, pid: u32) -> io::Result<Vec<u8>> {
-            self.count();
-            self.processes
-                .get(&pid)
-                .and_then(|p| p.cgroup.clone())
-                .ok_or_else(|| io::ErrorKind::NotFound.into())
+    /// The fake kernel the helper's rules look at: the pidfd's next look (shared with the
+    /// door's), the processes' files.
+    impl Kernel for FakeProcfs {
+        type File = InMemory;
+        fn pidfd_pid(&self, fd: i32) -> Option<i32> {
+            Procfs::pidfd_pid(self, fd)
+        }
+        fn open_info(&self, pid: u32) -> Result<InMemory, FileError> {
+            let p = self.processes.get(&pid).ok_or(FileError::Missing)?;
+            Ok(InMemory::new(p.owner, p.info.clone()?))
+        }
+        fn open_cgroup(&self, pid: u32) -> Result<InMemory, FileError> {
+            let p = self.processes.get(&pid).ok_or(FileError::Missing)?;
+            Ok(InMemory::new(p.owner, p.cgroup.clone()?))
         }
     }
 
@@ -263,8 +311,9 @@ mod tests {
         procfs.processes.insert(
             PID,
             Process {
-                flatpak_info: Some(info(APP, "77")),
-                cgroup: Some(cgroup(UID, APP, "77")),
+                owner: UID,
+                info: Ok(info(APP, "77")),
+                cgroup: Ok(cgroup(UID, APP, "77")),
             },
         );
         let mut users = FakeUsers::default();
@@ -356,8 +405,18 @@ mod tests {
         // The bus's ProcessID is now another process's pid: the pidfd names its own process.
         procfs.pidfd(FD, &[5151]);
         assert_eq!(run(&procfs, &users, &caller()), Err(NotAnApp::ProcessGone));
-        // The process died and its pid was reused while the files were read: the re-check sees it.
+        assert_eq!(procfs.reads(), 0, "the helper is not asked");
+        // The process died before the helper looked at its pidfd.
         procfs.pidfd(FD, &[PID as i32, -1]);
+        assert_eq!(run(&procfs, &users, &caller()), Err(NotAnApp::ProcessGone));
+        // The helper's own look names another process than the door's: its files are not used.
+        procfs.pidfd(FD, &[PID as i32, 5151, PID as i32]);
+        assert_eq!(
+            run(&procfs, &users, &caller()),
+            Err(NotAnApp::ProcessChanged)
+        );
+        // The process died and its pid was reused while the files were read: the re-check sees it.
+        procfs.pidfd(FD, &[PID as i32, PID as i32, -1]);
         assert_eq!(
             run(&procfs, &users, &caller()),
             Err(NotAnApp::ProcessChanged)
@@ -365,13 +424,94 @@ mod tests {
     }
 
     #[test]
+    fn without_the_helper_nobody_is_an_app() {
+        let (mut procfs, users) = world();
+        procfs.helper_down = true;
+        assert_eq!(
+            run(&procfs, &users, &caller()),
+            Err(NotAnApp::HelperUnavailable)
+        );
+        procfs.helper_down = false;
+        assert!(
+            run(&procfs, &users, &caller()).is_ok(),
+            "the helper is back"
+        );
+    }
+
+    #[test]
+    fn a_helper_refusal_is_not_an_app() {
+        struct Refusing(FakeProcfs, Refusal);
+        impl Procfs for Refusing {
+            fn pidfd_pid(&self, pidfd: i32) -> Option<i32> {
+                self.0.pidfd_pid(pidfd)
+            }
+            fn caller_files(&self, _pidfd: i32, _uid: u32) -> io::Result<Reply> {
+                Ok(Reply::Refused(self.1))
+            }
+        }
+        for r in [Refusal::BadRequest, Refusal::NotRoot, Refusal::NotAPidfd] {
+            let (procfs, users) = world();
+            assert_eq!(
+                identify(&Refusing(procfs, r), &users, &caller(), profiles),
+                Err(NotAnApp::HelperRefused(r))
+            );
+        }
+        let (procfs, users) = world();
+        assert_eq!(
+            identify(
+                &Refusing(procfs, Refusal::ProcessGone),
+                &users,
+                &caller(),
+                profiles
+            ),
+            Err(NotAnApp::ProcessGone)
+        );
+    }
+
+    #[test]
     fn an_unsandboxed_caller_is_not_an_app() {
         let (mut procfs, users) = world();
-        procfs.processes.get_mut(&PID).expect("set").flatpak_info = None;
+        procfs.processes.get_mut(&PID).expect("set").info = Err(FileError::Missing);
         assert_eq!(
             run(&procfs, &users, &caller()),
             Err(NotAnApp::NoFlatpakInfo)
         );
+    }
+
+    #[test]
+    fn an_unreadable_flatpak_info_is_not_a_missing_one() {
+        for e in [
+            FileError::NotOwned,
+            FileError::Denied,
+            FileError::NotRegular,
+            FileError::TooLarge,
+            FileError::Failed,
+        ] {
+            let (mut procfs, users) = world();
+            procfs.processes.get_mut(&PID).expect("set").info = Err(e);
+            assert_eq!(
+                run(&procfs, &users, &caller()),
+                Err(NotAnApp::FlatpakInfoUnreadable(e))
+            );
+        }
+        // A file there that the caller's uid does not own (root's, bound there): the helper's
+        // own rule refuses it, nothing is parsed.
+        let (mut procfs, users) = world();
+        procfs.processes.get_mut(&PID).expect("set").owner = 0;
+        assert_eq!(
+            run(&procfs, &users, &caller()),
+            Err(NotAnApp::FlatpakInfoUnreadable(FileError::NotOwned))
+        );
+        // The journal says which (vm-platform-check.sh looks for the first).
+        assert_eq!(
+            NotAnApp::FlatpakInfoUnreadable(FileError::NotOwned).to_string(),
+            "flatpak-info not-owned"
+        );
+        assert_eq!(
+            NotAnApp::FlatpakInfoUnreadable(FileError::Denied).to_string(),
+            "flatpak-info denied"
+        );
+        assert_eq!(NotAnApp::NoFlatpakInfo.to_string(), "no flatpak-info");
     }
 
     #[test]
@@ -386,7 +526,7 @@ mod tests {
             vec![0xff, 0xfe],
         ] {
             let (mut procfs, users) = world();
-            procfs.processes.get_mut(&PID).expect("set").flatpak_info = Some(bad.clone());
+            procfs.processes.get_mut(&PID).expect("set").info = Ok(bad.clone());
             assert_eq!(
                 run(&procfs, &users, &caller()),
                 Err(NotAnApp::BadFlatpakInfo),
@@ -400,14 +540,14 @@ mod tests {
     fn the_cgroup_must_be_that_apps_scope() {
         let (mut procfs, users) = world();
         procfs.processes.get_mut(&PID).expect("set").cgroup =
-            Some(cgroup(UID, "org.example.Other", "77"));
+            Ok(cgroup(UID, "org.example.Other", "77"));
         assert_eq!(run(&procfs, &users, &caller()), Err(NotAnApp::WrongScope));
     }
 
     #[test]
     fn the_instance_id_must_match_the_scope() {
         let (mut procfs, users) = world();
-        procfs.processes.get_mut(&PID).expect("set").cgroup = Some(cgroup(UID, APP, "78"));
+        procfs.processes.get_mut(&PID).expect("set").cgroup = Ok(cgroup(UID, APP, "78"));
         assert_eq!(run(&procfs, &users, &caller()), Err(NotAnApp::WrongScope));
     }
 
@@ -415,13 +555,13 @@ mod tests {
     fn a_scope_in_another_uids_manager_is_refused() {
         let (mut procfs, users) = world();
         // The right scope name, but under user@1002: another profile's manager.
-        procfs.processes.get_mut(&PID).expect("set").cgroup = Some(cgroup(1002, APP, "77"));
+        procfs.processes.get_mut(&PID).expect("set").cgroup = Ok(cgroup(1002, APP, "77"));
         assert_eq!(run(&procfs, &users, &caller()), Err(NotAnApp::WrongScope));
         // Outside every user manager, or unreadable.
         procfs.processes.get_mut(&PID).expect("set").cgroup =
-            Some(b"0::/system.slice/app-flatpak-org.example.Racer-77.scope\n".to_vec());
+            Ok(b"0::/system.slice/app-flatpak-org.example.Racer-77.scope\n".to_vec());
         assert_eq!(run(&procfs, &users, &caller()), Err(NotAnApp::WrongScope));
-        procfs.processes.get_mut(&PID).expect("set").cgroup = None;
+        procfs.processes.get_mut(&PID).expect("set").cgroup = Err(FileError::Missing);
         assert_eq!(run(&procfs, &users, &caller()), Err(NotAnApp::WrongScope));
     }
 
@@ -433,7 +573,9 @@ mod tests {
             (0, "root, no user entry here"),
             (1003, "no user"),
         ] {
-            procfs.processes.get_mut(&PID).expect("set").cgroup = Some(cgroup(uid, APP, "77"));
+            let p = procfs.processes.get_mut(&PID).expect("set");
+            p.cgroup = Ok(cgroup(uid, APP, "77"));
+            p.owner = uid;
             let c = Caller {
                 uid: Some(uid),
                 ..caller()
@@ -453,18 +595,5 @@ mod tests {
             identify(&procfs, &users, &caller(), |p| p == "p2"),
             Err(NotAnApp::NotAProfile)
         );
-    }
-
-    #[test]
-    fn fdinfo_lines() {
-        assert_eq!(
-            fdinfo_pid(
-                "pos:\t0\nflags:\t02000002\nmnt_id:\t15\nino:\t1057\nPid:\t4242\nNSpid:\t4242\n"
-            ),
-            Some(4242)
-        );
-        assert_eq!(fdinfo_pid("Pid:\t-1\n"), Some(-1));
-        assert_eq!(fdinfo_pid("pos:\t0\n"), None);
-        assert_eq!(fdinfo_pid("Pid:\tx\n"), None);
     }
 }
