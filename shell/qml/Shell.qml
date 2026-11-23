@@ -1988,7 +1988,10 @@ FocusScope {
             meta: root.libraryEmpty ? "" : InstallationText.playName(root.heroItem)
             primaryText: root.libraryEmpty ? qsTr("Open Store") : (root.heroClosing ? qsTr("Closing…") : root.heroRunning ? qsTr("Resume")
                                                                        : root.heroItem.kind === "app" ? qsTr("Open", "Button: start an app (a game says Play)") : qsTr("Play"))
-            primaryShown: root.libraryEmpty || Library.sessionAppId(root.heroItem.id ?? "") !== ""
+            // Shown when Play can start the preferred installation, and whenever any installation runs or
+            // closes (Resume / Closing…), even one Play would not start (a Steam preferred, a .play running).
+            primaryShown: root.libraryEmpty || root.heroRunning || root.heroClosing
+                          || Library.sessionAppId(root.heroItem.id ?? "") !== ""
             primaryDimmed: root.heroClosing
             secondaryText: root.libraryEmpty ? "" : qsTr("Details")
             holdEnabled: !root.libraryEmpty

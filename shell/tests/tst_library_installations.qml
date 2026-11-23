@@ -277,6 +277,31 @@ Item {
             keyClick(Qt.Key_Escape)
         }
 
+        // Play's installation is a Steam game the shell cannot start (no session app id), while the .play
+        // runs: the hero still shows Resume (lead review of round 2, Shell.qml primaryShown).
+        function test_the_hero_shows_resume_when_play_uses_an_installation_the_shell_cannot_start() {
+            start()
+            link()
+            const steam = "steam:367520"
+            let n = answerSpy.count
+            Library.linkInstallations(racer, steam)
+            tryCompare(answerSpy, "count", n + 1)
+            compare(answerSpy.signalArguments[n][1], "ok")
+            n = answerSpy.count
+            Library.setPreferredInstallation(racer, steam)
+            tryCompare(answerSpy, "count", n + 1)
+            compare(answerSpy.signalArguments[n][1], "ok")
+            tryVerify(() => Library.sessionAppId(racer) === "", 2000, "Play uses the Steam installation")
+            const started = launchedSpy.count
+            Session.launch("play.com.example.racer", "p2")
+            tryCompare(launchedSpy, "count", started + 1)
+            tryVerify(() => tc.shell.runningAppIds.includes("play.com.example.racer"), 2000)
+            tryCompare(tc.shell.heroItem, "id", racer)
+            verify(tc.shell.heroRunning, "the game runs from its .play")
+            tryVerify(() => find("homePlay").visible, 2000, "the hero's button is shown")
+            compare(find("homePlay").text, "Resume")
+        }
+
         function test_resume_brings_back_the_running_installation_and_starts_no_second() {
             const instance = runningFromThePlay()
             const app = createTemporaryObject(appComponent, host, { pid: Session.mockPidOf(instance) })
