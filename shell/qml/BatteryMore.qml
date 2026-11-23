@@ -40,7 +40,8 @@ FocusScope {
         objectName: "batteryMoreFocus"
         visible: more.activeFocus
         anchors.centerIn: parent
-        width: parent.width + 2 * Theme.spaceS * more.u
+        // The content plus spaceS each side, never narrower than its height: the compact "+N" gets a round pill (04 §5.5).
+        width: Math.max(Theme.buttonHeight * more.u, parent.width + 2 * Theme.spaceS * more.u)
         height: Theme.buttonHeight * more.u
         radius: height / 2
         color: Theme.focusFill

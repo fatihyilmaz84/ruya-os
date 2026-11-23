@@ -198,7 +198,7 @@ private:
 // Pictures for the art glow (T-281): solid-ish 160 x 90 pictures in a temporary directory, so no
 // binary is committed. red, blue, green, white and dark are a gentle diagonal gradient of one
 // colour; redblue is red on the left half and blue on the right; grey and pastel exercise the
-// sampler's limits. Exposed to the tests as `artFixtures` (a path); the mock library and store take
+// sampler's limits; brighttop and darktop are white over black and black over white (the top band). Exposed to the tests as `artFixtures` (a path); the mock library and store take
 // the first six as card art (MockArt.h).
 static QString writeArtFixtures(const QTemporaryDir &dir)
 {
@@ -228,6 +228,18 @@ static QString writeArtFixtures(const QTemporaryDir &dir)
     p.fillRect(80, 0, 80, 90, QColor(40, 80, 230));
     p.end();
     two.save(dir.filePath(QStringLiteral("redblue.png")));
+    // The top band behind the status tray (RUY-1117): white over the top third and black below (brighttop), and the
+    // other way round (darktop).
+    auto band = [&](const char *name, const QColor &top, const QColor &rest) {
+        QImage image(160, 90, QImage::Format_RGB32);
+        image.fill(rest);
+        QPainter bp(&image);
+        bp.fillRect(0, 0, 160, 30, top);
+        bp.end();
+        image.save(dir.filePath(QString::fromLatin1(name) + QStringLiteral(".png")));
+    };
+    band("brighttop", Qt::white, Qt::black);
+    band("darktop", Qt::black, Qt::white);
     // Three pictures that cannot be mistaken for a dark failed load (RUY-856, the .play fixture's hero, card and cover): a teal
     // scene with a sun and stripes, an orange card with big circles, a portrait violet cover with a diamond.
     auto scene = [&](const char *name, int w, int h, const QColor &from, const QColor &to, const QColor &mark, int kind) {

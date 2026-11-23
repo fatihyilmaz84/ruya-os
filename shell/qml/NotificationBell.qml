@@ -2,7 +2,7 @@ import QtQuick
 import RuyaShell
 
 // The bell at the left end of the status tray (RUY-413, RUY-1109, 04 §5.5): the one glass item of the flat tray,
-// a round `GlassPill` of `buttonHeight` over a blurred crop of `source` (L0), with `trayShade` between the crop
+// a round `GlassPill` of `buttonHeight` over a blurred crop of `source` (L0), with the tray's `shade` between the crop
 // and the glass (`glassStrong`); focused, `focusFill` under the `focusRingWidth` ring; the `notifications` glyph (`notifications_paused`,
 // filled, while quiet mode is on) and the unread count in a 32 u badge (`typeMicro` DemiBold,
 // `onPrimary` on `primaryFill`; "9+" above nine; none at 0). Right from the Settings gear reaches it;
@@ -19,6 +19,8 @@ FocusScope {
     property Item source
     property real sourceX: 0
     property real sourceY: 0
+    // The tray's shade as it is right now (Shell's `trayShade.color`, adaptive, RUY-1117): drawn over the crop.
+    property color shade: Theme.trayShade(Theme.trayShadeAlphaMax)
 
     signal activated()
     signal leftRequested()
@@ -45,7 +47,7 @@ FocusScope {
         source: bell.source
         sourceX: bell.sourceX
         sourceY: bell.sourceY
-        shade: Theme.trayShade
+        shade: bell.shade
     }
     Rectangle {
         objectName: "bellSurface"

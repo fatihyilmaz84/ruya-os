@@ -1,5 +1,7 @@
 #include "Wallpapers.h"
 
+#include "Luminance.h"
+
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDir>
@@ -245,21 +247,6 @@ void Wallpapers::saveIndex() const
 
 namespace {
 
-double toLinear(double s)
-{
-    return s <= 0.04045 ? s / 12.92 : std::pow((s + 0.055) / 1.055, 2.4);
-}
-
-double toSrgb(double l)
-{
-    return l <= 0.0031308 ? l * 12.92 : 1.055 * std::pow(l, 1.0 / 2.4) - 0.055;
-}
-
-double luminanceOf(double r, double g, double b)   // sRGB channels 0..1
-{
-    return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
-}
-
 double contrastOf(double a, double b)
 {
     const double hi = std::max(a, b);
@@ -270,17 +257,17 @@ double contrastOf(double a, double b)
 // The luminance of a grey of luminance `grey` under a layer of colour `layer` at alpha `a` (sRGB blend).
 double underLayer(double grey, const QColor &layer, double a)
 {
-    const double s = toSrgb(grey);
+    const double s = Luminance::toSrgb(grey);
     auto mix = [&](double c) { return (1 - a) * s + a * c; };
-    return luminanceOf(mix(layer.redF()), mix(layer.greenF()), mix(layer.blueF()));
+    return Luminance::of(mix(layer.redF()), mix(layer.greenF()), mix(layer.blueF()));
 }
 
 } // namespace
 
 qreal Wallpapers::requiredDim(qreal peak, qreal floor, const QColor &background, const QColor &text)
 {
-    const double textLum = luminanceOf(text.redF(), text.greenF(), text.blueF());
-    const double layerLum = luminanceOf(background.redF(), background.greenF(), background.blueF());
+    const double textLum = Luminance::of(text.redF(), text.greenF(), text.blueF());
+    const double layerLum = Luminance::of(background.redF(), background.greenF(), background.blueF());
     const double worst = textLum >= layerLum ? peak : floor;   // lighter text: the bright part is worst
     auto passes = [&](double a) { return contrastOf(textLum, underLayer(worst, background, a)) >= TargetContrast; };
     if (passes(0))
@@ -305,12 +292,11 @@ void Wallpapers::extremesOf(const QImage &image, qreal *floor, qreal *peak)
     for (int y = 0; y < small.height(); ++y) {
         const QRgb *line = reinterpret_cast<const QRgb *>(small.constScanLine(y));
         for (int x = 0; x < small.width(); ++x)
-            values.push_back(luminanceOf(qRed(line[x]) / 255.0, qGreen(line[x]) / 255.0, qBlue(line[x]) / 255.0));
+            values.push_back(Luminance::of(line[x]));
     }
     std::sort(values.begin(), values.end());
-    auto at = [&](double q) { return values.empty() ? 0.0 : values[std::min(values.size() - 1, size_t(std::floor(q * (values.size() - 1) + 0.5)))]; };
-    *floor = at(0.05);
-    *peak = at(0.95);
+    *floor = Luminance::quantile(values, 0.05);
+    *peak = Luminance::quantile(values, 0.95);
 }
 
 QSize Wallpapers::targetSize() const

@@ -410,6 +410,13 @@ Item {
                 compact.push(find("statusTray").moreCompact)
                 compare(label.text, find("statusTray").moreCompact ? "+" + more.count : more.count + " more")
                 compare(findChild(more, "batteryMoreFront").visible, !find("statusTray").moreCompact, "the glyph goes with the words")
+                // Its focus pill keeps the 76 u height and is never narrower than that: compact, a round pill (04 §5.5).
+                const pill = findChild(more, "batteryMoreFocus")
+                const u = tc.shell.u
+                compare(pill.height, Theme.buttonHeight * u)
+                compare(pill.width, Math.max(Theme.buttonHeight * u, more.width + 2 * Theme.spaceS * u))
+                if (find("statusTray").moreCompact)
+                    compare(pill.width, Theme.buttonHeight * u, "\"+N\" is narrower than the pill: the pill is round")
                 tc.shell.destroy()
                 wait(50)
             }
@@ -528,7 +535,7 @@ Item {
             const shade = find("trayShade")
             compare(shade.visible, tray.visible)
             compare(shade.height, tray.y + tray.height + Theme.spaceXxl * tc.shell.u, "solid to the tray's bottom, then the fade")
-            compare(find("bellGlass").shade, Theme.trayShade)
+            compare(find("bellGlass").shade, shade.color, "the bell's glass takes the tray's shade as it is")
             tc.shell.destroy()
             wait(50)
         }

@@ -24,6 +24,11 @@
 // A picture without a dominant hue (white, grey, black) gives a neutral grey. `strength` (0.2 to 1)
 // is how loudly the glow should speak: a very dark picture gives a faint one, a neutral one is
 // capped at NeutralStrengthMax.
+//
+// The same pass measures the light of the picture's top band (RUY-1117, 04 §5.5), what lies behind the
+// status tray: over the top BandShare of the sampled rows, the 90th (`bandHigh`) and 10th (`bandLow`)
+// percentile of the WCAG relative luminance (linearised sRGB, transparent pixels over black). The tray's
+// shade is only as strong as that light needs (ThemeMath.trayShadeAlpha).
 struct ArtColors
 {
     bool ok = false;
@@ -31,6 +36,8 @@ struct ArtColors
     QColor secondary;
     qreal strength = 0;
     bool neutral = false;
+    qreal bandHigh = 0;
+    qreal bandLow = 0;
 };
 
 class ArtPalette : public QObject
@@ -53,6 +60,9 @@ public:
     static constexpr qreal MinStrength = 0.20;
     static constexpr qreal NeutralStrengthMax = 0.60;
     static constexpr int SampleSize = 32;
+    static constexpr qreal BandShare = 0.20;        // the top band: this share of the rows (at least one)
+    static constexpr qreal BandHighQuantile = 0.90;
+    static constexpr qreal BandLowQuantile = 0.10;
     static constexpr int CacheLimit = 256;          // pictures remembered; the cache starts over beyond this
     static constexpr qint64 MaxDownloadBytes = 8LL * 1024 * 1024;
     static constexpr int DownloadTimeoutMs = 15000;   // a download that stalls this long is a failure
@@ -74,6 +84,11 @@ public:
     // cannot be read stays empty for good (the card keeps its placeholder colour) and emits nothing.
     Q_INVOKABLE QVariantMap colorsOf(const QString &source);
 
+    // The light of the picture's top band (RUY-1117): { ok: true, high, low } (relative luminances 0..1)
+    // once known, else an empty map, loaded and analysed like colorsOf (the same decode, the same cache,
+    // the same `sampled(source)`). A picture that cannot be read stays empty for good.
+    Q_INVOKABLE QVariantMap bandOf(const QString &source);
+
     // The worker's result, on the GUI thread (called by the worker's queued hand-over; not for callers).
     static void deliver(ArtPalette *self, const QString &source, const ArtColors &colors, qint64 us)
     {
@@ -85,6 +100,8 @@ signals:
     void sampled(const QString &source);
 
 private:
+    // The known result for `source`, or nullptr while it is unknown (and then its analysis is started).
+    const ArtColors *lookup(const QString &source);
     void finish(const QString &source, const ArtColors &colors, qint64 us);
     void startFile(const QString &source);
     void startDownload(const QString &source);

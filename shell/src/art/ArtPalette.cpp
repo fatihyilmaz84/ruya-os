@@ -1,5 +1,7 @@
 #include "ArtPalette.h"
 
+#include "Luminance.h"
+
 #include <QBuffer>
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -15,6 +17,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <vector>
 
 namespace {
 
@@ -140,9 +143,14 @@ ArtColors ArtPalette::analyse(const QImage &image)
     qreal meanV = 0, meanW = 0;
     qreal sumR = 0, sumG = 0, sumB = 0;
     const int count = small.width() * small.height();
+    const int bandRows = std::max(1, int(std::lround(small.height() * BandShare)));
+    std::vector<double> band;
+    band.reserve(size_t(bandRows) * small.width());
     for (int y = 0; y < small.height(); ++y) {
         const QRgb *line = reinterpret_cast<const QRgb *>(small.constScanLine(y));
         for (int x = 0; x < small.width(); ++x) {
+            if (y < bandRows)
+                band.push_back(Luminance::of(line[x]));
             const QColor c = QColor::fromRgb(line[x]);
             float h, s, v;
             c.getHsvF(&h, &s, &v);
@@ -165,6 +173,9 @@ ArtColors ArtPalette::analyse(const QImage &image)
     meanW /= count;
 
     out.ok = true;
+    std::sort(band.begin(), band.end());
+    out.bandHigh = Luminance::quantile(band, BandHighQuantile);
+    out.bandLow = Luminance::quantile(band, BandLowQuantile);
     if (meanW < ChromaticMean) {
         // No dominant hue: a neutral grey, never louder than NeutralStrengthMax.
         const QColor mean = QColor::fromRgbF(sumR / count, sumG / count, sumB / count);
@@ -213,19 +224,13 @@ ArtPalette *ArtPalette::create(QQmlEngine *qmlEngine, QJSEngine *)
     return new ArtPalette(qmlEngine);
 }
 
-QVariantMap ArtPalette::colorsOf(const QString &source)
+const ArtColors *ArtPalette::lookup(const QString &source)
 {
     if (source.isEmpty())
-        return {};
+        return nullptr;
     const auto it = m_done.constFind(source);
-    if (it != m_done.constEnd()) {
-        if (!it->ok)
-            return {};
-        return {{QStringLiteral("color"), it->primary},
-                {QStringLiteral("secondary"), it->secondary},
-                {QStringLiteral("strength"), it->strength},
-                {QStringLiteral("neutral"), it->neutral}};
-    }
+    if (it != m_done.constEnd())
+        return &*it;
     if (!m_pending.contains(source)) {
         m_pending.insert(source);
         if (isRemote(source))
@@ -233,7 +238,28 @@ QVariantMap ArtPalette::colorsOf(const QString &source)
         else
             startFile(source);
     }
-    return {};
+    return nullptr;
+}
+
+QVariantMap ArtPalette::colorsOf(const QString &source)
+{
+    const ArtColors *c = lookup(source);
+    if (!c || !c->ok)
+        return {};
+    return {{QStringLiteral("color"), c->primary},
+            {QStringLiteral("secondary"), c->secondary},
+            {QStringLiteral("strength"), c->strength},
+            {QStringLiteral("neutral"), c->neutral}};
+}
+
+QVariantMap ArtPalette::bandOf(const QString &source)
+{
+    const ArtColors *c = lookup(source);
+    if (!c || !c->ok)
+        return {};
+    return {{QStringLiteral("ok"), true},
+            {QStringLiteral("high"), c->bandHigh},
+            {QStringLiteral("low"), c->bandLow}};
 }
 
 void ArtPalette::finish(const QString &source, const ArtColors &colors, qint64 us)
