@@ -332,6 +332,8 @@ if not xwayland:
 
 # busrecv (RUY-594): a service's signals are broadcasts; the policy decides who receives them
 import xml.etree.ElementTree as ET
+# The public doors (security-baseline.json public_bus_doors; lint-bus-policies.ps1 checks the same list).
+doors = {k: set(v) for k, v in base.get("public_bus_doors", {}).items() if not k.startswith("_")}
 bus_dir = os.path.join(t, "bus")
 bus_files = sorted(os.listdir(bus_dir)) if os.path.isdir(bus_dir) else []
 if not bus_files:
@@ -342,7 +344,7 @@ for fname in bus_files:
     except Exception as e:
         bad("busrecv: %s is not valid XML: %s" % (fname, e))
         continue
-    names, recv_deny, recv_allow = set(), set(), {}
+    names, recv_deny, recv_allow, door_recv = set(), set(), {}, set()
     for pol in root.iter("policy"):
         user, ctx = pol.get("user"), pol.get("context")
         for rule in pol:
@@ -362,6 +364,12 @@ for fname in bus_files:
                 recv_deny.add(sender)
             elif rule.tag == "allow" and user in ("root", "ruya-shell"):
                 recv_allow.setdefault(sender, set()).add(user)
+            elif (rule.tag == "allow" and ctx == "default" and sender in doors and sender in recv_deny
+                  and set(rule.attrib) == {"receive_sender", "receive_interface", "receive_type"}
+                  and rule.get("receive_interface") in doors[sender]):
+                # A public door (ADR-022): every user hears its listed public interfaces' signals, which
+                # the service sends unicast; nothing else of it. After the default deny (the last rule wins).
+                door_recv.add("%s %s" % (sender, rule.get("receive_interface")))
             else:
                 bad("busrecv: %s: unexpected receive rule %s for %s in policy %s%s" % (
                     fname, rule.tag, sender, user or ctx,
@@ -373,6 +381,8 @@ for fname in bus_files:
             bad("busrecv: %s: no default-context deny receive_sender for %s (any client could receive its signals)" % (fname, n))
         elif recv_allow.get(n, set()) != {"root", "ruya-shell"}:
             bad("busrecv: %s: signals of %s are allowed to %s, want root and ruya-shell" % (fname, n, ", ".join(sorted(recv_allow.get(n, []))) or "nobody"))
+        elif n in doors:
+            ok("busrecv: %s signals go to root and ruya-shell; every user hears only %s" % (n, ", ".join(sorted(door_recv)) or "nothing"))
         else:
             ok("busrecv: %s signals go to root and ruya-shell only" % n)
 

@@ -1,0 +1,50 @@
+[Unit]
+Description=RuyaOS platform service (org.ruyaos.Platform1, the one door for sandboxed apps)
+# Profile ids and the active profile come from Profiles1; without it every app call is refused and
+# the service asks again (RUY-1098), so the profile service comes first.
+Wants=ruya-profiles.service
+After=ruya-profiles.service
+Before=ruya-compositor@tty1.service
+
+[Service]
+Type=dbus
+BusName=org.ruyaos.Platform1
+ExecStart=/usr/bin/ruya-platform
+Restart=on-failure
+# The player's permissions, one root-only file per profile:
+# /var/lib/ruyaos/platform/profiles/<id>.json (0600). The only place this service writes.
+StateDirectory=ruyaos/platform
+StateDirectoryMode=0700
+# Caller identity (ADR-022, RUY-157): /proc/<pid>/root/.flatpak-info and /proc/<pid>/cgroup of the
+# caller's xdg-dbus-proxy, a process of a profile user. Reading another uid's /proc/<pid>/root is
+# a ptrace-mode read: CAP_SYS_PTRACE and nothing else (no DAC override: .flatpak-info is
+# world-readable inside the sandbox). ProtectProc=ptraceable keeps those processes visible.
+CapabilityBoundingSet=CAP_SYS_PTRACE
+ProtectProc=ptraceable
+ProcSubset=pid
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+PrivateDevices=yes
+PrivateIPC=yes
+NoNewPrivileges=yes
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+UMask=0077
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+[Install]
+WantedBy=multi-user.target
