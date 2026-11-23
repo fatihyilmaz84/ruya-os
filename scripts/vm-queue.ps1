@@ -78,7 +78,8 @@ $lines.Add("PASS boot ($secs s): $bootRes")
 
 # ---- copy the helper files once (the checks expect them in /root)
 $scp = @($o + @("-P", "2222"))
-$files = Get-ChildItem $PSScriptRoot -Include "vm-*.sh", "vm-*.qml", "vm-*.py" -Recurse | ForEach-Object { $_.FullName }
+# vm_*.py: modules the vm-*.py helpers import (vm_uinput_trust.py, RUY-1063).
+$files = Get-ChildItem $PSScriptRoot -Include "vm-*.sh", "vm-*.qml", "vm-*.py", "vm_*.py" -Recurse | ForEach-Object { $_.FullName }
 $files += (Join-Path $Repo "image\security-baseline.json")   # vm-security-check.sh reads it next to itself
 $files += (Join-Path $Repo "samples\hello-runner\run-windows.py")   # vm-runner-check.sh sample runs it (RUY-36)
 # The .play checks find the sample package and ruya-pack in /root (scripts/play-vm-files.sh builds them);

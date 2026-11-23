@@ -14,6 +14,7 @@ use crate::pad::{
     code, OutEvent, Rumble, VIRTUAL_AXES, VIRTUAL_BUS_USB, VIRTUAL_KEYS, VIRTUAL_NAME,
     VIRTUAL_PRODUCT, VIRTUAL_VENDOR, VIRTUAL_VERSION,
 };
+use crate::udev::{from_udevd, UDEV_GROUP};
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -394,8 +395,6 @@ pub struct Monitor {
     fd: RawFd,
 }
 
-const UDEV_GROUP: u32 = 2;
-
 impl Monitor {
     pub fn open() -> io::Result<Monitor> {
         // SAFETY: plain socket calls with a zeroed, then filled sockaddr_nl.
@@ -426,21 +425,75 @@ impl Monitor {
                 &size as *const libc::c_int as *const libc::c_void,
                 size_of::<libc::c_int>() as libc::socklen_t,
             );
+            // The sender's credentials with every message (`recv` takes uid 0 only).
+            let on: libc::c_int = 1;
+            if libc::setsockopt(
+                fd,
+                libc::SOL_SOCKET,
+                libc::SO_PASSCRED,
+                &on as *const libc::c_int as *const libc::c_void,
+                size_of::<libc::c_int>() as libc::socklen_t,
+            ) < 0
+            {
+                let err = io::Error::last_os_error();
+                libc::close(fd);
+                return Err(err);
+            }
             Ok(Monitor { fd })
         }
     }
 
-    /// The next message; blocks.
+    /// The next message udevd sent (`udev::from_udevd`); blocks. A unicast message any local
+    /// process can send to this socket, or one whose sender is not root (SCM_CREDENTIALS, as
+    /// libudev checks), is dropped: the events now decide ACLs (RUY-1063).
     pub fn recv(&self) -> io::Result<Vec<u8>> {
-        let mut buf = vec![0u8; 16384];
-        // SAFETY: the buffer's length is passed.
-        let n = unsafe { libc::recv(self.fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len(), 0) };
-        if n < 0 {
-            return Err(io::Error::last_os_error());
+        // u64 elements: the control buffer is aligned for `cmsghdr`.
+        const CONTROL_WORDS: usize = 8;
+        loop {
+            let mut buf = vec![0u8; 16384];
+            let mut control = [0u64; CONTROL_WORDS];
+            // SAFETY: zeroed C structs; every pointer and length below is of a live local.
+            let mut from: libc::sockaddr_nl = unsafe { std::mem::zeroed() };
+            let mut iov = libc::iovec {
+                iov_base: buf.as_mut_ptr() as *mut libc::c_void,
+                iov_len: buf.len(),
+            };
+            let mut msg: libc::msghdr = unsafe { std::mem::zeroed() };
+            msg.msg_name = &mut from as *mut libc::sockaddr_nl as *mut libc::c_void;
+            msg.msg_namelen = size_of::<libc::sockaddr_nl>() as libc::socklen_t;
+            msg.msg_iov = &mut iov;
+            msg.msg_iovlen = 1;
+            msg.msg_control = control.as_mut_ptr() as *mut libc::c_void;
+            msg.msg_controllen = size_of::<[u64; CONTROL_WORDS]>() as _;
+            // SAFETY: `msg` points at the locals above, which outlive the call.
+            let n = unsafe { libc::recvmsg(self.fd, &mut msg, 0) };
+            if n < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            if !from_udevd(from.nl_groups, sender_uid(&msg)) {
+                continue;
+            }
+            buf.truncate(n as usize);
+            return Ok(buf);
         }
-        buf.truncate(n as usize);
-        Ok(buf)
     }
+}
+
+/// The uid of the SCM_CREDENTIALS control message of a received `msg`, if it carries one.
+fn sender_uid(msg: &libc::msghdr) -> Option<u32> {
+    // SAFETY: the CMSG_* walk stays inside `msg.msg_control`, which `recvmsg` filled.
+    unsafe {
+        let mut cmsg = libc::CMSG_FIRSTHDR(msg);
+        while !cmsg.is_null() {
+            if (*cmsg).cmsg_level == libc::SOL_SOCKET && (*cmsg).cmsg_type == libc::SCM_CREDENTIALS
+            {
+                let cred = std::ptr::read_unaligned(libc::CMSG_DATA(cmsg) as *const libc::ucred);
+                return Some(cred.uid);
+            }
+            cmsg = libc::CMSG_NXTHDR(msg, cmsg);
+        }
+    }
+    None
 }
 
 impl Drop for Monitor {

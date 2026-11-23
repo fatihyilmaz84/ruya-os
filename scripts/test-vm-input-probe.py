@@ -324,10 +324,12 @@ check("twoprofiles empties the family's slot under the other player's book, befo
 
 # RUY-581: cmd_nodes runs with the shell up, so "no ruya-shell ACL entry" can fail. Canned getfacl /
 # pgrep / udevadm output goes through the probe's own parsing; the stubs replace only the bus and pads.
+# RUY-1063: the navigation keyboard (event7, ruya-inputd's own) must keep uaccess; the kbm stand-in (event9, phys
+# ruya-input/kbm-check, made by root without vouching) is foreign and must have none.
 class NodesProc:
-    def __init__(self, shell_up, named, kbm_tag_after):
-        self.shell_up, self.named, self.kbm_tag_after = shell_up, named, kbm_tag_after
-        self.kbm_calls = 0
+    def __init__(self, shell_up, named, nav_uaccess, kbm_uaccess):
+        self.shell_up, self.named = shell_up, named
+        self.nav_uaccess, self.kbm_uaccess = nav_uaccess, kbm_uaccess
 
     def run(self, cmd, **kw):
         out, rc = "", 0
@@ -338,22 +340,19 @@ class NodesProc:
                             + ["user:%s:rw-" % u for u in self.named]
                             + ["group::---", "mask::rw-", "other::---", ""])
         elif cmd[0] == "udevadm":
-            if cmd[-1].endswith("event9"):
-                self.kbm_calls += 1
-                out = "CURRENT_TAGS=:uaccess:\n" if self.kbm_calls >= self.kbm_tag_after else "CURRENT_TAGS=:seat:\n"
-            else:
-                out = "CURRENT_TAGS=:seat:\n"
+            tagged = (cmd[-1].endswith("event9") and self.kbm_uaccess) or (cmd[-1].endswith("event7") and self.nav_uaccess)
+            out = "CURRENT_TAGS=:seat:uaccess:\n" if tagged else "CURRENT_TAGS=:seat:\n"
         return types.SimpleNamespace(stdout=out, returncode=rc)
 
 
-def run_nodes(shell_up=True, named=("u",), kbm_tag_after=1):
-    proc = NodesProc(shell_up, list(named), kbm_tag_after)
+def run_nodes(shell_up=True, named=("u",), nav_uaccess=True, kbm_uaccess=False):
+    proc = NodesProc(shell_up, list(named), nav_uaccess, kbm_uaccess)
     saved = {n: getattr(probe, n) for n in ("subprocess", "FakePad", "Bus", "devices", "node_by", "join_by_name", "time")}
     probe.subprocess = types.SimpleNamespace(run=proc.run)
     probe.FakePad = StubPad
     probe.Bus = RecBus
     probe.devices = lambda: [{"name": probe.NAME}]
-    probe.node_by = lambda key, val: ("/dev/input/" + ("event9" if "kbm" in val else "event8"), None)
+    probe.node_by = lambda key, val: ("/dev/input/" + ("event7" if key == "name" else "event9" if "kbm" in val else "event8"), None)
     probe.join_by_name = lambda bus, name, profile: ("ok", 1)
     sleeps = []
     clock = [0.0]      # a fake clock: sleep() advances it, so a bounded wait ends at once
@@ -376,9 +375,12 @@ check("nodes FAILS when the node has a ruya-shell ACL entry", n >= 1 and "has an
 n, text, _ = run_nodes(shell_up=False)
 check("nodes FAILS when the shell is not running (the check would be vacuous)",
       n == 1 and "the shell is not running" in text and "PASS:" not in text, text)
-n, text, sleeps = run_nodes(kbm_tag_after=3)
-check("nodes waits for the kbm stand-in's uaccess tag, no fixed 0.5 s sleep",
-      n == 0 and 0.5 not in sleeps and "keeps the uaccess tag" in text, (n, text, sleeps))
+n, text, _ = run_nodes(kbm_uaccess=True)
+check("nodes FAILS when a ruya-input/kbm* node ruya-inputd did not make carries uaccess (RUY-1063)",
+      n == 1 and "not ruya-inputd's) carries uaccess" in text, text)
+n, text, _ = run_nodes(nav_uaccess=False)
+check("nodes FAILS when the navigation keyboard (ruya-inputd's own) has no uaccess",
+      n == 1 and "FAIL: the navigation keyboard /dev/input/event7" in text, text)
 
 # --- pad_rows (RUY-719): wait for every one of the check's own pads, not the first listed -----------------------
 def run_pad_rows(listing_by_call):

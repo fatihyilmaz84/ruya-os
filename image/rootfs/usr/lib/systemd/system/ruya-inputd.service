@@ -14,13 +14,17 @@ ExecStart=/usr/bin/ruya-inputd
 Restart=always
 RestartSec=100ms
 WatchdogSec=5s
-# Its own unprivileged account (sysusers.d/ruyaos.conf, 06-input.md section 3): /dev/uinput by
-# group (70-ruya-input.rules), physical pads by an ACL entry (74-ruya-input-acl.rules), and the
-# virtual pads it makes are its own (phys ruya-input/pad*). No capability is needed.
+# Its own unprivileged account (sysusers.d/ruyaos.conf, 06-input.md section 3): /dev/uinput as its
+# owner (70-ruya-input.rules; it gives the node's one ACL entry to the signed-in profile's user),
+# physical pads by an ACL entry (74-ruya-input-acl.rules), and the devices it makes are its own:
+# each is marked in the RuntimeDirectory (own/inputN, which the udev rules test; readable by all,
+# as sysfs shows the same devices; emptied at every start). No capability is needed.
 User=ruya-input
 Group=ruya-input
 StateDirectory=ruya-input
 StateDirectoryMode=0700
+RuntimeDirectory=ruya-input
+RuntimeDirectoryMode=0755
 CapabilityBoundingSet=
 AmbientCapabilities=
 NoNewPrivileges=yes

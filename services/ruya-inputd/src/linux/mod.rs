@@ -25,10 +25,12 @@ use crate::caps::{self, Part, Probe};
 use crate::dbus::{serve, DynBackend, Shared};
 use crate::identity::{self, Hardware};
 use crate::mapping::{KeyEvent, NavKey};
+use crate::marks::Marks;
 use crate::nodes::{Ignored, Node};
 use crate::notify::{watchdog_interval, Notifier};
+use crate::origin::{self, ORIGIN_PROPERTY, OWN_DIR};
 use crate::owners::Owners;
-use crate::pad::{code, Normalizer, OutEvent, PadLayout, Range, Rumble, OWN_PHYS_PREFIX};
+use crate::pad::{code, Normalizer, OutEvent, PadLayout, Range, Rumble};
 use crate::routing::{Backend, Created, PadInfo, PadKey, Router, VirtualId, VirtualSpec};
 use crate::udev::{database_properties, parse_monitor_message};
 use sys::UinputPad;
@@ -61,11 +63,29 @@ fn build_nav_keyboard() -> io::Result<VirtualDevice> {
     ] {
         keys.insert(nav_to_key(nav));
     }
-    // No phys: the navigation keyboard keeps uaccess, so the shell's session can read it.
+    // No phys: marked as ours, the navigation keyboard keeps uaccess, so the shell's session
+    // can read it (06 section 3).
     VirtualDeviceBuilder::new()?
         .name(NAV_NAME)
         .with_keys(&keys)?
         .build()
+}
+
+/// Makes the navigation keyboard and marks it as ours; its input device's name.
+fn make_nav(marks: &Marks) -> io::Result<(VirtualDevice, String)> {
+    marks.make(
+        || {
+            let mut nav = build_nav_keyboard()?;
+            let syspath = nav.get_syspath()?;
+            let sysname = syspath
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default()
+                .to_owned();
+            Ok((nav, sysname))
+        },
+        drop,
+    )
 }
 
 /// The physical pads' descriptors, for rumble (a dup of the pump thread's fd).
@@ -97,10 +117,14 @@ enum FfCall {
 struct VirtualPad {
     pad: Arc<UinputPad>,
     alive: Arc<AtomicBool>,
+    sysname: String,
 }
 
 pub struct LinuxBackend {
     nav: VirtualDevice,
+    nav_sysname: String,
+    /// The origin markers of every device made here (`/run/ruya-input/own`).
+    marks: Marks,
     pads: HashMap<VirtualId, VirtualPad>,
     next: VirtualId,
     physicals: Physicals,
@@ -180,8 +204,13 @@ impl Backend for LinuxBackend {
     }
 
     fn create_virtual(&mut self, _pad: PadKey, spec: &VirtualSpec) -> Result<Created, String> {
-        let (pad, sysname) =
-            UinputPad::create(&spec.phys, spec.rumble).map_err(|e| e.to_string())?;
+        let (pad, sysname) = self
+            .marks
+            .make(
+                || UinputPad::create(&spec.phys, spec.rumble),
+                |pad| pad.destroy(),
+            )
+            .map_err(|e| e.to_string())?;
         self.next += 1;
         let id = self.next;
         let pad = Arc::new(pad);
@@ -190,14 +219,21 @@ impl Backend for LinuxBackend {
             let (pad, alive, ff) = (pad.clone(), alive.clone(), self.ff.clone());
             thread::spawn(move || ff_reader(id, pad, alive, ff));
         }
-        self.pads.insert(id, VirtualPad { pad, alive });
+        self.pads.insert(
+            id,
+            VirtualPad {
+                pad,
+                alive,
+                sysname: sysname.clone(),
+            },
+        );
         Ok(Created { id, sysname })
     }
 
     fn destroy_virtual(&mut self, id: VirtualId) {
         if let Some(v) = self.pads.remove(&id) {
             v.alive.store(false, Ordering::Relaxed);
-            v.pad.destroy();
+            self.marks.unmake(&v.sysname, || v.pad.destroy());
         }
     }
 
@@ -223,6 +259,23 @@ impl Backend for LinuxBackend {
 
     fn write_acl(&mut self, node: &str, value: &[u8]) -> Result<(), String> {
         sys::write_xattr(node, acl::XATTR_NAME, value).map_err(|e| e.to_string())
+    }
+
+    fn is_own(&mut self, sysname: &str) -> bool {
+        self.marks.is_marked(sysname)
+    }
+
+    fn is_nav(&mut self, sysname: &str) -> bool {
+        self.nav_sysname == sysname
+    }
+
+    fn renew_nav(&mut self) -> Result<String, String> {
+        // The old one never reached the shell: the new one first, then the old one goes.
+        let (nav, sysname) = make_nav(&self.marks).map_err(|e| e.to_string())?;
+        let old = std::mem::replace(&mut self.nav, nav);
+        let old_sysname = std::mem::replace(&mut self.nav_sysname, sysname.clone());
+        self.marks.unmake(&old_sysname, || drop(old));
+        Ok(sysname)
     }
 
     fn ff_upload(&mut self, pad: PadKey, physical_id: i16, rumble: &Rumble) -> Result<i16, i32> {
@@ -252,11 +305,12 @@ fn is_gamepad(device: &Device) -> bool {
         .is_some_and(|keys| keys.contains(Key::BTN_SOUTH))
 }
 
-/// Ours (a virtual pad, later a keyboard or mouse): never read back as a physical pad.
-fn is_own(device: &Device) -> bool {
-    device
-        .physical_path()
-        .is_some_and(|p| p.starts_with(OWN_PHYS_PREFIX))
+/// The sysfs devpath of an event node's device (`/devices/virtual/input/input23/event17`), read
+/// from `/sys/class/input/eventN`: the device that has the node's number now.
+fn sys_devpath(path: &Path) -> Option<String> {
+    let node = path.file_name()?;
+    let real = std::fs::canonicalize(Path::new("/sys/class/input").join(node)).ok()?;
+    real.to_str()?.strip_prefix("/sys").map(str::to_owned)
 }
 
 fn driver_of(path: &Path) -> String {
@@ -508,10 +562,22 @@ impl Scanner {
             .ignored
             .to_open(event_nodes(), |path| lock(&active).contains(path));
         for node in todo {
+            // A parentless device (made through uinput: ours, a profile's, Steam's) is never read
+            // as a physical pad, whatever its phys, unless root vouched for it (06 section 3 rule 1,
+            // `origin`). Not remembered: root's marker may come with a later event.
+            let Some(devpath) = sys_devpath(&node.path) else {
+                continue;
+            };
+            let props = udev_properties(&node.path);
+            let udev_origin = props.get(ORIGIN_PROPERTY).map_or("", String::as_str);
+            if !origin::reads_as_physical(&devpath, udev_origin) {
+                continue;
+            }
             match Device::open(&node.path) {
-                Ok(device) if is_gamepad(&device) && !is_own(&device) => {
-                    self.serve(device, node.path)
-                }
+                // The node's number went to another device between the look and the open (the
+                // kernel reuses event numbers, never input device names): the next scan looks.
+                Ok(_) if sys_devpath(&node.path).as_deref() != Some(devpath.as_str()) => {}
+                Ok(device) if is_gamepad(&device) => self.serve(device, node.path),
                 // The inode was read before the open: a node replaced in between is looked at
                 // again at the next scan.
                 Ok(_) => self.ignored.insert(&node),
@@ -603,16 +669,45 @@ fn salt() -> Vec<u8> {
     }
 }
 
-fn watch_udev(shared: Arc<Shared>, wake: mpsc::Sender<()>) {
-    let monitor = match sys::Monitor::open() {
-        Ok(m) => m,
-        Err(err) => {
-            return eprintln!(
+/// Every event node of a parentless input device now: its sysfs devpath and its node.
+fn parentless_event_nodes() -> Vec<(String, String)> {
+    let Ok(inputs) = std::fs::read_dir("/sys/devices/virtual/input") else {
+        return Vec::new();
+    };
+    let mut found = Vec::new();
+    for input in inputs.flatten() {
+        let Ok(children) = std::fs::read_dir(input.path()) else {
+            continue;
+        };
+        for child in children.flatten() {
+            let name = child.file_name().to_string_lossy().into_owned();
+            if !name.starts_with("event") {
+                continue;
+            }
+            let devpath = format!(
+                "/devices/virtual/input/{}/{name}",
+                input.file_name().to_string_lossy()
+            );
+            found.push((devpath, format!("/dev/input/{name}")));
+        }
+    }
+    found
+}
+
+/// Opened before the first device is made, so the processed `add` of the navigation keyboard is
+/// heard (`Router::udev_event_at` makes it again when udev called it foreign).
+fn open_monitor() -> Option<sys::Monitor> {
+    sys::Monitor::open()
+        .map_err(|err| {
+            eprintln!(
                 "ruya-inputd: no udev monitor ({err}): virtual pads get their ACL after {} s only",
                 crate::routing::UDEV_FALLBACK.as_secs()
             )
-        }
-    };
+        })
+        .ok()
+}
+
+fn watch_udev(monitor: sys::Monitor, shared: Arc<Shared>, wake: mpsc::Sender<()>) {
     loop {
         let msg = match monitor.recv() {
             Ok(m) => m,
@@ -625,7 +720,7 @@ fn watch_udev(shared: Arc<Shared>, wake: mpsc::Sender<()>) {
         let Some(ev) = parse_monitor_message(&msg) else {
             continue;
         };
-        if !ev.is_event_node() {
+        if !ev.is_event_node() && !ev.is_uinput() {
             continue;
         }
         shared.with(|r| r.udev_event_at(&ev, Instant::now()));
@@ -657,8 +752,14 @@ pub fn run() -> io::Result<()> {
     let notifier = Notifier::from_env();
     let (ff_tx, ff_rx) = mpsc::channel();
     let physicals: Physicals = Arc::default();
+    // No marker of an earlier run is left: its devices went with its descriptors.
+    let marks = Marks::wipe(OWN_DIR)?;
+    let monitor = open_monitor();
+    let (nav, nav_sysname) = make_nav(&marks)?;
     let backend = LinuxBackend {
-        nav: build_nav_keyboard()?,
+        nav,
+        nav_sysname,
+        marks,
         pads: HashMap::new(),
         next: 0,
         physicals: physicals.clone(),
@@ -666,6 +767,14 @@ pub fn run() -> io::Result<()> {
     };
     let backend: DynBackend = Box::new(backend);
     let mut router = Router::new(backend, Box::new(PasswdAccounts));
+    // Nobody is signed in yet: nobody but ruya-input may make an input device.
+    router.assert_uinput("start");
+    // Foreign devices made before this start keep no profile's entry (RUY-1063).
+    for (devpath, node) in parentless_event_nodes() {
+        let props = udev_properties(Path::new(&node));
+        let udev_origin = props.get(ORIGIN_PROPERTY).map_or("", String::as_str);
+        router.found_at_start(&devpath, &node, udev_origin);
+    }
     // Controller profiles (06 section 7): <state>/profiles/<console profile>/<id>.json.
     router.set_book(Book::new(Box::new(DirStore::new(
         state_dir().join("profiles"),
@@ -698,9 +807,9 @@ pub fn run() -> io::Result<()> {
     notifier.send("READY=1");
 
     let (wake_tx, wake_rx) = mpsc::channel();
-    {
+    if let Some(monitor) = monitor {
         let shared = shared.clone();
-        thread::spawn(move || watch_udev(shared, wake_tx));
+        thread::spawn(move || watch_udev(monitor, shared, wake_tx));
     }
     {
         let shared = shared.clone();

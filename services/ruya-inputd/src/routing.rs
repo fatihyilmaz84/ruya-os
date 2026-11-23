@@ -41,6 +41,10 @@
 //! - A virtual pad's node gets one ACL entry, for the profile's user, after every udev event on
 //!   it (logind's uaccess flushes it on a `change`), and is announced (`routed`) only then.
 //! - The caller that set the route leaving the bus means `locked`.
+//! - `/dev/uinput` names the signed-in profile's user only, nobody without one (RUY-1063,
+//!   `origin`); its ACL is set again after every udev event on it. A device another process made
+//!   there (foreign: parentless, not marked as ours or root's) is never read; its node names its
+//!   profile's user while that profile is signed in, nobody otherwise.
 //! - A virtual pad shows what the profile that applies to its pad makes of the physical pad
 //!   (`engine`, 06 §7): the console profile's global profile when its `match` fits, else the
 //!   built-in default. The pad of seat n uses the seated player's own profiles (RUY-643; a guest
@@ -57,6 +61,7 @@ use crate::book::{Book, SaveAnswer, Summary};
 use crate::caps::Capability;
 use crate::engine::Engine;
 use crate::mapping::{Axis, Button, Confirm, KeyBoard, KeyEvent, Mapper, NavKey};
+use crate::origin::{self, Foreign, Origin, UINPUT_NODE};
 use crate::owners::Owners;
 use crate::pad::{
     diff, OutEvent, PadAxis, PadButton, PadInput, PadState, Rumble, TestEvent, ALL_AXES,
@@ -279,6 +284,13 @@ pub trait Backend {
     fn node_of(&mut self, sysname: &str) -> Option<String>;
     fn read_acl(&mut self, node: &str) -> Option<Vec<u8>>;
     fn write_acl(&mut self, node: &str, acl: &[u8]) -> Result<(), String>;
+    /// The service made the input device `sysname` (`input23`) and it still exists: its origin
+    /// marker is there (`origin`, `marks`).
+    fn is_own(&mut self, sysname: &str) -> bool;
+    /// `sysname` is the "RuyaOS Navigation" keyboard.
+    fn is_nav(&mut self, sysname: &str) -> bool;
+    /// Destroys the navigation keyboard (its marker first) and makes it again; the new sysname.
+    fn renew_nav(&mut self) -> Result<String, String>;
     /// Uploads a rumble effect to the physical pad (`physical_id` -1: a new one); its id there.
     fn ff_upload(&mut self, pad: PadKey, physical_id: i16, rumble: &Rumble) -> Result<i16, i32>;
     fn ff_play(&mut self, pad: PadKey, physical_id: i16, value: i32);
@@ -303,6 +315,15 @@ impl Backend for NullBackend {
     }
     fn write_acl(&mut self, _: &str, _: &[u8]) -> Result<(), String> {
         Err("no devices in --session".into())
+    }
+    fn is_own(&mut self, _: &str) -> bool {
+        false
+    }
+    fn is_nav(&mut self, _: &str) -> bool {
+        false
+    }
+    fn renew_nav(&mut self) -> Result<String, String> {
+        Err("no uinput in --session".into())
     }
     fn ff_upload(&mut self, _: PadKey, _: i16, _: &Rumble) -> Result<i16, i32> {
         Err(ENODEV)
@@ -593,7 +614,15 @@ pub struct Router<B: Backend> {
     navigator: Option<(String, String)>,
     /// The last non-guest profile seated on each pad (RUY-124).
     owners: Owners,
+    /// Who holds `/dev/uinput` and the foreign devices made through it (RUY-1063).
+    foreign: Foreign,
+    /// How often the navigation keyboard was made again since start (`NAV_RENEWALS` at most).
+    nav_renewals: u32,
 }
+
+/// The navigation keyboard is made again at most this often per start: udev that never sees its
+/// marker would otherwise have it made and destroyed without end (RUY-1063 review).
+pub const NAV_RENEWALS: u32 = 1;
 
 /// An unseated pad's `ForeignInput` "press" is sent at most once per pad in this time (06 §11.3).
 pub const FOREIGN_PRESS_GAP: Duration = Duration::from_secs(1);
@@ -631,6 +660,8 @@ impl<B: Backend> Router<B> {
             seat_hold: SEAT_HOLD,
             navigator: None,
             owners: Owners::in_memory(),
+            foreign: Foreign::default(),
+            nav_renewals: 0,
         }
     }
 
@@ -1578,15 +1609,7 @@ impl<B: Backend> Router<B> {
             }
             return;
         }
-        let current = self.backend.read_acl(node);
-        let fine = current
-            .as_deref()
-            .is_some_and(|a| acl::is_only_user(a, owner.uid));
-        let result = if fine {
-            Ok(())
-        } else {
-            self.backend.write_acl(node, &acl::only_user(owner.uid))
-        };
+        let result = self.ensure_acl(node, &acl::only_user(owner.uid));
         let Some(v) = self.pads.get_mut(&key).and_then(|p| p.virt.as_mut()) else {
             return;
         };
@@ -1599,17 +1622,114 @@ impl<B: Backend> Router<B> {
             Err(err) => {
                 self.journal(format!("setting the ACL of {phys} ({node}) failed: {err}"));
             }
-            Ok(()) if !was_ready => {
+            Ok(_) if !was_ready => {
                 self.journal(format!(
                     "virtual pad {phys} ready for ruya-{} ({node}, {why})",
                     owner.profile
                 ));
                 self.changed(key);
             }
-            Ok(()) if !fine => {
+            Ok(true) => {
                 self.journal(format!("ACL of {phys} ({node}) re-asserted after {why}"));
             }
-            Ok(()) => {}
+            Ok(false) => {}
+        }
+    }
+
+    /// Gives `node` the ACL `want` unless it has exactly that already: `Ok(true)` when it wrote.
+    fn ensure_acl(&mut self, node: &str, want: &[u8]) -> Result<bool, String> {
+        let current = self.backend.read_acl(node);
+        if current.as_deref().is_some_and(|a| acl::matches(a, want)) {
+            return Ok(false);
+        }
+        self.backend.write_acl(node, want).map(|()| true)
+    }
+
+    // ---- /dev/uinput and the devices made through it (06 section 3 rule 1, RUY-1063) ---------
+
+    /// Gives `/dev/uinput` its ACL: the signed-in profile's user only, nobody while nobody is
+    /// signed in. At start, after each profile change and after each udev event on the node (udev
+    /// sets its mode again, which masks the entry).
+    pub fn assert_uinput(&mut self, why: &str) {
+        let want = self.foreign.uinput_acl();
+        let holder = match self.foreign.holder() {
+            "" => "nobody (closed)".to_owned(),
+            p => user_of(p),
+        };
+        match self.ensure_acl(UINPUT_NODE, &want) {
+            Ok(true) => self.journal(format!("{UINPUT_NODE} for {holder} ({why})")),
+            Ok(false) => {}
+            Err(err) => self.journal(format!(
+                "setting the ACL of {UINPUT_NODE} for {holder} failed ({why}): {err}"
+            )),
+        }
+    }
+
+    /// A udev event on a foreign device (parentless, unmarked: a pad, keyboard or mouse a profile
+    /// made): its ACL, its profile's user while that profile is signed in (`Foreign::seen`). Never
+    /// a device the service reads; the udev rules keep it from the shell.
+    fn foreign_event(&mut self, sysname: &str, node: &str, why: &str, now: Instant) {
+        let new = !self.foreign.knows(sysname);
+        let want = self.foreign.seen(sysname, now);
+        if new {
+            let whose = self
+                .foreign
+                .attributed(sysname)
+                .map_or_else(|| "nobody's: closed".to_owned(), user_of);
+            self.journal(format!("foreign device {sysname} ({node}): {whose}"));
+        }
+        self.write_foreign_acl(sysname, node, &want, why);
+    }
+
+    fn write_foreign_acl(&mut self, sysname: &str, node: &str, want: &[u8], why: &str) {
+        match self.ensure_acl(node, want) {
+            Ok(true) => {
+                let whose = if acl::matches(want, &acl::closed()) {
+                    "closed".to_owned()
+                } else {
+                    self.foreign
+                        .attributed(sysname)
+                        .map_or_else(String::new, user_of)
+                };
+                self.journal(format!(
+                    "ACL of foreign device {sysname} ({node}): {whose} ({why})"
+                ));
+            }
+            Ok(false) => {}
+            Err(err) => self.journal(format!(
+                "setting the ACL of foreign device {sysname} ({node}) failed: {err}"
+            )),
+        }
+    }
+
+    /// At start: an event node that exists already (`devpath`, its node, udev's
+    /// `RUYA_INPUT_ORIGIN`). A foreign one (made before this start; the foreign record went with the
+    /// last run) is nobody's and closed now, so it keeps no profile's entry of an earlier run.
+    pub fn found_at_start(&mut self, devpath: &str, node: &str, udev_origin: &str) {
+        let backend = &mut self.backend;
+        if origin::classify(devpath, udev_origin, |s| backend.is_own(s)) != Origin::Foreign {
+            return;
+        }
+        let Some(sysname) = origin::parentless_input(devpath) else {
+            return;
+        };
+        self.foreign.found_at_start(sysname);
+        self.journal(format!(
+            "foreign device {sysname} ({node}) found at start: nobody's"
+        ));
+        self.write_foreign_acl(sysname, node, &acl::closed(), "start");
+    }
+
+    /// The signed-in profile changed: `/dev/uinput` and every foreign device follow it.
+    fn uinput_profile_changed(&mut self, profile: &str, uid: Option<u32>, now: Instant) {
+        self.foreign.profile_changed(profile, uid, now);
+        self.assert_uinput("the profile changed");
+        for (sysname, want) in self.foreign.acls() {
+            match self.backend.node_of(&sysname) {
+                Some(node) => self.write_foreign_acl(&sysname, &node, &want, "the profile changed"),
+                // Gone without a `remove` we heard: nothing to close.
+                None => self.foreign.forget(&sysname),
+            }
         }
     }
 
@@ -1621,14 +1741,34 @@ impl<B: Backend> Router<B> {
 
     /// A processed udev event (the monitor): an `add` or `change` on one of our nodes sets the
     /// ACL again, because logind's uaccess builtin rewrites it on every event. Pad1 ready: the
-    /// ACLs that waited for it are set.
-    pub fn udev_event_at(&mut self, ev: &UdevEvent, _now: Instant) {
-        if !ev.is_event_node() || !matches!(ev.action.as_str(), "add" | "change") {
+    /// ACLs that waited for it are set. On `/dev/uinput` its ACL is set again; on a foreign device
+    /// (`origin`) its ACL follows its profile; the navigation keyboard that udev processed before
+    /// its marker is made again (RUY-1063).
+    pub fn udev_event_at(&mut self, ev: &UdevEvent, now: Instant) {
+        let why = format!("udev {}", ev.action);
+        let processed = matches!(ev.action.as_str(), "add" | "change");
+        if ev.is_uinput() {
+            if processed {
+                self.assert_uinput(&why);
+            }
+            return;
+        }
+        if !ev.is_event_node() {
             return;
         }
         let Some(sysname) = ev.parent_sysname() else {
             return;
         };
+        if ev.action == "remove" {
+            if self.foreign.knows(sysname) {
+                self.foreign.forget(sysname);
+                self.journal(format!("foreign device {sysname} ({}) gone", ev.devname));
+            }
+            return;
+        }
+        if !processed {
+            return;
+        }
         let key = self.pads.iter().find_map(|(&k, p)| {
             p.virt
                 .as_ref()
@@ -1636,10 +1776,47 @@ impl<B: Backend> Router<B> {
                 .then_some(k)
         });
         if let Some(key) = key {
-            let why = format!("udev {}", ev.action);
             self.assert_acl(key, &ev.devname, &why);
             self.release_acls();
             self.answer_prepared();
+            return;
+        }
+        let backend = &mut self.backend;
+        match origin::classify(&ev.devpath, &ev.origin, |s| backend.is_own(s)) {
+            // Ours (also when an earlier event, before its marker, made it foreign), or root's
+            // (`Trusted`, below): not a foreign device any more.
+            Origin::Own => {
+                self.foreign.forget(sysname);
+                // libinput (the shell) reads a device at its `add` only: a navigation keyboard
+                // that udev called foreign then never reaches the shell. A new one gets a new
+                // `add`, after its marker. Only on udev's word "foreign": rules without the origin
+                // (an older image) say nothing, and nothing is made again then.
+                if ev.action == "add" && ev.origin == "foreign" && self.backend.is_nav(sysname) {
+                    self.nav_renewals += 1;
+                    if self.nav_renewals > NAV_RENEWALS {
+                        if self.nav_renewals == NAV_RENEWALS + 1 {
+                            self.journal(format!(
+                                "udev does not see the origin marker of the navigation keyboard \
+                                 {sysname}: not made again (the shell cannot read it)"
+                            ));
+                        }
+                        return;
+                    }
+                    match self.backend.renew_nav() {
+                        Ok(new) => self.journal(format!(
+                            "navigation keyboard {sysname} was processed by udev before its marker \
+                             (origin '{}'): made again as {new}",
+                            ev.origin
+                        )),
+                        Err(err) => self.journal(format!(
+                            "making the navigation keyboard {sysname} again failed: {err}"
+                        )),
+                    }
+                }
+            }
+            Origin::Foreign => self.foreign_event(sysname, &ev.devname, &why, now),
+            Origin::Trusted => self.foreign.forget(sysname),
+            Origin::Physical => {}
         }
     }
 
@@ -1919,6 +2096,7 @@ impl<B: Backend> Router<B> {
             self.drop_holds();
             self.seats_changed(&before);
             self.clear_navigator("the profile changed");
+            self.uinput_profile_changed(profile, uid, now);
         }
         match r {
             Route::App if same_owner => {
@@ -2709,13 +2887,13 @@ mod tests {
         Destroy(VirtualId),
         Write(VirtualId, Vec<OutEvent>),
         WriteAcl(String),
+        RenewNav,
         FfUpload(PadKey, i16, Rumble),
         FfPlay(PadKey, i16, i32),
         FfErase(PadKey, i16),
     }
 
     /// A fake uinput and filesystem: records every call, keeps one ACL per node.
-    #[derive(Default)]
     struct Fake {
         calls: Vec<Call>,
         next: VirtualId,
@@ -2723,11 +2901,32 @@ mod tests {
         acls: HashMap<String, Vec<u8>>,
         acl_fails: bool,
         next_ff: i16,
+        /// The sysnames of the devices it made and has not destroyed (their markers).
+        own: BTreeSet<String>,
+        /// The navigation keyboard's sysname (`input1` until `renew_nav`) and how often it was renewed.
+        nav: String,
+        navs: u32,
     }
 
     impl Fake {
         fn take(&mut self) -> Vec<Call> {
             std::mem::take(&mut self.calls)
+        }
+    }
+
+    impl Default for Fake {
+        fn default() -> Self {
+            Fake {
+                calls: Vec::new(),
+                next: 0,
+                alive: BTreeSet::new(),
+                acls: HashMap::new(),
+                acl_fails: false,
+                next_ff: 0,
+                own: BTreeSet::from(["input1".to_owned()]),
+                nav: "input1".to_owned(),
+                navs: 0,
+            }
         }
     }
 
@@ -2741,13 +2940,16 @@ mod tests {
             self.next += 1;
             self.alive.insert(self.next);
             self.calls.push(Call::Create(pad, spec.clone()));
+            let sysname = format!("input{}", 100 + self.next);
+            self.own.insert(sysname.clone());
             Ok(Created {
                 id: self.next,
-                sysname: format!("input{}", 100 + self.next),
+                sysname,
             })
         }
         fn destroy_virtual(&mut self, id: VirtualId) {
             self.alive.remove(&id);
+            self.own.remove(&format!("input{}", 100 + id));
             self.calls.push(Call::Destroy(id));
         }
         fn write_virtual(&mut self, id: VirtualId, events: &[OutEvent]) {
@@ -2767,6 +2969,20 @@ mod tests {
             self.acls.insert(node.to_owned(), acl.to_vec());
             self.calls.push(Call::WriteAcl(node.to_owned()));
             Ok(())
+        }
+        fn is_own(&mut self, sysname: &str) -> bool {
+            self.own.contains(sysname)
+        }
+        fn is_nav(&mut self, sysname: &str) -> bool {
+            self.nav == sysname
+        }
+        fn renew_nav(&mut self) -> Result<String, String> {
+            self.own.remove(&self.nav);
+            self.navs += 1;
+            self.nav = format!("input{}", 900 + self.navs);
+            self.own.insert(self.nav.clone());
+            self.calls.push(Call::RenewNav);
+            Ok(self.nav.clone())
         }
         fn ff_upload(&mut self, pad: PadKey, physical: i16, r: &Rumble) -> Result<i16, i32> {
             self.calls.push(Call::FfUpload(pad, physical, *r));
@@ -2918,6 +3134,7 @@ mod tests {
             subsystem: "input".into(),
             devpath: format!("/devices/virtual/input/{sysname}/event17"),
             devname: "/dev/input/event17".into(),
+            ..UdevEvent::default()
         }
     }
 
@@ -4027,15 +4244,37 @@ mod tests {
         assert_eq!(destroyed(&r.backend_mut().take()), vec![3]);
     }
 
-    /// The order of the creations (pad key) and ACL writes (node) in `calls`.
+    /// The order of the creations (pad key) and the pad nodes' ACL writes (node) in `calls`; the
+    /// ACL of `/dev/uinput` follows the profile (RUY-1063), not a pad: `uinput_writes` has it.
     fn order(calls: &[Call]) -> Vec<String> {
         calls
             .iter()
             .filter_map(|c| match c {
                 Call::Create(k, s) => Some(format!("create {k} {}", s.phys)),
-                Call::WriteAcl(node) => Some(format!("acl {node}")),
+                Call::WriteAcl(node) if node != UINPUT_NODE => Some(format!("acl {node}")),
                 _ => None,
             })
+            .collect()
+    }
+
+    /// The pad nodes' ACLs: every node but `/dev/uinput`.
+    fn pad_acls(r: &mut Router<Fake>) -> Vec<String> {
+        let mut nodes: Vec<String> = r
+            .backend()
+            .acls
+            .keys()
+            .filter(|n| n.as_str() != UINPUT_NODE)
+            .cloned()
+            .collect();
+        nodes.sort();
+        nodes
+    }
+
+    /// The calls without the writes of `/dev/uinput`'s ACL.
+    fn pad_calls(calls: Vec<Call>) -> Vec<Call> {
+        calls
+            .into_iter()
+            .filter(|c| c != &Call::WriteAcl(UINPUT_NODE.into()))
             .collect()
     }
 
@@ -4391,10 +4630,15 @@ mod tests {
         r.udev_event(&udev("add", "input101"));
         tap(&mut r, a);
         app(&mut r, "i2", STK, "p2");
-        // The new pad (input102) is p2's; an event on p1's old node does nothing.
+        // The new pad (input102) is p2's; an event on p1's old node gives p1 nothing (the device
+        // is gone and no longer ours: since RUY-1063 it would be a foreign device, never p1's
+        // within the 2 s after the switch).
         r.backend_mut().acls.clear();
         r.udev_event(&udev("change", "input101"));
-        assert!(r.backend_mut().acls.is_empty());
+        assert!(r.backend().acls.values().all(|a| !acl::named_users(a)
+            .unwrap_or_default()
+            .contains(&(P1_UID, 6))));
+        assert!(!r.devices()[0].routed);
         r.udev_event(&udev("add", "input102"));
         assert!(acl::is_only_user(
             &r.backend_mut().acls["/dev/input/event17"],
@@ -4407,9 +4651,13 @@ mod tests {
         let mut r = router();
         r.add_pad(pad("a"), t0());
         app(&mut r, "i1", STK, "p1");
-        r.udev_event(&udev("add", "input7"));
+        // Another device (hardware; a parentless one is a foreign device since RUY-1063).
+        r.udev_event(&UdevEvent {
+            devpath: "/devices/pci0000:00/usb1/1-2/1-2:1.0/input/input7/event17".into(),
+            ..udev("add", "input7")
+        });
         r.udev_event(&udev("remove", "input101"));
-        assert!(r.backend_mut().acls.is_empty());
+        assert!(pad_acls(&mut r).is_empty());
         assert!(!r.devices()[0].routed);
     }
 
@@ -4421,7 +4669,7 @@ mod tests {
         sign_in(&mut r, a, "p1");
         r.set_route("app", "i1", STK, "p1", SHELL, start);
         r.tick(start + Duration::from_millis(500));
-        assert!(r.backend_mut().acls.is_empty());
+        assert!(pad_acls(&mut r).is_empty());
         r.tick(start + UDEV_FALLBACK);
         assert!(acl::is_only_user(
             &r.backend_mut().acls["/dev/input/event-input101"],
@@ -5463,9 +5711,315 @@ mod tests {
         r.ff_play(1, 0, 1); // the app plays again under the overlay: not forwarded
         assert!(r.backend_mut().take().is_empty());
         r.set_route("locked", "", "", "", SHELL, t0());
-        let calls = r.backend_mut().take();
+        let calls = pad_calls(r.backend_mut().take());
         assert_eq!(calls[0], Call::FfErase(a, 1));
         assert_eq!(destroyed(&calls), vec![1]);
+    }
+
+    // ---- /dev/uinput and foreign devices (RUY-1063) -----------------------------------------
+
+    fn uinput_acl(r: &Router<Fake>) -> Option<Vec<u8>> {
+        r.backend().acls.get(UINPUT_NODE).cloned()
+    }
+
+    fn misc_uinput(action: &str) -> UdevEvent {
+        UdevEvent {
+            action: action.into(),
+            subsystem: "misc".into(),
+            devpath: "/devices/virtual/misc/uinput".into(),
+            devname: UINPUT_NODE.into(),
+            ..UdevEvent::default()
+        }
+    }
+
+    /// A udev event on the event node of a parentless device another process made.
+    fn foreign_udev(action: &str, sysname: &str, devname: &str) -> UdevEvent {
+        UdevEvent {
+            origin: "foreign".into(),
+            ..udev_node(action, sysname, devname)
+        }
+    }
+
+    #[test]
+    fn uinput_names_the_signed_in_profile_and_nobody_after_lock_or_the_callers_end() {
+        let mut r = router();
+        r.assert_uinput("start");
+        assert_eq!(uinput_acl(&r), Some(acl::closed()), "nobody at start");
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        assert!(acl::is_only_user(&uinput_acl(&r).expect("acl"), P1_UID));
+        assert!(journal(&mut r)
+            .iter()
+            .any(|l| l == "/dev/uinput for ruya-p1 (the profile changed)"));
+        // A switch moves it to p2: p1's user is not named any more.
+        r.set_route("shell", "", "", "p2", SHELL, t0());
+        let acl = uinput_acl(&r).expect("acl");
+        assert!(acl::is_only_user(&acl, P2_UID));
+        assert_eq!(acl::named_users(&acl), Some(vec![(P2_UID, 6)]));
+        r.set_route("locked", "", "", "", SHELL, t0());
+        assert_eq!(uinput_acl(&r), Some(acl::closed()));
+        // The shell gone from the bus: locked, closed.
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        r.caller_left(SHELL, t0());
+        assert_eq!(uinput_acl(&r), Some(acl::closed()));
+        assert!(journal(&mut r)
+            .iter()
+            .any(|l| l == "/dev/uinput for nobody (closed) (the profile changed)"));
+    }
+
+    #[test]
+    fn uinputs_acl_is_set_again_after_a_udev_event_on_it() {
+        let mut r = router();
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        r.backend_mut().take();
+        journal(&mut r);
+        // udev's MODE on the event masked the entry: the service writes it again.
+        r.backend_mut()
+            .acls
+            .insert(UINPUT_NODE.into(), acl::closed());
+        r.udev_event(&misc_uinput("change"));
+        assert!(acl::is_only_user(&uinput_acl(&r).expect("acl"), P1_UID));
+        assert_eq!(
+            journal(&mut r),
+            vec!["/dev/uinput for ruya-p1 (udev change)".to_owned()]
+        );
+        // Already right: nothing written.
+        r.backend_mut().take();
+        r.udev_event(&misc_uinput("add"));
+        assert!(r.backend_mut().take().is_empty());
+        // A remove writes nothing.
+        r.backend_mut()
+            .acls
+            .insert(UINPUT_NODE.into(), acl::closed());
+        r.udev_event(&misc_uinput("remove"));
+        assert_eq!(uinput_acl(&r), Some(acl::closed()));
+    }
+
+    #[test]
+    fn a_foreign_pad_is_its_profiles_while_signed_in_and_never_read() {
+        let mut r = router();
+        let start = t0();
+        r.set_route("shell", "", "", "p1", SHELL, start);
+        r.backend_mut().take();
+        journal(&mut r);
+        let later = start + origin::HANDOVER;
+        r.udev_event_at(&foreign_udev("add", "input40", "/dev/input/event30"), later);
+        assert!(acl::is_only_user(
+            &r.backend().acls["/dev/input/event30"],
+            P1_UID
+        ));
+        assert!(journal(&mut r)
+            .iter()
+            .any(|l| l == "foreign device input40 (/dev/input/event30): ruya-p1"));
+        // Never a pad the service reads or makes a virtual pad for.
+        assert!(r.devices().is_empty());
+        assert!(created(&r.backend_mut().take()).is_empty());
+        // A change (logind, udev's MODE) masked it: written again.
+        r.backend_mut()
+            .acls
+            .insert("/dev/input/event30".into(), acl::closed());
+        r.udev_event_at(
+            &foreign_udev("change", "input40", "/dev/input/event30"),
+            later,
+        );
+        assert!(acl::is_only_user(
+            &r.backend().acls["/dev/input/event30"],
+            P1_UID
+        ));
+        // A switch to p2 closes it (node_of names the node then); back to p1 opens it again.
+        r.set_route("shell", "", "", "p2", SHELL, later);
+        assert_eq!(r.backend().acls["/dev/input/event-input40"], acl::closed());
+        r.set_route("shell", "", "", "p1", SHELL, later);
+        assert!(acl::is_only_user(
+            &r.backend().acls["/dev/input/event-input40"],
+            P1_UID
+        ));
+        r.set_route("locked", "", "", "", SHELL, later);
+        assert_eq!(r.backend().acls["/dev/input/event-input40"], acl::closed());
+        // Gone: forgotten, a later profile change writes nothing for it.
+        r.udev_event_at(
+            &foreign_udev("remove", "input40", "/dev/input/event30"),
+            later,
+        );
+        r.backend_mut().take();
+        r.set_route("shell", "", "", "p1", SHELL, later);
+        assert!(!r
+            .backend_mut()
+            .take()
+            .contains(&Call::WriteAcl("/dev/input/event-input40".into())));
+    }
+
+    #[test]
+    fn a_foreign_pad_within_two_seconds_of_a_switch_stays_closed() {
+        let mut r = router();
+        let start = t0();
+        r.set_route("shell", "", "", "p1", SHELL, start);
+        let switch = start + origin::HANDOVER * 2;
+        r.set_route("shell", "", "", "p2", SHELL, switch);
+        let soon = switch + Duration::from_millis(1500);
+        r.udev_event_at(&foreign_udev("add", "input41", "/dev/input/event31"), soon);
+        assert_eq!(r.backend().acls["/dev/input/event31"], acl::closed());
+        assert!(journal(&mut r)
+            .iter()
+            .any(|l| l == "foreign device input41 (/dev/input/event31): nobody's: closed"));
+        // Not p1's either, when p1 comes back.
+        r.set_route("shell", "", "", "p1", SHELL, switch + origin::HANDOVER * 3);
+        assert_eq!(r.backend().acls["/dev/input/event-input41"], acl::closed());
+    }
+
+    #[test]
+    fn a_foreign_keyboard_is_its_profiles_like_a_pad() {
+        // Criterion 7: a keyboard p1 made reaches no reader (the udev rules), its node names p1.
+        let mut r = router();
+        let start = t0();
+        r.set_route("shell", "", "", "p1", SHELL, start);
+        r.udev_event_at(
+            &foreign_udev("add", "input42", "/dev/input/event32"),
+            start + origin::HANDOVER,
+        );
+        let acl = r.backend().acls["/dev/input/event32"].clone();
+        assert_eq!(acl::named_users(&acl), Some(vec![(P1_UID, 6)]));
+        assert!(r.devices().is_empty());
+    }
+
+    #[test]
+    fn our_own_devices_roots_and_hardware_are_not_foreign() {
+        let mut r = router();
+        let start = t0();
+        r.set_route("shell", "", "", "p1", SHELL, start);
+        r.backend_mut().take();
+        let later = start + origin::HANDOVER;
+        // The navigation keyboard (marked): ours, never foreign, even if udev called it so.
+        r.udev_event_at(
+            &foreign_udev("change", "input1", "/dev/input/event3"),
+            later,
+        );
+        // Hardware: not this rule's.
+        let usb = UdevEvent {
+            devpath: "/devices/pci0000:00/usb1/1-2/1-2:1.0/input/input5/event4".into(),
+            devname: "/dev/input/event4".into(),
+            ..udev("add", "input5")
+        };
+        r.udev_event_at(&usb, later);
+        // What root vouched for: hardware too.
+        r.udev_event_at(
+            &UdevEvent {
+                origin: "trusted".into(),
+                ..foreign_udev("add", "input43", "/dev/input/event33")
+            },
+            later,
+        );
+        assert!(r.backend_mut().take().is_empty());
+    }
+
+    #[test]
+    fn a_device_marked_after_udev_called_it_foreign_is_ours_at_the_next_event() {
+        let mut r = router();
+        let start = t0();
+        r.set_route("shell", "", "", "p1", SHELL, start);
+        let later = start + origin::HANDOVER;
+        r.udev_event_at(&foreign_udev("add", "input44", "/dev/input/event34"), later);
+        assert!(r.backend().acls.contains_key("/dev/input/event34"));
+        // Its marker appears: the next event finds it ours and it leaves the foreign pads.
+        r.backend_mut().own.insert("input44".into());
+        r.udev_event_at(
+            &foreign_udev("change", "input44", "/dev/input/event34"),
+            later,
+        );
+        r.backend_mut().take();
+        r.set_route("shell", "", "", "p2", SHELL, later);
+        assert!(!r
+            .backend_mut()
+            .take()
+            .contains(&Call::WriteAcl("/dev/input/event-input44".into())));
+    }
+
+    #[test]
+    fn the_navigation_keyboard_udev_processed_before_its_marker_is_made_again() {
+        let mut r = router();
+        // Its add processed as foreign: libinput never reads it again, so a new one is made.
+        r.udev_event(&foreign_udev("add", "input1", "/dev/input/event3"));
+        assert_eq!(r.backend_mut().take(), vec![Call::RenewNav]);
+        assert!(journal(&mut r).iter().any(|l| l
+            == "navigation keyboard input1 was processed by udev before its marker \
+                (origin 'foreign'): made again as input901"));
+        // The new one's add processed as own: nothing more. A change never renews.
+        let own = UdevEvent {
+            origin: "own".into(),
+            ..udev_node("add", "input901", "/dev/input/event3")
+        };
+        r.udev_event(&own);
+        r.udev_event(&foreign_udev("change", "input901", "/dev/input/event3"));
+        // Rules that set no origin at all (an older image): no endless renewal.
+        r.udev_event(&udev_node("add", "input901", "/dev/input/event3"));
+        assert!(r.backend_mut().take().is_empty());
+        // A virtual pad processed as foreign keeps working (the same udev treatment): no renew.
+        let a = r.add_pad(pad("a"), t0());
+        sign_in(&mut r, a, "p1");
+        app(&mut r, "i1", STK, "p1");
+        r.backend_mut().take();
+        r.udev_event(&foreign_udev("add", "input101", "/dev/input/event17"));
+        let calls = r.backend_mut().take();
+        assert!(!calls.contains(&Call::RenewNav));
+        assert!(calls.contains(&Call::WriteAcl("/dev/input/event17".into())));
+    }
+
+    #[test]
+    fn a_foreign_device_found_at_start_is_closed_and_stays_nobodys() {
+        let mut r = router();
+        // An earlier run left p1's entry on it.
+        r.backend_mut()
+            .acls
+            .insert("/dev/input/event30".into(), acl::only_user(P1_UID));
+        r.found_at_start(
+            "/devices/virtual/input/input40/event30",
+            "/dev/input/event30",
+            "foreign",
+        );
+        assert_eq!(r.backend().acls["/dev/input/event30"], acl::closed());
+        // Ours (the navigation keyboard), root's and hardware are left alone.
+        r.found_at_start(
+            "/devices/virtual/input/input1/event3",
+            "/dev/input/event3",
+            "foreign",
+        );
+        r.found_at_start(
+            "/devices/virtual/input/input43/event33",
+            "/dev/input/event33",
+            "trusted",
+        );
+        r.found_at_start(
+            "/devices/pci0000:00/usb1/1-2/1-2:1.0/input/input5/event4",
+            "/dev/input/event4",
+            "",
+        );
+        assert_eq!(pad_acls(&mut r), vec!["/dev/input/event30".to_owned()]);
+        // p1 signs in: it is not p1's (nobody's for its life).
+        r.set_route("shell", "", "", "p1", SHELL, t0());
+        r.udev_event_at(
+            &foreign_udev("change", "input40", "/dev/input/event30"),
+            t0() + origin::HANDOVER * 2,
+        );
+        assert_eq!(r.backend().acls["/dev/input/event30"], acl::closed());
+    }
+
+    #[test]
+    fn the_navigation_keyboard_is_made_again_once_per_start_at_most() {
+        let mut r = router();
+        r.udev_event(&foreign_udev("add", "input1", "/dev/input/event3"));
+        assert_eq!(r.backend_mut().take(), vec![Call::RenewNav]);
+        journal(&mut r);
+        // The new one is foreign at its add too (udev never sees the marker): one line, no remake.
+        r.udev_event(&foreign_udev("add", "input901", "/dev/input/event3"));
+        r.udev_event(&foreign_udev("add", "input901", "/dev/input/event3"));
+        assert!(r.backend_mut().take().is_empty());
+        assert_eq!(
+            journal(&mut r),
+            vec![
+                "udev does not see the origin marker of the navigation keyboard input901: \
+                  not made again (the shell cannot read it)"
+                    .to_owned()
+            ]
+        );
     }
 
     // ---- controller profiles ----------------------------------------------------------------

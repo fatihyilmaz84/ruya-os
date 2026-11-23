@@ -1,10 +1,12 @@
 # ruya-inputd (user ruya-input) reads the physical pads (06-input.md section 3). A RUN program,
 # in a file after 73-seat-late.rules: logind's uaccess builtin there flushes named ACL entries,
-# so this entry is added after it, at every event, and both entries stay.
+# so this entry is added after it, at every event, and both entries stay. ruya-inputd's own
+# devices and foreign ones (RUYA_INPUT_ORIGIN, 70-ruya-input.rules) are ruya-input's already and
+# never read as pads; a device root vouched for ("trusted") is treated as hardware.
 ACTION=="remove", GOTO="ruya_input_acl_end"
 SUBSYSTEM!="input", GOTO="ruya_input_acl_end"
 KERNEL!="event*", GOTO="ruya_input_acl_end"
-ATTRS{phys}=="ruya-input/*", GOTO="ruya_input_acl_end"
+ENV{RUYA_INPUT_ORIGIN}=="own|foreign", GOTO="ruya_input_acl_end"
 
 # 2. Physical pads, and a pad's motion and touchpad nodes.
 ENV{ID_INPUT_JOYSTICK}=="1", RUN+="/usr/bin/setfacl -m u:ruya-input:rw $devnode", GOTO="ruya_input_acl_end"

@@ -33,8 +33,12 @@ fails=0
 ok() { echo "PASS: $*"; }
 bad() { echo "FAIL: $*"; fails=$((fails + 1)); }
 
-r 'mkdir -p /var/tmp/dell-glass && cat > /var/tmp/dell-glass/keys.py' <<'EOF'
+# Root vouches for its keyboard (vm_uinput_trust.py, RUY-1063): an unvouched uinput device is foreign
+# and the shell never reads it.
+r 'mkdir -p /var/tmp/dell-glass && cat > /var/tmp/dell-glass/vm_uinput_trust.py' < "$(dirname "$0")/vm_uinput_trust.py"
+r 'cat > /var/tmp/dell-glass/keys.py' <<'EOF'
 import fcntl, os, struct, sys, time
+import vm_uinput_trust
 KEYS = {"pgup": 104, "pgdn": 109, "esc": 1, "up": 103, "down": 108, "left": 105, "right": 106,
         "enter": 28, "guide": 172, "0": 11, "1": 2, "2": 3, "3": 4, "4": 5, "5": 6, "6": 7, "7": 8,
         "8": 9, "9": 10}
@@ -46,6 +50,7 @@ for code in KEYS.values():
     fcntl.ioctl(fd, 0x40045565, code)
 fcntl.ioctl(fd, 0x405C5503, struct.pack("HHHH80sI", 3, 0x1209, 1, 1, b"dell-glass-keys".ljust(80, b"\0"), 0))
 fcntl.ioctl(fd, 0x5501)
+trusted = vm_uinput_trust.trust(fd)
 try:
     time.sleep(1.5)
     for k in sys.argv[1:]:
@@ -56,6 +61,7 @@ try:
         time.sleep(0.4)
     time.sleep(0.3)
 finally:
+    vm_uinput_trust.untrust(trusted)
     fcntl.ioctl(fd, 0x5502)
     os.close(fd)
 EOF
