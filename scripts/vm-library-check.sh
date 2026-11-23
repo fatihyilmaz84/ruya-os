@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: check choicejudge clean play playid playjudge runners runnersjudge security seed steam steamids
+# modes: check choicejudge clean play playid playjudge runners runnersjudge scanjudge security seed steam steamids
 # Checks ruya-library (org.ruyaos.Library1, T-112 / T-163 / T-183) inside a running VM, as root. It builds a
 # tiny signed Flatpak repository (one runtime, a game and an app, no download, like
 # vm-store-check.sh), adds it through Store1, installs and uninstalls through Store1 and watches
@@ -38,10 +38,14 @@
 #             a manifest that is a link); signed in as that profile ListItems has exactly the two steam:
 #             items; a switch to a second profile sends ItemsChanged and leaves none; PutProfileItems and
 #             SetActiveProfile from ruya-shell are AccessDenied; ruya-library keeps ProtectHome=yes; after
-#             `systemctl restart ruya-library` the items come back without a sign-in; and a unit with the
+#             `systemctl restart ruya-library` the items come back without a sign-in; a unit with the
 #             reader's properties starts in the profile's manager, with its systemd-analyze --user
-#             security. Needs two profiles; removes the folder after (also on a failure).
-#             `steamids` prints the steam: ids of a ListItems reply (busctl's text) on stdin (host fixtures)
+#             security; and as the reader's unit (RUY-1102) a write to the home and to /run/user/<uid>
+#             fails on a read-only file system and socket() of every family ends the process.
+#             Needs a profile (vm-goto.ps1 home, admin PIN 1234); makes a second one when there is
+#             none and removes it, and the folder, after (also on a failure).
+#             `steamids` prints the steam: ids of a ListItems reply (busctl's text) on stdin (host fixtures);
+#             `scanjudge` judges the sandbox probe's output on stdin (host fixtures)
 #   security  see vm-security-check.sh (unit hardening)
 # Boot the VM with plain smoke-test.ps1 -Keep (or -Work -Keep for the screenshot).
 set -u
@@ -376,8 +380,42 @@ list_items_json() { as_shell busctl --system --json=short call "$svc" "$path" "$
 # steam_ids: the distinct "steam:<digits>" item ids of a ListItems reply (busctl's text) on stdin, sorted.
 steam_ids() { grep -o '"steam:[0-9]*"' | tr -d '"' | sort -u; }
 # The reader's unit properties, as spawner::PROFILE_SCAN_PROPERTIES in ruya-session has them
-# (test-vm-checks.sh keeps the two the same): the security report is of a unit built like the reader's.
-scan_properties="MemoryMax=512M TasksMax=16 NoNewPrivileges=yes PrivateNetwork=yes RestrictAddressFamilies=none ProtectSystem=strict PrivateTmp=yes ReadOnlyPaths=%h SystemCallFilter=@system-service MemoryDenyWriteExecute=yes LockPersonality=yes RestrictNamespaces=yes CapabilityBoundingSet="
+# (test-vm-checks.sh keeps the two the same): the security report and the sandbox probe run in a unit
+# built like the reader's.
+scan_properties="MemoryMax=512M TasksMax=16 NoNewPrivileges=yes PrivateNetwork=yes ProtectSystem=strict ProtectHome=read-only PrivateTmp=yes SystemCallFilter=@system-service SystemCallFilter=~@network-io MemoryDenyWriteExecute=yes LockPersonality=yes RestrictNamespaces=yes CapabilityBoundingSet="
+# The reader's RuntimeMaxSec, spawner::PROFILE_SCAN_RUNTIME_SECS (test-vm-checks.sh keeps the two the same).
+scan_runtime=20
+# The sandbox probe (RUY-1102), run as the reader's unit: a write to the home and to /run/user/<uid>,
+# a read of the home, and socket() of four families (python3 imports socket first, the control).
+scan_probe='ulimit -c 0
+for d in "home=$HOME" "runuser=/run/user/$(id -u)"; do
+    f="${d#*=}/.ruya-scan-probe"
+    if err="$( { : > "$f"; } 2>&1 )"; then rm -f "$f"; echo "write ${d%%=*}: written"
+    else case "$err" in *"Read-only file system"*) echo "write ${d%%=*}: read-only";; *) echo "write ${d%%=*}: other: $err";; esac; fi
+done
+ls -d "$HOME/." >/dev/null 2>&1 && echo "read home: ok" || echo "read home: failed"
+python3 -c "import socket" >/dev/null 2>&1; echo "python: rc$?"
+for fam in AF_UNIX AF_INET AF_INET6 AF_NETLINK; do
+    python3 -c "import socket, sys; f = getattr(socket, sys.argv[1]); socket.socket(f, socket.SOCK_RAW if f == socket.AF_NETLINK else socket.SOCK_DGRAM).close()" "$fam" >/dev/null 2>&1
+    echo "socket $fam: rc$?"
+done'
+# scan_judge: judges the probe's output on stdin (host fixtures in test-vm-checks.sh). Both writes must
+# fail on a read-only file system, the home must still read, and every socket() must end python3 by
+# SIGSYS (rc159: the system-call filter's kill), after a python3 that only imports socket ran (rc0).
+scan_judge() {
+    local out ok=1 d fam
+    out="$(cat)"
+    for d in home runuser; do
+        echo "$out" | grep -qx "write $d: read-only" || { echo "FAIL: a write to the $d as the reader's unit: $(echo "$out" | grep "^write $d" || echo 'not tried')"; ok=0; }
+    done
+    echo "$out" | grep -qx 'read home: ok' || { echo "FAIL: the reader's unit cannot read the home"; ok=0; }
+    echo "$out" | grep -qx 'python: rc0' || { echo "FAIL: python3 does not run in the reader's unit: $(echo "$out" | grep '^python')"; ok=0; }
+    for fam in AF_UNIX AF_INET AF_INET6 AF_NETLINK; do
+        echo "$out" | grep -qx "socket $fam: rc159" || { echo "FAIL: socket($fam) in the reader's unit: $(echo "$out" | grep "^socket $fam:" || echo 'not tried')"; ok=0; }
+    done
+    [ "$ok" = 1 ] && echo "PASS: as the reader's unit the home and /run/user are read-only, the home reads, socket() of every family ends the process"
+    [ "$ok" = 1 ]
+}
 psvc=org.ruyaos.Profiles1
 ppath=/org/ruyaos/Profiles1
 # sign_in <profile>: SwitchTo with no PIN, then the dev PIN 1234 when a PIN is asked; prints the reply.
@@ -402,15 +440,32 @@ steam_manifest() { # <appid> <name> <StateFlags>
 }
 # What the steam mode made in the profile's home (removed by the exit trap).
 steam_made=()
+# The second profile the steam mode made, if it made one, and the admin that made it.
+steam_profile_made=""
+steam_admin=""
 steam_clean() {
     [ "${#steam_made[@]}" -gt 0 ] && rm -rf "${steam_made[@]}"
     steam_made=()
+    if [ -n "$steam_profile_made" ]; then
+        # DeleteProfile refuses the active profile: the admin signs in first.
+        sign_in "$steam_admin" >/dev/null
+        out="$(busctl --system call "$psvc" "$ppath" "$psvc" DeleteProfile sss "$steam_admin" 1234 "$steam_profile_made" 2>&1)"
+        case "$out" in 'suu "ok"'*) ok "DeleteProfile $steam_profile_made: the check's profile is removed";; *) bad "DeleteProfile $steam_profile_made: $out";; esac
+        steam_profile_made=""
+    fi
 }
 steam_check() {
     local ids me other user home apps out before t0 s want
     ids="$(busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | grep -o '"p[0-9]*"' | tr -d '"')"
     me="$(echo "$ids" | head -1)"; other="$(echo "$ids" | grep -v "^$me\$" | head -1)"
-    [ -n "$me" ] && [ -n "$other" ] || { bad "two profiles are needed (vm-goto.ps1 home, then a second one)"; exit 1; }
+    [ -n "$me" ] || { bad "a profile is needed (vm-goto.ps1 home)"; exit 1; }
+    if [ -z "$other" ]; then
+        # The VM queue's fresh disk has the one profile vm-goto.ps1 made (admin, PIN 1234): a second
+        # one for the switch, removed by the exit trap.
+        out="$(busctl --system call "$psvc" "$ppath" "$psvc" CreateProfile sssss "$me" 1234 "Check Steam" standard "" 2>&1)"
+        case "$out" in 'ssuu "ok" '*) other="$(echo "$out" | cut -d'"' -f4)"; steam_profile_made="$other"; steam_admin="$me";; esac
+        [ -n "$other" ] && ok "CreateProfile made $other (Check Steam) for the switch" || { bad "CreateProfile Check Steam: $out"; exit 1; }
+    fi
     user="ruya-$me"; home="$(getent passwd "$user" | cut -d: -f6)"
     [ -d "$home" ] || { bad "no home for $user"; exit 1; }
     echo "--- a Steam folder in $me's home: two games, a Proton tool and a linked manifest"
@@ -478,6 +533,11 @@ steam_check() {
     uid="$(id -u "$user")"
     runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" systemd-analyze --user security ruya-scan-security-check.service | tail -3
     systemctl --user --machine="$user@.host" stop ruya-scan-security-check.service >/dev/null 2>&1
+
+    echo "--- the reader's sandbox holds (RUY-1102): as its unit, in $me's manager"
+    # The probe goes in on stdin (--pipe): the manager expands $ in a unit's command line.
+    printf '%s\n' "$scan_probe" | systemd-run --user --machine="$user@.host" --pipe --wait --quiet --collect --no-ask-password \
+        "--property=RuntimeMaxSec=$scan_runtime" "${props[@]}" -- /bin/bash -s 2>&1 | scan_judge || fail=1
 }
 
 clean_all() {
@@ -533,9 +593,13 @@ runnersjudge)
     ;;
 steam)
     steam_check
+    steam_clean # here, so a failed removal counts; the exit trap only covers an early stop
     ;;
 steamids)
     steam_ids; exit 0 # ids only, no verdict line
+    ;;
+scanjudge)
+    scan_judge || fail=1
     ;;
 choicejudge)
     choice_judge "${2:?choice}" && ok "the reply is ok with the choice ${2}" || bad "the reply is not ok with the choice ${2}"

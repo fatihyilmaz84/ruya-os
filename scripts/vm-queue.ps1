@@ -17,6 +17,7 @@ param(
         "vm-security-check.sh", "vm-swap-check.sh", "vm-gaming-check.sh",
         "vm-devices-check.sh bluetooth", "vm-devices-check.sh twopads", "vm-devices-check.sh inputd", "vm-devices-check.sh system",
         "vm-audio-check.sh",
+        "vm-library-check.sh steam",
         "vm-storage-check.ps1 scan",
         "vm-reboot-check.ps1 -SavedOutput"
     ),
@@ -91,14 +92,15 @@ if ($LASTEXITCODE -ne 0) { $lines.Add("FAIL copy helper files to the guest (scp 
 
 # ---- a signed-in profile for the checks that need one (RUY-473): on a fresh disk nothing has made one
 # vm-runner-check.sh check and sample run a Windows program on an X display of the signed-in profile (RUY-980).
-$needsProfile = @($Checks | Where-Object { $_ -match "^vm-x11-check\.sh" -or $_ -match "^vm-runner-check\.sh (check|sample)" }).Count -gt 0
+# vm-library-check.sh steam signs that profile in and makes its second one itself (RUY-1102).
+$needsProfile = @($Checks | Where-Object { $_ -match "^vm-x11-check\.sh" -or $_ -match "^vm-runner-check\.sh (check|sample)" -or $_ -match "^vm-library-check\.sh steam" }).Count -gt 0
 if ($needsProfile) {
-    Write-Host "== vm-goto.ps1 home (a signed-in profile for the x11 and runner checks)"
+    Write-Host "== vm-goto.ps1 home (a signed-in profile for the x11, runner and steam checks)"
     $gotoOut = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "vm-goto.ps1") home *>&1 | ForEach-Object { "$_" }
     $gotoCode = $LASTEXITCODE
     $gotoOut | Set-Content -Encoding UTF8 (Join-Path $outDir "vm-goto-home.log")
     if ($gotoCode -ne 0) { $lines.Add("FAIL vm-goto.ps1 home (exit $gotoCode): $(Keyline $gotoOut)"); $failed++ }
-    else { $lines.Add("PASS vm-goto.ps1 home (a signed-in profile for the x11 and runner checks)") }
+    else { $lines.Add("PASS vm-goto.ps1 home (a signed-in profile for the x11, runner and steam checks)") }
 }
 
 # ---- run

@@ -1784,6 +1784,21 @@ sids="$(printf '%s\n' 'aa{sv} 1 7 "id" s "flatpak:org.x.A" "launch" s "flatpak:o
 code_props="$(sed -n '/^pub const PROFILE_SCAN_PROPERTIES/,/^];/p' "$here/../services/ruya-session/src/spawner.rs" | grep -o '"[^"]*"' | tr -d '"' | tr '\n' ' ')"
 check_props="$(sed -n 's/^scan_properties="\(.*\)"$/\1/p' "$here/vm-library-check.sh") "
 [ -n "$code_props" ] && [ "$code_props" = "$check_props" ] && pass "vm-library-check.sh steam: the reader's properties, as ruya-session runs it" || fail "vm-library-check.sh scan_properties '$check_props' are not spawner.rs's '$code_props'"
+code_rt="$(sed -n 's/^pub const PROFILE_SCAN_RUNTIME_SECS: u32 = \([0-9]*\);$/\1/p' "$here/../services/ruya-session/src/spawner.rs")"
+check_rt="$(sed -n 's/^scan_runtime=\([0-9]*\)$/\1/p' "$here/vm-library-check.sh")"
+[ -n "$code_rt" ] && [ "$code_rt" = "$check_rt" ] && pass "vm-library-check.sh steam: the reader's RuntimeMaxSec, as ruya-session runs it" || fail "vm-library-check.sh scan_runtime '$check_rt' is not spawner.rs's '$code_rt'"
+# RUY-1102: the steam mode's sandbox probe, judged (scanjudge) as the Dell printed it under the reader's
+# properties; a writable home or /run/user, a socket that opens or is only refused, or no python fails.
+sj() { printf '%s\n' "$@" | bash "$here/vm-library-check.sh" scanjudge 2>&1; }
+sj_good=("write home: read-only" "write runuser: read-only" "read home: ok" "python: rc0" "socket AF_UNIX: rc159" "socket AF_INET: rc159" "socket AF_INET6: rc159" "socket AF_NETLINK: rc159")
+expect_contains "vm-library-check.sh scanjudge: the sandbox the Dell measured passes" "$(sj "${sj_good[@]}")" "ALL CHECKS PASSED"
+expect_contains "vm-library-check.sh scanjudge: a writable home fails" "$(sj "write home: written" "${sj_good[@]:1}")" "FAIL: a write to the home as the reader's unit"
+expect_contains "vm-library-check.sh scanjudge: a writable /run/user fails" "$(sj "${sj_good[0]}" "write runuser: written" "${sj_good[@]:2}")" "FAIL: a write to the runuser as the reader's unit"
+expect_contains "vm-library-check.sh scanjudge: an unreadable home fails" "$(sj "${sj_good[@]:0:2}" "read home: failed" "${sj_good[@]:3}")" "FAIL: the reader's unit cannot read the home"
+expect_contains "vm-library-check.sh scanjudge: an AF_INET6 socket that opens fails" "$(sj "${sj_good[@]:0:6}" "socket AF_INET6: rc0" "${sj_good[7]}")" "FAIL: socket(AF_INET6) in the reader's unit: socket AF_INET6: rc0"
+expect_contains "vm-library-check.sh scanjudge: a socket only refused (not the filter's kill) fails" "$(sj "${sj_good[@]:0:4}" "socket AF_UNIX: rc1" "${sj_good[@]:5}")" "FAIL: socket(AF_UNIX)"
+expect_contains "vm-library-check.sh scanjudge: no python3 fails" "$(sj "${sj_good[@]:0:3}" "python: rc127" "${sj_good[@]:4}")" "FAIL: python3 does not run"
+expect_contains "vm-library-check.sh scanjudge: an empty probe fails" "$(sj "")" "SOME CHECKS FAILED"
 grep -q 'no-gpg-verify' "$here/vm-play-check.sh" && fail "vm-play-check.sh mentions --no-gpg-verify" || pass "vm-play-check.sh never turns signature checks off"
 # RUY-900: the metadata generation in installed.json, read and set as the service writes the file.
 gj="$tmp/installed.json"
