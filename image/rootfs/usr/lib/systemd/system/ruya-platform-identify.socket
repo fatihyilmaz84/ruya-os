@@ -1,0 +1,18 @@
+[Unit]
+Description=RuyaOS platform identity helper socket (a sandboxed caller's .flatpak-info for ruya-platform)
+# ADR-022 build decision 4 (RUY-1129): ruya-platform, the door every sandbox talks to, holds no
+# capability; it hands a caller's pidfd to this socket and gets the caller's /.flatpak-info and
+# cgroup back as bytes, never a path. Root only: the helper also refuses any peer that is not uid 0.
+Before=ruya-platform.service
+
+[Socket]
+ListenSequentialPacket=/run/ruya-platform-identify.sock
+SocketUser=root
+SocketMode=0600
+# One helper process per request (ruya-platform-identify@.service), at most eight at a time; the
+# door asks one at a time.
+Accept=yes
+MaxConnections=8
+
+[Install]
+WantedBy=sockets.target

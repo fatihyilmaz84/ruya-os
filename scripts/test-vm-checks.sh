@@ -34,6 +34,10 @@
 #                          up on exit and mounts its drive nosuid,nodev,noexec; `parse perms` (RUY-851) reads
 #                          Flatpak permission sections in any order as the perms mode compares them, and an
 #                          extra filesystem or bus name makes them differ from the mapped set
+#   - vm-platform-check.sh (RUY-1129) the `identity` and `deputy` modes against fakes: the door's capability sets,
+#                          the helper's socket (active, 0600 root), its configured and live bounding set, its answer
+#                          to root, a profile user's refused connect, and the confused deputy's three verdicts each
+#                          can FAIL
 #   - vm-notifications-check.sh (RUY-730) against a fake Notifications1: each step (unit, exposure, Post and
 #                          Added, MarkRead, a restart that loses items, ids or the setting, the shell's journal
 #                          line and GetAll, the shell's Post, keyed replace, Withdraw, a switched-off source,
@@ -2896,6 +2900,111 @@ out="$(FAKE_JOURNAL='' webp_run "$wp/missing.so")"
 expect_contains "webp: a missing plugin fails" "$out" "FAIL: the Qt WebP image plugin is missing"
 [ "$(grep -c '^webp_checks$' "$here/vm-play-check.sh")" = 1 ] && pass "vm-play-check.sh check mode runs webp_checks" || fail "vm-play-check.sh check mode does not run webp_checks"
 grep -q 'qt6-qtimageformats' "$here/../image/build/20-base.sh" && pass "20-base.sh installs qt6-qtimageformats" || fail "20-base.sh lacks qt6-qtimageformats"
+
+# RUY-1129: vm-platform-check.sh identity and deputy (ADR-022 decision 4): the door's capabilities, the
+# helper's socket and bounding set (configured and live), its answer to root and its refusal of a profile
+# user, and the confused deputy's verdicts; each can FAIL. One fake over systemctl, stat, journalctl,
+# systemd-run, runuser and the probe's helper command; FAKE_BUG breaks one fact.
+echo "== vm-platform-check.sh identity and deputy: the identity helper (RUY-1129) =="
+pt="$tmp/platform"; mkdir -p "$pt/bin" "$pt/proc/100" "$pt/proc/200" "$pt/work"
+realpy="$(command -v python3 2>/dev/null)"; [ -x "$shims/python3" ] && realpy="$shims/python3"
+cat > "$pt/fake.py" <<'PYEOF'
+import os, sys
+sys.stdout.reconfigure(newline="\n")  # LF on a Windows host too
+tool, args = sys.argv[1], sys.argv[2:]
+bugs = set(os.environ.get("FAKE_BUG", "").split(","))
+line = " ".join(args)
+if tool == "systemctl":
+    if args[0] == "is-active":
+        print("inactive" if "socket_down" in bugs else "active")
+    elif args[0] == "list-units":
+        if "no_live" not in bugs:
+            print("ruya-platform-identify@0-1-9011_41661-0.service loaded active running RuyaOS platform identity helper")
+    elif "CapabilityBoundingSet" in line:
+        print("cap_dac_read_search cap_sys_ptrace" + (" cap_sys_admin" if "config_caps" in bugs else ""))
+    elif "MainPID" in line:
+        print("200" if "ruya-platform-identify@" in line else "100")
+    sys.exit(0)
+if tool == "stat":
+    print("666 root socket" if "socket_mode" in bugs else "600 root socket")
+    sys.exit(0)
+if tool == "busctl":
+    print('s "p1"')
+    sys.exit(0)
+if tool == "getent":
+    print("ruya-p1:x:1001:1001:RuyaOS profile:/var/home/ruya-p1:/usr/sbin/nologin")
+    sys.exit(0)
+if tool == "systemd-run":
+    print("register ok" if "deputy_ok" in bugs else "register not-an-app")
+    sys.exit(0)
+if tool == "journalctl":
+    if "ruya-platform-identify" in args:
+        if "helper_read" in bugs:
+            print("ruya-platform-identify: pid 4711: .flatpak-info 1200 bytes; cgroup 110 bytes")
+        else:
+            print("ruya-platform-identify: pid 4711: .flatpak-info not-owned, nothing read; cgroup 110 bytes")
+    else:
+        if "door_bytes" in bugs:
+            print("ruya-platform: :1.532 is not an app: bad flatpak-info")
+        elif "door_silent" not in bugs:
+            print("ruya-platform: :1.532 is not an app: flatpak-info not-owned")
+    sys.exit(0)
+if tool == "helper":
+    # The probe's helper command: root gets an answer, a profile user (runuser) cannot connect.
+    if os.environ.get("FAKE_AS_USER"):
+        print("helper files pid 1 info missing" if "user_connects" in bugs else "helper error PermissionError")
+    else:
+        print("helper files pid %s info %s" % (args[0], "bytes" if "root_info" in bugs else "missing"))
+    sys.exit(0)
+PYEOF
+for t in systemctl stat busctl getent systemd-run journalctl; do
+    printf '#!/bin/sh\nexec "%s" "%s" %s "$@"\n' "$realpy" "$pt/fake.py" "$t" > "$pt/bin/$t"; chmod +x "$pt/bin/$t"
+done
+# python3: the probe's helper command is faked (with the pid the check holds, $$ of the backgrounded
+# shim), anything else runs the real one.
+cat > "$pt/bin/python3" <<SHIMEOF
+#!/bin/sh
+case "\$*" in *vm-platform-probe.py\ helper*) exec "$realpy" "$pt/fake.py" helper "\$\$" ;; esac
+exec "$realpy" "\$@"
+SHIMEOF
+chmod +x "$pt/bin/python3"
+printf '#!/bin/sh\nwhile [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done\nshift\nFAKE_AS_USER=1 exec "$@"\n' > "$pt/bin/runuser"; chmod +x "$pt/bin/runuser"
+status() { printf 'Name:\tx\nCapInh:\t0000000000000000\nCapPrm:\t%s\nCapEff:\t%s\nCapBnd:\t%s\nCapAmb:\t0000000000000000\n' "$1" "$2" "$3"; }
+plat() { # <mode>; FAKE_BUG in the environment
+    status 0000000000000000 0000000000000000 "${DOOR_BND:-0000000000000000}" > "$pt/proc/100/status"
+    status 0000000000080004 0000000000080004 "${HELPER_BND:-0000000000080004}" > "$pt/proc/200/status"
+    PLAT_PROC="$pt/proc" PLAT_SOCK="$pt/sock" PLAT_WORK="$pt/work" PATH="$pt/bin:$shims:$PATH" bash "$here/vm-platform-check.sh" "$1" 2>&1
+}
+out="$(plat identity)"
+for want in "the door's CapBnd is 0" "the door's CapEff is 0" "ruya-platform-identify.socket is active" "is 0600 root" \
+    "bounds it to CAP_DAC_READ_SEARCH and CAP_SYS_PTRACE" "a live helper's CapBnd is exactly the two" "a root request is answered" \
+    "ruya-p1 cannot connect to the helper" "ALL CHECKS PASSED"; do
+    expect_contains "platform identity: $want" "$out" "$want"
+done
+expect_lacks "platform identity: no FAIL when all is well" "$out" "FAIL"
+[ -r "$pt/work/helpers/vm-platform-probe.py" ] && [ -r "$pt/work/helpers/vm_dbus.py" ] && pass "platform identity: the helpers are copied to the work folder" \
+    || fail "platform identity: the helpers are not in $pt/work/helpers"
+out="$(DOOR_BND=0000000000080000 plat identity)"
+expect_contains "platform identity: a door with CAP_SYS_PTRACE FAILs" "$out" "FAIL: the door's CapBnd is '0000000000080000'"
+out="$(HELPER_BND=00000000002c0004 plat identity)"
+expect_contains "platform identity: a live helper with more caps FAILs" "$out" "FAIL: a live helper's CapBnd is '00000000002c0004'"
+for case in "socket_down:FAIL: ruya-platform-identify.socket is not active" "socket_mode:want '600 root socket'" \
+    "config_caps:FAIL: the helper's configured bounding set is" "no_live:FAIL: no live ruya-platform-identify@ instance" \
+    "root_info:FAIL: the helper's answer to root" "user_connects:FAIL: ruya-p1 and the helper's socket"; do
+    out="$(FAKE_BUG="${case%%:*}" plat identity)"
+    expect_contains "platform identity: ${case%%:*} FAILs" "$out" "${case#*:}"
+    expect_contains "platform identity: ${case%%:*} ends failed" "$out" "SOME CHECKS FAILED"
+done
+out="$(plat deputy)"
+for want in ": not-an-app" "the helper read nothing of it (not-owned)" "the door logged flatpak-info not-owned" "the door was given no bytes of it" "ALL CHECKS PASSED"; do
+    expect_contains "platform deputy: $want" "$out" "$want"
+done
+expect_lacks "platform deputy: no FAIL when all is well" "$out" "FAIL"
+for case in "deputy_ok:FAIL: Register with /etc/shadow on /.flatpak-info: 'register ok'" "helper_read:FAIL: no 'not-owned, nothing read'" \
+    "door_silent:FAIL: no 'flatpak-info not-owned' in the door's journal" "door_bytes:FAIL: the door was given bytes of the bound file"; do
+    out="$(FAKE_BUG="${case%%:*}" plat deputy)"
+    expect_contains "platform deputy: ${case%%:*} FAILs" "$out" "${case#*:}"
+done
 
 echo
 if [ "$fails" = 0 ]; then echo "vm-check tests: all passed"; else echo "vm-check tests: $fails failed"; fi

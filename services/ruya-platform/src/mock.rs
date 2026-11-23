@@ -25,7 +25,7 @@ use zbus::object_server::SignalEmitter;
 
 use crate::dbus::{self as door_dbus, notify_lifecycle, Checks, ManageIface, Shared};
 use crate::door::arg;
-use crate::identity::{Procfs, Users};
+use crate::identity::{FileError, Files, Procfs, Refusal, Reply, Users};
 use crate::limits::{MAX_APP_ID, MAX_PROFILE_ID};
 use crate::registry::{Registry, RegistryError};
 use crate::store::Store;
@@ -189,23 +189,37 @@ impl Procfs for ScenarioProcfs {
         self.processes.pidfd_pid(pidfd)
     }
 
-    fn flatpak_info(&self, pid: u32) -> io::Result<Vec<u8>> {
-        let app = self.app_of(pid).ok_or(io::ErrorKind::NotFound)?;
-        Ok(format!(
-            "[Application]\nname={}\n\n[Instance]\ninstance-id={}\n",
-            app.app_id, app.instance
-        )
-        .into_bytes())
-    }
-
-    fn cgroup(&self, pid: u32) -> io::Result<Vec<u8>> {
-        let app = self.app_of(pid).ok_or(io::ErrorKind::NotFound)?;
-        let scope = instance_scope(&app.app_id, &app.instance).ok_or(io::ErrorKind::InvalidData)?;
-        let uid = self.processes.uid(pid)?;
-        Ok(
-            format!("0::/user.slice/user-{uid}.slice/user@{uid}.service/app.slice/{scope}\n")
-                .into_bytes(),
-        )
+    /// As the identity helper answers: its own look at the pidfd, then the scenario app's
+    /// `.flatpak-info` (owned by the process's uid, so another uid's request is `not-owned`) and
+    /// its instance's scope under that uid's user manager.
+    fn caller_files(&self, pidfd: i32, uid: u32) -> io::Result<Reply> {
+        let pid = match self.processes.pidfd_pid(pidfd) {
+            None => return Ok(Reply::Refused(Refusal::NotAPidfd)),
+            Some(p) if p <= 0 => return Ok(Reply::Refused(Refusal::ProcessGone)),
+            Some(p) => p as u32,
+        };
+        let (info, cgroup) = match (self.app_of(pid), self.processes.uid(pid)) {
+            (None, _) => (Err(FileError::Missing), Err(FileError::Missing)),
+            (Some(_), Err(_)) => (Err(FileError::Failed), Err(FileError::Failed)),
+            (Some(app), Ok(owner)) => {
+                let info = format!(
+                    "[Application]\nname={}\n\n[Instance]\ninstance-id={}\n",
+                    app.app_id, app.instance
+                );
+                let cgroup = instance_scope(&app.app_id, &app.instance).map(|scope| {
+                    format!("0::/user.slice/user-{owner}.slice/user@{owner}.service/app.slice/{scope}\n")
+                });
+                (
+                    if owner == uid {
+                        Ok(info.into_bytes())
+                    } else {
+                        Err(FileError::NotOwned)
+                    },
+                    cgroup.map(String::into_bytes).ok_or(FileError::Failed),
+                )
+            }
+        };
+        Ok(Reply::Files(Files { pid, info, cgroup }))
     }
 }
 
@@ -229,7 +243,7 @@ pub struct LinuxProcesses;
 #[cfg(target_os = "linux")]
 impl Processes for LinuxProcesses {
     fn pidfd_pid(&self, pidfd: i32) -> Option<i32> {
-        crate::procfs::LinuxProcfs.pidfd_pid(pidfd)
+        ruya_platform_identify::fdinfo::own_pidfd_pid(pidfd)
     }
 
     fn environ(&self, pid: u32) -> io::Result<Vec<u8>> {
@@ -515,7 +529,19 @@ mod tests {
         let mut p = FakeProcesses::default();
         p.0.insert(10, (Vec::new(), 1000));
         let procfs = ScenarioProcfs::new(Arc::new(s), Box::new(p));
-        assert!(procfs.flatpak_info(10).is_err());
+        let Ok(Reply::Files(files)) = procfs.caller_files(110, 1000) else {
+            panic!("the files of pid 10");
+        };
+        assert_eq!(files.info, Err(FileError::Missing));
+    }
+
+    #[test]
+    fn another_uids_request_is_not_owned() {
+        let (procfs, _) = world();
+        let Ok(Reply::Files(files)) = procfs.caller_files(110, 1001) else {
+            panic!("the files of pid 10");
+        };
+        assert_eq!(files.info, Err(FileError::NotOwned));
     }
 
     #[test]

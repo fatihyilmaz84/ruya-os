@@ -720,11 +720,8 @@ mod tests {
         fn a_stranger_cannot_register() {
             let mut w = World::new();
             let a = w.app(1, APP, "7");
-            w.procfs
-                .processes
-                .get_mut(&a.pid)
-                .expect("set")
-                .flatpak_info = None;
+            w.procfs.processes.get_mut(&a.pid).expect("set").info =
+                Err(crate::identity::FileError::Missing);
             let mut f = w.door();
             let (door, now) = (&mut f.door, f.now);
             assert_eq!(register(door, &a.caller(), now), Status::NotAnApp);

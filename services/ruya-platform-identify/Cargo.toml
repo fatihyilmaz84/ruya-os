@@ -1,0 +1,18 @@
+[package]
+name = "ruya-platform-identify"
+description = "RuyaOS Platform identity helper (ADR-022 decision 4): reads a sandboxed caller's .flatpak-info and cgroup for ruya-platform over a root-only socket; the wire codec and the helper's rules are a pure lib"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ruya-keyfile = { path = "../ruya-keyfile" }  # MAX_BYTES: the .flatpak-info cap is the keyfile reader's own (RUY-1050)
+
+[target.'cfg(target_os = "linux")'.dependencies]
+ruya-fs = { path = "../ruya-fs" }  # the caller's .flatpak-info and the fdinfo, never through a link (RUY-911)
+libc = "0.2"  # SO_PEERCRED and recvmsg with SCM_RIGHTS on the accepted socket; already in the tree
+
+[[bin]]
+name = "ruya-platform-identify"
+path = "src/main.rs"

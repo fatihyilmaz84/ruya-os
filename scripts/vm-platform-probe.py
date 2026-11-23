@@ -8,9 +8,15 @@ minimal client in vm_dbus.py (next to this script). Every line it writes is "<wo
                 message that arrives, "signal <interface>.<member> <value_ms>"; on Stopping it calls SaveDone
                 ("savedone <status>"). Runs until it is stopped, or 900 s.
   register      one Register, prints "register <status>" or "register error <error name>".
+  helper SOCK   one request to the identity helper's socket (RUY-1129, ADR-022 decision 4) with this
+                process's own pidfd and uid: connects, holds the connection 2 s first (so the check can read
+                the waiting helper's capabilities), then prints "helper files pid <pid> info <code>",
+                "helper refused <code>" or "helper error <exception>". The codes are the wire's
+                (services/ruya-platform-identify/src/wire.rs).
 """
 
 import os
+import socket
 import struct
 import sys
 import time
@@ -78,11 +84,40 @@ def app(log_path):
                 log.write("savedone error %s\n" % e.name)
 
 
+# The wire's codes (ruya-platform-identify wire.rs): a part's code, a refusal's code.
+FILE_CODES = ["bytes", "missing", "denied", "not-owned", "not-regular", "too-large", "failed"]
+REFUSALS = ["files", "bad-request", "not-root", "not-a-pidfd", "process-gone"]
+
+
+def name_of(names, code):
+    return names[code] if code < len(names) else "unknown-%d" % code
+
+
+def helper(sock_path):
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        s.connect(sock_path)
+        time.sleep(2)
+        socket.send_fds(s, [struct.pack("<BI", 1, os.getuid())], [os.pidfd_open(os.getpid())])
+        r = s.recv(1 << 17)
+    except OSError as e:
+        return "helper error %s" % type(e).__name__
+    if len(r) < 2 or r[0] != 1:
+        return "helper malformed %r" % r[:8]
+    if r[1] != 0:
+        return "helper refused %s" % name_of(REFUSALS, r[1])
+    if len(r) < 7:
+        return "helper malformed %r" % r[:8]
+    return "helper files pid %d info %s" % (struct.unpack_from("<I", r, 2)[0], name_of(FILE_CODES, r[6]))
+
+
 def main():
     if len(sys.argv) == 3 and sys.argv[1] == "app":
         app(sys.argv[2])
     elif len(sys.argv) == 2 and sys.argv[1] == "register":
         print("register %s" % register(Bus()))
+    elif len(sys.argv) == 3 and sys.argv[1] == "helper":
+        print(helper(sys.argv[2]))
     else:
         sys.exit(__doc__)
 

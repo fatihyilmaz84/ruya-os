@@ -110,7 +110,7 @@ impl Platform {
                         id
                     }
                     Err(why) => {
-                        eprintln!("ruya-platform: {} is not an app: {why:?}", caller.name);
+                        eprintln!("ruya-platform: {} is not an app: {why}", caller.name);
                         return Err(Status::NotAnApp);
                     }
                 }
@@ -322,12 +322,14 @@ pub(crate) mod tests {
             self.procfs.processes.insert(
                 pid,
                 Process {
-                    flatpak_info: Some(
-                        format!("[Application]\nname={app}\n[Instance]\ninstance-id={instance}\n").into_bytes(),
-                    ),
-                    cgroup: Some(
-                        format!("0::/user.slice/user-{uid}.slice/user@{uid}.service/app.slice/{scope}\n").into_bytes(),
-                    ),
+                    info: Ok(format!(
+                        "[Application]\nname={app}\n[Instance]\ninstance-id={instance}\n"
+                    )
+                    .into_bytes()),
+                    cgroup: Ok(format!(
+                        "0::/user.slice/user-{uid}.slice/user@{uid}.service/app.slice/{scope}\n"
+                    )
+                    .into_bytes()),
                 },
             );
             App {
@@ -642,8 +644,10 @@ pub(crate) mod tests {
     fn the_identity_is_kept_per_connection_until_it_leaves() {
         let mut w = World::new();
         let a = w.app(1, APP, "7");
-        // The pidfd names the process for the recipe's two looks, then the process is gone.
-        w.procfs.pidfd(a.fd, &[a.pid as i32, a.pid as i32, -1]);
+        // The pidfd names the process for the recipe's three looks (the door's, the helper's, the
+        // door's re-check), then the process is gone.
+        w.procfs
+            .pidfd(a.fd, &[a.pid as i32, a.pid as i32, a.pid as i32, -1]);
         let mut f = w.door();
         let (door, now) = (&mut f.door, f.now);
         door.admit(&a.caller(), L, Gate::ActiveProfile, now)

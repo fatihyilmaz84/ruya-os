@@ -1085,12 +1085,22 @@ dependencies = [
  "ruya-fs",
  "ruya-ids",
  "ruya-keyfile",
+ "ruya-platform-identify",
  "ruya-profiles-client",
  "ruya-users",
  "serde",
  "serde_json",
  "tempfile",
  "zbus",
+]
+
+[[package]]
+name = "ruya-platform-identify"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "ruya-fs",
+ "ruya-keyfile",
 ]
 
 [[package]]
