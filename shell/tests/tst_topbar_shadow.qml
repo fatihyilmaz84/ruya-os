@@ -134,7 +134,7 @@ Item {
                 tryVerify(() => shadows.every(s => !s.visible), 2000, "no shadows on Performance")
                 // The samples see the shadow: without it they are lighter.
                 const none = grabSamples()
-                for (let i = 0; i < 2; ++i) {
+                for (let i = 0; i < fresh.samples.length; ++i) {
                     const d = sampleDistance(fresh.samples[i], none.samples[i])
                     verify(d >= 8, "pill " + i + ": the samples lie in the shadow (difference to no shadow " + d + ")")
                 }
@@ -144,8 +144,8 @@ Item {
             tryVerify(() => shadows.every(s => s.visible && s.opacity === 1), 2000, "the shadows are back")
             const after = grabSamples()
             after.img.save(shotsDir + "/topbar-shadow-again-" + data.tag + ".png")
-            const names = ["section nav", "status cluster"]
-            for (let i = 0; i < 2; ++i) {
+            const names = ["section nav"]
+            for (let i = 0; i < fresh.samples.length; ++i) {
                 const d = sampleDistance(fresh.samples[i], after.samples[i])
                 verify(d <= 6, data.tag + ", " + names[i] + ": the shadow matches the first one (max channel difference "
                        + d + "): " + JSON.stringify(fresh.samples[i]) + " vs " + JSON.stringify(after.samples[i]))
