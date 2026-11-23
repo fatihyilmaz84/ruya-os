@@ -2925,6 +2925,23 @@ expect_contains "webp: a missing plugin fails" "$out" "FAIL: the Qt WebP image p
 [ "$(grep -c '^webp_checks$' "$here/vm-play-check.sh")" = 1 ] && pass "vm-play-check.sh check mode runs webp_checks" || fail "vm-play-check.sh check mode does not run webp_checks"
 grep -q 'qt6-qtimageformats' "$here/../image/build/20-base.sh" && pass "20-base.sh installs qt6-qtimageformats" || fail "20-base.sh lacks qt6-qtimageformats"
 
+# RUY-29: vm-update-check.sh `download` reads GetDownloadJob's record by key and the cached layers of each run
+# from ruya-update's journal line, which must still be the line the service writes.
+echo "== vm-update-check.sh: the download job's record and journal lines (RUY-29) =="
+uc() { bash "$here/vm-update-check.sh" parse "$@" | tr -d '\r'; }
+rec='{"type":"sa{sv}","data":["ok",{"resumable":{"type":"b","data":false},"state":{"type":"s","data":"paused"},"bytes_done":{"type":"t","data":209715200},"id":{"type":"s","data":"os-1795435200"}}]}'
+[ "$(echo "$rec" | uc job state)" = paused ] && pass "update parse: a key in any order" || fail "update parse: state is '$(echo "$rec" | uc job state)'"
+[ "$(echo "$rec" | uc job resumable)" = false ] && pass "update parse: a boolean reads true/false" || fail "update parse: resumable is '$(echo "$rec" | uc job resumable)'"
+[ "$(echo "$rec" | uc job bytes_done)" = 209715200 ] && pass "update parse: a number" || fail "update parse: bytes_done"
+[ -z "$(echo '{"type":"sa{sv}","data":["ok",{}]}' | uc job state)" ] && pass "update parse: no job reads empty" || fail "update parse: an empty record gave a state"
+journal='ruya-update: download os-1795435200: 59 layers (1067414334 bytes) here, 19 layers (2581035309 bytes) to fetch
+ruya-update: download os-1795435100: 50 layers (1 bytes) here, 1 layers (1 bytes) to fetch
+ruya-update: ignoring a progress line: bootc progress: EOF
+ruya-update: download os-1795435200: 68 layers (1267414334 bytes) here, 10 layers (2381035309 bytes) to fetch'
+[ "$(echo "$journal" | uc cached os-1795435200 | tr '\n' ' ')" = "59 68 " ] && pass "update parse: the cached layers of each run of one job" || fail "update parse: cached is '$(echo "$journal" | uc cached os-1795435200 | tr '\n' ' ')'"
+grep -q '"ruya-update: download {}: {steps_cached} layers ({bytes_cached} bytes) here, {steps_total} layers ({bytes_total} bytes) to fetch"' "$here/../services/ruya-update/src/service.rs" \
+    && pass "ruya-update still writes the journal line the download mode reads" || fail "ruya-update's download journal line changed: update cached_layers in vm-update-check.sh"
+
 echo
 if [ "$fails" = 0 ]; then echo "vm-check tests: all passed"; else echo "vm-check tests: $fails failed"; fi
 exit $(( fails > 0 ))

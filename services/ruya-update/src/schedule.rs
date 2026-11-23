@@ -30,6 +30,10 @@ pub trait Clock: Send + Sync {
     fn now(&self) -> i64;
     /// Minutes since local midnight, 0..1440.
     fn minute_of_day(&self) -> u32;
+    /// The local zone's offset east of UTC at `now`, in seconds (the download ledger's days).
+    fn utc_offset_secs(&self) -> i64;
+    /// Milliseconds on a clock that never goes back (the download rate).
+    fn monotonic_ms(&self) -> u64;
 }
 
 /// Restarts the console.
@@ -47,8 +51,12 @@ impl Clock for SystemClock {
             .map_or(0, |d| i64::try_from(d.as_secs()).unwrap_or(0))
     }
 
-    #[cfg(target_os = "linux")]
     fn minute_of_day(&self) -> u32 {
+        local_minute_of_day(self.now(), self.utc_offset_secs())
+    }
+
+    #[cfg(target_os = "linux")]
+    fn utc_offset_secs(&self) -> i64 {
         let now: libc::time_t = self.now();
         // SAFETY: `tm` is plain data that localtime_r fills in; both pointers are valid for the
         // call, and localtime_r (unlike localtime) keeps no static buffer. `tzset` (libc, POSIX)
@@ -61,14 +69,20 @@ impl Clock for SystemClock {
             libc::localtime_r(&now, &mut tm)
         };
         if filled.is_null() {
-            return local_minute_of_day(self.now(), 0);
+            return 0;
         }
-        u32::try_from(tm.tm_hour * 60 + tm.tm_min).unwrap_or(0)
+        tm.tm_gmtoff
     }
 
     #[cfg(not(target_os = "linux"))]
-    fn minute_of_day(&self) -> u32 {
-        local_minute_of_day(self.now(), 0)
+    fn utc_offset_secs(&self) -> i64 {
+        0
+    }
+
+    fn monotonic_ms(&self) -> u64 {
+        static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+        let start = START.get_or_init(std::time::Instant::now);
+        u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX)
     }
 }
 
@@ -139,6 +153,11 @@ impl Schedule {
         self.last_activity = Some(now);
         self.app_running = app_running;
         self.pending_restart.take().is_some()
+    }
+
+    /// The last report said an app is running.
+    pub fn app_running(&self) -> bool {
+        self.app_running
     }
 
     pub fn attempted(&mut self, now: i64) {
@@ -243,6 +262,13 @@ impl Clock for FakeClock {
     fn minute_of_day(&self) -> u32 {
         self.state.lock().expect("fake lock").1
     }
+    fn utc_offset_secs(&self) -> i64 {
+        0
+    }
+    /// Follows `now`: a test moves both with `set`.
+    fn monotonic_ms(&self) -> u64 {
+        u64::try_from(self.now()).unwrap_or(0) * 1000
+    }
 }
 
 /// For tests: a clock in a time zone, given as its offset from UTC, that can be changed while the
@@ -275,6 +301,12 @@ impl Clock for ZonedClock {
     fn minute_of_day(&self) -> u32 {
         let (now, offset) = *self.state.lock().expect("fake lock");
         local_minute_of_day(now, offset)
+    }
+    fn utc_offset_secs(&self) -> i64 {
+        self.state.lock().expect("fake lock").1
+    }
+    fn monotonic_ms(&self) -> u64 {
+        u64::try_from(self.now()).unwrap_or(0) * 1000
     }
 }
 

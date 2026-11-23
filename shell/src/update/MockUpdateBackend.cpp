@@ -13,6 +13,20 @@ const QString Ok = QStringLiteral("ok");
 const QString Busy = QStringLiteral("busy");
 const QString Unavailable = QStringLiteral("unavailable");
 const QString Forbidden = QStringLiteral("forbidden");
+const QString WrongState = QStringLiteral("wrong-state");
+const QString Unsupported = QStringLiteral("unsupported");
+// The image job (Update1's Job record).
+const QString JobRunning = QStringLiteral("running");
+const QString JobPaused = QStringLiteral("paused");
+const QString JobFinished = QStringLiteral("finished");
+const QString PhaseDownload = QStringLiteral("download");
+const QString PhaseInstall = QStringLiteral("install");
+// The service's mapping: bytes fill 0..90 %, the import and deploy 90..99, staged is 100.
+constexpr int DownloadEnd = 90;
+constexpr int InstallStep = 95;
+// What the Dell's 0.0.105 -> 0.0.106 run had to fetch, at a plausible rate.
+constexpr qulonglong MockBytesTotal = 2381035309ULL;
+constexpr qulonglong MockRateBps = 25000000ULL;
 } // namespace
 
 MockUpdateBackend::MockUpdateBackend(QObject *parent)
@@ -35,12 +49,20 @@ void MockUpdateBackend::reset()
     m_updateExists = true;
     m_failNext = false;
     m_pauseAt = -1;
-    m_paused = false;
+    m_held = false;
     m_rollbackCount = 0;
     m_activityCount = 0;
     m_lastAppRunning = false;
     m_callerIsAdmin = true;
+    m_jobId.clear();
+    m_jobVersion.clear();
+    m_jobState.clear();
+    m_jobStatus.clear();
+    m_jobPhase = PhaseDownload;
+    m_jobStarted = 0;
+    m_jobFinished = 0;
     publish();
+    publishJob();
 }
 
 void MockUpdateBackend::setRollbackAvailable(bool available)
@@ -52,12 +74,13 @@ void MockUpdateBackend::setRollbackAvailable(bool available)
 void MockUpdateBackend::resume()
 {
     m_pauseAt = -1;
-    m_paused = false;
+    m_held = false;
 }
 
 void MockUpdateBackend::refresh()
 {
     publish();
+    publishJob();
 }
 
 bool MockUpdateBackend::isRunning() const
@@ -80,6 +103,44 @@ void MockUpdateBackend::publishAfter(int ms)
         --m_pending;
         deliverStatus(request, copy);
     });
+}
+
+QVariantMap MockUpdateBackend::jobRecord() const
+{
+    if (m_jobState.isEmpty())
+        return {};
+    const bool running = m_jobState == JobRunning;
+    const bool fetching = running && m_jobPhase == PhaseDownload;
+    const int percent = m_status.progress;
+    const qulonglong done = MockBytesTotal * qulonglong(qMin(percent, DownloadEnd)) / qulonglong(DownloadEnd);
+    const qulonglong left = MockBytesTotal - done;
+    return {
+        {QStringLiteral("id"), m_jobId},
+        {QStringLiteral("source"), QStringLiteral("update")},
+        {QStringLiteral("kind"), QStringLiteral("os")},
+        {QStringLiteral("app"), QString()},
+        {QStringLiteral("title"), QStringLiteral("RuyaOS %1").arg(m_jobVersion)},
+        {QStringLiteral("state"), m_jobState},
+        {QStringLiteral("status"), m_jobStatus},
+        {QStringLiteral("reason"), QString()},
+        {QStringLiteral("phase"), m_jobPhase},
+        {QStringLiteral("percent"), uint(percent)},
+        {QStringLiteral("bytes_done"), done},
+        {QStringLiteral("bytes_total"), MockBytesTotal},
+        {QStringLiteral("rate_bps"), fetching ? MockRateBps : qulonglong(0)},
+        {QStringLiteral("eta_s"), fetching ? uint((left + MockRateBps - 1) / MockRateBps) : uint(0)},
+        {QStringLiteral("position"), uint(0)},
+        {QStringLiteral("resumable"), m_jobState != JobFinished && m_jobPhase == PhaseDownload},
+        {QStringLiteral("started"), m_jobStarted},
+        {QStringLiteral("finished"), m_jobFinished},
+    };
+}
+
+void MockUpdateBackend::publishJob()
+{
+    const quint64 request = beginJobRequest();
+    const QVariantMap copy = jobRecord();
+    QTimer::singleShot(0, this, [this, request, copy] { deliverJob(request, copy); });
 }
 
 void MockUpdateBackend::finish(const QString &method, const QString &status)
@@ -106,19 +167,98 @@ void MockUpdateBackend::check()
     finish(QStringLiteral("check"), Ok);
 }
 
+// A new job, or the paused one again (its percent stays).
+void MockUpdateBackend::startDownload()
+{
+    if (m_jobState != JobPaused) {
+        const qint64 now = QDateTime::currentSecsSinceEpoch();
+        // As the service: "os-<seconds>", with a suffix when the last job began in that second.
+        const QString base = QStringLiteral("os-%1").arg(now);
+        QString id = base;
+        for (int n = 2; id == m_jobId; ++n)
+            id = QStringLiteral("%1-%2").arg(base).arg(n);
+        m_jobId = id;
+        m_jobVersion = m_status.available;
+        m_jobStarted = now;
+        m_jobFinished = 0;
+        m_status.progress = 0;
+    }
+    m_jobState = JobRunning;
+    m_jobStatus.clear();
+    m_jobPhase = PhaseDownload;
+    m_status.state = DownloadingState;
+    m_status.error.clear();
+    m_held = false;
+    m_timer.start();
+    publish();
+    publishJob();
+}
+
+void MockUpdateBackend::endJob(const QString &status)
+{
+    m_jobState = JobFinished;
+    m_jobStatus = status;
+    m_jobFinished = QDateTime::currentSecsSinceEpoch();
+}
+
+void MockUpdateBackend::cancelPausedJob()
+{
+    if (m_jobState != JobPaused)
+        return;
+    endJob(QStringLiteral("cancelled"));
+    publishJob();
+}
+
 void MockUpdateBackend::download()
 {
     if (isRunning())
         return finish(QStringLiteral("download"), Busy);
-    if (m_status.available.isEmpty())
+    if (m_jobState != JobPaused && m_status.available.isEmpty())
         return finish(QStringLiteral("download"), Unavailable);
-    m_status.state = DownloadingState;
-    m_status.progress = 0;
-    m_status.error.clear();
-    m_paused = false;
-    m_timer.start();
-    publish();
+    startDownload();
     finish(QStringLiteral("download"), Ok);
+}
+
+void MockUpdateBackend::pauseDownload()
+{
+    if (m_jobState != JobRunning)
+        return finish(QStringLiteral("pauseDownload"), WrongState);
+    if (m_jobPhase != PhaseDownload)
+        return finish(QStringLiteral("pauseDownload"), Unsupported);
+    m_timer.stop();
+    m_jobState = JobPaused;
+    m_status.state = m_status.staged.isEmpty() ? IdleState : StagedState;
+    publish();
+    publishJob();
+    finish(QStringLiteral("pauseDownload"), Ok);
+}
+
+void MockUpdateBackend::resumeDownload()
+{
+    if (m_jobState != JobPaused)
+        return finish(QStringLiteral("resumeDownload"), WrongState);
+    if (isRunning())
+        return finish(QStringLiteral("resumeDownload"), Busy);
+    startDownload();
+    finish(QStringLiteral("resumeDownload"), Ok);
+}
+
+void MockUpdateBackend::cancelDownload()
+{
+    if (m_jobState == JobPaused) {
+        cancelPausedJob();
+        return finish(QStringLiteral("cancelDownload"), Ok);
+    }
+    if (m_jobState != JobRunning)
+        return finish(QStringLiteral("cancelDownload"), WrongState);
+    if (m_jobPhase != PhaseDownload)
+        return finish(QStringLiteral("cancelDownload"), Unsupported);
+    m_timer.stop();
+    endJob(QStringLiteral("cancelled"));
+    m_status.state = m_status.staged.isEmpty() ? IdleState : StagedState;
+    publish();
+    publishJob();
+    finish(QStringLiteral("cancelDownload"), Ok);
 }
 
 void MockUpdateBackend::rollback()
@@ -134,6 +274,7 @@ void MockUpdateBackend::rollback()
     m_status.state = StagedState;
     m_status.staged = QStringLiteral("0.0.17");
     m_status.available.clear();
+    cancelPausedJob();
     publish();
     finish(QStringLiteral("rollback"), Ok);
 }
@@ -150,6 +291,7 @@ void MockUpdateBackend::setChannel(const QString &channel)
     m_status.available.clear();
     if (m_status.state == UpToDateState || m_status.state == FailedState)
         m_status.state = IdleState;
+    cancelPausedJob();
     publish();
     finish(QStringLiteral("setChannel"), Ok);
 }
@@ -197,20 +339,29 @@ void MockUpdateBackend::step()
         }
         publish();
     } else if (m_status.state == DownloadingState) {
-        if (m_paused)
+        if (m_held)
             return;
-        m_status.progress = qMin(100, m_status.progress + 10);
+        if (m_status.progress < DownloadEnd) {
+            m_status.progress = qMin(DownloadEnd, m_status.progress + 10);
+        } else if (m_status.progress < InstallStep) {
+            m_status.progress = InstallStep;
+            m_jobPhase = PhaseInstall;
+        } else {
+            m_status.progress = 100;
+        }
         if (m_status.progress == m_pauseAt)
-            m_paused = true;
+            m_held = true;
         if (m_status.progress >= 100) {
             m_timer.stop();
+            endJob(Ok);
             m_status.state = StagedState;
-            m_status.staged = m_status.available;
+            m_status.staged = m_status.available.isEmpty() ? m_jobVersion : m_status.available;
             m_status.available.clear();
             m_status.rollbackAvailable = true;
             m_updateExists = false;
         }
         publish();
+        publishJob();
     } else {
         m_timer.stop();
     }

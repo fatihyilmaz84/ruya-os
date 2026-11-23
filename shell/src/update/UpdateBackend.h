@@ -4,6 +4,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QVariantMap>
 
 // The status record of org.ruyaos.Update1 (api/dbus/org.ruyaos.Update1.xml, "GetStatus").
 struct UpdateStatus
@@ -34,6 +35,11 @@ public:
     virtual void refresh() = 0;                       // reports the status
     virtual void check() = 0;
     virtual void download() = 0;
+    // The image job (Update1's Job record, RUY-29): pause keeps the fetched layers, resume goes on
+    // from them, cancel stops for good. Download with a paused job resumes it.
+    virtual void pauseDownload() = 0;
+    virtual void resumeDownload() = 0;
+    virtual void cancelDownload() = 0;
     virtual void rollback() = 0;
     virtual void setChannel(const QString &channel) = 0;
     virtual void setAutoRestart(bool enabled) = 0;
@@ -43,8 +49,12 @@ public:
 
 signals:
     void statusChanged(const UpdateStatus &status);
-    // method: "check" | "download" | "rollback" | "setChannel" | "setAutoRestart"; status: see the XML header
-    // ("ok", "busy", "unavailable", "invalid", "forbidden", "failed").
+    // The image job's whole record, keys as the XML's "Job record" (id, state, phase, percent,
+    // bytes_done, bytes_total, rate_bps, eta_s, resumable, ...); empty when there has been none.
+    void jobChanged(const QVariantMap &job);
+    // method: "check" | "download" | "pauseDownload" | "resumeDownload" | "cancelDownload" |
+    // "rollback" | "setChannel" | "setAutoRestart"; status: see the XML header ("ok", "busy",
+    // "unavailable", "invalid", "forbidden", "failed", "wrong-state", "unsupported").
     void requestFinished(const QString &method, const QString &status);
 
 protected:
@@ -58,7 +68,17 @@ protected:
         if (acceptStatus(request))
             emit statusChanged(status);
     }
+    // The job the same way: a JobChanged signal is numbered when it arrives, so a GetDownloadJob
+    // reply sent before it is stale.
+    quint64 beginJobRequest() { return m_jobSeq.begin(); }
+    bool acceptJob(quint64 request) { return m_jobSeq.accept(request); }
+    void deliverJob(quint64 request, const QVariantMap &job)
+    {
+        if (acceptJob(request))
+            emit jobChanged(job);
+    }
 
 private:
     RequestSequence m_statusSeq;
+    RequestSequence m_jobSeq;
 };

@@ -7,6 +7,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+ruya-jobs = { path = "../ruya-jobs" }  # the job rate and the per-day download ledger (RUY-29)
 serde_json = "1"  # `bootc status --json` (already in the tree)
 zbus = { version = "5", default-features = false, features = ["async-io"] }
 futures-lite = "2"

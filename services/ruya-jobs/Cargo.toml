@@ -1,0 +1,14 @@
+[package]
+name = "ruya-jobs"
+description = "RuyaOS job-record helpers the services share (ADR-026): the download rate and the per-day download ledger"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ruya-calendar = { path = "../ruya-calendar" }  # local days, YYYY-MM-DD
+serde_json = "1"  # the ledger file (already in the tree)
+
+[dev-dependencies]
+tempfile = "3"

@@ -89,10 +89,13 @@ fn run() -> Result<(), Box<dyn Error>> {
         };
         let connection = builder
             .name(BUS_NAME)?
-            .serve_at(OBJECT_PATH, UpdateIface::new(update, changes, session))?
+            .serve_at(
+                OBJECT_PATH,
+                UpdateIface::new(update.clone(), changes, session),
+            )?
             .build()
             .await?;
-        forward(connection, receiver).await;
+        forward(connection, update, receiver).await;
         Ok::<(), Box<dyn Error>>(())
     })
 }

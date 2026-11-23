@@ -185,7 +185,7 @@ The contract is `api/dbus/org.ruyaos.Store1.xml`. Differences from the list abov
 
 ### 4.3a Update service (`ruya-update`)
 
-OS image updates, not apps: see `01-platform.md` §4 and `api/dbus/org.ruyaos.Update1.xml`. Same layout as the store service (pure core behind a `Bootc` trait with a fake, thin D-Bus adapter, jobs on a thread, `StatusChanged` for every change).
+OS image updates, not apps: see `01-platform.md` §4 and `api/dbus/org.ruyaos.Update1.xml`. Same layout as the store service (pure core behind a `Bootc` trait with a fake, thin D-Bus adapter, jobs on a thread, `StatusChanged` for every change). The OS download is one ADR-026 v2 job (`GetDownloadJob`, `JobChanged`, `PauseDownload`, `ResumeDownload`, `CancelDownload`, `GetDownloadStats`; RUY-29, `01` §4); the shell's `Update` singleton carries its record as `Update.job` for the Downloads page (RUY-30).
 
 ### 4.4 Permissions
 - Flatpak permissions are **static**. The app page shows them in plain language before install ("Uses network", "Reads your Downloads folder", "Accesses all devices"). High-risk permissions (`--device=all`, `--filesystem=host`, `--talk-name=org.freedesktop.Flatpak`) get a warning and, for Standard profiles, need the admin PIN.
