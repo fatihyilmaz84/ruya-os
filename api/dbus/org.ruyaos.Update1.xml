@@ -82,8 +82,8 @@
   position 0 and title "RuyaOS <version>". There is at most one: GetDownloadJob and JobChanged
   give the running or paused one, else the last that finished since the service started.
 
-  Byte source: `bootc upgrade|switch --progress-fd` (bootc 1.17.1; a pipe, a file is refused)
-  writes JSON lines: one "Start", then "ProgressBytes" about ten times a second while layers are
+  Byte source: `bootc upgrade|switch` with its progress-fd option (bootc 1.17.1; the fd must be
+  a pipe, a file is refused) writes JSON lines: one "Start", then "ProgressBytes" about ten times a second while layers are
   fetched (bytes of this run, bytesTotal still to fetch, bytesCached already present, the same in
   layers as steps), then "ProgressSteps" for the import and the deploy, which carry no bytes.
   Another event type is ignored, a line that is no event is skipped (the job goes on). Measured
