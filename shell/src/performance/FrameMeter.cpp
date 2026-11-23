@@ -118,6 +118,28 @@ void FrameMeter::prune(QVector<qint64> &stamps, qint64 now)
     stamps.erase(stamps.begin(), keep);
 }
 
+void FrameMeter::setRecordIntervals(bool on)
+{
+    QMutexLocker lock(&m_mutex);
+    m_recordIntervals = on;
+    if (!on)
+        m_recorded.clear();
+}
+
+QVector<double> FrameMeter::takeIntervalsMs()
+{
+    QVector<qint64> taken;
+    {
+        QMutexLocker lock(&m_mutex);
+        taken.swap(m_recorded);
+    }
+    QVector<double> out;
+    out.reserve(taken.size());
+    for (qint64 ns : taken)
+        out.append(double(ns) / 1e6);
+    return out;
+}
+
 void FrameMeter::onCommit()
 {
     m_commitsSeen.fetch_add(1);
@@ -138,6 +160,11 @@ void FrameMeter::onPresented()
     m_presented.append(now);
     prune(m_presented, now);
     if (m_lastFrame >= 0 && now > m_lastFrame) {
+        if (m_recordIntervals) {
+            if (m_recorded.size() >= MaxRecordedIntervals)
+                m_recorded.removeFirst();
+            m_recorded.append(now - m_lastFrame);
+        }
         m_lowEnds.append(now);
         m_lowIntervals.append(now - m_lastFrame);
         const int tooMany = std::max(0, int(m_lowEnds.size()) - MaxLowIntervals);

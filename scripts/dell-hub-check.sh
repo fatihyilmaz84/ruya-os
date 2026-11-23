@@ -39,9 +39,7 @@
 # Exit 0 PASS, 1 a FAIL, 2 NOT RUN.
 set -u
 HOST="${1:-192.168.178.109}"
-SSHO="-i $HOME/.ssh/ruyaos_dev -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
-r() { ssh $SSHO "root@$HOST" "$@"; }
-BUS='runuser -u ruya-shell -- busctl --system'
+. "$(dirname "$0")/lib/dell-common.sh"   # SSHO, r, BUS, now, active, signin, stop_apps, shell_cost
 APP=net.supertuxkart.SuperTuxKart
 fails=0
 ok() { echo "PASS: $*"; }
@@ -83,49 +81,22 @@ finally:
     fcntl.ioctl(fd, 0x5502)
     os.close(fd)
 EOF
-r 'cat > /var/tmp/dell-hub/cost.sh' <<'EOF'
-# cost.sh: the shell's render ms (drm fdinfo, once per client id) and CPU ticks over 10 s
-sp=$(pgrep -x ruya-shell | head -1); declare -A f a
-for d in /proc/$sp/fdinfo/*; do id=$(awk '/drm-client-id/{print $2}' $d 2>/dev/null); [ -n "$id" ] && [ -z "${f[$id]:-}" ] && f[$id]=$d && a[$id]=$(awk '/drm-engine-render/{print $2}' $d); done
-c0=$(awk '{print $14+$15}' /proc/$sp/stat)
-sleep 10; t=0
-for id in "${!f[@]}"; do b=$(awk '/drm-engine-render/{print $2}' ${f[$id]}); t=$((t + (b - a[$id]) / 1000000)); done
-c1=$(awk '{print $14+$15}' /proc/$sp/stat)
-echo "$t $((c1 - c0))"
-EOF
 keys() { r "python3 /var/tmp/dell-hub/keys.py $*"; }
-cost() { r 'bash /var/tmp/dell-hub/cost.sh'; }
-now() { r 'date +%s'; }
+cost() { shell_cost 10; }
 
 r 'pgrep -x ruya-shell >/dev/null' || { echo "DELL HUB CHECK NOT RUN: ruya-shell is not running"; exit 2; }
 
 # The shell must be signed in; with nobody signed in a profile without a PIN (or RUYA_PIN for the
-# first one) is signed in over D-Bus.
-active() { r "$BUS get-property org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ActiveProfile" | sed -n 's/^s "\(.*\)"/\1/p'; }
-signin() {
-    local id pin
-    if [ -n "${RUYA_PIN:-}" ]; then
-        id=$(r "$BUS --json=short call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ListProfiles" | grep -o '\["[^"]*"' | head -1 | tr -d '[""')
-        pin="$RUYA_PIN"
-    else
-        id=$(r "$BUS --json=short call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 ListProfiles" | grep -o '\["[^"]*","[^"]*","[^"]*","[^"]*",false' | head -1 | cut -d'"' -f2)
-        pin=""
-    fi
-    [ -n "$id" ] || return 1
-    r "$BUS call org.ruyaos.Profiles1 /org/ruyaos/Profiles1 org.ruyaos.Profiles1 SwitchTo ss $id '$pin'" | grep -q '"ok"' || return 1
-    sleep 3
-}
+# first one) is signed in over D-Bus (signin).
 profile="$(active)"
 if [ -z "$profile" ]; then
     signin || { echo "DELL HUB CHECK NOT RUN: nobody is signed in and no profile can be signed in (a PIN: set RUYA_PIN)"; exit 2; }
     profile="$(active)"
 fi
-echo "profile: $profile; image: $(r "bootc status --json | python3 -c 'import json,sys;print(json.load(sys.stdin)[\"status\"][\"booted\"][\"image\"][\"version\"])'" 2>/dev/null)"
+echo "profile: $profile; image: $(image_version)"
 
 stk() {   # stop every app, start SuperTuxKart as the profile, let it reach its menu
-    for i in $(r "$BUS --json=short call org.ruyaos.Session1 /org/ruyaos/Session1 org.ruyaos.Session1 ListRunning" | grep -o 'ruya-app-[^"]*service'); do
-        r "$BUS call org.ruyaos.Session1 /org/ruyaos/Session1 org.ruyaos.Session1 Stop s $i" >/dev/null
-    done
+    stop_apps
     sleep 4
     r "$BUS call org.ruyaos.Session1 /org/ruyaos/Session1 org.ruyaos.Session1 Launch ss $APP $profile" | grep -q '"ok"' || { echo "DELL HUB CHECK NOT RUN: SuperTuxKart did not start"; exit 2; }
     sleep 30
@@ -133,17 +104,19 @@ stk() {   # stop every app, start SuperTuxKart as the profile, let it reach its 
 frozen() { r "$BUS --json=short call org.ruyaos.Session1 /org/ruyaos/Session1 org.ruyaos.Session1 ListRunning" | grep -o '"frozen":{"type":"b","data":true}' | wc -l; }
 
 conf=/var/lib/ruya-shell/.config/ruyaos/shell.conf
-D=/run/systemd/system/ruya-compositor@tty1.service.d
 # Put shell.conf and the drop-in back however the script ends (exit 2 in stk(), a lost ssh, Ctrl-C).
 restore() {
     trap - EXIT INT TERM
-    r "systemctl stop ruya-compositor@tty1; [ -f /var/tmp/dell-hub/shell.conf.bak ] && cp -p /var/tmp/dell-hub/shell.conf.bak $conf; rm -f $D/hub-check.conf; rmdir $D 2>/dev/null; systemctl daemon-reload; systemctl start ruya-compositor@tty1; rm -rf /var/tmp/dell-hub"
+    perflog_dropin_rm hub-check.conf
+    r "systemctl stop ruya-compositor@tty1; [ -f /var/tmp/dell-hub/shell.conf.bak ] && cp -p /var/tmp/dell-hub/shell.conf.bak $conf; systemctl start ruya-compositor@tty1; rm -rf /var/tmp/dell-hub"
 }
 trap restore EXIT
 trap 'exit 130' INT TERM
 # RUYA_PERF_LOG=1 from the start (a volatile drop-in): the shell-own frame count of step 1 needs it, and
 # step 4's frame meter too.
-r "cp -p $conf /var/tmp/dell-hub/shell.conf.bak; mkdir -p $D; printf '[Service]\nEnvironment=RUYA_PERF_LOG=1\n' > $D/hub-check.conf; systemctl daemon-reload; systemctl restart ruya-compositor@tty1"
+r "cp -p $conf /var/tmp/dell-hub/shell.conf.bak"
+perflog_dropin_add hub-check.conf
+r "systemctl restart ruya-compositor@tty1"
 sleep 12
 [ -n "$(active)" ] || signin || { echo "DELL HUB CHECK NOT RUN: could not sign in after the restart"; exit 2; }
 profile="$(active)"

@@ -113,6 +113,11 @@ public:
     Q_INVOKABLE double valueOf(const QString &name) const;
     // Asks the service now, outside the interval; only while a consumer is open (no-op otherwise).
     Q_INVOKABLE void refresh();
+    // The frame intervals presented since the last call as one log line body, ms rounded to 0.01,
+    // comma separated ("16.67,16.70,33.31"); "" when there are none. Recording starts with
+    // RUYA_PERF_LOG (or `setFrameLog(true)`, tests); updateFrames logs it once a second.
+    Q_INVOKABLE QString takeFrameIntervals();
+    Q_INVOKABLE void setFrameLog(bool on);
     // Recomputes the frame numbers now (the frame timer does it every FrameUpdateMs).
     Q_INVOKABLE void updateFrames();
 
@@ -152,6 +157,8 @@ private:
     int m_intervalMs = 1000;
     QTimer m_pollTimer;
     QTimer m_frameTimer;
+    static constexpr int UpdatesPerSecond = 1000 / FrameUpdateMs;
+    int m_updatesSinceIntervals = 0;
     bool m_logFrames = false;   // RUYA_PERF_LOG (a measuring script): one journal line per frame update
     FrameMeter m_meter;
     FrameMeter::Stats m_stats;
