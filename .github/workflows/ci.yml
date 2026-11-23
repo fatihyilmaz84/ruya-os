@@ -66,7 +66,9 @@ jobs:
       - name: Test lint
         run: pwsh -NoProfile -File scripts/lint-tests.ps1
       - name: Developer guide lint
-        run: pwsh -NoProfile -File scripts/lint-dev-docs.ps1 -Samples
+        # platform-demo's test needs a bus that passes ProcessFD (the developer mock, RUY-158);
+        # this runner's dbus has none, so the Fedora `samples` job runs it.
+        run: pwsh -NoProfile -File scripts/lint-dev-docs.ps1 -Samples -SkipSample platform-demo
       - name: VM check lint
         run: pwsh -NoProfile -File scripts/lint-vm-checks.ps1
       - name: Profile id lint (user names only from ruya-ids, RUY-1021)
@@ -92,6 +94,10 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
+      - name: Platform conformance coverage (a case for every public Platform1 element, RUY-158)
+        run: |
+          pwsh -NoProfile -File ../scripts/lint-dev-docs.ps1 -ApisJson ../output/apis.json
+          cargo run --locked -q -p ruya-platform --bin ruya-platform-conformance -- coverage --apis ../output/apis.json
 
   shell:
     runs-on: ubuntu-24.04
@@ -119,6 +125,7 @@ jobs:
         run: bash scripts/run-qml-tests.sh shell/build/tst_ruyashell 3 shell/build/qmltest
 
   # RUY-822: compile both .play samples, build each zip with the real ruya-pack and inspect it.
+  # RUY-158: the Platform conformance run against the developer mock, and platform-demo's test.
   samples:
     runs-on: ubuntu-24.04
     container: registry.fedoraproject.org/fedora:44
@@ -126,7 +133,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install compilers
-        run: dnf -y install --setopt=install_weak_deps=False gcc SDL3-devel pkgconf-pkg-config mingw64-gcc mingw32-gcc cargo rust findutils
+        run: dnf -y install --setopt=install_weak_deps=False gcc SDL3-devel pkgconf-pkg-config mingw64-gcc mingw32-gcc cargo rust findutils make systemd-devel dbus-daemon
       - name: Build and inspect the samples
         run: bash scripts/ci-samples-linux.sh
 

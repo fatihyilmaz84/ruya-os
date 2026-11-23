@@ -1,26 +1,21 @@
-//! RUY-403: the interfaces ruya-platform serves are the ones in api/dbus/org.ruyaos.Platform1.xml.
+//! RUY-403: the interfaces ruya-platform serves are the ones in api/dbus/org.ruyaos.Platform1.xml,
+//! and the developer mock's control interface the one in org.ruyaos.Platform1Mock.xml (RUY-158).
 
 use std::sync::{Arc, Mutex};
 
 use ruya_contract_test::{assert_interfaces_are, assert_serves, parse, served_xml};
 use ruya_platform::dbus::{Checks, LifecycleIface, ManageIface, Shared};
-use ruya_platform::lifecycle::{self, Lifecycle};
+use ruya_platform::mock::{self, Objects, Processes, Scenario};
 use ruya_platform::procfs::{NoProcfs, SystemUsers};
 use ruya_platform::registry::Registry;
 use ruya_platform::store::Store;
 use ruya_platform::Platform;
 
 const FILE: &str = "org.ruyaos.Platform1.xml";
+const MOCK_FILE: &str = "org.ruyaos.Platform1Mock.xml";
 
 fn core(dir: &tempfile::TempDir) -> Shared {
-    let mut registry = Registry::default();
-    registry
-        .register(
-            lifecycle::INTERFACE,
-            lifecycle::KEY,
-            Box::<Lifecycle>::default(),
-        )
-        .expect("registers");
+    let registry = Registry::served().expect("registers");
     let store = Store::open(&dir.path().join("platform")).expect("opens");
     Arc::new(Mutex::new(Platform::new(
         Box::new(NoProcfs),
@@ -75,4 +70,34 @@ fn manage_has_no_signal() {
     let manage = &contract["org.ruyaos.Platform1.Manage"];
     let signals: Vec<_> = manage.keys().filter(|k| k.starts_with("signal ")).collect();
     assert!(signals.is_empty(), "{signals:?}");
+}
+
+/// What the developer mock serves (RUY-158): the service's own Lifecycle and Manage, so the
+/// mock cannot offer an element Platform1.xml lacks or miss one it has, and its control
+/// interface, which is in a file of its own and never in Platform1.xml.
+#[test]
+fn the_mock_serves_the_contract_and_its_control_interface() {
+    struct NoProcesses;
+    impl Processes for NoProcesses {
+        fn pidfd_pid(&self, _pidfd: i32) -> Option<i32> {
+            None
+        }
+        fn environ(&self, _pid: u32) -> std::io::Result<Vec<u8>> {
+            Err(std::io::ErrorKind::Unsupported.into())
+        }
+        fn uid(&self, _pid: u32) -> std::io::Result<u32> {
+            Err(std::io::ErrorKind::Unsupported.into())
+        }
+    }
+    let dir = tempfile::tempdir().expect("temp dir");
+    let scenario = Arc::new(
+        Scenario::parse(r#"{"profile": "p1", "profiles": ["p1"], "apps": {}}"#).expect("valid"),
+    );
+    let store = Store::open(&dir.path().join("platform")).expect("opens");
+    let core = mock::core(scenario.clone(), Box::new(NoProcesses), store).expect("registers");
+    let objects = Objects::new(core, scenario);
+    assert_serves(FILE, &objects.lifecycle, &[]);
+    assert_serves(FILE, &objects.manage, &[]);
+    assert_serves(MOCK_FILE, &objects.control, &[]);
+    assert_interfaces_are(MOCK_FILE, &["org.ruyaos.Platform1Mock"]);
 }

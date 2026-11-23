@@ -1016,6 +1016,23 @@ Checked 2026-11-06.
         if (-not $ok) { Write-Host $out }
         Record "developer guide lint self-check ($($c.name): $(if ($c.expect -eq 0) { 'accepted' } else { 'rejected' }))" $ok
     }
+
+    # RUY-158: -Samples -SkipSample leaves a sample out and says so; without it the same sample
+    # (a Makefile whose test cannot pass) is a finding, whether make is installed or not.
+    $fx = Join-Path ([IO.Path]::GetTempPath()) ("ruya-devdocs-fx-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Force (Join-Path $fx "samples\s") | Out-Null
+    [IO.File]::WriteAllText((Join-Path $fx "README.md"), "# Guide`n`n| Chapter |`n|---|`n| [A](a.md) |`n| [Other](other.md) |`n")
+    [IO.File]::WriteAllText((Join-Path $fx "a.md"), $chapter)
+    [IO.File]::WriteAllText((Join-Path $fx "other.md"), $other)
+    [IO.File]::WriteAllText((Join-Path $fx "samples\s\Makefile"), "test:`n`tfalse`n")
+    $skipOut = & $lint -Dir $fx -Repo $fx -Samples -SkipSample s *>&1 | Out-String
+    $skipCode = $LASTEXITCODE
+    $runOut = & $lint -Dir $fx -Repo $fx -Samples *>&1 | Out-String
+    $runCode = $LASTEXITCODE
+    Remove-Item -Recurse -Force $fx
+    $ok = ($skipCode -eq 0) -and $skipOut.Contains("samples/s: make test not run here (-SkipSample)") -and ($runCode -eq 1) -and $runOut.Contains("samples/s")
+    if (-not $ok) { Write-Host $skipOut; Write-Host $runOut }
+    Record "developer guide lint self-check (-SkipSample leaves a sample out and says so; without it the sample is run)" $ok
 }
 
 # RUY-625: scripts\api-changelog.ps1 diffs the public elements of two sets of api/dbus files.
@@ -1064,6 +1081,43 @@ function Test-ApiChangelog {
     # Refs: the same script reads two git refs (this repo's HEAD against itself: nothing changed).
     $head = & $script HEAD HEAD *>&1 | Out-String
     Record "API changelog self-check (the same ref twice prints 'no public API changes')" ($head.Trim() -eq "no public API changes")
+}
+
+# RUY-158: every public element of org.ruyaos.Platform1.xml has a conformance case. The public
+# elements come from the apis.json that Test-DevDocs wrote (lint-dev-docs.ps1, the one parser of
+# the stability tags); the cases from ruya-platform-conformance. The run against the mock needs a
+# Linux session bus (scripts/conformance.sh, CI's samples job).
+function Test-Conformance {
+    Step "Platform conformance coverage (a case for every public Platform1 element)"
+    $apis = Join-Path $Repo "output\apis.json"
+    Push-Location $Services
+    $runner = { param($file) cargo run -q --locked -p ruya-platform --bin ruya-platform-conformance -- coverage --apis $file 2>&1 | Out-String }
+    $out = & $runner $apis
+    $code = $LASTEXITCODE
+    if ($code -ne 0) { Write-Host $out }
+    Record "conformance coverage of api\dbus\org.ruyaos.Platform1.xml" ($code -eq 0)
+
+    # Self-check: a fixture contract with one more tagged element, documented, so lint-dev-docs
+    # lists it: the coverage must fail and name it.
+    $fx = Join-Path ([IO.Path]::GetTempPath()) ("ruya-conformance-fx-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Force (Join-Path $fx "api\dbus") | Out-Null
+    $xml = [IO.File]::ReadAllText((Join-Path $Repo "api\dbus\org.ruyaos.Platform1.xml"))
+    $extra = "    <method name=`"Extra`">`n      <annotation name=`"org.ruyaos.Stability`" value=`"experimental`"/>`n      <annotation name=`"org.ruyaos.Since`" value=`"1`"/>`n    </method>`n  </interface>"
+    $at = $xml.IndexOf("  </interface>")
+    $xml = $xml.Substring(0, $at) + $extra + $xml.Substring($at + "  </interface>".Length)
+    [IO.File]::WriteAllText((Join-Path $fx "api\dbus\org.ruyaos.Platform1.xml"), $xml)
+    $names = @("Register", "SaveDone", "Background", "Resume", "Stopping", "Extra") | ForEach-Object { "``org.ruyaos.Platform1.Lifecycle.$_``" }
+    [IO.File]::WriteAllText((Join-Path $fx "README.md"), "# Guide`n`n| Chapter |`n|---|`n| [A](a.md) |`n")
+    [IO.File]::WriteAllText((Join-Path $fx "a.md"), "# A`n`n$($names -join ' ')`n`n## Sources`n`nChecked 2026-11-23.`n")
+    & (Join-Path $PSScriptRoot "lint-dev-docs.ps1") -Dir $fx -Repo $fx *>&1 | Out-Null
+    $lintCode = $LASTEXITCODE
+    $out = & $runner (Join-Path $fx "output\apis.json")
+    $code = $LASTEXITCODE
+    Pop-Location
+    Remove-Item -Recurse -Force $fx
+    $ok = ($lintCode -eq 0) -and ($code -ne 0) -and $out.Contains("no conformance case for org.ruyaos.Platform1.Lifecycle.Extra")
+    if (-not $ok) { Write-Host "    lint exit $lintCode, coverage exit $code"; Write-Host $out }
+    Record "conformance coverage self-check (a new tagged element without a case is named)" $ok
 }
 
 # The rules live in scripts\lint-tests.ps1 (shared with CI).
@@ -1313,7 +1367,7 @@ switch ($Command) {
         # A stale marker must never outlive a run that did not finish green.
         Remove-Item $GreenMarker -ErrorAction SilentlyContinue
         $treeBefore = Get-TreeState
-        Test-Text; Test-Boot; Test-BusPolicies; Test-DevDocs; Test-ApiChangelog; Test-VmChecks; Do-Rust; Do-Shell
+        Test-Text; Test-Boot; Test-BusPolicies; Test-DevDocs; Test-ApiChangelog; Test-VmChecks; Do-Rust; Test-Conformance; Do-Shell
         if ($script:Failures.Count -eq 0) { Write-GreenMarker $treeBefore (Get-TreeState) }
     }
     "shots" {

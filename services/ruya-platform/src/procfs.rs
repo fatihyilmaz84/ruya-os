@@ -1,8 +1,8 @@
 //! The recipe's reads (`identity.rs` has the rules): on Linux the pidfd's fdinfo, the caller's
 //! `.flatpak-info` through its root and its cgroup file ([`LinuxProcfs`]); everywhere the user
 //! database ([`SystemUsers`], `ruya-users`). Off Linux there is no `/proc`: [`NoProcfs`] answers
-//! nothing, so every caller is `not-an-app` (a dev host has no sandboxed apps; the developer mock
-//! is RUY-158).
+//! nothing, so every caller is `not-an-app` (a dev host has no sandboxed apps; the developer mock,
+//! `mock.rs`, reads a scenario instead).
 
 use std::io;
 
