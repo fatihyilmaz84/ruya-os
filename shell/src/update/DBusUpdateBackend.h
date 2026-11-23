@@ -6,6 +6,8 @@
 #include <QDBusMessage>
 #include <QDBusServiceWatcher>
 
+#include <functional>
+
 // Client of org.ruyaos.Update1 (api/dbus/org.ruyaos.Update1.xml) on the system bus, or the
 // session bus when RUYA_DBUS=session. The service may start after the shell, so the status is
 // read again whenever the name appears; the image job is read with it and then follows
@@ -38,6 +40,8 @@ private:
     void call(const QString &method, const QString &reportAs, const QVariantList &args = {});
     void refreshStatus();
     void refreshJob();
+    void getRecord(const QString &method, int index, const std::function<void(const QVariantMap &)> &deliver,
+                   const std::function<void()> &failed);
 
     QDBusConnection m_bus;
     QDBusServiceWatcher m_watcher;

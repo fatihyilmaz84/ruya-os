@@ -2059,6 +2059,21 @@ mod tests {
         thread
     }
 
+    fn paused(u: &Arc<Update<FakeBootc>>) {
+        assert_eq!(u.begin_download(1000), Status::Ok);
+        let thread = download_until_held(u);
+        assert_eq!(u.pause_download(), Status::Ok);
+        thread.join().expect("thread");
+        assert_eq!(job(u).state, "paused");
+    }
+
+    /// A service whose download (400 of 1000 bytes) the user paused.
+    fn found_paused() -> Arc<Update<FakeBootc>> {
+        let u = found(vec![run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop)]);
+        paused(&u);
+        u
+    }
+
     fn job(u: &Update<FakeBootc>) -> JobRecord {
         u.job_record(0).expect("a job")
     }
@@ -2192,11 +2207,7 @@ mod tests {
 
     #[test]
     fn download_continues_a_paused_job() {
-        let u = found(vec![run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop)]);
-        assert_eq!(u.begin_download(1000), Status::Ok);
-        let thread = download_until_held(&u);
-        assert_eq!(u.pause_download(), Status::Ok);
-        thread.join().expect("thread");
+        let u = found_paused();
         assert_eq!(u.begin_download(1500), Status::Ok);
         let j = job(&u);
         assert_eq!(
@@ -2252,11 +2263,7 @@ mod tests {
 
     #[test]
     fn cancel_ends_a_paused_download_at_once() {
-        let u = found(vec![run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop)]);
-        assert_eq!(u.begin_download(1000), Status::Ok);
-        let thread = download_until_held(&u);
-        assert_eq!(u.pause_download(), Status::Ok);
-        thread.join().expect("thread");
+        let u = found_paused();
         assert_eq!(u.cancel_download(&clk()), Status::Ok);
         let j = job(&u);
         assert_eq!((j.state, j.status.as_str()), ("finished", "cancelled"));
@@ -2295,11 +2302,7 @@ mod tests {
 
     #[test]
     fn resume_while_a_check_runs_is_busy() {
-        let u = found(vec![run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop)]);
-        assert_eq!(u.begin_download(1000), Status::Ok);
-        let thread = download_until_held(&u);
-        assert_eq!(u.pause_download(), Status::Ok);
-        thread.join().expect("thread");
+        let u = found_paused();
         assert_eq!(u.begin_check(), Status::Ok);
         assert_eq!(u.resume_download(1000), Status::Busy);
     }
@@ -2376,23 +2379,13 @@ mod tests {
         assert_eq!(u.record().available, "");
     }
 
-    fn paused(u: &Arc<Update<FakeBootc>>) {
-        assert_eq!(u.begin_download(1000), Status::Ok);
-        let thread = download_until_held(u);
-        assert_eq!(u.pause_download(), Status::Ok);
-        thread.join().expect("thread");
-        assert_eq!(job(u).state, "paused");
-    }
-
     #[test]
     fn set_channel_and_rollback_cancel_a_paused_download() {
-        let u = found(vec![run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop)]);
-        paused(&u);
+        let u = found_paused();
         assert_eq!(u.set_channel("beta", true, &clk()), Status::Ok);
         assert_eq!(job(&u).status, "cancelled");
 
-        let u = found(vec![run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop)]);
-        paused(&u);
+        let u = found_paused();
         assert_eq!(u.rollback(true, &clk()), Status::Ok);
         assert_eq!(job(&u).status, "cancelled");
         assert_eq!(u.resume_download(1000), Status::WrongState);
@@ -2421,8 +2414,7 @@ mod tests {
 
     #[test]
     fn a_download_the_user_paused_waits_for_the_user() {
-        let u = found(vec![run(vec![bytes_ev(400, 1000)], FakeEnd::HoldForStop)]);
-        paused(&u);
+        let u = found_paused();
         let clock = FakeClock::new(1060, 12 * 60);
         u.tick(&clock, &FakeReboot::default(), &mut || {});
         assert_eq!(job(&u).state, "paused");

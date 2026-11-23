@@ -5,6 +5,8 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use ruya_calendar::{day_of, format_day, parse_day};
+
 /// Days are kept this long, today included.
 pub const KEEP_DAYS: i64 = 90;
 pub const LEDGER_FILE: &str = "downloads.json";
@@ -27,17 +29,7 @@ pub struct Ledger {
 
 /// The local date of `unix` seconds in a zone `utc_offset_secs` east of UTC, "YYYY-MM-DD".
 pub fn local_day(unix: i64, utc_offset_secs: i64) -> String {
-    // Howard Hinnant's days-to-civil, for the proleptic Gregorian calendar.
-    let z = (unix + utc_offset_secs).div_euclid(86_400) + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = yoe + era * 400 + i64::from(m <= 2);
-    format!("{y:04}-{m:02}-{d:02}")
+    format_day(day_of(unix, utc_offset_secs))
 }
 
 /// The oldest day still kept at `now`.
@@ -99,7 +91,7 @@ impl Ledger {
             let day = entry
                 .get("day")
                 .and_then(|d| d.as_str())
-                .filter(|d| is_day(d))
+                .filter(|d| parse_day(d).is_some())
                 .ok_or("a day without a YYYY-MM-DD date")?;
             let number = |key: &str| {
                 entry
@@ -122,16 +114,6 @@ impl Ledger {
         }
         Ok(ledger)
     }
-}
-
-fn is_day(text: &str) -> bool {
-    let b = text.as_bytes();
-    b.len() == 10
-        && b[4] == b'-'
-        && b[7] == b'-'
-        && b.iter()
-            .enumerate()
-            .all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit())
 }
 
 /// The kept ledger: empty when there is none, an error naming the file when it cannot be used

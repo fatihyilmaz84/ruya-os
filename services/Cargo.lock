@@ -956,6 +956,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
+name = "ruya-calendar"
+version = "0.1.0"
+
+[[package]]
 name = "ruya-contract-test"
 version = "0.1.0"
 dependencies = [
@@ -1158,6 +1162,7 @@ dependencies = [
  "base64ct",
  "ed25519-dalek",
  "getrandom 0.2.17",
+ "ruya-calendar",
  "ruya-play-format",
  "serde",
  "serde_json",
@@ -1243,6 +1248,7 @@ dependencies = [
  "blocking",
  "futures-lite",
  "libc",
+ "ruya-calendar",
  "ruya-contract-test",
  "serde_json",
  "tempfile",

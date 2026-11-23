@@ -69,40 +69,42 @@ void DBusUpdateBackend::refresh()
     refreshJob();
 }
 
+// Calls a Get method of Update1 whose reply holds an a{sv} at argument `index`: `deliver` gets it,
+// or `failed` runs (a failure is an outcome too: an older reply after it is stale).
+void DBusUpdateBackend::getRecord(const QString &method, int index,
+                                  const std::function<void(const QVariantMap &)> &deliver,
+                                  const std::function<void()> &failed)
+{
+    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, method);
+    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [method, index, deliver, failed](QDBusPendingCallWatcher *w) {
+        w->deleteLater();
+        const QDBusMessage message = w->reply();
+        if (message.type() != QDBusMessage::ReplyMessage || message.arguments().size() <= index) {
+            qWarning("ruya-shell: Update1 %s failed: %s", qPrintable(method), qPrintable(w->error().message()));
+            failed();
+            return;
+        }
+        deliver(parseDict(message.arguments().at(index).value<QDBusArgument>()));
+    });
+}
+
 void DBusUpdateBackend::refreshStatus()
 {
     const quint64 request = beginStatusRequest();
-    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("GetStatus"));
-    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
-        w->deleteLater();
-        const QDBusMessage message = w->reply();
-        if (message.type() != QDBusMessage::ReplyMessage || message.arguments().isEmpty()) {
-            qWarning("ruya-shell: Update1 GetStatus failed: %s", qPrintable(w->error().message()));
-            acceptStatus(request); // a failure is an outcome too: an older reply after it is stale
-            return;
-        }
-        const QDBusArgument arg = message.arguments().at(0).value<QDBusArgument>();
-        deliverStatus(request, toStatus(parseDict(arg)));
-    });
+    getRecord(
+        QStringLiteral("GetStatus"), 0,
+        [this, request](const QVariantMap &d) { deliverStatus(request, toStatus(d)); },
+        [this, request] { acceptStatus(request); });
 }
 
 void DBusUpdateBackend::refreshJob()
 {
+    // GetDownloadJob answers (status, job).
     const quint64 request = beginJobRequest();
-    auto msg = QDBusMessage::createMethodCall(Service, Path, Interface, QStringLiteral("GetDownloadJob"));
-    auto *watcher = new QDBusPendingCallWatcher(m_bus.asyncCall(msg), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, request](QDBusPendingCallWatcher *w) {
-        w->deleteLater();
-        const QDBusMessage message = w->reply();
-        if (message.type() != QDBusMessage::ReplyMessage || message.arguments().size() < 2) {
-            qWarning("ruya-shell: Update1 GetDownloadJob failed: %s", qPrintable(w->error().message()));
-            acceptJob(request);
-            return;
-        }
-        const QDBusArgument arg = message.arguments().at(1).value<QDBusArgument>();
-        deliverJob(request, parseDict(arg));
-    });
+    getRecord(
+        QStringLiteral("GetDownloadJob"), 1, [this, request](const QVariantMap &d) { deliverJob(request, d); },
+        [this, request] { acceptJob(request); });
 }
 
 void DBusUpdateBackend::onJobChanged(const QDBusMessage &message)
