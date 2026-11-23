@@ -29,9 +29,7 @@ pub enum Gate {
 
 /// Who may call `Manage`: root and the shell's user (`shell_uid`, looked up by name; `None` when it
 /// could not be found, then root only). The bus policy says the same; this is defence in depth.
-pub fn may_manage(uid: u32, shell_uid: Option<u32>) -> bool {
-    uid == 0 || shell_uid == Some(uid)
-}
+pub use ruya_users::root_or_shell as may_manage;
 
 /// Who may send lifecycle events (`NotifyLifecycle`, org.ruyaos.Caller "root"): root only.
 pub fn may_notify(uid: u32) -> bool {
@@ -318,8 +316,18 @@ pub(crate) mod tests {
             }
         }
 
-        /// The door over this world, with Lifecycle registered, profiles p1 and p2, p1 active.
-        pub fn door(self, root: &std::path::Path, now: Instant) -> Platform {
+        /// The door over this world in a new temporary folder, with Lifecycle registered,
+        /// profiles p1 and p2, p1 active.
+        pub fn door(self) -> Fixture {
+            let mut f = self.door_before_profiles1();
+            f.door.follow_profiles(known(&["p1", "p2"]), "p1", f.now);
+            f
+        }
+
+        /// The door as it starts, before Profiles1 answered.
+        pub fn door_before_profiles1(self) -> Fixture {
+            let dir = tempfile::tempdir().expect("temp dir");
+            let now = Instant::now();
             let mut registry = Registry::default();
             registry
                 .register(
@@ -328,11 +336,27 @@ pub(crate) mod tests {
                     Box::<Lifecycle>::default(),
                 )
                 .expect("registers");
-            let store = Store::open(&root.join("platform")).expect("opens");
-            let mut door =
-                Platform::new(Box::new(self.procfs), Box::new(self.users), store, registry);
-            door.follow_profiles(known(&["p1", "p2"]), "p1", now);
-            door
+            let store = Store::open(&dir.path().join("platform")).expect("opens");
+            let door = Platform::new(Box::new(self.procfs), Box::new(self.users), store, registry);
+            Fixture { door, dir, now }
+        }
+    }
+
+    /// A door, the folder its files are in (removed when the fixture goes) and the time it was
+    /// made.
+    pub struct Fixture {
+        pub door: Platform,
+        pub dir: tempfile::TempDir,
+        pub now: Instant,
+    }
+
+    impl Fixture {
+        pub fn file(&self, profile: &str) -> std::path::PathBuf {
+            self.dir
+                .path()
+                .join("platform")
+                .join("profiles")
+                .join(format!("{profile}.json"))
         }
     }
 
@@ -344,11 +368,10 @@ pub(crate) mod tests {
 
     #[test]
     fn a_permitted_app_is_admitted_as_itself() {
-        let dir = tempfile::tempdir().expect("temp");
-        let now = Instant::now();
         let mut w = World::new();
         let a = w.app(1, APP, "7");
-        let mut door = w.door(dir.path(), now);
+        let mut f = w.door();
+        let (door, now) = (&mut f.door, f.now);
         let id = door
             .admit(&a.caller(), L, Gate::ActiveProfile, now)
             .expect("admitted");
@@ -364,12 +387,11 @@ pub(crate) mod tests {
 
     #[test]
     fn permission_off_is_not_allowed() {
-        let dir = tempfile::tempdir().expect("temp");
-        let now = Instant::now();
         let mut w = World::new();
         let a = w.app(1, APP, "7");
         let b = w.app(1, OTHER, "8");
-        let mut door = w.door(dir.path(), now);
+        let mut f = w.door();
+        let (door, now) = (&mut f.door, f.now);
         assert_eq!(
             door.set_permission("p1", APP, "lifecycle", false),
             Status::Ok
@@ -391,11 +413,10 @@ pub(crate) mod tests {
 
     #[test]
     fn a_choice_belongs_to_its_profile() {
-        let dir = tempfile::tempdir().expect("temp");
-        let now = Instant::now();
         let mut w = World::new();
         let a2 = w.app(2, APP, "7");
-        let mut door = w.door(dir.path(), now);
+        let mut f = w.door();
+        let (door, now) = (&mut f.door, f.now);
         door.follow_profiles(known(&["p1", "p2"]), "p2", now);
         assert_eq!(
             door.set_permission("p1", APP, "lifecycle", false),
@@ -410,11 +431,10 @@ pub(crate) mod tests {
 
     #[test]
     fn an_unregistered_interface_admits_nobody() {
-        let dir = tempfile::tempdir().expect("temp");
-        let now = Instant::now();
         let mut w = World::new();
         let a = w.app(1, APP, "7");
-        let mut door = w.door(dir.path(), now);
+        let mut f = w.door();
+        let (door, now) = (&mut f.door, f.now);
         assert_eq!(
             door.admit(
                 &a.caller(),
@@ -428,11 +448,10 @@ pub(crate) mod tests {
 
     #[test]
     fn an_app_of_an_inactive_profile_is_refused_where_the_gate_says_so() {
-        let dir = tempfile::tempdir().expect("temp");
-        let now = Instant::now();
         let mut w = World::new();
         let a2 = w.app(2, APP, "7");
-        let mut door = w.door(dir.path(), now);
+        let mut f = w.door();
+        let (door, now) = (&mut f.door, f.now);
         assert_eq!(
             door.admit(&a2.caller(), L, Gate::ActiveProfile, now),
             Err(Status::NotAllowed)
@@ -457,16 +476,10 @@ pub(crate) mod tests {
 
     #[test]
     fn nobody_is_an_app_before_profiles1_answered() {
-        let dir = tempfile::tempdir().expect("temp");
-        let now = Instant::now();
         let mut w = World::new();
         let a = w.app(1, APP, "7");
-        let mut registry = Registry::default();
-        registry
-            .register(L, lifecycle::KEY, Box::<Lifecycle>::default())
-            .expect("registers");
-        let store = Store::open(&dir.path().join("platform")).expect("opens");
-        let mut door = Platform::new(Box::new(w.procfs), Box::new(w.users), store, registry);
+        let mut f = w.door_before_profiles1();
+        let (door, now) = (&mut f.door, f.now);
         assert_eq!(
             door.admit(&a.caller(), L, Gate::AnyProfile, now),
             Err(Status::NotAnApp)
@@ -479,11 +492,11 @@ pub(crate) mod tests {
 
     #[test]
     fn a_deleted_profile_loses_its_apps_and_its_file() {
-        let dir = tempfile::tempdir().expect("temp");
-        let now = Instant::now();
         let mut w = World::new();
         let a2 = w.app(2, APP, "7");
-        let mut door = w.door(dir.path(), now);
+        let mut f = w.door();
+        let file = f.file("p2");
+        let (door, now) = (&mut f.door, f.now);
         assert_eq!(
             door.set_permission("p2", APP, "lifecycle", true),
             Status::Ok
@@ -492,7 +505,6 @@ pub(crate) mod tests {
             door.admit(&a2.caller(), L, Gate::AnyProfile, now).is_ok(),
             "cached now"
         );
-        let file = dir.path().join("platform").join("profiles").join("p2.json");
         assert!(file.exists());
         assert_eq!(door.follow_profiles(known(&["p1"]), "p1", now), ["p2"]);
         assert!(!file.exists(), "the file went with the profile");
@@ -511,11 +523,10 @@ pub(crate) mod tests {
 
     #[test]
     fn a_flood_is_cut_per_connection_before_any_read() {
-        let dir = tempfile::tempdir().expect("temp");
-        let now = Instant::now();
         let mut w = World::new();
         let a = w.app(1, APP, "7");
-        let mut door = w.door(dir.path(), now);
+        let mut f = w.door();
+        let (door, now) = (&mut f.door, f.now);
         // Not an app at all: refused by the bucket from the 11th call on, with no read.
         let stranger = Caller {
             name: ":1.999",
@@ -554,13 +565,12 @@ pub(crate) mod tests {
 
     #[test]
     fn an_instance_has_one_bucket_whatever_its_connections() {
-        let dir = tempfile::tempdir().expect("temp");
-        let now = Instant::now();
         let mut w = World::new();
         let conns: Vec<App> = (0..CALLER_RATE.capacity + 1)
             .map(|_| w.app(1, APP, "7"))
             .collect();
-        let mut door = w.door(dir.path(), now);
+        let mut f = w.door();
+        let (door, now) = (&mut f.door, f.now);
         for c in &conns[..CALLER_RATE.capacity as usize] {
             assert!(door.admit(&c.caller(), L, Gate::ActiveProfile, now).is_ok());
         }
@@ -578,13 +588,12 @@ pub(crate) mod tests {
 
     #[test]
     fn the_identity_is_kept_per_connection_until_it_leaves() {
-        let dir = tempfile::tempdir().expect("temp");
-        let now = Instant::now();
         let mut w = World::new();
         let a = w.app(1, APP, "7");
         // The pidfd names the process for the recipe's two looks, then the process is gone.
         w.procfs.pidfd(a.fd, &[a.pid as i32, a.pid as i32, -1]);
-        let mut door = w.door(dir.path(), now);
+        let mut f = w.door();
+        let (door, now) = (&mut f.door, f.now);
         door.admit(&a.caller(), L, Gate::ActiveProfile, now)
             .expect("admitted");
         // The connection is the same peer: its identity is not read again.
@@ -600,9 +609,8 @@ pub(crate) mod tests {
 
     #[test]
     fn manage_arguments_are_checked() {
-        let dir = tempfile::tempdir().expect("temp");
-        let now = Instant::now();
-        let mut door = World::new().door(dir.path(), now);
+        let mut f = World::new().door();
+        let door = &mut f.door;
         for (p, app, cap) in [
             ("p9", APP, "lifecycle"),
             ("../p1", APP, "lifecycle"),
@@ -637,16 +645,15 @@ pub(crate) mod tests {
 
     #[test]
     fn a_corrupt_permission_file_fails_closed() {
-        let dir = tempfile::tempdir().expect("temp");
-        let now = Instant::now();
         let mut w = World::new();
         let a = w.app(1, APP, "7");
-        let mut door = w.door(dir.path(), now);
+        let mut f = w.door();
+        let file = f.file("p1");
+        let (door, now) = (&mut f.door, f.now);
         assert_eq!(
             door.set_permission("p1", OTHER, "lifecycle", true),
             Status::Ok
         );
-        let file = dir.path().join("platform").join("profiles").join("p1.json");
         std::fs::write(&file, "{").expect("write");
         assert_eq!(
             door.admit(&a.caller(), L, Gate::ActiveProfile, now),
@@ -665,10 +672,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn who_may_manage() {
-        assert!(may_manage(0, Some(990)) && may_manage(990, Some(990)));
-        assert!(!may_manage(1001, Some(990)), "a profile user");
-        assert!(may_manage(0, None) && !may_manage(990, None));
+    fn only_root_sends_lifecycle_events() {
+        // Manage itself is root and the shell: `ruya_users::root_or_shell`, tested there.
         assert!(may_notify(0));
         assert!(!may_notify(990), "the shell may not send lifecycle events");
     }

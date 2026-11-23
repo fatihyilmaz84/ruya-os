@@ -377,70 +377,66 @@ mod tests {
         use crate::door::tests::{known, World, APP, OTHER};
         use crate::Status;
         use ruya_flatpak::scope::instance_scope;
-        use std::time::Instant;
 
         #[test]
         fn register_needs_the_capability() {
-            let dir = tempfile::tempdir().expect("temp");
-            let now = Instant::now();
             let mut w = World::new();
             let a = w.app(1, APP, "7");
-            let mut door = w.door(dir.path(), now);
+            let mut f = w.door();
+            let (door, now) = (&mut f.door, f.now);
             assert_eq!(
                 door.set_permission("p1", APP, "lifecycle", false),
                 Status::Ok
             );
-            assert_eq!(register(&mut door, &a.caller(), now), Status::NotAllowed);
+            assert_eq!(register(door, &a.caller(), now), Status::NotAllowed);
             assert_eq!(
                 door.set_permission("p1", APP, "lifecycle", true),
                 Status::Ok
             );
-            assert_eq!(register(&mut door, &a.caller(), now), Status::Ok);
+            assert_eq!(register(door, &a.caller(), now), Status::Ok);
         }
 
         #[test]
         fn turning_it_off_ends_the_registration() {
-            let dir = tempfile::tempdir().expect("temp");
-            let now = Instant::now();
             let mut w = World::new();
             let a = w.app(1, APP, "7");
-            let mut door = w.door(dir.path(), now);
-            assert_eq!(register(&mut door, &a.caller(), now), Status::Ok);
+            let mut f = w.door();
+            let (door, now) = (&mut f.door, f.now);
+            assert_eq!(register(door, &a.caller(), now), Status::Ok);
             let scope = instance_scope(APP, "7").expect("valid");
-            assert!(notify(&mut door, "p1", &scope, "background", 0).is_ok());
+            assert!(notify(door, "p1", &scope, "background", 0).is_ok());
             assert_eq!(
                 door.set_permission("p1", APP, "lifecycle", false),
                 Status::Ok
             );
             assert_eq!(
-                notify(&mut door, "p1", &scope, "background", 0),
+                notify(door, "p1", &scope, "background", 0),
                 Err(Status::NotRegistered)
             );
         }
 
         #[test]
         fn register_needs_the_active_profile_and_save_done_does_not() {
-            let dir = tempfile::tempdir().expect("temp");
-            let now = Instant::now();
             let mut w = World::new();
             let a2 = w.app(2, APP, "7");
-            let mut door = w.door(dir.path(), now);
+            let mut f = w.door();
+            let (door, now) = (&mut f.door, f.now);
             assert_eq!(
-                register(&mut door, &a2.caller(), now),
+                register(door, &a2.caller(), now),
                 Status::NotAllowed,
                 "p2 is not signed in"
             );
             door.follow_profiles(known(&["p1", "p2"]), "p2", now);
-            assert_eq!(register(&mut door, &a2.caller(), now), Status::Ok);
+            assert_eq!(register(door, &a2.caller(), now), Status::Ok);
             door.follow_profiles(known(&["p1", "p2"]), "p1", now);
             let scope = instance_scope(APP, "7").expect("valid");
-            let sent = notify(&mut door, "p2", &scope, "stopping", 5000).expect("registered");
+            let sent = notify(door, "p2", &scope, "stopping", 5000).expect("registered");
             assert_eq!(
                 sent,
                 (Event::Stopping { deadline_ms: 5000 }, vec![a2.name.clone()])
             );
             assert_eq!(
-                save_done(&mut door, &a2.caller(), now),
+                save_done(door, &a2.caller(), now),
                 Ok(("p2".to_owned(), scope)),
                 "power-off reaches every profile's apps"
             );
@@ -448,37 +444,33 @@ mod tests {
 
         #[test]
         fn app_a_cannot_register_or_save_done_as_b() {
-            let dir = tempfile::tempdir().expect("temp");
-            let now = Instant::now();
             let mut w = World::new();
             let a = w.app(1, APP, "7");
             let b = w.app(1, OTHER, "8");
-            let mut door = w.door(dir.path(), now);
-            assert_eq!(register(&mut door, &a.caller(), now), Status::Ok);
-            assert_eq!(register(&mut door, &b.caller(), now), Status::Ok);
+            let mut f = w.door();
+            let (door, now) = (&mut f.door, f.now);
+            assert_eq!(register(door, &a.caller(), now), Status::Ok);
+            assert_eq!(register(door, &b.caller(), now), Status::Ok);
             let a_scope = instance_scope(APP, "7").expect("valid");
             let b_scope = instance_scope(OTHER, "8").expect("valid");
             // B's signals reach B's connection alone.
-            let (_, names) =
-                notify(&mut door, "p1", &b_scope, "stopping", 5000).expect("registered");
+            let (_, names) = notify(door, "p1", &b_scope, "stopping", 5000).expect("registered");
             assert_eq!(names, vec![b.name.clone()]);
             assert_eq!(
-                save_done(&mut door, &a.caller(), now),
+                save_done(door, &a.caller(), now),
                 Err(Status::NotAllowed),
                 "A's SaveDone is A's, and A has no Stopping"
             );
             assert_eq!(
-                save_done(&mut door, &b.caller(), now),
+                save_done(door, &b.caller(), now),
                 Ok(("p1".to_owned(), b_scope))
             );
-            let (_, names) = notify(&mut door, "p1", &a_scope, "resume", 1200).expect("registered");
+            let (_, names) = notify(door, "p1", &a_scope, "resume", 1200).expect("registered");
             assert_eq!(names, vec![a.name.clone()]);
         }
 
         #[test]
         fn a_stranger_cannot_register() {
-            let dir = tempfile::tempdir().expect("temp");
-            let now = Instant::now();
             let mut w = World::new();
             let a = w.app(1, APP, "7");
             w.procfs
@@ -486,37 +478,33 @@ mod tests {
                 .get_mut(&a.pid)
                 .expect("set")
                 .flatpak_info = None;
-            let mut door = w.door(dir.path(), now);
-            assert_eq!(register(&mut door, &a.caller(), now), Status::NotAnApp);
-            assert_eq!(
-                save_done(&mut door, &a.caller(), now),
-                Err(Status::NotAnApp)
-            );
+            let mut f = w.door();
+            let (door, now) = (&mut f.door, f.now);
+            assert_eq!(register(door, &a.caller(), now), Status::NotAnApp);
+            assert_eq!(save_done(door, &a.caller(), now), Err(Status::NotAnApp));
         }
 
         #[test]
         fn a_deleted_profiles_registrations_go() {
-            let dir = tempfile::tempdir().expect("temp");
-            let now = Instant::now();
             let mut w = World::new();
             let a2 = w.app(2, APP, "7");
-            let mut door = w.door(dir.path(), now);
+            let mut f = w.door();
+            let (door, now) = (&mut f.door, f.now);
             door.follow_profiles(known(&["p1", "p2"]), "p2", now);
-            assert_eq!(register(&mut door, &a2.caller(), now), Status::Ok);
+            assert_eq!(register(door, &a2.caller(), now), Status::Ok);
             door.follow_profiles(known(&["p1"]), "p1", now);
             let scope = instance_scope(APP, "7").expect("valid");
             assert_eq!(
-                notify(&mut door, "p2", &scope, "background", 0),
+                notify(door, "p2", &scope, "background", 0),
                 Err(Status::NotRegistered)
             );
-            assert_eq!(register(&mut door, &a2.caller(), now), Status::NotAnApp);
+            assert_eq!(register(door, &a2.caller(), now), Status::NotAnApp);
         }
 
         #[test]
         fn notify_arguments_are_checked() {
-            let dir = tempfile::tempdir().expect("temp");
-            let now = Instant::now();
-            let mut door = World::new().door(dir.path(), now);
+            let mut f = World::new().door();
+            let door = &mut f.door;
             let scope = "app-flatpak-org.example.Racer-7.scope";
             let long_scope = format!("app-flatpak-{}.scope", "x".repeat(300));
             let long_event = "stopping".repeat(10);
@@ -534,13 +522,13 @@ mod tests {
                 ("p1", scope, long_event.as_str()),
             ] {
                 assert_eq!(
-                    notify(&mut door, p, s, e, 0),
+                    notify(door, p, s, e, 0),
                     Err(Status::InvalidArgument),
                     "{p:?} {s:?} {e:?}"
                 );
             }
             assert_eq!(
-                notify(&mut door, "p1", scope, "background", 0),
+                notify(door, "p1", scope, "background", 0),
                 Err(Status::NotRegistered)
             );
         }

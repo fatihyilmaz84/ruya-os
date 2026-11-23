@@ -3,7 +3,6 @@
 //! every rule is in `door.rs` and `lifecycle.rs`. It also follows the bus (a unique name that
 //! leaves) and Profiles1 (which profiles exist, which is active).
 
-use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -20,8 +19,6 @@ use crate::{Platform, Status};
 
 pub const BUS_NAME: &str = "org.ruyaos.Platform1";
 pub const OBJECT_PATH: &str = "/org/ruyaos/Platform1";
-const PROFILES_NAME: &str = "org.ruyaos.Profiles1";
-const PROFILES_PATH: &str = "/org/ruyaos/Profiles1";
 /// While Profiles1 does not answer it is asked again this often.
 const PROFILES_RETRY: Duration = Duration::from_secs(5);
 
@@ -317,105 +314,24 @@ pub async fn watch_names(connection: Connection, core: Shared) {
     eprintln!("ruya-platform: the bus closed, names are not followed");
 }
 
-/// Profiles1's active profile and every profile id that exists: ListProfiles (kept profiles)
-/// with ListGuests (live temporary guests).
-pub async fn fetch_profiles(connection: &Connection) -> zbus::Result<(String, BTreeSet<String>)> {
-    let proxy = zbus::Proxy::new(connection, PROFILES_NAME, PROFILES_PATH, PROFILES_NAME).await?;
-    let active: String = proxy.get_property("ActiveProfile").await?;
-    let profiles: Vec<(String, String, String, String, bool)> =
-        proxy.call("ListProfiles", &()).await?;
-    let guests: Vec<(String, String, u32)> = proxy.call("ListGuests", &()).await?;
-    let ids = profiles
-        .into_iter()
-        .map(|p| p.0)
-        .chain(guests.into_iter().map(|g| g.0))
-        .collect();
-    Ok((active, ids))
-}
-
-/// Reads Profiles1 into the core; false when it did not answer (logged when `answering` was
-/// true, so a Profiles1 that stays away is logged once).
-async fn follow_once(connection: &Connection, core: &Shared, answering: bool) -> bool {
-    match fetch_profiles(connection).await {
-        Ok((active, ids)) => {
-            if !answering {
-                eprintln!(
-                    "ruya-platform: Profiles1 answers: {} profile(s) and guest(s)",
-                    ids.len()
-                );
-            }
-            let removed = with(core, |door| {
+/// Follows Profiles1 for as long as the bus is up (`ruya_profiles_client::follow`): every answer
+/// goes to the core, which drops what a removed profile had. Until it first answered nobody is a
+/// profile (every caller is refused).
+pub async fn watch_profiles(connection: Connection, core: Shared) {
+    ruya_profiles_client::follow(
+        &connection,
+        "ruya-platform",
+        PROFILES_RETRY,
+        true,
+        |active, ids| {
+            let removed = with(&core, |door| {
                 door.follow_profiles(ids, &active, Instant::now())
             });
             for profile in removed.unwrap_or_default() {
                 eprintln!("ruya-platform: permissions of {profile} removed with the profile");
             }
-            true
-        }
-        Err(err) => {
-            if answering {
-                eprintln!(
-                    "ruya-platform: Profiles1 not readable, asking again every {} s: {err}",
-                    PROFILES_RETRY.as_secs()
-                );
-            }
-            false
-        }
-    }
-}
-
-/// Follows Profiles1 for as long as the bus is up (the pattern of ruya-notifications'
-/// `watch_profiles`): on its ActiveProfile change, ProfilesChanged and its name coming back the
-/// profiles are read again; while it does not answer it is asked every `PROFILES_RETRY`. Until it
-/// first answered nobody is a profile (every caller is refused).
-pub async fn watch_profiles(connection: Connection, core: Shared) {
-    let rule = |interface: &'static str, member: &'static str| {
-        MatchRule::builder()
-            .msg_type(zbus::message::Type::Signal)
-            .sender(PROFILES_NAME)
-            .and_then(|b| b.path(PROFILES_PATH))
-            .and_then(|b| b.interface(interface))
-            .and_then(|b| b.member(member))
-            .map(|b| b.build())
-    };
-    let owner = MatchRule::builder()
-        .msg_type(zbus::message::Type::Signal)
-        .sender("org.freedesktop.DBus")
-        .and_then(|b| b.member("NameOwnerChanged"))
-        .and_then(|b| b.arg(0, PROFILES_NAME))
-        .map(|b| b.build());
-    let (Ok(props), Ok(changed), Ok(owner)) = (
-        rule("org.freedesktop.DBus.Properties", "PropertiesChanged"),
-        rule(PROFILES_NAME, "ProfilesChanged"),
-        owner,
-    ) else {
-        return eprintln!("ruya-platform: cannot follow Profiles1");
-    };
-    let streams = (
-        MessageStream::for_match_rule(props, &connection, None).await,
-        MessageStream::for_match_rule(changed, &connection, None).await,
-        MessageStream::for_match_rule(owner, &connection, None).await,
-    );
-    let (Ok(a), Ok(b), Ok(c)) = streams else {
-        return eprintln!("ruya-platform: cannot follow Profiles1");
-    };
-    let mut stream = futures_lite::stream::or(futures_lite::stream::or(a, b), c);
-    let mut answering = true;
-    loop {
-        // Read after the streams are set up, so no change is missed in between.
-        answering = follow_once(&connection, &core, answering).await;
-        let next = async { futures_lite::StreamExt::next(&mut stream).await.is_some() };
-        let up = if answering {
-            next.await
-        } else {
-            futures_lite::future::or(next, async {
-                async_io::Timer::after(PROFILES_RETRY).await;
-                true
-            })
-            .await
-        };
-        if !up {
-            return eprintln!("ruya-platform: the bus closed, Profiles1 is not followed");
-        }
-    }
+            std::future::ready(())
+        },
+    )
+    .await;
 }

@@ -14,7 +14,7 @@ use ruya_platform::dbus::{
 };
 use ruya_platform::identity::{Procfs, Users};
 use ruya_platform::lifecycle::{self, Lifecycle};
-use ruya_platform::procfs::uid_of;
+use ruya_platform::procfs::SystemUsers;
 use ruya_platform::registry::Registry;
 use ruya_platform::store::Store;
 use ruya_platform::Platform;
@@ -32,12 +32,12 @@ fn readers() -> (Box<dyn Procfs>, Box<dyn Users>) {
     #[cfg(target_os = "linux")]
     return (
         Box::new(ruya_platform::procfs::LinuxProcfs),
-        Box::new(ruya_platform::procfs::SystemUsers),
+        Box::new(SystemUsers),
     );
     #[cfg(not(target_os = "linux"))]
     return (
         Box::new(ruya_platform::procfs::NoProcfs),
-        Box::new(ruya_platform::procfs::NoUsers),
+        Box::new(SystemUsers),
     );
 }
 
@@ -64,7 +64,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let core: Shared = Arc::new(Mutex::new(Platform::new(procfs, users, store, registry)));
     let checks = Checks {
         enforce: !session,
-        shell_uid: uid_of("ruya-shell"),
+        shell_uid: ruya_users::uid_of(ruya_users::SHELL_USER),
     };
     if session {
         eprintln!("ruya-platform: --session: Manage callers are not checked");

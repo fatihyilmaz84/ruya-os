@@ -8,6 +8,7 @@ rust-version.workspace = true
 
 [dependencies]
 ruya-ids = { path = "../ruya-ids" }  # the one profile-id rule and profile user name (RUY-1008)
+ruya-users = { path = "../ruya-users" }  # the one user-database lookup (RUY-1098)
 ruya-keyfile = { path = "../ruya-keyfile" }  # the one keyfile reader: the app table and Flatpak metadata (RUY-1050)
 zbus = { version = "5", default-features = false, features = ["async-io"] }
 futures-lite = "2"

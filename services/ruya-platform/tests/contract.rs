@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use ruya_contract_test::{assert_interfaces_are, assert_serves, parse, served_xml};
 use ruya_platform::dbus::{Checks, LifecycleIface, ManageIface, Shared};
 use ruya_platform::lifecycle::{self, Lifecycle};
-use ruya_platform::procfs::{NoProcfs, NoUsers};
+use ruya_platform::procfs::{NoProcfs, SystemUsers};
 use ruya_platform::registry::Registry;
 use ruya_platform::store::Store;
 use ruya_platform::Platform;
@@ -24,7 +24,7 @@ fn core(dir: &tempfile::TempDir) -> Shared {
     let store = Store::open(&dir.path().join("platform")).expect("opens");
     Arc::new(Mutex::new(Platform::new(
         Box::new(NoProcfs),
-        Box::new(NoUsers),
+        Box::new(SystemUsers),
         store,
         registry,
     )))

@@ -1044,11 +1044,11 @@ dependencies = [
 name = "ruya-notifications"
 version = "0.1.0"
 dependencies = [
- "async-io",
  "futures-lite",
- "libc",
  "ruya-contract-test",
  "ruya-ids",
+ "ruya-profiles-client",
+ "ruya-users",
  "serde",
  "serde_json",
  "tempfile",
@@ -1076,14 +1076,14 @@ version = "0.1.0"
 name = "ruya-platform"
 version = "0.1.0"
 dependencies = [
- "async-io",
  "futures-lite",
- "libc",
  "ruya-contract-test",
  "ruya-flatpak",
  "ruya-fs",
  "ruya-ids",
  "ruya-keyfile",
+ "ruya-profiles-client",
+ "ruya-users",
  "serde",
  "serde_json",
  "tempfile",
@@ -1177,6 +1177,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ruya-profiles-client"
+version = "0.1.0"
+dependencies = [
+ "async-io",
+ "futures-lite",
+ "zbus",
+]
+
+[[package]]
 name = "ruya-session"
 version = "0.1.0"
 dependencies = [
@@ -1192,6 +1201,7 @@ dependencies = [
  "ruya-keyfile",
  "ruya-play-format",
  "ruya-play-launch",
+ "ruya-users",
  "ruya-vdf",
  "tempfile",
  "zbus",
@@ -1234,6 +1244,13 @@ dependencies = [
  "serde_json",
  "tempfile",
  "zbus",
+]
+
+[[package]]
+name = "ruya-users"
+version = "0.1.0"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
