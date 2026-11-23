@@ -4,6 +4,7 @@
 #include <algorithm>
 
 #include <QRegularExpression>
+#include <QSet>
 #include <QTimer>
 
 namespace {
@@ -37,6 +38,41 @@ bool before(const LibraryItem &a, const LibraryItem &b)
         return a.lastPlayed > b.lastPlayed;
     const int t = a.title.compare(b.title, Qt::CaseInsensitive);
     return t != 0 ? t < 0 : a.id < b.id;
+}
+
+// Library1's fixed order of a game's installations: a .play app, a Flatpak app, a Steam game, then id.
+int rank(const LibraryItem &i)
+{
+    return i.source == QLatin1String("steam") ? 2 : i.play ? 0 : 1;
+}
+
+// A title as the suggestions compare it: its letters and digits, lower case.
+QString titleKey(const QString &title)
+{
+    QString out;
+    for (const QChar c : title) {
+        if (c.isLetterOrNumber())
+            out.append(c.toLower());
+    }
+    return out;
+}
+
+bool validProfile(const QString &profile)
+{
+    static const QRegularExpression profileId(QStringLiteral("^[A-Za-z0-9_-]{1,32}$"));
+    return profileId.match(profile).hasMatch();
+}
+
+// The game that holds installation id, or nullptr.
+const LibraryItem *gameHolding(const QList<LibraryItem> &games, const QString &id)
+{
+    for (const LibraryItem &g : games) {
+        for (const LibraryInstallation &i : g.installations) {
+            if (i.id == id)
+                return &g;
+        }
+    }
+    return nullptr;
 }
 
 // A resolution that found a runner.
@@ -113,8 +149,7 @@ void MockLibraryBackend::listRunnersDelayed(int ms)
 
 QString MockLibraryBackend::choiceStatus(const QString &profile, const QString &id) const
 {
-    static const QRegularExpression profileId(QStringLiteral("^[A-Za-z0-9_-]{1,32}$"));
-    if (!profileId.match(profile).hasMatch())
+    if (!validProfile(profile))
         return QStringLiteral("invalid");
     for (const LibraryItem &i : m_items) {
         if (i.id == id)
@@ -203,6 +238,9 @@ void MockLibraryBackend::reset(const QString &scenario)
     m_choices.clear();
     m_resolutions.clear();
     m_failing.clear();
+    m_links.clear();
+    m_preferred.clear();
+    m_versions.clear();
     listRunners();
     // "art:<dir>": the default library, each item with a picture from <dir> (tests only, T-281).
     const bool withArt = scenario.startsWith(QLatin1String("art:"));
@@ -285,6 +323,17 @@ void MockLibraryBackend::reset(const QString &scenario)
             }
             m_items.append(p);
         }
+        // "installations": a .play of Turbo Racer next to its Flatpak (RUY-137): two games with one title until the
+        // player links them; never played, so the Flatpak one stays Home's hero.
+        if (scenario == QLatin1String("installations")) {
+            LibraryItem p = item("flatpak:play.org.example.racer", "game", "Turbo Racer", 0);
+            p.play = true;
+            p.playTier = QStringLiteral("developer");
+            p.playSigner = QStringLiteral("Example Games");
+            p.resolution = resolved("proton-ge GE-Proton11-13", "system", "GE-Proton10-9");
+            m_versions.insert(p.id, QStringLiteral("1.4.2"));
+            m_items.append(p);
+        }
         // "chess": Open Chess, installed with an update in the Store's mock, is in the library too (the game page's
         // update state, RUY-524).
         if (scenario == QLatin1String("chess"))
@@ -329,9 +378,9 @@ void MockLibraryBackend::listItems()
     listItemsDelayed(0);
 }
 
-QList<LibraryItem> MockLibraryBackend::visibleItems() const
+QList<LibraryItem> MockLibraryBackend::installationsOf(const QString &profile) const
 {
-    if (hasSteamGames(m_active))
+    if (hasSteamGames(profile))
         return m_items;
     QList<LibraryItem> out;
     for (const LibraryItem &i : m_items) {
@@ -341,16 +390,157 @@ QList<LibraryItem> MockLibraryBackend::visibleItems() const
     return out;
 }
 
+QList<LibraryItem> MockLibraryBackend::gamesOf(const QString &profile) const
+{
+    const QList<LibraryItem> installs = installationsOf(profile);
+    QSet<QString> here;
+    for (const LibraryItem &i : installs)
+        here.insert(i.id);
+    // Each link's installations that are here are one game, under the first of them (its anchor while it is
+    // installed).
+    QMap<QString, QString> gameOf;
+    const QMap<QString, QStringList> links = m_links.value(profile);
+    for (auto it = links.constBegin(); it != links.constEnd(); ++it) {
+        QStringList ids;
+        for (const QString &id : QStringList{it.key()} + it.value()) {
+            if (here.contains(id))
+                ids.append(id);
+        }
+        if (ids.size() < 2)
+            continue;
+        for (const QString &id : std::as_const(ids))
+            gameOf.insert(id, ids.constFirst());
+    }
+    QMap<QString, QList<LibraryItem>> groups;
+    for (const LibraryItem &i : installs)
+        groups[gameOf.value(i.id, i.id)].append(i);
+    const QMap<QString, QString> chosen = m_preferred.value(profile);
+    QList<LibraryItem> games;
+    for (auto it = groups.begin(); it != groups.end(); ++it) {
+        QList<LibraryItem> members = it.value();
+        std::sort(members.begin(), members.end(), [](const LibraryItem &a, const LibraryItem &b) {
+            return rank(a) != rank(b) ? rank(a) < rank(b) : a.id < b.id;
+        });
+        int preferred = 0;
+        for (int n = 0; n < members.size(); ++n) {
+            if (members.at(n).id == chosen.value(it.key()))
+                preferred = n;
+        }
+        LibraryItem game = members.at(preferred);
+        game.id = it.key();
+        game.confidence = members.size() > 1 ? QStringLiteral("confirmed") : QStringLiteral("single");
+        for (int n = 0; n < members.size(); ++n) {
+            const LibraryItem &m = members.at(n);
+            game.lastPlayed = std::max(game.lastPlayed, m.lastPlayed);
+            LibraryInstallation i;
+            i.id = m.id;
+            i.source = m.source;
+            i.launch = m.launch;
+            i.play = m.play;
+            i.runner = m.resolution.runner;
+            i.version = m_versions.value(m.id);
+            i.preferred = n == preferred;
+            game.installations.append(i);
+        }
+        games.append(game);
+    }
+    std::sort(games.begin(), games.end(), before);
+    for (LibraryItem &g : games) {
+        const QString key = titleKey(g.title);
+        for (const LibraryItem &other : std::as_const(games)) {
+            if (!key.isEmpty() && other.id != g.id && titleKey(other.title) == key)
+                g.suggestions.append(other.id);
+        }
+    }
+    return games;
+}
+
+void MockLibraryBackend::answerInstallationCall(const QString &profile, const QString &call, const QString &status, bool changed)
+{
+    if (changed && profile == m_active)
+        emit itemsChanged();
+    QTimer::singleShot(0, this, [this, profile, call, status] { emit installationCallFinished(profile, call, status); });
+}
+
+void MockLibraryBackend::linkInstallations(const QString &profile, const QString &a, const QString &b)
+{
+    const QString call = QStringLiteral("LinkInstallations");
+    if (!validProfile(profile) || a == b)
+        return answerInstallationCall(profile, call, QStringLiteral("invalid"), false);
+    const QList<LibraryItem> games = gamesOf(profile);
+    const LibraryItem *ga = gameHolding(games, a);
+    const LibraryItem *gb = gameHolding(games, b);
+    if (!ga || !gb)
+        return answerInstallationCall(profile, call, QStringLiteral("unknown"), false);
+    if (ga->id == gb->id)
+        return answerInstallationCall(profile, call, QStringLiteral("ok"), false);
+    // The game of b joins the game of a, as Library1 does: one link under a's game id.
+    QMap<QString, QStringList> &links = m_links[profile];
+    QStringList members = links.take(ga->id);
+    members.append(gb->id);
+    members.append(links.take(gb->id));
+    members.removeDuplicates();
+    members.removeAll(ga->id);
+    links.insert(ga->id, members);
+    m_preferred[profile].remove(gb->id);
+    answerInstallationCall(profile, call, QStringLiteral("ok"), true);
+}
+
+void MockLibraryBackend::unlinkInstallation(const QString &profile, const QString &installation)
+{
+    const QString call = QStringLiteral("UnlinkInstallation");
+    if (!validProfile(profile))
+        return answerInstallationCall(profile, call, QStringLiteral("invalid"), false);
+    const LibraryItem *game = gameHolding(gamesOf(profile), installation);
+    if (!game)
+        return answerInstallationCall(profile, call, QStringLiteral("unknown"), false);
+    const QString gameId = game->id;
+    QMap<QString, QStringList> &links = m_links[profile];
+    for (auto it = links.begin(); it != links.end(); ++it) {
+        if (it.value().contains(installation)) {
+            it.value().removeAll(installation);
+            // As Library1: the preference goes with the installation it named, or when one is left.
+            const bool alone = it.value().isEmpty();
+            if (alone)
+                links.erase(it);
+            if (alone || m_preferred.value(profile).value(gameId) == installation)
+                m_preferred[profile].remove(gameId);
+            return answerInstallationCall(profile, call, QStringLiteral("ok"), true);
+        }
+    }
+    // The mock's shell rows never separate a game's own installation (its anchor): nothing else to undo.
+    answerInstallationCall(profile, call, QStringLiteral("invalid"), false);
+}
+
+void MockLibraryBackend::setPreferredInstallation(const QString &profile, const QString &game, const QString &installation)
+{
+    const QString call = QStringLiteral("SetPreferredInstallation");
+    if (!validProfile(profile))
+        return answerInstallationCall(profile, call, QStringLiteral("invalid"), false);
+    const QList<LibraryItem> games = gamesOf(profile);
+    const auto g = std::find_if(games.cbegin(), games.cend(), [&](const LibraryItem &i) { return i.id == game; });
+    const LibraryItem *holder = gameHolding(games, installation);
+    if (g == games.cend() || !holder)
+        return answerInstallationCall(profile, call, QStringLiteral("unknown"), false);
+    if (holder->id != game)
+        return answerInstallationCall(profile, call, QStringLiteral("invalid"), false);
+    const bool changed = m_preferred.value(profile).value(game) != installation;
+    m_preferred[profile].insert(game, installation);
+    answerInstallationCall(profile, call, QStringLiteral("ok"), changed);
+}
+
 void MockLibraryBackend::profileSelected(const QString &profile)
 {
     // As ruya-session: SetActiveProfile after the switch, then ItemsChanged when the list differs.
     QTimer::singleShot(0, this, [this, profile] {
         if (profile == m_active)
             return;
-        const bool before = hasSteamGames(m_active);
+        // The list differs when one has Steam games and the other not, or either grouped its games.
+        auto grouped = [this](const QString &p) { return !m_links.value(p).isEmpty() || !m_preferred.value(p).isEmpty(); };
+        const bool differs = hasSteamGames(m_active) != hasSteamGames(profile) || grouped(m_active) || grouped(profile);
         m_active = profile;
         emit activeProfileChanged(profile);
-        if (before != hasSteamGames(m_active))
+        if (differs)
             emit itemsChanged();
     });
 }
@@ -359,7 +549,7 @@ void MockLibraryBackend::listItemsDelayed(int ms)
 {
     const quint64 request = beginListRequest();
     ++m_pending;
-    QTimer::singleShot(ms, this, [this, request, snapshot = visibleItems()] {
+    QTimer::singleShot(ms, this, [this, request, snapshot = gamesOf(m_active)] {
         --m_pending;
         deliverList(request, snapshot);
     });

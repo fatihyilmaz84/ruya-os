@@ -118,6 +118,7 @@ pub fn item(g: &Game) -> Item {
         art: Vec::new(),
         last_played: g.last_played,
         play: None,
+        declared: Vec::new(),
     }
 }
 

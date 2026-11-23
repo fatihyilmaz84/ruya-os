@@ -9,6 +9,8 @@
 #include <QStringList>
 #include <QVariantMap>
 
+#include <algorithm>
+
 // The launcher's runner resolution of a .play app for one choice (Library1: the item record's runner
 // keys, which resolve the package default, and ResolveRunner's "Resolution record"; RUY-903, RUY-905).
 // Everything "" (and no fallback) for a native game.
@@ -52,7 +54,35 @@ struct LibraryResolution
     }
 };
 
-// One item record of org.ruyaos.Library1 (api/dbus/org.ruyaos.Library1.xml, "Item record").
+// One installation of a game (Library1 "Installation record", RUY-137): what one source installed.
+struct LibraryInstallation
+{
+    QString id;      // its item id ("steam:<appid>", "flatpak:<id>"), the id the runner calls take
+    QString source;  // "steam" | "flatpak"
+    QString launch;
+    bool play = false;     // a .play app
+    QString runner;        // a .play app's "<family> <version>"; "" when none
+    QString version;       // its display version; "" when unknown
+    bool available = true; // it can start now
+    bool preferred = false; // Play uses it
+
+    QVariantMap toVariant() const
+    {
+        return {
+            {QStringLiteral("id"), id},
+            {QStringLiteral("source"), source},
+            {QStringLiteral("launch"), launch},
+            {QStringLiteral("play"), play},
+            {QStringLiteral("runner"), runner},
+            {QStringLiteral("version"), version},
+            {QStringLiteral("available"), available},
+            {QStringLiteral("preferred"), preferred},
+        };
+    }
+};
+
+// One item record of org.ruyaos.Library1 (api/dbus/org.ruyaos.Library1.xml, "Item record"): one game,
+// with the keys of its preferred installation (RUY-137).
 struct LibraryItem
 {
     QString id;
@@ -78,6 +108,31 @@ struct LibraryItem
     // The launcher's own runner resolution for the package's default choice (RUY-903).
     LibraryResolution resolution;
 
+    // RUY-137: the game's installations in the contract's fixed order (one preferred), how sure the
+    // grouping is ("single" | "id" | "confirmed") and the ids of the other games with the same title.
+    QList<LibraryInstallation> installations;
+    QString confidence = QStringLiteral("single");
+    QStringList suggestions;
+
+    // Whether any installation is a Steam game (a game the shell hides while Library1 serves another
+    // profile's view, ADR-045).
+    bool hasSteam() const
+    {
+        if (installations.isEmpty())
+            return source == QLatin1String("steam");
+        return std::any_of(installations.cbegin(), installations.cend(),
+                           [](const LibraryInstallation &i) { return i.source == QLatin1String("steam"); });
+    }
+    // The installation Play uses ("" with none listed).
+    QString preferredInstallation() const
+    {
+        for (const LibraryInstallation &i : installations) {
+            if (i.preferred)
+                return i.id;
+        }
+        return QString();
+    }
+
     // The record as QML sees it (camelCase keys).
     QVariantMap toVariant() const
     {
@@ -92,7 +147,13 @@ struct LibraryItem
             {QStringLiteral("launch"), launch},
             {QStringLiteral("art"), artMap},
             {QStringLiteral("lastPlayed"), lastPlayed},
+            {QStringLiteral("confidence"), confidence},
+            {QStringLiteral("suggestions"), suggestions},
         };
+        QVariantList installs;
+        for (const LibraryInstallation &i : installations)
+            installs.append(i.toVariant());
+        out.insert(QStringLiteral("installations"), installs);
         if (play) { // the keys of a .play app exist only for one; every other record is unchanged
             out.insert(QStringLiteral("play"), true);
             out.insert(QStringLiteral("genres"), genres);
@@ -158,6 +219,11 @@ public:
     // The shell's signed-in profile changed (Library.profile). The D-Bus backend does nothing: ruya-session
     // tells Library1. The mock plays ruya-session and follows it.
     virtual void profileSelected(const QString &profile) { Q_UNUSED(profile) }
+    // RUY-137: the profile's say over its games. Each answers with installationCallFinished (call is the
+    // Library1 method name, status a Library1 status string); ItemsChanged follows a change of the list.
+    virtual void setPreferredInstallation(const QString &profile, const QString &game, const QString &installation) = 0;
+    virtual void linkInstallations(const QString &profile, const QString &a, const QString &b) = 0;
+    virtual void unlinkInstallation(const QString &profile, const QString &installation) = 0;
 
 signals:
     void itemsListed(const QList<LibraryItem> &items);
@@ -173,6 +239,7 @@ signals:
     void runnerChoiceChanged(const QString &profile, const QString &id, const QString &choice);
     // Library1 ActiveProfile changed (PropertiesChanged).
     void activeProfileChanged(const QString &profile);
+    void installationCallFinished(const QString &profile, const QString &call, const QString &status);
 
 protected:
     // Replies can arrive out of order: number each ListItems request when it is sent and report a

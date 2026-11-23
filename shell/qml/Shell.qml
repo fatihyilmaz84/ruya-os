@@ -1985,7 +1985,7 @@ FocusScope {
             title: root.libraryEmpty ? qsTr("Your library is empty") : (root.heroItem.title ?? "")
             // A .play app's logo replaces the title text (RUY-856); only for an item Library1 says is a .play app.
             logo: !root.libraryEmpty && root.heroItem.play === true && root.heroItem.art ? (root.heroItem.art.logo ?? "") : ""
-            meta: root.libraryEmpty ? "" : root.sourceLabel(root.heroItem.source ?? "")
+            meta: root.libraryEmpty ? "" : InstallationText.sourceName(root.heroItem.source ?? "")
             primaryText: root.libraryEmpty ? qsTr("Open Store") : (root.heroClosing ? qsTr("Closing…") : root.heroRunning ? qsTr("Resume")
                                                                        : root.heroItem.kind === "app" ? qsTr("Open", "Button: start an app (a game says Play)") : qsTr("Play"))
             primaryShown: root.libraryEmpty || Library.sessionAppId(root.heroItem.id ?? "") !== ""
@@ -2117,14 +2117,6 @@ FocusScope {
         homeSavedFocus = p ? f : null
     }
 
-    function sourceLabel(source) {
-        switch (source) {
-        case "steam": return "Steam"
-        case "flatpak": return "Flatpak"
-        }
-        return source
-    }
-
     function playHero() {
         if (libraryEmpty) {
             openSection("store")
@@ -2162,6 +2154,11 @@ FocusScope {
     property string optionsSurface: ""
     property string optionsItemId: ""
     property Page optionsPage: null
+    // RUY-137: "installations" while the menu lists the item's installations (its "Choose installation" row),
+    // else "" (the item's rows). The list opens on the anchor the menu had.
+    property string optionsList: ""
+    property Item optionsAnchor: null
+    property string optionsKind: ""
     property bool optionsOn: false             // from the opening until it closes (not the fade-out)
     // The rows of a game or app card, in order; a false condition leaves its row out (never dimmed).
     function gameRows(id) {
@@ -2181,13 +2178,38 @@ FocusScope {
         rows.push({ id: "details", label: qsTr("Details"), icon: "info" })
         if (Profiles.activeProfile !== "" && (Profiles.active.role ?? "") !== "guest")
             rows.push({ id: "activity", label: qsTr("Your activity"), icon: "bar_chart" })
+        // One game, several installations (RUY-137): which one Play uses, the ones the player linked, and the
+        // games with the same title it may be (added after the rest, the first to go at the cap of 8).
+        const installs = item.installations ?? []
+        if (installs.length > 1)
+            rows.push({ id: "installations", label: qsTr("Choose installation"), icon: "chevron_right" })
+        if (item.confidence === "confirmed") {
+            for (const inst of installs) {
+                if (inst.id !== id)
+                    rows.push({ id: "separate:" + inst.id, label: qsTr("Separate %1", "Options: make an installation a game of its own again").arg(InstallationText.name(inst)), icon: "close" })
+            }
+        }
+        const suggestions = []
+        for (const other of (item.suggestions ?? []).map(s => Library.item(s)).filter(o => o.id !== undefined).slice(0, 2)) {
+            suggestions.push({ id: "link:" + other.id, icon: "check_circle",
+                               label: qsTr("Same game as %1 (%2)?", "Options: link two installations; %1 a title, %2 its source").arg(other.title).arg(InstallationText.name(InstallationText.preferredOf(other.installations))) })
+        }
         // Uninstall…: an installed Flatpak app the Store knows, that does not run and has no Store job
         // on its card (a row that would start a job is hidden while one runs; one of ours counts from the moment
         // it was asked, the Store lists a job only once it has made progress).
         // Which service owns the app, and whether it answers now, is the dialog's rule (a .play app is Play's).
-        if (appId !== "" && item.source === "flatpak" && !running && !closing && uninstallConfirm.canUninstall(appId) && uninstallRuns[appId] === undefined)
+        const uninstall = appId !== "" && item.source === "flatpak" && !running && !closing && uninstallConfirm.canUninstall(appId) && uninstallRuns[appId] === undefined
+        rows.push(...suggestions.slice(0, Math.max(0, optionsMenu.maxRows - rows.length - (uninstall ? 1 : 0))))
+        if (uninstall)
             rows.push({ id: "uninstall", label: qsTr("Uninstall…"), icon: "delete", divider: rows.length > 0 })
         return rows
+    }
+
+    // The item's installations as rows (its "Choose installation" list, RUY-137): the one Play uses checked.
+    function installationRows(id) {
+        const item = Library.items.find(i => i.id === id)
+        return (item?.installations ?? []).map(inst => ({ id: "prefer:" + inst.id, label: InstallationText.label(inst),
+                                                         icon: inst.preferred ? "check_circle" : "" }))
     }
 
     // The note that ends a card's menu when the Store does not answer: its rows were left out.
@@ -2196,11 +2218,11 @@ FocusScope {
     }
 
     function optionRows(surface, id) {
-        return gameRows(id)
+        return optionsList === "installations" ? installationRows(id) : gameRows(id)
     }
 
     function optionNote(surface, id) {
-        return gameNote(id)
+        return optionsList === "installations" ? "" : gameNote(id)
     }
 
     function optionTitle(surface, id) {
@@ -2209,12 +2231,15 @@ FocusScope {
 
     // Opens the menu of item `id` on `surface`, anchored to `anchor` (a card or a pill). False when it
     // could not open (nobody signed in, no anchor, one is open already).
-    function openOptions(surface, id, anchor, kind, page) {
+    function openOptions(surface, id, anchor, kind, page, list) {
         if (!signedIn || !anchor || optionsMenu.shown || systemPanel.open || launching || closingScreen)
             return false
         optionsSurface = surface
         optionsItemId = id
         optionsPage = page ?? null
+        optionsList = list ?? ""
+        optionsAnchor = anchor
+        optionsKind = kind
         optionsOn = true                    // the anchor keeps its look before the menu takes the focus
         Sfx.select()
         optionsMenu.overArt = surface === "hero" || surface === "recent" || surface === "games"
@@ -2249,6 +2274,13 @@ FocusScope {
         case "activity":
             openPage("activityGame", { appId: appId !== "" ? appId : id })
             break
+        case "installations":
+            // The list opens where the menu was (the menu has closed and the focus is back on the item); a hero
+            // pill keeps its anchor look as for the first menu.
+            if (surface === "hero")
+                heroBlock.anchoredItem = optionsAnchor
+            openOptions(surface, id, optionsAnchor, optionsKind, optionsPage, "installations")
+            break
         case "uninstall":
             // The card's place in its list, kept for the focus after it has gone.
             uninstallConfirm.open(appId, item.title, {
@@ -2256,6 +2288,30 @@ FocusScope {
                 index: surface === "games" && optionsPage ? optionsPage.indexOfItem(id) : recentIds.indexOf(id)
             })
             break
+        default: {
+            // RUY-137: "prefer:<installation>", "link:<game>", "separate:<installation>". The item keeps its id,
+            // so the focus stays on its card; the list follows ItemsChanged.
+            const at = action.indexOf(":")
+            const verb = action.slice(0, at)
+            const target = action.slice(at + 1)
+            installationTitle = item.title
+            if (verb === "prefer")
+                Library.setPreferredInstallation(id, target)
+            else if (verb === "link")
+                Library.linkInstallations(id, target)
+            else if (verb === "separate")
+                Library.unlinkInstallation(target)
+        }
+        }
+    }
+
+    // A refused installation call says so (02 §1.7: an action that fails toasts and leaves the focus).
+    property string installationTitle: ""
+    Connections {
+        target: Library
+        function onInstallationCallFinished(call, status) {
+            if (status !== "ok")
+                Notifications.show(qsTr("Could not change %1. Try again.", "A refused installation change; %1 is the game").arg(root.installationTitle), "error")
         }
     }
 

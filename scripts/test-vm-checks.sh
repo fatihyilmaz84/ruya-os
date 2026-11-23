@@ -1807,6 +1807,34 @@ sids="$(printf '%s\n' 'aa{sv} 3 7 "id" s "steam:70" "kind" s "game" 7 "id" s "fl
 [ "$sids" = "steam:220 steam:70 " ] && pass "vm-library-check.sh steamids: the two steam: ids, once each" || fail "vm-library-check.sh steamids: '$sids'"
 sids="$(printf '%s\n' 'aa{sv} 1 7 "id" s "flatpak:org.x.A" "launch" s "flatpak:org.x.A"' | bash "$here/vm-library-check.sh" steamids 2>&1)"
 [ -z "$sids" ] && pass "vm-library-check.sh steamids: none in a Flatpak-only list" || fail "vm-library-check.sh steamids: '$sids'"
+# RUY-137: a game's installations are nested in its record; steamids still reads each id once.
+sids="$(printf '%s\n' 'aa{sv} 1 9 "id" s "steam:220" "installations" aa{sv} 1 5 "id" s "steam:220" "launch" s "steam://rungameid/220"' | bash "$here/vm-library-check.sh" steamids 2>&1 | tr '\n' ' ')"
+[ "$sids" = "steam:220 " ] && pass "vm-library-check.sh steamids: a nested installation's id once" || fail "vm-library-check.sh steamids nested: '$sids'"
+# RUY-137: installjudge reads ListItems (busctl --json=short): one game of two installations, or two games.
+ij_inst() { # <id> <preferred true|false>
+    printf '{"id":{"type":"s","data":"%s"},"source":{"type":"s","data":"flatpak"},"launch":{"type":"s","data":"flatpak:%s"},"available":{"type":"b","data":true},"preferred":{"type":"b","data":%s}}' "$1" "${1#flatpak:}" "$2"
+}
+ij_rec() { # <id> <launch id> <confidence> <installation json>...
+    local id="$1" launch="$2" conf="$3"; shift 3
+    local IFS=,
+    printf '{"id":{"type":"s","data":"%s"},"launch":{"type":"s","data":"%s"},"confidence":{"type":"s","data":"%s"},"installations":{"type":"aa{sv}","data":[%s]}}' "$id" "$launch" "$conf" "$*"
+}
+ij_list() { local IFS=,; printf '{"type":"aa{sv}","data":[[%s]]}' "$*"; }
+ij() { printf '%s\n' "$1" | bash "$here/vm-library-check.sh" installjudge "${@:2}" 2>&1; }
+A=flatpak:org.ruyaos.TestGame; B=flatpak:play.org.example.hello_library
+linked="$(ij_list "$(ij_rec "$A" "$A" confirmed "$(ij_inst "$B" false)" "$(ij_inst "$A" true)")")"
+apart="$(ij_list "$(ij_rec "$A" "$A" single "$(ij_inst "$A" true)")" "$(ij_rec "$B" "$B" single "$(ij_inst "$B" true)")")"
+expect_contains "vm-library-check.sh installjudge linked: one game, the Flatpak preferred and launched" "$(ij "$linked" linked "$A" "$B" "$A")" "PASS: install_judge linked"
+expect_contains "vm-library-check.sh installjudge linked: another preferred installation fails" "$(ij "$linked" linked "$A" "$B" "$B")" "FAIL: install_judge linked: preferred"
+expect_contains "vm-library-check.sh installjudge linked: the game under the other id fails" "$(ij "$linked" linked "$B" "$A" "$A")" "the game is $A, not $B"
+wrong_launch="$(ij_list "$(ij_rec "$A" "$B" confirmed "$(ij_inst "$B" false)" "$(ij_inst "$A" true)")")"
+expect_contains "vm-library-check.sh installjudge linked: a launch that is not the preferred one's fails" "$(ij "$wrong_launch" linked "$A" "$B" "$A")" "is not the launch of $A"
+unsure="$(ij_list "$(ij_rec "$A" "$A" id "$(ij_inst "$B" false)" "$(ij_inst "$A" true)")")"
+expect_contains "vm-library-check.sh installjudge linked: confidence id is not the player's link" "$(ij "$unsure" linked "$A" "$B" "$A")" "confidence id"
+expect_contains "vm-library-check.sh installjudge linked: two games are not linked" "$(ij "$apart" linked "$A" "$B" "$A")" "0 records hold both"
+expect_contains "vm-library-check.sh installjudge apart: two games pass" "$(ij "$apart" apart "$A" "$B")" "PASS: install_judge apart"
+expect_contains "vm-library-check.sh installjudge apart: one game fails" "$(ij "$linked" apart "$A" "$B")" "$B is not a game of its own"
+expect_contains "vm-library-check.sh installjudge: no reply fails" "$(ij "" apart "$A" "$B")" "no ListItems reply"
 # The steam mode's unit properties are the reader's (spawner::PROFILE_SCAN_PROPERTIES), in order.
 code_props="$(sed -n '/^pub const PROFILE_SCAN_PROPERTIES/,/^];/p' "$here/../services/ruya-session/src/spawner.rs" | grep -o '"[^"]*"' | tr -d '"' | tr '\n' ' ')"
 check_props="$(sed -n 's/^scan_properties="\(.*\)"$/\1/p' "$here/vm-library-check.sh") "

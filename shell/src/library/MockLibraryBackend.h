@@ -8,6 +8,10 @@
 // nobody ("") have the Steam games, a profile made later (p4 on) has none. The mock plays ruya-session:
 // it follows profileSelected one event-loop turn later (ActiveProfile changes, then itemsChanged when the
 // visible list differs). It starts with nobody active, as Library.profile does.
+// Games (RUY-137): the items are installations; ListItems groups them into games as Library1 does, by the
+// active profile's links (kept per profile in memory), with the fixed order (.play, Flatpak, Steam, id), the
+// preferred installation and the title suggestions. No mock source declares another source's id, so there
+// is no grouping by key.
 class MockLibraryBackend final : public LibraryBackend
 {
     Q_OBJECT
@@ -32,6 +36,9 @@ public:
     void resolveRunner(const QString &id, const QString &choice) override;
     QString activeProfile() const override { return m_active; }
     void profileSelected(const QString &profile) override;
+    void setPreferredInstallation(const QString &profile, const QString &game, const QString &installation) override;
+    void linkInstallations(const QString &profile, const QString &a, const QString &b) override;
+    void unlinkInstallation(const QString &profile, const QString &installation) override;
     // Tests only: the runners ListRunners answers from now on, and a ListRunners reply after ms.
     void setRunners(const QList<LibraryRunner> &runners) { m_runners = runners; }
     void listRunnersDelayed(int ms);
@@ -43,8 +50,9 @@ public:
     void setFailingRunnerCalls(const QStringList &calls) { m_failing = calls; }
 
     // Tests only. scenario: "", "empty", "unplayed" or "art:<dir>" (the default items, each with
-    // art.tile and art.icon = a picture of <dir>, see mockArtPath). Every scenario lists the pinned
-    // runner again and forgets the runner choices.
+    // art.tile and art.icon = a picture of <dir>, see mockArtPath), or "installations" (the default items
+    // and a .play "Turbo Racer", the title of the Flatpak one, never played: RUY-137). Every scenario lists
+    // the pinned runner again and forgets the runner choices, the links and the preferences.
     void reset(const QString &scenario);
     // Tests only: drops the item and announces the change (Library1's ItemsChanged after an app went).
     void removeItem(const QString &id);
@@ -57,8 +65,13 @@ private:
     // The Library1 status of a choice call for id ("ok" when it is a .play item).
     QString choiceStatus(const QString &profile, const QString &id) const;
 
-    // The list ListItems answers now: Steam items only while the active profile has them.
-    QList<LibraryItem> visibleItems() const;
+    // The installations `profile` sees: Steam items only while it has them.
+    QList<LibraryItem> installationsOf(const QString &profile) const;
+    // The games of profile's installations under its links and preferences, in the contract's order.
+    QList<LibraryItem> gamesOf(const QString &profile) const;
+    // An installation call's answer, one event-loop turn later, after itemsChanged when the active
+    // profile's list changed.
+    void answerInstallationCall(const QString &profile, const QString &call, const QString &status, bool changed);
 
     QList<LibraryItem> m_items; // every installed item, Steam ones included
     QString m_active; // Library1 ActiveProfile
@@ -66,5 +79,8 @@ private:
     QMap<QString, QMap<QString, QString>> m_choices; // profile -> item id -> choice
     QMap<QString, QMap<QString, LibraryResolution>> m_resolutions; // item id -> choice -> answer
     QStringList m_failing;                           // runner calls that answer "failed"
+    QMap<QString, QMap<QString, QStringList>> m_links;  // profile -> anchor -> the installations linked to it
+    QMap<QString, QMap<QString, QString>> m_preferred;  // profile -> game id -> installation
+    QMap<QString, QString> m_versions;                  // installation id -> its display version
     int m_pending = 0; // ListItems and ListRunners replies not delivered yet
 };

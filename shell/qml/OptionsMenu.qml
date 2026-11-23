@@ -27,6 +27,8 @@ FocusScope {
 
     property string title
     property var rows: []
+    // The most rows a menu has (02 §1.7); the owner leaves rows out to stay within it.
+    readonly property int maxRows: 8
     property string note
     property string kind: "card"
     property Item anchor: null

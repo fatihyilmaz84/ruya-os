@@ -302,7 +302,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>AppDetailPage</name>
     <message>
-        <location filename="../qml/AppDetailPage.qml" line="+244"/>
+        <location filename="../qml/AppDetailPage.qml" line="+246"/>
         <source>Official</source>
         <translation>Resmi</translation>
     </message>
@@ -575,7 +575,7 @@ Bu geri alınamaz.</translation>
         <translation>Oku</translation>
     </message>
     <message>
-        <location line="+412"/>
+        <location line="+414"/>
         <source>No special permissions.</source>
         <translation>Özel bir izni yok.</translation>
     </message>
@@ -625,7 +625,7 @@ Bu geri alınamaz.</translation>
         <translation>Kaldırmak için önce oyunu kapatın.</translation>
     </message>
     <message>
-        <location line="-945"/>
+        <location line="-947"/>
         <source>Install</source>
         <translation>Kur</translation>
     </message>
@@ -636,7 +636,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelle</translation>
     </message>
     <message>
-        <location line="+683"/>
+        <location line="+685"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Bu konsoldakinden daha yeni bir RuyaOS gerekiyor. Yüklü kalır.</translation>
     </message>
@@ -662,7 +662,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelleme şunları ekliyor: %1</translation>
     </message>
     <message>
-        <location line="-711"/>
+        <location line="-713"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Aç</translation>
@@ -717,17 +717,17 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+8"/>
-        <location line="+166"/>
+        <location line="+168"/>
         <source>Update ready</source>
         <translation>Güncelleme hazır</translation>
     </message>
     <message>
-        <location line="-155"/>
+        <location line="-156"/>
         <source>Installed through Steam</source>
         <translation>Steam üzerinden kuruldu</translation>
     </message>
     <message>
-        <location line="+94"/>
+        <location line="+95"/>
         <source>Start this game from Steam for now.</source>
         <translation>Bu oyunu şimdilik Steam&apos;den başlatın.</translation>
     </message>
@@ -1097,7 +1097,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 yüzde %2</translation>
     </message>
     <message numerus="yes">
-        <location line="+49"/>
+        <location line="+50"/>
         <source>%n more</source>
         <translation>
             <numerusform>%n tane daha</numerusform>
@@ -3369,6 +3369,23 @@ Bu geri alınamaz.</translation>
     </message>
 </context>
 <context>
+    <name>InstallationText</name>
+    <message>
+        <location filename="../qml/InstallationText.qml" line="+34"/>
+        <source>%1 · %2</source>
+        <comment>An installation: its source, then its version or runner</comment>
+        <translation>%1 · %2</translation>
+    </message>
+    <message numerus="yes">
+        <location line="+14"/>
+        <source>%n installations, Play uses %1</source>
+        <comment>The game page: a game installed more than once</comment>
+        <translation>
+            <numerusform>%n kurulum, Oyna: %1</numerusform>
+        </translation>
+    </message>
+</context>
+<context>
     <name>LaunchSplash</name>
     <message>
         <location filename="../qml/LaunchSplash.qml" line="+41"/>
@@ -3779,7 +3796,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>NotificationBell</name>
     <message numerus="yes">
-        <location filename="../qml/NotificationBell.qml" line="+37"/>
+        <location filename="../qml/NotificationBell.qml" line="+39"/>
         <source>Notifications, %n unread, quiet mode on</source>
         <translation>
             <numerusform>Bildirimler, %n okunmamış, sessiz mod açık</numerusform>
@@ -4027,7 +4044,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>OptionsMenu</name>
     <message>
-        <location filename="../qml/OptionsMenu.qml" line="+48"/>
+        <location filename="../qml/OptionsMenu.qml" line="+50"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -6145,7 +6162,7 @@ Bu geri alınamaz.</translation>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+401"/>
+        <location line="+461"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -6167,41 +6184,41 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+186"/>
+        <location line="+183"/>
         <source>Play</source>
         <translation>Oyna</translation>
     </message>
     <message>
-        <location line="-187"/>
-        <location line="+189"/>
+        <location line="-184"/>
+        <location line="+186"/>
         <source>Resume</source>
         <translation>Devam et</translation>
     </message>
     <message>
-        <location line="-189"/>
+        <location line="-186"/>
         <source>Closing…</source>
         <translation>Kapanıyor…</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+186"/>
+        <location line="+183"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Aç</translation>
     </message>
     <message>
-        <location line="-183"/>
-        <location line="+188"/>
+        <location line="-180"/>
+        <location line="+185"/>
         <source>Details</source>
         <translation>Ayrıntılar</translation>
     </message>
     <message>
-        <location line="-169"/>
+        <location line="-166"/>
         <source>Recent</source>
         <translation>Son oynananlar</translation>
     </message>
     <message>
-        <location line="+168"/>
+        <location line="+165"/>
         <source>Close game</source>
         <translation>Oyunu kapat</translation>
     </message>
@@ -6216,17 +6233,40 @@ Bu geri alınamaz.</translation>
         <translation>Etkinliğiniz</translation>
     </message>
     <message>
+        <location line="+5"/>
+        <source>Choose installation</source>
+        <translation>Kurulumu seç</translation>
+    </message>
+    <message>
+        <location line="+4"/>
+        <source>Separate %1</source>
+        <comment>Options: make an installation a game of its own again</comment>
+        <translation>%1 kurulumunu ayır</translation>
+    </message>
+    <message>
         <location line="+6"/>
+        <source>Same game as %1 (%2)?</source>
+        <comment>Options: link two installations; %1 a title, %2 its source</comment>
+        <translation>%1 (%2) ile aynı oyun mu?</translation>
+    </message>
+    <message>
+        <location line="+9"/>
         <source>Uninstall…</source>
         <translation>Kaldır…</translation>
     </message>
     <message>
-        <location line="+6"/>
+        <location line="+13"/>
         <source>Store options are unavailable right now.</source>
         <translation>Mağaza seçenekleri şu anda kullanılamıyor.</translation>
     </message>
     <message>
-        <location line="+129"/>
+        <location line="+97"/>
+        <source>Could not change %1. Try again.</source>
+        <comment>A refused installation change; %1 is the game</comment>
+        <translation>%1 değiştirilemedi. Yeniden deneyin.</translation>
+    </message>
+    <message>
+        <location line="+66"/>
         <source>Could not uninstall %1. Try again.</source>
         <translation>%1 kaldırılamadı. Yeniden deneyin.</translation>
     </message>
@@ -6263,7 +6303,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-1973"/>
+        <location line="-2089"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -6294,7 +6334,7 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1693"/>
+        <location line="+1809"/>
         <location line="+13"/>
         <location line="+3"/>
         <source>Sections</source>

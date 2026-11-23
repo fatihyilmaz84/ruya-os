@@ -13,7 +13,11 @@
 // Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux (ruya-library, T-112) and the
 // mock elsewhere, like Store and Profiles.
 //
-// Items are plain objects: { id, kind, title, source, launch, art, lastPlayed }.
+// Items are plain objects, one per game (RUY-137): { id, kind, title, source, launch, art, lastPlayed,
+// installations, confidence, suggestions }. The keys but id, lastPlayed and the last three are the game's
+// preferred installation's, so launch is what Play starts. installations: [{ id, source, launch, play,
+// runner, version, available, preferred }] in Library1's fixed order; confidence "single" | "id" |
+// "confirmed"; suggestions: the ids of the other games with the same title.
 class Library : public QObject
 {
     Q_OBJECT
@@ -68,6 +72,14 @@ public:
     // playFallback, as an item has. Profile-free (Library1 ResolveRunner).
     Q_INVOKABLE void resolveRunner(const QString &id, const QString &choice);
 
+    // RUY-137: the signed-in profile's say over its games (Library1, `profile` as for the runner calls). Play
+    // of game uses installation; installation b's game joins a's game (whose id stays); installation leaves
+    // the link that put it in its game. Each answers with installationCallFinished (call: the Library1
+    // method name), and itemsChanged follows when the list changed.
+    Q_INVOKABLE void setPreferredInstallation(const QString &game, const QString &installation);
+    Q_INVOKABLE void linkInstallations(const QString &a, const QString &b);
+    Q_INVOKABLE void unlinkInstallation(const QString &installation);
+
     // rescanned follows when the service has read its files again.
     Q_INVOKABLE void rescan();
     // Asks for the item to be started. Only emits launchRequested; Shell.qml answers it with
@@ -78,8 +90,9 @@ public:
     Q_INVOKABLE QString sessionAppId(const QString &id) const;
     // The record of an item, or an empty object.
     Q_INVOKABLE QVariantMap item(const QString &id) const;
-    // The record of the item whose Flatpak application id (sessionAppId) is appId, or an empty object. A binding
-    // that calls it reads `items` too, or it is not evaluated again when the list changes (AppName).
+    // The record of the item whose Flatpak application id (sessionAppId) is appId, or of the game that has an
+    // installation with it (RUY-137), or an empty object. A binding that calls it reads `items` too, or it is
+    // not evaluated again when the list changes (AppName).
     Q_INVOKABLE QVariantMap itemForApp(const QString &appId) const;
 
     // Tests only, and only with the mock backend (otherwise a no-op). scenario: "" (the default library), "empty" (nothing installed) or "unlisted" (the default items and one Flatpak app with no Store record) or "play" (the default items and one .play app with every field, RUY-852) or "unplayed" (the default
@@ -116,11 +129,18 @@ signals:
     void runnerResolved(const QString &id, const QString &choice, const QString &status, const QVariantMap &resolution);
     // Library1 RunnerChoiceChanged for the signed-in profile (from any caller, ruya-session included).
     void runnerChoiceChanged(const QString &id, const QString &choice);
+    // The answer of an installation call of the signed-in profile (status: a Library1 status string).
+    void installationCallFinished(const QString &call, const QString &status);
 
 private:
     // items, games and recent from the last list, its Steam items left out while the service's active
     // profile is not the signed-in one. itemsChanged after every list, otherwise only when they differ.
     void rebuild(bool listed);
+    // The runner calls name a .play installation (Library1); QML names the game. The game's preferred
+    // installation for a game id, and the game whose preferred installation it is, from the last list
+    // (any other id is passed through).
+    QString installationOf(const QString &game) const;
+    QString gameOf(const QString &installation) const;
 
     std::unique_ptr<LibraryBackend> m_backend;
     QList<LibraryItem> m_listed; // the last list, sorted

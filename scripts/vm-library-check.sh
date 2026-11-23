@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# modes: check choicejudge clean play playid playjudge runners runnersjudge scanjudge security seed steam steamids
+# modes: check choicejudge clean installations installjudge play playid playjudge runners runnersjudge scanjudge security seed steam steamids
 # Checks ruya-library (org.ruyaos.Library1, T-112 / T-163 / T-183) inside a running VM, as root. It builds a
 # tiny signed Flatpak repository (one runtime, a game and an app, no download, like
 # vm-store-check.sh), adds it through Store1, installs and uninstalls through Store1 and watches
@@ -46,6 +46,17 @@
 #             none and removes it, and the folder, after (also on a failure).
 #             `steamids` prints the steam: ids of a ListItems reply (busctl's text) on stdin (host fixtures);
 #             `scanjudge` judges the sandbox probe's output on stdin (host fixtures)
+#   installations  RUY-137: one game, two installations. Installs the test game (Flatpak, through Store1) and the
+#             .play sample (as for `play`), signs in the first profile, links them (LinkInstallations as
+#             ruya-shell: one game under the Flatpak's id, confidence confirmed), sets the Flatpak as the
+#             preferred one (SetPreferredInstallation: the game's launch is the Flatpak's), finds both in
+#             /var/lib/ruyaos/library/<profile>.json (format 2), restarts ruya-library and finds the
+#             state back once ruya-session has set the active profile again, then UnlinkInstallation splits
+#             them (two games, nothing of them left in the file). Removes both after (also on a failure).
+#             vm-library-check.sh installations [/root/hello-play-native.play.zip] (vm-play-check.sh next
+#             to it, as for `play`). Needs a profile (vm-goto.ps1 home, admin PIN 1234).
+#             `installjudge linked <a> <b> <preferred>` | `installjudge apart <a> <b>` judges ListItems as
+#             busctl --json=short on stdin (host fixtures)
 #   security  see vm-security-check.sh (unit hardening)
 # Boot the VM with plain smoke-test.ps1 -Keep (or -Work -Keep for the screenshot).
 set -u
@@ -65,9 +76,20 @@ bad() { echo "FAIL: $*"; fail=1; }
 
 as_shell() { runuser -u ruya-shell -- "$@"; }
 list_items() { as_shell busctl --system call "$svc" "$path" "$ifc" ListItems; }
-# The text of one item's record: busctl prints a{sv} flat, and every record starts with its entry
-# count (7: id, kind, title, source, launch, art, last_played), in no fixed key order.
-record_of() { list_items | sed 's/ 7 "/\n&/g' | grep "\"flatpak:$1\""; }
+# The text keys of one item's record as busctl's text prints them ("title" s "Test Game"), one per line:
+# read from the JSON reply, so a game's nested installations (RUY-137) never mix with another record.
+record_of() {
+    list_items_json | python3 -c '
+import json, sys
+def val(v):
+    return v.get("data") if isinstance(v, dict) and "type" in v and "data" in v else v
+for rec in (json.load(sys.stdin).get("data") or [[]])[0]:
+    if val(rec.get("id")) == sys.argv[1]:
+        for k, v in sorted(rec.items()):
+            if isinstance(v, dict) and v.get("type") == "s":
+                print("\"%s\" s \"%s\"" % (k, v["data"]))
+' "flatpak:$1"
+}
 signals() { local n; n="$(grep -c '"member":"ItemsChanged"' "$work/signals.log" 2>/dev/null)"; echo "${n:-0}"; }
 
 # make_app <id> <name> <categories>: an app with a desktop entry in the repository. Every call
@@ -540,6 +562,116 @@ steam_check() {
         "--property=RuntimeMaxSec=$scan_runtime" "${props[@]}" -- /bin/bash -s 2>&1 | scan_judge || fail=1
 }
 
+# --- RUY-137: one game, several installations ------------------------------------------------------
+# install_judge linked <a> <b> <preferred> | apart <a> <b>: ListItems (busctl --json=short) on stdin.
+# linked: one record holds both installations, under the id <a> (the anchor), confidence "confirmed",
+# only <preferred> is marked preferred and the record's launch is its; no other record holds either.
+# apart: each is a game of its own (a record with its id and that one installation). Prints PASS or
+# FAIL: <why>.
+install_judge() {
+    python3 -c '
+import json, sys
+mode, a, b = sys.argv[1:4]
+pref = sys.argv[4] if len(sys.argv) > 4 else ""
+def val(v):
+    return v.get("data") if isinstance(v, dict) and "type" in v and "data" in v else v
+try:
+    recs = (json.load(sys.stdin).get("data") or [[]])[0]
+except ValueError:
+    recs = None
+def installs(r):
+    return [{k: val(x) for k, x in i.items()} for i in (val(r.get("installations")) or [])]
+def holding(x):
+    return [r for r in recs if any(i.get("id") == x for i in installs(r))]
+why = []
+if recs is None:
+    why.append("no ListItems reply")
+elif mode == "linked":
+    both = [r for r in recs if {a, b} <= {i.get("id") for i in installs(r)}]
+    if len(both) != 1:
+        why.append("%d records hold both" % len(both))
+    else:
+        r = both[0]
+        if val(r.get("id")) != a:
+            why.append("the game is %s, not %s" % (val(r.get("id")), a))
+        if val(r.get("confidence")) != "confirmed":
+            why.append("confidence %s" % val(r.get("confidence")))
+        chosen = [i.get("id") for i in installs(r) if i.get("preferred")]
+        if chosen != [pref]:
+            why.append("preferred %s, not %s" % (chosen, pref))
+        launch = [i.get("launch") for i in installs(r) if i.get("id") == pref]
+        if [val(r.get("launch"))] != launch:
+            why.append("launch %s is not the launch of %s" % (val(r.get("launch")), pref))
+    if len(holding(a)) != 1 or len(holding(b)) != 1:
+        why.append("an installation in more than one record")
+elif mode == "apart":
+    for x in (a, b):
+        h = holding(x)
+        if len(h) != 1 or val(h[0].get("id")) != x or len(installs(h[0])) != 1:
+            why.append("%s is not a game of its own" % x)
+else:
+    why.append("unknown mode %s" % mode)
+print("FAIL: " + "; ".join(why) if why else "PASS")
+' "$@"
+}
+
+# installs_are <mode> <a> <b> [preferred] <seconds>: until install_judge passes; prints its last line.
+installs_are() {
+    local n=0 last secs="${*: -1}" args=("${@:1:$#-1}")
+    while :; do
+        last="$(list_items_json 2>/dev/null | install_judge "${args[@]}")"
+        [ "$last" = PASS ] || [ "$n" -ge "$secs" ] && break
+        sleep 1; n=$((n + 1))
+    done
+    echo "$last"
+    [ "$last" = PASS ]
+}
+
+install_call() { as_shell busctl --system call "$svc" "$path" "$ifc" "$@" 2>&1; }
+installs_linked=""
+
+# installations_check <zip>
+installations_check() {
+    local me out a b file n=0
+    me="$(busctl --system call "$psvc" "$ppath" "$psvc" ListProfiles | grep -o '"p[0-9]*"' | tr -d '"' | head -1)"
+    [ -n "$me" ] || { bad "a profile is needed (vm-goto.ps1 home)"; exit 1; }
+    out="$(sign_in "$me")"
+    case "$out" in 'suu "ok"'*) ok "$me signed in";; *) bad "SwitchTo $me: $out"; exit 1;; esac
+    until busctl --system get-property "$svc" "$path" "$ifc" ActiveProfile | grep -q "\"$me\"" || [ "$n" -ge 30 ]; do sleep 1; n=$((n + 1)); done
+    busctl --system get-property "$svc" "$path" "$ifc" ActiveProfile | grep -q "\"$me\"" && ok "ActiveProfile is $me" || { bad "ActiveProfile is not $me"; exit 1; }
+
+    need_clean=1
+    build_repo && ok "repository built" || { bad "cannot build the test repository"; exit 1; }
+    add_remote || exit 1
+    install_app "$game" || exit 1
+    wait_listed "$game" yes 180 >/dev/null && ok "the test game is listed" || { bad "the test game never appeared"; exit 1; }
+    play_install "$1" || exit 1
+    a="flatpak:$game"; b="flatpak:play.$play_id"; file="/var/lib/ruyaos/library/$me.json"
+    installs_are apart "$a" "$b" 5 >/dev/null && ok "two installations, two games" || bad "before the link: $(list_items_json | install_judge apart "$a" "$b")"
+
+    echo "--- link, prefer, restart"
+    out="$(install_call LinkInstallations sss "$me" "$a" "$b")"
+    [ "$out" = 's "ok"' ] && { ok "LinkInstallations: ok"; installs_linked="$me $b"; } || bad "LinkInstallations: $out"
+    out="$(install_call SetPreferredInstallation sss "$me" "$a" "$a")"
+    [ "$out" = 's "ok"' ] && ok "SetPreferredInstallation: ok" || bad "SetPreferredInstallation: $out"
+    out="$(installs_are linked "$a" "$b" "$a" 5)" && ok "one game under $a, the Flatpak preferred and launched" || bad "after the link: $out"
+    grep -q '"format":2' "$file" 2>/dev/null && grep -q "$b" "$file" && grep -q "\"preferred\":{\"$a\":\"$a\"}" "$file" \
+        && ok "the link and the preference are in $file (format 2)" || bad "$file: $(cat "$file" 2>&1)"
+    [ "$(stat -c '%U %a' "$file" 2>/dev/null)" = "ruya-library 600" ] && ok "$file is ruya-library's, 0600" || bad "$file: $(stat -c '%U %a' "$file" 2>&1)"
+    systemctl restart ruya-library
+    out="$(installs_are linked "$a" "$b" "$a" 30)" && ok "the state is back after a restart of ruya-library" || bad "after the restart: $out"
+    out="$(install_call SetPreferredInstallation sss "$me" "$a" "flatpak:play.not.installed")"
+    [ "$out" = 's "unknown"' ] && ok "an installation that is not installed is unknown" || bad "SetPreferredInstallation of no item: $out"
+
+    echo "--- unlink"
+    out="$(install_call UnlinkInstallation ss "$me" "$b")"
+    [ "$out" = 's "ok"' ] && { ok "UnlinkInstallation: ok"; installs_linked=""; } || bad "UnlinkInstallation: $out"
+    out="$(installs_are apart "$a" "$b" 5)" && ok "two games again" || bad "after the unlink: $out"
+    ! grep -q -e "$a" -e "$b" "$file" 2>/dev/null && ok "nothing of them is left in $file" || bad "$file still names them: $(cat "$file")"
+    out="$(install_call UnlinkInstallation ss "$me" "$b")"
+    [ "$out" = 's "invalid"' ] && ok "a second unlink has nothing to separate: invalid" || bad "the second UnlinkInstallation: $out"
+}
+
 clean_all() {
     flatpak uninstall --system -y "$game" "$notes" "$rt" >/dev/null 2>&1
     flatpak remote-delete --system --force "$remote" >/dev/null 2>&1
@@ -563,6 +695,8 @@ play_clean() {
 }
 on_exit() {
     [ -n "$mon" ] && kill "$mon" 2>/dev/null
+    # installations stopped between its link and its unlink: the profile keeps no link to the test apps.
+    [ -n "${installs_linked:-}" ] && install_call UnlinkInstallation ss ${installs_linked} >/dev/null
     steam_clean
     [ -n "${play_id:-}" ] && play_clean
     if [ "$need_clean" = 1 ] && { [ "$keep_on_success" = 0 ] || [ "$fail" != 0 ]; }; then
@@ -590,6 +724,15 @@ runners)
     ;;
 runnersjudge)
     runners_judge
+    ;;
+installations)
+    installations_check "${2:-/root/hello-play-native.play.zip}"
+    play_clean
+    clean_all
+    ;;
+installjudge)
+    out="$(install_judge "${@:2}")"
+    [ "$out" = PASS ] && ok "install_judge ${2:-}: the records agree" || bad "install_judge ${2:-}: ${out#FAIL: }"
     ;;
 steam)
     steam_check

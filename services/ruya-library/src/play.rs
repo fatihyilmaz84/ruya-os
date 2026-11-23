@@ -43,6 +43,9 @@ pub struct PlayInfo {
     pub screenshots: Vec<String>,
     /// What the launch would run the game with, the package's default choice (RUY-903).
     pub resolution: Resolution,
+    /// play.json's display version ("1.4.2"); none when it has none (RUY-137: an installation's
+    /// version).
+    pub version: Option<String>,
 }
 
 fn read_json(path: &Path) -> Option<serde_json::Value> {
@@ -225,6 +228,7 @@ pub fn enrich(item: &mut Item, flatpak_id: &str, root: &Path, runners: &Path) {
         signer,
         signer_key_id,
         screenshots,
+        version: text(&manifest, "version"),
         ..PlayInfo::default()
     };
     if let Some(resolution) = resolve_in_place(&files, runners, Override::PackageDefault) {

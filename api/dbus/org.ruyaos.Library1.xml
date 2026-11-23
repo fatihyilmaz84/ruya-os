@@ -2,7 +2,8 @@
  "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 <!--
   org.ruyaos.Library1 — everything installed that can be started: Steam games (read from Steam's
-  library files, read-only) and installed Flatpak apps, as one list.
+  library files, read-only) and installed Flatpak apps, as one list of games, each with its
+  installations (RUY-137, below).
   Served by ruya-library (T-112) at /org/ruyaos/Library1 on the system bus, as the system user
   ruya-library (T-163). It reads the system Flatpak installation itself and never a profile's home
   (ProtectHome=yes): Steam games come per profile from ruya-session (ADR-045, below). The service
@@ -40,8 +41,30 @@
   Every record is an a{sv} dictionary, so fields can be added later without breaking clients
   (unknown keys are ignored).
 
+  Games and installations (RUY-137, ADR-028). An installation is what one source installed: a Steam
+  game, a Flatpak app, a .play app (later a ROM, or a game an app publishes). Its id is the item id
+  it always had ("steam:<appid>", "flatpak:<id>"), so Session1's records, the runner choices and
+  last_played keep naming it. Installations are one game only
+    - by an identical identification key (a Steam app id, a Flatpak application id, later the
+      content hash of GameData1.Identify): confidence "id". No source carries another source's id
+      today, so this needs a source that declares one (an app-provided game, RUY-452);
+    - by the player's link (LinkInstallations): confidence "confirmed";
+  never by title. Two games with the same title (its letters and digits, case-insensitive) stay two
+  and name each other in "suggestions", for the question "Are these the same game?".
+  The game's id is the id of the installation it is anchored on: the game the other joined
+  (LinkInstallations' `a`), else the installation whose own key the others share, else the lowest
+  id. A game of one installation has that installation's id: every id that existed before RUY-137
+  is unchanged. Play uses the game's preferred installation: the one SetPreferredInstallation chose,
+  else the first available in the fixed order (a .play app, a Flatpak app, a Steam game, then id).
+  Links and preferences are each profile's (stored with its runner choices, below); ListItems
+  groups by ActiveProfile's. A link or a preference naming an installation that is not installed
+  is kept and ignored, and counts again when it is back.
+
+  An item is one game: every key but id, last_played, installations, confidence and suggestions is
+  its preferred installation's (a .play app's extra keys too).
+
   Item record (a{sv}), keys:
-    id           s    "steam:<appid>" or "flatpak:<application id>"; stable
+    id           s    the game's id (above): "steam:<appid>" or "flatpak:<application id>"; stable
     kind         s    "game" or "app". Steam items are always "game". A Flatpak item is a "game" when
                       "Game" is in the Categories of the [Desktop Entry] group of its exported
                       desktop entry (system installation), else "app" (also without such a file)
@@ -52,7 +75,24 @@
     art          a{ss} artwork by role ("tile", "hero", "icon") -> file path or URL; may be empty.
                       A .play app (below) adds the roles "logo", "card", "cover", "preview" (a short
                       video) and "trailer" (a video); each is present only when the package has it
-    last_played  x    unix seconds, 0 if unknown
+    last_played  x    unix seconds, 0 if unknown; the latest of its installations
+    installations aa{sv} its installations (Installation records, below), at least one, in the fixed
+                      order; exactly one is preferred
+    confidence   s    "single" (one installation), "id" (an identical key) or "confirmed" (the
+                      player linked them)
+    suggestions  as   the ids of the other games with the same title, in this list's order; absent
+                      when there are none
+
+  Installation record (a{sv}), keys:
+    id           s    its item id ("steam:<appid>", "flatpak:<application id>"); the id the runner
+                      calls and Session1 take
+    source       s    "steam" or "flatpak" (a .play app is "flatpak" with play true)
+    launch       s    its launch spec, as an item's
+    play         b    true for a .play app; absent for any other
+    runner       s    a .play app's play_runner ("<family> <version>"); absent when it has none
+    version      s    its display version (a .play app's play.json version); absent when unknown
+    available    b    it can start now; always true until games on other drives (RUY-139)
+    preferred    b    Play uses it
 
   A .play app (RUY-852) is a Flatpak app "play.<id>" that ruya-play installed; ruya-library reads its
   extra keys from its deployment
@@ -100,7 +140,7 @@
                       run against the deployment and the image's runners, the package's default
                       choice; they say nothing of a per-game choice (ResolveRunner below)
 
-  Order: last_played descending, then title (case-insensitive), then id.
+  Order (of the games): last_played descending, then title (case-insensitive), then id.
 
   Runners (RUY-959). The image's runners are the folders of /usr/lib/ruyaos/play/runners that the
   launcher itself would accept (ruya_play_launch::runners::scan_in, ADR-038): a folder whose
@@ -118,18 +158,23 @@
     "bundled"    the copy in the package
     "system"     the image's runner
   exactly the values ruya-play-launch takes as its runner argument (ADR-037). The choices are stored per profile
-  under /var/lib/ruyaos/library (one file per profile); `profile` is a Profiles1 id, which the caller
-  (the shell for the signed-in profile, ruya-session for the profile it launches for) passes. `id` is
-  a .play item's id ("flatpak:play.<id>").
+  under /var/lib/ruyaos/library (one file per profile, with the profile's links and preferred
+  installations); `profile` is a Profiles1 id, which the caller (the shell for the signed-in
+  profile, ruya-session for the profile it launches for) passes. `id` is a .play installation's id
+  ("flatpak:play.<id>"), also when it is not its game's id.
 
   Status strings (stable API):
     "ok"         done
-    "unknown"    no item with that id is installed
+    "unknown"    no item with that id is installed (an installation; for SetPreferredInstallation
+                 also the game)
     "not_play"   the item is not a .play app (a Steam game, a plain Flatpak app, a play.* app from
                  another remote)
     "invalid"    a malformed profile id or a choice that is not one of the three; for
-                 PutProfileItems and SetActiveProfile a malformed profile id or a refused document
-    "failed"     the choice could not be stored
+                 PutProfileItems and SetActiveProfile a malformed profile id or a refused document;
+                 for the installation calls an installation linked to itself, an installation of
+                 another game (SetPreferredInstallation) or one no link holds (UnlinkInstallation:
+                 alone, or there by an identical key)
+    "failed"     the choice (or the link, the preference) could not be stored
     "not_allowed" PutProfileItems or SetActiveProfile from a caller whose uid is not 0
 
   ResolveRunner's answer holds the six runner keys of the item record, for the choice asked for
@@ -225,6 +270,42 @@
       <arg name="choice" type="s" direction="in"/>
       <arg name="status" type="s" direction="out"/>
       <arg name="resolution" type="a{sv}" direction="out"/>
+    </method>
+
+    <!-- RUY-137. The installation calls are the player's (caller rule as SetRunnerChoice: the shell
+         and root). Each changes the profile's own links and preferences; ItemsChanged follows
+         when ActiveProfile's list changed. -->
+
+    <!-- Play of `game` (a game id of the profile's list) uses `installation`, one of its
+         installations. "ok", "unknown" (no such game or installation), "invalid" (an installation
+         of another game, a malformed profile id) or "failed". -->
+    <method name="SetPreferredInstallation">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="game" type="s" direction="in"/>
+      <arg name="installation" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- The player says installations `a` and `b` are one game: the game of `b` joins the game of
+         `a`, whose id stays (the game of `b` is gone, with its preference). "ok" (also when they
+         are one game already), "unknown" (either is not installed), "invalid" (a and b are the
+         same, a malformed profile id) or "failed". -->
+    <method name="LinkInstallations">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="a" type="s" direction="in"/>
+      <arg name="b" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- `installation` leaves the link that put it in its game and is a game again, with its own
+         id. When it was the game's anchor, the next linked installation is, and the game's id
+         becomes its. The game's preference moves with it, and goes when it named `installation`
+         or one installation is left. "ok", "unknown" (not installed), "invalid" (no link holds it,
+         a malformed profile id) or "failed". -->
+    <method name="UnlinkInstallation">
+      <arg name="profile" type="s" direction="in"/>
+      <arg name="installation" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
     </method>
 
     <!-- A profile's choice for a game changed (SetRunnerChoice). -->

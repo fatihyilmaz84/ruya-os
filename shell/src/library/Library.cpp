@@ -27,7 +27,7 @@ Library::Library(std::unique_ptr<LibraryBackend> backend, QObject *parent)
     // A list read before the change holds the previous profile's Steam items (the service's replies and
     // its PropertiesChanged arrive in order): they leave at once, and the list is read again.
     connect(m_backend.get(), &LibraryBackend::activeProfileChanged, this, [this] {
-        m_listed.removeIf([](const LibraryItem &i) { return i.source == QLatin1String("steam"); });
+        m_listed.removeIf([](const LibraryItem &i) { return i.hasSteam(); });
         emit activeProfileChanged();
         rebuild(false);
         m_backend->listItems();
@@ -45,21 +45,26 @@ Library::Library(std::unique_ptr<LibraryBackend> backend, QObject *parent)
     connect(m_backend.get(), &LibraryBackend::runnerChoiceAnswered, this,
             [this](const QString &profile, const QString &id, const QString &status, const QString &choice) {
                 if (profile == m_profile)
-                    emit runnerChoiceAnswered(id, status, choice);
+                    emit runnerChoiceAnswered(gameOf(id), status, choice);
             });
     connect(m_backend.get(), &LibraryBackend::runnerChoiceSet, this,
             [this](const QString &profile, const QString &id, const QString &choice, const QString &status) {
                 if (profile == m_profile)
-                    emit runnerChoiceSet(id, choice, status);
+                    emit runnerChoiceSet(gameOf(id), choice, status);
             });
     connect(m_backend.get(), &LibraryBackend::runnerChoiceChanged, this,
             [this](const QString &profile, const QString &id, const QString &choice) {
                 if (profile == m_profile && !m_profile.isEmpty())
-                    emit runnerChoiceChanged(id, choice);
+                    emit runnerChoiceChanged(gameOf(id), choice);
             });
     connect(m_backend.get(), &LibraryBackend::runnerResolved, this,
             [this](const QString &id, const QString &choice, const QString &status, const LibraryResolution &r) {
-                emit runnerResolved(id, choice, status, r.toVariant());
+                emit runnerResolved(gameOf(id), choice, status, r.toVariant());
+            });
+    connect(m_backend.get(), &LibraryBackend::installationCallFinished, this,
+            [this](const QString &profile, const QString &call, const QString &status) {
+                if (profile == m_profile)
+                    emit installationCallFinished(call, status);
             });
     m_backend->listItems();
     m_backend->listRunners();
@@ -106,7 +111,7 @@ void Library::rebuild(bool listed)
     QVariantList games;
     QVariantList recent;
     for (const LibraryItem &i : std::as_const(m_listed)) {
-        if (hideSteam && i.source == QLatin1String("steam"))
+        if (hideSteam && i.hasSteam())
             continue;
         const QVariantMap v = i.toVariant();
         items.append(v);
@@ -123,14 +128,51 @@ void Library::rebuild(bool listed)
     emit itemsChanged();
 }
 
+QString Library::installationOf(const QString &game) const
+{
+    for (const LibraryItem &i : m_listed) {
+        if (i.id == game) {
+            const QString preferred = i.preferredInstallation();
+            return preferred.isEmpty() ? game : preferred;
+        }
+    }
+    return game;
+}
+
+QString Library::gameOf(const QString &installation) const
+{
+    for (const LibraryItem &i : m_listed) {
+        for (const LibraryInstallation &inst : i.installations) {
+            if (inst.id == installation)
+                return inst.preferred ? i.id : installation; // another installation's answer is not the game's
+        }
+    }
+    return installation;
+}
+
 void Library::runnerChoice(const QString &id)
 {
-    m_backend->getRunnerChoice(m_profile, id);
+    m_backend->getRunnerChoice(m_profile, installationOf(id));
 }
 
 void Library::setRunnerChoice(const QString &id, const QString &choice)
 {
-    m_backend->setRunnerChoice(m_profile, id, choice);
+    m_backend->setRunnerChoice(m_profile, installationOf(id), choice);
+}
+
+void Library::setPreferredInstallation(const QString &game, const QString &installation)
+{
+    m_backend->setPreferredInstallation(m_profile, game, installation);
+}
+
+void Library::linkInstallations(const QString &a, const QString &b)
+{
+    m_backend->linkInstallations(m_profile, a, b);
+}
+
+void Library::unlinkInstallation(const QString &installation)
+{
+    m_backend->unlinkInstallation(m_profile, installation);
 }
 
 void Library::mockSetResolution(const QString &id, const QString &choice, const QVariantMap &resolution)
@@ -149,7 +191,7 @@ void Library::mockFailRunnerCalls(const QStringList &calls)
 
 void Library::resolveRunner(const QString &id, const QString &choice)
 {
-    m_backend->resolveRunner(id, choice);
+    m_backend->resolveRunner(installationOf(id), choice);
 }
 
 void Library::mockSetRunners(const QVariantList &runners, int ms)
@@ -203,6 +245,14 @@ QVariantMap Library::itemForApp(const QString &appId) const
         const QVariantMap m = v.toMap();
         if (flatpakIdOf(m) == appId)
             return m;
+    }
+    // An installation Play does not use (it ran before the player chose another one).
+    for (const QVariant &v : m_items) {
+        const QVariantMap m = v.toMap();
+        for (const QVariant &inst : m.value(QStringLiteral("installations")).toList()) {
+            if (flatpakIdOf(inst.toMap()) == appId)
+                return m;
+        }
     }
     return {};
 }

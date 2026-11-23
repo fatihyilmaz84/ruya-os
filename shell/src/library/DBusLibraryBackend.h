@@ -25,6 +25,9 @@ public:
     void setRunnerChoice(const QString &profile, const QString &id, const QString &choice) override;
     void resolveRunner(const QString &id, const QString &choice) override;
     QString activeProfile() const override { return m_activeProfile; }
+    void setPreferredInstallation(const QString &profile, const QString &game, const QString &installation) override;
+    void linkInstallations(const QString &profile, const QString &a, const QString &b) override;
+    void unlinkInstallation(const QString &profile, const QString &installation) override;
 
 private slots:
     void onPropertiesChanged(const QString &interface, const QVariantMap &changed, const QStringList &invalidated);
@@ -38,6 +41,8 @@ private:
     // arguments, and those arguments (a failure is logged with the method's name).
     using Answer = std::function<void(bool ok, const QVariantList &out)>;
     void call(const QString &method, const QVariantList &args, int outArgs, Answer done);
+    // An installation call (RUY-137): one status string, as installationCallFinished.
+    void installationCall(const QString &method, const QString &profile, const QVariantList &args);
 
     QDBusConnection m_bus;
     QDBusServiceWatcher m_watcher;

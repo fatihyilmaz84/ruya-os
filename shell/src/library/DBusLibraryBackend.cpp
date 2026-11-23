@@ -92,6 +92,20 @@ QList<T> records(const QVariant &v, Convert convert)
     return out;
 }
 
+LibraryInstallation toInstallation(const QVariantMap &d)
+{
+    LibraryInstallation i;
+    i.id = d.value(QStringLiteral("id")).toString();
+    i.source = d.value(QStringLiteral("source")).toString();
+    i.launch = d.value(QStringLiteral("launch")).toString();
+    i.play = d.value(QStringLiteral("play")).toBool();
+    i.runner = d.value(QStringLiteral("runner")).toString();
+    i.version = d.value(QStringLiteral("version")).toString();
+    i.available = d.value(QStringLiteral("available"), true).toBool();
+    i.preferred = d.value(QStringLiteral("preferred")).toBool();
+    return i;
+}
+
 LibraryItem toItem(const QVariantMap &d)
 {
     LibraryItem i;
@@ -128,6 +142,11 @@ LibraryItem toItem(const QVariantMap &d)
         i.playScreenshots = d.value(QStringLiteral("play_screenshots")).toStringList();
         i.resolution = toResolution(d);
     }
+    const QVariant installs = d.value(QStringLiteral("installations"));
+    if (installs.canConvert<QDBusArgument>())
+        i.installations = records<LibraryInstallation>(installs, toInstallation);
+    i.confidence = d.value(QStringLiteral("confidence"), i.confidence).toString();
+    i.suggestions = d.value(QStringLiteral("suggestions")).toStringList();
     return i;
 }
 } // namespace
@@ -249,6 +268,28 @@ void DBusLibraryBackend::resolveRunner(const QString &id, const QString &choice)
         else
             emit runnerResolved(id, choice, QStringLiteral("failed"), LibraryResolution());
     });
+}
+
+void DBusLibraryBackend::installationCall(const QString &method, const QString &profile, const QVariantList &args)
+{
+    call(method, args, 1, [this, profile, method](bool ok, const QVariantList &out) {
+        emit installationCallFinished(profile, method, ok ? out.constFirst().toString() : QStringLiteral("failed"));
+    });
+}
+
+void DBusLibraryBackend::setPreferredInstallation(const QString &profile, const QString &game, const QString &installation)
+{
+    installationCall(QStringLiteral("SetPreferredInstallation"), profile, {profile, game, installation});
+}
+
+void DBusLibraryBackend::linkInstallations(const QString &profile, const QString &a, const QString &b)
+{
+    installationCall(QStringLiteral("LinkInstallations"), profile, {profile, a, b});
+}
+
+void DBusLibraryBackend::unlinkInstallation(const QString &profile, const QString &installation)
+{
+    installationCall(QStringLiteral("UnlinkInstallation"), profile, {profile, installation});
 }
 
 void DBusLibraryBackend::rescan()
