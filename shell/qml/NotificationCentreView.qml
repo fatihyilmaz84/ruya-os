@@ -362,7 +362,8 @@ FocusScope {
             model: view.keys
 
             // Brings the current row into view and keeps it clear of the fade at the edge that hides
-            // rows (`spaceL` high): the Hub's reveal (QuickMenu.qml, T-450).
+            // rows (`spaceL` high, on the opaque sheet only; the page has no fades, so no margin): the Hub's
+            // reveal (QuickMenu.qml, T-450).
             function reveal() {
                 if (currentIndex < 0)
                     return
@@ -370,7 +371,7 @@ FocusScope {
                 const item = itemAtIndex(currentIndex)
                 if (!item || contentHeight <= height)
                     return
-                const fade = Theme.spaceL * view.u
+                const fade = view.opaque ? Theme.spaceL * view.u : 0
                 if (item.y - contentY < fade)
                     contentY = Math.max(originY, item.y - fade)
                 else if (item.y + item.height - contentY > height - fade)
