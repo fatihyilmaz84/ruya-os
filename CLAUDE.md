@@ -25,9 +25,8 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 2. **Read before coding.** The whole ticket (`get`: description and latest comments), every spec section it links, the `CLAUDE.md` of each area you touch, and the existing code you will change.
 3. **Claim it:** `claim` the ticket (moves it to In Progress, assigns you).
 4. **Build within scope.** Implement exactly the ticket's Scope.
-   - **Every follow-up** you notice (debt, flaky build, missing feature, spec gap) is one `inbox` line in your handover (the lead files it as a ticket labelled `inbox`). A follow-up that exists only in prose is lost.
-   - Crossing the shell/service boundary: **write or extend the D-Bus XML first**; the mock, the D-Bus client and the Rust service all follow it.
-   - **Contracts are drafts until the first release.** If the task can't be done cleanly within the contract, extend it in the same commit (XML, service and tests, mock, D-Bus client) and explain it in the Outcome; no workarounds. Never break behaviour other code relies on.
+   - **Every follow-up** you notice (debt, flaky build, missing feature, spec gap) is one `inbox` line in your handover; one only in prose is lost.
+   - Crossing the shell/service boundary: **D-Bus XML first**; mock, client and service follow it. Contracts are drafts until the first release: if the task needs it, extend the contract in the same commit (XML, service and tests, mock, client) and say so in the Outcome; never break behaviour other code relies on.
 5. **Verify.**
    - `.\scripts\dev.ps1 test` must end with `ALL GREEN`. Its Qt Quick tests run **offscreen**, independent of the desktop. A red `test` is a real failure.
    - UI change: also `.\scripts\dev.ps1 shots` (real GPU windows; needs an unlocked, undisturbed desktop: `TEST WINDOW LOST ACTIVATION` → re-run, never edit a test to suit the desktop). Read the changed screenshots in `output\shell-shots\review\` (half size) against the criteria and `04` §8, and fix what you see.
@@ -40,7 +39,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 ## Definition of done (all must hold)
 
 - [ ] Every acceptance criterion is met **and** checked by a test or a reviewed screenshot.
-- [ ] `.\scripts\dev.ps1 test` → `ALL GREEN`. No test was weakened, skipped or deleted to get there.
+- [ ] `.\scripts\dev.ps1 test` → `ALL GREEN` (Hard rules: tests).
 - [ ] New QML/C++ files are in `shell/CMakeLists.txt`; new strings use `qsTr()`; UI uses only existing design tokens and components (a missing one is an `inbox` line, `04` §8).
 - [ ] Contracts, mocks, D-Bus clients and services agree (method names, argument order, status strings).
 - [ ] The ticket's evidence and `Outcome:` comment and the specs are updated. Whatever couldn't run on this machine is marked **unverified**.
@@ -50,7 +49,7 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
 - **Decisions.** ADRs marked *Accepted* in `00-overview.md` are binding. If a task seems to need a different decision, or a new owner-level one (legal, licensing, product scope, spending, publishing), don't decide: add a *Proposed* ADR, move the ticket to Blocked with the question (the lead files an `owner-decision` ticket), and stop.
 - **Host.** Windows, with a Fedora 44 WSL distribution for image builds and QEMU (WHPX) for boot tests (`docs/dev-setup.md`). Never install system software or change system settings; `dnf` inside the WSL distribution is fine.
   - **VM checks (owner, 2026-11-03).** Linux-only behaviour gets a `scripts/vm-*-check.sh` (host fixtures in `test-vm-checks.sh`) and `Verified: host (vm pending: <check>)`. Builders run nothing in WSL unless dispatched to; the lead builds images (`image-chain.sh`) and runs the VM queue.
-  - **Unverifiable here** (say so): real GPU/KPI numbers, controllers or audio in the VM, the shell over D-Bus unless tested in the VM over SSH.
+  - **Unverifiable here** (say so): real GPU numbers, controllers or audio in the VM, the shell over D-Bus outside the VM.
   - **The Dell is a pure test machine (owner, 2026-11-08/13):** the lead and its agents may do anything on it over SSH without asking and report it (`Dell: <what>`); the real fix goes into the code. Never the owner's PC; the SSH key stays out of the repo.
 - **Tests are the spec's teeth.** Never weaken an assertion, add `skip()`, or delete a test to get green. If a test is wrong, fix it and say why in the Outcome.
 - **Security invariants:**
@@ -60,11 +59,11 @@ RuyaOS is an open-source, immutable (Fedora bootc) console OS for living-room PC
   - Third-party apps run only in Flatpak sandboxes, never as root or as `ruya-shell`.
   - Services keep their systemd hardening.
   - D-Bus policies stay restrictive: the shell and root only, plus `ruya-link` under its per-method allow-list (ADR-029, owner 2026-11-10).
-- **Honesty in the log.** Tickets, their comments and the session handoffs report what actually happened, including failures and anything left undone.
+- **Honesty in the log.** Tickets, comments and handoffs report what actually happened, failures and undone work included.
 
 ## Working style
 
-- **You are the long-term maintainer of this codebase (owner, 2026-11-18 and 2026-11-22).** Work and design as the person who will own this code for years: the clean, lasting design over the quick patch, no hacks or workarounds at any cost, one way to do a thing, and code you touch left easier to change. **Never take a path you are not confident is right:** stop and settle it first (a spike, the lead, the architect) instead of building on a guess. When the owner, the lead or a ticket points in a direction you think is wrong, say so plainly with why it is bad and the better path. Debt you see is an `inbox` line; fixing it stays within your ticket's scope.
+- **You are the long-term maintainer of this codebase (owner, 2026-11-18 and 2026-11-22).** The clean, lasting design over the quick patch, no hacks or workarounds at any cost, one way to do a thing, code you touch left easier to change. **Never take a path you are not confident is right:** settle it first (a spike, the lead, the architect). When the owner, the lead or a ticket points the wrong way, say so plainly, with why and the better path.
 - **Read lean.** Everything you read is paid for again on every later turn. Read line ranges, don't re-read what is in context or dump directories, filter long output (`| Select-String`), read only the screenshots your task changed, never the archives.
 - **Small steps.** Build and run the relevant check (`dev.ps1 shell` or `rust`) after each meaningful change.
 - **Copy existing patterns.** `ruya-profiles` (Rust), `shell/src/profiles` and `PinPad.qml` (shell) are the reference implementations; `shell/src/network` is the newest complete backend with a pane.
@@ -89,6 +88,5 @@ Areas: `shell`, `services`, `image`, `api`, `docs`, `scripts`, `ci`. Add the att
 - **Host tools corrupt files** (reached `main` four times). Backslashes sent through Bash heredocs, `sed` or Python literals become control characters: **write text with backslashes (Windows paths, regex) with Write/Edit.** Python defaults to **cp1252**: pass `encoding="utf-8"`. `scripts/lint-text.ps1` (in `test`, CI and the `.githooks/pre-commit` hook) fails on invalid UTF-8, control characters and tabs in tracked files; run it before every commit.
 - **Qt** 6.10.3 (MSVC) at `D:\dev\Qt\6.10.3\msvc2022_64`; the image uses Fedora's Qt (≥ 6.8), so use no newer APIs. MSVC compiles C++17 (no `[=, this]`).
 - **Rendering.** Offscreen (tests, CI) is the software renderer, where `MultiEffect` draws nothing: assert properties (`visible`, `blurMax`, focus), never pixels. Only `shots` renders on the GPU.
-- **qmllint** needs the module response file and `--max-warnings 0`; `dev.ps1` does that.
 - **Line endings.** Files that reach the Linux image stay LF (`.gitattributes`). Shell scripts need the exec bit: `git update-index --chmod=+x <file>`.
 - **Mock services.** Off Linux the shell uses mocks. Mock profiles: Player One (admin, PIN 1234), Ada (no PIN), Sam (guest role).
