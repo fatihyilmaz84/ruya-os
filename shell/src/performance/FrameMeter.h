@@ -51,6 +51,8 @@ public:
     static constexpr int MinFor1Low = 100;
     static constexpr int MinFor01Low = 1000;
 
+    static constexpr int MaxRecordedIntervals = 4096;
+
     static constexpr qint64 WindowNs = 1000LL * 1000 * 1000;
 
     explicit FrameMeter(QObject *parent = nullptr);
@@ -61,6 +63,12 @@ public:
     void setSource(QObject *surface);
     void setWindow(QObject *window);
     void setRunning(bool on);
+    // Keeps every presented-frame interval from now on until `takeIntervalsMs` (a measuring script's log,
+    // RUYA_PERF_LOG): off by default, so a shell nobody measures records nothing.
+    void setRecordIntervals(bool on);
+    // The intervals (ms) recorded since the last call, oldest first; at most MaxRecordedIntervals (the
+    // newest ones when the caller was late).
+    QVector<double> takeIntervalsMs();
     bool counting() const { return m_counting; }
     int commitsSeen() const { return m_commitsSeen.load(); }
     // ms on a test clock; a negative value goes back to the real clock.
@@ -103,4 +111,6 @@ private:
     QVector<qint64> m_lowEnds;
     QVector<qint64> m_lowIntervals;
     qint64 m_lastFrame = -1;         // the previous presented frame, -1 when none counts
+    bool m_recordIntervals = false;
+    QVector<qint64> m_recorded;      // intervals (ns) since the last takeIntervalsMs
 };

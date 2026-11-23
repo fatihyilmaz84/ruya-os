@@ -11,17 +11,17 @@
   dell-perf-stats.py compare <a.json> <b.json>
       The difference of every number with its noise band.
 
-The frame meter logs, four times a second, the last second's frame count, mean and p99 frame time
-(the p99 of fewer than 100 frames is the slowest frame of that second). Windows a second apart do not
-overlap, so the script keeps one line per second and works from those:
-  fps         mean frames per second
-  ft_p50_ms   median of the seconds' mean frame times (the typical frame)
-  ft_slow_ms  mean of the seconds' slowest frame
-  ft_worst_ms the slowest frame of the window
-  stutter     seconds that held a frame over twice ft_p50_ms
+The shell (RUYA_PERF_LOG=1) logs, four times a second, "perf-frames" (the last second's frame count; used
+for fps and the cold start) and once a second "perf-frame-intervals": every presented-frame interval of
+that second in ms, rounded to 0.01. Over the measured window [t1, t2):
+  fps         mean frames per second (perf-frames)
+  ft_p50_ms, ft_p99_ms, ft_p999_ms   nearest-rank percentiles of every interval in the window
+  ft_worst_ms the longest interval
+  stutter     intervals over twice ft_p50_ms
+  ft_lines    perf-frame-intervals lines in the window (about t2 - t1 when journald dropped none)
   cold_start_s  the launch ("Starting ruya-app-*.service") to the first presented frame
   steady_s      the launch to the first full second at 90 % of fps
-The raw frame times are not in the log: a true p99 and p99.9 over all frames need the shell to log them.
+An image from before the intervals line has fps but no frame-time numbers.
 """
 import json
 import re
@@ -29,15 +29,17 @@ import statistics
 import sys
 
 FRAMES = re.compile(r"^(\d+\.\d+) .*perf-frames fps=(\d+) full=(\d) commits=(\d+) meanMs=([\d.]+) p99Ms=([\d.]+)")
+INTERVALS = re.compile(r"^(\d+\.\d+) .*perf-frame-intervals ([\d.,]+)")
 STARTING = re.compile(r"^(\d+\.\d+) .*Starting ruya-app-")
 
 # metric -> (label, unit, better): better is "high" or "low"
 METRICS = {
     "fps": ("FPS", "", "high"),
     "ft_p50_ms": ("frame p50", "ms", "low"),
-    "ft_slow_ms": ("frame slowest/s", "ms", "low"),
+    "ft_p99_ms": ("frame p99", "ms", "low"),
+    "ft_p999_ms": ("frame p99.9", "ms", "low"),
     "ft_worst_ms": ("frame worst", "ms", "low"),
-    "stutter": ("stutter seconds", "", "low"),
+    "stutter": ("stutter frames", "", "low"),
     "cold_start_s": ("cold start", "s", "low"),
     "steady_s": ("full speed after", "s", "low"),
     "shell_cpu_pct": ("shell CPU", "% core", "low"),
@@ -49,13 +51,23 @@ METRICS = {
 }
 
 
+def rank(sorted_values, p):
+    """Nearest-rank percentile (ceil(p * n)-th of the sorted values), in integers of 1/1000."""
+    n = len(sorted_values)
+    return sorted_values[max(1, -(-n * round(p * 1000) // 1000)) - 1]
+
+
 def frames(text, t1, t2, launch):
     rows = []
+    seen = []   # (timestamp, intervals) of the perf-frame-intervals lines
     start = None
     for line in text.splitlines():
         m = STARTING.match(line)
         if m and start is None and float(m.group(1)) >= launch:
             start = float(m.group(1))
+        m = INTERVALS.match(line)
+        if m:
+            seen.append((float(m.group(1)), [float(v) for v in m.group(2).split(",") if v]))
         m = FRAMES.match(line)
         if m:
             rows.append((float(m.group(1)), int(m.group(2)), int(m.group(3)), float(m.group(5)), float(m.group(6))))
@@ -70,12 +82,16 @@ def frames(text, t1, t2, launch):
             kept.append(r)
     if not kept:
         return out
-    p50 = statistics.median(r[3] for r in kept)
     out["fps"] = round(statistics.mean(r[1] for r in kept), 1)
-    out["ft_p50_ms"] = round(p50, 1)
-    out["ft_slow_ms"] = round(statistics.mean(r[4] for r in kept), 1)
-    out["ft_worst_ms"] = round(max(r[4] for r in kept), 1)
-    out["stutter"] = sum(1 for r in kept if r[4] > 2 * p50)
+    intervals = sorted(v for ts, vs in seen if t1 <= ts < t2 for v in vs)
+    out["ft_lines"] = sum(1 for ts, _ in seen if t1 <= ts < t2)
+    if intervals:
+        p50 = statistics.median(intervals)
+        out["ft_p50_ms"] = round(p50, 2)
+        out["ft_p99_ms"] = rank(intervals, 0.99)
+        out["ft_p999_ms"] = rank(intervals, 0.999)
+        out["ft_worst_ms"] = intervals[-1]
+        out["stutter"] = sum(1 for v in intervals if v > 2 * p50)
     out["seconds"] = len(kept)
     if start is not None:
         steady = next((r[0] for r in rows if r[0] > start and r[2] == 1 and r[1] >= 0.9 * out["fps"]), None)
@@ -129,7 +145,7 @@ def summary(doc):
         if "skipped" in item and not item["runs"]:
             lines.append(f"{name}: SKIPPED ({item['skipped'].replace('_', ' ')})")
             continue
-        groups = [("fps", "ft_p50_ms", "ft_slow_ms", "ft_worst_ms", "stutter"),
+        groups = [("fps", "ft_p50_ms", "ft_p99_ms", "ft_p999_ms", "ft_worst_ms", "stutter"),
                   ("cold_start_s", "steady_s", "shell_cpu_pct", "shell_gpu_pct", "power_w", "temp_c"),
                   ("relay_p50_ms", "relay_p99_ms")]
         first = True

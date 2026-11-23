@@ -295,6 +295,27 @@ Item {
             fuzzyCompare(Performance.frameTimeMs, 1000 / 31, 0.01)
         }
 
+        // RUYA_PERF_LOG (RUY-842): the log line carries every interval of the second, rounded to 0.01 ms.
+        function test_the_frame_log_line_lists_every_interval_of_the_second() {
+            const surface = createTemporaryObject(surfaceComponent, host)
+            const win = createTemporaryObject(windowComponent, host)
+            Performance.fakeFrameClockMs(1000)
+            Performance.frameWindow = win
+            Performance.frameSource = surface
+            const consumer = createTemporaryObject(consumerComponent, host)
+            verify(consumer)
+            Performance.setFrameLog(true)
+            let t = drive(surface, win, 1000, 1000 / 60, 3, 1)       // the first frame has no interval before it
+            t = drive(surface, win, t, 33.333, 1, 1)                 // a hitch
+            compare(Performance.takeFrameIntervals(), "16.67,16.67,33.33")
+            compare(Performance.takeFrameIntervals(), "", "every interval is logged once")
+            t = drive(surface, win, t, 20, 2, 1)
+            compare(Performance.takeFrameIntervals(), "20.00,20.00")
+            Performance.setFrameLog(false)
+            drive(surface, win, t, 20, 3, 1)
+            compare(Performance.takeFrameIntervals(), "", "nothing is kept with the log off")
+        }
+
         function test_another_app_in_front_starts_the_count_again() {
             const first = createTemporaryObject(surfaceComponent, host)
             const second = createTemporaryObject(surfaceComponent, host)

@@ -18,11 +18,14 @@
 # (cold start), settle RUYA_PERF_SETTLE s (default 20), then measure RUYA_PERF_WINDOW s (default 30).
 #
 # Where each number comes from (no change to any game's permissions, no MangoHud):
-#   frames        the compositor's frame meter (RUY-347, FrameMeter) through the shell's perf-frames
-#                 journal lines (RUYA_PERF_LOG=1, a volatile systemd drop-in this script adds and takes
-#                 away). The log has the last second's mean and p99 frame time four times a second, not
-#                 every frame: dell-perf-stats.py says what is derived (fps, frame p50, the slowest
-#                 frame per second, the worst frame, seconds with a frame over twice the median).
+#   frames        the compositor's frame meter (RUY-347, FrameMeter) through the shell's journal lines
+#                 (RUYA_PERF_LOG=1, a volatile systemd drop-in this script adds and takes away):
+#                 perf-frames four times a second (fps, cold start) and, once a second,
+#                 perf-frame-intervals with every presented-frame interval of that second in ms. From
+#                 the intervals of the measured window dell-perf-stats.py takes frame p50, p99, p99.9,
+#                 the worst frame and the stutter frames (over twice the median). The script warns if
+#                 the window has fewer interval lines than seconds (journald dropped some). An image
+#                 from before the intervals line gives fps only.
 #   cold start    "Starting ruya-app-*.service" (Play pressed: the launch) to the first perf-frames line
 #                 with a frame, both journal lines, to about a second.
 #   shell cost    the shell's drm fdinfo render time and utime+stime over the window (lib/dell-cost.sh).
@@ -82,7 +85,7 @@ trap restore EXIT
 trap 'exit 130' INT TERM
 
 r "mkdir -p $D"
-for f in vm-input-probe.py vm_uinput_trust.py dell-perf-latency.py; do r "cat > $D/$f" < "$HERE/$f"; done
+for f in "$HERE"/vm-input-probe.py "$HERE"/vm_*.py "$HERE"/dell-perf-latency.py; do r "cat > $D/$(basename "$f")" < "$f"; done   # vm_*.py: what the probe imports (vm_dbus, vm_uinput_trust)
 perflog_dropin_add "$DROPIN"
 r "systemctl restart ruya-compositor@tty1"
 sleep 12
@@ -104,7 +107,7 @@ cost_fields() {
 
 # game_run <item> <app> <presses>: one run of a game; appends its line to runs.tsv, or says why not.
 game_run() {
-    local item=$1 app=$2 presses=$3 t0 t1 t2 n=0 lat="" frames cost reply front
+    local item=$1 app=$2 presses=$3 t0 t1 t2 n=0 lat="" frames cost reply front lines
     stop_apps
     sleep 4
     if [ "$presses" -gt 0 ]; then   # the stand-in pad, plugged in before the game starts
@@ -130,8 +133,14 @@ game_run() {
     t1=$(r 'date +%s.%N')
     cost=$(shell_cost "$WINDOW")
     t2=$(r 'date +%s.%N')
-    r "journalctl -b -o short-unix --since @${t0%.*} --no-pager | grep -a 'perf-frames\|Starting ruya-app-'" > "$work/$item.journal"
+    r "journalctl -b -o short-unix --since @${t0%.*} --no-pager | grep -a 'perf-frame\|Starting ruya-app-'" > "$work/$item.journal"
     frames=$(stats frames "$work/$item.journal" "$t1" "$t2" "$t0" | tr ' ' $'\t')
+    lines=${frames##*ft_lines=}; lines=${lines%%[!0-9]*}
+    if [ "${lines:-0}" -eq 0 ]; then
+        echo "  $item: no frame-interval lines (an image without them): frame times SKIPPED"
+    elif [ "$lines" -lt $((WINDOW - 2)) ]; then
+        echo "  $item: WARNING only $lines frame-interval lines in a $WINDOW s window (journald dropped some?)"
+    fi
     if [ "$presses" -gt 0 ]; then
         r "touch $D/go"
         n=0

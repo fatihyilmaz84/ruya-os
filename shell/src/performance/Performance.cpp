@@ -28,7 +28,7 @@ Performance::Performance(std::unique_ptr<PerformanceBackend> backend, QObject *p
     // scripts (scripts/dell-hub-check.sh, T-455): RUYA_PERF_LOG=1 holds a consumer for the whole
     // run and writes the frame numbers to the journal once per update.
     if (qEnvironmentVariableIsSet("RUYA_PERF_LOG")) {
-        m_logFrames = true;
+        setFrameLog(true);
         acquire();
     }
 }
@@ -182,12 +182,35 @@ QString Performance::frameState() const
     return m_meter.counting() && m_stats.full ? QStringLiteral("supported") : QStringLiteral("unavailable");
 }
 
+void Performance::setFrameLog(bool on)
+{
+    m_logFrames = on;
+    m_updatesSinceIntervals = 0;
+    m_meter.setRecordIntervals(on);
+}
+
+QString Performance::takeFrameIntervals()
+{
+    QStringList parts;
+    for (double ms : m_meter.takeIntervalsMs())
+        parts.append(QString::number(ms, 'f', 2));
+    return parts.join(QLatin1Char(','));
+}
+
 void Performance::updateFrames()
 {
     m_stats = m_meter.stats();
-    if (m_logFrames && m_meter.counting())
+    if (m_logFrames && m_meter.counting()) {
         qInfo("ruya-shell: perf-frames fps=%d full=%d commits=%d meanMs=%.1f p99Ms=%.1f", m_stats.frames,
               m_stats.full ? 1 : 0, m_stats.commits, m_stats.meanMs, m_stats.p99Ms);
+        // One line a second with every interval of that second (a measuring script's p50/p99/p99.9).
+        if (++m_updatesSinceIntervals >= UpdatesPerSecond) {
+            m_updatesSinceIntervals = 0;
+            const QString intervals = takeFrameIntervals();
+            if (!intervals.isEmpty())
+                qInfo("ruya-shell: perf-frame-intervals %s", qPrintable(intervals));
+        }
+    }
     emit framesChanged();
 }
 

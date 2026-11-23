@@ -39,8 +39,12 @@ journal = ["99.000000 dell systemd[1]: Starting ruya-app-ruya-p1-old.service - [
 t = 110.0
 for i in range(41):
     ts = t + i * 0.25
-    slow = 115.0 <= ts < 116.0
-    journal.append(line(ts, 60, 1, 16.7, 40.0 if slow else 17.0))
+    journal.append(line(ts, 60, 1, 16.7, 17.0))
+for i in range(12):   # one perf-frame-intervals line a second; the one at 115.5 holds a 40 ms frame
+    vals = ["16.70"] * 60
+    if i == 5:
+        vals[10] = "40.00"
+    journal.append(f"{110.5 + i:.6f} dell ruya-shell[1]: ruya-shell: perf-frame-intervals {','.join(vals)}")
 text = "\n".join(journal)
 
 out = stats.frames(text, 110.0, 120.0, 100.0)
@@ -48,10 +52,16 @@ check("frames: cold start is the launch to the first frame", out.get("cold_start
 check("frames: full speed is the first full second at 90 % of fps", out.get("steady_s") == 1.9, out)
 check("frames: one line per second", out.get("seconds") == 10, out)
 check("frames: fps is the mean", out.get("fps") == 60.0, out)
-check("frames: p50 is the median of the seconds' mean", out.get("ft_p50_ms") == 16.7, out)
+check("frames: p50 is the median interval", out.get("ft_p50_ms") == 16.7, out)
+check("frames: p99 of 600 intervals is the 594th", out.get("ft_p99_ms") == 16.7, out)
+check("frames: p99.9 of 600 intervals is the 600th, the slow frame", out.get("ft_p999_ms") == 40.0, out)
 check("frames: worst frame", out.get("ft_worst_ms") == 40.0, out)
-check("frames: a frame over twice the median is a stutter second", out.get("stutter") == 1, out)
-check("frames: the slowest frame per second is averaged", out.get("ft_slow_ms") == 19.3, out)
+check("frames: a frame over twice the median is a stutter frame", out.get("stutter") == 1, out)
+check("frames: only the lines inside the window count", out.get("ft_lines") == 10, out)
+old_image = stats.frames(chr(10).join(l for l in journal if "intervals" not in l), 110.0, 120.0, 100.0)
+check("frames: an image without the intervals line has fps but no frame times",
+      old_image.get("fps") == 60.0 and "ft_p99_ms" not in old_image, old_image)
+check("rank: nearest rank on a short list", stats.rank([1.0, 2.0, 3.0, 4.0], 0.99) == 4.0 and stats.rank([1.0, 2.0, 3.0, 4.0], 0.5) == 2.0)
 check("frames: lines outside the window are ignored", stats.frames(text, 200.0, 210.0, 100.0).get("fps") is None)
 check("frames: lines of a window that is not full are ignored",
       stats.frames("\n".join(journal[:4]), 100.0, 101.0, 100.0).get("fps") is None)
