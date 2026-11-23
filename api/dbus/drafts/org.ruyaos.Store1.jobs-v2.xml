@@ -1,0 +1,114 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<!--
+  DRAFT (RUY-27 spike, lead, 2026-11-23): the job record v2 and the job actions of ADR-026 for
+  org.ruyaos.Store1. Not served by anything. RUY-28 merges these members into
+  api/dbus/org.ruyaos.Store1.xml together with the implementation, the mock and the shell client,
+  and deletes this file. Only the changed and new members are here; everything else in Store1.xml
+  stays as it is. The same record is used by Update1 (drafts/org.ruyaos.Update1.download-v2.xml)
+  and Play1 (RUY-28 renames nothing there: Play1.ListJobs already calls the job `id`).
+
+  Job record v2 (a{sv}; ListJobs, JobChanged). Keys of v1 are kept with their meaning; new keys:
+    id           s   unchanged: the job name returned by Install/Uninstall/Update/Rollback
+    source       s   "store" (Update1 says "update", Play1 "play"; the shell's Downloads model
+                     merges the three by this key)
+    kind         s   "install" | "remove" | "update" | "rollback" | "runner"
+    app          s   unchanged: Flatpak application id
+    title        s   the app's name from the catalogue, else its id
+    state        s   "queued" | "running" | "paused" | "finished". A paused job keeps its place
+                     in the table but does not hold the queue: the next queued job runs.
+    status       s   "" unless finished, then the JobFinished status; new: "cancelled"
+    reason       s   "" | "interrupted" (v1) | "playing" (paused by the download policy, not by
+                     the player; ResumeJob clears it) | "restarted" (a paused job whose fetched
+                     objects are gone after a reboot: Resume starts the download over)
+    phase        s   unchanged ("download" | "install" | "update" | "remove")
+    percent      u   completion: libflatpak's own progress (it counts objects this boot already
+                     has: a resumed install started at 9 %), never decreasing within a job
+    bytes_done   t   bytes fetched over the network for this job, all its runs added up (what
+                     GetDownloadStats counts; after a resume it can exceed the completed share,
+                     because objects in flight at the pause are fetched again)
+    bytes_total  t   the sum of the transaction's operations' download sizes, known before the
+                     first byte; 0 = unknown (the UI then shows no size)
+    rate_bps     t   smoothed rate: byte deltas sampled once a second, exponential smoothing with
+                     a 5 s time constant; 0 after 10 s without a byte, and 0 = unknown
+    eta_s        u   bytes_total * (100 - percent) / 100 / rate_bps rounded up, 0 = unknown (the
+                     total or the rate is 0)
+    position     u   1-based place among the queued jobs (MoveJob), 0 for running, paused and
+                     finished jobs
+    resumable    b   PauseJob is offered: true for install, update and runner jobs (they download);
+                     false for remove and rollback (PauseJob answers "unsupported")
+    started      x   unix seconds the job first ran, 0 while it never ran
+    finished     x   unix seconds it finished, 0 while not finished
+
+  Byte source (spike finding): the flatpak CLI prints no byte counts at all, and with
+  --noninteractive (as the service runs it today) no progress either (Flatpak 1.18.4 on the Dell:
+  one "Installing app/..." line in 33 s while 335 MB arrived). The transaction therefore runs
+  through libflatpak (`FlatpakTransaction`; `FlatpakTransactionProgress` bytes transferred, each
+  operation's download size for bytes_total), cancelled through its GCancellable. Measured on the
+  Dell (libflatpak 1.18.4, SuperTux 324 MB): bytes_transferred within 7 % of the NIC's rx bytes;
+  a cancel ends run() with G_IO_ERROR_CANCELLED 1.2 s later; the resumed transaction needed 251 of
+  314 MB. The image gains flatpak-libs (1.1 MB; Fedora's flatpak CLI does not link it).
+
+  New status strings (reply of the actions below):
+    "unknown-job"   no job with that id in the table
+    "wrong-state"   PauseJob of a job that is not running or queued, ResumeJob of a job that is
+                    not paused, CancelJob of a finished job, MoveJob of a job that is not queued
+    "unsupported"   PauseJob of a job that is not resumable
+    "invalid"       MoveJob with position 0 or above the number of queued jobs (existing string)
+    "forbidden"     as for Install: the caller rules of the existing job calls (existing string)
+-->
+<node>
+  <interface name="org.ruyaos.Store1">
+
+    <!-- Running: the transaction is cancelled, the job is paused (state "paused"); objects
+         fetched so far stay in the system repository for this boot (OSTree's staging directory
+         is named by the boot id: measured, a resumed install fetched 240 of 335 MB after 127 MB
+         had arrived). Queued: it becomes paused where it is. -->
+    <method name="PauseJob">
+      <arg name="job" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- The paused job is queued first (position 1) and runs when the running job ends; the
+         transaction is started again and fetches only what this boot does not have yet. -->
+    <method name="ResumeJob">
+      <arg name="job" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Running: the transaction is cancelled; queued or paused: it never runs. The job finishes
+         with status "cancelled" (JobFinished). Fetched objects are left to OSTree's own cleanup;
+         nothing is installed. A cancel during the install phase (after the download) reports
+         what Flatpak left, read back from the installation as at a restart: "cancelled" when
+         nothing was deployed, "ok" when the deploy already happened (not measured in the spike:
+         RUY-28's VM check covers it). -->
+    <method name="CancelJob">
+      <arg name="job" type="s" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- A queued job moves to `position` (1-based among the queued jobs); the others keep their
+         order. -->
+    <method name="MoveJob">
+      <arg name="job" type="s" direction="in"/>
+      <arg name="position" type="u" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- Per local day, newest first, at most `days` (1..90) entries, days without bytes left
+         out: day s "YYYY-MM-DD", bytes t (fetched by this service that day), jobs u (finished
+         that day), failed u. Kept in a root-only ledger in the state directory for 90 days. -->
+    <method name="GetDownloadStats">
+      <arg name="days" type="u" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="stats" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!-- Replaces JobProgress (removed in the same change, with the shell client): the job's whole
+         v2 record, sent on every state change and at most once a second per running job. -->
+    <signal name="JobChanged">
+      <arg name="job" type="a{sv}"/>
+    </signal>
+
+  </interface>
+</node>

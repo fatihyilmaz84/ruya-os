@@ -1,0 +1,82 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<!--
+  DRAFT (RUY-27 spike, lead, 2026-11-23): the OS image download as an ADR-026 v2 job for
+  org.ruyaos.Update1. Not served by anything. RUY-29 merges these members into
+  api/dbus/org.ruyaos.Update1.xml together with the implementation, the mock and the shell client,
+  and deletes this file. The record is the one in drafts/org.ruyaos.Store1.jobs-v2.xml with
+  source "update", kind "os", app "" and title "RuyaOS <version>"; Update1 has at most one job.
+
+  Byte source (spike finding): `bootc upgrade|switch --progress-fd <fd>` (bootc 1.17.1; the fd
+  must be a pipe, a file is refused with "not a pipe") writes JSON lines: one "Start", then
+  "ProgressBytes" (bytes, bytesTotal, bytesCached, steps, stepsTotal, stepsCached, subtasks: one
+  per layer) about ten times a second while layers are fetched, and "ProgressSteps" for the phases
+  without bytes ("Importing Image", deploy). Measured on the Dell, 0.0.105 -> 0.0.106 from an
+  oci-archive: 21 s without an event (opening the archive), 114 s of ProgressBytes, about 80 s of
+  "Importing Image" (steps only), 12 s deploy; 240 s in all. `bytesTotal` is what is still to be
+  fetched; `bytesCached` is what the machine already has (layers shared with the booted image).
+  Today ruya-update reports progress 0 while bootc runs and 100 when it ends.
+
+  Mapping to the v2 record:
+    bytes_done   ProgressBytes.bytes of this run, added to what earlier runs of the job fetched
+    bytes_total  bytesTotal of the first ProgressBytes of the job's first run (fixed for the job)
+    percent      bytes_done * 90 / bytes_total while fetching (capped at 90), then 90..99 over the
+                 ProgressSteps of the import and deploy, 100 when staged; never decreasing
+    phase        "download" (ProgressBytes) | "install" (ProgressSteps: import, deploy)
+    rate_bps     as Store1 (byte deltas, 5 s smoothing, 0 after 10 s without a byte)
+    eta_s        only while phase is "download"; 0 during the import (its length is not reported)
+    resumable    true while phase is "download", false from the import on (PauseDownload then
+                 answers "unsupported")
+
+  Pause and resume (spike finding): bootc stops on SIGTERM. Layers fully fetched before it stay
+  in the OSTree repository and are reused: a switch stopped after 40 s left 9 of 19 layers
+  (about 200 MB); the next run reported 68 cached layers instead of 59 and 10 still to fetch;
+  only the layer in flight was lost. The layers are repository commits, so they also survive a
+  reboot until bootc's own cleanup after a deploy. Pause = SIGTERM to the bootc process;
+  Resume = the same command again.
+-->
+<node>
+  <interface name="org.ruyaos.Update1">
+
+    <!-- The download (state "downloading", phase "download") stops; the job is paused and the
+         status record's state becomes "idle" with `available` still set. "unsupported" once the
+         import has begun; "wrong-state" when nothing is downloading. -->
+    <method name="PauseDownload">
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- The paused download runs again; already fetched layers are not fetched again.
+         "wrong-state" when no download is paused. -->
+    <method name="ResumeDownload">
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- A running or paused download stops for good: the job finishes with status "cancelled",
+         nothing is staged; fetched layers are left to bootc's cleanup. During the import: as
+         PauseDownload, "unsupported" (a half-imported deployment is never left behind). -->
+    <method name="CancelDownload">
+      <arg name="status" type="s" direction="out"/>
+    </method>
+
+    <!-- The image job's v2 record: an empty dictionary when there has never been one since the
+         service started, else the current or last finished download. -->
+    <method name="GetDownloadJob">
+      <arg name="status" type="s" direction="out"/>
+      <arg name="job" type="a{sv}" direction="out"/>
+    </method>
+
+    <!-- As Store1.GetDownloadStats, for the bytes this service fetched. -->
+    <method name="GetDownloadStats">
+      <arg name="days" type="u" direction="in"/>
+      <arg name="status" type="s" direction="out"/>
+      <arg name="stats" type="aa{sv}" direction="out"/>
+    </method>
+
+    <!-- The image job's v2 record, on every state change and at most once a second while it
+         runs. StatusChanged keeps firing as today (its `progress` becomes the job's percent). -->
+    <signal name="JobChanged">
+      <arg name="job" type="a{sv}"/>
+    </signal>
+
+  </interface>
+</node>
