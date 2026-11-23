@@ -322,6 +322,7 @@ pub(crate) mod tests {
             self.procfs.processes.insert(
                 pid,
                 Process {
+                    owner: uid,
                     info: Ok(format!(
                         "[Application]\nname={app}\n[Instance]\ninstance-id={instance}\n"
                     )

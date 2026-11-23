@@ -13,6 +13,12 @@ SocketMode=0600
 # door asks one at a time.
 Accept=yes
 MaxConnections=8
+# Past the trigger limit systemd puts the socket in a failed state and every app becomes
+# not-an-app until it is restarted, so the limit must stay far above what the door can ask: it
+# asks one request at a time, each a new helper process (measured 47 ms on the Dell, 600 in 28 s).
+# Even at 1 ms each (about 50 times faster) that is 2000 in 2 s; 4000 keeps twice that.
+TriggerLimitIntervalSec=2s
+TriggerLimitBurst=4000
 
 [Install]
 WantedBy=sockets.target

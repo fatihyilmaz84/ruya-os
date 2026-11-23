@@ -25,11 +25,12 @@ use zbus::object_server::SignalEmitter;
 
 use crate::dbus::{self as door_dbus, notify_lifecycle, Checks, ManageIface, Shared};
 use crate::door::arg;
-use crate::identity::{FileError, Files, Procfs, Refusal, Reply, Users};
+use crate::identity::{FileError, Procfs, Reply, Users};
 use crate::limits::{MAX_APP_ID, MAX_PROFILE_ID};
 use crate::registry::{Registry, RegistryError};
 use crate::store::Store;
 use crate::{Platform, Status};
+use ruya_platform_identify::serve::{files_of, InMemory, Kernel};
 
 pub const MOCK_BUS_NAME: &str = "org.ruyaos.Platform1Mock";
 pub const MOCK_PATH: &str = "/org/ruyaos/Platform1Mock";
@@ -189,37 +190,39 @@ impl Procfs for ScenarioProcfs {
         self.processes.pidfd_pid(pidfd)
     }
 
-    /// As the identity helper answers: its own look at the pidfd, then the scenario app's
-    /// `.flatpak-info` (owned by the process's uid, so another uid's request is `not-owned`) and
-    /// its instance's scope under that uid's user manager.
+    /// The identity helper's own rules (`serve::files_of`) on the scenario's kernel.
     fn caller_files(&self, pidfd: i32, uid: u32) -> io::Result<Reply> {
-        let pid = match self.processes.pidfd_pid(pidfd) {
-            None => return Ok(Reply::Refused(Refusal::NotAPidfd)),
-            Some(p) if p <= 0 => return Ok(Reply::Refused(Refusal::ProcessGone)),
-            Some(p) => p as u32,
-        };
-        let (info, cgroup) = match (self.app_of(pid), self.processes.uid(pid)) {
-            (None, _) => (Err(FileError::Missing), Err(FileError::Missing)),
-            (Some(_), Err(_)) => (Err(FileError::Failed), Err(FileError::Failed)),
-            (Some(app), Ok(owner)) => {
-                let info = format!(
-                    "[Application]\nname={}\n\n[Instance]\ninstance-id={}\n",
-                    app.app_id, app.instance
-                );
-                let cgroup = instance_scope(&app.app_id, &app.instance).map(|scope| {
-                    format!("0::/user.slice/user-{owner}.slice/user@{owner}.service/app.slice/{scope}\n")
-                });
-                (
-                    if owner == uid {
-                        Ok(info.into_bytes())
-                    } else {
-                        Err(FileError::NotOwned)
-                    },
-                    cgroup.map(String::into_bytes).ok_or(FileError::Failed),
-                )
-            }
-        };
-        Ok(Reply::Files(Files { pid, info, cgroup }))
+        Ok(files_of(self, pidfd, uid))
+    }
+}
+
+/// What the helper's rules see of a process: a scenario app's `.flatpak-info` (owned by the
+/// process's uid, so another uid's request is `not-owned`) and its instance's scope under that
+/// uid's user manager; any other process has no `.flatpak-info`. The pidfd is the real one.
+impl Kernel for ScenarioProcfs {
+    type File = InMemory;
+
+    fn pidfd_pid(&self, fd: i32) -> Option<i32> {
+        self.processes.pidfd_pid(fd)
+    }
+
+    fn open_info(&self, pid: u32) -> Result<InMemory, FileError> {
+        let app = self.app_of(pid).ok_or(FileError::Missing)?;
+        let owner = self.processes.uid(pid).map_err(|_| FileError::Failed)?;
+        let info = format!(
+            "[Application]\nname={}\n\n[Instance]\ninstance-id={}\n",
+            app.app_id, app.instance
+        );
+        Ok(InMemory::new(owner, info.into_bytes()))
+    }
+
+    fn open_cgroup(&self, pid: u32) -> Result<InMemory, FileError> {
+        let app = self.app_of(pid).ok_or(FileError::Missing)?;
+        let owner = self.processes.uid(pid).map_err(|_| FileError::Failed)?;
+        let scope = instance_scope(&app.app_id, &app.instance).ok_or(FileError::Failed)?;
+        let cgroup =
+            format!("0::/user.slice/user-{owner}.slice/user@{owner}.service/app.slice/{scope}\n");
+        Ok(InMemory::new(owner, cgroup.into_bytes()))
     }
 }
 

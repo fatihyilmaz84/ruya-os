@@ -8,8 +8,8 @@ minimal client in vm_dbus.py (next to this script). Every line it writes is "<wo
                 message that arrives, "signal <interface>.<member> <value_ms>"; on Stopping it calls SaveDone
                 ("savedone <status>"). Runs until it is stopped, or 900 s.
   register      one Register, prints "register <status>" or "register error <error name>".
-  helper SOCK   one request to the identity helper's socket (RUY-1129, ADR-022 decision 4) with this
-                process's own pidfd and uid: connects, holds the connection 2 s first (so the check can read
+  helper SOCK UID  one request to the identity helper's socket (RUY-1129, ADR-022 decision 4) with this
+                process's own pidfd, for UID: connects, holds the connection 2 s first (so the check can read
                 the waiting helper's capabilities), then prints "helper files pid <pid> info <code>",
                 "helper refused <code>" or "helper error <exception>". The codes are the wire's
                 (services/ruya-platform-identify/src/wire.rs).
@@ -93,12 +93,12 @@ def name_of(names, code):
     return names[code] if code < len(names) else "unknown-%d" % code
 
 
-def helper(sock_path):
+def helper(sock_path, uid):
     try:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
         s.connect(sock_path)
         time.sleep(2)
-        socket.send_fds(s, [struct.pack("<BI", 1, os.getuid())], [os.pidfd_open(os.getpid())])
+        socket.send_fds(s, [struct.pack("<BI", 1, uid)], [os.pidfd_open(os.getpid())])
         r = s.recv(1 << 17)
     except OSError as e:
         return "helper error %s" % type(e).__name__
@@ -116,8 +116,8 @@ def main():
         app(sys.argv[2])
     elif len(sys.argv) == 2 and sys.argv[1] == "register":
         print("register %s" % register(Bus()))
-    elif len(sys.argv) == 3 and sys.argv[1] == "helper":
-        print(helper(sys.argv[2]))
+    elif len(sys.argv) == 4 and sys.argv[1] == "helper":
+        print(helper(sys.argv[2], int(sys.argv[3])))
     else:
         sys.exit(__doc__)
 

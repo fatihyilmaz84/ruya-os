@@ -2953,6 +2953,8 @@ if tool == "helper":
     # The probe's helper command: root gets an answer, a profile user (runuser) cannot connect.
     if os.environ.get("FAKE_AS_USER"):
         print("helper files pid 1 info missing" if "user_connects" in bugs else "helper error PermissionError")
+    elif args[-1] == "0":
+        print("helper files pid 1 info missing" if "root_uid" in bugs else "helper refused bad-request")
     else:
         print("helper files pid %s info %s" % (args[0], "bytes" if "root_info" in bugs else "missing"))
     sys.exit(0)
@@ -2964,7 +2966,7 @@ done
 # shim), anything else runs the real one.
 cat > "$pt/bin/python3" <<SHIMEOF
 #!/bin/sh
-case "\$*" in *vm-platform-probe.py\ helper*) exec "$realpy" "$pt/fake.py" helper "\$\$" ;; esac
+case "\$*" in *vm-platform-probe.py\ helper*) exec "$realpy" "$pt/fake.py" helper "\$\$" "\$@" ;; esac
 exec "$realpy" "\$@"
 SHIMEOF
 chmod +x "$pt/bin/python3"
@@ -2978,7 +2980,7 @@ plat() { # <mode>; FAKE_BUG in the environment
 out="$(plat identity)"
 for want in "the door's CapBnd is 0" "the door's CapEff is 0" "ruya-platform-identify.socket is active" "is 0600 root" \
     "bounds it to CAP_DAC_READ_SEARCH and CAP_SYS_PTRACE" "a live helper's CapBnd is exactly the two" "a root request is answered" \
-    "ruya-p1 cannot connect to the helper" "ALL CHECKS PASSED"; do
+    "ruya-p1 cannot connect to the helper" "a request for uid 0 is refused" "ALL CHECKS PASSED"; do
     expect_contains "platform identity: $want" "$out" "$want"
 done
 expect_lacks "platform identity: no FAIL when all is well" "$out" "FAIL"
@@ -2990,7 +2992,7 @@ out="$(HELPER_BND=00000000002c0004 plat identity)"
 expect_contains "platform identity: a live helper with more caps FAILs" "$out" "FAIL: a live helper's CapBnd is '00000000002c0004'"
 for case in "socket_down:FAIL: ruya-platform-identify.socket is not active" "socket_mode:want '600 root socket'" \
     "config_caps:FAIL: the helper's configured bounding set is" "no_live:FAIL: no live ruya-platform-identify@ instance" \
-    "root_info:FAIL: the helper's answer to root" "user_connects:FAIL: ruya-p1 and the helper's socket"; do
+    "root_info:FAIL: the helper's answer to root" "root_uid:FAIL: a request for uid 0" "user_connects:FAIL: ruya-p1 and the helper's socket"; do
     out="$(FAKE_BUG="${case%%:*}" plat identity)"
     expect_contains "platform identity: ${case%%:*} FAILs" "$out" "${case#*:}"
     expect_contains "platform identity: ${case%%:*} ends failed" "$out" "SOME CHECKS FAILED"

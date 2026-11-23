@@ -188,7 +188,8 @@ pub fn identify(
 /// Fakes of the recipe's reads, for this crate's tests.
 #[cfg(test)]
 pub(crate) mod fake {
-    use super::{FileError, Files, Procfs, Refusal, Reply, Users};
+    use super::{FileError, Procfs, Reply, Users};
+    use ruya_platform_identify::serve::{files_of, InMemory, Kernel};
     use std::collections::{HashMap, VecDeque};
     use std::io;
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -197,6 +198,8 @@ pub(crate) mod fake {
     /// One process as the fake helper answers for it.
     #[derive(Debug, Clone)]
     pub struct Process {
+        /// The owner of its `.flatpak-info` (the profile user in a real sandbox).
+        pub owner: u32,
         pub info: Result<Vec<u8>, FileError>,
         pub cgroup: Result<Vec<u8>, FileError>,
     }
@@ -243,24 +246,30 @@ pub(crate) mod fake {
             }
         }
 
-        /// As the helper: its own look at the pidfd, then the process's files (the ownership check
-        /// is the helper's, tested in ruya-platform-identify; a test sets `NotOwned` itself).
-        fn caller_files(&self, pidfd: i32, _uid: u32) -> io::Result<Reply> {
+        /// The helper's own rules (`serve::files_of`) on this fake kernel.
+        fn caller_files(&self, pidfd: i32, uid: u32) -> io::Result<Reply> {
             self.count();
             if self.helper_down {
                 return Err(io::ErrorKind::ConnectionRefused.into());
             }
-            let pid = match self.pidfd_pid(pidfd) {
-                None => return Ok(Reply::Refused(Refusal::NotAPidfd)),
-                Some(p) if p <= 0 => return Ok(Reply::Refused(Refusal::ProcessGone)),
-                Some(p) => p as u32,
-            };
-            let process = self.processes.get(&pid);
-            Ok(Reply::Files(Files {
-                pid,
-                info: process.map_or(Err(FileError::Missing), |p| p.info.clone()),
-                cgroup: process.map_or(Err(FileError::Missing), |p| p.cgroup.clone()),
-            }))
+            Ok(files_of(self, pidfd, uid))
+        }
+    }
+
+    /// The fake kernel the helper's rules look at: the pidfd's next look (shared with the
+    /// door's), the processes' files.
+    impl Kernel for FakeProcfs {
+        type File = InMemory;
+        fn pidfd_pid(&self, fd: i32) -> Option<i32> {
+            Procfs::pidfd_pid(self, fd)
+        }
+        fn open_info(&self, pid: u32) -> Result<InMemory, FileError> {
+            let p = self.processes.get(&pid).ok_or(FileError::Missing)?;
+            Ok(InMemory::new(p.owner, p.info.clone()?))
+        }
+        fn open_cgroup(&self, pid: u32) -> Result<InMemory, FileError> {
+            let p = self.processes.get(&pid).ok_or(FileError::Missing)?;
+            Ok(InMemory::new(p.owner, p.cgroup.clone()?))
         }
     }
 
@@ -302,6 +311,7 @@ mod tests {
         procfs.processes.insert(
             PID,
             Process {
+                owner: UID,
                 info: Ok(info(APP, "77")),
                 cgroup: Ok(cgroup(UID, APP, "77")),
             },
@@ -484,6 +494,14 @@ mod tests {
                 Err(NotAnApp::FlatpakInfoUnreadable(e))
             );
         }
+        // A file there that the caller's uid does not own (root's, bound there): the helper's
+        // own rule refuses it, nothing is parsed.
+        let (mut procfs, users) = world();
+        procfs.processes.get_mut(&PID).expect("set").owner = 0;
+        assert_eq!(
+            run(&procfs, &users, &caller()),
+            Err(NotAnApp::FlatpakInfoUnreadable(FileError::NotOwned))
+        );
         // The journal says which (vm-platform-check.sh looks for the first).
         assert_eq!(
             NotAnApp::FlatpakInfoUnreadable(FileError::NotOwned).to_string(),
@@ -555,7 +573,9 @@ mod tests {
             (0, "root, no user entry here"),
             (1003, "no user"),
         ] {
-            procfs.processes.get_mut(&PID).expect("set").cgroup = Ok(cgroup(uid, APP, "77"));
+            let p = procfs.processes.get_mut(&PID).expect("set");
+            p.cgroup = Ok(cgroup(uid, APP, "77"));
+            p.owner = uid;
             let c = Caller {
                 uid: Some(uid),
                 ..caller()

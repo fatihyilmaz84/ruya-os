@@ -124,7 +124,8 @@ check_identity() {
     [ "$v" = "cap_dac_read_search cap_sys_ptrace " ] && ok "the helper's unit bounds it to CAP_DAC_READ_SEARCH and CAP_SYS_PTRACE" \
         || bad "the helper's configured bounding set is '$v'"
     # A live helper: the probe connects as root and waits 2 s before it sends, so the helper waits too.
-    python3 -I "$here/vm-platform-probe.py" helper "$sock" > "$work/helper.out" 2>&1 &
+    # It asks for nobody's uid (65534): no app is root, and a request for uid 0 is refused (below).
+    python3 -I "$here/vm-platform-probe.py" helper "$sock" 65534 > "$work/helper.out" 2>&1 &
     holder=$!
     inst=""; n=0
     while [ -z "$inst" ] && [ "$n" -lt 15 ]; do
@@ -146,8 +147,10 @@ check_identity() {
     out="$(cat "$work/helper.out")"
     [ "$out" = "helper files pid $holder info missing" ] && ok "a root request is answered (root's own / has no .flatpak-info)" \
         || bad "the helper's answer to root: '$out', want 'helper files pid $holder info missing'"
+    out="$(python3 -I "$here/vm-platform-probe.py" helper "$sock" 0 2>&1)"
+    [ "$out" = "helper refused bad-request" ] && ok "a request for uid 0 is refused" || bad "a request for uid 0: '$out', want 'helper refused bad-request'"
     if [ -n "${user:-}" ]; then
-        out="$(runuser -u "$user" -- python3 -I "$helpers/vm-platform-probe.py" helper "$sock" 2>&1)"
+        out="$(runuser -u "$user" -- python3 -I "$helpers/vm-platform-probe.py" helper "$sock" 65534 2>&1)"
         [ "$out" = "helper error PermissionError" ] && ok "$user cannot connect to the helper" || bad "$user and the helper's socket: '$out'"
     fi
 }

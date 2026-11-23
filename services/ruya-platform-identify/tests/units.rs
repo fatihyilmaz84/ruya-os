@@ -42,6 +42,9 @@ fn the_socket_is_roots_only_and_where_the_door_connects() {
     assert_eq!(one(&socket, "SocketMode"), "0600");
     assert_eq!(one(&socket, "Accept"), "yes");
     assert_eq!(one(&socket, "MaxConnections"), "8");
+    // Far above what the serial door can ask (the unit's comment has the numbers).
+    assert_eq!(one(&socket, "TriggerLimitIntervalSec"), "2s");
+    assert_eq!(one(&socket, "TriggerLimitBurst"), "4000");
     assert_eq!(one(&socket, "WantedBy"), "sockets.target");
 }
 

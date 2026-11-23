@@ -85,14 +85,25 @@ pub fn answer(kernel: &impl Kernel, received: &Received) -> Reply {
     ) else {
         return Reply::Refused(Refusal::BadRequest);
     };
-    let pid = match kernel.pidfd_pid(*fd) {
+    // No app runs as root: a request for uid 0 would only ever read root's own files.
+    if request.uid == 0 {
+        return Reply::Refused(Refusal::BadRequest);
+    }
+    files_of(kernel, *fd, request.uid)
+}
+
+/// Steps 3 to 5: the files of the process the pidfd `fd` names, for the uid `uid`. The one copy
+/// of these rules: the helper runs them on `/proc`, the developer mock (`ruya-platform`'s
+/// `mock.rs`) and the door's test fake on their own [`Kernel`]s.
+pub fn files_of(kernel: &impl Kernel, fd: i32, uid: u32) -> Reply {
+    let pid = match kernel.pidfd_pid(fd) {
         None => return Reply::Refused(Refusal::NotAPidfd),
         Some(p) if p <= 0 => return Reply::Refused(Refusal::ProcessGone),
         // A positive i32 fits a u32.
         Some(p) => p as u32,
     };
     let info = kernel.open_info(pid).and_then(|mut file| {
-        if file.owner()? != request.uid {
+        if file.owner()? != uid {
             return Err(FileError::NotOwned);
         }
         read_capped(&mut file, MAX_INFO)
@@ -101,6 +112,35 @@ pub fn answer(kernel: &impl Kernel, received: &Received) -> Reply {
         .open_cgroup(pid)
         .and_then(|mut file| read_capped(&mut file, MAX_CGROUP));
     Reply::Files(Files { pid, info, cgroup })
+}
+
+/// A file held in memory with its owner: what a [`Kernel`] that is not `/proc` opens (the
+/// developer mock's scenario, test fakes).
+#[derive(Debug, Clone)]
+pub struct InMemory {
+    owner: u32,
+    bytes: io::Cursor<Vec<u8>>,
+}
+
+impl InMemory {
+    pub fn new(owner: u32, bytes: Vec<u8>) -> InMemory {
+        InMemory {
+            owner,
+            bytes: io::Cursor::new(bytes),
+        }
+    }
+}
+
+impl Read for InMemory {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.bytes.read(buf)
+    }
+}
+
+impl Opened for InMemory {
+    fn owner(&self) -> Result<u32, FileError> {
+        Ok(self.owner)
+    }
 }
 
 /// One connection, all steps; the reply sent is returned (for the journal line).
@@ -319,6 +359,15 @@ mod tests {
             describe(&Reply::Files(files)),
             "pid 4242: .flatpak-info not-owned, nothing read; cgroup 15 bytes"
         );
+    }
+
+    #[test]
+    fn a_request_for_root_is_refused() {
+        let k = FakeKernel::new();
+        let mut conn = FakeConn::from(Some(0));
+        conn.request.data = encode_request(&Request { uid: 0 }).to_vec();
+        assert_eq!(run(&mut conn, &k), Reply::Refused(Refusal::BadRequest));
+        assert!(k.calls.borrow().is_empty(), "nothing is looked at");
     }
 
     #[test]
