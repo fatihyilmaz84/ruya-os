@@ -90,7 +90,20 @@ async fn as_app<R>(
         }
     };
     let caller = caller_of(sender.as_str(), &creds);
-    with(core, |door| call(door, &caller)).unwrap_or_else(|| refused(Status::Failed))
+    let answer = with(core, |door| call(door, &caller)).unwrap_or_else(|| refused(Status::Failed));
+    // The name may have left while the credentials were asked for: its NameOwnerChanged was then
+    // handled before the call cached or registered it. Asked after the call, the bus settles it.
+    let has_owner = match DBusProxy::new(conn).await {
+        Ok(bus) => bus
+            .name_has_owner(BusName::Unique(sender.clone()))
+            .await
+            .unwrap_or(false),
+        Err(_) => false,
+    };
+    with(core, |door| {
+        door.forget_if_gone(sender.as_str(), has_owner, Instant::now())
+    });
+    answer
 }
 
 pub struct LifecycleIface {
@@ -126,22 +139,15 @@ impl LifecycleIface {
         #[zbus(header)] header: Header<'_>,
         #[zbus(connection)] conn: &Connection,
     ) -> String {
-        let saved = as_app(&self.core, &header, conn, Err, |door, caller| {
-            lifecycle::save_done(door, caller, Instant::now())
-        })
+        let status = as_app(
+            &self.core,
+            &header,
+            conn,
+            |s| s,
+            |door, caller| lifecycle::save_done(door, caller, Instant::now()),
+        )
         .await;
-        match saved {
-            Ok((profile, scope)) => {
-                eprintln!("ruya-platform: {profile} {scope} saved");
-                if let Ok(emitter) = SignalEmitter::new(conn, OBJECT_PATH) {
-                    if let Err(err) = ManageIface::saved(&emitter, &profile, &scope).await {
-                        eprintln!("ruya-platform: Saved not sent: {err}");
-                    }
-                }
-                Status::Ok.as_str().to_owned()
-            }
-            Err(status) => status.as_str().to_owned(),
-        }
+        status.as_str().to_owned()
     }
 
     #[zbus(signal)]
@@ -270,21 +276,40 @@ impl ManageIface {
         if !self.caller_may(&header, conn, may_notify).await {
             return Status::NotAllowed.as_str().to_owned();
         }
-        let sent = with(&self.core, |door| {
-            lifecycle::notify(door, profile_id, scope, event, value_ms)
+        let notice = with(&self.core, |door| {
+            lifecycle::notify(door, profile_id, scope, event, value_ms, Instant::now())
         })
         .unwrap_or(Err(Status::Failed));
-        match sent {
-            Ok((event, names)) => {
-                send_unicast(conn, &names, event).await;
-                Status::Ok.as_str().to_owned()
+        let notice = match notice {
+            Ok(notice) => notice,
+            Err(status) => return status.as_str().to_owned(),
+        };
+        send_unicast(conn, &notice.names, notice.event).await;
+        let Some(wait) = notice.wait else {
+            return Status::Ok.as_str().to_owned();
+        };
+        // The core's lock is not held while this waits: SaveDone, a name leaving or a withdrawal
+        // answers through the channel.
+        let answered = futures_lite::future::or(async { wait.answer.recv().await.ok() }, async {
+            async_io::Timer::at(wait.deadline).await;
+            None
+        })
+        .await;
+        let status = match answered {
+            Some(status) => status,
+            None => {
+                with(&self.core, |door| {
+                    lifecycle::expire(door, profile_id, scope, Instant::now())
+                });
+                wait.settled()
             }
-            Err(status) => status.as_str().to_owned(),
-        }
+        };
+        eprintln!(
+            "ruya-platform: {profile_id} {scope} stopping: {}",
+            status.as_str()
+        );
+        status.as_str().to_owned()
     }
-
-    #[zbus(signal)]
-    async fn saved(emitter: &SignalEmitter<'_>, profile_id: &str, scope: &str) -> zbus::Result<()>;
 }
 
 /// Forgets every unique name that leaves the bus (NameOwnerChanged with no new owner), for as long

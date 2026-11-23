@@ -1076,6 +1076,8 @@ version = "0.1.0"
 name = "ruya-platform"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
+ "async-io",
  "futures-lite",
  "ruya-contract-test",
  "ruya-flatpak",

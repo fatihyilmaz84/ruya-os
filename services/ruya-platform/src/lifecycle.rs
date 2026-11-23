@@ -3,13 +3,19 @@
 //! ruya-session) reach its registered connections alone: `Background`, `Resume(frozen_ms)`,
 //! `Stopping(deadline_ms)`, answered by `SaveDone`. There is no notice before a freeze: the freeze
 //! is instant and a frozen app could not act on it. Pure: the adapter sends each signal to the
-//! names this returns.
+//! names this returns and awaits the [`Wait`] of a Stopping.
+//!
+//! A Stopping is answered to the OS, not broadcast: `NotifyLifecycle(.., "stopping", ..)` replies
+//! `saved` when the instance calls `SaveDone`, `timeout` when the deadline passed first, and
+//! `not-registered` at once when nothing is registered, or when the registration ends while it
+//! waits (the last connection left, the profile was removed, the player turned it off). A second
+//! Stopping while one waits joins it: same deadline, same answer, no second signal.
 
 use std::any::Any;
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::{Duration, Instant};
 
-use std::time::Instant;
-
+use async_channel::{Receiver, Sender};
 use ruya_ids::valid_profile_id;
 
 use crate::door::{arg, Gate, Platform};
@@ -47,14 +53,66 @@ impl Event {
     }
 }
 
+/// The answer a `NotifyLifecycle` "stopping" waits for: `saved`, `timeout` or `not-registered`
+/// arrives on `answer`; at `deadline` the adapter calls [`Lifecycle::expire`] and reads it again.
+#[derive(Debug)]
+pub struct Wait {
+    pub answer: Receiver<Status>,
+    pub deadline: Instant,
+}
+
+impl Wait {
+    /// The answer once the deadline passed and [`Lifecycle::expire`] ran: what was sent, else
+    /// `not-registered` (the waiter was dropped unanswered, which no path does).
+    pub fn settled(&self) -> Status {
+        self.answer.try_recv().unwrap_or(Status::NotRegistered)
+    }
+}
+
+/// The waiters of one pending Stopping.
+#[derive(Debug)]
+struct Pending {
+    deadline: Instant,
+    waiters: Vec<Sender<Status>>,
+}
+
+impl Pending {
+    fn answer(self, status: Status) {
+        for w in self.waiters {
+            // A waiter whose caller went away is simply gone.
+            let _ = w.try_send(status);
+        }
+    }
+}
+
 /// An instance's registration: (profile, scope) is its key, the scope being unique in the
 /// profile's user manager.
 #[derive(Debug, Default)]
 struct Instance {
     app_id: String,
     names: BTreeSet<String>,
-    /// A Stopping was sent and no SaveDone came yet.
+    /// A Stopping was sent and no SaveDone came yet (also after its wait timed out: a late
+    /// SaveDone is `ok` and changes nothing).
     stopping: bool,
+    pending: Option<Pending>,
+}
+
+impl Instance {
+    /// The registration ends: a waiting Stopping is answered `not-registered`.
+    fn end(self) {
+        if let Some(p) = self.pending {
+            p.answer(Status::NotRegistered);
+        }
+    }
+}
+
+/// What `notify` asks the adapter to do: send the signal to `names` (empty when a Stopping joined
+/// one already sent), and, for a Stopping, await `wait`.
+#[derive(Debug)]
+pub struct Notice {
+    pub event: Event,
+    pub names: Vec<String>,
+    pub wait: Option<Wait>,
 }
 
 #[derive(Debug, Default)]
@@ -64,6 +122,15 @@ pub struct Lifecycle {
 
 fn key(id: &Identity) -> (String, String) {
     (id.profile.clone(), id.scope.clone())
+}
+
+fn waiter(pending: &mut Pending) -> Wait {
+    let (tx, rx) = async_channel::bounded(1);
+    pending.waiters.push(tx);
+    Wait {
+        answer: rx,
+        deadline: pending.deadline,
+    }
 }
 
 impl Lifecycle {
@@ -81,39 +148,78 @@ impl Lifecycle {
     }
 
     /// The OS's event for the instance `scope` of `profile`: the names to send its signal to
-    /// (that instance's registered connections, nobody else's), or `NotRegistered`.
+    /// (that instance's registered connections, nobody else's) and, for a Stopping, the wait for
+    /// its answer; `NotRegistered` when nothing is registered.
     pub fn notify(
         &mut self,
         profile: &str,
         scope: &str,
         event: Event,
-    ) -> Result<Vec<String>, Status> {
+        now: Instant,
+    ) -> Result<Notice, Status> {
         let Some(instance) = self
             .instances
             .get_mut(&(profile.to_owned(), scope.to_owned()))
         else {
             return Err(Status::NotRegistered);
         };
-        match event {
-            Event::Stopping { .. } => instance.stopping = true,
-            // Back in front: a Stopping before it was not carried out.
-            Event::Resume { .. } => instance.stopping = false,
-            Event::Background => {}
+        let names: Vec<String> = instance.names.iter().cloned().collect();
+        let Event::Stopping { deadline_ms } = event else {
+            return Ok(Notice {
+                event,
+                names,
+                wait: None,
+            });
+        };
+        instance.stopping = true;
+        if let Some(pending) = instance.pending.as_mut() {
+            return Ok(Notice {
+                event,
+                names: Vec::new(),
+                wait: Some(waiter(pending)),
+            });
         }
-        Ok(instance.names.iter().cloned().collect())
+        let pending = instance.pending.insert(Pending {
+            deadline: now + Duration::from_millis(u64::from(deadline_ms)),
+            waiters: Vec::new(),
+        });
+        Ok(Notice {
+            event,
+            names,
+            wait: Some(waiter(pending)),
+        })
     }
 
-    /// The instance `id` has saved after a Stopping: its (profile, scope) for the `Saved` signal.
-    pub fn save_done(&mut self, id: &Identity) -> Result<(String, String), Status> {
-        let instance = self
-            .instances
-            .get_mut(&key(id))
-            .ok_or(Status::NotRegistered)?;
+    /// The instance `id` has saved after a Stopping: a waiting Stopping is answered `saved`. After
+    /// the wait timed out it is `ok` and changes nothing more.
+    pub fn save_done(&mut self, id: &Identity) -> Status {
+        let Some(instance) = self.instances.get_mut(&key(id)) else {
+            return Status::NotRegistered;
+        };
         if !instance.stopping {
-            return Err(Status::NotAllowed);
+            return Status::NotAllowed;
         }
         instance.stopping = false;
-        Ok(key(id))
+        if let Some(p) = instance.pending.take() {
+            p.answer(Status::Saved);
+        }
+        Status::Ok
+    }
+
+    /// The deadline of the instance's waiting Stopping has come (`now` at or after it): its
+    /// waiters are answered `timeout`. Before the deadline, or with nothing waiting, nothing.
+    pub fn expire(&mut self, profile: &str, scope: &str, now: Instant) {
+        let Some(instance) = self
+            .instances
+            .get_mut(&(profile.to_owned(), scope.to_owned()))
+        else {
+            return;
+        };
+        if instance.pending.as_ref().is_some_and(|p| p.deadline <= now) {
+            if let Some(p) = instance.pending.take() {
+                p.answer(Status::Timeout);
+            }
+        }
     }
 
     /// The registered names of the instance (for the tests and the log).
@@ -123,23 +229,38 @@ impl Lifecycle {
             .map(|i| i.names.iter().cloned().collect())
             .unwrap_or_default()
     }
+
+    /// Ends every registration `gone` says, answering its waiting Stopping.
+    fn end_where(&mut self, mut gone: impl FnMut(&(String, String), &mut Instance) -> bool) {
+        let keys: Vec<(String, String)> = self
+            .instances
+            .iter_mut()
+            .filter_map(|(k, i)| gone(k, i).then(|| k.clone()))
+            .collect();
+        for k in keys {
+            if let Some(i) = self.instances.remove(&k) {
+                i.end();
+            }
+        }
+    }
 }
 
 impl Handler for Lifecycle {
+    /// An instance whose last registered connection left ends (a waiting Stopping is answered
+    /// `not-registered`); one with another connection left keeps waiting for its SaveDone.
     fn name_gone(&mut self, name: &str) {
-        self.instances.retain(|_, i| {
+        self.end_where(|_, i| {
             i.names.remove(name);
-            !i.names.is_empty()
+            i.names.is_empty()
         });
     }
 
     fn profile_gone(&mut self, profile: &str) {
-        self.instances.retain(|(p, _), _| p != profile);
+        self.end_where(|(p, _), _| p == profile);
     }
 
     fn withdrawn(&mut self, profile: &str, app_id: &str) {
-        self.instances
-            .retain(|(p, _), i| !(p == profile && i.app_id == app_id));
+        self.end_where(|(p, _), i| p == profile && i.app_id == app_id);
     }
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
@@ -164,26 +285,28 @@ pub fn register(door: &mut Platform, caller: &Caller<'_>, now: Instant) -> Statu
     }
 }
 
-/// `Lifecycle.SaveDone` from `caller`: the (profile, scope) for `Manage.Saved`. Any profile's app
-/// may answer its Stopping (power-off stops every profile's apps).
-pub fn save_done(
-    door: &mut Platform,
-    caller: &Caller<'_>,
-    now: Instant,
-) -> Result<(String, String), Status> {
-    let id = door.admit(caller, INTERFACE, Gate::AnyProfile, now)?;
-    handler(door)?.save_done(&id)
+/// `Lifecycle.SaveDone` from `caller`. Any profile's app may answer its Stopping (power-off stops
+/// every profile's apps).
+pub fn save_done(door: &mut Platform, caller: &Caller<'_>, now: Instant) -> Status {
+    match door.admit(caller, INTERFACE, Gate::AnyProfile, now) {
+        Ok(id) => match handler(door) {
+            Ok(l) => l.save_done(&id),
+            Err(status) => status,
+        },
+        Err(status) => status,
+    }
 }
 
-/// `Manage.NotifyLifecycle` (the adapter checked the caller is root): the event and the names to
-/// send its signal to.
+/// `Manage.NotifyLifecycle` (the adapter checked the caller is root): what to send and, for a
+/// Stopping, what to wait for.
 pub fn notify(
     door: &mut Platform,
     profile: &str,
     scope: &str,
     event: &str,
     value_ms: u64,
-) -> Result<(Event, Vec<String>), Status> {
+    now: Instant,
+) -> Result<Notice, Status> {
     let profile = arg(profile, MAX_PROFILE_ID)?;
     let scope = arg(scope, MAX_SCOPE)?;
     let event = Event::parse(arg(event, MAX_EVENT)?, value_ms)?;
@@ -191,8 +314,14 @@ pub fn notify(
     if !valid_profile_id(profile) || !scope_form {
         return Err(Status::InvalidArgument);
     }
-    let names = handler(door)?.notify(profile, scope, event)?;
-    Ok((event, names))
+    handler(door)?.notify(profile, scope, event, now)
+}
+
+/// `Lifecycle::expire` through the door, for the adapter when a wait's deadline came.
+pub fn expire(door: &mut Platform, profile: &str, scope: &str, now: Instant) {
+    if let Ok(l) = handler(door) {
+        l.expire(profile, scope, now);
+    }
 }
 
 #[cfg(test)]
@@ -211,6 +340,38 @@ mod tests {
 
     const A: &str = "org.example.Racer";
     const B: &str = "org.example.Chess";
+    const STOP: Event = Event::Stopping { deadline_ms: 5000 };
+
+    /// The names a non-Stopping event goes to.
+    fn sent(l: &mut Lifecycle, i: &Identity, event: Event) -> Result<Vec<String>, Status> {
+        l.notify(&i.profile, &i.scope, event, Instant::now())
+            .map(|n| n.names)
+    }
+
+    /// A Stopping at `now`: its names and its wait.
+    fn stop(l: &mut Lifecycle, i: &Identity, now: Instant) -> (Vec<String>, Wait) {
+        let n = l
+            .notify(&i.profile, &i.scope, STOP, now)
+            .expect("registered");
+        (n.names, n.wait.expect("a Stopping waits"))
+    }
+
+    /// A of p1 (connections :1.10 and :1.11), B of p1 (:1.20) and A of p2 (:1.30), registered.
+    fn three_instances() -> (Lifecycle, Identity, Identity, Identity) {
+        let mut l = Lifecycle::default();
+        let a = id("p1", A, "1");
+        let b = id("p1", B, "2");
+        let c = id("p2", A, "1");
+        l.register(&a, ":1.10");
+        l.register(&a, ":1.11");
+        l.register(&b, ":1.20");
+        l.register(&c, ":1.30");
+        (l, a, b, c)
+    }
+
+    fn pending(w: &Wait) -> bool {
+        w.answer.is_empty() && !w.answer.is_closed()
+    }
 
     #[test]
     fn events_from_the_session() {
@@ -226,10 +387,7 @@ mod tests {
                 frozen_ms: u64::MAX
             })
         );
-        assert_eq!(
-            Event::parse("stopping", 5000),
-            Ok(Event::Stopping { deadline_ms: 5000 })
-        );
+        assert_eq!(Event::parse("stopping", 5000), Ok(STOP));
         assert_eq!(
             Event::parse("stopping", u64::from(u32::MAX) + 1),
             Err(Status::InvalidArgument)
@@ -252,22 +410,24 @@ mod tests {
         assert_eq!(l.register(&b, ":1.30"), Status::Ok);
         assert_eq!(l.register(&other_profile, ":1.40"), Status::Ok);
         assert_eq!(
-            l.notify("p1", &a.scope, Event::Background),
+            sent(&mut l, &a, Event::Background),
             Ok(vec![":1.10".to_owned(), ":1.11".to_owned()])
         );
         assert_eq!(
-            l.notify("p1", &b.scope, Event::Resume { frozen_ms: 9 }),
+            sent(&mut l, &b, Event::Resume { frozen_ms: 9 }),
             Ok(vec![":1.30".to_owned()])
         );
         assert_eq!(
-            l.notify("p2", &a.scope, Event::Background),
+            sent(&mut l, &other_profile, Event::Background),
             Ok(vec![":1.40".to_owned()]),
             "the same scope name in another profile"
         );
         assert_eq!(
-            l.notify("p3", &a.scope, Event::Background),
+            sent(&mut l, &id("p3", A, "1"), Event::Background),
             Err(Status::NotRegistered)
         );
+        let (names, _) = stop(&mut l, &a, Instant::now());
+        assert_eq!(names, [":1.10", ":1.11"]);
     }
 
     #[test]
@@ -292,28 +452,66 @@ mod tests {
     }
 
     #[test]
-    fn save_done_answers_a_stopping_once() {
+    fn other_events_wait_for_nothing() {
         let mut l = Lifecycle::default();
         let a = id("p1", A, "1");
-        assert_eq!(l.save_done(&a), Err(Status::NotRegistered));
         l.register(&a, ":1.10");
-        assert_eq!(l.save_done(&a), Err(Status::NotAllowed), "no Stopping yet");
-        l.notify("p1", &a.scope, Event::Stopping { deadline_ms: 5000 })
-            .expect("registered");
-        assert_eq!(l.save_done(&a), Ok(("p1".to_owned(), a.scope.clone())));
+        for event in [Event::Background, Event::Resume { frozen_ms: 3 }] {
+            let n = l
+                .notify("p1", &a.scope, event, Instant::now())
+                .expect("registered");
+            assert!(n.wait.is_none(), "{event:?}");
+        }
+    }
+
+    #[test]
+    fn a_stopping_is_answered_saved_by_save_done() {
+        let mut l = Lifecycle::default();
+        let a = id("p1", A, "1");
+        l.register(&a, ":1.10");
+        assert_eq!(l.save_done(&a), Status::NotAllowed, "no Stopping yet");
+        let (_, wait) = stop(&mut l, &a, Instant::now());
+        assert!(pending(&wait));
+        assert_eq!(l.save_done(&a), Status::Ok);
+        assert_eq!(wait.answer.try_recv(), Ok(Status::Saved));
+        assert_eq!(l.save_done(&a), Status::NotAllowed, "once per Stopping");
+    }
+
+    #[test]
+    fn a_stopping_times_out_at_its_deadline_and_a_late_save_done_is_ignored() {
+        let mut l = Lifecycle::default();
+        let a = id("p1", A, "1");
+        l.register(&a, ":1.10");
+        let t0 = Instant::now();
+        let (_, wait) = stop(&mut l, &a, t0);
+        assert_eq!(wait.deadline, t0 + Duration::from_millis(5000));
+        l.expire("p1", &a.scope, t0 + Duration::from_millis(4999));
+        assert!(pending(&wait), "not before the deadline");
+        l.expire("p1", &a.scope, wait.deadline);
+        assert_eq!(wait.settled(), Status::Timeout);
+        assert_eq!(l.save_done(&a), Status::Ok, "late: ok, and nobody waits");
+        assert_eq!(l.save_done(&a), Status::NotAllowed);
+        // A new Stopping waits again.
+        let (_, again) = stop(&mut l, &a, wait.deadline);
+        assert!(pending(&again));
+    }
+
+    #[test]
+    fn a_second_stopping_joins_the_waiting_one() {
+        let mut l = Lifecycle::default();
+        let a = id("p1", A, "1");
+        l.register(&a, ":1.10");
+        let t0 = Instant::now();
+        let (_, first) = stop(&mut l, &a, t0);
+        let (names, second) = stop(&mut l, &a, t0 + Duration::from_secs(3));
+        assert!(names.is_empty(), "no second signal");
+        assert_eq!(second.deadline, first.deadline, "the same deadline");
+        assert_eq!(l.save_done(&a), Status::Ok);
+        assert_eq!(first.answer.try_recv(), Ok(Status::Saved));
         assert_eq!(
-            l.save_done(&a),
-            Err(Status::NotAllowed),
-            "once per Stopping"
-        );
-        l.notify("p1", &a.scope, Event::Stopping { deadline_ms: 5000 })
-            .expect("registered");
-        l.notify("p1", &a.scope, Event::Resume { frozen_ms: 0 })
-            .expect("registered");
-        assert_eq!(
-            l.save_done(&a),
-            Err(Status::NotAllowed),
-            "a Resume ends the Stopping"
+            second.answer.try_recv(),
+            Ok(Status::Saved),
+            "the same answer"
         );
     }
 
@@ -324,59 +522,84 @@ mod tests {
         let b = id("p1", B, "2");
         l.register(&a, ":1.10");
         l.register(&b, ":1.20");
-        l.notify("p1", &b.scope, Event::Stopping { deadline_ms: 5000 })
-            .expect("registered");
+        let (_, a_wait) = stop(&mut l, &a, Instant::now());
+        assert_eq!(l.save_done(&b), Status::NotAllowed, "B is not stopping");
+        assert!(pending(&a_wait), "B's SaveDone does not complete A's wait");
+        // Another instance of A is another instance.
+        assert_eq!(l.save_done(&id("p1", A, "9")), Status::NotRegistered);
+        assert!(pending(&a_wait));
+        assert_eq!(l.save_done(&a), Status::Ok);
+        assert_eq!(a_wait.answer.try_recv(), Ok(Status::Saved));
+    }
+
+    #[test]
+    fn a_wait_ends_not_registered_with_its_registration() {
+        let (mut l, a, b, c) = three_instances();
+        let now = Instant::now();
+        let (_, wa) = stop(&mut l, &a, now);
+        let (_, wb) = stop(&mut l, &b, now);
+        let (_, wc) = stop(&mut l, &c, now);
+        l.name_gone(":1.10");
+        assert!(pending(&wa), "another connection of A is still there");
+        l.name_gone(":1.11");
         assert_eq!(
-            l.save_done(&a),
-            Err(Status::NotAllowed),
-            "A is not stopping"
+            wa.answer.try_recv(),
+            Ok(Status::NotRegistered),
+            "its last name left"
         );
-        // Another instance of B is another instance.
-        assert_eq!(l.save_done(&id("p1", B, "9")), Err(Status::NotRegistered));
+        l.withdrawn("p1", B);
         assert_eq!(
-            l.save_done(&b),
-            Ok(("p1".to_owned(), b.scope.clone())),
-            "B's Stopping was untouched"
+            wb.answer.try_recv(),
+            Ok(Status::NotRegistered),
+            "turned off"
+        );
+        l.profile_gone("p2");
+        assert_eq!(
+            wc.answer.try_recv(),
+            Ok(Status::NotRegistered),
+            "profile removed"
         );
     }
 
     #[test]
     fn what_is_forgotten() {
-        let mut l = Lifecycle::default();
-        let a = id("p1", A, "1");
-        let b = id("p1", B, "2");
-        let c = id("p2", A, "1");
-        l.register(&a, ":1.10");
-        l.register(&a, ":1.11");
-        l.register(&b, ":1.20");
-        l.register(&c, ":1.30");
+        let (mut l, a, b, c) = three_instances();
         l.name_gone(":1.10");
         assert_eq!(l.names("p1", &a.scope), [":1.11"]);
         l.name_gone(":1.11");
         assert_eq!(
-            l.notify("p1", &a.scope, Event::Background),
+            sent(&mut l, &a, Event::Background),
             Err(Status::NotRegistered),
             "its last name left"
         );
         l.withdrawn("p1", B);
         assert_eq!(
-            l.notify("p1", &b.scope, Event::Background),
+            sent(&mut l, &b, Event::Background),
             Err(Status::NotRegistered),
             "the player turned it off"
         );
         assert_eq!(l.names("p2", &c.scope), [":1.30"]);
         l.profile_gone("p2");
         assert_eq!(
-            l.notify("p2", &c.scope, Event::Background),
+            sent(&mut l, &c, Event::Background),
             Err(Status::NotRegistered)
         );
     }
 
     mod through_the_door {
         use super::super::{notify, register, save_done, Event};
-        use crate::door::tests::{known, World, APP, OTHER};
+        use crate::door::tests::{known, App, Fixture, World, APP, OTHER};
         use crate::Status;
         use ruya_flatpak::scope::instance_scope;
+
+        /// APP instance 7 of p1, registered: the door, the caller and its scope.
+        fn registered_app() -> (Fixture, App, String) {
+            let mut w = World::new();
+            let a = w.app(1, APP, "7");
+            let mut f = w.door();
+            assert_eq!(register(&mut f.door, &a.caller(), f.now), Status::Ok);
+            (f, a, instance_scope(APP, "7").expect("valid"))
+        }
 
         #[test]
         fn register_needs_the_capability() {
@@ -397,20 +620,18 @@ mod tests {
         }
 
         #[test]
-        fn turning_it_off_ends_the_registration() {
-            let mut w = World::new();
-            let a = w.app(1, APP, "7");
-            let mut f = w.door();
+        fn turning_it_off_ends_the_registration_and_its_wait() {
+            let (mut f, _a, scope) = registered_app();
             let (door, now) = (&mut f.door, f.now);
-            assert_eq!(register(door, &a.caller(), now), Status::Ok);
-            let scope = instance_scope(APP, "7").expect("valid");
-            assert!(notify(door, "p1", &scope, "background", 0).is_ok());
+            let n = notify(door, "p1", &scope, "stopping", 5000, now).expect("registered");
+            let wait = n.wait.expect("waits");
             assert_eq!(
                 door.set_permission("p1", APP, "lifecycle", false),
                 Status::Ok
             );
+            assert_eq!(wait.answer.try_recv(), Ok(Status::NotRegistered));
             assert_eq!(
-                notify(door, "p1", &scope, "background", 0),
+                notify(door, "p1", &scope, "background", 0, now).map(|n| n.names),
                 Err(Status::NotRegistered)
             );
         }
@@ -430,16 +651,17 @@ mod tests {
             assert_eq!(register(door, &a2.caller(), now), Status::Ok);
             door.follow_profiles(known(&["p1", "p2"]), "p1", now);
             let scope = instance_scope(APP, "7").expect("valid");
-            let sent = notify(door, "p2", &scope, "stopping", 5000).expect("registered");
+            let n = notify(door, "p2", &scope, "stopping", 5000, now).expect("registered");
             assert_eq!(
-                sent,
+                (n.event, n.names),
                 (Event::Stopping { deadline_ms: 5000 }, vec![a2.name.clone()])
             );
             assert_eq!(
                 save_done(door, &a2.caller(), now),
-                Ok(("p2".to_owned(), scope)),
+                Status::Ok,
                 "power-off reaches every profile's apps"
             );
+            assert_eq!(n.wait.expect("waits").answer.try_recv(), Ok(Status::Saved));
         }
 
         #[test]
@@ -454,19 +676,30 @@ mod tests {
             let a_scope = instance_scope(APP, "7").expect("valid");
             let b_scope = instance_scope(OTHER, "8").expect("valid");
             // B's signals reach B's connection alone.
-            let (_, names) = notify(door, "p1", &b_scope, "stopping", 5000).expect("registered");
-            assert_eq!(names, vec![b.name.clone()]);
+            let n = notify(door, "p1", &b_scope, "stopping", 5000, now).expect("registered");
+            assert_eq!(n.names, vec![b.name.clone()]);
+            let wait = n.wait.expect("waits");
             assert_eq!(
                 save_done(door, &a.caller(), now),
-                Err(Status::NotAllowed),
+                Status::NotAllowed,
                 "A's SaveDone is A's, and A has no Stopping"
             );
+            assert!(wait.answer.is_empty(), "B still waits");
+            assert_eq!(save_done(door, &b.caller(), now), Status::Ok);
+            assert_eq!(wait.answer.try_recv(), Ok(Status::Saved));
+            let n = notify(door, "p1", &a_scope, "resume", 1200, now).expect("registered");
+            assert_eq!(n.names, vec![a.name.clone()]);
+        }
+
+        #[test]
+        fn a_stopping_for_nobody_is_answered_at_once() {
+            let mut f = World::new().door();
+            let (door, now) = (&mut f.door, f.now);
+            let scope = instance_scope(APP, "7").expect("valid");
             assert_eq!(
-                save_done(door, &b.caller(), now),
-                Ok(("p1".to_owned(), b_scope))
+                notify(door, "p1", &scope, "stopping", 5000, now).map(|n| n.names),
+                Err(Status::NotRegistered)
             );
-            let (_, names) = notify(door, "p1", &a_scope, "resume", 1200).expect("registered");
-            assert_eq!(names, vec![a.name.clone()]);
         }
 
         #[test]
@@ -481,7 +714,7 @@ mod tests {
             let mut f = w.door();
             let (door, now) = (&mut f.door, f.now);
             assert_eq!(register(door, &a.caller(), now), Status::NotAnApp);
-            assert_eq!(save_done(door, &a.caller(), now), Err(Status::NotAnApp));
+            assert_eq!(save_done(door, &a.caller(), now), Status::NotAnApp);
         }
 
         #[test]
@@ -495,16 +728,34 @@ mod tests {
             door.follow_profiles(known(&["p1"]), "p1", now);
             let scope = instance_scope(APP, "7").expect("valid");
             assert_eq!(
-                notify(door, "p2", &scope, "background", 0),
+                notify(door, "p2", &scope, "background", 0, now).map(|n| n.names),
                 Err(Status::NotRegistered)
             );
             assert_eq!(register(door, &a2.caller(), now), Status::NotAnApp);
         }
 
         #[test]
+        fn a_name_gone_before_its_register_is_not_kept() {
+            // NameOwnerChanged was handled while the call asked for the credentials; the adapter
+            // asks the bus after the call, and the name has no owner.
+            let (mut f, a, scope) = registered_app();
+            let (door, now) = (&mut f.door, f.now);
+            door.forget_if_gone(&a.name, false, now);
+            assert_eq!(
+                notify(door, "p1", &scope, "background", 0, now).map(|n| n.names),
+                Err(Status::NotRegistered)
+            );
+            assert!(!door.knows(&a.name), "no identity is cached for it");
+            // A name still on the bus is kept.
+            assert_eq!(register(door, &a.caller(), now), Status::Ok);
+            door.forget_if_gone(&a.name, true, now);
+            assert!(door.knows(&a.name));
+        }
+
+        #[test]
         fn notify_arguments_are_checked() {
             let mut f = World::new().door();
-            let door = &mut f.door;
+            let (door, now) = (&mut f.door, f.now);
             let scope = "app-flatpak-org.example.Racer-7.scope";
             let long_scope = format!("app-flatpak-{}.scope", "x".repeat(300));
             let long_event = "stopping".repeat(10);
@@ -522,13 +773,13 @@ mod tests {
                 ("p1", scope, long_event.as_str()),
             ] {
                 assert_eq!(
-                    notify(door, p, s, e, 0),
+                    notify(door, p, s, e, 0, now).map(|n| n.names),
                     Err(Status::InvalidArgument),
                     "{p:?} {s:?} {e:?}"
                 );
             }
             assert_eq!(
-                notify(door, "p1", scope, "background", 0),
+                notify(door, "p1", scope, "background", 0, now).map(|n| n.names),
                 Err(Status::NotRegistered)
             );
         }

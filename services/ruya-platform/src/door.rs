@@ -185,6 +185,20 @@ impl Platform {
         self.registry.name_gone(name);
     }
 
+    /// After a call was served: the bus says whether `name` still has an owner. A name that left
+    /// while the call waited for its credentials had its NameOwnerChanged handled before the call
+    /// cached or registered it, so it is forgotten now (`name_gone` is the same either way).
+    pub fn forget_if_gone(&mut self, name: &str, has_owner: bool, now: Instant) {
+        if !has_owner {
+            self.name_gone(name, now);
+        }
+    }
+
+    /// Is an identity cached for the unique name `name`?
+    pub fn knows(&self, name: &str) -> bool {
+        self.names.contains_key(name)
+    }
+
     fn known_profile(&self, profile: &str) -> Result<(), Status> {
         let profile = arg(profile, MAX_PROFILE_ID)?;
         let known = self.profiles.as_ref().is_some_and(|k| k.contains(profile));

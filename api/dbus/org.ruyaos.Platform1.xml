@@ -49,7 +49,11 @@
     "invalid-argument"  an argument is too long, has a control character or is not of its form
                         (a profile id, an app id, a capability, a scope, an event), or names a
                         profile that does not exist
-    "not-registered"    SaveDone or NotifyLifecycle for an instance that did not Register
+    "not-registered"    SaveDone or NotifyLifecycle for an instance that did not Register; a
+                        waiting "stopping" whose registration ended (its last connection left,
+                        its profile was removed, the player turned the capability off)
+    "saved"             NotifyLifecycle "stopping": the instance called SaveDone
+    "timeout"           NotifyLifecycle "stopping": the deadline passed without a SaveDone
     "failed"            internal error (the permission file could not be read or written; a
                         corrupt file is never overwritten)
 -->
@@ -65,18 +69,21 @@
       <arg name="status" type="s" direction="out"/>
     </method>
 
-    <!-- The answer to Stopping: the app has saved. Valid once per Stopping. "ok", "not-an-app",
-         "not-allowed" (no Stopping is pending, or the capability is off), "not-registered",
-         "rate-limited". -->
+    <!-- The answer to Stopping: the app's data is on disk (call it after fsync): the OS's wait
+         ends and the instance may be stopped at once. Valid once per Stopping; after the deadline
+         the stop goes on anyway and a late SaveDone is "ok" and ignored. "ok", "not-an-app",
+         "not-allowed" (no Stopping came, or the capability is off), "not-registered",
+         "rate-limited" (the same buckets as Register). -->
     <method name="SaveDone">
       <annotation name="org.ruyaos.Stability" value="experimental"/>
       <annotation name="org.ruyaos.Since" value="0"/>
       <arg name="status" type="s" direction="out"/>
     </method>
 
-    <!-- The instance left the front and keeps running (it is held behind Home, ADR-042/046). It
-         is not frozen. There is no notice before a freeze: the freeze is instant and a frozen app
-         could not act on one. -->
+    <!-- The console keeps the instance running behind Home (a hold, ADR-042/046): it left the
+         front and is not frozen. Only then: a normal Home, the Hub and a profile switch freeze the
+         app with no signal at all (there is no notice before a freeze: it is instant and a frozen
+         app could not act on one); the app learns of a freeze from Resume's frozen_ms. -->
     <signal name="Background">
       <annotation name="org.ruyaos.Stability" value="experimental"/>
       <annotation name="org.ruyaos.Since" value="0"/>
@@ -124,8 +131,12 @@
          (a scope name is unique within one manager only). `event`: "background" (`value_ms` 0),
          "resume" (`value_ms` the time it was frozen) or "stopping" (`value_ms` the deadline, at
          most 4294967295). Sent as the Lifecycle signal to the instance's registered connections
-         only. "ok", "invalid-argument", "not-registered" (the instance did not Register: nothing
-         is sent), "not-allowed". -->
+         only. "background" and "resume" reply at once: "ok". "stopping" replies when it is
+         settled: "saved" (the instance called SaveDone), "timeout" (`value_ms` passed first) or
+         "not-registered" (at once when nothing is registered, or when the registration ends
+         while it waits). A "stopping" for an instance that already waits joins that wait: no
+         second signal, the same deadline, the same answer. Also "invalid-argument",
+         "not-allowed". Nothing is broadcast: only the caller learns the answer. -->
     <method name="NotifyLifecycle">
       <annotation name="org.ruyaos.Caller" value="root"/>
       <arg name="profile_id" type="s" direction="in"/>
@@ -134,12 +145,5 @@
       <arg name="value_ms" type="t" direction="in"/>
       <arg name="status" type="s" direction="out"/>
     </method>
-
-    <!-- An instance answered a Stopping with SaveDone: ruya-session may stop it now instead of
-         waiting out the deadline. -->
-    <signal name="Saved">
-      <arg name="profile_id" type="s"/>
-      <arg name="scope" type="s"/>
-    </signal>
   </interface>
 </node>

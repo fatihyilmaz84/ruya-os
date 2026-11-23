@@ -66,3 +66,13 @@ fn no_lifecycle_method_takes_an_argument() {
         assert!(!shape.contains("in:"), "{key} takes an argument: {shape}");
     }
 }
+
+/// Manage broadcasts nothing (RUY-1098 round 2): which app of which profile is saving or stopping
+/// is the caller's answer, not a signal every listener could hear.
+#[test]
+fn manage_has_no_signal() {
+    let contract = parse(&ruya_contract_test::read_contract(FILE)).expect("the contract parses");
+    let manage = &contract["org.ruyaos.Platform1.Manage"];
+    let signals: Vec<_> = manage.keys().filter(|k| k.starts_with("signal ")).collect();
+    assert!(signals.is_empty(), "{signals:?}");
+}

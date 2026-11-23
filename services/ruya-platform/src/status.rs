@@ -8,6 +8,8 @@ pub enum Status {
     RateLimited,
     InvalidArgument,
     NotRegistered,
+    Saved,
+    Timeout,
     Failed,
 }
 
@@ -20,6 +22,8 @@ impl Status {
             Status::RateLimited => "rate-limited",
             Status::InvalidArgument => "invalid-argument",
             Status::NotRegistered => "not-registered",
+            Status::Saved => "saved",
+            Status::Timeout => "timeout",
             Status::Failed => "failed",
         }
     }
@@ -39,6 +43,8 @@ mod tests {
             Status::RateLimited,
             Status::InvalidArgument,
             Status::NotRegistered,
+            Status::Saved,
+            Status::Timeout,
             Status::Failed,
         ] {
             assert!(
