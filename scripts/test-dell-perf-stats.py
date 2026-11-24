@@ -108,6 +108,7 @@ with tempfile.TemporaryDirectory() as tmp:
     summary = outs[0][1].splitlines()
     check("build: the summary is at most 15 lines", 0 < len(summary) <= 15, len(summary))
     check("build: the summary shows median and spread", any("FPS 60 (59-60)" in s for s in summary), summary)
+    check("build: runs without lows print - for them", any("1% low -, 0.1% low -" in s for s in summary), summary)
     check("build: a skipped item and a skipped relay say so",
           any("play: SKIPPED" in s for s in summary) and any("relay latency SKIPPED" in s for s in summary), summary)
 
@@ -124,5 +125,21 @@ with tempfile.TemporaryDirectory() as tmp:
     better = compare(outs[2][0], outs[0][0])
     check("compare: a rise is better for FPS", next(s for s in better.splitlines() if "FPS" in s).rstrip().endswith("better"))
     check("compare: an item that was skipped is named", "play: not in both" in worse, worse)
+
+    low_tsv = os.path.join(tmp, "low.tsv")
+    open(low_tsv, "w", encoding="utf-8").write(chr(10).join(
+        f"supertuxkart{chr(9)}fps=60.0{chr(9)}fps_low1={a}{chr(9)}fps_low01={b}" for a, b in ((50, 40), (48, 38), (52, 41))))
+    low_json = os.path.join(tmp, "low.json")
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        stats.build([low_tsv, "new", "0.0.106", "dell", "2026-11-24", low_json])
+    low_sum = buf.getvalue().splitlines()
+    check("build: the lows are listed as median and min-max",
+          any("1% low 50 (48-52)" in s and "0.1% low 40 (38-41)" in s for s in low_sum), low_sum)
+    check("build: the summary with lows is at most 15 lines", len(low_sum) <= 15, low_sum)
+    mixed = compare(outs[0][0], low_json)
+    check("compare: an old JSON against a new one does not fail and skips the lows", "FPS" in mixed and "low" not in mixed, mixed)
+    both = compare(low_json, low_json)
+    check("compare: the lows are compared when both sides have them", "1% low" in both and "0.1% low" in both, both)
 
 sys.exit(1 if failed else 0)
