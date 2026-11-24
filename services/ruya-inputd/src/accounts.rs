@@ -4,22 +4,31 @@
 
 use ruya_ids::{user_of, valid_profile_id};
 
-/// Looks a profile id up. `None` when it is not a profile account.
+/// A profile account: its uid, and whether it is a temporary guest (RUY-125), which is never
+/// remembered as a pad's owner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Account {
+    pub uid: u32,
+    pub guest: bool,
+}
+
+/// Looks a profile id up. `None` when it is not a profile account. One call answers both the uid
+/// and the guest question, so the real lookup reads `/etc/passwd` once.
 pub trait Accounts: Send {
-    fn profile_uid(&self, profile: &str) -> Option<u32>;
-    /// Whether `profile` is a temporary guest account (RUY-125): never remembered as a pad's owner.
-    fn is_guest(&self, _profile: &str) -> bool {
-        false
-    }
+    fn account(&self, profile: &str) -> Option<Account>;
 }
 
 /// The first regular uid `useradd` hands out; profile accounts are regular users.
 const FIRST_REGULAR_UID: u32 = 1000;
 const LAST_REGULAR_UID: u32 = 60000;
 
+/// The passwd comment of a temporary guest account (RUY-125), `ruya-profiles`.
+const GUEST_COMMENT: &str = "RuyaOS profile (guest)";
+
 /// Finds profile `id` in `/etc/passwd` text: user `ruya-<id>`, a regular uid, the home
-/// `/var/home/ruya-<id>` and the comment "RuyaOS profile" that `ruya-profiles` writes.
-pub fn profile_uid_in_passwd(passwd: &str, id: &str) -> Option<u32> {
+/// `/var/home/ruya-<id>` and the comment "RuyaOS profile" that `ruya-profiles` writes (a guest:
+/// "RuyaOS profile (guest)").
+pub fn profile_in_passwd(passwd: &str, id: &str) -> Option<Account> {
     if !valid_profile_id(id) {
         return None;
     }
@@ -32,22 +41,12 @@ pub fn profile_uid_in_passwd(passwd: &str, id: &str) -> Option<u32> {
         }
         let uid: u32 = fields[2].parse().ok()?;
         let regular = (FIRST_REGULAR_UID..LAST_REGULAR_UID).contains(&uid);
-        (regular && fields[4].starts_with("RuyaOS profile") && fields[5] == home).then_some(uid)
-    })
-}
-
-/// The passwd comment of a temporary guest account (RUY-125), `ruya-profiles`.
-const GUEST_COMMENT: &str = "RuyaOS profile (guest)";
-
-/// Whether profile `id` is a temporary guest in `/etc/passwd` text (a profile account, by the comment).
-pub fn profile_is_guest_in_passwd(passwd: &str, id: &str) -> bool {
-    if profile_uid_in_passwd(passwd, id).is_none() {
-        return false;
-    }
-    let user = user_of(id);
-    passwd.lines().any(|line| {
-        let fields: Vec<&str> = line.split(':').collect();
-        fields.len() >= 7 && fields[0] == user && fields[4] == GUEST_COMMENT
+        (regular && fields[4].starts_with("RuyaOS profile") && fields[5] == home).then_some(
+            Account {
+                uid,
+                guest: fields[4] == GUEST_COMMENT,
+            },
+        )
     })
 }
 
@@ -55,26 +54,21 @@ pub fn profile_is_guest_in_passwd(passwd: &str, id: &str) -> bool {
 pub struct PasswdAccounts;
 
 impl Accounts for PasswdAccounts {
-    fn profile_uid(&self, profile: &str) -> Option<u32> {
+    fn account(&self, profile: &str) -> Option<Account> {
         let passwd = std::fs::read_to_string("/etc/passwd").ok()?;
-        profile_uid_in_passwd(&passwd, profile)
-    }
-
-    fn is_guest(&self, profile: &str) -> bool {
-        std::fs::read_to_string("/etc/passwd")
-            .is_ok_and(|p| profile_is_guest_in_passwd(&p, profile))
+        profile_in_passwd(&passwd, profile)
     }
 }
 
-/// Fixed accounts for `--session` and tests.
+/// Fixed accounts for `--session` and tests (none of them a guest).
 pub struct FixedAccounts(pub Vec<(String, u32)>);
 
 impl Accounts for FixedAccounts {
-    fn profile_uid(&self, profile: &str) -> Option<u32> {
+    fn account(&self, profile: &str) -> Option<Account> {
         self.0
             .iter()
             .find(|(id, _)| id == profile)
-            .map(|&(_, uid)| uid)
+            .map(|&(_, uid)| Account { uid, guest: false })
     }
 }
 
@@ -91,27 +85,30 @@ ruya-p3:x:500:500:RuyaOS profile:/var/home/ruya-p3:/usr/sbin/nologin\n";
 
     #[test]
     fn a_profile_account_is_found() {
-        assert_eq!(profile_uid_in_passwd(PASSWD, "p1"), Some(1001));
+        assert_eq!(profile_in_passwd(PASSWD, "p1").map(|a| a.uid), Some(1001));
     }
 
     #[test]
     fn system_users_and_lookalikes_are_not_profiles() {
-        assert_eq!(profile_uid_in_passwd(PASSWD, "shell"), None);
-        assert_eq!(profile_uid_in_passwd(PASSWD, "p2"), None); // not made by ruya-profiles
-        assert_eq!(profile_uid_in_passwd(PASSWD, "p3"), None); // a system uid
-        assert_eq!(profile_uid_in_passwd(PASSWD, "p9"), None);
-        assert_eq!(profile_uid_in_passwd(PASSWD, "p1:x"), None);
-        assert_eq!(profile_uid_in_passwd(PASSWD, ""), None);
+        assert_eq!(profile_in_passwd(PASSWD, "shell"), None);
+        assert_eq!(profile_in_passwd(PASSWD, "p2"), None); // not made by ruya-profiles
+        assert_eq!(profile_in_passwd(PASSWD, "p3"), None); // a system uid
+        assert_eq!(profile_in_passwd(PASSWD, "p9"), None);
+        assert_eq!(profile_in_passwd(PASSWD, "p1:x"), None);
+        assert_eq!(profile_in_passwd(PASSWD, ""), None);
     }
 
     #[test]
     fn a_guest_is_found_by_its_passwd_comment() {
         let passwd = format!(
-            "{PASSWD}ruya-g1:x:1005:1005:RuyaOS profile (guest):/var/home/ruya-g1:/usr/sbin/nologin\n"
+            "{PASSWD}ruya-g1:x:1005:1005:RuyaOS profile (guest):/var/home/ruya-g1:/usr/sbin/nologin
+"
         );
-        assert!(profile_is_guest_in_passwd(&passwd, "g1"));
-        assert!(!profile_is_guest_in_passwd(&passwd, "p1"));
-        assert!(!profile_is_guest_in_passwd(&passwd, "nobody"));
+        let guest = |id| profile_in_passwd(&passwd, id).map(|a| a.guest);
+        assert_eq!(guest("g1"), Some(true));
+        assert_eq!(guest("p1"), Some(false));
+        assert_eq!(guest("nobody"), None);
+        assert_eq!(profile_in_passwd(&passwd, "g1").map(|a| a.uid), Some(1005));
     }
 
     #[test]
