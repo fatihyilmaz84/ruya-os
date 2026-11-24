@@ -290,6 +290,7 @@ qt_add_qml_module(ruyashell
         qml/BluetoothPane.qml
         qml/ControllersPane.qml
         qml/ControllerPage.qml
+        qml/PadGone.qml
         qml/StoragePane.qml
         qml/SystemPane.qml
         qml/ZoneChooser.qml

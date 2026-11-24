@@ -688,6 +688,19 @@ Item {
             compare(toastTexts().filter(t => t.startsWith("Controller disconnected")).length, 1, "one toast")
         }
 
+        // RUY-701: the controller page and its Controls in games share one rule and one toast.
+        function test_the_pad_going_closes_the_controller_page_and_its_controls_in_games_with_one_toast() {
+            openController(pro)
+            tc.shell.openPage("controls", { id: pro })
+            tryCompare(tc.shell, "currentPage", "controls")
+            Input.mockRemoveDevice(pro)
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => toastTexts().includes("Controller disconnected / Pro Controller"), 2000, toastTexts().join(";"))
+            wait(Theme.pageMs + 100)
+            compare(tc.shell.currentPage, "settings", "both pages closed, not Settings")
+            compare(toastTexts().filter(t => t.startsWith("Controller disconnected")).length, 1, "one toast")
+        }
+
         function test_the_test_needs_the_shell_route() {
             // The route "app" ends the test; back in "shell" it starts again. An overlay with a game's instance
             // (a game frozen or closing behind Home, RUY-611) keeps it: before, any route but "shell" ended it.

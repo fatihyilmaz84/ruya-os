@@ -1038,6 +1038,104 @@ Item {
             verify(find("remap_south").activeFocus)
         }
 
+        // ---- the shown pad leaves (RUY-701) ------------------------------------------------------------------------
+
+        function disconnectToasts() {
+            return toastTexts().filter(t => t.startsWith("Controller disconnected"))
+        }
+
+        // Settings > Controllers with the focus on Controls in games, then `name` opened for `ds` over it.
+        function openOverPane(name, params) {
+            openPaneOnControls()
+            tc.shell.openPage(name, params)
+            tryCompare(tc.shell, "currentPage", name === "controls" ? "controls" : name)
+            tryCompare(GameControls, "padId", ds)
+        }
+
+        function test_padFor_is_exact_and_empty_means_the_first_pad() {
+            compare(GameControls.padFor("").id, ControllerPads.controllers()[0].id, "the first connected one")
+            compare(GameControls.padFor(pro).id, pro)
+            verify(GameControls.padFor("bluetooth-dead-beef") === null, "a pad that is not there is not another pad")
+            Input.mockRemoveDevice(ds)
+            tryVerify(() => GameControls.padFor(ds) === null, 2000)
+            verify(GameControls.padFor("") !== null, "empty still gives the first pad that is left")
+        }
+
+        function test_the_pad_leaving_closes_controls_in_games_once() {
+            openOverPane("controls", { id: ds })
+            Input.mockRemoveDevice(ds)
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => disconnectToasts().length === 1, 2000, toastTexts().join(";"))
+            compare(disconnectToasts()[0], "Controller disconnected / DualSense Wireless Controller")
+            wait(Theme.pageMs + 100)
+            compare(tc.shell.currentPage, "settings", "only the page of the pad closed")
+            compare(disconnectToasts().length, 1, "one toast")
+            verify(find("paneControllers").focusableRows().some(r => r.activeFocus), "the focus is on the pane again")
+        }
+
+        function test_the_pad_leaving_closes_remap_buttons_and_the_page_below_with_one_toast() {
+            openOverPane("controls", { id: ds })
+            tc.shell.openPage("controlsRemap", { id: ds })
+            tryCompare(tc.shell, "currentPage", "controlsRemap")
+            Input.mockRemoveDevice(ds)
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => disconnectToasts().length === 1, 2000, toastTexts().join(";"))
+            wait(Theme.pageMs + 100)
+            compare(tc.shell.currentPage, "settings")
+            compare(disconnectToasts().length, 1, "one toast for two pages")
+        }
+
+        function test_the_pad_leaving_closes_the_stick_page() {
+            openOverPane("controlsStick", { id: ds, side: "left" })
+            Input.mockRemoveDevice(ds)
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryVerify(() => disconnectToasts().length === 1, 2000, toastTexts().join(";"))
+            wait(Theme.pageMs + 100)
+            compare(tc.shell.currentPage, "settings")
+            compare(disconnectToasts().length, 1)
+        }
+
+        function test_a_page_without_a_pad_id_stays_when_a_pad_leaves() {
+            openControls()
+            Input.mockRemoveDevice(ds)
+            tryVerify(() => GameControls.pad === null || GameControls.pad.id !== ds, 2000)
+            wait(Theme.pageMs + 100)
+            compare(tc.shell.currentPage, "controls", "it follows the first connected pad")
+            compare(disconnectToasts().length, 0)
+        }
+
+        function test_nothing_is_saved_once_the_pad_is_gone() {
+            openOverPane("controls", { id: ds })
+            tryCompare(GameControls, "ready", true)
+            Input.mockRemoveDevice(ds)
+            tryCompare(tc.shell, "currentPage", "settings")
+            tryCompare(GameControls, "loadedKey", "")       // the lists are read again for no pad
+            verify(GameControls.padGone, "the shown pad is gone")
+            verify(!GameControls.ready, "not ready to edit")
+            const before = Input.mockProfileCalls().length
+            GameControls.setLayout("nintendo")
+            GameControls.setTarget("south", "east")
+            GameControls.setStick("left", "sensitivity", 1.5, false)
+            GameControls.resetAll()
+            GameControls.exportTo("vol-stick")
+            wait(300)
+            compare(Input.mockProfileCalls().length, before, "no call: nothing for another pad or controls-all")
+            compare(calls("SaveProfile").length, 0)
+        }
+
+        function test_an_edit_in_flight_when_the_pad_leaves_saves_only_its_own_profile() {
+            openOverPane("controls", { id: ds })
+            tryCompare(GameControls, "ready", true)
+            Input.mockHoldSaves(true)
+            GameControls.setLayout("nintendo")
+            Input.mockRemoveDevice(ds)
+            tryCompare(tc.shell, "currentPage", "settings")
+            Input.mockHoldSaves(false)
+            tryVerify(() => calls("SaveProfile").length >= 1, 2000)
+            for (const c of calls("SaveProfile"))
+                compare(JSON.parse(c.args.json).id, dsOwn, "the pad's own profile, nobody else's")
+        }
+
         // ---- the stick editor ------------------------------------------------------------------------------------
 
         function test_a_slider_saves_once_it_rests() {

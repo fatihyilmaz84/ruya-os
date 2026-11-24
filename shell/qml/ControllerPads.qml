@@ -12,6 +12,8 @@ import RuyaShell
 //    each matched to the one hub pad with the same kernel name and connection when exactly one of
 //    each exists, so it gets the alias and the battery; otherwise its own record's name and battery.
 QtObject {
+    id: pads
+
     // Words for a pad's battery (04 §7: the words carry the state, all in `text`).
     // state: "charging" | "full" | "discharging" | "" (UPower's, or the record's).
     function batteryText(percent, state) {
@@ -113,5 +115,23 @@ QtObject {
     // "Player 2", or "" when the record has no player (slot 0, before T-264).
     function playerText(slot) {
         return slot > 0 ? qsTr("Player %1").arg(slot) : ""
+    }
+
+    // "Controller disconnected", naming the pad, once per departure: pages about the same pad that are
+    // stacked (the controller page, its Controls in games, its Remap buttons) all see it leave. The pad is
+    // told again after it came back.
+    property var toldGone: []
+    function announceGone(pad) {
+        if (toldGone.includes(pad.id))
+            return
+        toldGone = toldGone.concat([pad.id])
+        Notifications.show(qsTr("Controller disconnected"), "info", "", DeviceIcons.iconFor("controller", pad.family, pad.model), pad.name)
+    }
+    property Connections devicesBack: Connections {
+        target: Input
+        function onDevicesChanged() {
+            if (Input.devicesState === "ok")
+                pads.toldGone = pads.toldGone.filter(id => !Input.devices.some(d => d.id === id))
+        }
     }
 }
