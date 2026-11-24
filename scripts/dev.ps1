@@ -19,7 +19,8 @@ param(
     [string]$Command = "test",
     # qml only: test files of shell\tests by name (tst_themes, tst_themes.qml; several, or comma-separated).
     [Parameter(Position = 1, ValueFromRemainingArguments = $true)]
-    [string[]]$Tests = @(),
+    # [object[]], not [string[]]: binding to strings would join an in-process `a,b` array with a space (RUY-725).
+    [object[]]$Tests = @(),
     # shots only, for the self-test of the sleeping-display stop: the probe window is never shown, as on
     # a display that is asleep, so the probe must see no frames and `shots` must stop with exit 1.
     [switch]$NoFramesProbe,
@@ -1266,6 +1267,7 @@ function Test-ScriptSelfChecks {
     Test-RevertCheckPiping
     Step "Shots filter and retry self-check (RUY-511)"
     Test-ShotsFilterAndRetry
+    Test-QmlNameParsing
     Test-Duplicates
     Test-Ids
     Test-RegexAnchors
@@ -1324,20 +1326,51 @@ function Write-GreenMarker($Before, $After) {
     Write-Host "    green marker: $($After.Head) ($GreenMarker)"
 }
 
+# RUY-725: the one place that turns the test names of `qml` and `shots` into a flat list. PowerShell passes
+# `a,b` as ONE array argument, so an element can itself be an array: flatten before splitting on commas.
+function ConvertTo-TestNames($Raw) {
+    $out = @()
+    foreach ($item in @($Raw)) {
+        if ($null -eq $item) { continue }
+        if ($item -is [System.Collections.IEnumerable] -and $item -isnot [string]) { $out += @(ConvertTo-TestNames @($item)) }
+        else { foreach ($p in ("$item" -split ',')) { if ($p.Trim()) { $out += $p.Trim() } } }
+    }
+    return $out
+}
+
 # shell\tests\<name>.qml for each name; an unknown name is a failure, not a silent skip.
-function Resolve-QmlTestFiles([string[]]$Names) {
+# -NoRecord (the self-check): an unknown name comes back as "unknown:<base>" and records nothing.
+function Resolve-QmlTestFiles([string[]]$Names, [string]$Dir = (Join-Path $Repo "shell\tests"), [switch]$NoRecord) {
     $files = @()
     foreach ($n in $Names) {
         $base = [IO.Path]::GetFileNameWithoutExtension($n.Trim())
-        $path = Join-Path $Repo "shell\tests\$base.qml"
+        $path = Join-Path $Dir "$base.qml"
         if ($base -and (Test-Path -LiteralPath $path)) { $files += $path }
+        elseif ($NoRecord) { $files += "unknown:$base" }
         else { Write-Host "    no such test file: shell\tests\$base.qml" -ForegroundColor Red; Record "test file $n" $false }
     }
     return $files
 }
 
+function Test-QmlNameParsing {
+    $dir = Join-Path $Repo "output\qml-names-fixture"
+    Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force $dir | Out-Null
+    foreach ($x in @("a", "b", "c")) { [IO.File]::WriteAllText((Join-Path $dir "tst_$x.qml"), "TestCase {}`n") }
+    $resolve = { param($raw) (@(Resolve-QmlTestFiles @(ConvertTo-TestNames $raw) $dir -NoRecord) | ForEach-Object { Split-Path $_ -Leaf }) -join "," }
+    $space = & $resolve @("tst_a", "tst_b", "tst_c")
+    $commaArray = & $resolve @(, @("tst_a", "tst_b"))
+    $commaString = & $resolve @("tst_a,tst_b.qml")
+    $suffix = & $resolve @("tst_a.qml", "tst_c.qml")
+    $unknown = & $resolve @("tst_a", "tst_zz")
+    $ok = $space -eq "tst_a.qml,tst_b.qml,tst_c.qml" -and $commaArray -eq "tst_a.qml,tst_b.qml" -and
+        $commaString -eq "tst_a.qml,tst_b.qml" -and $suffix -eq "tst_a.qml,tst_c.qml" -and $unknown -eq "tst_a.qml,unknown:tst_zz"
+    Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
+    Record "qml test names self-check (several names, a comma list passed as an array, a comma string, .qml suffixes, an unknown name)" $ok
+}
+
 $PartialBanner = "PARTIAL: dev.ps1 qml ran only the named test files (no lints, no Rust, no other tests). NOT a substitute for dev.ps1 test."
-$TestNames = @($Tests | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() })
+$TestNames = @(ConvertTo-TestNames $Tests)
 if ($TestNames.Count -gt 0 -and $Command -ne "qml" -and $Command -ne "shots") {
     Write-Host "Only 'qml' and 'shots' take test file names: .\scripts\dev.ps1 qml tst_themes" -ForegroundColor Red
     exit 2
