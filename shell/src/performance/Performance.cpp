@@ -192,12 +192,23 @@ QString Performance::takeFrameIntervals()
     return parts.join(QLatin1Char(','));
 }
 
+QString Performance::frameLogLine() const
+{
+    return QStringLiteral("ruya-shell: perf-frames fps=%1 full=%2 commits=%3 meanMs=%4 p99Ms=%5 low1=%6 low01=%7")
+        .arg(m_stats.frames)
+        .arg(m_stats.full ? 1 : 0)
+        .arg(m_stats.commits)
+        .arg(m_stats.meanMs, 0, 'f', 1)
+        .arg(m_stats.p99Ms, 0, 'f', 1)
+        .arg(fpsLow1())
+        .arg(fpsLow01());
+}
+
 void Performance::updateFrames()
 {
     m_stats = m_meter.stats();
     if (m_logFrames && m_meter.counting()) {
-        qInfo("ruya-shell: perf-frames fps=%d full=%d commits=%d meanMs=%.1f p99Ms=%.1f", m_stats.frames,
-              m_stats.full ? 1 : 0, m_stats.commits, m_stats.meanMs, m_stats.p99Ms);
+        qInfo("%s", qPrintable(frameLogLine()));
         // One line a second with every interval of that second (a measuring script's p50/p99/p99.9).
         if (++m_updatesSinceIntervals >= UpdatesPerSecond) {
             m_updatesSinceIntervals = 0;
