@@ -3796,13 +3796,13 @@ Bu geri alınamaz.</translation>
 <context>
     <name>NotificationCentreView</name>
     <message>
-        <location filename="../qml/NotificationCentreView.qml" line="+71"/>
-        <location line="+253"/>
+        <location filename="../qml/NotificationCentreView.qml" line="+74"/>
+        <location line="+257"/>
         <source>Clear all</source>
         <translation>Tümünü temizle</translation>
     </message>
     <message>
-        <location line="-251"/>
+        <location line="-255"/>
         <source>Toggle</source>
         <translation>Aç/Kapat</translation>
     </message>
@@ -3827,7 +3827,7 @@ Bu geri alınamaz.</translation>
         <translation>Temizle</translation>
     </message>
     <message>
-        <location line="+212"/>
+        <location line="+216"/>
         <location line="+57"/>
         <source>Notifications</source>
         <translation>Bildirimler</translation>
@@ -3845,7 +3845,7 @@ Bu geri alınamaz.</translation>
         <translation>Sessiz mod</translation>
     </message>
     <message>
-        <location line="+59"/>
+        <location line="+89"/>
         <source>Pinned until resolved</source>
         <translation>Çözülene kadar sabit</translation>
     </message>
@@ -3931,7 +3931,12 @@ Bu geri alınamaz.</translation>
         <translation>Bildirimler</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+2"/>
+        <source>Sections</source>
+        <translation>Bölümler</translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>Back</source>
         <translation>Geri</translation>
     </message>
@@ -6180,7 +6185,7 @@ Bu geri alınamaz.</translation>
         <translation>Duvar kağıdı yüklenemedi</translation>
     </message>
     <message>
-        <location line="+409"/>
+        <location line="+410"/>
         <source>Continue playing</source>
         <translation>Oynamaya devam et</translation>
     </message>
@@ -6288,7 +6293,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 kaldırıldı.</translation>
     </message>
     <message>
-        <location line="+544"/>
+        <location line="+542"/>
         <location line="+14"/>
         <location line="+4"/>
         <source>Select</source>
@@ -6315,7 +6320,7 @@ Bu geri alınamaz.</translation>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="-2071"/>
+        <location line="-2070"/>
         <source>Restarting in 2 minutes</source>
         <translation>2 dakikada yeniden başlıyor</translation>
     </message>
@@ -6346,13 +6351,13 @@ Bu geri alınamaz.</translation>
         <translation>Çalışan uygulama</translation>
     </message>
     <message>
-        <location line="+1057"/>
+        <location line="+1058"/>
         <source>Same game as the %1 version?</source>
         <comment>Options: link two installations; %1 the other one&apos;s source (.play, Flatpak, Steam)</comment>
         <translation>%1 sürümüyle aynı oyun mu?</translation>
     </message>
     <message>
-        <location line="+735"/>
+        <location line="+733"/>
         <location line="+13"/>
         <location line="+3"/>
         <source>Sections</source>
