@@ -74,6 +74,9 @@ public:
     // A band's `high` is this quantile of its luminances, its `low` 1 - this: a bright patch behind the clock or
     // the nav counts, a few stray pixels do not.
     static constexpr qreal BandQuantile = 0.98;
+    // A column the item's x range touches by more than this share of the view's width (one glyph of the clock, about
+    // 19 px at 1080p) is under it too: an item over a patch's edge is busy as a whole (RUY-1159).
+    static constexpr qreal GlyphShare = 0.01;
     static constexpr int CacheLimit = 256;          // pictures remembered; the cache starts over beyond this
     static constexpr qint64 MaxDownloadBytes = 8LL * 1024 * 1024;
     static constexpr int DownloadTimeoutMs = 15000;   // a download that stalls this long is a failure
@@ -87,8 +90,9 @@ public:
     static ArtColors analyse(const QImage &image);
     // The pure part of bandOf: the top band of `colors`' sample as drawn into a view of `viewAspect` (width / height)
     // with a centred PreserveAspectCrop (0 or less: the whole picture is shown, no crop), under the view's x range
-    // `from`..`to` (fractions of its width, RUY-1136): the sample columns whose centres lie in it, at least the one
-    // under its middle (a column is about 60 px of a 1080p screen: one only touched is mostly the neighbour's art).
+    // `from`..`to` (fractions of its width, RUY-1136): the sample columns whose centres lie in it and any it touches by
+    // more than GlyphShare (RUY-1159), at least the one under its middle (a column is about 60 px of a 1080p screen: one
+    // touched by less is mostly the neighbour's art).
     static ArtBand band(const ArtColors &colors, qreal viewAspect, qreal from = 0, qreal to = 1);
 
     int analysed() const { return m_analysed; }

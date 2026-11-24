@@ -60,6 +60,8 @@ FocusScope {
             m["n:" + items[i].id] = items[i]
         return m
     }
+    // "N new" as it stands: the opening's unread items that are still in the list (Clear all empties it, so 0 then).
+    readonly property int newShown: Math.min(newCount, freshIds.filter(id => byId["n:" + id] !== undefined).length)
     readonly property bool hasClearable: items.some(i => !i.pinned)
     readonly property var currentItem: stop === "row" && focusKey !== "" ? (byId[focusKey] ?? null) : null
     readonly property var currentActions: currentItem ? (currentItem.actions ?? []) : []
@@ -311,9 +313,9 @@ FocusScope {
         Text {
             objectName: "centreNewCount"
             readonly property real room: (clearAll.visible ? clearAll.x - Theme.spaceM * view.u : header.width) - x
-            visible: view.newCount > 0 && implicitWidth <= room
+            visible: view.newShown > 0 && implicitWidth <= room
             anchors { left: titleText.right; leftMargin: view.showTitle ? Theme.spaceS * view.u : 0; baseline: titleText.baseline }
-            text: qsTr("%n new", "", view.newCount)
+            text: qsTr("%n new", "", view.newShown)
             color: view.dimText
             font.pixelSize: Theme.typeBody * view.u
         }

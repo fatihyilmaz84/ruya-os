@@ -169,9 +169,12 @@ Item {
             verify(left.high < 0.05, "left of the strip: black " + left.high)
             const strip = bandOf(source, tc.wide, 0.91, 0.95)
             verify(strip.low > 0.9, "on the strip: white " + strip.low)
-            // A column only touched (here 28, its centre at 0.890) is not under the range.
-            const touched = bandOf(source, tc.wide, 0.892, 0.95)
-            verify(touched.low > 0.9, "column 28 is only touched: " + touched.low)
+            // A column only touched (here 28, 0.875..0.906, its centre at 0.890) is not under the range, unless the range
+            // reaches into it by more than a glyph (1 % of the width, RUY-1159): then the item is over the edge.
+            const touched = bandOf(source, tc.wide, 0.898, 0.95)
+            verify(touched.low > 0.9, "column 28 is only touched, by 0.008: " + touched.low)
+            const over = bandOf(source, tc.wide, 0.892, 0.95)
+            verify(over.low < 0.02 && over.high > 0.9, "column 28 is touched by a glyph and more: " + JSON.stringify(over))
             // A range narrower than a column takes the one under its middle.
             verify(bandOf(source, tc.wide, 0.92, 0.921).low > 0.9, "inside column 29")
             verify(bandOf(source, tc.wide, 0.5, 0.5).high < 0.05, "a point in the black")
@@ -393,6 +396,42 @@ Item {
             showHero(path("white"))
             settledOn(path("white"))
             checkHalos("a white hero", "")
+        }
+
+        // A patch edge through an item makes it busy (RUY-1159): clockedge is white from sample column 30 of 32 (x 0.9375, 1800
+        // px at 1080p), the clock is over 1724..1824 px, so its centre rule alone sees only black columns while its last
+        // digit stands on white. The clock is busy, with the halo; every other item is as before.
+        function test_an_item_over_a_patch_edge_is_busy() {
+            Batteries.mockPopulate()
+            signIn()
+            showHero(path("clockedge"))
+            settledOn(path("clockedge"))
+            const ink = find("clockInk")
+            verify(ink.span.from < 0.9375 && ink.span.to > 0.9375 + 0.01, "the edge runs through the clock " + JSON.stringify(ink.span))
+            verify(ink.pick.busy, "black and white under the clock: busy " + JSON.stringify(ink.band))
+            verify(ink.band.high > 0.9 && ink.band.low < 0.02, "its band has both ends " + JSON.stringify(ink.band))
+            checkHalos("a patch edge through the clock", "clockInk")
+            for (const name of ["navInk", "bellInk", "batteryInk", "profileInk"])
+                compare(find(name).pick.ink, "light", name + " over black " + JSON.stringify(find(name).band))
+        }
+
+        // The pills that show their own surface (the current one, the focused one) carry no glyph halo, even over busy art
+        // (RUY-1159, 04 §5.5): the halo belongs to the pills at rest.
+        function test_a_current_or_focused_pill_has_no_halo() {
+            signIn()
+            showHero(path("navbusy"))
+            settledOn(path("navbusy"))
+            verify(find("navInk").halo, "busy art under the nav's words " + JSON.stringify(find("navInk").band))
+            verify(find("navPill_games").layer.enabled, "a pill at rest has the halo")
+            verify(find("navPill_settings").layer.enabled, "the gear at rest has it")
+            verify(!find("navPill_home").layer.enabled, "the current pill has none")
+            keyClick(Qt.Key_Up)
+            tryVerify(() => find("sectionNav").activeFocus)
+            keyClick(Qt.Key_Right)
+            tryVerify(() => find("navPill_games").focused)
+            verify(!find("navPill_games").layer.enabled, "the focused pill has none")
+            verify(find("navPill_media").layer.enabled, "the pill beside it still has")
+            verify(!find("navPill_home").layer.enabled, "and the current one still none")
         }
 
         // A low chip's number is in the warning ink of the chips' own pick: over a flat grey where dark ink reads and its

@@ -14,7 +14,8 @@ Page {
     signal appRequested(var item)       // A on a row without actions whose item has an app
 
     title: qsTr("Notifications")
-    hints: centre.hints
+    // Like every section page: the section switch after the centre's own (RUY-1159).
+    hints: centre.hints.concat([{ actions: ["tabPrev", "tabNext"], text: qsTr("Sections") }])
 
     NotificationCentreView {
         id: centre
