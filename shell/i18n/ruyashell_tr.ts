@@ -4156,22 +4156,22 @@ Bu geri alınamaz.</translation>
     <message>
         <location line="-1"/>
         <source>Create</source>
-        <translation>Oluştur</translation>
+        <translation>Create</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Options</source>
-        <translation>Seçenekler</translation>
+        <translation>Options</translation>
     </message>
     <message>
         <location line="+1"/>
         <source>View</source>
-        <translation>Görünüm</translation>
+        <translation>View</translation>
     </message>
     <message>
         <location line="+0"/>
         <source>Menu</source>
-        <translation>Menü</translation>
+        <translation>Menu</translation>
     </message>
     <message>
         <location line="+1"/>

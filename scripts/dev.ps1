@@ -762,6 +762,8 @@ function Test-Translations {
     $project = Update-LUpdateProject
     & (Join-Path $PSScriptRoot "lint-translations.ps1") -LUpdateProject $project
     Record "translation lint" ($LASTEXITCODE -eq 0)
+    & (Join-Path $PSScriptRoot "lint-translations.ps1") -SelfCheck
+    Record "translation lint self-check (a translated pad button name is rejected)" ($LASTEXITCODE -eq 0)
 }
 
 # The rules live in scripts\lint-text.ps1 (shared with CI).

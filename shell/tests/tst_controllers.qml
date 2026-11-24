@@ -1178,9 +1178,10 @@ Item {
         function test_zz_screenshots_games_layout_720p_tr() { gamesLayoutShots(shotsDir + "/", "tr", 1280, 720) }
 
         // The Button test of one pad with a few inputs pressed, for the layout shots (RUY-486).
-        function layoutShot(dir, device, name, inputs) {
+        function layoutShot(dir, device, name, inputs, lang) {
             if (!shotsDir)
                 skip("set RUYA_SHOTS_DIR to save screenshots")
+            DeviceSettings.language = lang || "en"
             if (device.id !== ds && device.id !== xbox && device.id !== pro) {
                 Input.mockAddDevice(device)
                 tryVerify(() => Input.devices.length === 4)
@@ -1197,11 +1198,14 @@ Item {
             for (const i of inputs.slice(0, 3))
                 Input.mockTestInput(device.id, i, 1, "raw:pad:1:0")
             settle()
-            grabImage(tc.shell).save(dir + "27-button-test-layout-" + name + "-en.png")
+            grabImage(tc.shell).save(dir + "27-button-test-layout-" + name + "-" + (lang || "en") + ".png")
         }
 
         function test_zz_screenshots_layout_playstation() { layoutShot(shotsDir + "/", { id: ds }, "playstation", ["select", "dpad_left", "l3", "guide"]) }
         function test_zz_screenshots_layout_xbox() { layoutShot(shotsDir + "/", { id: xbox }, "xbox", ["start", "dpad_down", "r3", "guide"]) }
+        // RUY-1165: the printed names (Create, Options, View, Menu) stay as printed in Turkish.
+        function test_zz_screenshots_layout_playstation_tr() { layoutShot(shotsDir + "/", { id: ds }, "playstation", ["select", "dpad_left", "l3", "guide"], "tr") }
+        function test_zz_screenshots_layout_xbox_tr() { layoutShot(shotsDir + "/", { id: xbox }, "xbox", ["start", "dpad_down", "r3", "guide"], "tr") }
         function test_zz_screenshots_layout_nintendo() { layoutShot(shotsDir + "/", { id: pro }, "nintendo", ["select", "dpad_right", "l3", "guide"]) }
         function test_zz_screenshots_layout_wiiu() {
             layoutShot(shotsDir + "/", { id: "bluetooth-057e-0330-c1d2e3f4a5b6", name: "Nintendo Wii Remote Pro Controller", family: "nintendo",
