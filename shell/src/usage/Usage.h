@@ -13,8 +13,7 @@
 
 // QML face of the play ledger (T-247, org.ruyaos.Session1): what the active profile played, for
 // the Activity pages. It asks for the active profile only (the service refuses anything else) and
-// forgets everything when the profile changes. Backend: RUYA_SERVICES=mock|dbus; the default is
-// D-Bus on Linux and the mock elsewhere, like Session and Profiles.
+// forgets everything when the profile changes. Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 //
 // The numbers the pages show are computed here (UsageStats) from the service's day rows and
 // sessions; the words are the pages' (DurationText and qsTr).

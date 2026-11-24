@@ -14,8 +14,7 @@
 // QML face of org.ruyaos.Devices1.Time: the console's time zone (T-213), the list of zones to
 // choose from and the clock text the status cluster shows. Named TimeZone (not Time) because a
 // header called Time.h shadows <time.h> on a case-insensitive file system.
-// Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux (ruya-devices) and the mock
-// elsewhere, like Network and Batteries.
+// Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 //
 // The clock is computed here from the zone name (QTimeZone), not from the process's local time:
 // Qt reads the system zone once, and the shell must show a zone change at once.

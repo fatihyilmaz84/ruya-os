@@ -10,8 +10,7 @@
 #include <memory>
 
 // QML face of org.ruyaos.Session1: launch an installed app as a profile, stop it, and the list
-// of what runs. Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux (ruya-session,
-// T-139) and the mock elsewhere, like Store and Profiles.
+// of what runs. Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 //
 // Running records are plain objects: { instance, appId, item, parent, profile, started, state, frozen }.
 // `item` is the Library1 item id ("flatpak:<appId>", or "steam:<appid>" for a Steam game) and `parent`

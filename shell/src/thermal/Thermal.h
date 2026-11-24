@@ -10,8 +10,7 @@
 
 // QML face of org.ruyaos.Devices1.Thermal: the console's temperatures and fans and the worst
 // level they add up to. The service measures and classifies; what the console does about a warm,
-// hot or critical level is the shell's (qml/ThermalPolicy.qml). Backend: RUYA_SERVICES=mock|dbus;
-// the default is D-Bus on Linux (ruya-devices) and the mock elsewhere, like Batteries.
+// hot or critical level is the shell's (qml/ThermalPolicy.qml). Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 class Thermal : public QObject
 {
     Q_OBJECT

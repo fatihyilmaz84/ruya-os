@@ -10,7 +10,7 @@
 #include <memory>
 
 // QML face of org.ruyaos.Platform1.Manage (ADR-022): which capabilities exist, and what each
-// profile allowed each app. Backend: RUYA_SERVICES=mock|dbus; D-Bus on Linux, the mock elsewhere.
+// profile allowed each app. Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 // The service cannot tell people apart (its Manage callers are root and this shell), so who may
 // change whose permissions is decided here, in mayChange() (03 §4.4).
 class Platform : public QObject

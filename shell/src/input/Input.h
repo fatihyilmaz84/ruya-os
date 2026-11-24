@@ -26,7 +26,7 @@ class Storage;
 // drive through the Storage singleton (exportProfile, importProfile), so the pages need no
 // plumbing of their own. Since RUY-121 it keeps the players' seats (players, joinPlayer,
 // leavePlayer; 06 §11.3): only a seated pad reaches a game, pad n is seat n.
-// Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux and the mock elsewhere.
+// Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 class Input : public QObject
 {
     Q_OBJECT

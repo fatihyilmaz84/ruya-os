@@ -10,8 +10,7 @@
 #include <memory>
 
 // QML face of org.ruyaos.Devices1.Bluetooth: adapter power, scanning and the device list.
-// Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux (ruya-devices, T-132) and
-// the mock elsewhere, like Audio, Network and Profiles.
+// Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 class Bluetooth : public QObject
 {
     Q_OBJECT

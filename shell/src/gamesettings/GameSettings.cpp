@@ -1,4 +1,5 @@
 #include "GameSettings.h"
+#include "ServicesChoice.h"
 
 #include <QFile>
 #include <QFileInfo>
@@ -11,13 +12,7 @@ const char MockFile[] = ":/qt/qml/RuyaShell/src/gamesettings/mock-game-settings.
 GameSettings::GameSettings(QObject *parent)
     : QObject(parent)
 {
-    // Like Network and Profiles: the mock unless D-Bus was asked for (Linux default: D-Bus).
-    const QString choice = qEnvironmentVariable("RUYA_SERVICES");
-#ifdef Q_OS_LINUX
-    m_mock = choice == QLatin1String("mock");
-#else
-    m_mock = choice != QLatin1String("dbus");
-#endif
+    m_mock = ruya::useMockServices();
 }
 
 GameSettings *GameSettings::create(QQmlEngine *, QJSEngine *)

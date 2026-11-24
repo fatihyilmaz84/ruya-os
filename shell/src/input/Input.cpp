@@ -1,4 +1,5 @@
 #include "Input.h"
+#include "ServicesChoice.h"
 
 #include "DBusInputBackend.h"
 #include "InputProfileCalls.h"
@@ -401,13 +402,7 @@ void Input::setConfirmButton(const QString &deviceId, const QString &mode)
 Input *Input::create(QQmlEngine *qmlEngine, QJSEngine *)
 {
     std::unique_ptr<InputBackend> backend;
-    // Like Network and Profiles: D-Bus on Linux unless RUYA_SERVICES=mock, the mock elsewhere.
-    const QString choice = qEnvironmentVariable("RUYA_SERVICES");
-#ifdef Q_OS_LINUX
-    const bool mock = choice == QLatin1String("mock");
-#else
-    const bool mock = choice != QLatin1String("dbus");
-#endif
+    const bool mock = ruya::useMockServices();
     if (mock)
         backend = std::make_unique<MockInputBackend>();
     else

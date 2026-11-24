@@ -1,4 +1,5 @@
 #include "Storage.h"
+#include "ServicesChoice.h"
 
 #include "DBusStorageBackend.h"
 #include "MockStorageBackend.h"
@@ -197,13 +198,7 @@ void Storage::flushArrivals()
 Storage *Storage::create(QQmlEngine *, QJSEngine *)
 {
     std::unique_ptr<StorageBackend> backend;
-    // Like Audio, Network and Bluetooth: D-Bus on Linux unless RUYA_SERVICES=mock, the mock elsewhere.
-    const QString choice = qEnvironmentVariable("RUYA_SERVICES");
-#ifdef Q_OS_LINUX
-    const bool mock = choice == QLatin1String("mock");
-#else
-    const bool mock = choice != QLatin1String("dbus");
-#endif
+    const bool mock = ruya::useMockServices();
     if (mock)
         backend = std::make_unique<MockStorageBackend>();
     else

@@ -1,4 +1,5 @@
 #include "Session.h"
+#include "ServicesChoice.h"
 
 #include "DBusSessionBackend.h"
 #include "MockSessionBackend.h"
@@ -68,13 +69,7 @@ Session::~Session() = default;
 Session *Session::create(QQmlEngine *qmlEngine, QJSEngine *)
 {
     std::unique_ptr<SessionBackend> backend;
-    // Like Store and Profiles: D-Bus on Linux unless RUYA_SERVICES=mock, the mock elsewhere.
-    const QString choice = qEnvironmentVariable("RUYA_SERVICES");
-#ifdef Q_OS_LINUX
-    const bool mock = choice == QLatin1String("mock");
-#else
-    const bool mock = choice != QLatin1String("dbus");
-#endif
+    const bool mock = ruya::useMockServices();
     if (mock) {
         // The mock knows the profiles of the mock Profiles service, and who is signed in (Freeze).
         backend = std::make_unique<MockSessionBackend>(

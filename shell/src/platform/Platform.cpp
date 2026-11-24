@@ -1,4 +1,5 @@
 #include "Platform.h"
+#include "ServicesChoice.h"
 
 #include "DBusPlatformBackend.h"
 #include "MockPlatformBackend.h"
@@ -45,12 +46,7 @@ Platform::~Platform() = default;
 
 Platform *Platform::create(QQmlEngine *qmlEngine, QJSEngine *)
 {
-    const QString choice = qEnvironmentVariable("RUYA_SERVICES");
-#ifdef Q_OS_LINUX
-    const bool mock = choice == QLatin1String("mock");
-#else
-    const bool mock = choice != QLatin1String("dbus");
-#endif
+    const bool mock = ruya::useMockServices();
     std::unique_ptr<PlatformBackend> backend;
     if (mock)
         backend = std::make_unique<MockPlatformBackend>();

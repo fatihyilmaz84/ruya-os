@@ -12,8 +12,8 @@
 
 // QML face of org.ruyaos.Play1 (api/dbus/org.ruyaos.Play1.xml): the packages on mounted drives, a
 // look inside one, and the install and verify jobs. The install pages (RUY-98) use it.
-// Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux and the mock elsewhere, like the
-// Store. The service (ruya-play, RUY-100) does not exist yet, so on Linux the facade stays
+// Backend: RUYA_SERVICES picks it (ServicesChoice.h). The service (ruya-play,
+// RUY-100) does not exist yet, so on Linux the facade stays
 // unavailable until it does.
 //
 // A job's key is the package path for install() and the app id for verify() and remove(). Source records:

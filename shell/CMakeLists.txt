@@ -38,6 +38,7 @@ qt_add_qml_module(ruyashell
     OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/RuyaShell   # lets qmllint resolve the module
     SOURCES
         src/backend/RequestSequence.h
+        src/backend/ServicesChoice.h
         src/profiles/ProfilesBackend.h
         src/profiles/MockProfilesBackend.h src/profiles/MockProfilesBackend.cpp
         src/profiles/DBusProfilesBackend.h src/profiles/DBusProfilesBackend.cpp
@@ -446,7 +447,7 @@ if(RUYA_BUILD_TESTS)
     enable_testing()
     qt_add_executable(tst_ruyashell tests/tst_main.cpp)
     target_link_libraries(tst_ruyashell PRIVATE Qt6::Quick Qt6::QuickTest ruyashellplugin)
-    target_include_directories(tst_ruyashell PRIVATE src/settings)   # the theme-persistence check in tst_main.cpp
+    target_include_directories(tst_ruyashell PRIVATE src/settings src/backend)   # the theme-persistence check in tst_main.cpp
     target_compile_definitions(tst_ruyashell PRIVATE QUICK_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests")
     add_test(NAME qml COMMAND tst_ruyashell)
     set_tests_properties(qml PROPERTIES ENVIRONMENT "RUYA_SERVICES=mock")
