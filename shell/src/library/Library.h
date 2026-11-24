@@ -10,8 +10,7 @@
 #include <memory>
 
 // QML face of org.ruyaos.Library1: everything installed that can be started.
-// Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux (ruya-library, T-112) and the
-// mock elsewhere, like Store and Profiles.
+// Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 //
 // Items are plain objects, one per game (RUY-137): { id, kind, title, source, launch, art, lastPlayed,
 // installations, confidence, suggestions }. The keys but id, lastPlayed and the last three are the game's

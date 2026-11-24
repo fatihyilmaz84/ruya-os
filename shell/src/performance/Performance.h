@@ -25,8 +25,7 @@ class DeviceSettings;
 // window) and `frameSource` (the surface of the app in front, null when none); without a
 // compositor (the Windows host, the tests) they stay null unless a test sets stand-ins.
 //
-// Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux (ruya-devices) and the mock
-// elsewhere, like SystemDetails.
+// Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 class Performance : public QObject
 {
     Q_OBJECT

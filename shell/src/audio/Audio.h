@@ -10,9 +10,7 @@
 #include <memory>
 
 // QML face of org.ruyaos.Devices1.Audio: master volume and mute, the channel volumes and the
-// outputs (sinks). Backend: RUYA_SERVICES=mock|dbus. Unlike the other services this defaults
-// to the mock on every OS, because the D-Bus service (ruya-devices, blocker B-007) does not
-// exist yet; flip the default to follow Profiles once it does.
+// outputs (sinks). Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 class Audio : public QObject
 {
     Q_OBJECT

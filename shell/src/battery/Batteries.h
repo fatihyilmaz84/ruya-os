@@ -12,8 +12,7 @@
 // QML face of org.ruyaos.Devices1.Batteries: the batteries of the wireless devices (controllers,
 // headsets, speakers, mice, keyboards; UPower behind it), what the status cluster shows of them,
 // and the low-battery signal for controllers.
-// Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux (ruya-devices) and the mock
-// elsewhere, like Network and Bluetooth.
+// Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 //
 // This is the one source for a controller's battery (T-161): Bluetooth.batteryLow is not raised
 // for devices of kind "controller", because UPower reports a Bluetooth controller too. The other

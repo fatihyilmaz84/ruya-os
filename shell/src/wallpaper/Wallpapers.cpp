@@ -1,4 +1,5 @@
 #include "Wallpapers.h"
+#include "ServicesChoice.h"
 
 #include "Luminance.h"
 
@@ -34,16 +35,6 @@ constexpr int JpegQuality = 88;
 constexpr qreal TargetContrast = 4.52;    // 04 §7 asks 4.5; the margin keeps colour rounding (16-bit channels) above it
 constexpr qreal MaxRequiredDim = 0.85;
 const QString UserPrefix = QStringLiteral("user:");
-
-bool useMock()
-{
-    const QString choice = qEnvironmentVariable("RUYA_SERVICES");
-#ifdef Q_OS_LINUX
-    return choice == QLatin1String("mock");
-#else
-    return choice != QLatin1String("dbus");
-#endif
-}
 
 bool isPictureName(const QString &name)
 {
@@ -125,7 +116,7 @@ struct Wallpapers::Encoded
 
 Wallpapers::Wallpapers(QObject *parent)
     : QObject(parent)
-    , m_mock(useMock())
+    , m_mock(ruya::useMockServices())
 {
     const QString fixed = qEnvironmentVariable("RUYA_WALLPAPER_DIR");
     if (!fixed.isEmpty()) {

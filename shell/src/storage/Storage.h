@@ -12,8 +12,7 @@
 #include <memory>
 
 // QML face of org.ruyaos.Devices1.Storage: the volume list, eject, and the "drive inserted"
-// signal (one per drive, however many partitions it has). Backend: RUYA_SERVICES=mock|dbus; the default is D-Bus on Linux (the service is a
-// later task) and the mock elsewhere, like Audio, Network and Bluetooth.
+// signal (one per drive, however many partitions it has). Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 class Storage : public QObject
 {
     Q_OBJECT

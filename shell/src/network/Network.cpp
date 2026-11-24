@@ -1,4 +1,5 @@
 #include "Network.h"
+#include "ServicesChoice.h"
 
 #include "DBusNetworkBackend.h"
 #include "MockNetworkBackend.h"
@@ -41,13 +42,7 @@ Network::~Network() = default;
 Network *Network::create(QQmlEngine *, QJSEngine *)
 {
     std::unique_ptr<NetworkBackend> backend;
-    // Like Audio and Profiles: D-Bus on Linux unless RUYA_SERVICES=mock, the mock elsewhere.
-    const QString choice = qEnvironmentVariable("RUYA_SERVICES");
-#ifdef Q_OS_LINUX
-    const bool mock = choice == QLatin1String("mock");
-#else
-    const bool mock = choice != QLatin1String("dbus");
-#endif
+    const bool mock = ruya::useMockServices();
     if (mock)
         backend = std::make_unique<MockNetworkBackend>();
     else

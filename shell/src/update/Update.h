@@ -10,7 +10,7 @@
 
 // QML face of org.ruyaos.Update1: the OS image version, the channel, an update that was found
 // or is being staged (with its download job: bytes, rate, pause, resume, cancel), and the
-// rollback. Backend: RUYA_SERVICES=mock|dbus like Store and Profiles; D-Bus by default on Linux.
+// rollback. Backend: RUYA_SERVICES picks it (ServicesChoice.h).
 class Update : public QObject
 {
     Q_OBJECT
