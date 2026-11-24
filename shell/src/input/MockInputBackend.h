@@ -75,6 +75,14 @@ public:
     QVariantList players() const { return playerList(); }
     // Tests: every later JoinPlayer answers `status` and changes nothing ("" clears it).
     void setFailJoin(const QString &status) { m_failJoin = status; }
+    // Tests (RUY-669): `profile` is a temporary guest, never recorded as a pad's owner.
+    void setGuest(const QString &profile, bool guest)
+    {
+        if (guest)
+            m_guests.insert(profile);
+        else
+            m_guests.remove(profile);
+    }
     // Tests: how long a seat waits for its removed pad (60000 ms, the service's SEAT_HOLD).
     void setSeatHoldMs(int ms) { m_seatHoldMs = ms; }
     // Tests: PlayersChanged reaches the shell this long after the seats changed (a slow bus; RUY-664).
@@ -205,6 +213,8 @@ private:
     bool applySeatsToDevices();
     // A pad no longer remembers `profile` (RUY-669); and the DevicesChanged for whatever record changed.
     void forgetOwner(const QString &profile);
+    // The one place a pad learns its owner: never a temporary guest, never a player without a pad.
+    void rememberOwner(const QString &device, const QString &profile);
     void emitDevicesIfChanged();
 
     QVariantList m_calls;
@@ -240,6 +250,7 @@ private:
     bool m_confirmsDelayed = false;
     QString m_activeDevice;
     QList<Seat> m_seats;           // 4 while a profile is signed in (index 0 is seat 1), else none
+    QSet<QString> m_guests;             // temporary guests (tests, RUY-669)
     QHash<QString, QString> m_owners;   // stable pad id -> the profile that last played on it (RUY-124)
     QString m_padSinceChange;      // the pad of the last press since the profile last changed
     QString m_navigator;           // SetNavigator's pad ("" = none)

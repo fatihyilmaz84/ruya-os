@@ -224,6 +224,8 @@ public:
     // answers without changing anything ("" clears it).
     Q_INVOKABLE QVariantList mockPlayers() const;
     Q_INVOKABLE void mockFailJoin(const QString &status);
+    // Marks `profile` a temporary guest (or not): a pad never remembers it as its owner (RUY-669, as inputd).
+    Q_INVOKABLE void mockGuest(const QString &profile, bool guest);
     // How long the mock service holds a removed seated pad's seat (RUY-627; 60000 ms by default).
     // Also the replay deadline (RUY-644); mockReplayPending is the players still queued to join again.
     Q_INVOKABLE void mockSeatHoldMs(int ms);

@@ -382,8 +382,7 @@ void MockInputBackend::setRoute(const QString &route, const QString &instance, c
             if (!profile.isEmpty()) {
                 m_seats = QList<Seat>(4);
                 m_seats[0] = {profile, m_padSinceChange};
-                if (!m_padSinceChange.isEmpty())
-                    m_owners.insert(m_padSinceChange, profile);   // the pad's owner is learned (RUY-124)
+                rememberOwner(m_padSinceChange, profile);   // the pad's owner is learned (RUY-124)
             }
             m_padSinceChange.clear();
             m_navigator.clear();
@@ -615,6 +614,12 @@ void MockInputBackend::forgetOwner(const QString &profile)
     emitDevicesIfChanged();
 }
 
+void MockInputBackend::rememberOwner(const QString &device, const QString &profile)
+{
+    if (!device.isEmpty() && !m_guests.contains(profile))
+        m_owners.insert(device, profile);
+}
+
 void MockInputBackend::emitDevicesIfChanged()
 {
     if (applySeatsToDevices())
@@ -710,7 +715,7 @@ void MockInputBackend::joinPlayer(const QString &deviceId, const QString &profil
         const int at = seatOfDevice(deviceId);
         if (at >= 0 && m_seats.at(at).profile == profile) {
             slot = uint(at + 1);                         // (e) the same again: nothing changes
-            m_owners.insert(deviceId, profile);
+            rememberOwner(deviceId, profile);
             emitDevicesIfChanged();                      // the pad may have learned its owner
         } else {
             QList<Seat> next = m_seats;
@@ -739,7 +744,7 @@ void MockInputBackend::joinPlayer(const QString &deviceId, const QString &profil
             } else {
                 const QVariantList before = playerList();
                 m_seats = next;
-                m_owners.insert(deviceId, profile);   // the last profile seated on the pad (RUY-124)
+                rememberOwner(deviceId, profile);   // the last profile seated on the pad (RUY-124)
                 slot = uint(mine + 1);
                 seatsChanged(before);
             }

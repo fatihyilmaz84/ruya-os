@@ -323,6 +323,12 @@ void Input::mockFailJoin(const QString &status)
         mock->setFailJoin(status);
 }
 
+void Input::mockGuest(const QString &profile, bool guest)
+{
+    if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))
+        mock->setGuest(profile, guest);
+}
+
 void Input::mockPlayersDelayMs(int ms)
 {
     if (auto *mock = qobject_cast<MockInputBackend *>(m_backend.get()))

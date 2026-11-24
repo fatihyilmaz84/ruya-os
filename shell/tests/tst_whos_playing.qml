@@ -844,6 +844,19 @@ Item {
             compare(Input.players.length, 2, "no seat moved")
         }
 
+        // RUY-669: a temporary guest takes a seat but is never a pad's owner (inputd's rule), in any path.
+        function test_a_temporary_guest_is_never_a_pads_owner() {
+            signIn()
+            Input.mockGuest("p2", true)
+            Input.joinPlayer(host.dualSense, "p2")
+            tryVerify(() => Input.players.length === 2, 2000, "the guest has a seat")
+            wait(50)
+            compare(Input.devices.find(d => d.id === host.dualSense).owner, "", "the pad does not remember a guest")
+            Input.mockGuest("p2", false)
+            Input.joinPlayer(host.dualSense, "p2")                  // the same again, no longer a guest
+            tryVerify(() => Input.devices.find(d => d.id === host.dualSense).owner === "p2", 2000, "a kept profile is remembered")
+        }
+
         // ---- geometry at 1080p (u = 1) ------------------------------------------------------------------------
 
         function test_geometry() {
