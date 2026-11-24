@@ -32,8 +32,8 @@ Page {
     property real stickY: 0
     // The pad whose stream runs ("" none).
     property string testingId: ""
-    property bool gone: false
-    onBackRequested: gone = true
+    PadGone { id: padGone; page: page; padId: page.padId }
+    readonly property bool gone: padGone.gone
 
     Component.onCompleted: {
         GameControls.show(padId)

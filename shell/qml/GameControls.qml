@@ -61,7 +61,10 @@ QtObject {
     // differs from `padKey` the shown pad's own profile is not known, and `stored` is null only because
     // it is on its way: an edit then would start from an empty document and drop what the profile has.
     property var loadedKey: null
-    readonly property bool ready: loadState === "ok" && loadedKey === padKey
+    // The pad a page asked for left (RUY-701): nothing is edited until the page closes, so no change lands
+    // on another pad or on controls-all.
+    readonly property bool padGone: padId !== "" && pad === null
+    readonly property bool ready: loadState === "ok" && loadedKey === padKey && !padGone
     // The last ListProfiles answer (Input1's summaries).
     property var profiles: []
     // The summary of what applies to the pad, or null when nothing is assigned that fits it.
@@ -765,10 +768,11 @@ QtObject {
     }
 
     // ---- words -----------------------------------------------------------------------------------
-    // The pad the pages are about: the one asked for, else the first connected one, else null.
+    // The pad the pages are about: the one asked for (exactly: null once it is gone), "" the first connected
+    // one (null without one).
     function padFor(id) {
         const list = ControllerPads.controllers()
-        return list.find(p => p.id === id) ?? list[0] ?? null
+        return id === "" ? list[0] ?? null : list.find(p => p.id === id) ?? null
     }
     // "DualSense 2": the pad's name without " Wireless Controller", the name at most 30 characters with its
     // number (`tail`, " 2" or "") kept whole after it (RUY-743).

@@ -103,28 +103,16 @@ Page {
             page.capsState = status === "ok" ? "ok" : "failed"
             Qt.callLater(body.reflow)
         }
-        function onDevicesChanged() { page.checkGone() }
         function onConfirmButtonRefused(deviceId) {
             if (deviceId === page.padId)
                 Notifications.show(qsTr("Could not change the confirm button"), "error", "", "", qsTr("Try again."))
         }
     }
 
-    // The pad disconnected: the page closes (once), with a toast that names it. A page that is
-    // closing for any reason (Back too) never asks to close again: that would close the page below.
-    // A pad the player forgot here left on purpose: it closes the page without the toast.
-    property bool gone: false
+    // The pad disconnected: the page closes (PadGone), with a toast that names it. A pad the player forgot
+    // here left on purpose: it closes the page without the toast.
     property bool forgotOnPurpose: false
-    onBackRequested: gone = true
-    function checkGone() {
-        if (gone || Input.devicesState !== "ok" || Input.devices.some(d => d.id === padId))
-            return
-        gone = true
-        if (!forgotOnPurpose)
-            Notifications.show(qsTr("Controller disconnected"), "info", "", DeviceIcons.iconFor("controller", pad.family, pad.model),
-                               pad.name)
-        page.backRequested()
-    }
+    PadGone { page: page; padId: page.padId; silent: page.forgotOnPurpose }
 
     Column {
         objectName: "controllerFacts"

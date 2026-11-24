@@ -23,6 +23,8 @@ Page {
     title: qsTr("Remap buttons")
     hints: [{ action: "accept", text: qsTr("Change") }, { action: "back", text: qsTr("Back") }]
 
+    PadGone { page: page; padId: page.padId }
+
     Component.onCompleted: GameControls.show(padId)
 
     // The toasts of the changes on their way, by GameControls' tag: { title, detail }.

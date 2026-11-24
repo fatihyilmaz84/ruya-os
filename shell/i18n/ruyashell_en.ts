@@ -310,12 +310,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+81"/>
+        <location line="+82"/>
         <source>Developer</source>
         <translation>Developer</translation>
     </message>
     <message>
-        <location line="-81"/>
+        <location line="-82"/>
         <source>Community</source>
         <translation>Community</translation>
     </message>
@@ -485,7 +485,7 @@ This can&apos;t be undone.</translation>
         <translation>Another change is running. Try again in a moment.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Something went wrong. You can try again.</source>
         <translation>Something went wrong. You can try again.</translation>
     </message>
@@ -627,7 +627,7 @@ This can&apos;t be undone.</translation>
         <translation>Close the game to uninstall it.</translation>
     </message>
     <message>
-        <location line="-947"/>
+        <location line="-948"/>
         <source>Install</source>
         <translation>Install</translation>
     </message>
@@ -638,12 +638,13 @@ This can&apos;t be undone.</translation>
         <translation>Update</translation>
     </message>
     <message>
-        <location line="+685"/>
+        <location line="+686"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Needs a newer RuyaOS than this console has. It stays installed.</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-586"/>
+        <location line="+586"/>
         <source>Needs a newer RuyaOS</source>
         <translation>Needs a newer RuyaOS</translation>
     </message>
@@ -664,7 +665,7 @@ This can&apos;t be undone.</translation>
         <translation>The update adds: %1</translation>
     </message>
     <message>
-        <location line="-713"/>
+        <location line="-714"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Open</translation>
@@ -702,7 +703,7 @@ This can&apos;t be undone.</translation>
         <translation>Try again</translation>
     </message>
     <message>
-        <location line="+402"/>
+        <location line="+403"/>
         <source>Select</source>
         <translation>Select</translation>
     </message>
@@ -1876,7 +1877,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControllerPads</name>
     <message>
-        <location filename="../qml/ControllerPads.qml" line="+19"/>
+        <location filename="../qml/ControllerPads.qml" line="+21"/>
         <source>Battery not reported</source>
         <translation>Battery not reported</translation>
     </message>
@@ -1919,6 +1920,11 @@ This can&apos;t be undone.</translation>
         <location line="+5"/>
         <source>Player %1</source>
         <translation>Player %1</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Controller disconnected</source>
+        <translation>Controller disconnected</translation>
     </message>
 </context>
 <context>
@@ -2004,7 +2010,7 @@ This can&apos;t be undone.</translation>
         <translation>Microphone</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+30"/>
         <source>Could not change the confirm button</source>
         <translation>Could not change the confirm button</translation>
     </message>
@@ -2014,12 +2020,7 @@ This can&apos;t be undone.</translation>
         <translation>Try again.</translation>
     </message>
     <message>
-        <location line="+15"/>
-        <source>Controller disconnected</source>
-        <translation>Controller disconnected</translation>
-    </message>
-    <message>
-        <location line="+78"/>
+        <location line="+82"/>
         <source>Button test</source>
         <translation>Button test</translation>
     </message>
@@ -2285,7 +2286,7 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+98"/>
-        <location line="+39"/>
+        <location line="+40"/>
         <source>Import from USB drive</source>
         <translation>Import from USB drive</translation>
     </message>
@@ -2326,7 +2327,7 @@ This can&apos;t be undone.</translation>
         <translation>Controls in games</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+9"/>
         <source>All controllers</source>
         <translation>All controllers</translation>
     </message>
@@ -2846,22 +2847,22 @@ This can&apos;t be undone.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+525"/>
-        <location line="+193"/>
+        <location filename="../qml/GameControls.qml" line="+544"/>
+        <location line="+187"/>
         <source>Could not save to the USB drive</source>
         <translation>Could not save to the USB drive</translation>
     </message>
     <message>
-        <location line="-193"/>
-        <location line="+6"/>
+        <location line="-217"/>
         <location line="+2"/>
-        <location line="+185"/>
+        <location line="+28"/>
+        <location line="+187"/>
         <location line="+36"/>
         <source>Try again.</source>
         <translation>Try again.</translation>
     </message>
     <message>
-        <location line="-221"/>
+        <location line="-251"/>
         <source>Could not save the change</source>
         <translation>Could not save the change</translation>
     </message>
@@ -2871,7 +2872,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not save the change for %1</translation>
     </message>
     <message>
-        <location line="-280"/>
+        <location line="-260"/>
         <source>Left stick</source>
         <translation>Left stick</translation>
     </message>
@@ -2891,7 +2892,7 @@ This can&apos;t be undone.</translation>
         <translation>Games see %1 as A and %2 as B.</translation>
     </message>
     <message>
-        <location line="+457"/>
+        <location line="+467"/>
         <source>Saved to the USB drive</source>
         <translation>Saved to the USB drive</translation>
     </message>
@@ -2916,7 +2917,7 @@ This can&apos;t be undone.</translation>
         <translation>It isn&apos;t a RuyaOS controls file.</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+22"/>
         <source>PlayStation controllers</source>
         <translation>PlayStation controllers</translation>
     </message>
@@ -5641,7 +5642,7 @@ This can&apos;t be undone.</translation>
         <translation>Back</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+12"/>
         <source>Connect a controller first.</source>
         <translation>Connect a controller first.</translation>
     </message>

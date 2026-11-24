@@ -27,6 +27,8 @@ Page {
     title: qsTr("Controls in games")
     hints: body.hints
 
+    PadGone { page: page; padId: page.padId }
+
     Component.onCompleted: GameControls.show(padId)
 
     // Applies to: the choices the pad allows, and the stored one when it is for another pad.
