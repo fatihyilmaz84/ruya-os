@@ -2673,7 +2673,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>DriveHealth</name>
     <message>
-        <location filename="../qml/DriveHealth.qml" line="+61"/>
+        <location filename="../qml/DriveHealth.qml" line="+63"/>
         <source>Good</source>
         <translation>İyi</translation>
     </message>
@@ -2688,7 +2688,7 @@ Bu geri alınamaz.</translation>
         <translation>Arızalı</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+12"/>
         <source>%1 %2</source>
         <translation>%1 %2</translation>
     </message>
@@ -7277,22 +7277,7 @@ Bu geri alınamaz.</translation>
         <translation>Sürücü</translation>
     </message>
     <message>
-        <location line="+8"/>
-        <source>Healthy</source>
-        <translation>Sağlıklı</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Failing</source>
-        <translation>Arızalı</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Check soon</source>
-        <translation>Yakında kontrol edin</translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="+10"/>
         <source>Drive %1 health</source>
         <translation>Sürücü %1 sağlığı</translation>
     </message>
@@ -7897,13 +7882,13 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>%1 · Back up your saves</source>
-        <translation>%1 · Kayıtlarınızı yedekleyin</translation>
+        <source>Back up your saves</source>
+        <translation>Kayıtlarınızı yedekleyin</translation>
     </message>
     <message>
         <location line="+0"/>
-        <source>Back up your saves</source>
-        <translation>Kayıtlarınızı yedekleyin</translation>
+        <source>Back up your saves · %1</source>
+        <translation>Kayıtlarınızı yedekleyin · %1</translation>
     </message>
     <message>
         <location line="+11"/>

@@ -55,14 +55,15 @@ QtObject {
     onDrivesChanged: check()
     Component.onCompleted: check()
 
-    // "Good", "Check soon" or "Failing": the word beside the mark, so colour is never alone.
-    function stateText(state) {
-        switch (state) {
-        case "ok": return qsTr("Good")
-        case "warning": return qsTr("Check soon")
-        case "failing": return qsTr("Failing")
-        }
-        return ""
+    // "Good", "Check soon" or "Failing": the word beside the mark, so colour is never alone. The one
+    // place for the three words: Settings -> System's rows, the category's mark and the System
+    // information (SystemInfoRows) all read them here. `english` gives the English source, for the
+    // copyable report, which is not in the UI's language.
+    function stateText(state, english) {
+        const word = state === "ok" ? QT_TR_NOOP("Good")
+                   : state === "warning" ? QT_TR_NOOP("Check soon")
+                   : state === "failing" ? QT_TR_NOOP("Failing") : ""
+        return english || word === "" ? word : qsTr(word)
     }
 
     // Amber for "Check soon", red for "Failing"; "" has no mark.

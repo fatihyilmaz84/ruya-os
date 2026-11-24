@@ -251,7 +251,7 @@ Item {
             compare(row("graphics/nvidia").value, "550.54.14")
             verify(row("graphics/mesa") === null, "Mesa is not shown with the NVIDIA driver")
             compare(row("storage/drive0").value, "WD_BLACK SN770 1TB · NVMe · " + Storage.formatBytes(1000204886016))
-            compare(row("storage/drive0health").value, "Healthy", "health only for NVMe")
+            compare(row("storage/drive0health").value, "Good", "health only for NVMe")
             compare(row("storage/drive1").value, "ST2000DM008-2FR102 · Hard disk · " + Storage.formatBytes(2000398934016))
             verify(row("storage/drive1health") === null, "no health for a hard disk")
             compare(find("sysRow_storage/drive0").label, "Drive 1")

@@ -2678,7 +2678,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>DriveHealth</name>
     <message>
-        <location filename="../qml/DriveHealth.qml" line="+61"/>
+        <location filename="../qml/DriveHealth.qml" line="+63"/>
         <source>Good</source>
         <translation>Good</translation>
     </message>
@@ -2693,7 +2693,7 @@ This can&apos;t be undone.</translation>
         <translation>Failing</translation>
     </message>
     <message>
-        <location line="+13"/>
+        <location line="+12"/>
         <source>%1 %2</source>
         <translation>%1 %2</translation>
     </message>
@@ -7297,22 +7297,7 @@ This can&apos;t be undone.</translation>
         <translation>Drive</translation>
     </message>
     <message>
-        <location line="+8"/>
-        <source>Healthy</source>
-        <translation>Healthy</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Failing</source>
-        <translation>Failing</translation>
-    </message>
-    <message>
-        <location line="+0"/>
-        <source>Check soon</source>
-        <translation>Check soon</translation>
-    </message>
-    <message>
-        <location line="+2"/>
+        <location line="+10"/>
         <source>Drive %1 health</source>
         <translation>Drive %1 health</translation>
     </message>
@@ -7919,13 +7904,13 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>%1 · Back up your saves</source>
-        <translation>%1 · Back up your saves</translation>
+        <source>Back up your saves</source>
+        <translation>Back up your saves</translation>
     </message>
     <message>
         <location line="+0"/>
-        <source>Back up your saves</source>
-        <translation>Back up your saves</translation>
+        <source>Back up your saves · %1</source>
+        <translation>Back up your saves · %1</translation>
     </message>
     <message>
         <location line="+11"/>
