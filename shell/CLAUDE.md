@@ -23,7 +23,7 @@ Specs: `docs/specs/02-shell.md` (behaviour) and `docs/specs/04-design-system.md`
 - **Sizes are design pixels at 1080p × `u`** (`u = height / 1080`), passed down as a `u` property. Respect the safe area (`Theme.safeArea`).
 - **No literal colours, durations, easings, font sizes, spacing, radii or control sizes in components:** use the `Theme` tokens of `04` §3 (`lint-tokens.ps1` fails on most literals; a rare exception ends its line with `// token-ok: <reason>`). **Builders don't invent tokens or components:** take the closest existing one and add an Inbox line (`04` §8); the lead changes the system. A feedback animation (shake, pulse) does not start under `Theme.reducedMotion`.
 - User-visible strings: `qsTr()`, with `%n` plurals where counts appear. After adding or changing one, refresh the `.ts` files, translate the new entries (Turkish for real) and run the lint (`PATTERNS.md`, "Translations").
-- Effects: `MultiEffect` or precompiled `.qsb` shaders only. Never inline GLSL. Blur the shared backdrop; never stack more fullscreen blurs.
+- Effects: `MultiEffect` or precompiled `.qsb` shaders only. Never inline GLSL. Blur the shared backdrop; never stack more fullscreen blurs. Offscreen tests use the software renderer, where `MultiEffect` draws nothing: assert properties (`visible`, `blurMax`), never pixels; only `shots` renders on the GPU.
 - **Glass and motion (`04` §3.8, `PATTERNS.md`):** `GlassLayers` + `GlassShadow`; duration tokens are already scaled for reduced motion; decorative animation is gated (`LiquidGate`) and never runs forever on a still screen.
 - Never block the GUI thread: service calls are asynchronous (invoke, then react to a signal).
 
@@ -68,5 +68,5 @@ Pages, settings controls, modals from pages, text input (`TextEntry`, never a ra
 
 ## C++ rules
 
-- C++17 (MSVC). Qt APIs up to 6.8. Use `QStringLiteral` for literals. Use `qWarning("ruya-shell: …")` for failures.
+- C++17 (MSVC: no `[=, this]`). Qt 6.10.3 here, Fedora's Qt (6.8) in the image: APIs up to 6.8. Use `QStringLiteral` for literals. Use `qWarning("ruya-shell: …")` for failures.
 - QtDBus code runs only on Linux: keep it a thin translation of the XML contract.
