@@ -1404,7 +1404,7 @@ Bu geri alınamaz.</translation>
         <translation>Çıkmak için iki kez bas ya da basılı tut</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location line="+94"/>
         <source>Button test ended</source>
         <translation>Düğme testi sona erdi</translation>
     </message>
@@ -1415,12 +1415,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+107"/>
-        <location line="+87"/>
+        <location line="+108"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-115"/>
         <source>x&#xa0;%1  y&#xa0;%2</source>
         <translation>x&#xa0;%1  y&#xa0;%2</translation>
     </message>
@@ -1436,22 +1436,22 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <source>%1 (south)</source>
+        <source>%1 (bottom)</source>
         <translation>%1 (alt)</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>%1 (east)</source>
+        <source>%1 (right)</source>
         <translation>%1 (sağ)</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>%1 (west)</source>
+        <source>%1 (left)</source>
         <translation>%1 (sol)</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>%1 (north)</source>
+        <source>%1 (top)</source>
         <translation>%1 (üst)</translation>
     </message>
     <message>
@@ -1466,28 +1466,29 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+61"/>
+        <location line="+82"/>
         <source>Left stick</source>
         <translation>Sol çubuk</translation>
     </message>
     <message>
-        <location line="-59"/>
-        <location line="+60"/>
+        <location line="-80"/>
+        <location line="+81"/>
         <source>Right stick</source>
         <translation>Sağ çubuk</translation>
     </message>
     <message>
-        <location line="-59"/>
+        <location line="-80"/>
         <source>Create</source>
         <translation>Create</translation>
     </message>
     <message>
         <location line="+0"/>
+        <location line="+17"/>
         <source>View</source>
         <translation>View</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-16"/>
         <source>Options</source>
         <translation>Options</translation>
     </message>
@@ -1522,7 +1523,52 @@ Bu geri alınamaz.</translation>
         <translation>Yön tuşu sağ</translation>
     </message>
     <message>
-        <location line="+41"/>
+        <location line="+8"/>
+        <source>Confirm</source>
+        <translation>Onay</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Geri</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Options menu</source>
+        <translation>Seçenekler menüsü</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Ruya Hub</source>
+        <translation>Ruya Hub</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Previous tab</source>
+        <translation>Önceki sekme</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Next tab</source>
+        <translation>Sonraki sekme</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Previous page</source>
+        <translation>Önceki sayfa</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Next page</source>
+        <translation>Sonraki sayfa</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Move</source>
+        <translation>Hareket</translation>
+    </message>
+    <message>
+        <location line="+45"/>
         <source> · </source>
         <translation> · </translation>
     </message>
@@ -1535,6 +1581,16 @@ Bu geri alınamaz.</translation>
         <location line="+1"/>
         <source>Last input</source>
         <translation>Son giriş</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>In menus</source>
+        <translation>Menülerde</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>In games</source>
+        <translation>Oyunlarda</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2780,7 +2836,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+495"/>
+        <location filename="../qml/GameControls.qml" line="+509"/>
         <location line="+187"/>
         <source>Could not save to the USB drive</source>
         <translation>USB belleğe kaydedilemedi</translation>
@@ -2805,7 +2861,17 @@ Bu geri alınamaz.</translation>
         <translation>%1 için değişiklik kaydedilemedi</translation>
     </message>
     <message>
-        <location line="-260"/>
+        <location line="-268"/>
+        <source>Left stick</source>
+        <translation>Sol çubuk</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Right stick</source>
+        <translation>Sağ çubuk</translation>
+    </message>
+    <message>
+        <location line="+6"/>
         <source>Games see %1 as A and %2 as B, unlike menus.</source>
         <translation>Oyunlar %1 düğmesini A, %2 düğmesini B olarak görür; menülerden farklı.</translation>
     </message>
@@ -3002,30 +3068,30 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+71"/>
+        <location line="+96"/>
         <source>Up</source>
         <translation>Yukarı</translation>
     </message>
     <message>
-        <location line="-70"/>
-        <location line="+71"/>
+        <location line="-95"/>
+        <location line="+96"/>
         <source>Down</source>
         <translation>Aşağı</translation>
     </message>
     <message>
-        <location line="-70"/>
-        <location line="+71"/>
+        <location line="-95"/>
+        <location line="+96"/>
         <source>Left</source>
         <translation>Sol</translation>
     </message>
     <message>
-        <location line="-70"/>
-        <location line="+71"/>
+        <location line="-95"/>
+        <location line="+96"/>
         <source>Right</source>
         <translation>Sağ</translation>
     </message>
     <message>
-        <location line="-69"/>
+        <location line="-94"/>
         <location line="+38"/>
         <source>Create</source>
         <translation>Create</translation>
@@ -3116,7 +3182,7 @@ Bu geri alınamaz.</translation>
         <translation>Yön tuşları</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+39"/>
         <source>Page Up</source>
         <translation>Sayfa yukarı</translation>
     </message>

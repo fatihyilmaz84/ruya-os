@@ -45,6 +45,7 @@ Page {
     Component.onCompleted: {
         if (current)
             pad = current
+        GameControls.show(padId)         // In games reads this pad's profile
         Input.startTest(padId, false)
     }
     Component.onDestruction: {
@@ -234,16 +235,16 @@ Page {
             return "—"
         return qsTr("x %1  y %2  z %3 °/s").arg(dec(axes.gyro_x ?? 0)).arg(dec(axes.gyro_y ?? 0)).arg(dec(axes.gyro_z ?? 0))
     }
-    // "Cross (south)": the family's word for a face button, then its position.
+    // "Cross (bottom)": the family's word for a face button, then its position.
     function inputText(input) {
         const ps = pad.family === "playstation"
         switch (input) {
         case "": return qsTr("None")
-        // RUY-622: the word comes from the one glyph table (Glyphs), so a Nintendo pad reads B (south).
-        case "south": return qsTr("%1 (south)").arg(Glyphs.labelForPosition("south", pad.family))
-        case "east": return qsTr("%1 (east)").arg(Glyphs.labelForPosition("east", pad.family))
-        case "west": return qsTr("%1 (west)").arg(Glyphs.labelForPosition("west", pad.family))
-        case "north": return qsTr("%1 (north)").arg(Glyphs.labelForPosition("north", pad.family))
+        // RUY-622: the word comes from the one glyph table (Glyphs), so a Nintendo pad reads B (bottom).
+        case "south": return qsTr("%1 (bottom)").arg(Glyphs.labelForPosition("south", pad.family))
+        case "east": return qsTr("%1 (right)").arg(Glyphs.labelForPosition("east", pad.family))
+        case "west": return qsTr("%1 (left)").arg(Glyphs.labelForPosition("west", pad.family))
+        case "north": return qsTr("%1 (top)").arg(Glyphs.labelForPosition("north", pad.family))
         case "l1":
         case "r1":
         case "left_trigger":
@@ -263,6 +264,27 @@ Page {
         case "dpad_right": return qsTr("D-pad right")
         }
         return input            // a raw input: its source is its name
+    }
+
+    // "In menus": the shell action of an input on this pad, after its Confirm choice (Glyphs.actionFor).
+    function menuText(input) {
+        switch (Glyphs.actionFor(input, pad.family, glyphConfirmMode)) {
+        case "accept": return qsTr("Confirm")
+        case "back": return qsTr("Back")
+        case "options": return qsTr("Options menu")
+        case "view": return qsTr("View")
+        case "guide": return qsTr("Ruya Hub")
+        case "tabPrev": return qsTr("Previous tab")
+        case "tabNext": return qsTr("Next tab")
+        case "pagePrev": return qsTr("Previous page")
+        case "pageNext": return qsTr("Next page")
+        case "move": return qsTr("Move")
+        }
+        return "—"
+    }
+    // "In games": what the virtual pad sends for it (GameControls.gameInput).
+    function gameText(input) {
+        return GameControls.gameInput(input) || "—"
     }
 
     Rectangle {
@@ -317,6 +339,8 @@ Page {
                         { key: "triggers", label: qsTr("%1 · %2").arg(Glyphs.labelForPosition("left_trigger", page.pad.family)).arg(Glyphs.labelForPosition("right_trigger", page.pad.family)), value: page.triggerText() },
                         { key: "gyro", label: qsTr("Gyro"), value: page.gyroText() },
                         { key: "last", label: qsTr("Last input"), value: page.inputText(page.lastInput) },
+                        { key: "menus", label: qsTr("In menus"), value: page.menuText(page.lastInput) },
+                        { key: "games", label: qsTr("In games"), value: page.gameText(page.lastInput) },
                         { key: "source", label: qsTr("Source"), value: page.lastSource !== "" ? page.lastSource : "\u2014" }
                     ]
                     // One row per reading: the label (200 u, caption DemiBold), then the value (body, tabular figures).

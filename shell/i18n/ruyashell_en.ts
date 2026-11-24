@@ -1408,7 +1408,7 @@ This can&apos;t be undone.</translation>
         <translation>Press twice or hold to leave</translation>
     </message>
     <message>
-        <location line="+93"/>
+        <location line="+94"/>
         <source>Button test ended</source>
         <translation>Button test ended</translation>
     </message>
@@ -1419,12 +1419,12 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+107"/>
-        <location line="+87"/>
+        <location line="+108"/>
         <source>%1 · %2</source>
         <translation>%1 · %2</translation>
     </message>
     <message>
-        <location line="-94"/>
+        <location line="-115"/>
         <source>x&#xa0;%1  y&#xa0;%2</source>
         <translation>x&#xa0;%1  y&#xa0;%2</translation>
     </message>
@@ -1440,23 +1440,23 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <source>%1 (south)</source>
-        <translation>%1 (south)</translation>
+        <source>%1 (bottom)</source>
+        <translation>%1 (bottom)</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>%1 (east)</source>
-        <translation>%1 (east)</translation>
+        <source>%1 (right)</source>
+        <translation>%1 (right)</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>%1 (west)</source>
-        <translation>%1 (west)</translation>
+        <source>%1 (left)</source>
+        <translation>%1 (left)</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>%1 (north)</source>
-        <translation>%1 (north)</translation>
+        <source>%1 (top)</source>
+        <translation>%1 (top)</translation>
     </message>
     <message>
         <location line="+5"/>
@@ -1470,28 +1470,29 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+2"/>
-        <location line="+61"/>
+        <location line="+82"/>
         <source>Left stick</source>
         <translation>Left stick</translation>
     </message>
     <message>
-        <location line="-59"/>
-        <location line="+60"/>
+        <location line="-80"/>
+        <location line="+81"/>
         <source>Right stick</source>
         <translation>Right stick</translation>
     </message>
     <message>
-        <location line="-59"/>
+        <location line="-80"/>
         <source>Create</source>
         <translation>Create</translation>
     </message>
     <message>
         <location line="+0"/>
+        <location line="+17"/>
         <source>View</source>
         <translation>View</translation>
     </message>
     <message>
-        <location line="+1"/>
+        <location line="-16"/>
         <source>Options</source>
         <translation>Options</translation>
     </message>
@@ -1526,7 +1527,52 @@ This can&apos;t be undone.</translation>
         <translation>D-pad right</translation>
     </message>
     <message>
-        <location line="+41"/>
+        <location line="+8"/>
+        <source>Confirm</source>
+        <translation>Confirm</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Back</source>
+        <translation>Back</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Options menu</source>
+        <translation>Options menu</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Ruya Hub</source>
+        <translation>Ruya Hub</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Previous tab</source>
+        <translation>Previous tab</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Next tab</source>
+        <translation>Next tab</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Previous page</source>
+        <translation>Previous page</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Next page</source>
+        <translation>Next page</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>Move</source>
+        <translation>Move</translation>
+    </message>
+    <message>
+        <location line="+45"/>
         <source> · </source>
         <translation> · </translation>
     </message>
@@ -1539,6 +1585,16 @@ This can&apos;t be undone.</translation>
         <location line="+1"/>
         <source>Last input</source>
         <translation>Last input</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>In menus</source>
+        <translation>In menus</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>In games</source>
+        <translation>In games</translation>
     </message>
     <message>
         <location line="+1"/>
@@ -2785,7 +2841,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+495"/>
+        <location filename="../qml/GameControls.qml" line="+509"/>
         <location line="+187"/>
         <source>Could not save to the USB drive</source>
         <translation>Could not save to the USB drive</translation>
@@ -2810,7 +2866,17 @@ This can&apos;t be undone.</translation>
         <translation>Could not save the change for %1</translation>
     </message>
     <message>
-        <location line="-260"/>
+        <location line="-268"/>
+        <source>Left stick</source>
+        <translation>Left stick</translation>
+    </message>
+    <message>
+        <location line="+2"/>
+        <source>Right stick</source>
+        <translation>Right stick</translation>
+    </message>
+    <message>
+        <location line="+6"/>
         <source>Games see %1 as A and %2 as B, unlike menus.</source>
         <translation>Games see %1 as A and %2 as B, unlike menus.</translation>
     </message>
@@ -3007,30 +3073,30 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+1"/>
-        <location line="+71"/>
+        <location line="+96"/>
         <source>Up</source>
         <translation>Up</translation>
     </message>
     <message>
-        <location line="-70"/>
-        <location line="+71"/>
+        <location line="-95"/>
+        <location line="+96"/>
         <source>Down</source>
         <translation>Down</translation>
     </message>
     <message>
-        <location line="-70"/>
-        <location line="+71"/>
+        <location line="-95"/>
+        <location line="+96"/>
         <source>Left</source>
         <translation>Left</translation>
     </message>
     <message>
-        <location line="-70"/>
-        <location line="+71"/>
+        <location line="-95"/>
+        <location line="+96"/>
         <source>Right</source>
         <translation>Right</translation>
     </message>
     <message>
-        <location line="-69"/>
+        <location line="-94"/>
         <location line="+38"/>
         <source>Create</source>
         <translation>Create</translation>
@@ -3121,7 +3187,7 @@ This can&apos;t be undone.</translation>
         <translation>D-pad</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <location line="+39"/>
         <source>Page Up</source>
         <translation>Page Up</translation>
     </message>
