@@ -236,6 +236,20 @@ QtObject {
         const accept = Glyphs.acceptPosition(pad.family, String(Input.confirmButtons[pad.id] ?? "family"))
         return { a: a, b: b, family: pad.family, unlike: accept !== a }
     }
+    // What the virtual pad sends for an input of the shown pad (Input1's name), after the layout and the
+    // profile's remaps, in Xbox names (what games print): "A", "LB", "Left stick"; "Nothing" when it is
+    // remapped away; "" when it never reaches a game (Guide) or is not an input the pad sends.
+    function gameInput(input) {
+        if (sources.includes(input))
+            return buttonName(targetOf(input), "xbox")
+        switch (input) {
+        case "left_x":
+        case "left_y": return qsTr("Left stick")
+        case "right_x":
+        case "right_y": return qsTr("Right stick")
+        }
+        return ""
+    }
     // The note's sentence: %1 is the pad's button games see as A, %2 as B.
     function gamesNoteText(unlike) {
         return unlike ? qsTr("Games see %1 as A and %2 as B, unlike menus.") : qsTr("Games see %1 as A and %2 as B.")

@@ -493,7 +493,7 @@ Item {
             Input.mockTestInput(ds, "south", 1, "raw:pad:1:304")
             tryCompare(south, "look", "held")
             compare(south.color, Theme.primaryFill)
-            compare(find("raw_last").text, "Cross (south)")
+            compare(find("raw_last").text, "Cross (bottom)")
             compare(find("raw_source").text, "raw:pad:1:304")
             Input.mockTestInput(ds, "south", 0, "raw:pad:1:304")
             tryCompare(south, "look", "tried")
@@ -549,12 +549,77 @@ Item {
             compare(letter("east"), "A")
             compare(letter("south"), "B")
             compare(letter("west"), "Y")
-            const last = [["south", "B (south)"], ["east", "A (east)"], ["west", "Y (west)"], ["north", "X (north)"],
+            const last = [["south", "B (bottom)"], ["east", "A (right)"], ["west", "Y (left)"], ["north", "X (top)"],
                           ["l1", "L"], ["r1", "R"], ["left_trigger", "ZL"], ["right_trigger", "ZR"]]
             for (const [input, text] of last) {
                 Input.mockTestInput(wiiu, input, input.endsWith("trigger") ? 32767 : 1, "raw:pad:1:0")
                 tryCompare(find("raw_last"), "text", text)
             }
+        }
+
+        // RUY-502: In menus (the Confirm rule) and In games (layout and remaps) for the newest press.
+        function test_the_button_test_says_what_a_press_does_in_menus_and_games() {
+            openTest(ds)
+            compare(find("raw_menus").text, "—", "nothing pressed yet")
+            compare(find("raw_games").text, "—")
+            compare(find("raw_menus").parent.children[0].text, "In menus")
+            compare(find("raw_games").parent.children[0].text, "In games")
+            // A DualSense: Cross confirms, Circle goes back.
+            Input.mockTestInput(ds, "south", 1, "raw:pad:1:304")
+            tryCompare(find("raw_menus"), "text", "Confirm")
+            compare(find("raw_games").text, "A")
+            Input.mockTestInput(ds, "east", 1, "raw:pad:1:305")
+            tryCompare(find("raw_menus"), "text", "Back")
+            compare(find("raw_games").text, "B")
+            const table = [["start", "Options menu", "Menu"], ["select", "View", "View"], ["guide", "Ruya Hub", "—"],
+                           ["l1", "Previous tab", "LB"], ["r1", "Next tab", "RB"], ["dpad_up", "Move", "D-pad up"],
+                           ["l3", "—", "Left stick click"], ["west", "—", "X"], ["north", "—", "Y"]]
+            for (const [input, menus, games] of table) {
+                Input.mockTestInput(ds, input, 1, "raw:pad:1:0")
+                tryCompare(find("raw_menus"), "text", menus, 2000, input)
+                compare(find("raw_games").text, games, input)
+            }
+            Input.mockTestInput(ds, "left_trigger", 32767, "raw:pad:1:0")
+            tryCompare(find("raw_menus"), "text", "Previous page")
+            compare(find("raw_games").text, "LT")
+            Input.mockTestInput(ds, "right_x", 32767, "raw:pad:1:0")
+            tryCompare(find("raw_menus"), "text", "—")
+            compare(find("raw_games").text, "Right stick")
+            Input.mockTestInput(ds, "left_y", 32767, "raw:pad:1:0")
+            tryCompare(find("raw_menus"), "text", "Move")
+            compare(find("raw_games").text, "Left stick")
+        }
+
+        function test_the_button_test_follows_the_confirm_choice_the_layout_and_remaps() {
+            const wiiu = "bluetooth-057e-0330-c1d2e3f4a5b6"
+            Input.mockAddDevice({ id: wiiu, name: "Nintendo Wii Remote Pro Controller", family: "nintendo",
+                                  layout: "nintendo-wiiu", connection: "bluetooth", battery: 80 })
+            tryVerify(() => Input.devices.length === 4)
+            openTest(wiiu)
+            // As on the controller, By position: the right button (A) confirms; games see it as B.
+            Input.mockTestInput(wiiu, "east", 1, "raw:pad:1:0")
+            tryCompare(find("raw_last"), "text", "A (right)")
+            compare(find("raw_menus").text, "Confirm")
+            compare(find("raw_games").text, "B")
+            Input.mockTestInput(wiiu, "south", 1, "raw:pad:1:0")
+            tryCompare(find("raw_last"), "text", "B (bottom)")
+            compare(find("raw_menus").text, "Back")
+            compare(find("raw_games").text, "A")
+            // A remap to none is "Nothing".
+            verify(GameControls.setTarget("west", "none"))
+            Input.mockTestInput(wiiu, "west", 1, "raw:pad:1:0")
+            tryCompare(find("raw_last"), "text", "Y (left)")
+            compare(find("raw_games").text, "Nothing")
+        }
+
+        function test_the_button_test_in_menus_follows_the_confirm_row() {
+            openTest(ds)
+            Input.setConfirmButton(ds, "east")
+            tryCompare(Input.confirmButtons, ds, "east")
+            Input.mockTestInput(ds, "east", 1, "raw:pad:1:0")
+            tryCompare(find("raw_menus"), "text", "Confirm")
+            Input.mockTestInput(ds, "south", 1, "raw:pad:1:0")
+            tryCompare(find("raw_menus"), "text", "Back")
         }
 
         function test_a_switch_pro_takes_the_nintendo_drawing() {
@@ -1159,6 +1224,21 @@ Item {
             settle()
             grabImage(tc.shell).save(shotsDir + "/27-button-test-720p-en.png")
             openPaneShot720(shotsDir + "/")
+        }
+
+        // RUY-502: the Button test's readings (In menus, In games) in Turkish at 720p, the tightest fit.
+        function test_zz_screenshots_720p_tr() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            host.width = 1280
+            host.height = 720
+            DeviceSettings.language = "tr"
+            openController(ds)
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "buttonTest")
+            Input.mockTestInput(ds, "start", 1, "raw:pad:1:307")
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/27-button-test-720p-tr.png")
         }
 
         // RUY-512: the pane's rows in the light theme (the facts, the page rows and the choice arrows read against it).

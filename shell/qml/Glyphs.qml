@@ -121,6 +121,31 @@ QtObject {
         return textGlyph(action)
     }
 
+    // The shell action a pad input has (06 §11.1), after the Confirm setting: the inverse of glyphFor.
+    // "accept" | "back" | "options" | "view" | "guide" | "tabPrev" | "tabNext" | "pagePrev" | "pageNext" |
+    // "move" (D-pad, left stick), or "" when the shell does nothing with it. The input is Input1's name.
+    function actionFor(input, family, confirmMode) {
+        const acceptAt = acceptPosition(family, confirmMode)
+        switch (input) {
+        case "south":
+        case "east": return input === acceptAt ? "accept" : "back"
+        case "start": return "options"
+        case "select": return "view"
+        case "guide": return "guide"
+        case "l1": return "tabPrev"
+        case "r1": return "tabNext"
+        case "left_trigger": return "pagePrev"
+        case "right_trigger": return "pageNext"
+        case "dpad_up":
+        case "dpad_down":
+        case "dpad_left":
+        case "dpad_right":
+        case "left_x":
+        case "left_y": return "move"
+        }
+        return ""
+    }
+
     // Key caps (pills with the key's name): the keys the shell takes for each action.
     function keyGlyph(action) {
         switch (action) {

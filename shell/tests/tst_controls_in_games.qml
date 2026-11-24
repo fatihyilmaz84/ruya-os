@@ -257,6 +257,26 @@ Item {
             tryVerify(() => find("rowControlsInGames").activeFocus, 2000, "Left leaves the page too")
         }
 
+        // RUY-502: what the virtual pad sends for an input, in Xbox names, after the layout and remaps.
+        function test_what_games_get_for_an_input_follows_the_layout_and_remaps() {
+            openControls()
+            compare(GameControls.gameInput("south"), "A")
+            compare(GameControls.gameInput("l1"), "LB")
+            compare(GameControls.gameInput("right_trigger"), "RT")
+            compare(GameControls.gameInput("start"), "Menu")
+            compare(GameControls.gameInput("left_y"), "Left stick")
+            compare(GameControls.gameInput("guide"), "", "Guide never reaches a game")
+            verify(GameControls.setTarget("north", "none"))
+            compare(GameControls.gameInput("north"), "Nothing")
+            verify(GameControls.setTarget("l3", "r3"))
+            compare(GameControls.gameInput("l3"), "Right stick click")
+            focusRow("controlsBody", "rowLayout")
+            keyClick(Qt.Key_Right)
+            tryCompare(GameControls, "layout", "nintendo")
+            compare(GameControls.gameInput("south"), "B", "the Nintendo layout swaps the face buttons")
+            compare(GameControls.gameInput("east"), "A")
+        }
+
         function test_the_nintendo_layout_is_saved_and_shown() {
             openControls()
             focusRow("controlsBody", "rowLayout")

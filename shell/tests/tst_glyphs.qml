@@ -90,6 +90,20 @@ Item {
             }
         }
 
+        // RUY-502: the inverse of glyphFor: which action a pad input has, after the Confirm setting.
+        function test_the_action_of_an_input_follows_the_confirm_setting() {
+            compare(Glyphs.actionFor("south", "xbox", "family"), "accept")
+            compare(Glyphs.actionFor("east", "xbox", "family"), "back")
+            compare(Glyphs.actionFor("south", "nintendo", "family"), "back")
+            compare(Glyphs.actionFor("east", "nintendo", "family"), "accept")
+            compare(Glyphs.actionFor("south", "playstation", "east"), "back")
+            compare(Glyphs.actionFor("east", "playstation", "east"), "accept")
+            for (const [input, action] of [["west", ""], ["north", ""], ["start", "options"], ["select", "view"], ["guide", "guide"],
+                                           ["l1", "tabPrev"], ["r1", "tabNext"], ["left_trigger", "pagePrev"], ["right_trigger", "pageNext"],
+                                           ["dpad_left", "move"], ["left_y", "move"], ["right_x", ""], ["l3", ""]])
+                compare(Glyphs.actionFor(input, "xbox", "family"), action, input)
+        }
+
         function test_other_actions_per_family_data() {
             return [
                 { tag: "xbox", family: "xbox", want: { tabPrev: "LB", tabNext: "RB", pagePrev: "LT", pageNext: "RT", options: "Menu", view: "View", done: "Menu", left: "←", guide: "Guide" } },
