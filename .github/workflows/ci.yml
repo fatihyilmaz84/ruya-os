@@ -75,6 +75,10 @@ jobs:
         run: |
           pwsh -NoProfile -File scripts/lint-ids.ps1
           pwsh -NoProfile -File scripts/lint-ids.ps1 -SelfTest
+      - name: Regex anchor lint (anchoredPattern, RUY-709)
+        run: |
+          pwsh -NoProfile -File scripts/lint-regex-anchors.ps1
+          pwsh -NoProfile -File scripts/lint-regex-anchors.ps1 -SelfTest
       - name: App table lint (one per-app table, RUY-1050)
         run: |
           pwsh -NoProfile -File scripts/lint-app-table.ps1

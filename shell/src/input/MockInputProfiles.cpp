@@ -68,7 +68,7 @@ bool matches(const QString &pattern, const QString &s)
 
 bool validId(const QString &s)
 {
-    return matches(QStringLiteral("^[a-z0-9][a-z0-9._-]{0,63}$"), s);
+    return matches(QStringLiteral("[a-z0-9][a-z0-9._-]{0,63}"), s);
 }
 
 bool plainText(const QString &s)
@@ -192,7 +192,7 @@ struct Check
         };
         oneOf(o.value(QStringLiteral("type")), path + QStringLiteral("/type"), types);
         if (o.contains(QStringLiteral("code")))
-            pattern(o.value(QStringLiteral("code")), path + QStringLiteral("/code"), QStringLiteral("^[a-z0-9_]{1,32}$"));
+            pattern(o.value(QStringLiteral("code")), path + QStringLiteral("/code"), QStringLiteral("[a-z0-9_]{1,32}"));
         if (o.contains(QStringLiteral("scale")))
             number(o.value(QStringLiteral("scale")), path + QStringLiteral("/scale"), -8, 8);
         const QString type = o.value(QStringLiteral("type")).toString();
@@ -418,7 +418,7 @@ QStringList MockInputProfiles::validate(const QString &text, QJsonObject *out)
     if (o.contains(QStringLiteral("schema_version")) && o.value(QStringLiteral("schema_version")).toDouble() != 1.0)
         c.err(QStringLiteral("/schema_version"), QStringLiteral("must be 1"));
     if (o.contains(QStringLiteral("id")))
-        c.pattern(o.value(QStringLiteral("id")), QStringLiteral("/id"), QStringLiteral("^[a-z0-9][a-z0-9._-]{0,63}$"));
+        c.pattern(o.value(QStringLiteral("id")), QStringLiteral("/id"), QStringLiteral("[a-z0-9][a-z0-9._-]{0,63}"));
     if (o.contains(QStringLiteral("name")))
         c.text(o.value(QStringLiteral("name")), QStringLiteral("/name"), 1, 64);
     if (o.contains(QStringLiteral("description")))
@@ -435,7 +435,7 @@ QStringList MockInputProfiles::validate(const QString &text, QJsonObject *out)
             const QStringList known = key.isEmpty() ? QStringList{QStringLiteral("type")} : QStringList{QStringLiteral("type"), key};
             c.object(s, QStringLiteral("/scope"), known, known);
             if (!key.isEmpty() && s.contains(key))
-                c.pattern(s.value(key), QStringLiteral("/scope/") + key, QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$"));
+                c.pattern(s.value(key), QStringLiteral("/scope/") + key, QStringLiteral("[A-Za-z0-9][A-Za-z0-9._-]{0,254}"));
         }
     }
     // The service's rule (RUY-596): the "controls-" prefix names the global slots, no other scope takes it.
@@ -443,7 +443,7 @@ QStringList MockInputProfiles::validate(const QString &text, QJsonObject *out)
         && o.value(QStringLiteral("scope")).toObject().value(QStringLiteral("type")).toString() != QLatin1String("global"))
         c.err(QStringLiteral("/id"), QStringLiteral("the \"controls-\" prefix is reserved for global profiles"));
     if (o.contains(QStringLiteral("inherits"))) {
-        c.pattern(o.value(QStringLiteral("inherits")), QStringLiteral("/inherits"), QStringLiteral("^[a-z0-9][a-z0-9._-]{0,63}$"));
+        c.pattern(o.value(QStringLiteral("inherits")), QStringLiteral("/inherits"), QStringLiteral("[a-z0-9][a-z0-9._-]{0,63}"));
         if (o.value(QStringLiteral("inherits")) == o.value(QStringLiteral("id")))
             c.err(QStringLiteral("/inherits"), QStringLiteral("a profile cannot inherit from itself"));
     }
@@ -454,7 +454,7 @@ QStringList MockInputProfiles::validate(const QString &text, QJsonObject *out)
             c.oneOf(m.value(QStringLiteral("family")), QStringLiteral("/match/family"),
                     {QStringLiteral("xbox"), QStringLiteral("playstation"), QStringLiteral("nintendo"), QStringLiteral("generic")});
         if (m.contains(QStringLiteral("device")))
-            c.pattern(m.value(QStringLiteral("device")), QStringLiteral("/match/device"), QStringLiteral("^[a-z0-9:-]{1,64}$"));
+            c.pattern(m.value(QStringLiteral("device")), QStringLiteral("/match/device"), QStringLiteral("[a-z0-9:-]{1,64}"));
     }
     if (o.contains(QStringLiteral("output"))
         && c.object(o.value(QStringLiteral("output")), QStringLiteral("/output"), {QStringLiteral("type")}, {QStringLiteral("type")}))
@@ -513,7 +513,7 @@ bool MockInputProfiles::validSlot(const QString &scopeId)
         return families.contains(scopeId.mid(7));
     }
     if (scopeId.startsWith(QLatin1String("device:")))
-        return matches(QStringLiteral("^[a-z0-9:-]{1,64}$"), scopeId.mid(7));
+        return matches(QStringLiteral("[a-z0-9:-]{1,64}"), scopeId.mid(7));
     return false;
 }
 

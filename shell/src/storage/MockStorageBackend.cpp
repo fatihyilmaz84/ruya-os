@@ -101,7 +101,7 @@ namespace {
 // The rules of services/ruya-devices/src/volume_files.rs.
 bool validSuffix(const QString &suffix)
 {
-    static const QRegularExpression re(QStringLiteral("^\\.[a-z0-9]{1,8}$"));
+    static const QRegularExpression re(QRegularExpression::anchoredPattern(QStringLiteral("\\.[a-z0-9]{1,8}")));
     return re.match(suffix).hasMatch();
 }
 

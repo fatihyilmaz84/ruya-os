@@ -822,6 +822,15 @@ function Test-Ids {
     Record "profile id lint self-test (a hit, a marked line, a test module, tests.rs, ruya-ids)" ($LASTEXITCODE -eq 0)
 }
 
+# The rules live in scripts\lint-regex-anchors.ps1 (shared with CI): whole-string regexes use anchoredPattern (RUY-709).
+function Test-RegexAnchors {
+    Step "regex anchor lint (no bare ^...$ pattern in shell C++; anchoredPattern instead)"
+    & (Join-Path $PSScriptRoot "lint-regex-anchors.ps1")
+    Record "regex anchor lint" ($LASTEXITCODE -eq 0)
+    & (Join-Path $PSScriptRoot "lint-regex-anchors.ps1") -SelfTest
+    Record "regex anchor lint self-test (a hit, a marked line, one-sided anchors)" ($LASTEXITCODE -eq 0)
+}
+
 # The rules live in scripts\lint-app-table.ps1 (shared with CI): per-app launch behaviour is one table (RUY-1050, ADR-043).
 function Test-AppTable {
     Step "app table lint (the two retired per-app files stay gone: a per-app behaviour is a key in the apps table)"
@@ -1259,6 +1268,7 @@ function Test-ScriptSelfChecks {
     Test-ShotsFilterAndRetry
     Test-Duplicates
     Test-Ids
+    Test-RegexAnchors
     Test-AppTable
 }
 

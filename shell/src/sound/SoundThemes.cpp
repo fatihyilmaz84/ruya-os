@@ -25,7 +25,7 @@ enum class CopyFail { None, Io, TooManyFiles, TooLarge };
 
 bool isFolderName(const QString &name)
 {
-    static const QRegularExpression re(QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"));
+    static const QRegularExpression re(QRegularExpression::anchoredPattern(QStringLiteral("[A-Za-z0-9][A-Za-z0-9._-]{0,63}")));
     return re.match(name).hasMatch();
 }
 

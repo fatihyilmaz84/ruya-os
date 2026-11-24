@@ -425,6 +425,10 @@ Item {
             Storage.listFiles("vol-nope", ".json")
             tryCompare(filesSpy, "count", 4)
             compare(filesSpy.signalArguments[3][2], "unknown-volume")
+            // RUY-709: a suffix with a trailing line feed is invalid ("$" alone would accept it).
+            Storage.listFiles("vol-stick", ".json\n")
+            tryCompare(filesSpy, "count", 5)
+            compare(filesSpy.signalArguments[4][2], "invalid")
             Storage.readFile("vol-stick", "old.json", 0)
             tryCompare(readSpy, "count", 1)
             compare(readSpy.signalArguments[0][2], "invalid", "max_bytes 0")
