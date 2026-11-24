@@ -39,7 +39,11 @@ FocusScope {
     // The time left, 1 -> 0 over timeoutMs (the bar).
     property real remaining: 1
 
-    readonly property var modalHints: [{ action: "back", family: "keyboard", text: qsTr("Cancel") }]
+    // A keyboard cancels with Esc; a pad has no cancel button here (B is a capture too), so it is told
+    // how: no glyph, one sentence (HintBar: `actions: []`). Before any press the input counts as a pad.
+    readonly property var modalHints: Input.activeFamily === "keyboard"
+        ? [{ action: "back", family: "keyboard", text: qsTr("Cancel") }]
+        : [{ actions: [], text: qsTr("Any button counts. Wait 5 seconds to cancel.") }]
 
     signal capturedInput(string input)
     signal cancelled()
@@ -94,6 +98,12 @@ FocusScope {
         shown = false
         finish()
         dialog.cancelled()
+    }
+
+    // A page torn down while the capture is open must not leave the pad's stream running.
+    Component.onDestruction: {
+        if (shown || closing)
+            Input.stopTest(padId)
     }
 
     // The end of the dialog: the stream stops, the focus goes back.

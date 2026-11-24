@@ -2269,7 +2269,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControlsImportPicker</name>
     <message>
-        <location filename="../qml/ControlsImportPicker.qml" line="+28"/>
+        <location filename="../qml/ControlsImportPicker.qml" line="+29"/>
         <location line="+1"/>
         <source>Cancel</source>
         <translation>İptal</translation>
@@ -2280,13 +2280,18 @@ Bu geri alınamaz.</translation>
         <translation>Al</translation>
     </message>
     <message>
-        <location line="+93"/>
-        <location line="+31"/>
+        <location line="+98"/>
+        <location line="+39"/>
         <source>Import from USB drive</source>
         <translation>USB bellekten al</translation>
     </message>
     <message>
-        <location line="-9"/>
+        <location line="-22"/>
+        <source>Importing replaces your controls in games.</source>
+        <translation>İçe aktarmak oyunlardaki kontrollerini değiştirir.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>This drive can&apos;t be read right now.</source>
         <translation>Bu bellek şu an okunamıyor.</translation>
     </message>
@@ -2836,22 +2841,22 @@ Bu geri alınamaz.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+509"/>
-        <location line="+187"/>
+        <location filename="../qml/GameControls.qml" line="+525"/>
+        <location line="+193"/>
         <source>Could not save to the USB drive</source>
         <translation>USB belleğe kaydedilemedi</translation>
     </message>
     <message>
-        <location line="-187"/>
+        <location line="-193"/>
         <location line="+6"/>
         <location line="+2"/>
-        <location line="+179"/>
+        <location line="+185"/>
         <location line="+36"/>
         <source>Try again.</source>
         <translation>Yeniden dene.</translation>
     </message>
     <message>
-        <location line="-215"/>
+        <location line="-221"/>
         <source>Could not save the change</source>
         <translation>Değişiklik kaydedilemedi</translation>
     </message>
@@ -2861,7 +2866,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 için değişiklik kaydedilemedi</translation>
     </message>
     <message>
-        <location line="-268"/>
+        <location line="-280"/>
         <source>Left stick</source>
         <translation>Sol çubuk</translation>
     </message>
@@ -2881,7 +2886,7 @@ Bu geri alınamaz.</translation>
         <translation>Oyunlar %1 düğmesini A, %2 düğmesini B olarak görür.</translation>
     </message>
     <message>
-        <location line="+439"/>
+        <location line="+457"/>
         <source>Saved to the USB drive</source>
         <translation>USB belleğe kaydedildi</translation>
     </message>
@@ -5575,12 +5580,17 @@ Bu geri alınamaz.</translation>
 <context>
     <name>RemapCapture</name>
     <message>
-        <location filename="../qml/RemapCapture.qml" line="+42"/>
+        <location filename="../qml/RemapCapture.qml" line="+45"/>
         <source>Cancel</source>
         <translation>İptal</translation>
     </message>
     <message>
-        <location line="+115"/>
+        <location line="+1"/>
+        <source>Any button counts. Wait 5 seconds to cancel.</source>
+        <translation>Her düğme sayılır. İptal için 5 saniye bekle.</translation>
+    </message>
+    <message>
+        <location line="+121"/>
         <source>Controllers can&apos;t be read right now.</source>
         <translation>Kontrolcüler şu an okunamıyor.</translation>
     </message>

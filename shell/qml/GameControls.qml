@@ -78,6 +78,8 @@ QtObject {
     property var queue: []
     property string exportVolume: ""    // an export waits for the save before it
     property bool importing: false
+    // A reset asked for while a save is in flight: the padKey it was asked on, run when the save ends.
+    property string pendingReset: ""
     // An import that waits for the save in flight: { volumeId, fileName, targetId, targetSlot }, else null.
     property var pendingImport: null
     // The pad whose import is waiting or running (while `importing`): its changes wait in the queue until it ends.
@@ -110,6 +112,8 @@ QtObject {
         inFlight = null
         phase = ""
         pendingImport = null
+        pendingReset = ""
+        exportVolume = ""
         importing = false       // the old owner's ImportFinished is ignored; its hold on the queue ends
         loadState = "loading"
         loadedKey = null
@@ -473,12 +477,24 @@ QtObject {
         inFlight = null
         saved(tag)
         refresh()
-        if (pendingImport !== null)
+        if (pendingImport !== null) {
+            pendingReset = ""       // the import replaces the pad's controls anyway
             startImport()
-        else if (queue.length > 0)
-            flush()
-        else if (exportVolume !== "")
-            startExport()
+        } else {
+            runPendingReset()
+            if (queue.length > 0)
+                flush()
+            else if (phase === "" && exportVolume !== "")
+                startExport()
+        }
+    }
+
+    // The reset that waited for the save that just ended (resetAll): on the pad it was asked on only.
+    function runPendingReset() {
+        const asked = pendingReset
+        pendingReset = ""
+        if (asked !== "" && asked === padKey)
+            resetAll()
     }
 
     // After the save and the assignment: the next slot to empty, else done.
@@ -518,10 +534,14 @@ QtObject {
         }
         failed(tag)
         refresh()
-        if (pendingImport !== null)
+        if (pendingImport !== null) {
+            pendingReset = ""
             startImport()
-        else if (queue.length > 0)
-            flush()
+        } else {
+            runPendingReset()
+            if (queue.length > 0)
+                flush()
+        }
     }
 
     // Everything back to the default for the pad (and the pads of its slot): its own stored
@@ -534,8 +554,10 @@ QtObject {
         queue = queue.filter(q => q.padKey !== padKey)
         if (queue.length === 0)
             debounceTimer.stop()
-        if (phase !== "")
+        if (phase !== "") {
+            pendingReset = padKey       // runs when the save ends (done or fail)
             return
+        }
         const d = editable()
         const own = stored !== null && d.id === stored.id
         const below = applyingFor(pad, slotRank(slotOf(d.match)))
