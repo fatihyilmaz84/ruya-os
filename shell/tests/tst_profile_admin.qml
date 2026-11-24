@@ -651,7 +651,6 @@ Item {
             openProfilePage("p2")
             compare(findChild(find("rowManagedWho"), "label").text, "Standard", "the fact row is the role, not the title")
             compare(findChild(find("rowManagedWho"), "value").text, "No PIN")
-            verify(!find("noteLastAdmin").visible, "Delete is offered, so no reason is given")
             verify(!find("page_managedProfile").isLastAdmin)
             compare(find("page_managedProfile").title, "Ada")
             compare(find("rowRename").kind, "action")
@@ -668,8 +667,8 @@ Item {
             tryVerify(() => find("rowRename") === null, 3000, "the page is gone")
         }
 
-        // RUY-722: a PIN shows in the fact row's value; a second admin can be deleted, so no note.
-        function test_profile_page_pin_state_and_second_admin_has_no_last_admin_note() {
+        // RUY-722: a PIN shows in the fact row's value; a second admin can be deleted.
+        function test_profile_page_pin_state_and_second_admin_can_be_deleted() {
             startShell()
             signIn("p1", "1234")
             openProfilesPane()
@@ -681,7 +680,6 @@ Item {
             compare(find("page_managedProfile").adminCount, 2)
             verify(!find("page_managedProfile").isLastAdmin)
             verify(find("rowDelete").visible)
-            verify(!find("noteLastAdmin").visible)
         }
 
         // Left leaves the page too, and a profile opened again shows its own name.

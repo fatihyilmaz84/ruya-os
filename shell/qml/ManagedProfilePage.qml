@@ -45,6 +45,8 @@ Page {
     readonly property int adminCount: Profiles.profiles.filter(p => p.role === "admin").length
     // The same rules as before the page: another profile, an admin signed in, and never the last admin.
     readonly property bool canRename: other && body.isAdmin
+    // The service's rule. For an admin viewing another admin it is never true today (that makes two admins),
+    // so it is a guard, not a visible state.
     readonly property bool isLastAdmin: profile !== undefined && profile.role === "admin" && adminCount <= 1
     readonly property bool canDelete: other && body.isAdmin && !isLastAdmin
 
@@ -120,14 +122,6 @@ Page {
             visible: page.canDelete
             label: qsTr("Delete %1").arg(page.last.name)
             onActivated: body.startDelete(page.profileId, page.last.name)
-        }
-
-        // Why Delete is missing (the same rule as canDelete: isLastAdmin).
-        SettingNote {
-            objectName: "noteLastAdmin"
-            u: page.u
-            visible: page.other && body.isAdmin && page.isLastAdmin
-            text: qsTr("The last admin can't be deleted.")
         }
 
         Text {

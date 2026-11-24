@@ -3598,7 +3598,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ManagedProfilePage</name>
     <message>
-        <location filename="../qml/ManagedProfilePage.qml" line="+83"/>
+        <location filename="../qml/ManagedProfilePage.qml" line="+85"/>
         <source>Profile renamed.</source>
         <translation>Profil yeniden adlandırıldı.</translation>
     </message>
@@ -3623,12 +3623,7 @@ Bu geri alınamaz.</translation>
         <translation>PIN yok</translation>
     </message>
     <message>
-        <location line="+26"/>
-        <source>The last admin can&apos;t be deleted.</source>
-        <translation>Son yönetici silinemez.</translation>
-    </message>
-    <message>
-        <location line="-18"/>
+        <location line="+8"/>
         <source>Rename %1</source>
         <translation>%1 profilini yeniden adlandır</translation>
     </message>

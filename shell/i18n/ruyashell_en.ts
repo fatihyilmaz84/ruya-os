@@ -3604,7 +3604,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ManagedProfilePage</name>
     <message>
-        <location filename="../qml/ManagedProfilePage.qml" line="+83"/>
+        <location filename="../qml/ManagedProfilePage.qml" line="+85"/>
         <source>Profile renamed.</source>
         <translation>Profile renamed.</translation>
     </message>
@@ -3629,12 +3629,7 @@ This can&apos;t be undone.</translation>
         <translation>No PIN</translation>
     </message>
     <message>
-        <location line="+26"/>
-        <source>The last admin can&apos;t be deleted.</source>
-        <translation>The last admin can&apos;t be deleted.</translation>
-    </message>
-    <message>
-        <location line="-18"/>
+        <location line="+8"/>
         <source>Rename %1</source>
         <translation>Rename %1</translation>
     </message>
