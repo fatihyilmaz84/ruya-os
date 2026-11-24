@@ -814,10 +814,10 @@ Result check(const QString &dir)
     m.author = text("author", 80, true);
     m.licence = text("licence", 96, true);
     m.version = text("version", 32, true);
-    static const QRegularExpression spdx(QStringLiteral("^[A-Za-z0-9.+-]{2,40}( (AND|OR|WITH) [A-Za-z0-9.+-]{2,40})*$"));
+    static const QRegularExpression spdx(QRegularExpression::anchoredPattern(QStringLiteral("[A-Za-z0-9.+-]{2,40}( (AND|OR|WITH) [A-Za-z0-9.+-]{2,40})*")));
     if (!m.licence.isEmpty() && !spdx.match(m.licence).hasMatch())
         fail(QStringLiteral("'licence' must be an SPDX identifier such as CC0-1.0 or CC-BY-4.0"));
-    static const QRegularExpression semver(QStringLiteral("^\\d+\\.\\d+\\.\\d+([-+][0-9A-Za-z.-]+)?$"));
+    static const QRegularExpression semver(QRegularExpression::anchoredPattern(QStringLiteral("\\d+\\.\\d+\\.\\d+([-+][0-9A-Za-z.-]+)?")));
     if (!m.version.isEmpty() && !semver.match(m.version).hasMatch())
         fail(QStringLiteral("'version' must look like 1.0.0"));
 

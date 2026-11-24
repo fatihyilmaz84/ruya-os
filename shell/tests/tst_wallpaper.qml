@@ -739,6 +739,7 @@ Item {
             verify(DeviceSettings.isValidWallpaper("user:u-0123456789ab.jpg"))
             verify(!DeviceSettings.isValidWallpaper("user:a/b.jpg"))
             verify(!DeviceSettings.isValidWallpaper("Dusk"))
+            verify(!DeviceSettings.isValidWallpaper("aurora\n"),"RUY-709: a trailing line feed is not a wallpaper id")
             tryVerify(() => find("wallpaperLayer").covering, 5000)
         }
 

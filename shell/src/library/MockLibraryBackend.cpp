@@ -59,7 +59,7 @@ QString titleKey(const QString &title)
 
 bool validProfile(const QString &profile)
 {
-    static const QRegularExpression profileId(QStringLiteral("^[A-Za-z0-9_-]{1,32}$"));
+    static const QRegularExpression profileId(QRegularExpression::anchoredPattern(QStringLiteral("[A-Za-z0-9_-]{1,32}")));
     return profileId.match(profile).hasMatch();
 }
 

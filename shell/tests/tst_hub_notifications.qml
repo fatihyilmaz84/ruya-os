@@ -41,6 +41,7 @@ Item {
     }
 
     SignalSpy { id: launchedSpy; target: Session; signalName: "launchFinished" }
+    SignalSpy { id: settingSpy; target: NotificationCentre; signalName: "settingFinished" }
 
     TestCase {
         id: tc
@@ -469,6 +470,12 @@ Item {
             tryCompare(Notifications, "inQuietHours", true)
             setQuietHours(true, "00:00", "01:00")
             tryCompare(Notifications, "inQuietHours", false)
+            // RUY-709: a time with a trailing line feed is not a time ("$" alone would accept it).
+            settingSpy.clear()
+            NotificationCentre.setSetting("QuietHours", ({ enabled: true, from: "22:00\n", to: "07:00" }))
+            tryCompare(settingSpy, "count", 1)
+            compare(settingSpy.signalArguments[0][1], "invalid")
+            compare(NotificationCentre.quietHours.from, "00:00")
         }
 
         function test_quiet_hours_in_the_hub_and_settings() {

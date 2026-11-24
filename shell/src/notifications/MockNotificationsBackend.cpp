@@ -15,7 +15,7 @@ const QStringList Urgencies = {QStringLiteral("low"), QStringLiteral("normal"), 
 
 bool validClock(const QString &text)
 {
-    static const QRegularExpression re(QStringLiteral("^([01][0-9]|2[0-3]):[0-5][0-9]$"));
+    static const QRegularExpression re(QRegularExpression::anchoredPattern(QStringLiteral("([01][0-9]|2[0-3]):[0-5][0-9]")));
     return re.match(text).hasMatch();
 }
 } // namespace

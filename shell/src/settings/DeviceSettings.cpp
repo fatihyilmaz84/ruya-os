@@ -134,15 +134,15 @@ bool DeviceSettings::isValidWallpaper(const QString &value)
 {
     if (value.isEmpty())
         return true;
-    static const QRegularExpression bundled(QStringLiteral("^[a-z0-9-]{1,32}$"));
-    static const QRegularExpression user(QStringLiteral("^user:[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"));
+    static const QRegularExpression bundled(QRegularExpression::anchoredPattern(QStringLiteral("[a-z0-9-]{1,32}")));
+    static const QRegularExpression user(QRegularExpression::anchoredPattern(QStringLiteral("user:[A-Za-z0-9][A-Za-z0-9._-]{0,63}")));
     return bundled.match(value).hasMatch() || user.match(value).hasMatch();
 }
 
 bool DeviceSettings::isValidSoundTheme(const QString &value)
 {
-    static const QRegularExpression bundled(QStringLiteral("^[a-z0-9-]{1,32}$"));
-    static const QRegularExpression user(QStringLiteral("^user:[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"));
+    static const QRegularExpression bundled(QRegularExpression::anchoredPattern(QStringLiteral("[a-z0-9-]{1,32}")));
+    static const QRegularExpression user(QRegularExpression::anchoredPattern(QStringLiteral("user:[A-Za-z0-9][A-Za-z0-9._-]{0,63}")));
     return bundled.match(value).hasMatch() || user.match(value).hasMatch();
 }
 
@@ -347,7 +347,7 @@ void DeviceSettings::setSoundTheme(const QString &value)
 
 bool DeviceSettings::isValidProfileKey(const QString &id)
 {
-    static const QRegularExpression valid(QStringLiteral("^[A-Za-z0-9._-]{1,64}$"));
+    static const QRegularExpression valid(QRegularExpression::anchoredPattern(QStringLiteral("[A-Za-z0-9._-]{1,64}")));
     return valid.match(id).hasMatch();
 }
 
