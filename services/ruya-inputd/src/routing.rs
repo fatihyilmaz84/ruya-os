@@ -1887,7 +1887,7 @@ impl<B: Backend> Router<B> {
         if !valid_profile_id(profile) {
             return Status::UnknownProfile;
         }
-        let Some(uid) = self.accounts.profile_uid(profile) else {
+        let Some(uid) = self.accounts.account(profile).map(|a| a.uid) else {
             return Status::UnknownProfile;
         };
         if matches!(self.route, Route::Locked | Route::App) || self.profile != profile {
@@ -2013,7 +2013,7 @@ impl<B: Backend> Router<B> {
             if !valid_profile_id(profile) {
                 return Status::UnknownProfile;
             }
-            match self.accounts.profile_uid(profile) {
+            match self.accounts.account(profile).map(|a| a.uid) {
                 Some(uid) => Some(uid),
                 None => return Status::UnknownProfile,
             }
@@ -2415,7 +2415,7 @@ impl<B: Backend> Router<B> {
     fn owner_of(&self, pad: &str) -> String {
         self.owners
             .get(pad)
-            .filter(|who| self.accounts.profile_uid(who).is_some() && !self.accounts.is_guest(who))
+            .filter(|who| self.accounts.account(who).is_some_and(|a| !a.guest))
             .unwrap_or_default()
             .to_owned()
     }
@@ -2423,22 +2423,32 @@ impl<B: Backend> Router<B> {
     /// `profile` played on `pad` (a sign-in or a JoinPlayer): the pad's owner, unless it is a
     /// temporary guest or the player has no pad (RUY-124).
     fn remember_owner(&mut self, pad: &str, profile: &str) {
-        if pad.is_empty() || profile.is_empty() || self.accounts.is_guest(profile) {
+        if pad.is_empty() || profile.is_empty() {
+            return;
+        }
+        let Some(account) = self.accounts.account(profile) else {
+            return;
+        };
+        if account.guest {
             return;
         }
         let accounts = &self.accounts;
-        let live = |who: &str| accounts.profile_uid(who).is_some();
-        let changed = self.owners.record(pad, profile, &live);
-        self.drain_owners();
-        if changed {
-            let marked: Vec<PadKey> = self
-                .pads
-                .iter()
-                .filter(|(_, p)| p.info.id == pad)
-                .map(|(&k, _)| k)
-                .collect();
-            self.dirty.extend(marked);
+        let live = |who: &str| accounts.account(who).is_some();
+        if self.owners.record(pad, profile, &live) {
+            self.owner_changed(pad);
         }
+        self.drain_owners();
+    }
+
+    /// The owner of the pad with stable id `pad` changed: its record is announced.
+    fn owner_changed(&mut self, pad: &str) {
+        let marked: Vec<PadKey> = self
+            .pads
+            .iter()
+            .filter(|(_, p)| p.info.id == pad)
+            .map(|(&k, _)| k)
+            .collect();
+        self.dirty.extend(marked);
     }
 
     fn drain_owners(&mut self) {
@@ -2449,7 +2459,7 @@ impl<B: Backend> Router<B> {
 
     /// A console profile's controller profiles exist only for a profile account.
     fn console_ok(&self, profile: &str) -> bool {
-        valid_profile_id(profile) && self.accounts.profile_uid(profile).is_some()
+        valid_profile_id(profile) && self.accounts.account(profile).is_some()
     }
 
     /// The profiles of `profile` changed: the signal, and the owner's pads take the new mapping
@@ -2580,6 +2590,16 @@ impl<B: Backend> Router<B> {
         self.drain_book();
         if status == Status::Ok {
             self.journal(format!("controller profiles of ruya-{profile} removed"));
+        }
+        // A pad that remembered this profile now reads no owner: one `DeviceChanged` each.
+        let orphaned: Vec<String> = self
+            .pads
+            .values()
+            .map(|p| p.info.id.clone())
+            .filter(|id| self.owners.get(id) == Some(profile) && self.owner_of(id).is_empty())
+            .collect();
+        for id in orphaned {
+            self.owner_changed(&id);
         }
         self.profiles_changed(profile);
         status
@@ -7565,35 +7585,47 @@ mod tests {
     struct Live {
         profiles: std::sync::Arc<std::sync::Mutex<Vec<&'static str>>>,
         guests: Vec<&'static str>,
+        /// How many times the router asked (each is one `/etc/passwd` read in production).
+        lookups: std::sync::Arc<std::sync::atomic::AtomicUsize>,
     }
 
     impl Accounts for Live {
-        fn profile_uid(&self, profile: &str) -> Option<u32> {
+        fn account(&self, profile: &str) -> Option<crate::accounts::Account> {
+            self.lookups.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             self.profiles
                 .lock()
                 .expect("lock")
                 .iter()
                 .position(|p| *p == profile)
-                .map(|i| 1001 + i as u32)
-        }
-        fn is_guest(&self, profile: &str) -> bool {
-            self.guests.contains(&profile)
+                .map(|i| crate::accounts::Account {
+                    uid: 1001 + i as u32,
+                    guest: self.guests.contains(&profile),
+                })
         }
     }
 
     type Profiles = std::sync::Arc<std::sync::Mutex<Vec<&'static str>>>;
 
+    type Lookups = std::sync::Arc<std::sync::atomic::AtomicUsize>;
+
     fn owner_router(guests: Vec<&'static str>) -> (Router<Fake>, Profiles) {
+        let (r, profiles, _) = counted_router(guests);
+        (r, profiles)
+    }
+
+    fn counted_router(guests: Vec<&'static str>) -> (Router<Fake>, Profiles, Lookups) {
         let profiles: Profiles =
             std::sync::Arc::new(std::sync::Mutex::new(vec!["p1", "p2", "p3", "g1"]));
+        let lookups = Lookups::default();
         let r = Router::new(
             Fake::default(),
             Box::new(Live {
                 profiles: profiles.clone(),
                 guests,
+                lookups: lookups.clone(),
             }),
         );
-        (r, profiles)
+        (r, profiles, lookups)
     }
 
     fn owner_of(r: &Router<Fake>, key: PadKey) -> String {
@@ -7662,6 +7694,64 @@ mod tests {
         assert_eq!(join(&mut r, a, "p3"), 3);
         assert_eq!(r.owners.get("b"), None, "dropped by that write");
         assert_eq!(owner_of(&r, a), "p3");
+    }
+
+    #[test]
+    fn forgetting_a_profile_announces_each_pad_that_remembered_it() {
+        let (mut r, profiles) = owner_router(vec![]);
+        let a = r.add_pad(pad("a"), t0());
+        let b = r.add_pad(pad("b"), t0());
+        let c = r.add_pad(pad("c"), t0());
+        sign_in(&mut r, a, "p1");
+        assert_eq!(join(&mut r, b, "p2"), 2);
+        assert_eq!(join(&mut r, c, "p1"), 1, "p1 already has seat 1");
+        assert_eq!(owner_of(&r, c), "p1");
+        r.take_notices();
+        // The account is deleted, then the shell forgets the profile (RUY-468).
+        profiles.lock().expect("lock").retain(|p| *p != "p1");
+        assert_eq!(r.forget_console_profile("p1"), Status::Ok);
+        let changed: Vec<(String, String)> = r
+            .take_notices()
+            .into_iter()
+            .filter_map(|n| match n {
+                Notice::DeviceChanged(d) => Some((d.id, d.owner)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            changed,
+            vec![("a".into(), "".into()), ("c".into(), "".into())],
+            "one per pad that p1 owned, owner empty; b (p2) is untouched"
+        );
+        assert_eq!(owner_of(&r, b), "p2");
+    }
+
+    #[test]
+    fn forgetting_a_profile_whose_account_is_still_there_changes_no_owner() {
+        let (mut r, _) = owner_router(vec![]);
+        let a = r.add_pad(pad("a"), t0());
+        sign_in(&mut r, a, "p1");
+        r.take_notices();
+        assert_eq!(r.forget_console_profile("p1"), Status::Ok);
+        assert!(!r
+            .take_notices()
+            .iter()
+            .any(|n| matches!(n, Notice::DeviceChanged(_))));
+        assert_eq!(owner_of(&r, a), "p1");
+    }
+
+    #[test]
+    fn an_owner_is_read_from_the_accounts_once_per_record() {
+        let (mut r, _, lookups) = counted_router(vec![]);
+        let a = r.add_pad(pad("a"), t0());
+        sign_in(&mut r, a, "p1");
+        let before = lookups.load(std::sync::atomic::Ordering::SeqCst);
+        let _ = owner_of(&r, a);
+        assert_eq!(
+            lookups.load(std::sync::atomic::Ordering::SeqCst) - before,
+            1,
+            "uid and guest come from one lookup"
+        );
     }
 
     #[test]

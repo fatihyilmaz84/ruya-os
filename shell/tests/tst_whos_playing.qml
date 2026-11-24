@@ -38,6 +38,7 @@ Item {
     }
 
     SignalSpy { id: launchedSpy; target: Session; signalName: "launchFinished" }
+    SignalSpy { id: devicesSpy; target: Input; signalName: "devicesChanged" }
     SignalSpy { id: joinSpy; target: Input; signalName: "joinFinished" }
     SignalSpy { id: navigatorSpy; target: Input; signalName: "navigatorFinished" }
     SignalSpy { id: foreignSpy; target: Input; signalName: "foreignInput" }
@@ -815,6 +816,32 @@ Item {
             askWith(host.dualSense)
             tryVerify(() => find("whosPlayingCards").activeFocus, 2000)
             compare(find("whosPlayingCards").currentIndex, 1, "Ada, the first profile without a pad")
+        }
+
+        // RUY-669: a deleted profile's pads read no owner, announced as DevicesChanged (inputd: one DeviceChanged each).
+        function test_forgetting_a_profile_empties_the_owner_of_the_pads_that_remembered_it() {
+            signIn()
+            rememberOnDualSense("p9")
+            tryVerify(() => Input.devices.find(d => d.id === host.xbox).owner === "p1", 2000)
+            devicesSpy.clear()
+            Input.forgetConsoleProfile("p9")
+            tryVerify(() => Input.devices.find(d => d.id === host.dualSense).owner === "", 2000, "the DualSense forgot p9")
+            verify(devicesSpy.count >= 1, "the change was announced")
+            compare(Input.devices.find(d => d.id === host.xbox).owner, "p1", "another pad's owner stays")
+        }
+
+        // RUY-669: joining the profile that already holds the pad's seat changes nothing but the owner, which is announced.
+        function test_the_same_again_join_teaches_the_pad_its_owner_and_announces_it() {
+            signIn()
+            rememberOnDualSense("p2")
+            Input.forgetConsoleProfile("p2")                        // p2 keeps its seat on the DualSense, the pad forgets
+            tryVerify(() => Input.devices.find(d => d.id === host.dualSense).owner === "", 2000)
+            joinSpy.clear()
+            devicesSpy.clear()
+            Input.joinPlayer(host.dualSense, "p2")                  // the same again
+            tryVerify(() => Input.devices.find(d => d.id === host.dualSense).owner === "p2", 2000, "the pad remembers p2 again")
+            verify(devicesSpy.count >= 1, "and says so")
+            compare(Input.players.length, 2, "no seat moved")
         }
 
         // ---- geometry at 1080p (u = 1) ------------------------------------------------------------------------

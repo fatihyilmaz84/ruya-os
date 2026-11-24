@@ -203,6 +203,9 @@ private:
     // After the seats changed from `before`: the device records follow, PlayersChanged is sent.
     void seatsChanged(const QVariantList &before);
     bool applySeatsToDevices();
+    // A pad no longer remembers `profile` (RUY-669); and the DevicesChanged for whatever record changed.
+    void forgetOwner(const QString &profile);
+    void emitDevicesIfChanged();
 
     QVariantList m_calls;
     QString m_route = QStringLiteral("shell");

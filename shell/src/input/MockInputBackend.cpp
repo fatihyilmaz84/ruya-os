@@ -592,12 +592,33 @@ void MockInputBackend::callProfile(quint64 token, const QString &method, const Q
         // The settings file goes with the directory (RUY-468).
         if (method == QLatin1String("ForgetConsoleProfile") && reply.value(QStringLiteral("status")) == QLatin1String("ok"))
             m_confirm.remove(args.value(QStringLiteral("profile")).toString());
+        // The pads that remembered the profile now read no owner: DevicesChanged (as inputd, whose
+        // record-changed path announces each, RUY-669).
+        if (method == QLatin1String("ForgetConsoleProfile") && reply.value(QStringLiteral("status")) == QLatin1String("ok"))
+            forgetOwner(args.value(QStringLiteral("profile")).toString());
     }
     QTimer::singleShot(0, this, [this, token, method, args, reply, changed] {
         emit profileReply(token, method, args, reply);
         if (!changed.isEmpty())
             emit profilesChanged(changed);
     });
+}
+
+void MockInputBackend::forgetOwner(const QString &profile)
+{
+    for (auto it = m_owners.begin(); it != m_owners.end();) {
+        if (it.value() == profile)
+            it = m_owners.erase(it);
+        else
+            ++it;
+    }
+    emitDevicesIfChanged();
+}
+
+void MockInputBackend::emitDevicesIfChanged()
+{
+    if (applySeatsToDevices())
+        QTimer::singleShot(0, this, [this] { emit devicesChanged(); });
 }
 
 QVariantList MockInputBackend::playerList() const
@@ -657,8 +678,7 @@ bool MockInputBackend::applySeatsToDevices()
 
 void MockInputBackend::seatsChanged(const QVariantList &before)
 {
-    if (applySeatsToDevices())
-        QTimer::singleShot(0, this, [this] { emit devicesChanged(); });
+    emitDevicesIfChanged();
     const QVariantList now = playerList();
     // A signal from a service whose name has no owner is not heard.
     if (now != before && serviceOwned())
@@ -691,6 +711,7 @@ void MockInputBackend::joinPlayer(const QString &deviceId, const QString &profil
         if (at >= 0 && m_seats.at(at).profile == profile) {
             slot = uint(at + 1);                         // (e) the same again: nothing changes
             m_owners.insert(deviceId, profile);
+            emitDevicesIfChanged();                      // the pad may have learned its owner
         } else {
             QList<Seat> next = m_seats;
             if (at == 0)
