@@ -198,7 +198,7 @@ private:
 // Pictures for the art glow (T-281): solid-ish 160 x 90 pictures in a temporary directory, so no
 // binary is committed. red, blue, green, white and dark are a gentle diagonal gradient of one
 // colour; redblue is red on the left half and blue on the right; grey and pastel exercise the
-// sampler's limits; brighttop, darktop, portraitdarktop, squaredarktop and darkpatch exercise the top band. Exposed to the tests as `artFixtures` (a path); the mock library and store take
+// sampler's limits; brighttop, darktop, portraitdarktop, squaredarktop, darkpatch, clockstrip, clockbusy and greyflat exercise the top band. Exposed to the tests as `artFixtures` (a path); the mock library and store take
 // the first six as card art (MockArt.h).
 static QString writeArtFixtures(const QTemporaryDir &dir)
 {
@@ -243,13 +243,25 @@ static QString writeArtFixtures(const QTemporaryDir &dir)
     band("darktop", 160, 90, 30, Qt::black, Qt::white);
     band("portraitdarktop", 300, 450, 112, Qt::black, Qt::white);
     band("squaredarktop", 300, 300, 90, Qt::black, Qt::white);
-    // Black with one small white patch at the top right, where the clock is (darkpatch): about 5 % of the top band.
-    QImage patch(160, 90, QImage::Format_RGB32);
-    patch.fill(Qt::black);
-    QPainter pp(&patch);
-    pp.fillRect(144, 0, 8, 18, Qt::white);
-    pp.end();
-    patch.save(dir.filePath(QStringLiteral("darkpatch.png")));
+    // Black with white in one rectangle, 16:9. Where the clock is (the sample column from 145 of 160, about 1740..1800
+    // of a 1080p screen, RUY-1136): a small patch, about 5 % of the top band (darkpatch); a strip down the whole
+    // height (clockstrip: the clock's own band is white, the rest of the bar's black); a strip over the top two of
+    // the band's four sample rows only (clockbusy: the clock's own band is busy, the rest of the bar's black).
+    auto blackWith = [&](const char *name, const QRect &white) {
+        QImage image(160, 90, QImage::Format_RGB32);
+        image.fill(Qt::black);
+        QPainter wp(&image);
+        wp.fillRect(white, Qt::white);
+        wp.end();
+        image.save(dir.filePath(QString::fromLatin1(name) + QStringLiteral(".png")));
+    };
+    blackWith("darkpatch", QRect(144, 0, 8, 18));
+    blackWith("clockstrip", QRect(145, 0, 15, 90));
+    blackWith("clockbusy", QRect(145, 0, 15, 10));
+    // One flat grey of relative luminance 0.31 (greyflat): dark ink reads (6.2:1), Daylight's warning brown does not (2.5:1).
+    QImage flat(160, 90, QImage::Format_RGB32);
+    flat.fill(QColor(150, 150, 150));
+    flat.save(dir.filePath(QStringLiteral("greyflat.png")));
     // Three pictures that cannot be mistaken for a dark failed load (RUY-856, the .play fixture's hero, card and cover): a teal
     // scene with a sun and stripes, an orange card with big circles, a portrait violet cover with a diamond.
     auto scene = [&](const char *name, int w, int h, const QColor &from, const QColor &to, const QColor &mark, int kind) {

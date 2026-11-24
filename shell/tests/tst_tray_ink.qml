@@ -3,11 +3,14 @@ import QtTest
 import RuyaShell
 
 // The top bar's adaptive ink (RUY-1136, 04 §5.5; the shade it replaced was RUY-1117): ThemeMath.trayInk picks light or
-// dark ink for the nav's and the tray's text from the light of the art behind them (ArtPalette measures it: the top
-// band of the picture, in the same pass and cache as the glow's colours), with hysteresis, and turns the glyph halo on
-// over busy art; Shell's `trayInk` and `navInk` follow what is behind the bar (the hero art on Home, the wallpaper on a
-// page; the theme's `text` over its own Backdrop or art not measured yet), cross-faded over `tintMs`, at once under
-// reduced motion. `shots` saves Home over a dark, a light and a busy hero, Dreamglass and Daylight, 1080p and 720p.
+// dark ink for each item of the top bar from the light of the art behind that item (ArtPalette measures it: the top
+// band of the picture under the item's x range, in the same pass and cache as the glow's colours), with hysteresis,
+// and turns that item's glyph halo on over busy art. One TopBarInk per item (the nav's words through its glass
+// `navInk`, the bell `bellInk`, the battery chips and "N more" `batteryInk`, the profile `profileInk`, the clock
+// `clockInk`) follows what is behind the bar (the hero art on Home, the wallpaper on a page; the theme's `text` over its
+// own Backdrop or art not measured yet), cross-faded over `tintMs`, at once under reduced motion. `shots` saves Home
+// over a dark, a light, a busy hero (a white patch behind the clock) and one busy under the clock only, Dreamglass and
+// Daylight, 1080p and 720p.
 // Signs in as "Ada" (p2, no PIN) with controller keys.
 Item {
     id: host
@@ -148,10 +151,31 @@ Item {
         // --- ArtPalette.bandOf ------------------------------------------------------------------------
 
         readonly property real wide: 16 / 9     // the view's aspect: a 16:9 screen
-        function bandOf(source, aspect) {
+        function bandOf(source, aspect, from, to) {
             const a = aspect === undefined ? tc.wide : aspect
             tryVerify(() => ArtPalette.bandOf(source, a).ok === true, 5000, source + " is measured")
-            return ArtPalette.bandOf(source, a)
+            return from === undefined ? ArtPalette.bandOf(source, a) : ArtPalette.bandOf(source, a, from, to)
+        }
+
+        // Under an x range of the view (an item of the bar): the sample columns whose centres lie in it, at least the one
+        // under its middle. clockstrip is white from sample column 29 of 32 (x 0.906 of the view) to the right edge.
+        function test_the_band_under_an_x_range() {
+            const source = path("clockstrip")
+            const whole = bandOf(source)
+            verify(whole.high > 0.9 && whole.low < 0.02, "the whole band has both: " + JSON.stringify(whole))
+            compare(JSON.stringify(bandOf(source, tc.wide, 0, 1)), JSON.stringify(whole), "0..1 is the whole width")
+            const left = bandOf(source, tc.wide, 0, 0.88)
+            verify(left.high < 0.05, "left of the strip: black " + left.high)
+            const strip = bandOf(source, tc.wide, 0.91, 0.95)
+            verify(strip.low > 0.9, "on the strip: white " + strip.low)
+            // A column only touched (here 28, its centre at 0.890) is not under the range.
+            const touched = bandOf(source, tc.wide, 0.892, 0.95)
+            verify(touched.low > 0.9, "column 28 is only touched: " + touched.low)
+            // A range narrower than a column takes the one under its middle.
+            verify(bandOf(source, tc.wide, 0.92, 0.921).low > 0.9, "inside column 29")
+            verify(bandOf(source, tc.wide, 0.5, 0.5).high < 0.05, "a point in the black")
+            // Under a crop the range is of what is on screen: a 4:3 view shows the middle of the 16:9 picture.
+            verify(bandOf(source, 4 / 3, 0.9, 1).high < 0.05, "the strip is cut off in 4:3")
         }
 
         function test_the_top_band_is_measured() {
@@ -234,16 +258,19 @@ Item {
             find("heroArt").show({ id: "test:" + picture, title: "Hero", art: { tile: picture } })
             compare(front().picture, picture)
         }
-        // The bar's light is measured for `picture` and both inks have arrived where they head.
+        // Every item's ink: the nav's words, the bell, the battery chips and "N more", the profile, the clock.
+        readonly property var inks: ["navInk", "bellInk", "batteryInk", "profileInk", "clockInk"]
+        // The bar's light is measured for `picture` and every ink has arrived where it heads.
         function settledOn(picture) {
             const light = find("barLight")
-            tryVerify(() => light.behind.source === picture && light.band !== null, 5000,
+            const clock = find("clockInk")
+            tryVerify(() => light.behind.source === picture && clock.band !== null, 5000,
                       picture + " is measured (behind " + light.behind.kind + " " + light.behind.source + ")")
             settled()
-            return find("trayInk")
+            return clock
         }
         function settled() {
-            for (const name of ["trayInk", "navInk"]) {
+            for (const name of tc.inks) {
                 const ink = find(name)
                 tryVerify(() => Qt.colorEqual(ink.color, ink.target) && Qt.colorEqual(ink.warningColor, ink.warningTarget),
                           5000, name + " has arrived")
@@ -254,14 +281,20 @@ Item {
         function test_the_ink_follows_the_hero() {
             Batteries.mockPopulate()             // the chips and "N more" in the tray
             signIn()
-            const ink = find("trayInk")
+            const ink = find("clockInk")
             showHero(path("dark"))
             compare(find("barLight").behind.kind, "art")
             settledOn(path("dark"))
             compare(ink.pick.ink, "light", "a dark hero: light ink")
             verify(!ink.halo)
             compare(find("barLight").behind.aspect, front().width / front().height, "measured as drawn")
-            compare(JSON.stringify(ink.band), JSON.stringify(ArtPalette.bandOf(path("dark"), find("barLight").behind.aspect)))
+            // The clock's band is the art under the clock's own x range on screen.
+            const clock = find("statusClock")
+            const at = clock.mapToItem(tc.shell, 0, 0).x
+            compare(ink.span.from.toFixed(4), (at / tc.shell.width).toFixed(4))
+            compare(ink.span.to.toFixed(4), ((at + clock.width) / tc.shell.width).toFixed(4))
+            compare(JSON.stringify(ink.band), JSON.stringify(ArtPalette.bandOf(path("dark"), find("barLight").behind.aspect,
+                                                                               ink.span.from, ink.span.to)))
             // Every glyph and word of the tray is in the ink.
             verify(same(find("activeProfileName").color, Theme.inkLight))
             verify(same(find("statusClock").color, Theme.inkLight))
@@ -274,7 +307,7 @@ Item {
             verify(!ink.halo)
             verify(same(find("statusClock").color, Theme.inkDark))
             verify(same(find("navLabel_games").color, Theme.inkDark), "Dreamglass glass over white: dark ink")
-            verify(same(find("bellBadge").border.color, find("navInk").color), "the badge's outline in the nav's ink")
+            verify(same(find("bellBadge").border.color, find("bellInk").color), "the badge's outline in the bell's ink")
             const chip = find("batteryStatus").children.find(c => c.objectName.startsWith("batteryChip_"))
             verify(same(findChild(chip, "batteryKindIcon").color, Theme.inkDark), "a battery chip's glyph")
             verify(same(findChild(chip, "batteryPercent").color, chip.low ? Theme.inkDarkWarning : Theme.inkDark), "and its number")
@@ -288,26 +321,80 @@ Item {
             verify(same(find("navLabel_media").color, Theme.inkDark))
         }
 
-        function test_busy_art_turns_the_halo_on() {
+        // The text layer of each item (the halo's layer) and the ink it follows.
+        function layers() {
+            return [["navPill_games", "navInk"], ["navPill_notifications", "bellInk"], ["batteryStatus", "batteryInk"],
+                    ["profileGroup", "profileInk"], ["statusClock", "clockInk"]]
+        }
+        function checkHalos(where, busyInk) {
+            for (const [item, name] of layers()) {
+                const ink = find(name)
+                compare(ink.halo, name === busyInk, where + ": " + name + " halo " + JSON.stringify(ink.band))
+                compare(find(item).layer.enabled, name === busyInk, where + ": " + item + "'s halo layer")
+            }
+        }
+
+        // Each item takes its ink from the art behind it (the lead, round 2): a white strip behind the clock on a black
+        // hero gives the clock dark ink and every other item light ink, and no item is busy, so no halo anywhere (one
+        // ink for the whole bar would be busy over this art).
+        function test_each_item_reads_the_art_behind_it() {
+            Batteries.mockPopulate()
             signIn()
-            const ink = find("trayInk")
+            showHero(path("clockstrip"))
+            settledOn(path("clockstrip"))
+            compare(find("clockInk").pick.ink, "dark", "the clock over the white strip " + JSON.stringify(find("clockInk").band))
+            verify(same(find("statusClock").color, Theme.inkDark))
+            for (const name of ["navInk", "bellInk", "batteryInk", "profileInk"])
+                compare(find(name).pick.ink, "light", name + " over black " + JSON.stringify(find(name).band))
+            verify(same(find("activeProfileName").color, Theme.inkLight), "the name next to the clock")
+            verify(same(find("navLabel_games").color, Theme.inkLight))
+            checkHalos("a white strip behind the clock", "")
+            const whole = ThemeMath.trayInk(find("barLight").bandAt(0, 1), "", Theme)
+            verify(whole.busy, "one band for the whole bar would be busy here")
+        }
+
+        // Busy art under one item turns the halo on for that item only, in the other ink at trayHaloAlpha.
+        function test_busy_art_turns_the_halo_on_for_its_item_only() {
+            Batteries.mockPopulate()
+            signIn()
             showHero(path("dark"))
             settledOn(path("dark"))
-            verify(!ink.halo)
-            verify(!find("statusRow").layer.enabled, "no halo over a dark hero")
-            verify(!find("navPills").layer.enabled)
-            showHero(path("darkpatch"))
-            settledOn(path("darkpatch"))
-            verify(ink.pick.busy, "a bright patch on black: busy " + JSON.stringify(ink.band))
-            verify(ink.halo)
-            verify(find("statusRow").layer.enabled, "the tray's text layer carries the halo")
+            checkHalos("a dark hero", "")
+            showHero(path("clockbusy"))
+            settledOn(path("clockbusy"))
+            const ink = find("clockInk")
+            verify(ink.pick.busy, "white over black under the clock: busy " + JSON.stringify(ink.band))
+            checkHalos("busy under the clock", "clockInk")
             const other = ink.pick.ink === "light" ? Theme.inkDark : Theme.inkLight
             verify(same(Qt.rgba(ink.haloColor.r, ink.haloColor.g, ink.haloColor.b, 1), other), "in the other ink")
             compare(ink.haloColor.a.toFixed(2), Theme.trayHaloAlpha.toFixed(2), "at trayHaloAlpha")
-            compare(find("navPills").layer.enabled, find("navInk").halo, "the nav's words follow their own light")
             showHero(path("white"))
             settledOn(path("white"))
-            verify(!find("statusRow").layer.enabled, "off again when the art is not busy")
+            checkHalos("a white hero", "")
+        }
+
+        // A low chip's number is in the warning ink of the chips' own pick: over a flat grey where dark ink reads and its
+        // warning brown does not, the chips carry the halo while a chip is low, and only they.
+        function test_a_low_chip_carries_the_halo_where_its_warning_ink_does_not_read() {
+            Batteries.mockClear()
+            Batteries.mockSet("pad-a", 62, "discharging", "controller", "Wireless Controller")
+            signIn()
+            showHero(path("greyflat"))
+            settledOn(path("greyflat"))
+            const ink = find("batteryInk")
+            compare(ink.pick.ink, "dark", "dark ink over the grey " + JSON.stringify(ink.band))
+            verify(!ink.warning, "no chip is low")
+            checkHalos("no low chip", "")
+            Batteries.mockSet("pad-a", 9, "discharging", "controller", "Wireless Controller")
+            tryVerify(() => ink.warning, 2000, "the chip is low")
+            verify(ink.pick.warningContrast < 3, "the warning brown over the grey: " + ink.pick.warningContrast)
+            compare(ink.pick.ink, "dark", "the same ink")
+            checkHalos("a low chip", "batteryInk")
+            const chip = find("batteryChip_pad-a")
+            verify(same(findChild(chip, "batteryPercent").color, Theme.inkDarkWarning), "its number in the warning ink")
+            Batteries.mockSet("pad-a", 62, "discharging", "controller", "Wireless Controller")
+            tryVerify(() => !ink.warning, 2000)
+            checkHalos("charged again", "")
         }
 
         // Daylight's nav glass is frosted white: over a dark hero the tray reads light, the nav's words dark.
@@ -317,8 +404,9 @@ Item {
             tryCompare(Theme, "mix", 1, 5000)
             showHero(path("dark"))
             settledOn(path("dark"))
-            compare(find("trayInk").pick.ink, "light")
+            compare(find("clockInk").pick.ink, "light")
             compare(find("navInk").pick.ink, "dark", "the words on the white glass")
+            compare(find("bellInk").pick.ink, "dark", "the bell on the white glass")
             verify(same(find("navLabel_games").color, Theme.inkDark))
             verify(same(find("statusClock").color, Theme.inkLight))
         }
@@ -338,7 +426,7 @@ Item {
 
         function test_unknown_art_takes_the_theme_text_then_its_ink() {
             signIn()
-            const ink = find("trayInk")
+            const ink = find("clockInk")
             showHero(path("dark"))
             settledOn(path("dark"))
             const fresh = fileUrl("white")       // a picture not measured yet
@@ -367,7 +455,7 @@ Item {
 
         function test_a_page_takes_the_theme_text_or_the_wallpaper() {
             signIn()
-            const ink = find("trayInk")
+            const ink = find("clockInk")
             showHero(path("white"))
             settledOn(path("white"))
             openPage()
@@ -380,11 +468,11 @@ Item {
             const light = find("barLight")
             compare(light.behind.kind, "wallpaper")
             compare(light.behind.source, find("wallpaperLayer").target)
-            tryVerify(() => light.band !== null, 5000, "the wallpaper is measured")
+            tryVerify(() => ink.band !== null, 5000, "the wallpaper is measured")
             compare(light.behind.aspect, find("wallpaperLayer").width / find("wallpaperLayer").height)
-            const raw = ArtPalette.bandOf(find("wallpaperLayer").target, light.behind.aspect)
+            const raw = ArtPalette.bandOf(find("wallpaperLayer").target, light.behind.aspect, ink.span.from, ink.span.to)
             const dimmed = ThemeMath.bandUnder(raw, Theme.background, find("wallpaperLayer").effectiveDim)
-            compare(JSON.stringify(light.band), JSON.stringify(dimmed), "the wallpaper under its dim")
+            compare(JSON.stringify(ink.band), JSON.stringify(dimmed), "the wallpaper under the clock, under its dim")
             compare(ink.pick.ink, ThemeMath.trayInk(dimmed, "", Theme).ink)
             verify(dimmed.high <= raw.high, "the dim only darkens")
         }
@@ -392,7 +480,7 @@ Item {
         function test_changes_cross_fade_over_tintMs_and_jump_under_reduced_motion() {
             Theme.motionFactor = 1.0     // the subject is the duration
             signIn()
-            const ink = find("trayInk")
+            const ink = find("clockInk")
             showHero(path("dark"))
             settledOn(path("dark"))
             verify(same(ink.color, Theme.inkLight))
@@ -428,7 +516,8 @@ Item {
             DeviceSettings.theme = data.theme
             signIn(data.w, data.h)
             tryCompare(Theme, "mix", 1, 5000, "the theme has finished fading")
-            for (const hero of [["dark", path("dark")], ["light", path("white")], ["busy", path("darkpatch")]]) {
+            for (const hero of [["dark", path("dark")], ["light", path("white")], ["busy", path("darkpatch")],
+                                ["halo", path("clockbusy")]]) {
                 showHero(hero[1])
                 settledOn(hero[1])
                 wait(500)

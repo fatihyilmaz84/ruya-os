@@ -9,9 +9,10 @@ import RuyaShell
 // One instance lives in the shell's top layer and is shown on Home and the section pages.
 // One FocusGlide highlight glides under the pills to the focused one (04 §3.8).
 // The glass blurs a crop of `blurSource` (the shared backdrop layer); with no blur (the
-// Performance tier) it is `glassOpaque`. The words and glyphs of the pills at rest are drawn in `ink` (the top bar's
-// adaptive ink, Shell's `navInk`), with the glyph halo while `halo` is on; the current and the focused pill keep
-// their own text colours (`onPrimary`, `text`): they are surfaces of their own.
+// Performance tier) it is `glassOpaque`. The words and glyphs of the pills at rest are drawn in the top bar's adaptive
+// ink (TopBarInk, RUY-1136, 04 §5.5) of the art behind them through the glass (`light`, Shell's barLight): the words as
+// one group (`navInk`), the bell on its own (`bellInk`), each pill with the glyph halo while its ink's art is busy;
+// the current and the focused pill keep their own text colours (`onPrimary`, `text`): they are surfaces of their own.
 FocusScope {
     id: nav
 
@@ -23,15 +24,14 @@ FocusScope {
     property Item blurSource
     property real blurX: 0               // position of this item in `blurSource` coordinates
     property real blurY: 0
-    // The top bar's ink (TopBarInk) for the pills at rest, and its glyph halo.
-    property color ink: Theme.text
-    property bool halo: false
-    property color haloColor: "transparent"
+    // What lies behind the top bar (Shell's barLight), for the inks of the pills at rest.
+    property Item light: null
     // The bell's badge and glyph (NotificationCentre): the unread count, and whether quiet mode is on.
     property int notificationCount: 0
     property bool quiet: false
 
     readonly property string currentKey: keys[currentIndex]
+    readonly property Item bellPill: repeater.count === keys.length ? repeater.itemAt(keys.indexOf("notifications")) : null
     readonly property string badgeText: notificationCount > 9 ? "9+" : String(notificationCount)
 
     signal activated(string key)
@@ -97,8 +97,31 @@ FocusScope {
         shown: nav.activeFocus
     }
 
+    // The words: the pills before the bell, measured as one item of the bar.
+    Item {
+        id: words
+        x: pills.x
+        y: pills.y
+        width: nav.bellPill ? nav.bellPill.x - pills.spacing : pills.width
+        height: pills.height
+    }
+    TopBarInk {
+        id: navInk
+        objectName: "navInk"
+        light: nav.light
+        under: words
+        onGlass: true
+    }
+    TopBarInk {
+        id: bellInk
+        objectName: "bellInk"
+        light: nav.light
+        under: nav.bellPill
+        onGlass: true
+    }
+
     // The pills' fills and rings, each under its pill of `pills` (which owns the geometry), so the halo of the words
-    // and glyphs (on `pills` only) never draws around a pill.
+    // and glyphs (on each pill's own layer) never draws around a pill.
     Repeater {
         id: fills
         model: nav.keys
@@ -139,17 +162,12 @@ FocusScope {
         }
     }
 
-    // The words and glyphs: one layer, so the glyph halo (busy art, 04 §5.5) hugs them as a whole.
+    // The words and glyphs, each pill its own layer for the glyph halo (busy art under its ink, 04 §5.5).
     Row {
         id: pills
         objectName: "navPills"
         anchors.centerIn: parent
         spacing: Theme.spaceXxs * nav.u
-        layer.enabled: nav.halo
-        layer.effect: GlyphHalo {
-            u: nav.u
-            haloColor: nav.haloColor
-        }
 
         Repeater {
             id: repeater
@@ -163,8 +181,16 @@ FocusScope {
                 readonly property bool isSection: modelData === nav.section
                 readonly property bool focused: nav.activeFocus && index === nav.currentIndex
                 readonly property string icon: nav.iconOf(modelData)
-                // At rest the ink of the bar; on its own surface (current or focused) that surface's text colour.
-                readonly property color ink: isSection ? Theme.onPrimary : focused ? Theme.text : nav.ink
+                // At rest the ink of the art behind it (the bell's own, the words' group); on its own surface (current
+                // or focused) that surface's text colour, without the halo.
+                readonly property TopBarInk rest: modelData === "notifications" ? bellInk : navInk
+                readonly property bool atRest: !isSection && !focused
+                readonly property color ink: isSection ? Theme.onPrimary : focused ? Theme.text : rest.color
+                layer.enabled: atRest && rest.halo
+                layer.effect: GlyphHalo {
+                    u: nav.u
+                    haloColor: pill.rest.haloColor
+                }
 
                 objectName: "navPill_" + modelData
                 width: Math.max(height, text.implicitWidth + 2 * Theme.spaceL * nav.u)
@@ -204,7 +230,7 @@ FocusScope {
     Rectangle {
         id: badge
         objectName: "bellBadge"
-        readonly property Item bell: repeater.count === nav.keys.length ? repeater.itemAt(nav.keys.indexOf("notifications")) : null
+        readonly property Item bell: nav.bellPill
         visible: bell !== null && nav.notificationCount > 0
         height: 32 * nav.u // token-ok: the badge's size, 04 §5 "Bell"
         width: Math.max(height, badgeLabel.implicitWidth + 2 * Theme.spaceXs * nav.u)
@@ -213,7 +239,7 @@ FocusScope {
         y: bell ? pills.y + bell.y - height * 0.25 : 0
         color: Theme.primaryFill
         border.width: Theme.hairlineAt(nav.u)
-        border.color: nav.ink
+        border.color: bellInk.color
         Text {
             id: badgeLabel
             objectName: "bellBadgeText"

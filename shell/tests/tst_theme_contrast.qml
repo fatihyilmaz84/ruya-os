@@ -13,7 +13,8 @@ import RuyaShell
 //    brighter end, and the ground). `textDim` only on opaque surfaces (04 §3.1).
 //  - the top bar's ink (RUY-1136, 04 §5.5; its own tests below): over each fixture of art light the ink ThemeMath.trayInk
 //    picks reads at 4.5:1 against its worst case (the nav's words through every theme's glass too), or the art is busy
-//    and the glyph halo is on; a fixed ink fails some fixture.
+//    and the glyph halo is on; a fixed ink fails some fixture. Each item of the bar picks from the art behind it, so
+//    the same rule holds per item; the low battery's warning ink of the chips' pick reads at 3:1 wherever it is not busy.
 //  - overlap (>= 3): glass where the two big blobs overlap, with the white blob on top: the
 //    pessimistic corner, held to the large-text floor.
 //  - ring (>= 3): the focus ring against the glass, the ground, the panel and the scrims.
@@ -276,13 +277,41 @@ Item {
                     checkInk("nav over " + f.name + " (" + s.key + ")", ThemeMath.bandThroughGlass(f.band, t.glassStrong))
                 }
             }
-            // The low battery's number (large text, the 3 floor) reads in its warning ink over the fixtures that are not busy.
-            for (const f of inkFixtures.filter(x => !x.busy)) {
-                const pick = ThemeMath.trayInk(f.band, "", Theme)
+        }
+
+        // The low battery's number (large text, the 3 floor) is in the warning ink of the battery chips' own pick (each
+        // item of the bar takes its ink from the art behind it, 04 §5.5; the chips' ink is asked with `warning` while a
+        // chip is low): wherever that pick is not busy, the warning ink of the same pair reads at 3:1 against the same
+        // worst case, else the halo is on. Over the fixtures and over every band of a 1/40 grid of (low, high), from
+        // either ink chosen last. Red without `warning`: the text rule alone leaves bands where the text reads and the
+        // warning ink does not (Daylight's dark warning brown needs a dark end of 0.38, its text 0.21).
+        function test_the_warning_ink_reads_by_the_same_rule() {
+            let checked = 0
+            let unflagged = 0
+            const check = (where, band, current) => {
+                const pick = ThemeMath.trayInk(band, current, Theme, true)
                 const warning = pick.ink === "light" ? Theme.inkLightWarning : Theme.inkDarkWarning
-                const c = ThemeMath.contrast(warning, ThemeMath.grey(pick.ink === "light" ? f.band.high : f.band.low))
-                verify(c >= 3, f.name + ": the warning ink at " + c.toFixed(2))
+                const c = ThemeMath.contrast(warning, ThemeMath.grey(pick.ink === "light" ? band.high : band.low))
+                compare(pick.warningContrast.toFixed(3), c.toFixed(3), where + ": the pair's contrast")
+                compare(pick.ink, ThemeMath.trayInk(band, current, Theme).ink, where + ": the warning does not change the ink")
+                if (!ThemeMath.trayInk(band, current, Theme).busy && c < 3)
+                    ++unflagged
+                if (pick.busy)
+                    return
+                verify(c >= 3, where + ": " + pick.ink + " warning ink at " + c.toFixed(2))
+                ++checked
             }
+            for (const f of inkFixtures)
+                check(f.name, f.band, "")
+            for (let hi = 0; hi <= 40; ++hi) {
+                for (let lo = 0; lo <= hi; ++lo) {
+                    const band = { high: hi / 40, low: lo / 40 }
+                    for (const current of ["", "light", "dark"])
+                        check("band " + JSON.stringify(band) + " from \"" + current + "\"", band, current)
+                }
+            }
+            verify(checked > 500, "the warning ink reads over many bands: " + checked)
+            verify(unflagged > 0, "without `warning` some band reads in text but not in the warning ink")
         }
 
         // Red without the rule: one fixed ink (either one, or the theme's own `text`) fails a fixture that is not busy.

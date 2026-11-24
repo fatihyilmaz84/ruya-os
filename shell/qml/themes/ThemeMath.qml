@@ -129,9 +129,12 @@ QtObject {
     // bright end, else dark ink when it reads at 4.5:1 over its dark end, else the ink whose worst case is higher.
     // `current` is the ink chosen last ("" for none): the other ink takes over only when its worst case beats the
     // current one's by `trayInkHysteresis`, so art near the threshold does not flicker. `light` / `dark` in the
-    // result: each ink's worst-case contrast. Pure: the gate and the shell use the same function.
+    // result: each ink's worst-case contrast. `warning` true: the item shows its warning ink now (a low battery's
+    // number, large text): the chosen ink's warning pair must also read at 3:1 against the same worst case, else the art
+    // is busy for that item too (the halo carries it); the ink chosen does not change. `warningContrast` in the result:
+    // that pair's contrast. Pure: the gate and the shell use the same function.
     readonly property real trayInkHysteresis: 0.5
-    function trayInk(band, current, t) {
+    function trayInk(band, current, t, warning) {
         const light = contrast(t.inkLight, grey(band.high))
         const dark = contrast(t.inkDark, grey(band.low))
         let ink = light >= 4.5 ? "light" : dark >= 4.5 ? "dark" : light >= dark ? "light" : "dark"
@@ -141,7 +144,9 @@ QtObject {
             if (other < mine + trayInkHysteresis)
                 ink = current
         }
-        return { ink: ink, busy: (ink === "light" ? light : dark) < 4.5, light: light, dark: dark }
+        const warn = ink === "light" ? contrast(t.inkLightWarning, grey(band.high)) : contrast(t.inkDarkWarning, grey(band.low))
+        const busy = (ink === "light" ? light : dark) < 4.5 || (warning === true && warn < 3)
+        return { ink: ink, busy: busy, light: light, dark: dark, warningContrast: warn }
     }
 
     // How much a glass pill darkens its blurred crop (GlassPill's MultiEffect brightness, 04 §3.6; the liquid pill

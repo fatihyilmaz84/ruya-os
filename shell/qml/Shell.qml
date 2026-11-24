@@ -1603,20 +1603,23 @@ FocusScope {
     }
 
     // The light behind the top bar (RUY-1136, 04 §5.5): the top band of the picture behind it as ArtPalette measures it
-    // (its bright and dark 2 %, `bandOf`), the wallpaper under its dim layer; null while it is not measured, for
+    // (its bright and dark 2 %, `bandOf`) under an x range of the screen (`bandAt`, fractions of `frame`'s width: the
+    // hero and the wallpaper fill the shell), the wallpaper under its dim layer; null while it is not measured, for
     // unreadable art and a placeholder, and on the theme's Backdrop (its ground is known: the theme's `text` reads there).
+    // Each item of the bar takes its ink from the part under it (TopBarInk).
     Item {
         id: barLight
         objectName: "barLight"
         visible: false
 
+        readonly property Item frame: root
         readonly property var behind: root.trayBackground()
         property int measured: 0          // bumped when ArtPalette has measured the picture behind the bar
-        readonly property var band: {
+        function bandAt(from, to) {
             void measured
             if (behind.kind !== "art" && behind.kind !== "wallpaper")
                 return null
-            const b = ArtPalette.bandOf(behind.source, behind.aspect)
+            const b = ArtPalette.bandOf(behind.source, behind.aspect, from, to)
             if (b.ok !== true)
                 return null
             // The wallpaper lies under its dim layer (the theme's ground at its effective dim).
@@ -1631,23 +1634,32 @@ FocusScope {
             }
         }
     }
-    // The top bar's inks (RUY-1136, 04 §5.5): light or dark from that light, with the glyph halo over busy art. The tray
-    // lies flat on the art; the nav's words lie on its glass pill, so they are held against the light seen through it
-    // (ThemeMath.bandThroughGlass); without blur (Performance) the pill is `glassOpaque`, a known ground: `text`.
+    // The tray's inks (RUY-1136, 04 §5.5): one per item, light or dark from the light under that item, each with its own
+    // glyph halo over busy art. The tray lies flat on the art; the nav's words and its bell take theirs in SectionNav.
     TopBarInk {
-        id: trayInk
-        objectName: "trayInk"
-        band: barLight.band
+        id: batteryInk
+        objectName: "batteryInk"
+        light: barLight
+        under: batteryStatus
+        // A low chip's number is in the warning ink: it must read too (ThemeMath.trayInk's `warning`).
+        warning: statusTray.batteryDevices.slice(0, statusTray.chipCount).some(d => d.low === true)
     }
     TopBarInk {
-        id: navInk
-        objectName: "navInk"
-        band: barLight.band && Theme.blurMax > 0 ? ThemeMath.bandThroughGlass(barLight.band, Theme.glassStrong) : null
+        id: profileInk
+        objectName: "profileInk"
+        light: barLight
+        under: profileGroup
+    }
+    TopBarInk {
+        id: clockInk
+        objectName: "clockInk"
+        light: barLight
+        under: clock
     }
 
     // The status tray (device batteries, profile, clock) top right, flat on the page like a console's status line
     // (RUY-955, 04 §5.5): no container and no shade, one row centred on the nav, the clock's right edge on the safe area,
-    // its words and glyphs in the bar's ink (`trayInk`, RUY-1136). Shown on Home and on pages. The download pill (RUY-30)
+    // each item's words and glyphs in the ink of the art behind it (RUY-1136). Shown on Home and on pages. The download pill (RUY-30)
     // goes before the battery chips; nothing is reserved for it until it exists.
     Item {
         id: statusTray
@@ -1748,17 +1760,12 @@ FocusScope {
             return { chips: 0, compact: batteryWidth(0, false) + fixedWidth + nameMin > room }
         }
 
-        // The words and glyphs of the tray: one layer, so the glyph halo (busy art, 04 §5.5) hugs them as a whole.
+        // The tray's items, each in its own ink and its own layer for the glyph halo (busy art under it, 04 §5.5).
         Row {
             id: statusRow
             objectName: "statusRow"
             anchors.verticalCenter: parent.verticalCenter
             spacing: Theme.spaceL * root.u
-            layer.enabled: trayInk.halo
-            layer.effect: GlyphHalo {
-                u: root.u
-                haloColor: trayInk.haloColor
-            }
 
             // The battery of each wireless device (Batteries, UPower behind it), lowest first: up to
             // three chips and a "+N" for the rest; nothing without a device that needs one (T-223).
@@ -1768,6 +1775,11 @@ FocusScope {
                 visible: statusTray.batteryDevices.length > 0
                 spacing: Theme.spaceM * root.u
                 anchors.verticalCenter: parent.verticalCenter
+                layer.enabled: batteryInk.halo
+                layer.effect: GlyphHalo {
+                    u: root.u
+                    haloColor: batteryInk.haloColor
+                }
                 // The ids, not the entries: the delegates are kept while a level changes.
                 readonly property var chipIds: statusTray.batteryDevices.slice(0, statusTray.chipCount).map(d => d.id)
                 readonly property var overflow: statusTray.batteryDevices.slice(statusTray.chipCount)
@@ -1778,8 +1790,8 @@ FocusScope {
                         objectName: "batteryChip_" + modelData
                         deviceId: modelData
                         u: root.u
-                        ink: trayInk.color
-                        warningInk: trayInk.warningColor
+                        ink: batteryInk.color
+                        warningInk: batteryInk.warningColor
                     }
                 }
                 // The devices without a chip of their own: one chip the pad can reach (Right from the last
@@ -1794,7 +1806,7 @@ FocusScope {
                     count: batteryStatus.overflow.length
                     compact: statusTray.moreCompact
                     devices: batteryStatus.overflow
-                    ink: trayInk.color
+                    ink: batteryInk.color
                     onActivated: batteryList.open()
                     onLeftRequested: {           // back to the nav's last pill, the bell
                         Sfx.navigate()
@@ -1814,9 +1826,17 @@ FocusScope {
                     onVisibleChanged: if (!visible) Qt.callLater(root.rescueFocus)
                 }
             }
+            // The profile: the first seat's avatar, its name and the other players' avatars, one item of the bar.
             Row {
+                id: profileGroup
+                objectName: "profileGroup"
                 spacing: Theme.spaceS * root.u
                 anchors.verticalCenter: parent.verticalCenter
+                layer.enabled: profileInk.halo
+                layer.effect: GlyphHalo {
+                    u: root.u
+                    haloColor: profileInk.haloColor
+                }
                 PlayerChip {
                     objectName: "playerChip_1"
                     anchors.verticalCenter: parent.verticalCenter
@@ -1825,7 +1845,7 @@ FocusScope {
                     slot: 1
                     held: statusTray.firstSeat ? statusTray.firstSeat.held === true : false
                     showNumber: statusTray.manyPlayers
-                    ring: trayInk.color
+                    ring: profileInk.color
                 }
                 Text {
                     id: profileName
@@ -1835,7 +1855,7 @@ FocusScope {
                     text: Profiles.active.name ?? ""
                     width: Math.min(implicitWidth, statusTray.nameWidth)   // the full name unless the room is short
                     elide: Text.ElideRight
-                    color: trayInk.color
+                    color: profileInk.color
                     font.pixelSize: Theme.typeBody * root.u
                 }
                 Repeater {
@@ -1848,14 +1868,19 @@ FocusScope {
                         slot: modelData.slot
                         held: modelData.held === true
                         showNumber: statusTray.manyPlayers
-                        ring: trayInk.color
+                        ring: profileInk.color
                     }
                 }
             }
             Text {
                 id: clock
                 anchors.verticalCenter: parent.verticalCenter
-                color: trayInk.color
+                color: clockInk.color
+                layer.enabled: clockInk.halo
+                layer.effect: GlyphHalo {
+                    u: root.u
+                    haloColor: clockInk.haloColor
+                }
                 font.pixelSize: Theme.typeHeadline * root.u
                 font.weight: Theme.weightDemiBold
                 objectName: "statusClock"
@@ -2536,9 +2561,7 @@ FocusScope {
         opacity: root.navShown ? 1 : 0
         visible: root.navShown || opacity > 0     // visible at once, so focus can be given in the same step
         enabled: root.navShown && !systemPanel.open
-        ink: navInk.color
-        halo: navInk.halo
-        haloColor: navInk.haloColor
+        light: barLight
         notificationCount: NotificationCentre.unreadCount
         quiet: NotificationCentre.quiet
         Behavior on opacity { NumberAnimation { duration: Theme.pageMs; easing.type: Easing.Bezier; easing.bezierCurve: Theme.easeSnap } }

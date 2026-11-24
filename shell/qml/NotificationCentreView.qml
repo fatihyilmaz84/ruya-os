@@ -15,7 +15,8 @@ import RuyaShell
 // without actions opens its app on A when it has one; otherwise A does nothing and has no hint. When the focused row
 // goes (cleared here or by its source) the focus moves to the next row, else the previous one, else Quiet mode. A
 // long list scrolls with the focus in rows; on an opaque surface (`opaque`, the sheet) with fades at an edge that
-// hides rows. The focus moves inside with `focus = true` only, so a covered page never pulls it (PATTERNS.md, T-356).
+// hides rows, on a page with the Settings pane's scroll cue (T-185): while more lies beyond the first / last row in
+// view, that row (never the focused one) is drawn at `peekOpacity`. The focus moves inside with `focus = true` only, so a covered page never pulls it (PATTERNS.md, T-356).
 FocusScope {
     id: view
 
@@ -100,6 +101,10 @@ FocusScope {
         NotificationCentre.markRead()
         keys = buildKeys()
         focusFirst()
+        // Then from the list's top, its first caption included (the ListView brings a new current item to the view's
+        // top, which left the caption above the first row out of view), as far as the focused row stays whole.
+        list.positionViewAtBeginning()
+        list.reveal()
     }
 
     function buildKeys() {
@@ -365,7 +370,9 @@ FocusScope {
             // rows (`spaceL` high, on the opaque sheet only; the page has no fades, so no margin): the Hub's
             // reveal (QuickMenu.qml, T-450).
             function reveal() {
-                if (currentIndex < 0)
+                // Not laid out yet (the page opening): nothing to bring into view, and Contain in a view 0 high would
+                // scroll the row's caption away; onHeightChanged reveals again.
+                if (currentIndex < 0 || height <= 0)
                     return
                 positionViewAtIndex(currentIndex, ListView.Contain)
                 const item = itemAtIndex(currentIndex)
@@ -381,6 +388,29 @@ FocusScope {
             onHeightChanged: reveal()
             onContentHeightChanged: reveal()
 
+            // The scroll cue on a page (the Settings pane's, T-185, 04 §5): the index of the first (`top`) or last row
+            // in view, even in part, while more lies beyond that edge; -1 when nothing is beyond it, and on the sheet
+            // (its fades are the cue there).
+            function edgeRow(top) {
+                if (view.opaque)
+                    return -1
+                const more = top ? contentY > originY + 1 : contentY + height < originY + contentHeight - 1
+                if (!more)
+                    return -1
+                let found = -1
+                for (let i = 0; i < count; ++i) {
+                    const it = itemAtIndex(i)
+                    if (!it || it.y + it.height <= contentY + 0.5 || it.y >= contentY + height - 0.5)
+                        continue
+                    if (top)
+                        return i
+                    found = i
+                }
+                return found
+            }
+            readonly property int peekAbove: { void contentY; void height; void contentHeight; void count; return edgeRow(true) }
+            readonly property int peekBelow: { void contentY; void height; void contentHeight; void count; return edgeRow(false) }
+
             delegate: Item {
                 id: entry
                 required property string modelData
@@ -389,6 +419,10 @@ FocusScope {
                 objectName: caption ? "centreCaption_" + modelData.slice(4) : "centreRow_" + modelData.slice(2)
                 width: ListView.view.width
                 height: caption ? captionText.implicitHeight + Theme.spaceXs * view.u : rowItem.implicitHeight
+                // The scroll cue: the peek row at `peekOpacity`, never the focused one; eased like a Settings row.
+                readonly property bool peek: (index === list.peekAbove || index === list.peekBelow) && !rowItem.focused
+                opacity: peek ? Theme.peekOpacity : 1
+                Behavior on opacity { NumberAnimation { duration: Theme.focusMs } }   // instant under reduced motion
                 Text {
                     id: captionText
                     visible: entry.caption

@@ -706,6 +706,40 @@ Item {
             compare(tc.shell.focusRepairs, 0)
         }
 
+        // A long list on the page has the Settings pane's scroll cue (T-185): while more lies beyond the first / last row
+        // in view, that row is at peekOpacity; never the focused row, nothing at an edge with nothing beyond it.
+        function test_a_long_list_peeks_at_its_edges() {
+            for (let i = 0; i < 14; ++i)
+                post("Item " + i, tc.t0 - 1000 * (14 - i))
+            openCentre()
+            tryVerify(() => rowFocused("Item 13"), 2000, "the newest row")
+            const list = part("centreList")
+            verify(list.contentHeight > list.height + 1, "the list is longer than its place")
+            const dimmed = () => {
+                const out = []
+                for (let i = 0; i < list.count; ++i) {
+                    const it = list.itemAtIndex(i)
+                    if (it && it.opacity < 1)
+                        out.push(i)
+                }
+                return JSON.stringify(out)
+            }
+            compare(list.contentY, list.originY, "the list opens at its top, its first caption in view")
+            compare(list.peekAbove, -1, "nothing above the top")
+            verify(list.peekBelow > 0, "the last row in view peeks")
+            tryVerify(() => dimmed() === JSON.stringify([list.peekBelow]), 2000, "only it: " + dimmed())
+            tryCompare(list.itemAtIndex(list.peekBelow), "opacity", Theme.peekOpacity, 2000)
+            // Down to the last row: the cue moves to the top, and the focused row is never dimmed.
+            for (let i = 12; i >= 0; --i) {
+                keyClick(Qt.Key_Down)
+                tryVerify(() => rowFocused("Item " + i), 2000, "Down to Item " + i)
+                tryCompare(list.itemAtIndex(list.currentIndex), "opacity", 1, 2000, "the focused row is whole: Item " + i)
+            }
+            compare(list.peekBelow, -1, "nothing below the last row")
+            verify(list.peekAbove >= 0, "the first row in view peeks")
+            tryVerify(() => dimmed() === JSON.stringify([list.peekAbove]), 2000, "only it: " + dimmed())
+        }
+
         // The bell is in the nav on the section pages too: Up from Settings reaches the gear, Right the bell, A its page.
         function test_bell_on_section_pages() {
             keyClick(Qt.Key_Up)
