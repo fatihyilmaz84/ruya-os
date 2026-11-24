@@ -30,7 +30,7 @@ qt_standard_project_setup(REQUIRES 6.8)
 # Everything except main() is a static QML module, so the app and the tests share it.
 qt_add_library(ruyashell STATIC)
 
-set_source_files_properties(qml/Theme.qml qml/Sfx.qml qml/Notifications.qml qml/DeviceIcons.qml qml/ControllerPads.qml qml/GameControls.qml qml/Glyphs.qml qml/BluetoothText.qml qml/SoundThemeText.qml qml/ProfileStatus.qml qml/DurationText.qml qml/CapsText.qml qml/ArtRoles.qml qml/DisplayText.qml qml/BackKey.qml qml/ThermalText.qml qml/DriveHealth.qml qml/PlayTrust.qml qml/PlayCopy.qml qml/RunnerText.qml qml/InstallationText.qml qml/PermissionText.qml qml/AppName.qml qml/GlareGate.qml qml/LiquidGate.qml qml/IdleClock.qml qml/themes/Themes.qml qml/themes/ThemeMath.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Theme.qml qml/Sfx.qml qml/Notifications.qml qml/DeviceIcons.qml qml/ControllerPads.qml qml/GameControls.qml qml/Glyphs.qml qml/BluetoothText.qml qml/SoundThemeText.qml qml/ProfileStatus.qml qml/DurationText.qml qml/CapsText.qml qml/ArtRoles.qml qml/DisplayText.qml qml/BackKey.qml qml/ThermalText.qml qml/DriveHealth.qml qml/PlayTrust.qml qml/PlayCopy.qml qml/RunnerText.qml qml/InstallationText.qml qml/PermissionText.qml qml/AppName.qml qml/GlareGate.qml qml/LiquidGate.qml qml/IdleClock.qml qml/themes/Themes.qml qml/themes/ThemeMath.qml qml/ItemOffset.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 qt_add_qml_module(ruyashell
     URI RuyaShell
@@ -155,6 +155,7 @@ qt_add_qml_module(ruyashell
         qml/Sfx.qml
         qml/AmbientLoop.qml
         qml/BackKey.qml
+        qml/ItemOffset.qml
         qml/ThermalText.qml
         qml/DriveHealth.qml
         qml/Notifications.qml

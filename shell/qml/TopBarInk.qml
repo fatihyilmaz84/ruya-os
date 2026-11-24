@@ -29,13 +29,10 @@ Item {
     readonly property var span: {
         if (!light || !under || !light.frame || light.frame.width <= 0)
             return null
-        let x = 0
-        for (let i = under; i !== light.frame; i = i.parent) {
-            if (!i)
-                return null          // not under the frame (yet)
-            x += i.x
-        }
-        return { from: x / light.frame.width, to: (x + under.width) / light.frame.width }
+        const at = ItemOffset.of(under, light.frame)
+        if (!at)
+            return null              // not under the frame (yet)
+        return { from: at.x / light.frame.width, to: (at.x + under.width) / light.frame.width }
     }
     // The light behind the item ({ high, low } relative luminances), or null for the theme's own `text`.
     readonly property var band: {
