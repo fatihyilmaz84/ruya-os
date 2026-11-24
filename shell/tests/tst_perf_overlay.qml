@@ -475,7 +475,12 @@ Item {
             wait(500)
             grabImage(tc.shell).save(shotsDir + "/perf-overlay-2-states.png")
             Notifications.show("A toast takes the right corner", "warning", "", "", "", { urgency: "critical" })   // drawn over a game (RUY-413)
-            tryVerify(() => !rightBlock().visible, 2000)
+            // Wait on each link of the chain, so a failure names the one that did not happen: the toast is
+            // listed (not held back by the saver or quiet mode), the layer counts it, the right block hides.
+            tryVerify(() => Notifications.model.count > 0, 2000, "the toast is not on screen (pending " + Notifications.pendingCount
+                      + ", saver " + Notifications.saverOn + ", quiet " + Notifications.quiet + ")")
+            tryVerify(() => find("toastList").count > 0, 2000, "the toast layer does not list it")
+            tryVerify(() => !rightBlock().visible, 2000, "the right block did not hide for the toast")
             wait(500)
             grabImage(tc.shell).save(shotsDir + "/perf-overlay-3-toast.png")
             DeviceSettings.language = "tr"
