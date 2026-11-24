@@ -308,12 +308,12 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+0"/>
-        <location line="+81"/>
+        <location line="+82"/>
         <source>Developer</source>
         <translation>Geliştirici</translation>
     </message>
     <message>
-        <location line="-81"/>
+        <location line="-82"/>
         <source>Community</source>
         <translation>Topluluk</translation>
     </message>
@@ -483,7 +483,7 @@ Bu geri alınamaz.</translation>
         <translation>Başka bir değişiklik sürüyor. Birazdan tekrar deneyin.</translation>
     </message>
     <message>
-        <location line="+2"/>
+        <location line="+3"/>
         <source>Something went wrong. You can try again.</source>
         <translation>Bir şeyler ters gitti. Tekrar deneyebilirsiniz.</translation>
     </message>
@@ -625,7 +625,7 @@ Bu geri alınamaz.</translation>
         <translation>Kaldırmak için önce oyunu kapatın.</translation>
     </message>
     <message>
-        <location line="-947"/>
+        <location line="-948"/>
         <source>Install</source>
         <translation>Kur</translation>
     </message>
@@ -636,12 +636,13 @@ Bu geri alınamaz.</translation>
         <translation>Güncelle</translation>
     </message>
     <message>
-        <location line="+685"/>
+        <location line="+686"/>
         <source>Needs a newer RuyaOS than this console has. It stays installed.</source>
         <translation>Bu konsoldakinden daha yeni bir RuyaOS gerekiyor. Yüklü kalır.</translation>
     </message>
     <message>
-        <location line="+0"/>
+        <location line="-586"/>
+        <location line="+586"/>
         <source>Needs a newer RuyaOS</source>
         <translation>Daha yeni bir RuyaOS gerekiyor</translation>
     </message>
@@ -662,7 +663,7 @@ Bu geri alınamaz.</translation>
         <translation>Güncelleme şunları ekliyor: %1</translation>
     </message>
     <message>
-        <location line="-713"/>
+        <location line="-714"/>
         <source>Open</source>
         <comment>Button: start an app (a game says Play)</comment>
         <translation>Aç</translation>
@@ -700,7 +701,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene</translation>
     </message>
     <message>
-        <location line="+402"/>
+        <location line="+403"/>
         <source>Select</source>
         <translation>Seç</translation>
     </message>
@@ -1872,7 +1873,7 @@ Bu geri alınamaz.</translation>
 <context>
     <name>ControllerPads</name>
     <message>
-        <location filename="../qml/ControllerPads.qml" line="+19"/>
+        <location filename="../qml/ControllerPads.qml" line="+21"/>
         <source>Battery not reported</source>
         <translation>Pil düzeyi bildirilmiyor</translation>
     </message>
@@ -1915,6 +1916,11 @@ Bu geri alınamaz.</translation>
         <location line="+5"/>
         <source>Player %1</source>
         <translation>Oyuncu %1</translation>
+    </message>
+    <message>
+        <location line="+11"/>
+        <source>Controller disconnected</source>
+        <translation>Kontrolcü bağlantısı kesildi</translation>
     </message>
 </context>
 <context>
@@ -2000,7 +2006,7 @@ Bu geri alınamaz.</translation>
         <translation>Mikrofon</translation>
     </message>
     <message>
-        <location line="+31"/>
+        <location line="+30"/>
         <source>Could not change the confirm button</source>
         <translation>Onay düğmesi değiştirilemedi</translation>
     </message>
@@ -2010,12 +2016,7 @@ Bu geri alınamaz.</translation>
         <translation>Yeniden dene.</translation>
     </message>
     <message>
-        <location line="+15"/>
-        <source>Controller disconnected</source>
-        <translation>Kontrolcü bağlantısı kesildi</translation>
-    </message>
-    <message>
-        <location line="+78"/>
+        <location line="+82"/>
         <source>Button test</source>
         <translation>Düğme testi</translation>
     </message>
@@ -2281,7 +2282,7 @@ Bu geri alınamaz.</translation>
     </message>
     <message>
         <location line="+98"/>
-        <location line="+39"/>
+        <location line="+40"/>
         <source>Import from USB drive</source>
         <translation>USB bellekten al</translation>
     </message>
@@ -2322,7 +2323,7 @@ Bu geri alınamaz.</translation>
         <translation>Oyunlardaki kontroller</translation>
     </message>
     <message>
-        <location line="+7"/>
+        <location line="+9"/>
         <source>All controllers</source>
         <translation>Tüm kontrolcüler</translation>
     </message>
@@ -2841,22 +2842,22 @@ Bu geri alınamaz.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+525"/>
-        <location line="+193"/>
+        <location filename="../qml/GameControls.qml" line="+544"/>
+        <location line="+187"/>
         <source>Could not save to the USB drive</source>
         <translation>USB belleğe kaydedilemedi</translation>
     </message>
     <message>
-        <location line="-193"/>
-        <location line="+6"/>
+        <location line="-217"/>
         <location line="+2"/>
-        <location line="+185"/>
+        <location line="+28"/>
+        <location line="+187"/>
         <location line="+36"/>
         <source>Try again.</source>
         <translation>Yeniden dene.</translation>
     </message>
     <message>
-        <location line="-221"/>
+        <location line="-251"/>
         <source>Could not save the change</source>
         <translation>Değişiklik kaydedilemedi</translation>
     </message>
@@ -2866,7 +2867,7 @@ Bu geri alınamaz.</translation>
         <translation>%1 için değişiklik kaydedilemedi</translation>
     </message>
     <message>
-        <location line="-280"/>
+        <location line="-260"/>
         <source>Left stick</source>
         <translation>Sol çubuk</translation>
     </message>
@@ -2886,7 +2887,7 @@ Bu geri alınamaz.</translation>
         <translation>Oyunlar %1 düğmesini A, %2 düğmesini B olarak görür.</translation>
     </message>
     <message>
-        <location line="+457"/>
+        <location line="+467"/>
         <source>Saved to the USB drive</source>
         <translation>USB belleğe kaydedildi</translation>
     </message>
@@ -2911,7 +2912,7 @@ Bu geri alınamaz.</translation>
         <translation>Bir RuyaOS kontrol dosyası değil.</translation>
     </message>
     <message>
-        <location line="+21"/>
+        <location line="+22"/>
         <source>PlayStation controllers</source>
         <translation>PlayStation kontrolcüleri</translation>
     </message>
@@ -5623,7 +5624,7 @@ Bu geri alınamaz.</translation>
         <translation>Geri</translation>
     </message>
     <message>
-        <location line="+10"/>
+        <location line="+12"/>
         <source>Connect a controller first.</source>
         <translation>Önce bir kontrolcü bağla.</translation>
     </message>
