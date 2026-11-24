@@ -1226,6 +1226,21 @@ Item {
             openPaneShot720(shotsDir + "/")
         }
 
+        // RUY-502: the Button test's readings (In menus, In games) in Turkish at 720p, the tightest fit.
+        function test_zz_screenshots_720p_tr() {
+            if (!shotsDir)
+                skip("set RUYA_SHOTS_DIR to save screenshots")
+            host.width = 1280
+            host.height = 720
+            DeviceSettings.language = "tr"
+            openController(ds)
+            keyClick(Qt.Key_Return)
+            tryCompare(tc.shell, "currentPage", "buttonTest")
+            Input.mockTestInput(ds, "start", 1, "raw:pad:1:307")
+            settle()
+            grabImage(tc.shell).save(shotsDir + "/27-button-test-720p-tr.png")
+        }
+
         // RUY-512: the pane's rows in the light theme (the facts, the page rows and the choice arrows read against it).
         function test_zz_screenshots_daylight() {
             if (!shotsDir)
