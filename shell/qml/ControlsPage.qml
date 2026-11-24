@@ -189,6 +189,15 @@ Page {
         }
     }
     readonly property ControlsImportPicker importPicker: importSlot.item as ControlsImportPicker
+    // The picker closes by itself when its drive goes: the Import row may have gone with it, and the
+    // pane then takes the focus and settles it on the row nearest to it.
+    Connections {
+        target: page.importPicker
+        function onClosed() {
+            if (!body.activeFocus)
+                body.forceActiveFocus()
+        }
+    }
 
     Loader {
         id: resetSlot

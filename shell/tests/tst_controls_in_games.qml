@@ -40,6 +40,7 @@ Item {
             DeviceSettings.language = "en"
             Input.mockFail(false)
             Input.mockResetDevices()
+            Input.mockActiveInput("", "")                // no last input yet: the capture hint is the pad's
             Input.mockResetProfiles()
             Input.mockClearProfileCalls()
             Storage.mockReset()
@@ -860,10 +861,12 @@ Item {
 
         function test_a_capture_sets_the_target_and_the_row_keeps_the_focus() {
             openRemap()
+            Input.mockKeyFrom("AT Translated Set 2 keyboard", Qt.Key_Down)     // a keyboard opened it
+            tryCompare(Input, "activeFamily", "keyboard")
             openCapture("south")
             const dialog = find("remapCapture")
             compare(findChild(dialog, "remapCaptureTitle").text, "Press the new button for Cross")
-            compare(findChild(dialog, "remapCaptureDetail").text, "Any button on the DualSense. Nothing for 5 seconds cancels.")
+            compare(findChild(dialog, "remapCaptureDetail").text, "Any button on the DualSense.")
             compare(findChild(dialog, "remapCaptureSource").height, 80, "the source glyph at 80 u")
             compare(hintVerbs(), "back Cancel")
             compare(tc.shell.hintList[0].family, "keyboard", "the keyboard's Esc: every pad button is captured")
@@ -883,6 +886,54 @@ Item {
             keyClick(Qt.Key_Escape)
             tryCompare(tc.shell, "currentPage", "controls")
             tryCompare(find("rowRemap"), "value", "1 changed")
+        }
+
+        // RUY-480: a pad has no Esc: the hint bar says how to cancel, in words, with no glyph.
+        function test_capture_hint_follows_the_last_input() {
+            openRemap()
+            Input.mockActiveInput(ds, "playstation")
+            tryCompare(Input, "activeFamily", "playstation")
+            openCapture("south")
+            compare(hintVerbs(), " Any button counts. Wait 5 seconds to cancel.")
+            const sentence = findChild(find("hintBar"), "hint_text")
+            verify(sentence !== null && sentence.visible, "the sentence is in the hint bar")
+            compare(sentence.children.filter(c => c.kind !== undefined).length, 0, "no glyph")
+            DeviceSettings.language = "tr"
+            tryCompare(tc.shell.hintList[0], "text", "Her düğme sayılır. İptal için 5 saniye bekle.")
+            DeviceSettings.language = "en"
+            Input.mockKeyFrom("AT Translated Set 2 keyboard", Qt.Key_Down)
+            tryCompare(Input, "activeFamily", "keyboard")
+            tryVerify(() => hintVerbs() === "back Cancel", 2000, hintVerbs())
+            compare(tc.shell.hintList[0].family, "keyboard", "Esc after a keyboard key")
+            Input.mockActiveInput(ds, "playstation")
+            tryVerify(() => hintVerbs() === " Any button counts. Wait 5 seconds to cancel.", 2000, hintVerbs())
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !find("remapCapture").shown, 2000, "Esc still cancels")
+        }
+
+        // RUY-480: the capture takes every key; Guide is captured and the overlay stays closed.
+        function test_the_capture_takes_every_key_including_guide() {
+            openRemap()
+            openCapture("south")
+            const dialog = find("remapCapture")
+            for (const key of [Qt.Key_HomePage, Qt.Key_Super_L, Qt.Key_Meta, Qt.Key_Down, Qt.Key_Return, Qt.Key_Menu,
+                               Qt.Key_Left, Qt.Key_Tab, Qt.Key_PageDown]) {
+                keyClick(key)
+                verify(dialog.shown && dialog.activeFocus, "key " + key + " is taken")
+            }
+            wait(100)
+            verify(!find("systemPanel").open, "the Guide overlay stays closed")
+            compare(tc.shell.currentPage, "controlsRemap", "no page change")
+            compare(calls("SaveProfile").length, 0)
+        }
+
+        // RUY-480: a page torn down with the capture open stops the pad's stream.
+        function test_a_destroyed_capture_stops_the_stream() {
+            openRemap()
+            openCapture("south")
+            verify(Input.mockTestRunning(ds))
+            tc.shell.destroy()
+            tryVerify(() => !Input.mockTestRunning(ds), 2000, "the stream stopped")
         }
 
         function test_a_trigger_can_be_the_target() {
@@ -1265,6 +1316,46 @@ Item {
             tryVerify(() => find("rowImport").activeFocus, 2000, "Back returns the focus to Import")
         }
 
+        // RUY-480: the sheet says that importing replaces the controls; it takes no focus.
+        function test_the_import_sheet_says_it_replaces_the_controls() {
+            Storage.mockSetFile("vol-stick", "mine.json", profileText("mine"), 1731456000)
+            const picker = openImport()
+            const note = findChild(picker, "controlsImportNote")
+            compare(note.text, "Importing replaces your controls in games.")
+            verify(note.visible)
+            tryVerify(() => find("controlsImportFile_0").activeFocus, 2000, "the focus is on the first file")
+            DeviceSettings.language = "tr"
+            tryCompare(note, "text", "İçe aktarmak oyunlardaki kontrollerini değiştirir.")
+            DeviceSettings.language = "en"
+            keyClick(Qt.Key_Escape)
+            tryVerify(() => !picker.shown, 2000)
+        }
+
+        // RUY-480: the drive goes while the sheet is open: it closes and the focus is back on Import.
+        function test_a_vanished_drive_closes_the_picker() {
+            Storage.mockSetFile("vol-stick", "mine.json", profileText("mine"), 1731456000)
+            const picker = openImport()
+            tryVerify(() => find("controlsImportFile_0").activeFocus, 2000)
+            Storage.eject("vol-stick")
+            tryVerify(() => !Storage.volumes.some(v => v.id === "vol-stick" && v.mounted), 2000, "the drive is gone")
+            tryVerify(() => !picker.shown, 2000, "the sheet closes")
+            tryVerify(() => find("controlsBody").focusableRows().some(r => r.activeFocus), 2000,
+                      "the Import row went with the drive: the pane settles the focus on a row")
+            verify(find("rowNoDrive").visible, "the page says to plug a drive in")
+            compare(calls("ImportProfile").length, 0, "nothing imported")
+        }
+
+        // RUY-480: with another drive left the Import row stays and takes the focus back.
+        function test_a_vanished_drive_with_another_one_left_returns_to_import() {
+            Storage.mockPlug(["vol-stick-2"])
+            Storage.mockSetFile("vol-stick", "mine.json", profileText("mine"), 1731456000)
+            const picker = openImport()
+            compare(picker.volumeId, "vol-stick")
+            Storage.eject("vol-stick")
+            tryVerify(() => !picker.shown, 2000, "the sheet closes")
+            tryVerify(() => find("rowImport").activeFocus, 2000, "back on the Import row")
+        }
+
         function test_a_drive_without_controls_files_says_so() {
             const picker = openImport()
             tryVerify(() => find("controlsImportNone").visible, 2000, "the unavailable line")
@@ -1280,6 +1371,71 @@ Item {
         }
 
         // ---- reset -------------------------------------------------------------------------------------------------
+
+        // RUY-480: a reset asked for during a save is not dropped: it runs when the save ends.
+        function test_a_reset_during_a_save_runs_after_it() {
+            openControls()
+            Input.mockHoldSaves(true)
+            GameControls.setStick("left", "inner_deadzone", 0.2, false)
+            tryCompare(GameControls, "phase", "save")
+            GameControls.resetAll()
+            compare(GameControls.pendingReset, GameControls.padKey, "the reset waits")
+            compare(calls("DeleteProfile").length, 0, "not yet")
+            Input.mockHoldSaves(false)
+            tryVerify(() => calls("DeleteProfile").length === 1, 3000, "the reset ran after the save")
+            tryVerify(() => !GameControls.busy, 3000)
+            compare(GameControls.pendingReset, "")
+            verify(!GameControls.changed, "back to the default")
+        }
+
+        // RUY-480: a refused save does not eat the reset either.
+        function test_a_reset_during_a_refused_save_still_runs() {
+            given(dsOwn, { match: { device: ds }, settings: { left_stick: { inner_deadzone: 0.2 } } }, "device:" + ds, ds)
+            openControls()
+            tryVerify(() => GameControls.stored !== null, 2000)
+            Input.mockHoldSaves(true)
+            Input.mockSetProfileStatus("SaveProfile", "failed")
+            GameControls.setStick("left", "outer_deadzone", 0.05, false)
+            tryCompare(GameControls, "phase", "save")
+            GameControls.resetAll()
+            Input.mockHoldSaves(false)
+            tryVerify(() => hasToast("Could not save the change / Try again."), 3000, toastTexts().join("; "))
+            tryVerify(() => calls("DeleteProfile").length === 1, 3000, "the reset ran after the refusal")
+            tryVerify(() => !GameControls.busy, 3000)
+            compare(GameControls.pendingReset, "")
+        }
+
+        // RUY-480: a reset queued on one pad is not lost when the page moved to another: the toast says so.
+        function test_a_reset_queued_on_another_pad_says_so() {
+            openControls()
+            Input.mockHoldSaves(true)
+            GameControls.setStick("left", "inner_deadzone", 0.2, false)
+            tryCompare(GameControls, "phase", "save")
+            GameControls.resetAll()
+            verify(GameControls.pendingReset !== "")
+            GameControls.show(pro)
+            Input.mockHoldSaves(false)
+            tryVerify(() => hasToast("Could not save the change for DualSense / Try again."), 3000, toastTexts().join("; "))
+            compare(GameControls.pendingReset, "")
+            compare(calls("DeleteProfile").length, 0, "not run on the other pad")
+        }
+
+        // RUY-480: an owner change takes the old owner's waiting export and reset with it.
+        function test_an_owner_change_clears_the_export_and_the_reset() {
+            plugStick()
+            openControls()
+            Input.mockHoldSaves(true)
+            GameControls.setStick("left", "inner_deadzone", 0.2, false)
+            tryCompare(GameControls, "phase", "save")
+            GameControls.exportTo("vol-stick")
+            GameControls.resetAll()
+            compare(GameControls.exportVolume, "vol-stick")
+            verify(GameControls.pendingReset !== "")
+            Profiles.lock()
+            tryCompare(Profiles, "activeProfile", "")
+            compare(GameControls.exportVolume, "", "no export for the next owner")
+            compare(GameControls.pendingReset, "")
+        }
 
         function test_reset_asks_first_and_puts_everything_back() {
             openControls()
@@ -1407,6 +1563,10 @@ Item {
             Theme.motionFactor = 1.0                     // the bar mid-drain, as on the console
             wait(1500)
             grabImage(tc.shell).save(dir + "28-controls-capture-" + lang + suffix + ".png")
+            Input.mockKeyFrom("AT Translated Set 2 keyboard", Qt.Key_Down)     // RUY-480: after a key, Esc Cancel
+            tryCompare(Input, "activeFamily", "keyboard")
+            grabImage(tc.shell).save(dir + "28-controls-capture-keyboard-" + lang + suffix + ".png")
+            Input.mockActiveInput("", "")
             keyClick(Qt.Key_Escape)
             tryVerify(() => find("remap_west").activeFocus, 2000)
             keyClick(Qt.Key_Escape)

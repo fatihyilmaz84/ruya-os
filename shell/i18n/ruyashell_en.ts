@@ -2273,7 +2273,7 @@ This can&apos;t be undone.</translation>
 <context>
     <name>ControlsImportPicker</name>
     <message>
-        <location filename="../qml/ControlsImportPicker.qml" line="+28"/>
+        <location filename="../qml/ControlsImportPicker.qml" line="+29"/>
         <location line="+1"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
@@ -2284,13 +2284,18 @@ This can&apos;t be undone.</translation>
         <translation>Import</translation>
     </message>
     <message>
-        <location line="+93"/>
-        <location line="+31"/>
+        <location line="+98"/>
+        <location line="+39"/>
         <source>Import from USB drive</source>
         <translation>Import from USB drive</translation>
     </message>
     <message>
-        <location line="-9"/>
+        <location line="-22"/>
+        <source>Importing replaces your controls in games.</source>
+        <translation>Importing replaces your controls in games.</translation>
+    </message>
+    <message>
+        <location line="+13"/>
         <source>This drive can&apos;t be read right now.</source>
         <translation>This drive can&apos;t be read right now.</translation>
     </message>
@@ -2841,22 +2846,22 @@ This can&apos;t be undone.</translation>
 <context>
     <name>GameControls</name>
     <message>
-        <location filename="../qml/GameControls.qml" line="+509"/>
-        <location line="+187"/>
+        <location filename="../qml/GameControls.qml" line="+525"/>
+        <location line="+193"/>
         <source>Could not save to the USB drive</source>
         <translation>Could not save to the USB drive</translation>
     </message>
     <message>
-        <location line="-187"/>
+        <location line="-193"/>
         <location line="+6"/>
         <location line="+2"/>
-        <location line="+179"/>
+        <location line="+185"/>
         <location line="+36"/>
         <source>Try again.</source>
         <translation>Try again.</translation>
     </message>
     <message>
-        <location line="-215"/>
+        <location line="-221"/>
         <source>Could not save the change</source>
         <translation>Could not save the change</translation>
     </message>
@@ -2866,7 +2871,7 @@ This can&apos;t be undone.</translation>
         <translation>Could not save the change for %1</translation>
     </message>
     <message>
-        <location line="-268"/>
+        <location line="-280"/>
         <source>Left stick</source>
         <translation>Left stick</translation>
     </message>
@@ -2886,7 +2891,7 @@ This can&apos;t be undone.</translation>
         <translation>Games see %1 as A and %2 as B.</translation>
     </message>
     <message>
-        <location line="+439"/>
+        <location line="+457"/>
         <source>Saved to the USB drive</source>
         <translation>Saved to the USB drive</translation>
     </message>
@@ -5593,12 +5598,17 @@ This can&apos;t be undone.</translation>
 <context>
     <name>RemapCapture</name>
     <message>
-        <location filename="../qml/RemapCapture.qml" line="+42"/>
+        <location filename="../qml/RemapCapture.qml" line="+45"/>
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location line="+115"/>
+        <location line="+1"/>
+        <source>Any button counts. Wait 5 seconds to cancel.</source>
+        <translation>Any button counts. Wait 5 seconds to cancel.</translation>
+    </message>
+    <message>
+        <location line="+121"/>
         <source>Controllers can&apos;t be read right now.</source>
         <translation>Controllers can&apos;t be read right now.</translation>
     </message>
@@ -5609,8 +5619,8 @@ This can&apos;t be undone.</translation>
     </message>
     <message>
         <location line="+59"/>
-        <source>Any button on the %1. Nothing for 5 seconds cancels.</source>
-        <translation>Any button on the %1. Nothing for 5 seconds cancels.</translation>
+        <source>Any button on the %1.</source>
+        <translation>Any button on the %1.</translation>
     </message>
 </context>
 <context>

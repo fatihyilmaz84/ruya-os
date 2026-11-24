@@ -5,7 +5,7 @@ import RuyaShell
 // Remap buttons -> the capture dialog (RUY-465, 06 §7): "Press the new button for <name>". A dialog
 // card (04 §5) with the source's glyph at 80 u (`glyphSize` × 2, a literal of this dialog), an
 // arrow and an 80 u empty slot ringed in `focusRing` with "?", a 480 u ProgressBar draining over
-// 5 s, and "Any button on the <pad>. Nothing for 5 seconds cancels.".
+// 5 s, and "Any button on the <pad>.".
 //
 // It reads the pad's live test stream (Input.startTest when it opens, stopTest when it closes), not
 // the navigation keys: the first press of a remappable input (a trigger past a quarter) is the new
@@ -39,7 +39,11 @@ FocusScope {
     // The time left, 1 -> 0 over timeoutMs (the bar).
     property real remaining: 1
 
-    readonly property var modalHints: [{ action: "back", family: "keyboard", text: qsTr("Cancel") }]
+    // A keyboard cancels with Esc; a pad has no cancel button here (B is a capture too), so it is told
+    // how: no glyph, one sentence (HintBar: `actions: []`). Before any press the input counts as a pad.
+    readonly property var modalHints: Input.activeFamily === "keyboard"
+        ? [{ action: "back", family: "keyboard", text: qsTr("Cancel") }]
+        : [{ actions: [], text: qsTr("Any button counts. Wait 5 seconds to cancel.") }]
 
     signal capturedInput(string input)
     signal cancelled()
@@ -94,6 +98,12 @@ FocusScope {
         shown = false
         finish()
         dialog.cancelled()
+    }
+
+    // A page torn down while the capture is open must not leave the pad's stream running.
+    Component.onDestruction: {
+        if (shown || closing)
+            Input.stopTest(padId)
     }
 
     // The end of the dialog: the stream stops, the focus goes back.
@@ -251,7 +261,7 @@ FocusScope {
             anchors.horizontalCenter: parent.horizontalCenter
             width: Math.min(implicitWidth, 1100 * dialog.u)
             textFormat: Text.PlainText          // a pad's own name
-            text: qsTr("Any button on the %1. Nothing for 5 seconds cancels.").arg(dialog.padName)
+            text: qsTr("Any button on the %1.").arg(dialog.padName)
             color: Theme.textDim
             font.pixelSize: Theme.typeBody * dialog.u
             wrapMode: Text.Wrap

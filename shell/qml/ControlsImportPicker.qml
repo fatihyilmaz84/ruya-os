@@ -7,8 +7,9 @@ import RuyaShell
 // of the drive (Storage.listFiles, newest first) as rows 900 u wide, at most six visible: the file
 // name (one line, elided) and its date ("12 Nov"). Up/Down clamp, Accept imports the focused file
 // (GameControls.importFrom: read with the 64 KiB cap, validated, saved, assigned); it closes when the
-// import is done, and stays open on the file when it was refused (the toast says why). No file: the
-// unavailable line "No controls files on this drive.". Back closes it; the focus returns to the row
+// import is done, and stays open on the file when it was refused (the toast says why). Under the drive's label a caption says that importing replaces the
+// controls (no confirm dialog: it is read before A is pressed). A drive that is pulled or unmounted
+// closes it like Back. No file: the unavailable line "No controls files on this drive.". Back closes it; the focus returns to the row
 // that opened it. Modal: it accepts every key.
 FocusScope {
     id: picker
@@ -64,6 +65,11 @@ FocusScope {
 
     Connections {
         target: Storage
+        // The drive was pulled or unmounted: nothing to import from, the sheet goes the way Back does.
+        function onVolumesChanged() {
+            if (picker.shown && !Storage.volumes.some(v => v.id === picker.volumeId && v.mounted))
+                picker.close()
+        }
         function onFilesListed(id, suffix, status, files) {
             if (!picker.shown || id !== picker.volumeId)
                 return
@@ -132,6 +138,15 @@ FocusScope {
                 color: Theme.text
                 font.pixelSize: Theme.typeBody * picker.u
                 elide: Text.ElideRight
+            }
+            Text {
+                objectName: "controlsImportNote"
+                width: parent.width
+                topPadding: Theme.spaceXs * picker.u
+                text: qsTr("Importing replaces your controls in games.")
+                color: Theme.text                // on the sheet's glass: text, never textDim (04 §2)
+                font.pixelSize: Theme.typeCaption * picker.u
+                wrapMode: Text.Wrap
             }
         }
 

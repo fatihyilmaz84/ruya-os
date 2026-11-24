@@ -78,6 +78,8 @@ QtObject {
     property var queue: []
     property string exportVolume: ""    // an export waits for the save before it
     property bool importing: false
+    // A reset asked for while a save is in flight: the padKey it was asked on, run when the save ends.
+    property string pendingReset: ""
     // An import that waits for the save in flight: { volumeId, fileName, targetId, targetSlot }, else null.
     property var pendingImport: null
     // The pad whose import is waiting or running (while `importing`): its changes wait in the queue until it ends.
@@ -110,6 +112,8 @@ QtObject {
         inFlight = null
         phase = ""
         pendingImport = null
+        pendingReset = ""
+        exportVolume = ""
         importing = false       // the old owner's ImportFinished is ignored; its hold on the queue ends
         loadState = "loading"
         loadedKey = null
@@ -473,12 +477,40 @@ QtObject {
         inFlight = null
         saved(tag)
         refresh()
-        if (pendingImport !== null)
+        if (pendingImport !== null) {
+            pendingReset = ""       // the import replaces the pad's controls anyway
             startImport()
-        else if (queue.length > 0)
-            flush()
-        else if (exportVolume !== "")
-            startExport()
+        } else {
+            runPendingReset()
+            if (queue.length > 0)
+                flush()
+            else if (phase === "" && exportVolume !== "")
+                startExport()
+        }
+    }
+
+    // The reset that waited for the save that just ended (resetAll). resetAll works on the pad the page
+    // shows, so one asked on another pad (the page moved on meanwhile) is not run on the wrong one: it
+    // says so, naming that pad, like a refused save.
+    function runPendingReset() {
+        const asked = pendingReset
+        pendingReset = ""
+        if (asked === "")
+            return
+        if (asked === padKey)
+            resetAll()
+        else
+            showRefusedToast(asked)
+    }
+
+    // "Could not save the change", naming the pad when it is not the shown one (RUY-586).
+    function showRefusedToast(forPadKey) {
+        const id = String(forPadKey).split("/")[0]
+        const other = forPadKey !== padKey ? ControllerPads.controllers().find(p => p.id === id) : null
+        if (other)
+            Notifications.show(qsTr("Could not save the change for %1").arg(shortName(other.nameBase, other.nameTail)), "error", "", "", qsTr("Try again."))
+        else
+            Notifications.show(qsTr("Could not save the change"), "error", "", "", qsTr("Try again."))
     }
 
     // After the save and the assignment: the next slot to empty, else done.
@@ -508,20 +540,18 @@ QtObject {
             exportVolume = ""
             Notifications.show(qsTr("Could not save to the USB drive"), "error", "", "", qsTr("Try again."))
         } else {
-            // A refusal of another pad than the shown one names that pad (RUY-586).
-            const failedId = String(failedPad).split("/")[0]
-            const other = failedPad !== padKey ? ControllerPads.controllers().find(p => p.id === failedId) : null
-            if (other)
-                Notifications.show(qsTr("Could not save the change for %1").arg(shortName(other.nameBase, other.nameTail)), "error", "", "", qsTr("Try again."))
-            else
-                Notifications.show(qsTr("Could not save the change"), "error", "", "", qsTr("Try again."))
+            showRefusedToast(failedPad)
         }
         failed(tag)
         refresh()
-        if (pendingImport !== null)
+        if (pendingImport !== null) {
+            pendingReset = ""
             startImport()
-        else if (queue.length > 0)
-            flush()
+        } else {
+            runPendingReset()
+            if (queue.length > 0)
+                flush()
+        }
     }
 
     // Everything back to the default for the pad (and the pads of its slot): its own stored
@@ -534,8 +564,10 @@ QtObject {
         queue = queue.filter(q => q.padKey !== padKey)
         if (queue.length === 0)
             debounceTimer.stop()
-        if (phase !== "")
+        if (phase !== "") {
+            pendingReset = padKey       // runs when the save ends (done or fail)
             return
+        }
         const d = editable()
         const own = stored !== null && d.id === stored.id
         const below = applyingFor(pad, slotRank(slotOf(d.match)))
