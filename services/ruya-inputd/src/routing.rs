@@ -7591,7 +7591,8 @@ mod tests {
 
     impl Accounts for Live {
         fn account(&self, profile: &str) -> Option<crate::accounts::Account> {
-            self.lookups.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.lookups
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             self.profiles
                 .lock()
                 .expect("lock")
